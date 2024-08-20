@@ -53,6 +53,8 @@ DEFINE_bool(useFakeS3, false,
 DEFINE_bool(supportKVcache, false, "use kvcache to speed up sharing");
 DEFINE_bool(access_logging, true, "enable access log");
 DEFINE_validator(access_logging, &pass_bool);
+DEFINE_bool(block_cache_logging, true, "enable block cache log");
+DEFINE_validator(block_cache_logging, &pass_bool);
 
 /**
  * use curl -L fuseclient:port/flags/fuseClientAvgWriteBytes?setvalue=true
@@ -344,6 +346,43 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
     }
 }
 
+namespace {
+void SplitDiskCacheOption(DiskCacheOption option,
+                          std::vector<DiskCacheOption>* options) {
+    auto dirs = absl::StrSplit(option.cacheDir, ";");
+    for (const auto& dir : dirs) {
+        items = absl::StrSplit(option.cacheDir, ":");
+        if (items.size() > 2) {
+            LOG()
+        } else if (items.size)
+
+        if (items.size() > 2 || )
+        LOG_IF(LOG_IF, items.size() > 2 ||
+                     (items.size() == 2 && std::stoull(items[1])))
+            <<
+        DiskCacheOption o = option;
+        o.cacheDir = items[0];
+        o.cacheSize =
+        options->emplace_back(o);
+    }
+}
+}
+
+void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
+    c->GetValueFatalIfFail("bcache.stage", &option->stage);
+    c->GetValueFatalIfFail("bcache.logging", &FLAGS_block_cache_logging);
+    {  // disk cache option
+        DiskCacheOption o;
+        c->GetValueFatalIfFail("bcache.diskCache.cacheDir",
+                               &o->cacheDir);
+        c->GetValueFatalIfFail("bcache.diskCache.cacheSize",
+                               &o->cacheSize);
+        c->GetValueFatalIfFail("bcache.diskCache.freeSpaceRatio",
+                               &o->freeSpaceRatio);
+        SplitDiskCacheOption(o, &option->diskCacheOptions);
+    }
+}
+
 void SetBrpcOpt(Configuration *conf) {
     curve::common::GflagsLoadValueFromConfIfCmdNotSet dummy;
     dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
@@ -365,6 +404,7 @@ void InitFuseClientOption(Configuration *conf, FuseClientOption *clientOption) {
     InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
     InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
     InitFileSystemOption(conf, &clientOption->fileSystemOption);
+    InitBlockCacheOption(conf, &clientOption->blockCacheOption);
 
     conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                               &clientOption->listDentryLimit);

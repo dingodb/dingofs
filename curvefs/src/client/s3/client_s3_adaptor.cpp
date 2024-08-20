@@ -40,6 +40,7 @@ S3ClientAdaptorImpl::Init(
     std::shared_ptr<MdsClient> mdsClient,
     std::shared_ptr<FsCacheManager> fsCacheManager,
     std::shared_ptr<DiskCacheManagerImpl> diskCacheManagerImpl,
+    std::shared_ptr<BlockCache> bcache,
     std::shared_ptr<KVClientManager> kvClientManager,
     bool startBackGround) {
     blockSize_ = option.blockSize;
@@ -67,6 +68,7 @@ S3ClientAdaptorImpl::Init(
     fsCacheManager_ = fsCacheManager;
     waitInterval_.Init(option.intervalSec * 1000);
     diskCacheManagerImpl_ = diskCacheManagerImpl;
+    bcache_ = bcache;
     kvClientManager_ = std::move(kvClientManager);
     if (HasDiskCache()) {
         diskCacheManagerImpl_ = diskCacheManagerImpl;
@@ -74,6 +76,12 @@ S3ClientAdaptorImpl::Init(
             LOG(ERROR) << "Init disk cache failed";
             return CURVEFS_ERROR::INTERNAL;
         }
+
+        if (bcache_->Init() < 0) {
+            LOG(ERROR) << "Init bcache cache failed.";
+            return CURVEFS_ERROR::INTERNAL;
+        }
+
         // init rpc send exec-queue
         downloadTaskQueues_.resize(prefetchExecQueueNum_);
         for (auto &q : downloadTaskQueues_) {

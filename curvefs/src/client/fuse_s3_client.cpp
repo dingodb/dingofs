@@ -94,6 +94,7 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption &option) {
             wrapper, diskCacheWrite, diskCacheRead);
         auto diskCacheManagerImpl = std::make_shared<DiskCacheManagerImpl>(
             diskCacheManager, s3DiskCacheClient);
+        auto bcache = std::make_shared<BlockCacheImpl>(option.blockCacheOption);
         ret = s3Adaptor_->Init(opt.s3Opt.s3ClientAdaptorOpt, s3Client,
                                inodeManager_, mdsClient_, fsCacheManager,
                                diskCacheManagerImpl, kvClientManager_, true);

@@ -39,7 +39,9 @@
 #include "curvefs/src/client/s3/client_s3.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 #include "curvefs/src/client/s3/disk_cache_manager_impl.h"
+#include "curvefs/src/client/bcache/block_cache.h"
 #include "src/common/wait_interval.h"
+
 namespace curvefs {
 namespace client {
 
@@ -71,6 +73,7 @@ class S3ClientAdaptor {
          std::shared_ptr<MdsClient> mdsClient,
          std::shared_ptr<FsCacheManager> fsCacheManager,
          std::shared_ptr<DiskCacheManagerImpl> diskCacheManagerImpl,
+         std::shared_ptr<BlockCache> bcache,
          std::shared_ptr<KVClientManager> kvClientManager,
          bool startBackGround = false) = 0;
     /**
@@ -130,6 +133,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
          std::shared_ptr<MdsClient> mdsClient,
          std::shared_ptr<FsCacheManager> fsCacheManager,
          std::shared_ptr<DiskCacheManagerImpl> diskCacheManagerImpl,
+         std::shared_ptr<BlockCache> bcache,
          std::shared_ptr<KVClientManager> kvClientManager,
          bool startBackGround = false);
     /**
@@ -184,6 +188,11 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     std::shared_ptr<DiskCacheManagerImpl> GetDiskCacheManager() {
         return diskCacheManagerImpl_;
     }
+
+    std::shared_ptr<BlockCache> GetBlockCache() {
+        return bcache_;
+    }
+
     FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
                                 uint64_t *chunkId);
     void FsSyncSignal() {
@@ -268,6 +277,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     std::shared_ptr<FsCacheManager> fsCacheManager_;
     std::shared_ptr<InodeCacheManager> inodeManager_;
     std::shared_ptr<DiskCacheManagerImpl> diskCacheManagerImpl_;
+    std::shared_ptr<BlockCache> bcache_;
     DiskCacheType diskCacheType_;
     std::shared_ptr<MdsClient> mdsClient_;
     uint32_t fsId_;

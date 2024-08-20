@@ -678,7 +678,7 @@ void WarmupManagerS3Impl::AddFetchS3objectsTask(fuse_ino_t key,
 }
 
 void WarmupManagerS3Impl::PutObjectToCache(
-    fuse_ino_t key, const std::shared_ptr<GetObjectAsyncContext> &context) {
+    fuse_ino_t iey, const std::shared_ptr<GetObjectAsyncContext> &context) {
     ReadLockGuard lock(inode2ProgressMutex_);
     auto iter = FindWarmupProgressByKeyLocked(key);
     if (iter == inode2Progress_.end()) {

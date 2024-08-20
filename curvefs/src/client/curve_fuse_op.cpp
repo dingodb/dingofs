@@ -70,6 +70,7 @@ using ::curvefs::client::filesystem::StrEntry;
 using ::curvefs::client::filesystem::StrAttr;
 using ::curvefs::client::filesystem::StrMode;
 using ::curvefs::client::filesystem::IsWarmupXAttr;
+using ::curvefs::client::bcache::InitBcacheLog;
 
 using ::curvefs::common::FLAGS_vlog_level;
 
@@ -145,7 +146,8 @@ int InitLog(const char *confPath, const char *argv0) {
     // initialize logging module
     google::InitGoogleLogging(argv0);
 
-    bool succ = InitAccessLog(FLAGS_log_dir);
+    bool succ = InitAccessLog(FLAGS_log_dir) ||;
+                InitPerfLog(FLAGS_log_dir);
     if (!succ) {
         return -1;
     }
@@ -371,6 +373,8 @@ void FuseOpDestroy(void *userdata) {
     });
     client->FuseOpDestroy(userdata);
 }
+
+
 
 void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
     CURVEFS_ERROR rc;

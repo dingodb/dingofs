@@ -134,6 +134,16 @@ enum DataCacheStatus {
 
 class DataCache : public std::enable_shared_from_this<DataCache> {
  public:
+    struct FlushBlock {
+        FlushBlock(BlockKey key,
+                   std::shared_ptr<PutObjectAsyncContext> context)
+            : key(key), context(context) {}
+
+        BlockKey key;
+        std::shared_ptr<PutObjectAsyncContext> context;
+    };
+
+ public:
     DataCache(S3ClientAdaptorImpl *s3ClientAdaptor,
               ChunkCacheManagerPtr chunkCacheManager, uint64_t chunkPos,
               uint64_t len, const char *data,
@@ -211,13 +221,13 @@ class DataCache : public std::enable_shared_from_this<DataCache> {
 
     CURVEFS_ERROR PrepareFlushTasks(
         uint64_t inodeId, char *data,
-        std::vector<std::shared_ptr<PutObjectAsyncContext>> *s3Tasks,
+        std::vector<FlushBlock> *s3Tasks,
         std::vector<std::shared_ptr<SetKVCacheTask>> *kvCacheTasks,
         uint64_t *chunkId, uint64_t *writeOffset);
 
     void FlushTaskExecute(
         CachePolicy cachePolicy,
-        const std::vector<std::shared_ptr<PutObjectAsyncContext>> &s3Tasks,
+        const std::vector<FlushBlock> &s3Tasks,
         const std::vector<std::shared_ptr<SetKVCacheTask>> &kvCacheTasks);
 
     CachePolicy GetCachePolicy(bool toS3);
