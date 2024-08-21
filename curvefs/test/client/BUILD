@@ -78,6 +78,7 @@ cc_test(
     ],
     linkopts = [
                 "-L/usr/local/lib/x86_64-linux-gnu"],
+    linkstatic=1,
 )
 
 cc_test(
@@ -112,6 +113,7 @@ cc_test(
    linkopts = ["-lfuse3",
                "-L/usr/local/lib/x86_64-linux-gnu"],
    visibility = ["//visibility:public"],
+    linkstatic=1,
 )
 
 cc_library(
@@ -141,4 +143,5 @@ cc_test(
     ],
     copts = CURVE_TEST_COPTS,
     visibility = ["//visibility:public"],
+    linkstatic=1,
 )

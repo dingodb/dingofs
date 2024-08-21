@@ -35,4 +35,5 @@ cc_test(
         "@glog//:glog",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

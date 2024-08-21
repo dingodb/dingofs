@@ -47,6 +47,7 @@ cc_test(
             "@gtest//:gtest",
             "@com_google_absl//absl/types:optional",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -68,6 +69,7 @@ cc_test(
             "//curvefs/test/metaserver/storage:metaserver_storage_test_utils",
             "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -88,6 +90,7 @@ cc_test(
             "//curvefs/test/metaserver/storage:metaserver_storage_test_utils",
             "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 
@@ -123,6 +126,7 @@ cc_test(
         "-lfuse3",
         "-L/usr/local/lib/x86_64-linux-gnu",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -137,4 +141,5 @@ cc_test(
         "@brpc//:brpc",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

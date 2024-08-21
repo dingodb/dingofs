@@ -32,6 +32,7 @@ cc_test(
         "//test/fs:fs_mock",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -47,4 +48,5 @@ cc_test(
         "//test/fs:fs_mock",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

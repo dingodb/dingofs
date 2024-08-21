@@ -27,4 +27,5 @@ cc_test(
         "//curvefs/src/client/common",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

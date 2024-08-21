@@ -30,4 +30,5 @@ cc_test(
         "//curvefs/test/client:mock",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

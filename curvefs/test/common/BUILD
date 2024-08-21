@@ -29,4 +29,5 @@ cc_test(
         "@com_google_absl//absl/utility",
     ],
     copts = CURVE_TEST_COPTS,
+    linkstatic=1,
 )

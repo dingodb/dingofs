@@ -33,6 +33,7 @@ cc_test(
         "@glog//:glog",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # version
@@ -49,6 +50,7 @@ cc_test(
         "@glog//:glog",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # factory
@@ -65,6 +67,7 @@ cc_test(
         "@glog//:glog",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # create-topology
@@ -79,6 +82,7 @@ cc_test(
         "//curvefs/src/tools:curvefs_tools_lib",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # space-base-tool
@@ -92,6 +96,7 @@ cc_test(
         "//curvefs/src/tools:curvefs_tools_lib",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # space-status
@@ -105,4 +110,5 @@ cc_test(
         "//curvefs/src/tools:curvefs_tools_lib",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

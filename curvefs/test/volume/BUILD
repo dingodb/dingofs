@@ -38,6 +38,7 @@ cc_test(
         "@com_google_absl//absl/types:optional",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 # cc_test(

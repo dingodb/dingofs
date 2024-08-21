@@ -33,6 +33,7 @@ cc_test(
        "@gtest//:gtest",
    ],
    visibility = ["//visibility:public"],
+    linkstatic=1,
 )
 
 cc_library(

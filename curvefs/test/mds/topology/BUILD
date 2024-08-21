@@ -28,4 +28,5 @@ cc_test(
         "//curvefs/test/mds/mock:curvefs_mds_mock",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

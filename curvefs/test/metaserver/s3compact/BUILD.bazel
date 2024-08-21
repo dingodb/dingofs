@@ -31,4 +31,5 @@ cc_test(
         "//curvefs/test/metaserver/storage:metaserver_storage_test_utils",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

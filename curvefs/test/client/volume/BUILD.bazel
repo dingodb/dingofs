@@ -31,4 +31,5 @@ cc_test(
         "@gtest//:gtest",
         "@com_google_absl//absl/strings",
     ],
+    linkstatic=1,
 )

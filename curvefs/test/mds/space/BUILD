@@ -31,4 +31,5 @@ cc_test(
         "@brpc//:brpc",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

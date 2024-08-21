@@ -29,4 +29,5 @@ cc_test(
         "//curvefs/src/client/metric:client_metric",
    ],
    visibility = ["//visibility:public"],
+    linkstatic=1,
 )

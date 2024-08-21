@@ -25,4 +25,5 @@ cc_test(
         "@gtest//:gtest",
     ],
     copts = CURVE_TEST_COPTS,
+    linkstatic=1,
 )

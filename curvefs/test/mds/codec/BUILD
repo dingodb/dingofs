@@ -27,4 +27,5 @@ cc_test(
         "@protobuf//:protobuf",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

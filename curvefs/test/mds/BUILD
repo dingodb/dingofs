@@ -33,6 +33,7 @@ cc_test(
             "@brpc//:brpc",
             "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -50,6 +51,7 @@ cc_test(
             "@brpc//:brpc",
             "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 cc_test(
@@ -65,4 +67,5 @@ cc_test(
             "//curvefs/src/mds/schedule:curvefs_schedule",
             "@gtest//:gtest",
     ],
+    linkstatic=1,
 )

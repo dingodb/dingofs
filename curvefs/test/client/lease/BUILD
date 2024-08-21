@@ -25,13 +25,15 @@ cc_test(
    ),
    copts = CURVE_TEST_COPTS,
    deps = [
+        "//curvefs/src/client/lease:curvefs_lease",
+        "//curvefs/test/client/rpcclient:rpcclient_test_mock",
+        "//curvefs/proto:mds_cc_proto",
         "@gflags//:gflags",
         "@glog//:glog",
         "@brpc//:brpc",
         "@gtest//:gtest",
-        "//curvefs/src/client/lease:curvefs_lease",
-        "//curvefs/test/client/rpcclient:rpcclient_test_mock",
-        "//curvefs/proto:mds_cc_proto",
+        "@protobuf//:protobuf",
    ],
    visibility = ["//visibility:public"],
+    linkstatic=1,
 )

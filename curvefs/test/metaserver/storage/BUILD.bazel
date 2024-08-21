@@ -33,6 +33,7 @@ cc_test(
         "@gflags//:gflags",
         "@gtest//:gtest",
     ],
+    linkstatic=1,
 )
 
 cc_library(
