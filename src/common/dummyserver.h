@@ -23,7 +23,10 @@
 #ifndef SRC_COMMON_DUMMYSERVER_H_
 #define SRC_COMMON_DUMMYSERVER_H_
 
+#include <sstream>
+#include <mutex>
 #include <brpc/server.h>
+#include <bvar/bvar.h>
 
 namespace curve {
 namespace common {
@@ -52,6 +55,27 @@ bool StartBrpcDummyserver(uint32_t dummyServerStartPort,
 
     return true;
 }
+
+class MetricsDumper : public bvar::Dumper {
+private:
+    std::vector<std::pair<std::string, std::string> > _metricList;
+public:
+    bool dump(const std::string& name,
+              const butil::StringPiece& description) {
+        _metricList.push_back(std::make_pair(name, description.as_string()));
+        return true;
+    }
+
+    std::string contents() const {
+        std::ostringstream oss;
+        for (auto& metric : _metricList) {
+            oss << metric.first << " : " << metric.second << "\n";
+        }
+        return oss.str();
+    }  
+};
+
+
 
 }  // namespace common
 }  // namespace curve

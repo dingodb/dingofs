@@ -51,6 +51,8 @@ static const std::map<CURVEFS_ERROR, std::pair<int, std::string>> errors = {
     { CURVEFS_ERROR::IO_ERROR, { EIO, "I/O error" } },
     { CURVEFS_ERROR::STALE, { ESTALE, "stale file handler" } },
     { CURVEFS_ERROR::NOSYS, { ENOSYS, "invalid system call" } },
+    { CURVEFS_ERROR::NOPERMITTED, { EPERM, "Operation not permitted" } }
+
 };
 
 std::string StrErr(CURVEFS_ERROR code) {

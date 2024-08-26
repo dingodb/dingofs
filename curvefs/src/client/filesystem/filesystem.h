@@ -85,7 +85,7 @@ class FileSystem {
 
     CURVEFS_ERROR Open(Request req, Ino ino, FileInfo* fi);
 
-    CURVEFS_ERROR Release(Request req, Ino ino);
+    CURVEFS_ERROR Release(Request req, Ino ino, FileInfo* fi);
 
     // fuse reply: we control all replies to vfs layer in same entrance.
     void ReplyError(Request req, CURVEFS_ERROR code);

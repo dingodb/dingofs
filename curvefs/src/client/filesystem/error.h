@@ -57,6 +57,7 @@ enum class CURVEFS_ERROR {
     CACHETOOSMALL = -18,
     STALE = -19,
     NOSYS = -20,
+    NOPERMITTED = -21,
 };
 
 std::string StrErr(CURVEFS_ERROR code);

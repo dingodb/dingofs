@@ -24,7 +24,6 @@
 
 #include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/filesystem/utils.h"
-
 namespace curvefs {
 namespace client {
 namespace filesystem {
@@ -343,7 +342,10 @@ CURVEFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
     return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR FileSystem::Release(Request req, Ino ino) {
+CURVEFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
+    if(ino==STATSINODEID) {
+        ReleaseHandler(fi->fh);
+    }
     openFiles_->Close(ino);
     return CURVEFS_ERROR::OK;
 }

@@ -102,6 +102,8 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption &option) {
                                inodeManager_, mdsClient_, fsCacheManager,
                                nullptr, kvClientManager_, true);
     }
+
+    
     return ret;
 }
 
@@ -177,7 +179,8 @@ CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
         fsMetric_->userWrite.qps.count << 1;
         uint64_t duration = butil::cpuwide_time_us() - start;
         fsMetric_->userWrite.latency << duration;
-        fsMetric_->userWriteIoSize.set_value(wRet);
+        //fsMetric_->userWriteIoSize.set_value(wRet);
+        fsMetric_->userWriteIoSizeSecond << wRet;
     }
 
     std::shared_ptr<InodeWrapper> inodeWrapper;
@@ -230,6 +233,29 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
                                        struct fuse_file_info *fi, char *buffer,
                                        size_t *rSize) {
     (void)req;
+    auto GetReadSize = [](size_t &size, off_t &off, size_t &fileSize) -> size_t {
+        if (static_cast<int64_t>(fileSize) <= off) {
+            return 0;
+        } else if (fileSize < off + size) {
+            return fileSize - off;
+        } else {
+            return size;
+        }
+    };
+
+    if(ino == STATSINODEID) {
+        auto handler = fs_->FindHandler(fi->fh);
+        auto dataBuf = handler->buffer;
+
+        size_t fileSize = dataBuf->size;
+        size_t len = GetReadSize(size, off, fileSize);
+        *rSize = len;
+        if(len > 0){
+            memcpy(buffer,dataBuf->p + off,len);
+        }
+        return CURVEFS_ERROR::OK;
+    }
+
     // check align
     if (fi->flags & O_DIRECT) {
         if (!(is_aligned(off, DirectIOAlignment) &&
@@ -247,14 +273,20 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
     }
     uint64_t fileSize = inodeWrapper->GetLength();
 
-    size_t len = 0;
-    if (static_cast<int64_t>(fileSize) <= off) {
-        *rSize = 0;
-        return CURVEFS_ERROR::OK;
-    } else if (fileSize < off + size) {
-        len = fileSize - off;
-    } else {
-        len = size;
+    // size_t len = 0;
+    // if (static_cast<int64_t>(fileSize) <= off) {
+    //     *rSize = 0;
+    //     return CURVEFS_ERROR::OK;
+    // } else if (fileSize < off + size) {
+    //     len = fileSize - off;
+    // } else {
+    //     len = size;
+    // }
+
+    size_t len = GetReadSize(size, off, fileSize);
+    if(len == 0){
+       *rSize = 0;
+        return CURVEFS_ERROR::OK;      
     }
 
     // Read do not change inode. so we do not get lock here.
@@ -270,7 +302,8 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
         fsMetric_->userRead.qps.count << 1;
         uint64_t duration = butil::cpuwide_time_us() - start;
         fsMetric_->userRead.latency << duration;
-        fsMetric_->userReadIoSize.set_value(rRet);
+        //fsMetric_->userWriteIoSize.set_value(wRet);
+        fsMetric_->userReadIoSizeSecond << rRet;
     }
 
     ::curve::common::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
@@ -379,6 +412,8 @@ CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
     (void)fi;
     VLOG(1) << "FuseOpFlush, ino: " << ino;
     CURVEFS_ERROR ret = CURVEFS_ERROR::OK;
+
+    if(ino == STATSINODEID) return ret;
 
     // if enableCto, flush all write cache both in memory cache and disk cache
     if (FLAGS_enableCto) {

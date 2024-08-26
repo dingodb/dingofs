@@ -408,6 +408,29 @@ class FuseClient {
         return newName;
     }
 
+    InodeAttr GenerateVirtualInodeAttr(fuse_ino_t ino, uint32_t fsid){
+        InodeAttr attr;
+        
+        attr.set_inodeid(ino);
+        attr.set_fsid(fsid);
+        attr.set_nlink(1);
+        attr.set_mode(S_IFREG | 0444);
+        attr.set_type(FsFileType::TYPE_S3);
+        // attr.set_uid(0);
+        // attr.set_gid(0);
+        attr.set_length(0);
+        struct timespec now;
+        clock_gettime(CLOCK_REALTIME, &now);
+        attr.set_mtime(now.tv_sec);
+        attr.set_mtime_ns(now.tv_nsec);
+        attr.set_atime(now.tv_sec);
+        attr.set_atime_ns(now.tv_nsec);
+        attr.set_ctime(now.tv_sec);
+        attr.set_ctime_ns(now.tv_nsec);
+
+        return attr;
+    }
+
  protected:
     // mds client
     std::shared_ptr<MdsClient> mdsClient_;

@@ -276,6 +276,12 @@ CURVEFS_ERROR FuseClient::FuseOpLookup(fuse_req_t req,
                                        fuse_ino_t parent,
                                        const char* name,
                                        EntryOut* entryOut) {
+
+    if(parent == ROOTINODEID && strcmp(name, STATSNAME) == 0) { //stats node
+        InodeAttr attr = GenerateVirtualInodeAttr(STATSINODEID,fsInfo_->fsid());
+        *entryOut = EntryOut(attr);
+        return CURVEFS_ERROR::OK;
+    }
     CURVEFS_ERROR rc = fs_->Lookup(req, parent, name, entryOut);
     if (rc != CURVEFS_ERROR::OK && rc != CURVEFS_ERROR::NOTEXIST) {
         LOG(ERROR) << "Lookup() failed, retCode = " << rc
@@ -350,6 +356,29 @@ CURVEFS_ERROR FuseClient::FuseOpOpen(fuse_req_t req,
                                      fuse_ino_t ino,
                                      struct fuse_file_info* fi,
                                      FileOut* fileOut) {
+    if(ino == STATSINODEID) {
+        fi->direct_io = 1;
+        auto handler = fs_-> NewHandler();
+        fi->fh = handler->fh;
+
+        curve::common::MetricsDumper metricsDumper;
+        bvar::DumpOptions opts;
+        //opts.white_wildcards = "dingofs_s3_adaptor_read_bps;dingofs_fuse_op_write_lat_qps";
+        //opts.black_wildcards = "*var5";
+
+        int ret=bvar::Variable::dump_exposed(&metricsDumper, &opts);
+        std::string contents = metricsDumper.contents();
+
+        size_t len = contents.size();
+        handler->buffer->size = len;
+        handler->buffer->p = static_cast<char *>(malloc(len));
+        memcpy(handler->buffer->p, contents.c_str(), len);
+
+        InodeAttr attr = GenerateVirtualInodeAttr(STATSINODEID,fsInfo_->fsid());
+        *fileOut = FileOut(fi,attr);
+        return CURVEFS_ERROR::OK;
+    }
+
     CURVEFS_ERROR rc = fs_->Open(req, ino, fi);
     if (rc != CURVEFS_ERROR::OK) {
         LOG(ERROR) << "open(" << ino << ") failed, retCode = " << rc;
@@ -400,11 +429,11 @@ CURVEFS_ERROR FuseClient::MakeNode(
         return CURVEFS_ERROR::NAMETOOLONG;
     }
 
-    // check if node is recycle or under recycle
-    if (!internal && strcmp(name, RECYCLENAME) == 0 && parent == ROOTINODEID) {
-        LOG(WARNING) << "Can not make node " << RECYCLENAME
+    // check if node is recycle or under recycle or .stats node
+    if (!internal && IsInternalName(name) && parent == ROOTINODEID) {
+        LOG(WARNING) << "Can not make node " << name
                      << " under root dir.";
-        return CURVEFS_ERROR::NOPERMISSION;
+        return CURVEFS_ERROR::NOPERMITTED;
     }
 
     if (!internal && parent == RECYCLEINODEID) {
@@ -792,10 +821,9 @@ CURVEFS_ERROR FuseClient::RemoveNode(fuse_req_t req, fuse_ino_t parent,
         return CURVEFS_ERROR::NAMETOOLONG;
     }
 
-    // check if node is recycle or recycle time dir
-    if ((strcmp(name, RECYCLENAME) == 0 && parent == ROOTINODEID) ||
-         parent == RECYCLEINODEID) {
-        return CURVEFS_ERROR::NOPERMISSION;
+    // check if node is recycle or recycle time dir or .stats node
+    if ((IsInternalName(name) && parent == ROOTINODEID) || parent == RECYCLEINODEID) {
+        return CURVEFS_ERROR::NOPERMITTED;
     }
 
     Dentry dentry;
@@ -874,6 +902,20 @@ CURVEFS_ERROR FuseClient::FuseOpReadDir(fuse_req_t req,
             return rc;
         }
 
+        if(ino==ROOTINODEID)  {//root dir(add .stats file)
+            std::cout << "root dir" << std::endl;
+            DirEntry dirEntry;
+            if (! entries->Get(STATSINODEID, &dirEntry)) { //dirEntry not in dircache
+                std::cout << "not find" << std::endl;
+
+                dirEntry.ino = STATSINODEID;
+                dirEntry.name = STATSNAME;
+                dirEntry.attr = GenerateVirtualInodeAttr(STATSINODEID,fsInfo_->fsid());
+
+                entries->Add(dirEntry);
+            }
+        }
+
         entries->Iterate([&](DirEntry* dirEntry){
             if (plus) {
                 fs_->AddDirEntryPlus(req, buffer, dirEntry);
@@ -911,6 +953,11 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
                                        unsigned int flags) {
     VLOG(1) << "FuseOpRename from (" << parent << ", " << name << ") to ("
             << newparent << ", " << newname << ")";
+
+    // internel name can not be rename or rename to
+    if ((IsInternalName(name) || IsInternalName(newname)) && parent == ROOTINODEID) {
+        return CURVEFS_ERROR::NOPERMITTED;
+    }
 
     // TODO(Wine93): the flag RENAME_EXCHANGE and RENAME_NOREPLACE
     // is only used in linux interface renameat(), not required by posix,
@@ -967,6 +1014,12 @@ CURVEFS_ERROR FuseClient::FuseOpGetAttr(fuse_req_t req,
                                         fuse_ino_t ino,
                                         struct fuse_file_info *fi,
                                         AttrOut* attrOut) {
+    
+    if(ino == STATSINODEID) {
+        InodeAttr attr = GenerateVirtualInodeAttr(STATSINODEID,fsInfo_->fsid());
+        *attrOut = AttrOut(attr);
+        return CURVEFS_ERROR::OK;
+    }
     CURVEFS_ERROR rc = fs_->GetAttr(req, ino, attrOut);
     if (rc != CURVEFS_ERROR::OK) {
         LOG(ERROR) << "getattr() fail, retCode = " << rc
@@ -1206,6 +1259,16 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req,
     if (strlen(name) > option_.fileSystemOption.maxNameLength) {
         return CURVEFS_ERROR::NAMETOOLONG;
     }
+
+    //internal file name can not allowed for symlink
+    if (parent == ROOTINODEID && IsInternalName(name)){ //cant't allow  ln -s <file> .stats
+        return CURVEFS_ERROR::EXISTS;
+    }
+
+    if (parent == ROOTINODEID && IsInternalName(link)){//cant't allow  ln -s  .stats  <file>
+        return CURVEFS_ERROR::NOPERMITTED;
+    }
+
     const struct fuse_ctx *ctx = fuse_req_ctx(req);
     InodeParam param;
     param.fsId = fsInfo_->fsid();
@@ -1285,6 +1348,12 @@ CURVEFS_ERROR FuseClient::FuseOpLink(fuse_req_t req,
     if (strlen(newname) > option_.fileSystemOption.maxNameLength) {
         return CURVEFS_ERROR::NAMETOOLONG;
     }
+
+    if  (IsInternalNode(ino) || //cant't allow  ln   <file> .stats
+        (newparent == ROOTINODEID && IsInternalName(newname))){    //cant't allow  ln  .stats  <file>  
+        return CURVEFS_ERROR::NOPERMITTED;
+    }
+
     std::shared_ptr<InodeWrapper> inodeWrapper;
     CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
     if (ret != CURVEFS_ERROR::OK) {
@@ -1365,7 +1434,7 @@ CURVEFS_ERROR FuseClient::FuseOpReadLink(fuse_req_t req, fuse_ino_t ino,
 CURVEFS_ERROR FuseClient::FuseOpRelease(fuse_req_t req,
                                         fuse_ino_t ino,
                                         struct fuse_file_info *fi) {
-    CURVEFS_ERROR rc = fs_->Release(req, ino);
+    CURVEFS_ERROR rc = fs_->Release(req, ino, fi);
     if (rc != CURVEFS_ERROR::OK) {
         LOG(ERROR) << "release() failed, ino = " << ino;
     }
