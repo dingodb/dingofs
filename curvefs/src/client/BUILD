@@ -57,6 +57,8 @@ cc_library(
             "filesystem/*.h",
             "warmup/*.h",
             "warmup/*.cpp",
+            "block_cache/*.h",
+            "block_cache/*.cpp",
         ],
         exclude = ["main.cpp"],
     ),
@@ -67,6 +69,7 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "//curvefs/src/base:curvefs_base",
         "//curvefs/proto:mds_cc_proto",
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/proto:space_cc_proto",
