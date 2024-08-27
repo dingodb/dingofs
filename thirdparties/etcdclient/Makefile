@@ -20,14 +20,22 @@ pwd := $(shell pwd)
 
 all: intall-go install-etcdclient libetcdclient
 
+GO_VERSION=1.15.15
+
+ifeq ($(shell uname --hardware-platform), x86_64)
+    PLATFORM=amd64
+else ifeq ($(shell uname --hardware-platform), aarch64)
+    PLATFORM=arm64
+endif
+
 intall-go:
 	mkdir -p $(pwd)/tmp
-	cd $(pwd)/tmp && wget -N https://golang.google.cn/dl/go1.12.8.linux-amd64.tar.gz
-	cd $(pwd)/tmp && tar zxvf go1.12.8.linux-amd64.tar.gz
+	cd $(pwd)/tmp && wget -N https://golang.google.cn/dl/go$(GO_VERSION).linux-$(PLATFORM).tar.gz
+	cd $(pwd)/tmp && tar zxvf go$(GO_VERSION).linux-$(PLATFORM).tar.gz
 
 install-etcdclient:
 	mkdir -p $(pwd)/tmp/gosrc/src/go.etcd.io
-	cd $(pwd)/tmp/gosrc/src/go.etcd.io && git clone --branch v3.4.0 --depth=1 https://github.com/coreos/etcd
+	cd $(pwd)/tmp/gosrc/src/go.etcd.io && git clone --branch v3.4.18 --depth=1 https://github.com/coreos/etcd
 	cd $(pwd)/tmp/gosrc/src/go.etcd.io/etcd && cp $(pwd)/expose-session-for-election.patch . && patch -p1 < expose-session-for-election.patch
 
 vendorpath := $(pwd)/tmp/gosrc/src/go.etcd.io/etcd/vendor
