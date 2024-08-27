@@ -51,9 +51,18 @@ ExternalProject_Add(openssl
     INSTALL_COMMAND ${CMAKE_COMMAND} -E chdir ${OPENSSL_BINARY_DIR} $(MAKE) install_sw
 )
 
+set(ZLIB_SOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/zlib)
+set(ZLIB_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/zlib/build)
+
+file(WRITE ${ZLIB_BINARY_DIR}/copy_repo.sh
+     "mkdir -p ${ZLIB_BINARY_DIR} && cp -rf ${ZLIB_SOURCES_DIR}/* ${ZLIB_BINARY_DIR}/")
+
+execute_process(COMMAND sh ${ZLIB_BINARY_DIR}/copy_repo.sh)
+
 ExternalProject_Add(zlib
     PREFIX zlib
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/zlib"
+    SOURCE_DIR ${ZLIB_BINARY_DIR}
+    BINARY_DIR ${ZLIB_BINARY_DIR}
     CMAKE_ARGS
       -DBUILD_SHARED_LIBS=OFF
     CMAKE_CACHE_ARGS
@@ -61,7 +70,6 @@ ExternalProject_Add(zlib
         -DCMAKE_INSTALL_PREFIX:PATH=${THIRD_PARTY_INSTALL_PATH}
         -DCMAKE_INSTALL_LIBDIR:PATH=${THIRD_PARTY_INSTALL_PATH}/lib
 )
-
 
 ExternalProject_Add(gflags
    PREFIX gflags
