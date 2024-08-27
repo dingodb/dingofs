@@ -15,6 +15,20 @@
 load("//:copts.bzl", "CURVE_TEST_COPTS")
 
 cc_test(
+    name = "test_cache",
+    srcs = [
+        "test_cache.cpp",
+    ],
+    deps = [
+        "//curvefs/src/base:curvefs_base",
+        "@gtest//:gtest",
+    ],
+    copts = CURVE_TEST_COPTS,
+    visibility = ["//visibility:public"],
+    linkstatic=1,
+)
+
+cc_test(
     name = "test_timer_impl",
     srcs = [
         "test_timer_impl.cpp",
