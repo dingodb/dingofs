@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -26,34 +25,30 @@
 
 #define FUSE_USE_VERSION 34
 
-#include <stddef.h>
-#include <fuse3/fuse_lowlevel.h>
 #include <fuse3/fuse.h>
+#include <fuse3/fuse_lowlevel.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct MountOption {
-    const char* mountPoint;
-    const char* fsName;
-    const char* fsType;
-    char* conf;
-    char* mdsAddr;
+  const char* mountPoint;
+  const char* fsName;
+  const char* fsType;
+  char* conf;
+  char* mdsAddr;
 };
 
 static const struct fuse_opt mount_opts[] = {
-    { "fsname=%s",
-      offsetof(struct MountOption, fsName), 0},
+    {"fsname=%s", offsetof(struct MountOption, fsName), 0},
 
-    { "fstype=%s",
-      offsetof(struct MountOption, fsType), 0},
+    {"fstype=%s", offsetof(struct MountOption, fsType), 0},
 
-    { "conf=%s",
-      offsetof(struct MountOption, conf), 0},
+    {"conf=%s", offsetof(struct MountOption, conf), 0},
 
-    FUSE_OPT_END
-};
+    FUSE_OPT_END};
 
 #ifdef __cplusplus
 }  // extern "C"

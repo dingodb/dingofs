@@ -23,62 +23,60 @@
 #ifndef SRC_COMMON_DUMMYSERVER_H_
 #define SRC_COMMON_DUMMYSERVER_H_
 
-#include <sstream>
-#include <mutex>
 #include <brpc/server.h>
 #include <bvar/bvar.h>
+
+#include <mutex>
+#include <sstream>
 
 namespace curve {
 namespace common {
 
 bool StartBrpcDummyserver(uint32_t dummyServerStartPort,
-                          uint32_t dummyServerEndPort, uint32_t *listenPort) {
-    static std::once_flag flag;
-    std::call_once(flag, [&]() {
-        while (dummyServerStartPort < dummyServerEndPort) {
-            int ret = brpc::StartDummyServerAt(dummyServerStartPort);
-            if (ret >= 0) {
-                LOG(INFO) << "Start dummy server success, listen port = "
-                          << dummyServerStartPort;
-                *listenPort = dummyServerStartPort;
-                break;
-            }
+                          uint32_t dummyServerEndPort, uint32_t* listenPort) {
+  static std::once_flag flag;
+  std::call_once(flag, [&]() {
+    while (dummyServerStartPort < dummyServerEndPort) {
+      int ret = brpc::StartDummyServerAt(dummyServerStartPort);
+      if (ret >= 0) {
+        LOG(INFO) << "Start dummy server success, listen port = "
+                  << dummyServerStartPort;
+        *listenPort = dummyServerStartPort;
+        break;
+      }
 
-            ++dummyServerStartPort;
-        }
-    });
-
-    if (dummyServerStartPort >= dummyServerEndPort) {
-        LOG(ERROR) << "Start dummy server failed!";
-        return false;
+      ++dummyServerStartPort;
     }
+  });
 
-    return true;
+  if (dummyServerStartPort >= dummyServerEndPort) {
+    LOG(ERROR) << "Start dummy server failed!";
+    return false;
+  }
+
+  return true;
 }
 
 class MetricsDumper : public bvar::Dumper {
-private:
-    std::vector<std::pair<std::string, std::string> > _metricList;
-public:
-    bool dump(const std::string& name,
-              const butil::StringPiece& description) {
-        _metricList.push_back(std::make_pair(name, description.as_string()));
-        return true;
+ private:
+  std::vector<std::pair<std::string, std::string> > _metricList;
+
+ public:
+  bool dump(const std::string& name, const butil::StringPiece& description) {
+    _metricList.push_back(std::make_pair(name, description.as_string()));
+    return true;
+  }
+
+  std::string contents() const {
+    std::ostringstream oss;
+    for (auto& metric : _metricList) {
+      oss << metric.first << " : " << metric.second << "\n";
     }
-
-    std::string contents() const {
-        std::ostringstream oss;
-        for (auto& metric : _metricList) {
-            oss << metric.first << " : " << metric.second << "\n";
-        }
-        return oss.str();
-    }  
+    return oss.str();
+  }
 };
-
-
 
 }  // namespace common
 }  // namespace curve
-
 
 #endif  // SRC_COMMON_DUMMYSERVER_H_

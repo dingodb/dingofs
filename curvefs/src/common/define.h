@@ -33,25 +33,24 @@ const char RECYCLENAME[] = ".recycle";
 const uint64_t STATSINODEID = 0x7FFFFFFF00000001;
 const char STATSNAME[] = ".stats";
 
-inline bool IsInternalNode(uint64_t ino){
-	return ino==STATSINODEID || ino==RECYCLEINODEID || ino==ROOTINODEID;
+inline bool IsInternalNode(uint64_t ino) {
+    return ino == STATSINODEID || ino == RECYCLEINODEID || ino == ROOTINODEID;
 }
 
-inline bool IsInternalName(const std::string& name) {
+inline bool IsInternalName(const std::string &name) {
     return name == STATSNAME || name == RECYCLENAME;
 }
 
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
 using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_PREFIX;
 using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
 using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_PREFIX;
+using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
+using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 using ::curvefs::client::filesystem::XATTR_WARMUP_OP;
-
 
 
 }  // namespace curvefs

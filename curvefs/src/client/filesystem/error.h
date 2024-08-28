@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include <iostream>
 #include <map>
 #include <string>
-#include <iostream>
 
 #include "curvefs/proto/metaserver.pb.h"
 
@@ -36,35 +36,35 @@ namespace filesystem {
 using ::curvefs::metaserver::MetaStatusCode;
 
 enum class CURVEFS_ERROR {
-    OK = 0,
-    INTERNAL = -1,
-    UNKNOWN = -2,
-    EXISTS = -3,
-    NOTEXIST = -4,
-    NO_SPACE = -5,
-    BAD_FD = -6,
-    INVALIDPARAM = -7,
-    NOPERMISSION = -8,
-    NOTEMPTY = -9,
-    NOFLUSH = -10,
-    NOTSUPPORT = -11,
-    NAMETOOLONG = -12,
-    MOUNT_POINT_EXIST = -13,
-    MOUNT_FAILED = -14,
-    OUT_OF_RANGE = -15,
-    NODATA = -16,
-    IO_ERROR = -17,
-    CACHETOOSMALL = -18,
-    STALE = -19,
-    NOSYS = -20,
-    NOPERMITTED = -21,
+  OK = 0,
+  INTERNAL = -1,
+  UNKNOWN = -2,
+  EXISTS = -3,
+  NOTEXIST = -4,
+  NO_SPACE = -5,
+  BAD_FD = -6,
+  INVALIDPARAM = -7,
+  NOPERMISSION = -8,
+  NOTEMPTY = -9,
+  NOFLUSH = -10,
+  NOTSUPPORT = -11,
+  NAMETOOLONG = -12,
+  MOUNT_POINT_EXIST = -13,
+  MOUNT_FAILED = -14,
+  OUT_OF_RANGE = -15,
+  NODATA = -16,
+  IO_ERROR = -17,
+  CACHETOOSMALL = -18,
+  STALE = -19,
+  NOSYS = -20,
+  NOPERMITTED = -21,
 };
 
 std::string StrErr(CURVEFS_ERROR code);
 
 int SysErr(CURVEFS_ERROR code);
 
-std::ostream &operator<<(std::ostream &os, CURVEFS_ERROR code);
+std::ostream& operator<<(std::ostream& os, CURVEFS_ERROR code);
 
 CURVEFS_ERROR ToFSError(MetaStatusCode code);
 
