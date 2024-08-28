@@ -126,6 +126,9 @@ using common::FLAGS_fuseClientAvgReadBytes;
 using common::FLAGS_fuseClientBurstReadBytes;
 using common::FLAGS_fuseClientBurstReadBytesSecs;
 
+using ::curve::common::ReadWriteThrottleParams;
+using ::curve::common::ThrottleParams;
+
 static void on_throttle_timer(void* arg) {
   FuseClient* fuseClient = reinterpret_cast<FuseClient*>(arg);
   fuseClient->InitQosParam();
@@ -275,8 +278,14 @@ CURVEFS_ERROR FuseClient::FuseOpLookup(fuse_req_t req, fuse_ino_t parent,
     *entryOut = EntryOut(attr);
     return CURVEFS_ERROR::OK;
   }
+
+  auto entry_watcher = fs_->BorrowMember().entry_watcher;
   CURVEFS_ERROR rc = fs_->Lookup(req, parent, name, entryOut);
-  if (rc != CURVEFS_ERROR::OK && rc != CURVEFS_ERROR::NOTEXIST) {
+  if (rc == CURVEFS_ERROR::OK) {
+    entry_watcher->Remeber(entryOut->attr, name);
+  } else if (rc == CURVEFS_ERROR::NOTEXIST) {
+    // do nothing
+  } else {
     LOG(ERROR) << "Lookup() failed, retCode = " << rc << ", parent = " << parent
                << ", name = " << name;
   }
@@ -1363,6 +1372,8 @@ CURVEFS_ERROR FuseClient::FuseOpLink(fuse_req_t req, fuse_ino_t ino,
   }
 
   inodeWrapper->GetInodeAttr(&entryOut->attr);
+  auto entry_watcher = fs_->BorrowMember().entry_watcher;
+  entry_watcher->Forget(ino);
   return ret;
 }
 

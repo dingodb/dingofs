@@ -32,6 +32,9 @@
 #include <memory>
 #include <utility>
 
+#include "curvefs/src/base/filepath/filepath.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
+#include "curvefs/src/client/blockcache/s3_client.h"
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
@@ -45,6 +48,11 @@ namespace client {
 namespace warmup {
 
 using curve::common::WriteLockGuard;
+using ::curvefs::base::filepath::PathSplit;
+using ::curvefs::client::blockcache::BCACHE_ERROR;
+using ::curvefs::client::blockcache::Block;
+using ::curvefs::client::blockcache::CacheStore;
+using ::curvefs::client::blockcache::S3ClientImpl;
 
 #define WARMUP_CHECKINTERVAL_US (1000 * 1000)
 
@@ -336,7 +344,7 @@ void WarmupManagerS3Impl::TravelChunks(
           << ", size: " << s3ChunkInfoMap.size();
   for (auto const& infoIter : s3ChunkInfoMap) {
     VLOG(9) << "travel chunk: " << infoIter.first;
-    std::list<std::pair<std::string, uint64_t>> prefetchObjs;
+    std::list<std::pair<BlockKey, uint64_t>> prefetchObjs;
     TravelChunk(ino, infoIter.second, &prefetchObjs);
     {
       ReadLockGuard lock(inode2ProgressMutex_);
@@ -360,7 +368,6 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
                                       ObjectListType* prefetchObjs) {
   uint64_t blockSize = s3Adaptor_->GetBlockSize();
   uint64_t chunkSize = s3Adaptor_->GetChunkSize();
-  uint32_t objectPrefix = s3Adaptor_->GetObjectPrefix();
   uint64_t offset, len, chunkid, compaction;
   for (const auto& chunkinfo : chunkInfo.s3chunks()) {
     auto fsId = fsInfo_->fsid();
@@ -374,9 +381,8 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
     uint64_t blockIndexBegin = chunkPos / blockSize;
 
     if (len < blockSize) {  // just one block
-      auto objectName = curvefs::common::s3util::GenObjName(
-          chunkid, blockIndexBegin, compaction, fsId, ino, objectPrefix);
-      prefetchObjs->push_back(std::make_pair(objectName, len));
+      BlockKey key(fsId, ino, chunkid, blockIndexBegin, compaction);
+      prefetchObjs->push_back(std::make_pair(key, len));
     } else {
       // the offset in the block
       uint64_t blockPos = chunkPos % blockSize;
@@ -406,9 +412,8 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
       // of the obj is blockSize. Otherwise, the value is special.
       if (!firstBlockFull) {
         travelStartIndex = blockIndexBegin + 1;
-        auto objectName = curvefs::common::s3util::GenObjName(
-            chunkid, blockIndexBegin, compaction, fsId, ino, objectPrefix);
-        prefetchObjs->push_back(std::make_pair(objectName, firstBlockSize));
+        BlockKey key(fsId, ino, chunkid, blockIndexBegin, compaction);
+        prefetchObjs->push_back(std::make_pair(key, firstBlockSize));
       } else {
         travelStartIndex = blockIndexBegin;
       }
@@ -416,11 +421,10 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
         // block index is greater than or equal to 0
         travelEndIndex = (blockIndexEnd == blockIndexBegin) ? blockIndexEnd
                                                             : blockIndexEnd - 1;
-        auto objectName = curvefs::common::s3util::GenObjName(
-            chunkid, blockIndexEnd, compaction, fsId, ino, objectPrefix);
+        BlockKey key(fsId, ino, chunkid, blockIndexEnd, compaction);
         // there is no need to care about the order
         // in which objects are downloaded
-        prefetchObjs->push_back(std::make_pair(objectName, lastBlockSize));
+        prefetchObjs->push_back(std::make_pair(key, lastBlockSize));
       } else {
         travelEndIndex = blockIndexEnd;
       }
@@ -435,9 +439,8 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
               << ", blockPos: " << blockPos << ", chunkPos: " << chunkPos;
       for (auto blockIndex = travelStartIndex; blockIndex <= travelEndIndex;
            blockIndex++) {
-        auto objectName = curvefs::common::s3util::GenObjName(
-            chunkid, blockIndex, compaction, fsId, ino, objectPrefix);
-        prefetchObjs->push_back(std::make_pair(objectName, blockSize));
+        BlockKey key(fsId, ino, chunkid, blockIndex, compaction);
+        prefetchObjs->push_back(std::make_pair(key, blockSize));
       }
     }
   }
@@ -446,8 +449,8 @@ void WarmupManagerS3Impl::TravelChunk(fuse_ino_t ino,
 // TODO(hzwuhongsong): These logics are very similar to other place,
 // try to merge it
 void WarmupManagerS3Impl::WarmUpAllObjs(
-    fuse_ino_t key,
-    const std::list<std::pair<std::string, uint64_t>>& prefetchObjs) {
+    fuse_ino_t ino,
+    const std::list<std::pair<BlockKey, uint64_t>>& prefetchObjs) {
   std::atomic<uint64_t> pendingReq(0);
   curve::common::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
@@ -463,7 +466,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
         }
         if (context->retCode == 0) {
           VLOG(9) << "Get Object success: " << context->key;
-          PutObjectToCache(key, context);
+          PutObjectToCache(ino, context);
           CollectMetrics(&warmupS3Metric_.warmupS3Cached, context->len, start);
           warmupS3Metric_.warmupS3CacheSize << context->len;
           if (pendingReq.fetch_sub(1, std::memory_order_seq_cst) == 1) {
@@ -486,23 +489,24 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
 
         LOG(WARNING) << "Get Object failed, key: " << context->key
                      << ", offset: " << context->offset;
-        s3Adaptor_->GetS3Client()->DownloadAsync(context);
+        S3ClientImpl::GetInstance()->AsyncGet(context);
       };
 
   pendingReq.fetch_add(prefetchObjs.size(), std::memory_order_seq_cst);
   if (pendingReq.load(std::memory_order_seq_cst)) {
     VLOG(9) << "wait for pendingReq";
     for (auto iter : prefetchObjs) {
-      VLOG(9) << "download start: " << iter.first;
-      std::string name = iter.first;
+      BlockKey bkey = iter.first;
+      std::string name = bkey.StoreKey();
       uint64_t readLen = iter.second;
+      VLOG(9) << "download start: " << name;
       {
         ReadLockGuard lock(inode2ProgressMutex_);
-        auto iterProgress = FindWarmupProgressByKeyLocked(key);
+        auto iterProgress = FindWarmupProgressByKeyLocked(ino);
         if (iterProgress->second.GetStorageType() ==
                 curvefs::client::common::WarmupStorageType::
                     kWarmupStorageTypeDisk &&
-            s3Adaptor_->GetDiskCacheManager()->IsCached(name)) {
+            s3Adaptor_->GetBlockCache()->IsCached(bkey)) {
           // storage in disk and has cached
           pendingReq.fetch_sub(1);
           continue;
@@ -517,7 +521,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
       context->len = readLen;
       context->cb = cb;
       context->retry = 0;
-      s3Adaptor_->GetS3Client()->DownloadAsync(context);
+      S3ClientImpl::GetInstance()->AsyncGet(context);
     }
     if (pendingReq.load()) cond.Wait();
   }
@@ -663,24 +667,29 @@ void WarmupManagerS3Impl::AddFetchS3objectsTask(fuse_ino_t key,
 }
 
 void WarmupManagerS3Impl::PutObjectToCache(
-    fuse_ino_t key, const std::shared_ptr<GetObjectAsyncContext>& context) {
+    fuse_ino_t ino, const std::shared_ptr<GetObjectAsyncContext>& context) {
   ReadLockGuard lock(inode2ProgressMutex_);
-  auto iter = FindWarmupProgressByKeyLocked(key);
+  auto iter = FindWarmupProgressByKeyLocked(ino);
   if (iter == inode2Progress_.end()) {
-    VLOG(9) << "no this warmup task progress: " << key;
+    VLOG(9) << "no this warmup task progress: " << ino;
     return;
   }
-  int ret;
   // update progress
   iter->second.FinishedPlusOne();
   switch (iter->second.GetStorageType()) {
-    case curvefs::client::common::WarmupStorageType::kWarmupStorageTypeDisk:
-      ret = s3Adaptor_->GetDiskCacheManager()->WriteReadDirect(
-          context->key, context->buf, context->len);
-      if (ret < 0) {
-        LOG_EVERY_SECOND(INFO)
-            << "write read directly failed, key: " << context->key;
+    case curvefs::client::common::WarmupStorageType::kWarmupStorageTypeDisk: {
+      BlockKey key;
+      Block block(context->buf, context->len);
+      auto items = PathSplit(context->key);
+      assert(items.size() > 0);
+      assert(key.ParseFilename(items.back()));
+      auto block_cache = s3Adaptor_->GetBlockCache();
+      auto rc = block_cache->Cache(key, block);
+      if (rc != BCACHE_ERROR::OK) {
+        LOG_EVERY_SECOND(INFO) << "Cache block (" << key.Filename() << ")"
+                               << " failed: " << StrErr(rc);
       }
+    }
       delete[] context->buf;
       break;
     case curvefs::client::common::WarmupStorageType::kWarmupStorageTypeKvClient:

@@ -32,51 +32,11 @@ namespace curvefs {
 namespace client {
 namespace filesystem {
 
-class TimeSpecTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-  void TearDown() override {}
-};
-
 class HandlerManagerTest : public ::testing::Test {
  protected:
   void SetUp() override {}
   void TearDown() override {}
 };
-
-TEST_F(TimeSpecTest, Basic) {
-  // time1 == time2
-  ASSERT_EQ(TimeSpec(10, 20), TimeSpec(10, 20));
-
-  // time1 != time2
-  ASSERT_NE(TimeSpec(10, 20), TimeSpec(10, 21));
-  ASSERT_NE(TimeSpec(10, 20), TimeSpec(11, 20));
-  ASSERT_NE(TimeSpec(10, 20), TimeSpec(11, 21));
-
-  // time1 < time2
-  ASSERT_LT(TimeSpec(10, 20), TimeSpec(10, 21));
-  ASSERT_LT(TimeSpec(10, 20), TimeSpec(11, 20));
-  ASSERT_LT(TimeSpec(10, 20), TimeSpec(11, 21));
-
-  // time1 > time2
-  ASSERT_GT(TimeSpec(10, 20), TimeSpec(10, 19));
-  ASSERT_GT(TimeSpec(10, 20), TimeSpec(9, 21));
-  ASSERT_GT(TimeSpec(10, 20), TimeSpec(9, 19));
-
-  // time1 + time2
-  ASSERT_EQ(TimeSpec(10, 20) + TimeSpec(10, 20), TimeSpec(20, 40));
-
-  // std::cout << time
-  std::ostringstream oss;
-  oss << TimeSpec(10, 20);
-  ASSERT_EQ(oss.str(), "10.20");
-
-  // time2(time1)
-  TimeSpec time1(10, 20);
-  TimeSpec time2(time1);
-  ASSERT_EQ(time2.seconds, 10);
-  ASSERT_EQ(time2.nanoSeconds, 20);
-}
 
 TEST_F(HandlerManagerTest, Basic) {
   // CASE 1: new handler

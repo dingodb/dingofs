@@ -56,7 +56,6 @@ class ChunkCacheManagerTest : public testing::Test {
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
     option.chunkFlushThreads = 5;
-    option.diskCacheOpt.diskCacheType = (DiskCacheType)0;
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
     auto fsCacheManager_ = std::make_shared<FsCacheManager>(
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,

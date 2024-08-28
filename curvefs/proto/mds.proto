@@ -102,6 +102,7 @@ message FsInfo {
     optional uint64 txSequence = 13;
     optional string txOwner = 14;
     optional uint32 recycleTimeHour =15;
+    optional string uuid = 16;
 }
 
 message GetFsInfoResponse {

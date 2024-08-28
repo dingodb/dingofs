@@ -29,6 +29,7 @@
 #include <string>
 
 #include "curvefs/proto/metaserver.pb.h"
+#include "curvefs/src/base/time/time.h"
 #include "curvefs/src/client/dir_buffer.h"
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_wrapper.h"
@@ -43,6 +44,7 @@ using ::curve::common::ReadLockGuard;
 using ::curve::common::RWLock;
 using ::curve::common::UniqueLock;
 using ::curve::common::WriteLockGuard;
+using ::curvefs::base::time::TimeSpec;
 using ::curvefs::client::DirBufferHead;
 using ::curvefs::client::InodeWrapper;
 using ::curvefs::metaserver::Dentry;
@@ -97,25 +99,6 @@ struct FileOut {
   size_t nwritten;
 };
 
-struct TimeSpec {
-  TimeSpec() : seconds(0), nanoSeconds(0) {}
-
-  TimeSpec(uint64_t seconds, uint32_t nanoSeconds)
-      : seconds(seconds), nanoSeconds(nanoSeconds) {}
-
-  TimeSpec(const TimeSpec& time)
-      : seconds(time.seconds), nanoSeconds(time.nanoSeconds) {}
-
-  TimeSpec& operator=(const TimeSpec& time) = default;
-
-  TimeSpec operator+(const TimeSpec& time) const {
-    return TimeSpec(seconds + time.seconds, nanoSeconds + time.nanoSeconds);
-  }
-
-  uint64_t seconds;
-  uint32_t nanoSeconds;
-};
-
 struct FileHandler {
   uint64_t fh;
   DirBufferHead* buffer;
@@ -140,28 +123,6 @@ class HandlerManager {
   std::shared_ptr<DirBuffer> dirBuffer_;
   std::map<uint64_t, std::shared_ptr<FileHandler>> handlers_;
 };
-
-inline bool operator==(const TimeSpec& lhs, const TimeSpec& rhs) {
-  return (lhs.seconds == rhs.seconds) && (lhs.nanoSeconds == rhs.nanoSeconds);
-}
-
-inline bool operator!=(const TimeSpec& lhs, const TimeSpec& rhs) {
-  return !(lhs == rhs);
-}
-
-inline bool operator<(const TimeSpec& lhs, const TimeSpec& rhs) {
-  return (lhs.seconds < rhs.seconds) ||
-         (lhs.seconds == rhs.seconds && lhs.nanoSeconds < rhs.nanoSeconds);
-}
-
-inline bool operator>(const TimeSpec& lhs, const TimeSpec& rhs) {
-  return (lhs.seconds > rhs.seconds) ||
-         (lhs.seconds == rhs.seconds && lhs.nanoSeconds > rhs.nanoSeconds);
-}
-
-inline std::ostream& operator<<(std::ostream& os, const TimeSpec& time) {
-  return os << time.seconds << "." << time.nanoSeconds;
-}
 
 std::string StrMode(uint16_t mode);
 

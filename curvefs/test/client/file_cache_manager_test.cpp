@@ -23,6 +23,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 #include "curvefs/test/client/mock_client_s3.h"
@@ -50,6 +51,8 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::WithArg;
 
+using ::curvefs::client::blockcache::BCACHE_ERROR;
+
 // extern KVClientManager *g_kvClientManager;
 
 class FileCacheManagerTest : public testing::Test {
@@ -70,7 +73,6 @@ class FileCacheManagerTest : public testing::Test {
     option.readCacheMaxByte = 104857600;
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
-    option.diskCacheOpt.diskCacheType = (DiskCacheType)0;
     option.chunkFlushThreads = 5;
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
     auto fsCacheManager = std::make_shared<FsCacheManager>(
@@ -261,9 +263,10 @@ TEST_F(FileCacheManagerTest, test_read_s3) {
           DoAll(SetArgReferee<1>(inodeWrapper), Return(CURVEFS_ERROR::OK)))
       .WillOnce(
           DoAll(SetArgReferee<1>(inodeWrapper), Return(CURVEFS_ERROR::OK)));
-  EXPECT_CALL(*mockS3Client_, Download(_, _, _, _))
-      .WillOnce(DoAll(SetArgPointee<1>(*tmpBuf.data()), Return(len)))
-      .WillOnce(Return(-1));
+  EXPECT_CALL(*mockS3Client_, Range(_, _, _, _))
+      .WillOnce(
+          DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(BCACHE_ERROR::OK)))
+      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
 
   ASSERT_EQ(len, fileCacheManager_->Read(inodeId, offset, len, buf.data()));
   ASSERT_EQ(-1, fileCacheManager_->Read(inodeId, offset, len, buf.data()));

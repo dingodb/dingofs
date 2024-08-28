@@ -39,6 +39,7 @@
 #include <utility>
 #include <vector>
 
+#include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/dentry_cache_manager.h"
 #include "curvefs/src/client/fuse_common.h"
@@ -51,12 +52,15 @@
 #include "curvefs/src/common/task_thread_pool.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/concurrent/rw_lock.h"
+#include "src/common/s3_adapter.h"
 
 namespace curvefs {
 namespace client {
 namespace warmup {
 
 using common::FuseClientOption;
+using ::curve::common::GetObjectAsyncContext;
+using ::curvefs::client::blockcache::BlockKey;
 
 using ThreadPool = curvefs::common::TaskThreadPool2<bthread::Mutex,
                                                     bthread::ConditionVariable>;
@@ -373,15 +377,15 @@ class WarmupManagerS3Impl : public WarmupManager {
   void TravelChunks(fuse_ino_t key, fuse_ino_t ino,
                     const S3ChunkInfoMapType& s3ChunkInfoMap);
 
-  using ObjectListType = std::list<std::pair<std::string, uint64_t>>;
+  using ObjectListType = std::list<std::pair<BlockKey, uint64_t>>;
   // travel and download all objs belong to the chunk
   void TravelChunk(fuse_ino_t ino, const S3ChunkInfoList& chunkInfo,
                    ObjectListType* prefetchObjs);
 
   // warmup all the prefetchObjs
   void WarmUpAllObjs(
-      fuse_ino_t key,
-      const std::list<std::pair<std::string, uint64_t>>& prefetchObjs);
+      fuse_ino_t ino,
+      const std::list<std::pair<BlockKey, uint64_t>>& prefetchObjs);
 
   /**
    * @brief Whether the warmup task[key] is completed (or terminated)
@@ -405,7 +409,7 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   void AddFetchS3objectsTask(fuse_ino_t key, std::function<void()> task);
 
-  void PutObjectToCache(fuse_ino_t key,
+  void PutObjectToCache(fuse_ino_t ino,
                         const std::shared_ptr<GetObjectAsyncContext>& context);
 
  protected:

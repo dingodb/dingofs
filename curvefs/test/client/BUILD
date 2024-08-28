@@ -74,6 +74,7 @@ cc_test(
         "//curvefs/proto:mds_cc_proto",
         "//curvefs/proto:space_cc_proto",
         "//curvefs/test/client/rpcclient:rpcclient_test_mock",
+        "//curvefs/test/client/blockcache/mock:blockcache_mock_lib",
         "//test/client/mock:client_mock_lib",
     ],
     linkopts = [

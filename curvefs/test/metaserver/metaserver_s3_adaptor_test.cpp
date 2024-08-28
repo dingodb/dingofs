@@ -55,7 +55,6 @@ class MetaserverS3AdaptorTest : public testing::Test {
  protected:
   S3ClientAdaptor* metaserverS3ClientAdaptor_;
   MockS3Client* mockMetaserverS3Client_;
-  client::MockS3Client mockClientS3Client_;
 
   client::MockMetaServerService mockMetaServerService_;
   std::string addr_ = "127.0.0.1:5629";

@@ -16,13 +16,14 @@
 
 #include <memory>
 
-#include "curvefs/src/base/timer_impl.h"
+#include "curvefs/src/base/timer/timer_impl.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace curvefs {
 
 namespace base {
+namespace timer {
 
 class TimerImplTest : public ::testing::Test {
  public:
@@ -82,6 +83,7 @@ TEST_F(TimerImplTest, Add) {
 
   EXPECT_EQ(count.load(), 0);
 }
-}  // namespace base
 
+}  // namespace timer
+}  // namespace base
 }  // namespace curvefs

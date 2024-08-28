@@ -68,6 +68,8 @@ using ::curvefs::client::metric::FSMetric;
 using ::curvefs::common::FSType;
 using ::curvefs::metaserver::DentryFlag;
 using ::curvefs::metaserver::ManageInodeType;
+using ::curvefs::client::metric::FSMetric;
+using ::curve::common::Throttle;
 
 namespace curvefs {
 namespace client {

@@ -83,42 +83,6 @@ struct KVClientManagerOpt {
   int getThreadPooln = 4;
 };
 
-struct DiskCacheOption {
-  DiskCacheType diskCacheType;
-  // cache disk dir
-  std::string cacheDir;
-  // if true, call fdatasync after write
-  bool forceFlush;
-  // trim interval
-  uint64_t trimCheckIntervalSec;
-  // async load interval
-  uint64_t asyncLoadPeriodMs;
-  // trim start if disk usage over fullRatio
-  uint64_t fullRatio;
-  // trim finish until disk usage below safeRatio
-  uint64_t safeRatio;
-  // the max size disk cache can use
-  uint64_t maxUsableSpaceBytes;
-  // the max file nums can cache
-  uint64_t maxFileNums;
-  // the max time system command can run
-  uint32_t cmdTimeoutSec;
-  // threads for disk cache
-  uint32_t threads = 10;
-  // the write throttle bps of disk cache
-  uint64_t avgFlushBytes;
-  // the write burst bps of disk cache
-  uint64_t burstFlushBytes;
-  // the times that write burst bps can continue
-  uint64_t burstSecs;
-  // the read throttle bps of disk cache
-  uint64_t avgReadFileBytes;
-  // the write throttle iops of disk cache
-  uint64_t avgFlushIops;
-  // the read throttle iops of disk cache
-  uint64_t avgReadFileIops;
-};
-
 struct S3ClientAdaptorOption {
   uint64_t blockSize;
   uint64_t chunkSize;
@@ -136,7 +100,6 @@ struct S3ClientAdaptorOption {
   uint32_t maxReadRetryIntervalMs;
   uint32_t readRetryIntervalMs;
   uint32_t objectPrefix;
-  DiskCacheOption diskCacheOpt;
 };
 
 struct S3Option {
@@ -214,6 +177,7 @@ struct DeferSyncOption {
 
 struct FileSystemOption {
   bool cto;
+  std::string nocto_suffix;
   bool disableXAttr;
   uint32_t maxNameLength;
   uint32_t blockSize = 0x10000u;
@@ -224,6 +188,24 @@ struct FileSystemOption {
   AttrWatcherOption attrWatcherOption;
   RPCOption rpcOption;
   DeferSyncOption deferSyncOption;
+};
+// }
+
+// { block cache option
+struct DiskCacheOption {
+  uint32_t index;
+  std::string cache_dir;
+  uint64_t cache_size;  // bytes
+};
+
+struct BlockCacheOption {
+  std::string cache_store;
+  bool stage;
+  uint32_t flush_workers;
+  uint32_t flush_queue_size;
+  uint64_t upload_stage_workers;
+  uint64_t upload_stage_queue_size;
+  std::vector<DiskCacheOption> disk_cache_options;
 };
 // }
 
@@ -241,6 +223,7 @@ struct FuseClientOption {
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
   FileSystemOption fileSystemOption;
+  BlockCacheOption block_cache_option;
 
   uint32_t listDentryLimit;
   uint32_t listDentryThreads;
@@ -262,6 +245,8 @@ void S3Info2FsS3Option(const curvefs::common::S3Info& s3,
 void InitMdsOption(Configuration* conf, MdsOption* mdsOpt);
 
 void InitLeaseOpt(Configuration* conf, LeaseOpt* leaseOpt);
+
+void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
 
 }  // namespace common
 }  // namespace client

@@ -28,11 +28,13 @@
 #include <algorithm>
 #include <limits>
 
+#include "curvefs/src/base/string/string.h"
 #include "curvefs/src/mds/codec/codec.h"
 
 namespace curvefs {
 namespace mds {
 
+using ::curvefs::base::string::GenUuid;
 using ::curvefs::common::S3Info;
 using ::curvefs::common::Volume;
 using google::protobuf::util::MessageDifferencer;
@@ -49,6 +51,7 @@ FsInfoWrapper::FsInfoWrapper(const ::curvefs::mds::CreateFsRequest* request,
   fsInfo.set_enablesumindir(request->enablesumindir());
   fsInfo.set_txsequence(0);
   fsInfo.set_txowner("");
+  fsInfo.set_uuid(GenUuid());
   if (request->has_recycletimehour()) {
     fsInfo.set_recycletimehour(request->recycletimehour());
   }

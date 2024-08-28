@@ -28,24 +28,26 @@
 #include <memory>
 #include <string>
 
+#include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 
 namespace curvefs {
 namespace client {
 
+using ::curvefs::client::blockcache::BlockCache;
+
 class MockS3ClientAdaptor : public S3ClientAdaptor {
  public:
-  MOCK_METHOD8(
-      Init,
-      CURVEFS_ERROR(const S3ClientAdaptorOption& option,
-                    std::shared_ptr<S3Client> client,
-                    std::shared_ptr<InodeCacheManager> inodeManager,
-                    std::shared_ptr<MdsClient> mdsClient,
-                    std::shared_ptr<FsCacheManager> fsCacheManager,
-                    std::shared_ptr<DiskCacheManagerImpl> diskCacheManagerImpl,
-                    std::shared_ptr<KVClientManager> kvClientManager,
-                    bool startBackGround));
+  MOCK_METHOD8(Init,
+               CURVEFS_ERROR(const S3ClientAdaptorOption& option,
+                             std::shared_ptr<S3Client> client,
+                             std::shared_ptr<InodeCacheManager> inodeManager,
+                             std::shared_ptr<MdsClient> mdsClient,
+                             std::shared_ptr<FsCacheManager> fsCacheManager,
+                             std::shared_ptr<BlockCache> blockCache,
+                             std::shared_ptr<KVClientManager> kvClientManager,
+                             bool startBackGround));
 
   MOCK_METHOD4(Write, int(uint64_t inodeId, uint64_t offset, uint64_t length,
                           const char* buf));
@@ -64,7 +66,7 @@ class MockS3ClientAdaptor : public S3ClientAdaptor {
   MOCK_METHOD1(InitMetrics, void(const std::string& fsName));
   MOCK_METHOD3(CollectMetrics,
                void(InterfaceMetric* interface, int count, uint64_t start));
-  MOCK_METHOD0(GetDiskCacheManager, std::shared_ptr<DiskCacheManagerImpl>());
+  MOCK_METHOD0(GetBlockCache, std::shared_ptr<BlockCache>());
   MOCK_METHOD0(GetS3Client, std::shared_ptr<S3Client>());
   MOCK_METHOD0(GetBlockSize, uint64_t());
   MOCK_METHOD0(GetChunkSize, uint64_t());

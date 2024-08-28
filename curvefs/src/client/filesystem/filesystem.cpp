@@ -25,6 +25,7 @@
 #include <map>
 
 #include "curvefs/src/client/filesystem/utils.h"
+
 namespace curvefs {
 namespace client {
 namespace filesystem {
@@ -37,6 +38,7 @@ FileSystem::FileSystem(FileSystemOption option, ExternalMember member)
   openFiles_ = std::make_shared<OpenFiles>(option_.openFilesOption, deferSync_);
   attrWatcher_ = std::make_shared<AttrWatcher>(option_.attrWatcherOption,
                                                openFiles_, dirCache_);
+  entry_watcher_ = std::make_shared<EntryWatcher>(option_.nocto_suffix);
   handlerManager_ = std::make_shared<HandlerManager>();
   rpc_ = std::make_shared<RPCClient>(option.rpcOption, member);
 }
@@ -222,7 +224,7 @@ void FileSystem::ReleaseHandler(uint64_t fh) {
 }
 
 FileSystemMember FileSystem::BorrowMember() {
-  return FileSystemMember(deferSync_, openFiles_, attrWatcher_);
+  return FileSystemMember(deferSync_, openFiles_, attrWatcher_, entry_watcher_);
 }
 
 // fuse request*

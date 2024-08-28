@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/filesystem/access_log.h"
@@ -53,6 +54,7 @@ using ::curvefs::client::CURVEFS_ERROR;
 using ::curvefs::client::FuseClient;
 using ::curvefs::client::FuseS3Client;
 using ::curvefs::client::FuseVolumeClient;
+using ::curvefs::client::blockcache::InitBlockCacheLog;
 using ::curvefs::client::common::FuseClientOption;
 using ::curvefs::client::filesystem::AccessLogGuard;
 using ::curvefs::client::filesystem::AttrOut;
@@ -146,7 +148,7 @@ int InitLog(const char* confPath, const char* argv0) {
   // initialize logging module
   google::InitGoogleLogging(argv0);
 
-  bool succ = InitAccessLog(FLAGS_log_dir);
+  bool succ = InitAccessLog(FLAGS_log_dir) && InitBlockCacheLog(FLAGS_log_dir);
   if (!succ) {
     return -1;
   }

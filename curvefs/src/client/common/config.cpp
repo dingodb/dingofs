@@ -27,6 +27,10 @@
 #include <string>
 #include <vector>
 
+#include "curvefs/src/base/filepath/filepath.h"
+#include "curvefs/src/base/math/math.h"
+#include "curvefs/src/base/string/string.h"
+#include "curvefs/src/client/common/dynamic_config.h"
 #include "src/common/gflags_helper.h"
 #include "src/common/string_util.h"
 
@@ -46,6 +50,13 @@ DECLARE_bool(useFakeS3);
 namespace curvefs {
 namespace client {
 namespace common {
+
+using ::curvefs::base::filepath::PathJoin;
+using ::curvefs::base::math::kMiB;
+using ::curvefs::base::string::Str2Int;
+using ::curvefs::base::string::StrFormat;
+using ::curvefs::base::string::StrSplit;
+
 static bool pass_bool(const char*, bool) { return true; }
 DEFINE_bool(enableCto, true, "acheieve cto consistency");
 DEFINE_bool(useFakeS3, false,
@@ -162,40 +173,6 @@ void InitBlockDeviceOption(Configuration* conf,
   conf->GetValueFatalIfFail("bdev.confPath", &bdevOpt->configPath);
 }
 
-void InitDiskCacheOption(Configuration* conf,
-                         DiskCacheOption* diskCacheOption) {
-  uint32_t diskCacheType;
-  conf->GetValueFatalIfFail("diskCache.diskCacheType", &diskCacheType);
-  diskCacheOption->diskCacheType = (DiskCacheType)diskCacheType;
-  conf->GetValueFatalIfFail("diskCache.forceFlush",
-                            &diskCacheOption->forceFlush);
-  conf->GetValueFatalIfFail("diskCache.cacheDir", &diskCacheOption->cacheDir);
-  conf->GetValueFatalIfFail("diskCache.trimCheckIntervalSec",
-                            &diskCacheOption->trimCheckIntervalSec);
-  conf->GetValueFatalIfFail("diskCache.asyncLoadPeriodMs",
-                            &diskCacheOption->asyncLoadPeriodMs);
-  conf->GetValueFatalIfFail("diskCache.fullRatio", &diskCacheOption->fullRatio);
-  conf->GetValueFatalIfFail("diskCache.safeRatio", &diskCacheOption->safeRatio);
-  conf->GetValueFatalIfFail("diskCache.maxUsableSpaceBytes",
-                            &diskCacheOption->maxUsableSpaceBytes);
-  conf->GetValueFatalIfFail("diskCache.maxFileNums",
-                            &diskCacheOption->maxFileNums);
-  conf->GetValueFatalIfFail("diskCache.cmdTimeoutSec",
-                            &diskCacheOption->cmdTimeoutSec);
-  conf->GetValueFatalIfFail("diskCache.threads", &diskCacheOption->threads);
-  conf->GetValueFatalIfFail("diskCache.avgFlushBytes",
-                            &diskCacheOption->avgFlushBytes);
-  conf->GetValueFatalIfFail("diskCache.burstFlushBytes",
-                            &diskCacheOption->burstFlushBytes);
-  conf->GetValueFatalIfFail("diskCache.burstSecs", &diskCacheOption->burstSecs);
-  conf->GetValueFatalIfFail("diskCache.avgFlushIops",
-                            &diskCacheOption->avgFlushIops);
-  conf->GetValueFatalIfFail("diskCache.avgReadFileBytes",
-                            &diskCacheOption->avgReadFileBytes);
-  conf->GetValueFatalIfFail("diskCache.avgReadFileIops",
-                            &diskCacheOption->avgReadFileIops);
-}
-
 void InitS3Option(Configuration* conf, S3Option* s3Opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
   conf->GetValueFatalIfFail("s3.pageSize", &s3Opt->s3ClientAdaptorOpt.pageSize);
@@ -225,7 +202,6 @@ void InitS3Option(Configuration* conf, S3Option* s3Opt) {
                             &s3Opt->s3ClientAdaptorOpt.readRetryIntervalMs);
   ::curve::common::InitS3AdaptorOptionExceptS3InfoOption(conf,
                                                          &s3Opt->s3AdaptrOpt);
-  InitDiskCacheOption(conf, &s3Opt->s3ClientAdaptorOpt.diskCacheOpt);
 }
 
 void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt) {
@@ -280,6 +256,7 @@ void InitKVClientManagerOpt(Configuration* conf, KVClientManagerOpt* config) {
 void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
   c->GetValueFatalIfFail("fs.cto", &option->cto);
   c->GetValueFatalIfFail("fs.cto", &FLAGS_enableCto);
+  c->GetValueFatalIfFail("fs.nocto_suffix", &option->nocto_suffix);
   c->GetValueFatalIfFail("fs.disableXAttr", &option->disableXAttr);
   c->GetValueFatalIfFail("fs.maxNameLength", &option->maxNameLength);
   c->GetValueFatalIfFail("fs.accessLogging", &FLAGS_access_logging);
@@ -323,6 +300,73 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
   }
 }
 
+namespace {
+
+void SplitDiskCacheOption(DiskCacheOption option,
+                          std::vector<DiskCacheOption>* options) {
+  std::vector<std::string> dirs = StrSplit(option.cache_dir, ";");
+  for (int i = 0; i < dirs.size(); i++) {
+    uint64_t cache_size = option.cache_size;
+    std::vector<std::string> items = StrSplit(dirs[i], ":");
+    if (items.size() > 2 ||
+        (items.size() == 2 && !Str2Int(items[1], &cache_size))) {
+      CHECK(false) << "Invalid cache dir: " << dirs[i];
+    }
+
+    DiskCacheOption o = option;
+    o.index = i;
+    o.cache_dir = items[0];
+    o.cache_size = cache_size;
+    options->emplace_back(o);
+  }
+}
+
+}  // namespace
+
+void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
+  {  // block cache option
+    c->GetValueFatalIfFail("block_cache.stage", &option->stage);
+    c->GetValueFatalIfFail("block_cache.logging", &FLAGS_block_cache_logging);
+    c->GetValueFatalIfFail("block_cache.flush_workers", &option->flush_workers);
+    c->GetValueFatalIfFail("block_cache.flush_queue_size",
+                           &option->flush_queue_size);
+    c->GetValueFatalIfFail("block_cache.upload_stage_workers",
+                           &option->upload_stage_workers);
+    c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
+                           &option->upload_stage_queue_size);
+    c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store);
+    if (option->cache_store != "none" && option->cache_store != "disk") {
+      CHECK(false) << "Only support disk or none cache store.";
+    }
+  }
+
+  {  // disk cache option
+    DiskCacheOption o;
+    c->GetValueFatalIfFail("disk_cache.cache_dir", &o.cache_dir);
+    c->GetValueFatalIfFail("disk_cache.cache_size_mb", &o.cache_size);
+    c->GetValueFatalIfFail("disk_cache.free_space_ratio",
+                           &FLAGS_disk_cache_free_space_ratio);
+    c->GetValueFatalIfFail("disk_cache.cache_expire_second",
+                           &FLAGS_disk_cache_expire_second);
+
+    o.cache_size = o.cache_size * kMiB;
+    SplitDiskCacheOption(o, &option->disk_cache_options);
+  }
+
+  {  // disk state option
+    c->GetValueFatalIfFail("disk_state.tick_duration_second",
+                           &FLAGS_disk_state_tick_duration_second);
+    c->GetValueFatalIfFail("disk_state.normal2unstable_io_error_num",
+                           &FLAGS_disk_state_normal2unstable_io_error_num);
+    c->GetValueFatalIfFail("disk_state.unstable2normal_io_succ_num",
+                           &FLAGS_disk_state_unstable2normal_io_succ_num);
+    c->GetValueFatalIfFail("disk_state.unstable2down_second",
+                           &FLAGS_disk_state_unstable2down_second);
+    c->GetValueFatalIfFail("disk_state.disk_check_duration_millsecond",
+                           &FLAGS_disk_check_duration_millsecond);
+  }
+}
+
 void SetBrpcOpt(Configuration* conf) {
   curve::common::GflagsLoadValueFromConfIfCmdNotSet dummy;
   dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
@@ -344,6 +388,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
   InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
   InitFileSystemOption(conf, &clientOption->fileSystemOption);
+  InitBlockCacheOption(conf, &clientOption->block_cache_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                             &clientOption->listDentryLimit);
@@ -412,6 +457,14 @@ void S3Info2FsS3Option(const curvefs::common::S3Info& s3,
   fsS3Opt->blockSize = s3.blocksize();
   fsS3Opt->chunkSize = s3.chunksize();
   fsS3Opt->objectPrefix = s3.has_objectprefix() ? s3.objectprefix() : 0;
+}
+
+void RewriteCacheDir(BlockCacheOption* option, std::string uuid) {
+  auto& disk_cache_options = option->disk_cache_options;
+  for (auto& disk_cache_option : disk_cache_options) {
+    std::string cache_dir = disk_cache_option.cache_dir;
+    disk_cache_option.cache_dir = PathJoin({cache_dir, uuid});
+  }
 }
 
 }  // namespace common

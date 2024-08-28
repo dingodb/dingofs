@@ -29,8 +29,9 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
+#include "curvefs/src/base/queue/message_queue.h"
+#include "curvefs/src/base/time/time.h"
 #include "curvefs/src/client/common/config.h"
-#include "curvefs/src/client/filesystem/message_queue.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/metric.h"
 #include "src/common/concurrent/concurrent.h"
@@ -44,6 +45,8 @@ using ::curve::common::LRUCache;
 using ::curve::common::ReadLockGuard;
 using ::curve::common::RWLock;
 using ::curve::common::WriteLockGuard;
+using ::curvefs::base::queue::MessageQueue;
+using ::curvefs::base::time::TimeSpec;
 using ::curvefs::client::common::DirCacheOption;
 
 class DirEntryList {

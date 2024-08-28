@@ -52,7 +52,6 @@ class DataCacheTest : public testing::Test {
     option.flushIntervalSec = 5000;
     option.readCacheMaxByte = 104857600;
     option.readCacheThreads = 5;
-    option.diskCacheOpt.diskCacheType = (DiskCacheType)0;
     option.chunkFlushThreads = 5;
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
     auto fsCacheManager = std::make_shared<FsCacheManager>(

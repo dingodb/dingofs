@@ -29,6 +29,7 @@ cc_library(
         "//src/client:curve_client",
         "//src/common:curve_common",
         "//src/common:curve_s3_adapter",
+        "//curvefs/src/base:curvefs_base_lib",
         "//curvefs/proto:curvefs_common_cc_proto",
     ],
 )

@@ -32,6 +32,7 @@
 #include "curvefs/src/client/filesystem/attr_watcher.h"
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
+#include "curvefs/src/client/filesystem/entry_watcher.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/lookup_cache.h"
 #include "curvefs/src/client/filesystem/meta.h"
@@ -48,12 +49,17 @@ using ::curvefs::client::common::FileSystemOption;
 struct FileSystemMember {
   FileSystemMember(std::shared_ptr<DeferSync> deferSync,
                    std::shared_ptr<OpenFiles> openFiles,
-                   std::shared_ptr<AttrWatcher> attrWatcher)
-      : deferSync(deferSync), openFiles(openFiles), attrWatcher(attrWatcher) {}
+                   std::shared_ptr<AttrWatcher> attrWatcher,
+                   std::shared_ptr<EntryWatcher> entry_watcher)
+      : deferSync(deferSync),
+        openFiles(openFiles),
+        attrWatcher(attrWatcher),
+        entry_watcher(entry_watcher) {}
 
   std::shared_ptr<DeferSync> deferSync;
   std::shared_ptr<OpenFiles> openFiles;
   std::shared_ptr<AttrWatcher> attrWatcher;
+  std::shared_ptr<EntryWatcher> entry_watcher;
 };
 
 class FileSystem {
@@ -145,6 +151,7 @@ class FileSystem {
   std::shared_ptr<DirCache> dirCache_;
   std::shared_ptr<OpenFiles> openFiles_;
   std::shared_ptr<AttrWatcher> attrWatcher_;
+  std::shared_ptr<EntryWatcher> entry_watcher_;
   std::shared_ptr<HandlerManager> handlerManager_;
   std::shared_ptr<RPCClient> rpc_;
 };

@@ -26,10 +26,14 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
+#include <memory>
+
+#include "curvefs/src/client/blockcache/block_cache.h"
+#include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/inode_wrapper.h"
+#include "curvefs/test/client/blockcache/mock/mock_block_cache.h"
 #include "curvefs/test/client/mock_client_s3.h"
 #include "curvefs/test/client/mock_client_s3_cache_manager.h"
-#include "curvefs/test/client/mock_disk_cache_manager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_metaserver_service.h"
 #include "curvefs/test/client/rpcclient/mock_mds_client.h"
@@ -45,6 +49,9 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::WithArg;
 
+using ::curvefs::client::blockcache::BCACHE_ERROR;
+using ::curvefs::client::blockcache::MockBlockCache;
+using ::curvefs::client::blockcache::StoreType;
 using rpcclient::MockMdsClient;
 
 // extern KVClientManager *g_kvClientManager;
@@ -56,10 +63,9 @@ class ClientS3AdaptorTest : public testing::Test {
   void SetUp() override {
     s3ClientAdaptor_ = std::make_shared<S3ClientAdaptorImpl>();
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
-    mockDiskcacheManagerImpl_ = std::make_shared<MockDiskCacheManagerImpl>();
     mockFsCacheManager_ = std::make_shared<MockFsCacheManager>();
-    mockS3Client_ = std::make_shared<MockS3Client>();
     mockMdsClient_ = std::make_shared<MockMdsClient>();
+    mockBlockCache_ = std::make_shared<MockBlockCache>();
     S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
@@ -72,11 +78,9 @@ class ClientS3AdaptorTest : public testing::Test {
     option.readCacheThreads = 5;
     option.chunkFlushThreads = 5;
     option.objectPrefix = 0;
-    option.diskCacheOpt.diskCacheType = (DiskCacheType)0;
     kvClientManager_ = nullptr;
-    s3ClientAdaptor_->Init(option, mockS3Client_, mockInodeManager_,
-                           mockMdsClient_, mockFsCacheManager_,
-                           mockDiskcacheManagerImpl_, kvClientManager_);
+    s3ClientAdaptor_->Init(option, nullptr, mockInodeManager_, mockMdsClient_,
+                           mockFsCacheManager_, nullptr, kvClientManager_);
   }
 
   void TearDown() override {}
@@ -84,11 +88,10 @@ class ClientS3AdaptorTest : public testing::Test {
  protected:
   std::shared_ptr<S3ClientAdaptorImpl> s3ClientAdaptor_;
   std::shared_ptr<MockInodeCacheManager> mockInodeManager_;
-  std::shared_ptr<MockDiskCacheManagerImpl> mockDiskcacheManagerImpl_;
   std::shared_ptr<MockFsCacheManager> mockFsCacheManager_;
-  std::shared_ptr<MockS3Client> mockS3Client_;
   std::shared_ptr<MockMdsClient> mockMdsClient_;
   std::shared_ptr<KVClientManager> kvClientManager_;
+  std::shared_ptr<MockBlockCache> mockBlockCache_;
 };
 
 uint64_t gInodeId = 1;
@@ -115,7 +118,7 @@ TEST_F(ClientS3AdaptorTest, test_init) {
   ASSERT_EQ(1024 * 1024, s3ClientAdaptor_->GetBlockSize());
   ASSERT_EQ(4 * 1024 * 1024, s3ClientAdaptor_->GetChunkSize());
   ASSERT_EQ(64 * 1024, s3ClientAdaptor_->GetPageSize());
-  ASSERT_EQ(true, s3ClientAdaptor_->DisableDiskCache());
+  // ASSERT_EQ(true, s3ClientAdaptor_->DisableDiskCache());
 }
 
 TEST_F(ClientS3AdaptorTest, write_success) {
@@ -253,8 +256,6 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_flush_fail) {
 }
 
 TEST_F(ClientS3AdaptorTest, FlushAllCache_with_no_cache) {
-  s3ClientAdaptor_->SetDiskCache(DiskCacheType::Disable);
-
   LOG(INFO) << "############ case1: do not find file cache";
   auto filecache = std::make_shared<MockFileCacheManager>();
   EXPECT_CALL(*mockFsCacheManager_, FindFileCacheManager(_))
@@ -269,15 +270,15 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_no_cache) {
 }
 
 TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
-  s3ClientAdaptor_->SetDiskCache(DiskCacheType::ReadWrite);
-
   LOG(INFO) << "############ case1: clear write cache fail";
   auto filecache = std::make_shared<MockFileCacheManager>();
   EXPECT_CALL(*mockFsCacheManager_, FindFileCacheManager(_))
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(CURVEFS_ERROR::OK));
-  EXPECT_CALL(*mockDiskcacheManagerImpl_, UploadWriteCacheByInode(_))
-      .WillOnce(Return(-1));
+  EXPECT_CALL(*mockBlockCache_, GetStoreType())
+      .WillOnce(Return(StoreType::NONE));
+  EXPECT_CALL(*mockBlockCache_, Flush(_))
+      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
   ASSERT_EQ(CURVEFS_ERROR::INTERNAL, s3ClientAdaptor_->FlushAllCache(1));
 
   LOG(INFO)
@@ -285,8 +286,9 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
   EXPECT_CALL(*mockFsCacheManager_, FindFileCacheManager(_))
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(CURVEFS_ERROR::OK));
-  EXPECT_CALL(*mockDiskcacheManagerImpl_, UploadWriteCacheByInode(_))
-      .WillOnce(Return(0));
+  EXPECT_CALL(*mockBlockCache_, GetStoreType())
+      .WillOnce(Return(StoreType::DISK));
+  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(BCACHE_ERROR::OK));
   ASSERT_EQ(CURVEFS_ERROR::OK, s3ClientAdaptor_->FlushAllCache(1));
 }
 
