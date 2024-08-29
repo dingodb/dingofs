@@ -29,6 +29,20 @@ cc_test(
 )
 
 cc_test(
+    name = "test_ketama_con_hash",
+    srcs = [
+        "test_ketama_con_hash.cpp",
+    ],
+    deps = [
+        "//curvefs/src/base:curvefs_base",
+        "@gtest//:gtest",
+    ],
+    copts = CURVE_TEST_COPTS,
+    visibility = ["//visibility:public"],
+    linkstatic=1,
+)
+
+cc_test(
     name = "test_timer_impl",
     srcs = [
         "test_timer_impl.cpp",
