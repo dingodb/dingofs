@@ -24,33 +24,35 @@
 #define CURVEFS_TEST_MDS_MOCK_MOCK_COORDINATOR_H_
 
 #include <gmock/gmock.h>
+
 #include <map>
 #include <vector>
+
 #include "curvefs/src/mds/schedule/coordinator.h"
 
 namespace curvefs {
 namespace mds {
+using ::curvefs::mds::topology::CopySetKey;
 using ::curvefs::mds::topology::MetaServerIdType;
 using ::curvefs::mds::topology::PoolIdType;
-using ::curvefs::mds::topology::CopySetKey;
 class MockCoordinator : public ::curvefs::mds::schedule::Coordinator {
  public:
-    MockCoordinator() {}
-    ~MockCoordinator() {}
+  MockCoordinator() {}
+  ~MockCoordinator() {}
 
-    MOCK_METHOD3(
-        CopySetHeartbeat,
-        MetaServerIdType(
-            const ::curvefs::mds::topology::CopySetInfo &originInfo,
-            const ::curvefs::mds::heartbeat::ConfigChangeInfo &configChInfo,
-            ::curvefs::mds::heartbeat::CopySetConf *newConf));
+  MOCK_METHOD3(
+      CopySetHeartbeat,
+      MetaServerIdType(
+          const ::curvefs::mds::topology::CopySetInfo& originInfo,
+          const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
+          ::curvefs::mds::heartbeat::CopySetConf* newConf));
 
-    MOCK_METHOD2(MetaserverGoingToAdd, bool(MetaServerIdType, CopySetKey));
+  MOCK_METHOD2(MetaserverGoingToAdd, bool(MetaServerIdType, CopySetKey));
 
-    MOCK_METHOD2(
-        QueryMetaServerRecoverStatus,
-        schedule::ScheduleStatusCode(const std::vector<MetaServerIdType> &,
-                                  std::map<MetaServerIdType, bool> *));
+  MOCK_METHOD2(
+      QueryMetaServerRecoverStatus,
+      schedule::ScheduleStatusCode(const std::vector<MetaServerIdType>&,
+                                   std::map<MetaServerIdType, bool>*));
 };
 }  // namespace mds
 }  // namespace curvefs

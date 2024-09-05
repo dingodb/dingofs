@@ -51,16 +51,12 @@ using ::curvefs::volume::WritePart;
  * @param[out] alloc allocated extents, key is file offset
  * @return return true on success, otherwise return false
  */
-bool AllocSpace(SpaceManager* space,
-                const AllocPart& part,
+bool AllocSpace(SpaceManager* space, const AllocPart& part,
                 std::map<uint64_t, WritePart>* writes,
                 std::map<uint64_t, Extent>* alloc);
 
-bool PrepareWriteRequest(off_t off,
-                         size_t size,
-                         const char* data,
-                         ExtentCache* extentCache,
-                         SpaceManager* spaceManager,
+bool PrepareWriteRequest(off_t off, size_t size, const char* data,
+                         ExtentCache* extentCache, SpaceManager* spaceManager,
                          std::vector<WritePart>* writes);
 
 }  // namespace client

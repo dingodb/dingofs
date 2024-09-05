@@ -36,21 +36,20 @@ class CreateFsTool : public CurvefsToolRpc<curvefs::mds::CreateFsRequest,
                                            curvefs::mds::CreateFsResponse,
                                            curvefs::mds::MdsService_Stub> {
  public:
-    explicit CreateFsTool(const std::string& cmd = kCreateFsCmd,
-                          bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
+  explicit CreateFsTool(const std::string& cmd = kCreateFsCmd, bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
 
-    int Init() override;
+  int Init() override;
 
-    bool CheckRequiredFlagDefault() override;
+  bool CheckRequiredFlagDefault() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    void SetController() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  void SetController() override;
 };
 
 }  // namespace create

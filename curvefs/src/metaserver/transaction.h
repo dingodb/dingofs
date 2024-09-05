@@ -23,72 +23,72 @@
 #ifndef CURVEFS_SRC_METASERVER_TRANSACTION_H_
 #define CURVEFS_SRC_METASERVER_TRANSACTION_H_
 
-#include <vector>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
-#include "src/common/concurrent/rw_lock.h"
 #include "curvefs/src/metaserver/dentry_storage.h"
+#include "src/common/concurrent/rw_lock.h"
 
 namespace curvefs {
 namespace metaserver {
 
 class RenameTx {
  public:
-    RenameTx() = default;
+  RenameTx() = default;
 
-    RenameTx(const std::vector<Dentry>& dentrys,
-             std::shared_ptr<DentryStorage> storage);
+  RenameTx(const std::vector<Dentry>& dentrys,
+           std::shared_ptr<DentryStorage> storage);
 
-    bool Prepare();
+  bool Prepare();
 
-    bool Commit();
+  bool Commit();
 
-    bool Rollback();
+  bool Rollback();
 
-    uint64_t GetTxId();
+  uint64_t GetTxId();
 
-    uint64_t GetTxSequence();
+  uint64_t GetTxSequence();
 
-    std::vector<Dentry>* GetDentrys();
+  std::vector<Dentry>* GetDentrys();
 
-    bool operator==(const RenameTx& rhs);
+  bool operator==(const RenameTx& rhs);
 
-    friend std::ostream& operator<<(std::ostream& os, const RenameTx& renameTx);
+  friend std::ostream& operator<<(std::ostream& os, const RenameTx& renameTx);
 
  private:
-    uint64_t txId_;
+  uint64_t txId_;
 
-    // for prevent the stale transaction
-    uint64_t txSequence_;
+  // for prevent the stale transaction
+  uint64_t txSequence_;
 
-    std::vector<Dentry> dentrys_;
+  std::vector<Dentry> dentrys_;
 
-    std::shared_ptr<DentryStorage> storage_;
+  std::shared_ptr<DentryStorage> storage_;
 };
 
 class TxManager {
  public:
-    explicit TxManager(std::shared_ptr<DentryStorage> storage);
+  explicit TxManager(std::shared_ptr<DentryStorage> storage);
 
-    MetaStatusCode HandleRenameTx(const std::vector<Dentry>& dentrys);
+  MetaStatusCode HandleRenameTx(const std::vector<Dentry>& dentrys);
 
-    MetaStatusCode PreCheck(const std::vector<Dentry>& dentrys);
+  MetaStatusCode PreCheck(const std::vector<Dentry>& dentrys);
 
-    bool InsertPendingTx(const RenameTx& tx);
+  bool InsertPendingTx(const RenameTx& tx);
 
-    bool FindPendingTx(RenameTx* pendingTx);
+  bool FindPendingTx(RenameTx* pendingTx);
 
-    void DeletePendingTx();
+  void DeletePendingTx();
 
-    bool HandlePendingTx(uint64_t txId, RenameTx* pendingTx);
+  bool HandlePendingTx(uint64_t txId, RenameTx* pendingTx);
 
  private:
-    RWLock rwLock_;
+  RWLock rwLock_;
 
-    std::shared_ptr<DentryStorage> storage_;
+  std::shared_ptr<DentryStorage> storage_;
 
-    RenameTx EMPTY_TX, pendingTx_;
+  RenameTx EMPTY_TX, pendingTx_;
 };
 
 }  // namespace metaserver

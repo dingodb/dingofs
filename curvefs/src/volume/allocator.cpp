@@ -32,11 +32,11 @@ namespace volume {
 
 std::unique_ptr<Allocator> Allocator::Create(const std::string& type,
                                              const AllocatorOption& option) {
-    if (type == "bitmap") {
-        return absl::make_unique<BitmapAllocator>(option.bitmapAllocatorOption);
-    } else {
-        return nullptr;
-    }
+  if (type == "bitmap") {
+    return absl::make_unique<BitmapAllocator>(option.bitmapAllocatorOption);
+  } else {
+    return nullptr;
+  }
 }
 
 }  // namespace volume

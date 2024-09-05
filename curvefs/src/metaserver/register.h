@@ -23,9 +23,10 @@
 #ifndef CURVEFS_SRC_METASERVER_REGISTER_H_
 #define CURVEFS_SRC_METASERVER_REGISTER_H_
 
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
+
 #include "curvefs/proto/metaserver.pb.h"
 
 namespace curvefs {
@@ -33,30 +34,29 @@ namespace metaserver {
 const uint32_t CURRENT_METADATA_VERSION = 0x01;
 
 struct RegisterOptions {
-    std::string mdsListenAddr;
-    std::string metaserverInternalIp;
-    std::string metaserverExternalIp;
-    uint32_t metaserverInternalPort;
-    uint32_t metaserverExternalPort;
-    int registerRetries;
-    int registerTimeout;
+  std::string mdsListenAddr;
+  std::string metaserverInternalIp;
+  std::string metaserverExternalIp;
+  uint32_t metaserverInternalPort;
+  uint32_t metaserverExternalPort;
+  int registerRetries;
+  int registerTimeout;
 };
 
 class Register {
  public:
-    explicit Register(const RegisterOptions &ops);
-    ~Register() {}
+  explicit Register(const RegisterOptions& ops);
+  ~Register() {}
 
-    int RegisterToMDS(MetaServerMetadata *metadata);
+  int RegisterToMDS(MetaServerMetadata* metadata);
 
  private:
-    RegisterOptions ops_;
+  RegisterOptions ops_;
 
-    std::vector<std::string> mdsEps_;
-    int inServiceIndex_;
+  std::vector<std::string> mdsEps_;
+  int inServiceIndex_;
 };
 }  // namespace metaserver
 }  // namespace curvefs
 
 #endif  // CURVEFS_SRC_METASERVER_REGISTER_H_
-

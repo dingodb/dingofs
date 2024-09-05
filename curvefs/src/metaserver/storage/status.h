@@ -31,45 +31,45 @@ namespace storage {
 
 class Status {
  public:
-    enum Code : unsigned char {
-        kOk = 0,
-        kDBClosed = 1,
-        kNotFound = 2,
-        kNotSupported = 3,
-        kInternalError = 4,
-        kSerializedFailed = 5,
-        kParsedFailed = 6,
-        kMaxCode
-    };
+  enum Code : unsigned char {
+    kOk = 0,
+    kDBClosed = 1,
+    kNotFound = 2,
+    kNotSupported = 3,
+    kInternalError = 4,
+    kSerializedFailed = 5,
+    kParsedFailed = 6,
+    kMaxCode
+  };
 
  public:
-    Status() : code_(kOk) {}
-    ~Status() = default;
+  Status() : code_(kOk) {}
+  ~Status() = default;
 
-    static Status OK() { return Status(); }
-    static Status DBClosed() { return Status(kDBClosed); }
-    static Status NotFound() { return Status(kNotFound); }
-    static Status NotSupported() { return Status(kNotSupported); }
-    static Status InternalError() { return Status(kInternalError); }
-    static Status SerializedFailed() { return Status(kSerializedFailed); }
-    static Status ParsedFailed() { return Status(kParsedFailed); }
+  static Status OK() { return Status(); }
+  static Status DBClosed() { return Status(kDBClosed); }
+  static Status NotFound() { return Status(kNotFound); }
+  static Status NotSupported() { return Status(kNotSupported); }
+  static Status InternalError() { return Status(kInternalError); }
+  static Status SerializedFailed() { return Status(kSerializedFailed); }
+  static Status ParsedFailed() { return Status(kParsedFailed); }
 
-    bool ok() const { return code() == kOk; }
-    bool IsDBClosed() const { return code() == kDBClosed; }
-    bool IsNotFound() const { return code() == kNotFound; }
-    bool IsNotSupported() const { return code() == kNotSupported; }
-    bool IsInternalError() const { return code() == kInternalError; }
-    bool IsSerializedFailed() const { return code() == kSerializedFailed; }
-    bool IsParsedFailed() const {  return code() == kParsedFailed; }
+  bool ok() const { return code() == kOk; }
+  bool IsDBClosed() const { return code() == kDBClosed; }
+  bool IsNotFound() const { return code() == kNotFound; }
+  bool IsNotSupported() const { return code() == kNotSupported; }
+  bool IsInternalError() const { return code() == kInternalError; }
+  bool IsSerializedFailed() const { return code() == kSerializedFailed; }
+  bool IsParsedFailed() const { return code() == kParsedFailed; }
 
-    Code code() const { return code_; }
-    std::string ToString() const;
-
- private:
-    explicit Status(Code _code) : code_(_code) {}
+  Code code() const { return code_; }
+  std::string ToString() const;
 
  private:
-    Code code_;
+  explicit Status(Code _code) : code_(_code) {}
+
+ private:
+  Code code_;
 };
 
 }  // namespace storage

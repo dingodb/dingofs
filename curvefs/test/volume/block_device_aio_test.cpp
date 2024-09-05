@@ -46,102 +46,102 @@ using ::curve::client::UserDataType;
 
 class AioTest : public ::testing::Test {
  public:
-    AioTest() : dev_(absl::make_unique<MockFileClient>()) {}
+  AioTest() : dev_(absl::make_unique<MockFileClient>()) {}
 
  protected:
-    std::unique_ptr<MockFileClient> dev_;
-    char data_[4096];
+  std::unique_ptr<MockFileClient> dev_;
+  char data_[4096];
 };
 
 TEST_F(AioTest, IssueAlignedError) {
-    {
-        AioRead read(0, 4096, data_, dev_.get(), 0);
-
-        EXPECT_CALL(*dev_, AioRead(_, _, _)).WillOnce(Return(-1));
-
-        read.Issue();
-        EXPECT_GT(0, read.Wait());
-    }
-
-    {
-        AioWrite write(0, 4096, data_, dev_.get(), 0);
-
-        EXPECT_CALL(*dev_, AioWrite(_, _, _)).WillOnce(Return(-1));
-
-        write.Issue();
-        EXPECT_GT(0, write.Wait());
-    }
-}
-
-TEST_F(AioTest, AioRead_IssueUnAligned) {
-    AioRead read(1, 4096, data_, dev_.get(), 0);
-    char buffer[8192];
-    unsigned int seed = time(nullptr);
-
-    for (auto& c : buffer) {
-        c = rand_r(&seed) % 26 + 'a';
-    }
-
-    EXPECT_CALL(*dev_, AioRead(_, _, _))
-        .WillOnce(Invoke([buffer](int, CurveAioContext* aio, UserDataType) {
-            EXPECT_EQ(aio->length, 8192);
-            std::memcpy(aio->buf, buffer, aio->length);
-            aio->ret = aio->length;
-            aio->cb(aio);
-            return 0;
-        }));
-
-    read.Issue();
-    EXPECT_EQ(4096, read.Wait());
-    EXPECT_EQ(std::string(data_, 4096), std::string(buffer + 1, 4096));
-}
-
-TEST_F(AioTest, AioRead_IssueUnAlignedError) {
-    AioRead read(1, 4096, data_, dev_.get(), 0);
+  {
+    AioRead read(0, 4096, data_, dev_.get(), 0);
 
     EXPECT_CALL(*dev_, AioRead(_, _, _)).WillOnce(Return(-1));
 
     read.Issue();
     EXPECT_GT(0, read.Wait());
+  }
+
+  {
+    AioWrite write(0, 4096, data_, dev_.get(), 0);
+
+    EXPECT_CALL(*dev_, AioWrite(_, _, _)).WillOnce(Return(-1));
+
+    write.Issue();
+    EXPECT_GT(0, write.Wait());
+  }
+}
+
+TEST_F(AioTest, AioRead_IssueUnAligned) {
+  AioRead read(1, 4096, data_, dev_.get(), 0);
+  char buffer[8192];
+  unsigned int seed = time(nullptr);
+
+  for (auto& c : buffer) {
+    c = rand_r(&seed) % 26 + 'a';
+  }
+
+  EXPECT_CALL(*dev_, AioRead(_, _, _))
+      .WillOnce(Invoke([buffer](int, CurveAioContext* aio, UserDataType) {
+        EXPECT_EQ(aio->length, 8192);
+        std::memcpy(aio->buf, buffer, aio->length);
+        aio->ret = aio->length;
+        aio->cb(aio);
+        return 0;
+      }));
+
+  read.Issue();
+  EXPECT_EQ(4096, read.Wait());
+  EXPECT_EQ(std::string(data_, 4096), std::string(buffer + 1, 4096));
+}
+
+TEST_F(AioTest, AioRead_IssueUnAlignedError) {
+  AioRead read(1, 4096, data_, dev_.get(), 0);
+
+  EXPECT_CALL(*dev_, AioRead(_, _, _)).WillOnce(Return(-1));
+
+  read.Issue();
+  EXPECT_GT(0, read.Wait());
 }
 
 TEST_F(AioTest, AioWrite_IssueUnAlignedError) {
-    // padding leading
-    {
-        AioWrite write(1, 4095, data_, dev_.get(), 0);
+  // padding leading
+  {
+    AioWrite write(1, 4095, data_, dev_.get(), 0);
 
-        EXPECT_CALL(*dev_, AioRead(_, _, _)).WillOnce(Return(-1));
+    EXPECT_CALL(*dev_, AioRead(_, _, _)).WillOnce(Return(-1));
 
-        write.Issue();
-        EXPECT_GT(0, write.Wait());
-    }
+    write.Issue();
+    EXPECT_GT(0, write.Wait());
+  }
 
-    // padding both leading and trailing
-    // issue trailing padding read error
-    {
-        auto* write = new AioWrite(1, 12 * 1024, data_, dev_.get(), 0);
+  // padding both leading and trailing
+  // issue trailing padding read error
+  {
+    auto* write = new AioWrite(1, 12 * 1024, data_, dev_.get(), 0);
 
-        EXPECT_CALL(*dev_, AioRead(_, _, _))
-            .WillOnce(Invoke([&](int, CurveAioContext* aio, UserDataType) {
-                std::thread th([aio]() {
-                    std::this_thread::sleep_for(std::chrono::seconds(3));
-                    aio->ret = aio->length;
-                    aio->cb(aio);
-                });
+    EXPECT_CALL(*dev_, AioRead(_, _, _))
+        .WillOnce(Invoke([&](int, CurveAioContext* aio, UserDataType) {
+          std::thread th([aio]() {
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            aio->ret = aio->length;
+            aio->cb(aio);
+          });
 
-                th.detach();
+          th.detach();
 
-                return 0;
-            }))
-            .WillOnce(Invoke(
-                [&](int, CurveAioContext* aio, UserDataType) { return -1; }));
+          return 0;
+        }))
+        .WillOnce(Invoke(
+            [&](int, CurveAioContext* aio, UserDataType) { return -1; }));
 
-        write->Issue();
-        EXPECT_GT(0, write->Wait());
-        delete write;
+    write->Issue();
+    EXPECT_GT(0, write->Wait());
+    delete write;
 
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+  }
 }
 
 }  // namespace volume

@@ -43,100 +43,97 @@ namespace volume {
 using ::curve::client::FileClient;
 
 struct AioRead {
-    // aio context
+  // aio context
+  CurveAioContext aio;
+
+  // original request context
+  off_t offset;
+  size_t length;
+  char* data;
+
+  // backend block device
+  FileClient* dev;
+  int fd;
+
+  // synchronization
+  bool done = false;
+  std::mutex mtx;
+  std::condition_variable cond;
+
+  struct Padding {
+    off_t offset;
+    size_t length;
+    std::unique_ptr<char[]> data;
+  };
+
+  // padding read request if necessary
+  std::unique_ptr<Padding> padding;
+
+  AioRead(off_t offset, size_t length, char* data, FileClient* dev, int fd);
+
+  // Issue the read request.
+  void Issue();
+
+  // Wait until request is finished.
+  // Return read bytes if succeeded, other return values mean an error
+  // occurred.
+  ssize_t Wait();
+};
+
+struct AioWrite {
+  // aio context
+  CurveAioContext aio;
+
+  // original request context
+  off_t offset;
+  size_t length;
+  const char* data;
+
+  // backend block device
+  FileClient* dev;
+  int fd;
+
+  // synchronization
+  bool done = false;
+  std::mutex mtx;
+  std::condition_variable cond;
+
+  // padding read request
+  struct PaddingRead {
     CurveAioContext aio;
 
-    // original request context
     off_t offset;
     size_t length;
     char* data;
 
-    // backend block device
-    FileClient* dev;
-    int fd;
+    AioWrite* base;
+  };
 
-    // synchronization
-    bool done = false;
-    std::mutex mtx;
-    std::condition_variable cond;
+  struct PaddingAux {
+    // one write request has at most 2 padding read request
+    std::array<PaddingRead, 2> paddingReads;
+    std::unique_ptr<char[]> paddingData;
+    std::atomic<int> npadding;
+    std::atomic<bool> error{false};
+    size_t shift;
+    off_t alignedOffset;
+    size_t alignedLength;
+  };
 
-    struct Padding {
-        off_t offset;
-        size_t length;
-        std::unique_ptr<char[]> data;
-    };
+  std::unique_ptr<PaddingAux> aux;
 
-    // padding read request if necessary
-    std::unique_ptr<Padding> padding;
+  AioWrite(off_t offset, size_t length, const char* data, FileClient* dev,
+           int fd);
 
-    AioRead(off_t offset, size_t length, char* data, FileClient* dev, int fd);
+  // Issue the write request.
+  void Issue();
 
-    // Issue the read request.
-    void Issue();
+  // Wait until request is finished.
+  // Return written bytes if succeeded, other return values mean an error
+  // occurred.
+  ssize_t Wait();
 
-    // Wait until request is finished.
-    // Return read bytes if succeeded, other return values mean an error
-    // occurred.
-    ssize_t Wait();
-};
-
-struct AioWrite {
-    // aio context
-    CurveAioContext aio;
-
-    // original request context
-    off_t offset;
-    size_t length;
-    const char* data;
-
-    // backend block device
-    FileClient* dev;
-    int fd;
-
-    // synchronization
-    bool done = false;
-    std::mutex mtx;
-    std::condition_variable cond;
-
-    // padding read request
-    struct PaddingRead {
-        CurveAioContext aio;
-
-        off_t offset;
-        size_t length;
-        char* data;
-
-        AioWrite* base;
-    };
-
-    struct PaddingAux {
-        // one write request has at most 2 padding read request
-        std::array<PaddingRead, 2> paddingReads;
-        std::unique_ptr<char[]> paddingData;
-        std::atomic<int> npadding;
-        std::atomic<bool> error{false};
-        size_t shift;
-        off_t alignedOffset;
-        size_t alignedLength;
-    };
-
-    std::unique_ptr<PaddingAux> aux;
-
-    AioWrite(off_t offset,
-             size_t length,
-             const char* data,
-             FileClient* dev,
-             int fd);
-
-    // Issue the write request.
-    void Issue();
-
-    // Wait until request is finished.
-    // Return written bytes if succeeded, other return values mean an error
-    // occurred.
-    ssize_t Wait();
-
-    void OnPaddingReadComplete(CurveAioContext* read);
+  void OnPaddingReadComplete(CurveAioContext* read);
 };
 
 }  // namespace volume

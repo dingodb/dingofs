@@ -21,6 +21,7 @@
  */
 
 #include "curvefs/src/mds/space/manager.h"
+
 #include <glog/logging.h>
 
 #include <utility>
@@ -38,75 +39,74 @@ using ::curve::common::WriteLockGuard;
 using NameLockGuard = ::curve::common::GenericNameLockGuard<Mutex>;
 
 AbstractVolumeSpace* SpaceManagerImpl::GetVolumeSpace(uint32_t fsId) const {
-    ReadLockGuard lk(rwlock_);
-    auto it = volumes_.find(fsId);
-    if (it == volumes_.end()) {
-        return nullptr;
-    }
+  ReadLockGuard lk(rwlock_);
+  auto it = volumes_.find(fsId);
+  if (it == volumes_.end()) {
+    return nullptr;
+  }
 
-    return it->second.get();
+  return it->second.get();
 }
 
 SpaceErrCode SpaceManagerImpl::AddVolume(const FsInfo& fsInfo) {
-    CHECK(fsInfo.detail().has_volume());
+  CHECK(fsInfo.detail().has_volume());
 
-    NameLockGuard lock(namelock_, fsInfo.fsname());
+  NameLockGuard lock(namelock_, fsInfo.fsname());
 
-    {
-        ReadLockGuard lk(rwlock_);
-        if (volumes_.count(fsInfo.fsid()) != 0) {
-            return SpaceErrCode::SpaceErrExist;
-        }
+  {
+    ReadLockGuard lk(rwlock_);
+    if (volumes_.count(fsInfo.fsid()) != 0) {
+      return SpaceErrCode::SpaceErrExist;
     }
+  }
 
-    auto space = VolumeSpace::Create(fsInfo.fsid(), fsInfo.detail().volume(),
-                                     storage_.get(), fsStorage_.get());
+  auto space = VolumeSpace::Create(fsInfo.fsid(), fsInfo.detail().volume(),
+                                   storage_.get(), fsStorage_.get());
 
-    if (!space) {
-        LOG(ERROR) << "Create volume space failed, fsId: " << fsInfo.fsid();
-        return SpaceErrCreate;
-    }
+  if (!space) {
+    LOG(ERROR) << "Create volume space failed, fsId: " << fsInfo.fsid();
+    return SpaceErrCreate;
+  }
 
-    {
-        WriteLockGuard lk(rwlock_);
-        volumes_.emplace(fsInfo.fsid(), std::move(space));
-    }
+  {
+    WriteLockGuard lk(rwlock_);
+    volumes_.emplace(fsInfo.fsid(), std::move(space));
+  }
 
-    LOG(INFO) << "Added volume space, fsName: " << fsInfo.fsname()
-              << ", fsId: " << fsInfo.fsid();
+  LOG(INFO) << "Added volume space, fsName: " << fsInfo.fsname()
+            << ", fsId: " << fsInfo.fsid();
 
-    return SpaceOk;
+  return SpaceOk;
 }
 
 SpaceErrCode SpaceManagerImpl::RemoveVolume(uint32_t fsId) {
-    WriteLockGuard lk(rwlock_);
-    auto it = volumes_.find(fsId);
-    if (it == volumes_.end()) {
-        LOG(WARNING) << "Fail to remove volume space, fs not found, fsId: "
-                     << fsId;
-        return SpaceErrNotFound;
-    }
+  WriteLockGuard lk(rwlock_);
+  auto it = volumes_.find(fsId);
+  if (it == volumes_.end()) {
+    LOG(WARNING) << "Fail to remove volume space, fs not found, fsId: " << fsId;
+    return SpaceErrNotFound;
+  }
 
-    // TODO(wuhanqing): move this out of lock
-    volumes_.erase(it);
-    return SpaceOk;
+  // TODO(wuhanqing): move this out of lock
+  volumes_.erase(it);
+  return SpaceOk;
 }
 
 SpaceErrCode SpaceManagerImpl::DeleteVolume(uint32_t fsId) {
-    // remove all persist block groups
-    WriteLockGuard lk(rwlock_);
-    auto it = volumes_.find(fsId);
-    if (it == volumes_.end()) {
-        return SpaceErrNotFound;
-    }
+  // remove all persist block groups
+  WriteLockGuard lk(rwlock_);
+  auto it = volumes_.find(fsId);
+  if (it == volumes_.end()) {
+    return SpaceErrNotFound;
+  }
 
-    auto err = it->second->RemoveAllBlockGroups();
-    if (err != SpaceOk) {
-        return err;
-    }
+  auto err = it->second->RemoveAllBlockGroups();
+  if (err != SpaceOk) {
+    return err;
+  }
 
-    volumes_.erase(it);
-    return SpaceOk;
+  volumes_.erase(it);
+  return SpaceOk;
 }
 
 }  // namespace space

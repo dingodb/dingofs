@@ -23,15 +23,15 @@
 #ifndef SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 #define SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 
-#include "src/mds/schedule/scheduleMetricsTemplate.h"
 #include "src/mds/schedule/operatorStep.h"
+#include "src/mds/schedule/scheduleMetricsTemplate.h"
 
 namespace curve {
 namespace mds {
 namespace schedule {
 using ScheduleMetrics =
     ScheduleMetricsT<ChunkServerIdType, CopySetInfo, CopySetConf, Topology,
-                        ::curve::mds::topology::CopySetInfo>;
+                     ::curve::mds::topology::CopySetInfo>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curve

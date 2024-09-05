@@ -26,8 +26,8 @@
 #include <brpc/server.h>
 #include <gflags/gflags.h>
 
-#include <string>
 #include <iostream>
+#include <string>
 
 #include "curvefs/proto/topology.pb.h"
 #include "curvefs/src/tools/curvefs_tool.h"
@@ -38,23 +38,23 @@ namespace curvefs {
 namespace tools {
 namespace delete_ {
 
-class DeletePartitionTool : public CurvefsToolRpc<
-   curvefs::mds::topology::DeletePartitionRequest,
-   curvefs::mds::topology::DeletePartitionResponse,
-   curvefs::mds::topology::TopologyService_Stub> {
+class DeletePartitionTool
+    : public CurvefsToolRpc<curvefs::mds::topology::DeletePartitionRequest,
+                            curvefs::mds::topology::DeletePartitionResponse,
+                            curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit DeletePartitionTool(const std::string& cmd = kPartitionDeleteCmd)
-        : CurvefsToolRpc(cmd) {}
+  explicit DeletePartitionTool(const std::string& cmd = kPartitionDeleteCmd)
+      : CurvefsToolRpc(cmd) {}
 
-    void PrintHelp() override;
-    int Init() override;
-    void InitHostsAddr() override;
-    int RunCommand() override;
+  void PrintHelp() override;
+  int Init() override;
+  void InitHostsAddr() override;
+  int RunCommand() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 
  protected:
 };

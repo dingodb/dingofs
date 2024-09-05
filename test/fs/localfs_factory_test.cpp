@@ -21,6 +21,7 @@
  */
 
 #include <gtest/gtest.h>
+
 #include "src/fs/local_filesystem.h"
 
 namespace curve {
@@ -28,18 +29,18 @@ namespace fs {
 
 class LocalFSFactoryTest : public testing::Test {
  public:
-    LocalFSFactoryTest() {}
-    ~LocalFSFactoryTest() {}
+  LocalFSFactoryTest() {}
+  ~LocalFSFactoryTest() {}
 };
 
 TEST_F(LocalFSFactoryTest, CreateTest) {
-    std::shared_ptr<LocalFileSystem> lfs1 =
-        LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
-    ASSERT_NE(lfs1, nullptr);
-    std::shared_ptr<LocalFileSystem> lfs2 =
-        LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
-    // singleton
-    ASSERT_EQ(lfs1.get(), lfs2.get());
+  std::shared_ptr<LocalFileSystem> lfs1 =
+      LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
+  ASSERT_NE(lfs1, nullptr);
+  std::shared_ptr<LocalFileSystem> lfs2 =
+      LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
+  // singleton
+  ASSERT_EQ(lfs1.get(), lfs2.get());
 }
 
 }  // namespace fs

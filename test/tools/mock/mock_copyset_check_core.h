@@ -23,13 +23,14 @@
 #ifndef TEST_TOOLS_MOCK_MOCK_COPYSET_CHECK_CORE_H_
 #define TEST_TOOLS_MOCK_MOCK_COPYSET_CHECK_CORE_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
-#include <map>
-#include <set>
-#include <memory>
 
 #include "src/tools/chunkserver_client.h"
 
@@ -38,32 +39,33 @@ namespace curve {
 namespace tool {
 class MockCopysetCheckCore : public CopysetCheckCore {
  public:
-    MockCopysetCheckCore() : CopysetCheckCore(std::make_shared<MDSClient>(),
-                                    std::make_shared<ChunkServerClient>()) {}
-    ~MockCopysetCheckCore() {}
-    MOCK_METHOD1(Init, int(const std::string&));
-    MOCK_METHOD2(CheckOneCopyset, CheckResult(const PoolIdType&,
-                                              const CopySetIdType&));
-    MOCK_METHOD1(CheckCopysetsOnChunkServer, int(const ChunkServerIdType&));
-    MOCK_METHOD1(CheckCopysetsOnChunkServer, int(const std::string&));
-    MOCK_METHOD2(CheckCopysetsOnServer, int(const ServerIdType&,
-                                            std::vector<std::string>*));
-    MOCK_METHOD2(CheckCopysetsOnServer, int(const std::string&,
-                                            std::vector<std::string>*));
-    MOCK_METHOD0(CheckCopysetsInCluster, int());
-    MOCK_METHOD0(GetCopysetStatistics, CopysetStatistics());
-    MOCK_CONST_METHOD0(GetCopysetsRes,
-                    const std::map<std::string, std::set<std::string>>&());
-    MOCK_CONST_METHOD0(GetCopysetDetail, const std::string&());
-    MOCK_CONST_METHOD0(GetServiceExceptionChunkServer,
-                       const std::set<std::string>&());
-    MOCK_CONST_METHOD0(GetCopysetLoadExceptionChunkServer,
-                       const std::set<std::string>&());
-    MOCK_METHOD2(CheckOperator, int(const std::string&, uint64_t));
-    MOCK_METHOD1(CheckChunkServerOnline, bool(const std::string&));
-    MOCK_METHOD1(ListMayBrokenVolumes, int(std::vector<std::string>*));
-    MOCK_METHOD0(CheckCopysetsOnOfflineChunkServer, int());
-    MOCK_METHOD2(GetCopysetInfos, void(const char*, std::vector<CopysetInfo>*));
+  MockCopysetCheckCore()
+      : CopysetCheckCore(std::make_shared<MDSClient>(),
+                         std::make_shared<ChunkServerClient>()) {}
+  ~MockCopysetCheckCore() {}
+  MOCK_METHOD1(Init, int(const std::string&));
+  MOCK_METHOD2(CheckOneCopyset,
+               CheckResult(const PoolIdType&, const CopySetIdType&));
+  MOCK_METHOD1(CheckCopysetsOnChunkServer, int(const ChunkServerIdType&));
+  MOCK_METHOD1(CheckCopysetsOnChunkServer, int(const std::string&));
+  MOCK_METHOD2(CheckCopysetsOnServer,
+               int(const ServerIdType&, std::vector<std::string>*));
+  MOCK_METHOD2(CheckCopysetsOnServer,
+               int(const std::string&, std::vector<std::string>*));
+  MOCK_METHOD0(CheckCopysetsInCluster, int());
+  MOCK_METHOD0(GetCopysetStatistics, CopysetStatistics());
+  MOCK_CONST_METHOD0(GetCopysetsRes,
+                     const std::map<std::string, std::set<std::string>>&());
+  MOCK_CONST_METHOD0(GetCopysetDetail, const std::string&());
+  MOCK_CONST_METHOD0(GetServiceExceptionChunkServer,
+                     const std::set<std::string>&());
+  MOCK_CONST_METHOD0(GetCopysetLoadExceptionChunkServer,
+                     const std::set<std::string>&());
+  MOCK_METHOD2(CheckOperator, int(const std::string&, uint64_t));
+  MOCK_METHOD1(CheckChunkServerOnline, bool(const std::string&));
+  MOCK_METHOD1(ListMayBrokenVolumes, int(std::vector<std::string>*));
+  MOCK_METHOD0(CheckCopysetsOnOfflineChunkServer, int());
+  MOCK_METHOD2(GetCopysetInfos, void(const char*, std::vector<CopysetInfo>*));
 };
 }  // namespace tool
 }  // namespace curve

@@ -23,12 +23,12 @@
 #ifndef CURVEFS_SRC_MDS_DLOCK_DLOCK_H_
 #define CURVEFS_SRC_MDS_DLOCK_DLOCK_H_
 
-#include <string>
 #include <memory>
+#include <string>
 
+#include "src/common/concurrent/name_lock.h"
 #include "src/common/encode.h"
 #include "src/common/uncopyable.h"
-#include "src/common/concurrent/name_lock.h"
 #include "src/kvstorageclient/etcd_client.h"
 
 namespace curvefs {
@@ -40,85 +40,78 @@ using ::curve::common::Uncopyable;
 using ::curve::kvstorage::EtcdClientImp;
 
 struct DLockOptions {
-    uint64_t ttlMs = 5000;
+  uint64_t ttlMs = 5000;
 
-    uint64_t tryTimeoutMs = 3000;
+  uint64_t tryTimeoutMs = 3000;
 
-    uint64_t tryIntervalMs = 50;
+  uint64_t tryIntervalMs = 50;
 };
 
 enum class LOCK_STATUS {
-    OK,
-    FAILED,
-    TIMEOUT,
+  OK,
+  FAILED,
+  TIMEOUT,
 };
 
 enum class OWNER_STATUS {
-    OK,
-    ERROR,
-    NOT_EXIST,
-    EXPIRED,
+  OK,
+  ERROR,
+  NOT_EXIST,
+  EXPIRED,
 };
 
 class DLock : public Uncopyable {
  public:
-    DLock(const DLockOptions& options,
-          std::shared_ptr<EtcdClientImp> etcdClient);
+  DLock(const DLockOptions& options, std::shared_ptr<EtcdClientImp> etcdClient);
 
-    ~DLock() = default;
+  ~DLock() = default;
 
-    /**
-     * @brief: lock the specified namespace
-     * @param[in] name: namespace to lock
-     * @param[in] owner: owner for lock
-     * @return return LOCK_STATUS::OK if acquire lock success,
-     *         otherwise return LOCK_STATUS::TIMEOUT
-     */
-    LOCK_STATUS Lock(const std::string& name,
-                     const std::string& owner);
+  /**
+   * @brief: lock the specified namespace
+   * @param[in] name: namespace to lock
+   * @param[in] owner: owner for lock
+   * @return return LOCK_STATUS::OK if acquire lock success,
+   *         otherwise return LOCK_STATUS::TIMEOUT
+   */
+  LOCK_STATUS Lock(const std::string& name, const std::string& owner);
 
-    /**
-     * @brief: unlock the specified namespace
-     * @param[in] name: namespace to unlock
-     * @param[in] owner: owner for lock
-     * @return return LOCK_STATUS::OK if release lock success,
-     *         otherwise return LOCK_STATUS::TIMEOUT
-     */
-    LOCK_STATUS UnLock(const std::string& name,
-                       const std::string& owner);
+  /**
+   * @brief: unlock the specified namespace
+   * @param[in] name: namespace to unlock
+   * @param[in] owner: owner for lock
+   * @return return LOCK_STATUS::OK if release lock success,
+   *         otherwise return LOCK_STATUS::TIMEOUT
+   */
+  LOCK_STATUS UnLock(const std::string& name, const std::string& owner);
 
-    /**
-     * @brief: check whether owner locked the namespace
-     * @param[in] name: namespace to check
-     * @param[in] owner: owner for lock
-     * @return return ture if owner locked the namespace,
-     *         otherwise return false
-     */
-    bool CheckOwner(const std::string& name,
-                    const std::string& owner);
+  /**
+   * @brief: check whether owner locked the namespace
+   * @param[in] name: namespace to check
+   * @param[in] owner: owner for lock
+   * @return return ture if owner locked the namespace,
+   *         otherwise return false
+   */
+  bool CheckOwner(const std::string& name, const std::string& owner);
 
  private:
-    size_t Hash(const std::string& key);
+  size_t Hash(const std::string& key);
 
-    std::string EncodeKey(const std::string& name);
+  std::string EncodeKey(const std::string& name);
 
-    OWNER_STATUS GetOwner(const std::string& name,
-                          std::string* owner);
+  OWNER_STATUS GetOwner(const std::string& name, std::string* owner);
 
-    bool SetOwner(const std::string& name,
-                  const std::string& owner,
-                  uint64_t ttlMs);
+  bool SetOwner(const std::string& name, const std::string& owner,
+                uint64_t ttlMs);
 
-    bool ClearOwner(const std::string& name);
+  bool ClearOwner(const std::string& name);
 
-    bool ReplaceOwner(const std::string& name,
-                      const std::string& owner,
-                      uint64_t ttlMs);
+  bool ReplaceOwner(const std::string& name, const std::string& owner,
+                    uint64_t ttlMs);
 
  private:
-    NameLock nameLock_;
-    DLockOptions options_;
-    std::shared_ptr<EtcdClientImp> etcdClient_;
+  NameLock nameLock_;
+  DLockOptions options_;
+  std::shared_ptr<EtcdClientImp> etcdClient_;
 };
 
 }  // namespace dlock

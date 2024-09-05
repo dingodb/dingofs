@@ -25,29 +25,31 @@
 namespace curvefs {
 namespace metaserver {
 
-UpdateInodeRequest MakeUpdateInodeRequestFromInode(const Inode &inode,
-    uint32_t poolId, uint32_t copysetId, uint32_t partitionId) {
-    UpdateInodeRequest request;
-    request.set_poolid(poolId);
-    request.set_copysetid(copysetId);
-    request.set_partitionid(partitionId);
-    request.set_fsid(inode.fsid());
-    request.set_inodeid(inode.inodeid());
-    request.set_length(inode.length());
-    request.set_ctime(inode.ctime());
-    request.set_ctime_ns(inode.ctime_ns());
-    request.set_mtime(inode.mtime());
-    request.set_mtime_ns(inode.mtime_ns());
-    request.set_atime(inode.atime());
-    request.set_atime_ns(inode.atime_ns());
-    request.set_uid(inode.uid());
-    request.set_gid(inode.gid());
-    request.set_mode(inode.mode());
-    // *(request.mutable_volumeextentmap()) = inode.volumeextentmap();
-    *(request.mutable_s3chunkinfomap()) = inode.s3chunkinfomap();
-    *(request.mutable_xattr()) = inode.xattr();
-    request.set_nlink(inode.nlink());
-    return request;
+UpdateInodeRequest MakeUpdateInodeRequestFromInode(const Inode& inode,
+                                                   uint32_t poolId,
+                                                   uint32_t copysetId,
+                                                   uint32_t partitionId) {
+  UpdateInodeRequest request;
+  request.set_poolid(poolId);
+  request.set_copysetid(copysetId);
+  request.set_partitionid(partitionId);
+  request.set_fsid(inode.fsid());
+  request.set_inodeid(inode.inodeid());
+  request.set_length(inode.length());
+  request.set_ctime(inode.ctime());
+  request.set_ctime_ns(inode.ctime_ns());
+  request.set_mtime(inode.mtime());
+  request.set_mtime_ns(inode.mtime_ns());
+  request.set_atime(inode.atime());
+  request.set_atime_ns(inode.atime_ns());
+  request.set_uid(inode.uid());
+  request.set_gid(inode.gid());
+  request.set_mode(inode.mode());
+  // *(request.mutable_volumeextentmap()) = inode.volumeextentmap();
+  *(request.mutable_s3chunkinfomap()) = inode.s3chunkinfomap();
+  *(request.mutable_xattr()) = inode.xattr();
+  request.set_nlink(inode.nlink());
+  return request;
 }
 
 }  // namespace metaserver

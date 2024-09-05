@@ -40,8 +40,8 @@ namespace curvefs {
 namespace mds {
 namespace space {
 
-using ::curve::client::FInfo;
 using ::curve::client::FileEpoch;
+using ::curve::client::FInfo;
 using ::curve::client::UserInfo;
 
 MdsProxy::MdsProxy() = default;
@@ -49,54 +49,50 @@ MdsProxy::MdsProxy() = default;
 MdsProxy::~MdsProxy() = default;
 
 std::unique_ptr<MdsProxy> MdsProxy::Create(
-    const std::vector<std::string>& hosts,
-    const MdsProxyOptions& opts) {
-    auto proxy = absl::WrapUnique(new MdsProxy());
-    proxy->mdsClient_ =
-        absl::make_unique<curve::client::MDSClient>(ConcatHosts(hosts));
+    const std::vector<std::string>& hosts, const MdsProxyOptions& opts) {
+  auto proxy = absl::WrapUnique(new MdsProxy());
+  proxy->mdsClient_ =
+      absl::make_unique<curve::client::MDSClient>(ConcatHosts(hosts));
 
-    curve::client::MetaServerOption mdsOpts = opts.option;
-    mdsOpts.rpcRetryOpt.addrs = hosts;
+  curve::client::MetaServerOption mdsOpts = opts.option;
+  mdsOpts.rpcRetryOpt.addrs = hosts;
 
-    auto ret = proxy->mdsClient_->Initialize(mdsOpts);
-    if (ret != LIBCURVE_ERROR::OK) {
-        LOG(ERROR) << "Fail to initialize mds client, ret: " << ret;
-        return nullptr;
-    }
+  auto ret = proxy->mdsClient_->Initialize(mdsOpts);
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(ERROR) << "Fail to initialize mds client, ret: " << ret;
+    return nullptr;
+  }
 
-    return proxy;
+  return proxy;
 }
 
-bool MdsProxy::GetVolumeInfo(const common::Volume& volume,
-                             uint64_t* size,
+bool MdsProxy::GetVolumeInfo(const common::Volume& volume, uint64_t* size,
                              uint64_t* extendAlignment) {
-    UserInfo info(volume.user(), volume.password());
-    FInfo fi;
-    FileEpoch dummy;
-    auto ret = mdsClient_->GetFileInfo(volume.volumename(), info, &fi, &dummy);
-    if (ret != LIBCURVE_ERROR::OK) {
-        LOG(WARNING) << "Fail to get volume size, ret: "
-                     << LibCurveErrorName(ret);
-        return false;
-    }
+  UserInfo info(volume.user(), volume.password());
+  FInfo fi;
+  FileEpoch dummy;
+  auto ret = mdsClient_->GetFileInfo(volume.volumename(), info, &fi, &dummy);
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(WARNING) << "Fail to get volume size, ret: " << LibCurveErrorName(ret);
+    return false;
+  }
 
-    (void)dummy;
-    *size = fi.length;
-    *extendAlignment = fi.segmentsize;
-    return true;
+  (void)dummy;
+  *size = fi.length;
+  *extendAlignment = fi.segmentsize;
+  return true;
 }
 
 bool MdsProxy::ExtendVolume(const common::Volume& volume, uint64_t size) {
-    UserInfo info(volume.user(), volume.password());
+  UserInfo info(volume.user(), volume.password());
 
-    auto ret = mdsClient_->Extend(volume.volumename(), info, size);
-    if (ret != LIBCURVE_ERROR::OK) {
-        LOG(WARNING) << "Fail to extend volume, ret: "
-                     << LibCurveErrorName(ret);
-        return false;
-    }
+  auto ret = mdsClient_->Extend(volume.volumename(), info, size);
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(WARNING) << "Fail to extend volume, ret: " << LibCurveErrorName(ret);
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 }  // namespace space

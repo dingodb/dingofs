@@ -50,17 +50,17 @@ using HostAndResponseType =
 using InodeBase = curvefs::metaserver::GetInodeRequest;
 
 struct HashInodeBase {
-    size_t operator()(const InodeBase& inode) const {
-        auto inodeIdHash = std::hash<uint64_t>()(inode.inodeid());
-        auto fsIdHash = std::hash<uint64_t>()(inode.fsid());
-        return inodeIdHash ^ fsIdHash;
-    }
+  size_t operator()(const InodeBase& inode) const {
+    auto inodeIdHash = std::hash<uint64_t>()(inode.inodeid());
+    auto fsIdHash = std::hash<uint64_t>()(inode.fsid());
+    return inodeIdHash ^ fsIdHash;
+  }
 };
 
 struct KeyEuqalInodeBase {
-    bool operator()(const InodeBase& a, const InodeBase& b) const {
-        return a.fsid() == b.fsid() && a.inodeid() == b.inodeid();
-    }
+  bool operator()(const InodeBase& a, const InodeBase& b) const {
+    return a.fsid() == b.fsid() && a.inodeid() == b.inodeid();
+  }
 };
 
 class InodeS3InfoMapTool
@@ -68,31 +68,31 @@ class InodeS3InfoMapTool
                             curvefs::metaserver::GetOrModifyS3ChunkInfoResponse,
                             curvefs::metaserver::MetaServerService_Stub> {
  public:
-    explicit InodeS3InfoMapTool(const std::string& cmd = kNoInvokeCmd,
-                                bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
-    std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
-                       KeyEuqalInodeBase>
-    GetInode2S3ChunkInfoList() {
-        return inode2S3ChunkInfoList_;
-    }
+  explicit InodeS3InfoMapTool(const std::string& cmd = kNoInvokeCmd,
+                              bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
+  std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
+                     KeyEuqalInodeBase>
+  GetInode2S3ChunkInfoList() {
+    return inode2S3ChunkInfoList_;
+  }
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
-    void SetReceiveCallback();
-    void UpdateInode2S3ChunkInfoList_(const InodeBase& inode,
-                                      const S3ChunkInfoList&list);
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
+  void SetReceiveCallback();
+  void UpdateInode2S3ChunkInfoList_(const InodeBase& inode,
+                                    const S3ChunkInfoList& list);
 
  protected:
-    std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
-                       KeyEuqalInodeBase>
-        inode2S3ChunkInfoList_;
+  std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
+                     KeyEuqalInodeBase>
+      inode2S3ChunkInfoList_;
 };
 
 }  // namespace query

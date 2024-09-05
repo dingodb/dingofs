@@ -24,8 +24,8 @@
 #define SRC_COMMON_SNAPSHOTCLONE_SNAPSHOTCLONE_DEFINE_H_
 
 #include <cstdint>
-#include <string>
 #include <map>
+#include <string>
 
 namespace curve {
 namespace snapshotcloneserver {
@@ -74,16 +74,9 @@ extern const char* kCloneFileInfoStr;
 typedef std::string UUID;
 using TaskIdType = UUID;
 
-enum class CloneTaskType {
-    kClone = 0,
-    kRecover
-};
+enum class CloneTaskType { kClone = 0, kRecover };
 
-enum class CloneRefStatus {
-    kNoRef = 0,
-    kHasRef = 1,
-    kNeedCheck = 2
-};
+enum class CloneRefStatus { kNoRef = 0, kHasRef = 1, kNeedCheck = 2 };
 
 // 未初始序列号
 const uint64_t kUnInitializeSeqNum = 0;
@@ -137,11 +130,8 @@ const int kErrCodeNotSupport = -21;
 
 extern std::map<int, std::string> code2Msg;
 
-std::string BuildErrorMessage(
-    int errCode,
-    const std::string &requestId,
-    const std::string &uuid = "");
-
+std::string BuildErrorMessage(int errCode, const std::string& requestId,
+                              const std::string& uuid = "");
 
 // clone progress
 constexpr uint32_t kProgressCloneStart = 0;
@@ -152,8 +142,6 @@ constexpr uint32_t kProgressMetaInstalled = 5;
 constexpr uint32_t kProgressRecoverChunkBegin = kProgressMetaInstalled;
 constexpr uint32_t kProgressRecoverChunkEnd = 95;
 constexpr uint32_t kProgressCloneComplete = 100;
-
-
 
 }  // namespace snapshotcloneserver
 }  // namespace curve

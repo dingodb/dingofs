@@ -42,163 +42,155 @@ namespace metaserver {
 S3CompactWorker::S3CompactWorker(S3CompactManager* manager,
                                  S3CompactWorkerContext* context,
                                  S3CompactWorkerOptions* options)
-    : manager_(manager),
-      context_(context),
-      options_(options) {}
+    : manager_(manager), context_(context), options_(options) {}
 
 // REQUIRES: context_->mtx is held
 void S3CompactWorker::Cancel(uint32_t partitionId) {
-    assert(s3Compact_->partitionInfo.partitionid() == partitionId);
-    (void)partitionId;
-    s3Compact_->canceled = true;
-    sleeper.interrupt();
+  assert(s3Compact_->partitionInfo.partitionid() == partitionId);
+  (void)partitionId;
+  s3Compact_->canceled = true;
+  sleeper.interrupt();
 }
 
 void S3CompactWorker::Run() {
-    compact_ = std::thread{&S3CompactWorker::CompactWorker, this};
+  compact_ = std::thread{&S3CompactWorker::CompactWorker, this};
 }
 
 void S3CompactWorker::Stop() {
-    sleeper.interrupt();
+  sleeper.interrupt();
 
-    if (compact_.joinable()) {
-        compact_.join();
-    }
+  if (compact_.joinable()) {
+    compact_.join();
+  }
 
-    LOG(INFO) << "S3CompactWorker stopped";
+  LOG(INFO) << "S3CompactWorker stopped";
 }
 
 bool S3CompactWorker::WaitCompact() {
-    std::unique_lock<std::mutex> lock(context_->mtx);
-    if (context_->s3compacts.empty()) {
-        context_->cond.wait(lock, [this]() {
-            return !context_->s3compacts.empty() || !context_->running;
-        });
-    }
+  std::unique_lock<std::mutex> lock(context_->mtx);
+  if (context_->s3compacts.empty()) {
+    context_->cond.wait(lock, [this]() {
+      return !context_->s3compacts.empty() || !context_->running;
+    });
+  }
 
-    if (!context_->running) {
-        return false;
-    }
+  if (!context_->running) {
+    return false;
+  }
 
-    s3Compact_ = std::move(context_->s3compacts.front());
-    context_->s3compacts.pop_front();
-    context_->compacting.emplace(s3Compact_->partitionInfo.partitionid(), this);
+  s3Compact_ = std::move(context_->s3compacts.front());
+  context_->s3compacts.pop_front();
+  context_->compacting.emplace(s3Compact_->partitionInfo.partitionid(), this);
 
-    sleeper.init();
+  sleeper.init();
 
-    return true;
+  return true;
 }
 
 void S3CompactWorker::CleanupCompact(bool again) {
-    std::lock_guard<std::mutex> lock(context_->mtx);
+  std::lock_guard<std::mutex> lock(context_->mtx);
 
-    context_->compacting.erase(s3Compact_->partitionInfo.partitionid());
+  context_->compacting.erase(s3Compact_->partitionInfo.partitionid());
 
-    if (s3Compact_->canceled) {
-        LOG(INFO) << "Compact for partition "
-                  << s3Compact_->partitionInfo.partitionid()
-                  << " is asked to cancel";
-        again = false;
-    }
+  if (s3Compact_->canceled) {
+    LOG(INFO) << "Compact for partition "
+              << s3Compact_->partitionInfo.partitionid()
+              << " is asked to cancel";
+    again = false;
+  }
 
-    if (again) {
-        context_->s3compacts.push_back(std::move(s3Compact_.value()));
-        context_->cond.notify_one();
-    }
+  if (again) {
+    context_->s3compacts.push_back(std::move(s3Compact_.value()));
+    context_->cond.notify_one();
+  }
 
-    s3Compact_.reset();
+  s3Compact_.reset();
 }
 
 bool S3CompactWorker::CompactInodes(const std::list<uint64_t>& inodes,
                                     copyset::CopysetNode* node) {
-    if (inodes.empty()) {
-        VLOG(1) << "inode list is empty";
-        sleeper.wait_for(std::chrono::milliseconds(options_->sleepMS));
-        return true;
-    }
-
-    const auto fsId = s3Compact_->partitionInfo.fsid();
-    const auto pid = s3Compact_->partitionInfo.partitionid();
-
-    for (auto ino : inodes) {
-        if (!sleeper.wait_for(std::chrono::milliseconds(options_->sleepMS))) {
-            return false;
-        }
-
-        if (!context_->running) {
-            return false;
-        }
-
-        if (s3Compact_->canceled) {
-            LOG(INFO) << "Compact for partition " << pid
-                      << " is asked to cancel";
-            return false;
-        }
-
-        if (!node->IsLeaderTerm()) {
-            VLOG(1)
-                << "Current copyset " << node->Name()
-                << " isn't leader, skip this around compaction for partition `"
-                << pid << "`";
-            return true;
-        }
-
-        CompactInodeJob::S3CompactTask task{
-            s3Compact_->inodeManager, storage::Key4Inode{fsId, ino},
-            s3Compact_->partitionInfo,
-            absl::make_unique<CopysetNodeWrapper>(node)
-        };
-
-        CompactInodeJob job(options_);
-        job.CompactChunks(task);
-    }
-
+  if (inodes.empty()) {
+    VLOG(1) << "inode list is empty";
+    sleeper.wait_for(std::chrono::milliseconds(options_->sleepMS));
     return true;
+  }
+
+  const auto fsId = s3Compact_->partitionInfo.fsid();
+  const auto pid = s3Compact_->partitionInfo.partitionid();
+
+  for (auto ino : inodes) {
+    if (!sleeper.wait_for(std::chrono::milliseconds(options_->sleepMS))) {
+      return false;
+    }
+
+    if (!context_->running) {
+      return false;
+    }
+
+    if (s3Compact_->canceled) {
+      LOG(INFO) << "Compact for partition " << pid << " is asked to cancel";
+      return false;
+    }
+
+    if (!node->IsLeaderTerm()) {
+      VLOG(1) << "Current copyset " << node->Name()
+              << " isn't leader, skip this around compaction for partition `"
+              << pid << "`";
+      return true;
+    }
+
+    CompactInodeJob::S3CompactTask task{
+        s3Compact_->inodeManager, storage::Key4Inode{fsId, ino},
+        s3Compact_->partitionInfo, absl::make_unique<CopysetNodeWrapper>(node)};
+
+    CompactInodeJob job(options_);
+    job.CompactChunks(task);
+  }
+
+  return true;
 }
 
 void S3CompactWorker::CompactWorker() {
-    common::SetThreadName("s3compact");
+  common::SetThreadName("s3compact");
 
-    while (context_->running) {
-        if (!WaitCompact()) {
-            break;
-        }
-
-        CHECK(s3Compact_.has_value());
-        VLOG(1) << "Going to compact: "
-                << s3Compact_->partitionInfo.ShortDebugString();
-
-        // we take the compaction job, so at the end we put it back if needed
-        bool compactAgain = true;
-
-        auto cleanup = absl::MakeCleanup([&, this]() {
-            CleanupCompact(compactAgain);
-        });
-
-        const auto pid = s3Compact_->partitionInfo.partitionid();
-        std::list<uint64_t> inodes;
-        if (!s3Compact_->inodeManager->GetInodeIdList(&inodes)) {
-            compactAgain = false;
-            LOG(WARNING) << "Fail to GetInodeIdList for compact, partitionid: "
-                         << pid << ", stop compact for this partition";
-            continue;
-        }
-
-        if (s3Compact_->copysetNode == nullptr) {
-            compactAgain = false;
-            LOG(WARNING) << "Copyset node is invalid, poolid: "
-                         << s3Compact_->partitionInfo.poolid()
-                         << ", copysetid: "
-                         << s3Compact_->partitionInfo.copysetid()
-                         << ", partition id: " << pid
-                         << ", stop compact for this partition";
-            continue;
-        }
-
-        compactAgain = CompactInodes(inodes, s3Compact_->copysetNode.get());
+  while (context_->running) {
+    if (!WaitCompact()) {
+      break;
     }
 
-    LOG(INFO) << "S3CompactWorker thread stopped";
+    CHECK(s3Compact_.has_value());
+    VLOG(1) << "Going to compact: "
+            << s3Compact_->partitionInfo.ShortDebugString();
+
+    // we take the compaction job, so at the end we put it back if needed
+    bool compactAgain = true;
+
+    auto cleanup =
+        absl::MakeCleanup([&, this]() { CleanupCompact(compactAgain); });
+
+    const auto pid = s3Compact_->partitionInfo.partitionid();
+    std::list<uint64_t> inodes;
+    if (!s3Compact_->inodeManager->GetInodeIdList(&inodes)) {
+      compactAgain = false;
+      LOG(WARNING) << "Fail to GetInodeIdList for compact, partitionid: " << pid
+                   << ", stop compact for this partition";
+      continue;
+    }
+
+    if (s3Compact_->copysetNode == nullptr) {
+      compactAgain = false;
+      LOG(WARNING) << "Copyset node is invalid, poolid: "
+                   << s3Compact_->partitionInfo.poolid()
+                   << ", copysetid: " << s3Compact_->partitionInfo.copysetid()
+                   << ", partition id: " << pid
+                   << ", stop compact for this partition";
+      continue;
+    }
+
+    compactAgain = CompactInodes(inodes, s3Compact_->copysetNode.get());
+  }
+
+  LOG(INFO) << "S3CompactWorker thread stopped";
 }
 
 }  // namespace metaserver

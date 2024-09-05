@@ -24,9 +24,11 @@
 #define SRC_MDS_NAMESERVER2_CHUNK_ALLOCATOR_H_
 
 #include <stdint.h>
-#include <vector>
+
 #include <map>
 #include <memory>
+#include <vector>
+
 #include "src/mds/common/mds_define.h"
 #include "src/mds/nameserver2/idgenerator/chunk_id_generator.h"
 #include "src/mds/topology/topology_chunk_allocator.h"
@@ -38,49 +40,48 @@ namespace mds {
 
 class ChunkSegmentAllocator {
  public:
-    virtual ~ChunkSegmentAllocator() {}
+  virtual ~ChunkSegmentAllocator() {}
 
-    virtual bool AllocateChunkSegment(FileType type,
-        SegmentSizeType segmentSize, ChunkSizeType chunkSize,
-        offset_t offset, PageFileSegment *segment) = 0;
-    virtual void GetRemainingSpaceInLogicalPool(
-        const std::vector<PoolIdType>& logicalPools,
-        std::map<PoolIdType, double>* remianingSpace) = 0;
+  virtual bool AllocateChunkSegment(FileType type, SegmentSizeType segmentSize,
+                                    ChunkSizeType chunkSize, offset_t offset,
+                                    PageFileSegment* segment) = 0;
+  virtual void GetRemainingSpaceInLogicalPool(
+      const std::vector<PoolIdType>& logicalPools,
+      std::map<PoolIdType, double>* remianingSpace) = 0;
 };
 
-
-class ChunkSegmentAllocatorImpl: public ChunkSegmentAllocator {
+class ChunkSegmentAllocatorImpl : public ChunkSegmentAllocator {
  public:
-    using CopysetIdInfo = ::curve::mds::topology::CopysetIdInfo;
+  using CopysetIdInfo = ::curve::mds::topology::CopysetIdInfo;
 
-    explicit ChunkSegmentAllocatorImpl(
-                        std::shared_ptr<TopologyChunkAllocator> topologyAdmin,
-                        std::shared_ptr<ChunkIDGenerator> chunkIDGenerator) {
-        topologyChunkAllocator_ = topologyAdmin;
-        chunkIDGenerator_ = chunkIDGenerator;
-    }
+  explicit ChunkSegmentAllocatorImpl(
+      std::shared_ptr<TopologyChunkAllocator> topologyAdmin,
+      std::shared_ptr<ChunkIDGenerator> chunkIDGenerator) {
+    topologyChunkAllocator_ = topologyAdmin;
+    chunkIDGenerator_ = chunkIDGenerator;
+  }
 
-    ~ChunkSegmentAllocatorImpl() {
-        topologyChunkAllocator_ = nullptr;
-        chunkIDGenerator_ = nullptr;
-    }
+  ~ChunkSegmentAllocatorImpl() {
+    topologyChunkAllocator_ = nullptr;
+    chunkIDGenerator_ = nullptr;
+  }
 
-    bool AllocateChunkSegment(FileType type,
-        SegmentSizeType segmentSize, ChunkSizeType chunkSize,
-        offset_t offset, PageFileSegment *segment) override;
+  bool AllocateChunkSegment(FileType type, SegmentSizeType segmentSize,
+                            ChunkSizeType chunkSize, offset_t offset,
+                            PageFileSegment* segment) override;
 
-    void GetRemainingSpaceInLogicalPool(
-        const std::vector<PoolIdType>& logicalPools,
-        std::map<PoolIdType, double>* remianingSpace) {
-            return topologyChunkAllocator_->GetRemainingSpaceInLogicalPool(
-                            logicalPools, remianingSpace);
-        }
+  void GetRemainingSpaceInLogicalPool(
+      const std::vector<PoolIdType>& logicalPools,
+      std::map<PoolIdType, double>* remianingSpace) {
+    return topologyChunkAllocator_->GetRemainingSpaceInLogicalPool(
+        logicalPools, remianingSpace);
+  }
 
  private:
-    std::shared_ptr<TopologyChunkAllocator> topologyChunkAllocator_;
-    std::shared_ptr<ChunkIDGenerator> chunkIDGenerator_;
+  std::shared_ptr<TopologyChunkAllocator> topologyChunkAllocator_;
+  std::shared_ptr<ChunkIDGenerator> chunkIDGenerator_;
 };
 
 }  // namespace mds
 }  // namespace curve
-#endif   // SRC_MDS_NAMESERVER2_CHUNK_ALLOCATOR_H_
+#endif  // SRC_MDS_NAMESERVER2_CHUNK_ALLOCATOR_H_

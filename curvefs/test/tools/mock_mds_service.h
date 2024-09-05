@@ -32,30 +32,29 @@ namespace tools {
 
 class MockMdsService : public curvefs::mds::MdsService {
  public:
-    MockMdsService() : MdsService() {}
-    ~MockMdsService() = default;
+  MockMdsService() : MdsService() {}
+  ~MockMdsService() = default;
 
-    MOCK_METHOD4(CreateFs, void(::google::protobuf::RpcController* controller,
-                                const ::curvefs::mds::CreateFsRequest* request,
-                                ::curvefs::mds::CreateFsResponse* response,
-                                ::google::protobuf::Closure* done));
-    MOCK_METHOD4(MountFs, void(::google::protobuf::RpcController* controller,
-                               const ::curvefs::mds::MountFsRequest* request,
-                               ::curvefs::mds::MountFsResponse* response,
+  MOCK_METHOD4(CreateFs, void(::google::protobuf::RpcController* controller,
+                              const ::curvefs::mds::CreateFsRequest* request,
+                              ::curvefs::mds::CreateFsResponse* response,
+                              ::google::protobuf::Closure* done));
+  MOCK_METHOD4(MountFs, void(::google::protobuf::RpcController* controller,
+                             const ::curvefs::mds::MountFsRequest* request,
+                             ::curvefs::mds::MountFsResponse* response,
+                             ::google::protobuf::Closure* done));
+  MOCK_METHOD4(UmountFs, void(::google::protobuf::RpcController* controller,
+                              const ::curvefs::mds::UmountFsRequest* request,
+                              ::curvefs::mds::UmountFsResponse* response,
+                              ::google::protobuf::Closure* done));
+  MOCK_METHOD4(GetFsInfo, void(::google::protobuf::RpcController* controller,
+                               const ::curvefs::mds::GetFsInfoRequest* request,
+                               ::curvefs::mds::GetFsInfoResponse* response,
                                ::google::protobuf::Closure* done));
-    MOCK_METHOD4(UmountFs, void(::google::protobuf::RpcController* controller,
-                                const ::curvefs::mds::UmountFsRequest* request,
-                                ::curvefs::mds::UmountFsResponse* response,
-                                ::google::protobuf::Closure* done));
-    MOCK_METHOD4(GetFsInfo,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::mds::GetFsInfoRequest* request,
-                      ::curvefs::mds::GetFsInfoResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(DeleteFs, void(::google::protobuf::RpcController* controller,
-                                const ::curvefs::mds::DeleteFsRequest* request,
-                                ::curvefs::mds::DeleteFsResponse* response,
-                                ::google::protobuf::Closure* done));
+  MOCK_METHOD4(DeleteFs, void(::google::protobuf::RpcController* controller,
+                              const ::curvefs::mds::DeleteFsRequest* request,
+                              ::curvefs::mds::DeleteFsResponse* response,
+                              ::google::protobuf::Closure* done));
 };
 }  // namespace tools
 }  // namespace curvefs

@@ -44,19 +44,19 @@ class MetaserverQueryTool
                             curvefs::mds::topology::GetMetaServerInfoResponse,
                             curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit MetaserverQueryTool(const std::string& cmd = kMetaserverQueryCmd,
-                                 bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
+  explicit MetaserverQueryTool(const std::string& cmd = kMetaserverQueryCmd,
+                               bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
 
-    void PrintHelp() override;
-    int Init() override;
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 };
 }  // namespace query
 }  // namespace tools

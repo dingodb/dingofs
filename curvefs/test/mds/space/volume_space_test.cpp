@@ -25,6 +25,7 @@
 #include <brpc/closure_guard.h>
 #include <brpc/server.h>
 #include <gtest/gtest.h>
+
 #include <cassert>
 
 #include "absl/memory/memory.h"
@@ -42,8 +43,8 @@ namespace space {
 
 using ::testing::_;
 using ::testing::Invoke;
-using ::testing::Return;
 using ::testing::Matcher;
+using ::testing::Return;
 
 static constexpr uint32_t kFsId = 1;
 static constexpr uint64_t kVolumeSize = 10ULL * 1024 * 1024 * 1024;
@@ -59,415 +60,404 @@ static unsigned int seed = time(nullptr);
 
 class VolumeSpaceTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        storage_ = absl::make_unique<MockBlockGroupStorage>();
-        fsStorage_ = absl::make_unique<MockFsStorage>();
-        volume_.set_volumesize(kVolumeSize);
-        volume_.set_blocksize(kBlockSize);
-        volume_.set_blockgroupsize(kBlockGroupSize);
-        volume_.set_bitmaplocation(kBitmapLocation);
-        volume_.set_autoextend(false);
-        volume_.set_volumename("test");
-    }
+  void SetUp() override {
+    storage_ = absl::make_unique<MockBlockGroupStorage>();
+    fsStorage_ = absl::make_unique<MockFsStorage>();
+    volume_.set_volumesize(kVolumeSize);
+    volume_.set_blocksize(kBlockSize);
+    volume_.set_blockgroupsize(kBlockGroupSize);
+    volume_.set_bitmaplocation(kBitmapLocation);
+    volume_.set_autoextend(false);
+    volume_.set_volumename("test");
+  }
 
-    std::unique_ptr<VolumeSpace> CreateOneEmptyVolumeSpace() {
-        EXPECT_CALL(*storage_, ListBlockGroups(_, _))
-            .WillOnce(Invoke([](uint32_t, std::vector<BlockGroup>* groups) {
-                groups->clear();
-                return SpaceOk;
-            }));
-
-        auto space = VolumeSpace::Create(kFsId, volume_, storage_.get(),
-                                         fsStorage_.get());
-        EXPECT_NE(nullptr, space);
-        return space;
-    }
-
-    std::unique_ptr<VolumeSpace> CreateVolumeSpaceWithTwoGroups(
-        bool allocated = true, std::vector<BlockGroup>* out = nullptr) {
-        BlockGroup group1;
-        group1.set_offset(0);
-        group1.set_size(kBlockGroupSize);
-        group1.set_available(kBlockGroupSize / 2);
-        group1.set_bitmaplocation(kBitmapLocation);
-        if (allocated) {
-            group1.set_owner(kOwner);
-        }
-
-        BlockGroup group2;
-        group2.set_offset(kBlockGroupSize);
-        group2.set_size(kBlockGroupSize);
-        group2.set_available(kBlockGroupSize / 2);
-        group2.set_bitmaplocation(kBitmapLocation);
-        group2.set_owner(kOwner);
-        if (allocated) {
-            group2.set_owner(kOwner);
-        }
-
-        std::vector<BlockGroup> exist{group1, group2};
-
-        if (out) {
-            *out = exist;
-        }
-
-        EXPECT_CALL(*storage_, ListBlockGroups(_, _))
-            .WillOnce(
-                Invoke([&exist](uint32_t, std::vector<BlockGroup>* groups) {
-                    *groups = exist;
-                    return SpaceOk;
-                }));
-
-        auto space = VolumeSpace::Create(kFsId, volume_, storage_.get(),
-                                         fsStorage_.get());
-        EXPECT_NE(nullptr, space);
-        return space;
-    }
-
- protected:
-    std::unique_ptr<MockBlockGroupStorage> storage_;
-    std::unique_ptr<MockFsStorage> fsStorage_;
-    common::Volume volume_;
-};
-
-TEST_F(VolumeSpaceTest, TestCreate_ListError) {
-    EXPECT_CALL(*storage_, ListBlockGroups(_, _))
-        .WillOnce(Return(SpaceErrStorage));
-
-    auto space =
-        VolumeSpace::Create(kFsId, volume_, storage_.get(), fsStorage_.get());
-    EXPECT_EQ(nullptr, space);
-}
-
-TEST_F(VolumeSpaceTest, TestCreate_Success) {
+  std::unique_ptr<VolumeSpace> CreateOneEmptyVolumeSpace() {
     EXPECT_CALL(*storage_, ListBlockGroups(_, _))
         .WillOnce(Invoke([](uint32_t, std::vector<BlockGroup>* groups) {
-            groups->clear();
-            return SpaceOk;
+          groups->clear();
+          return SpaceOk;
         }));
 
     auto space =
         VolumeSpace::Create(kFsId, volume_, storage_.get(), fsStorage_.get());
     EXPECT_NE(nullptr, space);
+    return space;
+  }
+
+  std::unique_ptr<VolumeSpace> CreateVolumeSpaceWithTwoGroups(
+      bool allocated = true, std::vector<BlockGroup>* out = nullptr) {
+    BlockGroup group1;
+    group1.set_offset(0);
+    group1.set_size(kBlockGroupSize);
+    group1.set_available(kBlockGroupSize / 2);
+    group1.set_bitmaplocation(kBitmapLocation);
+    if (allocated) {
+      group1.set_owner(kOwner);
+    }
+
+    BlockGroup group2;
+    group2.set_offset(kBlockGroupSize);
+    group2.set_size(kBlockGroupSize);
+    group2.set_available(kBlockGroupSize / 2);
+    group2.set_bitmaplocation(kBitmapLocation);
+    group2.set_owner(kOwner);
+    if (allocated) {
+      group2.set_owner(kOwner);
+    }
+
+    std::vector<BlockGroup> exist{group1, group2};
+
+    if (out) {
+      *out = exist;
+    }
+
+    EXPECT_CALL(*storage_, ListBlockGroups(_, _))
+        .WillOnce(Invoke([&exist](uint32_t, std::vector<BlockGroup>* groups) {
+          *groups = exist;
+          return SpaceOk;
+        }));
+
+    auto space =
+        VolumeSpace::Create(kFsId, volume_, storage_.get(), fsStorage_.get());
+    EXPECT_NE(nullptr, space);
+    return space;
+  }
+
+ protected:
+  std::unique_ptr<MockBlockGroupStorage> storage_;
+  std::unique_ptr<MockFsStorage> fsStorage_;
+  common::Volume volume_;
+};
+
+TEST_F(VolumeSpaceTest, TestCreate_ListError) {
+  EXPECT_CALL(*storage_, ListBlockGroups(_, _))
+      .WillOnce(Return(SpaceErrStorage));
+
+  auto space =
+      VolumeSpace::Create(kFsId, volume_, storage_.get(), fsStorage_.get());
+  EXPECT_EQ(nullptr, space);
+}
+
+TEST_F(VolumeSpaceTest, TestCreate_Success) {
+  EXPECT_CALL(*storage_, ListBlockGroups(_, _))
+      .WillOnce(Invoke([](uint32_t, std::vector<BlockGroup>* groups) {
+        groups->clear();
+        return SpaceOk;
+      }));
+
+  auto space =
+      VolumeSpace::Create(kFsId, volume_, storage_.get(), fsStorage_.get());
+  EXPECT_NE(nullptr, space);
 }
 
 TEST_F(VolumeSpaceTest, TestAllocateBlockGroups_PersistBlockGroupError) {
-    auto space = CreateOneEmptyVolumeSpace();
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .WillOnce(Return(SpaceErrStorage));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .WillOnce(Return(SpaceErrStorage));
 
-    std::vector<BlockGroup> groups;
-    EXPECT_EQ(SpaceErrStorage,
-              space->AllocateBlockGroups(kAllocateOnce, kOwner, &groups));
+  std::vector<BlockGroup> groups;
+  EXPECT_EQ(SpaceErrStorage,
+            space->AllocateBlockGroups(kAllocateOnce, kOwner, &groups));
 }
 
 TEST_F(VolumeSpaceTest, TestAllocateBlockGroups) {
-    auto space = CreateOneEmptyVolumeSpace();
-    constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
+  auto space = CreateOneEmptyVolumeSpace();
+  constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(totalGroups)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(totalGroups)
+      .WillRepeatedly(Return(SpaceOk));
 
-    std::vector<BlockGroup> groups;
+  std::vector<BlockGroup> groups;
 
-    uint64_t i = 0;
-    while (i < totalGroups) {
-        uint64_t count = rand_r(&seed) % 10 + 1;
-        count = std::min(totalGroups - i, count);
+  uint64_t i = 0;
+  while (i < totalGroups) {
+    uint64_t count = rand_r(&seed) % 10 + 1;
+    count = std::min(totalGroups - i, count);
 
-        std::vector<BlockGroup> newGroups;
-        ASSERT_EQ(SpaceOk,
-                  space->AllocateBlockGroups(count, kOwner, &newGroups));
-        groups.insert(groups.end(), std::make_move_iterator(newGroups.begin()),
-                      std::make_move_iterator(newGroups.end()));
+    std::vector<BlockGroup> newGroups;
+    ASSERT_EQ(SpaceOk, space->AllocateBlockGroups(count, kOwner, &newGroups));
+    groups.insert(groups.end(), std::make_move_iterator(newGroups.begin()),
+                  std::make_move_iterator(newGroups.end()));
 
-        i += count;
-    }
+    i += count;
+  }
 
-    std::set<uint64_t> offsets;
-    for (auto& group : groups) {
-        ASSERT_EQ(kOwner, group.owner());
-        offsets.insert(group.offset());
-    }
-    ASSERT_EQ(totalGroups, offsets.size());
-    ASSERT_EQ(0, *offsets.begin());
-    ASSERT_EQ(kVolumeSize - kBlockGroupSize, *offsets.rbegin());
+  std::set<uint64_t> offsets;
+  for (auto& group : groups) {
+    ASSERT_EQ(kOwner, group.owner());
+    offsets.insert(group.offset());
+  }
+  ASSERT_EQ(totalGroups, offsets.size());
+  ASSERT_EQ(0, *offsets.begin());
+  ASSERT_EQ(kVolumeSize - kBlockGroupSize, *offsets.rbegin());
 
-    ASSERT_EQ(SpaceErrNoSpace,
-              space->AllocateBlockGroups(kAllocateOnce, kOwner, &groups));
+  ASSERT_EQ(SpaceErrNoSpace,
+            space->AllocateBlockGroups(kAllocateOnce, kOwner, &groups));
 }
 
 TEST_F(VolumeSpaceTest, TestAutoExtendVolume_ExtendError) {
-    volume_.set_autoextend(true);
-    volume_.set_extendfactor(kExtendFactor);
-    volume_.add_cluster("127.0.0.1:34000");
-    volume_.add_cluster("127.0.0.1:34001");
-    volume_.add_cluster("127.0.0.1:34002");
+  volume_.set_autoextend(true);
+  volume_.set_extendfactor(kExtendFactor);
+  volume_.add_cluster("127.0.0.1:34000");
+  volume_.add_cluster("127.0.0.1:34001");
+  volume_.add_cluster("127.0.0.1:34002");
 
-    constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
-    auto space = CreateOneEmptyVolumeSpace();
+  constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(totalGroups)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(totalGroups)
+      .WillRepeatedly(Return(SpaceOk));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceOk,
-              space->AllocateBlockGroups(totalGroups, kOwner, &groups));
-    ASSERT_EQ(totalGroups, groups.size());
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceOk, space->AllocateBlockGroups(totalGroups, kOwner, &groups));
+  ASSERT_EQ(totalGroups, groups.size());
 
-    std::vector<BlockGroup> newGroups;
-    ASSERT_EQ(SpaceErrNoSpace,
-              space->AllocateBlockGroups(1, kOwner, &newGroups));
+  std::vector<BlockGroup> newGroups;
+  ASSERT_EQ(SpaceErrNoSpace, space->AllocateBlockGroups(1, kOwner, &newGroups));
 }
 
 namespace {
 class FakeCurveFSService : public curve::mds::CurveFSService {
  public:
-    void ExtendFile(::google::protobuf::RpcController* controller,
-                    const ::curve::mds::ExtendFileRequest* request,
-                    ::curve::mds::ExtendFileResponse* response,
-                    ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard guard(done);
-        if (request->newsize() % kBlockGroupSize != 0) {
-            response->set_statuscode(curve::mds::kParaError);
-        } else {
-            response->set_statuscode(curve::mds::kOK);
-        }
+  void ExtendFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::ExtendFileRequest* request,
+                  ::curve::mds::ExtendFileResponse* response,
+                  ::google::protobuf::Closure* done) override {
+    brpc::ClosureGuard guard(done);
+    if (request->newsize() % kBlockGroupSize != 0) {
+      response->set_statuscode(curve::mds::kParaError);
+    } else {
+      response->set_statuscode(curve::mds::kOK);
     }
+  }
 };
 }  // namespace
 
 TEST_F(VolumeSpaceTest, TestAutoExtendVolume_UpdateFsInfoError) {
-    volume_.set_autoextend(true);
-    volume_.set_extendfactor(kExtendFactor);
-    volume_.set_extendalignment(kBlockGroupSize);
-    volume_.add_cluster("127.0.0.1:34000");
-    volume_.add_cluster("127.0.0.1:34001");
-    volume_.add_cluster("127.0.0.1:34002");
+  volume_.set_autoextend(true);
+  volume_.set_extendfactor(kExtendFactor);
+  volume_.set_extendalignment(kBlockGroupSize);
+  volume_.add_cluster("127.0.0.1:34000");
+  volume_.add_cluster("127.0.0.1:34001");
+  volume_.add_cluster("127.0.0.1:34002");
 
-    brpc::Server server;
-    ASSERT_EQ(0, server.AddService(new FakeCurveFSService(),
-                                   brpc::SERVER_OWNS_SERVICE));
-    ASSERT_EQ(0, server.Start("127.0.0.1:34000", nullptr));
+  brpc::Server server;
+  ASSERT_EQ(0, server.AddService(new FakeCurveFSService(),
+                                 brpc::SERVER_OWNS_SERVICE));
+  ASSERT_EQ(0, server.Start("127.0.0.1:34000", nullptr));
 
-    constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
-    auto space = CreateOneEmptyVolumeSpace();
+  constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(totalGroups)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(totalGroups)
+      .WillRepeatedly(Return(SpaceOk));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceOk,
-              space->AllocateBlockGroups(totalGroups, kOwner, &groups));
-    ASSERT_EQ(totalGroups, groups.size());
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceOk, space->AllocateBlockGroups(totalGroups, kOwner, &groups));
+  ASSERT_EQ(totalGroups, groups.size());
 
-    EXPECT_CALL(*fsStorage_, Get(Matcher<uint64_t>(_), _))
-        .WillOnce(Return(FSStatusCode::OK));
-    EXPECT_CALL(*fsStorage_, Update(_))
-        .WillOnce(Return(FSStatusCode::STORAGE_ERROR));
+  EXPECT_CALL(*fsStorage_, Get(Matcher<uint64_t>(_), _))
+      .WillOnce(Return(FSStatusCode::OK));
+  EXPECT_CALL(*fsStorage_, Update(_))
+      .WillOnce(Return(FSStatusCode::STORAGE_ERROR));
 
-    std::vector<BlockGroup> newGroups;
-    ASSERT_EQ(SpaceErrNoSpace,
-              space->AllocateBlockGroups(1, kOwner, &newGroups));
+  std::vector<BlockGroup> newGroups;
+  ASSERT_EQ(SpaceErrNoSpace, space->AllocateBlockGroups(1, kOwner, &newGroups));
 
-    server.Stop(0);
-    server.Join();
+  server.Stop(0);
+  server.Join();
 }
 
 TEST_F(VolumeSpaceTest, TestAutoExtendVolumeSuccess) {
-    volume_.set_autoextend(true);
-    volume_.set_extendfactor(kExtendFactor);
-    volume_.set_extendalignment(kBlockGroupSize);
-    volume_.add_cluster("127.0.0.1:34000");
-    volume_.add_cluster("127.0.0.1:34001");
-    volume_.add_cluster("127.0.0.1:34002");
+  volume_.set_autoextend(true);
+  volume_.set_extendfactor(kExtendFactor);
+  volume_.set_extendalignment(kBlockGroupSize);
+  volume_.add_cluster("127.0.0.1:34000");
+  volume_.add_cluster("127.0.0.1:34001");
+  volume_.add_cluster("127.0.0.1:34002");
 
-    brpc::Server server;
-    ASSERT_EQ(0, server.AddService(new FakeCurveFSService(),
-                                   brpc::SERVER_OWNS_SERVICE));
-    ASSERT_EQ(0, server.Start("127.0.0.1:34000", nullptr));
+  brpc::Server server;
+  ASSERT_EQ(0, server.AddService(new FakeCurveFSService(),
+                                 brpc::SERVER_OWNS_SERVICE));
+  ASSERT_EQ(0, server.Start("127.0.0.1:34000", nullptr));
 
-    constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
-    auto space = CreateOneEmptyVolumeSpace();
+  constexpr auto totalGroups = kVolumeSize / kBlockGroupSize;
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(totalGroups)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(totalGroups)
+      .WillRepeatedly(Return(SpaceOk));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceOk,
-              space->AllocateBlockGroups(totalGroups, kOwner, &groups));
-    ASSERT_EQ(totalGroups, groups.size());
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceOk, space->AllocateBlockGroups(totalGroups, kOwner, &groups));
+  ASSERT_EQ(totalGroups, groups.size());
 
-    EXPECT_CALL(*fsStorage_, Get(Matcher<uint64_t>(_), _))
-        .WillOnce(Return(FSStatusCode::OK));
-    EXPECT_CALL(*fsStorage_, Update(_))
-        .WillOnce(Return(FSStatusCode::OK));
+  EXPECT_CALL(*fsStorage_, Get(Matcher<uint64_t>(_), _))
+      .WillOnce(Return(FSStatusCode::OK));
+  EXPECT_CALL(*fsStorage_, Update(_)).WillOnce(Return(FSStatusCode::OK));
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(1)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(1)
+      .WillRepeatedly(Return(SpaceOk));
 
-    std::vector<BlockGroup> newGroups;
-    ASSERT_EQ(SpaceOk,
-              space->AllocateBlockGroups(1, kOwner, &newGroups));
+  std::vector<BlockGroup> newGroups;
+  ASSERT_EQ(SpaceOk, space->AllocateBlockGroups(1, kOwner, &newGroups));
 
-    ASSERT_EQ(totalGroups + 1, space->allocatedGroups_.size());
-    ASSERT_TRUE(space->availableGroups_.empty());
-    ASSERT_FALSE(space->cleanGroups_.empty());
+  ASSERT_EQ(totalGroups + 1, space->allocatedGroups_.size());
+  ASSERT_TRUE(space->availableGroups_.empty());
+  ASSERT_FALSE(space->cleanGroups_.empty());
 
-    server.Stop(0);
-    server.Join();
+  server.Stop(0);
+  server.Join();
 }
 
 TEST_F(VolumeSpaceTest, TestAcquireBlockGroups) {
-    auto space = CreateOneEmptyVolumeSpace();
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _)).WillOnce(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _)).WillOnce(Return(SpaceOk));
 
-    uint64_t offset = 0;
+  uint64_t offset = 0;
 
-    BlockGroup group;
-    ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
-    ASSERT_EQ(kOwner, group.owner());
-    ASSERT_EQ(offset, group.offset());
+  BlockGroup group;
+  ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
+  ASSERT_EQ(kOwner, group.owner());
+  ASSERT_EQ(offset, group.offset());
 }
 
 TEST_F(VolumeSpaceTest, TestAcquireBlockGroups_Retry) {
-    auto space = CreateOneEmptyVolumeSpace();
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(2)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(2)
+      .WillRepeatedly(Return(SpaceOk));
 
-    uint64_t offset = 0;
+  uint64_t offset = 0;
 
-    BlockGroup group;
-    ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
-    ASSERT_EQ(kOwner, group.owner());
-    ASSERT_EQ(offset, group.offset());
+  BlockGroup group;
+  ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
+  ASSERT_EQ(kOwner, group.owner());
+  ASSERT_EQ(offset, group.offset());
 
-    BlockGroup group2;
-    ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group2));
-    ASSERT_EQ(kOwner, group2.owner());
-    ASSERT_EQ(offset, group2.offset());
+  BlockGroup group2;
+  ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group2));
+  ASSERT_EQ(kOwner, group2.owner());
+  ASSERT_EQ(offset, group2.offset());
 }
 
 TEST_F(VolumeSpaceTest, TestAcquireBlockGroups_Conflict) {
-    auto space = CreateOneEmptyVolumeSpace();
+  auto space = CreateOneEmptyVolumeSpace();
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
-        .Times(1)
-        .WillOnce(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, _))
+      .Times(1)
+      .WillOnce(Return(SpaceOk));
 
-    uint64_t offset = 0;
+  uint64_t offset = 0;
 
-    BlockGroup group;
-    ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
-    ASSERT_EQ(kOwner, group.owner());
-    ASSERT_EQ(offset, group.offset());
+  BlockGroup group;
+  ASSERT_EQ(SpaceOk, space->AcquireBlockGroup(offset, kOwner, &group));
+  ASSERT_EQ(kOwner, group.owner());
+  ASSERT_EQ(offset, group.offset());
 
-    BlockGroup group2;
-    ASSERT_EQ(SpaceErrConflict,
-              space->AcquireBlockGroup(offset, "another owner", &group2));
+  BlockGroup group2;
+  ASSERT_EQ(SpaceErrConflict,
+            space->AcquireBlockGroup(offset, "another owner", &group2));
 }
 
 TEST_F(VolumeSpaceTest, TestRemoveAllBlockGroups_EmptyVolumeSpace) {
-    auto space = CreateOneEmptyVolumeSpace();
-    ASSERT_EQ(SpaceOk, space->RemoveAllBlockGroups());
+  auto space = CreateOneEmptyVolumeSpace();
+  ASSERT_EQ(SpaceOk, space->RemoveAllBlockGroups());
 }
 
 TEST_F(VolumeSpaceTest, TestRemoveAllBlockGroups_ClearBlockGroupError) {
-    for (auto allocated : {true, false}) {
-        auto space = CreateVolumeSpaceWithTwoGroups(allocated);
+  for (auto allocated : {true, false}) {
+    auto space = CreateVolumeSpaceWithTwoGroups(allocated);
 
-        EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
-            .WillOnce(Return(SpaceErrStorage));
+    EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
+        .WillOnce(Return(SpaceErrStorage));
 
-        ASSERT_NE(SpaceOk, space->RemoveAllBlockGroups());
-    }
+    ASSERT_NE(SpaceOk, space->RemoveAllBlockGroups());
+  }
 }
 
 TEST_F(VolumeSpaceTest, TestRemoveAllBlockGroups_Success) {
-    for (auto allocated : {true, false}) {
-        auto space = CreateVolumeSpaceWithTwoGroups(allocated);
+  for (auto allocated : {true, false}) {
+    auto space = CreateVolumeSpaceWithTwoGroups(allocated);
 
-        EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
-            .Times(2)
-            .WillRepeatedly(Return(SpaceOk));
+    EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(SpaceOk));
 
-        ASSERT_EQ(SpaceOk, space->RemoveAllBlockGroups());
-    }
+    ASSERT_EQ(SpaceOk, space->RemoveAllBlockGroups());
+  }
 }
 
 TEST_F(VolumeSpaceTest, TestReleaseBlockGroup_OwnerNotIdentical) {
-    std::vector<BlockGroup> exists;
-    auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
+  std::vector<BlockGroup> exists;
+  auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
 
-    exists[0].set_owner("hello");
+  exists[0].set_owner("hello");
 
-    ASSERT_EQ(SpaceErrConflict, space->ReleaseBlockGroups(exists));
+  ASSERT_EQ(SpaceErrConflict, space->ReleaseBlockGroups(exists));
 }
 
 TEST_F(VolumeSpaceTest, TestReleaseBlockGroup_SpaceIsNotUsed) {
-    std::vector<BlockGroup> exists;
-    auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
+  std::vector<BlockGroup> exists;
+  auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
 
-    exists[0].set_available(exists[0].size());
-    exists[1].set_available(exists[1].size());
+  exists[0].set_available(exists[0].size());
+  exists[1].set_available(exists[1].size());
 
-    EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
-        .Times(2)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
+      .Times(2)
+      .WillRepeatedly(Return(SpaceOk));
 
-    ASSERT_EQ(SpaceOk, space->ReleaseBlockGroups(exists));
+  ASSERT_EQ(SpaceOk, space->ReleaseBlockGroups(exists));
 }
 
 TEST_F(VolumeSpaceTest, TestReleaseBlockGroup_SpaceIsNotUsed_ButClearError) {
-    std::vector<BlockGroup> exists;
-    auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
+  std::vector<BlockGroup> exists;
+  auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
 
-    exists[0].set_available(exists[0].size());
-    exists[1].set_available(exists[1].size());
+  exists[0].set_available(exists[0].size());
+  exists[1].set_available(exists[1].size());
 
-    EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
-        .WillOnce(Return(SpaceErrStorage));
+  EXPECT_CALL(*storage_, RemoveBlockGroup(_, _))
+      .WillOnce(Return(SpaceErrStorage));
 
-    ASSERT_EQ(SpaceErrStorage, space->ReleaseBlockGroups(exists));
+  ASSERT_EQ(SpaceErrStorage, space->ReleaseBlockGroups(exists));
 }
 
-MATCHER(NoOwner, "") {
-    return !arg.has_owner();
-}
+MATCHER(NoOwner, "") { return !arg.has_owner(); }
 
 TEST_F(VolumeSpaceTest, TestReleaseBlockGroup_SpaceIsPartialUsed) {
-    std::vector<BlockGroup> exists;
-    auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
+  std::vector<BlockGroup> exists;
+  auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
 
-    exists[0].set_available(exists[0].size() / 2);
-    exists[1].set_available(exists[1].size() / 2);
+  exists[0].set_available(exists[0].size() / 2);
+  exists[1].set_available(exists[1].size() / 2);
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, NoOwner()))
-        .Times(2)
-        .WillRepeatedly(Return(SpaceOk));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, NoOwner()))
+      .Times(2)
+      .WillRepeatedly(Return(SpaceOk));
 
-    ASSERT_EQ(SpaceOk, space->ReleaseBlockGroups(exists));
+  ASSERT_EQ(SpaceOk, space->ReleaseBlockGroups(exists));
 }
 
 TEST_F(VolumeSpaceTest, TestReleaseBlockGroup_SpaceIsPartialUsed_PutError) {
-    std::vector<BlockGroup> exists;
-    auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
+  std::vector<BlockGroup> exists;
+  auto space = CreateVolumeSpaceWithTwoGroups(true, &exists);
 
-    exists[0].set_available(exists[0].size() / 2);
-    exists[1].set_available(exists[1].size() / 2);
+  exists[0].set_available(exists[0].size() / 2);
+  exists[1].set_available(exists[1].size() / 2);
 
-    EXPECT_CALL(*storage_, PutBlockGroup(_, _, NoOwner()))
-        .WillOnce(Return(SpaceErrStorage));
+  EXPECT_CALL(*storage_, PutBlockGroup(_, _, NoOwner()))
+      .WillOnce(Return(SpaceErrStorage));
 
-    ASSERT_EQ(SpaceErrStorage, space->ReleaseBlockGroups(exists));
+  ASSERT_EQ(SpaceErrStorage, space->ReleaseBlockGroups(exists));
 }
 
 }  // namespace space

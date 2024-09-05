@@ -34,29 +34,29 @@ namespace copyset {
 // OperatorType is encoded with client's requests into raft log, so remove or
 // reorder existing types may introduces compatible issues
 enum class OperatorType : uint32_t {
-    GetDentry = 0,
-    ListDentry = 1,
-    CreateDentry = 2,
-    DeleteDentry = 3,
-    GetInode = 4,
-    BatchGetInodeAttr = 5,
-    BatchGetXAttr = 6,
-    CreateInode = 7,
-    UpdateInode = 8,
-    DeleteInode = 9,
-    CreateRootInode = 10,
-    CreatePartition = 11,
-    DeletePartition = 12,
-    PrepareRenameTx = 13,
-    GetOrModifyS3ChunkInfo = 14,
-    GetVolumeExtent = 15,
-    UpdateVolumeExtent = 16,
-    CreateManageInode = 17,
-    // NOTE:
-    //   Add new operator before `OperatorTypeMax`
-    //   And DO NOT recorder or delete previous types
-    //   Also add corresponding name in below `OperatorTypeName`
-    OperatorTypeMax,
+  GetDentry = 0,
+  ListDentry = 1,
+  CreateDentry = 2,
+  DeleteDentry = 3,
+  GetInode = 4,
+  BatchGetInodeAttr = 5,
+  BatchGetXAttr = 6,
+  CreateInode = 7,
+  UpdateInode = 8,
+  DeleteInode = 9,
+  CreateRootInode = 10,
+  CreatePartition = 11,
+  DeletePartition = 12,
+  PrepareRenameTx = 13,
+  GetOrModifyS3ChunkInfo = 14,
+  GetVolumeExtent = 15,
+  UpdateVolumeExtent = 16,
+  CreateManageInode = 17,
+  // NOTE:
+  //   Add new operator before `OperatorTypeMax`
+  //   And DO NOT recorder or delete previous types
+  //   Also add corresponding name in below `OperatorTypeName`
+  OperatorTypeMax,
 };
 
 const char* OperatorTypeName(OperatorType type);

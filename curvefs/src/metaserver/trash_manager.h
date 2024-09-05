@@ -23,63 +23,59 @@
 #ifndef CURVEFS_SRC_METASERVER_TRASH_MANAGER_H_
 #define CURVEFS_SRC_METASERVER_TRASH_MANAGER_H_
 
-#include <map>
 #include <list>
+#include <map>
 #include <memory>
 
-#include "src/common/concurrent/concurrent.h"
 #include "curvefs/src/metaserver/trash.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace metaserver {
 
 class TrashManager {
  public:
-    TrashManager() : isStop_(true) {
-        LOG(INFO) << "TrashManager";
-    }
+  TrashManager() : isStop_(true) { LOG(INFO) << "TrashManager"; }
 
-    static TrashManager& GetInstance() {
-        static TrashManager instance_;
-        return instance_;
-    }
+  static TrashManager& GetInstance() {
+    static TrashManager instance_;
+    return instance_;
+  }
 
-    void Add(uint32_t partitionId, const std::shared_ptr<Trash> &trash) {
-        curve::common::WriteLockGuard lg(rwLock_);
-        trash->Init(options_);
-        trashs_.emplace(partitionId, trash);
-        LOG(INFO) << "add partition to trash manager, partitionId = "
-                  << partitionId;
-    }
+  void Add(uint32_t partitionId, const std::shared_ptr<Trash>& trash) {
+    curve::common::WriteLockGuard lg(rwLock_);
+    trash->Init(options_);
+    trashs_.emplace(partitionId, trash);
+    LOG(INFO) << "add partition to trash manager, partitionId = "
+              << partitionId;
+  }
 
-    void Remove(uint32_t partitionId);
+  void Remove(uint32_t partitionId);
 
-    void Init(const TrashOption &options) {
-        options_ = options;
-    }
+  void Init(const TrashOption& options) { options_ = options; }
 
-    int Run();
+  int Run();
 
-    void Fini();
+  void Fini();
 
-    void ScanEveryTrash();
+  void ScanEveryTrash();
 
-    void ListItems(std::list<TrashItem> *items);
+  void ListItems(std::list<TrashItem>* items);
 
  private:
-    void ScanLoop();
+  void ScanLoop();
 
  private:
-    TrashOption options_;
+  TrashOption options_;
 
-    Thread recycleThread_;
+  Thread recycleThread_;
 
-    Atomic<bool> isStop_;
+  Atomic<bool> isStop_;
 
-    InterruptibleSleeper sleeper_;
+  InterruptibleSleeper sleeper_;
 
-    std::map<uint32_t, std::shared_ptr<Trash>> trashs_;
-    curve::common::RWLock rwLock_;
+  std::map<uint32_t, std::shared_ptr<Trash>> trashs_;
+  curve::common::RWLock rwLock_;
 };
 
 }  // namespace metaserver

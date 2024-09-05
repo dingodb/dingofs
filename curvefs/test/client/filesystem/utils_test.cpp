@@ -20,9 +20,10 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "curvefs/src/client/filesystem/utils.h"
+
 #include <gtest/gtest.h>
 
-#include "curvefs/src/client/filesystem/utils.h"
 #include "curvefs/test/client/filesystem/helper/helper.h"
 
 namespace curvefs {
@@ -32,71 +33,71 @@ namespace filesystem {
 class UtilsTest : public ::testing::Test {};
 
 TEST_F(UtilsTest, IsDir) {
-    InodeAttr attr;
-    attr.set_type(FsFileType::TYPE_DIRECTORY);
+  InodeAttr attr;
+  attr.set_type(FsFileType::TYPE_DIRECTORY);
 
-    ASSERT_TRUE(IsDir(attr));
-    ASSERT_FALSE(IsS3File(attr));
-    ASSERT_FALSE(IsVolmeFile(attr));
-    ASSERT_FALSE(IsSymLink(attr));
+  ASSERT_TRUE(IsDir(attr));
+  ASSERT_FALSE(IsS3File(attr));
+  ASSERT_FALSE(IsVolmeFile(attr));
+  ASSERT_FALSE(IsSymLink(attr));
 }
 
 TEST_F(UtilsTest, IsS3File) {
-    InodeAttr attr;
-    attr.set_type(FsFileType::TYPE_S3);
+  InodeAttr attr;
+  attr.set_type(FsFileType::TYPE_S3);
 
-    ASSERT_FALSE(IsDir(attr));
-    ASSERT_TRUE(IsS3File(attr));
-    ASSERT_FALSE(IsVolmeFile(attr));
-    ASSERT_FALSE(IsSymLink(attr));
+  ASSERT_FALSE(IsDir(attr));
+  ASSERT_TRUE(IsS3File(attr));
+  ASSERT_FALSE(IsVolmeFile(attr));
+  ASSERT_FALSE(IsSymLink(attr));
 }
 
 TEST_F(UtilsTest, IsVolmeFile) {
-    InodeAttr attr;
-    attr.set_type(FsFileType::TYPE_FILE);
+  InodeAttr attr;
+  attr.set_type(FsFileType::TYPE_FILE);
 
-    ASSERT_FALSE(IsDir(attr));
-    ASSERT_FALSE(IsS3File(attr));
-    ASSERT_TRUE(IsVolmeFile(attr));
-    ASSERT_FALSE(IsSymLink(attr));
+  ASSERT_FALSE(IsDir(attr));
+  ASSERT_FALSE(IsS3File(attr));
+  ASSERT_TRUE(IsVolmeFile(attr));
+  ASSERT_FALSE(IsSymLink(attr));
 }
 
 TEST_F(UtilsTest, IsSymLink) {
-    InodeAttr attr;
-    attr.set_type(FsFileType::TYPE_SYM_LINK);
+  InodeAttr attr;
+  attr.set_type(FsFileType::TYPE_SYM_LINK);
 
-    ASSERT_FALSE(IsDir(attr));
-    ASSERT_FALSE(IsS3File(attr));
-    ASSERT_FALSE(IsVolmeFile(attr));
-    ASSERT_TRUE(IsSymLink(attr));
+  ASSERT_FALSE(IsDir(attr));
+  ASSERT_FALSE(IsS3File(attr));
+  ASSERT_FALSE(IsVolmeFile(attr));
+  ASSERT_TRUE(IsSymLink(attr));
 }
 
 TEST_F(UtilsTest, AttrMtime) {
-    InodeAttr attr;
-    attr.set_mtime(12345);
-    attr.set_mtime_ns(67890);
+  InodeAttr attr;
+  attr.set_mtime(12345);
+  attr.set_mtime_ns(67890);
 
-    auto time = AttrMtime(attr);
-    ASSERT_EQ(time.seconds, 12345);
-    ASSERT_EQ(time.nanoSeconds, 67890);
+  auto time = AttrMtime(attr);
+  ASSERT_EQ(time.seconds, 12345);
+  ASSERT_EQ(time.nanoSeconds, 67890);
 }
 
 TEST_F(UtilsTest, AttrCtime) {
-    InodeAttr attr;
-    attr.set_ctime(12345);
-    attr.set_ctime_ns(67890);
+  InodeAttr attr;
+  attr.set_ctime(12345);
+  attr.set_ctime_ns(67890);
 
-    auto time = AttrCtime(attr);
-    ASSERT_EQ(time.seconds, 12345);
-    ASSERT_EQ(time.nanoSeconds, 67890);
+  auto time = AttrCtime(attr);
+  ASSERT_EQ(time.seconds, 12345);
+  ASSERT_EQ(time.nanoSeconds, 67890);
 }
 
 TEST_F(UtilsTest, InodeMtime) {
-    auto inode = MkInode(1, InodeOption().mtime(123, 456));
+  auto inode = MkInode(1, InodeOption().mtime(123, 456));
 
-    auto time = InodeMtime(inode);
-    ASSERT_EQ(time.seconds, 123);
-    ASSERT_EQ(time.nanoSeconds, 456);
+  auto time = InodeMtime(inode);
+  ASSERT_EQ(time.seconds, 123);
+  ASSERT_EQ(time.nanoSeconds, 456);
 }
 
 }  // namespace filesystem

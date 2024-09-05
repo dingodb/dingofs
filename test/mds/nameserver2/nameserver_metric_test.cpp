@@ -21,40 +21,41 @@
  */
 
 #include <gtest/gtest.h>
+
 #include "src/mds/nameserver2/metric.h"
 
 namespace curve {
 namespace mds {
 
 TEST(SegmentDiscardMetricTest, TestCommon) {
-    const uint64_t segmentSize = 128ull * 1024 * 1024;
+  const uint64_t segmentSize = 128ull * 1024 * 1024;
 
-    SegmentDiscardMetric metric;
+  SegmentDiscardMetric metric;
 
-    ASSERT_EQ(0, metric.pendingSegments_.get_value());
-    ASSERT_EQ(0, metric.pendingSize_.get_value());
-    ASSERT_EQ(0, metric.totalCleanedSegments_.get_value());
-    ASSERT_EQ(0, metric.totalCleanedSize_.get_value());
+  ASSERT_EQ(0, metric.pendingSegments_.get_value());
+  ASSERT_EQ(0, metric.pendingSize_.get_value());
+  ASSERT_EQ(0, metric.totalCleanedSegments_.get_value());
+  ASSERT_EQ(0, metric.totalCleanedSize_.get_value());
 
-    metric.OnReceiveDiscardRequest(segmentSize);
-    metric.OnReceiveDiscardRequest(segmentSize);
+  metric.OnReceiveDiscardRequest(segmentSize);
+  metric.OnReceiveDiscardRequest(segmentSize);
 
-    ASSERT_EQ(2, metric.pendingSegments_.get_value());
-    ASSERT_EQ(2 * segmentSize, metric.pendingSize_.get_value());
-    ASSERT_EQ(0, metric.totalCleanedSegments_.get_value());
-    ASSERT_EQ(0, metric.totalCleanedSize_.get_value());
+  ASSERT_EQ(2, metric.pendingSegments_.get_value());
+  ASSERT_EQ(2 * segmentSize, metric.pendingSize_.get_value());
+  ASSERT_EQ(0, metric.totalCleanedSegments_.get_value());
+  ASSERT_EQ(0, metric.totalCleanedSize_.get_value());
 
-    metric.OnDiscardFinish(segmentSize);
-    ASSERT_EQ(1, metric.pendingSegments_.get_value());
-    ASSERT_EQ(1 * segmentSize, metric.pendingSize_.get_value());
-    ASSERT_EQ(1, metric.totalCleanedSegments_.get_value());
-    ASSERT_EQ(1 * segmentSize, metric.totalCleanedSize_.get_value());
+  metric.OnDiscardFinish(segmentSize);
+  ASSERT_EQ(1, metric.pendingSegments_.get_value());
+  ASSERT_EQ(1 * segmentSize, metric.pendingSize_.get_value());
+  ASSERT_EQ(1, metric.totalCleanedSegments_.get_value());
+  ASSERT_EQ(1 * segmentSize, metric.totalCleanedSize_.get_value());
 
-    metric.OnDiscardFinish(segmentSize);
-    ASSERT_EQ(0, metric.pendingSegments_.get_value());
-    ASSERT_EQ(0, metric.pendingSize_.get_value());
-    ASSERT_EQ(2, metric.totalCleanedSegments_.get_value());
-    ASSERT_EQ(2 * segmentSize, metric.totalCleanedSize_.get_value());
+  metric.OnDiscardFinish(segmentSize);
+  ASSERT_EQ(0, metric.pendingSegments_.get_value());
+  ASSERT_EQ(0, metric.pendingSize_.get_value());
+  ASSERT_EQ(2, metric.totalCleanedSegments_.get_value());
+  ASSERT_EQ(2 * segmentSize, metric.totalCleanedSize_.get_value());
 }
 
 }  // namespace mds

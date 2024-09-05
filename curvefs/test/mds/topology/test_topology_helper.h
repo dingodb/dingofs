@@ -29,17 +29,17 @@ namespace curvefs {
 namespace mds {
 namespace topology {
 
-bool ComparePool(const Pool &lh, const Pool &rh);
+bool ComparePool(const Pool& lh, const Pool& rh);
 
-bool CompareZone(const Zone &lh, const Zone &rh);
+bool CompareZone(const Zone& lh, const Zone& rh);
 
-bool CompareServer(const Server &lh, const Server &rh);
+bool CompareServer(const Server& lh, const Server& rh);
 
-bool CompareMetaServer(const MetaServer &lh, const MetaServer &rh);
+bool CompareMetaServer(const MetaServer& lh, const MetaServer& rh);
 
-bool CompareCopysetInfo(const CopySetInfo &lh, const CopySetInfo &rh);
+bool CompareCopysetInfo(const CopySetInfo& lh, const CopySetInfo& rh);
 
-bool ComparePartition(const Partition &lh, const Partition &rh);
+bool ComparePartition(const Partition& lh, const Partition& rh);
 
 }  // namespace topology
 }  // namespace mds

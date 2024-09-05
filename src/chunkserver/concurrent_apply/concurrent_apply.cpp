@@ -20,10 +20,12 @@
  * Author: lixiaocui
  */
 
+#include "src/chunkserver/concurrent_apply/concurrent_apply.h"
+
 #include <glog/logging.h>
 
 #include <algorithm>
-#include "src/chunkserver/concurrent_apply/concurrent_apply.h"
+
 #include "src/common/concurrent/count_down_event.h"
 
 using ::curve::common::CountDownEvent;
@@ -31,141 +33,137 @@ using ::curve::common::CountDownEvent;
 namespace curve {
 namespace chunkserver {
 namespace concurrent {
-bool ConcurrentApplyModule::Init(const ConcurrentApplyOption &opt) {
-    if (start_) {
-        LOG(WARNING) << "concurrent module already start!";
-        return true;
-    }
-
-    if (false == checkOptAndInit(opt)) {
-        return false;
-    }
-
-    start_ = true;
-    cond_.Reset(opt.rconcurrentsize + opt.wconcurrentsize);
-    InitThreadPool(ThreadPoolType::READ, rconcurrentsize_, rqueuedepth_);
-    InitThreadPool(ThreadPoolType::WRITE, wconcurrentsize_, wqueuedepth_);
-
-    if (!cond_.WaitFor(5000)) {
-        LOG(ERROR) << "init concurrent module's threads fail";
-        start_ = false;
-    }
-
-    LOG(INFO) << "Init concurrent module's threads success";
-    return start_;
-}
-
-bool ConcurrentApplyModule::checkOptAndInit(
-    const ConcurrentApplyOption &opt) {
-    if (opt.rconcurrentsize <= 0 || opt.wconcurrentsize <= 0 ||
-        opt.rqueuedepth <= 0 || opt.wqueuedepth <= 0) {
-        LOG(INFO) << "init concurrent module fail, params must >=0"
-            << ", rconcurrentsize=" << opt.rconcurrentsize
-            << ", wconcurrentsize=" << opt.wconcurrentsize
-            << ", rqueuedepth=" << opt.rqueuedepth
-            << ", wconcurrentsize=" << opt.wqueuedepth;
-        return false;
-    }
-
-    wconcurrentsize_ = opt.wconcurrentsize;
-    wqueuedepth_ = opt.wqueuedepth;
-    rconcurrentsize_ = opt.rconcurrentsize;
-    rqueuedepth_ = opt.rqueuedepth;
-
+bool ConcurrentApplyModule::Init(const ConcurrentApplyOption& opt) {
+  if (start_) {
+    LOG(WARNING) << "concurrent module already start!";
     return true;
+  }
+
+  if (false == checkOptAndInit(opt)) {
+    return false;
+  }
+
+  start_ = true;
+  cond_.Reset(opt.rconcurrentsize + opt.wconcurrentsize);
+  InitThreadPool(ThreadPoolType::READ, rconcurrentsize_, rqueuedepth_);
+  InitThreadPool(ThreadPoolType::WRITE, wconcurrentsize_, wqueuedepth_);
+
+  if (!cond_.WaitFor(5000)) {
+    LOG(ERROR) << "init concurrent module's threads fail";
+    start_ = false;
+  }
+
+  LOG(INFO) << "Init concurrent module's threads success";
+  return start_;
 }
 
+bool ConcurrentApplyModule::checkOptAndInit(const ConcurrentApplyOption& opt) {
+  if (opt.rconcurrentsize <= 0 || opt.wconcurrentsize <= 0 ||
+      opt.rqueuedepth <= 0 || opt.wqueuedepth <= 0) {
+    LOG(INFO) << "init concurrent module fail, params must >=0"
+              << ", rconcurrentsize=" << opt.rconcurrentsize
+              << ", wconcurrentsize=" << opt.wconcurrentsize
+              << ", rqueuedepth=" << opt.rqueuedepth
+              << ", wconcurrentsize=" << opt.wqueuedepth;
+    return false;
+  }
 
-void ConcurrentApplyModule::InitThreadPool(
-    ThreadPoolType type, int concurrent, int depth) {
-    for (int i = 0; i < concurrent; i++) {
-        auto asyncth = new (std::nothrow) TaskThread(depth);
-        CHECK(asyncth != nullptr) << "allocate failed!";
+  wconcurrentsize_ = opt.wconcurrentsize;
+  wqueuedepth_ = opt.wqueuedepth;
+  rconcurrentsize_ = opt.rconcurrentsize;
+  rqueuedepth_ = opt.rqueuedepth;
 
-        switch (type) {
-        case ThreadPoolType::READ:
-            rapplyMap_.insert(std::make_pair(i, asyncth));
-            break;
+  return true;
+}
 
-        case ThreadPoolType::WRITE:
-            wapplyMap_.insert(std::make_pair(i, asyncth));
-            break;
-        }
+void ConcurrentApplyModule::InitThreadPool(ThreadPoolType type, int concurrent,
+                                           int depth) {
+  for (int i = 0; i < concurrent; i++) {
+    auto asyncth = new (std::nothrow) TaskThread(depth);
+    CHECK(asyncth != nullptr) << "allocate failed!";
+
+    switch (type) {
+      case ThreadPoolType::READ:
+        rapplyMap_.insert(std::make_pair(i, asyncth));
+        break;
+
+      case ThreadPoolType::WRITE:
+        wapplyMap_.insert(std::make_pair(i, asyncth));
+        break;
     }
+  }
 
-    for (int i = 0; i < concurrent; i++) {
-        switch (type) {
-        case ThreadPoolType::READ:
-            rapplyMap_[i]->th =
-                    std::thread(&ConcurrentApplyModule::Run, this, type, i);
-            break;
+  for (int i = 0; i < concurrent; i++) {
+    switch (type) {
+      case ThreadPoolType::READ:
+        rapplyMap_[i]->th =
+            std::thread(&ConcurrentApplyModule::Run, this, type, i);
+        break;
 
-        case ThreadPoolType::WRITE:
-            wapplyMap_[i]->th =
-                    std::thread(&ConcurrentApplyModule::Run, this, type, i);
-            break;
-        }
+      case ThreadPoolType::WRITE:
+        wapplyMap_[i]->th =
+            std::thread(&ConcurrentApplyModule::Run, this, type, i);
+        break;
     }
+  }
 }
 
 void ConcurrentApplyModule::Run(ThreadPoolType type, int index) {
-    cond_.Signal();
-    while (start_) {
-        switch (type) {
-        case ThreadPoolType::READ:
-            rapplyMap_[index]->tq.Pop()();
-            break;
+  cond_.Signal();
+  while (start_) {
+    switch (type) {
+      case ThreadPoolType::READ:
+        rapplyMap_[index]->tq.Pop()();
+        break;
 
-        case ThreadPoolType::WRITE:
-            wapplyMap_[index]->tq.Pop()();
-            break;
-        }
+      case ThreadPoolType::WRITE:
+        wapplyMap_[index]->tq.Pop()();
+        break;
     }
+  }
 }
 
 void ConcurrentApplyModule::Stop() {
-    LOG(INFO) << "stop ConcurrentApplyModule...";
-    start_ = false;
-    auto wakeup = []() {};
-    for (auto iter : rapplyMap_) {
-        iter.second->tq.Push(wakeup);
-        iter.second->th.join();
-        delete iter.second;
-    }
-    rapplyMap_.clear();
+  LOG(INFO) << "stop ConcurrentApplyModule...";
+  start_ = false;
+  auto wakeup = []() {};
+  for (auto iter : rapplyMap_) {
+    iter.second->tq.Push(wakeup);
+    iter.second->th.join();
+    delete iter.second;
+  }
+  rapplyMap_.clear();
 
-    for (auto iter : wapplyMap_) {
-        iter.second->tq.Push(wakeup);
-        iter.second->th.join();
-        delete iter.second;
-    }
-    wapplyMap_.clear();
+  for (auto iter : wapplyMap_) {
+    iter.second->tq.Push(wakeup);
+    iter.second->th.join();
+    delete iter.second;
+  }
+  wapplyMap_.clear();
 
-    LOG(INFO) << "stop ConcurrentApplyModule ok.";
+  LOG(INFO) << "stop ConcurrentApplyModule ok.";
 }
 
 void ConcurrentApplyModule::Flush() {
-    CountDownEvent event(wconcurrentsize_);
-    auto flushtask = [&event]() {
-        event.Signal();
-    };
+  CountDownEvent event(wconcurrentsize_);
+  auto flushtask = [&event]() { event.Signal(); };
 
-    for (int i = 0; i < wconcurrentsize_; i++) {
-        wapplyMap_[i]->tq.Push(flushtask);
-    }
+  for (int i = 0; i < wconcurrentsize_; i++) {
+    wapplyMap_[i]->tq.Push(flushtask);
+  }
 
-    event.Wait();
+  event.Wait();
 }
 
 ThreadPoolType ConcurrentApplyModule::Schedule(CHUNK_OP_TYPE optype) {
-    switch (optype) {
+  switch (optype) {
     case CHUNK_OP_READ:
     case CHUNK_OP_RECOVER:
-        return ThreadPoolType::READ;
+      return ThreadPoolType::READ;
     default:
-        return ThreadPoolType::WRITE;
-    }
+      return ThreadPoolType::WRITE;
+  }
 }
-}   // namespace concurrent
-}   // namespace chunkserver
-}   // namespace curve
+}  // namespace concurrent
+}  // namespace chunkserver
+}  // namespace curve

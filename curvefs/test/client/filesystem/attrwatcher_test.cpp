@@ -30,48 +30,47 @@ namespace filesystem {
 
 class AttrWatcherTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
+  void SetUp() override {}
 
-    void TearDown() override {}
+  void TearDown() override {}
 };
 
 TEST_F(AttrWatcherTest, RememberMtime) {
-    auto option = AttrWatcherOption();
-    auto attrWatcher = std::make_shared<AttrWatcher>(option, nullptr, nullptr);
+  auto option = AttrWatcherOption();
+  auto attrWatcher = std::make_shared<AttrWatcher>(option, nullptr, nullptr);
 
-    // remeber mtime
-    InodeAttr attr = MkAttr(100, AttrOption().mtime(123, 456));
-    attrWatcher->RemeberMtime(attr);
+  // remeber mtime
+  InodeAttr attr = MkAttr(100, AttrOption().mtime(123, 456));
+  attrWatcher->RemeberMtime(attr);
 
-    // get mtime
-    TimeSpec time;
-    bool yes = attrWatcher->GetMtime(100, &time);
-    ASSERT_TRUE(yes);
-    ASSERT_EQ(time, TimeSpec(123, 456));
+  // get mtime
+  TimeSpec time;
+  bool yes = attrWatcher->GetMtime(100, &time);
+  ASSERT_TRUE(yes);
+  ASSERT_EQ(time, TimeSpec(123, 456));
 }
 
 TEST_F(AttrWatcherTest, EvitAttr) {
-    auto option = AttrWatcherOption{lruSize: 1};
-    auto attrWatcher = std::make_shared<AttrWatcher>(option, nullptr, nullptr);
+  auto option = AttrWatcherOption{lruSize : 1};
+  auto attrWatcher = std::make_shared<AttrWatcher>(option, nullptr, nullptr);
 
-    // remeber mtime
-    for (const Ino& ino : std::vector<Ino>{100, 200}) {
-        InodeAttr attr = MkAttr(ino, AttrOption().mtime(123, 456));
-        attrWatcher->RemeberMtime(attr);
-    }
+  // remeber mtime
+  for (const Ino& ino : std::vector<Ino>{100, 200}) {
+    InodeAttr attr = MkAttr(ino, AttrOption().mtime(123, 456));
+    attrWatcher->RemeberMtime(attr);
+  }
 
-    // get mtime
-    TimeSpec time;
-    bool yes = attrWatcher->GetMtime(100, &time);
-    ASSERT_FALSE(yes);
+  // get mtime
+  TimeSpec time;
+  bool yes = attrWatcher->GetMtime(100, &time);
+  ASSERT_FALSE(yes);
 
-    yes = attrWatcher->GetMtime(200, &time);
-    ASSERT_TRUE(yes);
-    ASSERT_EQ(time, TimeSpec(123, 456));
+  yes = attrWatcher->GetMtime(200, &time);
+  ASSERT_TRUE(yes);
+  ASSERT_EQ(time, TimeSpec(123, 456));
 }
 
-TEST_F(AttrWatcherTest, UpdateDirEntryAttr) {
-}
+TEST_F(AttrWatcherTest, UpdateDirEntryAttr) {}
 
 }  // namespace filesystem
 }  // namespace client

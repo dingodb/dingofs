@@ -57,50 +57,50 @@ namespace copyset {
 
 // Options for copyset node and relative modules
 struct CopysetNodeOptions {
-    // copyset's data uri
-    std::string dataUri;
+  // copyset's data uri
+  std::string dataUri;
 
-    // ip and port of this copyset node
-    std::string ip;
-    uint32_t port;
+  // ip and port of this copyset node
+  std::string ip;
+  uint32_t port;
 
-    // the number of concurrent recovery loads of copyset
-    // Default: 1
-    uint32_t loadConcurrency;
+  // the number of concurrent recovery loads of copyset
+  // Default: 1
+  uint32_t loadConcurrency;
 
-    // the maximum number of retries to check whether a copyset is loaded
-    // completed, possible exceptions:
-    // 1. most of the current replicas haven't been up
-    // 2. network problems, etc. lead to the failure to obtain the leader
-    // 3. the committed index of the leader cannot be obtained due to other
-    //    reasons
-    // Default: 3
-    uint32_t checkRetryTimes;
+  // the maximum number of retries to check whether a copyset is loaded
+  // completed, possible exceptions:
+  // 1. most of the current replicas haven't been up
+  // 2. network problems, etc. lead to the failure to obtain the leader
+  // 3. the committed index of the leader cannot be obtained due to other
+  //    reasons
+  // Default: 3
+  uint32_t checkRetryTimes;
 
-    // if the difference between the applied_index of the current peer and the
-    // committed_index on the leader is less than |finishLoadMargin|, it's
-    // determined that the copyset has been loaded
-    // Default: 2000
-    uint32_t finishLoadMargin;
+  // if the difference between the applied_index of the current peer and the
+  // committed_index on the leader is less than |finishLoadMargin|, it's
+  // determined that the copyset has been loaded
+  // Default: 2000
+  uint32_t finishLoadMargin;
 
-    // sleep time in microseconds between different cycles check whether
-    // copyset is loaded
-    // Default: 1000
-    uint32_t checkLoadMarginIntervalMs;
+  // sleep time in microseconds between different cycles check whether
+  // copyset is loaded
+  // Default: 1000
+  uint32_t checkLoadMarginIntervalMs;
 
-    // apply queue options
-    ApplyQueueOption applyQueueOption;
+  // apply queue options
+  ApplyQueueOption applyQueueOption;
 
-    // filesystem adaptor
-    curve::fs::LocalFileSystem* localFileSystem;
+  // filesystem adaptor
+  curve::fs::LocalFileSystem* localFileSystem;
 
-    CopysetTrashOptions trashOptions;
+  CopysetTrashOptions trashOptions;
 
-    braft::NodeOptions raftNodeOptions;
+  braft::NodeOptions raftNodeOptions;
 
-    storage::StorageOptions storageOptions;
+  storage::StorageOptions storageOptions;
 
-    CopysetNodeOptions();
+  CopysetNodeOptions();
 };
 
 inline CopysetNodeOptions::CopysetNodeOptions()

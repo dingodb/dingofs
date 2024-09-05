@@ -42,92 +42,87 @@ using ::curvefs::client::rpcclient::MdsClient;
 
 class SpaceManager {
  public:
-    virtual ~SpaceManager() = default;
+  virtual ~SpaceManager() = default;
 
-    virtual bool Alloc(uint32_t size,
-                       const AllocateHint& hint,
-                       std::vector<Extent>* extents) = 0;
+  virtual bool Alloc(uint32_t size, const AllocateHint& hint,
+                     std::vector<Extent>* extents) = 0;
 
-    virtual bool DeAlloc(const std::vector<Extent>& extents) = 0;
+  virtual bool DeAlloc(const std::vector<Extent>& extents) = 0;
 
-    virtual bool Shutdown() = 0;
+  virtual bool Shutdown() = 0;
 };
 
 class SpaceManagerImpl final : public SpaceManager {
  public:
-    SpaceManagerImpl(
-        const SpaceManagerOption& option,
-        const std::shared_ptr<MdsClient>& mdsClient,
-        const std::shared_ptr<BlockDeviceClient>& blockDeviceClient);
+  SpaceManagerImpl(const SpaceManagerOption& option,
+                   const std::shared_ptr<MdsClient>& mdsClient,
+                   const std::shared_ptr<BlockDeviceClient>& blockDeviceClient);
 
-    SpaceManagerImpl(const SpaceManagerImpl&) = delete;
-    SpaceManagerImpl& operator=(const SpaceManagerImpl&) = delete;
+  SpaceManagerImpl(const SpaceManagerImpl&) = delete;
+  SpaceManagerImpl& operator=(const SpaceManagerImpl&) = delete;
 
-    bool Alloc(uint32_t size,
-               const AllocateHint& hint,
-               std::vector<Extent>* extents) override;
+  bool Alloc(uint32_t size, const AllocateHint& hint,
+             std::vector<Extent>* extents) override;
 
-    bool DeAlloc(const std::vector<Extent>& extents) override;
+  bool DeAlloc(const std::vector<Extent>& extents) override;
 
-    /**
-     * @brief Shutdown space manager, release all blockgroups' rights
-     */
-    bool Shutdown() override;
+  /**
+   * @brief Shutdown space manager, release all blockgroups' rights
+   */
+  bool Shutdown() override;
 
  private:
-    int64_t AllocInternal(int64_t size,
-                          const AllocateHint& hint,
-                          std::vector<Extent>* exts);
+  int64_t AllocInternal(int64_t size, const AllocateHint& hint,
+                        std::vector<Extent>* exts);
 
-    std::map<uint64_t, std::unique_ptr<Allocator>>::iterator FindAllocator(
-        const AllocateHint& hint);
+  std::map<uint64_t, std::unique_ptr<Allocator>>::iterator FindAllocator(
+      const AllocateHint& hint);
 
-    /**
-     * @brief Find corresponding bitmap updater by extent
-     */
-    BlockGroupBitmapUpdater* FindBitmapUpdater(const Extent& ext);
+  /**
+   * @brief Find corresponding bitmap updater by extent
+   */
+  BlockGroupBitmapUpdater* FindBitmapUpdater(const Extent& ext);
 
-    bool UpdateBitmap(const std::vector<Extent>& exts);
-
- private:
-    bool AllocateBlockGroup(uint64_t hint);
-
-    bool AcquireBlockGroup(uint64_t blockGroupOffset);
+  bool UpdateBitmap(const std::vector<Extent>& exts);
 
  private:
-    curve::common::RWLock allocatorsLock_;
-    std::map<uint64_t, std::unique_ptr<Allocator>> allocators_;
+  bool AllocateBlockGroup(uint64_t hint);
 
-    curve::common::RWLock updatersLock_;
-    std::map<uint64_t, std::unique_ptr<BlockGroupBitmapUpdater>>
-        bitmapUpdaters_;
-
-    std::atomic<uint64_t> totalBytes_;
-    std::atomic<uint64_t> availableBytes_;
-
-    // from fileinfo
-    uint32_t blockSize_;
-    uint64_t blockGroupSize_;
-
-    std::unique_ptr<BlockGroupManager> blockGroupManager_;
-
-    bool allocating_;
-    std::mutex mtx_;
-    std::condition_variable cond_;
+  bool AcquireBlockGroup(uint64_t blockGroupOffset);
 
  private:
-    struct Metric {
-        bvar::LatencyRecorder allocLatency;
-        bvar::LatencyRecorder allocSize;
-        bvar::Adder<uint64_t> errorCount;
+  curve::common::RWLock allocatorsLock_;
+  std::map<uint64_t, std::unique_ptr<Allocator>> allocators_;
 
-        Metric()
-            : allocLatency("space_alloc_latency"),
-              allocSize("space_alloc_size"),
-              errorCount("space_alloc_error") {}
-    };
+  curve::common::RWLock updatersLock_;
+  std::map<uint64_t, std::unique_ptr<BlockGroupBitmapUpdater>> bitmapUpdaters_;
 
-    Metric metric_;
+  std::atomic<uint64_t> totalBytes_;
+  std::atomic<uint64_t> availableBytes_;
+
+  // from fileinfo
+  uint32_t blockSize_;
+  uint64_t blockGroupSize_;
+
+  std::unique_ptr<BlockGroupManager> blockGroupManager_;
+
+  bool allocating_;
+  std::mutex mtx_;
+  std::condition_variable cond_;
+
+ private:
+  struct Metric {
+    bvar::LatencyRecorder allocLatency;
+    bvar::LatencyRecorder allocSize;
+    bvar::Adder<uint64_t> errorCount;
+
+    Metric()
+        : allocLatency("space_alloc_latency"),
+          allocSize("space_alloc_size"),
+          errorCount("space_alloc_error") {}
+  };
+
+  Metric metric_;
 };
 
 }  // namespace volume

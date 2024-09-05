@@ -24,20 +24,20 @@
 #define CURVEFS_SRC_CLIENT_XATTR_MANAGER_H_
 
 #include <cstdint>
-#include <map>
-#include <unordered_map>
-#include <memory>
-#include <string>
 #include <list>
-#include <stack>
+#include <map>
+#include <memory>
 #include <mutex>
 #include <set>
+#include <stack>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
-#include "curvefs/src/common/define.h"
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/client_operator.h"
+#include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/common/define.h"
 #include "src/common/interruptible_sleeper.h"
 
 #define DirectIOAlignment 512
@@ -45,94 +45,83 @@
 namespace curvefs {
 namespace client {
 
-using curvefs::metaserver::FsFileType;
 using ::curve::common::Atomic;
 using ::curve::common::InterruptibleSleeper;
+using curvefs::metaserver::FsFileType;
 
 struct SummaryInfo {
-    uint64_t files = 0;
-    uint64_t subdirs = 0;
-    uint64_t entries = 0;
-    uint64_t fbytes = 0;
+  uint64_t files = 0;
+  uint64_t subdirs = 0;
+  uint64_t entries = 0;
+  uint64_t fbytes = 0;
 };
 
 class XattrManager {
  public:
-    XattrManager(const std::shared_ptr<InodeCacheManager> &inodeManager,
-        const std::shared_ptr<DentryCacheManager> &dentryManager,
-        uint32_t listDentryLimit,
-        uint32_t listDentryThreads)
-        : inodeManager_(inodeManager),
+  XattrManager(const std::shared_ptr<InodeCacheManager>& inodeManager,
+               const std::shared_ptr<DentryCacheManager>& dentryManager,
+               uint32_t listDentryLimit, uint32_t listDentryThreads)
+      : inodeManager_(inodeManager),
         dentryManager_(dentryManager),
         listDentryLimit_(listDentryLimit),
         listDentryThreads_(listDentryThreads),
         isStop_(false) {}
 
-    ~XattrManager() {}
+  ~XattrManager() {}
 
-    void Stop() {
-        isStop_.store(true);
-    }
+  void Stop() { isStop_.store(true); }
 
-    CURVEFS_ERROR GetXattr(const char* name, std::string *value,
-        InodeAttr *attr, bool enableSumInDir);
+  CURVEFS_ERROR GetXattr(const char* name, std::string* value, InodeAttr* attr,
+                         bool enableSumInDir);
 
-    CURVEFS_ERROR UpdateParentInodeXattr(uint64_t parentId,
-        const XAttr &xattr, bool direction);
+  CURVEFS_ERROR UpdateParentInodeXattr(uint64_t parentId, const XAttr& xattr,
+                                       bool direction);
 
-    CURVEFS_ERROR UpdateParentXattrAfterRename(uint64_t parent,
-        uint64_t newparent, const char *newname,
-        RenameOperator* renameOp);
-
- private:
-    bool ConcurrentListDentry(
-        std::list<Dentry> *dentrys,
-        std::stack<uint64_t> *iStack,
-        std::mutex *stackMutex,
-        bool dirOnly,
-        Atomic<uint32_t> *inflightNum,
-        Atomic<bool> *ret);
-
-    void ConcurrentGetInodeAttr(
-        std::stack<uint64_t> *iStack,
-        std::mutex *stackMutex,
-        std::unordered_map<uint64_t, uint64_t> *hardLinkMap,
-        std::mutex *mapMutex,
-        SummaryInfo *summaryInfo,
-        std::mutex *valueMutex,
-        Atomic<uint32_t> *inflightNum,
-        Atomic<bool> *ret);
-
-    void ConcurrentGetInodeXattr(
-        std::stack<uint64_t> *iStack,
-        std::mutex *stackMutex,
-        InodeAttr *attr,
-        std::mutex *inodeMutex,
-        Atomic<uint32_t> *inflightNum,
-        Atomic<bool> *ret);
-
-    CURVEFS_ERROR CalOneLayerSumInfo(InodeAttr *attr);
-
-    CURVEFS_ERROR CalAllLayerSumInfo(InodeAttr *attr);
-
-    CURVEFS_ERROR FastCalOneLayerSumInfo(InodeAttr *attr);
-
-    CURVEFS_ERROR FastCalAllLayerSumInfo(InodeAttr *attr);
+  CURVEFS_ERROR UpdateParentXattrAfterRename(uint64_t parent,
+                                             uint64_t newparent,
+                                             const char* newname,
+                                             RenameOperator* renameOp);
 
  private:
-    // inode cache manager
-    std::shared_ptr<InodeCacheManager> inodeManager_;
+  bool ConcurrentListDentry(std::list<Dentry>* dentrys,
+                            std::stack<uint64_t>* iStack,
+                            std::mutex* stackMutex, bool dirOnly,
+                            Atomic<uint32_t>* inflightNum, Atomic<bool>* ret);
 
-    // dentry cache manager
-    std::shared_ptr<DentryCacheManager> dentryManager_;
+  void ConcurrentGetInodeAttr(
+      std::stack<uint64_t>* iStack, std::mutex* stackMutex,
+      std::unordered_map<uint64_t, uint64_t>* hardLinkMap, std::mutex* mapMutex,
+      SummaryInfo* summaryInfo, std::mutex* valueMutex,
+      Atomic<uint32_t>* inflightNum, Atomic<bool>* ret);
 
-    InterruptibleSleeper sleeper_;
+  void ConcurrentGetInodeXattr(std::stack<uint64_t>* iStack,
+                               std::mutex* stackMutex, InodeAttr* attr,
+                               std::mutex* inodeMutex,
+                               Atomic<uint32_t>* inflightNum,
+                               Atomic<bool>* ret);
 
-    uint32_t listDentryLimit_;
+  CURVEFS_ERROR CalOneLayerSumInfo(InodeAttr* attr);
 
-    uint32_t listDentryThreads_;
+  CURVEFS_ERROR CalAllLayerSumInfo(InodeAttr* attr);
 
-    Atomic<bool> isStop_;
+  CURVEFS_ERROR FastCalOneLayerSumInfo(InodeAttr* attr);
+
+  CURVEFS_ERROR FastCalAllLayerSumInfo(InodeAttr* attr);
+
+ private:
+  // inode cache manager
+  std::shared_ptr<InodeCacheManager> inodeManager_;
+
+  // dentry cache manager
+  std::shared_ptr<DentryCacheManager> dentryManager_;
+
+  InterruptibleSleeper sleeper_;
+
+  uint32_t listDentryLimit_;
+
+  uint32_t listDentryThreads_;
+
+  Atomic<bool> isStop_;
 };
 
 }  // namespace client

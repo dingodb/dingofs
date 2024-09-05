@@ -40,105 +40,98 @@ namespace client {
 
 class MemCachedTest : public ::testing::Test {
  public:
-    MemCachedTest() = default;
-    void SetUp() {
-        auto hostname = "127.0.0.1";
-        auto port = 18080;
-        memcached_pid = ::fork();
-        if (0 > memcached_pid) {
-            ASSERT_FALSE(true);
-        } else if (0 == memcached_pid) {
-            std::string memcached_port =
-                "-p " + std::to_string(port);
-            ASSERT_EQ(0, execlp("memcached", "memcached", "-uroot",
-                                memcached_port.c_str(), nullptr));
-        }
-
-        std::shared_ptr<MemCachedClient> client(new MemCachedClient());
-        ASSERT_EQ(true, client->AddServer(hostname, port));
-        ASSERT_EQ(true, client->PushServer());
-        KVClientManagerOpt opt;
-        opt.setThreadPooln = 2;
-        opt.getThreadPooln = 2;
-        ASSERT_EQ(true, manager_.Init(opt, client));
-
-        // wait memcached server start
-        std::string errorlog;
-        int retry = 0;
-        bool ret = false;
-        do {
-            if ((ret = client->Set("1", "2", 1, &errorlog)) || retry > 100) {
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            retry++;
-        } while (1);
-        ASSERT_TRUE(ret)
-            << absl::StrCat("memcache start failed, errorlog: ", errorlog);
-        LOG(INFO) << "=============== memcache start ok";
+  MemCachedTest() = default;
+  void SetUp() {
+    auto hostname = "127.0.0.1";
+    auto port = 18080;
+    memcached_pid = ::fork();
+    if (0 > memcached_pid) {
+      ASSERT_FALSE(true);
+    } else if (0 == memcached_pid) {
+      std::string memcached_port = "-p " + std::to_string(port);
+      ASSERT_EQ(0, execlp("memcached", "memcached", "-uroot",
+                          memcached_port.c_str(), nullptr));
     }
 
-    void TearDown() {
-        auto str = absl::StrCat("kill -9 ", memcached_pid);
-        ::system(str.c_str());
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-    }
-    pid_t memcached_pid;
-    KVClientManager manager_;
+    std::shared_ptr<MemCachedClient> client(new MemCachedClient());
+    ASSERT_EQ(true, client->AddServer(hostname, port));
+    ASSERT_EQ(true, client->PushServer());
+    KVClientManagerOpt opt;
+    opt.setThreadPooln = 2;
+    opt.getThreadPooln = 2;
+    ASSERT_EQ(true, manager_.Init(opt, client));
+
+    // wait memcached server start
+    std::string errorlog;
+    int retry = 0;
+    bool ret = false;
+    do {
+      if ((ret = client->Set("1", "2", 1, &errorlog)) || retry > 100) {
+        break;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      retry++;
+    } while (1);
+    ASSERT_TRUE(ret) << absl::StrCat("memcache start failed, errorlog: ",
+                                     errorlog);
+    LOG(INFO) << "=============== memcache start ok";
+  }
+
+  void TearDown() {
+    auto str = absl::StrCat("kill -9 ", memcached_pid);
+    ::system(str.c_str());
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+  }
+  pid_t memcached_pid;
+  KVClientManager manager_;
 };
 
-
 TEST_F(MemCachedTest, MultiThreadTask) {
-    // prepare data
-    std::vector<std::thread> workers;
-    std::vector<std::pair<std::string, std::string>> kvstr = {
-        {"123", "1231"},
-        {"456", "4561"},
-        {"789", "7891"},
-        {"234", "2341"},
-        {"890", "8901"}
-    };
+  // prepare data
+  std::vector<std::thread> workers;
+  std::vector<std::pair<std::string, std::string>> kvstr = {{"123", "1231"},
+                                                            {"456", "4561"},
+                                                            {"789", "7891"},
+                                                            {"234", "2341"},
+                                                            {"890", "8901"}};
 
-    // set
-    CountDownEvent taskEvent(5);
-    for (int i = 0; i < 5; i++) {
-        workers.emplace_back([&, i]() {
-            auto task = std::make_shared<SetKVCacheTask>(
-                kvstr[i].first, kvstr[i].second.c_str(),
-                kvstr[i].second.length());
-            task->done =
-                [&taskEvent](const std::shared_ptr<SetKVCacheTask> &task) {
-                    taskEvent.Signal();
-                };
-            manager_.Set(task);
-        });
-    }
-    taskEvent.Wait();
-    ASSERT_EQ(
-        5, manager_.GetClientMetricForTesting()->kvClientSet.latency.count());
+  // set
+  CountDownEvent taskEvent(5);
+  for (int i = 0; i < 5; i++) {
+    workers.emplace_back([&, i]() {
+      auto task = std::make_shared<SetKVCacheTask>(
+          kvstr[i].first, kvstr[i].second.c_str(), kvstr[i].second.length());
+      task->done = [&taskEvent](const std::shared_ptr<SetKVCacheTask>& task) {
+        taskEvent.Signal();
+      };
+      manager_.Set(task);
+    });
+  }
+  taskEvent.Wait();
+  ASSERT_EQ(5,
+            manager_.GetClientMetricForTesting()->kvClientSet.latency.count());
 
-    // get
-    for (int i = 0; i < 5; i++) {
-        workers.emplace_back([&, i]() {
-            CountDownEvent taskEvent(1);
-            char *result = new char[4];
-            auto task =
-                std::make_shared<GetKVCacheTask>(kvstr[i].first, result, 0, 4);
-            task->done =
-                [&taskEvent](const std::shared_ptr<GetKVCacheTask> &task) {
-                    taskEvent.Signal();
-                };
-            manager_.Get(task);
-            taskEvent.Wait();
-            ASSERT_EQ(0, memcmp(result, kvstr[i].second.c_str(), 4));
-            ASSERT_TRUE(task->res);
-        });
+  // get
+  for (int i = 0; i < 5; i++) {
+    workers.emplace_back([&, i]() {
+      CountDownEvent taskEvent(1);
+      char* result = new char[4];
+      auto task =
+          std::make_shared<GetKVCacheTask>(kvstr[i].first, result, 0, 4);
+      task->done = [&taskEvent](const std::shared_ptr<GetKVCacheTask>& task) {
+        taskEvent.Signal();
+      };
+      manager_.Get(task);
+      taskEvent.Wait();
+      ASSERT_EQ(0, memcmp(result, kvstr[i].second.c_str(), 4));
+      ASSERT_TRUE(task->res);
+    });
+  }
+  for (auto& iter : workers) {
+    if (iter.joinable()) {
+      iter.join();
     }
-    for (auto &iter : workers) {
-        if (iter.joinable()) {
-            iter.join();
-        }
-    }
+  }
 }
 }  // namespace client
 }  // namespace curvefs

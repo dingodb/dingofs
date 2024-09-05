@@ -37,51 +37,48 @@ using ::curve::common::Bitmap;
 class BlockDeviceClient;
 
 struct BitmapRange {
-    uint64_t offset;
-    uint64_t length;
+  uint64_t offset;
+  uint64_t length;
 };
 
 // bitmap updater for each block group
 class BlockGroupBitmapUpdater {
  public:
-    BlockGroupBitmapUpdater(Bitmap bitmap,
-                            uint32_t blockSize,
-                            uint32_t groupSize,
-                            uint64_t groupOffset,
-                            const BitmapRange& range,
-                            BlockDeviceClient* blockDev)
-        : dirty_(false),
-          bitmap_(std::move(bitmap)),
-          blockSize_(blockSize),
-          groupSize_(groupSize),
-          groupOffset_(groupOffset),
-          bitmapRange_(range),
-          blockDev_(blockDev) {}
+  BlockGroupBitmapUpdater(Bitmap bitmap, uint32_t blockSize, uint32_t groupSize,
+                          uint64_t groupOffset, const BitmapRange& range,
+                          BlockDeviceClient* blockDev)
+      : dirty_(false),
+        bitmap_(std::move(bitmap)),
+        blockSize_(blockSize),
+        groupSize_(groupSize),
+        groupOffset_(groupOffset),
+        bitmapRange_(range),
+        blockDev_(blockDev) {}
 
-    enum Op { Set, Clear };
+  enum Op { Set, Clear };
 
-    /**
-     * @brief Update corresponding bit that covered by exts
-     * @param op set or clear bit
-     */
-    void Update(const Extent& ext, Op op);
+  /**
+   * @brief Update corresponding bit that covered by exts
+   * @param op set or clear bit
+   */
+  void Update(const Extent& ext, Op op);
 
-    /**
-     * @brief Sync bitmap to backend storage if dirty
-     * @return return true if success, otherwise, return false
-     */
-    bool Sync();
+  /**
+   * @brief Sync bitmap to backend storage if dirty
+   * @return return true if success, otherwise, return false
+   */
+  bool Sync();
 
  private:
-    std::mutex bitmapMtx_;
-    std::mutex syncMtx_;
-    bool dirty_;
-    Bitmap bitmap_;
-    uint32_t blockSize_;
-    uint32_t groupSize_;
-    uint64_t groupOffset_;
-    BitmapRange bitmapRange_;
-    BlockDeviceClient* blockDev_;
+  std::mutex bitmapMtx_;
+  std::mutex syncMtx_;
+  bool dirty_;
+  Bitmap bitmap_;
+  uint32_t blockSize_;
+  uint32_t groupSize_;
+  uint64_t groupOffset_;
+  BitmapRange bitmapRange_;
+  BlockDeviceClient* blockDev_;
 };
 
 }  // namespace volume

@@ -40,68 +40,67 @@ namespace tools {
 namespace list {
 
 void PartitionListTool::PrintHelp() {
-    CurvefsToolRpc::PrintHelp();
-    std::cout << " -fsId=" << FLAGS_fsId << " [-mdsAddr=" << FLAGS_mdsAddr
-              << "]" << std::endl;
+  CurvefsToolRpc::PrintHelp();
+  std::cout << " -fsId=" << FLAGS_fsId << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
+            << std::endl;
 }
 
 void PartitionListTool::AddUpdateFlags() {
-    AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
+  AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
 }
 
 int PartitionListTool::Init() {
-    if (CurvefsToolRpc::Init() != 0) {
-        return -1;
-    }
+  if (CurvefsToolRpc::Init() != 0) {
+    return -1;
+  }
 
-    curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
-    google::CommandLineFlagInfo info;
-    if (CheckFsIdDefault(&info)) {
-        std::cerr << "no -fsId=*, please use --example check!" << std::endl;
-        return -1;
-    }
+  curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
+  google::CommandLineFlagInfo info;
+  if (CheckFsIdDefault(&info)) {
+    std::cerr << "no -fsId=*, please use --example check!" << std::endl;
+    return -1;
+  }
 
-    std::vector<std::string> fsIds;
-    curve::common::SplitString(FLAGS_fsId, ",", &fsIds);
+  std::vector<std::string> fsIds;
+  curve::common::SplitString(FLAGS_fsId, ",", &fsIds);
 
-    service_stub_func_ =
-        std::bind(&curvefs::mds::topology::TopologyService_Stub::ListPartition,
-                  service_stub_.get(), std::placeholders::_1,
-                  std::placeholders::_2, std::placeholders::_3, nullptr);
+  service_stub_func_ =
+      std::bind(&curvefs::mds::topology::TopologyService_Stub::ListPartition,
+                service_stub_.get(), std::placeholders::_1,
+                std::placeholders::_2, std::placeholders::_3, nullptr);
 
-    curvefs::mds::topology::ListPartitionRequest request;
-    for (const auto& i : fsIds) {
-        uint32_t fsId = 0;
-        curve::common::StringToUl(i, &fsId);
-        request.set_fsid(fsId);
-        AddRequest(request);
-    }
+  curvefs::mds::topology::ListPartitionRequest request;
+  for (const auto& i : fsIds) {
+    uint32_t fsId = 0;
+    curve::common::StringToUl(i, &fsId);
+    request.set_fsid(fsId);
+    AddRequest(request);
+  }
 
-    return 0;
+  return 0;
 }
 
 bool PartitionListTool::AfterSendRequestToHost(const std::string& host) {
-    bool ret = false;
-    if (controller_->Failed()) {
-        errorOutput_ << "get fsinfo from mds: " << host
-                     << " failed, errorcode= " << controller_->ErrorCode()
-                     << ", error text " << controller_->ErrorText() << "\n";
+  bool ret = false;
+  if (controller_->Failed()) {
+    errorOutput_ << "get fsinfo from mds: " << host
+                 << " failed, errorcode= " << controller_->ErrorCode()
+                 << ", error text " << controller_->ErrorText() << "\n";
+  } else {
+    if (response_->statuscode() != mds::topology::TopoStatusCode::TOPO_OK) {
+      std::cerr << "list partitions failed, errorcode= "
+                << mds::topology::TopoStatusCode_Name(response_->statuscode())
+                << std::endl;
     } else {
-        if (response_->statuscode() != mds::topology::TopoStatusCode::TOPO_OK) {
-            std::cerr << "list partitions failed, errorcode= "
-                      << mds::topology::TopoStatusCode_Name(
-                             response_->statuscode())
-                      << std::endl;
-        } else {
-            fsId2PartitionList_[requestQueue_.front().fsid()] =
-                response_->partitioninfolist();
-            if (show_) {
-                std::cout << response_->DebugString() << std::endl;
-                ret = true;
-            }
-        }
+      fsId2PartitionList_[requestQueue_.front().fsid()] =
+          response_->partitioninfolist();
+      if (show_) {
+        std::cout << response_->DebugString() << std::endl;
+        ret = true;
+      }
     }
-    return ret;
+  }
+  return ret;
 }
 
 }  // namespace list

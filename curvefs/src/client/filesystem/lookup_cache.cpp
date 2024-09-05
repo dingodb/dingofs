@@ -20,83 +20,81 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "curvefs/src/client/filesystem/lookup_cache.h"
+
 #include <glog/logging.h>
 
 #include <ctime>
 
 #include "absl/strings/str_format.h"
 #include "curvefs/src/client/filesystem/utils.h"
-#include "curvefs/src/client/filesystem/lookup_cache.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
 #define RETURN_FALSE_IF_DISABLED() \
-    do {                           \
-        if (!enable_) {            \
-            return false;          \
-        }                          \
-    } while (0)
-
+  do {                             \
+    if (!enable_) {                \
+      return false;                \
+    }                              \
+  } while (0)
 
 LookupCache::LookupCache(LookupCacheOption option)
-    : enable_(option.negativeTimeoutSec > 0),
-      rwlock_(),
-      option_(option) {
-    lru_ = std::make_shared<LRUType>(option.lruSize);
-    if (enable_) {
-        LOG(INFO) << "Using lookup negative lru cache"
-                  << ", timeout = " << option.negativeTimeoutSec
-                  << ", capacity = " << option.lruSize;
-    }
+    : enable_(option.negativeTimeoutSec > 0), rwlock_(), option_(option) {
+  lru_ = std::make_shared<LRUType>(option.lruSize);
+  if (enable_) {
+    LOG(INFO) << "Using lookup negative lru cache"
+              << ", timeout = " << option.negativeTimeoutSec
+              << ", capacity = " << option.lruSize;
+  }
 }
 
 std::string LookupCache::CacheKey(Ino parent, const std::string& name) {
-    return absl::StrFormat("%d:%s", parent, name);
+  return absl::StrFormat("%d:%s", parent, name);
 }
 
 bool LookupCache::Get(Ino parent, const std::string& name) {
-    RETURN_FALSE_IF_DISABLED();
-    ReadLockGuard lk(rwlock_);
-    CacheEntry entry;
-    auto key = CacheKey(parent, name);
-    bool yes = lru_->Get(key, &entry);
-    if (!yes) {
-        VLOG(1) << absl::StrFormat("Lookup cache not found: key(%d,%s)",
-                                   parent, name);
-        return false;
-    } else if (entry.uses < option_.minUses) {
-        return false;
-    } else if (entry.expireTime < Now()) {
-        return false;
-    }
-    return true;
+  RETURN_FALSE_IF_DISABLED();
+  ReadLockGuard lk(rwlock_);
+  CacheEntry entry;
+  auto key = CacheKey(parent, name);
+  bool yes = lru_->Get(key, &entry);
+  if (!yes) {
+    VLOG(1) << absl::StrFormat("Lookup cache not found: key(%d,%s)", parent,
+                               name);
+    return false;
+  } else if (entry.uses < option_.minUses) {
+    return false;
+  } else if (entry.expireTime < Now()) {
+    return false;
+  }
+  return true;
 }
 
 bool LookupCache::Put(Ino parent, const std::string& name) {
-    RETURN_FALSE_IF_DISABLED();
-    WriteLockGuard lk(rwlock_);
-    CacheEntry entry;
-    auto key = CacheKey(parent, name);
-    bool yes = lru_->Get(key, &entry);
-    if (yes) {
-        entry.uses++;
-    } else {
-        entry.uses = 0;
-    }
+  RETURN_FALSE_IF_DISABLED();
+  WriteLockGuard lk(rwlock_);
+  CacheEntry entry;
+  auto key = CacheKey(parent, name);
+  bool yes = lru_->Get(key, &entry);
+  if (yes) {
+    entry.uses++;
+  } else {
+    entry.uses = 0;
+  }
 
-    entry.expireTime = Now() + TimeSpec(option_.negativeTimeoutSec, 0);
-    lru_->Put(key, entry);
-    return true;
+  entry.expireTime = Now() + TimeSpec(option_.negativeTimeoutSec, 0);
+  lru_->Put(key, entry);
+  return true;
 }
 
 bool LookupCache::Delete(Ino parent, const std::string& name) {
-    RETURN_FALSE_IF_DISABLED();
-    WriteLockGuard lk(rwlock_);
-    auto key = CacheKey(parent, name);
-    lru_->Remove(key);
-    return true;
+  RETURN_FALSE_IF_DISABLED();
+  WriteLockGuard lk(rwlock_);
+  auto key = CacheKey(parent, name);
+  lru_->Remove(key);
+  return true;
 }
 
 }  // namespace filesystem

@@ -24,6 +24,7 @@
 #define CURVEFS_SRC_MDS_HEARTBEAT_HEARTBEAT_SERVICE_H_
 
 #include <brpc/server.h>
+
 #include <memory>
 
 #include "curvefs/proto/heartbeat.pb.h"
@@ -37,18 +38,18 @@ namespace heartbeat {
 
 class HeartbeatServiceImpl : public HeartbeatService {
  public:
-    HeartbeatServiceImpl() = default;
-    explicit HeartbeatServiceImpl(
-        std::shared_ptr<HeartbeatManager> heartbeatManager);
-    ~HeartbeatServiceImpl() override = default;
+  HeartbeatServiceImpl() = default;
+  explicit HeartbeatServiceImpl(
+      std::shared_ptr<HeartbeatManager> heartbeatManager);
+  ~HeartbeatServiceImpl() override = default;
 
-    void MetaServerHeartbeat(google::protobuf::RpcController *cntl_base,
-                             const MetaServerHeartbeatRequest *request,
-                             MetaServerHeartbeatResponse *response,
-                             google::protobuf::Closure *done) override;
+  void MetaServerHeartbeat(google::protobuf::RpcController* cntl_base,
+                           const MetaServerHeartbeatRequest* request,
+                           MetaServerHeartbeatResponse* response,
+                           google::protobuf::Closure* done) override;
 
  private:
-    std::shared_ptr<HeartbeatManager> heartbeatManager_;
+  std::shared_ptr<HeartbeatManager> heartbeatManager_;
 };
 }  // namespace heartbeat
 }  // namespace mds

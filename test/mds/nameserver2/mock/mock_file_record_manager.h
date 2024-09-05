@@ -35,12 +35,12 @@ namespace mds {
 
 class MockFileRecordManager : public FileRecordManager {
  public:
-    MockFileRecordManager() = default;
-    ~MockFileRecordManager() = default;
+  MockFileRecordManager() = default;
+  ~MockFileRecordManager() = default;
 
-    MOCK_CONST_METHOD0(GetFileRecordExpiredTimeUs, uint32_t());
-    MOCK_CONST_METHOD2(FindFileMountPoint,
-                       bool(const std::string&, std::vector<butil::EndPoint>*));
+  MOCK_CONST_METHOD0(GetFileRecordExpiredTimeUs, uint32_t());
+  MOCK_CONST_METHOD2(FindFileMountPoint,
+                     bool(const std::string&, std::vector<butil::EndPoint>*));
 };
 
 }  // namespace mds

@@ -23,12 +23,12 @@
 #ifndef CURVEFS_SRC_COMMON_PROCESS_H_
 #define CURVEFS_SRC_COMMON_PROCESS_H_
 
-#include <unistd.h>
 #include <signal.h>
+#include <unistd.h>
 
+#include <functional>
 #include <string>
 #include <vector>
-#include <functional>
 
 namespace curvefs {
 namespace common {
@@ -37,20 +37,20 @@ using ProcFunc = std::function<void()>;
 using SignalHandler = std::function<void(int, siginfo_t, void*)>;
 
 struct Signal {
-    int signo;
-    void (*handler)(int signo, siginfo_t* siginfo, void* ucontext);
+  int signo;
+  void (*handler)(int signo, siginfo_t* siginfo, void* ucontext);
 };
 
 class Process {
  public:
-    static pid_t SpawnProcess(ProcFunc proc);
-    static void InitSetProcTitle(int argc, char* const* argv);
-    static void SetProcTitle(const std::string& title);
-    static bool InitSignals(const std::vector<Signal>& signals);
+  static pid_t SpawnProcess(ProcFunc proc);
+  static void InitSetProcTitle(int argc, char* const* argv);
+  static void SetProcTitle(const std::string& title);
+  static bool InitSignals(const std::vector<Signal>& signals);
 
  private:
-    static char** OsArgv_;
-    static char* OsArgvLast_;
+  static char** OsArgv_;
+  static char* OsArgvLast_;
 };
 
 };  // namespace common

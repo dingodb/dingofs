@@ -24,38 +24,40 @@
 #define TEST_MDS_MOCK_MOCK_COORDINATOR_H_
 
 #include <gmock/gmock.h>
-#include <vector>
+
 #include <map>
+#include <vector>
+
 #include "src/mds/schedule/coordinator.h"
 
 namespace curve {
 namespace mds {
 using ::curve::mds::topology::ChunkServerIdType;
-using ::curve::mds::topology::PoolIdType;
 using ::curve::mds::topology::CopySetKey;
+using ::curve::mds::topology::PoolIdType;
 
 class MockCoordinator : public ::curve::mds::schedule::Coordinator {
  public:
-    MockCoordinator() {}
-    ~MockCoordinator() {}
+  MockCoordinator() {}
+  ~MockCoordinator() {}
 
-    MOCK_METHOD3(CopySetHeartbeat, ChunkServerIdType(
-                const ::curve::mds::topology::CopySetInfo &originInfo,
-                const ::curve::mds::heartbeat::ConfigChangeInfo &configChInfo,
-                ::curve::mds::heartbeat::CopySetConf *newConf));
+  MOCK_METHOD3(
+      CopySetHeartbeat,
+      ChunkServerIdType(
+          const ::curve::mds::topology::CopySetInfo& originInfo,
+          const ::curve::mds::heartbeat::ConfigChangeInfo& configChInfo,
+          ::curve::mds::heartbeat::CopySetConf* newConf));
 
-    MOCK_METHOD2(ChunkserverGoingToAdd, bool(ChunkServerIdType, CopySetKey));
+  MOCK_METHOD2(ChunkserverGoingToAdd, bool(ChunkServerIdType, CopySetKey));
 
-    MOCK_METHOD1(RapidLeaderSchedule, int(PoolIdType));
+  MOCK_METHOD1(RapidLeaderSchedule, int(PoolIdType));
 
-    MOCK_METHOD2(QueryChunkServerRecoverStatus,
-        int(const std::vector<ChunkServerIdType> &,
-            std::map<ChunkServerIdType, bool> *));
+  MOCK_METHOD2(QueryChunkServerRecoverStatus,
+               int(const std::vector<ChunkServerIdType>&,
+                   std::map<ChunkServerIdType, bool>*));
 
-    MOCK_METHOD2(SetLogicalPoolScanState,
-                 int(PoolIdType lpid, bool scanEnable));
+  MOCK_METHOD2(SetLogicalPoolScanState, int(PoolIdType lpid, bool scanEnable));
 };
 }  // namespace mds
 }  // namespace curve
 #endif  // TEST_MDS_MOCK_MOCK_COORDINATOR_H_
-

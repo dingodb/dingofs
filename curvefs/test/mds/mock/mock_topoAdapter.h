@@ -23,10 +23,12 @@
 #define CURVEFS_TEST_MDS_MOCK_MOCK_TOPOADAPTER_H_
 
 #include <gmock/gmock.h>
+
 #include <list>
 #include <map>
 #include <set>
 #include <vector>
+
 #include "curvefs/src/mds/schedule/topoAdapter.h"
 
 namespace curvefs {
@@ -34,57 +36,56 @@ namespace mds {
 namespace schedule {
 class MockTopoAdapter : public TopoAdapter {
  public:
-    MockTopoAdapter() {}
-    ~MockTopoAdapter() {}
+  MockTopoAdapter() {}
+  ~MockTopoAdapter() {}
 
-    MOCK_METHOD2(GetCopySetInfo, bool(const CopySetKey &id, CopySetInfo *info));
+  MOCK_METHOD2(GetCopySetInfo, bool(const CopySetKey& id, CopySetInfo* info));
 
-    MOCK_METHOD0(GetCopySetInfos, std::vector<CopySetInfo>());
+  MOCK_METHOD0(GetCopySetInfos, std::vector<CopySetInfo>());
 
-    MOCK_METHOD1(GetCopySetInfosInMetaServer,
-                 std::vector<CopySetInfo>(MetaServerIdType));
+  MOCK_METHOD1(GetCopySetInfosInMetaServer,
+               std::vector<CopySetInfo>(MetaServerIdType));
 
-    MOCK_METHOD2(GetMetaServerInfo,
-                 bool(MetaServerIdType id, MetaServerInfo *info));
+  MOCK_METHOD2(GetMetaServerInfo,
+               bool(MetaServerIdType id, MetaServerInfo* info));
 
-    MOCK_METHOD0(GetMetaServerInfos, std::vector<MetaServerInfo>());
+  MOCK_METHOD0(GetMetaServerInfos, std::vector<MetaServerInfo>());
 
-    MOCK_METHOD1(GetStandardZoneNumInPool, uint16_t(PoolIdType id));
+  MOCK_METHOD1(GetStandardZoneNumInPool, uint16_t(PoolIdType id));
 
-    MOCK_METHOD1(GetStandardReplicaNumInPool, uint16_t(PoolIdType id));
+  MOCK_METHOD1(GetStandardReplicaNumInPool, uint16_t(PoolIdType id));
 
-    MOCK_METHOD1(GetAvgScatterWidthInPool, int(PoolIdType id));
+  MOCK_METHOD1(GetAvgScatterWidthInPool, int(PoolIdType id));
 
-    MOCK_METHOD2(CreateCopySetAtMetaServer,
-                 bool(CopySetKey id, MetaServerIdType csID));
+  MOCK_METHOD2(CreateCopySetAtMetaServer,
+               bool(CopySetKey id, MetaServerIdType csID));
 
-    MOCK_METHOD2(CopySetFromTopoToSchedule,
-                 bool(const ::curvefs::mds::topology::CopySetInfo &origin,
-                      ::curvefs::mds::schedule::CopySetInfo *out));
+  MOCK_METHOD2(CopySetFromTopoToSchedule,
+               bool(const ::curvefs::mds::topology::CopySetInfo& origin,
+                    ::curvefs::mds::schedule::CopySetInfo* out));
 
-    MOCK_METHOD2(MetaServerFromTopoToSchedule,
-                 bool(const ::curvefs::mds::topology::MetaServer &origin,
-                      ::curvefs::mds::schedule::MetaServerInfo *out));
+  MOCK_METHOD2(MetaServerFromTopoToSchedule,
+               bool(const ::curvefs::mds::topology::MetaServer& origin,
+                    ::curvefs::mds::schedule::MetaServerInfo* out));
 
-    MOCK_METHOD0(Getpools, std::vector<PoolIdType>());
+  MOCK_METHOD0(Getpools, std::vector<PoolIdType>());
 
-    MOCK_METHOD2(GetPool,
-                 bool(PoolIdType id, ::curvefs::mds::topology::Pool *pool));
+  MOCK_METHOD2(GetPool,
+               bool(PoolIdType id, ::curvefs::mds::topology::Pool* pool));
 
-    MOCK_METHOD1(GetCopySetInfosInPool, std::vector<CopySetInfo>(PoolIdType));
+  MOCK_METHOD1(GetCopySetInfosInPool, std::vector<CopySetInfo>(PoolIdType));
 
-    MOCK_METHOD1(GetMetaServersInZone,
-                 std::vector<MetaServerInfo>(ZoneIdType zoneId));
+  MOCK_METHOD1(GetMetaServersInZone,
+               std::vector<MetaServerInfo>(ZoneIdType zoneId));
 
-    MOCK_METHOD1(GetZoneInPool, std::list<ZoneIdType>(PoolIdType poolId));
+  MOCK_METHOD1(GetZoneInPool, std::list<ZoneIdType>(PoolIdType poolId));
 
-    MOCK_METHOD1(GetMetaServersInPool, std::vector<MetaServerInfo>(PoolIdType));
+  MOCK_METHOD1(GetMetaServersInPool, std::vector<MetaServerInfo>(PoolIdType));
 
-    MOCK_METHOD4(ChooseNewMetaServerForCopyset,
-                 bool(PoolIdType poolId,
-                      const std::set<ZoneIdType> &excludeZones,
-                      const std::set<MetaServerIdType> &excludeMetaservers,
-                      MetaServerIdType *target));
+  MOCK_METHOD4(ChooseNewMetaServerForCopyset,
+               bool(PoolIdType poolId, const std::set<ZoneIdType>& excludeZones,
+                    const std::set<MetaServerIdType>& excludeMetaservers,
+                    MetaServerIdType* target));
 };
 }  // namespace schedule
 }  // namespace mds

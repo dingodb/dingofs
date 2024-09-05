@@ -24,8 +24,8 @@
 #define CURVEFS_TEST_CLIENT_VOLUME_COMMON_H_
 
 #include <cstdint>
-#include <ostream>
 #include <iomanip>
+#include <ostream>
 
 #include "curvefs/src/client/volume/extent.h"
 #include "curvefs/src/volume/common.h"
@@ -33,21 +33,21 @@
 namespace curvefs {
 namespace client {
 
+using ::curvefs::volume::kGiB;
 using ::curvefs::volume::kKiB;
 using ::curvefs::volume::kMiB;
-using ::curvefs::volume::kGiB;
 using ::curvefs::volume::kTiB;
 
 inline bool operator==(const PExtent& p1, const PExtent& p2) {
-    return p1.pOffset == p2.pOffset && p1.len == p2.len &&
-           p1.UnWritten == p2.UnWritten;
+  return p1.pOffset == p2.pOffset && p1.len == p2.len &&
+         p1.UnWritten == p2.UnWritten;
 }
 
 inline std::ostream& operator<<(std::ostream& os, const PExtent& p) {
-    os << "[physical offset: " << p.pOffset << ", length: " << p.len
-       << ", written: " << std::boolalpha << (!p.UnWritten) << "]";
+  os << "[physical offset: " << p.pOffset << ", length: " << p.len
+     << ", written: " << std::boolalpha << (!p.UnWritten) << "]";
 
-    return os;
+  return os;
 }
 
 }  // namespace client

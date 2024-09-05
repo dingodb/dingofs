@@ -76,7 +76,6 @@ using curvefs::mds::topology::ZoneIdType;
 using curvefs::metaserver::MockMetaserverService;
 using google::protobuf::util::MessageDifferencer;
 
-using curvefs::mds::schedule::ScheduleMetrics;
 using curvefs::mds::schedule::AddPeer;
 using curvefs::mds::schedule::ChangePeer;
 using curvefs::mds::schedule::CopySetConf;
@@ -86,368 +85,350 @@ using curvefs::mds::schedule::Operator;
 using curvefs::mds::schedule::OperatorController;
 using curvefs::mds::schedule::RecoverScheduler;
 using curvefs::mds::schedule::RemovePeer;
+using curvefs::mds::schedule::ScheduleMetrics;
 using curvefs::mds::schedule::ScheduleOption;
 using curvefs::mds::schedule::TopoAdapterImpl;
 using curvefs::mds::schedule::TransferLeader;
 
 class MetaserverBalancePOC : public ::testing::Test {
  protected:
-    MetaserverBalancePOC() {}
-    virtual ~MetaserverBalancePOC() {}
-    virtual void SetUp() {
-        std::string addr = "127.0.0.1:13146";
+  MetaserverBalancePOC() {}
+  virtual ~MetaserverBalancePOC() {}
+  virtual void SetUp() {
+    std::string addr = "127.0.0.1:13146";
 
-        idGenerator_ = std::make_shared<DefaultIdGenerator>();
-        tokenGenerator_ = std::make_shared<MockTokenGenerator>();
-        storage_ = std::make_shared<MockStorage>();
-        topology_ = std::make_shared<TopologyImpl>(idGenerator_,
-                                                   tokenGenerator_, storage_);
-        TopologyOption topologyOption;
-        topologyOption.createPartitionNumber = 12;
-        topologyOption.maxPartitionNumberInCopyset = 20;
-        topologyOption.maxCopysetNumInMetaserver = 100;
+    idGenerator_ = std::make_shared<DefaultIdGenerator>();
+    tokenGenerator_ = std::make_shared<MockTokenGenerator>();
+    storage_ = std::make_shared<MockStorage>();
+    topology_ =
+        std::make_shared<TopologyImpl>(idGenerator_, tokenGenerator_, storage_);
+    TopologyOption topologyOption;
+    topologyOption.createPartitionNumber = 12;
+    topologyOption.maxPartitionNumberInCopyset = 20;
+    topologyOption.maxCopysetNumInMetaserver = 100;
 
-        EXPECT_CALL(*storage_, LoadClusterInfo(_)).WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, StorageClusterInfo(_))
-                                .WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadPool(_, _)).WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadZone(_, _)).WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadServer(_, _)).WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadMetaServer(_, _))
-                                .WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadCopySet(_, _)).WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadPartition(_, _))
-                                .WillRepeatedly(Return(true));
-        EXPECT_CALL(*storage_, LoadMemcacheCluster(_, _))
-            .WillOnce(Return(true));
-        EXPECT_CALL(*storage_, LoadFs2MemcacheCluster(_))
-            .WillOnce(Return(true));
+    EXPECT_CALL(*storage_, LoadClusterInfo(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, StorageClusterInfo(_)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadPool(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadZone(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadServer(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadMetaServer(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadCopySet(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadPartition(_, _)).WillRepeatedly(Return(true));
+    EXPECT_CALL(*storage_, LoadMemcacheCluster(_, _)).WillOnce(Return(true));
+    EXPECT_CALL(*storage_, LoadFs2MemcacheCluster(_)).WillOnce(Return(true));
 
-        ASSERT_EQ(topology_->Init(topologyOption), TopoStatusCode::TOPO_OK);
+    ASSERT_EQ(topology_->Init(topologyOption), TopoStatusCode::TOPO_OK);
 
-        MetaserverOptions metaserverOptions;
-        metaserverOptions.metaserverAddr = addr;
-        metaserverOptions.rpcTimeoutMs = 500;
-        mockMetaserverClient_ =
-            std::make_shared<MockMetaserverClient>(metaserverOptions);
-        serviceManager_ =
-            std::make_shared<TopologyManager>(topology_, mockMetaserverClient_);
-        serviceManager_->Init(topologyOption);
+    MetaserverOptions metaserverOptions;
+    metaserverOptions.metaserverAddr = addr;
+    metaserverOptions.rpcTimeoutMs = 500;
+    mockMetaserverClient_ =
+        std::make_shared<MockMetaserverClient>(metaserverOptions);
+    serviceManager_ =
+        std::make_shared<TopologyManager>(topology_, mockMetaserverClient_);
+    serviceManager_->Init(topologyOption);
 
-        metric_ = std::make_shared<ScheduleMetrics>(topology_);
-        opController_ = std::make_shared<OperatorController>(2, metric_);
-        topoAdapter_ =
-            std::make_shared<TopoAdapterImpl>(topology_, serviceManager_);
-        ScheduleOption opt;
-        opt.transferLeaderTimeLimitSec = 10;
-        opt.removePeerTimeLimitSec = 100;
-        opt.addPeerTimeLimitSec = 1000;
-        opt.changePeerTimeLimitSec = 1000;
-        opt.recoverSchedulerIntervalSec = 1;
-        opt.copysetSchedulerIntervalSec = 1;
-        opt.balanceRatioPercent = 30;
-        opt.metaserverCoolingTimeSec = 10;
-        recoverScheduler_ = std::make_shared<RecoverScheduler>(
-            opt, topoAdapter_, opController_);
-        copysetScheduler_ = std::make_shared<CopySetScheduler>(
-            opt, topoAdapter_, opController_);
-    }
+    metric_ = std::make_shared<ScheduleMetrics>(topology_);
+    opController_ = std::make_shared<OperatorController>(2, metric_);
+    topoAdapter_ =
+        std::make_shared<TopoAdapterImpl>(topology_, serviceManager_);
+    ScheduleOption opt;
+    opt.transferLeaderTimeLimitSec = 10;
+    opt.removePeerTimeLimitSec = 100;
+    opt.addPeerTimeLimitSec = 1000;
+    opt.changePeerTimeLimitSec = 1000;
+    opt.recoverSchedulerIntervalSec = 1;
+    opt.copysetSchedulerIntervalSec = 1;
+    opt.balanceRatioPercent = 30;
+    opt.metaserverCoolingTimeSec = 10;
+    recoverScheduler_ =
+        std::make_shared<RecoverScheduler>(opt, topoAdapter_, opController_);
+    copysetScheduler_ =
+        std::make_shared<CopySetScheduler>(opt, topoAdapter_, opController_);
+  }
 
-    virtual void TearDown() {
-        idGenerator_ = nullptr;
-        tokenGenerator_ = nullptr;
-        storage_ = nullptr;
-        topology_ = nullptr;
-        mockMetaserverClient_ = nullptr;
-        serviceManager_ = nullptr;
-    }
+  virtual void TearDown() {
+    idGenerator_ = nullptr;
+    tokenGenerator_ = nullptr;
+    storage_ = nullptr;
+    topology_ = nullptr;
+    mockMetaserverClient_ = nullptr;
+    serviceManager_ = nullptr;
+  }
 
  protected:
-    void PrepareAddPool(PoolIdType id = 0x11,
-                        const std::string &name = "testPool",
-                        const Pool::RedundanceAndPlaceMentPolicy &rap =
-                            Pool::RedundanceAndPlaceMentPolicy(),
-                        uint64_t createTime = 0x888) {
-        Pool pool(id, name, rap, createTime);
-        EXPECT_CALL(*storage_, StoragePool(_)).WillOnce(Return(true));
+  void PrepareAddPool(PoolIdType id = 0x11,
+                      const std::string& name = "testPool",
+                      const Pool::RedundanceAndPlaceMentPolicy& rap =
+                          Pool::RedundanceAndPlaceMentPolicy(),
+                      uint64_t createTime = 0x888) {
+    Pool pool(id, name, rap, createTime);
+    EXPECT_CALL(*storage_, StoragePool(_)).WillOnce(Return(true));
 
-        int ret = topology_->AddPool(pool);
-        ASSERT_EQ(TopoStatusCode::TOPO_OK, ret);
+    int ret = topology_->AddPool(pool);
+    ASSERT_EQ(TopoStatusCode::TOPO_OK, ret);
+  }
+
+  void PrepareAddZone(ZoneIdType id = 0x21,
+                      const std::string& name = "testZone",
+                      PoolIdType poolId = 0x11) {
+    Zone zone(id, name, poolId);
+    EXPECT_CALL(*storage_, StorageZone(_)).WillOnce(Return(true));
+
+    int ret = topology_->AddZone(zone);
+    ASSERT_EQ(TopoStatusCode::TOPO_OK, ret) << "should have PrepareAddPool()";
+  }
+
+  void PrepareAddServer(ServerIdType id = 0x31,
+                        const std::string& hostName = "testServer",
+                        PoolIdType poolId = 0x11, ZoneIdType zoneId = 0x21,
+                        const std::string& internalHostIp = "testInternalIp",
+                        uint32_t internalPort = 0,
+                        const std::string& externalHostIp = "testExternalIp",
+                        uint32_t externalPort = 0) {
+    Server server(id, hostName, internalHostIp, internalPort, externalHostIp,
+                  externalPort, zoneId, poolId);
+    EXPECT_CALL(*storage_, StorageServer(_)).WillOnce(Return(true));
+
+    int ret = topology_->AddServer(server);
+    ASSERT_EQ(TopoStatusCode::TOPO_OK, ret) << "should have PrepareAddZone()";
+  }
+
+  void PrepareAddMetaServer(
+      MetaServerIdType id = 0x41,
+      const std::string& hostname = "testMetaserver",
+      const std::string& token = "testToken", ServerIdType serverId = 0x31,
+      OnlineState onlineState = OnlineState::ONLINE,
+      const std::string& hostIp = "testInternalIp", uint32_t port = 0,
+      const std::string& externalHostIp = "testExternalIp",
+      uint32_t externalPort = 0) {
+    MetaServer ms(id, hostname, token, serverId, hostIp, port, externalHostIp,
+                  externalPort, onlineState);
+
+    EXPECT_CALL(*storage_, StorageMetaServer(_)).WillOnce(Return(true));
+    int ret = topology_->AddMetaServer(ms);
+    ASSERT_EQ(TopoStatusCode::TOPO_OK, ret) << "should have PrepareAddServer()";
+  }
+
+  void PrepareTopology() {
+    PoolIdType poolId = 0x11;
+    ZoneIdType zoneId = 0x21;
+    ServerIdType serverId = 0x31;
+    MetaServerIdType msId = 0x41;
+    CopySetIdType copysetId = 0x51;
+    PartitionIdType partitionId = 0x61;
+
+    Pool::RedundanceAndPlaceMentPolicy policy;
+    policy.replicaNum = 3;
+    policy.copysetNum = 0;
+    policy.zoneNum = 3;
+
+    PrepareAddPool(poolId, "pool1", policy);
+    PrepareAddZone(zoneId, "zone1", poolId);
+    PrepareAddZone(zoneId + 1, "zone2", poolId);
+    PrepareAddZone(zoneId + 2, "zone3", poolId);
+    PrepareAddServer(serverId, "server1", poolId, zoneId);
+    PrepareAddServer(serverId + 1, "server2", poolId, zoneId + 1);
+    PrepareAddServer(serverId + 2, "server3", poolId, zoneId + 2);
+    for (int i = 0; i < 12; i++) {
+      PrepareAddMetaServer(msId + i, "msName", "token1", 0x31 + i % 3);
+      topology_->UpdateMetaServerSpace(MetaServerSpace(100, 0), msId + i);
     }
 
-    void PrepareAddZone(ZoneIdType id = 0x21,
-                        const std::string &name = "testZone",
-                        PoolIdType poolId = 0x11) {
-        Zone zone(id, name, poolId);
-        EXPECT_CALL(*storage_, StorageZone(_)).WillOnce(Return(true));
+    std::map<PoolIdType, CopySetIdType> idMaxMap;
+    idMaxMap[poolId] = copysetId - 1;
+    idGenerator_->initCopySetIdGenerator(idMaxMap);
+    idGenerator_->initPartitionIdGenerator(partitionId - 1);
+  }
 
-        int ret = topology_->AddZone(zone);
-        ASSERT_EQ(TopoStatusCode::TOPO_OK, ret)
-            << "should have PrepareAddPool()";
+  void CreatePartitions() {
+    FsIdType fsId = 0x01;
+
+    for (int i = 1; i <= 12; i++) {
+      CreatePartitionRequest request;
+      CreatePartitionResponse response;
+      request.set_fsid(fsId);
+      request.set_count(i);
+      serviceManager_->CreatePartitions(&request, &response);
+      ASSERT_EQ(TopoStatusCode::TOPO_OK, response.statuscode());
+      ASSERT_EQ(i, response.partitioninfolist().size());
+      UpdateMetaServerSpace();
+
+      for (int j = 0; j < i; j++) {
+        Partition partition;
+        PartitionIdType tempId = response.partitioninfolist(j).partitionid();
+        ASSERT_TRUE(topology_->GetPartition(tempId, &partition));
+        ASSERT_EQ(response.partitioninfolist(j).copysetid(),
+                  partition.GetCopySetId());
+      }
     }
+  }
 
-    void PrepareAddServer(ServerIdType id = 0x31,
-                          const std::string &hostName = "testServer",
-                          PoolIdType poolId = 0x11, ZoneIdType zoneId = 0x21,
-                          const std::string &internalHostIp = "testInternalIp",
-                          uint32_t internalPort = 0,
-                          const std::string &externalHostIp = "testExternalIp",
-                          uint32_t externalPort = 0) {
-        Server server(id, hostName, internalHostIp, internalPort,
-                      externalHostIp, externalPort, zoneId, poolId);
-        EXPECT_CALL(*storage_, StorageServer(_)).WillOnce(Return(true));
-
-        int ret = topology_->AddServer(server);
-        ASSERT_EQ(TopoStatusCode::TOPO_OK, ret)
-            << "should have PrepareAddZone()";
-    }
-
-    void PrepareAddMetaServer(
-        MetaServerIdType id = 0x41,
-        const std::string &hostname = "testMetaserver",
-        const std::string &token = "testToken", ServerIdType serverId = 0x31,
-        OnlineState onlineState = OnlineState::ONLINE,
-        const std::string &hostIp = "testInternalIp", uint32_t port = 0,
-        const std::string &externalHostIp = "testExternalIp",
-        uint32_t externalPort = 0) {
-        MetaServer ms(id, hostname, token, serverId, hostIp, port,
-                      externalHostIp, externalPort, onlineState);
-
-        EXPECT_CALL(*storage_, StorageMetaServer(_)).WillOnce(Return(true));
-        int ret = topology_->AddMetaServer(ms);
-        ASSERT_EQ(TopoStatusCode::TOPO_OK, ret)
-            << "should have PrepareAddServer()";
-    }
-
-    void PrepareTopology() {
-        PoolIdType poolId = 0x11;
-        ZoneIdType zoneId = 0x21;
-        ServerIdType serverId = 0x31;
-        MetaServerIdType msId = 0x41;
-        CopySetIdType copysetId = 0x51;
-        PartitionIdType partitionId = 0x61;
-
-        Pool::RedundanceAndPlaceMentPolicy policy;
-        policy.replicaNum = 3;
-        policy.copysetNum = 0;
-        policy.zoneNum = 3;
-
-        PrepareAddPool(poolId, "pool1", policy);
-        PrepareAddZone(zoneId, "zone1", poolId);
-        PrepareAddZone(zoneId + 1, "zone2", poolId);
-        PrepareAddZone(zoneId + 2, "zone3", poolId);
-        PrepareAddServer(serverId, "server1", poolId, zoneId);
-        PrepareAddServer(serverId + 1, "server2", poolId, zoneId + 1);
-        PrepareAddServer(serverId + 2, "server3", poolId, zoneId + 2);
-        for (int i = 0; i < 12; i++) {
-            PrepareAddMetaServer(msId + i, "msName", "token1", 0x31 + i % 3);
-            topology_->UpdateMetaServerSpace(MetaServerSpace(100, 0), msId + i);
+  void UpdateMetaServerSpace() {
+    std::vector<PoolIdType> poolList = topology_->GetPoolInCluster();
+    for (PoolIdType poolId : poolList) {
+      std::vector<CopySetInfo> copysets =
+          topology_->GetCopySetInfosInPool(poolId);
+      std::map<MetaServerIdType, uint32_t> copysetNumOfMetaserver;
+      for (const auto& copyset : copysets) {
+        std::set<MetaServerIdType> members = copyset.GetCopySetMembers();
+        for (auto& it : members) {
+          copysetNumOfMetaserver[it]++;
         }
+      }
 
-        std::map<PoolIdType, CopySetIdType> idMaxMap;
-        idMaxMap[poolId] = copysetId - 1;
-        idGenerator_->initCopySetIdGenerator(idMaxMap);
-        idGenerator_->initPartitionIdGenerator(partitionId - 1);
+      for (const auto& it : copysetNumOfMetaserver) {
+        MetaServerSpace msSpace(100, it.second);
+        topology_->UpdateMetaServerSpace(msSpace, it.first);
+      }
+    }
+  }
+
+  void PrintStatistic(PoolIdType poolId) {
+    std::vector<CopySetInfo> copysets =
+        topology_->GetCopySetInfosInPool(poolId);
+
+    std::map<CopySetIdType, uint32_t> partitionNumOfCopyset;
+    std::map<MetaServerIdType, uint32_t> copysetNumOfMetaserver;
+    std::map<MetaServerIdType, uint32_t> partitionNumOfMetaserver;
+    std::map<MetaServerIdType, uint32_t> resourceUsageOfMetaserver;
+    for (const auto& copyset : copysets) {
+      partitionNumOfCopyset[copyset.GetId()] = copyset.GetPartitionNum();
+      std::set<MetaServerIdType> members = copyset.GetCopySetMembers();
+      for (auto& it : members) {
+        copysetNumOfMetaserver[it]++;
+        partitionNumOfMetaserver[it] += copyset.GetPartitionNum();
+      }
     }
 
-    void CreatePartitions() {
-        FsIdType fsId = 0x01;
-
-        for (int i = 1; i <= 12; i++) {
-            CreatePartitionRequest request;
-            CreatePartitionResponse response;
-            request.set_fsid(fsId);
-            request.set_count(i);
-            serviceManager_->CreatePartitions(&request, &response);
-            ASSERT_EQ(TopoStatusCode::TOPO_OK, response.statuscode());
-            ASSERT_EQ(i, response.partitioninfolist().size());
-            UpdateMetaServerSpace();
-
-            for (int j = 0; j < i; j++) {
-                Partition partition;
-                PartitionIdType tempId =
-                    response.partitioninfolist(j).partitionid();
-                ASSERT_TRUE(topology_->GetPartition(tempId, &partition));
-                ASSERT_EQ(response.partitioninfolist(j).copysetid(),
-                          partition.GetCopySetId());
-            }
-        }
+    LOG(INFO) << "total copyset num: " << partitionNumOfCopyset.size();
+    for (const auto& it : partitionNumOfCopyset) {
+      LOG(INFO) << "copyset id: " << it.first
+                << ", partition num: " << it.second;
     }
 
-    void UpdateMetaServerSpace() {
-        std::vector<PoolIdType> poolList = topology_->GetPoolInCluster();
-        for (PoolIdType poolId : poolList) {
-            std::vector<CopySetInfo> copysets =
-                topology_->GetCopySetInfosInPool(poolId);
-            std::map<MetaServerIdType, uint32_t> copysetNumOfMetaserver;
-            for (const auto &copyset : copysets) {
-                std::set<MetaServerIdType> members =
-                                        copyset.GetCopySetMembers();
-                for (auto &it : members) {
-                    copysetNumOfMetaserver[it]++;
-                }
-            }
-
-            for (const auto &it : copysetNumOfMetaserver) {
-                MetaServerSpace msSpace(100, it.second);
-                topology_->UpdateMetaServerSpace(msSpace, it.first);
-            }
-        }
+    std::list<MetaServerIdType> msIds = topology_->GetMetaServerInPool(poolId);
+    LOG(INFO) << "total metaserver num: " << msIds.size();
+    for (MetaServerIdType msId : msIds) {
+      MetaServer metaserver;
+      ASSERT_TRUE(topology_->GetMetaServer(msId, &metaserver));
+      ASSERT_EQ(topology_->GetCopysetNumInMetaserver(msId),
+                copysetNumOfMetaserver[msId]);
+      LOG(INFO) << "metaserver id: " << msId
+                << ", copyset num: " << copysetNumOfMetaserver[msId]
+                << ", partition num: " << partitionNumOfMetaserver[msId]
+                << ", resource usage: "
+                << metaserver.GetMetaServerSpace().GetResourceUseRatioPercent();
     }
+  }
 
-    void PrintStatistic(PoolIdType poolId) {
-        std::vector<CopySetInfo> copysets =
-            topology_->GetCopySetInfosInPool(poolId);
+  MetaServerIdType OfflineOneMetaserver(PoolIdType poolId) {
+    std::list<MetaServerIdType> msIds = topology_->GetMetaServerInPool(poolId);
+    std::srand(std::time(nullptr));
+    int random_variable = std::rand();
+    auto iter = msIds.begin();
+    std::advance(iter, random_variable % msIds.size());
+    MetaServerIdType msId = *iter;
+    LOG(INFO) << "offline metaserver " << msId;
 
-        std::map<CopySetIdType, uint32_t> partitionNumOfCopyset;
-        std::map<MetaServerIdType, uint32_t> copysetNumOfMetaserver;
-        std::map<MetaServerIdType, uint32_t> partitionNumOfMetaserver;
-        std::map<MetaServerIdType, uint32_t> resourceUsageOfMetaserver;
-        for (const auto &copyset : copysets) {
-            partitionNumOfCopyset[copyset.GetId()] = copyset.GetPartitionNum();
-            std::set<MetaServerIdType> members = copyset.GetCopySetMembers();
-            for (auto &it : members) {
-                copysetNumOfMetaserver[it]++;
-                partitionNumOfMetaserver[it] += copyset.GetPartitionNum();
-            }
-        }
+    topology_->UpdateMetaServerOnlineState(OnlineState::OFFLINE, msId);
+    return msId;
+  }
 
-        LOG(INFO) << "total copyset num: " << partitionNumOfCopyset.size();
-        for (const auto &it : partitionNumOfCopyset) {
-            LOG(INFO) << "copyset id: " << it.first
-                      << ", partition num: " << it.second;
-        }
+  void UpMetaserver(MetaServerIdType offlineMsId) {
+    LOG(INFO) << "online metaerver " << offlineMsId;
 
+    MetaServer ms;
+    topology_->GetMetaServer(offlineMsId, &ms);
+    MetaServerSpace space = ms.GetMetaServerSpace();
+    ASSERT_EQ(0, space.GetDiskUsed());
+    ASSERT_EQ(TopoStatusCode::TOPO_OK, topology_->UpdateMetaServerOnlineState(
+                                           OnlineState::ONLINE, offlineMsId));
+  }
 
-        std::list<MetaServerIdType> msIds =
-                        topology_->GetMetaServerInPool(poolId);
-        LOG(INFO) << "total metaserver num: " << msIds.size();
-        for (MetaServerIdType msId : msIds) {
-            MetaServer metaserver;
-            ASSERT_TRUE(topology_->GetMetaServer(msId, &metaserver));
-            ASSERT_EQ(topology_->GetCopysetNumInMetaserver(msId),
-                                    copysetNumOfMetaserver[msId]);
-            LOG(INFO) << "metaserver id: " << msId
-                      << ", copyset num: " << copysetNumOfMetaserver[msId]
-                      << ", partition num: " << partitionNumOfMetaserver[msId]
-                      << ", resource usage: "
-                      << metaserver.GetMetaServerSpace().
-                                    GetResourceUseRatioPercent();
-        }
-    }
+  void Apply(const std::vector<Operator>& ops) {
+    for (const auto& op : ops) {
+      CopySetKey copysetID = op.copysetID;
+      CopySetInfo topoCopyset;
+      ASSERT_TRUE(topology_->GetCopySet(copysetID, &topoCopyset));
 
-    MetaServerIdType OfflineOneMetaserver(PoolIdType poolId) {
-        std::list<MetaServerIdType> msIds =
-            topology_->GetMetaServerInPool(poolId);
-        std::srand(std::time(nullptr));
-        int random_variable = std::rand();
-        auto iter = msIds.begin();
-        std::advance(iter, random_variable % msIds.size());
-        MetaServerIdType msId = *iter;
-        LOG(INFO) << "offline metaserver " << msId;
+      LOG(INFO) << op.OpToString();
 
-        topology_->UpdateMetaServerOnlineState(OnlineState::OFFLINE, msId);
-        return msId;
-    }
+      // transfer leader operator
+      if (dynamic_cast<TransferLeader*>(op.step.get()) != nullptr) {
+        topoCopyset.SetLeader(op.step->GetTargetPeer());
+      }
 
-    void UpMetaserver(MetaServerIdType offlineMsId) {
-        LOG(INFO) << "online metaerver " << offlineMsId;
+      // change peer operator
+      ChangePeer* changePeerOp = dynamic_cast<ChangePeer*>(op.step.get());
+      if (changePeerOp != nullptr) {
+        std::set<MetaServerIdType> members = topoCopyset.GetCopySetMembers();
+        members.erase(changePeerOp->GetOldPeer());
+        members.insert(changePeerOp->GetTargetPeer());
+        topoCopyset.SetCopySetMembers(members);
+        topology_->UpdateCopySetTopo(topoCopyset);
 
+        // update target usage
         MetaServer ms;
-        topology_->GetMetaServer(offlineMsId, &ms);
+        topology_->GetMetaServer(changePeerOp->GetTargetPeer(), &ms);
         MetaServerSpace space = ms.GetMetaServerSpace();
-        ASSERT_EQ(0, space.GetDiskUsed());
-        ASSERT_EQ(TopoStatusCode::TOPO_OK,
-                  topology_->UpdateMetaServerOnlineState(OnlineState::ONLINE,
-                                                         offlineMsId));
+        space.SetDiskUsed(space.GetDiskUsed() + 1);
+        topology_->UpdateMetaServerSpace(space, changePeerOp->GetTargetPeer());
+
+        // update source usage
+        topology_->GetMetaServer(changePeerOp->GetOldPeer(), &ms);
+        space = ms.GetMetaServerSpace();
+        space.SetDiskUsed(space.GetDiskUsed() - 1);
+        topology_->UpdateMetaServerSpace(space, changePeerOp->GetOldPeer());
+      }
+
+      schedule::CopySetInfo copyset;
+      ASSERT_TRUE(
+          topoAdapter_->CopySetFromTopoToSchedule(topoCopyset, &copyset));
+      CopySetConf conf;
+      ASSERT_FALSE(opController_->ApplyOperator(copyset, &conf));
     }
+  }
 
-    void Apply(const std::vector<Operator> &ops) {
-        for (const auto &op : ops) {
-            CopySetKey copysetID = op.copysetID;
-            CopySetInfo topoCopyset;
-            ASSERT_TRUE(topology_->GetCopySet(copysetID, &topoCopyset));
+  void Schedule() {
+    while (true) {
+      int ret = recoverScheduler_->Schedule();
+      std::vector<Operator> ops = opController_->GetOperators();
+      ASSERT_EQ(ret, ops.size());
+      Apply(ops);
+      ASSERT_EQ(0, opController_->GetOperators().size());
 
-            LOG(INFO) << op.OpToString();
-
-            // transfer leader operator
-            if (dynamic_cast<TransferLeader *>(op.step.get()) != nullptr) {
-                topoCopyset.SetLeader(op.step->GetTargetPeer());
-            }
-
-            // change peer operator
-            ChangePeer *changePeerOp =
-                dynamic_cast<ChangePeer *>(op.step.get());
-            if (changePeerOp != nullptr) {
-                std::set<MetaServerIdType> members =
-                    topoCopyset.GetCopySetMembers();
-                members.erase(changePeerOp->GetOldPeer());
-                members.insert(changePeerOp->GetTargetPeer());
-                topoCopyset.SetCopySetMembers(members);
-                topology_->UpdateCopySetTopo(topoCopyset);
-
-                // update target usage
-                MetaServer ms;
-                topology_->GetMetaServer(changePeerOp->GetTargetPeer(), &ms);
-                MetaServerSpace space = ms.GetMetaServerSpace();
-                space.SetDiskUsed(space.GetDiskUsed() + 1);
-                topology_->UpdateMetaServerSpace(space,
-                                                 changePeerOp->GetTargetPeer());
-
-                // update source usage
-                topology_->GetMetaServer(changePeerOp->GetOldPeer(), &ms);
-                space = ms.GetMetaServerSpace();
-                space.SetDiskUsed(space.GetDiskUsed() - 1);
-                topology_->UpdateMetaServerSpace(space,
-                                                 changePeerOp->GetOldPeer());
-            }
-
-            schedule::CopySetInfo copyset;
-            ASSERT_TRUE(
-                topoAdapter_->CopySetFromTopoToSchedule(topoCopyset, &copyset));
-            CopySetConf conf;
-            ASSERT_FALSE(opController_->ApplyOperator(copyset, &conf));
-        }
+      if (ret == 0) {
+        break;
+      }
     }
+    while (true) {
+      int ret = copysetScheduler_->Schedule();
+      std::vector<Operator> ops = opController_->GetOperators();
+      ASSERT_EQ(ret, ops.size());
+      Apply(ops);
+      ASSERT_EQ(0, opController_->GetOperators().size());
 
-    void Schedule() {
-        while (true) {
-            int ret = recoverScheduler_->Schedule();
-            std::vector<Operator> ops = opController_->GetOperators();
-            ASSERT_EQ(ret, ops.size());
-            Apply(ops);
-            ASSERT_EQ(0, opController_->GetOperators().size());
-
-            if (ret == 0) {
-                break;
-            }
-        }
-        while (true) {
-            int ret = copysetScheduler_->Schedule();
-            std::vector<Operator> ops = opController_->GetOperators();
-            ASSERT_EQ(ret, ops.size());
-            Apply(ops);
-            ASSERT_EQ(0, opController_->GetOperators().size());
-
-            if (ret == 0) {
-                break;
-            }
-        }
+      if (ret == 0) {
+        break;
+      }
     }
+  }
 
  protected:
-    std::shared_ptr<DefaultIdGenerator> idGenerator_;
-    std::shared_ptr<MockTokenGenerator> tokenGenerator_;
-    std::shared_ptr<MockStorage> storage_;
-    std::shared_ptr<TopologyImpl> topology_;
-    std::shared_ptr<MockMetaserverClient> mockMetaserverClient_;
-    std::shared_ptr<TopologyManager> serviceManager_;
+  std::shared_ptr<DefaultIdGenerator> idGenerator_;
+  std::shared_ptr<MockTokenGenerator> tokenGenerator_;
+  std::shared_ptr<MockStorage> storage_;
+  std::shared_ptr<TopologyImpl> topology_;
+  std::shared_ptr<MockMetaserverClient> mockMetaserverClient_;
+  std::shared_ptr<TopologyManager> serviceManager_;
 
-    std::shared_ptr<ScheduleMetrics> metric_;
-    std::shared_ptr<TopoAdapterImpl> topoAdapter_;
-    std::shared_ptr<OperatorController> opController_;
-    std::shared_ptr<RecoverScheduler> recoverScheduler_;
-    std::shared_ptr<CopySetScheduler> copysetScheduler_;
+  std::shared_ptr<ScheduleMetrics> metric_;
+  std::shared_ptr<TopoAdapterImpl> topoAdapter_;
+  std::shared_ptr<OperatorController> opController_;
+  std::shared_ptr<RecoverScheduler> recoverScheduler_;
+  std::shared_ptr<CopySetScheduler> copysetScheduler_;
 };
 
 // This test run 30 rounds. In every round, it will do :
@@ -728,50 +709,50 @@ class MetaserverBalancePOC : public ::testing::Test {
 // metaserver id: 70, copyset num: 62, partition num: 1170, resource usage: 62
 // metaserver id: 73, copyset num: 62, partition num: 1148, resource usage: 62
 TEST_F(MetaserverBalancePOC, test_CreatePartitionWithAvailableCopyset_Success) {
-    PoolIdType poolId = 0x11;
-    PrepareTopology();
+  PoolIdType poolId = 0x11;
+  PrepareTopology();
 
-    EXPECT_CALL(*mockMetaserverClient_, CreateCopySet(poolId, _, _))
-        .WillRepeatedly(Return(FSStatusCode::OK));
+  EXPECT_CALL(*mockMetaserverClient_, CreateCopySet(poolId, _, _))
+      .WillRepeatedly(Return(FSStatusCode::OK));
 
-    EXPECT_CALL(*storage_, StorageCopySet(_)).WillRepeatedly(Return(true));
+  EXPECT_CALL(*storage_, StorageCopySet(_)).WillRepeatedly(Return(true));
 
-    EXPECT_CALL(*storage_, StoragePartition(_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(*storage_, StorageClusterInfo(_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(*mockMetaserverClient_, CreatePartition(_, _, _, _, _, _, _))
-        .WillRepeatedly(Return(FSStatusCode::OK));
-    EXPECT_CALL(*mockMetaserverClient_, CreateCopySetOnOneMetaserver(_, _, _))
-        .WillRepeatedly(Return(FSStatusCode::OK));
+  EXPECT_CALL(*storage_, StoragePartition(_)).WillRepeatedly(Return(true));
+  EXPECT_CALL(*storage_, StorageClusterInfo(_)).WillRepeatedly(Return(true));
+  EXPECT_CALL(*mockMetaserverClient_, CreatePartition(_, _, _, _, _, _, _))
+      .WillRepeatedly(Return(FSStatusCode::OK));
+  EXPECT_CALL(*mockMetaserverClient_, CreateCopySetOnOneMetaserver(_, _, _))
+      .WillRepeatedly(Return(FSStatusCode::OK));
 
-    // run 30 round
-    for (int i = 0; i < 30; i++) {
-        LOG(INFO) << "run test round " << i;
-        // create partitions
-        LOG(INFO) << "1. create partitions";
-        CreatePartitions();
+  // run 30 round
+  for (int i = 0; i < 30; i++) {
+    LOG(INFO) << "run test round " << i;
+    // create partitions
+    LOG(INFO) << "1. create partitions";
+    CreatePartitions();
 
-        // random offline one metaserver, schedule
-        LOG(INFO) << "2. offline one metaserver, schedule";
-        MetaServerIdType offlineMsId = OfflineOneMetaserver(poolId);
-        Schedule();
+    // random offline one metaserver, schedule
+    LOG(INFO) << "2. offline one metaserver, schedule";
+    MetaServerIdType offlineMsId = OfflineOneMetaserver(poolId);
+    Schedule();
 
-        // create partitions
-        LOG(INFO) << "3. create partitions when one metaserver down";
-        CreatePartitions();
+    // create partitions
+    LOG(INFO) << "3. create partitions when one metaserver down";
+    CreatePartitions();
 
-        // up metaserver, schedule
-        LOG(INFO) << "4. up offline metaserver, schedule";
-        UpMetaserver(offlineMsId);
-        Schedule();
-        PrintStatistic(poolId);
-    }
+    // up metaserver, schedule
+    LOG(INFO) << "4. up offline metaserver, schedule";
+    UpMetaserver(offlineMsId);
+    Schedule();
+    PrintStatistic(poolId);
+  }
 }
 
 }  // namespace mds
 }  // namespace curvefs
 
-int main(int argc, char *argv[]) {
-    testing::InitGoogleTest(&argc, argv);
+int main(int argc, char* argv[]) {
+  testing::InitGoogleTest(&argc, argv);
 
-    return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }

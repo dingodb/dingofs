@@ -28,20 +28,17 @@
 namespace curve {
 namespace snapshotcloneserver {
 
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class MockSnapshotCloneService : public SnapshotCloneService {
  public:
-    MOCK_METHOD4(default_method,
-        void(RpcController *controller,
-        const HttpRequest *request,
-        HttpResponse *response,
-        Closure *done));
+  MOCK_METHOD4(default_method,
+               void(RpcController* controller, const HttpRequest* request,
+                    HttpResponse* response, Closure* done));
 };
 
 }  // namespace snapshotcloneserver
 }  // namespace curve
-
 
 #endif  // TEST_MDS_MOCK_MOCK_SNAPSHOTCLONESERVER_H_

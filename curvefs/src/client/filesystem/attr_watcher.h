@@ -25,53 +25,48 @@
 
 #include <memory>
 
-#include "src/common/lru_cache.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/openfile.h"
+#include "src/common/lru_cache.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
 using ::curve::common::LRUCache;
-using ::curve::common::RWLock;
 using ::curve::common::ReadLockGuard;
+using ::curve::common::RWLock;
 using ::curve::common::WriteLockGuard;
 using ::curvefs::client::common::AttrWatcherOption;
 
 class AttrWatcher {
  public:
-    using LRUType = LRUCache<Ino, struct TimeSpec>;
+  using LRUType = LRUCache<Ino, struct TimeSpec>;
 
  public:
-    AttrWatcher(AttrWatcherOption option,
-                std::shared_ptr<OpenFiles> openFiles,
-                std::shared_ptr<DirCache> dirCache);
+  AttrWatcher(AttrWatcherOption option, std::shared_ptr<OpenFiles> openFiles,
+              std::shared_ptr<DirCache> dirCache);
 
-    void RemeberMtime(const InodeAttr& attr);
+  void RemeberMtime(const InodeAttr& attr);
 
-    bool GetMtime(Ino ino, TimeSpec* time);
+  bool GetMtime(Ino ino, TimeSpec* time);
 
-    void UpdateDirEntryAttr(Ino ino, const InodeAttr& attr);
+  void UpdateDirEntryAttr(Ino ino, const InodeAttr& attr);
 
-    void UpdateDirEntryLength(Ino ino, const InodeAttr& open);
-
- private:
-    friend class AttrWatcherGuard;
+  void UpdateDirEntryLength(Ino ino, const InodeAttr& open);
 
  private:
-    RWLock rwlock_;
-    std::shared_ptr<LRUType> modifiedAt_;
-    std::shared_ptr<OpenFiles> openFiles_;
-    std::shared_ptr<DirCache> dirCache_;
+  friend class AttrWatcherGuard;
+
+ private:
+  RWLock rwlock_;
+  std::shared_ptr<LRUType> modifiedAt_;
+  std::shared_ptr<OpenFiles> openFiles_;
+  std::shared_ptr<DirCache> dirCache_;
 };
 
-
-enum class ReplyType {
-    ATTR,
-    ONLY_LENGTH
-};
+enum class ReplyType { ATTR, ONLY_LENGTH };
 
 /*
  * each attribute reply to kernel, the watcher will:
@@ -84,18 +79,16 @@ enum class ReplyType {
  */
 struct AttrWatcherGuard {
  public:
-    AttrWatcherGuard(std::shared_ptr<AttrWatcher> watcher,
-                     InodeAttr* attr,
-                     ReplyType type,
-                     bool writeBack);
+  AttrWatcherGuard(std::shared_ptr<AttrWatcher> watcher, InodeAttr* attr,
+                   ReplyType type, bool writeBack);
 
-    ~AttrWatcherGuard();
+  ~AttrWatcherGuard();
 
  private:
-    std::shared_ptr<AttrWatcher> watcher;
-    InodeAttr* attr;
-    ReplyType type;
-    bool writeBack;
+  std::shared_ptr<AttrWatcher> watcher;
+  InodeAttr* attr;
+  ReplyType type;
+  bool writeBack;
 };
 
 }  // namespace filesystem

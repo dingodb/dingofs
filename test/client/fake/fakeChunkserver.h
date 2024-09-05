@@ -23,15 +23,15 @@
 #ifndef TEST_CLIENT_FAKE_FAKECHUNKSERVER_H_
 #define TEST_CLIENT_FAKE_FAKECHUNKSERVER_H_
 
+#include <braft/builtin_service.pb.h>
 #include <braft/configuration.h>
 #include <brpc/controller.h>
 #include <brpc/server.h>
-#include <glog/logging.h>
 #include <fiu-control.h>
-#include <braft/builtin_service.pb.h>
+#include <glog/logging.h>
 
-#include <thread>   // NOLINT
 #include <algorithm>
+#include <thread>  // NOLINT
 
 #include "proto/chunk.pb.h"
 #include "proto/cli2.pb.h"
@@ -40,296 +40,273 @@
 #include "test/client/fake/mockMDS.h"
 
 using braft::PeerId;
-using curve::chunkserver::ChunkService;
 using curve::chunkserver::CHUNK_OP_STATUS;
+using curve::chunkserver::ChunkService;
 
 class FakeChunkService : public ChunkService {
  public:
-    FakeChunkService() {
-        rpcFailed = false;
-        retryTimes.store(0);
-        waittimeMS = 10;
-        wait4netunstable = false;
-    }
-    virtual ~FakeChunkService() {}
+  FakeChunkService() {
+    rpcFailed = false;
+    retryTimes.store(0);
+    waittimeMS = 10;
+    wait4netunstable = false;
+  }
+  virtual ~FakeChunkService() {}
 
-    void WriteChunk(::google::protobuf::RpcController *controller,
-                    const ::curve::chunkserver::ChunkRequest *request,
-                    ::curve::chunkserver::ChunkResponse *response,
-                    google::protobuf::Closure *done) {
-        brpc::ClosureGuard doneGuard(done);
-        retryTimes.fetch_add(1);
-        brpc::Controller *cntl = dynamic_cast<brpc::Controller *>(controller);
+  void WriteChunk(::google::protobuf::RpcController* controller,
+                  const ::curve::chunkserver::ChunkRequest* request,
+                  ::curve::chunkserver::ChunkResponse* response,
+                  google::protobuf::Closure* done) {
+    brpc::ClosureGuard doneGuard(done);
+    retryTimes.fetch_add(1);
+    brpc::Controller* cntl = dynamic_cast<brpc::Controller*>(controller);
 
-        if (rpcFailed) {
-            cntl->SetFailed(-1, "set rpc failed!");
-        }
-
-        ::memcpy(chunk_,
-                 cntl->request_attachment().to_string().c_str(),
-                 request->size());
-        response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
-        response->set_appliedindex(2);
-        if (wait4netunstable) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(waittimeMS));
-        }
+    if (rpcFailed) {
+      cntl->SetFailed(-1, "set rpc failed!");
     }
 
-    void ReadChunk(::google::protobuf::RpcController *controller,
-                   const ::curve::chunkserver::ChunkRequest *request,
-                   ::curve::chunkserver::ChunkResponse *response,
-                   google::protobuf::Closure *done) {
-        brpc::ClosureGuard doneGuard(done);
-        retryTimes.fetch_add(1);
-        brpc::Controller *cntl = dynamic_cast<brpc::Controller *>(controller);
-        if (rpcFailed) {
-            cntl->SetFailed(EHOSTDOWN, "set rpc failed!");
-        }
+    ::memcpy(chunk_, cntl->request_attachment().to_string().c_str(),
+             request->size());
+    response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
+    response->set_appliedindex(2);
+    if (wait4netunstable) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(waittimeMS));
+    }
+  }
 
-        char buff[128 * 1024] = {0};
-        ::memcpy(buff, chunk_, request->size());
-        cntl->response_attachment().append(buff, request->size());
-        response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
-        response->set_appliedindex(2);
-        if (wait4netunstable) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(waittimeMS));
-        }
+  void ReadChunk(::google::protobuf::RpcController* controller,
+                 const ::curve::chunkserver::ChunkRequest* request,
+                 ::curve::chunkserver::ChunkResponse* response,
+                 google::protobuf::Closure* done) {
+    brpc::ClosureGuard doneGuard(done);
+    retryTimes.fetch_add(1);
+    brpc::Controller* cntl = dynamic_cast<brpc::Controller*>(controller);
+    if (rpcFailed) {
+      cntl->SetFailed(EHOSTDOWN, "set rpc failed!");
     }
 
-    void DeleteChunkSnapshotOrCorrectSn(
-                    ::google::protobuf::RpcController* controller,
-                    const ::curve::chunkserver::ChunkRequest* request,
-                    ::curve::chunkserver::ChunkResponse* response,
-                    ::google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
-        if (fakedeletesnapchunkret_->controller_ != nullptr &&
-             fakedeletesnapchunkret_->controller_->Failed()) {
-            controller->SetFailed("failed");
-        }
+    char buff[128 * 1024] = {0};
+    ::memcpy(buff, chunk_, request->size());
+    cntl->response_attachment().append(buff, request->size());
+    response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
+    response->set_appliedindex(2);
+    if (wait4netunstable) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(waittimeMS));
+    }
+  }
 
-        auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
-                    fakedeletesnapchunkret_->response_);
-        response->CopyFrom(*resp);
+  void DeleteChunkSnapshotOrCorrectSn(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::chunkserver::ChunkRequest* request,
+      ::curve::chunkserver::ChunkResponse* response,
+      ::google::protobuf::Closure* done) {
+    brpc::ClosureGuard done_guard(done);
+    if (fakedeletesnapchunkret_->controller_ != nullptr &&
+        fakedeletesnapchunkret_->controller_->Failed()) {
+      controller->SetFailed("failed");
     }
 
-    void ReadChunkSnapshot(::google::protobuf::RpcController* controller,
-                    const ::curve::chunkserver::ChunkRequest* request,
-                    ::curve::chunkserver::ChunkResponse* response,
-                    ::google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
-        if (fakereadchunksnapret_->controller_ != nullptr &&
-             fakereadchunksnapret_->controller_->Failed()) {
-            controller->SetFailed("failed");
-        }
+    auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
+        fakedeletesnapchunkret_->response_);
+    response->CopyFrom(*resp);
+  }
 
-        brpc::Controller *cntl = dynamic_cast<brpc::Controller *>(controller);
-        char buff[8192] = {1};
-        ::memset(buff, 1, 8192);
-        cntl->response_attachment().append(buff, request->size());
-        auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
-                    fakereadchunksnapret_->response_);
-        response->CopyFrom(*resp);
+  void ReadChunkSnapshot(::google::protobuf::RpcController* controller,
+                         const ::curve::chunkserver::ChunkRequest* request,
+                         ::curve::chunkserver::ChunkResponse* response,
+                         ::google::protobuf::Closure* done) {
+    brpc::ClosureGuard done_guard(done);
+    if (fakereadchunksnapret_->controller_ != nullptr &&
+        fakereadchunksnapret_->controller_->Failed()) {
+      controller->SetFailed("failed");
     }
 
-    void GetChunkInfo(::google::protobuf::RpcController *controller,
-                        const ::curve::chunkserver::GetChunkInfoRequest *request,      // NOLINT
-                        ::curve::chunkserver::GetChunkInfoResponse *response,
-                        google::protobuf::Closure *done) {
-        brpc::ClosureGuard done_guard(done);
-        if (fakeGetChunkInforet_->controller_ != nullptr &&
-             fakeGetChunkInforet_->controller_->Failed()) {
-            controller->SetFailed("failed");
-        }
+    brpc::Controller* cntl = dynamic_cast<brpc::Controller*>(controller);
+    char buff[8192] = {1};
+    ::memset(buff, 1, 8192);
+    cntl->response_attachment().append(buff, request->size());
+    auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
+        fakereadchunksnapret_->response_);
+    response->CopyFrom(*resp);
+  }
 
-        auto resp = static_cast<::curve::chunkserver::GetChunkInfoResponse*>(
-                    fakeGetChunkInforet_->response_);
-        response->CopyFrom(*resp);
+  void GetChunkInfo(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::chunkserver::GetChunkInfoRequest* request,  // NOLINT
+      ::curve::chunkserver::GetChunkInfoResponse* response,
+      google::protobuf::Closure* done) {
+    brpc::ClosureGuard done_guard(done);
+    if (fakeGetChunkInforet_->controller_ != nullptr &&
+        fakeGetChunkInforet_->controller_->Failed()) {
+      controller->SetFailed("failed");
     }
 
-    void GetChunkHash(::google::protobuf::RpcController *controller,
-                        const ::curve::chunkserver::GetChunkHashRequest *request,      // NOLINT
-                        ::curve::chunkserver::GetChunkHashResponse *response,
-                        google::protobuf::Closure *done) {
-        brpc::ClosureGuard done_guard(done);
-        if (fakeGetChunkHashRet_->controller_ != nullptr &&
-             fakeGetChunkHashRet_->controller_->Failed()) {
-            controller->SetFailed("failed");
-        }
+    auto resp = static_cast<::curve::chunkserver::GetChunkInfoResponse*>(
+        fakeGetChunkInforet_->response_);
+    response->CopyFrom(*resp);
+  }
 
-        auto resp = static_cast<::curve::chunkserver::GetChunkHashResponse*>(
-                    fakeGetChunkHashRet_->response_);
-        response->CopyFrom(*resp);
+  void GetChunkHash(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::chunkserver::GetChunkHashRequest* request,  // NOLINT
+      ::curve::chunkserver::GetChunkHashResponse* response,
+      google::protobuf::Closure* done) {
+    brpc::ClosureGuard done_guard(done);
+    if (fakeGetChunkHashRet_->controller_ != nullptr &&
+        fakeGetChunkHashRet_->controller_->Failed()) {
+      controller->SetFailed("failed");
     }
 
-    void SetReadChunkSnapshot(FakeReturn* fakeret) {
-        fakereadchunksnapret_ = fakeret;
-    }
+    auto resp = static_cast<::curve::chunkserver::GetChunkHashResponse*>(
+        fakeGetChunkHashRet_->response_);
+    response->CopyFrom(*resp);
+  }
 
-    void SetDeleteChunkSnapshot(FakeReturn* fakeret) {
-        fakedeletesnapchunkret_ = fakeret;
-    }
+  void SetReadChunkSnapshot(FakeReturn* fakeret) {
+    fakereadchunksnapret_ = fakeret;
+  }
 
-    void SetGetChunkInfo(FakeReturn* fakeret) {
-        fakeGetChunkInforet_ = fakeret;
-    }
+  void SetDeleteChunkSnapshot(FakeReturn* fakeret) {
+    fakedeletesnapchunkret_ = fakeret;
+  }
 
-    void SetGetChunkHash(FakeReturn* fakeret) {
-        fakeGetChunkHashRet_ = fakeret;
-    }
+  void SetGetChunkInfo(FakeReturn* fakeret) { fakeGetChunkInforet_ = fakeret; }
 
-    void SetRPCFailed() {
-        rpcFailed = true;
-    }
+  void SetGetChunkHash(FakeReturn* fakeret) { fakeGetChunkHashRet_ = fakeret; }
 
-    void ReSetRPCFailed() {
-        rpcFailed = false;
-    }
+  void SetRPCFailed() { rpcFailed = true; }
 
-    FakeReturn* fakedeletesnapchunkret_;
-    FakeReturn* fakereadchunksnapret_;
-    FakeReturn* fakeGetChunkInforet_;
-    FakeReturn* fakeGetChunkHashRet_;
+  void ReSetRPCFailed() { rpcFailed = false; }
 
-    void EnableNetUnstable(uint64_t waittime) {
-        wait4netunstable = true;
-        waittimeMS = waittime;
-    }
+  FakeReturn* fakedeletesnapchunkret_;
+  FakeReturn* fakereadchunksnapret_;
+  FakeReturn* fakeGetChunkInforet_;
+  FakeReturn* fakeGetChunkHashRet_;
 
-    void DisableNetUnstable() {
-        wait4netunstable = false;
-        waittimeMS = 0;
-    }
+  void EnableNetUnstable(uint64_t waittime) {
+    wait4netunstable = true;
+    waittimeMS = waittime;
+  }
 
-    void CleanRetryTimes() {
-        retryTimes.store(0);
-    }
+  void DisableNetUnstable() {
+    wait4netunstable = false;
+    waittimeMS = 0;
+  }
 
-    uint64_t GetRetryTimes() {
-        return retryTimes.load();
-    }
+  void CleanRetryTimes() { retryTimes.store(0); }
+
+  uint64_t GetRetryTimes() { return retryTimes.load(); }
 
  private:
-    // wait4netunstable用来模拟网络延时，当打开之后，每个读写rpc会停留一段时间再返回
-    bool wait4netunstable;
-    uint64_t waittimeMS;
-    bool rpcFailed;
-    std::atomic<uint64_t> retryTimes;
-    char chunk_[128 * 1024];
+  // wait4netunstable用来模拟网络延时，当打开之后，每个读写rpc会停留一段时间再返回
+  bool wait4netunstable;
+  uint64_t waittimeMS;
+  bool rpcFailed;
+  std::atomic<uint64_t> retryTimes;
+  char chunk_[128 * 1024];
 };
 
 class CliServiceFake : public curve::chunkserver::CliService2 {
  public:
-    CliServiceFake() {
-        invokeTimes = 0;
-    }
+  CliServiceFake() { invokeTimes = 0; }
 
-    void GetLeader(::google::protobuf::RpcController* controller,
-                    const curve::chunkserver::GetLeaderRequest2* request,
-                    curve::chunkserver::GetLeaderResponse2* response,
-                    ::google::protobuf::Closure* done) {
-        brpc::ClosureGuard done_guard(done);
-        curve::common::Peer *peer = new curve::common::Peer();
-        peer->set_address(leaderid_.to_string());
-        response->set_allocated_leader(peer);
-        invokeTimes++;
-    }
+  void GetLeader(::google::protobuf::RpcController* controller,
+                 const curve::chunkserver::GetLeaderRequest2* request,
+                 curve::chunkserver::GetLeaderResponse2* response,
+                 ::google::protobuf::Closure* done) {
+    brpc::ClosureGuard done_guard(done);
+    curve::common::Peer* peer = new curve::common::Peer();
+    peer->set_address(leaderid_.to_string());
+    response->set_allocated_leader(peer);
+    invokeTimes++;
+  }
 
-    void SetPeerID(PeerId peerid) {
-        leaderid_ = peerid;
-    }
+  void SetPeerID(PeerId peerid) { leaderid_ = peerid; }
 
-    uint64_t GetInvokeTimes() {
-        return invokeTimes;
-    }
+  uint64_t GetInvokeTimes() { return invokeTimes; }
 
-    void ReSetInvokeTimes() {
-        invokeTimes = 0;
-    }
+  void ReSetInvokeTimes() { invokeTimes = 0; }
 
  private:
-    PeerId leaderid_;
-    uint64_t invokeTimes;
+  PeerId leaderid_;
+  uint64_t invokeTimes;
 };
 
 class FakeChunkServerService : public ChunkService {
  public:
-    void WriteChunk(::google::protobuf::RpcController *controller,
-                    const ::curve::chunkserver::ChunkRequest *request,
-                    ::curve::chunkserver::ChunkResponse *response,
-                    google::protobuf::Closure *done) {
-        brpc::ClosureGuard doneGuard(done);
+  void WriteChunk(::google::protobuf::RpcController* controller,
+                  const ::curve::chunkserver::ChunkRequest* request,
+                  ::curve::chunkserver::ChunkResponse* response,
+                  google::protobuf::Closure* done) {
+    brpc::ClosureGuard doneGuard(done);
 
-        if (fakewriteret_->controller_ != nullptr && fakewriteret_->controller_->Failed()) {    // NOLINT
-            controller->SetFailed("failed");
-        }
-
-        auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(fakewriteret_->response_);    // NOLINT
-        response->CopyFrom(*resp);
-
-        static uint64_t latestSn = 0;
-        if (request->sn() < latestSn) {
-            response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_BACKWARD);
-        }
-
-        latestSn = std::max(latestSn, request->sn());
+    if (fakewriteret_->controller_ != nullptr &&
+        fakewriteret_->controller_->Failed()) {  // NOLINT
+      controller->SetFailed("failed");
     }
 
-    void ReadChunk(::google::protobuf::RpcController *controller,
-                   const ::curve::chunkserver::ChunkRequest *request,
-                   ::curve::chunkserver::ChunkResponse *response,
-                   google::protobuf::Closure *done) {
-        brpc::ClosureGuard doneGuard(done);
+    auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
+        fakewriteret_->response_);  // NOLINT
+    response->CopyFrom(*resp);
 
-        brpc::Controller *cntl = dynamic_cast<brpc::Controller *>(controller);
-        char buff[8192] = {0};
-        if (request->has_appliedindex()) {
-            memset(buff, 'a', 4096);
-            memset(buff + 4096, 'b', 4096);
-        } else {
-            memset(buff, 'c', 4096);
-            memset(buff + 4096, 'd', 4096);
-        }
-        cntl->response_attachment().append(buff, request->size());
-        auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(fakereadret_->response_);     // NOLINT
-        response->CopyFrom(*resp);
+    static uint64_t latestSn = 0;
+    if (request->sn() < latestSn) {
+      response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_BACKWARD);
     }
 
-    void SetFakeWriteReturn(FakeReturn* ret) {
-        fakewriteret_ = ret;
-    }
+    latestSn = std::max(latestSn, request->sn());
+  }
 
-    void SetFakeReadReturn(FakeReturn* ret) {
-        fakereadret_ = ret;
+  void ReadChunk(::google::protobuf::RpcController* controller,
+                 const ::curve::chunkserver::ChunkRequest* request,
+                 ::curve::chunkserver::ChunkResponse* response,
+                 google::protobuf::Closure* done) {
+    brpc::ClosureGuard doneGuard(done);
+
+    brpc::Controller* cntl = dynamic_cast<brpc::Controller*>(controller);
+    char buff[8192] = {0};
+    if (request->has_appliedindex()) {
+      memset(buff, 'a', 4096);
+      memset(buff + 4096, 'b', 4096);
+    } else {
+      memset(buff, 'c', 4096);
+      memset(buff + 4096, 'd', 4096);
     }
+    cntl->response_attachment().append(buff, request->size());
+    auto resp = static_cast<::curve::chunkserver::ChunkResponse*>(
+        fakereadret_->response_);  // NOLINT
+    response->CopyFrom(*resp);
+  }
+
+  void SetFakeWriteReturn(FakeReturn* ret) { fakewriteret_ = ret; }
+
+  void SetFakeReadReturn(FakeReturn* ret) { fakereadret_ = ret; }
 
  private:
-    FakeReturn* fakewriteret_;
-    FakeReturn* fakereadret_;
+  FakeReturn* fakewriteret_;
+  FakeReturn* fakereadret_;
 };
 
 class FakeRaftStateService : public braft::raft_stat {
  public:
-    void default_method(::google::protobuf::RpcController* controller,
-                        const ::braft::IndexRequest*,
-                        ::braft::IndexResponse*,
-                        ::google::protobuf::Closure* done) {
-        brpc::ClosureGuard doneGuard(done);
-        brpc::Controller *cntl = dynamic_cast<brpc::Controller *>(controller);  // NOLINT
-        if (failed_) {
-            cntl->SetFailed("failed for test");
-            return;
-        }
-        cntl->response_attachment().append(buf_);
+  void default_method(::google::protobuf::RpcController* controller,
+                      const ::braft::IndexRequest*, ::braft::IndexResponse*,
+                      ::google::protobuf::Closure* done) {
+    brpc::ClosureGuard doneGuard(done);
+    brpc::Controller* cntl =
+        dynamic_cast<brpc::Controller*>(controller);  // NOLINT
+    if (failed_) {
+      cntl->SetFailed("failed for test");
+      return;
     }
-    void SetBuf(const butil::IOBuf& iobuf) {
-        buf_ = iobuf;
-    }
-    void SetFailed(bool failed) {
-        failed_ = failed;
-    }
+    cntl->response_attachment().append(buf_);
+  }
+  void SetBuf(const butil::IOBuf& iobuf) { buf_ = iobuf; }
+  void SetFailed(bool failed) { failed_ = failed; }
+
  private:
-    butil::IOBuf buf_;
-    bool failed_ = false;
+  butil::IOBuf buf_;
+  bool failed_ = false;
 };
 
 #endif  // TEST_CLIENT_FAKE_FAKECHUNKSERVER_H_

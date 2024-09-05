@@ -23,30 +23,31 @@
 #ifndef CURVEFS_TEST_MDS_SCHEDULE_COMMON_H_
 #define CURVEFS_TEST_MDS_SCHEDULE_COMMON_H_
 
-#include <vector>
 #include <map>
+#include <vector>
+
+#include "curvefs/proto/heartbeat.pb.h"
 #include "curvefs/src/mds/schedule/operatorStep.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "curvefs/proto/heartbeat.pb.h"
 
-using ::curvefs::mds::schedule::TransferLeader;
+using ::curvefs::mds::heartbeat::CandidateError;
 using ::curvefs::mds::schedule::AddPeer;
-using ::curvefs::mds::schedule::RemovePeer;
-using ::curvefs::mds::schedule::PeerInfo;
 using ::curvefs::mds::schedule::CopySetConf;
+using ::curvefs::mds::schedule::PeerInfo;
+using ::curvefs::mds::schedule::RemovePeer;
+using ::curvefs::mds::schedule::TransferLeader;
+using ::curvefs::mds::topology::CopySetIdType;
 using ::curvefs::mds::topology::EpochType;
 using ::curvefs::mds::topology::MetaServerIdType;
-using ::curvefs::mds::topology::ServerIdType;
 using ::curvefs::mds::topology::PoolIdType;
-using ::curvefs::mds::topology::CopySetIdType;
-using ::curvefs::mds::heartbeat::CandidateError;
+using ::curvefs::mds::topology::ServerIdType;
 
 namespace curvefs {
 namespace mds {
 namespace schedule {
 ::curvefs::mds::schedule::CopySetInfo GetCopySetInfoForTest();
 void GetCopySetInMetaServersForTest(
-    std::map<MetaServerIdType, std::vector<CopySetInfo>> *out);
+    std::map<MetaServerIdType, std::vector<CopySetInfo>>* out);
 ::curvefs::mds::topology::CopySetInfo GetTopoCopySetInfoForTest();
 std::vector<::curvefs::mds::topology::MetaServer> GetTopoMetaServerForTest();
 std::vector<::curvefs::mds::topology::Server> GetServerForTest();

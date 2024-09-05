@@ -39,12 +39,12 @@ namespace version {
 
 class VersionTool : public CurvefsTool {
  public:
-    explicit VersionTool(const std::string& command = kVersionCmd)
-        : CurvefsTool(command) {}
-    void PrintHelp() override;
+  explicit VersionTool(const std::string& command = kVersionCmd)
+      : CurvefsTool(command) {}
+  void PrintHelp() override;
 
-    int RunCommand() override;
-    int Init() override;
+  int RunCommand() override;
+  int Init() override;
 };
 
 }  // namespace version

@@ -25,15 +25,16 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
 #include "src/mds/nameserver2/idgenerator/chunk_id_generator.h"
 
 namespace curve {
 namespace mds {
 
-class MockChunkIDGenerator: public ChunkIDGenerator {
+class MockChunkIDGenerator : public ChunkIDGenerator {
  public:
-    ~MockChunkIDGenerator() {}
-    MOCK_METHOD1(GenChunkID, bool(ChunkID *));
+  ~MockChunkIDGenerator() {}
+  MOCK_METHOD1(GenChunkID, bool(ChunkID*));
 };
 
 }  // namespace mds

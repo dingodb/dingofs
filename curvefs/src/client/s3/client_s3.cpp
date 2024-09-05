@@ -24,64 +24,59 @@
 namespace curvefs {
 namespace client {
 
-void S3ClientImpl::Init(const curve::common::S3AdapterOption &option) {
-    s3Adapter_->Init(option);
+void S3ClientImpl::Init(const curve::common::S3AdapterOption& option) {
+  s3Adapter_->Init(option);
 }
 
-void S3ClientImpl::Deinit() {
-    s3Adapter_->Deinit();
-}
+void S3ClientImpl::Deinit() { s3Adapter_->Deinit(); }
 
-int S3ClientImpl::Upload(const std::string &name, const char *buf,
+int S3ClientImpl::Upload(const std::string& name, const char* buf,
                          uint64_t length) {
-    int ret = 0;
-    const Aws::String aws_key(name.c_str(), name.size());
+  int ret = 0;
+  const Aws::String aws_key(name.c_str(), name.size());
 
-    VLOG(9) << "upload start, aws_key:" << aws_key << ",length:" << length;
-    ret = s3Adapter_->PutObject(aws_key, buf, length);
-    if (ret < 0) {
-        LOG(WARNING) << "upload error:" << ret;
-    }
-    VLOG(9) << "upload end, ret:" << ret;
-    return ret;
+  VLOG(9) << "upload start, aws_key:" << aws_key << ",length:" << length;
+  ret = s3Adapter_->PutObject(aws_key, buf, length);
+  if (ret < 0) {
+    LOG(WARNING) << "upload error:" << ret;
+  }
+  VLOG(9) << "upload end, ret:" << ret;
+  return ret;
 }
 
-void S3ClientImpl::UploadAsync(
-  std::shared_ptr<PutObjectAsyncContext> context) {
-    const Aws::String aws_key(context->key.c_str(),
-      context->key.size());
-    VLOG(9) << "upload async start, aws_key: "
-            << aws_key << ", length: "
-            << context->bufferSize;
-    s3Adapter_->PutObjectAsync(context);
+void S3ClientImpl::UploadAsync(std::shared_ptr<PutObjectAsyncContext> context) {
+  const Aws::String aws_key(context->key.c_str(), context->key.size());
+  VLOG(9) << "upload async start, aws_key: " << aws_key
+          << ", length: " << context->bufferSize;
+  s3Adapter_->PutObjectAsync(context);
 }
 
-int S3ClientImpl::Download(const std::string &name, char *buf, uint64_t offset,
+int S3ClientImpl::Download(const std::string& name, char* buf, uint64_t offset,
                            uint64_t length) {
-    int ret = 0;
-    VLOG(9) << "download start, name:" << name << ",offset:" << offset
-            << ",length:" << length;
-    ret = s3Adapter_->GetObject(name, buf, offset, length);
-    if (ret < 0) {
-        const Aws::String aws_key(name.c_str(), name.size());
-        if (!s3Adapter_->ObjectExist(aws_key)) {
-            LOG(INFO) << "obj " << name << " seems not exist";
-            ret = -2;
-        }
-        LOG(ERROR) << "download error:" << ret;
+  int ret = 0;
+  VLOG(9) << "download start, name:" << name << ",offset:" << offset
+          << ",length:" << length;
+  ret = s3Adapter_->GetObject(name, buf, offset, length);
+  if (ret < 0) {
+    const Aws::String aws_key(name.c_str(), name.size());
+    if (!s3Adapter_->ObjectExist(aws_key)) {
+      LOG(INFO) << "obj " << name << " seems not exist";
+      ret = -2;
     }
+    LOG(ERROR) << "download error:" << ret;
+  }
 
-    VLOG(9) << "download end, ret:" << ret << ",length:" << length;
-    return ret;
+  VLOG(9) << "download end, ret:" << ret << ",length:" << length;
+  return ret;
 }
 
 void S3ClientImpl::DownloadAsync(
     std::shared_ptr<GetObjectAsyncContext> context) {
-    VLOG(9) << "download async start, name:" << context->key
-            << ",offset:" << context->offset << ",length:" << context->len;
+  VLOG(9) << "download async start, name:" << context->key
+          << ",offset:" << context->offset << ",length:" << context->len;
 
-    s3Adapter_->GetObjectAsync(context);
-    return;
+  s3Adapter_->GetObjectAsync(context);
+  return;
 }
 
 }  // namespace client

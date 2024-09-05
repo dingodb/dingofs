@@ -29,64 +29,64 @@ namespace metaserver {
 namespace copyset {
 
 OperatorMetric::OperatorMetric(PoolId poolId, CopysetId copysetId) {
-    std::string prefix = "op_apply_pool_" + std::to_string(poolId) +
-                         "_copyset_" + std::to_string(copysetId);
-    std::string fromLogPrefix = "op_apply_from_log_pool_" +
-        std::to_string(poolId) + "_copyset_" + std::to_string(copysetId);
+  std::string prefix = "op_apply_pool_" + std::to_string(poolId) + "_copyset_" +
+                       std::to_string(copysetId);
+  std::string fromLogPrefix = "op_apply_from_log_pool_" +
+                              std::to_string(poolId) + "_copyset_" +
+                              std::to_string(copysetId);
 
-    for (uint32_t i = 0; i < kTotalOperatorNum; ++i) {
-        opMetrics_[i] = absl::make_unique<OpMetric>(
-            prefix + OperatorTypeName(static_cast<OperatorType>(i)));
-        opMetricsFromLog_[i] = absl::make_unique<OpMetric>(
-            fromLogPrefix + OperatorTypeName(static_cast<OperatorType>(i)));
-    }
+  for (uint32_t i = 0; i < kTotalOperatorNum; ++i) {
+    opMetrics_[i] = absl::make_unique<OpMetric>(
+        prefix + OperatorTypeName(static_cast<OperatorType>(i)));
+    opMetricsFromLog_[i] = absl::make_unique<OpMetric>(
+        fromLogPrefix + OperatorTypeName(static_cast<OperatorType>(i)));
+  }
 }
 
-void OperatorMetric::OnOperatorComplete(OperatorType type,
-                                             uint64_t latencyUs, bool success) {
-    auto index = static_cast<uint32_t>(type);
-    if (index < kTotalOperatorNum) {
-        if (success) {
-            opMetrics_[index]->latRecorder << latencyUs;
-        } else {
-            opMetrics_[index]->errorCount << 1;
-        }
+void OperatorMetric::OnOperatorComplete(OperatorType type, uint64_t latencyUs,
+                                        bool success) {
+  auto index = static_cast<uint32_t>(type);
+  if (index < kTotalOperatorNum) {
+    if (success) {
+      opMetrics_[index]->latRecorder << latencyUs;
+    } else {
+      opMetrics_[index]->errorCount << 1;
     }
+  }
 }
 
 void OperatorMetric::OnOperatorCompleteFromLog(OperatorType type,
-                                             uint64_t latencyUs, bool success) {
-    auto index = static_cast<uint32_t>(type);
-    if (index < kTotalOperatorNum) {
-        if (success) {
-            opMetricsFromLog_[index]->latRecorder << latencyUs;
-        } else {
-            opMetricsFromLog_[index]->errorCount << 1;
-        }
+                                               uint64_t latencyUs,
+                                               bool success) {
+  auto index = static_cast<uint32_t>(type);
+  if (index < kTotalOperatorNum) {
+    if (success) {
+      opMetricsFromLog_[index]->latRecorder << latencyUs;
+    } else {
+      opMetricsFromLog_[index]->errorCount << 1;
     }
+  }
 }
 
-void OperatorMetric::WaitInQueueLatency(OperatorType type,
-                                             uint64_t latencyUs) {
-    auto index = static_cast<uint32_t>(type);
-    if (index < kTotalOperatorNum) {
-        opMetrics_[index]->waitInQueueLatency << latencyUs;
-    }
+void OperatorMetric::WaitInQueueLatency(OperatorType type, uint64_t latencyUs) {
+  auto index = static_cast<uint32_t>(type);
+  if (index < kTotalOperatorNum) {
+    opMetrics_[index]->waitInQueueLatency << latencyUs;
+  }
 }
 
-void OperatorMetric::ExecuteLatency(OperatorType type,
-                                             uint64_t latencyUs) {
-    auto index = static_cast<uint32_t>(type);
-    if (index < kTotalOperatorNum) {
-        opMetrics_[index]->executeLatency << latencyUs;
-    }
+void OperatorMetric::ExecuteLatency(OperatorType type, uint64_t latencyUs) {
+  auto index = static_cast<uint32_t>(type);
+  if (index < kTotalOperatorNum) {
+    opMetrics_[index]->executeLatency << latencyUs;
+  }
 }
 
 void OperatorMetric::NewArrival(OperatorType type) {
-    auto index = static_cast<uint32_t>(type);
-    if (index < kTotalOperatorNum) {
-        opMetrics_[index]->rcount << 1;
-    }
+  auto index = static_cast<uint32_t>(type);
+  if (index < kTotalOperatorNum) {
+    opMetrics_[index]->rcount << 1;
+  }
 }
 
 }  // namespace copyset

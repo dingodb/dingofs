@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+
 #include "src/mds/schedule/operatorStepTemplate.h"
 #include "src/mds/schedule/operatorTemplate.h"
 
@@ -34,34 +35,33 @@ namespace schedule {
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 class OperatorFactoryT {
  public:
-    using Operator = OperatorT<IdType, CopySetInfoT, CopySetConfT>;
-    using OperatorStep = OperatorStepT<IdType, CopySetInfoT, CopySetConfT>;
-    using AddPeer = AddPeerT<IdType, CopySetInfoT, CopySetConfT>;
-    using ChangePeer = ChangePeerT<IdType, CopySetInfoT, CopySetConfT>;
-    using TransferLeader = TransferLeaderT<IdType, CopySetInfoT, CopySetConfT>;
-    using RemovePeer = RemovePeerT<IdType, CopySetInfoT, CopySetConfT>;
-    using ScanPeer = ScanPeerT<IdType, CopySetInfoT, CopySetConfT>;
+  using Operator = OperatorT<IdType, CopySetInfoT, CopySetConfT>;
+  using OperatorStep = OperatorStepT<IdType, CopySetInfoT, CopySetConfT>;
+  using AddPeer = AddPeerT<IdType, CopySetInfoT, CopySetConfT>;
+  using ChangePeer = ChangePeerT<IdType, CopySetInfoT, CopySetConfT>;
+  using TransferLeader = TransferLeaderT<IdType, CopySetInfoT, CopySetConfT>;
+  using RemovePeer = RemovePeerT<IdType, CopySetInfoT, CopySetConfT>;
+  using ScanPeer = ScanPeerT<IdType, CopySetInfoT, CopySetConfT>;
 
  public:
-    /**
-     * @brief Create_xxxx_Operator: Create operator for xxxx
-     */
-    Operator CreateTransferLeaderOperator(const CopySetInfoT &info,
-                                          IdType newLeader,
-                                          OperatorPriority pri);
+  /**
+   * @brief Create_xxxx_Operator: Create operator for xxxx
+   */
+  Operator CreateTransferLeaderOperator(const CopySetInfoT& info,
+                                        IdType newLeader, OperatorPriority pri);
 
-    Operator CreateRemovePeerOperator(const CopySetInfoT &info, IdType rmPeer,
-                                      OperatorPriority pri);
+  Operator CreateRemovePeerOperator(const CopySetInfoT& info, IdType rmPeer,
+                                    OperatorPriority pri);
 
-    Operator CreateAddPeerOperator(const CopySetInfoT &info, IdType addPeer,
-                                   OperatorPriority pri);
+  Operator CreateAddPeerOperator(const CopySetInfoT& info, IdType addPeer,
+                                 OperatorPriority pri);
 
-    Operator CreateChangePeerOperator(const CopySetInfoT &info, IdType rmPeer,
-                                      IdType addPeer, OperatorPriority pri);
+  Operator CreateChangePeerOperator(const CopySetInfoT& info, IdType rmPeer,
+                                    IdType addPeer, OperatorPriority pri);
 
-    Operator CreateScanPeerOperator(const CopySetInfoT &info,
-                                    IdType startScanPeer, OperatorPriority pri,
-                                    ConfigChangeType opType);
+  Operator CreateScanPeerOperator(const CopySetInfoT& info,
+                                  IdType startScanPeer, OperatorPriority pri,
+                                  ConfigChangeType opType);
 };
 
 // extern OperatorFactoryT<ChunkServerIdType, CopySetInfo, CopySetConf>
@@ -70,45 +70,45 @@ class OperatorFactoryT {
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 OperatorT<IdType, CopySetInfoT, CopySetConfT> OperatorFactoryT<
     IdType, CopySetInfoT,
-    CopySetConfT>::CreateTransferLeaderOperator(const CopySetInfoT &info,
+    CopySetConfT>::CreateTransferLeaderOperator(const CopySetInfoT& info,
                                                 IdType newLeader,
                                                 OperatorPriority pri) {
-    return Operator(info.epoch, info.id, pri, steady_clock::now(),
-                    std::make_shared<TransferLeader>(info.leader, newLeader));
+  return Operator(info.epoch, info.id, pri, steady_clock::now(),
+                  std::make_shared<TransferLeader>(info.leader, newLeader));
 }
 
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 OperatorT<IdType, CopySetInfoT, CopySetConfT>
 OperatorFactoryT<IdType, CopySetInfoT, CopySetConfT>::CreateRemovePeerOperator(
-    const CopySetInfoT &info, IdType peer, OperatorPriority pri) {
-    return Operator(info.epoch, info.id, pri, steady_clock::now(),
-                    std::make_shared<RemovePeer>(peer));
+    const CopySetInfoT& info, IdType peer, OperatorPriority pri) {
+  return Operator(info.epoch, info.id, pri, steady_clock::now(),
+                  std::make_shared<RemovePeer>(peer));
 }
 
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 OperatorT<IdType, CopySetInfoT, CopySetConfT>
 OperatorFactoryT<IdType, CopySetInfoT, CopySetConfT>::CreateAddPeerOperator(
-    const CopySetInfoT &info, IdType addPeer, OperatorPriority pri) {
-    return Operator(info.epoch, info.id, pri, steady_clock::now(),
-                    std::make_shared<AddPeer>(addPeer));
+    const CopySetInfoT& info, IdType addPeer, OperatorPriority pri) {
+  return Operator(info.epoch, info.id, pri, steady_clock::now(),
+                  std::make_shared<AddPeer>(addPeer));
 }
 
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 OperatorT<IdType, CopySetInfoT, CopySetConfT>
 OperatorFactoryT<IdType, CopySetInfoT, CopySetConfT>::CreateChangePeerOperator(
-    const CopySetInfoT &info, IdType rmPeer, IdType addPeer,
+    const CopySetInfoT& info, IdType rmPeer, IdType addPeer,
     OperatorPriority pri) {
-    return Operator(info.epoch, info.id, pri, steady_clock::now(),
-                    std::make_shared<ChangePeer>(rmPeer, addPeer));
+  return Operator(info.epoch, info.id, pri, steady_clock::now(),
+                  std::make_shared<ChangePeer>(rmPeer, addPeer));
 }
 
 template <class IdType, class CopySetInfoT, class CopySetConfT>
 OperatorT<IdType, CopySetInfoT, CopySetConfT>
 OperatorFactoryT<IdType, CopySetInfoT, CopySetConfT>::CreateScanPeerOperator(
-    const CopySetInfoT &info, IdType scanPeer, OperatorPriority pri,
+    const CopySetInfoT& info, IdType scanPeer, OperatorPriority pri,
     ConfigChangeType opType) {
-    return Operator(info.epoch, info.id, pri, steady_clock::now(),
-                    std::make_shared<ScanPeer>(scanPeer, opType));
+  return Operator(info.epoch, info.id, pri, steady_clock::now(),
+                  std::make_shared<ScanPeer>(scanPeer, opType));
 }
 
 }  // namespace schedule

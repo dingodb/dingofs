@@ -28,19 +28,19 @@
 #include "src/common/namespace_define.h"
 #include "src/mds/topology/topology_item.h"
 
-using ::curve::common::LOGICALPOOLKEYPREFIX;
-using ::curve::common::LOGICALPOOLKEYEND;
-using ::curve::common::PHYSICALPOOLKEYPREFIX;
-using ::curve::common::PHYSICALPOOLKEYEND;
-using ::curve::common::ZONEKEYPREFIX;
-using ::curve::common::ZONEKEYEND;
-using ::curve::common::SERVERKEYPREFIX;
-using ::curve::common::SERVERKEYEND;
-using ::curve::common::CHUNKSERVERKEYPREFIX;
 using ::curve::common::CHUNKSERVERKEYEND;
+using ::curve::common::CHUNKSERVERKEYPREFIX;
 using ::curve::common::CLUSTERINFOKEY;
-using ::curve::common::COPYSETKEYPREFIX;
 using ::curve::common::COPYSETKEYEND;
+using ::curve::common::COPYSETKEYPREFIX;
+using ::curve::common::LOGICALPOOLKEYEND;
+using ::curve::common::LOGICALPOOLKEYPREFIX;
+using ::curve::common::PHYSICALPOOLKEYEND;
+using ::curve::common::PHYSICALPOOLKEYPREFIX;
+using ::curve::common::SERVERKEYEND;
+using ::curve::common::SERVERKEYPREFIX;
+using ::curve::common::ZONEKEYEND;
+using ::curve::common::ZONEKEYPREFIX;
 
 namespace curve {
 namespace mds {
@@ -48,52 +48,38 @@ namespace topology {
 
 class TopologyStorageCodec {
  public:
-    // there are three types of function here:
-    // Encode__Key: attach item id to item prefix
-    // Encode__Data: convert data structure to a string
-    // Decode__Data: convert a string to data structure
-    std::string EncodeLogicalPoolKey(
-        LogicalPoolIdType id);
-    bool EncodeLogicalPoolData(
-        const LogicalPool &data, std::string *value);
-    bool DecodeLogicalPoolData(const std::string &value, LogicalPool *data);
+  // there are three types of function here:
+  // Encode__Key: attach item id to item prefix
+  // Encode__Data: convert data structure to a string
+  // Decode__Data: convert a string to data structure
+  std::string EncodeLogicalPoolKey(LogicalPoolIdType id);
+  bool EncodeLogicalPoolData(const LogicalPool& data, std::string* value);
+  bool DecodeLogicalPoolData(const std::string& value, LogicalPool* data);
 
-    std::string EncodePhysicalPoolKey(
-        PhysicalPoolIdType id);
-    bool EncodePhysicalPoolData(
-        const PhysicalPool &data, std::string *value);
-    bool DecodePhysicalPoolData(const std::string &value, PhysicalPool *data);
+  std::string EncodePhysicalPoolKey(PhysicalPoolIdType id);
+  bool EncodePhysicalPoolData(const PhysicalPool& data, std::string* value);
+  bool DecodePhysicalPoolData(const std::string& value, PhysicalPool* data);
 
-    std::string EncodeZoneKey(
-        ZoneIdType id);
-    bool EncodeZoneData(
-        const Zone &data, std::string *value);
-    bool DecodeZoneData(const std::string &value, Zone *data);
+  std::string EncodeZoneKey(ZoneIdType id);
+  bool EncodeZoneData(const Zone& data, std::string* value);
+  bool DecodeZoneData(const std::string& value, Zone* data);
 
-    std::string EncodeServerKey(
-        ServerIdType id);
-    bool EncodeServerData(
-        const Server &data, std::string *value);
-    bool DecodeServerData(const std::string &value, Server *data);
+  std::string EncodeServerKey(ServerIdType id);
+  bool EncodeServerData(const Server& data, std::string* value);
+  bool DecodeServerData(const std::string& value, Server* data);
 
-    std::string EncodeChunkServerKey(
-        ChunkServerIdType id);
-    bool EncodeChunkServerData(
-        const ChunkServer &data, std::string *value);
-    bool DecodeChunkServerData(const std::string &value, ChunkServer *data);
+  std::string EncodeChunkServerKey(ChunkServerIdType id);
+  bool EncodeChunkServerData(const ChunkServer& data, std::string* value);
+  bool DecodeChunkServerData(const std::string& value, ChunkServer* data);
 
-    std::string EncodeCopySetKey(
-        const CopySetKey &id);
-    bool EncodeCopySetData(
-        const CopySetInfo &data, std::string *value);
-    bool DecodeCopySetData(const std::string &value, CopySetInfo *data);
+  std::string EncodeCopySetKey(const CopySetKey& id);
+  bool EncodeCopySetData(const CopySetInfo& data, std::string* value);
+  bool DecodeCopySetData(const std::string& value, CopySetInfo* data);
 
-    bool EncodeClusterInfoData(
-        const ClusterInformation &data, std::string *value);
-    bool DecodeCluserInfoData(const std::string &value,
-        ClusterInformation *data);
+  bool EncodeClusterInfoData(const ClusterInformation& data,
+                             std::string* value);
+  bool DecodeCluserInfoData(const std::string& value, ClusterInformation* data);
 };
-
 
 }  // namespace topology
 }  // namespace mds

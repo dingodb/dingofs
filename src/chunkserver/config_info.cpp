@@ -22,8 +22,8 @@
 
 #include "src/chunkserver/config_info.h"
 
-#include "src/chunkserver/copyset_node_manager.h"
 #include "src/chunkserver/concurrent_apply/concurrent_apply.h"
+#include "src/chunkserver/copyset_node_manager.h"
 #include "src/chunkserver/datastore/file_pool.h"
 
 namespace curve {
@@ -47,8 +47,7 @@ CopysetNodeOptions::CopysetNodeOptions()
       chunkFilePool(nullptr),
       walFilePool(nullptr),
       localFileSystem(nullptr),
-      snapshotThrottle(nullptr) {
-}
+      snapshotThrottle(nullptr) {}
 
 }  // namespace chunkserver
 }  // namespace curve

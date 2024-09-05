@@ -35,44 +35,44 @@ namespace storage {
 // Collect some metrics from rocksdb since start
 class MetricEventListener : public rocksdb::EventListener {
  public:
-    MetricEventListener();
+  MetricEventListener();
 
-    void OnFlushBegin(rocksdb::DB* db,
-                      const rocksdb::FlushJobInfo& info) override;
+  void OnFlushBegin(rocksdb::DB* db,
+                    const rocksdb::FlushJobInfo& info) override;
 
-    void OnFlushCompleted(rocksdb::DB* db,
-                          const rocksdb::FlushJobInfo& info) override;
+  void OnFlushCompleted(rocksdb::DB* db,
+                        const rocksdb::FlushJobInfo& info) override;
 
-    void OnCompactionBegin(rocksdb::DB* db,
-                           const rocksdb::CompactionJobInfo& info) override;
+  void OnCompactionBegin(rocksdb::DB* db,
+                         const rocksdb::CompactionJobInfo& info) override;
 
-    void OnCompactionCompleted(rocksdb::DB* db,
-                               const rocksdb::CompactionJobInfo& info) override;
+  void OnCompactionCompleted(rocksdb::DB* db,
+                             const rocksdb::CompactionJobInfo& info) override;
 
-    void OnMemTableSealed(const rocksdb::MemTableInfo& info) override;
+  void OnMemTableSealed(const rocksdb::MemTableInfo& info) override;
 
-    void OnStallConditionsChanged(const rocksdb::WriteStallInfo& info) override;
+  void OnStallConditionsChanged(const rocksdb::WriteStallInfo& info) override;
 
  private:
-    // number of flushing tasks
-    bvar::Adder<int64_t> flushing_;
-    // flush latency
-    bvar::LatencyRecorder flushLatency_;
-    // total bytes of flush
-    bvar::Adder<uint64_t> flushedBytes_;
+  // number of flushing tasks
+  bvar::Adder<int64_t> flushing_;
+  // flush latency
+  bvar::LatencyRecorder flushLatency_;
+  // total bytes of flush
+  bvar::Adder<uint64_t> flushedBytes_;
 
-    // number of compacting tasks
-    bvar::Adder<int64_t> compacting_;
-    // compaction latency
-    bvar::LatencyRecorder compactionLatency_;
+  // number of compacting tasks
+  bvar::Adder<int64_t> compacting_;
+  // compaction latency
+  bvar::LatencyRecorder compactionLatency_;
 
-    // total number of sealed memtable
-    bvar::Adder<int64_t> sealedMemtable_;
+  // total number of sealed memtable
+  bvar::Adder<int64_t> sealedMemtable_;
 
-    // total number of delayed write operations
-    bvar::Adder<int64_t> delayedWrite_;
-    // total number of stopped write operations
-    bvar::Adder<int64_t> stoppedWrite_;
+  // total number of delayed write operations
+  bvar::Adder<int64_t> delayedWrite_;
+  // total number of stopped write operations
+  bvar::Adder<int64_t> stoppedWrite_;
 };
 
 }  // namespace storage

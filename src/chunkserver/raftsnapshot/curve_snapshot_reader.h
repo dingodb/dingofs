@@ -43,50 +43,52 @@
 #define SRC_CHUNKSERVER_RAFTSNAPSHOT_CURVE_SNAPSHOT_READER_H_
 
 #include <braft/storage.h>
-#include <vector>
+
 #include <string>
-#include "src/chunkserver/raftsnapshot/define.h"
+#include <vector>
+
 #include "src/chunkserver/raftsnapshot/curve_snapshot_file_reader.h"
+#include "src/chunkserver/raftsnapshot/define.h"
 
 namespace curve {
 namespace chunkserver {
 
 class CurveSnapshotReader : public braft::SnapshotReader {
  public:
-    CurveSnapshotReader(const std::string& path,
-                       const butil::EndPoint& server_addr,
-                       braft::FileSystemAdaptor* fs,
-                       braft::SnapshotThrottle* snapshot_throttle) :
-        _path(path),
+  CurveSnapshotReader(const std::string& path,
+                      const butil::EndPoint& server_addr,
+                      braft::FileSystemAdaptor* fs,
+                      braft::SnapshotThrottle* snapshot_throttle)
+      : _path(path),
         _addr(server_addr),
         _reader_id(0),
         _fs(fs),
         _snapshot_throttle(snapshot_throttle) {}
-    virtual ~CurveSnapshotReader();
-    int64_t snapshot_index();
-    virtual int init();
-    int load_meta(braft::SnapshotMeta* meta) override;
-    // Get the path of the Snapshot
-    std::string get_path() override { return _path; }
-    // Generate uri for other peers to copy this snapshot.
-    // Return an empty string if some error has occcured
-    std::string generate_uri_for_copy() override;
-    // List all the existing files in the Snapshot currently
-    void list_files(std::vector<std::string> *files) override;
+  virtual ~CurveSnapshotReader();
+  int64_t snapshot_index();
+  virtual int init();
+  int load_meta(braft::SnapshotMeta* meta) override;
+  // Get the path of the Snapshot
+  std::string get_path() override { return _path; }
+  // Generate uri for other peers to copy this snapshot.
+  // Return an empty string if some error has occcured
+  std::string generate_uri_for_copy() override;
+  // List all the existing files in the Snapshot currently
+  void list_files(std::vector<std::string>* files) override;
 
-    // Get the implementation-defined file_meta
-    int get_file_meta(const std::string& filename,
-                        ::google::protobuf::Message* file_meta) override;
+  // Get the implementation-defined file_meta
+  int get_file_meta(const std::string& filename,
+                    ::google::protobuf::Message* file_meta) override;
 
  private:
-    void destroy_reader_in_file_service();
+  void destroy_reader_in_file_service();
 
-    std::string _path;
-    braft::LocalSnapshotMetaTable _meta_table;
-    butil::EndPoint _addr;
-    int64_t _reader_id;
-    scoped_refptr<braft::FileSystemAdaptor> _fs;
-    scoped_refptr<braft::SnapshotThrottle> _snapshot_throttle;
+  std::string _path;
+  braft::LocalSnapshotMetaTable _meta_table;
+  butil::EndPoint _addr;
+  int64_t _reader_id;
+  scoped_refptr<braft::FileSystemAdaptor> _fs;
+  scoped_refptr<braft::SnapshotThrottle> _snapshot_throttle;
 };
 
 }  // namespace chunkserver

@@ -23,164 +23,153 @@
 #ifndef CURVEFS_SRC_METASERVER_INODE_STORAGE_H_
 #define CURVEFS_SRC_METASERVER_INODE_STORAGE_H_
 
-#include <list>
-#include <string>
-#include <memory>
-#include <utility>
 #include <functional>
+#include <list>
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
-#include "absl/container/btree_set.h"
 #include "absl/container/btree_map.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "absl/container/btree_set.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/converter.h"
-#include "curvefs/src/metaserver/storage/utils.h"
 #include "curvefs/src/metaserver/storage/storage.h"
+#include "curvefs/src/metaserver/storage/utils.h"
+#include "src/common/concurrent/rw_lock.h"
 
 namespace curvefs {
 namespace metaserver {
 
 using ::curve::common::RWLock;
-using ::curvefs::metaserver::storage::Iterator;
-using ::curvefs::metaserver::storage::KVStorage;
-using ::curvefs::metaserver::storage::StorageTransaction;
-using ::curvefs::metaserver::storage::Key4Inode;
 using ::curvefs::metaserver::storage::Converter;
+using ::curvefs::metaserver::storage::Iterator;
+using ::curvefs::metaserver::storage::Key4Inode;
+using ::curvefs::metaserver::storage::KVStorage;
 using ::curvefs::metaserver::storage::NameGenerator;
+using ::curvefs::metaserver::storage::StorageTransaction;
 using S3ChunkInfoMap = google::protobuf::Map<uint64_t, S3ChunkInfoList>;
 using Transaction = std::shared_ptr<StorageTransaction>;
 class InodeStorage {
  public:
-    InodeStorage(std::shared_ptr<KVStorage> kvStorage,
-                 std::shared_ptr<NameGenerator> nameGenerator,
-                 uint64_t nInode);
+  InodeStorage(std::shared_ptr<KVStorage> kvStorage,
+               std::shared_ptr<NameGenerator> nameGenerator, uint64_t nInode);
 
-    /**
-     * @brief insert inode to storage
-     * @param[in] inode: the inode want to insert
-     * @return If inode exist, return INODE_EXIST; else insert and return OK
-     */
-    MetaStatusCode Insert(const Inode& inode);
+  /**
+   * @brief insert inode to storage
+   * @param[in] inode: the inode want to insert
+   * @return If inode exist, return INODE_EXIST; else insert and return OK
+   */
+  MetaStatusCode Insert(const Inode& inode);
 
-    /**
-     * @brief get inode from storage
-     * @param[in] key: the key of inode want to get
-     * @param[out] inode: the inode got
-     * @return If inode not exist, return NOT_FOUND; else return OK
-     */
-    MetaStatusCode Get(const Key4Inode& key, Inode* inode);
+  /**
+   * @brief get inode from storage
+   * @param[in] key: the key of inode want to get
+   * @param[out] inode: the inode got
+   * @return If inode not exist, return NOT_FOUND; else return OK
+   */
+  MetaStatusCode Get(const Key4Inode& key, Inode* inode);
 
-    /**
-     * @brief get inode attribute from storage
-     * @param[in] key: the key of inode want to get
-     * @param[out] attr: the inode attribute got
-     * @return If inode not exist, return NOT_FOUND; else return OK
-     */
-    MetaStatusCode GetAttr(const Key4Inode& key, InodeAttr *attr);
+  /**
+   * @brief get inode attribute from storage
+   * @param[in] key: the key of inode want to get
+   * @param[out] attr: the inode attribute got
+   * @return If inode not exist, return NOT_FOUND; else return OK
+   */
+  MetaStatusCode GetAttr(const Key4Inode& key, InodeAttr* attr);
 
-    /**
-     * @brief get inode extended attributes from storage
-     * @param[in] key: the key of inode want to get
-     * @param[out] attr: the inode extended attribute got
-     * @return If inode not exist, return NOT_FOUND; else return OK
-     */
-    MetaStatusCode GetXAttr(const Key4Inode& key, XAttr *xattr);
+  /**
+   * @brief get inode extended attributes from storage
+   * @param[in] key: the key of inode want to get
+   * @param[out] attr: the inode extended attribute got
+   * @return If inode not exist, return NOT_FOUND; else return OK
+   */
+  MetaStatusCode GetXAttr(const Key4Inode& key, XAttr* xattr);
 
-    /**
-     * @brief delete inode from storage
-     * @param[in] key: the key of inode want to delete
-     * @return If inode not exist, return NOT_FOUND; else return OK
-     */
-    MetaStatusCode Delete(const Key4Inode& key);
+  /**
+   * @brief delete inode from storage
+   * @param[in] key: the key of inode want to delete
+   * @return If inode not exist, return NOT_FOUND; else return OK
+   */
+  MetaStatusCode Delete(const Key4Inode& key);
 
-    /**
-     * @brief update inode from storage
-     * @param[in] inode: the inode want to update
-     * @return If inode not exist, return NOT_FOUND; else replace and return OK
-     */
-    MetaStatusCode Update(const Inode& inode);
+  /**
+   * @brief update inode from storage
+   * @param[in] inode: the inode want to update
+   * @return If inode not exist, return NOT_FOUND; else replace and return OK
+   */
+  MetaStatusCode Update(const Inode& inode);
 
-    std::shared_ptr<Iterator> GetAllInode();
+  std::shared_ptr<Iterator> GetAllInode();
 
-    bool GetAllInodeId(std::list<uint64_t>* ids);
+  bool GetAllInodeId(std::list<uint64_t>* ids);
 
-    // NOTE: the return size is accurate under normal cluster status,
-    // but under abnormal status, the return size maybe less than
-    // the real value for delete the unexist inode multi-times.
-    size_t Size();
+  // NOTE: the return size is accurate under normal cluster status,
+  // but under abnormal status, the return size maybe less than
+  // the real value for delete the unexist inode multi-times.
+  size_t Size();
 
-    bool Empty();
+  bool Empty();
 
-    MetaStatusCode Clear();
+  MetaStatusCode Clear();
 
-    // s3chunkinfo
-    MetaStatusCode ModifyInodeS3ChunkInfoList(uint32_t fsId,
-                                              uint64_t inodeId,
-                                              uint64_t chunkIndex,
-                                              const S3ChunkInfoList* list2add,
-                                              const S3ChunkInfoList* list2del);
+  // s3chunkinfo
+  MetaStatusCode ModifyInodeS3ChunkInfoList(uint32_t fsId, uint64_t inodeId,
+                                            uint64_t chunkIndex,
+                                            const S3ChunkInfoList* list2add,
+                                            const S3ChunkInfoList* list2del);
 
-    MetaStatusCode PaddingInodeS3ChunkInfo(int32_t fsId,
-                                           uint64_t inodeId,
-                                           S3ChunkInfoMap* m,
-                                           uint64_t limit = 0);
+  MetaStatusCode PaddingInodeS3ChunkInfo(int32_t fsId, uint64_t inodeId,
+                                         S3ChunkInfoMap* m, uint64_t limit = 0);
 
-    std::shared_ptr<Iterator> GetInodeS3ChunkInfoList(uint32_t fsId,
-                                                      uint64_t inodeId);
+  std::shared_ptr<Iterator> GetInodeS3ChunkInfoList(uint32_t fsId,
+                                                    uint64_t inodeId);
 
-    std::shared_ptr<Iterator> GetAllS3ChunkInfoList();
+  std::shared_ptr<Iterator> GetAllS3ChunkInfoList();
 
-    // volume extent
-    std::shared_ptr<Iterator> GetAllVolumeExtentList();
+  // volume extent
+  std::shared_ptr<Iterator> GetAllVolumeExtentList();
 
-    MetaStatusCode UpdateVolumeExtentSlice(uint32_t fsId,
-                                           uint64_t inodeId,
-                                           const VolumeExtentSlice& slice);
+  MetaStatusCode UpdateVolumeExtentSlice(uint32_t fsId, uint64_t inodeId,
+                                         const VolumeExtentSlice& slice);
 
-    MetaStatusCode GetAllVolumeExtent(uint32_t fsId,
-                                      uint64_t inodeId,
-                                      VolumeExtentList* extents);
+  MetaStatusCode GetAllVolumeExtent(uint32_t fsId, uint64_t inodeId,
+                                    VolumeExtentList* extents);
 
-    MetaStatusCode GetVolumeExtentByOffset(uint32_t fsId,
-                                           uint64_t inodeId,
-                                           uint64_t offset,
-                                           VolumeExtentSlice* slice);
+  MetaStatusCode GetVolumeExtentByOffset(uint32_t fsId, uint64_t inodeId,
+                                         uint64_t offset,
+                                         VolumeExtentSlice* slice);
 
-    MetaStatusCode AddS3ChunkInfoList(
-        std::shared_ptr<StorageTransaction> txn,
-        uint32_t fsId,
-        uint64_t inodeId,
-        uint64_t chunkIndex,
-        const S3ChunkInfoList* list2add);
+  MetaStatusCode AddS3ChunkInfoList(std::shared_ptr<StorageTransaction> txn,
+                                    uint32_t fsId, uint64_t inodeId,
+                                    uint64_t chunkIndex,
+                                    const S3ChunkInfoList* list2add);
 
  private:
-    MetaStatusCode UpdateInodeS3MetaSize(Transaction txn, uint32_t fsId,
-                                         uint64_t inodeId, uint64_t size4add,
-                                         uint64_t size4del);
+  MetaStatusCode UpdateInodeS3MetaSize(Transaction txn, uint32_t fsId,
+                                       uint64_t inodeId, uint64_t size4add,
+                                       uint64_t size4del);
 
-    uint64_t GetInodeS3MetaSize(uint32_t fsId, uint64_t inodeId);
+  uint64_t GetInodeS3MetaSize(uint32_t fsId, uint64_t inodeId);
 
-    MetaStatusCode DelS3ChunkInfoList(
-        std::shared_ptr<StorageTransaction> txn,
-        uint32_t fsId,
-        uint64_t inodeId,
-        uint64_t chunkIndex,
-        const S3ChunkInfoList* list2del);
+  MetaStatusCode DelS3ChunkInfoList(std::shared_ptr<StorageTransaction> txn,
+                                    uint32_t fsId, uint64_t inodeId,
+                                    uint64_t chunkIndex,
+                                    const S3ChunkInfoList* list2del);
 
  private:
-    // FIXME: please remove this lock, because we has locked each inode
-    // in inode manager, this lock only for proetct storage, but now we
-    // use rocksdb storage, it support write in parallel.
-    RWLock rwLock_;
-    std::shared_ptr<KVStorage> kvStorage_;
-    std::string table4Inode_;
-    std::string table4S3ChunkInfo_;
-    std::string table4VolumeExtent_;
-    std::string table4InodeAuxInfo_;
-    size_t nInode_;
-    Converter conv_;
+  // FIXME: please remove this lock, because we has locked each inode
+  // in inode manager, this lock only for proetct storage, but now we
+  // use rocksdb storage, it support write in parallel.
+  RWLock rwLock_;
+  std::shared_ptr<KVStorage> kvStorage_;
+  std::string table4Inode_;
+  std::string table4S3ChunkInfo_;
+  std::string table4VolumeExtent_;
+  std::string table4InodeAuxInfo_;
+  size_t nInode_;
+  Converter conv_;
 };
 
 }  // namespace metaserver

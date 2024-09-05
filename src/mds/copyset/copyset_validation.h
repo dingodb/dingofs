@@ -23,10 +23,11 @@
 #ifndef SRC_MDS_COPYSET_COPYSET_VALIDATION_H_
 #define SRC_MDS_COPYSET_COPYSET_VALIDATION_H_
 
-#include <vector>
 #include <map>
-#include "src/mds/copyset/copyset_structure.h"
+#include <vector>
+
 #include "src/mds/copyset/copyset_config.h"
+#include "src/mds/copyset/copyset_structure.h"
 
 namespace curve {
 namespace mds {
@@ -34,101 +35,97 @@ namespace copyset {
 
 using ::curve::mds::topology::ChunkServerIdType;
 
-class CopysetValidation{
+class CopysetValidation {
  public:
-    explicit CopysetValidation(const CopysetOption &option)
-    : option_(option) {}
+  explicit CopysetValidation(const CopysetOption& option) : option_(option) {}
 
-    /**
-     * @brief validate whether the copyset list satisfy the metrics of 
-     *        CopysetOption
-     *
-     * @param copysets copysets list
-     *
-     * @retval true if succeeded
-     * @retval false if failed
-     */
-    bool Validate(const std::vector<Copyset> &copysets) const;
+  /**
+   * @brief validate whether the copyset list satisfy the metrics of
+   *        CopysetOption
+   *
+   * @param copysets copysets list
+   *
+   * @retval true if succeeded
+   * @retval false if failed
+   */
+  bool Validate(const std::vector<Copyset>& copysets) const;
 
-    /**
-     * @brief validate whether average scatter width of copyset satisfy 
-     *        target scatterwidth
-     *
-     * @param scatterWidth target scatterWidth
-     * @param scatterWidthOut actual average scatterWidth
-     * @param copysets copyset list
-     *
-     * @retval true if succeeded
-     * @retval false if failed
-     */
-    bool ValidateScatterWidth(uint32_t scatterWidth,
-        uint32_t *scatterWidthOut,
-        const std::vector<Copyset> &copysets) const;
+  /**
+   * @brief validate whether average scatter width of copyset satisfy
+   *        target scatterwidth
+   *
+   * @param scatterWidth target scatterWidth
+   * @param scatterWidthOut actual average scatterWidth
+   * @param copysets copyset list
+   *
+   * @retval true if succeeded
+   * @retval false if failed
+   */
+  bool ValidateScatterWidth(uint32_t scatterWidth, uint32_t* scatterWidthOut,
+                            const std::vector<Copyset>& copysets) const;
 
-    /**
-     * @brief calculate scatter width map of copyset
-     *
-     * @param copysets copysets list
-     * @param scatterWidthMap map<chunkserver id, scatterWidth>
-     */
-    void CalcScatterWidth(
-        const std::vector<Copyset> &copysets,
-        std::map<ChunkServerIdType, uint32_t> *scatterWidthMap) const;
+  /**
+   * @brief calculate scatter width map of copyset
+   *
+   * @param copysets copysets list
+   * @param scatterWidthMap map<chunkserver id, scatterWidth>
+   */
+  void CalcScatterWidth(
+      const std::vector<Copyset>& copysets,
+      std::map<ChunkServerIdType, uint32_t>* scatterWidthMap) const;
 
  private:
-    CopysetOption option_;
+  CopysetOption option_;
 };
 
 class StatisticsTools {
  public:
-     /**
-      * @brief calculate average number
-      *
-      * @param values value list
-      *
-      * @return average value
-      */
-     static double CalcAverage(const std::vector<double> &values);
-     /**
-      * @brief calculate variance
-      *
-      * @param values value list
-      * @param average average value
-      *
-      * @return variance
-      */
-     static double CalcVariance(const std::vector<double> &values,
-            double average);
-     /**
-      * @brief calculate standard deviation
-      *
-      * @param variance variance value
-      *
-      * @return standard deviation
-      */
-     static double CalcStandardDevation(double variance);
-     /**
-      * @brief calculate standard deviation
-      *
-      * @param values value list
-      * @param average average value
-      *
-      * @return standard deviation
-      */
-     static double CalcStandardDevation(const std::vector<double> &values,
-            double average);
-     /**
-      * @brief calculate range
-      *
-      * @param values value list
-      * @param minValue minimum value
-      * @param maxValue maximum value
-      *
-      * @return range value
-      */
-     static double CalcRange(const std::vector<double> &values,
-            double *minValue,
-            double *maxValue);
+  /**
+   * @brief calculate average number
+   *
+   * @param values value list
+   *
+   * @return average value
+   */
+  static double CalcAverage(const std::vector<double>& values);
+  /**
+   * @brief calculate variance
+   *
+   * @param values value list
+   * @param average average value
+   *
+   * @return variance
+   */
+  static double CalcVariance(const std::vector<double>& values, double average);
+  /**
+   * @brief calculate standard deviation
+   *
+   * @param variance variance value
+   *
+   * @return standard deviation
+   */
+  static double CalcStandardDevation(double variance);
+  /**
+   * @brief calculate standard deviation
+   *
+   * @param values value list
+   * @param average average value
+   *
+   * @return standard deviation
+   */
+  static double CalcStandardDevation(const std::vector<double>& values,
+                                     double average);
+  /**
+   * @brief calculate range
+   *
+   * @param values value list
+   * @param minValue minimum value
+   * @param maxValue maximum value
+   *
+   * @return range value
+   */
+  static double CalcRange(const std::vector<double>& values, double* minValue,
+                          double* maxValue);
 };
 
 }  // namespace copyset

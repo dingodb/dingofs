@@ -21,6 +21,7 @@
  */
 
 #include "curvefs/src/mds/schedule/scheduleService/scheduleService.h"
+
 #include <map>
 #include <vector>
 
@@ -32,39 +33,38 @@ void ScheduleServiceImpl::QueryMetaServerRecoverStatus(
     const QueryMetaServerRecoverStatusRequest* request,
     QueryMetaServerRecoverStatusResponse* response,
     google::protobuf::Closure* done) {
-    brpc::ClosureGuard done_guard(done);
+  brpc::ClosureGuard done_guard(done);
 
-    brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
+  brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
 
-    LOG(INFO) << "Received request[log_id=" << cntl->log_id() << "] from "
-              << cntl->remote_side() << " to " << cntl->local_side()
-              << ". [QueryMetaServerRecoverStatusRequest] "
-              << request->DebugString();
+  LOG(INFO) << "Received request[log_id=" << cntl->log_id() << "] from "
+            << cntl->remote_side() << " to " << cntl->local_side()
+            << ". [QueryMetaServerRecoverStatusRequest] "
+            << request->DebugString();
 
-    std::vector<MetaServerIdType> ids;
-    for (int i = 0; i < request->metaserverid_size(); i++) {
-        ids.emplace_back(request->metaserverid(i));
+  std::vector<MetaServerIdType> ids;
+  for (int i = 0; i < request->metaserverid_size(); i++) {
+    ids.emplace_back(request->metaserverid(i));
+  }
+
+  std::map<MetaServerIdType, bool> statusMap;
+  ScheduleStatusCode errCode =
+      coordinator_->QueryMetaServerRecoverStatus(ids, &statusMap);
+  response->set_statuscode(errCode);
+  if (errCode == ScheduleStatusCode::Success) {
+    LOG(INFO) << "Send response[log_id=" << cntl->log_id() << "] from "
+              << cntl->local_side() << " to " << cntl->remote_side()
+              << ". [QueryMetaServerRecoverStatusResponse] "
+              << response->DebugString();
+    for (auto item : statusMap) {
+      response->mutable_recoverstatusmap()->insert({item.first, item.second});
     }
-
-    std::map<MetaServerIdType, bool> statusMap;
-    ScheduleStatusCode errCode =
-        coordinator_->QueryMetaServerRecoverStatus(ids, &statusMap);
-    response->set_statuscode(errCode);
-    if (errCode == ScheduleStatusCode::Success) {
-        LOG(INFO) << "Send response[log_id=" << cntl->log_id() << "] from "
-                  << cntl->local_side() << " to " << cntl->remote_side()
-                  << ". [QueryMetaServerRecoverStatusResponse] "
-                  << response->DebugString();
-        for (auto item : statusMap) {
-            response->mutable_recoverstatusmap()->insert(
-                {item.first, item.second});
-        }
-    } else {
-        LOG(ERROR) << "Send response[log_id=" << cntl->log_id() << "] from "
-                   << cntl->local_side() << " to " << cntl->remote_side()
-                   << ". [QueryMetaServerRecoverStatusResponse] "
-                   << response->DebugString();
-    }
+  } else {
+    LOG(ERROR) << "Send response[log_id=" << cntl->log_id() << "] from "
+               << cntl->local_side() << " to " << cntl->remote_side()
+               << ". [QueryMetaServerRecoverStatusResponse] "
+               << response->DebugString();
+  }
 }
 }  // namespace schedule
 }  // namespace mds

@@ -29,8 +29,8 @@
 
 #include <string>
 
-#include "curvefs/src/client/kvclient/kvclient.h"
 #include "curvefs/proto/topology.pb.h"
+#include "curvefs/src/client/kvclient/kvclient.h"
 
 namespace curvefs {
 
@@ -42,7 +42,7 @@ using curvefs::mds::topology::MemcacheClusterInfo;
  * only the threadpool will operate the kvclient,
  * for threadsafe and fast, we can make every thread has a client.
  */
-extern thread_local memcached_st *tcli;
+extern thread_local memcached_st* tcli;
 
 /**
  * MemCachedClient is a client to memcached cluster. You'd better
@@ -77,128 +77,126 @@ extern thread_local memcached_st *tcli;
 
 class MemCachedClient : public KVClient {
  public:
-    MemCachedClient() : server_(nullptr) {
-        client_ = memcached_create(nullptr);
-    }
-    explicit MemCachedClient(memcached_st *cli) : client_(cli) {}
-    ~MemCachedClient() { UnInit(); }
+  MemCachedClient() : server_(nullptr) { client_ = memcached_create(nullptr); }
+  explicit MemCachedClient(memcached_st* cli) : client_(cli) {}
+  ~MemCachedClient() { UnInit(); }
 
-    bool Init(const MemcacheClusterInfo &kvcachecluster) {
-        client_ = memcached(nullptr, 0);
+  bool Init(const MemcacheClusterInfo& kvcachecluster) {
+    client_ = memcached(nullptr, 0);
 
-        for (int i = 0; i < kvcachecluster.servers_size(); i++) {
-            if (!AddServer(kvcachecluster.servers(i).ip(),
-                           kvcachecluster.servers(i).port())) {
-                return false;
-            }
-        }
-        memcached_behavior_set(client_, MEMCACHED_BEHAVIOR_DISTRIBUTION,
-                               MEMCACHED_DISTRIBUTION_CONSISTENT);
-        memcached_behavior_set(client_, MEMCACHED_BEHAVIOR_RETRY_TIMEOUT, 5);
-
-        return PushServer();
-    }
-
-    void UnInit() override {
-        if (client_) {
-            memcached_free(client_);
-            client_ = nullptr;
-        }
-    }
-
-    bool Set(const std::string &key, const char *value,
-             const uint64_t value_len, std::string *errorlog) override {
-        if (nullptr == tcli) {
-            tcli = memcached_clone(nullptr, client_);
-        }
-        auto res = memcached_set(tcli, key.c_str(), key.length(), value,
-                                 value_len, 0, 0);
-        if (MEMCACHED_SUCCESS == res) {
-            VLOG(9) << "Set key = " << key << " OK";
-            return true;
-        }
-        *errorlog = ResError(res);
-        memcached_free(tcli);
-        tcli = nullptr;
-        LOG(ERROR) << "Set key = " << key << " error = " << *errorlog;
+    for (int i = 0; i < kvcachecluster.servers_size(); i++) {
+      if (!AddServer(kvcachecluster.servers(i).ip(),
+                     kvcachecluster.servers(i).port())) {
         return false;
+      }
+    }
+    memcached_behavior_set(client_, MEMCACHED_BEHAVIOR_DISTRIBUTION,
+                           MEMCACHED_DISTRIBUTION_CONSISTENT);
+    memcached_behavior_set(client_, MEMCACHED_BEHAVIOR_RETRY_TIMEOUT, 5);
+
+    return PushServer();
+  }
+
+  void UnInit() override {
+    if (client_) {
+      memcached_free(client_);
+      client_ = nullptr;
+    }
+  }
+
+  bool Set(const std::string& key, const char* value, const uint64_t value_len,
+           std::string* errorlog) override {
+    if (nullptr == tcli) {
+      tcli = memcached_clone(nullptr, client_);
+    }
+    auto res =
+        memcached_set(tcli, key.c_str(), key.length(), value, value_len, 0, 0);
+    if (MEMCACHED_SUCCESS == res) {
+      VLOG(9) << "Set key = " << key << " OK";
+      return true;
+    }
+    *errorlog = ResError(res);
+    memcached_free(tcli);
+    tcli = nullptr;
+    LOG(ERROR) << "Set key = " << key << " error = " << *errorlog;
+    return false;
+  }
+
+  bool Get(const std::string& key, char* value, uint64_t offset,
+           uint64_t length, std::string* errorlog) override {
+    if (nullptr == tcli) {
+      // multi thread use a memcached_st* client is unsafe.
+      // should clone it or use memcached_st_pool.
+      tcli = memcached_clone(nullptr, client_);
+    }
+    uint32_t flags = 0;
+    size_t value_length = 0;
+    memcached_return_t ue;
+    char* res = memcached_get(tcli, key.c_str(), key.length(), &value_length,
+                              &flags, &ue);
+    if (MEMCACHED_SUCCESS == ue && res != nullptr && value &&
+        value_length >= length) {
+      VLOG(9) << "Get key = " << key << " OK";
+      memcpy(value, res + offset, length);
+      free(res);
+      return true;
     }
 
-    bool Get(const std::string &key, char *value, uint64_t offset,
-             uint64_t length, std::string *errorlog) override {
-        if (nullptr == tcli) {
-            // multi thread use a memcached_st* client is unsafe.
-            // should clone it or use memcached_st_pool.
-            tcli = memcached_clone(nullptr, client_);
-        }
-        uint32_t flags = 0;
-        size_t value_length = 0;
-        memcached_return_t ue;
-        char *res = memcached_get(tcli, key.c_str(), key.length(),
-                                  &value_length, &flags, &ue);
-        if (MEMCACHED_SUCCESS == ue && res != nullptr && value &&
-            value_length >= length) {
-            VLOG(9) << "Get key = " << key << " OK";
-            memcpy(value, res + offset, length);
-            free(res);
-            return true;
-        }
-
-        *errorlog = ResError(ue);
-        if (ue != MEMCACHED_NOTFOUND) {
-          LOG(ERROR) << "Get key = " << key << " error = " << *errorlog
-                     << ", get_value_len = " << value_length
-                     << ", expect_value_len = " << length;
-          memcached_free(tcli);
-          tcli = nullptr;
-        }
-
-        return false;
+    *errorlog = ResError(ue);
+    if (ue != MEMCACHED_NOTFOUND) {
+      LOG(ERROR) << "Get key = " << key << " error = " << *errorlog
+                 << ", get_value_len = " << value_length
+                 << ", expect_value_len = " << length;
+      memcached_free(tcli);
+      tcli = nullptr;
     }
 
-    // transform the res to a error string
-    const std::string ResError(const memcached_return_t res) {
-        return memcached_strerror(nullptr, res);
-    }
+    return false;
+  }
 
-    /**
-     * @brief: add a remote memcache server to client,
-     * this means just add, you must use push after all server add.
-     */
-    bool AddServer(const std::string &hostname, const uint32_t port) {
-        memcached_return_t res;
-        server_ =
-            memcached_server_list_append(server_, hostname.c_str(), port, &res);
-        if (MEMCACHED_SUCCESS == res) {
-            return true;
-        }
-        LOG(ERROR) << "client add " << hostname << " " << port << " error";
-        return false;
-    }
+  // transform the res to a error string
+  const std::string ResError(const memcached_return_t res) {
+    return memcached_strerror(nullptr, res);
+  }
 
-    /**
-     * @brief: push the server list to the client
-     */
-    bool PushServer() {
-        memcached_return_t res = memcached_server_push(client_, server_);
-        if (MEMCACHED_SUCCESS == res) {
-            return true;
-        }
-        memcached_server_list_free(server_);
-        server_ = nullptr;
-        return false;
+  /**
+   * @brief: add a remote memcache server to client,
+   * this means just add, you must use push after all server add.
+   */
+  bool AddServer(const std::string& hostname, const uint32_t port) {
+    memcached_return_t res;
+    server_ =
+        memcached_server_list_append(server_, hostname.c_str(), port, &res);
+    if (MEMCACHED_SUCCESS == res) {
+      return true;
     }
+    LOG(ERROR) << "client add " << hostname << " " << port << " error";
+    return false;
+  }
 
-    /**
-     * @return: return this client number of remote servers
-     */
-    int ServerCount() {
-        return static_cast<int>(memcached_server_count(client_));
+  /**
+   * @brief: push the server list to the client
+   */
+  bool PushServer() {
+    memcached_return_t res = memcached_server_push(client_, server_);
+    if (MEMCACHED_SUCCESS == res) {
+      return true;
     }
+    memcached_server_list_free(server_);
+    server_ = nullptr;
+    return false;
+  }
+
+  /**
+   * @return: return this client number of remote servers
+   */
+  int ServerCount() {
+    return static_cast<int>(memcached_server_count(client_));
+  }
 
  private:
-    memcached_server_st *server_;
-    memcached_st *client_;
+  memcached_server_st* server_;
+  memcached_st* client_;
 };
 
 }  //  namespace client

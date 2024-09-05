@@ -27,15 +27,15 @@ namespace curve {
 namespace fs {
 
 enum class FileSystemType {
-    // SFS,
-    EXT4,
+  // SFS,
+  EXT4,
 };
 
 struct FileSystemInfo {
-    uint64_t total = 0;         // Total bytes
-    uint64_t available = 0;     // Free bytes available for unprivileged users
-    uint64_t allocated = 0;     // Bytes allocated by the store
-    uint64_t stored = 0;        // Bytes actually stored by the user
+  uint64_t total = 0;      // Total bytes
+  uint64_t available = 0;  // Free bytes available for unprivileged users
+  uint64_t allocated = 0;  // Bytes allocated by the store
+  uint64_t stored = 0;     // Bytes actually stored by the user
 };
 
 }  // namespace fs

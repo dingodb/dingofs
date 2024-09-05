@@ -24,29 +24,31 @@
 #define NEBD_TEST_PART2_MOCK_CURVE_CLIENT_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
+
 #include "include/client/libcurve.h"
 
 namespace nebd {
 namespace server {
 class MockCurveClient : public ::curve::client::CurveClient {
  public:
-    MockCurveClient() {}
-    ~MockCurveClient() {}
-    MOCK_METHOD1(Init, int(const std::string&));
-    MOCK_METHOD0(UnInit, void());
-    MOCK_METHOD2(Open,
-                 int(const std::string&, const ::curve::client::OpenFlags&));
-    MOCK_METHOD2(ReOpen,
-                 int(const std::string&, const ::curve::client::OpenFlags&));
-    MOCK_METHOD1(Close, int(int));
-    MOCK_METHOD2(Extend, int(const std::string&, int64_t));
-    MOCK_METHOD1(StatFile, int64_t(const std::string&));
-    MOCK_METHOD3(AioRead,
-                 int(int, CurveAioContext*, curve::client::UserDataType));
-    MOCK_METHOD3(AioWrite,
-                 int(int, CurveAioContext*, curve::client::UserDataType));
-    MOCK_METHOD2(AioDiscard, int(int, CurveAioContext*));
+  MockCurveClient() {}
+  ~MockCurveClient() {}
+  MOCK_METHOD1(Init, int(const std::string&));
+  MOCK_METHOD0(UnInit, void());
+  MOCK_METHOD2(Open,
+               int(const std::string&, const ::curve::client::OpenFlags&));
+  MOCK_METHOD2(ReOpen,
+               int(const std::string&, const ::curve::client::OpenFlags&));
+  MOCK_METHOD1(Close, int(int));
+  MOCK_METHOD2(Extend, int(const std::string&, int64_t));
+  MOCK_METHOD1(StatFile, int64_t(const std::string&));
+  MOCK_METHOD3(AioRead,
+               int(int, CurveAioContext*, curve::client::UserDataType));
+  MOCK_METHOD3(AioWrite,
+               int(int, CurveAioContext*, curve::client::UserDataType));
+  MOCK_METHOD2(AioDiscard, int(int, CurveAioContext*));
 };
 
 }  // namespace server

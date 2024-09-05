@@ -33,5 +33,3 @@ ChunkServerHeartbeatRequest GetChunkServerHeartbeatRequestForTest();
 }  // namespace mds
 }  // namespace curve
 #endif  // TEST_MDS_HEARTBEAT_COMMON_H_
-
-

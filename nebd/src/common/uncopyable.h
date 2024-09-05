@@ -28,12 +28,12 @@ namespace common {
 
 class Uncopyable {
  protected:
-    constexpr Uncopyable() = default;
-    ~Uncopyable() = default;
+  constexpr Uncopyable() = default;
+  ~Uncopyable() = default;
 
  public:
-    Uncopyable(const Uncopyable &) = delete;
-    Uncopyable &operator=(const Uncopyable &) = delete;
+  Uncopyable(const Uncopyable&) = delete;
+  Uncopyable& operator=(const Uncopyable&) = delete;
 };
 
 }  // namespace common

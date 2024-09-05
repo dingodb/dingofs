@@ -21,6 +21,7 @@
  */
 
 #include <gtest/gtest.h>
+
 #include <memory>
 
 #include "absl/memory/memory.h"
@@ -50,103 +51,103 @@ constexpr BitmapLocation kBitmapLocation = BitmapLocation::AtStart;
 constexpr uint32_t kFsId = 1;
 
 FsInfo GenerateVolumeFsInfo() {
-    FsInfo fsInfo;
-    fsInfo.set_fsid(kFsId);
-    Volume volume;
-    volume.set_volumesize(kVolumeSize);
-    volume.set_blocksize(kBlockSize);
-    volume.set_blockgroupsize(kBlockGroupSize);
-    volume.set_bitmaplocation(kBitmapLocation);
-    auto* detail = fsInfo.mutable_detail();
-    detail->mutable_volume()->Swap(&volume);
+  FsInfo fsInfo;
+  fsInfo.set_fsid(kFsId);
+  Volume volume;
+  volume.set_volumesize(kVolumeSize);
+  volume.set_blocksize(kBlockSize);
+  volume.set_blockgroupsize(kBlockGroupSize);
+  volume.set_bitmaplocation(kBitmapLocation);
+  auto* detail = fsInfo.mutable_detail();
+  detail->mutable_volume()->Swap(&volume);
 
-    return fsInfo;
+  return fsInfo;
 }
 
 }  // namespace
 
 class SpaceManagerTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        etcdclient_ = std::make_shared<MockEtcdClientImpl>();
-        fsStorage_ = std::make_shared<MockFsStorage>();
-        spaceManager_ =
-            absl::make_unique<SpaceManagerImpl>(etcdclient_, fsStorage_);
-    }
+  void SetUp() override {
+    etcdclient_ = std::make_shared<MockEtcdClientImpl>();
+    fsStorage_ = std::make_shared<MockFsStorage>();
+    spaceManager_ =
+        absl::make_unique<SpaceManagerImpl>(etcdclient_, fsStorage_);
+  }
 
-    void TearDown() override {}
+  void TearDown() override {}
 
-    void AddOneNewVolume() {
-        FsInfo fsInfo = GenerateVolumeFsInfo();
+  void AddOneNewVolume() {
+    FsInfo fsInfo = GenerateVolumeFsInfo();
 
-        using type = std::vector<std::string>*;
+    using type = std::vector<std::string>*;
 
-        EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
-            .WillOnce(Invoke([](const std::string&, const std::string&,
-                                std::vector<std::string>* values) {
-                values->clear();
-                return 0;
-            }));
+    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
+        .WillOnce(Invoke([](const std::string&, const std::string&,
+                            std::vector<std::string>* values) {
+          values->clear();
+          return 0;
+        }));
 
-        ASSERT_EQ(SpaceOk, spaceManager_->AddVolume(fsInfo));
-    }
+    ASSERT_EQ(SpaceOk, spaceManager_->AddVolume(fsInfo));
+  }
 
  protected:
-    std::shared_ptr<MockEtcdClientImpl> etcdclient_;
-    std::unique_ptr<SpaceManager> spaceManager_;
-    std::shared_ptr<MockFsStorage> fsStorage_;
+  std::shared_ptr<MockEtcdClientImpl> etcdclient_;
+  std::unique_ptr<SpaceManager> spaceManager_;
+  std::shared_ptr<MockFsStorage> fsStorage_;
 };
 
 TEST_F(SpaceManagerTest, TestGetVolumeSpace) {
-    ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(0));
+  ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(0));
 
-    // add one volume space
-    {
-        AddOneNewVolume();
-        ASSERT_NE(nullptr, spaceManager_->GetVolumeSpace(kFsId));
-    }
+  // add one volume space
+  {
+    AddOneNewVolume();
+    ASSERT_NE(nullptr, spaceManager_->GetVolumeSpace(kFsId));
+  }
 }
 
 TEST_F(SpaceManagerTest, TestAddVolume_AlreadyExists) {
-    AddOneNewVolume();
-    ASSERT_NE(nullptr, spaceManager_->GetVolumeSpace(kFsId));
+  AddOneNewVolume();
+  ASSERT_NE(nullptr, spaceManager_->GetVolumeSpace(kFsId));
 
-    FsInfo fsInfo = GenerateVolumeFsInfo();
+  FsInfo fsInfo = GenerateVolumeFsInfo();
 
-    using type = std::vector<std::string>*;
-    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_))).Times(0);
+  using type = std::vector<std::string>*;
+  EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_))).Times(0);
 
-    ASSERT_EQ(SpaceErrExist, spaceManager_->AddVolume(fsInfo));
+  ASSERT_EQ(SpaceErrExist, spaceManager_->AddVolume(fsInfo));
 }
 
 TEST_F(SpaceManagerTest, TestAddVolume_LoadBlockGroupsError) {
-    using type = std::vector<std::string>*;
-    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
-        .WillOnce(Return(EtcdErrCode::EtcdInternal));
+  using type = std::vector<std::string>*;
+  EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
+      .WillOnce(Return(EtcdErrCode::EtcdInternal));
 
-    FsInfo fsInfo = GenerateVolumeFsInfo();
-    ASSERT_EQ(SpaceErrCreate, spaceManager_->AddVolume(fsInfo));
-    ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(fsInfo.fsid()));
+  FsInfo fsInfo = GenerateVolumeFsInfo();
+  ASSERT_EQ(SpaceErrCreate, spaceManager_->AddVolume(fsInfo));
+  ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(fsInfo.fsid()));
 }
 
 TEST_F(SpaceManagerTest, TestRemoveVolume_SpaceNotExist) {
-    ASSERT_EQ(SpaceErrNotFound, spaceManager_->RemoveVolume(kFsId + 1));
+  ASSERT_EQ(SpaceErrNotFound, spaceManager_->RemoveVolume(kFsId + 1));
 }
 
 TEST_F(SpaceManagerTest, TestRemoveVolume_Success) {
-    AddOneNewVolume();
-    ASSERT_EQ(SpaceOk, spaceManager_->RemoveVolume(kFsId));
-    ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(kFsId));
+  AddOneNewVolume();
+  ASSERT_EQ(SpaceOk, spaceManager_->RemoveVolume(kFsId));
+  ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(kFsId));
 }
 
 TEST_F(SpaceManagerTest, TestDeleteVolume_SpaceNotExist) {
-    ASSERT_EQ(SpaceErrNotFound, spaceManager_->DeleteVolume(kFsId));
+  ASSERT_EQ(SpaceErrNotFound, spaceManager_->DeleteVolume(kFsId));
 }
 
 TEST_F(SpaceManagerTest, TestDeleteVolume_Success) {
-    AddOneNewVolume();
-    ASSERT_EQ(SpaceOk, spaceManager_->DeleteVolume(kFsId));
-    ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(kFsId));
+  AddOneNewVolume();
+  ASSERT_EQ(SpaceOk, spaceManager_->DeleteVolume(kFsId));
+  ASSERT_EQ(nullptr, spaceManager_->GetVolumeSpace(kFsId));
 }
 
 }  // namespace space

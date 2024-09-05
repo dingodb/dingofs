@@ -36,114 +36,110 @@ namespace client {
 using ::curvefs::metaserver::Inode;
 using ::curvefs::volume::AllocateHint;
 
-bool AllocSpace(SpaceManager* space,
-                const AllocPart& part,
+bool AllocSpace(SpaceManager* space, const AllocPart& part,
                 std::map<uint64_t, WritePart>* writes,
                 std::map<uint64_t, Extent>* alloc) {
-    AllocateHint hint;
-    if (part.allocInfo.leftHintAvailable) {
-        hint.leftOffset = part.allocInfo.pOffsetLeft;
-    }
+  AllocateHint hint;
+  if (part.allocInfo.leftHintAvailable) {
+    hint.leftOffset = part.allocInfo.pOffsetLeft;
+  }
 
-    if (part.allocInfo.rightHintAvailable) {
-        hint.rightOffset = part.allocInfo.pOffsetRight;
-    }
+  if (part.allocInfo.rightHintAvailable) {
+    hint.rightOffset = part.allocInfo.pOffsetRight;
+  }
 
-    std::vector<Extent> exts;
-    auto ret = space->Alloc(part.allocInfo.len, hint, &exts);
-    if (!ret) {
-        LOG(ERROR) << "allocate space error, length: " << part.allocInfo.len
-                   << ", hint: " << hint;
-        return false;
-    }
+  std::vector<Extent> exts;
+  auto ret = space->Alloc(part.allocInfo.len, hint, &exts);
+  if (!ret) {
+    LOG(ERROR) << "allocate space error, length: " << part.allocInfo.len
+               << ", hint: " << hint;
+    return false;
+  }
 
-    // may allocate more than one extents for one alloc request
-    if (exts.size() == 1) {
-        WritePart newPart;
-        newPart.offset = exts[0].offset + part.padding;
-        newPart.length = part.writelength;
-        newPart.data = part.data;
+  // may allocate more than one extents for one alloc request
+  if (exts.size() == 1) {
+    WritePart newPart;
+    newPart.offset = exts[0].offset + part.padding;
+    newPart.length = part.writelength;
+    newPart.data = part.data;
 
-        writes->emplace(part.allocInfo.lOffset, newPart);
-        alloc->emplace(part.allocInfo.lOffset, exts[0]);
-
-        return true;
-    }
-
-    const char* datap = part.data;
-
-    uint64_t loffset = part.allocInfo.lOffset;
-    uint64_t totalsize = 0;
-
-    int64_t writelength = part.writelength;
-    size_t padding = part.padding;
-
-    for (const auto& ext : exts) {
-        if (writelength > 0) {
-            WritePart newPart;
-            newPart.offset = ext.offset + padding;
-            if (static_cast<uint64_t>(writelength) < ext.len) {
-                newPart.length = writelength;
-            } else {
-                newPart.length = ext.len - padding;
-            }
-            newPart.data = datap;
-
-            writes->emplace(loffset, newPart);
-            datap += newPart.length;
-            writelength -= newPart.length;
-            padding = 0;
-        }
-
-        alloc->emplace(loffset, ext);
-
-        loffset += ext.len;
-        totalsize += ext.len;
-    }
-
-    CHECK(part.allocInfo.len == totalsize);
+    writes->emplace(part.allocInfo.lOffset, newPart);
+    alloc->emplace(part.allocInfo.lOffset, exts[0]);
 
     return true;
+  }
+
+  const char* datap = part.data;
+
+  uint64_t loffset = part.allocInfo.lOffset;
+  uint64_t totalsize = 0;
+
+  int64_t writelength = part.writelength;
+  size_t padding = part.padding;
+
+  for (const auto& ext : exts) {
+    if (writelength > 0) {
+      WritePart newPart;
+      newPart.offset = ext.offset + padding;
+      if (static_cast<uint64_t>(writelength) < ext.len) {
+        newPart.length = writelength;
+      } else {
+        newPart.length = ext.len - padding;
+      }
+      newPart.data = datap;
+
+      writes->emplace(loffset, newPart);
+      datap += newPart.length;
+      writelength -= newPart.length;
+      padding = 0;
+    }
+
+    alloc->emplace(loffset, ext);
+
+    loffset += ext.len;
+    totalsize += ext.len;
+  }
+
+  CHECK(part.allocInfo.len == totalsize);
+
+  return true;
 }
 
-bool PrepareWriteRequest(off_t off,
-                         size_t size,
-                         const char* data,
-                         ExtentCache* extentCache,
-                         SpaceManager* spaceManager,
+bool PrepareWriteRequest(off_t off, size_t size, const char* data,
+                         ExtentCache* extentCache, SpaceManager* spaceManager,
                          std::vector<WritePart>* writes) {
-    std::vector<AllocPart> needalloc;
+  std::vector<AllocPart> needalloc;
 
-    extentCache->DivideForWrite(off, size, data, writes, &needalloc);
+  extentCache->DivideForWrite(off, size, data, writes, &needalloc);
 
-    if (needalloc.empty()) {
-        return true;
-    }
-
-    std::map<uint64_t, WritePart> newalloc;
-    std::map<uint64_t, Extent> newextents;
-
-    // alloc enough space for write
-    for (const auto& alloc : needalloc) {
-        auto ret = AllocSpace(spaceManager, alloc, &newalloc, &newextents);
-        if (!ret) {
-            LOG(ERROR) << "Alloc space error";
-            return false;
-        }
-    }
-
-    // insert allocated space into extent cache
-    for (const auto& ext : newextents) {
-        PExtent pext{ext.second.len, ext.second.offset, true};
-        extentCache->Merge(ext.first, pext);
-    }
-
-    for (const auto& alloc : newalloc) {
-        writes->emplace_back(alloc.second.offset, alloc.second.length,
-                             alloc.second.data);
-    }
-
+  if (needalloc.empty()) {
     return true;
+  }
+
+  std::map<uint64_t, WritePart> newalloc;
+  std::map<uint64_t, Extent> newextents;
+
+  // alloc enough space for write
+  for (const auto& alloc : needalloc) {
+    auto ret = AllocSpace(spaceManager, alloc, &newalloc, &newextents);
+    if (!ret) {
+      LOG(ERROR) << "Alloc space error";
+      return false;
+    }
+  }
+
+  // insert allocated space into extent cache
+  for (const auto& ext : newextents) {
+    PExtent pext{ext.second.len, ext.second.offset, true};
+    extentCache->Merge(ext.first, pext);
+  }
+
+  for (const auto& alloc : newalloc) {
+    writes->emplace_back(alloc.second.offset, alloc.second.length,
+                         alloc.second.data);
+  }
+
+  return true;
 }
 
 }  // namespace client

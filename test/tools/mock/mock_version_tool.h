@@ -20,16 +20,17 @@
  * Author: charisu
  */
 
-
 #ifndef TEST_TOOLS_MOCK_MOCK_VERSION_TOOL_H_
 #define TEST_TOOLS_MOCK_MOCK_VERSION_TOOL_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <string>
-#include <vector>
+#include <gtest/gtest.h>
+
 #include <map>
 #include <memory>
+#include <string>
+#include <vector>
+
 #include "src/tools/version_tool.h"
 #include "test/tools/mock/mock_snapshot_clone_client.h"
 
@@ -38,16 +39,17 @@ namespace curve {
 namespace tool {
 class MockVersionTool : public VersionTool {
  public:
-    MockVersionTool() : VersionTool(std::make_shared<MDSClient>(),
-                                 std::make_shared<MetricClient>(),
-                                 std::make_shared<MockSnapshotCloneClient>()) {}
-    MOCK_METHOD2(GetAndCheckMdsVersion, int(std::string*,
-                                            std::vector<std::string>*));
-    MOCK_METHOD2(GetAndCheckChunkServerVersion, int(std::string*,
-                                                    std::vector<std::string>*));
-    MOCK_METHOD1(GetClientVersion, int(ClientVersionMapType*));
-    MOCK_METHOD2(GetAndCheckSnapshotCloneVersion, int(std::string*,
-                                                    std::vector<std::string>*));
+  MockVersionTool()
+      : VersionTool(std::make_shared<MDSClient>(),
+                    std::make_shared<MetricClient>(),
+                    std::make_shared<MockSnapshotCloneClient>()) {}
+  MOCK_METHOD2(GetAndCheckMdsVersion,
+               int(std::string*, std::vector<std::string>*));
+  MOCK_METHOD2(GetAndCheckChunkServerVersion,
+               int(std::string*, std::vector<std::string>*));
+  MOCK_METHOD1(GetClientVersion, int(ClientVersionMapType*));
+  MOCK_METHOD2(GetAndCheckSnapshotCloneVersion,
+               int(std::string*, std::vector<std::string>*));
 };
 }  // namespace tool
 }  // namespace curve

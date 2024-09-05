@@ -41,70 +41,67 @@ static constexpr uint64_t kBlockGroupOffset = 10 * kGiB;  // 10 GiB
 
 class BlockGroupBitmapUpdaterTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        mockBlockDev_ = absl::make_unique<MockBlockDeviceClient>();
+  void SetUp() override {
+    mockBlockDev_ = absl::make_unique<MockBlockDeviceClient>();
 
-        Bitmap bitmap(kBlockGroupSize / kBlockSize);
-        bitmap.Clear();
+    Bitmap bitmap(kBlockGroupSize / kBlockSize);
+    bitmap.Clear();
 
-        BitmapRange range{
-            kBlockGroupOffset,
-            kBlockGroupSize / kBlockSize / curve::common::BITMAP_UNIT_SIZE};
+    BitmapRange range{kBlockGroupOffset, kBlockGroupSize / kBlockSize /
+                                             curve::common::BITMAP_UNIT_SIZE};
 
-        updater_ = absl::make_unique<BlockGroupBitmapUpdater>(
-            std::move(bitmap), kBlockSize, kBlockGroupSize, kBlockGroupOffset,
-            range, mockBlockDev_.get());
-    }
+    updater_ = absl::make_unique<BlockGroupBitmapUpdater>(
+        std::move(bitmap), kBlockSize, kBlockGroupSize, kBlockGroupOffset,
+        range, mockBlockDev_.get());
+  }
 
  protected:
-    std::unique_ptr<MockBlockDeviceClient> mockBlockDev_;
-    std::unique_ptr<BlockGroupBitmapUpdater> updater_;
+  std::unique_ptr<MockBlockDeviceClient> mockBlockDev_;
+  std::unique_ptr<BlockGroupBitmapUpdater> updater_;
 };
 
 TEST_F(BlockGroupBitmapUpdaterTest, SyncTest_NoDirty) {
-    EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
-        .Times(0);
+  EXPECT_CALL(*mockBlockDev_, Write(_, _, _)).Times(0);
 
-    ASSERT_TRUE(updater_->Sync());
+  ASSERT_TRUE(updater_->Sync());
 }
 
 TEST_F(BlockGroupBitmapUpdaterTest, SyncTest_Dirty) {
-    auto start = kBlockGroupOffset;
-    auto end = kBlockGroupOffset + kBlockGroupSize;
-    updater_->Update({start, end}, BlockGroupBitmapUpdater::Set);
+  auto start = kBlockGroupOffset;
+  auto end = kBlockGroupOffset + kBlockGroupSize;
+  updater_->Update({start, end}, BlockGroupBitmapUpdater::Set);
 
-    EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
-        .WillOnce(
-            Invoke([](const char*, off_t, size_t length) { return length; }));
+  EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
+      .WillOnce(
+          Invoke([](const char*, off_t, size_t length) { return length; }));
 
-    ASSERT_TRUE(updater_->Sync());
+  ASSERT_TRUE(updater_->Sync());
 }
 
 TEST_F(BlockGroupBitmapUpdaterTest, SyncTest_OnlySyncOnce) {
-    auto start1 = kBlockGroupOffset;
-    auto end1 = kBlockGroupOffset + kBlockGroupSize;
-    updater_->Update({start1, end1}, BlockGroupBitmapUpdater::Set);
+  auto start1 = kBlockGroupOffset;
+  auto end1 = kBlockGroupOffset + kBlockGroupSize;
+  updater_->Update({start1, end1}, BlockGroupBitmapUpdater::Set);
 
-    auto start2 = kBlockGroupOffset;
-    auto end2 = kBlockGroupOffset + kBlockGroupSize;
-    updater_->Update({start2, end2}, BlockGroupBitmapUpdater::Clear);
+  auto start2 = kBlockGroupOffset;
+  auto end2 = kBlockGroupOffset + kBlockGroupSize;
+  updater_->Update({start2, end2}, BlockGroupBitmapUpdater::Clear);
 
-    EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
-        .WillOnce(
-            Invoke([](const char*, off_t, size_t length) { return length; }));
+  EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
+      .WillOnce(
+          Invoke([](const char*, off_t, size_t length) { return length; }));
 
-    ASSERT_TRUE(updater_->Sync());
+  ASSERT_TRUE(updater_->Sync());
 }
 
 TEST_F(BlockGroupBitmapUpdaterTest, SyncTest_WriteFailed) {
-    auto start = kBlockGroupOffset;
-    auto end = kBlockGroupOffset + kBlockGroupSize;
-    updater_->Update({start, end}, BlockGroupBitmapUpdater::Set);
+  auto start = kBlockGroupOffset;
+  auto end = kBlockGroupOffset + kBlockGroupSize;
+  updater_->Update({start, end}, BlockGroupBitmapUpdater::Set);
 
-    EXPECT_CALL(*mockBlockDev_, Write(_, _, _))
-        .WillOnce(Return(-1));
+  EXPECT_CALL(*mockBlockDev_, Write(_, _, _)).WillOnce(Return(-1));
 
-    ASSERT_FALSE(updater_->Sync());
+  ASSERT_FALSE(updater_->Sync());
 }
 
 }  // namespace volume

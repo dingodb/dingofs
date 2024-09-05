@@ -35,37 +35,36 @@ namespace curvefs {
 namespace mds {
 
 void FsMountMetric::OnMount(const Mountpoint& mp) {
-    std::string key = Key(mp);
+  std::string key = Key(mp);
 
-    {
-        std::lock_guard<Mutex> lock(mtx_);
+  {
+    std::lock_guard<Mutex> lock(mtx_);
 
-        auto* metric = new bvar::Status<std::string>();
-        metric->expose(key);
+    auto* metric = new bvar::Status<std::string>();
+    metric->expose(key);
 
-        // value format is: {"host": "1.2.3.4", "port": "1234", "dir": "/tmp"}
-        metric->set_value(
-            "{\"host\": \"%s\", \"port\": \"%d\", \"dir\": \"%s\"}",
-            mp.hostname().c_str(), mp.port(), mp.path().c_str());
+    // value format is: {"host": "1.2.3.4", "port": "1234", "dir": "/tmp"}
+    metric->set_value("{\"host\": \"%s\", \"port\": \"%d\", \"dir\": \"%s\"}",
+                      mp.hostname().c_str(), mp.port(), mp.path().c_str());
 
-        mps_.emplace(std::move(key), metric);
-    }
+    mps_.emplace(std::move(key), metric);
+  }
 
-    count_ << 1;
+  count_ << 1;
 }
 
 void FsMountMetric::OnUnMount(const Mountpoint& mp) {
-    {
-        std::lock_guard<Mutex> lock(mtx_);
-        mps_.erase(Key(mp));
-    }
+  {
+    std::lock_guard<Mutex> lock(mtx_);
+    mps_.erase(Key(mp));
+  }
 
-    count_ << -1;
+  count_ << -1;
 }
 
 std::string FsMountMetric::Key(const Mountpoint& mp) {
-    return "fs_mount_" + fsname_ + "_" + mp.hostname() + "_" +
-           std::to_string(mp.port()) + "_" + mp.path();
+  return "fs_mount_" + fsname_ + "_" + mp.hostname() + "_" +
+         std::to_string(mp.port()) + "_" + mp.path();
 }
 
 }  // namespace mds

@@ -23,10 +23,11 @@
 #ifndef SRC_IDGENERATOR_ETCD_ID_GENERATOR_H_
 #define SRC_IDGENERATOR_ETCD_ID_GENERATOR_H_
 
-#include <string>
 #include <memory>
-#include "src/kvstorageclient/etcd_client.h"
+#include <string>
+
 #include "src/common/concurrent/concurrent.h"
+#include "src/kvstorageclient/etcd_client.h"
 
 namespace curve {
 namespace idgenerator {
@@ -35,45 +36,44 @@ using curve::kvstorage::KVStorageClient;
 
 class EtcdIdGenerator {
  public:
-    EtcdIdGenerator(const std::shared_ptr<KVStorageClient>& client,
-                    const std::string& storeKey, uint64_t initial,
-                    uint64_t bundle)
-        : storeKey_(storeKey),
-          initialize_(initial),
-          bundle_(bundle),
-          client_(client),
-          nextId_(initial),
-          bundleEnd_(initial),
-          lock_() {}
+  EtcdIdGenerator(const std::shared_ptr<KVStorageClient>& client,
+                  const std::string& storeKey, uint64_t initial,
+                  uint64_t bundle)
+      : storeKey_(storeKey),
+        initialize_(initial),
+        bundle_(bundle),
+        client_(client),
+        nextId_(initial),
+        bundleEnd_(initial),
+        lock_() {}
 
-    ~EtcdIdGenerator() {}
+  ~EtcdIdGenerator() {}
 
-
-    bool GenID(uint64_t *id);
-
- private:
-    /*
-    * @brief apply for IDs in batches from storage
-    *
-    * @param[in] requiredNum Number of IDs that need to be applied
-    *
-    * @param[out] false if failed, true if succeeded
-    */
-    bool AllocateBundleIds(int requiredNum);
+  bool GenID(uint64_t* id);
 
  private:
-    const std::string storeKey_;
-    uint64_t initialize_;
-    uint64_t bundle_;
+  /*
+   * @brief apply for IDs in batches from storage
+   *
+   * @param[in] requiredNum Number of IDs that need to be applied
+   *
+   * @param[out] false if failed, true if succeeded
+   */
+  bool AllocateBundleIds(int requiredNum);
 
-    std::shared_ptr<KVStorageClient> client_;
-    uint64_t nextId_;
-    uint64_t bundleEnd_;
+ private:
+  const std::string storeKey_;
+  uint64_t initialize_;
+  uint64_t bundle_;
 
-    curve::common::Mutex lock_;
+  std::shared_ptr<KVStorageClient> client_;
+  uint64_t nextId_;
+  uint64_t bundleEnd_;
+
+  curve::common::Mutex lock_;
 };
 
 }  // namespace idgenerator
 }  // namespace curve
 
-#endif   // SRC_IDGENERATOR_ETCD_ID_GENERATOR_H_
+#endif  // SRC_IDGENERATOR_ETCD_ID_GENERATOR_H_

@@ -47,22 +47,20 @@ namespace space {
 // A proxy to curvebs cluster
 class MdsProxy {
  public:
-    static std::unique_ptr<MdsProxy> Create(
-        const std::vector<std::string>& hosts,
-        const MdsProxyOptions& opts);
+  static std::unique_ptr<MdsProxy> Create(const std::vector<std::string>& hosts,
+                                          const MdsProxyOptions& opts);
 
-    ~MdsProxy();
+  ~MdsProxy();
 
-    bool GetVolumeInfo(const common::Volume& volume,
-                       uint64_t* size,
-                       uint64_t* extendAlignment);
+  bool GetVolumeInfo(const common::Volume& volume, uint64_t* size,
+                     uint64_t* extendAlignment);
 
-    bool ExtendVolume(const common::Volume& volume, uint64_t size);
+  bool ExtendVolume(const common::Volume& volume, uint64_t size);
 
  private:
-    MdsProxy();
+  MdsProxy();
 
-    std::unique_ptr<curve::client::MDSClient> mdsClient_;
+  std::unique_ptr<curve::client::MDSClient> mdsClient_;
 };
 
 }  // namespace space

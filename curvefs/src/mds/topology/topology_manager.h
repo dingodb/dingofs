@@ -23,11 +23,11 @@
 #ifndef CURVEFS_SRC_MDS_TOPOLOGY_TOPOLOGY_MANAGER_H_
 #define CURVEFS_SRC_MDS_TOPOLOGY_TOPOLOGY_MANAGER_H_
 
+#include <list>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
-#include <list>
 
 #include "curvefs/proto/copyset.pb.h"
 #include "curvefs/proto/mds.pb.h"
@@ -42,180 +42,176 @@ namespace curvefs {
 namespace mds {
 namespace topology {
 
-using std::string;
 using curve::common::NameLock;
 using curve::common::NameLockGuard;
 using curve::common::TimeUtility;
 using curvefs::mds::MetaserverClient;
+using std::string;
 
 class TopologyManager {
  public:
-    TopologyManager(const std::shared_ptr<Topology> &topology,
-                    std::shared_ptr<MetaserverClient> metaserverClient)
-        : topology_(topology), metaserverClient_(metaserverClient) {}
+  TopologyManager(const std::shared_ptr<Topology>& topology,
+                  std::shared_ptr<MetaserverClient> metaserverClient)
+      : topology_(topology), metaserverClient_(metaserverClient) {}
 
-    virtual ~TopologyManager() {}
+  virtual ~TopologyManager() {}
 
-    virtual void Init(const TopologyOption &option);
+  virtual void Init(const TopologyOption& option);
 
-    virtual void RegistMetaServer(const MetaServerRegistRequest *request,
-                                  MetaServerRegistResponse *response);
+  virtual void RegistMetaServer(const MetaServerRegistRequest* request,
+                                MetaServerRegistResponse* response);
 
-    virtual void ListMetaServer(const ListMetaServerRequest *request,
-                                ListMetaServerResponse *response);
+  virtual void ListMetaServer(const ListMetaServerRequest* request,
+                              ListMetaServerResponse* response);
 
-    virtual void GetMetaServer(const GetMetaServerInfoRequest *request,
-                               GetMetaServerInfoResponse *response);
+  virtual void GetMetaServer(const GetMetaServerInfoRequest* request,
+                             GetMetaServerInfoResponse* response);
 
-    virtual void DeleteMetaServer(const DeleteMetaServerRequest *request,
-                                  DeleteMetaServerResponse *response);
+  virtual void DeleteMetaServer(const DeleteMetaServerRequest* request,
+                                DeleteMetaServerResponse* response);
 
-    virtual void RegistServer(const ServerRegistRequest *request,
-                              ServerRegistResponse *response);
+  virtual void RegistServer(const ServerRegistRequest* request,
+                            ServerRegistResponse* response);
 
-    virtual void GetServer(const GetServerRequest *request,
-                           GetServerResponse *response);
+  virtual void GetServer(const GetServerRequest* request,
+                         GetServerResponse* response);
 
-    virtual void DeleteServer(const DeleteServerRequest *request,
-                              DeleteServerResponse *response);
+  virtual void DeleteServer(const DeleteServerRequest* request,
+                            DeleteServerResponse* response);
 
-    virtual void ListZoneServer(const ListZoneServerRequest *request,
-                                ListZoneServerResponse *response);
+  virtual void ListZoneServer(const ListZoneServerRequest* request,
+                              ListZoneServerResponse* response);
 
-    virtual void CreateZone(const CreateZoneRequest *request,
-                            CreateZoneResponse *response);
+  virtual void CreateZone(const CreateZoneRequest* request,
+                          CreateZoneResponse* response);
 
-    virtual void DeleteZone(const DeleteZoneRequest *request,
-                            DeleteZoneResponse *response);
+  virtual void DeleteZone(const DeleteZoneRequest* request,
+                          DeleteZoneResponse* response);
 
-    virtual void GetZone(const GetZoneRequest *request,
-                         GetZoneResponse *response);
+  virtual void GetZone(const GetZoneRequest* request,
+                       GetZoneResponse* response);
 
-    virtual void ListPoolZone(const ListPoolZoneRequest *request,
-                              ListPoolZoneResponse *response);
+  virtual void ListPoolZone(const ListPoolZoneRequest* request,
+                            ListPoolZoneResponse* response);
 
-    virtual void CreatePool(const CreatePoolRequest *request,
-                            CreatePoolResponse *response);
+  virtual void CreatePool(const CreatePoolRequest* request,
+                          CreatePoolResponse* response);
 
-    virtual void DeletePool(const DeletePoolRequest *request,
-                            DeletePoolResponse *response);
+  virtual void DeletePool(const DeletePoolRequest* request,
+                          DeletePoolResponse* response);
 
-    virtual void GetPool(const GetPoolRequest *request,
-                         GetPoolResponse *response);
+  virtual void GetPool(const GetPoolRequest* request,
+                       GetPoolResponse* response);
 
-    virtual void ListPool(const ListPoolRequest *request,
-                          ListPoolResponse *response);
+  virtual void ListPool(const ListPoolRequest* request,
+                        ListPoolResponse* response);
 
-    virtual void CreatePartitions(const CreatePartitionRequest *request,
-                                  CreatePartitionResponse *response);
+  virtual void CreatePartitions(const CreatePartitionRequest* request,
+                                CreatePartitionResponse* response);
 
-    virtual void DeletePartition(const DeletePartitionRequest *request,
-                                 DeletePartitionResponse *response);
+  virtual void DeletePartition(const DeletePartitionRequest* request,
+                               DeletePartitionResponse* response);
 
-    virtual TopoStatusCode CreatePartitionsAndGetMinPartition(
-        FsIdType fsId, PartitionInfo *partition);
+  virtual TopoStatusCode CreatePartitionsAndGetMinPartition(
+      FsIdType fsId, PartitionInfo* partition);
 
-    virtual TopoStatusCode DeletePartition(uint32_t partitionId);
+  virtual TopoStatusCode DeletePartition(uint32_t partitionId);
 
-    virtual TopoStatusCode CommitTxId(const std::vector<PartitionTxId>& txIds);
+  virtual TopoStatusCode CommitTxId(const std::vector<PartitionTxId>& txIds);
 
-    virtual void CommitTx(const CommitTxRequest *request,
-                          CommitTxResponse *response);
+  virtual void CommitTx(const CommitTxRequest* request,
+                        CommitTxResponse* response);
 
-    virtual void GetMetaServerListInCopysets(
-        const GetMetaServerListInCopySetsRequest *request,
-        GetMetaServerListInCopySetsResponse *response);
+  virtual void GetMetaServerListInCopysets(
+      const GetMetaServerListInCopySetsRequest* request,
+      GetMetaServerListInCopySetsResponse* response);
 
-    virtual void ListPartition(const ListPartitionRequest *request,
-                               ListPartitionResponse *response);
+  virtual void ListPartition(const ListPartitionRequest* request,
+                             ListPartitionResponse* response);
 
-    virtual void ListPartitionOfFs(FsIdType fsId,
-                                   std::list<PartitionInfo>* list);
+  virtual void ListPartitionOfFs(FsIdType fsId, std::list<PartitionInfo>* list);
 
-    virtual void
-    GetLatestPartitionsTxId(const std::vector<PartitionTxId> &txIds,
-                            std::vector<PartitionTxId> *needUpdate);
+  virtual void GetLatestPartitionsTxId(const std::vector<PartitionTxId>& txIds,
+                                       std::vector<PartitionTxId>* needUpdate);
 
-    virtual TopoStatusCode UpdatePartitionStatus(PartitionIdType partitionId,
-                                                 PartitionStatus status);
+  virtual TopoStatusCode UpdatePartitionStatus(PartitionIdType partitionId,
+                                               PartitionStatus status);
 
-    virtual void GetCopysetOfPartition(
-        const GetCopysetOfPartitionRequest *request,
-        GetCopysetOfPartitionResponse *response);
+  virtual void GetCopysetOfPartition(
+      const GetCopysetOfPartitionRequest* request,
+      GetCopysetOfPartitionResponse* response);
 
-    virtual TopoStatusCode GetCopysetMembers(const PoolIdType poolId,
-                                             const CopySetIdType copysetId,
-                                             std::set<std::string> *addrs);
+  virtual TopoStatusCode GetCopysetMembers(const PoolIdType poolId,
+                                           const CopySetIdType copysetId,
+                                           std::set<std::string>* addrs);
 
-    virtual bool CreateCopysetNodeOnMetaServer(PoolIdType poolId,
-                                               CopySetIdType copysetId,
-                                               MetaServerIdType metaServerId);
+  virtual bool CreateCopysetNodeOnMetaServer(PoolIdType poolId,
+                                             CopySetIdType copysetId,
+                                             MetaServerIdType metaServerId);
 
-    virtual void GetCopysetsInfo(const GetCopysetsInfoRequest* request,
-                                 GetCopysetsInfoResponse* response);
+  virtual void GetCopysetsInfo(const GetCopysetsInfoRequest* request,
+                               GetCopysetsInfoResponse* response);
 
-    virtual void ListCopysetsInfo(ListCopysetInfoResponse* response);
+  virtual void ListCopysetsInfo(ListCopysetInfoResponse* response);
 
-    virtual void GetMetaServersSpace(
-        ::google::protobuf::RepeatedPtrField<
-            curvefs::mds::topology::MetadataUsage>* spaces);
+  virtual void GetMetaServersSpace(
+      ::google::protobuf::RepeatedPtrField<
+          curvefs::mds::topology::MetadataUsage>* spaces);
 
-    virtual void GetTopology(ListTopologyResponse* response);
+  virtual void GetTopology(ListTopologyResponse* response);
 
-    virtual void ListZone(ListZoneResponse* response);
+  virtual void ListZone(ListZoneResponse* response);
 
-    virtual void ListServer(ListServerResponse* response);
+  virtual void ListServer(ListServerResponse* response);
 
-    virtual void ListMetaserverOfCluster(ListMetaServerResponse* response);
+  virtual void ListMetaserverOfCluster(ListMetaServerResponse* response);
 
-    virtual void RegistMemcacheCluster(
-        const RegistMemcacheClusterRequest* request,
-        RegistMemcacheClusterResponse* response);
+  virtual void RegistMemcacheCluster(
+      const RegistMemcacheClusterRequest* request,
+      RegistMemcacheClusterResponse* response);
 
-    virtual void ListMemcacheCluster(ListMemcacheClusterResponse* response);
+  virtual void ListMemcacheCluster(ListMemcacheClusterResponse* response);
 
-    virtual void AllocOrGetMemcacheCluster(
-        const AllocOrGetMemcacheClusterRequest* request,
-        AllocOrGetMemcacheClusterResponse* response);
+  virtual void AllocOrGetMemcacheCluster(
+      const AllocOrGetMemcacheClusterRequest* request,
+      AllocOrGetMemcacheClusterResponse* response);
 
  private:
-    TopoStatusCode CreateEnoughCopyset(int32_t createNum);
+  TopoStatusCode CreateEnoughCopyset(int32_t createNum);
 
-    TopoStatusCode CreateCopyset(const CopysetCreateInfo& copyset);
+  TopoStatusCode CreateCopyset(const CopysetCreateInfo& copyset);
 
-    virtual void GetCopysetInfo(const uint32_t& poolId,
-                                const uint32_t& copysetId,
-                                CopysetValue* copysetValue);
+  virtual void GetCopysetInfo(const uint32_t& poolId, const uint32_t& copysetId,
+                              CopysetValue* copysetValue);
 
-    virtual void ClearCopysetCreating(PoolIdType poolId,
-                                      CopySetIdType copysetId);
-    TopoStatusCode CreatePartitionOnCopyset(FsIdType fsId,
-                                            const CopySetInfo& copyset,
-                                            PartitionInfo *info);
+  virtual void ClearCopysetCreating(PoolIdType poolId, CopySetIdType copysetId);
+  TopoStatusCode CreatePartitionOnCopyset(FsIdType fsId,
+                                          const CopySetInfo& copyset,
+                                          PartitionInfo* info);
 
  private:
-    std::shared_ptr<Topology> topology_;
-    std::shared_ptr<MetaserverClient> metaserverClient_;
+  std::shared_ptr<Topology> topology_;
+  std::shared_ptr<MetaserverClient> metaserverClient_;
 
-    /**
-     * @brief register mutex for metaserver, preventing duplicate registration
-     *        in concurrent scenario
-     */
-    NameLock registMsMutex;
+  /**
+   * @brief register mutex for metaserver, preventing duplicate registration
+   *        in concurrent scenario
+   */
+  NameLock registMsMutex;
 
-    /**
-     * @brief register mutex for memcachecluster,
-     *           preventing duplicate registration
-     *        in concurrent scenario
-     */
-    mutable RWLock registMemcacheClusterMutex_;
+  /**
+   * @brief register mutex for memcachecluster,
+   *           preventing duplicate registration
+   *        in concurrent scenario
+   */
+  mutable RWLock registMemcacheClusterMutex_;
 
-    NameLock createPartitionMutex_;
+  NameLock createPartitionMutex_;
 
-    /**
-     * @brief topology options
-     */
-    TopologyOption option_;
+  /**
+   * @brief topology options
+   */
+  TopologyOption option_;
 };
 
 }  // namespace topology

@@ -33,37 +33,37 @@ namespace mds {
 
 class MockNameService : public CurveFSService {
  public:
-    MOCK_METHOD4(OpenFile, void(google::protobuf::RpcController* cntl,
-                                const OpenFileRequest* request,
-                                OpenFileResponse* response,
+  MOCK_METHOD4(OpenFile,
+               void(google::protobuf::RpcController* cntl,
+                    const OpenFileRequest* request, OpenFileResponse* response,
+                    google::protobuf::Closure* done));
+
+  MOCK_METHOD4(DeleteFile, void(google::protobuf::RpcController* cntl,
+                                const DeleteFileRequest* request,
+                                DeleteFileResponse* response,
                                 google::protobuf::Closure* done));
 
-    MOCK_METHOD4(DeleteFile, void(google::protobuf::RpcController* cntl,
-                                  const DeleteFileRequest* request,
-                                  DeleteFileResponse* response,
-                                  google::protobuf::Closure* done));
+  MOCK_METHOD4(RenameFile, void(google::protobuf::RpcController* cntl,
+                                const RenameFileRequest* request,
+                                RenameFileResponse* response,
+                                google::protobuf::Closure* done));
 
-    MOCK_METHOD4(RenameFile, void(google::protobuf::RpcController* cntl,
-                                  const RenameFileRequest* request,
-                                  RenameFileResponse* response,
-                                  google::protobuf::Closure* done));
+  MOCK_METHOD4(ChangeOwner, void(google::protobuf::RpcController* cntl,
+                                 const ChangeOwnerRequest* request,
+                                 ChangeOwnerResponse* response,
+                                 google::protobuf::Closure* done));
 
-    MOCK_METHOD4(ChangeOwner, void(google::protobuf::RpcController* cntl,
-                                  const ChangeOwnerRequest* request,
-                                  ChangeOwnerResponse* response,
-                                  google::protobuf::Closure* done));
+  MOCK_METHOD4(RefreshSession,
+               void(::google::protobuf::RpcController* controller,
+                    const curve::mds::ReFreshSessionRequest* request,
+                    curve::mds::ReFreshSessionResponse* response,
+                    ::google::protobuf::Closure* done));
 
-    MOCK_METHOD4(RefreshSession,
-                 void(::google::protobuf::RpcController* controller,
-                      const curve::mds::ReFreshSessionRequest* request,
-                      curve::mds::ReFreshSessionResponse* response,
-                      ::google::protobuf::Closure* done));
-
-    MOCK_METHOD4(IncreaseFileEpoch,
-                 void(::google::protobuf::RpcController* controller,
-                      const curve::mds::IncreaseFileEpochRequest* request,
-                      curve::mds::IncreaseFileEpochResponse* response,
-                      ::google::protobuf::Closure* done));
+  MOCK_METHOD4(IncreaseFileEpoch,
+               void(::google::protobuf::RpcController* controller,
+                    const curve::mds::IncreaseFileEpochRequest* request,
+                    curve::mds::IncreaseFileEpochResponse* response,
+                    ::google::protobuf::Closure* done));
 };
 
 }  // namespace mds

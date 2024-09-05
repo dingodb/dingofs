@@ -55,153 +55,148 @@ uint64_t CHUNKID = 0;  // use to record chunkId
 
 // replace MockEtcdClientImpl::Get
 int GetRep(const std::string& key, std::string* out) {
-    *out = ChunkIdAllocatorImpl::EncodeID(CHUNKID);
-    LOG(INFO) << "check chunk id is: " << *out;
-    return 0;
+  *out = ChunkIdAllocatorImpl::EncodeID(CHUNKID);
+  LOG(INFO) << "check chunk id is: " << *out;
+  return 0;
 }
 
 // replaceMockEtcdClientImpl::CompareAndSwap
 
 int CompareAndSwapRep(const std::string& key, const std::string& preV,
                       const std::string& target) {
-    uint64_t preValue = 0;
-    ChunkIdAllocatorImpl::DecodeID(preV, &preValue);
-    uint64_t targetValue = 0;
-    ChunkIdAllocatorImpl::DecodeID(target, &targetValue);
-    if (preValue != CHUNKID) {
-        LOG(ERROR) << "Error："
-                   << "prev:" << preValue << ", now: " << CHUNKID
-                   << ", target: " << target;
-        return EtcdErrCode::EtcdOutOfRange;
-    }
+  uint64_t preValue = 0;
+  ChunkIdAllocatorImpl::DecodeID(preV, &preValue);
+  uint64_t targetValue = 0;
+  ChunkIdAllocatorImpl::DecodeID(target, &targetValue);
+  if (preValue != CHUNKID) {
+    LOG(ERROR) << "Error："
+               << "prev:" << preValue << ", now: " << CHUNKID
+               << ", target: " << target;
+    return EtcdErrCode::EtcdOutOfRange;
+  }
 
-    CHUNKID = targetValue;
-    return EtcdErrCode::EtcdOK;
+  CHUNKID = targetValue;
+  return EtcdErrCode::EtcdOK;
 }
 
 class ChunkIdAllocatorTest : public testing::Test {
  protected:
-    void SetUp() override;
-    void TearDown() override;
+  void SetUp() override;
+  void TearDown() override;
 
-    std::shared_ptr<ChunkIdAllocator> chunkIdAllocator_;
-    std::shared_ptr<MockEtcdClientImpl> mockEtcdClient_;
+  std::shared_ptr<ChunkIdAllocator> chunkIdAllocator_;
+  std::shared_ptr<MockEtcdClientImpl> mockEtcdClient_;
 };
 
 void ChunkIdAllocatorTest::SetUp() {
-    mockEtcdClient_ = make_shared<MockEtcdClientImpl>();
-    chunkIdAllocator_ = make_shared<ChunkIdAllocatorImpl>(mockEtcdClient_);
+  mockEtcdClient_ = make_shared<MockEtcdClientImpl>();
+  chunkIdAllocator_ = make_shared<ChunkIdAllocatorImpl>(mockEtcdClient_);
 }
 
-void ChunkIdAllocatorTest::TearDown() {
-    CHUNKID = 0;
-}
+void ChunkIdAllocatorTest::TearDown() { CHUNKID = 0; }
 
 TEST_F(ChunkIdAllocatorTest, test_get_chunkIds_1001) {
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillRepeatedly(Invoke(GetRep));
-    EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
-        .WillRepeatedly(Invoke(CompareAndSwapRep));
-    const int times = 1001;
-    set<uint64_t> chunkids;  // record get chunkids
-    for (int i = 0; i < times; ++i) {
-        uint64_t tmp = 0;
-        chunkIdAllocator_->GenChunkId(1, &tmp);
-        chunkids.insert(tmp);
-        LOG(INFO) << "allocate id:" << tmp;
-    }
-    LOG(INFO) << "chunkids' szie: " << chunkids.size();
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _)).WillRepeatedly(Invoke(GetRep));
+  EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
+      .WillRepeatedly(Invoke(CompareAndSwapRep));
+  const int times = 1001;
+  set<uint64_t> chunkids;  // record get chunkids
+  for (int i = 0; i < times; ++i) {
+    uint64_t tmp = 0;
+    chunkIdAllocator_->GenChunkId(1, &tmp);
+    chunkids.insert(tmp);
+    LOG(INFO) << "allocate id:" << tmp;
+  }
+  LOG(INFO) << "chunkids' szie: " << chunkids.size();
 
-    ASSERT_EQ(times, chunkids.size());
+  ASSERT_EQ(times, chunkids.size());
 }
 
 TEST_F(ChunkIdAllocatorTest, test_reclient_get_chunkIds_1001) {
-    // after test_get_chunkIds_1001，client close and restart,
-    // try to get chunkids
-    mockEtcdClient_ = make_shared<MockEtcdClientImpl>();
-    chunkIdAllocator_ = make_shared<ChunkIdAllocatorImpl>(mockEtcdClient_);
+  // after test_get_chunkIds_1001，client close and restart,
+  // try to get chunkids
+  mockEtcdClient_ = make_shared<MockEtcdClientImpl>();
+  chunkIdAllocator_ = make_shared<ChunkIdAllocatorImpl>(mockEtcdClient_);
 
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillRepeatedly(Invoke(GetRep));
-    EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
-        .WillRepeatedly(Invoke(CompareAndSwapRep));
-    const int times = 1001;
-    set<uint64_t> chunkids;  // record get chunkids
-    for (int i = 0; i < times; ++i) {
-        uint64_t tmp = 0;
-        chunkIdAllocator_->GenChunkId(1, &tmp);
-        chunkids.insert(tmp);
-        LOG(INFO) << "allocate id:" << tmp;
-    }
-    LOG(INFO) << "chunkids' szie: " << chunkids.size();
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _)).WillRepeatedly(Invoke(GetRep));
+  EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
+      .WillRepeatedly(Invoke(CompareAndSwapRep));
+  const int times = 1001;
+  set<uint64_t> chunkids;  // record get chunkids
+  for (int i = 0; i < times; ++i) {
+    uint64_t tmp = 0;
+    chunkIdAllocator_->GenChunkId(1, &tmp);
+    chunkids.insert(tmp);
+    LOG(INFO) << "allocate id:" << tmp;
+  }
+  LOG(INFO) << "chunkids' szie: " << chunkids.size();
 
-    ASSERT_EQ(times, chunkids.size());
+  ASSERT_EQ(times, chunkids.size());
 }
 
 TEST_F(ChunkIdAllocatorTest, storeKeyExist_etcdNotOK) {
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillOnce(Return(EtcdErrCode::EtcdUnknown));
-    uint64_t chunkId;
-    int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
-    LOG(INFO) << "ret: " << ret;
-    ASSERT_LT(ret, 0);
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
+      .WillOnce(Return(EtcdErrCode::EtcdUnknown));
+  uint64_t chunkId;
+  int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
+  LOG(INFO) << "ret: " << ret;
+  ASSERT_LT(ret, 0);
 }
 
 TEST_F(ChunkIdAllocatorTest, storeKeyNotExist) {
-    string out = "abs";
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillOnce(Return(EtcdErrCode::EtcdKeyNotExist));
-    EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
-        .WillOnce(Return(0));
-    uint64_t chunkId;
-    int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
-    LOG(INFO) << "ret: " << ret;
-    ASSERT_EQ(ret, 0);
+  string out = "abs";
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
+      .WillOnce(Return(EtcdErrCode::EtcdKeyNotExist));
+  EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
+      .WillOnce(Return(0));
+  uint64_t chunkId;
+  int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
+  LOG(INFO) << "ret: " << ret;
+  ASSERT_EQ(ret, 0);
 }
 
 TEST_F(ChunkIdAllocatorTest, DecodeID_ERROR) {
-    string out = "abs";  // set out can't be decoded
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillOnce(DoAll(SetArgPointee<1>(out), Return(EtcdErrCode::EtcdOK)));
-    uint64_t chunkId;
-    int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
-    LOG(INFO) << "ret: " << ret;
-    ASSERT_LT(ret, 0);
+  string out = "abs";  // set out can't be decoded
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
+      .WillOnce(DoAll(SetArgPointee<1>(out), Return(EtcdErrCode::EtcdOK)));
+  uint64_t chunkId;
+  int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
+  LOG(INFO) << "ret: " << ret;
+  ASSERT_LT(ret, 0);
 }
 
 TEST_F(ChunkIdAllocatorTest, CAS_ERROR) {
-    string out = "1000";  // set out can't be decoded
-    EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillOnce(DoAll(SetArgPointee<1>(out), Return(EtcdErrCode::EtcdOK)));
-    EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
-        .WillOnce(Return(-3));
-    uint64_t chunkId;
-    int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
-    LOG(INFO) << "ret: " << ret;
-    ASSERT_LT(ret, 0);
+  string out = "1000";  // set out can't be decoded
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
+      .WillOnce(DoAll(SetArgPointee<1>(out), Return(EtcdErrCode::EtcdOK)));
+  EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
+      .WillOnce(Return(-3));
+  uint64_t chunkId;
+  int ret = chunkIdAllocator_->GenChunkId(1, &chunkId);
+  LOG(INFO) << "ret: " << ret;
+  ASSERT_LT(ret, 0);
 }
 
 TEST_F(ChunkIdAllocatorTest, test_get_more_chunkid) {
-     EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _))
-        .WillRepeatedly(Invoke(GetRep));
-    EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
-        .WillRepeatedly(Invoke(CompareAndSwapRep));
+  EXPECT_CALL(*mockEtcdClient_.get(), Get(_, _)).WillRepeatedly(Invoke(GetRep));
+  EXPECT_CALL(*mockEtcdClient_.get(), CompareAndSwap(_, _, _))
+      .WillRepeatedly(Invoke(CompareAndSwapRep));
 
-    uint64_t chunkId;
-    int ret = chunkIdAllocator_->GenChunkId(5, &chunkId);
-    ASSERT_EQ(0, ret);
-    ASSERT_EQ(1, chunkId);
-    ret = chunkIdAllocator_->GenChunkId(10, &chunkId);
-    ASSERT_EQ(0, ret);
-    ASSERT_EQ(6, chunkId);
+  uint64_t chunkId;
+  int ret = chunkIdAllocator_->GenChunkId(5, &chunkId);
+  ASSERT_EQ(0, ret);
+  ASSERT_EQ(1, chunkId);
+  ret = chunkIdAllocator_->GenChunkId(10, &chunkId);
+  ASSERT_EQ(0, ret);
+  ASSERT_EQ(6, chunkId);
 }
 
 }  // namespace mds
 }  // namespace curvefs
 
 int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    ::testing::InitGoogleMock(&argc, argv);
+  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleMock(&argc, argv);
 
-    return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }

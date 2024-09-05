@@ -36,28 +36,28 @@ namespace status {
 
 class MdsStatusTool : public StatusBaseTool {
  public:
-    explicit MdsStatusTool(const std::string& cmd = kMdsStatusCmd,
-                           const std::string hostType = kHostTypeMds)
-        : StatusBaseTool(cmd, hostType) {}
-    void PrintHelp() override;
-    int Init() override;
+  explicit MdsStatusTool(const std::string& cmd = kMdsStatusCmd,
+                         const std::string hostType = kHostTypeMds)
+      : StatusBaseTool(cmd, hostType) {}
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    /**
-     * @brief
-     *
-     * @details
-     * Since the main port of non-main mds does not work,
-     * all dummy ports of mds provide services
-     * so use dummy port when querying mds status
-     */
-    std::map<std::string, std::string> dummy2MainAddr_;
+  /**
+   * @brief
+   *
+   * @details
+   * Since the main port of non-main mds does not work,
+   * all dummy ports of mds provide services
+   * so use dummy port when querying mds status
+   */
+  std::map<std::string, std::string> dummy2MainAddr_;
 
-    void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
-                        const std::string& value,
-                        const MetricStatusCode& statusCode) override;
-    void InitHostsAddr() override;
-    void AddUpdateFlags() override;
+  void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
+                      const std::string& value,
+                      const MetricStatusCode& statusCode) override;
+  void InitHostsAddr() override;
+  void AddUpdateFlags() override;
 };
 
 }  // namespace status

@@ -24,24 +24,26 @@
 #define SRC_TOOLS_CURVE_META_TOOL_H_
 
 #include <gflags/gflags.h>
+
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "src/chunkserver/datastore/chunkserver_chunkfile.h"
 #include "src/common/bitmap.h"
 #include "src/fs/local_filesystem.h"
 #include "src/tools/curve_tool.h"
 #include "src/tools/curve_tool_define.h"
-#include "src/chunkserver/datastore/chunkserver_chunkfile.h"
 
 namespace curve {
 namespace tool {
 
+using curve::chunkserver::ChunkFileMetaPage;
+using curve::chunkserver::CSErrorCode;
+using curve::chunkserver::SnapshotMetaPage;
 using curve::common::BitRange;
 using curve::fs::LocalFileSystem;
-using curve::chunkserver::ChunkFileMetaPage;
-using curve::chunkserver::SnapshotMetaPage;
-using curve::chunkserver::CSErrorCode;
 
 std::ostream& operator<<(std::ostream& os, const vector<BitRange>& ranges);
 std::ostream& operator<<(std::ostream& os, const ChunkFileMetaPage& metaPage);
@@ -49,44 +51,44 @@ std::ostream& operator<<(std::ostream& os, const SnapshotMetaPage& metaPage);
 
 class CurveMetaTool : public CurveTool {
  public:
-    explicit CurveMetaTool(std::shared_ptr<LocalFileSystem> localFs) :
-                              localFS_(localFs) {}
+  explicit CurveMetaTool(std::shared_ptr<LocalFileSystem> localFs)
+      : localFS_(localFs) {}
 
-    /**
-     *  @brief 执行命令
-     *  @param command 要执行的命令
-     *  @return 成功返回0，失败返回-1
-    */
-    int RunCommand(const std::string& command) override;
+  /**
+   *  @brief 执行命令
+   *  @param command 要执行的命令
+   *  @return 成功返回0，失败返回-1
+   */
+  int RunCommand(const std::string& command) override;
 
-    /**
-     *  @brief 打印帮助信息
-    */
-    void PrintHelp(const std::string& command) override;
+  /**
+   *  @brief 打印帮助信息
+   */
+  void PrintHelp(const std::string& command) override;
 
-    /**
-     *  @brief 返回是否支持该命令
-     *  @param command：执行的命令
-     *  @return true / false
-     */
-    static bool SupportCommand(const std::string& command);
+  /**
+   *  @brief 返回是否支持该命令
+   *  @param command：执行的命令
+   *  @return true / false
+   */
+  static bool SupportCommand(const std::string& command);
 
  private:
-    /**
-     *  @brief 打印chunk文件元数据
-     *  @param chunkFileName chunk文件的文件名
-     *  @return 成功返回0，否则返回-1
-     */
-    int PrintChunkMeta(const std::string& chunkFileName);
+  /**
+   *  @brief 打印chunk文件元数据
+   *  @param chunkFileName chunk文件的文件名
+   *  @return 成功返回0，否则返回-1
+   */
+  int PrintChunkMeta(const std::string& chunkFileName);
 
-    /**
-     *  @brief 打印快照文件元数据
-     *  @param snapFileName 快照文件的文件名
-     *  @return 成功返回0，否则返回-1
-     */
-    int PrintSnapshotMeta(const std::string& snapFileName);
+  /**
+   *  @brief 打印快照文件元数据
+   *  @param snapFileName 快照文件的文件名
+   *  @return 成功返回0，否则返回-1
+   */
+  int PrintSnapshotMeta(const std::string& snapFileName);
 
-    std::shared_ptr<LocalFileSystem> localFS_;
+  std::shared_ptr<LocalFileSystem> localFS_;
 };
 
 }  // namespace tool

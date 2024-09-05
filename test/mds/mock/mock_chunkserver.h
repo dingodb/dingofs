@@ -23,42 +23,34 @@
 #ifndef TEST_MDS_MOCK_MOCK_CHUNKSERVER_H_
 #define TEST_MDS_MOCK_MOCK_CHUNKSERVER_H_
 
-#include "proto/cli2.pb.h"
 #include "proto/chunk.pb.h"
+#include "proto/cli2.pb.h"
 
 namespace curve {
 namespace chunkserver {
 
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class MockChunkService : public ChunkService {
  public:
-    MOCK_METHOD4(DeleteChunkSnapshotOrCorrectSn,
-        void(RpcController *controller,
-        const ChunkRequest *request,
-        ChunkResponse *response,
-        Closure *done));
+  MOCK_METHOD4(DeleteChunkSnapshotOrCorrectSn,
+               void(RpcController* controller, const ChunkRequest* request,
+                    ChunkResponse* response, Closure* done));
 
-    MOCK_METHOD4(DeleteChunk,
-        void(RpcController *controller,
-        const ChunkRequest *request,
-        ChunkResponse *response,
-        Closure *done));
+  MOCK_METHOD4(DeleteChunk,
+               void(RpcController* controller, const ChunkRequest* request,
+                    ChunkResponse* response, Closure* done));
 };
 
 class MockCliService : public CliService2 {
  public:
-    MOCK_METHOD4(GetLeader,
-        void(RpcController *controller,
-        const GetLeaderRequest2 *request,
-        GetLeaderResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(GetLeader,
+               void(RpcController* controller, const GetLeaderRequest2* request,
+                    GetLeaderResponse2* response, Closure* done));
 };
-
 
 }  // namespace chunkserver
 }  // namespace curve
-
 
 #endif  // TEST_MDS_MOCK_MOCK_CHUNKSERVER_H_

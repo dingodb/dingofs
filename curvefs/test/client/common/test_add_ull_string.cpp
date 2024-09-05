@@ -28,29 +28,29 @@ namespace curvefs {
 namespace client {
 namespace common {
 TEST(TestAddULLString, test1) {
-    std::string first = "1";
-    ASSERT_TRUE(AddUllStringToFirst(&first, 1, true));
-    ASSERT_EQ(first, "2");
+  std::string first = "1";
+  ASSERT_TRUE(AddUllStringToFirst(&first, 1, true));
+  ASSERT_EQ(first, "2");
 
-    ASSERT_TRUE(AddUllStringToFirst(&first, 1, true));
-    ASSERT_EQ(first, "3");
+  ASSERT_TRUE(AddUllStringToFirst(&first, 1, true));
+  ASSERT_EQ(first, "3");
 
-    ASSERT_TRUE(AddUllStringToFirst(&first, 1, false));
-    ASSERT_EQ(first, "2");
+  ASSERT_TRUE(AddUllStringToFirst(&first, 1, false));
+  ASSERT_EQ(first, "2");
 
-    ASSERT_TRUE(AddUllStringToFirst(&first, 1, false));
-    ASSERT_EQ(first, "1");
+  ASSERT_TRUE(AddUllStringToFirst(&first, 1, false));
+  ASSERT_EQ(first, "1");
 
-    ASSERT_FALSE(AddUllStringToFirst(&first, 2, false));
+  ASSERT_FALSE(AddUllStringToFirst(&first, 2, false));
 }
 
 TEST(TestAddULLString, test2) {
-    uint64_t first = 1;
-    ASSERT_TRUE(AddUllStringToFirst(&first, "1"));
-    ASSERT_EQ(first, 2);
+  uint64_t first = 1;
+  ASSERT_TRUE(AddUllStringToFirst(&first, "1"));
+  ASSERT_EQ(first, 2);
 
-    ASSERT_TRUE(AddUllStringToFirst(&first, "1"));
-    ASSERT_EQ(first, 3);
+  ASSERT_TRUE(AddUllStringToFirst(&first, "1"));
+  ASSERT_EQ(first, 3);
 }
 }  // namespace common
 }  // namespace client

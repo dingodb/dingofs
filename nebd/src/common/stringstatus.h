@@ -20,56 +20,57 @@
  * Author: lixiaocui
  */
 
-
-#ifndef  NEBD_SRC_COMMON_STRINGSTATUS_H_
-#define  NEBD_SRC_COMMON_STRINGSTATUS_H_
+#ifndef NEBD_SRC_COMMON_STRINGSTATUS_H_
+#define NEBD_SRC_COMMON_STRINGSTATUS_H_
 
 #include <bvar/bvar.h>
-#include <string>
+
 #include <map>
+#include <string>
 
 namespace nebd {
 namespace common {
 class StringStatus {
  public:
-    /**
-     * @brief ExposeAs 用于初始化bvar
-     *
-     * @param[in] prefix, 前缀
-     * @param[in] name, 名字
-     */
-    void ExposeAs(const std::string &prefix, const std::string &name);
+  /**
+   * @brief ExposeAs 用于初始化bvar
+   *
+   * @param[in] prefix, 前缀
+   * @param[in] name, 名字
+   */
+  void ExposeAs(const std::string& prefix, const std::string& name);
 
-    /**
-     * @brief Set 设置每项key-value信息
-     *
-     * @param[in] key
-     * @param[in] value
-     */
-    void Set(const std::string& key, const std::string& value);
+  /**
+   * @brief Set 设置每项key-value信息
+   *
+   * @param[in] key
+   * @param[in] value
+   */
+  void Set(const std::string& key, const std::string& value);
 
-    /**
-     * @brief Update 把当前key-value map中的键值对以json string的形式设置到status中 //NOLINT
-     */
-    void Update();
+  /**
+   * @brief Update 把当前key-value map中的键值对以json
+   * string的形式设置到status中 //NOLINT
+   */
+  void Update();
 
-    /**
-     * @brief GetValueByKey 获取指定key对应的value
-     *
-     * @param[in] key 指定key
-     */
-    std::string GetValueByKey(const std::string &key);
+  /**
+   * @brief GetValueByKey 获取指定key对应的value
+   *
+   * @param[in] key 指定key
+   */
+  std::string GetValueByKey(const std::string& key);
 
-    /**
-     * @brief JsonBody 获取当前key-value map对应的json形式字符串
-     */
-    std::string JsonBody();
+  /**
+   * @brief JsonBody 获取当前key-value map对应的json形式字符串
+   */
+  std::string JsonBody();
 
  private:
-    // 需要导出的结构体的key-value map
-    std::map<std::string, std::string> kvs_;
-    // 该导出项对应的status
-    bvar::Status<std::string> status_;
+  // 需要导出的结构体的key-value map
+  std::map<std::string, std::string> kvs_;
+  // 该导出项对应的status
+  bvar::Status<std::string> status_;
 };
 }  // namespace common
 }  // namespace nebd

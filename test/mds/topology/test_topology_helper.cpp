@@ -21,94 +21,88 @@
  */
 
 #include "test/mds/topology/test_topology_helper.h"
+
 #include "src/mds/topology/topology_item.h"
 
 namespace curve {
 namespace mds {
 namespace topology {
 
-bool JudgeLogicalPoolEqual(const LogicalPool &lh, const LogicalPool &rh) {
-    if (lh.GetId() == rh.GetId() &&
-        lh.GetName() == rh.GetName() &&
-        lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
-        lh.GetLogicalPoolType() == rh.GetLogicalPoolType() &&
-        lh.GetRedundanceAndPlaceMentPolicyJsonStr() ==
-            rh.GetRedundanceAndPlaceMentPolicyJsonStr() &&
-        lh.GetUserPolicyJsonStr() == rh.GetUserPolicyJsonStr() &&
-        lh.GetScatterWidth() == rh.GetScatterWidth() &&
-        lh.GetCreateTime() == rh.GetCreateTime() &&
-        lh.GetStatus() == rh.GetStatus() &&
-        lh.GetLogicalPoolAvaliableFlag() == rh.GetLogicalPoolAvaliableFlag()) {
-        return true;
-    }
-    return false;
+bool JudgeLogicalPoolEqual(const LogicalPool& lh, const LogicalPool& rh) {
+  if (lh.GetId() == rh.GetId() && lh.GetName() == rh.GetName() &&
+      lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
+      lh.GetLogicalPoolType() == rh.GetLogicalPoolType() &&
+      lh.GetRedundanceAndPlaceMentPolicyJsonStr() ==
+          rh.GetRedundanceAndPlaceMentPolicyJsonStr() &&
+      lh.GetUserPolicyJsonStr() == rh.GetUserPolicyJsonStr() &&
+      lh.GetScatterWidth() == rh.GetScatterWidth() &&
+      lh.GetCreateTime() == rh.GetCreateTime() &&
+      lh.GetStatus() == rh.GetStatus() &&
+      lh.GetLogicalPoolAvaliableFlag() == rh.GetLogicalPoolAvaliableFlag()) {
+    return true;
+  }
+  return false;
 }
 
-bool JudgePhysicalPoolEqual(const PhysicalPool &lh, const PhysicalPool &rh) {
-    if (lh.GetId() == rh.GetId() &&
-        lh.GetName() == rh.GetName() &&
-        lh.GetDesc() == rh.GetDesc() &&
-        lh.GetDiskCapacity() == rh.GetDiskCapacity()) {
-        return true;
-    }
-    return false;
+bool JudgePhysicalPoolEqual(const PhysicalPool& lh, const PhysicalPool& rh) {
+  if (lh.GetId() == rh.GetId() && lh.GetName() == rh.GetName() &&
+      lh.GetDesc() == rh.GetDesc() &&
+      lh.GetDiskCapacity() == rh.GetDiskCapacity()) {
+    return true;
+  }
+  return false;
 }
 
-bool JudgeZoneEqual(const Zone &lh, const Zone &rh) {
-    if (lh.GetId() == rh.GetId() &&
-        lh.GetName() == rh.GetName() &&
-        lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
-        lh.GetDesc() == rh.GetDesc()) {
-        return true;
-    }
-    return false;
+bool JudgeZoneEqual(const Zone& lh, const Zone& rh) {
+  if (lh.GetId() == rh.GetId() && lh.GetName() == rh.GetName() &&
+      lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
+      lh.GetDesc() == rh.GetDesc()) {
+    return true;
+  }
+  return false;
 }
 
-bool JudgeServerEqual(const Server &lh, const Server &rh) {
-    if (lh.GetId() == rh.GetId() &&
-        lh.GetHostName() == rh.GetHostName() &&
-        lh.GetInternalHostIp() == rh.GetInternalHostIp() &&
-        lh.GetInternalPort() == rh.GetInternalPort() &&
-        lh.GetExternalHostIp() == rh.GetExternalHostIp() &&
-        lh.GetExternalPort() == rh.GetExternalPort() &&
-        lh.GetZoneId() == rh.GetZoneId() &&
-        lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
-        lh.GetDesc() == rh.GetDesc()) {
-        return true;
-    }
-    return false;
+bool JudgeServerEqual(const Server& lh, const Server& rh) {
+  if (lh.GetId() == rh.GetId() && lh.GetHostName() == rh.GetHostName() &&
+      lh.GetInternalHostIp() == rh.GetInternalHostIp() &&
+      lh.GetInternalPort() == rh.GetInternalPort() &&
+      lh.GetExternalHostIp() == rh.GetExternalHostIp() &&
+      lh.GetExternalPort() == rh.GetExternalPort() &&
+      lh.GetZoneId() == rh.GetZoneId() &&
+      lh.GetPhysicalPoolId() == rh.GetPhysicalPoolId() &&
+      lh.GetDesc() == rh.GetDesc()) {
+    return true;
+  }
+  return false;
 }
 
-bool JudgeChunkServerEqual(const ChunkServer &lh, const ChunkServer &rh) {
-    if (lh.GetId() == rh.GetId() &&
-        lh.GetToken() == rh.GetToken() &&
-        lh.GetDiskType() == rh.GetDiskType() &&
-        lh.GetServerId() == rh.GetServerId() &&
-        lh.GetHostIp() == rh.GetHostIp() &&
-        lh.GetPort() == rh.GetPort() &&
-        lh.GetMountPoint() == rh.GetMountPoint() &&
-        lh.GetStartUpTime() == rh.GetStartUpTime() &&
-        lh.GetStatus() == rh.GetStatus() &&
-        lh.GetOnlineState() == rh.GetOnlineState() &&
-        lh.GetChunkServerState().GetDiskState() ==
-            rh.GetChunkServerState().GetDiskState() &&
-        lh.GetChunkServerState().GetDiskCapacity() ==
-            rh.GetChunkServerState().GetDiskCapacity() &&
-        lh.GetChunkServerState().GetDiskUsed() ==
-            rh.GetChunkServerState().GetDiskUsed()) {
-        return true;
-    }
-    return false;
+bool JudgeChunkServerEqual(const ChunkServer& lh, const ChunkServer& rh) {
+  if (lh.GetId() == rh.GetId() && lh.GetToken() == rh.GetToken() &&
+      lh.GetDiskType() == rh.GetDiskType() &&
+      lh.GetServerId() == rh.GetServerId() &&
+      lh.GetHostIp() == rh.GetHostIp() && lh.GetPort() == rh.GetPort() &&
+      lh.GetMountPoint() == rh.GetMountPoint() &&
+      lh.GetStartUpTime() == rh.GetStartUpTime() &&
+      lh.GetStatus() == rh.GetStatus() &&
+      lh.GetOnlineState() == rh.GetOnlineState() &&
+      lh.GetChunkServerState().GetDiskState() ==
+          rh.GetChunkServerState().GetDiskState() &&
+      lh.GetChunkServerState().GetDiskCapacity() ==
+          rh.GetChunkServerState().GetDiskCapacity() &&
+      lh.GetChunkServerState().GetDiskUsed() ==
+          rh.GetChunkServerState().GetDiskUsed()) {
+    return true;
+  }
+  return false;
 }
 
-bool JudgeCopysetInfoEqual(const CopySetInfo &lh, const CopySetInfo &rh) {
-    if (lh.GetLogicalPoolId() == rh.GetLogicalPoolId() &&
-        lh.GetId() == rh.GetId() &&
-        lh.GetEpoch() == rh.GetEpoch() &&
-        lh.GetCopySetMembersStr() == rh.GetCopySetMembersStr()) {
-        return true;
-    }
-    return false;
+bool JudgeCopysetInfoEqual(const CopySetInfo& lh, const CopySetInfo& rh) {
+  if (lh.GetLogicalPoolId() == rh.GetLogicalPoolId() &&
+      lh.GetId() == rh.GetId() && lh.GetEpoch() == rh.GetEpoch() &&
+      lh.GetCopySetMembersStr() == rh.GetCopySetMembersStr()) {
+    return true;
+  }
+  return false;
 }
 
 }  // namespace topology

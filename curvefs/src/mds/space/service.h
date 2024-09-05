@@ -32,35 +32,34 @@ namespace space {
 
 class SpaceServiceImpl : public SpaceService {
  public:
-    explicit SpaceServiceImpl(SpaceManager* spaceMgr) : spaceMgr_(spaceMgr) {}
+  explicit SpaceServiceImpl(SpaceManager* spaceMgr) : spaceMgr_(spaceMgr) {}
 
-    void AllocateBlockGroup(google::protobuf::RpcController* controller,
-                            const AllocateBlockGroupRequest* request,
-                            AllocateBlockGroupResponse* response,
-                            google::protobuf::Closure* done) override;
+  void AllocateBlockGroup(google::protobuf::RpcController* controller,
+                          const AllocateBlockGroupRequest* request,
+                          AllocateBlockGroupResponse* response,
+                          google::protobuf::Closure* done) override;
 
-    void AcquireBlockGroup(google::protobuf::RpcController* controller,
-                           const AcquireBlockGroupRequest* request,
-                           AcquireBlockGroupResponse* response,
-                           google::protobuf::Closure* done) override;
+  void AcquireBlockGroup(google::protobuf::RpcController* controller,
+                         const AcquireBlockGroupRequest* request,
+                         AcquireBlockGroupResponse* response,
+                         google::protobuf::Closure* done) override;
 
-    void ReleaseBlockGroup(google::protobuf::RpcController* controller,
-                           const ReleaseBlockGroupRequest* request,
-                           ReleaseBlockGroupResponse* response,
-                           google::protobuf::Closure* done) override;
+  void ReleaseBlockGroup(google::protobuf::RpcController* controller,
+                         const ReleaseBlockGroupRequest* request,
+                         ReleaseBlockGroupResponse* response,
+                         google::protobuf::Closure* done) override;
 
-    void StatSpace(google::protobuf::RpcController* controller,
-                   const StatSpaceRequest* request,
-                   StatSpaceResponse* response,
+  void StatSpace(google::protobuf::RpcController* controller,
+                 const StatSpaceRequest* request, StatSpaceResponse* response,
+                 google::protobuf::Closure* done) override;
+
+  void UpdateUsage(google::protobuf::RpcController* controller,
+                   const UpdateUsageRequest* request,
+                   UpdateUsageResponse* response,
                    google::protobuf::Closure* done) override;
 
-    void UpdateUsage(google::protobuf::RpcController* controller,
-                     const UpdateUsageRequest* request,
-                     UpdateUsageResponse* response,
-                     google::protobuf::Closure* done) override;
-
  private:
-    SpaceManager* spaceMgr_;
+  SpaceManager* spaceMgr_;
 };
 
 }  // namespace space

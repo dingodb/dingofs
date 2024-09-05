@@ -49,16 +49,16 @@ class MatedataUsageTool
                             curvefs::mds::topology::StatMetadataUsageResponse,
                             curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit MatedataUsageTool(const std::string& cmd = kMetedataUsageCmd)
-        : CurvefsToolRpc(cmd) {}
-    void PrintHelp() override;
+  explicit MatedataUsageTool(const std::string& cmd = kMetedataUsageCmd)
+      : CurvefsToolRpc(cmd) {}
+  void PrintHelp() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
 
  private:
-    int Init() override;
+  int Init() override;
 };
 
 }  // namespace usage

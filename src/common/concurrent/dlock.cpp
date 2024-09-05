@@ -21,41 +21,40 @@
  */
 
 #include "src/common/concurrent/dlock.h"
+
 #include <glog/logging.h>
 
 namespace curve {
 namespace common {
 
 int64_t DLock::Init() {
-    LOG(INFO) << "DLock::Init:"
-              << " pfx: " << opts_.pfx
-              << ", ctx_timeoutMS: " << opts_.ctx_timeoutMS
-              << ", ttlSec: " << opts_.ttlSec;
-    locker_ = NewEtcdMutex(const_cast<char*>(opts_.pfx.c_str()),
-                           opts_.pfx.size(), opts_.ttlSec);
-    return locker_;
+  LOG(INFO) << "DLock::Init:"
+            << " pfx: " << opts_.pfx
+            << ", ctx_timeoutMS: " << opts_.ctx_timeoutMS
+            << ", ttlSec: " << opts_.ttlSec;
+  locker_ = NewEtcdMutex(const_cast<char*>(opts_.pfx.c_str()), opts_.pfx.size(),
+                         opts_.ttlSec);
+  return locker_;
 }
 
-DLock::~DLock() {
-    DestoryEtcdMutex(locker_);
-}
+DLock::~DLock() { DestoryEtcdMutex(locker_); }
 
 int DLock::Lock() {
-    bool needRetry = false;
-    int retry = 0;
-    int errCode;
-    do {
-        LOG(INFO) << "DLock::Lock locker_ = " << locker_;
-        errCode = EtcdMutexLock(opts_.ctx_timeoutMS, locker_);
-        needRetry = NeedRetry(errCode);
-    } while (needRetry && ++retry <= opts_.retryTimes);
+  bool needRetry = false;
+  int retry = 0;
+  int errCode;
+  do {
+    LOG(INFO) << "DLock::Lock locker_ = " << locker_;
+    errCode = EtcdMutexLock(opts_.ctx_timeoutMS, locker_);
+    needRetry = NeedRetry(errCode);
+  } while (needRetry && ++retry <= opts_.retryTimes);
 
-    if (retry > opts_.retryTimes) {
-        LOG(ERROR) << "DLock::Lock timeout"
-                   << ", timeoutMS = " << opts_.ctx_timeoutMS
-                   << ", retryTimes = " << opts_.retryTimes;
-    }
-    return errCode;
+  if (retry > opts_.retryTimes) {
+    LOG(ERROR) << "DLock::Lock timeout"
+               << ", timeoutMS = " << opts_.ctx_timeoutMS
+               << ", retryTimes = " << opts_.retryTimes;
+  }
+  return errCode;
 }
 
 // TODO(wanghai01): if etcd used updated to v3.5, the TryLock can be used
@@ -72,38 +71,36 @@ int DLock::Lock() {
 // }
 
 int DLock::Unlock() {
-    bool needRetry = false;
-    int retry = 0;
-    int errCode;
-    do {
-        LOG(INFO) << "DLock::Unlock locker_ = " << locker_;
-        errCode = EtcdMutexUnlock(opts_.ctx_timeoutMS, locker_);
-        needRetry = NeedRetry(errCode);
-    } while (needRetry && ++retry <= opts_.retryTimes);
+  bool needRetry = false;
+  int retry = 0;
+  int errCode;
+  do {
+    LOG(INFO) << "DLock::Unlock locker_ = " << locker_;
+    errCode = EtcdMutexUnlock(opts_.ctx_timeoutMS, locker_);
+    needRetry = NeedRetry(errCode);
+  } while (needRetry && ++retry <= opts_.retryTimes);
 
-    if (retry > opts_.retryTimes) {
-        LOG(ERROR) << "DLock::Lock timeout"
-                   << ", timeoutMS = " << opts_.ctx_timeoutMS
-                   << ", retryTimes = " << opts_.retryTimes;
-    }
-    return errCode;
+  if (retry > opts_.retryTimes) {
+    LOG(ERROR) << "DLock::Lock timeout"
+               << ", timeoutMS = " << opts_.ctx_timeoutMS
+               << ", retryTimes = " << opts_.retryTimes;
+  }
+  return errCode;
 }
 
-std::string DLock::GetPrefix() {
-    return opts_.pfx;
-}
+std::string DLock::GetPrefix() { return opts_.pfx; }
 
 bool DLock::NeedRetry(int errCode) {
-    switch (errCode) {
-        case EtcdErrCode::EtcdDeadlineExceeded:
-        case EtcdErrCode::EtcdResourceExhausted:
-        case EtcdErrCode::EtcdFailedPrecondition:
-        case EtcdErrCode::EtcdAborted:
-        case EtcdErrCode::EtcdUnavailable:
-            return true;
-    }
-    return false;
+  switch (errCode) {
+    case EtcdErrCode::EtcdDeadlineExceeded:
+    case EtcdErrCode::EtcdResourceExhausted:
+    case EtcdErrCode::EtcdFailedPrecondition:
+    case EtcdErrCode::EtcdAborted:
+    case EtcdErrCode::EtcdUnavailable:
+      return true;
+  }
+  return false;
 }
 
-}   // namespace common
-}   // namespace curve
+}  // namespace common
+}  // namespace curve

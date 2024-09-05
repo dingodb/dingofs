@@ -37,37 +37,32 @@ namespace chunkserver {
  */
 
 // 获取leader
-butil::Status GetLeader(const LogicPoolID &logicPoolId,
-                        const CopysetID &copysetId,
-                        const Configuration &conf,
-                        PeerId *leaderId);
+butil::Status GetLeader(const LogicPoolID& logicPoolId,
+                        const CopysetID& copysetId, const Configuration& conf,
+                        PeerId* leaderId);
 
 // 增加一个peer
-butil::Status AddPeer(const LogicPoolID &logicPoolId,
-                      const CopysetID &copysetId,
-                      const Configuration &conf,
-                      const PeerId &peer_id,
-                      const braft::cli::CliOptions &options);
+butil::Status AddPeer(const LogicPoolID& logicPoolId,
+                      const CopysetID& copysetId, const Configuration& conf,
+                      const PeerId& peer_id,
+                      const braft::cli::CliOptions& options);
 
 // 移除一个peer
-butil::Status RemovePeer(const LogicPoolID &logicPoolId,
-                         const CopysetID &copysetId,
-                         const Configuration &conf,
-                         const PeerId &peer_id,
-                         const braft::cli::CliOptions &options);
+butil::Status RemovePeer(const LogicPoolID& logicPoolId,
+                         const CopysetID& copysetId, const Configuration& conf,
+                         const PeerId& peer_id,
+                         const braft::cli::CliOptions& options);
 
 // 转移leader
-butil::Status TransferLeader(const LogicPoolID &logicPoolId,
-                             const CopysetID &copysetId,
-                             const Configuration &conf,
-                             const PeerId &peer,
-                             const braft::cli::CliOptions &options);
+butil::Status TransferLeader(const LogicPoolID& logicPoolId,
+                             const CopysetID& copysetId,
+                             const Configuration& conf, const PeerId& peer,
+                             const braft::cli::CliOptions& options);
 
 // 触发快照
-butil::Status Snapshot(const LogicPoolID &logicPoolId,
-                       const CopysetID &copysetId,
-                       const PeerId &peer,
-                       const braft::cli::CliOptions &options);
+butil::Status Snapshot(const LogicPoolID& logicPoolId,
+                       const CopysetID& copysetId, const PeerId& peer,
+                       const braft::cli::CliOptions& options);
 
 }  // namespace chunkserver
 }  // namespace curve

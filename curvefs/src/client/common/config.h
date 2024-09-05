@@ -26,8 +26,8 @@
 #include <cstdint>
 #include <string>
 
-#include "curvefs/src/client/common/common.h"
 #include "curvefs/proto/common.pb.h"
+#include "curvefs/src/client/common/common.h"
 #include "src/client/config_info.h"
 #include "src/common/configuration.h"
 #include "src/common/s3_adapter.h"
@@ -37,231 +37,231 @@ namespace client {
 namespace common {
 using ::curve::common::Configuration;
 using ::curve::common::S3AdapterOption;
-using ::curvefs::client::common::DiskCacheType;
 using ::curve::common::S3InfoOption;
+using ::curvefs::client::common::DiskCacheType;
 using MdsOption = ::curve::client::MetaServerOption;
 
 struct BlockDeviceClientOptions {
-    std::string configPath;
+  std::string configPath;
 };
 
 struct MetaCacheOpt {
-    int metacacheGetLeaderRetry = 3;
-    int metacacheRPCRetryIntervalUS = 500;
-    int metacacheGetLeaderRPCTimeOutMS = 1000;
+  int metacacheGetLeaderRetry = 3;
+  int metacacheRPCRetryIntervalUS = 500;
+  int metacacheGetLeaderRPCTimeOutMS = 1000;
 
-    uint16_t getPartitionCountOnce = 3;
-    uint16_t createPartitionOnce = 3;
+  uint16_t getPartitionCountOnce = 3;
+  uint16_t createPartitionOnce = 3;
 };
 
 struct ExcutorOpt {
-    uint32_t maxRetry = 3;
-    uint64_t retryIntervalUS = 200;
-    uint64_t rpcTimeoutMS = 1000;
-    uint64_t rpcStreamIdleTimeoutMS = 500;
-    uint64_t maxRPCTimeoutMS = 64000;
-    uint64_t maxRetrySleepIntervalUS = 64ull * 1000 * 1000;
-    uint64_t minRetryTimesForceTimeoutBackoff = 5;
-    uint64_t maxRetryTimesBeforeConsiderSuspend = 20;
-    uint32_t batchInodeAttrLimit = 10000;
-    bool enableRenameParallel = false;
+  uint32_t maxRetry = 3;
+  uint64_t retryIntervalUS = 200;
+  uint64_t rpcTimeoutMS = 1000;
+  uint64_t rpcStreamIdleTimeoutMS = 500;
+  uint64_t maxRPCTimeoutMS = 64000;
+  uint64_t maxRetrySleepIntervalUS = 64ull * 1000 * 1000;
+  uint64_t minRetryTimesForceTimeoutBackoff = 5;
+  uint64_t maxRetryTimesBeforeConsiderSuspend = 20;
+  uint32_t batchInodeAttrLimit = 10000;
+  bool enableRenameParallel = false;
 };
 
 struct LeaseOpt {
-    uint32_t refreshTimesPerLease = 5;
-    // default = 20s
-    uint32_t leaseTimeUs = 20000000;
+  uint32_t refreshTimesPerLease = 5;
+  // default = 20s
+  uint32_t leaseTimeUs = 20000000;
 };
 
 struct SpaceAllocServerOption {
-    std::string spaceaddr;
-    uint64_t rpcTimeoutMs;
+  std::string spaceaddr;
+  uint64_t rpcTimeoutMs;
 };
 
 struct KVClientManagerOpt {
-    int setThreadPooln = 4;
-    int getThreadPooln = 4;
+  int setThreadPooln = 4;
+  int getThreadPooln = 4;
 };
 
 struct DiskCacheOption {
-    DiskCacheType diskCacheType;
-    // cache disk dir
-    std::string cacheDir;
-    // if true, call fdatasync after write
-    bool forceFlush;
-    // trim interval
-    uint64_t trimCheckIntervalSec;
-    // async load interval
-    uint64_t asyncLoadPeriodMs;
-    // trim start if disk usage over fullRatio
-    uint64_t fullRatio;
-    // trim finish until disk usage below safeRatio
-    uint64_t safeRatio;
-    // the max size disk cache can use
-    uint64_t maxUsableSpaceBytes;
-    // the max file nums can cache
-    uint64_t maxFileNums;
-    // the max time system command can run
-    uint32_t cmdTimeoutSec;
-    // threads for disk cache
-    uint32_t threads = 10;
-    // the write throttle bps of disk cache
-    uint64_t avgFlushBytes;
-    // the write burst bps of disk cache
-    uint64_t burstFlushBytes;
-    // the times that write burst bps can continue
-    uint64_t burstSecs;
-    // the read throttle bps of disk cache
-    uint64_t avgReadFileBytes;
-    // the write throttle iops of disk cache
-    uint64_t avgFlushIops;
-    // the read throttle iops of disk cache
-    uint64_t avgReadFileIops;
+  DiskCacheType diskCacheType;
+  // cache disk dir
+  std::string cacheDir;
+  // if true, call fdatasync after write
+  bool forceFlush;
+  // trim interval
+  uint64_t trimCheckIntervalSec;
+  // async load interval
+  uint64_t asyncLoadPeriodMs;
+  // trim start if disk usage over fullRatio
+  uint64_t fullRatio;
+  // trim finish until disk usage below safeRatio
+  uint64_t safeRatio;
+  // the max size disk cache can use
+  uint64_t maxUsableSpaceBytes;
+  // the max file nums can cache
+  uint64_t maxFileNums;
+  // the max time system command can run
+  uint32_t cmdTimeoutSec;
+  // threads for disk cache
+  uint32_t threads = 10;
+  // the write throttle bps of disk cache
+  uint64_t avgFlushBytes;
+  // the write burst bps of disk cache
+  uint64_t burstFlushBytes;
+  // the times that write burst bps can continue
+  uint64_t burstSecs;
+  // the read throttle bps of disk cache
+  uint64_t avgReadFileBytes;
+  // the write throttle iops of disk cache
+  uint64_t avgFlushIops;
+  // the read throttle iops of disk cache
+  uint64_t avgReadFileIops;
 };
 
 struct S3ClientAdaptorOption {
-    uint64_t blockSize;
-    uint64_t chunkSize;
-    uint64_t pageSize;
-    uint32_t prefetchBlocks;
-    uint32_t prefetchExecQueueNum;
-    uint32_t intervalSec;
-    uint32_t chunkFlushThreads;
-    uint32_t flushIntervalSec;
-    uint64_t writeCacheMaxByte;
-    uint64_t readCacheMaxByte;
-    uint32_t readCacheThreads;
-    uint32_t nearfullRatio;
-    uint32_t baseSleepUs;
-    uint32_t maxReadRetryIntervalMs;
-    uint32_t readRetryIntervalMs;
-    uint32_t objectPrefix;
-    DiskCacheOption diskCacheOpt;
+  uint64_t blockSize;
+  uint64_t chunkSize;
+  uint64_t pageSize;
+  uint32_t prefetchBlocks;
+  uint32_t prefetchExecQueueNum;
+  uint32_t intervalSec;
+  uint32_t chunkFlushThreads;
+  uint32_t flushIntervalSec;
+  uint64_t writeCacheMaxByte;
+  uint64_t readCacheMaxByte;
+  uint32_t readCacheThreads;
+  uint32_t nearfullRatio;
+  uint32_t baseSleepUs;
+  uint32_t maxReadRetryIntervalMs;
+  uint32_t readRetryIntervalMs;
+  uint32_t objectPrefix;
+  DiskCacheOption diskCacheOpt;
 };
 
 struct S3Option {
-    S3ClientAdaptorOption s3ClientAdaptorOpt;
-    S3AdapterOption s3AdaptrOpt;
+  S3ClientAdaptorOption s3ClientAdaptorOpt;
+  S3AdapterOption s3AdaptrOpt;
 };
 
 struct BlockGroupOption {
-    uint32_t allocateOnce;
+  uint32_t allocateOnce;
 };
 
 struct BitmapAllocatorOption {
-    uint64_t sizePerBit;
-    double smallAllocProportion;
+  uint64_t sizePerBit;
+  double smallAllocProportion;
 };
 
 struct VolumeAllocatorOption {
-    std::string type;
-    BitmapAllocatorOption bitmapAllocatorOption;
-    BlockGroupOption blockGroupOption;
+  std::string type;
+  BitmapAllocatorOption bitmapAllocatorOption;
+  BlockGroupOption blockGroupOption;
 };
 
 struct VolumeOption {
-    uint64_t bigFileSize;
-    uint64_t volBlockSize;
-    uint64_t fsBlockSize;
-    VolumeAllocatorOption allocatorOption;
+  uint64_t bigFileSize;
+  uint64_t volBlockSize;
+  uint64_t fsBlockSize;
+  VolumeAllocatorOption allocatorOption;
 };
 
 struct ExtentManagerOption {
-    uint64_t preAllocSize;
+  uint64_t preAllocSize;
 };
 
 struct RefreshDataOption {
-    uint64_t maxDataSize = 1024;
-    uint32_t refreshDataIntervalSec = 30;
+  uint64_t maxDataSize = 1024;
+  uint32_t refreshDataIntervalSec = 30;
 };
 
 // { filesystem option
 struct KernelCacheOption {
-    uint32_t entryTimeoutSec;
-    uint32_t dirEntryTimeoutSec;
-    uint32_t attrTimeoutSec;
-    uint32_t dirAttrTimeoutSec;
+  uint32_t entryTimeoutSec;
+  uint32_t dirEntryTimeoutSec;
+  uint32_t attrTimeoutSec;
+  uint32_t dirAttrTimeoutSec;
 };
 
 struct LookupCacheOption {
-    uint64_t lruSize;
-    uint32_t negativeTimeoutSec;
-    uint32_t minUses;
+  uint64_t lruSize;
+  uint32_t negativeTimeoutSec;
+  uint32_t minUses;
 };
 
 struct DirCacheOption {
-    uint64_t lruSize;
-    uint32_t timeoutSec;
+  uint64_t lruSize;
+  uint32_t timeoutSec;
 };
 
 struct AttrWatcherOption {
-    uint64_t lruSize;
+  uint64_t lruSize;
 };
 
 struct OpenFilesOption {
-    uint64_t lruSize;
-    uint32_t deferSyncSecond;
+  uint64_t lruSize;
+  uint32_t deferSyncSecond;
 };
 
 struct RPCOption {
-    uint32_t listDentryLimit;
+  uint32_t listDentryLimit;
 };
 
 struct DeferSyncOption {
-    uint32_t delay;
-    bool deferDirMtime;
+  uint32_t delay;
+  bool deferDirMtime;
 };
 
 struct FileSystemOption {
-    bool cto;
-    bool disableXAttr;
-    uint32_t maxNameLength;
-    uint32_t blockSize = 0x10000u;
-    KernelCacheOption kernelCacheOption;
-    LookupCacheOption lookupCacheOption;
-    DirCacheOption dirCacheOption;
-    OpenFilesOption openFilesOption;
-    AttrWatcherOption attrWatcherOption;
-    RPCOption rpcOption;
-    DeferSyncOption deferSyncOption;
+  bool cto;
+  bool disableXAttr;
+  uint32_t maxNameLength;
+  uint32_t blockSize = 0x10000u;
+  KernelCacheOption kernelCacheOption;
+  LookupCacheOption lookupCacheOption;
+  DirCacheOption dirCacheOption;
+  OpenFilesOption openFilesOption;
+  AttrWatcherOption attrWatcherOption;
+  RPCOption rpcOption;
+  DeferSyncOption deferSyncOption;
 };
 // }
 
 struct FuseClientOption {
-    MdsOption mdsOpt;
-    MetaCacheOpt metaCacheOpt;
-    ExcutorOpt excutorOpt;
-    ExcutorOpt excutorInternalOpt;
-    SpaceAllocServerOption spaceOpt;
-    BlockDeviceClientOptions bdevOpt;
-    S3Option s3Opt;
-    ExtentManagerOption extentManagerOpt;
-    VolumeOption volumeOpt;
-    LeaseOpt leaseOpt;
-    RefreshDataOption refreshDataOption;
-    KVClientManagerOpt kvClientManagerOpt;
-    FileSystemOption fileSystemOption;
+  MdsOption mdsOpt;
+  MetaCacheOpt metaCacheOpt;
+  ExcutorOpt excutorOpt;
+  ExcutorOpt excutorInternalOpt;
+  SpaceAllocServerOption spaceOpt;
+  BlockDeviceClientOptions bdevOpt;
+  S3Option s3Opt;
+  ExtentManagerOption extentManagerOpt;
+  VolumeOption volumeOpt;
+  LeaseOpt leaseOpt;
+  RefreshDataOption refreshDataOption;
+  KVClientManagerOpt kvClientManagerOpt;
+  FileSystemOption fileSystemOption;
 
-    uint32_t listDentryLimit;
-    uint32_t listDentryThreads;
-    uint32_t dummyServerStartPort;
-    bool enableMultiMountPointRename = false;
-    bool enableFuseSplice = false;
-    uint32_t downloadMaxRetryTimes;
-    uint32_t warmupThreadsNum = 10;
+  uint32_t listDentryLimit;
+  uint32_t listDentryThreads;
+  uint32_t dummyServerStartPort;
+  bool enableMultiMountPointRename = false;
+  bool enableFuseSplice = false;
+  uint32_t downloadMaxRetryTimes;
+  uint32_t warmupThreadsNum = 10;
 };
 
-void InitFuseClientOption(Configuration *conf, FuseClientOption *clientOption);
+void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption);
 
-void SetFuseClientS3Option(FuseClientOption *clientOption,
-    const S3InfoOption &fsS3Opt);
+void SetFuseClientS3Option(FuseClientOption* clientOption,
+                           const S3InfoOption& fsS3Opt);
 
 void S3Info2FsS3Option(const curvefs::common::S3Info& s3,
                        S3InfoOption* fsS3Opt);
 
-void InitMdsOption(Configuration *conf, MdsOption *mdsOpt);
+void InitMdsOption(Configuration* conf, MdsOption* mdsOpt);
 
-void InitLeaseOpt(Configuration *conf, LeaseOpt *leaseOpt);
+void InitLeaseOpt(Configuration* conf, LeaseOpt* leaseOpt);
 
 }  // namespace common
 }  // namespace client

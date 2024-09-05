@@ -41,89 +41,86 @@ using ::curvefs::mds::codec::EncodeProtobufMessage;
 namespace {
 
 SpaceErrCode StoreErrCodeToSpaceErrCode(int code) {
-    switch (code) {
-        case EtcdErrCode::EtcdOK:
-            return SpaceOk;
+  switch (code) {
+    case EtcdErrCode::EtcdOK:
+      return SpaceOk;
 
-        case EtcdErrCode::EtcdKeyNotExist:
-            return SpaceErrNotFound;
+    case EtcdErrCode::EtcdKeyNotExist:
+      return SpaceErrNotFound;
 
-        default:
-            return SpaceErrStorage;
-    }
+    default:
+      return SpaceErrStorage;
+  }
 }
 
 }  // namespace
 
 SpaceErrCode BlockGroupStorageImpl::PutBlockGroup(
-    uint32_t fsId,
-    uint64_t offset,
-    const BlockGroup& blockGroup) {
-    std::string key = EncodeBlockGroupKey(fsId, offset);
-    std::string value;
+    uint32_t fsId, uint64_t offset, const BlockGroup& blockGroup) {
+  std::string key = EncodeBlockGroupKey(fsId, offset);
+  std::string value;
 
-    if (!blockGroup.IsInitialized()) {
-        LOG(WARNING) << "Block group is not initialized, fsId: " << fsId
-                     << ", offset: " << offset;
-        return SpaceErrEncode;
-    }
+  if (!blockGroup.IsInitialized()) {
+    LOG(WARNING) << "Block group is not initialized, fsId: " << fsId
+                 << ", offset: " << offset;
+    return SpaceErrEncode;
+  }
 
-    if (!EncodeProtobufMessage(blockGroup, &value)) {
-        LOG(WARNING) << "Encode block group failed, fsId: " << fsId
-                     << ", block group offset: " << offset;
-        return SpaceErrEncode;
-    }
+  if (!EncodeProtobufMessage(blockGroup, &value)) {
+    LOG(WARNING) << "Encode block group failed, fsId: " << fsId
+                 << ", block group offset: " << offset;
+    return SpaceErrEncode;
+  }
 
-    int err = store_->Put(key, value);
-    if (err != EtcdErrCode::EtcdOK) {
-        LOG(ERROR) << "Put block group failed, fsId: " << fsId
-                   << ", block group offset: " << offset << ", err: " << err;
-    }
+  int err = store_->Put(key, value);
+  if (err != EtcdErrCode::EtcdOK) {
+    LOG(ERROR) << "Put block group failed, fsId: " << fsId
+               << ", block group offset: " << offset << ", err: " << err;
+  }
 
-    return StoreErrCodeToSpaceErrCode(err);
+  return StoreErrCodeToSpaceErrCode(err);
 }
 
 SpaceErrCode BlockGroupStorageImpl::RemoveBlockGroup(uint32_t fsId,
                                                      uint64_t offset) {
-    std::string key = EncodeBlockGroupKey(fsId, offset);
+  std::string key = EncodeBlockGroupKey(fsId, offset);
 
-    int err = store_->Delete(key);
-    if (err != EtcdErrCode::EtcdOK) {
-        LOG(WARNING) << "Remove block group failed, fsId: " << fsId
-                     << ", block group offset: " << offset << ", err: " << err;
-    }
+  int err = store_->Delete(key);
+  if (err != EtcdErrCode::EtcdOK) {
+    LOG(WARNING) << "Remove block group failed, fsId: " << fsId
+                 << ", block group offset: " << offset << ", err: " << err;
+  }
 
-    return StoreErrCodeToSpaceErrCode(err);
+  return StoreErrCodeToSpaceErrCode(err);
 }
 
 SpaceErrCode BlockGroupStorageImpl::ListBlockGroups(
-    uint32_t fsId,
-    std::vector<BlockGroup>* blockGroups) {
-    std::string startKey = EncodeBlockGroupKey(fsId, 0);
-    std::string endKey = EncodeBlockGroupKey(fsId + 1, 0);
+    uint32_t fsId, std::vector<BlockGroup>* blockGroups) {
+  std::string startKey = EncodeBlockGroupKey(fsId, 0);
+  std::string endKey = EncodeBlockGroupKey(fsId + 1, 0);
 
-    std::vector<std::string> raw;
+  std::vector<std::string> raw;
 
-    int err = store_->List(startKey, endKey, &raw);
-    if (err != EtcdErrCode::EtcdOK) {
-        LOG(WARNING) << "List block groups failed, fsId: " << fsId
-                     << ", err: " << err;
-        return StoreErrCodeToSpaceErrCode(err);
+  int err = store_->List(startKey, endKey, &raw);
+  if (err != EtcdErrCode::EtcdOK) {
+    LOG(WARNING) << "List block groups failed, fsId: " << fsId
+                 << ", err: " << err;
+    return StoreErrCodeToSpaceErrCode(err);
+  }
+
+  for (size_t i = 0; i < raw.size(); ++i) {
+    BlockGroup group;
+    bool ok = DecodeProtobufMessage(raw[i], &group);
+    if (!ok) {
+      blockGroups->clear();
+      LOG(WARNING) << "Decode block group failed";
+      return SpaceErrDecode;
     }
 
-    for (size_t i = 0; i < raw.size(); ++i) {
-        BlockGroup group;
-        bool ok = DecodeProtobufMessage(raw[i], &group);
-        if (!ok) {
-            blockGroups->clear();
-            LOG(WARNING) << "Decode block group failed";
-            return SpaceErrDecode;
-        }
+    blockGroups->push_back(std::move(group));
+  }
 
-        blockGroups->push_back(std::move(group));
-    }
-
-    return SpaceOk;
+  return SpaceOk;
 }
 
 }  // namespace space

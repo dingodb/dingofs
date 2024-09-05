@@ -26,14 +26,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <string>
 #include <memory>
+#include <string>
 
-#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
-#include "curvefs/test/client/mock_metaserver_client.h"
-#include "curvefs/test/client/mock_inode_cache_manager.h"
+#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
+#include "curvefs/test/client/mock_inode_cache_manager.h"
+#include "curvefs/test/client/mock_metaserver_client.h"
 
 namespace curvefs {
 namespace client {
@@ -43,201 +43,200 @@ using ::curvefs::client::common::KernelCacheOption;
 
 class DeferSyncBuilder {
  public:
-    using Callback = std::function<void(DeferSyncOption* option)>;
+  using Callback = std::function<void(DeferSyncOption* option)>;
 
-    static DeferSyncOption DefaultOption() {
-        return DeferSyncOption {
-            delay: 3,
-            deferDirMtime: false,
-        };
-    }
+  static DeferSyncOption DefaultOption() {
+    return DeferSyncOption{
+      delay : 3,
+      deferDirMtime : false,
+    };
+  }
 
  public:
-    DeferSyncBuilder()
-        : option_(DefaultOption()),
-          dentryManager_(std::make_shared<MockDentryCacheManager>()),
-          inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
+  DeferSyncBuilder()
+      : option_(DefaultOption()),
+        dentryManager_(std::make_shared<MockDentryCacheManager>()),
+        inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
 
-    DeferSyncBuilder SetOption(Callback callback) {
-        callback(&option_);
-        return *this;
-    }
+  DeferSyncBuilder SetOption(Callback callback) {
+    callback(&option_);
+    return *this;
+  }
 
-    std::shared_ptr<DeferSync> Build() {
-        return std::make_shared<DeferSync>(option_);
-    }
+  std::shared_ptr<DeferSync> Build() {
+    return std::make_shared<DeferSync>(option_);
+  }
 
-    std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
-        return dentryManager_;
-    }
+  std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
+    return dentryManager_;
+  }
 
-    std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
-        return inodeManager_;
-    }
+  std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
+    return inodeManager_;
+  }
 
  private:
-    DeferSyncOption option_;
-    std::shared_ptr<MockDentryCacheManager> dentryManager_;
-    std::shared_ptr<MockInodeCacheManager> inodeManager_;
+  DeferSyncOption option_;
+  std::shared_ptr<MockDentryCacheManager> dentryManager_;
+  std::shared_ptr<MockInodeCacheManager> inodeManager_;
 };
 
 class DirCacheBuilder {
  public:
-    using Callback = std::function<void(DirCacheOption* option)>;
+  using Callback = std::function<void(DirCacheOption* option)>;
 
-    static DirCacheOption DefaultOption() {
-        return DirCacheOption {
-            lruSize: 5000000,
-        };
-    }
+  static DirCacheOption DefaultOption() {
+    return DirCacheOption{
+      lruSize : 5000000,
+    };
+  }
 
  public:
-    DirCacheBuilder() : option_(DefaultOption()) {}
+  DirCacheBuilder() : option_(DefaultOption()) {}
 
-    DirCacheBuilder SetOption(Callback callback) {
-        callback(&option_);
-        return *this;
-    }
+  DirCacheBuilder SetOption(Callback callback) {
+    callback(&option_);
+    return *this;
+  }
 
-    std::shared_ptr<DirCache> Build() {
-        return std::make_shared<DirCache>(option_);
-    }
+  std::shared_ptr<DirCache> Build() {
+    return std::make_shared<DirCache>(option_);
+  }
 
  private:
-    DirCacheOption option_;
+  DirCacheOption option_;
 };
 
 class OpenFilesBuilder {
  public:
-    using Callback = std::function<void(OpenFilesOption* option)>;
+  using Callback = std::function<void(OpenFilesOption* option)>;
 
-    static OpenFilesOption DefaultOption() {
-        return OpenFilesOption {
-            lruSize: 65535,
-            deferSyncSecond: 3,
-        };
-    }
+  static OpenFilesOption DefaultOption() {
+    return OpenFilesOption{
+      lruSize : 65535,
+      deferSyncSecond : 3,
+    };
+  }
 
  public:
-    OpenFilesBuilder()
-        : option_(DefaultOption()),
-          deferSync_(DeferSyncBuilder().Build()) {}
+  OpenFilesBuilder()
+      : option_(DefaultOption()), deferSync_(DeferSyncBuilder().Build()) {}
 
-    OpenFilesBuilder SetOption(Callback callback) {
-        callback(&option_);
-        return *this;
-    }
+  OpenFilesBuilder SetOption(Callback callback) {
+    callback(&option_);
+    return *this;
+  }
 
-    std::shared_ptr<OpenFiles> Build() {
-        return std::make_shared<OpenFiles>(option_, deferSync_);
-    }
+  std::shared_ptr<OpenFiles> Build() {
+    return std::make_shared<OpenFiles>(option_, deferSync_);
+  }
 
  private:
-    std::shared_ptr<DeferSync> deferSync_;
-    OpenFilesOption option_;
+  std::shared_ptr<DeferSync> deferSync_;
+  OpenFilesOption option_;
 };
 
 class RPCClientBuilder {
  public:
-    using Callback = std::function<void(RPCOption* option)>;
+  using Callback = std::function<void(RPCOption* option)>;
 
-    static RPCOption DefaultOption() {
-        return RPCOption{ listDentryLimit: 65535 };
-    }
+  static RPCOption DefaultOption() {
+    return RPCOption{listDentryLimit : 65535};
+  }
 
  public:
-    RPCClientBuilder()
-        : option_(DefaultOption()),
-          dentryManager_(std::make_shared<MockDentryCacheManager>()),
-          inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
+  RPCClientBuilder()
+      : option_(DefaultOption()),
+        dentryManager_(std::make_shared<MockDentryCacheManager>()),
+        inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
 
-    RPCClientBuilder SetOption(Callback callback) {
-        callback(&option_);
-        return *this;
-    }
+  RPCClientBuilder SetOption(Callback callback) {
+    callback(&option_);
+    return *this;
+  }
 
-    std::shared_ptr<RPCClient> Build() {
-        ExternalMember member(dentryManager_, inodeManager_);
-        return std::make_shared<RPCClient>(option_, member);
-    }
+  std::shared_ptr<RPCClient> Build() {
+    ExternalMember member(dentryManager_, inodeManager_);
+    return std::make_shared<RPCClient>(option_, member);
+  }
 
-    std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
-        return dentryManager_;
-    }
+  std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
+    return dentryManager_;
+  }
 
-    std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
-        return inodeManager_;
-    }
+  std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
+    return inodeManager_;
+  }
 
  private:
-    RPCOption option_;
-    std::shared_ptr<MockDentryCacheManager> dentryManager_;
-    std::shared_ptr<MockInodeCacheManager> inodeManager_;
+  RPCOption option_;
+  std::shared_ptr<MockDentryCacheManager> dentryManager_;
+  std::shared_ptr<MockInodeCacheManager> inodeManager_;
 };
 
 // build filesystem which you want
 class FileSystemBuilder {
  public:
-    using Callback = std::function<void(FileSystemOption* option)>;
+  using Callback = std::function<void(FileSystemOption* option)>;
 
-    FileSystemOption DefaultOption() {
-        auto option = FileSystemOption();
-        auto kernelCacheOption = KernelCacheOption {
-            entryTimeoutSec: 3600,
-            dirEntryTimeoutSec: 3600,
-            attrTimeoutSec: 3600,
-            dirAttrTimeoutSec: 3600,
-        };
-        auto lookupCacheOption = LookupCacheOption {
-            lruSize: 100000,
-            negativeTimeoutSec: 0,
-        };
-        auto attrWatcherOption = AttrWatcherOption {
-            lruSize: 5000000,
-        };
+  FileSystemOption DefaultOption() {
+    auto option = FileSystemOption();
+    auto kernelCacheOption = KernelCacheOption{
+      entryTimeoutSec : 3600,
+      dirEntryTimeoutSec : 3600,
+      attrTimeoutSec : 3600,
+      dirAttrTimeoutSec : 3600,
+    };
+    auto lookupCacheOption = LookupCacheOption{
+      lruSize : 100000,
+      negativeTimeoutSec : 0,
+    };
+    auto attrWatcherOption = AttrWatcherOption{
+      lruSize : 5000000,
+    };
 
-        option.cto = true;
-        option.disableXAttr = true;
-        option.maxNameLength = 255;
-        option.blockSize = 0x10000u;
-        option.kernelCacheOption = kernelCacheOption;
-        option.lookupCacheOption = lookupCacheOption;
-        option.dirCacheOption = DirCacheBuilder::DefaultOption();
-        option.openFilesOption = OpenFilesBuilder::DefaultOption();
-        option.attrWatcherOption = attrWatcherOption;
-        option.rpcOption = RPCClientBuilder::DefaultOption();
-        option.deferSyncOption = DeferSyncBuilder::DefaultOption();
-        return option;
-    }
+    option.cto = true;
+    option.disableXAttr = true;
+    option.maxNameLength = 255;
+    option.blockSize = 0x10000u;
+    option.kernelCacheOption = kernelCacheOption;
+    option.lookupCacheOption = lookupCacheOption;
+    option.dirCacheOption = DirCacheBuilder::DefaultOption();
+    option.openFilesOption = OpenFilesBuilder::DefaultOption();
+    option.attrWatcherOption = attrWatcherOption;
+    option.rpcOption = RPCClientBuilder::DefaultOption();
+    option.deferSyncOption = DeferSyncBuilder::DefaultOption();
+    return option;
+  }
 
  public:
-    FileSystemBuilder()
-        : option_(DefaultOption()),
-          dentryManager_(std::make_shared<MockDentryCacheManager>()),
-          inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
+  FileSystemBuilder()
+      : option_(DefaultOption()),
+        dentryManager_(std::make_shared<MockDentryCacheManager>()),
+        inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
 
-    FileSystemBuilder SetOption(Callback callback) {
-        callback(&option_);
-        return *this;
-    }
+  FileSystemBuilder SetOption(Callback callback) {
+    callback(&option_);
+    return *this;
+  }
 
-    std::shared_ptr<FileSystem> Build() {
-        auto member = ExternalMember(dentryManager_, inodeManager_);
-        return std::make_shared<FileSystem>(option_, member);
-    }
+  std::shared_ptr<FileSystem> Build() {
+    auto member = ExternalMember(dentryManager_, inodeManager_);
+    return std::make_shared<FileSystem>(option_, member);
+  }
 
-    std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
-        return dentryManager_;
-    }
+  std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
+    return dentryManager_;
+  }
 
-    std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
-        return inodeManager_;
-    }
+  std::shared_ptr<MockInodeCacheManager> GetInodeManager() {
+    return inodeManager_;
+  }
 
  private:
-    FileSystemOption option_;
-    std::shared_ptr<MockDentryCacheManager> dentryManager_;
-    std::shared_ptr<MockInodeCacheManager> inodeManager_;
+  FileSystemOption option_;
+  std::shared_ptr<MockDentryCacheManager> dentryManager_;
+  std::shared_ptr<MockInodeCacheManager> inodeManager_;
 };
 
 }  // namespace filesystem

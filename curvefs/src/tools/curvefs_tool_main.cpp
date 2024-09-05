@@ -39,32 +39,32 @@ DECLARE_int32(health_check_interval);
 }
 
 int main(int argc, char** argv) {
-    google::SetUsageMessage(curvefs::tools::kHelpStr);
-    google::ParseCommandLineFlags(&argc, &argv, true);
-    google::InitGoogleLogging(argv[0]);
+  google::SetUsageMessage(curvefs::tools::kHelpStr);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  google::InitGoogleLogging(argv[0]);
 
-    if (argc < 2) {
-        std::cout << curvefs::tools::kHelpStr << std::endl;
-        return -1;
-    }
+  if (argc < 2) {
+    std::cout << curvefs::tools::kHelpStr << std::endl;
+    return -1;
+  }
 
-    std::string command = argv[1];
+  std::string command = argv[1];
 
-    // Turn off the health check,
-    // otherwise it does not make sense to try again when Not Connect to
-    brpc::FLAGS_health_check_interval = -1;
-    curvefs::tools::CurvefsToolFactory curveToolFactory;
-    std::shared_ptr<curvefs::tools::CurvefsTool> curveTool =
-        curveToolFactory.GenerateCurvefsTool(command);
+  // Turn off the health check,
+  // otherwise it does not make sense to try again when Not Connect to
+  brpc::FLAGS_health_check_interval = -1;
+  curvefs::tools::CurvefsToolFactory curveToolFactory;
+  std::shared_ptr<curvefs::tools::CurvefsTool> curveTool =
+      curveToolFactory.GenerateCurvefsTool(command);
 
-    if (curveTool == nullptr) {
-        std::cout << curvefs::tools::kHelpStr << std::endl;
-        return -1;
-    }
-    if (FLAGS_example) {
-        curveTool->PrintHelp();
-        return 0;
-    }
+  if (curveTool == nullptr) {
+    std::cout << curvefs::tools::kHelpStr << std::endl;
+    return -1;
+  }
+  if (FLAGS_example) {
+    curveTool->PrintHelp();
+    return 0;
+  }
 
-    return curveTool->Run();
+  return curveTool->Run();
 }

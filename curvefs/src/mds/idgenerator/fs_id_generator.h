@@ -33,21 +33,19 @@ namespace mds {
 
 class FsIdGenerator {
  public:
-    explicit FsIdGenerator(
-        const std::shared_ptr<curve::kvstorage::KVStorageClient>& client)
-        : generator_(new curve::idgenerator::EtcdIdGenerator(
-              client, FS_ID_KEY_PREFIX, FS_ID_INIT, FS_ID_ALLOCATE_BUNDLE)) {}
+  explicit FsIdGenerator(
+      const std::shared_ptr<curve::kvstorage::KVStorageClient>& client)
+      : generator_(new curve::idgenerator::EtcdIdGenerator(
+            client, FS_ID_KEY_PREFIX, FS_ID_INIT, FS_ID_ALLOCATE_BUNDLE)) {}
 
-    bool GenFsId(uint64_t* id) {
-        return generator_->GenID(id);
-    }
+  bool GenFsId(uint64_t* id) { return generator_->GenID(id); }
 
  private:
-    static constexpr uint64_t FS_ID_INIT = 0;
-    static constexpr uint64_t FS_ID_ALLOCATE_BUNDLE = 100;
+  static constexpr uint64_t FS_ID_INIT = 0;
+  static constexpr uint64_t FS_ID_ALLOCATE_BUNDLE = 100;
 
  private:
-    std::unique_ptr<curve::idgenerator::EtcdIdGenerator> generator_;
+  std::unique_ptr<curve::idgenerator::EtcdIdGenerator> generator_;
 };
 
 }  // namespace mds

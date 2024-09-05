@@ -21,6 +21,7 @@
  */
 
 #include <gtest/gtest.h>
+
 #include "curvefs/src/mds/topology/deal_peerid.h"
 
 namespace curvefs {
@@ -28,62 +29,62 @@ namespace mds {
 namespace topology {
 
 TEST(DealPeerIdTest, testBuildPeerIdWithIpPort) {
-    std::string ip = "127.0.0.1";
-    uint32_t port = 10000;
-    uint32_t index = 1;
-    ASSERT_EQ("127.0.0.1:10000:0", BuildPeerIdWithIpPort(ip, port));
-    ASSERT_EQ("127.0.0.1:10000:1", BuildPeerIdWithIpPort(ip, port, index));
+  std::string ip = "127.0.0.1";
+  uint32_t port = 10000;
+  uint32_t index = 1;
+  ASSERT_EQ("127.0.0.1:10000:0", BuildPeerIdWithIpPort(ip, port));
+  ASSERT_EQ("127.0.0.1:10000:1", BuildPeerIdWithIpPort(ip, port, index));
 }
 
 TEST(DealPeerIdTest, BuildPeerIdWithAddr) {
-    std::string addr = "127.0.0.1:10000";
-    uint32_t index = 1;
-    ASSERT_EQ("127.0.0.1:10000:0", BuildPeerIdWithAddr(addr));
-    ASSERT_EQ("127.0.0.1:10000:1", BuildPeerIdWithAddr(addr, index));
+  std::string addr = "127.0.0.1:10000";
+  uint32_t index = 1;
+  ASSERT_EQ("127.0.0.1:10000:0", BuildPeerIdWithAddr(addr));
+  ASSERT_EQ("127.0.0.1:10000:1", BuildPeerIdWithAddr(addr, index));
 }
 
 TEST(DealPeerIdTest, SplitPeerIdSuccess) {
-    std::string peerId = "127.0.0.1:10000:0";
-    std::string ip;
-    uint32_t port;
-    uint32_t index;
-    ASSERT_TRUE(SplitPeerId(peerId, &ip, &port, &index));
-    ASSERT_EQ("127.0.0.1", ip);
-    ASSERT_EQ(10000, port);
-    ASSERT_EQ(0, index);
+  std::string peerId = "127.0.0.1:10000:0";
+  std::string ip;
+  uint32_t port;
+  uint32_t index;
+  ASSERT_TRUE(SplitPeerId(peerId, &ip, &port, &index));
+  ASSERT_EQ("127.0.0.1", ip);
+  ASSERT_EQ(10000, port);
+  ASSERT_EQ(0, index);
 }
 
 TEST(DealPeerIdTest, SplitPeerIdSuccess1) {
-    std::string peerId = "127.0.0.1:10000:0";
-    std::string ip;
-    uint32_t port;
-    ASSERT_TRUE(SplitPeerId(peerId, &ip, &port));
-    ASSERT_EQ("127.0.0.1", ip);
-    ASSERT_EQ(10000, port);
+  std::string peerId = "127.0.0.1:10000:0";
+  std::string ip;
+  uint32_t port;
+  ASSERT_TRUE(SplitPeerId(peerId, &ip, &port));
+  ASSERT_EQ("127.0.0.1", ip);
+  ASSERT_EQ(10000, port);
 }
 
 TEST(DealPeerIdTest, SplitPeerIdFail) {
-    std::string peerId = "127.0.0.1:10000:0:0";
-    std::string ip;
-    uint32_t port;
-    uint32_t index;
-    ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
+  std::string peerId = "127.0.0.1:10000:0:0";
+  std::string ip;
+  uint32_t port;
+  uint32_t index;
+  ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
 }
 
 TEST(DealPeerIdTest, SplitPeerIdFail1) {
-    std::string peerId = "127.0.0.1:q10000:0";
-    std::string ip;
-    uint32_t port;
-    uint32_t index;
-    ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
+  std::string peerId = "127.0.0.1:q10000:0";
+  std::string ip;
+  uint32_t port;
+  uint32_t index;
+  ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
 }
 
 TEST(DealPeerIdTest, SplitPeerIdFail2) {
-    std::string peerId = "127.0.0.1:10000:q1";
-    std::string ip;
-    uint32_t port;
-    uint32_t index;
-    ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
+  std::string peerId = "127.0.0.1:10000:q1";
+  std::string ip;
+  uint32_t port;
+  uint32_t index;
+  ASSERT_FALSE(SplitPeerId(peerId, &ip, &port, &index));
 }
 
 }  // namespace topology

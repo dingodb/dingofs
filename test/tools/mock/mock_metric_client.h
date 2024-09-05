@@ -20,15 +20,16 @@
  * Author: charisu
  */
 
-
 #ifndef TEST_TOOLS_MOCK_MOCK_METRIC_CLIENT_H_
 #define TEST_TOOLS_MOCK_MOCK_METRIC_CLIENT_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
+
 #include "src/tools/metric_client.h"
 
 using ::testing::Return;
@@ -36,14 +37,12 @@ namespace curve {
 namespace tool {
 class MockMetricClient : public MetricClient {
  public:
-    MOCK_METHOD3(GetMetric, MetricRet(const std::string&, const std::string&,
-                                std::string*));
-    MOCK_METHOD3(GetMetricUint, MetricRet(const std::string&,
-                                const std::string&,
-                                uint64_t*));
-    MOCK_METHOD3(GetConfValueFromMetric, MetricRet(const std::string&,
-                                         const std::string&,
-                                         std::string*));
+  MOCK_METHOD3(GetMetric,
+               MetricRet(const std::string&, const std::string&, std::string*));
+  MOCK_METHOD3(GetMetricUint,
+               MetricRet(const std::string&, const std::string&, uint64_t*));
+  MOCK_METHOD3(GetConfValueFromMetric,
+               MetricRet(const std::string&, const std::string&, std::string*));
 };
 }  // namespace tool
 }  // namespace curve

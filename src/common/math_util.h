@@ -22,21 +22,21 @@
 #ifndef SRC_COMMON_MATH_UTIL_H_
 #define SRC_COMMON_MATH_UTIL_H_
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <algorithm>
 #include <numeric>
 
 namespace curve {
 namespace common {
 
 inline uint64_t MaxPowerTimesLessEqualValue(uint64_t value) {
-    uint64_t pow = 0;
-    while (value > 1) {
-        value >>= 1;
-        pow++;
-    }
-    return pow;
+  uint64_t pow = 0;
+  while (value > 1) {
+    value >>= 1;
+    pow++;
+  }
+  return pow;
 }
 
 /**
@@ -48,7 +48,7 @@ inline uint64_t MaxPowerTimesLessEqualValue(uint64_t value) {
 template <typename T, typename Compare>
 inline const T& Clamp(const T& value, const T& low, const T& high,
                       Compare comp) {
-    return comp(value, low) ? low : (comp(high, value) ? high : value);
+  return comp(value, low) ? low : (comp(high, value) ? high : value);
 }
 
 /**
@@ -59,8 +59,8 @@ inline const T& Clamp(const T& value, const T& low, const T& high,
  */
 template <typename T>
 inline const T& Clamp(const T& value, const T& low, const T& high) {
-    return Clamp(value, low, high,
-                 [](const T& a, const T& b) { return a < b ? true : false; });
+  return Clamp(value, low, high,
+               [](const T& a, const T& b) { return a < b ? true : false; });
 }
 
 }  // namespace common

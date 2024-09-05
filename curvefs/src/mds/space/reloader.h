@@ -38,19 +38,19 @@ namespace space {
 
 class Reloader {
  public:
-    Reloader(SpaceManager* manager, int concurrency);
+  Reloader(SpaceManager* manager, int concurrency);
 
-    void Add(const FsInfo& fsInfo);
+  void Add(const FsInfo& fsInfo);
 
-    SpaceErrCode Wait();
-
- private:
-    void ReloadOne(const FsInfo& fsInfo);
+  SpaceErrCode Wait();
 
  private:
-    SpaceManager* manager_;
-    std::unique_ptr<curve::common::TaskThreadPool<>> taskPool_;
-    std::atomic<SpaceErrCode> error_;
+  void ReloadOne(const FsInfo& fsInfo);
+
+ private:
+  SpaceManager* manager_;
+  std::unique_ptr<curve::common::TaskThreadPool<>> taskPool_;
+  std::atomic<SpaceErrCode> error_;
 };
 
 }  // namespace space

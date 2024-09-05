@@ -35,26 +35,26 @@ namespace metaserver {
 // Basic inflight throttle
 class MetaServiceClosure : public google::protobuf::Closure {
  public:
-    MetaServiceClosure(InflightThrottle* throttle,
-                       google::protobuf::Closure* done)
-        : throttle_(throttle), rpcDone_(done) {
-            throttle_->Increment();
-    }
+  MetaServiceClosure(InflightThrottle* throttle,
+                     google::protobuf::Closure* done)
+      : throttle_(throttle), rpcDone_(done) {
+    throttle_->Increment();
+  }
 
-    ~MetaServiceClosure() = default;
+  ~MetaServiceClosure() = default;
 
-    MetaServiceClosure(const MetaServiceClosure&) = delete;
-    MetaServiceClosure& operator=(const MetaServiceClosure&) = delete;
+  MetaServiceClosure(const MetaServiceClosure&) = delete;
+  MetaServiceClosure& operator=(const MetaServiceClosure&) = delete;
 
-    void Run() override {
-        std::unique_ptr<MetaServiceClosure> selfGuard(this);
-        rpcDone_->Run();
-        throttle_->Decrement();
-    }
+  void Run() override {
+    std::unique_ptr<MetaServiceClosure> selfGuard(this);
+    rpcDone_->Run();
+    throttle_->Decrement();
+  }
 
  private:
-    InflightThrottle* throttle_;
-    google::protobuf::Closure* rpcDone_;
+  InflightThrottle* throttle_;
+  google::protobuf::Closure* rpcDone_;
 };
 
 }  // namespace metaserver

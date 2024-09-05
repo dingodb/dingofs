@@ -42,18 +42,18 @@ namespace status {
 
 class StatusTool : public CurvefsTool {
  public:
-    explicit StatusTool(const std::string& command = kStatusCmd)
-        : CurvefsTool(command) {}
-    void PrintHelp() override;
+  explicit StatusTool(const std::string& command = kStatusCmd)
+      : CurvefsTool(command) {}
+  void PrintHelp() override;
 
-    int RunCommand() override;
-    int Init() override;
+  int RunCommand() override;
+  int Init() override;
 
  protected:
-    std::shared_ptr<MdsStatusTool> mdsStatusTool_;
-    std::shared_ptr<MetaserverStatusTool> metaserverStatusTool_;
-    std::shared_ptr<EtcdStatusTool> etcdStatusTool_;
-    std::shared_ptr<CopysetStatusTool> copysetStatutsTool_;
+  std::shared_ptr<MdsStatusTool> mdsStatusTool_;
+  std::shared_ptr<MetaserverStatusTool> metaserverStatusTool_;
+  std::shared_ptr<EtcdStatusTool> etcdStatusTool_;
+  std::shared_ptr<CopysetStatusTool> copysetStatutsTool_;
 };
 
 }  // namespace status

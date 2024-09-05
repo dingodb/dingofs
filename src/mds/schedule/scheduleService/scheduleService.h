@@ -23,9 +23,11 @@
 #ifndef SRC_MDS_SCHEDULE_SCHEDULESERVICE_SCHEDULESERVICE_H_
 #define SRC_MDS_SCHEDULE_SCHEDULESERVICE_SCHEDULESERVICE_H_
 
-#include <glog/logging.h>
 #include <brpc/server.h>
+#include <glog/logging.h>
+
 #include <memory>
+
 #include "proto/schedule.pb.h"
 #include "src/mds/schedule/coordinator.h"
 
@@ -34,26 +36,24 @@ namespace mds {
 namespace schedule {
 class ScheduleServiceImpl : public ScheduleService {
  public:
-    explicit ScheduleServiceImpl(
-        const std::shared_ptr<Coordinator> &coordinator)
-        : coordinator_(coordinator) {}
+  explicit ScheduleServiceImpl(const std::shared_ptr<Coordinator>& coordinator)
+      : coordinator_(coordinator) {}
 
-    virtual ~ScheduleServiceImpl() {}
+  virtual ~ScheduleServiceImpl() {}
 
-    virtual void RapidLeaderSchedule(
-        google::protobuf::RpcController* cntl_base,
-        const RapidLeaderScheduleRequst* request,
-        RapidLeaderScheduleResponse* response,
-        google::protobuf::Closure* done);
+  virtual void RapidLeaderSchedule(google::protobuf::RpcController* cntl_base,
+                                   const RapidLeaderScheduleRequst* request,
+                                   RapidLeaderScheduleResponse* response,
+                                   google::protobuf::Closure* done);
 
-    virtual void QueryChunkServerRecoverStatus(
-        google::protobuf::RpcController* cntl_base,
-        const QueryChunkServerRecoverStatusRequest *request,
-        QueryChunkServerRecoverStatusResponse *response,
-        google::protobuf::Closure* done);
+  virtual void QueryChunkServerRecoverStatus(
+      google::protobuf::RpcController* cntl_base,
+      const QueryChunkServerRecoverStatusRequest* request,
+      QueryChunkServerRecoverStatusResponse* response,
+      google::protobuf::Closure* done);
 
  private:
-    std::shared_ptr<Coordinator> coordinator_;
+  std::shared_ptr<Coordinator> coordinator_;
 };
 
 }  // namespace schedule

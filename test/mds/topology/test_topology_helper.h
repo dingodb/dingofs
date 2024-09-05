@@ -29,18 +29,17 @@ namespace curve {
 namespace mds {
 namespace topology {
 
-bool JudgeLogicalPoolEqual(const LogicalPool &lh, const LogicalPool &rh);
+bool JudgeLogicalPoolEqual(const LogicalPool& lh, const LogicalPool& rh);
 
-bool JudgePhysicalPoolEqual(const PhysicalPool &lh, const PhysicalPool &rh);
+bool JudgePhysicalPoolEqual(const PhysicalPool& lh, const PhysicalPool& rh);
 
-bool JudgeZoneEqual(const Zone &lh, const Zone &rh);
+bool JudgeZoneEqual(const Zone& lh, const Zone& rh);
 
+bool JudgeServerEqual(const Server& lh, const Server& rh);
 
-bool JudgeServerEqual(const Server &lh, const Server &rh);
+bool JudgeChunkServerEqual(const ChunkServer& lh, const ChunkServer& rh);
 
-bool JudgeChunkServerEqual(const ChunkServer &lh, const ChunkServer &rh);
-
-bool JudgeCopysetInfoEqual(const CopySetInfo &lh, const CopySetInfo &rh);
+bool JudgeCopysetInfoEqual(const CopySetInfo& lh, const CopySetInfo& rh);
 
 }  // namespace topology
 }  // namespace mds

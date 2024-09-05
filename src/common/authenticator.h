@@ -22,40 +22,39 @@
 #ifndef SRC_COMMON_AUTHENTICATOR_H_
 #define SRC_COMMON_AUTHENTICATOR_H_
 
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace curve {
 namespace common {
 
 class Authenticator {
  public:
-    /**
-     * bref: 获取要进行签名的字符串
-     * @param: date, 当前的时间
-     * @param: owner, 文件所有者
-     * @return: 返回需要进行加密的字符串
-     */
-    static std::string GetString2Signature(uint64_t date,
-                                          const std::string& owner);
+  /**
+   * bref: 获取要进行签名的字符串
+   * @param: date, 当前的时间
+   * @param: owner, 文件所有者
+   * @return: 返回需要进行加密的字符串
+   */
+  static std::string GetString2Signature(uint64_t date,
+                                         const std::string& owner);
 
-    /**
-     * bref: 为字符串计算签名
-     * @param: String2Signature, 需要进行签名计算的字符串
-     * @param: secretKey, 为计算的秘钥
-     * @return: 返回需要进行签名过后的字符串
-     */
-    static std::string CalcString2Signature(const std::string& String2Signature,
-                                            const std::string& secretKey);
+  /**
+   * bref: 为字符串计算签名
+   * @param: String2Signature, 需要进行签名计算的字符串
+   * @param: secretKey, 为计算的秘钥
+   * @return: 返回需要进行签名过后的字符串
+   */
+  static std::string CalcString2Signature(const std::string& String2Signature,
+                                          const std::string& secretKey);
 
  private:
-    static int HMacSha256(const void* key, int key_size,
-                          const void* data, int data_size,
-                          void* digest);
+  static int HMacSha256(const void* key, int key_size, const void* data,
+                        int data_size, void* digest);
 
-    static std::string Base64(const unsigned char *src, size_t sz);
+  static std::string Base64(const unsigned char* src, size_t sz);
 };
-}   // namespace common
-}   // namespace curve
+}  // namespace common
+}  // namespace curve
 
 #endif  // SRC_COMMON_AUTHENTICATOR_H_

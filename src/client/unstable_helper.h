@@ -35,11 +35,7 @@
 namespace curve {
 namespace client {
 
-enum class UnstableState {
-    NoUnstable,
-    ChunkServerUnstable,
-    ServerUnstable
-};
+enum class UnstableState { NoUnstable, ChunkServerUnstable, ServerUnstable };
 
 // 如果chunkserver宕机或者网络不可达, 发往对应chunkserver的rpc会超时
 // 返回之后, 回去refresh leader然后再去发送请求
@@ -51,53 +47,51 @@ enum class UnstableState {
 // 主动去refresh leader，而不是根据缓存的leader信息直接发送rpc
 class UnstableHelper {
  public:
-    UnstableHelper() = default;
+  UnstableHelper() = default;
 
-    UnstableHelper(const UnstableHelper&) = delete;
-    UnstableHelper& operator=(const UnstableHelper&) = delete;
+  UnstableHelper(const UnstableHelper&) = delete;
+  UnstableHelper& operator=(const UnstableHelper&) = delete;
 
-    void Init(const ChunkServerUnstableOption& opt) {
-        option_ = opt;
-    }
+  void Init(const ChunkServerUnstableOption& opt) { option_ = opt; }
 
-    void IncreTimeout(ChunkServerID csId) {
-        std::unique_lock<decltype(mtx_)> guard(mtx_);
-        ++timeoutTimes_[csId];
-    }
+  void IncreTimeout(ChunkServerID csId) {
+    std::unique_lock<decltype(mtx_)> guard(mtx_);
+    ++timeoutTimes_[csId];
+  }
 
-    UnstableState GetCurrentUnstableState(ChunkServerID csId,
-                                          const butil::EndPoint& csEndPoint);
+  UnstableState GetCurrentUnstableState(ChunkServerID csId,
+                                        const butil::EndPoint& csEndPoint);
 
-    void ClearTimeout(ChunkServerID csId, const butil::EndPoint& csEndPoint) {
-        std::string ip = butil::ip2str(csEndPoint.ip).c_str();
+  void ClearTimeout(ChunkServerID csId, const butil::EndPoint& csEndPoint) {
+    std::string ip = butil::ip2str(csEndPoint.ip).c_str();
 
-        std::unique_lock<decltype(mtx_)> guard(mtx_);
-        timeoutTimes_[csId] = 0;
-        serverUnstabledChunkservers_[ip].clear();
-    }
+    std::unique_lock<decltype(mtx_)> guard(mtx_);
+    timeoutTimes_[csId] = 0;
+    serverUnstabledChunkservers_[ip].clear();
+  }
 
  private:
-    /**
-     * @brief 检查chunkserver状态
-     *
-     * @param: endPoint chunkserver的ip:port地址
-     * @return: true 健康 / false 不健康
-     */
-    bool CheckChunkServerHealth(const butil::EndPoint& endPoint) const {
-        return ServiceHelper::CheckChunkServerHealth(
-                   endPoint, option_.checkHealthTimeoutMS) == 0;
-    }
+  /**
+   * @brief 检查chunkserver状态
+   *
+   * @param: endPoint chunkserver的ip:port地址
+   * @return: true 健康 / false 不健康
+   */
+  bool CheckChunkServerHealth(const butil::EndPoint& endPoint) const {
+    return ServiceHelper::CheckChunkServerHealth(
+               endPoint, option_.checkHealthTimeoutMS) == 0;
+  }
 
-    ChunkServerUnstableOption option_;
+  ChunkServerUnstableOption option_;
 
-    bthread::Mutex mtx_;
+  bthread::Mutex mtx_;
 
-    // 同一chunkserver连续超时请求次数
-    std::unordered_map<ChunkServerID, uint32_t> timeoutTimes_;
+  // 同一chunkserver连续超时请求次数
+  std::unordered_map<ChunkServerID, uint32_t> timeoutTimes_;
 
-    // 同一server上unstable chunkserver的id
-    std::unordered_map<std::string, std::unordered_set<ChunkServerID>>
-        serverUnstabledChunkservers_;
+  // 同一server上unstable chunkserver的id
+  std::unordered_map<std::string, std::unordered_set<ChunkServerID>>
+      serverUnstabledChunkservers_;
 };
 
 }  // namespace client

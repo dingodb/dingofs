@@ -31,38 +31,38 @@ namespace curvefs {
 namespace mds {
 
 struct FakeCurveFSService : public curve::mds::CurveFSService {
-    void ExtendFile(::google::protobuf::RpcController* controller,
-                    const ::curve::mds::ExtendFileRequest* request,
-                    ::curve::mds::ExtendFileResponse* response,
-                    ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard guard(done);
-        if (extendCallback) {
-            extendCallback(response);
-        } else {
-            response->set_statuscode(curve::mds::kOK);
-        }
+  void ExtendFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::ExtendFileRequest* request,
+                  ::curve::mds::ExtendFileResponse* response,
+                  ::google::protobuf::Closure* done) override {
+    brpc::ClosureGuard guard(done);
+    if (extendCallback) {
+      extendCallback(response);
+    } else {
+      response->set_statuscode(curve::mds::kOK);
     }
+  }
 
-    void GetFileInfo(::google::protobuf::RpcController* controller,
-                     const ::curve::mds::GetFileInfoRequest* request,
-                     ::curve::mds::GetFileInfoResponse* response,
-                     ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard guard(done);
-        if (getinfoCallback) {
-            getinfoCallback(response);
-        } else {
-            response->set_statuscode(curve::mds::kOK);
-            auto* fileInfo = response->mutable_fileinfo();
-            fileInfo->set_length(volumeSize);
-            fileInfo->set_segmentsize(volumeSegmentSize);
-        }
+  void GetFileInfo(::google::protobuf::RpcController* controller,
+                   const ::curve::mds::GetFileInfoRequest* request,
+                   ::curve::mds::GetFileInfoResponse* response,
+                   ::google::protobuf::Closure* done) override {
+    brpc::ClosureGuard guard(done);
+    if (getinfoCallback) {
+      getinfoCallback(response);
+    } else {
+      response->set_statuscode(curve::mds::kOK);
+      auto* fileInfo = response->mutable_fileinfo();
+      fileInfo->set_length(volumeSize);
+      fileInfo->set_segmentsize(volumeSegmentSize);
     }
+  }
 
-    std::function<void(curve::mds::ExtendFileResponse*)> extendCallback;
-    std::function<void(curve::mds::GetFileInfoResponse*)> getinfoCallback;
+  std::function<void(curve::mds::ExtendFileResponse*)> extendCallback;
+  std::function<void(curve::mds::GetFileInfoResponse*)> getinfoCallback;
 
-    uint64_t volumeSize{100ULL << 30};
-    uint64_t volumeSegmentSize{1ULL << 30};
+  uint64_t volumeSize{100ULL << 30};
+  uint64_t volumeSegmentSize{1ULL << 30};
 };
 
 }  // namespace mds

@@ -25,6 +25,7 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+
 #include <string>
 #include <vector>
 
@@ -35,39 +36,35 @@ namespace client {
 
 class FakeHeartbeatService : public NebdHeartbeatService {
  public:
-    FakeHeartbeatService() = default;
-    virtual ~FakeHeartbeatService() = default;
+  FakeHeartbeatService() = default;
+  virtual ~FakeHeartbeatService() = default;
 
-    void KeepAlive(::google::protobuf::RpcController* controller,
-                   const ::nebd::client::HeartbeatRequest* request,
-                   ::nebd::client::HeartbeatResponse* response,
-                   ::google::protobuf::Closure* done) override {
-        brpc::ClosureGuard doneGuard(done);
-        ++invokeTimes_;
-        latestFileInfos_.clear();
+  void KeepAlive(::google::protobuf::RpcController* controller,
+                 const ::nebd::client::HeartbeatRequest* request,
+                 ::nebd::client::HeartbeatResponse* response,
+                 ::google::protobuf::Closure* done) override {
+    brpc::ClosureGuard doneGuard(done);
+    ++invokeTimes_;
+    latestFileInfos_.clear();
 
-        response->set_retcode(RetCode::kOK);
+    response->set_retcode(RetCode::kOK);
 
-        for (int i = 0; i < request->info_size(); ++i) {
-           latestFileInfos_.push_back(request->info(i));
-        }
+    for (int i = 0; i < request->info_size(); ++i) {
+      latestFileInfos_.push_back(request->info(i));
     }
+  }
 
-    std::vector<HeartbeatFileInfo> GetLatestRequestFileInfos() const {
-       return latestFileInfos_;
-    }
+  std::vector<HeartbeatFileInfo> GetLatestRequestFileInfos() const {
+    return latestFileInfos_;
+  }
 
-    void ClearInvokeTimes() {
-       invokeTimes_ = 0;
-    }
+  void ClearInvokeTimes() { invokeTimes_ = 0; }
 
-    int GetInvokeTimes() const {
-       return invokeTimes_;
-    }
+  int GetInvokeTimes() const { return invokeTimes_; }
 
  private:
-    int invokeTimes_{0};
-    std::vector<HeartbeatFileInfo> latestFileInfos_;
+  int invokeTimes_{0};
+  std::vector<HeartbeatFileInfo> latestFileInfos_;
 };
 
 }  // namespace client

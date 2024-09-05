@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gtest/gtest.h>
-
 #include "curvefs/src/metaserver/storage/status.h"
+
+#include <gtest/gtest.h>
 
 namespace curvefs {
 namespace metaserver {
@@ -30,32 +30,32 @@ namespace storage {
 
 class StatusTest : public testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(StatusTest, BasicTest) {
-    Status s;
+  Status s;
 
-    s = Status::OK();
-    ASSERT_TRUE(s.ok());
-    ASSERT_EQ(s.ToString(), "OK");
+  s = Status::OK();
+  ASSERT_TRUE(s.ok());
+  ASSERT_EQ(s.ToString(), "OK");
 
-    s = Status::DBClosed();
-    ASSERT_TRUE(s.IsDBClosed());
-    ASSERT_EQ(s.ToString(), "Database Closed");
+  s = Status::DBClosed();
+  ASSERT_TRUE(s.IsDBClosed());
+  ASSERT_EQ(s.ToString(), "Database Closed");
 
-    s = Status::NotFound();
-    ASSERT_TRUE(s.IsNotFound());
-    ASSERT_EQ(s.ToString(), "Not Found");
+  s = Status::NotFound();
+  ASSERT_TRUE(s.IsNotFound());
+  ASSERT_EQ(s.ToString(), "Not Found");
 
-    s = Status::NotSupported();
-    ASSERT_TRUE(s.IsNotSupported());
-    ASSERT_EQ(s.ToString(), "Not Supported");
+  s = Status::NotSupported();
+  ASSERT_TRUE(s.IsNotSupported());
+  ASSERT_EQ(s.ToString(), "Not Supported");
 
-    s = Status::InternalError();
-    ASSERT_TRUE(s.IsInternalError());
-    ASSERT_EQ(s.ToString(), "Internal Error");
+  s = Status::InternalError();
+  ASSERT_TRUE(s.IsInternalError());
+  ASSERT_EQ(s.ToString(), "Internal Error");
 }
 
 }  // namespace storage

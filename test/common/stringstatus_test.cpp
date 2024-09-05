@@ -20,27 +20,28 @@
  * Author: lixiaocui
  */
 
-#include <gtest/gtest.h>
 #include "src/common/stringstatus.h"
+
+#include <gtest/gtest.h>
 
 namespace curve {
 namespace common {
 
 TEST(Common, string_status_test) {
-    StringStatus status;
-    status.ExposeAs("test1_", "1");
-    status.Update();
-    ASSERT_TRUE(status.JsonBody().empty());
+  StringStatus status;
+  status.ExposeAs("test1_", "1");
+  status.Update();
+  ASSERT_TRUE(status.JsonBody().empty());
 
-    status.Set("hello", "world");
-    status.Update();
-    ASSERT_EQ("{\"hello\":\"world\"}", status.JsonBody());
-    ASSERT_EQ("world", status.GetValueByKey("hello"));
+  status.Set("hello", "world");
+  status.Update();
+  ASSERT_EQ("{\"hello\":\"world\"}", status.JsonBody());
+  ASSERT_EQ("world", status.GetValueByKey("hello"));
 
-    status.Set("code", "smart");
-    status.Update();
-    ASSERT_EQ("{\"code\":\"smart\",\"hello\":\"world\"}", status.JsonBody());
-    ASSERT_EQ("smart", status.GetValueByKey("code"));
+  status.Set("code", "smart");
+  status.Update();
+  ASSERT_EQ("{\"code\":\"smart\",\"hello\":\"world\"}", status.JsonBody());
+  ASSERT_EQ("smart", status.GetValueByKey("code"));
 }
 
 }  // namespace common

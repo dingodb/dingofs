@@ -45,40 +45,40 @@ class InodeTool
                             curvefs::metaserver::GetInodeResponse,
                             curvefs::metaserver::MetaServerService_Stub> {
  public:
-    explicit InodeTool(const std::string& cmd = kNoInvokeCmd, bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
+  explicit InodeTool(const std::string& cmd = kNoInvokeCmd, bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
 
-    void PrintHelp() override;
-    int Init() override;
-    std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
-                       KeyEuqalInodeBase>
-    GetInode2InodeBaseInfoList() {
-        return inode2InodeBaseInfoList_;
-    }
-
- protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
-
-    /**
-     * @brief
-     *
-     * @param inode
-     * @param list
-     * @return true : success
-     * @return false : inode2InodeBaseInfoList_[inode].second.size() > 0
-     * means  found two inode in the fs
-     */
-    bool UpdateInode2InodeBaseInfoList_(const InodeBase& inode,
-                                        const InodeBaseInfo& list);
+  void PrintHelp() override;
+  int Init() override;
+  std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
+                     KeyEuqalInodeBase>
+  GetInode2InodeBaseInfoList() {
+    return inode2InodeBaseInfoList_;
+  }
 
  protected:
-    std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
-                       KeyEuqalInodeBase>
-        inode2InodeBaseInfoList_;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
+
+  /**
+   * @brief
+   *
+   * @param inode
+   * @param list
+   * @return true : success
+   * @return false : inode2InodeBaseInfoList_[inode].second.size() > 0
+   * means  found two inode in the fs
+   */
+  bool UpdateInode2InodeBaseInfoList_(const InodeBase& inode,
+                                      const InodeBaseInfo& list);
+
+ protected:
+  std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
+                     KeyEuqalInodeBase>
+      inode2InodeBaseInfoList_;
 };
 
 }  // namespace query

@@ -33,244 +33,241 @@ namespace client {
 SnapshotClient::SnapshotClient() {}
 
 int SnapshotClient::Init(ClientConfigOption clientopt) {
-    google::SetCommandLineOption(
-        "minloglevel", std::to_string(clientopt.loginfo.logLevel).c_str());
-    int ret = -LIBCURVE_ERROR::FAILED;
-    do {
-        if (mdsclient_.Initialize(clientopt.metaServerOpt) !=
-            LIBCURVE_ERROR::OK) {
-            LOG(ERROR) << "MDSClient init failed!";
-            break;
-        }
-
-        if (!iomanager4chunk_.Initialize(clientopt.ioOpt, &mdsclient_)) {
-            LOG(ERROR) << "Init io context manager failed!";
-            break;
-        }
-        ret = LIBCURVE_ERROR::OK;
-    } while (0);
-
-    return ret;
-}
-
-int SnapshotClient::Init(const std::string &configpath) {
-    if (-1 == clientconfig_.Init(configpath.c_str())) {
-        LOG(ERROR) << "config init failed!";
-        return -LIBCURVE_ERROR::FAILED;
+  google::SetCommandLineOption(
+      "minloglevel", std::to_string(clientopt.loginfo.logLevel).c_str());
+  int ret = -LIBCURVE_ERROR::FAILED;
+  do {
+    if (mdsclient_.Initialize(clientopt.metaServerOpt) != LIBCURVE_ERROR::OK) {
+      LOG(ERROR) << "MDSClient init failed!";
+      break;
     }
 
-    int ret = -LIBCURVE_ERROR::FAILED;
-    do {
-        auto rt = mdsclient_.Initialize(
-            clientconfig_.GetFileServiceOption().metaServerOpt);
-        if (rt != LIBCURVE_ERROR::OK) {
-            LOG(ERROR) << "MDSClient init failed!";
-            break;
-        }
+    if (!iomanager4chunk_.Initialize(clientopt.ioOpt, &mdsclient_)) {
+      LOG(ERROR) << "Init io context manager failed!";
+      break;
+    }
+    ret = LIBCURVE_ERROR::OK;
+  } while (0);
 
-        bool rc = iomanager4chunk_.Initialize(
-            clientconfig_.GetFileServiceOption().ioOpt, &mdsclient_);
-        if (!rc) {
-            LOG(ERROR) << "Init io context manager failed!";
-            break;
-        }
-        ret = LIBCURVE_ERROR::OK;
-    } while (0);
+  return ret;
+}
 
-    return ret;
+int SnapshotClient::Init(const std::string& configpath) {
+  if (-1 == clientconfig_.Init(configpath.c_str())) {
+    LOG(ERROR) << "config init failed!";
+    return -LIBCURVE_ERROR::FAILED;
+  }
+
+  int ret = -LIBCURVE_ERROR::FAILED;
+  do {
+    auto rt = mdsclient_.Initialize(
+        clientconfig_.GetFileServiceOption().metaServerOpt);
+    if (rt != LIBCURVE_ERROR::OK) {
+      LOG(ERROR) << "MDSClient init failed!";
+      break;
+    }
+
+    bool rc = iomanager4chunk_.Initialize(
+        clientconfig_.GetFileServiceOption().ioOpt, &mdsclient_);
+    if (!rc) {
+      LOG(ERROR) << "Init io context manager failed!";
+      break;
+    }
+    ret = LIBCURVE_ERROR::OK;
+  } while (0);
+
+  return ret;
 }
 
 void SnapshotClient::UnInit() {
-    iomanager4chunk_.UnInitialize();
-    mdsclient_.UnInitialize();
+  iomanager4chunk_.UnInitialize();
+  mdsclient_.UnInitialize();
 }
 
-int SnapshotClient::CreateSnapShot(const std::string &filename,
-                                   const UserInfo_t &userinfo, uint64_t *seq) {
-    LIBCURVE_ERROR ret = mdsclient_.CreateSnapShot(filename, userinfo, seq);
-    return -ret;
+int SnapshotClient::CreateSnapShot(const std::string& filename,
+                                   const UserInfo_t& userinfo, uint64_t* seq) {
+  LIBCURVE_ERROR ret = mdsclient_.CreateSnapShot(filename, userinfo, seq);
+  return -ret;
 }
 
-int SnapshotClient::DeleteSnapShot(const std::string &filename,
-                                   const UserInfo_t &userinfo, uint64_t seq) {
-    LIBCURVE_ERROR ret = mdsclient_.DeleteSnapShot(filename, userinfo, seq);
-    return -ret;
+int SnapshotClient::DeleteSnapShot(const std::string& filename,
+                                   const UserInfo_t& userinfo, uint64_t seq) {
+  LIBCURVE_ERROR ret = mdsclient_.DeleteSnapShot(filename, userinfo, seq);
+  return -ret;
 }
 
-int SnapshotClient::GetSnapShot(const std::string &filename,
-                                const UserInfo_t &userinfo, uint64_t seq,
-                                FInfo *snapinfo) {
-    std::map<uint64_t, FInfo> infomap;
-    std::vector<uint64_t> seqvec;
-    seqvec.push_back(seq);
-    LIBCURVE_ERROR ret =
-        mdsclient_.ListSnapShot(filename, userinfo, &seqvec, &infomap);
-    if (ret == LIBCURVE_ERROR::OK && !infomap.empty()) {
-        auto it = infomap.begin();
-        if (it->first != seq) {
-            LOG(WARNING) << "Snapshot info not found with seqnum = " << seq;
-            return -LIBCURVE_ERROR::NOTEXIST;
-        }
-        *snapinfo = it->second;
+int SnapshotClient::GetSnapShot(const std::string& filename,
+                                const UserInfo_t& userinfo, uint64_t seq,
+                                FInfo* snapinfo) {
+  std::map<uint64_t, FInfo> infomap;
+  std::vector<uint64_t> seqvec;
+  seqvec.push_back(seq);
+  LIBCURVE_ERROR ret =
+      mdsclient_.ListSnapShot(filename, userinfo, &seqvec, &infomap);
+  if (ret == LIBCURVE_ERROR::OK && !infomap.empty()) {
+    auto it = infomap.begin();
+    if (it->first != seq) {
+      LOG(WARNING) << "Snapshot info not found with seqnum = " << seq;
+      return -LIBCURVE_ERROR::NOTEXIST;
     }
-    return -ret;
+    *snapinfo = it->second;
+  }
+  return -ret;
 }
 
-int SnapshotClient::ListSnapShot(const std::string &filename,
-                                 const UserInfo_t &userinfo,
-                                 const std::vector<uint64_t> *seq,
-                                 std::map<uint64_t, FInfo> *snapif) {
-    LIBCURVE_ERROR ret =
-        mdsclient_.ListSnapShot(filename, userinfo, seq, snapif);
-    return -ret;
+int SnapshotClient::ListSnapShot(const std::string& filename,
+                                 const UserInfo_t& userinfo,
+                                 const std::vector<uint64_t>* seq,
+                                 std::map<uint64_t, FInfo>* snapif) {
+  LIBCURVE_ERROR ret = mdsclient_.ListSnapShot(filename, userinfo, seq, snapif);
+  return -ret;
 }
 
-int SnapshotClient::GetSnapshotSegmentInfo(const std::string &filename,
-                                           const UserInfo_t &userinfo,
+int SnapshotClient::GetSnapshotSegmentInfo(const std::string& filename,
+                                           const UserInfo_t& userinfo,
                                            uint64_t seq, uint64_t offset,
-                                           SegmentInfo *segInfo) {
-    int ret = mdsclient_.GetSnapshotSegmentInfo(filename, userinfo, seq, offset,
-                                                segInfo);
+                                           SegmentInfo* segInfo) {
+  int ret = mdsclient_.GetSnapshotSegmentInfo(filename, userinfo, seq, offset,
+                                              segInfo);
 
-    if (ret != LIBCURVE_ERROR::OK) {
-        LOG(WARNING) << "GetSnapshotSegmentInfo failed, ret = " << ret;
-        return -ret;
-    }
-
-    for (const auto &iter : segInfo->chunkvec) {
-        iomanager4chunk_.GetMetaCache()->UpdateChunkInfoByID(iter.cid_, iter);
-    }
-
-    return GetServerList(segInfo->lpcpIDInfo.lpid, segInfo->lpcpIDInfo.cpidVec);
-}
-
-int SnapshotClient::GetServerList(const LogicPoolID &lpid,
-                                  const std::vector<CopysetID> &csid) {
-    std::vector<CopysetInfo<ChunkServerID>> cpinfoVec;
-    int ret = mdsclient_.GetServerList(lpid, csid, &cpinfoVec);
-
-    for (auto iter : cpinfoVec) {
-        iomanager4chunk_.GetMetaCache()->UpdateCopysetInfo(lpid, iter.cpid_,
-                                                           iter);
-    }
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(WARNING) << "GetSnapshotSegmentInfo failed, ret = " << ret;
     return -ret;
+  }
+
+  for (const auto& iter : segInfo->chunkvec) {
+    iomanager4chunk_.GetMetaCache()->UpdateChunkInfoByID(iter.cid_, iter);
+  }
+
+  return GetServerList(segInfo->lpcpIDInfo.lpid, segInfo->lpcpIDInfo.cpidVec);
 }
 
-int SnapshotClient::CheckSnapShotStatus(const std::string &filename,
-                                        const UserInfo_t &userinfo,
-                                        uint64_t seq, FileStatus *filestatus) {
-    LIBCURVE_ERROR ret =
-        mdsclient_.CheckSnapShotStatus(filename, userinfo, seq, filestatus);
-    return -ret;
+int SnapshotClient::GetServerList(const LogicPoolID& lpid,
+                                  const std::vector<CopysetID>& csid) {
+  std::vector<CopysetInfo<ChunkServerID>> cpinfoVec;
+  int ret = mdsclient_.GetServerList(lpid, csid, &cpinfoVec);
+
+  for (auto iter : cpinfoVec) {
+    iomanager4chunk_.GetMetaCache()->UpdateCopysetInfo(lpid, iter.cpid_, iter);
+  }
+  return -ret;
 }
 
-int SnapshotClient::CreateCloneFile(const std::string &source,
-                                    const std::string &destination,
-                                    const UserInfo_t &userinfo, uint64_t size,
+int SnapshotClient::CheckSnapShotStatus(const std::string& filename,
+                                        const UserInfo_t& userinfo,
+                                        uint64_t seq, FileStatus* filestatus) {
+  LIBCURVE_ERROR ret =
+      mdsclient_.CheckSnapShotStatus(filename, userinfo, seq, filestatus);
+  return -ret;
+}
+
+int SnapshotClient::CreateCloneFile(const std::string& source,
+                                    const std::string& destination,
+                                    const UserInfo_t& userinfo, uint64_t size,
                                     uint64_t sn, uint32_t chunksize,
                                     uint64_t stripeUnit, uint64_t stripeCount,
-                                    FInfo *finfo) {
-    LIBCURVE_ERROR ret =
-        mdsclient_.CreateCloneFile(source, destination, userinfo, size, sn,
-                                   chunksize, stripeUnit, stripeCount, finfo);
-    return -ret;
+                                    FInfo* finfo) {
+  LIBCURVE_ERROR ret =
+      mdsclient_.CreateCloneFile(source, destination, userinfo, size, sn,
+                                 chunksize, stripeUnit, stripeCount, finfo);
+  return -ret;
 }
 
-int SnapshotClient::GetFileInfo(const std::string &filename,
-                                const UserInfo_t &userinfo, FInfo *fileInfo) {
-    FileEpoch_t fEpoch;
-    LIBCURVE_ERROR ret = mdsclient_.GetFileInfo(filename, userinfo,
-                                                fileInfo, &fEpoch);
-    return -ret;
+int SnapshotClient::GetFileInfo(const std::string& filename,
+                                const UserInfo_t& userinfo, FInfo* fileInfo) {
+  FileEpoch_t fEpoch;
+  LIBCURVE_ERROR ret =
+      mdsclient_.GetFileInfo(filename, userinfo, fileInfo, &fEpoch);
+  return -ret;
 }
 
 int SnapshotClient::GetOrAllocateSegmentInfo(bool allocate, uint64_t offset,
-                                             const FInfo_t *fi,
-                                             SegmentInfo *segInfo) {
-    int ret = mdsclient_.GetOrAllocateSegment(
-        allocate, offset, fi, nullptr, segInfo);
+                                             const FInfo_t* fi,
+                                             SegmentInfo* segInfo) {
+  int ret =
+      mdsclient_.GetOrAllocateSegment(allocate, offset, fi, nullptr, segInfo);
 
-    if (ret != LIBCURVE_ERROR::OK) {
-        LOG(INFO) << "GetSnapshotSegmentInfo failed, ret = " << ret;
-        return -ret;
-    }
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(INFO) << "GetSnapshotSegmentInfo failed, ret = " << ret;
+    return -ret;
+  }
 
-    // update metacache
-    int count = 0;
-    for (auto iter : segInfo->chunkvec) {
-        uint64_t index =
-            (segInfo->startoffset + count * fi->chunksize) / fi->chunksize;
-        iomanager4chunk_.GetMetaCache()->UpdateChunkInfoByIndex(index, iter);
-        ++count;
-    }
-    return GetServerList(segInfo->lpcpIDInfo.lpid, segInfo->lpcpIDInfo.cpidVec);
+  // update metacache
+  int count = 0;
+  for (auto iter : segInfo->chunkvec) {
+    uint64_t index =
+        (segInfo->startoffset + count * fi->chunksize) / fi->chunksize;
+    iomanager4chunk_.GetMetaCache()->UpdateChunkInfoByIndex(index, iter);
+    ++count;
+  }
+  return GetServerList(segInfo->lpcpIDInfo.lpid, segInfo->lpcpIDInfo.cpidVec);
 }
 
-int SnapshotClient::RenameCloneFile(const UserInfo_t &userinfo,
+int SnapshotClient::RenameCloneFile(const UserInfo_t& userinfo,
                                     uint64_t originId, uint64_t destinationId,
-                                    const std::string &origin,
-                                    const std::string &destination) {
-    LIBCURVE_ERROR ret = mdsclient_.RenameFile(userinfo, origin, destination,
-                                               originId, destinationId);
-    return -ret;
+                                    const std::string& origin,
+                                    const std::string& destination) {
+  LIBCURVE_ERROR ret = mdsclient_.RenameFile(userinfo, origin, destination,
+                                             originId, destinationId);
+  return -ret;
 }
 
-int SnapshotClient::CompleteCloneMeta(const std::string &destination,
-                                      const UserInfo_t &userinfo) {
-    LIBCURVE_ERROR ret = mdsclient_.CompleteCloneMeta(destination, userinfo);
-    return -ret;
+int SnapshotClient::CompleteCloneMeta(const std::string& destination,
+                                      const UserInfo_t& userinfo) {
+  LIBCURVE_ERROR ret = mdsclient_.CompleteCloneMeta(destination, userinfo);
+  return -ret;
 }
 
-int SnapshotClient::CompleteCloneFile(const std::string &destination,
-                                      const UserInfo_t &userinfo) {
-    LIBCURVE_ERROR ret = mdsclient_.CompleteCloneFile(destination, userinfo);
-    return -ret;
+int SnapshotClient::CompleteCloneFile(const std::string& destination,
+                                      const UserInfo_t& userinfo) {
+  LIBCURVE_ERROR ret = mdsclient_.CompleteCloneFile(destination, userinfo);
+  return -ret;
 }
 
-int SnapshotClient::SetCloneFileStatus(const std::string &filename,
-                                       const FileStatus &filestatus,
-                                       const UserInfo_t &userinfo,
+int SnapshotClient::SetCloneFileStatus(const std::string& filename,
+                                       const FileStatus& filestatus,
+                                       const UserInfo_t& userinfo,
                                        uint64_t fileID) {
-    LIBCURVE_ERROR ret =
-        mdsclient_.SetCloneFileStatus(filename, filestatus, userinfo, fileID);
-    return -ret;
+  LIBCURVE_ERROR ret =
+      mdsclient_.SetCloneFileStatus(filename, filestatus, userinfo, fileID);
+  return -ret;
 }
 
-int SnapshotClient::DeleteFile(const std::string &filename,
-                               const UserInfo_t &userinfo, uint64_t id) {
-    LIBCURVE_ERROR ret = mdsclient_.DeleteFile(filename, userinfo, false, id);
-    return -ret;
+int SnapshotClient::DeleteFile(const std::string& filename,
+                               const UserInfo_t& userinfo, uint64_t id) {
+  LIBCURVE_ERROR ret = mdsclient_.DeleteFile(filename, userinfo, false, id);
+  return -ret;
 }
 
-int SnapshotClient::CreateCloneChunk(const std::string &location,
-                                     const ChunkIDInfo &chunkidinfo,
+int SnapshotClient::CreateCloneChunk(const std::string& location,
+                                     const ChunkIDInfo& chunkidinfo,
                                      uint64_t sn, uint64_t correntSn,
                                      uint64_t chunkSize,
-                                     SnapCloneClosure *scc) {
-    return iomanager4chunk_.CreateCloneChunk(location, chunkidinfo, sn,
-                                             correntSn, chunkSize, scc);
+                                     SnapCloneClosure* scc) {
+  return iomanager4chunk_.CreateCloneChunk(location, chunkidinfo, sn, correntSn,
+                                           chunkSize, scc);
 }
 
-int SnapshotClient::RecoverChunk(const ChunkIDInfo &chunkidinfo,
+int SnapshotClient::RecoverChunk(const ChunkIDInfo& chunkidinfo,
                                  uint64_t offset, uint64_t len,
-                                 SnapCloneClosure *scc) {
-    return iomanager4chunk_.RecoverChunk(chunkidinfo, offset, len, scc);
+                                 SnapCloneClosure* scc) {
+  return iomanager4chunk_.RecoverChunk(chunkidinfo, offset, len, scc);
 }
 
 int SnapshotClient::ReadChunkSnapshot(ChunkIDInfo cidinfo, uint64_t seq,
-                                      uint64_t offset, uint64_t len, char *buf,
-                                      SnapCloneClosure *scc) {
-    return iomanager4chunk_.ReadSnapChunk(cidinfo, seq, offset, len, buf, scc);
+                                      uint64_t offset, uint64_t len, char* buf,
+                                      SnapCloneClosure* scc) {
+  return iomanager4chunk_.ReadSnapChunk(cidinfo, seq, offset, len, buf, scc);
 }
 
 int SnapshotClient::DeleteChunkSnapshotOrCorrectSn(ChunkIDInfo cidinfo,
                                                    uint64_t correctedSeq) {
-    return iomanager4chunk_.DeleteSnapChunkOrCorrectSn(cidinfo, correctedSeq);
+  return iomanager4chunk_.DeleteSnapChunkOrCorrectSn(cidinfo, correctedSeq);
 }
 
 int SnapshotClient::GetChunkInfo(ChunkIDInfo cidinfo,
-                                 ChunkInfoDetail *chunkInfo) {
-    return iomanager4chunk_.GetChunkInfo(cidinfo, chunkInfo);
+                                 ChunkInfoDetail* chunkInfo) {
+  return iomanager4chunk_.GetChunkInfo(cidinfo, chunkInfo);
 }
 }  // namespace client
 }  // namespace curve

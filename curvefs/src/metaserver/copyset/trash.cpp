@@ -51,165 +51,164 @@ CopysetTrash::CopysetTrash()
 
 bool CopysetTrash::Init(const CopysetTrashOptions& options,
                         LocalFileSystem* fs) {
-    options_ = options;
-    lfs_ = fs;
+  options_ = options;
+  lfs_ = fs;
 
-    bool parseSuccess =
-        !UriParser::ParseUri(options_.trashUri, &trashDir_).empty() &&
-        !trashDir_.empty();
-    if (!parseSuccess) {
-        LOG(ERROR) << "Trash uri is invalid, trash uri: " << options_.trashUri;
-        return false;
-    }
+  bool parseSuccess =
+      !UriParser::ParseUri(options_.trashUri, &trashDir_).empty() &&
+      !trashDir_.empty();
+  if (!parseSuccess) {
+    LOG(ERROR) << "Trash uri is invalid, trash uri: " << options_.trashUri;
+    return false;
+  }
 
-    LOG(INFO) << "Trash init success, trash path: '" << trashDir_ << "'";
-    return true;
+  LOG(INFO) << "Trash init success, trash path: '" << trashDir_ << "'";
+  return true;
 }
 
 bool CopysetTrash::Start() {
-    if (!running_.exchange(true)) {
-        recycleThread_ =
-            std::thread(&CopysetTrash::DeleteExpiredCopysets, this);
-        LOG(INFO) << "Trash thread start success";
-    }
+  if (!running_.exchange(true)) {
+    recycleThread_ = std::thread(&CopysetTrash::DeleteExpiredCopysets, this);
+    LOG(INFO) << "Trash thread start success";
+  }
 
-    return true;
+  return true;
 }
 
 bool CopysetTrash::Stop() {
-    if (running_.exchange(false)) {
-        LOG(INFO) << "Stop trash...";
-        sleeper_.interrupt();
-        recycleThread_.join();
-        LOG(INFO) << "Trash stopped";
-    }
+  if (running_.exchange(false)) {
+    LOG(INFO) << "Stop trash...";
+    sleeper_.interrupt();
+    recycleThread_.join();
+    LOG(INFO) << "Trash stopped";
+  }
 
-    return true;
+  return true;
 }
 
 std::string CopysetTrash::GenerateCopysetRecyclePath(
     const std::string& copysetAbsolutePath) {
-    std::string copysetBasename =
-        copysetAbsolutePath.substr(copysetAbsolutePath.find_last_of('/') + 1);
+  std::string copysetBasename =
+      copysetAbsolutePath.substr(copysetAbsolutePath.find_last_of('/') + 1);
 
-    std::string destPath =
-        trashDir_ + "/" + copysetBasename + "." + std::to_string(time(nullptr));
-    return destPath;
+  std::string destPath =
+      trashDir_ + "/" + copysetBasename + "." + std::to_string(time(nullptr));
+  return destPath;
 }
 
 bool CopysetTrash::IsCopysetDirNameValid(const std::string& dir) const {
-    const auto pos = dir.find('.');
-    if (pos == std::string::npos) {
-        LOG(WARNING) << "'" << dir << "' is invalid";
-        return false;
-    }
+  const auto pos = dir.find('.');
+  if (pos == std::string::npos) {
+    LOG(WARNING) << "'" << dir << "' is invalid";
+    return false;
+  }
 
-    uint64_t groupId;
-    bool success = StringToUll(dir.substr(0, pos), &groupId);
-    if (!success) {
-        LOG(WARNING) << "Convert to group id failed, group id string: "
-                     << dir.substr(0, pos);
-        return false;
-    }
+  uint64_t groupId;
+  bool success = StringToUll(dir.substr(0, pos), &groupId);
+  if (!success) {
+    LOG(WARNING) << "Convert to group id failed, group id string: "
+                 << dir.substr(0, pos);
+    return false;
+  }
 
-    if (GetPoolId(groupId) <= 0 || GetCopysetId(groupId) <= 0) {
-        LOG(WARNING) << "Invalid copyset group id: " << groupId;
-        return false;
-    }
+  if (GetPoolId(groupId) <= 0 || GetCopysetId(groupId) <= 0) {
+    LOG(WARNING) << "Invalid copyset group id: " << groupId;
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 bool CopysetTrash::IsCopysetDirExpired(const std::string& dir) {
-    int fd = lfs_->Open(dir, O_RDONLY);
-    if (fd < 0) {
-        LOG(ERROR) << "Trash open dir failed, dir: " << dir;
-        return false;
-    }
+  int fd = lfs_->Open(dir, O_RDONLY);
+  if (fd < 0) {
+    LOG(ERROR) << "Trash open dir failed, dir: " << dir;
+    return false;
+  }
 
-    auto closeFd = absl::MakeCleanup([fd, this]() { lfs_->Close(fd); });
+  auto closeFd = absl::MakeCleanup([fd, this]() { lfs_->Close(fd); });
 
-    struct stat dirInfo;
-    if (0 != lfs_->Fstat(fd, &dirInfo)) {
-        LOG(ERROR) << "Trash stat dir failed, dir: " << dir;
-        return false;
-    }
+  struct stat dirInfo;
+  if (0 != lfs_->Fstat(fd, &dirInfo)) {
+    LOG(ERROR) << "Trash stat dir failed, dir: " << dir;
+    return false;
+  }
 
-    time_t now = time(nullptr);
-    if (difftime(now, dirInfo.st_ctime) < options_.expiredAfterSec) {
-        return false;
-    }
+  time_t now = time(nullptr);
+  if (difftime(now, dirInfo.st_ctime) < options_.expiredAfterSec) {
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 bool CopysetTrash::RecycleCopyset(const std::string& copysetAbsolutePath) {
-    if (!CreateTrashDirIfNotExist()) {
-        LOG(WARNING) << "Create trash path failed";
-        return false;
-    }
+  if (!CreateTrashDirIfNotExist()) {
+    LOG(WARNING) << "Create trash path failed";
+    return false;
+  }
 
-    std::string destPath = GenerateCopysetRecyclePath(copysetAbsolutePath);
-    if (lfs_->DirExists(destPath)) {
-        LOG(WARNING) << "Recycle copyset failed, dest path already exists, "
-                     << "copyset dir: " << copysetAbsolutePath
-                     << ", dest dir: " << destPath;
-        return false;
-    }
+  std::string destPath = GenerateCopysetRecyclePath(copysetAbsolutePath);
+  if (lfs_->DirExists(destPath)) {
+    LOG(WARNING) << "Recycle copyset failed, dest path already exists, "
+                 << "copyset dir: " << copysetAbsolutePath
+                 << ", dest dir: " << destPath;
+    return false;
+  }
 
-    if (0 != lfs_->Rename(copysetAbsolutePath, destPath)) {
-        LOG(ERROR) << "Recycle copyset rename failed, copyset dir: "
-                   << copysetAbsolutePath << ", dest dir: " << destPath;
-        return false;
-    }
+  if (0 != lfs_->Rename(copysetAbsolutePath, destPath)) {
+    LOG(ERROR) << "Recycle copyset rename failed, copyset dir: "
+               << copysetAbsolutePath << ", dest dir: " << destPath;
+    return false;
+  }
 
-    LOG(INFO) << "Recycle copyset success, copyset dir: " << copysetAbsolutePath
-              << ", dest dir: " << destPath;
-    return true;
+  LOG(INFO) << "Recycle copyset success, copyset dir: " << copysetAbsolutePath
+            << ", dest dir: " << destPath;
+  return true;
 }
 
 void CopysetTrash::DeleteExpiredCopysets() {
-    while (sleeper_.wait_for(std::chrono::seconds(options_.scanPeriodSec))) {
-        if (!lfs_->DirExists(trashDir_)) {
-            continue;
-        }
-
-        std::vector<std::string> subdirs;
-        if (0 != lfs_->List(trashDir_, &subdirs)) {
-            LOG(ERROR) << "Trash list '" << trashDir_ << "' failed";
-            continue;
-        }
-
-        for (const auto& subdir : subdirs) {
-            if (!IsCopysetDirNameValid(subdir)) {
-                continue;
-            }
-
-            std::string fullpath = absl::StrCat(trashDir_, "/", subdir);
-            if (!IsCopysetDirExpired(fullpath)) {
-                continue;
-            }
-
-            if (0 != lfs_->Delete(fullpath)) {
-                LOG(ERROR) << "Trash delete dir failed, " << fullpath;
-            } else {
-                LOG(INFO) << "Trash delete dir succeeded, " << fullpath;
-            }
-        }
+  while (sleeper_.wait_for(std::chrono::seconds(options_.scanPeriodSec))) {
+    if (!lfs_->DirExists(trashDir_)) {
+      continue;
     }
+
+    std::vector<std::string> subdirs;
+    if (0 != lfs_->List(trashDir_, &subdirs)) {
+      LOG(ERROR) << "Trash list '" << trashDir_ << "' failed";
+      continue;
+    }
+
+    for (const auto& subdir : subdirs) {
+      if (!IsCopysetDirNameValid(subdir)) {
+        continue;
+      }
+
+      std::string fullpath = absl::StrCat(trashDir_, "/", subdir);
+      if (!IsCopysetDirExpired(fullpath)) {
+        continue;
+      }
+
+      if (0 != lfs_->Delete(fullpath)) {
+        LOG(ERROR) << "Trash delete dir failed, " << fullpath;
+      } else {
+        LOG(INFO) << "Trash delete dir succeeded, " << fullpath;
+      }
+    }
+  }
 }
 
 bool CopysetTrash::CreateTrashDirIfNotExist() {
-    if (!lfs_->DirExists(trashDir_)) {
-        LOG(INFO) << "Trash dir not exist, going to create it";
+  if (!lfs_->DirExists(trashDir_)) {
+    LOG(INFO) << "Trash dir not exist, going to create it";
 
-        if (0 != lfs_->Mkdir(trashDir_)) {
-            LOG(ERROR) << "Trash dir create failed, trash path: " << trashDir_;
-            return false;
-        }
+    if (0 != lfs_->Mkdir(trashDir_)) {
+      LOG(ERROR) << "Trash dir create failed, trash path: " << trashDir_;
+      return false;
     }
+  }
 
-    return true;
+  return true;
 }
 
 }  // namespace copyset

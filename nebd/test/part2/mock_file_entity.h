@@ -24,6 +24,7 @@
 #define NEBD_TEST_PART2_MOCK_FILE_ENTITY_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
 #include <vector>
 
@@ -34,24 +35,24 @@ namespace server {
 
 class MockFileEntity : public NebdFileEntity {
  public:
-    MockFileEntity() : NebdFileEntity() {}
-    ~MockFileEntity() {}
+  MockFileEntity() : NebdFileEntity() {}
+  ~MockFileEntity() {}
 
-    MOCK_METHOD1(Init, int(const NebdFileEntityOption&));
-    MOCK_METHOD0(Open, int());
-    MOCK_METHOD1(Close, int(bool));
-    MOCK_METHOD1(Extend, int(int64_t));
-    MOCK_METHOD1(GetInfo, int(NebdFileInfo*));
-    MOCK_METHOD1(Discard, int(NebdServerAioContext*));
-    MOCK_METHOD1(AioRead, int(NebdServerAioContext*));
-    MOCK_METHOD1(AioWrite, int(NebdServerAioContext*));
-    MOCK_METHOD1(Flush, int(NebdServerAioContext*));
-    MOCK_METHOD0(InvalidCache, int());
-    MOCK_CONST_METHOD0(GetFileName, std::string());
-    MOCK_CONST_METHOD0(GetFd, int());
-    MOCK_METHOD1(UpdateFileTimeStamp, void(uint64_t));
-    MOCK_CONST_METHOD0(GetFileTimeStamp, uint64_t());
-    MOCK_CONST_METHOD0(GetFileStatus, NebdFileStatus());
+  MOCK_METHOD1(Init, int(const NebdFileEntityOption&));
+  MOCK_METHOD0(Open, int());
+  MOCK_METHOD1(Close, int(bool));
+  MOCK_METHOD1(Extend, int(int64_t));
+  MOCK_METHOD1(GetInfo, int(NebdFileInfo*));
+  MOCK_METHOD1(Discard, int(NebdServerAioContext*));
+  MOCK_METHOD1(AioRead, int(NebdServerAioContext*));
+  MOCK_METHOD1(AioWrite, int(NebdServerAioContext*));
+  MOCK_METHOD1(Flush, int(NebdServerAioContext*));
+  MOCK_METHOD0(InvalidCache, int());
+  MOCK_CONST_METHOD0(GetFileName, std::string());
+  MOCK_CONST_METHOD0(GetFd, int());
+  MOCK_METHOD1(UpdateFileTimeStamp, void(uint64_t));
+  MOCK_CONST_METHOD0(GetFileTimeStamp, uint64_t());
+  MOCK_CONST_METHOD0(GetFileStatus, NebdFileStatus());
 };
 
 }  // namespace server

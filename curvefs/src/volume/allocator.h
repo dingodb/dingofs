@@ -35,56 +35,55 @@ namespace volume {
 
 class Allocator {
  public:
-    static std::unique_ptr<Allocator> Create(const std::string& type,
-                                             const AllocatorOption& option);
+  static std::unique_ptr<Allocator> Create(const std::string& type,
+                                           const AllocatorOption& option);
 
-    virtual ~Allocator() = default;
+  virtual ~Allocator() = default;
 
-    /**
-     * @brief Allocate space
-     *
-     * @param size expected allocate space size
-     * @param hint allocate hint of current allocation
-     * @param[out] exts store allocated extents
-     * @return return allocated size
-     */
-    virtual uint64_t Alloc(const uint64_t size,
-                           const AllocateHint& hint,
-                           std::vector<Extent>* exts) = 0;
+  /**
+   * @brief Allocate space
+   *
+   * @param size expected allocate space size
+   * @param hint allocate hint of current allocation
+   * @param[out] exts store allocated extents
+   * @return return allocated size
+   */
+  virtual uint64_t Alloc(const uint64_t size, const AllocateHint& hint,
+                         std::vector<Extent>* exts) = 0;
 
-    /**
-     * @brief DeAllocate space
-     *
-     * @return return true if succeeded, otherwise return false
-     */
-    virtual bool DeAlloc(const uint64_t off, const uint64_t len) = 0;
+  /**
+   * @brief DeAllocate space
+   *
+   * @return return true if succeeded, otherwise return false
+   */
+  virtual bool DeAlloc(const uint64_t off, const uint64_t len) = 0;
 
-    /**
-     * @brief DeAllocate space
-     *
-     * @return return true if succeeded, otherwise return false
-     */
-    virtual bool DeAlloc(const std::vector<Extent>& exts) = 0;
+  /**
+   * @brief DeAllocate space
+   *
+   * @return return true if succeeded, otherwise return false
+   */
+  virtual bool DeAlloc(const std::vector<Extent>& exts) = 0;
 
-    /**
-     * @brief Total space size
-     */
-    virtual uint64_t Total() const = 0;
+  /**
+   * @brief Total space size
+   */
+  virtual uint64_t Total() const = 0;
 
-    /**
-     * @brief Current available space size
-     */
-    virtual uint64_t AvailableSize() const = 0;
+  /**
+   * @brief Current available space size
+   */
+  virtual uint64_t AvailableSize() const = 0;
 
-    /**
-     * @brief Mark extents are used
-     */
-    virtual bool MarkUsed(const std::vector<Extent>& extents) = 0;
+  /**
+   * @brief Mark extents are used
+   */
+  virtual bool MarkUsed(const std::vector<Extent>& extents) = 0;
 
-    /**
-     * @brief Mark extents are available
-     */
-    virtual bool MarkUsable(const std::vector<Extent>& extents) = 0;
+  /**
+   * @brief Mark extents are available
+   */
+  virtual bool MarkUsable(const std::vector<Extent>& extents) = 0;
 };
 
 }  // namespace volume

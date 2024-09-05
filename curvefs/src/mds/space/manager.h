@@ -42,44 +42,44 @@ namespace space {
 
 class SpaceManager {
  public:
-    virtual ~SpaceManager() = default;
+  virtual ~SpaceManager() = default;
 
-    virtual AbstractVolumeSpace* GetVolumeSpace(uint32_t fsId) const = 0;
-    virtual SpaceErrCode AddVolume(const FsInfo& fsInfo) = 0;
-    virtual SpaceErrCode RemoveVolume(uint32_t fsId) = 0;
-    virtual SpaceErrCode DeleteVolume(uint32_t fsId) = 0;
+  virtual AbstractVolumeSpace* GetVolumeSpace(uint32_t fsId) const = 0;
+  virtual SpaceErrCode AddVolume(const FsInfo& fsInfo) = 0;
+  virtual SpaceErrCode RemoveVolume(uint32_t fsId) = 0;
+  virtual SpaceErrCode DeleteVolume(uint32_t fsId) = 0;
 };
 
 class SpaceManagerImpl final : public SpaceManager {
  public:
-    SpaceManagerImpl(
-        const std::shared_ptr<curve::kvstorage::KVStorageClient>& kvstore,
-        std::shared_ptr<FsStorage> fsStorage)
-        : storage_(new BlockGroupStorageImpl(kvstore)),
-          fsStorage_(std::move(fsStorage)) {}
+  SpaceManagerImpl(
+      const std::shared_ptr<curve::kvstorage::KVStorageClient>& kvstore,
+      std::shared_ptr<FsStorage> fsStorage)
+      : storage_(new BlockGroupStorageImpl(kvstore)),
+        fsStorage_(std::move(fsStorage)) {}
 
-    SpaceManagerImpl(const SpaceManagerImpl&) = delete;
-    SpaceManagerImpl& operator=(const SpaceManagerImpl&) = delete;
+  SpaceManagerImpl(const SpaceManagerImpl&) = delete;
+  SpaceManagerImpl& operator=(const SpaceManagerImpl&) = delete;
 
-    AbstractVolumeSpace* GetVolumeSpace(uint32_t fsId) const override;
+  AbstractVolumeSpace* GetVolumeSpace(uint32_t fsId) const override;
 
-    SpaceErrCode AddVolume(const FsInfo& fsInfo) override;
+  SpaceErrCode AddVolume(const FsInfo& fsInfo) override;
 
-    SpaceErrCode RemoveVolume(uint32_t fsId) override;
+  SpaceErrCode RemoveVolume(uint32_t fsId) override;
 
-    SpaceErrCode DeleteVolume(uint32_t fsId) override;
+  SpaceErrCode DeleteVolume(uint32_t fsId) override;
 
  private:
-    mutable RWLock rwlock_;
+  mutable RWLock rwlock_;
 
-    // key is fs id
-    std::unordered_map<uint32_t, std::unique_ptr<VolumeSpace>> volumes_;
+  // key is fs id
+  std::unordered_map<uint32_t, std::unique_ptr<VolumeSpace>> volumes_;
 
-    std::unique_ptr<BlockGroupStorage> storage_;
+  std::unique_ptr<BlockGroupStorage> storage_;
 
-    curve::common::GenericNameLock<Mutex> namelock_;
+  curve::common::GenericNameLock<Mutex> namelock_;
 
-    std::shared_ptr<FsStorage> fsStorage_;
+  std::shared_ptr<FsStorage> fsStorage_;
 };
 
 }  // namespace space

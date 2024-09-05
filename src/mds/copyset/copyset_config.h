@@ -31,23 +31,23 @@ namespace copyset {
  * @brief copyset module configuration
  */
 struct CopysetOption {
-    // retry times of copyset creation
-    int copysetRetryTimes;
-    // variance of scatterWidth
-    double scatterWidthVariance;
-    // standard deviation of scatterWidth
-    double scatterWidthStandardDevation;
-    // range of scatterWidth
-    double scatterWidthRange;
-    // floating percentage of scatterwidth
-    double scatterWidthFloatingPercentage;
+  // retry times of copyset creation
+  int copysetRetryTimes;
+  // variance of scatterWidth
+  double scatterWidthVariance;
+  // standard deviation of scatterWidth
+  double scatterWidthStandardDevation;
+  // range of scatterWidth
+  double scatterWidthRange;
+  // floating percentage of scatterwidth
+  double scatterWidthFloatingPercentage;
 
-    CopysetOption()
-    : copysetRetryTimes(1),
-      scatterWidthVariance(0.0),
-      scatterWidthStandardDevation(0.0),
-      scatterWidthRange(0.0),
-      scatterWidthFloatingPercentage(0.0) {}
+  CopysetOption()
+      : copysetRetryTimes(1),
+        scatterWidthVariance(0.0),
+        scatterWidthStandardDevation(0.0),
+        scatterWidthRange(0.0),
+        scatterWidthFloatingPercentage(0.0) {}
 };
 
 }  // namespace copyset

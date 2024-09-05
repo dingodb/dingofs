@@ -23,10 +23,9 @@
 #ifndef SRC_COMMON_CRC32_H_
 #define SRC_COMMON_CRC32_H_
 
+#include <butil/crc32c.h>
 #include <stdint.h>
 #include <sys/types.h>
-
-#include <butil/crc32c.h>
 
 namespace curve {
 namespace common {
@@ -37,8 +36,8 @@ namespace common {
  * @param iLen 待计算的数据长度
  * @return 32位的数据CRC32校验码
  */
-inline uint32_t CRC32(const char *pData, size_t iLen) {
-    return butil::crc32c::Value(pData, iLen);
+inline uint32_t CRC32(const char* pData, size_t iLen) {
+  return butil::crc32c::Value(pData, iLen);
 }
 
 /**
@@ -50,8 +49,8 @@ inline uint32_t CRC32(const char *pData, size_t iLen) {
  * @param iLen 待计算的数据长度
  * @return 32位的数据CRC32校验码
  */
-inline uint32_t CRC32(uint32_t crc, const char *pData, size_t iLen) {
-    return butil::crc32c::Extend(crc, pData, iLen);
+inline uint32_t CRC32(uint32_t crc, const char* pData, size_t iLen) {
+  return butil::crc32c::Extend(crc, pData, iLen);
 }
 
 }  // namespace common

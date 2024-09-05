@@ -40,72 +40,66 @@
 namespace curvefs {
 namespace client {
 
+using ::curvefs::metaserver::VolumeExtentList;
+using ::curvefs::metaserver::VolumeExtentSlice;
 using ::curvefs::volume::ReadPart;
 using ::curvefs::volume::WritePart;
-using ::curvefs::metaserver::VolumeExtentSlice;
-using ::curvefs::metaserver::VolumeExtentList;
 
 struct ExtentCacheOption {
-    // preallocation size if offset ~ length is not allocated
-    // TODO(wuhanqing): preallocation size should take care of file size
-    uint64_t preAllocSize = 64ULL * 1024;
-    // a single file's extents are split by offset, and each one called `slice`
-    uint64_t sliceSize = 1ULL * 1024 * 1024 * 1024;
-    // minimum allocate and read/write unit
-    uint32_t blockSize = 4096;
+  // preallocation size if offset ~ length is not allocated
+  // TODO(wuhanqing): preallocation size should take care of file size
+  uint64_t preAllocSize = 64ULL * 1024;
+  // a single file's extents are split by offset, and each one called `slice`
+  uint64_t sliceSize = 1ULL * 1024 * 1024 * 1024;
+  // minimum allocate and read/write unit
+  uint32_t blockSize = 4096;
 };
 
 class ExtentCache {
  public:
-    ExtentCache() = default;
+  ExtentCache() = default;
 
-    static void SetOption(const ExtentCacheOption& option);
+  static void SetOption(const ExtentCacheOption& option);
 
-    void Build(const VolumeExtentList& extents);
+  void Build(const VolumeExtentList& extents);
 
-    void DivideForWrite(uint64_t offset,
-                        uint64_t len,
-                        const char* data,
-                        std::vector<WritePart>* allocated,
-                        std::vector<AllocPart>* needAlloc);
+  void DivideForWrite(uint64_t offset, uint64_t len, const char* data,
+                      std::vector<WritePart>* allocated,
+                      std::vector<AllocPart>* needAlloc);
 
-    void DivideForRead(uint64_t offset,
-                       uint64_t len,
-                       char* data,
-                       std::vector<ReadPart>* reads,
-                       std::vector<ReadPart>* holes);
+  void DivideForRead(uint64_t offset, uint64_t len, char* data,
+                     std::vector<ReadPart>* reads,
+                     std::vector<ReadPart>* holes);
 
-    void Merge(uint64_t loffset, const PExtent& pExt);
+  void Merge(uint64_t loffset, const PExtent& pExt);
 
-    void MarkWritten(uint64_t offset, uint64_t len);
+  void MarkWritten(uint64_t offset, uint64_t len);
 
-    bool HasDirtyExtents() const;
+  bool HasDirtyExtents() const;
 
-    VolumeExtentList GetDirtyExtents();
+  VolumeExtentList GetDirtyExtents();
 
-    std::unordered_map<uint64_t, std::map<uint64_t, PExtent>>
-    GetExtentsForTesting() const;
+  std::unordered_map<uint64_t, std::map<uint64_t, PExtent>>
+  GetExtentsForTesting() const;
 
  private:
-    static void DivideForWriteWithinEmptySlice(
-        uint64_t offset,
-        uint64_t len,
-        const char* data,
-        std::vector<AllocPart>* needAlloc);
+  static void DivideForWriteWithinEmptySlice(uint64_t offset, uint64_t len,
+                                             const char* data,
+                                             std::vector<AllocPart>* needAlloc);
 
  private:
-    mutable curve::common::RWLock lock_;
+  mutable curve::common::RWLock lock_;
 
-    // key is offset
-    std::unordered_map<uint64_t, ExtentSlice> slices_;
+  // key is offset
+  std::unordered_map<uint64_t, ExtentSlice> slices_;
 
-    // dirty slices
-    std::unordered_set<ExtentSlice*> dirties_;
+  // dirty slices
+  std::unordered_set<ExtentSlice*> dirties_;
 
  private:
-    friend class ExtentSlice;
+  friend class ExtentSlice;
 
-    static ExtentCacheOption option_;
+  static ExtentCacheOption option_;
 };
 
 }  // namespace client

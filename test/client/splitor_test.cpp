@@ -33,76 +33,76 @@ namespace curve {
 namespace client {
 
 struct TestParams {
-    FileStatus fileStatus;
-    OpType opType;
-    uint64_t offset;
-    uint64_t length;
-    int expectedRequests;
-    int expectedUnAlignedRequests;
+  FileStatus fileStatus;
+  OpType opType;
+  uint64_t offset;
+  uint64_t length;
+  int expectedRequests;
+  int expectedUnAlignedRequests;
 };
 
 class SplitorAlignmentTest : public ::testing::TestWithParam<TestParams> {
  protected:
-    void SetUp() override {
-        params_ = GetParam();
+  void SetUp() override {
+    params_ = GetParam();
 
-        splitOpt_.alignment.commonVolume = 512;
-        splitOpt_.alignment.cloneVolume = 4096;
-        splitOpt_.fileIOSplitMaxSizeKB = 64;
-        Splitor::Init(splitOpt_);
+    splitOpt_.alignment.commonVolume = 512;
+    splitOpt_.alignment.cloneVolume = 4096;
+    splitOpt_.fileIOSplitMaxSizeKB = 64;
+    Splitor::Init(splitOpt_);
 
-        chunkIdInfo_.lpid_ = 1;
-        chunkIdInfo_.cpid_ = 2;
-        chunkIdInfo_.cid_ = 3;
-        chunkIdInfo_.chunkExist = true;
+    chunkIdInfo_.lpid_ = 1;
+    chunkIdInfo_.cpid_ = 2;
+    chunkIdInfo_.cid_ = 3;
+    chunkIdInfo_.chunkExist = true;
 
-        metaCache_.SetLatestFileStatus(params_.fileStatus);
+    metaCache_.SetLatestFileStatus(params_.fileStatus);
 
-        iotracker_ = new IOTracker(nullptr, nullptr, nullptr, nullptr);
-        iotracker_->SetOpType(params_.opType);
+    iotracker_ = new IOTracker(nullptr, nullptr, nullptr, nullptr);
+    iotracker_->SetOpType(params_.opType);
 
-        if (params_.opType == OpType::WRITE) {
-            std::string fakeData(params_.length, 'c');
-            writeData_.append(fakeData);
-        }
+    if (params_.opType == OpType::WRITE) {
+      std::string fakeData(params_.length, 'c');
+      writeData_.append(fakeData);
+    }
+  }
+
+  void TearDown() override {
+    delete iotracker_;
+
+    for (auto& r : requests_) {
+      r->UnInit();
+      delete r;
+    }
+  }
+
+  int UnalignedRequests() const {
+    int count = 0;
+    for (auto& r : requests_) {
+      count += (r->padding.aligned ? 0 : 1);
     }
 
-    void TearDown() override {
-        delete iotracker_;
-
-        for (auto& r : requests_) {
-            r->UnInit();
-            delete r;
-        }
-    }
-
-    int UnalignedRequests() const {
-        int count = 0;
-        for (auto& r : requests_) {
-            count += (r->padding.aligned ? 0 : 1);
-        }
-
-        return count;
-    }
+    return count;
+  }
 
  protected:
-    TestParams params_;
-    IOSplitOption splitOpt_;
-    ChunkIDInfo chunkIdInfo_;
-    MetaCache metaCache_;
-    IOTracker* iotracker_;
-    butil::IOBuf writeData_;
-    std::vector<RequestContext*> requests_;
+  TestParams params_;
+  IOSplitOption splitOpt_;
+  ChunkIDInfo chunkIdInfo_;
+  MetaCache metaCache_;
+  IOTracker* iotracker_;
+  butil::IOBuf writeData_;
+  std::vector<RequestContext*> requests_;
 };
 
 TEST_P(SplitorAlignmentTest, Test) {
-    EXPECT_EQ(0, Splitor::SingleChunkIO2ChunkRequests(
-                     iotracker_, &metaCache_, &requests_, chunkIdInfo_,
-                     params_.opType == OpType::WRITE ? &writeData_ : nullptr,
-                     params_.offset, params_.length, 0));
+  EXPECT_EQ(0, Splitor::SingleChunkIO2ChunkRequests(
+                   iotracker_, &metaCache_, &requests_, chunkIdInfo_,
+                   params_.opType == OpType::WRITE ? &writeData_ : nullptr,
+                   params_.offset, params_.length, 0));
 
-    EXPECT_EQ(params_.expectedRequests, requests_.size());
-    EXPECT_EQ(params_.expectedUnAlignedRequests, UnalignedRequests());
+  EXPECT_EQ(params_.expectedRequests, requests_.size());
+  EXPECT_EQ(params_.expectedUnAlignedRequests, UnalignedRequests());
 }
 
 INSTANTIATE_TEST_CASE_P(
@@ -262,6 +262,6 @@ INSTANTIATE_TEST_CASE_P(
 }  // namespace curve
 
 int main(int argc, char* argv[]) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

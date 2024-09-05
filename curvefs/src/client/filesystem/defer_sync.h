@@ -24,12 +24,12 @@
 #define CURVEFS_SRC_CLIENT_FILESYSTEM_DEFER_SYNC_H_
 
 #include <atomic>
-#include <vector>
 #include <memory>
+#include <vector>
 
-#include "src/common/interruptible_sleeper.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/filesystem/meta.h"
+#include "src/common/interruptible_sleeper.h"
 
 namespace curvefs {
 namespace client {
@@ -37,30 +37,30 @@ namespace filesystem {
 
 using ::curvefs::client::common::DeferSyncOption;
 
-using ::curve::common::Mutex;
-using ::curve::common::LockGuard;
 using ::curve::common::InterruptibleSleeper;
+using ::curve::common::LockGuard;
+using ::curve::common::Mutex;
 
 class DeferSync {
  public:
-    explicit DeferSync(DeferSyncOption option);
+  explicit DeferSync(DeferSyncOption option);
 
-    void Start();
+  void Start();
 
-    void Stop();
+  void Stop();
 
-    void Push(const std::shared_ptr<InodeWrapper>& inode);
-
- private:
-    void SyncTask();
+  void Push(const std::shared_ptr<InodeWrapper>& inode);
 
  private:
-    DeferSyncOption option_;
-    Mutex mutex_;
-    std::atomic<bool> running_;
-    std::thread thread_;
-    InterruptibleSleeper sleeper_;
-    std::vector<std::shared_ptr<InodeWrapper>> inodes_;
+  void SyncTask();
+
+ private:
+  DeferSyncOption option_;
+  Mutex mutex_;
+  std::atomic<bool> running_;
+  std::thread thread_;
+  InterruptibleSleeper sleeper_;
+  std::vector<std::shared_ptr<InodeWrapper>> inodes_;
 };
 
 }  // namespace filesystem

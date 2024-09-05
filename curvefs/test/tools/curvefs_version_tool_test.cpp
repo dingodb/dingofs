@@ -35,20 +35,16 @@ using ::testing::SetArgPointee;
 
 class VersionToolTest : public testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 
  protected:
-    VersionTool versionTool_;
+  VersionTool versionTool_;
 };
 
-TEST_F(VersionToolTest, version_test) {
-    ASSERT_EQ(versionTool_.Run(), 0);
-}
+TEST_F(VersionToolTest, version_test) { ASSERT_EQ(versionTool_.Run(), 0); }
 
-TEST_F(VersionToolTest, print_help) {
-    versionTool_.PrintHelp();
-}
+TEST_F(VersionToolTest, print_help) { versionTool_.PrintHelp(); }
 
 }  // namespace version
 }  // namespace tools

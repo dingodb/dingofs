@@ -23,97 +23,96 @@
 #ifndef SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_INL_H_
 #define SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_INL_H_
 
-#include <string>
 #include <map>
 #include <memory>
+#include <string>
 
 namespace curve {
 namespace common {
 
 template <typename MutexT>
 GenericNameLock<MutexT>::GenericNameLock(int bucketNum) {
-    locks_.reserve(bucketNum);
-    for (int i = 0; i < bucketNum; i++) {
-        locks_.push_back(std::make_shared<LockBucket>());
-    }
+  locks_.reserve(bucketNum);
+  for (int i = 0; i < bucketNum; i++) {
+    locks_.push_back(std::make_shared<LockBucket>());
+  }
 }
 
 template <typename MutexT>
-void GenericNameLock<MutexT>::Lock(const std::string &lockStr) {
-    LockEntryPtr entry = NULL;
+void GenericNameLock<MutexT>::Lock(const std::string& lockStr) {
+  LockEntryPtr entry = NULL;
 
-    int bucketOffset = GetBucketOffset(lockStr);
-    LockBucketPtr lockBucket = locks_[bucketOffset];
+  int bucketOffset = GetBucketOffset(lockStr);
+  LockBucketPtr lockBucket = locks_[bucketOffset];
 
-    {
-        LockGuard guard(lockBucket->mu);
-        auto it = lockBucket->lockMap.find(lockStr);
-        if (it == lockBucket->lockMap.end()) {
-            entry = std::make_shared<LockEntry>();
-            entry->ref_.store(1);
-            lockBucket->lockMap.emplace(lockStr, entry);
-        } else {
-            entry = it->second;
-            entry->ref_.fetch_add(1);
-        }
-    }
-    entry->lock_.lock();
-}
-
-template <typename MutexT>
-bool GenericNameLock<MutexT>::TryLock(const std::string &lockStr) {
-    LockEntryPtr entry = NULL;
-
-    int bucketOffset = GetBucketOffset(lockStr);
-    LockBucketPtr lockBucket = locks_[bucketOffset];
-
-    {
-        LockGuard guard(lockBucket->mu);
-        auto it = lockBucket->lockMap.find(lockStr);
-        if (it == lockBucket->lockMap.end()) {
-            entry = std::make_shared<LockEntry>();
-            entry->ref_.store(1);
-            lockBucket->lockMap.emplace(lockStr, entry);
-        } else {
-            entry = it->second;
-            entry->ref_.fetch_add(1);
-        }
-    }
-    if (entry->lock_.try_lock()) {
-        return true;
-    } else {
-        LockGuard guard(lockBucket->mu);
-        if (entry->ref_.fetch_sub(1) == 1) {
-            lockBucket->lockMap.erase(lockStr);
-        }
-        return false;
-    }
-}
-
-template <typename MutexT>
-void GenericNameLock<MutexT>::Unlock(const std::string &lockStr) {
-    int bucketOffset = GetBucketOffset(lockStr);
-    LockBucketPtr lockBucket = locks_[bucketOffset];
-
+  {
     LockGuard guard(lockBucket->mu);
     auto it = lockBucket->lockMap.find(lockStr);
-    if (it != lockBucket->lockMap.end()) {
-        LockEntryPtr entry = it->second;
-        entry->lock_.unlock();
-        if (entry->ref_.fetch_sub(1) == 1) {
-            lockBucket->lockMap.erase(it);
-        }
+    if (it == lockBucket->lockMap.end()) {
+      entry = std::make_shared<LockEntry>();
+      entry->ref_.store(1);
+      lockBucket->lockMap.emplace(lockStr, entry);
+    } else {
+      entry = it->second;
+      entry->ref_.fetch_add(1);
     }
+  }
+  entry->lock_.lock();
 }
 
 template <typename MutexT>
-int GenericNameLock<MutexT>::GetBucketOffset(const std::string &lockStr) {
-    std::hash<std::string> hash_fn;
-    return hash_fn(lockStr) % locks_.size();
+bool GenericNameLock<MutexT>::TryLock(const std::string& lockStr) {
+  LockEntryPtr entry = NULL;
+
+  int bucketOffset = GetBucketOffset(lockStr);
+  LockBucketPtr lockBucket = locks_[bucketOffset];
+
+  {
+    LockGuard guard(lockBucket->mu);
+    auto it = lockBucket->lockMap.find(lockStr);
+    if (it == lockBucket->lockMap.end()) {
+      entry = std::make_shared<LockEntry>();
+      entry->ref_.store(1);
+      lockBucket->lockMap.emplace(lockStr, entry);
+    } else {
+      entry = it->second;
+      entry->ref_.fetch_add(1);
+    }
+  }
+  if (entry->lock_.try_lock()) {
+    return true;
+  } else {
+    LockGuard guard(lockBucket->mu);
+    if (entry->ref_.fetch_sub(1) == 1) {
+      lockBucket->lockMap.erase(lockStr);
+    }
+    return false;
+  }
 }
 
+template <typename MutexT>
+void GenericNameLock<MutexT>::Unlock(const std::string& lockStr) {
+  int bucketOffset = GetBucketOffset(lockStr);
+  LockBucketPtr lockBucket = locks_[bucketOffset];
 
-}   // namespace common
-}   // namespace curve
+  LockGuard guard(lockBucket->mu);
+  auto it = lockBucket->lockMap.find(lockStr);
+  if (it != lockBucket->lockMap.end()) {
+    LockEntryPtr entry = it->second;
+    entry->lock_.unlock();
+    if (entry->ref_.fetch_sub(1) == 1) {
+      lockBucket->lockMap.erase(it);
+    }
+  }
+}
+
+template <typename MutexT>
+int GenericNameLock<MutexT>::GetBucketOffset(const std::string& lockStr) {
+  std::hash<std::string> hash_fn;
+  return hash_fn(lockStr) % locks_.size();
+}
+
+}  // namespace common
+}  // namespace curve
 
 #endif  // SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_INL_H_

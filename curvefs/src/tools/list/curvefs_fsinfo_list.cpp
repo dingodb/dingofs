@@ -31,64 +31,64 @@ namespace curvefs {
 namespace tools {
 namespace list {
 
-using ::google::protobuf::util::MessageToJsonString;
 using ::google::protobuf::util::JsonPrintOptions;
+using ::google::protobuf::util::MessageToJsonString;
 
 void FsInfoListTool::PrintHelp() {
-    CurvefsToolRpc::PrintHelp();
-    std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
-              << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]";
-    std::cout << std::endl;
+  CurvefsToolRpc::PrintHelp();
+  std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
+            << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]";
+  std::cout << std::endl;
 }
 
 void FsInfoListTool::AddUpdateFlags() {
-    AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
-    AddUpdateFlagsFunc(curvefs::tools::SetRpcTimeoutMs);
+  AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
+  AddUpdateFlagsFunc(curvefs::tools::SetRpcTimeoutMs);
 }
 
 int FsInfoListTool::Init() {
-    if (CurvefsToolRpc::Init() != 0) {
-        return -1;
-    }
+  if (CurvefsToolRpc::Init() != 0) {
+    return -1;
+  }
 
-    curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
+  curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
 
-    service_stub_func_ =
-        std::bind(&curvefs::mds::MdsService_Stub::ListClusterFsInfo,
-                  service_stub_.get(), std::placeholders::_1,
-                  std::placeholders::_2, std::placeholders::_3, nullptr);
+  service_stub_func_ =
+      std::bind(&curvefs::mds::MdsService_Stub::ListClusterFsInfo,
+                service_stub_.get(), std::placeholders::_1,
+                std::placeholders::_2, std::placeholders::_3, nullptr);
 
-    curvefs::mds::ListClusterFsInfoRequest request;
-    AddRequest(request);
+  curvefs::mds::ListClusterFsInfoRequest request;
+  AddRequest(request);
 
-    controller_->set_timeout_ms(FLAGS_rpcTimeoutMs);
+  controller_->set_timeout_ms(FLAGS_rpcTimeoutMs);
 
-    return 0;
+  return 0;
 }
 
 bool FsInfoListTool::AfterSendRequestToHost(const std::string& host) {
-    bool ret = false;
-    if (controller_->Failed()) {
-        errorOutput_ << "get fsinfo from mds: " << host
-                     << " failed, errorcode= " << controller_->ErrorCode()
-                     << ", error text " << controller_->ErrorText() << "\n";
-    } else if (show_) {
-        if (response_->fsinfo().empty()) {
-            std::cout << "no fs in cluster." << std::endl;
-            return true;
-        }
-
-        std::string output;
-        JsonPrintOptions option;
-        option.add_whitespace = true;
-        option.always_print_primitive_fields = true;
-        option.preserve_proto_field_names = true;
-        MessageToJsonString(*response_, &output, option);
-        std::cout << output << std::endl;
-
-        ret = true;
+  bool ret = false;
+  if (controller_->Failed()) {
+    errorOutput_ << "get fsinfo from mds: " << host
+                 << " failed, errorcode= " << controller_->ErrorCode()
+                 << ", error text " << controller_->ErrorText() << "\n";
+  } else if (show_) {
+    if (response_->fsinfo().empty()) {
+      std::cout << "no fs in cluster." << std::endl;
+      return true;
     }
-    return ret;
+
+    std::string output;
+    JsonPrintOptions option;
+    option.add_whitespace = true;
+    option.always_print_primitive_fields = true;
+    option.preserve_proto_field_names = true;
+    MessageToJsonString(*response_, &output, option);
+    std::cout << output << std::endl;
+
+    ret = true;
+  }
+  return ret;
 }
 
 }  // namespace list

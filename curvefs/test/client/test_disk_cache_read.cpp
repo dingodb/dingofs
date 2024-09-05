@@ -20,13 +20,13 @@
  * Author: hzwuhongsong
  */
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include "src/common/lru_cache.h"
-#include "curvefs/test/client/mock_test_posix_wapper.h"
-#include "curvefs/test/client/mock_disk_cache_base.h"
 #include "curvefs/src/client/s3/disk_cache_read.h"
+#include "curvefs/test/client/mock_disk_cache_base.h"
+#include "curvefs/test/client/mock_test_posix_wapper.h"
+#include "src/common/lru_cache.h"
 
 namespace curvefs {
 namespace client {
@@ -52,180 +52,181 @@ using ::curve::common::SglLRUCache;
 
 class TestDiskCacheRead : public ::testing::Test {
  protected:
-    TestDiskCacheRead() {}
-    ~TestDiskCacheRead() {}
+  TestDiskCacheRead() {}
+  ~TestDiskCacheRead() {}
 
-    virtual void SetUp() {
-        diskCacheRead_ = std::make_shared<DiskCacheRead>();
-        wrapper_ = std::make_shared<MockPosixWrapper>();
+  virtual void SetUp() {
+    diskCacheRead_ = std::make_shared<DiskCacheRead>();
+    wrapper_ = std::make_shared<MockPosixWrapper>();
 
-        diskCacheRead_->Init(wrapper_, "test", 0);
-    }
+    diskCacheRead_->Init(wrapper_, "test", 0);
+  }
 
-    virtual void TearDown() {
-        // allows the destructor of lfs_ to be invoked correctly
-        Mock::VerifyAndClear(wrapper_.get());
-        Mock::VerifyAndClear(diskCacheRead_.get());
-    }
-    std::shared_ptr<DiskCacheRead> diskCacheRead_;
-    std::shared_ptr<MockPosixWrapper> wrapper_;
+  virtual void TearDown() {
+    // allows the destructor of lfs_ to be invoked correctly
+    Mock::VerifyAndClear(wrapper_.get());
+    Mock::VerifyAndClear(diskCacheRead_.get());
+  }
+  std::shared_ptr<DiskCacheRead> diskCacheRead_;
+  std::shared_ptr<MockPosixWrapper> wrapper_;
 };
 
 TEST_F(TestDiskCacheRead, ReadDiskFile) {
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(-1));
-    std::string fileName = "test";
-    uint64_t length = 10;
-    int ret = diskCacheRead_->ReadDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length, length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(-1));
+  std::string fileName = "test";
+  uint64_t length = 10;
+  int ret = diskCacheRead_->ReadDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length, length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(-1));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->ReadDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length, length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(-1));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->ReadDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length, length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(-1));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->ReadDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length, length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(-1));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->ReadDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length, length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(length - 1));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->ReadDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length, length);
-    ASSERT_EQ(length - 1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(length - 1));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->ReadDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length, length);
+  ASSERT_EQ(length - 1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(length));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->ReadDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length, length);
-    ASSERT_EQ(length, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, lseek(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, read(_, _, _)).WillOnce(Return(length));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->ReadDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length, length);
+  ASSERT_EQ(length, ret);
 }
 
 TEST_F(TestDiskCacheRead, LinkWriteToRead) {
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
-    std::string fileName = "test";
-    int ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
+  std::string fileName = "test";
+  int ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, link(NotNull(), NotNull())).WillOnce(Return(-1));
-    ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, link(NotNull(), NotNull())).WillOnce(Return(-1));
+  ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, link(NotNull(), NotNull())).WillOnce(Return(0));
-    ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
-    ASSERT_EQ(0, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, link(NotNull(), NotNull())).WillOnce(Return(0));
+  ret = diskCacheRead_->LinkWriteToRead(fileName, fileName, fileName);
+  ASSERT_EQ(0, ret);
 }
 
 TEST_F(TestDiskCacheRead, LoadAllCacheFile) {
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
-    std::shared_ptr<SglLRUCache<std::string>> cachedObj;
-    cachedObj =  std::make_shared<SglLRUCache<std::string>>
-        (0, std::make_shared<CacheMetrics>("diskcache"));;
-    int ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
+  std::shared_ptr<SglLRUCache<std::string>> cachedObj;
+  cachedObj = std::make_shared<SglLRUCache<std::string>>(
+      0, std::make_shared<CacheMetrics>("diskcache"));
+  ;
+  int ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(ReturnNull());
-    ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(ReturnNull());
+  ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
+  ASSERT_EQ(-1, ret);
 
-    DIR *dir = opendir(".");
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(Return(dir));
-    EXPECT_CALL(*wrapper_, closedir(NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, readdir(NotNull())).WillOnce(ReturnNull());
-    ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
-    ASSERT_EQ(0, ret);
+  DIR* dir = opendir(".");
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(Return(dir));
+  EXPECT_CALL(*wrapper_, closedir(NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, readdir(NotNull())).WillOnce(ReturnNull());
+  ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
+  ASSERT_EQ(0, ret);
 
-    dir = opendir(".");
-    EXPECT_NE(dir, nullptr);
+  dir = opendir(".");
+  EXPECT_NE(dir, nullptr);
 
-    struct dirent fake;
-    fake.d_type = 8;
-    strcpy(fake.d_name, "fake");  // NOLINT
+  struct dirent fake;
+  fake.d_type = 8;
+  strcpy(fake.d_name, "fake");  // NOLINT
 
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(Return(dir));
-    EXPECT_CALL(*wrapper_, readdir(NotNull()))
-        .Times(2)
-        .WillOnce(Return(&fake))
-        .WillOnce(ReturnNull());
-    EXPECT_CALL(*wrapper_, closedir(NotNull())).WillOnce(Return(0));
-    ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
-    ASSERT_EQ(0, ret);
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, opendir(NotNull())).WillOnce(Return(dir));
+  EXPECT_CALL(*wrapper_, readdir(NotNull()))
+      .Times(2)
+      .WillOnce(Return(&fake))
+      .WillOnce(ReturnNull());
+  EXPECT_CALL(*wrapper_, closedir(NotNull())).WillOnce(Return(0));
+  ret = diskCacheRead_->LoadAllCacheReadFile(cachedObj);
+  ASSERT_EQ(0, ret);
 }
 
 TEST_F(TestDiskCacheRead, WriteDiskFile) {
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(-1));
-    std::string fileName = "test";
-    uint64_t length = 10;
-    int ret = diskCacheRead_->WriteDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(-1));
+  std::string fileName = "test";
+  uint64_t length = 10;
+  int ret = diskCacheRead_->WriteDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(-1));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->WriteDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(-1));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->WriteDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(length + 1));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(-1));
-    ret = diskCacheRead_->WriteDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length);
-    ASSERT_EQ(-1, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(length + 1));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(-1));
+  ret = diskCacheRead_->WriteDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length);
+  ASSERT_EQ(-1, ret);
 
-    EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(length));
-    EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
-    ret = diskCacheRead_->WriteDiskFile(
-        fileName, const_cast<char *>(fileName.c_str()), length);
-    ASSERT_EQ(length, ret);
+  EXPECT_CALL(*wrapper_, open(_, _, _)).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, write(_, _, length)).WillOnce(Return(length));
+  EXPECT_CALL(*wrapper_, close(_)).WillOnce(Return(0));
+  ret = diskCacheRead_->WriteDiskFile(
+      fileName, const_cast<char*>(fileName.c_str()), length);
+  ASSERT_EQ(length, ret);
 }
 
 TEST_F(TestDiskCacheRead, ClearReadCache) {
-    std::list<std::string> files{"16777216"};
+  std::list<std::string> files{"16777216"};
 
-    LOG(INFO) << "##############case1: load cache file fail.";
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
-    std::set<std::string> cachedObj;
-    ASSERT_EQ(-1, diskCacheRead_->ClearReadCache(files));
+  LOG(INFO) << "##############case1: load cache file fail.";
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(-1));
+  std::set<std::string> cachedObj;
+  ASSERT_EQ(-1, diskCacheRead_->ClearReadCache(files));
 
-    LOG(INFO) << "##############case2: remove file fail, and file not exist";
-    struct dirent fake;
-    strcpy(fake.d_name, "1_16777216_2_0_0");  // NOLINT
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull()))
-        .Times(2)
-        .WillRepeatedly(Return(0));
-    EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(-1));
-    ASSERT_EQ(-1, diskCacheRead_->ClearReadCache(files));
+  LOG(INFO) << "##############case2: remove file fail, and file not exist";
+  struct dirent fake;
+  strcpy(fake.d_name, "1_16777216_2_0_0");  // NOLINT
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull()))
+      .Times(2)
+      .WillRepeatedly(Return(0));
+  EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(-1));
+  ASSERT_EQ(-1, diskCacheRead_->ClearReadCache(files));
 
-    LOG(INFO) << "##############case3: remove file ok";
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
-    EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(0));
-    ASSERT_EQ(0, diskCacheRead_->ClearReadCache(files));
+  LOG(INFO) << "##############case3: remove file ok";
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull())).WillOnce(Return(0));
+  EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(0));
+  ASSERT_EQ(0, diskCacheRead_->ClearReadCache(files));
 
-    LOG(INFO) << "##############case4: remove file fail, and file not exist";
-    strcpy(fake.d_name, "1_16777216_2_0_0");  // NOLINT
-    EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull()))
-        .WillOnce(Return(0))
-        .WillOnce(Return(-1));
-    EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(-1));
-    ASSERT_EQ(0, diskCacheRead_->ClearReadCache(files));
+  LOG(INFO) << "##############case4: remove file fail, and file not exist";
+  strcpy(fake.d_name, "1_16777216_2_0_0");  // NOLINT
+  EXPECT_CALL(*wrapper_, stat(NotNull(), NotNull()))
+      .WillOnce(Return(0))
+      .WillOnce(Return(-1));
+  EXPECT_CALL(*wrapper_, remove(NotNull())).WillOnce(Return(-1));
+  ASSERT_EQ(0, diskCacheRead_->ClearReadCache(files));
 }
 
 }  // namespace client

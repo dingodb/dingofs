@@ -25,8 +25,8 @@
 
 #include <braft/raft.h>
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 #include <list>
 #include <memory>
 #include <string>
@@ -46,206 +46,206 @@ namespace metaserver {
 namespace copyset {
 
 using ::braft::PeerId;
+using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::common::Peer;
 using ::curvefs::metaserver::MetaStore;
-using ::curve::mds::heartbeat::ConfigChangeType;
 
 class CopysetNodeManager;
 
 // Implement our own business raft state machine
 class CopysetNode : public braft::StateMachine {
  public:
-    CopysetNode(PoolId poolId, CopysetId copysetId,
-                const braft::Configuration& conf,
-                CopysetNodeManager* nodeManager);
+  CopysetNode(PoolId poolId, CopysetId copysetId,
+              const braft::Configuration& conf,
+              CopysetNodeManager* nodeManager);
 
-    ~CopysetNode() override;
+  ~CopysetNode() override;
 
-    bool Init(const CopysetNodeOptions& options);
+  bool Init(const CopysetNodeOptions& options);
 
-    /**
-     * @brief Start raft node
-     */
-    bool Start();
+  /**
+   * @brief Start raft node
+   */
+  bool Start();
 
-    void Stop();
+  void Stop();
 
-    /**
-     * @brief Propose an op request to copyset node
-     */
-    virtual void Propose(const braft::Task& task);
+  /**
+   * @brief Propose an op request to copyset node
+   */
+  virtual void Propose(const braft::Task& task);
 
-    int64_t LeaderTerm() const;
+  int64_t LeaderTerm() const;
 
-    virtual bool IsLeaderTerm() const;
+  virtual bool IsLeaderTerm() const;
 
-    PoolId GetPoolId() const;
+  PoolId GetPoolId() const;
 
-    const braft::PeerId& GetPeerId() const;
+  const braft::PeerId& GetPeerId() const;
 
-    CopysetId GetCopysetId() const;
+  CopysetId GetCopysetId() const;
 
-    PeerId GetLeaderId() const;
+  PeerId GetLeaderId() const;
 
-    MetaStore* GetMetaStore() const;
+  MetaStore* GetMetaStore() const;
 
-    virtual uint64_t GetConfEpoch() const;
+  virtual uint64_t GetConfEpoch() const;
 
-    std::string GetCopysetDataDir() const;
+  std::string GetCopysetDataDir() const;
 
-    void UpdateAppliedIndex(uint64_t index);
+  void UpdateAppliedIndex(uint64_t index);
 
-    uint64_t GetAppliedIndex() const;
+  uint64_t GetAppliedIndex() const;
 
-    /**
-     * @brief Get current copyset node's leader status
-     * @return true if success, otherwise return false
-     */
-    bool GetLeaderStatus(braft::NodeStatus* leaderStatus);
+  /**
+   * @brief Get current copyset node's leader status
+   * @return true if success, otherwise return false
+   */
+  bool GetLeaderStatus(braft::NodeStatus* leaderStatus);
 
-    /**
-     * @brief Get current copyset node's status
-     */
-    void GetStatus(braft::NodeStatus* status);
+  /**
+   * @brief Get current copyset node's status
+   */
+  void GetStatus(braft::NodeStatus* status);
 
-    virtual void ListPeers(std::vector<Peer>* peers) const;
+  virtual void ListPeers(std::vector<Peer>* peers) const;
 
-    ApplyQueue* GetApplyQueue() const;
+  ApplyQueue* GetApplyQueue() const;
 
-    OperatorMetric* GetMetric() const;
+  OperatorMetric* GetMetric() const;
 
-    const std::string& Name() const;
+  const std::string& Name() const;
 
-    int64_t LatestLoadSnapshotIndex() const;
+  int64_t LatestLoadSnapshotIndex() const;
 
-    int LoadConfEpoch(const std::string& file);
+  int LoadConfEpoch(const std::string& file);
 
-    int SaveConfEpoch(const std::string& file);
+  int SaveConfEpoch(const std::string& file);
 
 #ifdef UNIT_TEST
-    void SetMetaStore(MetaStore* metastore) { metaStore_.reset(metastore); }
+  void SetMetaStore(MetaStore* metastore) { metaStore_.reset(metastore); }
 
-    void FlushApplyQueue() { applyQueue_->Flush(); }
+  void FlushApplyQueue() { applyQueue_->Flush(); }
 
-    void SetRaftNode(RaftNode* raftNode) { raftNode_.reset(raftNode); }
+  void SetRaftNode(RaftNode* raftNode) { raftNode_.reset(raftNode); }
 #endif  // UNIT_TEST
 
  public:
-    /** configuration change interfaces **/
+  /** configuration change interfaces **/
 
-    virtual butil::Status TransferLeader(const Peer& target);
-    virtual void AddPeer(const Peer& peer, braft::Closure* done = nullptr);
-    virtual void RemovePeer(const Peer& peer, braft::Closure* done = nullptr);
-    virtual void ChangePeers(const std::vector<Peer>& newPeers,
-                             braft::Closure* done = nullptr);
-    void GetConfChange(ConfigChangeType* type, Peer* alterPeer);
-    void OnConfChangeComplete();
+  virtual butil::Status TransferLeader(const Peer& target);
+  virtual void AddPeer(const Peer& peer, braft::Closure* done = nullptr);
+  virtual void RemovePeer(const Peer& peer, braft::Closure* done = nullptr);
+  virtual void ChangePeers(const std::vector<Peer>& newPeers,
+                           braft::Closure* done = nullptr);
+  void GetConfChange(ConfigChangeType* type, Peer* alterPeer);
+  void OnConfChangeComplete();
 
  private:
-    // Whether current copyset is ready do configuration change
-    // return butil::Status::OK() if ready
-    butil::Status ReadyDoConfChange();
-    bool HasOngoingConfChange();
+  // Whether current copyset is ready do configuration change
+  // return butil::Status::OK() if ready
+  butil::Status ReadyDoConfChange();
+  bool HasOngoingConfChange();
 
-    void DoAddOrRemovePeer(ConfigChangeType type, const Peer& peer,
-                           braft::Closure* done);
+  void DoAddOrRemovePeer(ConfigChangeType type, const Peer& peer,
+                         braft::Closure* done);
 
  public:
-    /*** implement interfaces from braft::StateMacine ***/
+  /*** implement interfaces from braft::StateMacine ***/
 
-    void on_apply(braft::Iterator& iter) override;
+  void on_apply(braft::Iterator& iter) override;
 
-    void on_shutdown() override;
+  void on_shutdown() override;
 
-    void on_snapshot_save(braft::SnapshotWriter* writer,
-                          braft::Closure* done) override;
+  void on_snapshot_save(braft::SnapshotWriter* writer,
+                        braft::Closure* done) override;
 
-    int on_snapshot_load(braft::SnapshotReader* reader) override;
+  int on_snapshot_load(braft::SnapshotReader* reader) override;
 
-    void on_leader_start(int64_t term) override;
+  void on_leader_start(int64_t term) override;
 
-    void on_leader_stop(const butil::Status& status) override;
+  void on_leader_stop(const butil::Status& status) override;
 
-    void on_error(const braft::Error& e) override;
+  void on_error(const braft::Error& e) override;
 
-    void on_configuration_committed(const braft::Configuration& conf,
-                                    int64_t index) override;
+  void on_configuration_committed(const braft::Configuration& conf,
+                                  int64_t index) override;
 
-    void on_stop_following(const braft::LeaderChangeContext& ctx) override;
+  void on_stop_following(const braft::LeaderChangeContext& ctx) override;
 
-    void on_start_following(const braft::LeaderChangeContext& ctx) override;
+  void on_start_following(const braft::LeaderChangeContext& ctx) override;
 
  public:
-    // for heartbeat
-    bool GetPartitionInfoList(std::list<PartitionInfo> *partitionInfoList);
+  // for heartbeat
+  bool GetPartitionInfoList(std::list<PartitionInfo>* partitionInfoList);
 
-    bool IsLoading() const;
-
- private:
-    void InitRaftNodeOptions();
-
-    bool FetchLeaderStatus(const braft::PeerId& peerId,
-                           braft::NodeStatus* leaderStatus);
+  bool IsLoading() const;
 
  private:
-    const PoolId poolId_;
-    const CopysetId copysetId_;
-    const GroupId groupId_;
+  void InitRaftNodeOptions();
 
-    // copyset name: (poolid, copysetid, groupid)
-    const std::string name_;
+  bool FetchLeaderStatus(const braft::PeerId& peerId,
+                         braft::NodeStatus* leaderStatus);
 
-    // configuration of current copyset
-    braft::Configuration conf_;
+ private:
+  const PoolId poolId_;
+  const CopysetId copysetId_;
+  const GroupId groupId_;
 
-    CopysetNodeManager* nodeManager_;
+  // copyset name: (poolid, copysetid, groupid)
+  const std::string name_;
 
-    // configuration version of current copyset
-    std::atomic<uint64_t> epoch_;
+  // configuration of current copyset
+  braft::Configuration conf_;
 
-    CopysetNodeOptions options_;
+  CopysetNodeManager* nodeManager_;
 
-    // current term, greater than 0 means leader
-    std::atomic<int64_t> leaderTerm_;
+  // configuration version of current copyset
+  std::atomic<uint64_t> epoch_;
 
-    braft::PeerId peerId_;
+  CopysetNodeOptions options_;
 
-    std::unique_ptr<RaftNode> raftNode_;
+  // current term, greater than 0 means leader
+  std::atomic<int64_t> leaderTerm_;
 
-    std::string copysetDataPath_;
+  braft::PeerId peerId_;
 
-    std::unique_ptr<MetaStore> metaStore_;
+  std::unique_ptr<RaftNode> raftNode_;
 
-    // applied log index
-    std::atomic<uint64_t> appliedIndex_;
+  std::string copysetDataPath_;
 
-    std::unique_ptr<ConfEpochFile> epochFile_;
+  std::unique_ptr<MetaStore> metaStore_;
 
-    std::unique_ptr<ApplyQueue> applyQueue_;
+  // applied log index
+  std::atomic<uint64_t> appliedIndex_;
 
-    mutable Mutex confMtx_;
+  std::unique_ptr<ConfEpochFile> epochFile_;
 
-    int64_t latestLoadSnapshotIndex_;
+  std::unique_ptr<ApplyQueue> applyQueue_;
 
-    mutable Mutex confChangeMtx_;
+  mutable Mutex confMtx_;
 
-    OngoingConfChange ongoingConfChange_;
+  int64_t latestLoadSnapshotIndex_;
 
-    std::unique_ptr<OperatorMetric> metric_;
+  mutable Mutex confChangeMtx_;
 
-    std::atomic<bool> isLoading_;
+  OngoingConfChange ongoingConfChange_;
+
+  std::unique_ptr<OperatorMetric> metric_;
+
+  std::atomic<bool> isLoading_;
 };
 
 inline void CopysetNode::Propose(const braft::Task& task) {
-    raftNode_->apply(task);
+  raftNode_->apply(task);
 }
 
 inline int64_t CopysetNode::LeaderTerm() const {
-    return leaderTerm_.load(std::memory_order_acquire);
+  return leaderTerm_.load(std::memory_order_acquire);
 }
 
 inline bool CopysetNode::IsLeaderTerm() const {
-    return leaderTerm_.load(std::memory_order_acquire) > 0;
+  return leaderTerm_.load(std::memory_order_acquire) > 0;
 }
 
 inline PoolId CopysetNode::GetPoolId() const { return poolId_; }
@@ -253,46 +253,44 @@ inline PoolId CopysetNode::GetPoolId() const { return poolId_; }
 inline CopysetId CopysetNode::GetCopysetId() const { return copysetId_; }
 
 inline PeerId CopysetNode::GetLeaderId() const {
-    return raftNode_->leader_id();
+  return raftNode_->leader_id();
 }
 
 inline MetaStore* CopysetNode::GetMetaStore() const { return metaStore_.get(); }
 
 inline uint64_t CopysetNode::GetConfEpoch() const {
-    std::lock_guard<Mutex> lock(confMtx_);
-    return epoch_.load(std::memory_order_relaxed);
+  std::lock_guard<Mutex> lock(confMtx_);
+  return epoch_.load(std::memory_order_relaxed);
 }
 
 inline std::string CopysetNode::GetCopysetDataDir() const {
-    return copysetDataPath_;
+  return copysetDataPath_;
 }
 
 inline uint64_t CopysetNode::GetAppliedIndex() const {
-    return appliedIndex_.load(std::memory_order_acquire);
+  return appliedIndex_.load(std::memory_order_acquire);
 }
 
 inline void CopysetNode::GetStatus(braft::NodeStatus* status) {
-    raftNode_->get_status(status);
+  raftNode_->get_status(status);
 }
 
 inline ApplyQueue* CopysetNode::GetApplyQueue() const {
-    return applyQueue_.get();
+  return applyQueue_.get();
 }
 
-inline OperatorMetric* CopysetNode::GetMetric() const {
-    return metric_.get();
-}
+inline OperatorMetric* CopysetNode::GetMetric() const { return metric_.get(); }
 
 inline const std::string& CopysetNode::Name() const { return name_; }
 
 inline int64_t CopysetNode::LatestLoadSnapshotIndex() const {
-    return latestLoadSnapshotIndex_;
+  return latestLoadSnapshotIndex_;
 }
 
 inline const braft::PeerId& CopysetNode::GetPeerId() const { return peerId_; }
 
 inline bool CopysetNode::IsLoading() const {
-    return isLoading_.load(std::memory_order_acquire);
+  return isLoading_.load(std::memory_order_acquire);
 }
 
 }  // namespace copyset

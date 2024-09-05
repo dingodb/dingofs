@@ -27,25 +27,25 @@ namespace metaserver {
 namespace storage {
 
 std::string Status::ToString() const {
-    switch (code_) {
-        case Code::kOk:
-            return "OK";
-        case Code::kDBClosed:
-            return "Database Closed";
-        case Code::kNotFound:
-            return "Not Found";
-        case Code::kNotSupported:
-            return "Not Supported";
-        case Code::kInternalError:
-            return "Internal Error";
-        case Code::kSerializedFailed:
-            return  "Serialized Failed";
-        case Code::kParsedFailed:
-            return  "Parse Failed";
-        default:
-            return "Unknown Status";
-    }
-    return "Unknown Status";
+  switch (code_) {
+    case Code::kOk:
+      return "OK";
+    case Code::kDBClosed:
+      return "Database Closed";
+    case Code::kNotFound:
+      return "Not Found";
+    case Code::kNotSupported:
+      return "Not Supported";
+    case Code::kInternalError:
+      return "Internal Error";
+    case Code::kSerializedFailed:
+      return "Serialized Failed";
+    case Code::kParsedFailed:
+      return "Parse Failed";
+    default:
+      return "Unknown Status";
+  }
+  return "Unknown Status";
 }
 
 }  // namespace storage

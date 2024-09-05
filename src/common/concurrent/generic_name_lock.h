@@ -23,101 +23,100 @@
 #ifndef SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_H_
 #define SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_H_
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <memory>
-#include "src/common/concurrent/concurrent.h"
 
+#include "src/common/concurrent/concurrent.h"
 
 namespace curve {
 namespace common {
 
 template <typename MutexT>
-class GenericNameLock  {
+class GenericNameLock {
  public:
-    explicit GenericNameLock(int bucketNum = 256);
+  explicit GenericNameLock(int bucketNum = 256);
 
-    GenericNameLock(const GenericNameLock&) = delete;
-    GenericNameLock& operator=(const GenericNameLock&) = delete;
+  GenericNameLock(const GenericNameLock&) = delete;
+  GenericNameLock& operator=(const GenericNameLock&) = delete;
 
-    /**
-     * @brief Lock the specified string
-     *
-     * @param lockStr Locked string
-     */
-    void Lock(const std::string &lockStr);
+  /**
+   * @brief Lock the specified string
+   *
+   * @param lockStr Locked string
+   */
+  void Lock(const std::string& lockStr);
 
-    /**
-     * @brief Try to specify sting lock
-     *
-     * @param lockStr Locked string
-     *
-     * @retval true when succeeded
-     * @retval false when failed
-     */
-    bool TryLock(const std::string &lockStr);
+  /**
+   * @brief Try to specify sting lock
+   *
+   * @param lockStr Locked string
+   *
+   * @retval true when succeeded
+   * @retval false when failed
+   */
+  bool TryLock(const std::string& lockStr);
 
-    /**
-     * @brief Unlock the specified string
-     *
-     * @param lockStr Locked string
-     */
-    void Unlock(const std::string &lockStr);
-
-
- private:
-    struct LockEntry {
-        Atomic<uint32_t> ref_;
-        MutexT lock_;
-    };
-    using LockEntryPtr = std::shared_ptr<LockEntry>;
-
-    struct LockBucket {
-        MutexT mu;
-        std::unordered_map<std::string, LockEntryPtr> lockMap;
-    };
-    using LockBucketPtr = std::shared_ptr<LockBucket>;
-
-    using LockGuard = std::lock_guard<MutexT>;
-
-    int GetBucketOffset(const std::string &lockStr);
+  /**
+   * @brief Unlock the specified string
+   *
+   * @param lockStr Locked string
+   */
+  void Unlock(const std::string& lockStr);
 
  private:
-    std::vector<LockBucketPtr> locks_;
+  struct LockEntry {
+    Atomic<uint32_t> ref_;
+    MutexT lock_;
+  };
+  using LockEntryPtr = std::shared_ptr<LockEntry>;
+
+  struct LockBucket {
+    MutexT mu;
+    std::unordered_map<std::string, LockEntryPtr> lockMap;
+  };
+  using LockBucketPtr = std::shared_ptr<LockBucket>;
+
+  using LockGuard = std::lock_guard<MutexT>;
+
+  int GetBucketOffset(const std::string& lockStr);
+
+ private:
+  std::vector<LockBucketPtr> locks_;
 };
 
 template <typename MutexT>
 class GenericNameLockGuard {
  public:
-    GenericNameLockGuard(GenericNameLock<MutexT> &lock, const std::string &lockStr) :  //NOLINT
+  GenericNameLockGuard(GenericNameLock<MutexT>& lock,
+                       const std::string& lockStr)
+      :  // NOLINT
         lock_(lock),
         lockStr_(lockStr),
         release_(false) {
-        lock_.Lock(lockStr_);
-    }
+    lock_.Lock(lockStr_);
+  }
 
-    GenericNameLockGuard(const GenericNameLockGuard&) = delete;
-    GenericNameLockGuard& operator=(const GenericNameLockGuard&) = delete;
+  GenericNameLockGuard(const GenericNameLockGuard&) = delete;
+  GenericNameLockGuard& operator=(const GenericNameLockGuard&) = delete;
 
-    ~GenericNameLockGuard() {
-        if (!release_) {
-            lock_.Unlock(lockStr_);
-        }
+  ~GenericNameLockGuard() {
+    if (!release_) {
+      lock_.Unlock(lockStr_);
     }
+  }
 
-    void Release() {
-        release_ = true;
-    }
+  void Release() { release_ = true; }
 
  private:
-    GenericNameLock<MutexT> &lock_;
-    std::string lockStr_;
-    bool release_;
+  GenericNameLock<MutexT>& lock_;
+  std::string lockStr_;
+  bool release_;
 };
 
-}   // namespace common
-}   // namespace curve
+}  // namespace common
+}  // namespace curve
 
 #include "src/common/concurrent/generic_name_lock-inl.h"
 

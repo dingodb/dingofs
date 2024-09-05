@@ -34,43 +34,43 @@ namespace metaserver {
  */
 class InflightThrottle {
  public:
-    explicit InflightThrottle(uint64_t maxInflight)
-        : inflightRequestCount_(0), maxInflightRequest_(maxInflight) {}
+  explicit InflightThrottle(uint64_t maxInflight)
+      : inflightRequestCount_(0), maxInflightRequest_(maxInflight) {}
 
-    ~InflightThrottle() = default;
+  ~InflightThrottle() = default;
 
-    /**
-     * @brief: 判断是否过载
-     * @return true，过载，false没有过载
-     */
-    bool IsOverLoad() {
-        if (maxInflightRequest_ >=
-            inflightRequestCount_.load(std::memory_order_relaxed)) {
-            return false;
-        } else {
-            return true;
-        }
+  /**
+   * @brief: 判断是否过载
+   * @return true，过载，false没有过载
+   */
+  bool IsOverLoad() {
+    if (maxInflightRequest_ >=
+        inflightRequestCount_.load(std::memory_order_relaxed)) {
+      return false;
+    } else {
+      return true;
     }
+  }
 
-    /**
-     * @brief: inflight request计数加1
-     */
-    void Increment() {
-        inflightRequestCount_.fetch_add(1, std::memory_order_relaxed);
-    }
+  /**
+   * @brief: inflight request计数加1
+   */
+  void Increment() {
+    inflightRequestCount_.fetch_add(1, std::memory_order_relaxed);
+  }
 
-    /**
-     * @brief: inflight request计数减1
-     */
-    void Decrement() {
-        inflightRequestCount_.fetch_sub(1, std::memory_order_relaxed);
-    }
+  /**
+   * @brief: inflight request计数减1
+   */
+  void Decrement() {
+    inflightRequestCount_.fetch_sub(1, std::memory_order_relaxed);
+  }
 
  private:
-    // 当前inflight request数量
-    std::atomic<uint64_t> inflightRequestCount_;
-    // 最大的inflight request数量
-    const uint64_t maxInflightRequest_;
+  // 当前inflight request数量
+  std::atomic<uint64_t> inflightRequestCount_;
+  // 最大的inflight request数量
+  const uint64_t maxInflightRequest_;
 };
 
 }  // namespace metaserver

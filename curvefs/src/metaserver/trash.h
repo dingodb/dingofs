@@ -24,112 +24,109 @@
 #define CURVEFS_SRC_METASERVER_TRASH_H_
 
 #include <cstdint>
-#include <memory>
 #include <list>
+#include <memory>
 #include <unordered_map>
 
-#include "src/common/configuration.h"
-#include "src/common/concurrent/concurrent.h"
-#include "src/common/interruptible_sleeper.h"
+#include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/metaserver/inode_storage.h"
 #include "curvefs/src/metaserver/s3/metaserver_s3_adaptor.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "src/common/concurrent/concurrent.h"
+#include "src/common/configuration.h"
+#include "src/common/interruptible_sleeper.h"
 
 namespace curvefs {
 namespace metaserver {
 
-using ::curve::common::Configuration;
-using ::curve::common::Thread;
 using ::curve::common::Atomic;
-using ::curve::common::Mutex;
-using ::curve::common::LockGuard;
+using ::curve::common::Configuration;
 using ::curve::common::InterruptibleSleeper;
+using ::curve::common::LockGuard;
+using ::curve::common::Mutex;
+using ::curve::common::Thread;
 using ::curvefs::client::rpcclient::MdsClient;
 using ::curvefs::client::rpcclient::MdsClientImpl;
 
 struct TrashItem {
-    uint32_t fsId;
-    uint64_t inodeId;
-    uint32_t dtime;
-    TrashItem()
-        : fsId(0),
-          inodeId(0),
-          dtime(0) {}
+  uint32_t fsId;
+  uint64_t inodeId;
+  uint32_t dtime;
+  TrashItem() : fsId(0), inodeId(0), dtime(0) {}
 };
 
 struct TrashOption {
-    uint32_t scanPeriodSec;
-    uint32_t expiredAfterSec;
-    std::shared_ptr<S3ClientAdaptor>  s3Adaptor;
-    std::shared_ptr<MdsClient> mdsClient;
-    TrashOption()
+  uint32_t scanPeriodSec;
+  uint32_t expiredAfterSec;
+  std::shared_ptr<S3ClientAdaptor> s3Adaptor;
+  std::shared_ptr<MdsClient> mdsClient;
+  TrashOption()
       : scanPeriodSec(0),
         expiredAfterSec(0),
         s3Adaptor(nullptr),
         mdsClient(nullptr) {}
 
-    void InitTrashOptionFromConf(std::shared_ptr<Configuration> conf);
+  void InitTrashOptionFromConf(std::shared_ptr<Configuration> conf);
 };
 
 class Trash {
  public:
-    Trash() {}
-    virtual ~Trash() {}
+  Trash() {}
+  virtual ~Trash() {}
 
-    virtual void Init(const TrashOption &option) = 0;
+  virtual void Init(const TrashOption& option) = 0;
 
-    virtual void Add(uint32_t fsId, uint64_t inodeId, uint32_t dtime) = 0;
+  virtual void Add(uint32_t fsId, uint64_t inodeId, uint32_t dtime) = 0;
 
-    virtual void ListItems(std::list<TrashItem> *items) = 0;
+  virtual void ListItems(std::list<TrashItem>* items) = 0;
 
-    virtual void ScanTrash() = 0;
+  virtual void ScanTrash() = 0;
 
-    virtual void StopScan() = 0;
+  virtual void StopScan() = 0;
 
-    virtual bool IsStop() = 0;
+  virtual bool IsStop() = 0;
 };
 
 class TrashImpl : public Trash {
  public:
-    explicit TrashImpl(const std::shared_ptr<InodeStorage> &inodeStorage)
+  explicit TrashImpl(const std::shared_ptr<InodeStorage>& inodeStorage)
       : inodeStorage_(inodeStorage) {}
 
-    ~TrashImpl() {}
+  ~TrashImpl() {}
 
-    void Init(const TrashOption &option) override;
+  void Init(const TrashOption& option) override;
 
-    void Add(uint32_t fsId, uint64_t inodeId, uint32_t dtime) override;
+  void Add(uint32_t fsId, uint64_t inodeId, uint32_t dtime) override;
 
-    void ListItems(std::list<TrashItem> *items) override;
+  void ListItems(std::list<TrashItem>* items) override;
 
-    void ScanTrash() override;
+  void ScanTrash() override;
 
-    void StopScan() override;
+  void StopScan() override;
 
-    bool IsStop() override;
-
- private:
-    bool NeedDelete(const TrashItem &item);
-
-    MetaStatusCode DeleteInodeAndData(const TrashItem &item);
-
-    uint64_t GetFsRecycleTimeHour(uint32_t fsId);
+  bool IsStop() override;
 
  private:
-    std::shared_ptr<InodeStorage> inodeStorage_;
-    std::shared_ptr<S3ClientAdaptor>  s3Adaptor_;
-    std::shared_ptr<MdsClient> mdsClient_;
-    std::unordered_map<uint32_t, FsInfo> fsInfoMap_;
+  bool NeedDelete(const TrashItem& item);
 
-    std::list<TrashItem> trashItems_;
+  MetaStatusCode DeleteInodeAndData(const TrashItem& item);
 
-    mutable Mutex itemsMutex_;
+  uint64_t GetFsRecycleTimeHour(uint32_t fsId);
 
-    TrashOption options_;
+ private:
+  std::shared_ptr<InodeStorage> inodeStorage_;
+  std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
+  std::shared_ptr<MdsClient> mdsClient_;
+  std::unordered_map<uint32_t, FsInfo> fsInfoMap_;
 
-    mutable Mutex scanMutex_;
+  std::list<TrashItem> trashItems_;
 
-    bool isStop_;
+  mutable Mutex itemsMutex_;
+
+  TrashOption options_;
+
+  mutable Mutex scanMutex_;
+
+  bool isStop_;
 };
 
 }  // namespace metaserver

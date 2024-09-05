@@ -43,34 +43,34 @@ class RequestSender;
  */
 class RequestSenderManager : public Uncopyable {
  public:
-    using SenderPtr = std::shared_ptr<RequestSender>;
-    RequestSenderManager() : rwlock_(), senderPool_() {}
+  using SenderPtr = std::shared_ptr<RequestSender>;
+  RequestSenderManager() : rwlock_(), senderPool_() {}
 
-    /**
-     * 获取指定leader id的sender，如果没有则根据leader
-     * 地址，创建新的 sender并返回
-     * @param leaderId:leader的id
-     * @param leaderAddr:leader的地址
-     * @return nullptr:get或者create失败，否则成功
-     */
-    SenderPtr GetOrCreateSender(const ChunkServerID& leaderId,
-                                const butil::EndPoint& leaderAddr,
-                                const IOSenderOption& senderopt);
+  /**
+   * 获取指定leader id的sender，如果没有则根据leader
+   * 地址，创建新的 sender并返回
+   * @param leaderId:leader的id
+   * @param leaderAddr:leader的地址
+   * @return nullptr:get或者create失败，否则成功
+   */
+  SenderPtr GetOrCreateSender(const ChunkServerID& leaderId,
+                              const butil::EndPoint& leaderAddr,
+                              const IOSenderOption& senderopt);
 
-    /**
-     * @brief 如果csId对应的RequestSender不健康，就进行重置
-     * @param csId chunkserver id
-     */
-    void ResetSenderIfNotHealth(const ChunkServerID& csId);
+  /**
+   * @brief 如果csId对应的RequestSender不健康，就进行重置
+   * @param csId chunkserver id
+   */
+  void ResetSenderIfNotHealth(const ChunkServerID& csId);
 
  private:
-    // 读写锁，保护senderPool_
-    curve::common::BthreadRWLock rwlock_;
-    // 请求发送链接的map，以ChunkServer ID为key
-    std::unordered_map<ChunkServerID, SenderPtr> senderPool_;
+  // 读写锁，保护senderPool_
+  curve::common::BthreadRWLock rwlock_;
+  // 请求发送链接的map，以ChunkServer ID为key
+  std::unordered_map<ChunkServerID, SenderPtr> senderPool_;
 };
 
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve
 
 #endif  // SRC_CLIENT_REQUEST_SENDER_MANAGER_H_

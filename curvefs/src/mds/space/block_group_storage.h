@@ -35,50 +35,47 @@ namespace space {
 
 class BlockGroupStorage {
  public:
-    virtual ~BlockGroupStorage() = default;
+  virtual ~BlockGroupStorage() = default;
 
-    virtual SpaceErrCode PutBlockGroup(uint32_t fsId,
-                                       uint64_t offset,
-                                       const BlockGroup& blockGroup) = 0;
+  virtual SpaceErrCode PutBlockGroup(uint32_t fsId, uint64_t offset,
+                                     const BlockGroup& blockGroup) = 0;
 
-    virtual SpaceErrCode RemoveBlockGroup(uint32_t fsId, uint64_t offset) = 0;
+  virtual SpaceErrCode RemoveBlockGroup(uint32_t fsId, uint64_t offset) = 0;
 
-    virtual SpaceErrCode ListBlockGroups(
-        uint32_t fsId,
-        std::vector<BlockGroup>* blockGroups) = 0;
+  virtual SpaceErrCode ListBlockGroups(
+      uint32_t fsId, std::vector<BlockGroup>* blockGroups) = 0;
 };
 
 class BlockGroupStorageImpl final : public BlockGroupStorage {
  public:
-    explicit BlockGroupStorageImpl(
-        const std::shared_ptr<curve::kvstorage::KVStorageClient>& store)
-        : store_(store) {}
+  explicit BlockGroupStorageImpl(
+      const std::shared_ptr<curve::kvstorage::KVStorageClient>& store)
+      : store_(store) {}
 
-    BlockGroupStorageImpl(const BlockGroupStorageImpl&) = delete;
-    BlockGroupStorageImpl& operator=(const BlockGroupStorageImpl&) = delete;
+  BlockGroupStorageImpl(const BlockGroupStorageImpl&) = delete;
+  BlockGroupStorageImpl& operator=(const BlockGroupStorageImpl&) = delete;
 
-    /**
-     * @brief Insert one block group into storage
-     * @return if success return SpaceOk, otherwise return error code
-     */
-    SpaceErrCode PutBlockGroup(uint32_t fsId,
-                               uint64_t offset,
-                               const BlockGroup& blockGroup) override;
+  /**
+   * @brief Insert one block group into storage
+   * @return if success return SpaceOk, otherwise return error code
+   */
+  SpaceErrCode PutBlockGroup(uint32_t fsId, uint64_t offset,
+                             const BlockGroup& blockGroup) override;
 
-    /**
-     * @brief Remove a block group from storage
-     * @return if success return SpaceOk, otherwise return error code
-     */
-    SpaceErrCode RemoveBlockGroup(uint32_t fsId, uint64_t offset) override;
+  /**
+   * @brief Remove a block group from storage
+   * @return if success return SpaceOk, otherwise return error code
+   */
+  SpaceErrCode RemoveBlockGroup(uint32_t fsId, uint64_t offset) override;
 
-    /**
-     * @brief List all block groups from storage that belong to a single fs
-     */
-    SpaceErrCode ListBlockGroups(uint32_t fsId,
-                                 std::vector<BlockGroup>* blockGroups) override;
+  /**
+   * @brief List all block groups from storage that belong to a single fs
+   */
+  SpaceErrCode ListBlockGroups(uint32_t fsId,
+                               std::vector<BlockGroup>* blockGroups) override;
 
  private:
-    std::shared_ptr<curve::kvstorage::KVStorageClient> store_;
+  std::shared_ptr<curve::kvstorage::KVStorageClient> store_;
 };
 
 }  // namespace space

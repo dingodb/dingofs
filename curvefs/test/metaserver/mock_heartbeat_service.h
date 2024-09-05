@@ -24,6 +24,7 @@
 #define CURVEFS_TEST_METASERVER_MOCK_HEARTBEAT_SERVICE_H_
 
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/heartbeat.pb.h"
 
 namespace curvefs {
@@ -32,14 +33,14 @@ namespace heartbeat {
 
 class MockHeartbeatService : public HeartbeatService {
  public:
-    MockHeartbeatService() : HeartbeatService() {}
-    ~MockHeartbeatService() = default;
+  MockHeartbeatService() : HeartbeatService() {}
+  ~MockHeartbeatService() = default;
 
-    MOCK_METHOD4(MetaServerHeartbeat,
-                 void(google::protobuf::RpcController* cntl_base,
-                      const MetaServerHeartbeatRequest* request,
-                      MetaServerHeartbeatResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(MetaServerHeartbeat,
+               void(google::protobuf::RpcController* cntl_base,
+                    const MetaServerHeartbeatRequest* request,
+                    MetaServerHeartbeatResponse* response,
+                    google::protobuf::Closure* done));
 };
 }  // namespace heartbeat
 }  // namespace mds

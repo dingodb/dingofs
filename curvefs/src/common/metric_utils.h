@@ -30,18 +30,18 @@ namespace curvefs {
 namespace common {
 
 struct LatencyUpdater {
-    explicit LatencyUpdater(bvar::LatencyRecorder* recorder)
-        : recorder(recorder) {
-        timer.start();
-    }
+  explicit LatencyUpdater(bvar::LatencyRecorder* recorder)
+      : recorder(recorder) {
+    timer.start();
+  }
 
-    ~LatencyUpdater() {
-        timer.stop();
-        (*recorder) << timer.u_elapsed();
-    }
+  ~LatencyUpdater() {
+    timer.stop();
+    (*recorder) << timer.u_elapsed();
+  }
 
-    bvar::LatencyRecorder* recorder;
-    butil::Timer timer;
+  bvar::LatencyRecorder* recorder;
+  butil::Timer timer;
 };
 
 }  // namespace common

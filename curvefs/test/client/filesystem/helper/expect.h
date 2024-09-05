@@ -25,20 +25,20 @@
 
 #include <gmock/gmock.h>
 
-#include "curvefs/test/client/mock_metaserver_client.h"
-#include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
+#include "curvefs/test/client/mock_inode_cache_manager.h"
+#include "curvefs/test/client/mock_metaserver_client.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
-using ::testing::_;
-using ::testing::Return;
-using ::testing::Invoke;
 using ::curvefs::client::MockDentryCacheManager;
 using ::curvefs::client::MockInodeCacheManager;
 using ::curvefs::client::rpcclient::MockMetaServerClient;
+using ::testing::_;
+using ::testing::Invoke;
+using ::testing::Return;
 
 /*
  * Reference:
@@ -63,65 +63,59 @@ using ::curvefs::client::rpcclient::MockMetaServerClient;
  */
 
 // times
-#define EXPECT_CALL_INDOE_SYNC_TIMES(CLIENT, INO, TIMES)                   \
-    EXPECT_CALL(CLIENT, UpdateInodeWithOutNlinkAsync_rvr(_, INO, _, _, _)) \
-        .Times(TIMES)
+#define EXPECT_CALL_INDOE_SYNC_TIMES(CLIENT, INO, TIMES)                 \
+  EXPECT_CALL(CLIENT, UpdateInodeWithOutNlinkAsync_rvr(_, INO, _, _, _)) \
+      .Times(TIMES)
 
 // return
-#define EXPECT_CALL_RETURN_GetDentry(MANAGER, CODE) \
-do {                                                \
-    EXPECT_CALL(MANAGER, GetDentry(_, _, _))        \
-        .WillOnce(Return(CODE));                    \
-} while (0)
+#define EXPECT_CALL_RETURN_GetDentry(MANAGER, CODE)                  \
+  do {                                                               \
+    EXPECT_CALL(MANAGER, GetDentry(_, _, _)).WillOnce(Return(CODE)); \
+  } while (0)
 
-#define EXPECT_CALL_RETURN_ListDentry(MANAGER, CODE) \
-do {                                                 \
-    EXPECT_CALL(MANAGER, ListDentry(_, _, _, _, _))  \
-        .WillOnce(Return(CODE));                     \
-} while (0)
+#define EXPECT_CALL_RETURN_ListDentry(MANAGER, CODE)                        \
+  do {                                                                      \
+    EXPECT_CALL(MANAGER, ListDentry(_, _, _, _, _)).WillOnce(Return(CODE)); \
+  } while (0)
 
-#define EXPECT_CALL_RETURN_GetInodeAttr(MANAGER, CODE) \
-do {                                                   \
-    EXPECT_CALL(MANAGER, GetInodeAttr(_, _))           \
-        .WillOnce(Return(CODE));                       \
-} while (0)
+#define EXPECT_CALL_RETURN_GetInodeAttr(MANAGER, CODE)               \
+  do {                                                               \
+    EXPECT_CALL(MANAGER, GetInodeAttr(_, _)).WillOnce(Return(CODE)); \
+  } while (0)
 
 #define EXPECT_CALL_RETURN_BatchGetInodeAttrAsync(MANAGER, CODE) \
-do {                                                             \
+  do {                                                           \
     EXPECT_CALL(MANAGER, BatchGetInodeAttrAsync(_, _, _))        \
         .WillOnce(Return(CODE));                                 \
-} while (0)
+  } while (0)
 
-#define EXPECT_CALL_RETURN_GetInode(MANAGER, CODE) \
-do {                                               \
-    EXPECT_CALL(MANAGER, GetInode(_, _))           \
-        .WillOnce(Return(CODE));                   \
-} while (0)
+#define EXPECT_CALL_RETURN_GetInode(MANAGER, CODE)               \
+  do {                                                           \
+    EXPECT_CALL(MANAGER, GetInode(_, _)).WillOnce(Return(CODE)); \
+  } while (0)
 
 // invoke
 #define EXPECT_CALL_INVOKE_ListDentry(MANAGER, CALLBACK) \
-do {                                                     \
+  do {                                                   \
     EXPECT_CALL(MANAGER, ListDentry(_, _, _, _, _))      \
         .WillOnce(Invoke(CALLBACK));                     \
-} while (0)
+  } while (0)
 
-#define EXPECT_CALL_INVOKE_GetInodeAttr(MANAGER, CALLBACK) \
-do {                                                       \
-    EXPECT_CALL(MANAGER, GetInodeAttr(_, _))               \
-        .WillOnce(Invoke(CALLBACK));                       \
-} while (0)
+#define EXPECT_CALL_INVOKE_GetInodeAttr(MANAGER, CALLBACK)               \
+  do {                                                                   \
+    EXPECT_CALL(MANAGER, GetInodeAttr(_, _)).WillOnce(Invoke(CALLBACK)); \
+  } while (0)
 
 #define EXPECT_CALL_INVOKE_BatchGetInodeAttrAsync(MANAGER, CALLBACK) \
-do {                                                                 \
+  do {                                                               \
     EXPECT_CALL(MANAGER, BatchGetInodeAttrAsync(_, _, _))            \
         .WillOnce(Invoke(CALLBACK));                                 \
-} while (0)
+  } while (0)
 
-#define EXPECT_CALL_INVOKE_GetInode(MANAGER, CALLBACK) \
-do {                                                   \
-    EXPECT_CALL(MANAGER, GetInode(_, _))               \
-        .WillOnce(Invoke(CALLBACK));                   \
-} while (0)
+#define EXPECT_CALL_INVOKE_GetInode(MANAGER, CALLBACK)               \
+  do {                                                               \
+    EXPECT_CALL(MANAGER, GetInode(_, _)).WillOnce(Invoke(CALLBACK)); \
+  } while (0)
 
 }  // namespace filesystem
 }  // namespace client

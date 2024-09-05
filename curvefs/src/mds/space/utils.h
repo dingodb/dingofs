@@ -34,7 +34,7 @@ namespace space {
 
 // Join mutiple ip:port into a string with separate ','.
 inline std::string ConcatHosts(const std::vector<std::string>& hosts) {
-    return absl::StrJoin(hosts, ",");
+  return absl::StrJoin(hosts, ",");
 }
 
 }  // namespace space

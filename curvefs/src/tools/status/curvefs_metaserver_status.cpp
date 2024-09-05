@@ -28,90 +28,90 @@ namespace tools {
 namespace status {
 
 void MetaserverStatusTool::PrintHelp() {
-    StatusBaseTool::PrintHelp();
-    std::cout << " [-metaserverAddr=" << FLAGS_metaserverAddr << "]";
-    std::cout << std::endl;
+  StatusBaseTool::PrintHelp();
+  std::cout << " [-metaserverAddr=" << FLAGS_metaserverAddr << "]";
+  std::cout << std::endl;
 }
 
 void MetaserverStatusTool::InitHostsAddr() {
-    curve::common::SplitString(FLAGS_metaserverAddr, ",", &hostsAddr_);
+  curve::common::SplitString(FLAGS_metaserverAddr, ",", &hostsAddr_);
 }
 
 void MetaserverStatusTool::AddUpdateFlags() {
-    AddUpdateFlagsFunc(curvefs::tools::SetMetaserverAddr);
-    StatusBaseTool::AddUpdateFlags();
+  AddUpdateFlagsFunc(curvefs::tools::SetMetaserverAddr);
+  StatusBaseTool::AddUpdateFlags();
 }
 
 int MetaserverStatusTool::ProcessMetrics() {
-    int ret = 0;
+  int ret = 0;
 
-    // version
+  // version
+  if (show_) {
+    std::cout << hostType_ << " version: " << version_ << std::endl;
+  }
+
+  // online host
+  if (onlineHosts_.empty()) {
     if (show_) {
-        std::cout << hostType_ << " version: " << version_ << std::endl;
+      std::cerr << "no online " << hostType_ << "." << std::endl;
     }
-
-    // online host
-    if (onlineHosts_.empty()) {
-        if (show_) {
-            std::cerr << "no online " << hostType_ << "." << std::endl;
-        }
-        ret = -1;
-    } else if (show_) {
-        std::cout << "online " << hostType_ << ": [ ";
-        for (auto const& i : onlineHosts_) {
-            std::cerr << i << " ";
-        }
-        std::cout << "]." << std::endl;
+    ret = -1;
+  } else if (show_) {
+    std::cout << "online " << hostType_ << ": [ ";
+    for (auto const& i : onlineHosts_) {
+      std::cerr << i << " ";
     }
+    std::cout << "]." << std::endl;
+  }
 
-    // offline host
-    if (!offlineHosts_.empty()) {
-        ret = -1;
-        if (show_) {
-            std::cout << "offline " << hostType_ << ": [ ";
-            for (auto const& i : offlineHosts_) {
-                std::cerr << i << " ";
-            }
-            std::cout << "]." << std::endl;
-        }
+  // offline host
+  if (!offlineHosts_.empty()) {
+    ret = -1;
+    if (show_) {
+      std::cout << "offline " << hostType_ << ": [ ";
+      for (auto const& i : offlineHosts_) {
+        std::cerr << i << " ";
+      }
+      std::cout << "]." << std::endl;
     }
+  }
 
-    return ret;
+  return ret;
 }
 
 int MetaserverStatusTool::Init() {
-    versionSubUri_ = kVersionUri;
-    statusSubUri_ = kMetaserverStatusUri;
-    versionKey_ = kVersionKey;
+  versionSubUri_ = kVersionUri;
+  statusSubUri_ = kMetaserverStatusUri;
+  versionKey_ = kVersionKey;
 
-    return StatusBaseTool::Init();
+  return StatusBaseTool::Init();
 }
 
 void MetaserverStatusTool::AfterGetMetric(const std::string hostAddr,
                                           const std::string& subUri,
                                           const std::string& value,
                                           const MetricStatusCode& statusCode) {
-    if (statusCode == MetricStatusCode::kOK) {
-        onlineHosts_.insert(hostAddr);
-        if (subUri == statusSubUri_) {
-            // get response is ok
-            onlineHosts_.insert(hostAddr);
-        } else if (subUri == versionSubUri_) {
-            std::string keyValue;
-            if (!metricClient_->GetKeyValueFromString(value, versionKey_,
-                                                      &keyValue)) {
-                version_ = keyValue;
-            } else {
-                std::cerr << "parse " << versionKey_ << " form " << hostAddr
-                          << subUri << " error." << std::endl;
-                version_ = "unknown";
-            }
-        }
-
-    } else if (subUri == statusSubUri_) {
-        // offline host
-        offlineHosts_.insert(hostAddr);
+  if (statusCode == MetricStatusCode::kOK) {
+    onlineHosts_.insert(hostAddr);
+    if (subUri == statusSubUri_) {
+      // get response is ok
+      onlineHosts_.insert(hostAddr);
+    } else if (subUri == versionSubUri_) {
+      std::string keyValue;
+      if (!metricClient_->GetKeyValueFromString(value, versionKey_,
+                                                &keyValue)) {
+        version_ = keyValue;
+      } else {
+        std::cerr << "parse " << versionKey_ << " form " << hostAddr << subUri
+                  << " error." << std::endl;
+        version_ = "unknown";
+      }
     }
+
+  } else if (subUri == statusSubUri_) {
+    // offline host
+    offlineHosts_.insert(hostAddr);
+  }
 }
 
 }  // namespace status

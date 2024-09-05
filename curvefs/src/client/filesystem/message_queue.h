@@ -25,12 +25,12 @@
 
 #include <glog/logging.h>
 
-#include <string>
 #include <atomic>
+#include <string>
 #include <thread>
 
-#include "src/common/concurrent/task_queue.h"
 #include "curvefs/src/common/threading.h"
+#include "src/common/concurrent/task_queue.h"
 
 namespace curvefs {
 namespace client {
@@ -42,73 +42,69 @@ using ::curvefs::common::SetThreadName;
 template <typename MessageT>
 class MessageQueue {
  public:
-    using MessageHandler = std::function<void(const MessageT& message)>;
+  using MessageHandler = std::function<void(const MessageT& message)>;
 
  public:
-    MessageQueue(const std::string& name, size_t bufferSize)
-        : name_(name),
-          running_(false),
-          thread_(),
-          handler_(),
-          queue_(bufferSize) {}
+  MessageQueue(const std::string& name, size_t bufferSize)
+      : name_(name),
+        running_(false),
+        thread_(),
+        handler_(),
+        queue_(bufferSize) {}
 
-    void Start() {
-        if (running_.exchange(true)) {
-            return;
-        }
-
-        thread_ = std::thread(&MessageQueue::Consumer, this);
-        LOG(INFO) << "MessageQueue [ " << name_ << " ] "
-                  << "consumer thread start success";
+  void Start() {
+    if (running_.exchange(true)) {
+      return;
     }
 
-    void Stop() {
-        if (!running_.exchange(false)) {
-            return;
-        }
+    thread_ = std::thread(&MessageQueue::Consumer, this);
+    LOG(INFO) << "MessageQueue [ " << name_ << " ] "
+              << "consumer thread start success";
+  }
 
-        auto wakeup = []() {};
-        queue_.Push(wakeup);
-
-        LOG(INFO) << "MessageQueue [ " << name_ << " ] "
-                  << "consumer thread stoping...";
-
-        thread_.join();
-
-        LOG(INFO) << "MessageQueue [ " << name_ << " ] "
-                  << "consumer thread stopped";
+  void Stop() {
+    if (!running_.exchange(false)) {
+      return;
     }
 
-    void Publish(MessageT message) {
-        if (handler_ != nullptr) {
-            queue_.Push([this, message](){
-                this->handler_(message);
-            });
-        }
-    }
+    auto wakeup = []() {};
+    queue_.Push(wakeup);
 
-    void Subscribe(MessageHandler handler) {
-        handler_ = handler;
+    LOG(INFO) << "MessageQueue [ " << name_ << " ] "
+              << "consumer thread stoping...";
+
+    thread_.join();
+
+    LOG(INFO) << "MessageQueue [ " << name_ << " ] "
+              << "consumer thread stopped";
+  }
+
+  void Publish(MessageT message) {
+    if (handler_ != nullptr) {
+      queue_.Push([this, message]() { this->handler_(message); });
     }
+  }
+
+  void Subscribe(MessageHandler handler) { handler_ = handler; }
 
  private:
-    void Consumer() {
-        SetThreadName(name_.c_str());
-        while (running_.load(std::memory_order_relaxed)) {
-            queue_.Pop()();
-        }
-
-        while (queue_.Size() > 0) {
-            queue_.Pop()();
-        }
+  void Consumer() {
+    SetThreadName(name_.c_str());
+    while (running_.load(std::memory_order_relaxed)) {
+      queue_.Pop()();
     }
 
+    while (queue_.Size() > 0) {
+      queue_.Pop()();
+    }
+  }
+
  private:
-    std::string name_;
-    std::atomic<bool> running_;
-    std::thread thread_;
-    MessageHandler handler_;
-    TaskQueue queue_;
+  std::string name_;
+  std::atomic<bool> running_;
+  std::thread thread_;
+  MessageHandler handler_;
+  TaskQueue queue_;
 };
 
 }  // namespace filesystem

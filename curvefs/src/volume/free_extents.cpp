@@ -46,9 +46,9 @@ FreeExtents::FreeExtents(const uint64_t off, const uint64_t len)
       available_(len),
       extents_(),
       blocks_() {
-    if (len != 0) {
-        extents_.emplace(off, maxLength_);
-    }
+  if (len != 0) {
+    extents_.emplace(off, maxLength_);
+  }
 }
 
 FreeExtents::FreeExtents(const uint64_t maxExtentSize)
@@ -60,8 +60,7 @@ FreeExtents::FreeExtents(const uint64_t maxExtentSize)
       extents_(),
       blocks_() {}
 
-FreeExtents::FreeExtents(const uint64_t maxExtentSize,
-                         const uint64_t off,
+FreeExtents::FreeExtents(const uint64_t maxExtentSize, const uint64_t off,
                          const uint64_t len)
     : startOffset_(off),
       length_(len),
@@ -74,251 +73,250 @@ FreeExtents::FreeExtents(const uint64_t maxExtentSize,
 uint64_t FreeExtents::AllocInternal(const uint64_t size,
                                     const AllocateHint& hint,
                                     std::vector<Extent>* exts) {
-    if (available_ == 0) {
-        return 0;
-    }
+  if (available_ == 0) {
+    return 0;
+  }
 
-    uint64_t need = size;
-    std::map<uint64_t, uint64_t>::const_iterator iter;
+  uint64_t need = size;
+  std::map<uint64_t, uint64_t>::const_iterator iter;
 
-    // 1. find extents that satisfy hint.leftOffset
-    if (hint.leftOffset != AllocateHint::INVALID_OFFSET) {
-        iter = extents_.lower_bound(hint.leftOffset);
+  // 1. find extents that satisfy hint.leftOffset
+  if (hint.leftOffset != AllocateHint::INVALID_OFFSET) {
+    iter = extents_.lower_bound(hint.leftOffset);
 
-        if (iter != extents_.end() && iter->first == hint.leftOffset) {
-            if (iter->second >= need) {
-                exts->emplace_back(iter->first, need);
+    if (iter != extents_.end() && iter->first == hint.leftOffset) {
+      if (iter->second >= need) {
+        exts->emplace_back(iter->first, need);
 
-                if (iter->second == need) {
-                    extents_.erase(iter);
-                } else {
-                    auto newOff = iter->first + need;
-                    auto newLen = iter->second - need;
-                    extents_.erase(iter);
-                    extents_.emplace(newOff, newLen);
-                }
-
-                return size;
-            } else {
-                need -= iter->second;
-                exts->emplace_back(iter->first, iter->second);
-
-                extents_.erase(iter);
-            }
-        }
-    }
-
-    // 2. find extents that satisfy hint.rightOffset
-    if (hint.rightOffset != AllocateHint::INVALID_OFFSET &&
-        hint.rightOffset >= need) {
-        iter = extents_.lower_bound(hint.rightOffset - need);
-        if (iter != extents_.end() &&
-            iter->first == (hint.rightOffset - need)) {
-            if (iter->second >= need) {
-                exts->emplace_back(iter->first, need);
-
-                if (iter->second == need) {
-                    extents_.erase(iter);
-                } else {
-                    auto newOff = iter->first + need;
-                    auto newLen = iter->second - need;
-                    extents_.erase(iter);
-                    extents_.emplace(newOff, newLen);
-                }
-
-                return size;
-            } else {
-                need -= iter->second;
-                exts->emplace_back(iter->first, iter->second);
-
-                extents_.erase(iter);
-            }
-        }
-    }
-
-    // both leftOffset and rightOffset aren't satisfied
-    // first loop find a extent that satisfy needed size
-    iter = extents_.begin();
-    while (iter != extents_.end()) {
-        if (iter->second >= need) {
-            exts->emplace_back(iter->first, need);
-
-            // modify this extents
-            if (iter->second == need) {
-                extents_.erase(iter);
-            } else {
-                auto newOff = iter->first + need;
-                auto newLen = iter->second - need;
-                extents_.erase(iter);
-                extents_.emplace(newOff, newLen);
-            }
-
-            return size;
+        if (iter->second == need) {
+          extents_.erase(iter);
         } else {
-            ++iter;
+          auto newOff = iter->first + need;
+          auto newLen = iter->second - need;
+          extents_.erase(iter);
+          extents_.emplace(newOff, newLen);
         }
+
+        return size;
+      } else {
+        need -= iter->second;
+        exts->emplace_back(iter->first, iter->second);
+
+        extents_.erase(iter);
+      }
     }
+  }
 
-    // second loop consume all existing extent
-    iter = extents_.begin();
-    while (need > 0 && iter != extents_.end()) {
-        if (iter->second <= need) {
-            need -= iter->second;
-            exts->emplace_back(iter->first, iter->second);
+  // 2. find extents that satisfy hint.rightOffset
+  if (hint.rightOffset != AllocateHint::INVALID_OFFSET &&
+      hint.rightOffset >= need) {
+    iter = extents_.lower_bound(hint.rightOffset - need);
+    if (iter != extents_.end() && iter->first == (hint.rightOffset - need)) {
+      if (iter->second >= need) {
+        exts->emplace_back(iter->first, need);
 
-            // remove this extent
-            iter = extents_.erase(iter);
-        } else {  // iter->second > need
-            exts->emplace_back(iter->first, need);
-
-            auto newOff = iter->first + need;
-            auto newLen = iter->second - need;
-
-            extents_.erase(iter);
-            extents_.emplace(newOff, newLen);
-
-            return size;
+        if (iter->second == need) {
+          extents_.erase(iter);
+        } else {
+          auto newOff = iter->first + need;
+          auto newLen = iter->second - need;
+          extents_.erase(iter);
+          extents_.emplace(newOff, newLen);
         }
-    }
 
-    return size - need;
+        return size;
+      } else {
+        need -= iter->second;
+        exts->emplace_back(iter->first, iter->second);
+
+        extents_.erase(iter);
+      }
+    }
+  }
+
+  // both leftOffset and rightOffset aren't satisfied
+  // first loop find a extent that satisfy needed size
+  iter = extents_.begin();
+  while (iter != extents_.end()) {
+    if (iter->second >= need) {
+      exts->emplace_back(iter->first, need);
+
+      // modify this extents
+      if (iter->second == need) {
+        extents_.erase(iter);
+      } else {
+        auto newOff = iter->first + need;
+        auto newLen = iter->second - need;
+        extents_.erase(iter);
+        extents_.emplace(newOff, newLen);
+      }
+
+      return size;
+    } else {
+      ++iter;
+    }
+  }
+
+  // second loop consume all existing extent
+  iter = extents_.begin();
+  while (need > 0 && iter != extents_.end()) {
+    if (iter->second <= need) {
+      need -= iter->second;
+      exts->emplace_back(iter->first, iter->second);
+
+      // remove this extent
+      iter = extents_.erase(iter);
+    } else {  // iter->second > need
+      exts->emplace_back(iter->first, need);
+
+      auto newOff = iter->first + need;
+      auto newLen = iter->second - need;
+
+      extents_.erase(iter);
+      extents_.emplace(newOff, newLen);
+
+      return size;
+    }
+  }
+
+  return size - need;
 }
 
 uint64_t FreeExtents::AvailableBlocks(std::map<uint64_t, uint64_t>* blocks) {
-    uint64_t size = 0;
+  uint64_t size = 0;
 
-    // TODO(wuhanqing): move this calc to DeAlloc
-    *blocks = std::move(blocks_);
-    for (const auto& b : *blocks) {
-        size += b.second;
-    }
+  // TODO(wuhanqing): move this calc to DeAlloc
+  *blocks = std::move(blocks_);
+  for (const auto& b : *blocks) {
+    size += b.second;
+  }
 
-    available_ -= size;
-    return size;
+  available_ -= size;
+  return size;
 }
 
 std::ostream& operator<<(std::ostream& os, const FreeExtents& e) {
-    os << "avail: " << e.available_ << ", extents: ";
+  os << "avail: " << e.available_ << ", extents: ";
 
-    for (auto& ee : e.extents_) {
-        os << Extent{ee.first, ee.second} << " ";
-    }
+  for (auto& ee : e.extents_) {
+    os << Extent{ee.first, ee.second} << " ";
+  }
 
-    os << ", blocks: ";
-    for (auto& ee : e.blocks_) {
-        os << Extent{ee.first, ee.second} << " ";
-    }
+  os << ", blocks: ";
+  for (auto& ee : e.blocks_) {
+    os << Extent{ee.first, ee.second} << " ";
+  }
 
-    return os;
+  return os;
 }
 
 void FreeExtents::DeAllocInternal(const uint64_t off, const uint64_t len) {
-    assert((length_ == 0) ||
-           (off >= startOffset_ && off + len <= startOffset_ + length_));
+  assert((length_ == 0) ||
+         (off >= startOffset_ && off + len <= startOffset_ + length_));
 
-    if (available_ == 0) {
-        // FIXME: off/len may need recycle to blocks
-        extents_.emplace(off, len);
+  if (available_ == 0) {
+    // FIXME: off/len may need recycle to blocks
+    extents_.emplace(off, len);
+    return;
+  }
+
+  // try merge with left extent
+  auto iter = extents_.lower_bound(off);
+  auto curIter = extents_.end();
+  if (iter != extents_.begin()) {
+    --iter;
+  }
+  if ((iter->first + iter->second) == off) {
+    iter->second += len;
+    curIter = iter;
+  } else {
+    // TODO(wuhanqing): should tackle iter->first + iter->second > off ?
+    auto r = extents_.emplace(off, len);
+    curIter = r.first;
+  }
+
+  // try merge with right extent
+  const auto endOff = curIter->first + curIter->second;
+  iter = extents_.lower_bound(endOff);
+  if (iter != extents_.end() && iter->first == endOff) {
+    curIter->second += iter->second;
+
+    // erase current iterator
+    extents_.erase(iter);
+  }
+
+  // split it if it's big enough
+  if (maxExtentSize_ != 0 && curIter->second >= maxExtentSize_) {
+    if (curIter->second == maxExtentSize_) {
+      // not aligned to maxExtentSize
+      if (align_down(curIter->first, maxExtentSize_) != curIter->first) {
         return;
-    }
+      }
 
-    // try merge with left extent
-    auto iter = extents_.lower_bound(off);
-    auto curIter = extents_.end();
-    if (iter != extents_.begin()) {
-        --iter;
-    }
-    if ((iter->first + iter->second) == off) {
-        iter->second += len;
-        curIter = iter;
+      blocks_.emplace(curIter->first, curIter->second);
+      extents_.erase(curIter);
+      return;
     } else {
-        // TODO(wuhanqing): should tackle iter->first + iter->second > off ?
-        auto r = extents_.emplace(off, len);
-        curIter = r.first;
+      auto start = curIter->first;
+      auto end = start + curIter->second;
+      extents_.erase(curIter);
+
+      auto alignStart = align_up(start, maxExtentSize_);
+      auto alignEnd = align_down(end, maxExtentSize_);
+
+      if (start != alignStart) {
+        extents_.emplace(start, alignStart - start);
+      }
+      if (end != alignEnd) {
+        extents_.emplace(alignEnd, end - alignEnd);
+      }
+
+      while (alignStart < alignEnd) {
+        blocks_.emplace(alignStart, maxExtentSize_);
+        alignStart += maxExtentSize_;
+      }
     }
-
-    // try merge with right extent
-    const auto endOff = curIter->first + curIter->second;
-    iter = extents_.lower_bound(endOff);
-    if (iter != extents_.end() && iter->first == endOff) {
-        curIter->second += iter->second;
-
-        // erase current iterator
-        extents_.erase(iter);
-    }
-
-    // split it if it's big enough
-    if (maxExtentSize_ != 0 && curIter->second >= maxExtentSize_) {
-        if (curIter->second == maxExtentSize_) {
-            // not aligned to maxExtentSize
-            if (align_down(curIter->first, maxExtentSize_) != curIter->first) {
-                return;
-            }
-
-            blocks_.emplace(curIter->first, curIter->second);
-            extents_.erase(curIter);
-            return;
-        } else {
-            auto start = curIter->first;
-            auto end = start + curIter->second;
-            extents_.erase(curIter);
-
-            auto alignStart = align_up(start, maxExtentSize_);
-            auto alignEnd = align_down(end, maxExtentSize_);
-
-            if (start != alignStart) {
-                extents_.emplace(start, alignStart - start);
-            }
-            if (end != alignEnd) {
-                extents_.emplace(alignEnd, end - alignEnd);
-            }
-
-            while (alignStart < alignEnd) {
-                blocks_.emplace(alignStart, maxExtentSize_);
-                alignStart += maxExtentSize_;
-            }
-        }
-    }
+  }
 }
 
 void FreeExtents::MarkUsedInternal(const uint64_t off, const uint64_t len) {
-    assert((length_ != 0) ||
-           (off >= startOffset_ && off + len <= startOffset_ + length_));
+  assert((length_ != 0) ||
+         (off >= startOffset_ && off + len <= startOffset_ + length_));
 
-    CHECK(available_ >= len) << "MarkUsedInternal: [off: " << off
-                             << " ~ len: " << len << "] " << *this;
+  CHECK(available_ >= len) << "MarkUsedInternal: [off: " << off
+                           << " ~ len: " << len << "] " << *this;
 
-    auto iter = extents_.lower_bound(off);
-    if (iter != extents_.end() && iter->first == off) {
-        if (iter->first == off && iter->second == len) {
-            extents_.erase(iter);
-        } else {
-            auto newOff = iter->first + len;
-            auto newLen = iter->second - len;
-            extents_.erase(iter);
-            extents_.emplace(newOff, newLen);
-        }
+  auto iter = extents_.lower_bound(off);
+  if (iter != extents_.end() && iter->first == off) {
+    if (iter->first == off && iter->second == len) {
+      extents_.erase(iter);
     } else {
-        if (iter != extents_.begin()) {
-            --iter;
-        }
-
-        if ((iter->first + iter->second) == (off + len)) {
-            auto newOff = iter->first;
-            auto newLen = iter->second - len;
-            extents_.erase(iter);
-            extents_.emplace(newOff, newLen);
-        } else {
-            // [off, len] is in the middle of [iter->first, iter->second]
-            auto leftOff = iter->first;
-            auto leftLen = off - iter->first;
-            auto rightOff = off + len;
-            auto rightLen = (iter->first + iter->second) - rightOff;
-            extents_.erase(iter);
-            extents_.emplace(leftOff, leftLen);
-            extents_.emplace(rightOff, rightLen);
-        }
+      auto newOff = iter->first + len;
+      auto newLen = iter->second - len;
+      extents_.erase(iter);
+      extents_.emplace(newOff, newLen);
     }
+  } else {
+    if (iter != extents_.begin()) {
+      --iter;
+    }
+
+    if ((iter->first + iter->second) == (off + len)) {
+      auto newOff = iter->first;
+      auto newLen = iter->second - len;
+      extents_.erase(iter);
+      extents_.emplace(newOff, newLen);
+    } else {
+      // [off, len] is in the middle of [iter->first, iter->second]
+      auto leftOff = iter->first;
+      auto leftLen = off - iter->first;
+      auto rightOff = off + len;
+      auto rightLen = (iter->first + iter->second) - rightOff;
+      extents_.erase(iter);
+      extents_.emplace(leftOff, leftLen);
+      extents_.emplace(rightOff, rightLen);
+    }
+  }
 }
 
 }  // namespace volume

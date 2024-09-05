@@ -20,6 +20,7 @@
  * @Author: chenwei
  */
 #include "curvefs/src/metaserver/partition_clean_manager.h"
+
 #include "curvefs/src/metaserver/trash_manager.h"
 
 namespace curvefs {
@@ -27,98 +28,98 @@ namespace metaserver {
 void PartitionCleanManager::Add(
     uint32_t partitionId, const std::shared_ptr<PartitionCleaner>& cleaner,
     copyset::CopysetNode* copysetNode) {
-    curve::common::WriteLockGuard lockGuard(rwLock_);
-    LOG(INFO) << "Add partition to partition clean mananager, partititonId = "
-              << partitionId;
-    cleaner->SetS3Aapter(S3ClientAdaptor_);
-    cleaner->SetCopysetNode(copysetNode);
-    cleaner->SetIndoDeletePeriod(inodeDeletePeriodMs_);
-    cleaner->SetMdsClient(mdsClient_);
-    partitonCleanerList_.push_back(cleaner);
-    partitionCleanerCount << 1;
+  curve::common::WriteLockGuard lockGuard(rwLock_);
+  LOG(INFO) << "Add partition to partition clean mananager, partititonId = "
+            << partitionId;
+  cleaner->SetS3Aapter(S3ClientAdaptor_);
+  cleaner->SetCopysetNode(copysetNode);
+  cleaner->SetIndoDeletePeriod(inodeDeletePeriodMs_);
+  cleaner->SetMdsClient(mdsClient_);
+  partitonCleanerList_.push_back(cleaner);
+  partitionCleanerCount << 1;
 }
 
 void PartitionCleanManager::Remove(uint32_t partitionId) {
-    curve::common::WriteLockGuard lockGuard(rwLock_);
-    // 1. first check inProcessingCleaner
-    if (inProcessingCleaner_ != nullptr
-        && inProcessingCleaner_->GetPartitionId() == partitionId) {
-        inProcessingCleaner_->Stop();
-        LOG(INFO) << "remove partition from PartitionCleanManager, partition is"
-                  << " in processing, stop this cleaner, partitionId = "
-                  << partitionId;
-        return;
-    }
+  curve::common::WriteLockGuard lockGuard(rwLock_);
+  // 1. first check inProcessingCleaner
+  if (inProcessingCleaner_ != nullptr &&
+      inProcessingCleaner_->GetPartitionId() == partitionId) {
+    inProcessingCleaner_->Stop();
+    LOG(INFO) << "remove partition from PartitionCleanManager, partition is"
+              << " in processing, stop this cleaner, partitionId = "
+              << partitionId;
+    return;
+  }
 
-    // 2. then check partitonCleanerList
-    for (auto it = partitonCleanerList_.begin();
-              it != partitonCleanerList_.end(); it++) {
-        if ((*it)->GetPartitionId() == partitionId) {
-            partitonCleanerList_.erase(it);
-            partitionCleanerCount << -1;
-            LOG(INFO) << "remove partition from PartitionCleanManager, "
-                      << "partitionId = " << partitionId;
-            return;
-        }
+  // 2. then check partitonCleanerList
+  for (auto it = partitonCleanerList_.begin(); it != partitonCleanerList_.end();
+       it++) {
+    if ((*it)->GetPartitionId() == partitionId) {
+      partitonCleanerList_.erase(it);
+      partitionCleanerCount << -1;
+      LOG(INFO) << "remove partition from PartitionCleanManager, "
+                << "partitionId = " << partitionId;
+      return;
     }
+  }
 }
 
 void PartitionCleanManager::Run() {
-    if (isStop_.exchange(false)) {
-        thread_ = Thread(&PartitionCleanManager::ScanLoop, this);
-        LOG(INFO) << "Start PartitionCleanManager thread ok.";
-        return;
-    }
+  if (isStop_.exchange(false)) {
+    thread_ = Thread(&PartitionCleanManager::ScanLoop, this);
+    LOG(INFO) << "Start PartitionCleanManager thread ok.";
+    return;
+  }
 
-    LOG(INFO) << "PartitionCleanManager already runned.";
+  LOG(INFO) << "PartitionCleanManager already runned.";
 }
 
 void PartitionCleanManager::Fini() {
-    if (!isStop_.exchange(true)) {
-        LOG(INFO) << "stop PartitionCleanManager manager ...";
-        sleeper_.interrupt();
-        thread_.join();
-        partitonCleanerList_.clear();
-        inProcessingCleaner_ = nullptr;
-        S3ClientAdaptor_ = nullptr;
-    }
-    LOG(INFO) << "stop PartitionCleanManager manager ok.";
+  if (!isStop_.exchange(true)) {
+    LOG(INFO) << "stop PartitionCleanManager manager ...";
+    sleeper_.interrupt();
+    thread_.join();
+    partitonCleanerList_.clear();
+    inProcessingCleaner_ = nullptr;
+    S3ClientAdaptor_ = nullptr;
+  }
+  LOG(INFO) << "stop PartitionCleanManager manager ok.";
 }
 
 void PartitionCleanManager::ScanLoop() {
-    LOG(INFO) << "PartitionCleanManager start scan thread, scanPeriodSec = "
-              << scanPeriodSec_;
-    while (sleeper_.wait_for(std::chrono::seconds(scanPeriodSec_))) {
-        {
-            curve::common::WriteLockGuard lockGuard(rwLock_);
-            if (partitonCleanerList_.empty()) {
-                continue;
-            }
+  LOG(INFO) << "PartitionCleanManager start scan thread, scanPeriodSec = "
+            << scanPeriodSec_;
+  while (sleeper_.wait_for(std::chrono::seconds(scanPeriodSec_))) {
+    {
+      curve::common::WriteLockGuard lockGuard(rwLock_);
+      if (partitonCleanerList_.empty()) {
+        continue;
+      }
 
-            inProcessingCleaner_ = partitonCleanerList_.front();
-            partitonCleanerList_.pop_front();
-        }
-
-        uint32_t partitionId = inProcessingCleaner_->GetPartitionId();
-        LOG(INFO) << "scan partition, partitionId = " << partitionId;
-        bool deleteRecord = inProcessingCleaner_->ScanPartition();
-        if (deleteRecord) {
-            LOG(INFO) << "scan partition, partition is empty"
-                      << ", delete record from clean manager, partitionId = "
-                      << partitionId;
-            partitionCleanerCount << -1;
-        } else {
-            curve::common::WriteLockGuard lockGuard(rwLock_);
-            if (!inProcessingCleaner_->IsStop()) {
-                partitonCleanerList_.push_back(inProcessingCleaner_);
-            } else {
-                LOG(INFO) << "scan partition, cleaner is mark stoped, remove it"
-                          << ", partitionId = " << partitionId;
-            }
-        }
-        inProcessingCleaner_ = nullptr;
+      inProcessingCleaner_ = partitonCleanerList_.front();
+      partitonCleanerList_.pop_front();
     }
-    LOG(INFO) << "PartitionCleanManager stop scan thread.";
+
+    uint32_t partitionId = inProcessingCleaner_->GetPartitionId();
+    LOG(INFO) << "scan partition, partitionId = " << partitionId;
+    bool deleteRecord = inProcessingCleaner_->ScanPartition();
+    if (deleteRecord) {
+      LOG(INFO) << "scan partition, partition is empty"
+                << ", delete record from clean manager, partitionId = "
+                << partitionId;
+      partitionCleanerCount << -1;
+    } else {
+      curve::common::WriteLockGuard lockGuard(rwLock_);
+      if (!inProcessingCleaner_->IsStop()) {
+        partitonCleanerList_.push_back(inProcessingCleaner_);
+      } else {
+        LOG(INFO) << "scan partition, cleaner is mark stoped, remove it"
+                  << ", partitionId = " << partitionId;
+      }
+    }
+    inProcessingCleaner_ = nullptr;
+  }
+  LOG(INFO) << "PartitionCleanManager stop scan thread.";
 }
 
 }  // namespace metaserver

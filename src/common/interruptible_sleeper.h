@@ -24,6 +24,7 @@
 #define SRC_COMMON_INTERRUPTIBLE_SLEEPER_H_
 
 #include <chrono>  // NOLINT
+
 #include "src/common/concurrent/concurrent.h"
 
 namespace curve {
@@ -35,41 +36,40 @@ namespace common {
  */
 class InterruptibleSleeper {
  public:
-    /**
-     * @brief wait_for 等待指定时间，如果接受到退出信号立刻返回
-     *
-     * @param[in] time 指定wait时长
-     *
-     * @return false-收到退出信号 true-超时后退出
-     */
-    template<typename R, typename P>
-    bool wait_for(std::chrono::duration<R, P> const& time) {
-        UniqueLock lock(m);
-        return !cv.wait_for(lock, time, [&]{return terminate;});
-    }
+  /**
+   * @brief wait_for 等待指定时间，如果接受到退出信号立刻返回
+   *
+   * @param[in] time 指定wait时长
+   *
+   * @return false-收到退出信号 true-超时后退出
+   */
+  template <typename R, typename P>
+  bool wait_for(std::chrono::duration<R, P> const& time) {
+    UniqueLock lock(m);
+    return !cv.wait_for(lock, time, [&] { return terminate; });
+  }
 
-    /**
-     * @brief interrupt 给当前wait发送退出信号
-     */
-    void interrupt() {
-        UniqueLock lock(m);
-        terminate = true;
-        cv.notify_all();
-    }
+  /**
+   * @brief interrupt 给当前wait发送退出信号
+   */
+  void interrupt() {
+    UniqueLock lock(m);
+    terminate = true;
+    cv.notify_all();
+  }
 
-    void init() {
-        UniqueLock lock(m);
-        terminate = false;
-    }
+  void init() {
+    UniqueLock lock(m);
+    terminate = false;
+  }
 
  private:
-    ConditionVariable cv;
-    Mutex m;
-    bool terminate = false;
+  ConditionVariable cv;
+  Mutex m;
+  bool terminate = false;
 };
 
 }  // namespace common
 }  // namespace curve
 
 #endif  // SRC_COMMON_INTERRUPTIBLE_SLEEPER_H_
-

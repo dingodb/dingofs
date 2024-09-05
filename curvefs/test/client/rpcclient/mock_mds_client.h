@@ -26,11 +26,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include "curvefs/src/client/rpcclient/mds_client.h"
 
@@ -43,95 +43,86 @@ namespace rpcclient {
 
 class MockMdsClient : public MdsClient {
  public:
-    MockMdsClient() {}
-    ~MockMdsClient() {}
+  MockMdsClient() {}
+  ~MockMdsClient() {}
 
-    MOCK_METHOD2(Init,
-                 FSStatusCode(const ::curve::client::MetaServerOption& mdsOpt,
-                              MDSBaseClient* baseclient));
+  MOCK_METHOD2(Init,
+               FSStatusCode(const ::curve::client::MetaServerOption& mdsOpt,
+                            MDSBaseClient* baseclient));
 
-    MOCK_METHOD3(MountFs,
-                 FSStatusCode(const std::string& fsName,
-                              const Mountpoint& mountPt, FsInfo* fsInfo));
+  MOCK_METHOD3(MountFs,
+               FSStatusCode(const std::string& fsName,
+                            const Mountpoint& mountPt, FsInfo* fsInfo));
 
-    MOCK_METHOD2(UmountFs, FSStatusCode(const std::string& fsName,
-                                        const Mountpoint& mountPt));
+  MOCK_METHOD2(UmountFs, FSStatusCode(const std::string& fsName,
+                                      const Mountpoint& mountPt));
 
-    MOCK_METHOD2(GetFsInfo,
-                 FSStatusCode(const std::string& fsName, FsInfo* fsInfo));
+  MOCK_METHOD2(GetFsInfo,
+               FSStatusCode(const std::string& fsName, FsInfo* fsInfo));
 
-    MOCK_METHOD2(GetFsInfo, FSStatusCode(uint32_t fsId, FsInfo* fsInfo));
+  MOCK_METHOD2(GetFsInfo, FSStatusCode(uint32_t fsId, FsInfo* fsInfo));
 
-    MOCK_METHOD3(AllocS3ChunkId, FSStatusCode(uint32_t fsId, uint32_t idNum,
-                                              uint64_t *chunkId));
+  MOCK_METHOD3(AllocS3ChunkId,
+               FSStatusCode(uint32_t fsId, uint32_t idNum, uint64_t* chunkId));
 
-    MOCK_METHOD2(GetLatestTxId,
-                 FSStatusCode(uint32_t fsId,
-                              std::vector<PartitionTxId>* txIds));
+  MOCK_METHOD2(GetLatestTxId,
+               FSStatusCode(uint32_t fsId, std::vector<PartitionTxId>* txIds));
 
-    MOCK_METHOD5(GetLatestTxIdWithLock,
-                 FSStatusCode(uint32_t fsId,
-                              const std::string& fsname,
-                              const std::string& uuid,
-                              std::vector<PartitionTxId>* txIds,
-                              uint64_t* sequence));
+  MOCK_METHOD5(GetLatestTxIdWithLock,
+               FSStatusCode(uint32_t fsId, const std::string& fsname,
+                            const std::string& uuid,
+                            std::vector<PartitionTxId>* txIds,
+                            uint64_t* sequence));
 
-    MOCK_METHOD1(CommitTx,
-                 FSStatusCode(const std::vector<PartitionTxId>& txIds));
+  MOCK_METHOD1(CommitTx, FSStatusCode(const std::vector<PartitionTxId>& txIds));
 
-    MOCK_METHOD4(CommitTxWithLock,
-                 FSStatusCode(const std::vector<PartitionTxId>& txIds,
-                              const std::string& fsname,
-                              const std::string& uuid,
-                              uint64_t sequence));
+  MOCK_METHOD4(CommitTxWithLock,
+               FSStatusCode(const std::vector<PartitionTxId>& txIds,
+                            const std::string& fsname, const std::string& uuid,
+                            uint64_t sequence));
 
-    MOCK_METHOD2(GetMetaServerInfo,
-                 bool(const PeerAddr& addr,
-                      CopysetPeerInfo<MetaserverID>* metaserverInfo));
+  MOCK_METHOD2(GetMetaServerInfo,
+               bool(const PeerAddr& addr,
+                    CopysetPeerInfo<MetaserverID>* metaserverInfo));
 
-    MOCK_METHOD3(GetMetaServerListInCopysets,
-                 bool(const LogicPoolID& logicalpooid,
-                      const std::vector<CopysetID>& copysetidvec,
-                      std::vector<CopysetInfo<MetaserverID>>* cpinfoVec));
+  MOCK_METHOD3(GetMetaServerListInCopysets,
+               bool(const LogicPoolID& logicalpooid,
+                    const std::vector<CopysetID>& copysetidvec,
+                    std::vector<CopysetInfo<MetaserverID>>* cpinfoVec));
 
-    MOCK_METHOD3(CreatePartition,
-                 bool(uint32_t fsID, uint32_t count,
-                      std::vector<PartitionInfo>* partitionInfos));
+  MOCK_METHOD3(CreatePartition,
+               bool(uint32_t fsID, uint32_t count,
+                    std::vector<PartitionInfo>* partitionInfos));
 
-    MOCK_METHOD2(GetCopysetOfPartitions,
-                 bool(const std::vector<uint32_t>& partitionIDList,
-                      std::map<uint32_t, Copyset>* copysetMap));
+  MOCK_METHOD2(GetCopysetOfPartitions,
+               bool(const std::vector<uint32_t>& partitionIDList,
+                    std::map<uint32_t, Copyset>* copysetMap));
 
-    MOCK_METHOD2(ListPartition,
-                 bool(uint32_t fsID,
-                      std::vector<PartitionInfo>* partitionInfos));
+  MOCK_METHOD2(ListPartition,
+               bool(uint32_t fsID, std::vector<PartitionInfo>* partitionInfos));
 
-    MOCK_METHOD5(RefreshSession,
-                 FSStatusCode(const std::vector<PartitionTxId> &txIds,
-                              std::vector<PartitionTxId> *latestTxIdList,
-                              const std::string& fsName,
-                              const Mountpoint& mountpoint,
-                              std::atomic<bool>* enableSumInDir));
+  MOCK_METHOD5(RefreshSession,
+               FSStatusCode(const std::vector<PartitionTxId>& txIds,
+                            std::vector<PartitionTxId>* latestTxIdList,
+                            const std::string& fsName,
+                            const Mountpoint& mountpoint,
+                            std::atomic<bool>* enableSumInDir));
 
-    MOCK_METHOD4(AllocateVolumeBlockGroup,
-                 SpaceErrCode(uint32_t,
-                              uint32_t,
-                              const std::string&,
-                              std::vector<curvefs::mds::space::BlockGroup>*));
+  MOCK_METHOD4(AllocateVolumeBlockGroup,
+               SpaceErrCode(uint32_t, uint32_t, const std::string&,
+                            std::vector<curvefs::mds::space::BlockGroup>*));
 
-    MOCK_METHOD4(AcquireVolumeBlockGroup,
-                 SpaceErrCode(uint32_t,
-                              uint64_t,
-                              const std::string&,
-                              curvefs::mds::space::BlockGroup*));
+  MOCK_METHOD4(AcquireVolumeBlockGroup,
+               SpaceErrCode(uint32_t, uint64_t, const std::string&,
+                            curvefs::mds::space::BlockGroup*));
 
-    MOCK_METHOD3(
-        ReleaseVolumeBlockGroup,
-        SpaceErrCode(uint32_t, const std::string&,
-                     const std::vector<curvefs::mds::space::BlockGroup>&));
+  MOCK_METHOD3(
+      ReleaseVolumeBlockGroup,
+      SpaceErrCode(uint32_t, const std::string&,
+                   const std::vector<curvefs::mds::space::BlockGroup>&));
 
-    MOCK_METHOD2(AllocOrGetMemcacheCluster,
-                 bool(uint32_t, curvefs::mds::topology::MemcacheClusterInfo*));
+  MOCK_METHOD2(AllocOrGetMemcacheCluster,
+               bool(uint32_t, curvefs::mds::topology::MemcacheClusterInfo*));
 };
 }  // namespace rpcclient
 }  // namespace client

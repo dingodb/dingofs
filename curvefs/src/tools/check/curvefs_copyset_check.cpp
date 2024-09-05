@@ -34,35 +34,33 @@ namespace tools {
 namespace check {
 
 void CopysetCheckTool::PrintHelp() {
-    CurvefsTool::PrintHelp();
-    std::cout << " -copysetId=" << FLAGS_copysetId
-              << " -poolId=" << FLAGS_poolId << " [-mdsAddr=" << FLAGS_mdsAddr
-              << "]";
-    std::cout << std::endl;
+  CurvefsTool::PrintHelp();
+  std::cout << " -copysetId=" << FLAGS_copysetId << " -poolId=" << FLAGS_poolId
+            << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
+  std::cout << std::endl;
 }
 
 int CopysetCheckTool::Init() {
-    FLAGS_detail = true;  // try to get copyset status
-    queryCopysetTool_ = std::make_shared<query::CopysetQueryTool>("", false);
-    return 0;
+  FLAGS_detail = true;  // try to get copyset status
+  queryCopysetTool_ = std::make_shared<query::CopysetQueryTool>("", false);
+  return 0;
 }
 
 int CopysetCheckTool::RunCommand() {
-    queryCopysetTool_->Run();
-    auto key2Info = queryCopysetTool_->GetKey2Info();
-    auto key2Status = queryCopysetTool_->GetKey2Status();
-    auto copysetKey = queryCopysetTool_->GetKey_();
-    for (auto const& key : copysetKey) {
-        std::cout << "copyset[" << key << "]: is ";
-        auto result =
-            copyset::checkCopysetHelthy(key2Info[key], key2Status[key]);
-        if (result != copyset::CheckResult::kHealthy) {
-            std::cerr << "unhealthy or not exist!" << std::endl;
-        } else {
-            std::cout << "healthy." << std::endl;
-        }
+  queryCopysetTool_->Run();
+  auto key2Info = queryCopysetTool_->GetKey2Info();
+  auto key2Status = queryCopysetTool_->GetKey2Status();
+  auto copysetKey = queryCopysetTool_->GetKey_();
+  for (auto const& key : copysetKey) {
+    std::cout << "copyset[" << key << "]: is ";
+    auto result = copyset::checkCopysetHelthy(key2Info[key], key2Status[key]);
+    if (result != copyset::CheckResult::kHealthy) {
+      std::cerr << "unhealthy or not exist!" << std::endl;
+    } else {
+      std::cout << "healthy." << std::endl;
     }
-    return 0;
+  }
+  return 0;
 }
 
 }  // namespace check

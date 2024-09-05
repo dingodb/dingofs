@@ -27,20 +27,20 @@
 
 #include <memory>
 
+#include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/volume/metric.h"
 #include "curvefs/src/client/volume/volume_storage.h"
 #include "curvefs/src/volume/block_device_client.h"
 #include "curvefs/src/volume/space_manager.h"
-#include "curvefs/src/client/filesystem/error.h"
-#include "curvefs/src/client/filesystem/meta.h"
 
 namespace curvefs {
 namespace client {
 
-using ::curvefs::volume::BlockDeviceClient;
-using ::curvefs::volume::SpaceManager;
 using ::curvefs::client::filesystem::CURVEFS_ERROR;
 using ::curvefs::client::filesystem::FileOut;
+using ::curvefs::volume::BlockDeviceClient;
+using ::curvefs::volume::SpaceManager;
 
 class InodeCacheManager;
 
@@ -49,39 +49,34 @@ class InodeCacheManager;
 // meta-data is cached
 class DefaultVolumeStorage final : public VolumeStorage {
  public:
-    DefaultVolumeStorage(SpaceManager* spaceManager,
-                         BlockDeviceClient* blockDeviceClient,
-                         InodeCacheManager* inodeCacheManager)
-        : spaceManager_(spaceManager),
-          blockDeviceClient_(blockDeviceClient),
-          inodeCacheManager_(inodeCacheManager),
-          metric_("default_volume_storage") {}
+  DefaultVolumeStorage(SpaceManager* spaceManager,
+                       BlockDeviceClient* blockDeviceClient,
+                       InodeCacheManager* inodeCacheManager)
+      : spaceManager_(spaceManager),
+        blockDeviceClient_(blockDeviceClient),
+        inodeCacheManager_(inodeCacheManager),
+        metric_("default_volume_storage") {}
 
-    DefaultVolumeStorage(const DefaultVolumeStorage&) = delete;
-    DefaultVolumeStorage& operator=(const DefaultVolumeStorage&) = delete;
+  DefaultVolumeStorage(const DefaultVolumeStorage&) = delete;
+  DefaultVolumeStorage& operator=(const DefaultVolumeStorage&) = delete;
 
-    ~DefaultVolumeStorage() override = default;
+  ~DefaultVolumeStorage() override = default;
 
-    CURVEFS_ERROR Read(uint64_t ino,
-                       off_t offset,
-                       size_t len,
-                       char* data) override;
+  CURVEFS_ERROR Read(uint64_t ino, off_t offset, size_t len,
+                     char* data) override;
 
-    CURVEFS_ERROR Write(uint64_t ino,
-                        off_t offset,
-                        size_t len,
-                        const char* data,
-                        FileOut* fileOut) override;
+  CURVEFS_ERROR Write(uint64_t ino, off_t offset, size_t len, const char* data,
+                      FileOut* fileOut) override;
 
-    CURVEFS_ERROR Flush(uint64_t ino) override;
+  CURVEFS_ERROR Flush(uint64_t ino) override;
 
-    bool Shutdown() override;
+  bool Shutdown() override;
 
  private:
-    SpaceManager* spaceManager_;
-    BlockDeviceClient* blockDeviceClient_;
-    InodeCacheManager* inodeCacheManager_;
-    VolumeStorageMetric metric_;
+  SpaceManager* spaceManager_;
+  BlockDeviceClient* blockDeviceClient_;
+  InodeCacheManager* inodeCacheManager_;
+  VolumeStorageMetric metric_;
 };
 
 }  // namespace client

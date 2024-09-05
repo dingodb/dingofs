@@ -24,10 +24,10 @@
 namespace curve {
 namespace snapshotcloneserver {
 
-std::ostream& operator<<(std::ostream& os, const CloneTaskInfo &taskInfo) {
-    os << "{ CloneInfo : " << taskInfo.GetCloneInfo();
-    os << ", Progress : " << taskInfo.GetProgress() << " }";
-    return os;
+std::ostream& operator<<(std::ostream& os, const CloneTaskInfo& taskInfo) {
+  os << "{ CloneInfo : " << taskInfo.GetCloneInfo();
+  os << ", Progress : " << taskInfo.GetProgress() << " }";
+  return os;
 }
 
 }  // namespace snapshotcloneserver

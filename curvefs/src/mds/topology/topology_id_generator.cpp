@@ -43,9 +43,9 @@ void DefaultIdGenerator::initMetaServerIdGenerator(MetaServerIdType idMax) {
 }
 
 void DefaultIdGenerator::initCopySetIdGenerator(
-    const std::map<PoolIdType, CopySetIdType> &idMaxMap) {
+    const std::map<PoolIdType, CopySetIdType>& idMaxMap) {
   copySetIdGentor_.clear();
-  for (const auto &it : idMaxMap) {
+  for (const auto& it : idMaxMap) {
     copySetIdGentor_[it.first].init(it.second);
   }
 }
@@ -59,13 +59,9 @@ void DefaultIdGenerator::initMemcacheClusterIdGenerator(
   memcacheClusterIdGentor_.init(idMax);
 }
 
-PoolIdType DefaultIdGenerator::GenPoolId() {
-  return PoolIdGentor_.GenId();
-}
+PoolIdType DefaultIdGenerator::GenPoolId() { return PoolIdGentor_.GenId(); }
 
-ZoneIdType DefaultIdGenerator::GenZoneId() {
-  return zoneIdGentor_.GenId();
-}
+ZoneIdType DefaultIdGenerator::GenZoneId() { return zoneIdGentor_.GenId(); }
 
 ServerIdType DefaultIdGenerator::GenServerId() {
   return serverIdGentor_.GenId();
@@ -90,4 +86,3 @@ MemcacheClusterIdType DefaultIdGenerator::GenMemCacheClusterId() {
 }  // namespace topology
 }  // namespace mds
 }  // namespace curvefs
-

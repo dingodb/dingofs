@@ -24,30 +24,28 @@
 #define SRC_MDS_HEARTBEAT_TOPO_UPDATER_H_
 
 #include <memory>
-#include "src/mds/topology/topology_item.h"
-#include "src/mds/topology/topology.h"
 
-using ::curve::mds::topology::CopySetInfo;
-using ::curve::mds::topology::Topology;
+#include "src/mds/topology/topology.h"
+#include "src/mds/topology/topology_item.h"
 
 namespace curve {
 namespace mds {
 namespace heartbeat {
 class TopoUpdater {
  public:
-    explicit TopoUpdater(std::shared_ptr<Topology> topo) : topo_(topo) {}
-    ~TopoUpdater() {}
+  explicit TopoUpdater(std::shared_ptr<curve::mds::topology::Topology> topo) : topo_(topo) {}
+  ~TopoUpdater() {}
 
-   /*
-    * @brief UpdateTopo this function will be called by leader copyset
-    *                   for updating copyset epoch, copy relationship and 
-    *                   statistical data according to reportCopySetInfo 
-    * @param[in] reportCopySetInfo copyset info reported by chunkserver
-    */
-    void UpdateTopo(const CopySetInfo &reportCopySetInfo);
+  /*
+   * @brief UpdateTopo this function will be called by leader copyset
+   *                   for updating copyset epoch, copy relationship and
+   *                   statistical data according to reportCopySetInfo
+   * @param[in] reportCopySetInfo copyset info reported by chunkserver
+   */
+  void UpdateTopo(const curve::mds::topology::CopySetInfo& reportCopySetInfo);
 
  private:
-    std::shared_ptr<Topology> topo_;
+  std::shared_ptr<curve::mds::topology::Topology> topo_;
 };
 }  // namespace heartbeat
 }  // namespace mds

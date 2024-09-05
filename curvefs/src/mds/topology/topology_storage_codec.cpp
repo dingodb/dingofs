@@ -23,6 +23,7 @@
 
 #include <string>
 #include <utility>
+
 #include "curvefs/src/mds/common/storage_key.h"
 #include "src/common/encode.h"
 
@@ -35,156 +36,156 @@ using curvefs::mds::MEMCACHECLUSTERKEYEND;
 using curvefs::mds::MEMCACHECLUSTERKEYPREFIX;
 
 std::string TopologyStorageCodec::EncodePoolKey(PoolIdType id) {
-    std::string key = POOLKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = POOLKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodePoolData(const Pool &data,
-                                          std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodePoolData(const Pool& data,
+                                          std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodePoolData(const std::string &value,
-                                          Pool *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodePoolData(const std::string& value,
+                                          Pool* data) {
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodeZoneKey(ZoneIdType id) {
-    std::string key = ZONEKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = ZONEKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeZoneData(const Zone &data,
-                                          std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeZoneData(const Zone& data,
+                                          std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeZoneData(const std::string &value,
-                                          Zone *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeZoneData(const std::string& value,
+                                          Zone* data) {
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodeServerKey(ServerIdType id) {
-    std::string key = SERVERKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = SERVERKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeServerData(const Server &data,
-                                            std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeServerData(const Server& data,
+                                            std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeServerData(const std::string &value,
-                                            Server *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeServerData(const std::string& value,
+                                            Server* data) {
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodeMetaServerKey(MetaServerIdType id) {
-    std::string key = METASERVERKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = METASERVERKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeMetaServerData(const MetaServer &data,
-                                                std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeMetaServerData(const MetaServer& data,
+                                                std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeMetaServerData(const std::string &value,
-                                                MetaServer *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeMetaServerData(const std::string& value,
+                                                MetaServer* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodeCopySetKey(const CopySetKey &id) {
-    std::string key = COPYSETKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t) + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id.first);
-    EncodeBigEndian(&(key[prefixLen + sizeof(uint64_t)]), id.second);
-    return key;
+std::string TopologyStorageCodec::EncodeCopySetKey(const CopySetKey& id) {
+  std::string key = COPYSETKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t) + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id.first);
+  EncodeBigEndian(&(key[prefixLen + sizeof(uint64_t)]), id.second);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeCopySetData(const CopySetInfo &data,
-                                             std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeCopySetData(const CopySetInfo& data,
+                                             std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeCopySetData(const std::string &value,
-                                             CopySetInfo *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeCopySetData(const std::string& value,
+                                             CopySetInfo* data) {
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodePartitionKey(PartitionIdType id) {
-    std::string key = PARTITIONKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = PARTITIONKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodePartitionData(const Partition &data,
-                                               std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodePartitionData(const Partition& data,
+                                               std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodePartitionData(const std::string &value,
-                                               Partition *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodePartitionData(const std::string& value,
+                                               Partition* data) {
+  return data->ParseFromString(value);
 }
 
-bool TopologyStorageCodec::EncodeClusterInfoData(const ClusterInformation &data,
-                                                 std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeClusterInfoData(const ClusterInformation& data,
+                                                 std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeClusterInfoData(const std::string &value,
-                                                ClusterInformation *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeClusterInfoData(const std::string& value,
+                                                 ClusterInformation* data) {
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodeMemcacheClusterKey(
     MetaServerIdType id) {
-    std::string key = MEMCACHECLUSTERKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+  std::string key = MEMCACHECLUSTERKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
 bool TopologyStorageCodec::EncodeMemcacheClusterData(
     const MemcacheCluster& data, std::string* value) {
-    return data.SerializeToString(value);
+  return data.SerializeToString(value);
 }
 
 bool TopologyStorageCodec::DecodeMemcacheClusterData(const std::string& value,
                                                      MemcacheCluster* data) {
-    return data->ParseFromString(value);
+  return data->ParseFromString(value);
 }
 
 std::string TopologyStorageCodec::EncodeFs2MemcacheClusterKey(FsIdType fsId) {
-    std::string key = FS2MEMCACHECLUSTERKEYPREFIX;
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    key.resize(prefixLen + sizeof(uint64_t));
-    EncodeBigEndian(&(key[prefixLen]), fsId);
-    return key;
+  std::string key = FS2MEMCACHECLUSTERKEYPREFIX;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  key.resize(prefixLen + sizeof(uint64_t));
+  EncodeBigEndian(&(key[prefixLen]), fsId);
+  return key;
 }
 
 bool TopologyStorageCodec::DecodeFs2MemcacheClusterKey(const std::string& value,
                                                        FsIdType* data) {
-    size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
-    *data = curve::common::DecodeBigEndian(&(value[prefixLen]));
-    return true;
+  size_t prefixLen = TOPOLOGY_PREFIX_LENGTH;
+  *data = curve::common::DecodeBigEndian(&(value[prefixLen]));
+  return true;
 }
 
 }  // namespace topology

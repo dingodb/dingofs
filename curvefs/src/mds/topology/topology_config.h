@@ -30,26 +30,26 @@ namespace mds {
 namespace topology {
 
 struct TopologyOption {
-    // time interval that topology data updated to storage
-    uint32_t topologyUpdateToRepoSec;
-    // partition number in each copyset
-    uint64_t maxPartitionNumberInCopyset;
-    // id number in each partition
-    uint64_t idNumberInPartition;
-    // create partition number
-    uint32_t createPartitionNumber;
-    // max copyset num in metaserver
-    uint32_t maxCopysetNumInMetaserver;
-    // time interval for updating topology metric
-    uint32_t UpdateMetricIntervalSec;
+  // time interval that topology data updated to storage
+  uint32_t topologyUpdateToRepoSec;
+  // partition number in each copyset
+  uint64_t maxPartitionNumberInCopyset;
+  // id number in each partition
+  uint64_t idNumberInPartition;
+  // create partition number
+  uint32_t createPartitionNumber;
+  // max copyset num in metaserver
+  uint32_t maxCopysetNumInMetaserver;
+  // time interval for updating topology metric
+  uint32_t UpdateMetricIntervalSec;
 
-    TopologyOption()
-        : topologyUpdateToRepoSec(0),
-          maxPartitionNumberInCopyset(128),
-          idNumberInPartition(1048576),
-          createPartitionNumber(12),
-          maxCopysetNumInMetaserver(100),
-          UpdateMetricIntervalSec(60) {}
+  TopologyOption()
+      : topologyUpdateToRepoSec(0),
+        maxPartitionNumberInCopyset(128),
+        idNumberInPartition(1048576),
+        createPartitionNumber(12),
+        maxCopysetNumInMetaserver(100),
+        UpdateMetricIntervalSec(60) {}
 };
 
 }  // namespace topology

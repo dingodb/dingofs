@@ -24,6 +24,7 @@
 #define NEBD_TEST_PART2_MOCK_METAFILE_MANAGER_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
 #include <vector>
 
@@ -34,13 +35,13 @@ namespace server {
 
 class MockMetaFileManager : public NebdMetaFileManager {
  public:
-    MockMetaFileManager() {}
-    ~MockMetaFileManager() {}
+  MockMetaFileManager() {}
+  ~MockMetaFileManager() {}
 
-    MOCK_METHOD1(Init, int(const NebdMetaFileManagerOption&));
-    MOCK_METHOD1(ListFileMeta, int(std::vector<NebdFileMeta>*));
-    MOCK_METHOD2(UpdateFileMeta, int(const std::string&, const NebdFileMeta&));
-    MOCK_METHOD1(RemoveFileMeta, int(const std::string&));
+  MOCK_METHOD1(Init, int(const NebdMetaFileManagerOption&));
+  MOCK_METHOD1(ListFileMeta, int(std::vector<NebdFileMeta>*));
+  MOCK_METHOD2(UpdateFileMeta, int(const std::string&, const NebdFileMeta&));
+  MOCK_METHOD1(RemoveFileMeta, int(const std::string&));
 };
 
 }  // namespace server

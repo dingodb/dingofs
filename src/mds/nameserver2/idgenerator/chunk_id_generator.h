@@ -24,17 +24,18 @@
 #define SRC_MDS_NAMESERVER2_IDGENERATOR_CHUNK_ID_GENERATOR_H_
 
 #include <memory>
-#include "src/mds/common/mds_define.h"
-#include "src/common/namespace_define.h"
+
 #include "src/common/concurrent/concurrent.h"
+#include "src/common/namespace_define.h"
 #include "src/idgenerator/etcd_id_generator.h"
+#include "src/mds/common/mds_define.h"
 #include "src/mds/nameserver2/helper/namespace_helper.h"
 
 using ::curve::common::Atomic;
 using ::curve::common::CHUNKSTOREKEY;
 
 namespace curve {
-namespace  mds {
+namespace mds {
 const uint64_t CHUNKINITIALIZE = 0;
 const uint64_t CHUNKBUNDLEALLOCATED = 1000;
 
@@ -43,30 +44,30 @@ using curve::kvstorage::KVStorageClient;
 
 class ChunkIDGenerator {
  public:
-    virtual  ~ChunkIDGenerator() {}
+  virtual ~ChunkIDGenerator() {}
 
-    /*
-    * @brief GenChunkID Generate a globally incremented ID
-    *
-    * @param[out] ID generated
-    *
-    * @return true if succeeded, false if failed
-    */
-    virtual bool GenChunkID(ChunkID *id) = 0;
+  /*
+   * @brief GenChunkID Generate a globally incremented ID
+   *
+   * @param[out] ID generated
+   *
+   * @return true if succeeded, false if failed
+   */
+  virtual bool GenChunkID(ChunkID* id) = 0;
 };
 
 class ChunkIDGeneratorImp : public ChunkIDGenerator {
  public:
-    explicit ChunkIDGeneratorImp(std::shared_ptr<KVStorageClient> client) {
-        generator_ = std::make_shared<EtcdIdGenerator>(
-            client, CHUNKSTOREKEY, CHUNKINITIALIZE, CHUNKBUNDLEALLOCATED);
-    }
-    virtual ~ChunkIDGeneratorImp() {}
+  explicit ChunkIDGeneratorImp(std::shared_ptr<KVStorageClient> client) {
+    generator_ = std::make_shared<EtcdIdGenerator>(
+        client, CHUNKSTOREKEY, CHUNKINITIALIZE, CHUNKBUNDLEALLOCATED);
+  }
+  virtual ~ChunkIDGeneratorImp() {}
 
-    bool GenChunkID(ChunkID *id) override;
+  bool GenChunkID(ChunkID* id) override;
 
  private:
-    std::shared_ptr<EtcdIdGenerator> generator_;
+  std::shared_ptr<EtcdIdGenerator> generator_;
 };
 }  // namespace mds
 }  // namespace curve

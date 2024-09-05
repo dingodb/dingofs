@@ -23,92 +23,92 @@
 #ifndef CURVEFS_SRC_CLIENT_FILESYSTEM_DIR_CACHE_H_
 #define CURVEFS_SRC_CLIENT_FILESYSTEM_DIR_CACHE_H_
 
-#include <map>
 #include <list>
-#include <vector>
+#include <map>
 #include <memory>
+#include <vector>
 
 #include "absl/container/btree_map.h"
-#include "src/common/lru_cache.h"
-#include "src/common/concurrent/concurrent.h"
 #include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/filesystem/message_queue.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/metric.h"
-#include "curvefs/src/client/filesystem/message_queue.h"
+#include "src/common/concurrent/concurrent.h"
+#include "src/common/lru_cache.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
 using ::curve::common::LRUCache;
-using ::curve::common::RWLock;
 using ::curve::common::ReadLockGuard;
+using ::curve::common::RWLock;
 using ::curve::common::WriteLockGuard;
 using ::curvefs::client::common::DirCacheOption;
 
 class DirEntryList {
  public:
-    using IterateHandler = std::function<void(DirEntry* dirEntry)>;
+  using IterateHandler = std::function<void(DirEntry* dirEntry)>;
 
  public:
-    DirEntryList();
+  DirEntryList();
 
-    size_t Size();
+  size_t Size();
 
-    void Add(const DirEntry& dirEntry);
+  void Add(const DirEntry& dirEntry);
 
-    void Iterate(IterateHandler handler);
+  void Iterate(IterateHandler handler);
 
-    bool Get(Ino ino, DirEntry* dirEntry);
+  bool Get(Ino ino, DirEntry* dirEntry);
 
-    bool UpdateAttr(Ino ino, const InodeAttr& attr);
+  bool UpdateAttr(Ino ino, const InodeAttr& attr);
 
-    bool UpdateLength(Ino ino, const InodeAttr& open);
+  bool UpdateLength(Ino ino, const InodeAttr& open);
 
-    void Clear();
+  void Clear();
 
-    void SetMtime(TimeSpec mtime);
+  void SetMtime(TimeSpec mtime);
 
-    TimeSpec GetMtime();
+  TimeSpec GetMtime();
 
  private:
-    RWLock rwlock_;
-    TimeSpec mtime_;
-    std::vector<DirEntry> entries_;
-    absl::btree_map<Ino, uint32_t> index_;
+  RWLock rwlock_;
+  TimeSpec mtime_;
+  std::vector<DirEntry> entries_;
+  absl::btree_map<Ino, uint32_t> index_;
 };
 
 class DirCache {
  public:
-    using LRUType = LRUCache<Ino, std::shared_ptr<DirEntryList>>;
-    using MessageType = std::shared_ptr<DirEntryList>;
-    using MessageQueueType = MessageQueue<MessageType>;
+  using LRUType = LRUCache<Ino, std::shared_ptr<DirEntryList>>;
+  using MessageType = std::shared_ptr<DirEntryList>;
+  using MessageQueueType = MessageQueue<MessageType>;
 
  public:
-    explicit DirCache(DirCacheOption option);
+  explicit DirCache(DirCacheOption option);
 
-    void Start();
+  void Start();
 
-    void Stop();
+  void Stop();
 
-    void Put(Ino parent, std::shared_ptr<DirEntryList> entries);
+  void Put(Ino parent, std::shared_ptr<DirEntryList> entries);
 
-    bool Get(Ino parent, std::shared_ptr<DirEntryList>* entries);
+  bool Get(Ino parent, std::shared_ptr<DirEntryList>* entries);
 
-    void Drop(Ino parent);
-
- private:
-    void Delete(Ino parent, std::shared_ptr<DirEntryList> entries, bool evit);
-
-    void Evit(size_t size);
+  void Drop(Ino parent);
 
  private:
-    RWLock rwlock_;
-    size_t nentries_;
-    DirCacheOption option_;
-    std::shared_ptr<LRUType> lru_;
-    std::shared_ptr<MessageQueueType> mq_;
-    std::shared_ptr<DirCacheMetric> metric_;
+  void Delete(Ino parent, std::shared_ptr<DirEntryList> entries, bool evit);
+
+  void Evit(size_t size);
+
+ private:
+  RWLock rwlock_;
+  size_t nentries_;
+  DirCacheOption option_;
+  std::shared_ptr<LRUType> lru_;
+  std::shared_ptr<MessageQueueType> mq_;
+  std::shared_ptr<DirCacheMetric> metric_;
 };
 
 }  // namespace filesystem

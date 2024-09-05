@@ -25,6 +25,7 @@
 
 #include <fcntl.h>
 #include <glog/logging.h>
+
 #include <string>
 
 namespace curve {
@@ -38,6 +39,5 @@ int prepare_segment(const std::string& path);
 
 }  // namespace chunkserver
 }  // namespace curve
-
 
 #endif  // TEST_CHUNKSERVER_RAFTLOG_COMMON_H_

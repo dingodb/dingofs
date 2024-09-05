@@ -40,7 +40,7 @@ using curve::common::is_aligned;
 namespace {
 
 inline bool IsAllocTypeBig(const AllocateHint& hint) {
-    return hint.allocType == AllocateType::Big;
+  return hint.allocType == AllocateType::Big;
 }
 
 constexpr uint64_t kAlignment = 4096;
@@ -49,21 +49,21 @@ constexpr uint64_t kAlignment = 4096;
 
 uint64_t BitmapAllocator::CalcBitmapAreaLength(
     const BitmapAllocatorOption& opt) {
-    uint64_t len = align_down<uint64_t>(
-        opt.length * (1 - opt.smallAllocProportion), opt.sizePerBit);
+  uint64_t len = align_down<uint64_t>(
+      opt.length * (1 - opt.smallAllocProportion), opt.sizePerBit);
 
-    return std::min(len, opt.length);
+  return std::min(len, opt.length);
 }
 
 struct BitmapAllocator::AllocOrder {
-    using Func = uint64_t (BitmapAllocator::*)(const uint64_t size,
-                                               const AllocateHint& hint,
-                                               std::vector<Extent>* exts);
+  using Func = uint64_t (BitmapAllocator::*)(const uint64_t size,
+                                             const AllocateHint& hint,
+                                             std::vector<Extent>* exts);
 
-    AllocOrder(Func first, Func second, Func third)
-        : funs({first, second, third}) {}
+  AllocOrder(Func first, Func second, Func third)
+      : funs({first, second, third}) {}
 
-    const std::vector<Func> funs;
+  const std::vector<Func> funs;
 };
 
 BitmapAllocator::BitmapAllocator(const BitmapAllocatorOption& opt)
@@ -77,363 +77,358 @@ BitmapAllocator::BitmapAllocator(const BitmapAllocatorOption& opt)
       bitmap_(bitmapAreaLength_ / opt_.sizePerBit),
       bitmapExtent_(opt_.sizePerBit, bitmapAreaOffset_, bitmapAreaLength_),
       smallExtent_(opt_.startOffset, smallAreaLength_) {
-    CHECK(bitmap_.Size() * opt_.sizePerBit + smallExtent_.AvailableSize() ==
-          opt_.length)
-        << "bitmap.size: " << bitmap_.Size()
-        << ", opt.sizePerBit: " << opt_.sizePerBit
-        << ", smallExtent.avail: " << smallExtent_.AvailableSize()
-        << ", opt.length: " << opt.length;
+  CHECK(bitmap_.Size() * opt_.sizePerBit + smallExtent_.AvailableSize() ==
+        opt_.length)
+      << "bitmap.size: " << bitmap_.Size()
+      << ", opt.sizePerBit: " << opt_.sizePerBit
+      << ", smallExtent.avail: " << smallExtent_.AvailableSize()
+      << ", opt.length: " << opt.length;
 
-    VLOG(9) << "offset: " << opt_.startOffset << ", len: " << opt_.length
-            << ", size_per_bit: " << opt_.sizePerBit << ", bitmapAreaLength_ "
-            << bitmapAreaLength_ << ", bitmapAreaOffset_: " << bitmapAreaOffset_
-            << ", smallAreaLength_: " << smallAreaLength_
-            << ", available: " << available_;
+  VLOG(9) << "offset: " << opt_.startOffset << ", len: " << opt_.length
+          << ", size_per_bit: " << opt_.sizePerBit << ", bitmapAreaLength_ "
+          << bitmapAreaLength_ << ", bitmapAreaOffset_: " << bitmapAreaOffset_
+          << ", smallAreaLength_: " << smallAreaLength_
+          << ", available: " << available_;
 }
 
 BitmapAllocator::~BitmapAllocator() {}
 
-uint64_t BitmapAllocator::Alloc(uint64_t size,
-                                const AllocateHint& hint,
+uint64_t BitmapAllocator::Alloc(uint64_t size, const AllocateHint& hint,
                                 std::vector<Extent>* exts) {
-    assert(is_aligned(size, kAlignment));
+  assert(is_aligned(size, kAlignment));
 
-    static const BitmapAllocator::AllocOrder kAllocBig(
-        &BitmapAllocator::AllocFromBitmap,
-        &BitmapAllocator::AllocFromBitmapExtent,
-        &BitmapAllocator::AllocFromSmallExtent);
+  static const BitmapAllocator::AllocOrder kAllocBig(
+      &BitmapAllocator::AllocFromBitmap,
+      &BitmapAllocator::AllocFromBitmapExtent,
+      &BitmapAllocator::AllocFromSmallExtent);
 
-    static const BitmapAllocator::AllocOrder kAllocBigWithHint(
-        &BitmapAllocator::AllocFromBitmapExtent,
-        &BitmapAllocator::AllocFromBitmap,
-        &BitmapAllocator::AllocFromSmallExtent);
+  static const BitmapAllocator::AllocOrder kAllocBigWithHint(
+      &BitmapAllocator::AllocFromBitmapExtent,
+      &BitmapAllocator::AllocFromBitmap,
+      &BitmapAllocator::AllocFromSmallExtent);
 
-    static const BitmapAllocator::AllocOrder kAllocSmall(
-        &BitmapAllocator::AllocFromSmallExtent,
-        &BitmapAllocator::AllocFromBitmapExtent,
-        &BitmapAllocator::AllocFromBitmap);
+  static const BitmapAllocator::AllocOrder kAllocSmall(
+      &BitmapAllocator::AllocFromSmallExtent,
+      &BitmapAllocator::AllocFromBitmapExtent,
+      &BitmapAllocator::AllocFromBitmap);
 
-    std::lock_guard<bthread::Mutex> lock(mtx_);
-    if (available_ == 0) {
-        return 0;
-    }
+  std::lock_guard<bthread::Mutex> lock(mtx_);
+  if (available_ == 0) {
+    return 0;
+  }
 
-    uint64_t alloc = 0;
+  uint64_t alloc = 0;
 
-    if (size < opt_.sizePerBit && !IsAllocTypeBig(hint)) {
-        alloc = AllocInternal(kAllocSmall, size, hint, exts);
-    } else if (hint.HasHint()) {
-        alloc = AllocInternal(kAllocBigWithHint, size, hint, exts);
-    } else {
-        alloc = AllocInternal(kAllocBig, size, hint, exts);
-    }
+  if (size < opt_.sizePerBit && !IsAllocTypeBig(hint)) {
+    alloc = AllocInternal(kAllocSmall, size, hint, exts);
+  } else if (hint.HasHint()) {
+    alloc = AllocInternal(kAllocBigWithHint, size, hint, exts);
+  } else {
+    alloc = AllocInternal(kAllocBig, size, hint, exts);
+  }
 
-    CHECK(alloc <= available_) << *this;
-    available_ -= alloc;
+  CHECK(alloc <= available_) << *this;
+  available_ -= alloc;
 
-    return alloc;
+  return alloc;
 }
 
 bool BitmapAllocator::DeAlloc(const uint64_t off, const uint64_t len) {
-    assert(is_aligned(off, kAlignment) && is_aligned(len, kAlignment));
+  assert(is_aligned(off, kAlignment) && is_aligned(len, kAlignment));
 
-    assert(off >= opt_.startOffset &&
-           off + len <= opt_.startOffset + opt_.length);
+  assert(off >= opt_.startOffset &&
+         off + len <= opt_.startOffset + opt_.length);
 
-    VLOG(9) << "Dealloc off: " << off << ", len: " << len;
+  VLOG(9) << "Dealloc off: " << off << ", len: " << len;
 
-    std::lock_guard<bthread::Mutex> lock(mtx_);
+  std::lock_guard<bthread::Mutex> lock(mtx_);
 
-    if (len > opt_.length - available_) {
-        return false;
-    }
+  if (len > opt_.length - available_) {
+    return false;
+  }
 
-    uint64_t offInSmallExtent = 0;
-    uint64_t lenInSmallExtent = 0;
-    uint64_t offInBitmap = 0;
-    uint64_t lenInBitmap = 0;
+  uint64_t offInSmallExtent = 0;
+  uint64_t lenInSmallExtent = 0;
+  uint64_t offInBitmap = 0;
+  uint64_t lenInBitmap = 0;
 
-    Split(off, len, &offInSmallExtent, &lenInSmallExtent, &offInBitmap,
-          &lenInBitmap);
+  Split(off, len, &offInSmallExtent, &lenInSmallExtent, &offInBitmap,
+        &lenInBitmap);
 
-    if (lenInSmallExtent != 0) {
-        DeAllocToSmallExtent(offInSmallExtent, lenInSmallExtent);
-    }
+  if (lenInSmallExtent != 0) {
+    DeAllocToSmallExtent(offInSmallExtent, lenInSmallExtent);
+  }
 
-    if (lenInBitmap != 0) {
-        DeAllocToBitmap(offInBitmap, lenInBitmap);
-    }
+  if (lenInBitmap != 0) {
+    DeAllocToBitmap(offInBitmap, lenInBitmap);
+  }
 
-    CHECK(available_ + len <= opt_.length) << *this;
-    available_ += len;
+  CHECK(available_ + len <= opt_.length) << *this;
+  available_ += len;
 
-    return true;
+  return true;
 }
 
 bool BitmapAllocator::DeAlloc(const std::vector<Extent>& exts) {
-    for (const auto& e : exts) {
-        if (!DeAlloc(e.offset, e.len)) {
-            return false;
-        }
+  for (const auto& e : exts) {
+    if (!DeAlloc(e.offset, e.len)) {
+      return false;
     }
+  }
 
-    return true;
+  return true;
 }
 
 bool BitmapAllocator::MarkUsed(const std::vector<Extent>& extents) {
-    for (auto& e : extents) {
-        MarkUsedInternal(e.offset, e.len);
-    }
+  for (auto& e : extents) {
+    MarkUsedInternal(e.offset, e.len);
+  }
 
-    return true;
+  return true;
 }
 
 bool BitmapAllocator::MarkUsable(const std::vector<Extent>& /*extents*/) {
-    return false;
+  return false;
 }
 
 uint64_t BitmapAllocator::AllocInternal(const AllocOrder& order,
                                         const uint64_t size,
                                         const AllocateHint& hint,
                                         std::vector<Extent>* exts) {
-    uint64_t need = size;
-    for (auto& fn : order.funs) {
-        need -= (this->*fn)(need, hint, exts);
-        if (need == 0) {
-            return size;
-        }
+  uint64_t need = size;
+  for (auto& fn : order.funs) {
+    need -= (this->*fn)(need, hint, exts);
+    if (need == 0) {
+      return size;
     }
+  }
 
-    return size - need;
+  return size - need;
 }
 
 uint64_t BitmapAllocator::AllocFromBitmap(uint64_t size,
                                           const AllocateHint& /*hint*/,
                                           std::vector<Extent>* exts) {
-    uint64_t need = size;
+  uint64_t need = size;
 
-    while (need > 0) {
-        auto idx = bitmap_.NextClearBit(bitmapAllocIdx_);
-        if (idx == bitmap_.NO_POS) {
-            bitmapAllocIdx_ = 0;
-            idx = bitmap_.NextClearBit(bitmapAllocIdx_);
-            if (idx == bitmap_.NO_POS) {
-                break;
-            }
-        }
-
-        // mark this slot used
-        bitmap_.Set(idx);
-        bitmapAllocIdx_ = idx + 1;
-
-        uint64_t off = idx * opt_.sizePerBit + bitmapAreaOffset_;
-
-        if (need >= opt_.sizePerBit) {
-            exts->emplace_back(off, opt_.sizePerBit);
-            need -= opt_.sizePerBit;
-        } else {
-            exts->emplace_back(off, need);
-            bitmapExtent_.DeAlloc(off + need, opt_.sizePerBit - need);
-            need = 0;
-        }
+  while (need > 0) {
+    auto idx = bitmap_.NextClearBit(bitmapAllocIdx_);
+    if (idx == bitmap_.NO_POS) {
+      bitmapAllocIdx_ = 0;
+      idx = bitmap_.NextClearBit(bitmapAllocIdx_);
+      if (idx == bitmap_.NO_POS) {
+        break;
+      }
     }
 
-    return size - need;
+    // mark this slot used
+    bitmap_.Set(idx);
+    bitmapAllocIdx_ = idx + 1;
+
+    uint64_t off = idx * opt_.sizePerBit + bitmapAreaOffset_;
+
+    if (need >= opt_.sizePerBit) {
+      exts->emplace_back(off, opt_.sizePerBit);
+      need -= opt_.sizePerBit;
+    } else {
+      exts->emplace_back(off, need);
+      bitmapExtent_.DeAlloc(off + need, opt_.sizePerBit - need);
+      need = 0;
+    }
+  }
+
+  return size - need;
 }
 
 uint64_t BitmapAllocator::AllocFromBitmapExtent(uint64_t size,
                                                 const AllocateHint& hint,
                                                 std::vector<Extent>* exts) {
-    return bitmapExtent_.Alloc(size, hint, exts);
+  return bitmapExtent_.Alloc(size, hint, exts);
 }
 
 uint64_t BitmapAllocator::AllocFromSmallExtent(uint64_t size,
                                                const AllocateHint& hint,
                                                std::vector<Extent>* exts) {
-    return smallExtent_.Alloc(size, hint, exts);
+  return smallExtent_.Alloc(size, hint, exts);
 }
 
 void BitmapAllocator::DeAllocToSmallExtent(const uint64_t off,
                                            const uint64_t len) {
-    smallExtent_.DeAlloc(off, len);
+  smallExtent_.DeAlloc(off, len);
 }
 
 void BitmapAllocator::DeAllocToBitmap(const uint64_t off, const uint64_t len) {
-    uint64_t alignedLeftOff = align_up<uint64_t>(off, opt_.sizePerBit);
-    uint64_t unalignedLeftLen = alignedLeftOff - off;
+  uint64_t alignedLeftOff = align_up<uint64_t>(off, opt_.sizePerBit);
+  uint64_t unalignedLeftLen = alignedLeftOff - off;
 
-    uint64_t alignedRightOff = align_down<uint64_t>(off + len, opt_.sizePerBit);
-    uint64_t unalignedRightLen = off + len - alignedRightOff;
+  uint64_t alignedRightOff = align_down<uint64_t>(off + len, opt_.sizePerBit);
+  uint64_t unalignedRightLen = off + len - alignedRightOff;
 
-    // DeAllocToBitmap
-    if (alignedRightOff > alignedLeftOff) {
-        auto curOff = alignedLeftOff;
-        while (curOff < alignedRightOff) {
-            auto idx = (curOff - bitmapAreaOffset_) / opt_.sizePerBit;
-            bitmap_.Clear(idx);
+  // DeAllocToBitmap
+  if (alignedRightOff > alignedLeftOff) {
+    auto curOff = alignedLeftOff;
+    while (curOff < alignedRightOff) {
+      auto idx = (curOff - bitmapAreaOffset_) / opt_.sizePerBit;
+      bitmap_.Clear(idx);
 
-            curOff += opt_.sizePerBit;
-        }
-
-        if (unalignedLeftLen != 0) {
-            DeAllocToBitmapExtent(off, unalignedLeftLen);
-        }
-        if (unalignedRightLen != 0) {
-            DeAllocToBitmapExtent(alignedRightOff, unalignedRightLen);
-        }
-    } else {
-        DeAllocToBitmapExtent(off, len);
+      curOff += opt_.sizePerBit;
     }
+
+    if (unalignedLeftLen != 0) {
+      DeAllocToBitmapExtent(off, unalignedLeftLen);
+    }
+    if (unalignedRightLen != 0) {
+      DeAllocToBitmapExtent(alignedRightOff, unalignedRightLen);
+    }
+  } else {
+    DeAllocToBitmapExtent(off, len);
+  }
 }
 
 void BitmapAllocator::DeAllocToBitmapExtent(const uint64_t off,
                                             const uint64_t len) {
-    std::map<uint64_t, uint64_t> blocks;
-    bitmapExtent_.DeAlloc(off, len);
-    auto size = bitmapExtent_.AvailableBlocks(&blocks);
-    (void)size;
+  std::map<uint64_t, uint64_t> blocks;
+  bitmapExtent_.DeAlloc(off, len);
+  auto size = bitmapExtent_.AvailableBlocks(&blocks);
+  (void)size;
 
-    for (const auto& e : blocks) {
-        auto idx = (e.first - bitmapAreaOffset_) / opt_.sizePerBit;
-        bitmap_.Clear(idx);
-    }
+  for (const auto& e : blocks) {
+    auto idx = (e.first - bitmapAreaOffset_) / opt_.sizePerBit;
+    bitmap_.Clear(idx);
+  }
 }
 
 void BitmapAllocator::MarkUsedInternal(const uint64_t off, const uint64_t len) {
-    assert(is_aligned(off, kAlignment) && is_aligned(len, kAlignment));
+  assert(is_aligned(off, kAlignment) && is_aligned(len, kAlignment));
 
-    assert(off >= opt_.startOffset &&
-           off + len <= opt_.startOffset + opt_.length);
+  assert(off >= opt_.startOffset &&
+         off + len <= opt_.startOffset + opt_.length);
 
-    std::lock_guard<bthread::Mutex> lock(mtx_);
+  std::lock_guard<bthread::Mutex> lock(mtx_);
 
-    uint64_t offInSmallExtent = 0;
-    uint64_t lenInSmallExtent = 0;
-    uint64_t offInBitmap = 0;
-    uint64_t lenInBitmap = 0;
+  uint64_t offInSmallExtent = 0;
+  uint64_t lenInSmallExtent = 0;
+  uint64_t offInBitmap = 0;
+  uint64_t lenInBitmap = 0;
 
-    Split(off, len, &offInSmallExtent, &lenInSmallExtent, &offInBitmap,
-          &lenInBitmap);
+  Split(off, len, &offInSmallExtent, &lenInSmallExtent, &offInBitmap,
+        &lenInBitmap);
 
-    if (lenInSmallExtent != 0) {
-        MarkUsedForSmallExtent(offInSmallExtent, lenInSmallExtent);
-    }
+  if (lenInSmallExtent != 0) {
+    MarkUsedForSmallExtent(offInSmallExtent, lenInSmallExtent);
+  }
 
-    if (lenInBitmap != 0) {
-        MarkUsedForBitmap(offInBitmap, lenInBitmap);
-    }
+  if (lenInBitmap != 0) {
+    MarkUsedForBitmap(offInBitmap, lenInBitmap);
+  }
 
-    CHECK(available_ >= len) << *this;
-    available_ -= len;
+  CHECK(available_ >= len) << *this;
+  available_ -= len;
 }
 
 void BitmapAllocator::MarkUsedForSmallExtent(const uint64_t off,
                                              const uint64_t len) {
-    smallExtent_.MarkUsed(off, len);
+  smallExtent_.MarkUsed(off, len);
 }
 
 uint32_t BitmapAllocator::ToBitmapIndex(uint64_t offset) const {
-    return (offset - bitmapAreaOffset_) / opt_.sizePerBit;
+  return (offset - bitmapAreaOffset_) / opt_.sizePerBit;
 }
 
 uint64_t BitmapAllocator::ToBitmapOffset(uint32_t index) const {
-    return index * opt_.sizePerBit + bitmapAreaOffset_;
+  return index * opt_.sizePerBit + bitmapAreaOffset_;
 }
 
 void BitmapAllocator::MarkUsedForBitmap(const uint64_t off,
                                         const uint64_t len) {
-    // if it's a aligned block, mark slot used
-    // otherwise call bitmapExtent::MarkUsed
+  // if it's a aligned block, mark slot used
+  // otherwise call bitmapExtent::MarkUsed
 
-    uint64_t alignedLeftOff = align_up<uint64_t>(off, opt_.sizePerBit);
-    uint64_t unalignedLeftLen = alignedLeftOff - off;
+  uint64_t alignedLeftOff = align_up<uint64_t>(off, opt_.sizePerBit);
+  uint64_t unalignedLeftLen = alignedLeftOff - off;
 
-    uint64_t alignedRightOff = align_down<uint64_t>(off + len, opt_.sizePerBit);
-    uint64_t unalignedRightLen = off + len - alignedRightOff;
+  uint64_t alignedRightOff = align_down<uint64_t>(off + len, opt_.sizePerBit);
+  uint64_t unalignedRightLen = off + len - alignedRightOff;
 
-    // bitmap
-    if (alignedRightOff > alignedLeftOff) {
-        auto curOff = alignedLeftOff;
-        while (curOff < alignedRightOff) {
-            auto idx = ToBitmapIndex(curOff);
-            assert(bitmap_.Test(idx) == false);
-            bitmap_.Set(idx);
-            curOff += opt_.sizePerBit;
-        }
-
-        if (unalignedLeftLen != 0) {
-            auto idx = ToBitmapIndex(off);
-            if (bitmap_.Test(idx)) {
-                bitmapExtent_.MarkUsed(off, unalignedLeftLen);
-            } else {
-                bitmap_.Set(idx);
-                bitmapExtent_.DeAlloc(ToBitmapOffset(idx),
-                                      opt_.sizePerBit - unalignedLeftLen);
-            }
-        }
-        if (unalignedRightLen != 0) {
-            auto idx = ToBitmapIndex(off + len);
-            if (bitmap_.Test(idx)) {
-                bitmapExtent_.MarkUsed(alignedRightOff, unalignedRightLen);
-            } else {
-                bitmap_.Set(idx);
-                bitmapExtent_.DeAlloc(off + len,
-                                      opt_.sizePerBit - unalignedRightLen);
-            }
-        }
-    } else {
-        auto idx = ToBitmapIndex(off);
-        if (bitmap_.Test(idx)) {
-            bitmapExtent_.MarkUsed(off, len);
-        } else {
-            bitmap_.Set(idx);
-            const auto startOff = ToBitmapOffset(idx);
-
-            if (off != startOff) {
-                bitmapExtent_.DeAlloc(startOff, off - startOff);
-            }
-
-            if ((off + len) != ToBitmapOffset(idx + 1)) {
-                bitmapExtent_.DeAlloc(off + len,
-                                    ToBitmapOffset(idx + 1) - (off + len));
-            }
-        }
+  // bitmap
+  if (alignedRightOff > alignedLeftOff) {
+    auto curOff = alignedLeftOff;
+    while (curOff < alignedRightOff) {
+      auto idx = ToBitmapIndex(curOff);
+      assert(bitmap_.Test(idx) == false);
+      bitmap_.Set(idx);
+      curOff += opt_.sizePerBit;
     }
+
+    if (unalignedLeftLen != 0) {
+      auto idx = ToBitmapIndex(off);
+      if (bitmap_.Test(idx)) {
+        bitmapExtent_.MarkUsed(off, unalignedLeftLen);
+      } else {
+        bitmap_.Set(idx);
+        bitmapExtent_.DeAlloc(ToBitmapOffset(idx),
+                              opt_.sizePerBit - unalignedLeftLen);
+      }
+    }
+    if (unalignedRightLen != 0) {
+      auto idx = ToBitmapIndex(off + len);
+      if (bitmap_.Test(idx)) {
+        bitmapExtent_.MarkUsed(alignedRightOff, unalignedRightLen);
+      } else {
+        bitmap_.Set(idx);
+        bitmapExtent_.DeAlloc(off + len, opt_.sizePerBit - unalignedRightLen);
+      }
+    }
+  } else {
+    auto idx = ToBitmapIndex(off);
+    if (bitmap_.Test(idx)) {
+      bitmapExtent_.MarkUsed(off, len);
+    } else {
+      bitmap_.Set(idx);
+      const auto startOff = ToBitmapOffset(idx);
+
+      if (off != startOff) {
+        bitmapExtent_.DeAlloc(startOff, off - startOff);
+      }
+
+      if ((off + len) != ToBitmapOffset(idx + 1)) {
+        bitmapExtent_.DeAlloc(off + len, ToBitmapOffset(idx + 1) - (off + len));
+      }
+    }
+  }
 }
 
-void BitmapAllocator::Split(const uint64_t off,
-                            const uint64_t len,
+void BitmapAllocator::Split(const uint64_t off, const uint64_t len,
                             uint64_t* offInSmallExtent,
-                            uint64_t* lenInSmallExtent,
-                            uint64_t* offInBitmap,
+                            uint64_t* lenInSmallExtent, uint64_t* offInBitmap,
                             uint64_t* lenInBitmap) const {
-    if (off >= bitmapAreaOffset_) {
-        *lenInSmallExtent = 0;
-        *offInBitmap = off;
-        *lenInBitmap = len;
-        return;
-    }
+  if (off >= bitmapAreaOffset_) {
+    *lenInSmallExtent = 0;
+    *offInBitmap = off;
+    *lenInBitmap = len;
+    return;
+  }
 
-    if (off < bitmapAreaOffset_ && (off + len) <= bitmapAreaOffset_) {
-        *lenInBitmap = 0;
-        *offInSmallExtent = off;
-        *lenInSmallExtent = len;
-        return;
-    }
-
+  if (off < bitmapAreaOffset_ && (off + len) <= bitmapAreaOffset_) {
+    *lenInBitmap = 0;
     *offInSmallExtent = off;
-    *lenInSmallExtent = bitmapAreaOffset_ - off;
+    *lenInSmallExtent = len;
+    return;
+  }
 
-    *offInBitmap = bitmapAreaOffset_;
-    *lenInBitmap = off + len - bitmapAreaOffset_;
+  *offInSmallExtent = off;
+  *lenInSmallExtent = bitmapAreaOffset_ - off;
+
+  *offInBitmap = bitmapAreaOffset_;
+  *lenInBitmap = off + len - bitmapAreaOffset_;
 }
 
 std::ostream& operator<<(std::ostream& os, const BitmapAllocator& alloc) {
-    os << "avail: " << alloc.available_
-       << ", [== bitmap ext: " << alloc.bitmapExtent_ << "  ==]"
-       << ", [== small ext: " << alloc.smallExtent_ << " ==]";
+  os << "avail: " << alloc.available_
+     << ", [== bitmap ext: " << alloc.bitmapExtent_ << "  ==]"
+     << ", [== small ext: " << alloc.smallExtent_ << " ==]";
 
-    return os;
+  return os;
 }
 
 }  // namespace volume

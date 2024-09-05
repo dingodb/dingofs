@@ -27,28 +27,28 @@
 extern "C" {
 #endif
 
+#include <aio.h>
+#include <fcntl.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #include <unistd.h>
-#include <aio.h>
 
 // 文件路径最大的长度，单位字节
-#define NEBD_MAX_FILE_PATH_LEN   1024
+#define NEBD_MAX_FILE_PATH_LEN 1024
 
 // nebd异步请求的类型
 typedef enum LIBAIO_OP {
-    LIBAIO_OP_READ,
-    LIBAIO_OP_WRITE,
-    LIBAIO_OP_DISCARD,
-    LIBAIO_OP_FLUSH,
+  LIBAIO_OP_READ,
+  LIBAIO_OP_WRITE,
+  LIBAIO_OP_DISCARD,
+  LIBAIO_OP_FLUSH,
 } LIBAIO_OP;
 
 typedef struct NebdOpenFlags {
-    int exclusive;
+  int exclusive;
 } NebdOpenFlags;
 
 void nebd_lib_init_open_flags(NebdOpenFlags* flags);
@@ -59,13 +59,13 @@ struct NebdClientAioContext;
 typedef void (*LibAioCallBack)(struct NebdClientAioContext* context);
 
 struct NebdClientAioContext {
-    off_t offset;             // 请求的offset
-    size_t length;            // 请求的length
-    int ret;                  // 记录异步返回的返回值
-    LIBAIO_OP op;             // 异步请求的类型，详见定义
-    LibAioCallBack cb;        // 异步请求的回调函数
-    void* buf;                // 请求的buf
-    unsigned int retryCount;  // 记录异步请求的重试次数
+  off_t offset;             // 请求的offset
+  size_t length;            // 请求的length
+  int ret;                  // 记录异步返回的返回值
+  LIBAIO_OP op;             // 异步请求的类型，详见定义
+  LibAioCallBack cb;        // 异步请求的回调函数
+  void* buf;                // 请求的buf
+  unsigned int retryCount;  // 记录异步请求的重试次数
 };
 
 // int nebd_lib_fini(void);

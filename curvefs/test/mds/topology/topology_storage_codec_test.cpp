@@ -20,24 +20,24 @@
  * Author: wanghai01
  */
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
+#include "curvefs/src/mds/topology/topology_storage_codec.h"
 
-#include <string>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include <set>
+#include <string>
 
 #include "curvefs/src/mds/topology/topology_item.h"
-#include "curvefs/src/mds/topology/topology_storage_codec.h"
 #include "curvefs/test/mds/topology/test_topology_helper.h"
 
-using ::testing::Return;
 using ::testing::_;
-using ::testing::AnyOf;
 using ::testing::AllOf;
-using ::testing::SetArgPointee;
-using ::testing::Invoke;
+using ::testing::AnyOf;
 using ::testing::DoAll;
-
+using ::testing::Invoke;
+using ::testing::Return;
+using ::testing::SetArgPointee;
 
 namespace curvefs {
 namespace mds {
@@ -45,155 +45,152 @@ namespace topology {
 
 class TopologyStorageCodecTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-    }
+  void SetUp() override {}
 
-    void TearDown() override {
-    }
+  void TearDown() override {}
 
  protected:
-    TopologyStorageCodec testObj;
+  TopologyStorageCodec testObj;
 };
 
 TEST_F(TopologyStorageCodecTest, TestPoolDataEncodeDecodeEqual) {
-    Pool::RedundanceAndPlaceMentPolicy rap;
-    rap.replicaNum = 3;
-    rap.copysetNum = 3;
-    rap.zoneNum = 3;
+  Pool::RedundanceAndPlaceMentPolicy rap;
+  rap.replicaNum = 3;
+  rap.copysetNum = 3;
+  rap.zoneNum = 3;
 
-    Pool data(0x11, "pool", rap, 0);
-    std::string value;
-    ASSERT_TRUE(testObj.EncodePoolData(data, &value));
+  Pool data(0x11, "pool", rap, 0);
+  std::string value;
+  ASSERT_TRUE(testObj.EncodePoolData(data, &value));
 
-    Pool out;
-    ASSERT_TRUE(testObj.DecodePoolData(value, &out));
+  Pool out;
+  ASSERT_TRUE(testObj.DecodePoolData(value, &out));
 
-    ASSERT_TRUE(ComparePool(data, out));
+  ASSERT_TRUE(ComparePool(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestZoneDataEncodeDecodeEqual) {
-    Zone data(0x31, "zone", 0x21);
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeZoneData(data, &value));
+  Zone data(0x31, "zone", 0x21);
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeZoneData(data, &value));
 
-    Zone out;
-    ASSERT_TRUE(testObj.DecodeZoneData(value, &out));
+  Zone out;
+  ASSERT_TRUE(testObj.DecodeZoneData(value, &out));
 
-    ASSERT_TRUE(CompareZone(data, out));
+  ASSERT_TRUE(CompareZone(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestServerDataEncodeDecodeEqual) {
-    Server data(0x41, "server", "127.0.0.1", 8080, "127.0.0.1", 8080, 0x31,
-                0x21);
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeServerData(data, &value));
+  Server data(0x41, "server", "127.0.0.1", 8080, "127.0.0.1", 8080, 0x31, 0x21);
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeServerData(data, &value));
 
-    Server out;
-    ASSERT_TRUE(testObj.DecodeServerData(value, &out));
+  Server out;
+  ASSERT_TRUE(testObj.DecodeServerData(value, &out));
 
-    ASSERT_TRUE(CompareServer(data, out));
+  ASSERT_TRUE(CompareServer(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestMetaServerDataEncodeDecodeEqual) {
-    MetaServer data(0x51, "metaserver", "token", 0x41, "127.0.0.1", 8080,
-        "127.0.0.1", 8080, OnlineState::OFFLINE);
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeMetaServerData(data, &value));
+  MetaServer data(0x51, "metaserver", "token", 0x41, "127.0.0.1", 8080,
+                  "127.0.0.1", 8080, OnlineState::OFFLINE);
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeMetaServerData(data, &value));
 
-    MetaServer out;
-    ASSERT_TRUE(testObj.DecodeMetaServerData(value, &out));
+  MetaServer out;
+  ASSERT_TRUE(testObj.DecodeMetaServerData(value, &out));
 
-    ASSERT_TRUE(CompareMetaServer(data, out));
+  ASSERT_TRUE(CompareMetaServer(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestCopySetInfoEncodeDecodeEqual) {
-    CopySetInfo data(0x11, 0x61);
-    data.SetEpoch(100);
-    data.SetCopySetMembers({0x51, 0x52, 0x53});
+  CopySetInfo data(0x11, 0x61);
+  data.SetEpoch(100);
+  data.SetCopySetMembers({0x51, 0x52, 0x53});
 
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeCopySetData(data, &value));
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeCopySetData(data, &value));
 
-    CopySetInfo out;
-    ASSERT_TRUE(testObj.DecodeCopySetData(value, &out));
+  CopySetInfo out;
+  ASSERT_TRUE(testObj.DecodeCopySetData(value, &out));
 
-    ASSERT_TRUE(CompareCopysetInfo(data, out));
+  ASSERT_TRUE(CompareCopysetInfo(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestPartitionDataEncodeDecodeEqual) {
-    Partition data(0x01, 0x11, 0x61, 0x71, 0, 100);
+  Partition data(0x01, 0x11, 0x61, 0x71, 0, 100);
 
-    std::string value;
-    ASSERT_TRUE(testObj.EncodePartitionData(data, &value));
+  std::string value;
+  ASSERT_TRUE(testObj.EncodePartitionData(data, &value));
 
-    Partition out;
-    ASSERT_TRUE(testObj.DecodePartitionData(value, &out));
+  Partition out;
+  ASSERT_TRUE(testObj.DecodePartitionData(value, &out));
 
-    ASSERT_TRUE(ComparePartition(data, out));
+  ASSERT_TRUE(ComparePartition(data, out));
 }
 
 TEST_F(TopologyStorageCodecTest, TestClusterInfoEncodeDecodeEqual) {
-    ClusterInformation data;
-    data.clusterId = "xxx";
+  ClusterInformation data;
+  data.clusterId = "xxx";
 
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeClusterInfoData(data, &value));
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeClusterInfoData(data, &value));
 
-    ClusterInformation out;
-    ASSERT_TRUE(testObj.DecodeClusterInfoData(value, &out));
+  ClusterInformation out;
+  ASSERT_TRUE(testObj.DecodeClusterInfoData(value, &out));
 
-    ASSERT_EQ(data.clusterId, out.clusterId);
+  ASSERT_EQ(data.clusterId, out.clusterId);
 }
 
 TEST_F(TopologyStorageCodecTest, TestEncodeKeyNumEqual) {
-    std::string encodeKey;
-    int keyNum = 10000;
-    std::set<std::string> keySet;
-    for (int i = 0; i < keyNum; i++) {
-        encodeKey = testObj.EncodePoolKey(i);
-        keySet.insert(encodeKey);
-    }
-    for (int i = 0; i < keyNum; i++) {
-        encodeKey = testObj.EncodeZoneKey(i);
-        keySet.insert(encodeKey);
-    }
-    for (int i = 0; i < keyNum; i++) {
-        encodeKey = testObj.EncodeServerKey(i);
-        keySet.insert(encodeKey);
-    }
-    for (int i = 0; i < keyNum; i++) {
-        encodeKey = testObj.EncodeMetaServerKey(i);
-        keySet.insert(encodeKey);
-    }
-    for (int i = 0; i < keyNum; i++) {
-        encodeKey = testObj.EncodePartitionKey(i);
-        keySet.insert(encodeKey);
-    }
+  std::string encodeKey;
+  int keyNum = 10000;
+  std::set<std::string> keySet;
+  for (int i = 0; i < keyNum; i++) {
+    encodeKey = testObj.EncodePoolKey(i);
+    keySet.insert(encodeKey);
+  }
+  for (int i = 0; i < keyNum; i++) {
+    encodeKey = testObj.EncodeZoneKey(i);
+    keySet.insert(encodeKey);
+  }
+  for (int i = 0; i < keyNum; i++) {
+    encodeKey = testObj.EncodeServerKey(i);
+    keySet.insert(encodeKey);
+  }
+  for (int i = 0; i < keyNum; i++) {
+    encodeKey = testObj.EncodeMetaServerKey(i);
+    keySet.insert(encodeKey);
+  }
+  for (int i = 0; i < keyNum; i++) {
+    encodeKey = testObj.EncodePartitionKey(i);
+    keySet.insert(encodeKey);
+  }
 
-    int keyRow = 10;
-    for (int i = 0; i < keyNum; i++) {
-        for (int j = 0; j < keyRow; j++) {
-            encodeKey = testObj.EncodeCopySetKey({j, i});
-            keySet.insert(encodeKey);
-        }
+  int keyRow = 10;
+  for (int i = 0; i < keyNum; i++) {
+    for (int j = 0; j < keyRow; j++) {
+      encodeKey = testObj.EncodeCopySetKey({j, i});
+      keySet.insert(encodeKey);
     }
+  }
 
-    ASSERT_EQ(5 * keyNum + keyNum * keyRow, keySet.size());
+  ASSERT_EQ(5 * keyNum + keyNum * keyRow, keySet.size());
 }
 
 TEST_F(TopologyStorageCodecTest, TestMemcacheClusterEncodeDecodeEqual) {
-    MemcacheCluster data(
-        1, std::list<MemcacheServer>{MemcacheServer("127.0.0.1", 1),
-                                     MemcacheServer("127.0.0.1", 2),
-                                     MemcacheServer("127.0.0.1", 3)});
+  MemcacheCluster data(
+      1, std::list<MemcacheServer>{MemcacheServer("127.0.0.1", 1),
+                                   MemcacheServer("127.0.0.1", 2),
+                                   MemcacheServer("127.0.0.1", 3)});
 
-    std::string value;
-    ASSERT_TRUE(testObj.EncodeMemcacheClusterData(data, &value));
+  std::string value;
+  ASSERT_TRUE(testObj.EncodeMemcacheClusterData(data, &value));
 
-    MemcacheCluster out;
-    ASSERT_TRUE(testObj.DecodeMemcacheClusterData(value, &out));
+  MemcacheCluster out;
+  ASSERT_TRUE(testObj.DecodeMemcacheClusterData(value, &out));
 
-    ASSERT_EQ(data, out);
+  ASSERT_EQ(data, out);
 }
 
 }  // namespace topology

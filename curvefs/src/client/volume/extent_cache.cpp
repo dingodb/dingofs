@@ -57,11 +57,10 @@ bvar::LatencyRecorder g_merge_latency("extent_cache_merge");
 bvar::LatencyRecorder g_mark_written_latency("extent_cache_mark_written");
 
 std::ostream& operator<<(std::ostream& os, const ExtentCacheOption& opt) {
-    os << "prealloc size: " << opt.preAllocSize
-       << ", slice size: " << opt.sliceSize
-       << ", block size: " << opt.blockSize;
+  os << "prealloc size: " << opt.preAllocSize
+     << ", slice size: " << opt.sliceSize << ", block size: " << opt.blockSize;
 
-    return os;
+  return os;
 }
 
 }  // namespace
@@ -70,188 +69,181 @@ ExtentCacheOption ExtentCache::option_;
 
 // TODO(wuhanqing): loffset and pext can span on two ranges
 void ExtentCache::Merge(uint64_t loffset, const PExtent& pExt) {
-    VLOG(9) << "merge extent, loffset: " << loffset
-            << ", physical offset: " << pExt.pOffset << ", len: " << pExt.len
-            << ", written: " << !pExt.UnWritten;
-    assert(is_aligned(loffset, option_.blockSize));
-    assert(is_aligned(pExt.pOffset, option_.blockSize));
-    assert(is_aligned(pExt.len, option_.blockSize));
+  VLOG(9) << "merge extent, loffset: " << loffset
+          << ", physical offset: " << pExt.pOffset << ", len: " << pExt.len
+          << ", written: " << !pExt.UnWritten;
+  assert(is_aligned(loffset, option_.blockSize));
+  assert(is_aligned(pExt.pOffset, option_.blockSize));
+  assert(is_aligned(pExt.len, option_.blockSize));
 
-    LatencyUpdater updater(&g_merge_latency);
-    WriteLockGuard lk(lock_);
+  LatencyUpdater updater(&g_merge_latency);
+  WriteLockGuard lk(lock_);
 
-    const auto sliceOffset = align_down(loffset, option_.sliceSize);
-    auto slice = slices_.find(sliceOffset);
-    if (slice == slices_.end()) {
-        auto ret = slices_.emplace(sliceOffset, ExtentSlice{sliceOffset});
-        assert(ret.second);
-        slice = ret.first;
-    }
+  const auto sliceOffset = align_down(loffset, option_.sliceSize);
+  auto slice = slices_.find(sliceOffset);
+  if (slice == slices_.end()) {
+    auto ret = slices_.emplace(sliceOffset, ExtentSlice{sliceOffset});
+    assert(ret.second);
+    slice = ret.first;
+  }
 
-    slice->second.Merge(loffset, pExt);
-    dirties_.insert(&slice->second);
+  slice->second.Merge(loffset, pExt);
+  dirties_.insert(&slice->second);
 }
 
-void ExtentCache::DivideForWrite(uint64_t offset,
-                                 uint64_t len,
+void ExtentCache::DivideForWrite(uint64_t offset, uint64_t len,
                                  const char* data,
                                  std::vector<WritePart>* allocated,
                                  std::vector<AllocPart>* needAlloc) {
-    LatencyUpdater updater(&g_write_divide_latency);
-    ReadLockGuard lk(lock_);
+  LatencyUpdater updater(&g_write_divide_latency);
+  ReadLockGuard lk(lock_);
 
-    const auto end = offset + len;
-    const char* datap = data;
+  const auto end = offset + len;
+  const char* datap = data;
 
-    while (offset < end) {
-        const auto length = std::min(
-            end - offset, option_.sliceSize - (offset & ~option_.sliceSize));
+  while (offset < end) {
+    const auto length = std::min(
+        end - offset, option_.sliceSize - (offset & ~option_.sliceSize));
 
-        auto slice = slices_.find(align_down(offset, option_.sliceSize));
-        if (slice != slices_.end()) {
-            slice->second.DivideForWrite(offset, length, datap, allocated,
-                                         needAlloc);
-        } else {
-            DivideForWriteWithinEmptySlice(offset, length, datap, needAlloc);
-        }
-
-        datap += length;
-        offset += length;
+    auto slice = slices_.find(align_down(offset, option_.sliceSize));
+    if (slice != slices_.end()) {
+      slice->second.DivideForWrite(offset, length, datap, allocated, needAlloc);
+    } else {
+      DivideForWriteWithinEmptySlice(offset, length, datap, needAlloc);
     }
+
+    datap += length;
+    offset += length;
+  }
 }
 
 void ExtentCache::DivideForWriteWithinEmptySlice(
-    uint64_t offset,
-    uint64_t len,
-    const char* data,
+    uint64_t offset, uint64_t len, const char* data,
     std::vector<AllocPart>* needAlloc) {
-    AllocPart part;
-    part.data = data;
+  AllocPart part;
+  part.data = data;
 
-    auto alignedoffset = align_down(offset, option_.blockSize);
-    part.allocInfo.lOffset = alignedoffset;
+  auto alignedoffset = align_down(offset, option_.blockSize);
+  part.allocInfo.lOffset = alignedoffset;
 
-    uint64_t alloclength = 0;
-    if (offset == alignedoffset) {
-        alloclength =
-            align_up(std::max(len, option_.preAllocSize), option_.blockSize);
-    } else {
-        auto alignedend = align_up(offset + len, option_.blockSize);
-        alloclength =
-            align_up(std::max(alignedend - alignedoffset, option_.preAllocSize),
-                     option_.blockSize);
-    }
+  uint64_t alloclength = 0;
+  if (offset == alignedoffset) {
+    alloclength =
+        align_up(std::max(len, option_.preAllocSize), option_.blockSize);
+  } else {
+    auto alignedend = align_up(offset + len, option_.blockSize);
+    alloclength =
+        align_up(std::max(alignedend - alignedoffset, option_.preAllocSize),
+                 option_.blockSize);
+  }
 
-    part.allocInfo.len = alloclength;
+  part.allocInfo.len = alloclength;
 
-    const auto rangeEnd = align_up(offset + 1, option_.sliceSize);
-    if (part.allocInfo.lOffset + part.allocInfo.len > rangeEnd) {
-        part.allocInfo.len = rangeEnd - part.allocInfo.lOffset;
-    }
+  const auto rangeEnd = align_up(offset + 1, option_.sliceSize);
+  if (part.allocInfo.lOffset + part.allocInfo.len > rangeEnd) {
+    part.allocInfo.len = rangeEnd - part.allocInfo.lOffset;
+  }
 
-    part.writelength = len;
-    part.padding = offset - alignedoffset;
+  part.writelength = len;
+  part.padding = offset - alignedoffset;
 
-    needAlloc->push_back(part);
+  needAlloc->push_back(part);
 }
 
 void ExtentCache::MarkWritten(uint64_t offset, uint64_t len) {
-    LatencyUpdater updater(&g_mark_written_latency);
-    WriteLockGuard lk(lock_);
+  LatencyUpdater updater(&g_mark_written_latency);
+  WriteLockGuard lk(lock_);
 
-    auto cur = align_down(offset, option_.blockSize);
-    const auto end = align_up(offset + len, option_.blockSize);
+  auto cur = align_down(offset, option_.blockSize);
+  const auto end = align_up(offset + len, option_.blockSize);
 
-    while (cur < end) {
-        const auto length =
-            std::min(end - cur, option_.sliceSize - (cur & ~option_.sliceSize));
-        auto slice = slices_.find(align_down(cur, option_.sliceSize));
-        assert(slice != slices_.end());
-        auto changed = slice->second.MarkWritten(cur, length);
-        cur += length;
-        if (changed) {
-            dirties_.insert((&slice->second));
-        }
+  while (cur < end) {
+    const auto length =
+        std::min(end - cur, option_.sliceSize - (cur & ~option_.sliceSize));
+    auto slice = slices_.find(align_down(cur, option_.sliceSize));
+    assert(slice != slices_.end());
+    auto changed = slice->second.MarkWritten(cur, length);
+    cur += length;
+    if (changed) {
+      dirties_.insert((&slice->second));
     }
+  }
 }
 
 std::unordered_map<uint64_t, std::map<uint64_t, PExtent>>
 ExtentCache::GetExtentsForTesting() const {
-    std::unordered_map<uint64_t, std::map<uint64_t, PExtent>> result;
-    ReadLockGuard lk(lock_);
+  std::unordered_map<uint64_t, std::map<uint64_t, PExtent>> result;
+  ReadLockGuard lk(lock_);
 
-    for (auto& slice : slices_) {
-        result.emplace(slice.first, slice.second.GetExtentsForTesting());
-    }
+  for (auto& slice : slices_) {
+    result.emplace(slice.first, slice.second.GetExtentsForTesting());
+  }
 
-    return result;
+  return result;
 }
 
-void ExtentCache::DivideForRead(uint64_t offset,
-                                uint64_t len,
-                                char* data,
+void ExtentCache::DivideForRead(uint64_t offset, uint64_t len, char* data,
                                 std::vector<ReadPart>* reads,
                                 std::vector<ReadPart>* holes) {
-    LatencyUpdater updater(&g_read_divide_latency);
-    ReadLockGuard lk(lock_);
+  LatencyUpdater updater(&g_read_divide_latency);
+  ReadLockGuard lk(lock_);
 
-    const auto end = offset + len;
-    char* datap = data;
+  const auto end = offset + len;
+  char* datap = data;
 
-    while (offset < end) {
-        const auto length = std::min(
-            end - offset, option_.sliceSize - (offset & ~option_.sliceSize));
+  while (offset < end) {
+    const auto length = std::min(
+        end - offset, option_.sliceSize - (offset & ~option_.sliceSize));
 
-        auto slice = slices_.find(align_down(offset, option_.sliceSize));
-        if (slice != slices_.end()) {
-            slice->second.DivideForRead(offset, length, datap, reads, holes);
-        } else {
-            holes->emplace_back(offset, length, datap);
-        }
-
-        datap += length;
-        offset += length;
+    auto slice = slices_.find(align_down(offset, option_.sliceSize));
+    if (slice != slices_.end()) {
+      slice->second.DivideForRead(offset, length, datap, reads, holes);
+    } else {
+      holes->emplace_back(offset, length, datap);
     }
+
+    datap += length;
+    offset += length;
+  }
 }
 
 void ExtentCache::SetOption(const ExtentCacheOption& option) {
-    CHECK(is_alignment(option.preAllocSize))
-        << "prealloc size must be power of 2, current is "
-        << option.preAllocSize;
-    CHECK(is_alignment(option.sliceSize))
-        << "slice size must be power of 2, current is " << option.sliceSize;
-    CHECK(is_alignment(option.blockSize))
-        << "block size must be power of 2, current is " << option.blockSize;
+  CHECK(is_alignment(option.preAllocSize))
+      << "prealloc size must be power of 2, current is " << option.preAllocSize;
+  CHECK(is_alignment(option.sliceSize))
+      << "slice size must be power of 2, current is " << option.sliceSize;
+  CHECK(is_alignment(option.blockSize))
+      << "block size must be power of 2, current is " << option.blockSize;
 
-    option_ = option;
+  option_ = option;
 
-    LOG(INFO) << "ExtentCacheOption: [" << option_ << "]";
+  LOG(INFO) << "ExtentCacheOption: [" << option_ << "]";
 }
 
-void ExtentCache::Build(const VolumeExtentList &extents) {
-    WriteLockGuard lk(lock_);
-    slices_.clear();
-    dirties_.clear();
+void ExtentCache::Build(const VolumeExtentList& extents) {
+  WriteLockGuard lk(lock_);
+  slices_.clear();
+  dirties_.clear();
 
-    for (const auto& s : extents.slices()) {
-        slices_.emplace(s.offset(), ExtentSlice{s});
-    }
+  for (const auto& s : extents.slices()) {
+    slices_.emplace(s.offset(), ExtentSlice{s});
+  }
 }
 
 VolumeExtentList ExtentCache::GetDirtyExtents() {
-    VolumeExtentList result;
-    WriteLockGuard lk(lock_);
-    for (const auto* slice : dirties_) {
-        *result.add_slices() = slice->ToVolumeExtentSlice();
-    }
+  VolumeExtentList result;
+  WriteLockGuard lk(lock_);
+  for (const auto* slice : dirties_) {
+    *result.add_slices() = slice->ToVolumeExtentSlice();
+  }
 
-    dirties_.clear();
-    return result;
+  dirties_.clear();
+  return result;
 }
 
 bool ExtentCache::HasDirtyExtents() const {
-    curve::common::ReadLockGuard lk(lock_);
-    return !dirties_.empty();
+  curve::common::ReadLockGuard lk(lock_);
+  return !dirties_.empty();
 }
 
 }  // namespace client

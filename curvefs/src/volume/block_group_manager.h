@@ -43,38 +43,37 @@ class SpaceManager;
 
 class BlockGroupManager {
  public:
-    virtual ~BlockGroupManager() = default;
+  virtual ~BlockGroupManager() = default;
 
-    virtual bool AllocateBlockGroup(
-        std::vector<AllocatorAndBitmapUpdater>* out) = 0;
+  virtual bool AllocateBlockGroup(
+      std::vector<AllocatorAndBitmapUpdater>* out) = 0;
 
-    virtual bool ReleaseAllBlockGroups() = 0;
+  virtual bool ReleaseAllBlockGroups() = 0;
 };
 
 class BlockGroupManagerImpl final : public BlockGroupManager {
  public:
-    BlockGroupManagerImpl(SpaceManager* spaceManager,
-                          const std::shared_ptr<MdsClient>& mdsClient,
-                          const std::shared_ptr<BlockDeviceClient>& blockDevice,
-                          const BlockGroupManagerOption& managerOption,
-                          const AllocatorOption& allocatorOption);
+  BlockGroupManagerImpl(SpaceManager* spaceManager,
+                        const std::shared_ptr<MdsClient>& mdsClient,
+                        const std::shared_ptr<BlockDeviceClient>& blockDevice,
+                        const BlockGroupManagerOption& managerOption,
+                        const AllocatorOption& allocatorOption);
 
-    bool AllocateBlockGroup(
-        std::vector<AllocatorAndBitmapUpdater>* out) override;
+  bool AllocateBlockGroup(std::vector<AllocatorAndBitmapUpdater>* out) override;
 
-    void AcquireBlockGroup();
+  void AcquireBlockGroup();
 
-    void AllocateBlockGroupAsync();
+  void AllocateBlockGroupAsync();
 
-    bool ReleaseAllBlockGroups() override;
+  bool ReleaseAllBlockGroups() override;
 
  private:
-    SpaceManager* spaceManager_;
-    std::shared_ptr<MdsClient> mdsClient_;
-    std::shared_ptr<BlockDeviceClient> blockDeviceClient_;
+  SpaceManager* spaceManager_;
+  std::shared_ptr<MdsClient> mdsClient_;
+  std::shared_ptr<BlockDeviceClient> blockDeviceClient_;
 
-    BlockGroupManagerOption option_;
-    AllocatorOption allocatorOption_;
+  BlockGroupManagerOption option_;
+  AllocatorOption allocatorOption_;
 };
 
 }  // namespace volume

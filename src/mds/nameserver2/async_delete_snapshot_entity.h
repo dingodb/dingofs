@@ -26,50 +26,41 @@
 #include "proto/nameserver2.pb.h"
 
 namespace curve {
-namespace  mds {
+namespace mds {
 
 using ::curve::mds::DeleteSnapShotResponse;
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class AsyncDeleteSnapShotEntity {
  public:
-    AsyncDeleteSnapShotEntity(DeleteSnapShotResponse* deleteResponse,
-                    const DeleteSnapShotRequest* deleteRequest,
-                    RpcController* controller,
-                    Closure* closure) {
-        deleteResponse_ = deleteResponse;
-        deleteRequest_ = deleteRequest;
-        controller_ = controller;
-        closure_ = closure;
-    }
+  AsyncDeleteSnapShotEntity(DeleteSnapShotResponse* deleteResponse,
+                            const DeleteSnapShotRequest* deleteRequest,
+                            RpcController* controller, Closure* closure) {
+    deleteResponse_ = deleteResponse;
+    deleteRequest_ = deleteRequest;
+    controller_ = controller;
+    closure_ = closure;
+  }
 
-    DeleteSnapShotResponse* GetDeleteResponse(void) {
-        return deleteResponse_;
-    }
+  DeleteSnapShotResponse* GetDeleteResponse(void) { return deleteResponse_; }
 
-    const DeleteSnapShotRequest* GetDeleteRequest(void) const {
-        return deleteRequest_;
-    }
+  const DeleteSnapShotRequest* GetDeleteRequest(void) const {
+    return deleteRequest_;
+  }
 
-    RpcController* GetController(void) {
-        return controller_;
-    }
+  RpcController* GetController(void) { return controller_; }
 
-    Closure* GetClosure(void) {
-        return closure_;
-    }
+  Closure* GetClosure(void) { return closure_; }
 
-    void SetClosure(Closure *closure) {
-        closure_ = closure;
-    }
+  void SetClosure(Closure* closure) { closure_ = closure; }
 
  private:
-    // response set the response
-    DeleteSnapShotResponse* deleteResponse_;
-    const DeleteSnapShotRequest*  deleteRequest_;
-    RpcController* controller_;
-    Closure* closure_;
+  // response set the response
+  DeleteSnapShotResponse* deleteResponse_;
+  const DeleteSnapShotRequest* deleteRequest_;
+  RpcController* controller_;
+  Closure* closure_;
 };
 
 }  // namespace mds

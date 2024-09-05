@@ -24,6 +24,7 @@
 #define SRC_TOOLS_CURVE_TOOL_DEFINE_H_
 
 #include <gflags/gflags.h>
+
 #include <string>
 
 DECLARE_string(mdsAddr);

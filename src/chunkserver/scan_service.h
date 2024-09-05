@@ -29,20 +29,20 @@
 namespace curve {
 namespace chunkserver {
 
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class ScanServiceImpl : public ScanService {
  public:
-    explicit  ScanServiceImpl(ScanManager* scanManager) :
-           scanManager_(scanManager) {}
-    ~ScanServiceImpl() {}
-    void FollowScanMap(RpcController *controller,
-                       const FollowScanMapRequest *request,
-                       FollowScanMapResponse *response,
-                       Closure *done);
+  explicit ScanServiceImpl(ScanManager* scanManager)
+      : scanManager_(scanManager) {}
+  ~ScanServiceImpl() {}
+  void FollowScanMap(RpcController* controller,
+                     const FollowScanMapRequest* request,
+                     FollowScanMapResponse* response, Closure* done);
+
  private:
-    ScanManager* scanManager_;
+  ScanManager* scanManager_;
 };
 }  // namespace chunkserver
 }  // namespace curve

@@ -23,12 +23,13 @@
 #ifndef SRC_CLIENT_LEASE_EXECUTOR_H_
 #define SRC_CLIENT_LEASE_EXECUTOR_H_
 
+#include <ctime>  // NOLINT for brpc/periodic_task.h
+#include <memory>
+#include <string>
+
 #include <brpc/periodic_task.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
-
-#include <memory>
-#include <string>
 
 #include "src/client/client_common.h"
 #include "src/client/client_config.h"
@@ -46,19 +47,15 @@ class RefreshSessionTask;
  * 续约成功了FInfo_t中才会有对应的文件信息
  */
 struct LeaseRefreshResult {
-    enum class Status {
-        OK,
-        FAILED,
-        NOT_EXIST
-    };
-    Status status;
-    FInfo_t finfo;
+  enum class Status { OK, FAILED, NOT_EXIST };
+  Status status;
+  FInfo_t finfo;
 };
 
 class LeaseExecutorBase {
  public:
-    virtual ~LeaseExecutorBase() = default;
-    virtual bool RefreshLease() { return true; }
+  virtual ~LeaseExecutorBase() = default;
+  virtual bool RefreshLease() { return true; }
 };
 
 /**
@@ -70,97 +67,97 @@ class LeaseExecutorBase {
  */
 class LeaseExecutor : public LeaseExecutorBase {
  public:
-    /**
-     * 构造函数
-     * @param: leaseopt为当前lease续约的option配置
-     * @param: mdsclient是与mds续约的client
-     * @param: iomanager会在续约失败或者版本变更的时候进行io调度
-     */
-    LeaseExecutor(const LeaseOption& leaseOpt, const UserInfo& userinfo,
-                  MDSClient* mdscllent, IOManager4File* iomanager);
+  /**
+   * 构造函数
+   * @param: leaseopt为当前lease续约的option配置
+   * @param: mdsclient是与mds续约的client
+   * @param: iomanager会在续约失败或者版本变更的时候进行io调度
+   */
+  LeaseExecutor(const LeaseOption& leaseOpt, const UserInfo& userinfo,
+                MDSClient* mdscllent, IOManager4File* iomanager);
 
-    ~LeaseExecutor();
+  ~LeaseExecutor();
 
-    /**
-     * LeaseExecutor需要finfo保存filename
-     * LeaseSession_t是当前leaeexcutor的执行配置
-     * @param: fi为当前需要续约的文件版本信息
-     * @param: lease为续约的lease信息
-     * @return: 成功返回true，否则返回false
-     */
-    bool Start(const FInfo_t& fi, const LeaseSession_t&  lease);
+  /**
+   * LeaseExecutor需要finfo保存filename
+   * LeaseSession_t是当前leaeexcutor的执行配置
+   * @param: fi为当前需要续约的文件版本信息
+   * @param: lease为续约的lease信息
+   * @return: 成功返回true，否则返回false
+   */
+  bool Start(const FInfo_t& fi, const LeaseSession_t& lease);
 
-    /**
-     * 停止续约
-     */
-    void Stop();
+  /**
+   * 停止续约
+   */
+  void Stop();
 
-    /**
-     * 当前lease如果续约失败则通知iomanagerdisable io
-     */
-    bool LeaseValid();
+  /**
+   * 当前lease如果续约失败则通知iomanagerdisable io
+   */
+  bool LeaseValid();
 
-    /**
-     * 测试使用，主动失效增加刷新失败
-     */
-    void InvalidLease() {
-        for (uint32_t i = 0; i <= leaseoption_.mdsRefreshTimesPerLease; i++) {
-            IncremRefreshFailed();
-        }
+  /**
+   * 测试使用，主动失效增加刷新失败
+   */
+  void InvalidLease() {
+    for (uint32_t i = 0; i <= leaseoption_.mdsRefreshTimesPerLease; i++) {
+      IncremRefreshFailed();
     }
+  }
 
-    /**
-     * @brief 续约任务执行者
-     * @return 是否继续执行refresh session任务
-     */
-    bool RefreshLease() override;
+  /**
+   * @brief 续约任务执行者
+   * @return 是否继续执行refresh session任务
+   */
+  bool RefreshLease() override;
 
-    /**
-     * @brief 测试使用，重置refresh session task
-     */
-    void ResetRefreshSessionTask();
-
- private:
-    /**
-     *  一个lease期间会续约rfreshTimesPerLease次，每次续约失败就递增
-     * 当连续续约rfreshTimesPerLease次失败的时候，则disable IO
-     */
-    void IncremRefreshFailed();
-
-    /**
-     * @brief Updating local file information consistent with MDS record.
-     *        Currently, only seqnum and file status are updated
-     * @param fileInfo Latest file information returned by refresh session RPC
-     */
-    void CheckNeedUpdateFileInfo(const FInfo& fileInfo);
+  /**
+   * @brief 测试使用，重置refresh session task
+   */
+  void ResetRefreshSessionTask();
 
  private:
-    // 与mds进行lease续约的文件名
-    std::string             fullFileName_;
+  /**
+   *  一个lease期间会续约rfreshTimesPerLease次，每次续约失败就递增
+   * 当连续续约rfreshTimesPerLease次失败的时候，则disable IO
+   */
+  void IncremRefreshFailed();
 
-    // 用于续约的client
-    MDSClient*              mdsclient_;
+  /**
+   * @brief Updating local file information consistent with MDS record.
+   *        Currently, only seqnum and file status are updated
+   * @param fileInfo Latest file information returned by refresh session RPC
+   */
+  void CheckNeedUpdateFileInfo(const FInfo& fileInfo);
 
-    // 用于发起refression的user信息
-    UserInfo_t              userinfo_;
+ private:
+  // 与mds进行lease续约的文件名
+  std::string fullFileName_;
 
-    // IO管理者，当文件需要更新版本信息或者disable io的时候调用其接口
-    IOManager4File*         iomanager_;
+  // 用于续约的client
+  MDSClient* mdsclient_;
 
-    // 当前lease执行的配置信息
-    LeaseOption           leaseoption_;
+  // 用于发起refression的user信息
+  UserInfo_t userinfo_;
 
-    // mds端传过来的lease信息，包含当前文件的lease时长，及sessionid
-    LeaseSession_t          leasesession_;
+  // IO管理者，当文件需要更新版本信息或者disable io的时候调用其接口
+  IOManager4File* iomanager_;
 
-    // 记录当前lease是否可用
-    std::atomic<bool>       isleaseAvaliable_;
+  // 当前lease执行的配置信息
+  LeaseOption leaseoption_;
 
-    // 记录当前连续续约失败的次数
-    std::atomic<uint64_t>   failedrefreshcount_;
+  // mds端传过来的lease信息，包含当前文件的lease时长，及sessionid
+  LeaseSession_t leasesession_;
 
-    // refresh session定时任务，会间隔固定时间执行一次
-    std::unique_ptr<RefreshSessionTask> task_;
+  // 记录当前lease是否可用
+  std::atomic<bool> isleaseAvaliable_;
+
+  // 记录当前连续续约失败的次数
+  std::atomic<uint64_t> failedrefreshcount_;
+
+  // refresh session定时任务，会间隔固定时间执行一次
+  std::unique_ptr<RefreshSessionTask> task_;
 };
 
 // RefreshSessin定期任务
@@ -169,93 +166,90 @@ class LeaseExecutor : public LeaseExecutorBase {
 // 如果不再继续触发，调用OnDestroyingTask进行清理操作
 class RefreshSessionTask : public brpc::PeriodicTask {
  public:
-    using Task = std::function<bool(void)>;
+  using Task = std::function<bool(void)>;
 
-    RefreshSessionTask(LeaseExecutorBase* leaseExecutor,
-                       uint64_t intervalUs)
-        : leaseExecutor_(leaseExecutor),
-          refreshIntervalUs_(intervalUs),
-          stopped_(false),
-          stopMtx_(),
-          terminated_(false),
-          terminatedMtx_(),
-          terminatedCv_() {}
+  RefreshSessionTask(LeaseExecutorBase* leaseExecutor, uint64_t intervalUs)
+      : leaseExecutor_(leaseExecutor),
+        refreshIntervalUs_(intervalUs),
+        stopped_(false),
+        stopMtx_(),
+        terminated_(false),
+        terminatedMtx_(),
+        terminatedCv_() {}
 
-    RefreshSessionTask(const RefreshSessionTask& other)
-        : leaseExecutor_(other.leaseExecutor_),
-          refreshIntervalUs_(other.refreshIntervalUs_),
-          stopped_(false),
-          stopMtx_(),
-          terminated_(false),
-          terminatedMtx_(),
-          terminatedCv_() {}
+  RefreshSessionTask(const RefreshSessionTask& other)
+      : leaseExecutor_(other.leaseExecutor_),
+        refreshIntervalUs_(other.refreshIntervalUs_),
+        stopped_(false),
+        stopMtx_(),
+        terminated_(false),
+        terminatedMtx_(),
+        terminatedCv_() {}
 
-    virtual ~RefreshSessionTask() = default;
+  virtual ~RefreshSessionTask() = default;
 
-    /**
-     * @brief 定时器超时后执行当前函数
-     * @param next_abstime 任务下次执行的绝对时间
-     * @return true 继续定期执行当前任务
-     *         false 停止执行当前任务
-     */
-    bool OnTriggeringTask(timespec* next_abstime) override {
-        std::lock_guard<bthread::Mutex> lk(stopMtx_);
-        if (stopped_) {
-            return false;
-        }
-
-        *next_abstime = butil::microseconds_from_now(refreshIntervalUs_);
-        return leaseExecutor_->RefreshLease();
+  /**
+   * @brief 定时器超时后执行当前函数
+   * @param next_abstime 任务下次执行的绝对时间
+   * @return true 继续定期执行当前任务
+   *         false 停止执行当前任务
+   */
+  bool OnTriggeringTask(timespec* next_abstime) override {
+    std::lock_guard<bthread::Mutex> lk(stopMtx_);
+    if (stopped_) {
+      return false;
     }
 
-    /**
-     * @brief 停止再次执行当前任务
-     */
-    void Stop() {
-        std::lock_guard<bthread::Mutex> lk(stopMtx_);
-        stopped_ = true;
-    }
+    *next_abstime = butil::microseconds_from_now(refreshIntervalUs_);
+    return leaseExecutor_->RefreshLease();
+  }
 
-    /**
-     * @brief 任务停止后调用
-     */
-    void OnDestroyingTask() override {
-        std::unique_lock<bthread::Mutex> lk(terminatedMtx_);
-        terminated_ = true;
-        terminatedCv_.notify_one();
-    }
+  /**
+   * @brief 停止再次执行当前任务
+   */
+  void Stop() {
+    std::lock_guard<bthread::Mutex> lk(stopMtx_);
+    stopped_ = true;
+  }
 
-    /**
-     * @brief 等待任务退出
-     */
-    void WaitTaskExit() {
-        std::unique_lock<bthread::Mutex> lk(terminatedMtx_);
-        while (terminated_ != true) {
-            terminatedCv_.wait(lk);
-        }
-    }
+  /**
+   * @brief 任务停止后调用
+   */
+  void OnDestroyingTask() override {
+    std::unique_lock<bthread::Mutex> lk(terminatedMtx_);
+    terminated_ = true;
+    terminatedCv_.notify_one();
+  }
 
-    /**
-     * @brief 获取refresh session时间间隔(us)
-     * @return refresh session任务时间间隔(us)
-     */
-    uint64_t RefreshIntervalUs() const {
-        return refreshIntervalUs_;
+  /**
+   * @brief 等待任务退出
+   */
+  void WaitTaskExit() {
+    std::unique_lock<bthread::Mutex> lk(terminatedMtx_);
+    while (terminated_ != true) {
+      terminatedCv_.wait(lk);
     }
+  }
+
+  /**
+   * @brief 获取refresh session时间间隔(us)
+   * @return refresh session任务时间间隔(us)
+   */
+  uint64_t RefreshIntervalUs() const { return refreshIntervalUs_; }
 
  private:
-    LeaseExecutorBase* leaseExecutor_;
-    uint64_t refreshIntervalUs_;
+  LeaseExecutorBase* leaseExecutor_;
+  uint64_t refreshIntervalUs_;
 
-    bool stopped_;
-    bthread::Mutex stopMtx_;
+  bool stopped_;
+  bthread::Mutex stopMtx_;
 
-    bool terminated_;
-    bthread::Mutex terminatedMtx_;
-    bthread::ConditionVariable terminatedCv_;
+  bool terminated_;
+  bthread::Mutex terminatedMtx_;
+  bthread::ConditionVariable terminatedCv_;
 };
 
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve
 
 #endif  // SRC_CLIENT_LEASE_EXECUTOR_H_

@@ -25,9 +25,9 @@
 
 #include <gmock/gmock.h>
 
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
 
 #include "curvefs/src/client/s3/disk_cache_base.h"
 
@@ -36,22 +36,17 @@ namespace client {
 
 class MockDiskCacheBase : public DiskCacheBase {
  public:
-    MockDiskCacheBase()  {}
-    ~MockDiskCacheBase() {}
+  MockDiskCacheBase() {}
+  ~MockDiskCacheBase() {}
 
-    MOCK_METHOD1(CreateIoDir,
-                 int(bool writreDir));
+  MOCK_METHOD1(CreateIoDir, int(bool writreDir));
 
-    MOCK_METHOD1(IsFileExist,
-                 bool(const std::string file));
+  MOCK_METHOD1(IsFileExist, bool(const std::string file));
 
-    MOCK_METHOD1(CreateDir,
-                 int(const std::string dirName));
+  MOCK_METHOD1(CreateDir, int(const std::string dirName));
 
-    MOCK_METHOD0(GetCacheIoFullDir,
-                 std::string());
+  MOCK_METHOD0(GetCacheIoFullDir, std::string());
 };
-
 
 }  // namespace client
 }  // namespace curvefs

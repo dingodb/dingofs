@@ -29,8 +29,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "curvefs/proto/topology.pb.h"
 #include "curvefs/proto/common.pb.h"
+#include "curvefs/proto/topology.pb.h"
 #include "curvefs/src/tools/curvefs_tool.h"
 #include "curvefs/src/tools/curvefs_tool_define.h"
 
@@ -46,25 +46,24 @@ class PartitionListTool
                             curvefs::mds::topology::ListPartitionResponse,
                             curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit PartitionListTool(const std::string& cmd = kPartitionListCmd,
-                               bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
+  explicit PartitionListTool(const std::string& cmd = kPartitionListCmd,
+                             bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
 
-    std::unordered_map<uint32_t, PartitionInfoList>
-    GetFsId2PartitionInfoList() {
-        return fsId2PartitionList_;
-    }
-
- protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
+  std::unordered_map<uint32_t, PartitionInfoList> GetFsId2PartitionInfoList() {
+    return fsId2PartitionList_;
+  }
 
  protected:
-    std::unordered_map<uint32_t, PartitionInfoList> fsId2PartitionList_;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+
+ protected:
+  std::unordered_map<uint32_t, PartitionInfoList> fsId2PartitionList_;
 };
 }  // namespace list
 }  // namespace tools

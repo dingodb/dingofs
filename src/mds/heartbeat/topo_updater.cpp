@@ -20,168 +20,167 @@
  * Author: lixiaocui
  */
 
-#include <glog/logging.h>
 #include "src/mds/heartbeat/topo_updater.h"
+
+#include <glog/logging.h>
+
+#include "src/mds/topology/topology_item.h"
 
 namespace curve {
 namespace mds {
 namespace heartbeat {
-void TopoUpdater::UpdateTopo(const CopySetInfo &reportCopySetInfo) {
-    CopySetInfo recordCopySetInfo;
 
-    if (!topo_->GetCopySet(
-        reportCopySetInfo.GetCopySetKey(), &recordCopySetInfo)) {
-        LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
-            << " heartbeat, topoUpdater receive copyset("
-            << reportCopySetInfo.GetLogicalPoolId()
-            << "," << reportCopySetInfo.GetId()
-            << ") information, but can not get info from topology";
-        return;
+using topology::CopySetInfo;
+
+void TopoUpdater::UpdateTopo(const CopySetInfo& reportCopySetInfo) {
+  CopySetInfo recordCopySetInfo;
+
+  if (!topo_->GetCopySet(reportCopySetInfo.GetCopySetKey(),
+                         &recordCopySetInfo)) {
+    LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
+               << " heartbeat, topoUpdater receive copyset("
+               << reportCopySetInfo.GetLogicalPoolId() << ","
+               << reportCopySetInfo.GetId()
+               << ") information, but can not get info from topology";
+    return;
+  }
+  // here we compare epoch number reported by heartbeat and stored in mds
+  // record, and there're three possible cases:
+  // 1. report epoch > mds record epoch
+  //    after every configuration change, raft will increase the epoch of
+  //    copyset, which makes epoch of mds fall behind.
+  //    update on mds of epoch and copy relationship is required
+  // 2. report epoch == mds record epoch
+  //    there's no finished or undergoing configuration changes,
+  //    recording candidate to mds may be needed
+  // 3. report epoch < mds epoch
+  //    this case should not occurs normally since epoch number in raft is
+  //    always the most up-to-date. But there is a case in addition:
+  //    - copyset(1-2-3), leader is chunkserver1
+  //    - chunkserver1 report heartbeat, mds do not handle
+  //    - copyset(1-2-3) transferleader, leader is chunkserver2
+  //    - chunkserver2 report heartbeat, mds handled
+  //    - mds handle chunkserver1 heartbeat
+  //    - the result is report.epoch < mds.epoch
+  //    So be warned in this case. Except for this situation, alarm is needed.
+
+  // mds epoch fall behind, update needed:
+  bool needUpdate = false;
+  if (recordCopySetInfo.GetEpoch() < reportCopySetInfo.GetEpoch()) {
+    LOG(INFO) << "chunkserver " << reportCopySetInfo.GetLeader()
+              << " heartbeat, topoUpdater find report copyset("
+              << reportCopySetInfo.GetLogicalPoolId() << ","
+              << reportCopySetInfo.GetId()
+              << ") epoch:" << reportCopySetInfo.GetEpoch()
+              << " > recordEpoch:" << recordCopySetInfo.GetEpoch()
+              << " need to update";
+    needUpdate = true;
+  } else if (recordCopySetInfo.GetEpoch() == reportCopySetInfo.GetEpoch()) {
+    // epoch reported is equal to epoch stored in mds
+
+    // leader reported and recorded in topology are different
+    if (reportCopySetInfo.GetLeader() != recordCopySetInfo.GetLeader()) {
+      needUpdate = true;
     }
-    // here we compare epoch number reported by heartbeat and stored in mds
-    // record, and there're three possible cases:
-    // 1. report epoch > mds record epoch
-    //    after every configuration change, raft will increase the epoch of
-    //    copyset, which makes epoch of mds fall behind.
-    //    update on mds of epoch and copy relationship is required
-    // 2. report epoch == mds record epoch
-    //    there's no finished or undergoing configuration changes,
-    //    recording candidate to mds may be needed
-    // 3. report epoch < mds epoch
-    //    this case should not occurs normally since epoch number in raft is
-    //    always the most up-to-date. But there is a case in addition:
-    //    - copyset(1-2-3), leader is chunkserver1
-    //    - chunkserver1 report heartbeat, mds do not handle
-    //    - copyset(1-2-3) transferleader, leader is chunkserver2
-    //    - chunkserver2 report heartbeat, mds handled
-    //    - mds handle chunkserver1 heartbeat
-    //    - the result is report.epoch < mds.epoch
-    //    So be warned in this case. Except for this situation, alarm is needed.
 
-    // mds epoch fall behind, update needed:
-    bool needUpdate = false;
-    if (recordCopySetInfo.GetEpoch() < reportCopySetInfo.GetEpoch()) {
-        LOG(INFO) << "chunkserver " << reportCopySetInfo.GetLeader()
-            << " heartbeat, topoUpdater find report copyset("
-            << reportCopySetInfo.GetLogicalPoolId()
-            << "," << reportCopySetInfo.GetId()
-            << ") epoch:" << reportCopySetInfo.GetEpoch()
-            << " > recordEpoch:"
-            << recordCopySetInfo.GetEpoch() << " need to update";
+    // heartbeat report and mds record provide a different member list.
+    // this should trigger an alarm since it should not happend in normal
+    // cases, since chunkserver always report configurations that already
+    // applied and when member list are different the epoch
+    // should be different
+    if (reportCopySetInfo.GetCopySetMembers() !=
+        recordCopySetInfo.GetCopySetMembers()) {
+      LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
+                 << " heartbeat, topoUpdater find report copyset("
+                 << reportCopySetInfo.GetLogicalPoolId() << ","
+                 << reportCopySetInfo.GetId() << ") member list: "
+                 << reportCopySetInfo.GetCopySetMembersStr()
+                 << " is not same as record one: "
+                 << recordCopySetInfo.GetCopySetMembersStr()
+                 << ", but epoch is same: " << recordCopySetInfo.GetEpoch();
+      return;
+    }
+
+    // no configuration changes in heartbeat report (no candidate)
+    if (!reportCopySetInfo.HasCandidate()) {
+      // configuration changes on mds (has candidate)
+      if (recordCopySetInfo.HasCandidate()) {
+        LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
+                     << " heartbeat,topoUpdater find report copyset("
+                     << reportCopySetInfo.GetLogicalPoolId() << ","
+                     << reportCopySetInfo.GetId()
+                     << ") no candidate but record has candidate: "
+                     << recordCopySetInfo.GetCandidate();
         needUpdate = true;
-    } else if (recordCopySetInfo.GetEpoch() == reportCopySetInfo.GetEpoch()) {
-        // epoch reported is equal to epoch stored in mds
-
-        // leader reported and recorded in topology are different
-        if (reportCopySetInfo.GetLeader() != recordCopySetInfo.GetLeader()) {
-            needUpdate = true;
-        }
-
-        // heartbeat report and mds record provide a different member list.
-        // this should trigger an alarm since it should not happend in normal
-        // cases, since chunkserver always report configurations that already
-        // applied and when member list are different the epoch
-        // should be different
-        if (reportCopySetInfo.GetCopySetMembers() !=
-            recordCopySetInfo.GetCopySetMembers()) {
-            LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
-                << " heartbeat, topoUpdater find report copyset("
-                << reportCopySetInfo.GetLogicalPoolId()
-                << "," << reportCopySetInfo.GetId()
-                << ") member list: "
-                << reportCopySetInfo.GetCopySetMembersStr()
-                << " is not same as record one: "
-                << recordCopySetInfo.GetCopySetMembersStr()
-                << ", but epoch is same: "
-                << recordCopySetInfo.GetEpoch();
-            return;
-        }
-
-        // no configuration changes in heartbeat report (no candidate)
-        if (!reportCopySetInfo.HasCandidate()) {
-            // configuration changes on mds (has candidate)
-            if (recordCopySetInfo.HasCandidate()) {
-                LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
-                        << " heartbeat,topoUpdater find report copyset("
-                        << reportCopySetInfo.GetLogicalPoolId()
-                        << "," << reportCopySetInfo.GetId()
-                        << ") no candidate but record has candidate: "
-                        << recordCopySetInfo.GetCandidate();
-                needUpdate = true;
-            }
-        } else if (!recordCopySetInfo.HasCandidate()) {
-            // configuration changes reported but not on mds
-            needUpdate = true;
-        } else if (reportCopySetInfo.GetCandidate() !=
-                   recordCopySetInfo.GetCandidate()) {
-            // reported data and mds record have different configuration changes
-            LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
-                    << " heartbeat, topoUpdater find report candidate "
-                    << reportCopySetInfo.GetCandidate()
-                    << ", record candidate: "
-                    << recordCopySetInfo.GetCandidate()
-                    << " on copyset("
-                    << reportCopySetInfo.GetLogicalPoolId()
-                    << "," << reportCopySetInfo.GetId()
-                    << ") not same";
-            needUpdate = true;
-        }
-
-        auto recordScaning = recordCopySetInfo.GetScaning();
-        auto recordLastScanSec = recordCopySetInfo.GetLastScanSec();
-        if (reportCopySetInfo.IsLatestScaning(recordScaning) ||
-            reportCopySetInfo.IsLatestLastScanSec(recordLastScanSec)) {
-            needUpdate = true;
-            LOG(INFO) << "Report scan status for copyset("
-                      << reportCopySetInfo.GetLogicalPoolId()
-                      << "," << reportCopySetInfo.GetId()
-                      << "): scaning=" << reportCopySetInfo.GetScaning()
-                      << ", lastScanSec=" << reportCopySetInfo.GetLastScanSec()
-                      << ", lastScanConsistent="
-                      << reportCopySetInfo.GetLastScanConsistent();
-        }
-    } else if (recordCopySetInfo.GetEpoch() > reportCopySetInfo.GetEpoch()) {
-        if (recordCopySetInfo.GetLeader() != reportCopySetInfo.GetLeader()) {
-            LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
-                    << " heartbeat, topoUpdater find copyset("
-                    << reportCopySetInfo.GetLogicalPoolId()
-                    << "," << reportCopySetInfo.GetId()
-                    << "), record epoch:" << recordCopySetInfo.GetEpoch()
-                    << " bigger than report epoch:"
-                    << reportCopySetInfo.GetEpoch()
-                    << ", may be staled heartbeat";
-        } else {
-            // this case will trigger an alarm since epoch of copyset leader
-            // should always larger or equal than the epoch of mds record
-            LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
-                    << " heartbeat, find copyset("
-                    << reportCopySetInfo.GetLogicalPoolId()
-                    << "," << reportCopySetInfo.GetId()
-                    << "), record epoch:" << recordCopySetInfo.GetEpoch()
-                    << " bigger than report epoch:"
-                    << reportCopySetInfo.GetEpoch();
-        }
-
-
-        return;
+      }
+    } else if (!recordCopySetInfo.HasCandidate()) {
+      // configuration changes reported but not on mds
+      needUpdate = true;
+    } else if (reportCopySetInfo.GetCandidate() !=
+               recordCopySetInfo.GetCandidate()) {
+      // reported data and mds record have different configuration changes
+      LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
+                   << " heartbeat, topoUpdater find report candidate "
+                   << reportCopySetInfo.GetCandidate()
+                   << ", record candidate: " << recordCopySetInfo.GetCandidate()
+                   << " on copyset(" << reportCopySetInfo.GetLogicalPoolId()
+                   << "," << reportCopySetInfo.GetId() << ") not same";
+      needUpdate = true;
     }
 
-    // update changes to database and RAM
-    if (needUpdate) {
-        LOG(INFO) << "topoUpdater find copyset("
-                  << reportCopySetInfo.GetLogicalPoolId() << ","
-                  << reportCopySetInfo.GetId() << ") need to update";
-
-        int updateCode =
-            topo_->UpdateCopySetTopo(reportCopySetInfo);
-        if (::curve::mds::topology::kTopoErrCodeSuccess != updateCode) {
-            LOG(ERROR) << "topoUpdater update copyset("
-                       << reportCopySetInfo.GetLogicalPoolId()
-                       << "," << reportCopySetInfo.GetId()
-                       << ") got error code: " << updateCode;
-            return;
-        }
+    auto recordScaning = recordCopySetInfo.GetScaning();
+    auto recordLastScanSec = recordCopySetInfo.GetLastScanSec();
+    if (reportCopySetInfo.IsLatestScaning(recordScaning) ||
+        reportCopySetInfo.IsLatestLastScanSec(recordLastScanSec)) {
+      needUpdate = true;
+      LOG(INFO) << "Report scan status for copyset("
+                << reportCopySetInfo.GetLogicalPoolId() << ","
+                << reportCopySetInfo.GetId()
+                << "): scaning=" << reportCopySetInfo.GetScaning()
+                << ", lastScanSec=" << reportCopySetInfo.GetLastScanSec()
+                << ", lastScanConsistent="
+                << reportCopySetInfo.GetLastScanConsistent();
     }
+  } else if (recordCopySetInfo.GetEpoch() > reportCopySetInfo.GetEpoch()) {
+    if (recordCopySetInfo.GetLeader() != reportCopySetInfo.GetLeader()) {
+      LOG(WARNING) << "chunkserver " << reportCopySetInfo.GetLeader()
+                   << " heartbeat, topoUpdater find copyset("
+                   << reportCopySetInfo.GetLogicalPoolId() << ","
+                   << reportCopySetInfo.GetId()
+                   << "), record epoch:" << recordCopySetInfo.GetEpoch()
+                   << " bigger than report epoch:"
+                   << reportCopySetInfo.GetEpoch()
+                   << ", may be staled heartbeat";
+    } else {
+      // this case will trigger an alarm since epoch of copyset leader
+      // should always larger or equal than the epoch of mds record
+      LOG(ERROR) << "chunkserver " << reportCopySetInfo.GetLeader()
+                 << " heartbeat, find copyset("
+                 << reportCopySetInfo.GetLogicalPoolId() << ","
+                 << reportCopySetInfo.GetId()
+                 << "), record epoch:" << recordCopySetInfo.GetEpoch()
+                 << " bigger than report epoch:"
+                 << reportCopySetInfo.GetEpoch();
+    }
+
+    return;
+  }
+
+  // update changes to database and RAM
+  if (needUpdate) {
+    LOG(INFO) << "topoUpdater find copyset("
+              << reportCopySetInfo.GetLogicalPoolId() << ","
+              << reportCopySetInfo.GetId() << ") need to update";
+
+    int updateCode = topo_->UpdateCopySetTopo(reportCopySetInfo);
+    if (::curve::mds::topology::kTopoErrCodeSuccess != updateCode) {
+      LOG(ERROR) << "topoUpdater update copyset("
+                 << reportCopySetInfo.GetLogicalPoolId() << ","
+                 << reportCopySetInfo.GetId()
+                 << ") got error code: " << updateCode;
+      return;
+    }
+  }
 }
 }  // namespace heartbeat
 }  // namespace mds

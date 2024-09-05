@@ -20,144 +20,143 @@
  * Author: tongguangxun
  */
 
-#include <vector>
 #include "src/mds/nameserver2/helper/namespace_helper.h"
+
+#include <vector>
+
+#include "src/common/namespace_define.h"
 #include "src/common/string_util.h"
 #include "src/common/timeutility.h"
-#include "src/common/namespace_define.h"
 
 using ::curve::common::COMMON_PREFIX_LENGTH;
-using ::curve::common::FILEINFOKEYPREFIX;
-using ::curve::common::SNAPSHOTFILEINFOKEYPREFIX;
-using ::curve::common::SEGMENTKEYLEN;
-using ::curve::common::SEGMENTINFOKEYPREFIX;
-using ::curve::common::SEGMENTALLOCSIZEKEY;
+using ::curve::common::DISCARDSEGMENTKEYEND;
 using ::curve::common::DISCARDSEGMENTKEYLEN;
 using ::curve::common::DISCARDSEGMENTKEYPREFIX;
-using ::curve::common::DISCARDSEGMENTKEYEND;
+using ::curve::common::FILEINFOKEYPREFIX;
+using ::curve::common::SEGMENTALLOCSIZEKEY;
+using ::curve::common::SEGMENTINFOKEYPREFIX;
+using ::curve::common::SEGMENTKEYLEN;
+using ::curve::common::SNAPSHOTFILEINFOKEYPREFIX;
 
 namespace curve {
 namespace mds {
-std::string NameSpaceStorageCodec::EncodeFileStoreKey(uint64_t parentID,
-                                                const std::string &fileName) {
-    std::string storeKey;
-    storeKey.resize(
-        COMMON_PREFIX_LENGTH + sizeof(parentID) + fileName.length());
+std::string NameSpaceStorageCodec::EncodeFileStoreKey(
+    uint64_t parentID, const std::string& fileName) {
+  std::string storeKey;
+  storeKey.resize(COMMON_PREFIX_LENGTH + sizeof(parentID) + fileName.length());
 
-    memcpy(&(storeKey[0]), FILEINFOKEYPREFIX,  COMMON_PREFIX_LENGTH);
-    ::curve::common::EncodeBigEndian(&(storeKey[2]), parentID);
-    memcpy(&(storeKey[10]), fileName.data(), fileName.length());
-    return storeKey;
+  memcpy(&(storeKey[0]), FILEINFOKEYPREFIX, COMMON_PREFIX_LENGTH);
+  ::curve::common::EncodeBigEndian(&(storeKey[2]), parentID);
+  memcpy(&(storeKey[10]), fileName.data(), fileName.length());
+  return storeKey;
 }
 
-std::string NameSpaceStorageCodec::EncodeSnapShotFileStoreKey(uint64_t parentID,
-                                                const std::string &fileName) {
-    std::string storeKey;
-    storeKey.resize(
-        COMMON_PREFIX_LENGTH + sizeof(parentID) + fileName.length());
+std::string NameSpaceStorageCodec::EncodeSnapShotFileStoreKey(
+    uint64_t parentID, const std::string& fileName) {
+  std::string storeKey;
+  storeKey.resize(COMMON_PREFIX_LENGTH + sizeof(parentID) + fileName.length());
 
-    memcpy(&(storeKey[0]), SNAPSHOTFILEINFOKEYPREFIX, COMMON_PREFIX_LENGTH);
-    ::curve::common::EncodeBigEndian(&(storeKey[2]), parentID);
-    memcpy(&(storeKey[10]), fileName.data(), fileName.length());
-    return storeKey;
+  memcpy(&(storeKey[0]), SNAPSHOTFILEINFOKEYPREFIX, COMMON_PREFIX_LENGTH);
+  ::curve::common::EncodeBigEndian(&(storeKey[2]), parentID);
+  memcpy(&(storeKey[10]), fileName.data(), fileName.length());
+  return storeKey;
 }
 
 std::string NameSpaceStorageCodec::EncodeSegmentStoreKey(uint64_t inodeID,
-                                                   offset_t offset) {
-    std::string storeKey;
-    storeKey.resize(SEGMENTKEYLEN);
-    memcpy(&(storeKey[0]), SEGMENTINFOKEYPREFIX,  COMMON_PREFIX_LENGTH);
-    ::curve::common::EncodeBigEndian(&(storeKey[2]), inodeID);
-    ::curve::common::EncodeBigEndian(&(storeKey[10]), offset);
-    return storeKey;
+                                                         offset_t offset) {
+  std::string storeKey;
+  storeKey.resize(SEGMENTKEYLEN);
+  memcpy(&(storeKey[0]), SEGMENTINFOKEYPREFIX, COMMON_PREFIX_LENGTH);
+  ::curve::common::EncodeBigEndian(&(storeKey[2]), inodeID);
+  ::curve::common::EncodeBigEndian(&(storeKey[10]), offset);
+  return storeKey;
 }
 
 std::string NameSpaceStorageCodec::EncodeDiscardSegmentStoreKey(
     const InodeID inodeId, const uint64_t offset) {
-    std::string storeKey;
-    storeKey.resize(DISCARDSEGMENTKEYLEN);
-    ::memcpy(&(storeKey[0]), DISCARDSEGMENTKEYPREFIX, COMMON_PREFIX_LENGTH);
-    ::curve::common::EncodeBigEndian(&(storeKey[2]), inodeId);
-    ::curve::common::EncodeBigEndian(&(storeKey[10]), offset);
-    ::curve::common::EncodeBigEndian(
-        &(storeKey[18]), curve::common::TimeUtility::GetTimeofDayUs());
-    return storeKey;
+  std::string storeKey;
+  storeKey.resize(DISCARDSEGMENTKEYLEN);
+  ::memcpy(&(storeKey[0]), DISCARDSEGMENTKEYPREFIX, COMMON_PREFIX_LENGTH);
+  ::curve::common::EncodeBigEndian(&(storeKey[2]), inodeId);
+  ::curve::common::EncodeBigEndian(&(storeKey[10]), offset);
+  ::curve::common::EncodeBigEndian(
+      &(storeKey[18]), curve::common::TimeUtility::GetTimeofDayUs());
+  return storeKey;
 }
 
-bool NameSpaceStorageCodec::EncodeFileInfo(const FileInfo &fileInfo,
-                                     std::string *out) {
-    return fileInfo.SerializeToString(out);
+bool NameSpaceStorageCodec::EncodeFileInfo(const FileInfo& fileInfo,
+                                           std::string* out) {
+  return fileInfo.SerializeToString(out);
 }
 
 bool NameSpaceStorageCodec::DecodeFileInfo(const std::string info,
-                                     FileInfo *fileInfo) {
-    return fileInfo->ParseFromString(info);
+                                           FileInfo* fileInfo) {
+  return fileInfo->ParseFromString(info);
 }
 
-bool NameSpaceStorageCodec::EncodeSegment(const PageFileSegment &segment,
-                                    std::string *out) {
-    return segment.SerializeToString(out);
+bool NameSpaceStorageCodec::EncodeSegment(const PageFileSegment& segment,
+                                          std::string* out) {
+  return segment.SerializeToString(out);
 }
 
 bool NameSpaceStorageCodec::DecodeSegment(const std::string info,
-                                    PageFileSegment *segment) {
-    return segment->ParseFromString(info);
+                                          PageFileSegment* segment) {
+  return segment->ParseFromString(info);
 }
 
 std::string NameSpaceStorageCodec::EncodeID(uint64_t value) {
-    return std::to_string(value);
+  return std::to_string(value);
 }
 
-bool NameSpaceStorageCodec::DecodeID(
-    const std::string &value, uint64_t *out) {
-    return ::curve::common::StringToUll(value, out);
+bool NameSpaceStorageCodec::DecodeID(const std::string& value, uint64_t* out) {
+  return ::curve::common::StringToUll(value, out);
 }
 
 std::string NameSpaceStorageCodec::EncodeSegmentAllocKey(uint16_t lid) {
-    return SEGMENTALLOCSIZEKEY + std::to_string(lid);
+  return SEGMENTALLOCSIZEKEY + std::to_string(lid);
 }
 
-std::string NameSpaceStorageCodec::EncodeSegmentAllocValue(
-    uint16_t lid, uint64_t alloc) {
-    return std::to_string(lid) + "_" + std::to_string(alloc);
+std::string NameSpaceStorageCodec::EncodeSegmentAllocValue(uint16_t lid,
+                                                           uint64_t alloc) {
+  return std::to_string(lid) + "_" + std::to_string(alloc);
 }
 
-bool NameSpaceStorageCodec::DecodeSegmentAllocValue(
-        const std::string &value, uint16_t *lid, uint64_t *alloc) {
-    std::vector<std::string> res;
-    ::curve::common::SplitString(value, "_", &res);
-    if (res.size() != 2) {
-        LOG(ERROR) << "segment alloc value: "
-                   << value << " is in unknownn format";
-        return false;
-    }
+bool NameSpaceStorageCodec::DecodeSegmentAllocValue(const std::string& value,
+                                                    uint16_t* lid,
+                                                    uint64_t* alloc) {
+  std::vector<std::string> res;
+  ::curve::common::SplitString(value, "_", &res);
+  if (res.size() != 2) {
+    LOG(ERROR) << "segment alloc value: " << value << " is in unknownn format";
+    return false;
+  }
 
-    uint64_t tmplid;
-    bool lidOk = ::curve::common::StringToUll(res[0], &tmplid);
-    if (false == lidOk) {
-        LOG(ERROR) << "get logicalPoolId from " << res[0] << " fail";
-        return false;
-    }
-    *lid = tmplid;
+  uint64_t tmplid;
+  bool lidOk = ::curve::common::StringToUll(res[0], &tmplid);
+  if (false == lidOk) {
+    LOG(ERROR) << "get logicalPoolId from " << res[0] << " fail";
+    return false;
+  }
+  *lid = tmplid;
 
-    bool allocOk = ::curve::common::StringToUll(res[1], alloc);
-    if (false == allocOk) {
-        LOG(ERROR) << "get alloc value from " << res[1] << " fail";
-        return false;
-    }
+  bool allocOk = ::curve::common::StringToUll(res[1], alloc);
+  if (false == allocOk) {
+    LOG(ERROR) << "get alloc value from " << res[1] << " fail";
+    return false;
+  }
 
-    return true;
+  return true;
 }
 
 bool NameSpaceStorageCodec::EncodeDiscardSegment(const DiscardSegmentInfo& info,
                                                  std::string* out) {
-    return info.SerializeToString(out);
+  return info.SerializeToString(out);
 }
 
 bool NameSpaceStorageCodec::DecodeDiscardSegment(
     const std::string& info, DiscardSegmentInfo* discardSegmentInfo) {
-    return discardSegmentInfo->ParseFromString(info);
+  return discardSegmentInfo->ParseFromString(info);
 }
 
-}   // namespace mds
-}   // namespace curve
+}  // namespace mds
+}  // namespace curve

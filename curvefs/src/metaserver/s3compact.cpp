@@ -29,13 +29,10 @@
 namespace curvefs {
 namespace metaserver {
 
-S3Compact::S3Compact(std::shared_ptr<InodeManager> manager,
-                     PartitionInfo pinfo)
-    : inodeManager(std::move(manager)),
-      partitionInfo(std::move(pinfo)) {
-    copysetNode =
-        copyset::CopysetNodeManager::GetInstance().GetSharedCopysetNode(
-            partitionInfo.poolid(), partitionInfo.copysetid());
+S3Compact::S3Compact(std::shared_ptr<InodeManager> manager, PartitionInfo pinfo)
+    : inodeManager(std::move(manager)), partitionInfo(std::move(pinfo)) {
+  copysetNode = copyset::CopysetNodeManager::GetInstance().GetSharedCopysetNode(
+      partitionInfo.poolid(), partitionInfo.copysetid());
 }
 
 }  // namespace metaserver

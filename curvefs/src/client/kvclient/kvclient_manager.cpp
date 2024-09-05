@@ -21,7 +21,9 @@
  */
 
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
+
 #include <memory>
+
 #include "src/client/client_metric.h"
 #include "src/common/concurrent/count_down_event.h"
 
@@ -32,48 +34,47 @@ using curvefs::client::metric::KVClientMetric;
 namespace curvefs {
 namespace client {
 
-#define ONRETURN(TYPE, RES)                                                    \
-    if (RES) {                                                                 \
-        kvClientMetric_.kvClient##TYPE.qps.count << 1;                        \
-    } else {                                                                   \
-        kvClientMetric_.kvClient##TYPE.eps.count << 1;                        \
-    }                                                                          \
+#define ONRETURN(TYPE, RES)                        \
+  if (RES) {                                       \
+    kvClientMetric_.kvClient##TYPE.qps.count << 1; \
+  } else {                                         \
+    kvClientMetric_.kvClient##TYPE.eps.count << 1; \
+  }
 
-bool KVClientManager::Init(const KVClientManagerOpt &config,
-                           const std::shared_ptr<KVClient> &kvclient) {
-    client_ = kvclient;
-    return threadPool_.Start(config.setThreadPooln) == 0;
+bool KVClientManager::Init(const KVClientManagerOpt& config,
+                           const std::shared_ptr<KVClient>& kvclient) {
+  client_ = kvclient;
+  return threadPool_.Start(config.setThreadPooln) == 0;
 }
 
 void KVClientManager::Uninit() {
-    client_->UnInit();
-    threadPool_.Stop();
+  client_->UnInit();
+  threadPool_.Stop();
 }
 
 void KVClientManager::Set(std::shared_ptr<SetKVCacheTask> task) {
-    threadPool_.Enqueue([task, this]() {
-        LatencyGuard guard(&kvClientMetric_.kvClientSet.latency);
+  threadPool_.Enqueue([task, this]() {
+    LatencyGuard guard(&kvClientMetric_.kvClientSet.latency);
 
-        std::string error_log;
-        auto res =
-            client_->Set(task->key, task->value, task->length, &error_log);
-        ONRETURN(Set, res);
+    std::string error_log;
+    auto res = client_->Set(task->key, task->value, task->length, &error_log);
+    ONRETURN(Set, res);
 
-        task->done(task);
-    });
+    task->done(task);
+  });
 }
 
 void KVClientManager::Get(std::shared_ptr<GetKVCacheTask> task) {
-    threadPool_.Enqueue([task, this]() {
-        LatencyGuard guard(&kvClientMetric_.kvClientGet.latency);
+  threadPool_.Enqueue([task, this]() {
+    LatencyGuard guard(&kvClientMetric_.kvClientGet.latency);
 
-        std::string error_log;
-        task->res = client_->Get(task->key, task->value, task->offset,
-                                task->length, &error_log);
-        ONRETURN(Get, task->res);
+    std::string error_log;
+    task->res = client_->Get(task->key, task->value, task->offset, task->length,
+                             &error_log);
+    ONRETURN(Get, task->res);
 
-        task->done(task);
-    });
+    task->done(task);
+  });
 }
 
 }  // namespace client

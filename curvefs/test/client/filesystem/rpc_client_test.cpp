@@ -32,144 +32,141 @@ namespace filesystem {
 
 class RPCClientTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(RPCClientTest, GetAttr_Basic) {
-    auto builder = RPCClientBuilder();
-    auto rpc = builder.Build();
+  auto builder = RPCClientBuilder();
+  auto rpc = builder.Build();
 
-    // CASE 1: ok
-    {
-        EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
-                                        CURVEFS_ERROR::OK);
+  // CASE 1: ok
+  {
+    EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
+                                    CURVEFS_ERROR::OK);
 
-        InodeAttr attr;
-        auto rc = rpc->GetAttr(100, &attr);
-        ASSERT_EQ(rc, CURVEFS_ERROR::OK);
-    }
+    InodeAttr attr;
+    auto rc = rpc->GetAttr(100, &attr);
+    ASSERT_EQ(rc, CURVEFS_ERROR::OK);
+  }
 
-    // CASE 2: inode not exist
-    {
-        EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
-                                        CURVEFS_ERROR::NOTEXIST);
+  // CASE 2: inode not exist
+  {
+    EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
+                                    CURVEFS_ERROR::NOTEXIST);
 
-        InodeAttr attr;
-        auto rc = rpc->GetAttr(100, &attr);
-        ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
-    }
+    InodeAttr attr;
+    auto rc = rpc->GetAttr(100, &attr);
+    ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
+  }
 }
 
 TEST_F(RPCClientTest, Lookup_Basic) {
-    auto builder = RPCClientBuilder();
-    auto rpc = builder.Build();
+  auto builder = RPCClientBuilder();
+  auto rpc = builder.Build();
 
-    // CASE 1: ok
-    {
-        EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
-                                     CURVEFS_ERROR::OK);
-        EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
-                                        CURVEFS_ERROR::OK);
+  // CASE 1: ok
+  {
+    EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
+                                 CURVEFS_ERROR::OK);
+    EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
+                                    CURVEFS_ERROR::OK);
 
-        EntryOut entryOut;
-        auto rc = rpc->Lookup(1, "f1", &entryOut);
-        ASSERT_EQ(rc, CURVEFS_ERROR::OK);
-    }
+    EntryOut entryOut;
+    auto rc = rpc->Lookup(1, "f1", &entryOut);
+    ASSERT_EQ(rc, CURVEFS_ERROR::OK);
+  }
 
-    // CASE 2: dentry not exist
-    {
-        EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
-                                     CURVEFS_ERROR::NOTEXIST);
+  // CASE 2: dentry not exist
+  {
+    EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
+                                 CURVEFS_ERROR::NOTEXIST);
 
-        EntryOut entryOut;
-        auto rc = rpc->Lookup(1, "f1", &entryOut);
-        ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
-    }
+    EntryOut entryOut;
+    auto rc = rpc->Lookup(1, "f1", &entryOut);
+    ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
+  }
 
-    // CASE 3: inode not exist
-    {
-        EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
-                                     CURVEFS_ERROR::OK);
-        EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
-                                        CURVEFS_ERROR::NOTEXIST);
+  // CASE 3: inode not exist
+  {
+    EXPECT_CALL_RETURN_GetDentry(*builder.GetDentryManager(),
+                                 CURVEFS_ERROR::OK);
+    EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
+                                    CURVEFS_ERROR::NOTEXIST);
 
-        EntryOut entryOut;
-        auto rc = rpc->Lookup(1, "f1", &entryOut);
-        ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
-    }
+    EntryOut entryOut;
+    auto rc = rpc->Lookup(1, "f1", &entryOut);
+    ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
+  }
 }
 
 TEST_F(RPCClientTest, ReadDir_Basic) {
-    auto builder = RPCClientBuilder();
-    auto rpc = builder.Build();
+  auto builder = RPCClientBuilder();
+  auto rpc = builder.Build();
 
-    // CASE 1: ok
-    {
-        EXPECT_CALL_INVOKE_ListDentry(*builder.GetDentryManager(),
-            [&](uint64_t parent,
-                std::list<Dentry>* dentries,
-                uint32_t limit,
-                bool only,
-                uint32_t nlink) -> CURVEFS_ERROR {
-                dentries->push_back(MkDentry(1, "test"));
-                return CURVEFS_ERROR::OK;
-            });
-        EXPECT_CALL_INVOKE_BatchGetInodeAttrAsync(*builder.GetInodeManager(),
-            [&](uint64_t parentId,
-                std::set<uint64_t>* inos,
-                std::map<uint64_t, InodeAttr>* attrs) -> CURVEFS_ERROR {
-                for (const auto& ino : *inos) {
-                    auto attr = MkAttr(ino, AttrOption().mtime(123, ino));
-                    attrs->emplace(ino, attr);
-                }
-                return CURVEFS_ERROR::OK;
-            });
+  // CASE 1: ok
+  {
+    EXPECT_CALL_INVOKE_ListDentry(
+        *builder.GetDentryManager(),
+        [&](uint64_t parent, std::list<Dentry>* dentries, uint32_t limit,
+            bool only, uint32_t nlink) -> CURVEFS_ERROR {
+          dentries->push_back(MkDentry(1, "test"));
+          return CURVEFS_ERROR::OK;
+        });
+    EXPECT_CALL_INVOKE_BatchGetInodeAttrAsync(
+        *builder.GetInodeManager(),
+        [&](uint64_t parentId, std::set<uint64_t>* inos,
+            std::map<uint64_t, InodeAttr>* attrs) -> CURVEFS_ERROR {
+          for (const auto& ino : *inos) {
+            auto attr = MkAttr(ino, AttrOption().mtime(123, ino));
+            attrs->emplace(ino, attr);
+          }
+          return CURVEFS_ERROR::OK;
+        });
 
-        DirEntry dirEntry;
-        auto entries = std::make_shared<DirEntryList>();
-        auto rc = rpc->ReadDir(100, &entries);
-        ASSERT_EQ(rc, CURVEFS_ERROR::OK);
-        ASSERT_EQ(entries->Size(), 1);
-        ASSERT_TRUE(entries->Get(1, &dirEntry));
-        ASSERT_EQ(dirEntry.ino, 1);
-        ASSERT_EQ(dirEntry.name, "test");
-    }
+    DirEntry dirEntry;
+    auto entries = std::make_shared<DirEntryList>();
+    auto rc = rpc->ReadDir(100, &entries);
+    ASSERT_EQ(rc, CURVEFS_ERROR::OK);
+    ASSERT_EQ(entries->Size(), 1);
+    ASSERT_TRUE(entries->Get(1, &dirEntry));
+    ASSERT_EQ(dirEntry.ino, 1);
+    ASSERT_EQ(dirEntry.name, "test");
+  }
 
-    // CASE 2: inode not exist
-    {
-        EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
-                                        CURVEFS_ERROR::NOTEXIST);
+  // CASE 2: inode not exist
+  {
+    EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
+                                    CURVEFS_ERROR::NOTEXIST);
 
-        InodeAttr attr;
-        auto rc = rpc->GetAttr(100, &attr);
-        ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
-    }
+    InodeAttr attr;
+    auto rc = rpc->GetAttr(100, &attr);
+    ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
+  }
 }
 
 TEST_F(RPCClientTest, Open_Basic) {
-    auto builder = RPCClientBuilder();
-    auto rpc = builder.Build();
+  auto builder = RPCClientBuilder();
+  auto rpc = builder.Build();
 
-    // CASE 1: ok
-    {
-        EXPECT_CALL_RETURN_GetInode(*builder.GetInodeManager(),
-                                    CURVEFS_ERROR::OK);
+  // CASE 1: ok
+  {
+    EXPECT_CALL_RETURN_GetInode(*builder.GetInodeManager(), CURVEFS_ERROR::OK);
 
-        auto inode = MkInode(100);
-        auto rc = rpc->Open(100, &inode);
-        ASSERT_EQ(rc, CURVEFS_ERROR::OK);
-    }
+    auto inode = MkInode(100);
+    auto rc = rpc->Open(100, &inode);
+    ASSERT_EQ(rc, CURVEFS_ERROR::OK);
+  }
 
-    // CASE 2: inode not exist
-    {
-        EXPECT_CALL_RETURN_GetInode(*builder.GetInodeManager(),
-                                    CURVEFS_ERROR::NOTEXIST);
+  // CASE 2: inode not exist
+  {
+    EXPECT_CALL_RETURN_GetInode(*builder.GetInodeManager(),
+                                CURVEFS_ERROR::NOTEXIST);
 
-        auto inode = MkInode(100);
-        auto rc = rpc->Open(100, &inode);
-        ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
-    }
+    auto inode = MkInode(100);
+    auto rc = rpc->Open(100, &inode);
+    ASSERT_EQ(rc, CURVEFS_ERROR::NOTEXIST);
+  }
 }
 
 }  // namespace filesystem

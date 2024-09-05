@@ -39,52 +39,52 @@ using curve::common::StringToUl;
  */
 inline std::string BuildPeerIdWithIpPort(const std::string& ip, uint32_t port,
                                          uint32_t idx = 0) {
-    return ip + ":" + std::to_string(port) + ":" + std::to_string(idx);
+  return ip + ":" + std::to_string(port) + ":" + std::to_string(idx);
 }
 
 inline std::string BuildPeerIdWithAddr(const std::string& addr,
                                        uint32_t idx = 0) {
-    return addr + ":" + std::to_string(idx);
+  return addr + ":" + std::to_string(idx);
 }
 
 inline bool SplitPeerId(const std::string& peerId, std::string* ip,
                         uint32_t* port, uint32_t* idx = nullptr) {
-    std::vector<std::string> items;
-    SplitString(peerId, ":", &items);
-    if (3 == items.size()) {
-        *ip = items[0];
-        if (!StringToUl(items[1], port)) {
-            return false;
-        }
-        if (idx != nullptr) {
-            if (!StringToUl(items[2], idx)) {
-                return false;
-            }
-        }
-        return true;
+  std::vector<std::string> items;
+  SplitString(peerId, ":", &items);
+  if (3 == items.size()) {
+    *ip = items[0];
+    if (!StringToUl(items[1], port)) {
+      return false;
     }
-    return false;
+    if (idx != nullptr) {
+      if (!StringToUl(items[2], idx)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
 }
 
 inline bool SplitPeerId(const std::string& peerId, std::string* addr) {
-    std::vector<std::string> items;
-    curve::common::SplitString(peerId, ":", &items);
-    if (3 == items.size()) {
-        *addr = items[0] + ":" + items[1];
-        return true;
-    }
-    return false;
+  std::vector<std::string> items;
+  curve::common::SplitString(peerId, ":", &items);
+  if (3 == items.size()) {
+    *addr = items[0] + ":" + items[1];
+    return true;
+  }
+  return false;
 }
 
 inline bool SplitAddrToIpPort(const std::string& addr, std::string* ipstr,
                               uint32_t* port) {
-    std::vector<std::string> items;
-    curve::common::SplitString(addr, ":", &items);
-    if (2 == items.size() && curve::common::StringToUl(items[1], port)) {
-        *ipstr = items[0];
-        return true;
-    }
-    return false;
+  std::vector<std::string> items;
+  curve::common::SplitString(addr, ":", &items);
+  if (2 == items.size() && curve::common::StringToUl(items[1], port)) {
+    *ipstr = items[0];
+    return true;
+  }
+  return false;
 }
 
 }  // namespace topology

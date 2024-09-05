@@ -41,104 +41,102 @@ const uint64_t CHUNKBUNDLEALLOCATED = 1000;
 
 class ChunkIdAllocator {
  public:
-    ChunkIdAllocator() {}
-    virtual ~ChunkIdAllocator() {}
-    /**
-     * @brief Generate a ID
-     *
-     * @param chunkId
-     * @return int
-     * @details
-     */
-    virtual int GenChunkId(uint64_t idNum, uint64_t *chunkId) = 0;
+  ChunkIdAllocator() {}
+  virtual ~ChunkIdAllocator() {}
+  /**
+   * @brief Generate a ID
+   *
+   * @param chunkId
+   * @return int
+   * @details
+   */
+  virtual int GenChunkId(uint64_t idNum, uint64_t* chunkId) = 0;
 
-    /**
-     * @brief init ChunkIdAllocator
-     *
-     * @param client etcd client
-     * @param chunkIdStoreKey
-     * @param bundleSize
-     * @details
-     */
-    virtual void Init(
-        const std::shared_ptr<KVStorageClient>& client = nullptr,
-        const std::string& chunkIdStoreKey = CHUNKID_NAME_KEY_PREFIX,
-        uint64_t bundleSize = CHUNKBUNDLEALLOCATED) = 0;
+  /**
+   * @brief init ChunkIdAllocator
+   *
+   * @param client etcd client
+   * @param chunkIdStoreKey
+   * @param bundleSize
+   * @details
+   */
+  virtual void Init(
+      const std::shared_ptr<KVStorageClient>& client = nullptr,
+      const std::string& chunkIdStoreKey = CHUNKID_NAME_KEY_PREFIX,
+      uint64_t bundleSize = CHUNKBUNDLEALLOCATED) = 0;
 };
 
 class ChunkIdAllocatorImpl : public ChunkIdAllocator {
  public:
-    ChunkIdAllocatorImpl(std::shared_ptr<KVStorageClient> client = nullptr,
-                         std::string storeKey = CHUNKID_NAME_KEY_PREFIX,
-                         uint64_t initId = CHUNKIDINITIALIZE,
-                         uint64_t bundleSize = CHUNKBUNDLEALLOCATED)
-        : ChunkIdAllocator(),
-          client_(client),
-          storeKey_(storeKey),
-          nextId_(initId),
-          lastId_(initId),
-          bundleSize_(bundleSize) {}
+  ChunkIdAllocatorImpl(std::shared_ptr<KVStorageClient> client = nullptr,
+                       std::string storeKey = CHUNKID_NAME_KEY_PREFIX,
+                       uint64_t initId = CHUNKIDINITIALIZE,
+                       uint64_t bundleSize = CHUNKBUNDLEALLOCATED)
+      : ChunkIdAllocator(),
+        client_(client),
+        storeKey_(storeKey),
+        nextId_(initId),
+        lastId_(initId),
+        bundleSize_(bundleSize) {}
 
-    virtual ~ChunkIdAllocatorImpl() {}
+  virtual ~ChunkIdAllocatorImpl() {}
 
-    /**
-     * @brief Generate a globally incremented ID
-     *
-     * @param chunkId
-     * @return int
-     * @details
-     */
-    int GenChunkId(uint64_t idNum, uint64_t *chunkId) override;
+  /**
+   * @brief Generate a globally incremented ID
+   *
+   * @param chunkId
+   * @return int
+   * @details
+   */
+  int GenChunkId(uint64_t idNum, uint64_t* chunkId) override;
 
-    /**
-     * @brief init ChunkIdAllocator
-     *
-     * @param client
-     * @param chunkIdStoreKey
-     * @param bundleSize
-     * @details
-     * init ChunkIdAllocator, use it for init or change some configuration.
-     * but this class object will work as old configuration,
-     * until the chunkIds in the current bundle is exhausted.
-     */
-    virtual void Init(
-        const std::shared_ptr<KVStorageClient>& client = nullptr,
-        const std::string& chunkIdStoreKey = CHUNKID_NAME_KEY_PREFIX,
-        uint64_t bundleSize = CHUNKBUNDLEALLOCATED) override;
-    /**
-     * @brief get bundleSize chunkIds from etcd
-     *
-     * @param bundleSize get the number of chunkIds
-     * @return int
-     * 0:   ok or key not exist
-     * -1:  unknow error
-     * -2:  value decodes fails
-     * -3:  CAS error
-     * @details
-     */
-    virtual int AllocateBundleIds(int bundleSize);
+  /**
+   * @brief init ChunkIdAllocator
+   *
+   * @param client
+   * @param chunkIdStoreKey
+   * @param bundleSize
+   * @details
+   * init ChunkIdAllocator, use it for init or change some configuration.
+   * but this class object will work as old configuration,
+   * until the chunkIds in the current bundle is exhausted.
+   */
+  virtual void Init(
+      const std::shared_ptr<KVStorageClient>& client = nullptr,
+      const std::string& chunkIdStoreKey = CHUNKID_NAME_KEY_PREFIX,
+      uint64_t bundleSize = CHUNKBUNDLEALLOCATED) override;
+  /**
+   * @brief get bundleSize chunkIds from etcd
+   *
+   * @param bundleSize get the number of chunkIds
+   * @return int
+   * 0:   ok or key not exist
+   * -1:  unknow error
+   * -2:  value decodes fails
+   * -3:  CAS error
+   * @details
+   */
+  virtual int AllocateBundleIds(int bundleSize);
 
-    static bool DecodeID(const std::string& value, uint64_t* out);
+  static bool DecodeID(const std::string& value, uint64_t* out);
 
-    static std::string EncodeID(uint64_t value) {
-        return std::to_string(value);
-    }
-    enum ChunkIdAllocatorStatusCode {
-        KEY_NOTEXIST = 1,
-        OK = 0,
-        UNKNOWN_ERROR = -1,
-        DECODE_ERROR = -2,
-        CAS_ERROR = -3
-    };
+  static std::string EncodeID(uint64_t value) { return std::to_string(value); }
+  enum ChunkIdAllocatorStatusCode {
+    KEY_NOTEXIST = 1,
+    OK = 0,
+    UNKNOWN_ERROR = -1,
+    DECODE_ERROR = -2,
+    CAS_ERROR = -3
+  };
 
  private:
-    std::shared_ptr<KVStorageClient> client_;  // the etcd client
-    std::string storeKey_;  // the key of ChunkId stored in etcd
-    uint64_t nextId_;       // the next ChunkId can be allocated in this bunlde
-    uint64_t lastId_;       // the last ChunkId can be allocated in this bunlde
-    uint64_t bundleSize_;   // get the numnber of ChunkId at a time
-    ::curve::common::RWLock
-        nextIdRWlock_;  // guarantee the uniqueness of the ChunkId
+  std::shared_ptr<KVStorageClient> client_;  // the etcd client
+  std::string storeKey_;  // the key of ChunkId stored in etcd
+  uint64_t nextId_;       // the next ChunkId can be allocated in this bunlde
+  uint64_t lastId_;       // the last ChunkId can be allocated in this bunlde
+  uint64_t bundleSize_;   // get the numnber of ChunkId at a time
+  ::curve::common::RWLock
+      nextIdRWlock_;  // guarantee the uniqueness of the ChunkId
 };
 
 }  // namespace mds

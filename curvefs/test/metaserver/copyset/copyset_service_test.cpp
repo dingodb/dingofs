@@ -39,7 +39,8 @@ using ::curve::fs::FileSystemType;
 using ::curve::fs::LocalFileSystem;
 using ::curve::fs::LocalFsFactory;
 
-const std::string kTestDataPath = "./runlog/" + UUIDGenerator{}.GenerateUUID();  // NOLINT
+const std::string kTestDataPath =
+    "./runlog/" + UUIDGenerator{}.GenerateUUID();             // NOLINT
 const std::string kTestTrashPath = kTestDataPath + "_trash";  // NOLINT
 
 const char* kTestIp = "127.0.0.1";
@@ -47,131 +48,65 @@ const int kTestPort = 29960;
 
 class CopysetServiceTest : public testing::Test {
  protected:
-    void SetUp() override {
-        poolId_ = time(nullptr) % 123456;
-        copysetId_ = time(nullptr) % reinterpret_cast<uint64_t>(this);
+  void SetUp() override {
+    poolId_ = time(nullptr) % 123456;
+    copysetId_ = time(nullptr) % reinterpret_cast<uint64_t>(this);
 
-        fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
+    fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
 
-        options_.dataUri = "local://" + kTestDataPath;
-        options_.raftNodeOptions.log_uri = "local://" + kTestDataPath;
-        options_.raftNodeOptions.raft_meta_uri = "local://" + kTestDataPath;
-        options_.raftNodeOptions.snapshot_uri = "local://" + kTestDataPath;
+    options_.dataUri = "local://" + kTestDataPath;
+    options_.raftNodeOptions.log_uri = "local://" + kTestDataPath;
+    options_.raftNodeOptions.raft_meta_uri = "local://" + kTestDataPath;
+    options_.raftNodeOptions.snapshot_uri = "local://" + kTestDataPath;
 
-        options_.ip = kTestIp;
-        options_.port = kTestPort;
+    options_.ip = kTestIp;
+    options_.port = kTestPort;
 
-        options_.localFileSystem = fs_.get();
+    options_.localFileSystem = fs_.get();
 
-        options_.trashOptions.trashUri = "local://" + kTestTrashPath;
+    options_.trashOptions.trashUri = "local://" + kTestTrashPath;
 
-        options_.storageOptions.type = "memory";
+    options_.storageOptions.type = "memory";
 
-        butil::EndPoint listenAddr(butil::IP_ANY, kTestPort);
+    butil::EndPoint listenAddr(butil::IP_ANY, kTestPort);
 
-        nodeManager_->AddService(&server_, listenAddr);
+    nodeManager_->AddService(&server_, listenAddr);
 
-        ASSERT_TRUE(nodeManager_->Init(options_));
-        ASSERT_TRUE(nodeManager_->Start());
+    ASSERT_TRUE(nodeManager_->Init(options_));
+    ASSERT_TRUE(nodeManager_->Start());
 
-        ASSERT_EQ(0, server_.AddService(new CopysetServiceImpl(nodeManager_),
-                                        brpc::SERVER_OWNS_SERVICE));
-        ASSERT_EQ(0, server_.Start(listenAddr, nullptr));
+    ASSERT_EQ(0, server_.AddService(new CopysetServiceImpl(nodeManager_),
+                                    brpc::SERVER_OWNS_SERVICE));
+    ASSERT_EQ(0, server_.Start(listenAddr, nullptr));
 
-        brpc::ChannelOptions opts;
-        opts.timeout_ms = 10 * 1000;
-        opts.max_retry = 0;
-        ASSERT_EQ(0, channel_.Init(listenAddr, &opts));
-    }
+    brpc::ChannelOptions opts;
+    opts.timeout_ms = 10 * 1000;
+    opts.max_retry = 0;
+    ASSERT_EQ(0, channel_.Init(listenAddr, &opts));
+  }
 
-    void TearDown() override {
-        nodeManager_->Stop();
+  void TearDown() override {
+    nodeManager_->Stop();
 
-        server_.Stop(0);
-        server_.Join();
+    server_.Stop(0);
+    server_.Join();
 
-        system(std::string("rm -rf " + kTestDataPath).c_str());
-    }
+    system(std::string("rm -rf " + kTestDataPath).c_str());
+  }
 
  protected:
-    CopysetNodeOptions options_;
-    std::shared_ptr<LocalFileSystem> fs_;
-    brpc::Server server_;
-    brpc::Channel channel_;
-    PoolId poolId_;
-    CopysetId copysetId_;
-    CopysetNodeManager* nodeManager_ = &CopysetNodeManager::GetInstance();
+  CopysetNodeOptions options_;
+  std::shared_ptr<LocalFileSystem> fs_;
+  brpc::Server server_;
+  brpc::Channel channel_;
+  PoolId poolId_;
+  CopysetId copysetId_;
+  CopysetNodeManager* nodeManager_ = &CopysetNodeManager::GetInstance();
 };
 
 TEST_F(CopysetServiceTest, CreateCopysetTest) {
-    // create one copyset
-    {
-        CopysetService_Stub stub(&channel_);
-        brpc::Controller cntl;
-
-        CreateCopysetRequest request;
-        CreateCopysetResponse response;
-
-        auto* copyset = request.add_copysets();
-        copyset->set_poolid(poolId_);
-        copyset->set_copysetid(copysetId_);
-        copyset->add_peers()->set_address("127.0.0.1:29960:0");
-        copyset->add_peers()->set_address("127.0.0.1:29961:0");
-        copyset->add_peers()->set_address("127.0.0.1:29962:0");
-
-        stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
-
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS,
-                  response.status());
-    }
-
-    // create duplicate copyset
-    {
-        CopysetService_Stub stub(&channel_);
-        brpc::Controller cntl;
-
-        CreateCopysetRequest request;
-        CreateCopysetResponse response;
-
-        auto* copyset = request.add_copysets();
-        copyset->set_poolid(poolId_);
-        copyset->set_copysetid(copysetId_);
-        copyset->add_peers()->set_address("127.0.0.1:29960:0");
-        copyset->add_peers()->set_address("127.0.0.1:29961:0");
-        copyset->add_peers()->set_address("127.0.0.1:29962:0");
-
-        stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
-
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS,
-                  response.status());
-    }
-
-    // create copyset exist
-    {
-        CopysetService_Stub stub(&channel_);
-        brpc::Controller cntl;
-
-        CreateCopysetRequest request;
-        CreateCopysetResponse response;
-
-        auto* copyset = request.add_copysets();
-        copyset->set_poolid(poolId_);
-        copyset->set_copysetid(copysetId_);
-        copyset->add_peers()->set_address("127.0.0.1:29960:0");
-        copyset->add_peers()->set_address("127.0.0.1:29961:0");
-        copyset->add_peers()->set_address("127.0.0.1:29963:0");
-
-        stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
-
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_EXIST,
-                  response.status());
-    }
-}
-
-TEST_F(CopysetServiceTest, CreateCopysetTest_PeerParseFailed) {
+  // create one copyset
+  {
     CopysetService_Stub stub(&channel_);
     brpc::Controller cntl;
 
@@ -181,112 +116,173 @@ TEST_F(CopysetServiceTest, CreateCopysetTest_PeerParseFailed) {
     auto* copyset = request.add_copysets();
     copyset->set_poolid(poolId_);
     copyset->set_copysetid(copysetId_);
-    copyset->add_peers()->set_address("127.0.0.1:abcd:0");
-    copyset->add_peers()->set_address("127.0.0.1:efgh:0");
-    copyset->add_peers()->set_address("127.0.0.1:ijkl:0");
+    copyset->add_peers()->set_address("127.0.0.1:29960:0");
+    copyset->add_peers()->set_address("127.0.0.1:29961:0");
+    copyset->add_peers()->set_address("127.0.0.1:29962:0");
 
     stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
     ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_PARSE_PEER_ERROR,
-                response.status());
-}
+    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS, response.status());
+  }
 
-TEST_F(CopysetServiceTest, GetCopyestStauts_CopysetNodeNotExists) {
+  // create duplicate copyset
+  {
     CopysetService_Stub stub(&channel_);
     brpc::Controller cntl;
 
-    CopysetStatusRequest request;
-    CopysetStatusResponse response;
+    CreateCopysetRequest request;
+    CreateCopysetResponse response;
 
-    request.set_poolid(poolId_);
-    request.set_copysetid(copysetId_);
-    request.mutable_peer()->set_address("127.0.0.1:29960:0");
+    auto* copyset = request.add_copysets();
+    copyset->set_poolid(poolId_);
+    copyset->set_copysetid(copysetId_);
+    copyset->add_peers()->set_address("127.0.0.1:29960:0");
+    copyset->add_peers()->set_address("127.0.0.1:29961:0");
+    copyset->add_peers()->set_address("127.0.0.1:29962:0");
 
-    stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
-
-    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_COPYSET_NOTEXIST,
-                response.status());
-}
-
-TEST_F(CopysetServiceTest, GetCopyestStauts_PeerMismatch) {
-    // create one copyset
-    {
-        CopysetService_Stub stub(&channel_);
-        brpc::Controller cntl;
-
-        CreateCopysetRequest request;
-        CreateCopysetResponse response;
-
-        auto* copyset = request.add_copysets();
-        copyset->set_poolid(poolId_);
-        copyset->set_copysetid(copysetId_);
-        copyset->add_peers()->set_address("127.0.0.1:29960:0");
-        copyset->add_peers()->set_address("127.0.0.1:29961:0");
-        copyset->add_peers()->set_address("127.0.0.1:29962:0");
-
-        stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
-
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS,
-                  response.status());
-    }
-
-    CopysetService_Stub stub(&channel_);
-    brpc::Controller cntl;
-
-    CopysetStatusRequest request;
-    CopysetStatusResponse response;
-
-    request.set_poolid(poolId_);
-    request.set_copysetid(copysetId_);
-    request.mutable_peer()->set_address("127.0.0.1:29961:0");
-
-    stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
-    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_PEER_MISMATCH,
-              response.status());
-}
-
-TEST_F(CopysetServiceTest, GetCopyestStauts) {
-    // create one copyset
-    {
-        CopysetService_Stub stub(&channel_);
-        brpc::Controller cntl;
-
-        CreateCopysetRequest request;
-        CreateCopysetResponse response;
-
-        auto* copyset = request.add_copysets();
-        copyset->set_poolid(poolId_);
-        copyset->set_copysetid(copysetId_);
-        copyset->add_peers()->set_address("127.0.0.1:29960:0");
-        copyset->add_peers()->set_address("127.0.0.1:29961:0");
-        copyset->add_peers()->set_address("127.0.0.1:29962:0");
-
-        stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
-
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS,
-                  response.status());
-    }
-
-    CopysetService_Stub stub(&channel_);
-    brpc::Controller cntl;
-
-    CopysetStatusRequest request;
-    CopysetStatusResponse response;
-
-    request.set_poolid(poolId_);
-    request.set_copysetid(copysetId_);
-    request.mutable_peer()->set_address("127.0.0.1:29960:0");
-
-    stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
+    stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
     ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
     ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS, response.status());
-    LOG(INFO) << response.ShortDebugString();
+  }
+
+  // create copyset exist
+  {
+    CopysetService_Stub stub(&channel_);
+    brpc::Controller cntl;
+
+    CreateCopysetRequest request;
+    CreateCopysetResponse response;
+
+    auto* copyset = request.add_copysets();
+    copyset->set_poolid(poolId_);
+    copyset->set_copysetid(copysetId_);
+    copyset->add_peers()->set_address("127.0.0.1:29960:0");
+    copyset->add_peers()->set_address("127.0.0.1:29961:0");
+    copyset->add_peers()->set_address("127.0.0.1:29963:0");
+
+    stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
+
+    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_EXIST, response.status());
+  }
+}
+
+TEST_F(CopysetServiceTest, CreateCopysetTest_PeerParseFailed) {
+  CopysetService_Stub stub(&channel_);
+  brpc::Controller cntl;
+
+  CreateCopysetRequest request;
+  CreateCopysetResponse response;
+
+  auto* copyset = request.add_copysets();
+  copyset->set_poolid(poolId_);
+  copyset->set_copysetid(copysetId_);
+  copyset->add_peers()->set_address("127.0.0.1:abcd:0");
+  copyset->add_peers()->set_address("127.0.0.1:efgh:0");
+  copyset->add_peers()->set_address("127.0.0.1:ijkl:0");
+
+  stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
+
+  ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+  ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_PARSE_PEER_ERROR,
+            response.status());
+}
+
+TEST_F(CopysetServiceTest, GetCopyestStauts_CopysetNodeNotExists) {
+  CopysetService_Stub stub(&channel_);
+  brpc::Controller cntl;
+
+  CopysetStatusRequest request;
+  CopysetStatusResponse response;
+
+  request.set_poolid(poolId_);
+  request.set_copysetid(copysetId_);
+  request.mutable_peer()->set_address("127.0.0.1:29960:0");
+
+  stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
+
+  ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+  ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_COPYSET_NOTEXIST,
+            response.status());
+}
+
+TEST_F(CopysetServiceTest, GetCopyestStauts_PeerMismatch) {
+  // create one copyset
+  {
+    CopysetService_Stub stub(&channel_);
+    brpc::Controller cntl;
+
+    CreateCopysetRequest request;
+    CreateCopysetResponse response;
+
+    auto* copyset = request.add_copysets();
+    copyset->set_poolid(poolId_);
+    copyset->set_copysetid(copysetId_);
+    copyset->add_peers()->set_address("127.0.0.1:29960:0");
+    copyset->add_peers()->set_address("127.0.0.1:29961:0");
+    copyset->add_peers()->set_address("127.0.0.1:29962:0");
+
+    stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
+
+    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS, response.status());
+  }
+
+  CopysetService_Stub stub(&channel_);
+  brpc::Controller cntl;
+
+  CopysetStatusRequest request;
+  CopysetStatusResponse response;
+
+  request.set_poolid(poolId_);
+  request.set_copysetid(copysetId_);
+  request.mutable_peer()->set_address("127.0.0.1:29961:0");
+
+  stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
+  ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+  ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_PEER_MISMATCH,
+            response.status());
+}
+
+TEST_F(CopysetServiceTest, GetCopyestStauts) {
+  // create one copyset
+  {
+    CopysetService_Stub stub(&channel_);
+    brpc::Controller cntl;
+
+    CreateCopysetRequest request;
+    CreateCopysetResponse response;
+
+    auto* copyset = request.add_copysets();
+    copyset->set_poolid(poolId_);
+    copyset->set_copysetid(copysetId_);
+    copyset->add_peers()->set_address("127.0.0.1:29960:0");
+    copyset->add_peers()->set_address("127.0.0.1:29961:0");
+    copyset->add_peers()->set_address("127.0.0.1:29962:0");
+
+    stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
+
+    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+    ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS, response.status());
+  }
+
+  CopysetService_Stub stub(&channel_);
+  brpc::Controller cntl;
+
+  CopysetStatusRequest request;
+  CopysetStatusResponse response;
+
+  request.set_poolid(poolId_);
+  request.set_copysetid(copysetId_);
+  request.mutable_peer()->set_address("127.0.0.1:29960:0");
+
+  stub.GetCopysetStatus(&cntl, &request, &response, nullptr);
+
+  ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+  ASSERT_EQ(COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS, response.status());
+  LOG(INFO) << response.ShortDebugString();
 }
 
 }  // namespace copyset

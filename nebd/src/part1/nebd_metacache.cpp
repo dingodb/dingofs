@@ -25,41 +25,41 @@
 namespace nebd {
 namespace client {
 
-using nebd::common::WriteLockGuard;
 using nebd::common::ReadLockGuard;
+using nebd::common::WriteLockGuard;
 
 void NebdClientMetaCache::AddFileInfo(const NebdClientFileInfo& fileInfo) {
-    WriteLockGuard guard(rwLock_);
-    fileinfos_.emplace(fileInfo.fd, fileInfo);
+  WriteLockGuard guard(rwLock_);
+  fileinfos_.emplace(fileInfo.fd, fileInfo);
 }
 
 void NebdClientMetaCache::RemoveFileInfo(int fd) {
-    WriteLockGuard guard(rwLock_);
-    fileinfos_.erase(fd);
+  WriteLockGuard guard(rwLock_);
+  fileinfos_.erase(fd);
 }
 
-int NebdClientMetaCache::GetFileInfo(
-    int fd, NebdClientFileInfo* fileInfo) const {
-    ReadLockGuard guard(rwLock_);
-    auto iter = fileinfos_.find(fd);
-    if (iter != fileinfos_.end()) {
-        *fileInfo = iter->second;
-        return 0;
-    }
+int NebdClientMetaCache::GetFileInfo(int fd,
+                                     NebdClientFileInfo* fileInfo) const {
+  ReadLockGuard guard(rwLock_);
+  auto iter = fileinfos_.find(fd);
+  if (iter != fileinfos_.end()) {
+    *fileInfo = iter->second;
+    return 0;
+  }
 
-    return -1;
+  return -1;
 }
 
 std::vector<NebdClientFileInfo> NebdClientMetaCache::GetAllFileInfo() const {
-    ReadLockGuard guard(rwLock_);
-    std::vector<NebdClientFileInfo> result;
+  ReadLockGuard guard(rwLock_);
+  std::vector<NebdClientFileInfo> result;
 
-    result.reserve(fileinfos_.size());
-    for (const auto& kv : fileinfos_) {
-        result.push_back(kv.second);
-    }
+  result.reserve(fileinfos_.size());
+  for (const auto& kv : fileinfos_) {
+    result.push_back(kv.second);
+  }
 
-    return result;
+  return result;
 }
 
 }  // namespace client

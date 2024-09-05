@@ -28,18 +28,16 @@ namespace curvefs {
 namespace tools {
 namespace version {
 
-int VersionTool::Init() {
-    return 0;
-}
+int VersionTool::Init() { return 0; }
 
 void VersionTool::PrintHelp() {
-    CurvefsTool::PrintHelp();
-    std::cout << std::endl;
+  CurvefsTool::PrintHelp();
+  std::cout << std::endl;
 }
 
 int VersionTool::RunCommand() {
-    std::cout << curve::common::CurveVersion() << std::endl;
-    return 0;
+  std::cout << curve::common::CurveVersion() << std::endl;
+  return 0;
 }
 
 }  // namespace version

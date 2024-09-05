@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -26,44 +25,43 @@
 namespace curvefs {
 namespace client {
 
-
 uint64_t DirBuffer::DirBufferNew() {
-    uint64_t dindex = index_++;
-    curve::common::WriteLockGuard wlg(bufferMtx_);
-    DirBufferHead *head = new DirBufferHead();
-    buffer_.emplace(dindex, head);
-    return dindex;
+  uint64_t dindex = index_++;
+  curve::common::WriteLockGuard wlg(bufferMtx_);
+  DirBufferHead* head = new DirBufferHead();
+  buffer_.emplace(dindex, head);
+  return dindex;
 }
 
 DirBufferHead* DirBuffer::DirBufferGet(uint64_t dindex) {
-    curve::common::ReadLockGuard rlg(bufferMtx_);
-    auto it = buffer_.find(dindex);
-    if (it != buffer_.end()) {
-        return it->second;
-    } else {
-        return nullptr;
-    }
+  curve::common::ReadLockGuard rlg(bufferMtx_);
+  auto it = buffer_.find(dindex);
+  if (it != buffer_.end()) {
+    return it->second;
+  } else {
+    return nullptr;
+  }
 }
 
 // TODO(xuchaojie) : these two function need to be called in right place.
 void DirBuffer::DirBufferRelease(uint64_t dindex) {
-    curve::common::WriteLockGuard wlg(bufferMtx_);
-    auto it = buffer_.find(dindex);
-    if (it != buffer_.end()) {
-        free(it->second->p);
-        delete it->second;
-        buffer_.erase(it);
-    }
+  curve::common::WriteLockGuard wlg(bufferMtx_);
+  auto it = buffer_.find(dindex);
+  if (it != buffer_.end()) {
+    free(it->second->p);
+    delete it->second;
+    buffer_.erase(it);
+  }
 }
 
 void DirBuffer::DirBufferFreeAll() {
-    curve::common::WriteLockGuard wlg(bufferMtx_);
-    for (auto it : buffer_) {
-        free(it.second->p);
-        delete it.second;
-    }
-    buffer_.clear();
-    index_ = 0;
+  curve::common::WriteLockGuard wlg(bufferMtx_);
+  for (auto it : buffer_) {
+    free(it.second->p);
+    delete it.second;
+  }
+  buffer_.clear();
+  index_ = 0;
 }
 
 }  // namespace client

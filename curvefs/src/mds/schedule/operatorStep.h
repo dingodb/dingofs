@@ -25,6 +25,7 @@
 
 #include <cstdint>
 #include <string>
+
 #include "curvefs/src/mds/schedule/topoAdapter.h"
 #include "src/mds/schedule/operatorStepTemplate.h"
 
@@ -33,18 +34,16 @@ namespace mds {
 namespace schedule {
 using OperatorStep =
     curve::mds::schedule::OperatorStepT<MetaServerIdType, CopySetInfo,
-                                           CopySetConf>;
-using RemovePeer =
-    curve::mds::schedule::RemovePeerT<MetaServerIdType, CopySetInfo,
-                                         CopySetConf>;
-using AddPeer = curve::mds::schedule::AddPeerT<MetaServerIdType, CopySetInfo,
-                                                  CopySetConf>;
+                                        CopySetConf>;
+using RemovePeer = curve::mds::schedule::RemovePeerT<MetaServerIdType,
+                                                     CopySetInfo, CopySetConf>;
+using AddPeer =
+    curve::mds::schedule::AddPeerT<MetaServerIdType, CopySetInfo, CopySetConf>;
 using TransferLeader =
     curve::mds::schedule::TransferLeaderT<MetaServerIdType, CopySetInfo,
-                                             CopySetConf>;
-using ChangePeer =
-    curve::mds::schedule::ChangePeerT<MetaServerIdType, CopySetInfo,
-                                         CopySetConf>;
+                                          CopySetConf>;
+using ChangePeer = curve::mds::schedule::ChangePeerT<MetaServerIdType,
+                                                     CopySetInfo, CopySetConf>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curvefs

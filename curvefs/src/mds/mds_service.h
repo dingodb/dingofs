@@ -32,73 +32,67 @@
 
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/src/mds/chunkid_allocator.h"
-#include "curvefs/src/mds/fs_manager.h"
 #include "curvefs/src/mds/common/mds_define.h"
+#include "curvefs/src/mds/fs_manager.h"
 
 namespace curvefs {
 namespace mds {
 
 class MdsServiceImpl : public MdsService {
  public:
-    MdsServiceImpl(std::shared_ptr<FsManager> fsManager,
-                   std::shared_ptr<ChunkIdAllocator> chunkIdAllocator)
-        : fsManager_(std::move(fsManager)),
-          chunkIdAllocator_(std::move(chunkIdAllocator)) {}
+  MdsServiceImpl(std::shared_ptr<FsManager> fsManager,
+                 std::shared_ptr<ChunkIdAllocator> chunkIdAllocator)
+      : fsManager_(std::move(fsManager)),
+        chunkIdAllocator_(std::move(chunkIdAllocator)) {}
 
-    void CreateFs(::google::protobuf::RpcController* controller,
-                  const CreateFsRequest* request,
-                  CreateFsResponse* response,
-                  ::google::protobuf::Closure* done);
+  void CreateFs(::google::protobuf::RpcController* controller,
+                const CreateFsRequest* request, CreateFsResponse* response,
+                ::google::protobuf::Closure* done);
 
-    void MountFs(::google::protobuf::RpcController* controller,
-                 const MountFsRequest* request,
-                 MountFsResponse* response,
+  void MountFs(::google::protobuf::RpcController* controller,
+               const MountFsRequest* request, MountFsResponse* response,
+               ::google::protobuf::Closure* done);
+
+  void UmountFs(::google::protobuf::RpcController* controller,
+                const UmountFsRequest* request, UmountFsResponse* response,
+                ::google::protobuf::Closure* done);
+
+  void GetFsInfo(::google::protobuf::RpcController* controller,
+                 const GetFsInfoRequest* request, GetFsInfoResponse* response,
                  ::google::protobuf::Closure* done);
 
-    void UmountFs(::google::protobuf::RpcController* controller,
-                  const UmountFsRequest* request,
-                  UmountFsResponse* response,
-                  ::google::protobuf::Closure* done);
+  void DeleteFs(::google::protobuf::RpcController* controller,
+                const DeleteFsRequest* request, DeleteFsResponse* response,
+                ::google::protobuf::Closure* done);
 
-    void GetFsInfo(::google::protobuf::RpcController* controller,
-                   const GetFsInfoRequest* request,
-                   GetFsInfoResponse* response,
-                   ::google::protobuf::Closure* done);
-
-    void DeleteFs(::google::protobuf::RpcController* controller,
-                  const DeleteFsRequest* request,
-                  DeleteFsResponse* response,
-                  ::google::protobuf::Closure* done);
-
-    void AllocateS3Chunk(::google::protobuf::RpcController* controller,
-                         const ::curvefs::mds::AllocateS3ChunkRequest* request,
-                         ::curvefs::mds::AllocateS3ChunkResponse* response,
-                         ::google::protobuf::Closure* done);
-
-    void ListClusterFsInfo(
-        ::google::protobuf::RpcController* controller,
-        const ::curvefs::mds::ListClusterFsInfoRequest* request,
-        ::curvefs::mds::ListClusterFsInfoResponse* response,
-        ::google::protobuf::Closure* done);
-
-    void RefreshSession(::google::protobuf::RpcController *controller,
-                        const ::curvefs::mds::RefreshSessionRequest *request,
-                        ::curvefs::mds::RefreshSessionResponse *response,
-                        ::google::protobuf::Closure *done);
-
-    void GetLatestTxId(::google::protobuf::RpcController* controller,
-                       const GetLatestTxIdRequest* request,
-                       GetLatestTxIdResponse* response,
+  void AllocateS3Chunk(::google::protobuf::RpcController* controller,
+                       const ::curvefs::mds::AllocateS3ChunkRequest* request,
+                       ::curvefs::mds::AllocateS3ChunkResponse* response,
                        ::google::protobuf::Closure* done);
 
-    void CommitTx(::google::protobuf::RpcController* controller,
-                  const CommitTxRequest* request,
-                  CommitTxResponse* response,
-                  ::google::protobuf::Closure* done);
+  void ListClusterFsInfo(
+      ::google::protobuf::RpcController* controller,
+      const ::curvefs::mds::ListClusterFsInfoRequest* request,
+      ::curvefs::mds::ListClusterFsInfoResponse* response,
+      ::google::protobuf::Closure* done);
+
+  void RefreshSession(::google::protobuf::RpcController* controller,
+                      const ::curvefs::mds::RefreshSessionRequest* request,
+                      ::curvefs::mds::RefreshSessionResponse* response,
+                      ::google::protobuf::Closure* done);
+
+  void GetLatestTxId(::google::protobuf::RpcController* controller,
+                     const GetLatestTxIdRequest* request,
+                     GetLatestTxIdResponse* response,
+                     ::google::protobuf::Closure* done);
+
+  void CommitTx(::google::protobuf::RpcController* controller,
+                const CommitTxRequest* request, CommitTxResponse* response,
+                ::google::protobuf::Closure* done);
 
  private:
-    std::shared_ptr<FsManager> fsManager_;
-    std::shared_ptr<ChunkIdAllocator> chunkIdAllocator_;
+  std::shared_ptr<FsManager> fsManager_;
+  std::shared_ptr<ChunkIdAllocator> chunkIdAllocator_;
 };
 }  // namespace mds
 }  // namespace curvefs

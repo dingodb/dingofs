@@ -43,33 +43,33 @@ using curvefs::common::S3Info;
 
 class S3InfoCache {
  private:
-    std::mutex mtx_;
-    uint64_t capacity_;
-    std::vector<std::string> mdsAddrs_;
-    uint64_t mdsIndex_;
-    butil::EndPoint metaserverAddr_;
-    // lru cache
-    std::unordered_map<uint64_t, S3Info> cache_;
-    std::list<uint64_t> recent_;
-    std::unordered_map<uint64_t, std::list<uint64_t>::iterator> pos_;
+  std::mutex mtx_;
+  uint64_t capacity_;
+  std::vector<std::string> mdsAddrs_;
+  uint64_t mdsIndex_;
+  butil::EndPoint metaserverAddr_;
+  // lru cache
+  std::unordered_map<uint64_t, S3Info> cache_;
+  std::list<uint64_t> recent_;
+  std::unordered_map<uint64_t, std::list<uint64_t>::iterator> pos_;
 
-    void UpdateRecent(uint64_t fsid);
-    S3Info Get(uint64_t fsid);
-    void Put(uint64_t fsid, const S3Info& s3info);
+  void UpdateRecent(uint64_t fsid);
+  S3Info Get(uint64_t fsid);
+  void Put(uint64_t fsid, const S3Info& s3info);
 
  public:
-    enum class RequestStatusCode { SUCCESS, NOS3INFO, RPCFAILURE };
-    explicit S3InfoCache(uint64_t capacity,
-                         const std::vector<std::string>& mdsAddrs,
-                         butil::EndPoint metaserverAddr)
-        : capacity_(capacity),
-          mdsAddrs_(mdsAddrs),
-          mdsIndex_(0),
-          metaserverAddr_(metaserverAddr) {}
-    virtual ~S3InfoCache() {}
-    virtual RequestStatusCode RequestS3Info(uint64_t fsid, S3Info* s3info);
-    virtual int GetS3Info(uint64_t fsid, S3Info* s3info);
-    virtual void InvalidateS3Info(uint64_t fsid);
+  enum class RequestStatusCode { SUCCESS, NOS3INFO, RPCFAILURE };
+  explicit S3InfoCache(uint64_t capacity,
+                       const std::vector<std::string>& mdsAddrs,
+                       butil::EndPoint metaserverAddr)
+      : capacity_(capacity),
+        mdsAddrs_(mdsAddrs),
+        mdsIndex_(0),
+        metaserverAddr_(metaserverAddr) {}
+  virtual ~S3InfoCache() {}
+  virtual RequestStatusCode RequestS3Info(uint64_t fsid, S3Info* s3info);
+  virtual int GetS3Info(uint64_t fsid, S3Info* s3info);
+  virtual void InvalidateS3Info(uint64_t fsid);
 };
 
 }  // namespace metaserver

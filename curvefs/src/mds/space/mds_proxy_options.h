@@ -33,7 +33,7 @@ namespace mds {
 namespace space {
 
 struct MdsProxyOptions {
-    curve::client::MetaServerOption option;
+  curve::client::MetaServerOption option;
 };
 
 }  // namespace space

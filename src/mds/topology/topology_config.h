@@ -30,31 +30,31 @@ namespace mds {
 namespace topology {
 
 struct TopologyOption {
-    // time interval that topology data updated to storage
-    uint32_t TopologyUpdateToRepoSec;
-    // timeout peroid of RPC for copyset creation (in ms)
-    uint32_t CreateCopysetRpcTimeoutMs;
-    // retry times after timeout of RPC for copyset creation
-    uint32_t CreateCopysetRpcRetryTimes;
-    // time interval of retries (in ms)
-    uint32_t CreateCopysetRpcRetrySleepTimeMs;
-    // time interval for updating topology metric
-    uint32_t UpdateMetricIntervalSec;
-    // threshold of maximum usage of a physical pool
-    uint32_t PoolUsagePercentLimit;
-    // policy of pool choosing
-    int choosePoolPolicy;
-    // enable LogicalPool ALLOW/DENY status
-    bool enableLogicalPoolStatus;
+  // time interval that topology data updated to storage
+  uint32_t TopologyUpdateToRepoSec;
+  // timeout peroid of RPC for copyset creation (in ms)
+  uint32_t CreateCopysetRpcTimeoutMs;
+  // retry times after timeout of RPC for copyset creation
+  uint32_t CreateCopysetRpcRetryTimes;
+  // time interval of retries (in ms)
+  uint32_t CreateCopysetRpcRetrySleepTimeMs;
+  // time interval for updating topology metric
+  uint32_t UpdateMetricIntervalSec;
+  // threshold of maximum usage of a physical pool
+  uint32_t PoolUsagePercentLimit;
+  // policy of pool choosing
+  int choosePoolPolicy;
+  // enable LogicalPool ALLOW/DENY status
+  bool enableLogicalPoolStatus;
 
-    TopologyOption()
-        : TopologyUpdateToRepoSec(0),
-          CreateCopysetRpcTimeoutMs(500),
-          CreateCopysetRpcRetryTimes(3),
-          CreateCopysetRpcRetrySleepTimeMs(500),
-          UpdateMetricIntervalSec(0),
-          choosePoolPolicy(0),
-          enableLogicalPoolStatus(false) {}
+  TopologyOption()
+      : TopologyUpdateToRepoSec(0),
+        CreateCopysetRpcTimeoutMs(500),
+        CreateCopysetRpcRetryTimes(3),
+        CreateCopysetRpcRetrySleepTimeMs(500),
+        UpdateMetricIntervalSec(0),
+        choosePoolPolicy(0),
+        enableLogicalPoolStatus(false) {}
 };
 
 }  // namespace topology

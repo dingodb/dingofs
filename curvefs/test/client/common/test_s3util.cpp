@@ -20,59 +20,55 @@
  * Author: lixiaocui
  */
 
-#include <gtest/gtest.h>
 #include <glog/logging.h>
+#include <gtest/gtest.h>
+
 #include "curvefs/src/common/s3util.h"
 
 namespace curvefs {
 namespace common {
 TEST(ValidNameOfInodeTest, test) {
-    LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
-    ASSERT_FALSE(
-        curvefs::common::s3util::ValidNameOfInode("1", "1_16777216_2_0_0", 0));
+  LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
+  ASSERT_FALSE(
+      curvefs::common::s3util::ValidNameOfInode("1", "1_16777216_2_0_0", 0));
 
-    LOG(INFO) << "inode = 16777216, name = 1_16777216_2_0_0";
-    ASSERT_TRUE(
-        curvefs::common::s3util::ValidNameOfInode("16777216",
-                                          "1_16777216_2_0_0", 0));
+  LOG(INFO) << "inode = 16777216, name = 1_16777216_2_0_0";
+  ASSERT_TRUE(curvefs::common::s3util::ValidNameOfInode("16777216",
+                                                        "1_16777216_2_0_0", 0));
 
-    LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
-    ASSERT_FALSE(
-        curvefs::common::s3util::ValidNameOfInode("1", "1_16777216_2_0_0", 0));
+  LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
+  ASSERT_FALSE(
+      curvefs::common::s3util::ValidNameOfInode("1", "1_16777216_2_0_0", 0));
 
-    LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216_0";
-    ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode("16777216",
-                                                   "1_1_1_16777216_0", 0));
+  LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216_0";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode(
+      "16777216", "1_1_1_16777216_0", 0));
 
-    LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216";
-    ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode("16777216",
-                                                     "1_1_1_16777216", 0));
+  LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode("16777216",
+                                                         "1_1_1_16777216", 0));
 }
 
 TEST(ValidNameOfInodeTest1, test) {
-    LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
-    ASSERT_FALSE(
-        curvefs::common::s3util::ValidNameOfInode("1",
-                        "1/16/16777/1_16777216_2_0_0", 1));
+  LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode(
+      "1", "1/16/16777/1_16777216_2_0_0", 1));
 
-    LOG(INFO) << "inode = 16777216, name = 1_16777216_2_0_0";
-    ASSERT_TRUE(
-        curvefs::common::s3util::ValidNameOfInode("16777216",
-                                "1/16/16777/1_16777216_2_0_0", 1));
+  LOG(INFO) << "inode = 16777216, name = 1_16777216_2_0_0";
+  ASSERT_TRUE(curvefs::common::s3util::ValidNameOfInode(
+      "16777216", "1/16/16777/1_16777216_2_0_0", 1));
 
-    LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
-    ASSERT_FALSE(
-        curvefs::common::s3util::ValidNameOfInode("1",
-                        "1/16/16777/1_16777216_2_0_0", 1));
+  LOG(INFO) << "inode = 1, name = 1_16777216_2_0_0";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode(
+      "1", "1/16/16777/1_16777216_2_0_0", 1));
 
-    LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216_0";
-    ASSERT_FALSE(
-        curvefs::common::s3util::ValidNameOfInode("16777216",
-                               "1/16/16777/1_1_1_16777216_0", 1));
+  LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216_0";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode(
+      "16777216", "1/16/16777/1_1_1_16777216_0", 1));
 
-    LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216";
-    ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode("16777216",
-                                          "1/16/16777/1_1_1_16777216", 1));
+  LOG(INFO) << "inode = 16777216, name = 1_1_1_16777216";
+  ASSERT_FALSE(curvefs::common::s3util::ValidNameOfInode(
+      "16777216", "1/16/16777/1_1_1_16777216", 1));
 }
 
 }  // namespace common

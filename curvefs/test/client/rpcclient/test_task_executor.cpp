@@ -36,48 +36,48 @@ using ::testing::Invoke;
 using ::testing::Return;
 
 TEST(CreateInodeTaskExecutorTest, TestPartitionAllocIdFail) {
-    auto context = std::make_shared<TaskContext>();
-    context->rpctask = [](LogicPoolID poolID, CopysetID copysetID,
-                          PartitionID partitionID, uint64_t txId,
-                          uint64_t applyIndex, brpc::Channel *channel,
-                          brpc::Controller *cntl, TaskExecutorDone *done) {
-        static int count = 0;
-        ++count;
-        if (count == 1) {
-            // return PARTITION_ALLOC_ID_FAIL firstly
-            return MetaStatusCode::PARTITION_ALLOC_ID_FAIL;
-        }
+  auto context = std::make_shared<TaskContext>();
+  context->rpctask = [](LogicPoolID poolID, CopysetID copysetID,
+                        PartitionID partitionID, uint64_t txId,
+                        uint64_t applyIndex, brpc::Channel* channel,
+                        brpc::Controller* cntl, TaskExecutorDone* done) {
+    static int count = 0;
+    ++count;
+    if (count == 1) {
+      // return PARTITION_ALLOC_ID_FAIL firstly
+      return MetaStatusCode::PARTITION_ALLOC_ID_FAIL;
+    }
 
-        return MetaStatusCode::OK;
-    };
+    return MetaStatusCode::OK;
+  };
 
-    auto mockMetaCache = std::make_shared<MockMetaCache>();
-    auto channelMgr = std::make_shared<ChannelManager<MetaserverID>>();
-    CreateInodeExcutor executor(ExcutorOpt{}, mockMetaCache, channelMgr,
-                                std::move(context));
+  auto mockMetaCache = std::make_shared<MockMetaCache>();
+  auto channelMgr = std::make_shared<ChannelManager<MetaserverID>>();
+  CreateInodeExcutor executor(ExcutorOpt{}, mockMetaCache, channelMgr,
+                              std::move(context));
 
-    EXPECT_CALL(*mockMetaCache, MarkPartitionUnavailable(_))
-        .WillOnce(Return(true));
+  EXPECT_CALL(*mockMetaCache, MarkPartitionUnavailable(_))
+      .WillOnce(Return(true));
 
-    EXPECT_CALL(*mockMetaCache, SelectTarget(_, _, _))
-        .Times(2)
-        .WillRepeatedly(Invoke(
-            [](uint32_t /*fsId*/, CopysetTarget *target, uint64_t *applyIndex) {
-                target->groupID = CopysetGroupID{1, 1};
-                target->partitionID = 1;
-                target->txId = 1;
-                target->metaServerID = 1;
+  EXPECT_CALL(*mockMetaCache, SelectTarget(_, _, _))
+      .Times(2)
+      .WillRepeatedly(Invoke(
+          [](uint32_t /*fsId*/, CopysetTarget* target, uint64_t* applyIndex) {
+            target->groupID = CopysetGroupID{1, 1};
+            target->partitionID = 1;
+            target->txId = 1;
+            target->metaServerID = 1;
 
-                butil::EndPoint ep;
-                butil::str2endpoint("127.0.0.1:12345", &ep);
+            butil::EndPoint ep;
+            butil::str2endpoint("127.0.0.1:12345", &ep);
 
-                target->endPoint = std::move(ep);
+            target->endPoint = std::move(ep);
 
-                *applyIndex = 1;
-                return true;
-            }));
+            *applyIndex = 1;
+            return true;
+          }));
 
-    EXPECT_EQ(MetaStatusCode::OK, executor.DoRPCTask());
+  EXPECT_EQ(MetaStatusCode::OK, executor.DoRPCTask());
 }
 
 }  // namespace rpcclient

@@ -30,19 +30,19 @@ namespace curve {
 namespace common {
 
 std::string CurveVersion() {
-    static const std::string version =
+  static const std::string version =
 #ifdef CURVEVERSION
-        std::string(STRINGIFY(CURVEVERSION));
+      std::string(STRINGIFY(CURVEVERSION));
 #else
-        std::string("unknown");
+      std::string("unknown");
 #endif
-    return version;
+  return version;
 }
 
 void ExposeCurveVersion() {
-    static bvar::Status<std::string> version;
-    version.expose_as("curve", "version");
-    version.set_value(CurveVersion());
+  static bvar::Status<std::string> version;
+  version.expose_as("curve", "version");
+  version.set_value(CurveVersion());
 }
 
 }  // namespace common

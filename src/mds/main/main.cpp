@@ -19,11 +19,11 @@
  * Created Date: Friday October 19th 2018
  * Author: hzsunjianliang
  */
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
-#include "src/mds/server/mds.h"
 #include "src/mds/common/mds_define.h"
+#include "src/mds/server/mds.h"
 
 DEFINE_string(confPath, "conf/mds.conf", "mds confPath");
 DEFINE_string(mdsAddr, "127.0.0.1:6666", "mds listen addr");
@@ -33,8 +33,8 @@ DEFINE_int32(sessionInterSec, 5, "mds session expired second");
 DEFINE_int32(updateToRepoSec, 5, "interval of update data in mds to repo");
 DEFINE_uint32(dummyPort, 6667, "dummy server port");
 
-using ::curve::mds::kMB;
 using ::curve::mds::kGB;
+using ::curve::mds::kMB;
 using ::curve::mds::kTB;
 
 DEFINE_uint64(chunkSize, 16 * kMB, "chunk size");
@@ -42,94 +42,89 @@ DEFINE_uint64(segmentSize, 1 * kGB, "segment size");
 DEFINE_uint64(minFileLength, 10 * kGB, "min filelength");
 DEFINE_uint64(maxFileLength, 20 * kTB, "max filelength");
 
-void LoadConfigFromCmdline(Configuration *conf) {
-    google::CommandLineFlagInfo info;
-    if (GetCommandLineFlagInfo("mdsAddr", &info) && !info.is_default) {
-        conf->SetStringValue("mds.listen.addr", FLAGS_mdsAddr);
-    }
+void LoadConfigFromCmdline(Configuration* conf) {
+  google::CommandLineFlagInfo info;
+  if (GetCommandLineFlagInfo("mdsAddr", &info) && !info.is_default) {
+    conf->SetStringValue("mds.listen.addr", FLAGS_mdsAddr);
+  }
 
-    if (GetCommandLineFlagInfo("etcdAddr", &info) && !info.is_default) {
-        conf->SetStringValue("mds.etcd.endpoint", FLAGS_etcdAddr);
-    }
+  if (GetCommandLineFlagInfo("etcdAddr", &info) && !info.is_default) {
+    conf->SetStringValue("mds.etcd.endpoint", FLAGS_etcdAddr);
+  }
 
-    if (GetCommandLineFlagInfo("chunkSize", &info) && !info.is_default) {
-        conf->SetUInt64Value("mds.curvefs.defaultChunkSize", FLAGS_chunkSize);
-    }
+  if (GetCommandLineFlagInfo("chunkSize", &info) && !info.is_default) {
+    conf->SetUInt64Value("mds.curvefs.defaultChunkSize", FLAGS_chunkSize);
+  }
 
-    if (GetCommandLineFlagInfo("segmentSize", &info) && !info.is_default) {
-        conf->SetUInt64Value(
-                    "mds.curvefs.defaultSegmentSize", FLAGS_segmentSize);
-    }
+  if (GetCommandLineFlagInfo("segmentSize", &info) && !info.is_default) {
+    conf->SetUInt64Value("mds.curvefs.defaultSegmentSize", FLAGS_segmentSize);
+  }
 
-    if (GetCommandLineFlagInfo("minFileLength", &info) && !info.is_default) {
-        conf->SetUInt64Value("mds.curvefs.minFileLength", FLAGS_minFileLength);
-     }
+  if (GetCommandLineFlagInfo("minFileLength", &info) && !info.is_default) {
+    conf->SetUInt64Value("mds.curvefs.minFileLength", FLAGS_minFileLength);
+  }
 
-    if (GetCommandLineFlagInfo("maxFileLength", &info) && !info.is_default) {
-        conf->SetUInt64Value("mds.curvefs.maxFileLength", FLAGS_maxFileLength);
-    }
+  if (GetCommandLineFlagInfo("maxFileLength", &info) && !info.is_default) {
+    conf->SetUInt64Value("mds.curvefs.maxFileLength", FLAGS_maxFileLength);
+  }
 
-    if (GetCommandLineFlagInfo("mdsDbName", &info) && !info.is_default) {
-        conf->SetStringValue("mds.DbName", FLAGS_mdsDbName);
-    }
+  if (GetCommandLineFlagInfo("mdsDbName", &info) && !info.is_default) {
+    conf->SetStringValue("mds.DbName", FLAGS_mdsDbName);
+  }
 
-    if (GetCommandLineFlagInfo("sessionInterSec", &info) && !info.is_default) {
-        conf->SetIntValue(
-            "mds.leader.sessionInterSec", FLAGS_sessionInterSec);
-    }
+  if (GetCommandLineFlagInfo("sessionInterSec", &info) && !info.is_default) {
+    conf->SetIntValue("mds.leader.sessionInterSec", FLAGS_sessionInterSec);
+  }
 
-    if (GetCommandLineFlagInfo("updateToRepoSec", &info) && !info.is_default) {
-        conf->SetIntValue(
-            "mds.topology.TopologyUpdateToRepoSec", FLAGS_updateToRepoSec);
-    }
+  if (GetCommandLineFlagInfo("updateToRepoSec", &info) && !info.is_default) {
+    conf->SetIntValue("mds.topology.TopologyUpdateToRepoSec",
+                      FLAGS_updateToRepoSec);
+  }
 
-    if (GetCommandLineFlagInfo("dummyPort", &info) && !info.is_default) {
-        conf->SetIntValue(
-            "mds.dummy.listen.port", FLAGS_dummyPort);
-    }
+  if (GetCommandLineFlagInfo("dummyPort", &info) && !info.is_default) {
+    conf->SetIntValue("mds.dummy.listen.port", FLAGS_dummyPort);
+  }
 }
 
-
-int main(int argc, char **argv) {
-    // config initialization
-    google::ParseCommandLineFlags(&argc, &argv, false);
-    std::string confPath = FLAGS_confPath.c_str();
-    auto conf = std::make_shared<Configuration>();
-    conf->SetConfigPath(confPath);
-    LOG_IF(FATAL, !conf->LoadConfig())
-        << "load mds configuration fail, conf path = " << confPath;
-    LoadConfigFromCmdline(conf.get());
-    conf->PrintConfig();
-    if (FLAGS_log_dir.empty()) {
-        if (!conf->GetStringValue("mds.common.logDir", &FLAGS_log_dir)) {
-            LOG(WARNING) << "no mds.common.logDir in " << confPath
-                         << ", will log to /tmp";
-        }
+int main(int argc, char** argv) {
+  // config initialization
+  google::ParseCommandLineFlags(&argc, &argv, false);
+  std::string confPath = FLAGS_confPath.c_str();
+  auto conf = std::make_shared<Configuration>();
+  conf->SetConfigPath(confPath);
+  LOG_IF(FATAL, !conf->LoadConfig())
+      << "load mds configuration fail, conf path = " << confPath;
+  LoadConfigFromCmdline(conf.get());
+  conf->PrintConfig();
+  if (FLAGS_log_dir.empty()) {
+    if (!conf->GetStringValue("mds.common.logDir", &FLAGS_log_dir)) {
+      LOG(WARNING) << "no mds.common.logDir in " << confPath
+                   << ", will log to /tmp";
     }
+  }
 
-    // initialize logging module
-    google::InitGoogleLogging(argv[0]);
+  // initialize logging module
+  google::InitGoogleLogging(argv[0]);
 
-    curve::mds::MDS mds;
+  curve::mds::MDS mds;
 
-    // initialize MDS options
-    mds.InitMdsOptions(conf);
+  // initialize MDS options
+  mds.InitMdsOptions(conf);
 
-    // start MDS dummy server for liveness probe and metric exportation of MDS
-    mds.StartDummy();
+  // start MDS dummy server for liveness probe and metric exportation of MDS
+  mds.StartDummy();
 
-    mds.StartCompaginLeader();
+  mds.StartCompaginLeader();
 
-    // Initialize other modules after winning election
-    mds.Init();
+  // Initialize other modules after winning election
+  mds.Init();
 
-    // start mds server and wait CTRL+C to quit
-    mds.Run();
+  // start mds server and wait CTRL+C to quit
+  mds.Run();
 
-    // stop server and background threads
-    mds.Stop();
+  // stop server and background threads
+  mds.Stop();
 
-    google::ShutdownGoogleLogging();
-    return 0;
+  google::ShutdownGoogleLogging();
+  return 0;
 }
-

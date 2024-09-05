@@ -20,30 +20,30 @@
  * Author: yangyaokai
  */
 
-#include <gtest/gtest.h>
-
 #include "src/common/crc32.h"
+
+#include <gtest/gtest.h>
 
 namespace curve {
 namespace common {
 
 TEST(Crc32TEST, BasicTest) {
-    char buf1[10];
-    ::memset(buf1, 0, 10);
-    char buf2[10];
-    ::memset(buf2, 1, 10);
-    char buf3[20];
-    ::memset(buf3, 0, 20);
-    char buf4[10];
-    ::memset(buf4, 0, 10);
-    uint32_t crc1 = CRC32(buf1, sizeof(buf1));
-    uint32_t crc2 = CRC32(buf2, sizeof(buf2));
-    uint32_t crc3 = CRC32(buf3, sizeof(buf3));
-    uint32_t crc4 = CRC32(buf4, sizeof(buf4));
-    ASSERT_EQ(crc1, crc4);
-    ASSERT_NE(crc1, crc2);
-    ASSERT_NE(crc1, crc3);
-    ASSERT_NE(crc2, crc3);
+  char buf1[10];
+  ::memset(buf1, 0, 10);
+  char buf2[10];
+  ::memset(buf2, 1, 10);
+  char buf3[20];
+  ::memset(buf3, 0, 20);
+  char buf4[10];
+  ::memset(buf4, 0, 10);
+  uint32_t crc1 = CRC32(buf1, sizeof(buf1));
+  uint32_t crc2 = CRC32(buf2, sizeof(buf2));
+  uint32_t crc3 = CRC32(buf3, sizeof(buf3));
+  uint32_t crc4 = CRC32(buf4, sizeof(buf4));
+  ASSERT_EQ(crc1, crc4);
+  ASSERT_NE(crc1, crc2);
+  ASSERT_NE(crc1, crc3);
+  ASSERT_NE(crc2, crc3);
 }
 
 TEST(Crc32TEST, StandardResults) {
@@ -67,29 +67,18 @@ TEST(Crc32TEST, StandardResults) {
   ASSERT_EQ(0x113fdb5cU, CRC32(buf, sizeof(buf)));
 
   unsigned char data[48] = {
-    0x01, 0xc0, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x14, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x04, 0x00,
-    0x00, 0x00, 0x00, 0x14,
-    0x00, 0x00, 0x00, 0x18,
-    0x28, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
-    0x02, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00,
+      0x01, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00,
+      0x00, 0x00, 0x00, 0x14, 0x00, 0x00, 0x00, 0x18, 0x28, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   };
   ASSERT_EQ(0xd9963a56, CRC32(reinterpret_cast<char*>(data), sizeof(data)));
 }
 
-TEST(Crc32TEST, Values) {
-  ASSERT_NE(CRC32("a", 1), CRC32("foo", 3));
-}
+TEST(Crc32TEST, Values) { ASSERT_NE(CRC32("a", 1), CRC32("foo", 3)); }
 
 TEST(Crc32TEST, Extend) {
-  ASSERT_EQ(CRC32("hello world", 11),
-            CRC32(CRC32("hello ", 6), "world", 5));
+  ASSERT_EQ(CRC32("hello world", 11), CRC32(CRC32("hello ", 6), "world", 5));
 }
 
 }  // namespace common

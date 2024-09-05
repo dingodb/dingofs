@@ -23,10 +23,12 @@
 #ifndef CURVEFS_TEST_CLIENT_MOCK_CLIENT_S3_H_
 #define CURVEFS_TEST_CLIENT_MOCK_CLIENT_S3_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <string>
+#include <gtest/gtest.h>
+
 #include <memory>
+#include <string>
+
 #include "curvefs/src/client/s3/client_s3.h"
 
 using ::testing::_;
@@ -37,21 +39,20 @@ namespace client {
 
 class MockS3Client : public S3Client {
  public:
-    MockS3Client() {}
-    ~MockS3Client() {}
+  MockS3Client() {}
+  ~MockS3Client() {}
 
-    MOCK_METHOD1(Init, void(const curve::common::S3AdapterOption &options));
-    MOCK_METHOD0(Deinit, void());
-    MOCK_METHOD3(Upload, int(const std::string &name, const char *buf,
-                             uint64_t length));
-    MOCK_METHOD1(UploadAsync,
-                 void(std::shared_ptr<PutObjectAsyncContext> context));
-    MOCK_METHOD4(Download, int(const std::string &name, char *buf,
-                               uint64_t offset, uint64_t length));
-    MOCK_METHOD1(DownloadAsync,
-                 void(std::shared_ptr<GetObjectAsyncContext> context));
+  MOCK_METHOD1(Init, void(const curve::common::S3AdapterOption& options));
+  MOCK_METHOD0(Deinit, void());
+  MOCK_METHOD3(Upload,
+               int(const std::string& name, const char* buf, uint64_t length));
+  MOCK_METHOD1(UploadAsync,
+               void(std::shared_ptr<PutObjectAsyncContext> context));
+  MOCK_METHOD4(Download, int(const std::string& name, char* buf,
+                             uint64_t offset, uint64_t length));
+  MOCK_METHOD1(DownloadAsync,
+               void(std::shared_ptr<GetObjectAsyncContext> context));
 };
-
 
 }  // namespace client
 }  // namespace curvefs

@@ -39,28 +39,27 @@ namespace metaserver {
 
 class MockCompactInodeJob : public CompactInodeJob {
  public:
-    using CompactInodeJob::CompactInodeJob;
+  using CompactInodeJob::CompactInodeJob;
 
-    MetaStatusCode UpdateInode(
-        CopysetNode* copysetNode, const PartitionInfo& pinfo, uint64_t inodeId,
-        ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3ChunkInfoAdd,
-        ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&&
-            s3ChunkInfoRemove) {
-        return UpdateInode_rvr(copysetNode, pinfo, inodeId, s3ChunkInfoAdd,
-                               s3ChunkInfoRemove);
-    }
-    MOCK_METHOD5(
-        UpdateInode_rvr,
-        MetaStatusCode(CopysetNode*, const PartitionInfo&, uint64_t,
-                       ::google::protobuf::Map<uint64_t, S3ChunkInfoList>,
-                       ::google::protobuf::Map<uint64_t, S3ChunkInfoList>));
+  MetaStatusCode UpdateInode(
+      CopysetNode* copysetNode, const PartitionInfo& pinfo, uint64_t inodeId,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3ChunkInfoAdd,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3ChunkInfoRemove) {
+    return UpdateInode_rvr(copysetNode, pinfo, inodeId, s3ChunkInfoAdd,
+                           s3ChunkInfoRemove);
+  }
+  MOCK_METHOD5(
+      UpdateInode_rvr,
+      MetaStatusCode(CopysetNode*, const PartitionInfo&, uint64_t,
+                     ::google::protobuf::Map<uint64_t, S3ChunkInfoList>,
+                     ::google::protobuf::Map<uint64_t, S3ChunkInfoList>));
 };
 
 class MockCopysetNodeWrapper : public CopysetNodeWrapper {
  public:
-    MockCopysetNodeWrapper() : CopysetNodeWrapper(nullptr) {}
-    MOCK_METHOD0(IsLeaderTerm, bool());
-    MOCK_METHOD0(IsValid, bool());
+  MockCopysetNodeWrapper() : CopysetNodeWrapper(nullptr) {}
+  MOCK_METHOD0(IsLeaderTerm, bool());
+  MOCK_METHOD0(IsValid, bool());
 };
 
 }  // namespace metaserver

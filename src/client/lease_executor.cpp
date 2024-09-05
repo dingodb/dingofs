@@ -19,11 +19,12 @@
  * File Created: Saturday, 23rd February 2019 1:41:31 pm
  * Author: tongguangxun
  */
+#include "src/client/lease_executor.h"
+
 #include <glog/logging.h>
 
-#include "src/common/timeutility.h"
-#include "src/client/lease_executor.h"
 #include "src/client/service_helper.h"
+#include "src/common/timeutility.h"
 
 using curve::common::TimeUtility;
 
@@ -43,165 +44,160 @@ LeaseExecutor::LeaseExecutor(const LeaseOption& leaseOpt,
       task_() {}
 
 LeaseExecutor::~LeaseExecutor() {
-    if (task_) {
-        task_->Stop();
-        task_->WaitTaskExit();
-    }
+  if (task_) {
+    task_->Stop();
+    task_->WaitTaskExit();
+  }
 }
 
 bool LeaseExecutor::Start(const FInfo_t& fi, const LeaseSession_t& lease) {
-    fullFileName_ = fi.fullPathName;
+  fullFileName_ = fi.fullPathName;
 
-    leasesession_ = lease;
-    if (leasesession_.leaseTime <= 0) {
-        LOG(ERROR) << "Invalid lease time, filename = " << fullFileName_;
-        return false;
-    }
+  leasesession_ = lease;
+  if (leasesession_.leaseTime <= 0) {
+    LOG(ERROR) << "Invalid lease time, filename = " << fullFileName_;
+    return false;
+  }
 
-    if (leaseoption_.mdsRefreshTimesPerLease == 0) {
-        LOG(ERROR) << "Invalid refreshTimesPerLease, filename = "
-                   << fullFileName_;
-        return false;
-    }
+  if (leaseoption_.mdsRefreshTimesPerLease == 0) {
+    LOG(ERROR) << "Invalid refreshTimesPerLease, filename = " << fullFileName_;
+    return false;
+  }
 
-    iomanager_->UpdateFileInfo(fi);
+  iomanager_->UpdateFileInfo(fi);
 
-    auto interval =
-        leasesession_.leaseTime / leaseoption_.mdsRefreshTimesPerLease;
+  auto interval =
+      leasesession_.leaseTime / leaseoption_.mdsRefreshTimesPerLease;
 
-    task_.reset(new (std::nothrow) RefreshSessionTask(this, interval));
-    if (task_ == nullptr) {
-        LOG(ERROR) << "Allocate RefreshSessionTask failed, filename = "
-                   << fullFileName_;
-        return false;
-    }
+  task_.reset(new (std::nothrow) RefreshSessionTask(this, interval));
+  if (task_ == nullptr) {
+    LOG(ERROR) << "Allocate RefreshSessionTask failed, filename = "
+               << fullFileName_;
+    return false;
+  }
 
-    timespec abstime = butil::microseconds_from_now(interval);
-    brpc::PeriodicTaskManager::StartTaskAt(task_.get(), abstime);
+  timespec abstime = butil::microseconds_from_now(interval);
+  brpc::PeriodicTaskManager::StartTaskAt(task_.get(), abstime);
 
-    LOG(INFO) << "LeaseExecutor for " << fullFileName_
-              << " started, lease interval is " << interval << " us";
+  LOG(INFO) << "LeaseExecutor for " << fullFileName_
+            << " started, lease interval is " << interval << " us";
 
-    return true;
+  return true;
 }
 
 bool LeaseExecutor::RefreshLease() {
-    if (!LeaseValid()) {
-        LOG(INFO) << "lease not valid!";
-        iomanager_->LeaseTimeoutBlockIO();
-    }
+  if (!LeaseValid()) {
+    LOG(INFO) << "lease not valid!";
+    iomanager_->LeaseTimeoutBlockIO();
+  }
 
-    LeaseRefreshResult response;
-    LIBCURVE_ERROR ret = mdsclient_->RefreshSession(
-        fullFileName_, userinfo_, leasesession_.sessionID, &response);
+  LeaseRefreshResult response;
+  LIBCURVE_ERROR ret = mdsclient_->RefreshSession(
+      fullFileName_, userinfo_, leasesession_.sessionID, &response);
 
-    if (LIBCURVE_ERROR::FAILED == ret) {
-        LOG(WARNING) << "Refresh session rpc failed, filename = "
-                     << fullFileName_;
-        return true;
-    } else if (LIBCURVE_ERROR::AUTHFAIL == ret) {
-        iomanager_->LeaseTimeoutBlockIO();
-        LOG(ERROR) << "Refresh session auth fail, block io. "
-                   << "session id = " << leasesession_.sessionID
-                   << ", filename = " << fullFileName_;
-        return true;
-    }
-
-    if (response.status == LeaseRefreshResult::Status::OK) {
-        if (iomanager_->InodeId() != response.finfo.id) {
-            LOG(ERROR) << fullFileName_ << " inode id changed, current id = "
-                       << iomanager_->InodeId()
-                       << ", but mds response id = " << response.finfo.id
-                       << ", block IO";
-            iomanager_->LeaseTimeoutBlockIO();
-            isleaseAvaliable_.store(false);
-            return false;
-        }
-
-        CheckNeedUpdateFileInfo(response.finfo);
-        failedrefreshcount_.store(0);
-        isleaseAvaliable_.store(true);
-        iomanager_->ResumeIO();
-        return true;
-    } else if (response.status == LeaseRefreshResult::Status::NOT_EXIST) {
-        iomanager_->LeaseTimeoutBlockIO();
-        isleaseAvaliable_.store(false);
-        LOG(ERROR) << "session or file not exists, no longer refresh!"
-                   << ", sessionid = " << leasesession_.sessionID
-                   << ", filename = " << fullFileName_;
-        return false;
-    } else {
-        LOG(ERROR) << "Refresh session failed, filename = " << fullFileName_;
-        return true;
-    }
+  if (LIBCURVE_ERROR::FAILED == ret) {
+    LOG(WARNING) << "Refresh session rpc failed, filename = " << fullFileName_;
     return true;
+  } else if (LIBCURVE_ERROR::AUTHFAIL == ret) {
+    iomanager_->LeaseTimeoutBlockIO();
+    LOG(ERROR) << "Refresh session auth fail, block io. "
+               << "session id = " << leasesession_.sessionID
+               << ", filename = " << fullFileName_;
+    return true;
+  }
+
+  if (response.status == LeaseRefreshResult::Status::OK) {
+    if (iomanager_->InodeId() != response.finfo.id) {
+      LOG(ERROR) << fullFileName_
+                 << " inode id changed, current id = " << iomanager_->InodeId()
+                 << ", but mds response id = " << response.finfo.id
+                 << ", block IO";
+      iomanager_->LeaseTimeoutBlockIO();
+      isleaseAvaliable_.store(false);
+      return false;
+    }
+
+    CheckNeedUpdateFileInfo(response.finfo);
+    failedrefreshcount_.store(0);
+    isleaseAvaliable_.store(true);
+    iomanager_->ResumeIO();
+    return true;
+  } else if (response.status == LeaseRefreshResult::Status::NOT_EXIST) {
+    iomanager_->LeaseTimeoutBlockIO();
+    isleaseAvaliable_.store(false);
+    LOG(ERROR) << "session or file not exists, no longer refresh!"
+               << ", sessionid = " << leasesession_.sessionID
+               << ", filename = " << fullFileName_;
+    return false;
+  } else {
+    LOG(ERROR) << "Refresh session failed, filename = " << fullFileName_;
+    return true;
+  }
+  return true;
 }
 
 void LeaseExecutor::Stop() {
-    if (task_ != nullptr) {
-        task_->Stop();
+  if (task_ != nullptr) {
+    task_->Stop();
 
-        LOG(INFO) << "LeaseExecutor for " << fullFileName_ << " stopped";
-    }
+    LOG(INFO) << "LeaseExecutor for " << fullFileName_ << " stopped";
+  }
 }
 
-bool LeaseExecutor::LeaseValid() {
-    return isleaseAvaliable_.load();
-}
+bool LeaseExecutor::LeaseValid() { return isleaseAvaliable_.load(); }
 
 void LeaseExecutor::IncremRefreshFailed() {
-    failedrefreshcount_.fetch_add(1);
-    if (failedrefreshcount_.load() >= leaseoption_.mdsRefreshTimesPerLease) {
-        isleaseAvaliable_.store(false);
-        iomanager_->LeaseTimeoutBlockIO();
-        LOG(ERROR) << "session invalid now!";
-    }
+  failedrefreshcount_.fetch_add(1);
+  if (failedrefreshcount_.load() >= leaseoption_.mdsRefreshTimesPerLease) {
+    isleaseAvaliable_.store(false);
+    iomanager_->LeaseTimeoutBlockIO();
+    LOG(ERROR) << "session invalid now!";
+  }
 }
 
 void LeaseExecutor::CheckNeedUpdateFileInfo(const FInfo& fileInfo) {
-    MetaCache* metaCache = iomanager_->GetMetaCache();
+  MetaCache* metaCache = iomanager_->GetMetaCache();
 
-    uint64_t currentFileSn = metaCache->GetLatestFileSn();
-    uint64_t newSn = fileInfo.seqnum;
-    if (newSn > currentFileSn) {
-        LOG(INFO) << "Update file sn, new file sn = " << newSn
-                  << ", current sn = " << currentFileSn
-                  << ", filename = " << fullFileName_;
-        metaCache->SetLatestFileSn(newSn);
-    }
+  uint64_t currentFileSn = metaCache->GetLatestFileSn();
+  uint64_t newSn = fileInfo.seqnum;
+  if (newSn > currentFileSn) {
+    LOG(INFO) << "Update file sn, new file sn = " << newSn
+              << ", current sn = " << currentFileSn
+              << ", filename = " << fullFileName_;
+    metaCache->SetLatestFileSn(newSn);
+  }
 
-    FileStatus currentFileStatus = metaCache->GetLatestFileStatus();
-    FileStatus newFileStatus = fileInfo.filestatus;
-    if (newFileStatus != currentFileStatus) {
-        LOG(INFO) << "Update file status, new status = "
-                  << FileStatusToName(newFileStatus)
-                  << ", current file status = "
-                  << FileStatusToName(currentFileStatus)
-                  << ", filename = " << fullFileName_;
-        metaCache->SetLatestFileStatus(newFileStatus);
-    }
+  FileStatus currentFileStatus = metaCache->GetLatestFileStatus();
+  FileStatus newFileStatus = fileInfo.filestatus;
+  if (newFileStatus != currentFileStatus) {
+    LOG(INFO) << "Update file status, new status = "
+              << FileStatusToName(newFileStatus) << ", current file status = "
+              << FileStatusToName(currentFileStatus)
+              << ", filename = " << fullFileName_;
+    metaCache->SetLatestFileStatus(newFileStatus);
+  }
 
-    // update throttle params
-    iomanager_->UpdateFileThrottleParams(fileInfo.throttleParams);
+  // update throttle params
+  iomanager_->UpdateFileThrottleParams(fileInfo.throttleParams);
 }
 
 void LeaseExecutor::ResetRefreshSessionTask() {
-    if (task_ == nullptr) {
-        return;
-    }
+  if (task_ == nullptr) {
+    return;
+  }
 
-    // 等待前一个任务退出
-    task_->Stop();
-    task_->WaitTaskExit();
+  // 等待前一个任务退出
+  task_->Stop();
+  task_->WaitTaskExit();
 
-    auto interval = task_->RefreshIntervalUs();
+  auto interval = task_->RefreshIntervalUs();
 
-    task_.reset(new (std::nothrow) RefreshSessionTask(this, interval));
-    timespec abstime = butil::microseconds_from_now(interval);
-    brpc::PeriodicTaskManager::StartTaskAt(task_.get(), abstime);
+  task_.reset(new (std::nothrow) RefreshSessionTask(this, interval));
+  timespec abstime = butil::microseconds_from_now(interval);
+  brpc::PeriodicTaskManager::StartTaskAt(task_.get(), abstime);
 
-    isleaseAvaliable_.store(true);
+  isleaseAvaliable_.store(true);
 }
 
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve

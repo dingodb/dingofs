@@ -25,10 +25,10 @@
 
 #include <gmock/gmock.h>
 
+#include <list>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
-#include <list>
 
 #include "curvefs/src/client/s3/disk_cache_read.h"
 
@@ -37,29 +37,28 @@ namespace client {
 
 class MockDiskCacheRead : public DiskCacheRead {
  public:
-    MockDiskCacheRead() {}
-    ~MockDiskCacheRead() {}
+  MockDiskCacheRead() {}
+  ~MockDiskCacheRead() {}
 
-    MOCK_METHOD4(ReadDiskFile, int(const std::string name, char *buf,
-                                   uint64_t offset, uint64_t length));
+  MOCK_METHOD4(ReadDiskFile, int(const std::string name, char* buf,
+                                 uint64_t offset, uint64_t length));
 
-    MOCK_METHOD1(CreateIoDir, int(bool writreDir));
+  MOCK_METHOD1(CreateIoDir, int(bool writreDir));
 
-    MOCK_METHOD1(IsFileExist, bool(const std::string file));
+  MOCK_METHOD1(IsFileExist, bool(const std::string file));
 
-    MOCK_METHOD0(GetCacheIoFullDir, std::string());
+  MOCK_METHOD0(GetCacheIoFullDir, std::string());
 
-    MOCK_METHOD3(LinkWriteToRead,
-                 int(const std::string fileName, const std::string fullWriteDir,
-                     const std::string fullReadDir));
-    MOCK_METHOD3(WriteReadDirect, int(const std::string fileName,
-                                      const char *buf, uint64_t length));
-    MOCK_METHOD1(LoadAllCacheReadFile, int(std::set<std::string> *cachedObj));
-    MOCK_METHOD3(WriteDiskFile, int(const std::string fileName, const char *buf,
+  MOCK_METHOD3(LinkWriteToRead,
+               int(const std::string fileName, const std::string fullWriteDir,
+                   const std::string fullReadDir));
+  MOCK_METHOD3(WriteReadDirect, int(const std::string fileName, const char* buf,
                                     uint64_t length));
-    MOCK_METHOD1(ClearReadCache, int(const std::list<std::string> &files));
+  MOCK_METHOD1(LoadAllCacheReadFile, int(std::set<std::string>* cachedObj));
+  MOCK_METHOD3(WriteDiskFile, int(const std::string fileName, const char* buf,
+                                  uint64_t length));
+  MOCK_METHOD1(ClearReadCache, int(const std::list<std::string>& files));
 };
-
 
 }  // namespace client
 }  // namespace curvefs

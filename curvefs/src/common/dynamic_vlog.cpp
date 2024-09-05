@@ -32,9 +32,9 @@ namespace common {
 
 namespace {
 bool CheckVLogLevel(const char* /*name*/, int32_t value) {
-    FLAGS_v = value;
-    LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
-    return true;
+  FLAGS_v = value;
+  LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
+  return true;
 }
 }  // namespace
 

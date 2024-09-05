@@ -32,6 +32,7 @@
 #include <string>
 #include <thread>  //NOLINT
 #include <vector>
+
 #include "curvefs/proto/heartbeat.pb.h"
 #include "curvefs/src/metaserver/common/types.h"
 #include "curvefs/src/metaserver/copyset/copyset_node_manager.h"
@@ -51,8 +52,8 @@ using MetaServerSpaceStatus = curvefs::mds::heartbeat::MetaServerSpaceStatus;
 using ::curvefs::mds::heartbeat::CopySetConf;
 using TaskStatus = butil::Status;
 using CopysetNodePtr = std::shared_ptr<CopysetNode>;
-using curvefs::metaserver::copyset::CopysetNodeManager;
 using curvefs::common::Peer;
+using curvefs::metaserver::copyset::CopysetNodeManager;
 using PeerId = braft::PeerId;
 
 class ResourceCollector;
@@ -61,17 +62,17 @@ class ResourceCollector;
  * heartbeat subsystem option
  */
 struct HeartbeatOptions {
-    MetaServerID metaserverId;
-    std::string metaserverToken;
-    std::string storeUri;
-    std::string mdsListenAddr;
-    std::string ip;
-    uint32_t port;
-    uint32_t intervalSec;
-    uint32_t timeout;
-    CopysetNodeManager* copysetNodeManager;
-    ResourceCollector* resourceCollector;
-    std::shared_ptr<LocalFileSystem> fs;
+  MetaServerID metaserverId;
+  std::string metaserverToken;
+  std::string storeUri;
+  std::string mdsListenAddr;
+  std::string ip;
+  uint32_t port;
+  uint32_t intervalSec;
+  uint32_t timeout;
+  CopysetNodeManager* copysetNodeManager;
+  ResourceCollector* resourceCollector;
+  std::shared_ptr<LocalFileSystem> fs;
 };
 
 class HeartbeatTaskExecutor;
@@ -81,114 +82,114 @@ class HeartbeatTaskExecutor;
  */
 class Heartbeat {
  public:
-    Heartbeat() {}
-    ~Heartbeat() {}
+  Heartbeat() {}
+  ~Heartbeat() {}
 
-    /**
-     * @brief init heartbeat subsystem
-     * @param[in] options
-     * @return 0:success; not 0: fail
-     */
-    int Init(const HeartbeatOptions& options);
+  /**
+   * @brief init heartbeat subsystem
+   * @param[in] options
+   * @return 0:success; not 0: fail
+   */
+  int Init(const HeartbeatOptions& options);
 
-    /**
-     * @brief clean heartbeat subsystem
-     * @return 0:success; not 0: fail
-     */
-    int Fini();
+  /**
+   * @brief clean heartbeat subsystem
+   * @return 0:success; not 0: fail
+   */
+  int Fini();
 
-    /**
-     * @brief run heartbeat subsystem
-     * @return 0:success; not 0: fail
-     */
-    int Run();
-
- private:
-    /**
-     * @brief stop heartbeat subsystem
-     * @return 0:success; not 0: fail
-     */
-    int Stop();
-
-    /*
-     * heartbeat work thread
-     */
-    void HeartbeatWorker();
-
-    void BuildCopysetInfo(curvefs::mds::heartbeat::CopySetInfo* info,
-                         CopysetNode* copyset);
-
-    int BuildRequest(HeartbeatRequest* request);
-
-    int SendHeartbeat(const HeartbeatRequest& request,
-                      HeartbeatResponse* response);
-
-    /*
-     * print HeartbeatRequest to log
-     */
-    void DumpHeartbeatRequest(const HeartbeatRequest& request);
-
-    /*
-     * print HeartbeatResponse to log
-     */
-    void DumpHeartbeatResponse(const HeartbeatResponse& response);
-
-    bool GetMetaserverSpaceStatus(MetaServerSpaceStatus* status,
-                                  uint64_t ncopysets);
+  /**
+   * @brief run heartbeat subsystem
+   * @return 0:success; not 0: fail
+   */
+  int Run();
 
  private:
-    friend class HeartbeatTest;
+  /**
+   * @brief stop heartbeat subsystem
+   * @return 0:success; not 0: fail
+   */
+  int Stop();
+
+  /*
+   * heartbeat work thread
+   */
+  void HeartbeatWorker();
+
+  void BuildCopysetInfo(curvefs::mds::heartbeat::CopySetInfo* info,
+                        CopysetNode* copyset);
+
+  int BuildRequest(HeartbeatRequest* request);
+
+  int SendHeartbeat(const HeartbeatRequest& request,
+                    HeartbeatResponse* response);
+
+  /*
+   * print HeartbeatRequest to log
+   */
+  void DumpHeartbeatRequest(const HeartbeatRequest& request);
+
+  /*
+   * print HeartbeatResponse to log
+   */
+  void DumpHeartbeatResponse(const HeartbeatResponse& response);
+
+  bool GetMetaserverSpaceStatus(MetaServerSpaceStatus* status,
+                                uint64_t ncopysets);
 
  private:
-     Thread hbThread_;
+  friend class HeartbeatTest;
 
-    std::atomic<bool> toStop_;
+ private:
+  Thread hbThread_;
 
-    ::curve::common::WaitInterval waitInterval_;
+  std::atomic<bool> toStop_;
 
-    CopysetNodeManager* copysetMan_;
+  ::curve::common::WaitInterval waitInterval_;
 
-    // metaserver store path
-    std::string storePath_;
+  CopysetNodeManager* copysetMan_;
 
-    HeartbeatOptions options_;
+  // metaserver store path
+  std::string storePath_;
 
-    // MDS addr list
-    std::vector<std::string> mdsEps_;
+  HeartbeatOptions options_;
 
-    // index of current service mds
-    int inServiceIndex_;
+  // MDS addr list
+  std::vector<std::string> mdsEps_;
 
-    // MetaServer addr
-    butil::EndPoint msEp_;
+  // index of current service mds
+  int inServiceIndex_;
 
-    // heartbeat subsystem init time, use unix time
-    uint64_t startUpTime_;
+  // MetaServer addr
+  butil::EndPoint msEp_;
 
-    std::unique_ptr<HeartbeatTaskExecutor> taskExecutor_;
+  // heartbeat subsystem init time, use unix time
+  uint64_t startUpTime_;
+
+  std::unique_ptr<HeartbeatTaskExecutor> taskExecutor_;
 };
 
 // execute tasks from heartbeat response
 class HeartbeatTaskExecutor {
  public:
-    HeartbeatTaskExecutor(CopysetNodeManager* mgr, const butil::EndPoint& ep);
+  HeartbeatTaskExecutor(CopysetNodeManager* mgr, const butil::EndPoint& ep);
 
-    void ExecTasks(const HeartbeatResponse& response);
-
- private:
-    void ExecOneTask(const CopySetConf& conf);
-
-    void DoTransferLeader(CopysetNode* node, const CopySetConf& conf);
-    void DoAddPeer(CopysetNode* node, const CopySetConf& conf);
-    void DoRemovePeer(CopysetNode* node, const CopySetConf& conf);
-    void DoChangePeer(CopysetNode* node, const CopySetConf& conf);
-    void DoPurgeCopyset(PoolId poolid, CopysetId copysetid);
-
-    bool NeedPurge(const CopySetConf& conf);
+  void ExecTasks(const HeartbeatResponse& response);
 
  private:
-    CopysetNodeManager* copysetMgr_;
-    butil::EndPoint ep_;
+  void ExecOneTask(const CopySetConf& conf);
+
+  void DoTransferLeader(CopysetNode* node, const CopySetConf& conf);
+  void DoAddPeer(CopysetNode* node, const CopySetConf& conf);
+  void DoRemovePeer(CopysetNode* node, const CopySetConf& conf);
+  void DoChangePeer(CopysetNode* node, const CopySetConf& conf);
+  void DoPurgeCopyset(PoolId poolid, CopysetId copysetid);
+
+  bool NeedPurge(const CopySetConf& conf);
+
+ private:
+  CopysetNodeManager* copysetMgr_;
+  butil::EndPoint ep_;
 };
 
 }  // namespace metaserver

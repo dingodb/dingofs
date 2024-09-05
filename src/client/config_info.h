@@ -24,6 +24,7 @@
 #define SRC_CLIENT_CONFIG_INFO_H_
 
 #include <stdint.h>
+
 #include <string>
 #include <vector>
 
@@ -36,8 +37,8 @@ namespace client {
  * @logPath: log打印位置
  */
 struct LogInfo {
-    int logLevel = 2;
-    std::string logPath;
+  int logLevel = 2;
+  std::string logPath;
 };
 
 /**
@@ -45,36 +46,36 @@ struct LogInfo {
  * @fileMaxInFlightRPCNum: 为一个文件中最大允许的inflight IO数量
  */
 struct InFlightIOCntlInfo {
-    uint64_t fileMaxInFlightRPCNum = 2048;
+  uint64_t fileMaxInFlightRPCNum = 2048;
 };
 
 struct MetaServerOption {
-    uint64_t mdsMaxRetryMS = 8000;
-    struct RpcRetryOption {
-        // rpc max timeout
-        uint64_t maxRPCTimeoutMS = 2000;
-        // rpc normal timeout
-        uint64_t rpcTimeoutMs = 500;
-        // rpc retry interval
-        uint32_t rpcRetryIntervalUS = 50000;
-        // retry maxFailedTimesBeforeChangeAddr at a server
-        uint32_t maxFailedTimesBeforeChangeAddr = 5;
+  uint64_t mdsMaxRetryMS = 8000;
+  struct RpcRetryOption {
+    // rpc max timeout
+    uint64_t maxRPCTimeoutMS = 2000;
+    // rpc normal timeout
+    uint64_t rpcTimeoutMs = 500;
+    // rpc retry interval
+    uint32_t rpcRetryIntervalUS = 50000;
+    // retry maxFailedTimesBeforeChangeAddr at a server
+    uint32_t maxFailedTimesBeforeChangeAddr = 5;
 
-        /**
-         * When the failed times except RPC error
-         * greater than mdsNormalRetryTimesBeforeTriggerWait,
-         * it will trigger wait strategy, and sleep long time before retry
-         */
-        uint64_t maxRetryMsInIOPath = 86400000;  // 1 day
+    /**
+     * When the failed times except RPC error
+     * greater than mdsNormalRetryTimesBeforeTriggerWait,
+     * it will trigger wait strategy, and sleep long time before retry
+     */
+    uint64_t maxRetryMsInIOPath = 86400000;  // 1 day
 
-        // if the overall timeout passed by the user is 0, that means retry
-        // until success. First try normalRetryTimesBeforeTriggerWait times,
-        // then repeatedly sleep waitSleepMs and try once
-        uint64_t normalRetryTimesBeforeTriggerWait = 3;  // 3 times
-        uint64_t waitSleepMs = 10000;                    // 10 seconds
+    // if the overall timeout passed by the user is 0, that means retry
+    // until success. First try normalRetryTimesBeforeTriggerWait times,
+    // then repeatedly sleep waitSleepMs and try once
+    uint64_t normalRetryTimesBeforeTriggerWait = 3;  // 3 times
+    uint64_t waitSleepMs = 10000;                    // 10 seconds
 
-        std::vector<std::string> addrs;
-    } rpcRetryOpt;
+    std::vector<std::string> addrs;
+  } rpcRetryOpt;
 };
 
 /**
@@ -86,7 +87,7 @@ struct MetaServerOption {
  *                           续约成功。
  */
 struct LeaseOption {
-    uint32_t mdsRefreshTimesPerLease = 5;
+  uint32_t mdsRefreshTimesPerLease = 5;
 };
 
 /**
@@ -101,9 +102,9 @@ struct LeaseOption {
  *     整个server上的所有chunkserver都标记为unstable
  */
 struct ChunkServerUnstableOption {
-    uint32_t maxStableChunkServerTimeoutTimes = 64;
-    uint32_t checkHealthTimeoutMS = 100;
-    uint32_t serverUnstableThreshold = 3;
+  uint32_t maxStableChunkServerTimeoutTimes = 64;
+  uint32_t checkHealthTimeoutMS = 100;
+  uint32_t serverUnstableThreshold = 3;
 };
 
 /**
@@ -145,13 +146,13 @@ struct ChunkServerUnstableOption {
  *                          向上报警。
  */
 struct FailureRequestOption {
-    uint32_t chunkserverOPMaxRetry = 3;
-    uint64_t chunkserverOPRetryIntervalUS = 200;
-    uint64_t chunkserverRPCTimeoutMS = 1000;
-    uint64_t chunkserverMaxRPCTimeoutMS = 64000;
-    uint64_t chunkserverMaxRetrySleepIntervalUS = 64ull * 1000 * 1000;
-    uint64_t chunkserverMinRetryTimesForceTimeoutBackoff = 5;
-    uint64_t chunkserverMaxRetryTimesBeforeConsiderSuspend = 20;
+  uint32_t chunkserverOPMaxRetry = 3;
+  uint64_t chunkserverOPRetryIntervalUS = 200;
+  uint64_t chunkserverRPCTimeoutMS = 1000;
+  uint64_t chunkserverMaxRPCTimeoutMS = 64000;
+  uint64_t chunkserverMaxRetrySleepIntervalUS = 64ull * 1000 * 1000;
+  uint64_t chunkserverMinRetryTimesForceTimeoutBackoff = 5;
+  uint64_t chunkserverMaxRetryTimesBeforeConsiderSuspend = 20;
 };
 
 /**
@@ -161,9 +162,9 @@ struct FailureRequestOption {
  * @failRequestOpt: rpc发送失败之后，需要进行rpc重试的相关配置
  */
 struct IOSenderOption {
-    bool chunkserverEnableAppliedIndexRead;
-    InFlightIOCntlInfo inflightOpt;
-    FailureRequestOption failRequestOpt;
+  bool chunkserverEnableAppliedIndexRead;
+  InFlightIOCntlInfo inflightOpt;
+  FailureRequestOption failRequestOpt;
 };
 
 /**
@@ -173,9 +174,9 @@ struct IOSenderOption {
  * @scheduleThreadpoolSize: schedule模块线程池大小
  */
 struct RequestScheduleOption {
-    uint32_t scheduleQueueCapacity = 1024;
-    uint32_t scheduleThreadpoolSize = 2;
-    IOSenderOption ioSenderOpt;
+  uint32_t scheduleQueueCapacity = 1024;
+  uint32_t scheduleThreadpoolSize = 2;
+  IOSenderOption ioSenderOpt;
 };
 
 /**
@@ -201,18 +202,18 @@ struct RequestScheduleOption {
  *                            选择底层服务节点的策略
  */
 struct MetaCacheOption {
-    uint32_t metacacheGetLeaderRetry = 3;
-    uint32_t metacacheRPCRetryIntervalUS = 500;
-    uint32_t metacacheGetLeaderRPCTimeOutMS = 1000;
-    uint32_t metacacheGetLeaderBackupRequestMS = 100;
-    uint32_t discardGranularity = 4096;
-    std::string metacacheGetLeaderBackupRequestLbName = "rr";
-    ChunkServerUnstableOption chunkserverUnstableOption;
+  uint32_t metacacheGetLeaderRetry = 3;
+  uint32_t metacacheRPCRetryIntervalUS = 500;
+  uint32_t metacacheGetLeaderRPCTimeOutMS = 1000;
+  uint32_t metacacheGetLeaderBackupRequestMS = 100;
+  uint32_t discardGranularity = 4096;
+  std::string metacacheGetLeaderBackupRequestLbName = "rr";
+  ChunkServerUnstableOption chunkserverUnstableOption;
 };
 
 struct AlignmentOption {
-    uint32_t commonVolume = 512;
-    uint32_t cloneVolume = 4096;
+  uint32_t commonVolume = 512;
+  uint32_t cloneVolume = 4096;
 };
 
 /**
@@ -222,8 +223,8 @@ struct AlignmentOption {
  *                        发向同一个chunkserver的请求锁携带的数据大小不能超过该值。
  */
 struct IOSplitOption {
-    uint64_t fileIOSplitMaxSizeKB = 64;
-    AlignmentOption alignment;
+  uint64_t fileIOSplitMaxSizeKB = 64;
+  AlignmentOption alignment;
 };
 
 /**
@@ -234,14 +235,14 @@ struct IOSplitOption {
  * @isolationTaskThreadPoolSize: 隔离线程池容量
  */
 struct TaskThreadOption {
-    uint64_t isolationTaskQueueCapacity = 500000;
-    uint32_t isolationTaskThreadPoolSize = 1;
+  uint64_t isolationTaskQueueCapacity = 500000;
+  uint32_t isolationTaskThreadPoolSize = 1;
 };
 
 // for discard
 struct DiscardOption {
-    bool enable = false;
-    uint32_t taskDelayMs = 1000 * 60;  // 1 min
+  bool enable = false;
+  uint32_t taskDelayMs = 1000 * 60;  // 1 min
 };
 
 /**
@@ -250,26 +251,26 @@ struct DiscardOption {
  * @fdCloseTimeInterval: close sourcereader fd time interval
  */
 struct CloseFdThreadOption {
-    uint32_t fdTimeout = 300;
-    uint32_t fdCloseTimeInterval = 600;
+  uint32_t fdTimeout = 300;
+  uint32_t fdCloseTimeInterval = 600;
 };
 
 struct ThrottleOption {
-    bool enable = false;
+  bool enable = false;
 };
 
 /**
  * IOOption存储了当前io 操作所需要的所有配置信息
  */
 struct IOOption {
-    IOSplitOption ioSplitOpt;
-    IOSenderOption ioSenderOpt;
-    MetaCacheOption metaCacheOpt;
-    TaskThreadOption taskThreadOpt;
-    RequestScheduleOption reqSchdulerOpt;
-    CloseFdThreadOption closeFdThreadOption;
-    ThrottleOption throttleOption;
-    DiscardOption discardOption;
+  IOSplitOption ioSplitOpt;
+  IOSenderOption ioSenderOpt;
+  MetaCacheOption metaCacheOpt;
+  TaskThreadOption taskThreadOpt;
+  RequestScheduleOption reqSchdulerOpt;
+  CloseFdThreadOption closeFdThreadOption;
+  ThrottleOption throttleOption;
+  DiscardOption discardOption;
 };
 
 /**
@@ -280,34 +281,33 @@ struct IOOption {
  * @turnOffHealthCheck: 是否关闭健康检查
  */
 struct CommonConfigOpt {
-    bool mdsRegisterToMDS = false;
-    bool turnOffHealthCheck = false;
+  bool mdsRegisterToMDS = false;
+  bool turnOffHealthCheck = false;
 };
 
 /**
  * ClientConfigOption是外围快照系统需要设置的配置信息
  */
 struct ClientConfigOption {
-    LogInfo loginfo;
-    IOOption ioOpt;
-    CommonConfigOpt commonOpt;
-    MetaServerOption metaServerOpt;
+  LogInfo loginfo;
+  IOOption ioOpt;
+  CommonConfigOpt commonOpt;
+  MetaServerOption metaServerOpt;
 };
 
 struct ChunkServerBroadCasterOption {
-    uint32_t broadCastMaxNum;
+  uint32_t broadCastMaxNum;
 
-    ChunkServerBroadCasterOption()
-      : broadCastMaxNum(200) {}
+  ChunkServerBroadCasterOption() : broadCastMaxNum(200) {}
 };
 
 struct ChunkServerClientRetryOptions {
-     uint32_t rpcTimeoutMs;
-     uint32_t rpcMaxTry;
-     uint32_t rpcIntervalUs;
-     uint32_t rpcMaxTimeoutMs;
+  uint32_t rpcTimeoutMs;
+  uint32_t rpcMaxTry;
+  uint32_t rpcIntervalUs;
+  uint32_t rpcMaxTimeoutMs;
 
-    ChunkServerClientRetryOptions()
+  ChunkServerClientRetryOptions()
       : rpcTimeoutMs(500),
         rpcMaxTry(3),
         rpcIntervalUs(100000),
@@ -318,13 +318,13 @@ struct ChunkServerClientRetryOptions {
  * FileServiceOption是QEMU侧总体配置信息
  */
 struct FileServiceOption {
-    LogInfo loginfo;
-    IOOption ioOpt;
-    LeaseOption leaseOpt;
-    CommonConfigOpt commonOpt;
-    MetaServerOption metaServerOpt;
-    ChunkServerClientRetryOptions csClientOpt;
-    ChunkServerBroadCasterOption csBroadCasterOpt;
+  LogInfo loginfo;
+  IOOption ioOpt;
+  LeaseOption leaseOpt;
+  CommonConfigOpt commonOpt;
+  MetaServerOption metaServerOpt;
+  ChunkServerClientRetryOptions csClientOpt;
+  ChunkServerBroadCasterOption csBroadCasterOpt;
 };
 
 }  // namespace client

@@ -35,53 +35,52 @@ namespace copyset {
 using ::curve::common::CountDownEvent;
 
 TEST(ApplyQueueTest, StartAndStopTest) {
-    ApplyQueue applyQueue;
+  ApplyQueue applyQueue;
 
-    ApplyQueueOption option;
-    option.workerCount = 0;
-    option.queueDepth = 0;
+  ApplyQueueOption option;
+  option.workerCount = 0;
+  option.queueDepth = 0;
 
-    EXPECT_FALSE(applyQueue.Start(option));
+  EXPECT_FALSE(applyQueue.Start(option));
 
-    option.workerCount = 5;
-    option.queueDepth = 100 * 100 * 100;
+  option.workerCount = 5;
+  option.queueDepth = 100 * 100 * 100;
 
-    ASSERT_TRUE(applyQueue.Start(option));
-    EXPECT_TRUE(applyQueue.Start(option));
+  ASSERT_TRUE(applyQueue.Start(option));
+  EXPECT_TRUE(applyQueue.Start(option));
 
-    std::atomic<bool> runned(false);
-    auto task = [&]() {
-        runned = true;
-    };
+  std::atomic<bool> runned(false);
+  auto task = [&]() { runned = true; };
 
-    applyQueue.Push(time(nullptr), task);
+  applyQueue.Push(time(nullptr), task);
 
-    while (!runned) {}
+  while (!runned) {
+  }
 
-    applyQueue.Stop();
-    applyQueue.Stop();
+  applyQueue.Stop();
+  applyQueue.Stop();
 }
 
 TEST(ApplyQueueTest, FlushTest) {
-    ApplyQueueOption option;
-    option.workerCount = 10;
-    option.queueDepth = 100 * 100;
+  ApplyQueueOption option;
+  option.workerCount = 10;
+  option.queueDepth = 100 * 100;
 
-    ApplyQueue applyQueue;
-    ASSERT_TRUE(applyQueue.Start(option));
+  ApplyQueue applyQueue;
+  ASSERT_TRUE(applyQueue.Start(option));
 
-    int taskCount = option.workerCount * option.queueDepth;
-    std::atomic<int> runned(0);
+  int taskCount = option.workerCount * option.queueDepth;
+  std::atomic<int> runned(0);
 
-    auto task = [&runned]() { runned.fetch_add(1, std::memory_order_relaxed); };
+  auto task = [&runned]() { runned.fetch_add(1, std::memory_order_relaxed); };
 
-    for (int i = 0; i < taskCount; ++i) {
-        applyQueue.Push(i, task);
-    }
+  for (int i = 0; i < taskCount; ++i) {
+    applyQueue.Push(i, task);
+  }
 
-    applyQueue.Flush();
-    ASSERT_EQ(taskCount, runned.load(std::memory_order_relaxed));
-    applyQueue.Stop();
+  applyQueue.Flush();
+  ASSERT_EQ(taskCount, runned.load(std::memory_order_relaxed));
+  applyQueue.Stop();
 }
 
 }  // namespace copyset

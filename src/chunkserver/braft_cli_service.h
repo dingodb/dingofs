@@ -23,54 +23,47 @@
 #ifndef SRC_CHUNKSERVER_BRAFT_CLI_SERVICE_H_
 #define SRC_CHUNKSERVER_BRAFT_CLI_SERVICE_H_
 
-#include <butil/status.h>
 #include <braft/node.h>
+#include <butil/status.h>
 
 #include <string>
 
-#include "src/chunkserver/copyset_node.h"
 #include "proto/cli.pb.h"
+#include "src/chunkserver/copyset_node.h"
 
 namespace curve {
 namespace chunkserver {
 
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 /**
  * brief: This is a service for braft configuration changes.
  */
 class BRaftCliServiceImpl : public CliService {
  public:
-    // @brief: Add a peer.
-    void add_peer(RpcController *controller,
-                  const AddPeerRequest *request,
-                  AddPeerResponse *response,
-                  Closure *done);
+  // @brief: Add a peer.
+  void add_peer(RpcController* controller, const AddPeerRequest* request,
+                AddPeerResponse* response, Closure* done);
 
-    // @brief: Remove peer.
-    void remove_peer(RpcController *controller,
-                     const RemovePeerRequest *request,
-                     RemovePeerResponse *response,
-                     Closure *done);
+  // @brief: Remove peer.
+  void remove_peer(RpcController* controller, const RemovePeerRequest* request,
+                   RemovePeerResponse* response, Closure* done);
 
-    // @brief: Get the leader of copyset.
-    void get_leader(RpcController *controller,
-                    const GetLeaderRequest *request,
-                    GetLeaderResponse *response,
-                    Closure *done);
+  // @brief: Get the leader of copyset.
+  void get_leader(RpcController* controller, const GetLeaderRequest* request,
+                  GetLeaderResponse* response, Closure* done);
 
-    // @brief: Transfer leader.
-    void transfer_leader(RpcController *controller,
-                         const TransferLeaderRequest *request,
-                         TransferLeaderResponse *response,
-                         Closure *done);
+  // @brief: Transfer leader.
+  void transfer_leader(RpcController* controller,
+                       const TransferLeaderRequest* request,
+                       TransferLeaderResponse* response, Closure* done);
 
  private:
-    butil::Status get_node(scoped_refptr<braft::NodeImpl> *node,
-                           const LogicPoolID &logicPoolId,
-                           const CopysetID &copysetId,
-                           const std::string &peer_id);
+  butil::Status get_node(scoped_refptr<braft::NodeImpl>* node,
+                         const LogicPoolID& logicPoolId,
+                         const CopysetID& copysetId,
+                         const std::string& peer_id);
 };
 
 }  // namespace chunkserver

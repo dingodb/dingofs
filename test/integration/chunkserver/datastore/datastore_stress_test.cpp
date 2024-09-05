@@ -25,95 +25,95 @@
 namespace curve {
 namespace chunkserver {
 
-const string baseDir = "./data_int_str";    // NOLINT
-const string poolDir = "./chunkfilepool_int_str";  // NOLINT
+const string baseDir = "./data_int_str";                     // NOLINT
+const string poolDir = "./chunkfilepool_int_str";            // NOLINT
 const string poolMetaPath = "./chunkfilepool_int_str.meta";  // NOLINT
 
 class StressTestSuit : public DatastoreIntegrationBase {
  public:
-    StressTestSuit() {}
-    ~StressTestSuit() {}
+  StressTestSuit() {}
+  ~StressTestSuit() {}
 };
 
 TEST_F(StressTestSuit, StressTest) {
-    InitChunkPool(100);
-    off_t offset = 0;
-    size_t length = PAGE_SIZE;
-    char buf[PAGE_SIZE] = {0};
+  InitChunkPool(100);
+  off_t offset = 0;
+  size_t length = PAGE_SIZE;
+  char buf[PAGE_SIZE] = {0};
 
-    Atomic<SequenceNum> sn(1);
-    static unsigned int seed = 1;
+  Atomic<SequenceNum> sn(1);
+  static unsigned int seed = 1;
 
-    auto RunRead = [&](int idRange, int loopNum) {
-        for (int i = 0; i < loopNum; ++i) {
-            ChunkID id = rand_r(&seed) % idRange + 1;
-            uint64_t pageIndex = rand_r(&seed) % (CHUNK_SIZE / PAGE_SIZE);
-            offset = pageIndex * PAGE_SIZE;
-            dataStore_->ReadChunk(id, sn, buf, offset, length);
-        }
-    };
+  auto RunRead = [&](int idRange, int loopNum) {
+    for (int i = 0; i < loopNum; ++i) {
+      ChunkID id = rand_r(&seed) % idRange + 1;
+      uint64_t pageIndex = rand_r(&seed) % (CHUNK_SIZE / PAGE_SIZE);
+      offset = pageIndex * PAGE_SIZE;
+      dataStore_->ReadChunk(id, sn, buf, offset, length);
+    }
+  };
 
-    auto RunWrite = [&](int idRange, int loopNum) {
-        for (int i = 0; i < loopNum; ++i) {
-            ChunkID id = rand_r(&seed) % idRange + 1;
-            uint64_t pageIndex = rand_r(&seed) % (CHUNK_SIZE / PAGE_SIZE);
-            offset = pageIndex * PAGE_SIZE;
-            dataStore_->WriteChunk(id, sn, buf, offset, length, nullptr);
-        }
-    };
+  auto RunWrite = [&](int idRange, int loopNum) {
+    for (int i = 0; i < loopNum; ++i) {
+      ChunkID id = rand_r(&seed) % idRange + 1;
+      uint64_t pageIndex = rand_r(&seed) % (CHUNK_SIZE / PAGE_SIZE);
+      offset = pageIndex * PAGE_SIZE;
+      dataStore_->WriteChunk(id, sn, buf, offset, length, nullptr);
+    }
+  };
 
-    auto RunStress = [&](int threadNum, int rwPercent, int ioNum) {
-        uint64_t beginTime = TimeUtility::GetTimeofDayUs();
-        Thread *threads = new Thread[threadNum];
-        int readThreadNum = threadNum * rwPercent / 100;
-        int ioNumAvg = ioNum / threadNum;
-        int idRange = 100;
-        for (int i = 0; i < readThreadNum; ++i) {
-            threads[i] = std::thread(RunRead, idRange, ioNumAvg);
-        }
+  auto RunStress = [&](int threadNum, int rwPercent, int ioNum) {
+    uint64_t beginTime = TimeUtility::GetTimeofDayUs();
+    Thread* threads = new Thread[threadNum];
+    int readThreadNum = threadNum * rwPercent / 100;
+    int ioNumAvg = ioNum / threadNum;
+    int idRange = 100;
+    for (int i = 0; i < readThreadNum; ++i) {
+      threads[i] = std::thread(RunRead, idRange, ioNumAvg);
+    }
 
-        for (int i = readThreadNum; i < threadNum; ++i) {
-            threads[i] = std::thread(RunWrite, idRange, ioNumAvg);
-        }
+    for (int i = readThreadNum; i < threadNum; ++i) {
+      threads[i] = std::thread(RunWrite, idRange, ioNumAvg);
+    }
 
-        for (int i = 0; i < threadNum; ++i) {
-            threads[i].join();
-        }
+    for (int i = 0; i < threadNum; ++i) {
+      threads[i].join();
+    }
 
-        uint64_t endTime = TimeUtility::GetTimeofDayUs();
-        uint64_t iops = ioNum * 1000000L / (endTime - beginTime);
-        printf("Total time used: %lu us\n", endTime - beginTime);
-        printf("Thread number: %d\n", threadNum);
-        printf("read write percent: %d\n", rwPercent);
-        printf("io num: %d\n", ioNum);
-        printf("iops: %lu\n", iops);
-        delete[] threads;
-    };
+    uint64_t endTime = TimeUtility::GetTimeofDayUs();
+    uint64_t iops = ioNum * 1000000L / (endTime - beginTime);
+    printf("Total time used: %lu us\n", endTime - beginTime);
+    printf("Thread number: %d\n", threadNum);
+    printf("read write percent: %d\n", rwPercent);
+    printf("io num: %d\n", ioNum);
+    printf("iops: %lu\n", iops);
+    delete[] threads;
+  };
 
-    printf("===============TEST WRITE==================\n");
+  printf("===============TEST WRITE==================\n");
 
-    // 测试单线程性能
-    RunStress(1, 0, 10000);
-    // 10个线程
-    RunStress(10, 0, 50000);
-    // 50个线程
-    RunStress(50, 0, 100000);
+  // 测试单线程性能
+  RunStress(1, 0, 10000);
+  // 10个线程
+  RunStress(10, 0, 50000);
+  // 50个线程
+  RunStress(50, 0, 100000);
 
-    printf("===============TEST READ==================\n");
-    // 测试单线程性能
-    RunStress(1, 100, 10000);
-    // 10个线程
-    RunStress(10, 100, 50000);
-    // 50个线程
-    RunStress(50, 100, 100000);
+  printf("===============TEST READ==================\n");
+  // 测试单线程性能
+  RunStress(1, 100, 10000);
+  // 10个线程
+  RunStress(10, 100, 50000);
+  // 50个线程
+  RunStress(50, 100, 100000);
 
-    printf("===============TEST READWRITE==================\n");
-    // 测试单线程性能
-    RunStress(1, 50, 10000);
-    // 10个线程
-    RunStress(10, 50, 50000);
-    // 50个线程
-    RunStress(50, 50, 100000);
+  printf("===============TEST READWRITE==================\n");
+  // 测试单线程性能
+  RunStress(1, 50, 10000);
+  // 10个线程
+  RunStress(10, 50, 50000);
+  // 50个线程
+  RunStress(50, 50, 100000);
 }
 
 }  // namespace chunkserver

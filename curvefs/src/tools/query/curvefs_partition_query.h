@@ -44,19 +44,19 @@ class PartitionQueryTool
           curvefs::mds::topology::GetCopysetOfPartitionResponse,
           curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit PartitionQueryTool(const std::string& cmd = kPartitionQueryCmd,
-                                bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
+  explicit PartitionQueryTool(const std::string& cmd = kPartitionQueryCmd,
+                              bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
 
-    void PrintHelp() override;
-    int Init() override;
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 };
 
 }  // namespace query

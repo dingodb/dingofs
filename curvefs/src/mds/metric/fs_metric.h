@@ -36,24 +36,24 @@ namespace mds {
 
 class FsMetric {
  public:
-    static FsMetric& GetInstance() {
-        static FsMetric fsMetric;
-        return fsMetric;
-    }
+  static FsMetric& GetInstance() {
+    static FsMetric fsMetric;
+    return fsMetric;
+  }
 
-    void OnMount(const std::string& fsname, const Mountpoint& mp);
-    void OnUnMount(const std::string& fsname, const Mountpoint& mp);
-
- private:
-    FsMetric() = default;
-    ~FsMetric() = default;
-
-    FsMetric(const FsMetric&) = delete;
-    FsMetric& operator=(const FsMetric&) = delete;
+  void OnMount(const std::string& fsname, const Mountpoint& mp);
+  void OnUnMount(const std::string& fsname, const Mountpoint& mp);
 
  private:
-    Mutex mtx_;
-    std::unordered_map<std::string, std::unique_ptr<FsMountMetric>> metrics_;
+  FsMetric() = default;
+  ~FsMetric() = default;
+
+  FsMetric(const FsMetric&) = delete;
+  FsMetric& operator=(const FsMetric&) = delete;
+
+ private:
+  Mutex mtx_;
+  std::unordered_map<std::string, std::unique_ptr<FsMountMetric>> metrics_;
 };
 
 }  // namespace mds

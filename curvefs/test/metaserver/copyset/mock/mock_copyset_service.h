@@ -33,21 +33,19 @@ namespace copyset {
 
 class MockCopysetService : public CopysetService {
  public:
-    MOCK_METHOD4(
-        CreateCopysetNode,
-        void(
-            ::google::protobuf::RpcController* controller,
-            const ::curvefs::metaserver::copyset::CreateCopysetRequest* request,
-            ::curvefs::metaserver::copyset::CreateCopysetResponse* response,
-            ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      CreateCopysetNode,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::copyset::CreateCopysetRequest* request,
+           ::curvefs::metaserver::copyset::CreateCopysetResponse* response,
+           ::google::protobuf::Closure* done));
 
-    MOCK_METHOD4(
-        GetCopysetStatus,
-        void(
-            ::google::protobuf::RpcController* controller,
-            const ::curvefs::metaserver::copyset::CopysetStatusRequest* request,
-            ::curvefs::metaserver::copyset::CopysetStatusResponse* response,
-            ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      GetCopysetStatus,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::copyset::CopysetStatusRequest* request,
+           ::curvefs::metaserver::copyset::CopysetStatusResponse* response,
+           ::google::protobuf::Closure* done));
 };
 
 }  // namespace copyset

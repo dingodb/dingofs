@@ -26,92 +26,92 @@ namespace curvefs {
 namespace tools {
 
 void CurvefsTool::PrintHelp() {
-    std::cout << "Example :" << std::endl;
-    std::cout << programe_ << " " << command_ << " " << kConfPathHelp;
+  std::cout << "Example :" << std::endl;
+  std::cout << programe_ << " " << command_ << " " << kConfPathHelp;
 }
 
 int CurvefsTool::Run() {
-    if (Init() < 0) {
-        return -1;
-    }
-    int ret = RunCommand();
-    if (ret != 0) {
-        PrintError();
-    }
-    return ret;
+  if (Init() < 0) {
+    return -1;
+  }
+  int ret = RunCommand();
+  if (ret != 0) {
+    PrintError();
+  }
+  return ret;
 }
 
 void CurvefsTool::PrintError() {
-    if (errorOutput_.tellp() > 0) {
-        // only show if errorOutput is not empty
-        std::cerr << "[error]" << std::endl;
-        std::cerr << errorOutput_.str();
-    }
+  if (errorOutput_.tellp() > 0) {
+    // only show if errorOutput is not empty
+    std::cerr << "[error]" << std::endl;
+    std::cerr << errorOutput_.str();
+  }
 }
 
 int CurvefsToolMetric::Init(const std::shared_ptr<MetricClient>& metricClient) {
-    metricClient_ = metricClient;
-    return 0;
+  metricClient_ = metricClient;
+  return 0;
 }
 
 void CurvefsToolMetric::PrintHelp() {
-    CurvefsTool::PrintHelp();
-    std::cout << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]"
-              << " [-rpcRetryTimes=" << FLAGS_rpcRetryTimes << "]";
+  CurvefsTool::PrintHelp();
+  std::cout << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]"
+            << " [-rpcRetryTimes=" << FLAGS_rpcRetryTimes << "]";
 }
 
 void CurvefsToolMetric::AddUpdateFlagsFunc(
     const std::function<void(curve::common::Configuration*,
                              google::CommandLineFlagInfo*)>& func) {
-    updateFlagsFunc_.push_back(func);
+  updateFlagsFunc_.push_back(func);
 }
 
 int CurvefsToolMetric::RunCommand() {
-    int ret = 0;
-    for (auto const& i : addr2SubUri) {
-        std::string value;
-        MetricStatusCode statusCode =
-            metricClient_->GetMetric(i.first, i.second, &value);
-        AfterGetMetric(i.first, i.second, value, statusCode);
-    }
+  int ret = 0;
+  for (auto const& i : addr2SubUri) {
+    std::string value;
+    MetricStatusCode statusCode =
+        metricClient_->GetMetric(i.first, i.second, &value);
+    AfterGetMetric(i.first, i.second, value, statusCode);
+  }
 
-    if (ProcessMetrics() != 0) {
-        ret = -1;
-    }
-    return ret;
+  if (ProcessMetrics() != 0) {
+    ret = -1;
+  }
+  return ret;
 }
 
 void CurvefsToolMetric::AddUpdateFlags() {
-    // rpcTimeout and rpcRetrytimes is default
-    AddUpdateFlagsFunc(SetRpcTimeoutMs);
-    AddUpdateFlagsFunc(SetRpcRetryTimes);
+  // rpcTimeout and rpcRetrytimes is default
+  AddUpdateFlagsFunc(SetRpcTimeoutMs);
+  AddUpdateFlagsFunc(SetRpcRetryTimes);
 }
 
 void CurvefsToolMetric::UpdateFlags() {
-    curve::common::Configuration conf;
-    conf.SetConfigPath(FLAGS_confPath);
-    if (!conf.LoadConfig()) {
-        std::cerr << "load configure file " << FLAGS_confPath << " failed!"
-                  << std::endl;
-    }
-    google::CommandLineFlagInfo info;
+  curve::common::Configuration conf;
+  conf.SetConfigPath(FLAGS_confPath);
+  if (!conf.LoadConfig()) {
+    std::cerr << "load configure file " << FLAGS_confPath << " failed!"
+              << std::endl;
+  }
+  google::CommandLineFlagInfo info;
 
-    for (auto& i : updateFlagsFunc_) {
-        i(&conf, &info);
-    }
+  for (auto& i : updateFlagsFunc_) {
+    i(&conf, &info);
+  }
 }
 
 void CurvefsToolMetric::AddAddr2Suburi(
     const std::pair<std::string, std::string>& addrSubUri) {
-    addr2SubUri.push_back(addrSubUri);
+  addr2SubUri.push_back(addrSubUri);
 }
 
 int CurvefsToolMetric::Init() {
-    // add need update flags
-    AddUpdateFlags();
-    UpdateFlags();
-    InitHostsAddr();
-    return 0;
+  // add need update flags
+  AddUpdateFlags();
+  UpdateFlags();
+  InitHostsAddr();
+  return 0;
 }
 
 }  // namespace tools

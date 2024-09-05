@@ -42,38 +42,38 @@ namespace status {
  */
 class StatusBaseTool : public CurvefsToolMetric {
  public:
-    explicit StatusBaseTool(
-        const std::string& cmd, const std::string& hostType,
-        const std::string& hostLeaderValue = kHostLeaderValue,
-        const std::string& hostFollowerValue = kHostFollowerValue)
-        : CurvefsToolMetric(cmd),
-          hostType_(hostType),
-          hostLeaderValue_(hostLeaderValue),
-          hostStandbyValue_(hostFollowerValue) {}
-    virtual ~StatusBaseTool() {}
+  explicit StatusBaseTool(
+      const std::string& cmd, const std::string& hostType,
+      const std::string& hostLeaderValue = kHostLeaderValue,
+      const std::string& hostFollowerValue = kHostFollowerValue)
+      : CurvefsToolMetric(cmd),
+        hostType_(hostType),
+        hostLeaderValue_(hostLeaderValue),
+        hostStandbyValue_(hostFollowerValue) {}
+  virtual ~StatusBaseTool() {}
 
  protected:
-    void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
-                        const std::string& value,
-                        const MetricStatusCode& statusCode);
-    int Init() override;
-    virtual int ProcessMetrics();
+  void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
+                      const std::string& value,
+                      const MetricStatusCode& statusCode);
+  int Init() override;
+  virtual int ProcessMetrics();
 
  protected:
-    std::vector<std::string> hostsAddr_;
-    std::set<std::string> standbyHost_;
-    std::set<std::string> errorHosts_;  // not leader, not standby
-    std::set<std::string> offlineHosts_;
-    std::set<std::string> leaderHosts_;
-    std::set<std::string> onlineHosts_;
-    std::string version_;
-    std::string hostType_;
-    std::string versionSubUri_ = "";
-    std::string statusSubUri_ = "";
-    std::string versionKey_;
-    std::string statusKey_;
-    std::string hostLeaderValue_;
-    std::string hostStandbyValue_;
+  std::vector<std::string> hostsAddr_;
+  std::set<std::string> standbyHost_;
+  std::set<std::string> errorHosts_;  // not leader, not standby
+  std::set<std::string> offlineHosts_;
+  std::set<std::string> leaderHosts_;
+  std::set<std::string> onlineHosts_;
+  std::string version_;
+  std::string hostType_;
+  std::string versionSubUri_ = "";
+  std::string statusSubUri_ = "";
+  std::string versionKey_;
+  std::string statusKey_;
+  std::string hostLeaderValue_;
+  std::string hostStandbyValue_;
 };
 
 }  // namespace status

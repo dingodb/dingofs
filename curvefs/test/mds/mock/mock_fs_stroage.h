@@ -36,22 +36,22 @@ namespace mds {
 
 class MockFsStorage : public FsStorage {
  public:
-    MockFsStorage() = default;
-    ~MockFsStorage() = default;
+  MockFsStorage() = default;
+  ~MockFsStorage() = default;
 
-    MOCK_METHOD0(Init, bool());
-    MOCK_METHOD0(Uninit, void());
-    MOCK_METHOD2(Get, FSStatusCode(uint64_t, FsInfoWrapper*));
-    MOCK_METHOD2(Get, FSStatusCode(const std::string&, FsInfoWrapper*));
-    MOCK_METHOD1(Insert, FSStatusCode(const FsInfoWrapper&));
-    MOCK_METHOD1(Update, FSStatusCode(const FsInfoWrapper&));
-    MOCK_METHOD1(Delete, FSStatusCode(const std::string&));
-    MOCK_METHOD2(Rename, FSStatusCode(const FsInfoWrapper&,
-                                      const FsInfoWrapper&));
-    MOCK_METHOD1(Exist, bool(uint64_t));
-    MOCK_METHOD1(Exist, bool(const std::string&));
-    MOCK_METHOD0(NextFsId, uint64_t());
-    MOCK_METHOD1(GetAll, void(std::vector<FsInfoWrapper>* fsInfoVec));
+  MOCK_METHOD0(Init, bool());
+  MOCK_METHOD0(Uninit, void());
+  MOCK_METHOD2(Get, FSStatusCode(uint64_t, FsInfoWrapper*));
+  MOCK_METHOD2(Get, FSStatusCode(const std::string&, FsInfoWrapper*));
+  MOCK_METHOD1(Insert, FSStatusCode(const FsInfoWrapper&));
+  MOCK_METHOD1(Update, FSStatusCode(const FsInfoWrapper&));
+  MOCK_METHOD1(Delete, FSStatusCode(const std::string&));
+  MOCK_METHOD2(Rename,
+               FSStatusCode(const FsInfoWrapper&, const FsInfoWrapper&));
+  MOCK_METHOD1(Exist, bool(uint64_t));
+  MOCK_METHOD1(Exist, bool(const std::string&));
+  MOCK_METHOD0(NextFsId, uint64_t());
+  MOCK_METHOD1(GetAll, void(std::vector<FsInfoWrapper>* fsInfoVec));
 };
 
 }  // namespace mds

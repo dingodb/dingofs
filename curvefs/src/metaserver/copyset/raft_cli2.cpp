@@ -49,47 +49,47 @@ namespace copyset {
 butil::Status GetLeader(PoolId poolId, CopysetId copysetId,
                         const braft::Configuration& conf,
                         braft::PeerId* leaderId) {
-    if (conf.empty()) {
-        return butil::Status(EINVAL, "Empty group configuration");
+  if (conf.empty()) {
+    return butil::Status(EINVAL, "Empty group configuration");
+  }
+
+  butil::Status status(-1, "Fail to get leader of copyset %s",
+                       ToGroupIdString(poolId, copysetId).c_str());
+
+  leaderId->reset();
+  for (const auto& peer : conf) {
+    brpc::Channel channel;
+    if (channel.Init(peer.addr, nullptr) != 0) {
+      return butil::Status(-1, "Fail to init channel to %s",
+                           peer.to_string().c_str());
     }
 
-    butil::Status status(-1, "Fail to get leader of copyset %s",
-                         ToGroupIdString(poolId, copysetId).c_str());
+    CliService2_Stub stub(&channel);
+    GetLeaderRequest2 request;
+    GetLeaderResponse2 response;
+    brpc::Controller cntl;
+    request.set_poolid(poolId);
+    request.set_copysetid(copysetId);
+    request.mutable_peer()->set_address(peer.to_string());
 
-    leaderId->reset();
-    for (const auto& peer : conf) {
-        brpc::Channel channel;
-        if (channel.Init(peer.addr, nullptr) != 0) {
-            return butil::Status(-1, "Fail to init channel to %s",
-                                 peer.to_string().c_str());
-        }
-
-        CliService2_Stub stub(&channel);
-        GetLeaderRequest2 request;
-        GetLeaderResponse2 response;
-        brpc::Controller cntl;
-        request.set_poolid(poolId);
-        request.set_copysetid(copysetId);
-        request.mutable_peer()->set_address(peer.to_string());
-
-        stub.GetLeader(&cntl, &request, &response, nullptr);
-        if (cntl.Failed()) {
-            std::string saved = status.error_str();
-            status.set_error(cntl.ErrorCode(), "%s, [%s] %s", saved.c_str(),
-                             butil::endpoint2str(cntl.remote_side()).c_str(),
-                             cntl.ErrorText().c_str());
-            continue;
-        } else {
-            leaderId->parse(response.leader().address());
-            break;
-        }
+    stub.GetLeader(&cntl, &request, &response, nullptr);
+    if (cntl.Failed()) {
+      std::string saved = status.error_str();
+      status.set_error(cntl.ErrorCode(), "%s, [%s] %s", saved.c_str(),
+                       butil::endpoint2str(cntl.remote_side()).c_str(),
+                       cntl.ErrorText().c_str());
+      continue;
+    } else {
+      leaderId->parse(response.leader().address());
+      break;
     }
+  }
 
-    if (leaderId->is_empty()) {
-        return status;
-    }
+  if (leaderId->is_empty()) {
+    return status;
+  }
 
-    return butil::Status::OK();
+  return butil::Status::OK();
 }
 
 }  // namespace copyset

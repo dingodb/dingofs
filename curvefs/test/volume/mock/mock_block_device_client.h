@@ -36,24 +36,21 @@ namespace volume {
 
 class MockBlockDeviceClient : public BlockDeviceClient {
  public:
-    MockBlockDeviceClient() {}
-    ~MockBlockDeviceClient() {}
+  MockBlockDeviceClient() {}
+  ~MockBlockDeviceClient() {}
 
-    MOCK_METHOD1(Init, bool(const BlockDeviceClientOptions& options));
-    MOCK_METHOD0(UnInit, void());
-    MOCK_METHOD2(Open,
-                 bool(const std::string& filename,
-                               const std::string& owner));
-    MOCK_METHOD0(Close, bool());
-    MOCK_METHOD3(Stat,
-                 bool(const std::string& filename,
-                               const std::string& owner,
-                               BlockDeviceStat* statInfo));
-    MOCK_METHOD3(Read, ssize_t(char* buf, off_t offset, size_t length));
-    MOCK_METHOD3(Write, ssize_t(const char* buf, off_t offset, size_t length));
+  MOCK_METHOD1(Init, bool(const BlockDeviceClientOptions& options));
+  MOCK_METHOD0(UnInit, void());
+  MOCK_METHOD2(Open,
+               bool(const std::string& filename, const std::string& owner));
+  MOCK_METHOD0(Close, bool());
+  MOCK_METHOD3(Stat, bool(const std::string& filename, const std::string& owner,
+                          BlockDeviceStat* statInfo));
+  MOCK_METHOD3(Read, ssize_t(char* buf, off_t offset, size_t length));
+  MOCK_METHOD3(Write, ssize_t(const char* buf, off_t offset, size_t length));
 
-    MOCK_METHOD1(Readv, ssize_t(const std::vector<ReadPart>&));
-    MOCK_METHOD1(Writev, ssize_t(const std::vector<WritePart>&));
+  MOCK_METHOD1(Readv, ssize_t(const std::vector<ReadPart>&));
+  MOCK_METHOD1(Writev, ssize_t(const std::vector<WritePart>&));
 };
 
 }  // namespace volume

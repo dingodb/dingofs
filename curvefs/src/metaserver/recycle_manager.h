@@ -29,49 +29,48 @@
 namespace curvefs {
 namespace metaserver {
 struct RecycleManagerOption {
-    std::shared_ptr<MdsClient> mdsClient;
-    std::shared_ptr<MetaServerClient> metaClient;
-    uint32_t scanPeriodSec;
-    uint32_t scanLimit;
+  std::shared_ptr<MdsClient> mdsClient;
+  std::shared_ptr<MetaServerClient> metaClient;
+  uint32_t scanPeriodSec;
+  uint32_t scanLimit;
 };
 
 class RecycleManager {
  public:
-    RecycleManager() {
-        isStop_ = true;
-        inProcessingCleaner_ = nullptr;
-    }
+  RecycleManager() {
+    isStop_ = true;
+    inProcessingCleaner_ = nullptr;
+  }
 
-    static RecycleManager& GetInstance() {
-        static RecycleManager instance_;
-        return instance_;
-    }
+  static RecycleManager& GetInstance() {
+    static RecycleManager instance_;
+    return instance_;
+  }
 
-    void Init(const RecycleManagerOption& opt);
+  void Init(const RecycleManagerOption& opt);
 
-    void Add(uint32_t partitionId,
-             const std::shared_ptr<RecycleCleaner>& cleaner,
-             copyset::CopysetNode* copysetNode);
+  void Add(uint32_t partitionId, const std::shared_ptr<RecycleCleaner>& cleaner,
+           copyset::CopysetNode* copysetNode);
 
-    void Remove(uint32_t partitionId);
+  void Remove(uint32_t partitionId);
 
-    void Run();
+  void Run();
 
-    void Stop();
+  void Stop();
 
-    void ScanLoop();
+  void ScanLoop();
 
  private:
-    std::list<std::shared_ptr<RecycleCleaner>> recycleCleanerList_;
-    std::shared_ptr<MdsClient> mdsClient_;
-    std::shared_ptr<MetaServerClient> metaClient_;
-    curve::common::RWLock rwLock_;
-    std::shared_ptr<RecycleCleaner> inProcessingCleaner_;
-    Atomic<bool> isStop_;
-    Thread thread_;
-    InterruptibleSleeper sleeper_;
-    uint32_t scanPeriodSec_;
-    uint32_t scanLimit_;
+  std::list<std::shared_ptr<RecycleCleaner>> recycleCleanerList_;
+  std::shared_ptr<MdsClient> mdsClient_;
+  std::shared_ptr<MetaServerClient> metaClient_;
+  curve::common::RWLock rwLock_;
+  std::shared_ptr<RecycleCleaner> inProcessingCleaner_;
+  Atomic<bool> isStop_;
+  Thread thread_;
+  InterruptibleSleeper sleeper_;
+  uint32_t scanPeriodSec_;
+  uint32_t scanLimit_;
 };
 }  // namespace metaserver
 }  // namespace curvefs

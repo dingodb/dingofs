@@ -27,51 +27,30 @@
 #include <map>
 #include <string>
 
-#include "src/common/snapshotclone/snapshotclone_define.h"
 #include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/rw_lock.h"
 #include "src/common/concurrent/name_lock.h"
+#include "src/common/concurrent/rw_lock.h"
+#include "src/common/snapshotclone/snapshotclone_define.h"
 
 namespace curve {
 namespace snapshotcloneserver {
 
 class CloneReference {
  public:
-    CloneReference() {}
+  CloneReference() {}
 
-    curve::common::NameLock& GetLock() {
-        return fileLock_;
-    }
+  curve::common::NameLock& GetLock() { return fileLock_; }
 
-    void IncrementRef(const std::string &fileName);
-    void DecrementRef(const std::string &fileName);
+  void IncrementRef(const std::string& fileName);
+  void DecrementRef(const std::string& fileName);
 
-    int GetRef(const std::string &fileName);
+  int GetRef(const std::string& fileName);
 
  private:
-    std::map<std::string, int> refMap_;
-    curve::common::RWLock refMapLock_;
-    curve::common::NameLock fileLock_;
+  std::map<std::string, int> refMap_;
+  curve::common::RWLock refMapLock_;
+  curve::common::NameLock fileLock_;
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 }  // namespace snapshotcloneserver
 }  // namespace curve

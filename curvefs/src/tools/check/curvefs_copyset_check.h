@@ -40,17 +40,17 @@ namespace check {
 
 class CopysetCheckTool : public CurvefsTool {
  public:
-    explicit CopysetCheckTool(const std::string& cmd = kCopysetCheckCmd,
-                              bool show = true)
-        : CurvefsTool(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int RunCommand() override;
-    int Init() override;
+  explicit CopysetCheckTool(const std::string& cmd = kCopysetCheckCmd,
+                            bool show = true)
+      : CurvefsTool(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int RunCommand() override;
+  int Init() override;
 
  protected:
-    std::shared_ptr<query::CopysetQueryTool> queryCopysetTool_;
+  std::shared_ptr<query::CopysetQueryTool> queryCopysetTool_;
 };
 
 }  // namespace check

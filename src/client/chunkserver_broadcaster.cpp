@@ -31,63 +31,60 @@ namespace client {
 
 class UpdateFileEpochClosure : public ChunkServerClientClosure {
  public:
-    UpdateFileEpochClosure() {}
-    virtual ~UpdateFileEpochClosure() {}
-    void Run() override {
-        std::unique_ptr<UpdateFileEpochClosure> self_guard(this);
-        tracker_->HandleResponse(GetErrorCode());
-    }
+  UpdateFileEpochClosure() {}
+  virtual ~UpdateFileEpochClosure() {}
+  void Run() override {
+    std::unique_ptr<UpdateFileEpochClosure> self_guard(this);
+    tracker_->HandleResponse(GetErrorCode());
+  }
 
-    void AddToBeTraced(const std::shared_ptr<TaskTracker> &tracker) {
-        tracker->AddOneTrace();
-        tracker_ = tracker;
-    }
+  void AddToBeTraced(const std::shared_ptr<TaskTracker>& tracker) {
+    tracker->AddOneTrace();
+    tracker_ = tracker;
+  }
 
  private:
-    std::shared_ptr<TaskTracker> tracker_;
+  std::shared_ptr<TaskTracker> tracker_;
 };
 
 int ChunkServerBroadCaster::BroadCastFileEpoch(
     uint64_t fileId, uint64_t epoch,
-    const std::list<CopysetPeerInfo<ChunkServerID>> &csLocs) {
-    int ret = LIBCURVE_ERROR::OK;
-    auto tracker = std::make_shared<TaskTracker>();
-    for (const auto &cs : csLocs) {
-        UpdateFileEpochClosure *done = new UpdateFileEpochClosure();
-        done->AddToBeTraced(tracker);
-        ret = csClient_->UpdateFileEpoch(cs, fileId, epoch, done);
-        if (ret != LIBCURVE_ERROR::OK) {
-            // already failed, wait all inflight rpc to be done
-            tracker->Wait();
-            LOG(ERROR) << "BroadCastFileEpoch request failed, ret: " << ret
-                       << ", chunkserverid: " << cs.peerID
-                       << ", fileId: " << fileId
-                       << ", epoch: " << epoch;
-            return ret;
-        }
-        if (tracker->GetTaskNum() >= option_.broadCastMaxNum) {
-            tracker->WaitSome(1);
-        }
-        ret = tracker->GetResult();
-        if (ret != LIBCURVE_ERROR::OK) {
-            // already failed, wait all inflight rpc to be done
-            tracker->Wait();
-            LOG(ERROR) << "BroadCastFileEpoch found some request failed, ret: "
-                       << ret;
-            return ret;
-        }
+    const std::list<CopysetPeerInfo<ChunkServerID>>& csLocs) {
+  int ret = LIBCURVE_ERROR::OK;
+  auto tracker = std::make_shared<TaskTracker>();
+  for (const auto& cs : csLocs) {
+    UpdateFileEpochClosure* done = new UpdateFileEpochClosure();
+    done->AddToBeTraced(tracker);
+    ret = csClient_->UpdateFileEpoch(cs, fileId, epoch, done);
+    if (ret != LIBCURVE_ERROR::OK) {
+      // already failed, wait all inflight rpc to be done
+      tracker->Wait();
+      LOG(ERROR) << "BroadCastFileEpoch request failed, ret: " << ret
+                 << ", chunkserverid: " << cs.peerID << ", fileId: " << fileId
+                 << ", epoch: " << epoch;
+      return ret;
     }
-    tracker->Wait();
+    if (tracker->GetTaskNum() >= option_.broadCastMaxNum) {
+      tracker->WaitSome(1);
+    }
     ret = tracker->GetResult();
     if (ret != LIBCURVE_ERROR::OK) {
-        LOG(ERROR) << "BroadCastFileEpoch found some request failed, ret: "
-                   << ret;
-        return ret;
+      // already failed, wait all inflight rpc to be done
+      tracker->Wait();
+      LOG(ERROR) << "BroadCastFileEpoch found some request failed, ret: "
+                 << ret;
+      return ret;
     }
+  }
+  tracker->Wait();
+  ret = tracker->GetResult();
+  if (ret != LIBCURVE_ERROR::OK) {
+    LOG(ERROR) << "BroadCastFileEpoch found some request failed, ret: " << ret;
+    return ret;
+  }
 
-    return LIBCURVE_ERROR::OK;
+  return LIBCURVE_ERROR::OK;
 }
 
-
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve

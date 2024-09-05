@@ -20,11 +20,13 @@
  * Author: charisu
  */
 
-#ifndef  SRC_CHUNKSERVER_RAFTLOG_BRAFT_SEGMENT_H_
-#define  SRC_CHUNKSERVER_RAFTLOG_BRAFT_SEGMENT_H_
+#ifndef SRC_CHUNKSERVER_RAFTLOG_BRAFT_SEGMENT_H_
+#define SRC_CHUNKSERVER_RAFTLOG_BRAFT_SEGMENT_H_
 
 #include <braft/log.h>
+
 #include <string>
+
 #include "src/chunkserver/raftlog/segment.h"
 
 namespace curve {
@@ -32,74 +34,54 @@ namespace chunkserver {
 
 class BraftSegment : public Segment {
  public:
-    BraftSegment(const std::string& path, const int64_t first_index,
-                 int checksum_type)
-        : _segment(new braft::Segment(path, first_index, checksum_type))
-    {}
-    BraftSegment(const std::string& path, const int64_t first_index,
-            const int64_t last_index, int checksum_type)
-        : _segment(new braft::Segment(path, first_index,
-                                      last_index, checksum_type))
-    {}
+  BraftSegment(const std::string& path, const int64_t first_index,
+               int checksum_type)
+      : _segment(new braft::Segment(path, first_index, checksum_type)) {}
+  BraftSegment(const std::string& path, const int64_t first_index,
+               const int64_t last_index, int checksum_type)
+      : _segment(
+            new braft::Segment(path, first_index, last_index, checksum_type)) {}
 
-    int create() override {
-        return _segment->create();
-    }
+  int create() override { return _segment->create(); }
 
-    int load(braft::ConfigurationManager* configuration_manager) override {
-        return _segment->load(configuration_manager);
-    }
+  int load(braft::ConfigurationManager* configuration_manager) override {
+    return _segment->load(configuration_manager);
+  }
 
-    int append(const braft::LogEntry* entry) override {
-        return _segment->append(entry);
-    }
+  int append(const braft::LogEntry* entry) override {
+    return _segment->append(entry);
+  }
 
-    braft::LogEntry* get(const int64_t index) const override {
-        return _segment->get(index);
-    }
+  braft::LogEntry* get(const int64_t index) const override {
+    return _segment->get(index);
+  }
 
-    int64_t get_term(const int64_t index) const override {
-        return _segment->get_term(index);
-    }
+  int64_t get_term(const int64_t index) const override {
+    return _segment->get_term(index);
+  }
 
-    int close(bool will_sync) override {
-        return _segment->close(will_sync);
-    }
+  int close(bool will_sync) override { return _segment->close(will_sync); }
 
-    int sync(bool will_sync) override {
-        return _segment->sync(will_sync);
-    }
+  int sync(bool will_sync) override { return _segment->sync(will_sync); }
 
-    int unlink() override {
-        return _segment->unlink();
-    }
+  int unlink() override { return _segment->unlink(); }
 
-    int truncate(const int64_t last_index_kept) override {
-        return _segment->truncate(last_index_kept);
-    }
+  int truncate(const int64_t last_index_kept) override {
+    return _segment->truncate(last_index_kept);
+  }
 
-    bool is_open() const override {
-        return _segment->is_open();
-    }
+  bool is_open() const override { return _segment->is_open(); }
 
-    int64_t bytes() const override {
-        return _segment->bytes();
-    }
+  int64_t bytes() const override { return _segment->bytes(); }
 
-    int64_t first_index() const override {
-        return _segment->first_index();
-    }
+  int64_t first_index() const override { return _segment->first_index(); }
 
-    int64_t last_index() const override {
-        return _segment->last_index();
-    }
+  int64_t last_index() const override { return _segment->last_index(); }
 
-    std::string file_name() override {
-        return _segment->file_name();
-    }
+  std::string file_name() override { return _segment->file_name(); }
 
  private:
-    scoped_refptr<braft::Segment> _segment;
+  scoped_refptr<braft::Segment> _segment;
 };
 
 }  // namespace chunkserver

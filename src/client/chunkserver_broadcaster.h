@@ -27,41 +27,39 @@
 #include <memory>
 
 #include "include/client/libcurve_define.h"
-#include "src/client/client_common.h"
-#include "src/client/metacache_struct.h"
-
 #include "src/client/chunkserver_client.h"
+#include "src/client/client_common.h"
 #include "src/client/config_info.h"
+#include "src/client/metacache_struct.h"
 
 namespace curve {
 namespace client {
 
 class ChunkServerBroadCaster {
  public:
-    ChunkServerBroadCaster()
-        : csClient_(std::make_shared<ChunkServerClient>()) {}
+  ChunkServerBroadCaster() : csClient_(std::make_shared<ChunkServerClient>()) {}
 
-    explicit ChunkServerBroadCaster(
-        const std::shared_ptr<ChunkServerClient> &csClient)
-        : csClient_(csClient) {}
+  explicit ChunkServerBroadCaster(
+      const std::shared_ptr<ChunkServerClient>& csClient)
+      : csClient_(csClient) {}
 
-    int Init(const ChunkServerBroadCasterOption &ops) {
-        option_ = ops;
-        return 0;
-    }
+  int Init(const ChunkServerBroadCasterOption& ops) {
+    option_ = ops;
+    return 0;
+  }
 
-    ~ChunkServerBroadCaster() {}
+  ~ChunkServerBroadCaster() {}
 
-    int BroadCastFileEpoch(uint64_t fileId, uint64_t epoch,
-        const std::list<CopysetPeerInfo<ChunkServerID>> &csLocs);
+  int BroadCastFileEpoch(
+      uint64_t fileId, uint64_t epoch,
+      const std::list<CopysetPeerInfo<ChunkServerID>>& csLocs);
 
  private:
-    std::shared_ptr<ChunkServerClient> csClient_;
-    ChunkServerBroadCasterOption option_;
+  std::shared_ptr<ChunkServerClient> csClient_;
+  ChunkServerBroadCasterOption option_;
 };
 
-}   // namespace client
-}   // namespace curve
-
+}  // namespace client
+}  // namespace curve
 
 #endif  // SRC_CLIENT_CHUNKSERVER_BROADCASTER_H_

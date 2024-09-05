@@ -29,53 +29,53 @@ namespace metaserver {
 namespace copyset {
 
 const char* OperatorTypeName(OperatorType type) {
-    switch (type) {
-        case OperatorType::GetDentry:
-            return "GetDentry";
-        case OperatorType::ListDentry:
-            return "ListDentry";
-        case OperatorType::CreateDentry:
-            return "CreateDentry";
-        case OperatorType::DeleteDentry:
-            return "DeleteDentry";
-        case OperatorType::GetInode:
-            return "GetInode";
-        case OperatorType::BatchGetInodeAttr:
-            return "BatchGetInodeAttr";
-        case OperatorType::BatchGetXAttr:
-            return "BatchGetXAttr";
-        case OperatorType::CreateInode:
-            return "CreateInode";
-        case OperatorType::UpdateInode:
-            return "UpdateInode";
-        case OperatorType::DeleteInode:
-            return "DeleteInode";
-        case OperatorType::CreateRootInode:
-            return "CreateRootInode";
-        case OperatorType::CreateManageInode:
-            return "CreateManageInode";
-        case OperatorType::CreatePartition:
-            return "CreatePartition";
-        case OperatorType::DeletePartition:
-            return "DeletePartition";
-        case OperatorType::PrepareRenameTx:
-            return "PrepareRenameTx";
-        case OperatorType::GetOrModifyS3ChunkInfo:
-            return "GetOrModifyS3ChunkInfo";
-        case OperatorType::GetVolumeExtent:
-            return "GetVolumeExtent";
-        case OperatorType::UpdateVolumeExtent:
-            return "UpdateVolumeExtent";
-        // Add new case before `OperatorType::OperatorTypeMax`
-        case OperatorType::OperatorTypeMax:
-            break;
-    }
+  switch (type) {
+    case OperatorType::GetDentry:
+      return "GetDentry";
+    case OperatorType::ListDentry:
+      return "ListDentry";
+    case OperatorType::CreateDentry:
+      return "CreateDentry";
+    case OperatorType::DeleteDentry:
+      return "DeleteDentry";
+    case OperatorType::GetInode:
+      return "GetInode";
+    case OperatorType::BatchGetInodeAttr:
+      return "BatchGetInodeAttr";
+    case OperatorType::BatchGetXAttr:
+      return "BatchGetXAttr";
+    case OperatorType::CreateInode:
+      return "CreateInode";
+    case OperatorType::UpdateInode:
+      return "UpdateInode";
+    case OperatorType::DeleteInode:
+      return "DeleteInode";
+    case OperatorType::CreateRootInode:
+      return "CreateRootInode";
+    case OperatorType::CreateManageInode:
+      return "CreateManageInode";
+    case OperatorType::CreatePartition:
+      return "CreatePartition";
+    case OperatorType::DeletePartition:
+      return "DeletePartition";
+    case OperatorType::PrepareRenameTx:
+      return "PrepareRenameTx";
+    case OperatorType::GetOrModifyS3ChunkInfo:
+      return "GetOrModifyS3ChunkInfo";
+    case OperatorType::GetVolumeExtent:
+      return "GetVolumeExtent";
+    case OperatorType::UpdateVolumeExtent:
+      return "UpdateVolumeExtent";
+    // Add new case before `OperatorType::OperatorTypeMax`
+    case OperatorType::OperatorTypeMax:
+      break;
+  }
 
-    // DO NOT make it as a default case in switch statement
-    // otherwise compiler WILL NOT warning on unhandled enumeration value
-    CHECK(false) << "Unexpected, did you forget add corresponding name "
-                    "after add a new operator type?";
-    return "Unexpected";
+  // DO NOT make it as a default case in switch statement
+  // otherwise compiler WILL NOT warning on unhandled enumeration value
+  CHECK(false) << "Unexpected, did you forget add corresponding name "
+                  "after add a new operator type?";
+  return "Unexpected";
 }
 
 }  // namespace copyset

@@ -20,15 +20,15 @@
  * Author: chenwei
  */
 
-#include <glog/logging.h>
-#include <gflags/gflags.h>
 #include <butil/at_exit.h>  // butil::AtExitManager
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 
+#include "curvefs/src/common/dynamic_vlog.h"
 #include "curvefs/src/common/process.h"
+#include "curvefs/src/common/threading.h"
 #include "curvefs/src/metaserver/metaserver.h"
 #include "src/common/configuration.h"
-#include "curvefs/src/common/dynamic_vlog.h"
-#include "curvefs/src/common/threading.h"
 
 DEFINE_string(confPath, "curvefs/conf/metaserver.conf", "metaserver confPath");
 DEFINE_string(ip, "127.0.0.1", "metasetver listen ip");
@@ -54,97 +54,96 @@ extern void (*g_worker_startfn)();
 namespace {
 
 void SetBthreadWorkerName() {
-    static std::atomic<int> counter(0);
+  static std::atomic<int> counter(0);
 
-    char buffer[16] = {0};
-    snprintf(buffer, sizeof(buffer), "bthread:%d",
-             counter.fetch_add(1, std::memory_order_relaxed));
+  char buffer[16] = {0};
+  snprintf(buffer, sizeof(buffer), "bthread:%d",
+           counter.fetch_add(1, std::memory_order_relaxed));
 
-    curvefs::common::SetThreadName(buffer);
+  curvefs::common::SetThreadName(buffer);
 }
 
-void LoadConfigFromCmdline(Configuration *conf) {
-    google::CommandLineFlagInfo info;
-    if (GetCommandLineFlagInfo("ip", &info) && !info.is_default) {
-        conf->SetStringValue("global.ip", FLAGS_ip);
-    }
-    if (GetCommandLineFlagInfo("port", &info) && !info.is_default) {
-        conf->SetStringValue("global.port", FLAGS_ip);
-    }
+void LoadConfigFromCmdline(Configuration* conf) {
+  google::CommandLineFlagInfo info;
+  if (GetCommandLineFlagInfo("ip", &info) && !info.is_default) {
+    conf->SetStringValue("global.ip", FLAGS_ip);
+  }
+  if (GetCommandLineFlagInfo("port", &info) && !info.is_default) {
+    conf->SetStringValue("global.port", FLAGS_ip);
+  }
 
-    if (GetCommandLineFlagInfo("dataUri", &info) && !info.is_default) {
-        conf->SetStringValue("copyset.data_uri", FLAGS_dataUri);
-    }
+  if (GetCommandLineFlagInfo("dataUri", &info) && !info.is_default) {
+    conf->SetStringValue("copyset.data_uri", FLAGS_dataUri);
+  }
 
-    if (GetCommandLineFlagInfo("trashUri", &info) && !info.is_default) {
-        conf->SetStringValue("trash.uri", FLAGS_trashUri);
-    }
+  if (GetCommandLineFlagInfo("trashUri", &info) && !info.is_default) {
+    conf->SetStringValue("trash.uri", FLAGS_trashUri);
+  }
 
-    if (GetCommandLineFlagInfo("raftLogUri", &info) && !info.is_default) {
-        conf->SetStringValue("copyset.raft_log_uri", FLAGS_raftLogUri);
-    }
+  if (GetCommandLineFlagInfo("raftLogUri", &info) && !info.is_default) {
+    conf->SetStringValue("copyset.raft_log_uri", FLAGS_raftLogUri);
+  }
 
-    if (GetCommandLineFlagInfo("raftMetaUri", &info) && !info.is_default) {
-        conf->SetStringValue("copyset.raft_meta_uri", FLAGS_raftMetaUri);
-    }
+  if (GetCommandLineFlagInfo("raftMetaUri", &info) && !info.is_default) {
+    conf->SetStringValue("copyset.raft_meta_uri", FLAGS_raftMetaUri);
+  }
 
-    if (GetCommandLineFlagInfo("raftSnapshotUri", &info) && !info.is_default) {
-        conf->SetStringValue("copyset.raft_snapshot_uri",
-                             FLAGS_raftSnapshotUri);
-    }
+  if (GetCommandLineFlagInfo("raftSnapshotUri", &info) && !info.is_default) {
+    conf->SetStringValue("copyset.raft_snapshot_uri", FLAGS_raftSnapshotUri);
+  }
 
-    if (FLAGS_log_dir.empty()) {
-        if (!conf->GetStringValue("metaserver.common.logDir", &FLAGS_log_dir)) {
-            LOG(WARNING) << "no metaserver.common.logDir in " << FLAGS_confPath
-                         << ", will log to /tmp";
-        }
+  if (FLAGS_log_dir.empty()) {
+    if (!conf->GetStringValue("metaserver.common.logDir", &FLAGS_log_dir)) {
+      LOG(WARNING) << "no metaserver.common.logDir in " << FLAGS_confPath
+                   << ", will log to /tmp";
     }
+  }
 
-    if (GetCommandLineFlagInfo("v", &info) && !info.is_default) {
-        conf->SetIntValue("metaserver.loglevel", FLAGS_v);
-    }
+  if (GetCommandLineFlagInfo("v", &info) && !info.is_default) {
+    conf->SetIntValue("metaserver.loglevel", FLAGS_v);
+  }
 }
 
 }  // namespace
 
-int main(int argc, char **argv) {
-    // config initialization
-    google::ParseCommandLineFlags(&argc, &argv, false);
+int main(int argc, char** argv) {
+  // config initialization
+  google::ParseCommandLineFlags(&argc, &argv, false);
 
-    ::curvefs::common::Process::InitSetProcTitle(argc, argv);
-    butil::AtExitManager atExit;
+  ::curvefs::common::Process::InitSetProcTitle(argc, argv);
+  butil::AtExitManager atExit;
 
-    bthread::g_worker_startfn = SetBthreadWorkerName;
+  bthread::g_worker_startfn = SetBthreadWorkerName;
 
-    std::string confPath = FLAGS_confPath;
-    auto conf = std::make_shared<Configuration>();
-    conf->SetConfigPath(confPath);
-    LOG_IF(FATAL, !conf->LoadConfig())
-        << "load metaserver configuration fail, conf path = " << confPath;
-    conf->GetValueFatalIfFail("metaserver.loglevel", &FLAGS_v);
-    LoadConfigFromCmdline(conf.get());
-    FLAGS_vlog_level = FLAGS_v;
+  std::string confPath = FLAGS_confPath;
+  auto conf = std::make_shared<Configuration>();
+  conf->SetConfigPath(confPath);
+  LOG_IF(FATAL, !conf->LoadConfig())
+      << "load metaserver configuration fail, conf path = " << confPath;
+  conf->GetValueFatalIfFail("metaserver.loglevel", &FLAGS_v);
+  LoadConfigFromCmdline(conf.get());
+  FLAGS_vlog_level = FLAGS_v;
 
-    // initialize logging module
-    google::InitGoogleLogging(argv[0]);
+  // initialize logging module
+  google::InitGoogleLogging(argv[0]);
 
-    conf->PrintConfig();
+  conf->PrintConfig();
 
-    curvefs::metaserver::Metaserver metaserver;
+  curvefs::metaserver::Metaserver metaserver;
 
-    // initialize metaserver options
-    metaserver.InitOptions(conf);
+  // initialize metaserver options
+  metaserver.InitOptions(conf);
 
-    // Initialize other modules after winning election
-    metaserver.Init();
+  // Initialize other modules after winning election
+  metaserver.Init();
 
-    // start metaserver server and wait CTRL+C to quit
-    metaserver.Run();
+  // start metaserver server and wait CTRL+C to quit
+  metaserver.Run();
 
-    // stop server and background threads
-    metaserver.Stop();
+  // stop server and background threads
+  metaserver.Stop();
 
-    curve::common::S3Adapter::Shutdown();
-    google::ShutdownGoogleLogging();
-    return 0;
+  curve::common::S3Adapter::Shutdown();
+  google::ShutdownGoogleLogging();
+  return 0;
 }

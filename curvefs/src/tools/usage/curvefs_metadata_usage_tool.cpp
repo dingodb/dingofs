@@ -29,58 +29,56 @@ namespace tools {
 namespace usage {
 
 void MatedataUsageTool::PrintHelp() {
-    CurvefsToolRpc::PrintHelp();
-    std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
-    std::cout << std::endl;
+  CurvefsToolRpc::PrintHelp();
+  std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
+  std::cout << std::endl;
 }
 
 void MatedataUsageTool::AddUpdateFlags() {
-    AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
+  AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
 }
 
 bool MatedataUsageTool::AfterSendRequestToHost(const std::string& host) {
-    bool ret = true;
-    if (controller_->Failed()) {
-        errorOutput_ << "get metadata usage from mds: " << host
-                     << " failed, errorcode= " << controller_->ErrorCode()
-                     << ", error text: " << controller_->ErrorText()
-                     << std::endl;
-        ret = false;
-    } else {
-        uint64_t total = 0;
-        uint64_t used = 0;
-        for (auto const& i : response_->metadatausages()) {
-            auto totalTmp = i.total();
-            total += totalTmp;
-            auto usedTmp = i.used();
-            used += usedTmp;
-            std::cout << "metaserver[" << i.metaserveraddr()
-                      << "] usage: total: " << ToReadableByte(totalTmp)
-                      << " used: " << ToReadableByte(usedTmp)
-                      << " left: " << ToReadableByte(totalTmp - usedTmp)
-                      << std::endl;
-        }
-        std::cout << "all cluster usage: total: " << ToReadableByte(total)
-                  << " used: " << ToReadableByte(used)
-                  << " left: " << ToReadableByte(total - used) << std::endl;
+  bool ret = true;
+  if (controller_->Failed()) {
+    errorOutput_ << "get metadata usage from mds: " << host
+                 << " failed, errorcode= " << controller_->ErrorCode()
+                 << ", error text: " << controller_->ErrorText() << std::endl;
+    ret = false;
+  } else {
+    uint64_t total = 0;
+    uint64_t used = 0;
+    for (auto const& i : response_->metadatausages()) {
+      auto totalTmp = i.total();
+      total += totalTmp;
+      auto usedTmp = i.used();
+      used += usedTmp;
+      std::cout << "metaserver[" << i.metaserveraddr()
+                << "] usage: total: " << ToReadableByte(totalTmp)
+                << " used: " << ToReadableByte(usedTmp)
+                << " left: " << ToReadableByte(totalTmp - usedTmp) << std::endl;
     }
+    std::cout << "all cluster usage: total: " << ToReadableByte(total)
+              << " used: " << ToReadableByte(used)
+              << " left: " << ToReadableByte(total - used) << std::endl;
+  }
 
-    return ret;
+  return ret;
 }
 
 int MatedataUsageTool::Init() {
-    if (CurvefsToolRpc::Init() != 0) {
-        return -1;
-    }
-    curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
-    service_stub_func_ = std::bind(
-        &curvefs::mds::topology::TopologyService_Stub::StatMetadataUsage,
-        service_stub_.get(), std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3, nullptr);
+  if (CurvefsToolRpc::Init() != 0) {
+    return -1;
+  }
+  curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
+  service_stub_func_ = std::bind(
+      &curvefs::mds::topology::TopologyService_Stub::StatMetadataUsage,
+      service_stub_.get(), std::placeholders::_1, std::placeholders::_2,
+      std::placeholders::_3, nullptr);
 
-    curvefs::mds::topology::StatMetadataUsageRequest request;
-    AddRequest(request);
-    return 0;
+  curvefs::mds::topology::StatMetadataUsageRequest request;
+  AddRequest(request);
+  return 0;
 }
 
 }  // namespace usage

@@ -50,304 +50,294 @@ using ::testing::SetArgPointee;
 
 class DefaultVolumeStorageTest : public ::testing::Test {
  protected:
-    DefaultVolumeStorageTest()
-        : storage_(&spaceMgr_, &blockDev_, &inodeCacheMgr_),
-          metaServerCli_(std::make_shared<MockMetaServerClient>()) {}
+  DefaultVolumeStorageTest()
+      : storage_(&spaceMgr_, &blockDev_, &inodeCacheMgr_),
+        metaServerCli_(std::make_shared<MockMetaServerClient>()) {}
 
-    void SetUp() override {
-        ON_CALL(*metaServerCli_, UpdateInodeAttrWithOutNlink(_, _, _, _, _))
-            .WillByDefault(Return(MetaStatusCode::OK));
-    }
+  void SetUp() override {
+    ON_CALL(*metaServerCli_, UpdateInodeAttrWithOutNlink(_, _, _, _, _))
+        .WillByDefault(Return(MetaStatusCode::OK));
+  }
 
  protected:
-    MockSpaceManager spaceMgr_;
-    MockBlockDeviceClient blockDev_;
-    MockInodeCacheManager inodeCacheMgr_;
-    DefaultVolumeStorage storage_;
-    std::shared_ptr<MockMetaServerClient> metaServerCli_;
+  MockSpaceManager spaceMgr_;
+  MockBlockDeviceClient blockDev_;
+  MockInodeCacheManager inodeCacheMgr_;
+  DefaultVolumeStorage storage_;
+  std::shared_ptr<MockMetaServerClient> metaServerCli_;
 };
 
 TEST_F(DefaultVolumeStorageTest, WriteAndReadTest_InodeNotFound) {
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .Times(2)
-        .WillRepeatedly(Return(CURVEFS_ERROR::NOTEXIST));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .Times(2)
+      .WillRepeatedly(Return(CURVEFS_ERROR::NOTEXIST));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
-    FileOut fileOut;
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
+  FileOut fileOut;
 
-    ASSERT_EQ(CURVEFS_ERROR::NOTEXIST,
-              storage_.Read(ino, offset, len, data.get()));
-    ASSERT_EQ(CURVEFS_ERROR::NOTEXIST,
-              storage_.Write(ino, offset, len, data.get(), &fileOut));
+  ASSERT_EQ(CURVEFS_ERROR::NOTEXIST,
+            storage_.Read(ino, offset, len, data.get()));
+  ASSERT_EQ(CURVEFS_ERROR::NOTEXIST,
+            storage_.Write(ino, offset, len, data.get(), &fileOut));
 }
 
 TEST_F(DefaultVolumeStorageTest, ReadTest_BlockDevReadError) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    VolumeExtentList exts;
-    auto* slice = exts.add_slices();
-    slice->set_offset(0);
-    auto* ext = slice->add_extents();
-    ext->set_fsoffset(0);
-    ext->set_length(4096);
-    ext->set_volumeoffset(8192);
-    ext->set_isused(true);
+  VolumeExtentList exts;
+  auto* slice = exts.add_slices();
+  slice->set_offset(0);
+  auto* ext = slice->add_extents();
+  ext->set_fsoffset(0);
+  ext->set_length(4096);
+  ext->set_volumeoffset(8192);
+  ext->set_isused(true);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                *extents = exts;
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            *extents = exts;
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    EXPECT_CALL(blockDev_, Readv(_))
-        .WillOnce(Return(-1));
+  EXPECT_CALL(blockDev_, Readv(_)).WillOnce(Return(-1));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
 
-    ASSERT_EQ(CURVEFS_ERROR::IO_ERROR,
-              storage_.Read(ino, offset, len, data.get()));
+  ASSERT_EQ(CURVEFS_ERROR::IO_ERROR,
+            storage_.Read(ino, offset, len, data.get()));
 }
 
 TEST_F(DefaultVolumeStorageTest, ReadTest_BlockDevReadSuccess) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    VolumeExtentList exts;
-    auto* slice = exts.add_slices();
-    slice->set_offset(0);
-    auto* ext = slice->add_extents();
-    ext->set_fsoffset(0);
-    ext->set_length(4096);
-    ext->set_volumeoffset(8192);
-    ext->set_isused(true);
+  VolumeExtentList exts;
+  auto* slice = exts.add_slices();
+  slice->set_offset(0);
+  auto* ext = slice->add_extents();
+  ext->set_fsoffset(0);
+  ext->set_length(4096);
+  ext->set_volumeoffset(8192);
+  ext->set_isused(true);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                *extents = exts;
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            *extents = exts;
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
 
-    EXPECT_CALL(blockDev_, Readv(_))
-        .WillOnce(Return(len));
+  EXPECT_CALL(blockDev_, Readv(_)).WillOnce(Return(len));
 
-    EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper))
-        .Times(1);
+  EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper)).Times(1);
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, storage_.Read(ino, offset, len, data.get()));
+  ASSERT_EQ(CURVEFS_ERROR::OK, storage_.Read(ino, offset, len, data.get()));
 }
 
 TEST_F(DefaultVolumeStorageTest, ReadTest_BlockDevReadHoleSuccess) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    VolumeExtentList exts;
-    auto* slice = exts.add_slices();
-    slice->set_offset(0);
-    auto* ext = slice->add_extents();
-    ext->set_fsoffset(0);
-    ext->set_length(4096);
-    ext->set_volumeoffset(8192);
-    ext->set_isused(false);
+  VolumeExtentList exts;
+  auto* slice = exts.add_slices();
+  slice->set_offset(0);
+  auto* ext = slice->add_extents();
+  ext->set_fsoffset(0);
+  ext->set_length(4096);
+  ext->set_volumeoffset(8192);
+  ext->set_isused(false);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                *extents = exts;
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            *extents = exts;
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[4096]);
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[4096]);
 
-    memset(data.get(), 'x', len);
+  memset(data.get(), 'x', len);
 
-    EXPECT_CALL(blockDev_, Readv(_))
-        .Times(0);
+  EXPECT_CALL(blockDev_, Readv(_)).Times(0);
 
-    EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper))
-        .Times(1);
+  EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper)).Times(1);
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, storage_.Read(ino, offset, len, data.get()));
+  ASSERT_EQ(CURVEFS_ERROR::OK, storage_.Read(ino, offset, len, data.get()));
 
-    for (size_t i = 0; i < len; ++i) {
-        ASSERT_EQ(data[i], 0);
-    }
+  for (size_t i = 0; i < len; ++i) {
+    ASSERT_EQ(data[i], 0);
+  }
 }
 
 TEST_F(DefaultVolumeStorageTest, WriteTest_PrepareError) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                extents->clear_slices();
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            extents->clear_slices();
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    EXPECT_CALL(spaceMgr_, Alloc(_, _, _))
-        .WillOnce(Return(false));
+  EXPECT_CALL(spaceMgr_, Alloc(_, _, _)).WillOnce(Return(false));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
-    FileOut fileOut;
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
+  FileOut fileOut;
 
-    ASSERT_EQ(CURVEFS_ERROR::NO_SPACE,
-              storage_.Write(ino, offset, len, data.get(), &fileOut));
+  ASSERT_EQ(CURVEFS_ERROR::NO_SPACE,
+            storage_.Write(ino, offset, len, data.get(), &fileOut));
 }
 
 TEST_F(DefaultVolumeStorageTest, WriteTest_BlockDevWriteError) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                extents->clear_slices();
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            extents->clear_slices();
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    std::vector<WritePart> parts;
-    parts.push_back({});
-    parts.push_back({});
+  std::vector<WritePart> parts;
+  parts.push_back({});
+  parts.push_back({});
 
-    EXPECT_CALL(spaceMgr_, Alloc(_, _, _))
-        .WillOnce(Invoke(
-            [](uint32_t size, const AllocateHint&, std::vector<Extent>* exts) {
-                exts->emplace_back(size, size);
-                return true;
-            }));
+  EXPECT_CALL(spaceMgr_, Alloc(_, _, _))
+      .WillOnce(Invoke(
+          [](uint32_t size, const AllocateHint&, std::vector<Extent>* exts) {
+            exts->emplace_back(size, size);
+            return true;
+          }));
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
-    FileOut fileOut;
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
+  FileOut fileOut;
 
-    EXPECT_CALL(blockDev_, Writev(_))
-        .WillOnce(Return(-1));
+  EXPECT_CALL(blockDev_, Writev(_)).WillOnce(Return(-1));
 
-    ASSERT_EQ(CURVEFS_ERROR::IO_ERROR,
-              storage_.Write(ino, offset, len, data.get(), &fileOut));
+  ASSERT_EQ(CURVEFS_ERROR::IO_ERROR,
+            storage_.Write(ino, offset, len, data.get(), &fileOut));
 }
 
 TEST_F(DefaultVolumeStorageTest, WriteTest_BlockDevWriteSuccess) {
-    Inode inode;
-    inode.set_type(FsFileType::TYPE_FILE);
+  Inode inode;
+  inode.set_type(FsFileType::TYPE_FILE);
 
-    auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
+  auto inodeWrapper = std::make_shared<InodeWrapper>(inode, metaServerCli_);
 
-    EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(
-            Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
-                extents->clear_slices();
-                return MetaStatusCode::OK;
-            }));
+  EXPECT_CALL(*metaServerCli_, GetVolumeExtent(_, _, _, _))
+      .WillOnce(
+          Invoke([&](uint32_t, uint64_t, bool, VolumeExtentList* extents) {
+            extents->clear_slices();
+            return MetaStatusCode::OK;
+          }));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
+  ASSERT_EQ(CURVEFS_ERROR::OK, inodeWrapper->RefreshVolumeExtent());
 
+  EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
+      .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
+        out = inodeWrapper;
+        return CURVEFS_ERROR::OK;
+      }));
 
-    EXPECT_CALL(inodeCacheMgr_, GetInode(_, _))
-        .WillOnce(Invoke([&](uint64_t, std::shared_ptr<InodeWrapper>& out) {
-            out = inodeWrapper;
-            return CURVEFS_ERROR::OK;
-        }));
+  std::vector<WritePart> parts;
+  parts.push_back({});
+  parts.push_back({});
 
-    std::vector<WritePart> parts;
-    parts.push_back({});
-    parts.push_back({});
+  EXPECT_CALL(spaceMgr_, Alloc(_, _, _))
+      .WillOnce(Invoke(
+          [](uint32_t size, const AllocateHint&, std::vector<Extent>* exts) {
+            exts->emplace_back(size, size);
+            return true;
+          }));
 
-    EXPECT_CALL(spaceMgr_, Alloc(_, _, _))
-        .WillOnce(Invoke(
-            [](uint32_t size, const AllocateHint&, std::vector<Extent>* exts) {
-                exts->emplace_back(size, size);
-                return true;
-            }));
+  uint64_t ino = 1;
+  off_t offset = 0;
+  size_t len = 4096;
+  std::unique_ptr<char[]> data(new char[len]);
+  FileOut fileOut;
 
-    uint64_t ino = 1;
-    off_t offset = 0;
-    size_t len = 4096;
-    std::unique_ptr<char[]> data(new char[len]);
-    FileOut fileOut;
+  EXPECT_CALL(blockDev_, Writev(_)).WillOnce(Return(len));
 
-    EXPECT_CALL(blockDev_, Writev(_))
-        .WillOnce(Return(len));
+  EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper)).Times(1);
 
-    EXPECT_CALL(inodeCacheMgr_, ShipToFlush(inodeWrapper))
-        .Times(1);
+  ASSERT_EQ(CURVEFS_ERROR::OK,
+            storage_.Write(ino, offset, len, data.get(), &fileOut));
 
-    ASSERT_EQ(CURVEFS_ERROR::OK,
-              storage_.Write(ino, offset, len, data.get(), &fileOut));
-
-    ASSERT_EQ(offset + len, inodeWrapper->GetInode().length());
+  ASSERT_EQ(offset + len, inodeWrapper->GetInode().length());
 }
 
 }  // namespace client

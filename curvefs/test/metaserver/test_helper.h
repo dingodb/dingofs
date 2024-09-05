@@ -28,11 +28,12 @@
 namespace curvefs {
 namespace metaserver {
 
-UpdateInodeRequest MakeUpdateInodeRequestFromInode(const Inode &inode,
-    uint32_t poolId = 0, uint32_t copysetId = 0, uint32_t partitionId = 0);
+UpdateInodeRequest MakeUpdateInodeRequestFromInode(const Inode& inode,
+                                                   uint32_t poolId = 0,
+                                                   uint32_t copysetId = 0,
+                                                   uint32_t partitionId = 0);
 
 }  // namespace metaserver
 }  // namespace curvefs
-
 
 #endif  // CURVEFS_TEST_METASERVER_TEST_HELPER_H_

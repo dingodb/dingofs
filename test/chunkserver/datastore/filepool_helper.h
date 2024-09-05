@@ -22,9 +22,10 @@
 #ifndef TEST_CHUNKSERVER_DATASTORE_FILEPOOL_HELPER_H_
 #define TEST_CHUNKSERVER_DATASTORE_FILEPOOL_HELPER_H_
 
+#include <fcntl.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
-#include <fcntl.h>
+
 #include <climits>
 #include <memory>
 #include <string>
@@ -35,9 +36,7 @@ using curve::fs::FileSystemType;
 using curve::fs::LocalFileSystem;
 using curve::fs::LocalFsFactory;
 
-void allocateChunk(std::shared_ptr<LocalFileSystem> fsptr,
-                   uint32_t num,
-                   std::string poolDir,
-                   uint32_t chunkSize);
+void allocateChunk(std::shared_ptr<LocalFileSystem> fsptr, uint32_t num,
+                   std::string poolDir, uint32_t chunkSize);
 
 #endif  // TEST_CHUNKSERVER_DATASTORE_FILEPOOL_HELPER_H_

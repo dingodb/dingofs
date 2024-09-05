@@ -32,28 +32,28 @@ namespace curvefs {
 namespace volume {
 
 struct BitmapAllocatorOption {
-    uint64_t startOffset;
-    uint64_t length;
-    uint64_t sizePerBit;
-    double smallAllocProportion;
+  uint64_t startOffset;
+  uint64_t length;
+  uint64_t sizePerBit;
+  double smallAllocProportion;
 };
 
 struct BlockGroupManagerOption {
-    uint32_t fsId;
-    uint32_t blockGroupAllocateOnce;
-    uint32_t blockSize;
-    uint64_t blockGroupSize;
-    std::string owner;
+  uint32_t fsId;
+  uint32_t blockGroupAllocateOnce;
+  uint32_t blockSize;
+  uint64_t blockGroupSize;
+  std::string owner;
 };
 
 struct AllocatorOption {
-    std::string type;
-    BitmapAllocatorOption bitmapAllocatorOption;
+  std::string type;
+  BitmapAllocatorOption bitmapAllocatorOption;
 };
 
 struct SpaceManagerOption {
-    AllocatorOption allocatorOption;
-    BlockGroupManagerOption blockGroupManagerOption;
+  AllocatorOption allocatorOption;
+  BlockGroupManagerOption blockGroupManagerOption;
 };
 
 }  // namespace volume

@@ -23,8 +23,10 @@
 #define TEST_MDS_SCHEDULE_MOCK_TOPOADAPTER_H_
 
 #include <gmock/gmock.h>
-#include <vector>
+
 #include <map>
+#include <vector>
+
 #include "src/mds/schedule/topoAdapter.h"
 
 namespace curve {
@@ -32,52 +34,52 @@ namespace mds {
 namespace schedule {
 class MockTopoAdapter : public TopoAdapter {
  public:
-    MockTopoAdapter() {}
-    ~MockTopoAdapter() {}
+  MockTopoAdapter() {}
+  ~MockTopoAdapter() {}
 
-    MOCK_METHOD2(GetCopySetInfo, bool(const CopySetKey &id, CopySetInfo *info));
+  MOCK_METHOD2(GetCopySetInfo, bool(const CopySetKey& id, CopySetInfo* info));
 
-    MOCK_METHOD0(GetCopySetInfos, std::vector<CopySetInfo>());
+  MOCK_METHOD0(GetCopySetInfos, std::vector<CopySetInfo>());
 
-    MOCK_METHOD1(GetCopySetInfosInChunkServer,
-        std::vector<CopySetInfo>(ChunkServerIdType));
+  MOCK_METHOD1(GetCopySetInfosInChunkServer,
+               std::vector<CopySetInfo>(ChunkServerIdType));
 
-    MOCK_METHOD2(GetChunkServerInfo,
-                bool(ChunkServerIdType id, ChunkServerInfo *info));
+  MOCK_METHOD2(GetChunkServerInfo,
+               bool(ChunkServerIdType id, ChunkServerInfo* info));
 
-    MOCK_METHOD0(GetChunkServerInfos, std::vector<ChunkServerInfo>());
+  MOCK_METHOD0(GetChunkServerInfos, std::vector<ChunkServerInfo>());
 
-    MOCK_METHOD1(GetStandardZoneNumInLogicalPool, int(PoolIdType id));
+  MOCK_METHOD1(GetStandardZoneNumInLogicalPool, int(PoolIdType id));
 
-    MOCK_METHOD1(GetStandardReplicaNumInLogicalPool, int(PoolIdType id));
+  MOCK_METHOD1(GetStandardReplicaNumInLogicalPool, int(PoolIdType id));
 
-    MOCK_METHOD1(GetAvgScatterWidthInLogicalPool, int(PoolIdType id));
+  MOCK_METHOD1(GetAvgScatterWidthInLogicalPool, int(PoolIdType id));
 
-    MOCK_METHOD2(CreateCopySetAtChunkServer,
-                bool(CopySetKey id, ChunkServerIdType csID));
+  MOCK_METHOD2(CreateCopySetAtChunkServer,
+               bool(CopySetKey id, ChunkServerIdType csID));
 
-    MOCK_METHOD2(CopySetFromTopoToSchedule,
-                bool(const ::curve::mds::topology::CopySetInfo &origin,
-                    ::curve::mds::schedule::CopySetInfo *out));
+  MOCK_METHOD2(CopySetFromTopoToSchedule,
+               bool(const ::curve::mds::topology::CopySetInfo& origin,
+                    ::curve::mds::schedule::CopySetInfo* out));
 
-    MOCK_METHOD2(ChunkServerFromTopoToSchedule,
-                bool(const ::curve::mds::topology::ChunkServer &origin,
-                    ::curve::mds::schedule::ChunkServerInfo *out));
+  MOCK_METHOD2(ChunkServerFromTopoToSchedule,
+               bool(const ::curve::mds::topology::ChunkServer& origin,
+                    ::curve::mds::schedule::ChunkServerInfo* out));
 
-    MOCK_METHOD2(GetChunkServerScatterMap, void(const ChunkServerIdType &,
-                std::map<ChunkServerIdType, int> *));
+  MOCK_METHOD2(GetChunkServerScatterMap,
+               void(const ChunkServerIdType&,
+                    std::map<ChunkServerIdType, int>*));
 
-    MOCK_METHOD0(GetLogicalpools, std::vector<PoolIdType>());
+  MOCK_METHOD0(GetLogicalpools, std::vector<PoolIdType>());
 
-    MOCK_METHOD2(
-        GetLogicalPool,
-        bool(PoolIdType id, ::curve::mds::topology::LogicalPool* lpool));
+  MOCK_METHOD2(GetLogicalPool,
+               bool(PoolIdType id, ::curve::mds::topology::LogicalPool* lpool));
 
-    MOCK_METHOD1(GetCopySetInfosInLogicalPool,
-        std::vector<CopySetInfo>(PoolIdType));
+  MOCK_METHOD1(GetCopySetInfosInLogicalPool,
+               std::vector<CopySetInfo>(PoolIdType));
 
-    MOCK_METHOD1(GetChunkServersInLogicalPool,
-        std::vector<ChunkServerInfo>(PoolIdType));
+  MOCK_METHOD1(GetChunkServersInLogicalPool,
+               std::vector<ChunkServerInfo>(PoolIdType));
 };
 }  // namespace schedule
 }  // namespace mds

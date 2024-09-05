@@ -23,14 +23,14 @@
 #ifndef SRC_MDS_TOPOLOGY_TOPOLOGY_STORGE_ETCD_H_
 #define SRC_MDS_TOPOLOGY_TOPOLOGY_STORGE_ETCD_H_
 
-#include <vector>
 #include <map>
-#include <unordered_map>
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
-#include "src/mds/topology/topology_storge.h"
 #include "src/kvstorageclient/etcd_client.h"
 #include "src/mds/topology/topology_storage_codec.h"
+#include "src/mds/topology/topology_storge.h"
 
 namespace curve {
 namespace mds {
@@ -39,63 +39,58 @@ namespace topology {
 using ::curve::kvstorage::EtcdClientImp;
 using ::curve::kvstorage::KVStorageClient;
 
-
-
 class TopologyStorageEtcd : public TopologyStorage {
  public:
-    TopologyStorageEtcd(std::shared_ptr<KVStorageClient> client,
-        std::shared_ptr<TopologyStorageCodec> codec)
-    : client_(client),
-      codec_(codec) {}
+  TopologyStorageEtcd(std::shared_ptr<KVStorageClient> client,
+                      std::shared_ptr<TopologyStorageCodec> codec)
+      : client_(client), codec_(codec) {}
 
-    bool LoadLogicalPool(
-        std::unordered_map<PoolIdType, LogicalPool> *logicalPoolMap,
-        PoolIdType *maxLogicalPoolId) override;
-    bool LoadPhysicalPool(
-        std::unordered_map<PoolIdType, PhysicalPool> *physicalPoolMap,
-        PoolIdType *maxPhysicalPoolId) override;
-    bool LoadZone(
-        std::unordered_map<ZoneIdType, Zone> *zoneMap,
-        ZoneIdType *maxZoneId) override;
-    bool LoadServer(
-        std::unordered_map<ServerIdType, Server> *serverMap,
-        ServerIdType *maxServerId) override;
-    bool LoadChunkServer(
-        std::unordered_map<ChunkServerIdType, ChunkServer> *chunkServerMap,
-        ChunkServerIdType *maxChunkServerId) override;
-    bool LoadCopySet(
-        std::map<CopySetKey, CopySetInfo> *copySetMap,
-        std::map<PoolIdType, CopySetIdType> *copySetIdMaxMap) override;
+  bool LoadLogicalPool(
+      std::unordered_map<PoolIdType, LogicalPool>* logicalPoolMap,
+      PoolIdType* maxLogicalPoolId) override;
+  bool LoadPhysicalPool(
+      std::unordered_map<PoolIdType, PhysicalPool>* physicalPoolMap,
+      PoolIdType* maxPhysicalPoolId) override;
+  bool LoadZone(std::unordered_map<ZoneIdType, Zone>* zoneMap,
+                ZoneIdType* maxZoneId) override;
+  bool LoadServer(std::unordered_map<ServerIdType, Server>* serverMap,
+                  ServerIdType* maxServerId) override;
+  bool LoadChunkServer(
+      std::unordered_map<ChunkServerIdType, ChunkServer>* chunkServerMap,
+      ChunkServerIdType* maxChunkServerId) override;
+  bool LoadCopySet(
+      std::map<CopySetKey, CopySetInfo>* copySetMap,
+      std::map<PoolIdType, CopySetIdType>* copySetIdMaxMap) override;
 
-    bool StorageLogicalPool(const LogicalPool &data) override;
-    bool StoragePhysicalPool(const PhysicalPool &data) override;
-    bool StorageZone(const Zone &data) override;
-    bool StorageServer(const Server &data) override;
-    bool StorageChunkServer(const ChunkServer &data) override;
-    bool StorageCopySet(const CopySetInfo &data) override;
+  bool StorageLogicalPool(const LogicalPool& data) override;
+  bool StoragePhysicalPool(const PhysicalPool& data) override;
+  bool StorageZone(const Zone& data) override;
+  bool StorageServer(const Server& data) override;
+  bool StorageChunkServer(const ChunkServer& data) override;
+  bool StorageCopySet(const CopySetInfo& data) override;
 
-    bool DeleteLogicalPool(PoolIdType id) override;
-    bool DeletePhysicalPool(PoolIdType id) override;
-    bool DeleteZone(ZoneIdType id) override;
-    bool DeleteServer(ServerIdType id) override;
-    bool DeleteChunkServer(ChunkServerIdType id) override;
-    bool DeleteCopySet(CopySetKey key) override;
+  bool DeleteLogicalPool(PoolIdType id) override;
+  bool DeletePhysicalPool(PoolIdType id) override;
+  bool DeleteZone(ZoneIdType id) override;
+  bool DeleteServer(ServerIdType id) override;
+  bool DeleteChunkServer(ChunkServerIdType id) override;
+  bool DeleteCopySet(CopySetKey key) override;
 
-    bool UpdateLogicalPool(const LogicalPool &data) override;
-    bool UpdatePhysicalPool(const PhysicalPool &data) override;
-    bool UpdateZone(const Zone &data) override;
-    bool UpdateServer(const Server &data) override;
-    bool UpdateChunkServer(const ChunkServer &data) override;
-    bool UpdateCopySet(const CopySetInfo &data) override;
+  bool UpdateLogicalPool(const LogicalPool& data) override;
+  bool UpdatePhysicalPool(const PhysicalPool& data) override;
+  bool UpdateZone(const Zone& data) override;
+  bool UpdateServer(const Server& data) override;
+  bool UpdateChunkServer(const ChunkServer& data) override;
+  bool UpdateCopySet(const CopySetInfo& data) override;
 
-    bool LoadClusterInfo(std::vector<ClusterInformation> *info) override;
-    bool StorageClusterInfo(const ClusterInformation &info) override;
+  bool LoadClusterInfo(std::vector<ClusterInformation>* info) override;
+  bool StorageClusterInfo(const ClusterInformation& info) override;
 
  private:
-    // underlying storage media
-    std::shared_ptr<KVStorageClient> client_;
-    // codec module
-    std::shared_ptr<TopologyStorageCodec> codec_;
+  // underlying storage media
+  std::shared_ptr<KVStorageClient> client_;
+  // codec module
+  std::shared_ptr<TopologyStorageCodec> codec_;
 };
 
 }  // namespace topology

@@ -73,8 +73,8 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
   const uint64_t writeCacheMaxByte =
       opt.s3Opt.s3ClientAdaptorOpt.writeCacheMaxByte;
   if (writeCacheMaxByte < MIN_WRITE_CACHE_SIZE) {
-    LOG(ERROR) << "writeCacheMaxByte is too small" << ", at least "
-               << MIN_WRITE_CACHE_SIZE
+    LOG(ERROR) << "writeCacheMaxByte is too small"
+               << ", at least " << MIN_WRITE_CACHE_SIZE
                << " (8MB)"
                   ", writeCacheMaxByte = "
                << writeCacheMaxByte;
@@ -216,7 +216,8 @@ CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
     for (const auto& it : inode->parent()) {
       auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, true);
       if (tret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << it
+        LOG(ERROR) << "UpdateParentInodeXattr failed,"
+                   << " inodeId = " << it
                    << ", xattr = " << xattr.DebugString();
       }
     }

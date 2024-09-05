@@ -32,14 +32,14 @@ namespace curvefs {
 namespace client {
 
 struct VolumeStorageMetric {
-    bvar::LatencyRecorder readLatency;
-    bvar::LatencyRecorder writeLatency;
-    bvar::LatencyRecorder flushLatency;
+  bvar::LatencyRecorder readLatency;
+  bvar::LatencyRecorder writeLatency;
+  bvar::LatencyRecorder flushLatency;
 
-    explicit VolumeStorageMetric(absl::string_view prefix)
-        : readLatency(absl::StrCat(prefix, "_read")),
-          writeLatency(absl::StrCat(prefix, "_write")),
-          flushLatency(absl::StrCat(prefix, "_flush")) {}
+  explicit VolumeStorageMetric(absl::string_view prefix)
+      : readLatency(absl::StrCat(prefix, "_read")),
+        writeLatency(absl::StrCat(prefix, "_write")),
+        flushLatency(absl::StrCat(prefix, "_flush")) {}
 };
 
 }  // namespace client

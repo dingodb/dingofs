@@ -20,12 +20,14 @@
  * Author: hzsunjianliang
  */
 
-#ifndef  SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_
-#define  SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_
+#ifndef SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_
+#define SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+
 #include <string>
+
 #include "proto/nameserver2.pb.h"
 #include "src/mds/nameserver2/file_lock.h"
 
@@ -63,143 +65,146 @@ bool IsRenamePathValid(const std::string& oldFileName,
  */
 uint32_t GetMdsLogLevel(StatusCode code);
 
-class NameSpaceService: public CurveFSService {
+class NameSpaceService : public CurveFSService {
  public:
-    explicit NameSpaceService(FileLockManager *fileLockManager) {
-        fileLockManager_ = fileLockManager;
-    }
+  explicit NameSpaceService(FileLockManager* fileLockManager) {
+    fileLockManager_ = fileLockManager;
+  }
 
-    virtual ~NameSpaceService() {}
+  virtual ~NameSpaceService() {}
 
-    void CreateFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::CreateFileRequest* request,
-                       ::curve::mds::CreateFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void CreateFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::CreateFileRequest* request,
+                  ::curve::mds::CreateFileResponse* response,
+                  ::google::protobuf::Closure* done) override;
 
-    void DeleteFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::DeleteFileRequest* request,
-                       ::curve::mds::DeleteFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void DeleteFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::DeleteFileRequest* request,
+                  ::curve::mds::DeleteFileResponse* response,
+                  ::google::protobuf::Closure* done) override;
 
-    void RecoverFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::RecoverFileRequest* request,
-                       ::curve::mds::RecoverFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void RecoverFile(::google::protobuf::RpcController* controller,
+                   const ::curve::mds::RecoverFileRequest* request,
+                   ::curve::mds::RecoverFileResponse* response,
+                   ::google::protobuf::Closure* done) override;
 
-    void GetFileInfo(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::GetFileInfoRequest* request,
-                       ::curve::mds::GetFileInfoResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void GetFileInfo(::google::protobuf::RpcController* controller,
+                   const ::curve::mds::GetFileInfoRequest* request,
+                   ::curve::mds::GetFileInfoResponse* response,
+                   ::google::protobuf::Closure* done) override;
 
-    void GetOrAllocateSegment(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::GetOrAllocateSegmentRequest* request,
-                       ::curve::mds::GetOrAllocateSegmentResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void GetOrAllocateSegment(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::GetOrAllocateSegmentRequest* request,
+      ::curve::mds::GetOrAllocateSegmentResponse* response,
+      ::google::protobuf::Closure* done) override;
 
-    void DeAllocateSegment(
-        ::google::protobuf::RpcController* controller,
-        const ::curve::mds::DeAllocateSegmentRequest* request,
-        ::curve::mds::DeAllocateSegmentResponse* response,
-        ::google::protobuf::Closure* done) override;
+  void DeAllocateSegment(::google::protobuf::RpcController* controller,
+                         const ::curve::mds::DeAllocateSegmentRequest* request,
+                         ::curve::mds::DeAllocateSegmentResponse* response,
+                         ::google::protobuf::Closure* done) override;
 
-    void RenameFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::RenameFileRequest* request,
-                       ::curve::mds::RenameFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void RenameFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::RenameFileRequest* request,
+                  ::curve::mds::RenameFileResponse* response,
+                  ::google::protobuf::Closure* done) override;
 
-    void ExtendFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::ExtendFileRequest* request,
-                       ::curve::mds::ExtendFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void ExtendFile(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::ExtendFileRequest* request,
+                  ::curve::mds::ExtendFileResponse* response,
+                  ::google::protobuf::Closure* done) override;
 
-    void ChangeOwner(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::ChangeOwnerRequest* request,
-                       ::curve::mds::ChangeOwnerResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void ChangeOwner(::google::protobuf::RpcController* controller,
+                   const ::curve::mds::ChangeOwnerRequest* request,
+                   ::curve::mds::ChangeOwnerResponse* response,
+                   ::google::protobuf::Closure* done) override;
 
-    void ListDir(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::ListDirRequest* request,
-                       ::curve::mds::ListDirResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void ListDir(::google::protobuf::RpcController* controller,
+               const ::curve::mds::ListDirRequest* request,
+               ::curve::mds::ListDirResponse* response,
+               ::google::protobuf::Closure* done) override;
 
-    void IncreaseFileEpoch(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::IncreaseFileEpochRequest* request,
-                       ::curve::mds::IncreaseFileEpochResponse* response,
-                       ::google::protobuf::Closure* done) override;
+  void IncreaseFileEpoch(::google::protobuf::RpcController* controller,
+                         const ::curve::mds::IncreaseFileEpochRequest* request,
+                         ::curve::mds::IncreaseFileEpochResponse* response,
+                         ::google::protobuf::Closure* done) override;
 
-    void CreateSnapShot(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::CreateSnapShotRequest* request,
-                       ::curve::mds::CreateSnapShotResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void ListSnapShot(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::ListSnapShotFileInfoRequest* request,
-                       ::curve::mds::ListSnapShotFileInfoResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void DeleteSnapShot(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::DeleteSnapShotRequest* request,
-                       ::curve::mds::DeleteSnapShotResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void CheckSnapShotStatus(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::CheckSnapShotStatusRequest* request,
-                       ::curve::mds::CheckSnapShotStatusResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void GetSnapShotFileSegment(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::GetOrAllocateSegmentRequest* request,
-                       ::curve::mds::GetOrAllocateSegmentResponse* response,
-                       ::google::protobuf::Closure* done);
+  void CreateSnapShot(::google::protobuf::RpcController* controller,
+                      const ::curve::mds::CreateSnapShotRequest* request,
+                      ::curve::mds::CreateSnapShotResponse* response,
+                      ::google::protobuf::Closure* done) override;
+  void ListSnapShot(::google::protobuf::RpcController* controller,
+                    const ::curve::mds::ListSnapShotFileInfoRequest* request,
+                    ::curve::mds::ListSnapShotFileInfoResponse* response,
+                    ::google::protobuf::Closure* done) override;
+  void DeleteSnapShot(::google::protobuf::RpcController* controller,
+                      const ::curve::mds::DeleteSnapShotRequest* request,
+                      ::curve::mds::DeleteSnapShotResponse* response,
+                      ::google::protobuf::Closure* done) override;
+  void CheckSnapShotStatus(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::CheckSnapShotStatusRequest* request,
+      ::curve::mds::CheckSnapShotStatusResponse* response,
+      ::google::protobuf::Closure* done) override;
+  void GetSnapShotFileSegment(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::GetOrAllocateSegmentRequest* request,
+      ::curve::mds::GetOrAllocateSegmentResponse* response,
+      ::google::protobuf::Closure* done);
 
-    void OpenFile(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::OpenFileRequest* request,
-                       ::curve::mds::OpenFileResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void CloseFile(::google::protobuf::RpcController* controller,
-                        const ::curve::mds::CloseFileRequest* request,
-                        ::curve::mds::CloseFileResponse* response,
-                        ::google::protobuf::Closure* done) override;
-    void RefreshSession(::google::protobuf::RpcController* controller,
-                        const ::curve::mds::ReFreshSessionRequest* request,
-                        ::curve::mds::ReFreshSessionResponse* response,
-                        ::google::protobuf::Closure* done) override;
-    void CreateCloneFile(::google::protobuf::RpcController* controller,
+  void OpenFile(::google::protobuf::RpcController* controller,
+                const ::curve::mds::OpenFileRequest* request,
+                ::curve::mds::OpenFileResponse* response,
+                ::google::protobuf::Closure* done) override;
+  void CloseFile(::google::protobuf::RpcController* controller,
+                 const ::curve::mds::CloseFileRequest* request,
+                 ::curve::mds::CloseFileResponse* response,
+                 ::google::protobuf::Closure* done) override;
+  void RefreshSession(::google::protobuf::RpcController* controller,
+                      const ::curve::mds::ReFreshSessionRequest* request,
+                      ::curve::mds::ReFreshSessionResponse* response,
+                      ::google::protobuf::Closure* done) override;
+  void CreateCloneFile(::google::protobuf::RpcController* controller,
                        const ::curve::mds::CreateCloneFileRequest* request,
                        ::curve::mds::CreateCloneFileResponse* response,
                        ::google::protobuf::Closure* done) override;
-    void SetCloneFileStatus(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::SetCloneFileStatusRequest* request,
-                       ::curve::mds::SetCloneFileStatusResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void GetAllocatedSize(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::GetAllocatedSizeRequest* request,
-                       ::curve::mds::GetAllocatedSizeResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void GetFileSize(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::GetFileSizeRequest* request,
-                       ::curve::mds::GetFileSizeResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void ListClient(::google::protobuf::RpcController* controller,
-                       const ::curve::mds::ListClientRequest* request,
-                       ::curve::mds::ListClientResponse* response,
-                       ::google::protobuf::Closure* done) override;
-    void FindFileMountPoint(
-        ::google::protobuf::RpcController* controller,
-        const ::curve::mds::FindFileMountPointRequest* request,
-        ::curve::mds::FindFileMountPointResponse* response,
-        ::google::protobuf::Closure* done) override;
-    void ListVolumesOnCopysets(
-                ::google::protobuf::RpcController* controller,
-                const ::curve::mds::ListVolumesOnCopysetsRequest* request,
-                ::curve::mds::ListVolumesOnCopysetsResponse* response,
-                ::google::protobuf::Closure* done) override;
+  void SetCloneFileStatus(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::SetCloneFileStatusRequest* request,
+      ::curve::mds::SetCloneFileStatusResponse* response,
+      ::google::protobuf::Closure* done) override;
+  void GetAllocatedSize(::google::protobuf::RpcController* controller,
+                        const ::curve::mds::GetAllocatedSizeRequest* request,
+                        ::curve::mds::GetAllocatedSizeResponse* response,
+                        ::google::protobuf::Closure* done) override;
+  void GetFileSize(::google::protobuf::RpcController* controller,
+                   const ::curve::mds::GetFileSizeRequest* request,
+                   ::curve::mds::GetFileSizeResponse* response,
+                   ::google::protobuf::Closure* done) override;
+  void ListClient(::google::protobuf::RpcController* controller,
+                  const ::curve::mds::ListClientRequest* request,
+                  ::curve::mds::ListClientResponse* response,
+                  ::google::protobuf::Closure* done) override;
+  void FindFileMountPoint(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::FindFileMountPointRequest* request,
+      ::curve::mds::FindFileMountPointResponse* response,
+      ::google::protobuf::Closure* done) override;
+  void ListVolumesOnCopysets(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::ListVolumesOnCopysetsRequest* request,
+      ::curve::mds::ListVolumesOnCopysetsResponse* response,
+      ::google::protobuf::Closure* done) override;
 
-    void UpdateFileThrottleParams(
-        ::google::protobuf::RpcController* controller,
-        const ::curve::mds::UpdateFileThrottleParamsRequest* request,
-        ::curve::mds::UpdateFileThrottleParamsResponse* response,
-        ::google::protobuf::Closure* done) override;
+  void UpdateFileThrottleParams(
+      ::google::protobuf::RpcController* controller,
+      const ::curve::mds::UpdateFileThrottleParamsRequest* request,
+      ::curve::mds::UpdateFileThrottleParamsResponse* response,
+      ::google::protobuf::Closure* done) override;
 
  private:
-    FileLockManager *fileLockManager_;
+  FileLockManager* fileLockManager_;
 };
 }  // namespace mds
 }  // namespace curve
-#endif   // SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_
+#endif  // SRC_MDS_NAMESERVER2_NAMESPACE_SERVICE_H_

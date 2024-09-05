@@ -27,29 +27,29 @@ namespace curve {
 namespace common {
 
 TEST(MathUtilTest, TestMaxPowerTimesLessEqualValue) {
-    ASSERT_EQ(0, MaxPowerTimesLessEqualValue(0));
-    ASSERT_EQ(0, MaxPowerTimesLessEqualValue(1));
-    ASSERT_EQ(2, MaxPowerTimesLessEqualValue(4));
-    ASSERT_EQ(1, MaxPowerTimesLessEqualValue(2));
-    ASSERT_EQ(1, MaxPowerTimesLessEqualValue(3));
-    ASSERT_EQ(2, MaxPowerTimesLessEqualValue(7));
-    ASSERT_EQ(3, MaxPowerTimesLessEqualValue(10));
-    ASSERT_EQ(3, MaxPowerTimesLessEqualValue(15));
-    ASSERT_EQ(5, MaxPowerTimesLessEqualValue(32));
-    ASSERT_EQ(5, MaxPowerTimesLessEqualValue(63));
-    ASSERT_EQ(6, MaxPowerTimesLessEqualValue(64));
-    ASSERT_EQ(7, MaxPowerTimesLessEqualValue(255));
-    ASSERT_EQ(8, MaxPowerTimesLessEqualValue(256));
-    ASSERT_EQ(8, MaxPowerTimesLessEqualValue(257));
-    ASSERT_EQ(10, MaxPowerTimesLessEqualValue(1024));
-    ASSERT_EQ(10, MaxPowerTimesLessEqualValue(2047));
-    ASSERT_EQ(11, MaxPowerTimesLessEqualValue(2048));
-    ASSERT_EQ(11, MaxPowerTimesLessEqualValue(2049));
+  ASSERT_EQ(0, MaxPowerTimesLessEqualValue(0));
+  ASSERT_EQ(0, MaxPowerTimesLessEqualValue(1));
+  ASSERT_EQ(2, MaxPowerTimesLessEqualValue(4));
+  ASSERT_EQ(1, MaxPowerTimesLessEqualValue(2));
+  ASSERT_EQ(1, MaxPowerTimesLessEqualValue(3));
+  ASSERT_EQ(2, MaxPowerTimesLessEqualValue(7));
+  ASSERT_EQ(3, MaxPowerTimesLessEqualValue(10));
+  ASSERT_EQ(3, MaxPowerTimesLessEqualValue(15));
+  ASSERT_EQ(5, MaxPowerTimesLessEqualValue(32));
+  ASSERT_EQ(5, MaxPowerTimesLessEqualValue(63));
+  ASSERT_EQ(6, MaxPowerTimesLessEqualValue(64));
+  ASSERT_EQ(7, MaxPowerTimesLessEqualValue(255));
+  ASSERT_EQ(8, MaxPowerTimesLessEqualValue(256));
+  ASSERT_EQ(8, MaxPowerTimesLessEqualValue(257));
+  ASSERT_EQ(10, MaxPowerTimesLessEqualValue(1024));
+  ASSERT_EQ(10, MaxPowerTimesLessEqualValue(2047));
+  ASSERT_EQ(11, MaxPowerTimesLessEqualValue(2048));
+  ASSERT_EQ(11, MaxPowerTimesLessEqualValue(2049));
 }
 
 TEST(MathUtilTest, TestClamp) {
-    ASSERT_EQ(0, Clamp(-1, 0, 255));
-    ASSERT_EQ(255, Clamp(256, 0, 255));
+  ASSERT_EQ(0, Clamp(-1, 0, 255));
+  ASSERT_EQ(255, Clamp(256, 0, 255));
 }
 
 }  // namespace common

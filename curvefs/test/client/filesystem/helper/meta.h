@@ -25,12 +25,12 @@
 
 #include <gmock/gmock.h>
 
-#include <string>
 #include <memory>
+#include <string>
 
 #include "absl/strings/str_format.h"
-#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
+#include "curvefs/src/client/filesystem/meta.h"
 
 namespace curvefs {
 namespace client {
@@ -40,46 +40,46 @@ using ::absl::StrFormat;
 
 struct AttrOption {
  public:
-    AttrOption() = default;
-    AttrOption type(FsFileType type);
-    AttrOption mode(uint32_t mode);
-    AttrOption nlink(uint32_t nlink);
-    AttrOption uid(uint32_t uid);
-    AttrOption gid(uint32_t gid);
-    AttrOption length(uint64_t length);
-    AttrOption rdev(uint64_t rdev);
-    AttrOption atime(uint64_t seconds, uint32_t naoSeconds);
-    AttrOption mtime(uint64_t seconds, uint32_t naoSeconds);
-    AttrOption ctime(uint64_t seconds, uint32_t naoSeconds);
+  AttrOption() = default;
+  AttrOption type(FsFileType type);
+  AttrOption mode(uint32_t mode);
+  AttrOption nlink(uint32_t nlink);
+  AttrOption uid(uint32_t uid);
+  AttrOption gid(uint32_t gid);
+  AttrOption length(uint64_t length);
+  AttrOption rdev(uint64_t rdev);
+  AttrOption atime(uint64_t seconds, uint32_t naoSeconds);
+  AttrOption mtime(uint64_t seconds, uint32_t naoSeconds);
+  AttrOption ctime(uint64_t seconds, uint32_t naoSeconds);
 
  private:
-    friend InodeAttr MkAttr(Ino ino, AttrOption option);
+  friend InodeAttr MkAttr(Ino ino, AttrOption option);
 
  private:
-    FsFileType type_;
-    uint32_t mode_;
-    uint32_t nlink_;
-    uint32_t uid_;
-    uint32_t gid_;
-    uint64_t length_;
-    uint64_t rdev_;
-    TimeSpec atime_;
-    TimeSpec mtime_;
-    TimeSpec ctime_;
+  FsFileType type_;
+  uint32_t mode_;
+  uint32_t nlink_;
+  uint32_t uid_;
+  uint32_t gid_;
+  uint64_t length_;
+  uint64_t rdev_;
+  TimeSpec atime_;
+  TimeSpec mtime_;
+  TimeSpec ctime_;
 };
 
 class InodeOption {
  public:
-    InodeOption() = default;
-    InodeOption mtime(uint64_t seconds, uint32_t naoSeconds);
-    InodeOption metaClient(std::shared_ptr<MetaServerClient> metaClient);
+  InodeOption() = default;
+  InodeOption mtime(uint64_t seconds, uint32_t naoSeconds);
+  InodeOption metaClient(std::shared_ptr<MetaServerClient> metaClient);
 
  private:
-    friend std::shared_ptr<InodeWrapper> MkInode(Ino ino, InodeOption option);
+  friend std::shared_ptr<InodeWrapper> MkInode(Ino ino, InodeOption option);
 
  private:
-    TimeSpec mtime_;
-    std::shared_ptr<MetaServerClient> metaClient_;
+  TimeSpec mtime_;
+  std::shared_ptr<MetaServerClient> metaClient_;
 };
 
 InodeAttr MkAttr(Ino ino, AttrOption option = AttrOption());
@@ -89,8 +89,7 @@ std::shared_ptr<InodeWrapper> MkInode(Ino ino,
 
 Dentry MkDentry(Ino ino, const std::string& name);
 
-DirEntry MkDirEntry(Ino ino,
-                    const std::string& name,
+DirEntry MkDirEntry(Ino ino, const std::string& name,
                     InodeAttr attr = MkAttr(0));
 
 }  // namespace filesystem

@@ -35,29 +35,27 @@ namespace tools {
 
 class CurvefsToolFactory {
  public:
-    CurvefsToolFactory();
-    virtual ~CurvefsToolFactory() {}
+  CurvefsToolFactory();
+  virtual ~CurvefsToolFactory() {}
 
-    std::shared_ptr<CurvefsTool> GenerateCurvefsTool(
-        const std::string& command);
+  std::shared_ptr<CurvefsTool> GenerateCurvefsTool(const std::string& command);
 
-    /**
-     * @brief add commands and function to generate objects
-     *
-     * @param command
-     * @param function
-     * @details
-     * The same command will only take effect for the first one registered
-     */
-    virtual void RegisterCurvefsTool(
-        const std::string& command,
-        const std::function<std::shared_ptr<CurvefsTool>()>& function);
+  /**
+   * @brief add commands and function to generate objects
+   *
+   * @param command
+   * @param function
+   * @details
+   * The same command will only take effect for the first one registered
+   */
+  virtual void RegisterCurvefsTool(
+      const std::string& command,
+      const std::function<std::shared_ptr<CurvefsTool>()>& function);
 
  private:
-    // storage commands and function to generate objects
-    std::unordered_map<std::string,
-                       std::function<std::shared_ptr<CurvefsTool>()>>
-        command2creator_;
+  // storage commands and function to generate objects
+  std::unordered_map<std::string, std::function<std::shared_ptr<CurvefsTool>()>>
+      command2creator_;
 };
 
 }  // namespace tools

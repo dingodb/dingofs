@@ -23,18 +23,16 @@
 #ifndef SRC_MDS_COPYSET_COPYSET_POLICY_H_
 #define SRC_MDS_COPYSET_COPYSET_POLICY_H_
 
-
-#include <set>
-#include <vector>
-#include <memory>
-#include <iostream>
 #include <cstdint>
+#include <iostream>
 #include <iterator>
+#include <memory>
+#include <set>
 #include <utility>
+#include <vector>
 
 #include "src/mds/common/mds_define.h"
 #include "src/mds/copyset/copyset_structure.h"
-
 
 namespace curve {
 namespace mds {
@@ -42,101 +40,80 @@ namespace copyset {
 
 class CopysetPolicy {
  public:
-    CopysetPolicy() {}
-    virtual ~CopysetPolicy() {}
+  CopysetPolicy() {}
+  virtual ~CopysetPolicy() {}
 
-    // GenCopyset generate some copysets for a cluster
-    // return: if succeed return true
-    virtual bool GenCopyset(const ClusterInfo& cluster,
-        int numCopysets,
-        std::vector<Copyset>* out) = 0;
+  // GenCopyset generate some copysets for a cluster
+  // return: if succeed return true
+  virtual bool GenCopyset(const ClusterInfo& cluster, int numCopysets,
+                          std::vector<Copyset>* out) = 0;
 
-
-    virtual void GetMinCopySetFromScatterWidth(
-        int numChunkServers,
-        int scatterWidth,
-        int numReplicas,
-        int *min) = 0;
+  virtual void GetMinCopySetFromScatterWidth(int numChunkServers,
+                                             int scatterWidth, int numReplicas,
+                                             int* min) = 0;
 };
 
 class CopysetPermutationPolicy {
  public:
-    CopysetPermutationPolicy()
-    : zoneNum_(0),
-    zoneChoseNum_(0),
-    replicaNum_(0) {}
-    explicit CopysetPermutationPolicy(const CopysetConstrait &constrait)
-    : zoneNum_(constrait.zoneNum),
-    zoneChoseNum_(constrait.zoneChoseNum),
-    replicaNum_(constrait.replicaNum) {}
-    virtual ~CopysetPermutationPolicy() {}
-    virtual bool permutation(
-            const std::vector<ChunkServerInfo> &serversIn,
-            std::vector<ChunkServerInfo> *serversOut) = 0;
+  CopysetPermutationPolicy() : zoneNum_(0), zoneChoseNum_(0), replicaNum_(0) {}
+  explicit CopysetPermutationPolicy(const CopysetConstrait& constrait)
+      : zoneNum_(constrait.zoneNum),
+        zoneChoseNum_(constrait.zoneChoseNum),
+        replicaNum_(constrait.replicaNum) {}
+  virtual ~CopysetPermutationPolicy() {}
+  virtual bool permutation(const std::vector<ChunkServerInfo>& serversIn,
+                           std::vector<ChunkServerInfo>* serversOut) = 0;
 
-    uint32_t GetZoneNum() const {
-        return zoneNum_;
-    }
+  uint32_t GetZoneNum() const { return zoneNum_; }
 
-    uint32_t GetZoneChosenNum() const {
-        return zoneChoseNum_;
-    }
+  uint32_t GetZoneChosenNum() const { return zoneChoseNum_; }
 
-    uint32_t GetReplicaNum() const {
-        return replicaNum_;
-    }
+  uint32_t GetReplicaNum() const { return replicaNum_; }
 
  protected:
-    const uint32_t zoneNum_;
-    const uint32_t zoneChoseNum_;
-    const uint32_t replicaNum_;
+  const uint32_t zoneNum_;
+  const uint32_t zoneChoseNum_;
+  const uint32_t replicaNum_;
 };
-
 
 class CopysetZoneShufflePolicy : public CopysetPolicy {
  public:
-    CopysetZoneShufflePolicy(
-        std::shared_ptr<CopysetPermutationPolicy> permutationPolicy)
-        : permutationPolicy_(permutationPolicy) {}
+  CopysetZoneShufflePolicy(
+      std::shared_ptr<CopysetPermutationPolicy> permutationPolicy)
+      : permutationPolicy_(permutationPolicy) {}
 
-    virtual ~CopysetZoneShufflePolicy() {}
+  virtual ~CopysetZoneShufflePolicy() {}
 
-    // GenCopyset generate some copysets for a cluster
-    // return: if succeed return true
-    bool GenCopyset(const ClusterInfo& cluster,
-        int numCopysets,
-        std::vector<Copyset>* out) override;
+  // GenCopyset generate some copysets for a cluster
+  // return: if succeed return true
+  bool GenCopyset(const ClusterInfo& cluster, int numCopysets,
+                  std::vector<Copyset>* out) override;
 
-    void GetMinCopySetFromScatterWidth(
-        int numChunkServers,
-        int scatterWidth,
-        int numReplicas,
-        int *min) override;
+  void GetMinCopySetFromScatterWidth(int numChunkServers, int scatterWidth,
+                                     int numReplicas, int* min) override;
 
  private:
-    // Get Max permutation num,  make sure the permutation will stop finally
-    int GetMaxPermutationNum(int numCopysets,
-        int numChunkServers,
-        int numReplicas);
+  // Get Max permutation num,  make sure the permutation will stop finally
+  int GetMaxPermutationNum(int numCopysets, int numChunkServers,
+                           int numReplicas);
 
  private:
-    std::shared_ptr<CopysetPermutationPolicy> permutationPolicy_;
+  std::shared_ptr<CopysetPermutationPolicy> permutationPolicy_;
 };
 
 class CopysetPermutationPolicyNXX : public CopysetPermutationPolicy {
  public:
-    explicit CopysetPermutationPolicyNXX(const CopysetConstrait &constrait)
-        : CopysetPermutationPolicy(constrait) {}
+  explicit CopysetPermutationPolicyNXX(const CopysetConstrait& constrait)
+      : CopysetPermutationPolicy(constrait) {}
 
-    ~CopysetPermutationPolicyNXX() {}
+  ~CopysetPermutationPolicyNXX() {}
 
-    bool permutation(const std::vector<ChunkServerInfo> &serversIn,
-            std::vector<ChunkServerInfo> *serversOut) override;
+  bool permutation(const std::vector<ChunkServerInfo>& serversIn,
+                   std::vector<ChunkServerInfo>* serversOut) override;
 };
 
 }  // namespace copyset
 }  // namespace mds
 }  // namespace curve
-
 
 #endif  // SRC_MDS_COPYSET_COPYSET_POLICY_H_

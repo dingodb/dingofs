@@ -29,44 +29,45 @@ namespace schedule {
 
 // only support one type now, add more type later
 enum class SchedulerType {
-    RecoverSchedulerType,
-    CopysetSchedulerType,
-    LeaderSchedulerType,
+  RecoverSchedulerType,
+  CopysetSchedulerType,
+  LeaderSchedulerType,
 };
 
 struct ScheduleOption {
-    // recover switch
-    bool enableRecoverScheduler;
-    // copyset scheduler switch
-    bool enableCopysetScheduler;
-    // copyset leader schedule switch
-    bool enableLeaderScheduler;
+  // recover switch
+  bool enableRecoverScheduler;
+  // copyset scheduler switch
+  bool enableCopysetScheduler;
+  // copyset leader schedule switch
+  bool enableLeaderScheduler;
 
-    // xxxSchedulerIntervalSec: time interval of calculation for xxx scheduling
-    uint32_t recoverSchedulerIntervalSec;
-    uint32_t copysetSchedulerIntervalSec;
-    uint32_t leaderSchedulerIntervalSec;
+  // xxxSchedulerIntervalSec: time interval of calculation for xxx scheduling
+  uint32_t recoverSchedulerIntervalSec;
+  uint32_t copysetSchedulerIntervalSec;
+  uint32_t leaderSchedulerIntervalSec;
 
-    // number of copyset that can operate configuration changing at the same time on single metaserver //NOLINT
-    uint32_t operatorConcurrent;
+  // number of copyset that can operate configuration changing at the same time
+  // on single metaserver //NOLINT
+  uint32_t operatorConcurrent;
 
-    // xxxTimeLimitSec: time limit for xxx, operation will be considered
-    // overtime and cancel if exceed this limit
-    uint32_t transferLeaderTimeLimitSec;
-    uint32_t addPeerTimeLimitSec;
-    uint32_t removePeerTimeLimitSec;
-    uint32_t changePeerTimeLimitSec;
+  // xxxTimeLimitSec: time limit for xxx, operation will be considered
+  // overtime and cancel if exceed this limit
+  uint32_t transferLeaderTimeLimitSec;
+  uint32_t addPeerTimeLimitSec;
+  uint32_t removePeerTimeLimitSec;
+  uint32_t changePeerTimeLimitSec;
 
-    // metaserver can be the target leader on leader scheduling only after
-    // starting for metaserverCoolingTimeSec.
-    // when a metaserver start running, the copysets will replay the journal,
-    // and during the leader transferring I/O on metaserver will be suspended.
-    // if the metaserver is under journal replaying when leader transferring
-    // operation arrive, the operation will wait for the replay and will be
-    // stuck and exceed the 'leadertimeout' if the replay takes too long time.
-    uint32_t metaserverCoolingTimeSec;
+  // metaserver can be the target leader on leader scheduling only after
+  // starting for metaserverCoolingTimeSec.
+  // when a metaserver start running, the copysets will replay the journal,
+  // and during the leader transferring I/O on metaserver will be suspended.
+  // if the metaserver is under journal replaying when leader transferring
+  // operation arrive, the operation will wait for the replay and will be
+  // stuck and exceed the 'leadertimeout' if the replay takes too long time.
+  uint32_t metaserverCoolingTimeSec;
 
-    uint32_t balanceRatioPercent;
+  uint32_t balanceRatioPercent;
 };
 
 }  // namespace schedule

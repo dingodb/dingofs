@@ -45,169 +45,158 @@ constexpr uint64_t kTiB = 1ull * 1024 * 1024 * 1024 * 1024;
 
 class CurveClientTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        mockFileClient_ = new MockFileClient();
-        client_.SetFileClient(mockFileClient_);
-    }
+  void SetUp() override {
+    mockFileClient_ = new MockFileClient();
+    client_.SetFileClient(mockFileClient_);
+  }
 
-    void TearDown() override {}
+  void TearDown() override {}
 
-    CurveClient client_;
-    MockFileClient* mockFileClient_;
+  CurveClient client_;
+  MockFileClient* mockFileClient_;
 };
 
 TEST_F(CurveClientTest, TestInit) {
-    {
-        EXPECT_CALL(*mockFileClient_, Init(_))
-            .WillOnce(Return(LIBCURVE_ERROR::OK));
+  {
+    EXPECT_CALL(*mockFileClient_, Init(_)).WillOnce(Return(LIBCURVE_ERROR::OK));
 
-        ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Init("/etc/curve/client.conf"));
-    }
+    ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Init("/etc/curve/client.conf"));
+  }
 
-    {
-        EXPECT_CALL(*mockFileClient_, Init(_))
-            .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
+  {
+    EXPECT_CALL(*mockFileClient_, Init(_))
+        .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
 
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
-                  client_.Init("/etc/curve/client.conf"));
-    }
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.Init("/etc/curve/client.conf"));
+  }
 }
 
 TEST_F(CurveClientTest, TestUnInit) {
-    EXPECT_CALL(*mockFileClient_, UnInit())
-        .Times(1);
+  EXPECT_CALL(*mockFileClient_, UnInit()).Times(1);
 
-    ASSERT_NO_FATAL_FAILURE(client_.UnInit());
+  ASSERT_NO_FATAL_FAILURE(client_.UnInit());
 }
 
 TEST_F(CurveClientTest, TestOpen) {
-    // parse filename and user info failed
-    {
-        EXPECT_CALL(*mockFileClient_, Open(_, _, _))
-            .Times(0);
+  // parse filename and user info failed
+  {
+    EXPECT_CALL(*mockFileClient_, Open(_, _, _)).Times(0);
 
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
-                  client_.Open(kWrongFileName, {}));
-    }
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.Open(kWrongFileName, {}));
+  }
 
-    // open success
-    {
-        EXPECT_CALL(*mockFileClient_, Open(_, _, _))
-            .WillOnce(Return(1));
+  // open success
+  {
+    EXPECT_CALL(*mockFileClient_, Open(_, _, _)).WillOnce(Return(1));
 
-        ASSERT_EQ(1, client_.Open(kValidFileName, {}));
-    }
+    ASSERT_EQ(1, client_.Open(kValidFileName, {}));
+  }
 }
 
 TEST_F(CurveClientTest, TestClose) {
-    EXPECT_CALL(*mockFileClient_, Close(_))
-        .WillOnce(Return(LIBCURVE_ERROR::OK));
+  EXPECT_CALL(*mockFileClient_, Close(_)).WillOnce(Return(LIBCURVE_ERROR::OK));
 
-    ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Close(0));
+  ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Close(0));
 }
 
 TEST_F(CurveClientTest, TestExtend) {
-    // parse filename and user info failed
-    {
-        EXPECT_CALL(*mockFileClient_, Extend(_, _, _))
-            .Times(0);
+  // parse filename and user info failed
+  {
+    EXPECT_CALL(*mockFileClient_, Extend(_, _, _)).Times(0);
 
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
-                  client_.Extend(kWrongFileName, 1 * kTiB));
-    }
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
+              client_.Extend(kWrongFileName, 1 * kTiB));
+  }
 
-    // extend success
-    {
-        EXPECT_CALL(*mockFileClient_, Extend(_, _, _))
-            .Times(1);
+  // extend success
+  {
+    EXPECT_CALL(*mockFileClient_, Extend(_, _, _)).Times(1);
 
-        ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Extend(kValidFileName, 1 * kTiB));
-    }
+    ASSERT_EQ(LIBCURVE_ERROR::OK, client_.Extend(kValidFileName, 1 * kTiB));
+  }
 }
 
 TEST_F(CurveClientTest, TestStatFile) {
-    // parse filename and user info failed
-    {
-        EXPECT_CALL(*mockFileClient_, StatFile(_, _, _))
-            .Times(0);
+  // parse filename and user info failed
+  {
+    EXPECT_CALL(*mockFileClient_, StatFile(_, _, _)).Times(0);
 
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.StatFile(kWrongFileName));
-    }
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.StatFile(kWrongFileName));
+  }
 
-    // statfile return failed
-    {
-        FileStatInfo info;
-        info.length = 1 * kTiB;
+  // statfile return failed
+  {
+    FileStatInfo info;
+    info.length = 1 * kTiB;
 
-        EXPECT_CALL(*mockFileClient_, StatFile(_, _, _))
-            .WillOnce(
-                DoAll(SetArgPointee<2>(info), Return(-LIBCURVE_ERROR::FAILED)));
+    EXPECT_CALL(*mockFileClient_, StatFile(_, _, _))
+        .WillOnce(
+            DoAll(SetArgPointee<2>(info), Return(-LIBCURVE_ERROR::FAILED)));
 
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.StatFile(kValidFileName));
-    }
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED, client_.StatFile(kValidFileName));
+  }
 
-    // statfile success
-    {
-        FileStatInfo info;
-        info.length = 1 * kTiB;
-        EXPECT_CALL(*mockFileClient_, StatFile(_, _, _))
-            .WillOnce(
-                DoAll(SetArgPointee<2>(info), Return(LIBCURVE_ERROR::OK)));
+  // statfile success
+  {
+    FileStatInfo info;
+    info.length = 1 * kTiB;
+    EXPECT_CALL(*mockFileClient_, StatFile(_, _, _))
+        .WillOnce(DoAll(SetArgPointee<2>(info), Return(LIBCURVE_ERROR::OK)));
 
-        ASSERT_EQ(1 * kTiB, client_.StatFile(kValidFileName));
-    }
+    ASSERT_EQ(1 * kTiB, client_.StatFile(kValidFileName));
+  }
 }
 
 TEST_F(CurveClientTest, TestAioRead) {
-    // aio read call failed
-    {
-        EXPECT_CALL(*mockFileClient_, AioRead(_, _, _))
-            .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
+  // aio read call failed
+  {
+    EXPECT_CALL(*mockFileClient_, AioRead(_, _, _))
+        .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
 
-        CurveAioContext aioctx;
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
-                  client_.AioRead(0, &aioctx, UserDataType::RawBuffer));
-    }
+    CurveAioContext aioctx;
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
+              client_.AioRead(0, &aioctx, UserDataType::RawBuffer));
+  }
 
-    // aio read call success
-    {
-        EXPECT_CALL(*mockFileClient_, AioRead(_, _, _))
-            .WillOnce(Return(LIBCURVE_ERROR::OK));
+  // aio read call success
+  {
+    EXPECT_CALL(*mockFileClient_, AioRead(_, _, _))
+        .WillOnce(Return(LIBCURVE_ERROR::OK));
 
-        CurveAioContext aioctx;
-        ASSERT_EQ(-LIBCURVE_ERROR::OK,
-                  client_.AioRead(0, &aioctx, UserDataType::RawBuffer));
-    }
+    CurveAioContext aioctx;
+    ASSERT_EQ(-LIBCURVE_ERROR::OK,
+              client_.AioRead(0, &aioctx, UserDataType::RawBuffer));
+  }
 }
 
 TEST_F(CurveClientTest, TestAioWrite) {
-    // aio write call failed
-    {
-        EXPECT_CALL(*mockFileClient_, AioWrite(_, _, _))
-            .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
+  // aio write call failed
+  {
+    EXPECT_CALL(*mockFileClient_, AioWrite(_, _, _))
+        .WillOnce(Return(-LIBCURVE_ERROR::FAILED));
 
-        CurveAioContext aioctx;
-        ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
-                  client_.AioWrite(0, &aioctx, UserDataType::RawBuffer));
-    }
+    CurveAioContext aioctx;
+    ASSERT_EQ(-LIBCURVE_ERROR::FAILED,
+              client_.AioWrite(0, &aioctx, UserDataType::RawBuffer));
+  }
 
-    // aio write call success
-    {
-        EXPECT_CALL(*mockFileClient_, AioWrite(_, _, _))
-            .WillOnce(Return(LIBCURVE_ERROR::OK));
+  // aio write call success
+  {
+    EXPECT_CALL(*mockFileClient_, AioWrite(_, _, _))
+        .WillOnce(Return(LIBCURVE_ERROR::OK));
 
-        CurveAioContext aioctx;
-        ASSERT_EQ(-LIBCURVE_ERROR::OK,
-                  client_.AioWrite(0, &aioctx, UserDataType::RawBuffer));
-    }
+    CurveAioContext aioctx;
+    ASSERT_EQ(-LIBCURVE_ERROR::OK,
+              client_.AioWrite(0, &aioctx, UserDataType::RawBuffer));
+  }
 }
 
 }  // namespace client
 }  // namespace curve
 
 int main(int argc, char** argv) {
-    testing::InitGoogleTest(&argc, argv);
-    google::ParseCommandLineFlags(&argc, &argv, false);
+  testing::InitGoogleTest(&argc, argv);
+  google::ParseCommandLineFlags(&argc, &argv, false);
 
-    return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }

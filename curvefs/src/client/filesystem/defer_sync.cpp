@@ -20,10 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <vector>
-#include <memory>
-
 #include "curvefs/src/client/filesystem/defer_sync.h"
+
+#include <memory>
+#include <vector>
+
 #include "curvefs/src/client/filesystem/utils.h"
 
 namespace curvefs {
@@ -36,49 +37,48 @@ DeferSync::DeferSync(DeferSyncOption option)
       running_(false),
       thread_(),
       sleeper_(),
-      inodes_() {
-}
+      inodes_() {}
 
 void DeferSync::Start() {
-    if (!running_.exchange(true)) {
-        thread_ = std::thread(&DeferSync::SyncTask, this);
-        LOG(INFO) << "Defer sync thread start success";
-    }
+  if (!running_.exchange(true)) {
+    thread_ = std::thread(&DeferSync::SyncTask, this);
+    LOG(INFO) << "Defer sync thread start success";
+  }
 }
 
 void DeferSync::Stop() {
-    if (running_.exchange(false)) {
-        LOG(INFO) << "Stop defer sync thread...";
-        sleeper_.interrupt();
-        thread_.join();
-        LOG(INFO) << "Defer sync thread stopped";
-    }
+  if (running_.exchange(false)) {
+    LOG(INFO) << "Stop defer sync thread...";
+    sleeper_.interrupt();
+    thread_.join();
+    LOG(INFO) << "Defer sync thread stopped";
+  }
 }
 
 void DeferSync::SyncTask() {
-    std::vector<std::shared_ptr<InodeWrapper>> inodes;
-    for ( ;; ) {
-        bool running = sleeper_.wait_for(std::chrono::seconds(option_.delay));
+  std::vector<std::shared_ptr<InodeWrapper>> inodes;
+  for (;;) {
+    bool running = sleeper_.wait_for(std::chrono::seconds(option_.delay));
 
-        {
-            LockGuard lk(mutex_);
-            inodes.swap(inodes_);
-        }
-        for (const auto& inode : inodes) {
-            UniqueLock lk(inode->GetUniqueLock());
-            inode->Async(nullptr, true);
-        }
-        inodes.clear();
-
-        if (!running) {
-            break;
-        }
+    {
+      LockGuard lk(mutex_);
+      inodes.swap(inodes_);
     }
+    for (const auto& inode : inodes) {
+      UniqueLock lk(inode->GetUniqueLock());
+      inode->Async(nullptr, true);
+    }
+    inodes.clear();
+
+    if (!running) {
+      break;
+    }
+  }
 }
 
 void DeferSync::Push(const std::shared_ptr<InodeWrapper>& inode) {
-    LockGuard lk(mutex_);
-    inodes_.emplace_back(inode);
+  LockGuard lk(mutex_);
+  inodes_.emplace_back(inode);
 }
 
 }  // namespace filesystem

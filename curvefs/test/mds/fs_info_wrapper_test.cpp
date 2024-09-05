@@ -35,118 +35,118 @@ using ::curvefs::common::Volume;
 using ::google::protobuf::util::MessageDifferencer;
 
 TEST(FsInfoWrapperTest, volumeTest) {
-    FsInfo fsinfo;
+  FsInfo fsinfo;
 
-    fsinfo.set_fsid(1);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(mds::FSType::TYPE_VOLUME);
+  fsinfo.set_fsid(1);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(mds::FSType::TYPE_VOLUME);
 
-    FsInfoWrapper wrapper(fsinfo);
+  FsInfoWrapper wrapper(fsinfo);
 
-    EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
+  EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
 }
 
 TEST(FsInfoWrapperTest, s3Test) {
-    FsInfo fsinfo;
+  FsInfo fsinfo;
 
-    fsinfo.set_fsid(2);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(mds::FSType::TYPE_S3);
+  fsinfo.set_fsid(2);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(mds::FSType::TYPE_S3);
 
-    FsInfoWrapper wrapper(fsinfo);
+  FsInfoWrapper wrapper(fsinfo);
 
-    EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
+  EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
 }
 
 TEST(FsInfoWrapperTest, hybridTest) {
-    FsInfo fsinfo;
+  FsInfo fsinfo;
 
-    fsinfo.set_fsid(3);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(mds::FSType::TYPE_HYBRID);
+  fsinfo.set_fsid(3);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(mds::FSType::TYPE_HYBRID);
 
-    FsInfoWrapper wrapper(fsinfo);
+  FsInfoWrapper wrapper(fsinfo);
 
-    EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
+  EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
 }
 
 TEST(FsInfoWrapperTest, mpconflictTest_disablecto) {
-    FsInfo fsinfo;
+  FsInfo fsinfo;
 
-    fsinfo.set_fsid(3);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(mds::FSType::TYPE_S3);
-    Mountpoint mp;
-    mp.set_hostname("0.0.0.0");
-    mp.set_port(9000);
-    mp.set_path("/data");
-    *fsinfo.add_mountpoints() = mp;
-    FsInfoWrapper wrapper(fsinfo);
+  fsinfo.set_fsid(3);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(mds::FSType::TYPE_S3);
+  Mountpoint mp;
+  mp.set_hostname("0.0.0.0");
+  mp.set_port(9000);
+  mp.set_path("/data");
+  *fsinfo.add_mountpoints() = mp;
+  FsInfoWrapper wrapper(fsinfo);
 
-    // mount point exsit
-    Mountpoint testmp = mp;
-    ASSERT_TRUE(wrapper.IsMountPointConflict(mp));
+  // mount point exsit
+  Mountpoint testmp = mp;
+  ASSERT_TRUE(wrapper.IsMountPointConflict(mp));
 
-    // mount point has cto=false, no conflict
-    testmp.set_hostname("127.0.0.1");
-    testmp.set_cto(false);
-    ASSERT_FALSE(wrapper.IsMountPointConflict(testmp));
+  // mount point has cto=false, no conflict
+  testmp.set_hostname("127.0.0.1");
+  testmp.set_cto(false);
+  ASSERT_FALSE(wrapper.IsMountPointConflict(testmp));
 
-    // mount point has cto=true, conflict
-    testmp.set_hostname("127.0.0.1");
-    testmp.set_cto(true);
-    ASSERT_TRUE(wrapper.IsMountPointConflict(testmp));
+  // mount point has cto=true, conflict
+  testmp.set_hostname("127.0.0.1");
+  testmp.set_cto(true);
+  ASSERT_TRUE(wrapper.IsMountPointConflict(testmp));
 }
 
 TEST(FsInfoWrapperTest, mpconflictTest_enablecto) {
-    FsInfo fsinfo;
+  FsInfo fsinfo;
 
-    fsinfo.set_fsid(3);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(mds::FSType::TYPE_S3);
-    Mountpoint mp;
-    mp.set_hostname("0.0.0.0");
-    mp.set_port(9000);
-    mp.set_path("/data");
-    mp.set_cto(true);
-    *fsinfo.add_mountpoints() = mp;
-    FsInfoWrapper wrapper(fsinfo);
+  fsinfo.set_fsid(3);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(mds::FSType::TYPE_S3);
+  Mountpoint mp;
+  mp.set_hostname("0.0.0.0");
+  mp.set_port(9000);
+  mp.set_path("/data");
+  mp.set_cto(true);
+  *fsinfo.add_mountpoints() = mp;
+  FsInfoWrapper wrapper(fsinfo);
 
-    // mount point has cto=false, conflict
-    Mountpoint testmp = mp;
-    testmp.set_hostname("127.0.0.1");
-    testmp.set_cto(false);
-    ASSERT_TRUE(wrapper.IsMountPointConflict(testmp));
+  // mount point has cto=false, conflict
+  Mountpoint testmp = mp;
+  testmp.set_hostname("127.0.0.1");
+  testmp.set_cto(false);
+  ASSERT_TRUE(wrapper.IsMountPointConflict(testmp));
 
-    // mount point has cto=true, no conflict
-    testmp.set_hostname("127.0.0.1");
-    testmp.set_cto(true);
-    ASSERT_FALSE(wrapper.IsMountPointConflict(testmp));
+  // mount point has cto=true, no conflict
+  testmp.set_hostname("127.0.0.1");
+  testmp.set_cto(true);
+  ASSERT_FALSE(wrapper.IsMountPointConflict(testmp));
 }
 
 }  // namespace mds

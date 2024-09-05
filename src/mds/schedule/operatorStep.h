@@ -29,8 +29,7 @@
 namespace curve {
 namespace mds {
 namespace schedule {
-using OperatorStep =
-    OperatorStepT<ChunkServerIdType, CopySetInfo, CopySetConf>;
+using OperatorStep = OperatorStepT<ChunkServerIdType, CopySetInfo, CopySetConf>;
 using RemovePeer = RemovePeerT<ChunkServerIdType, CopySetInfo, CopySetConf>;
 using AddPeer = AddPeerT<ChunkServerIdType, CopySetInfo, CopySetConf>;
 using TransferLeader =

@@ -47,26 +47,26 @@ class GetCopysetStatusTool
           curvefs::metaserver::copyset::CopysetsStatusResponse,
           curvefs::metaserver::copyset::CopysetService_Stub> {
  public:
-    explicit GetCopysetStatusTool(const std::string& cmd = kNoInvokeCmd,
-                                  bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int RunCommand() override;
-    int Init() override;
-    std::map<uint64_t, std::vector<CopysetStatusType>> GetKey2CopysetStatus() {
-        return key2CopysetStatus_;
-    }
+  explicit GetCopysetStatusTool(const std::string& cmd = kNoInvokeCmd,
+                                bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int RunCommand() override;
+  int Init() override;
+  std::map<uint64_t, std::vector<CopysetStatusType>> GetKey2CopysetStatus() {
+    return key2CopysetStatus_;
+  }
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 
  protected:
-    std::vector<uint64_t> key_;
-    std::map<uint64_t, std::vector<CopysetStatusType>> key2CopysetStatus_;
+  std::vector<uint64_t> key_;
+  std::map<uint64_t, std::vector<CopysetStatusType>> key2CopysetStatus_;
 };
 
 }  // namespace copyset

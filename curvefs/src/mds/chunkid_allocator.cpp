@@ -19,96 +19,96 @@
  * Author: chengyi01
  */
 
-#include <utility>
-
 #include "curvefs/src/mds/chunkid_allocator.h"
+
+#include <utility>
 
 namespace curvefs {
 namespace mds {
 
-int ChunkIdAllocatorImpl::GenChunkId(uint64_t idNum, uint64_t *chunkId) {
-    int ret = 0;
-    // will unloack at destructor
-    ::curve::common::WriteLockGuard guard(nextIdRWlock_);
+int ChunkIdAllocatorImpl::GenChunkId(uint64_t idNum, uint64_t* chunkId) {
+  int ret = 0;
+  // will unloack at destructor
+  ::curve::common::WriteLockGuard guard(nextIdRWlock_);
 
-    if (nextId_ + idNum - 1> lastId_ || CHUNKIDINITIALIZE == nextId_) {
-        // the chunkIds is exhausted || first to get chunkId
-        uint64_t allocSize = nextId_ + idNum - lastId_ + bundleSize_;
-        ret = AllocateBundleIds(allocSize);
-    }
+  if (nextId_ + idNum - 1 > lastId_ || CHUNKIDINITIALIZE == nextId_) {
+    // the chunkIds is exhausted || first to get chunkId
+    uint64_t allocSize = nextId_ + idNum - lastId_ + bundleSize_;
+    ret = AllocateBundleIds(allocSize);
+  }
 
-    if (ret >= 0) {
-        // allocate id
-        *chunkId = nextId_;
-        nextId_ += idNum;
-        VLOG(3) << "allocate chunkid:" << *chunkId;
-    } else {
-        // the chunkIds in the current bundle is exhausted,
-        // but fail to get a new bunlde of chunIds.
-        LOG(ERROR) << "allocate chunkid error, error code is: " << ret;
-    }
-    return ret;
+  if (ret >= 0) {
+    // allocate id
+    *chunkId = nextId_;
+    nextId_ += idNum;
+    VLOG(3) << "allocate chunkid:" << *chunkId;
+  } else {
+    // the chunkIds in the current bundle is exhausted,
+    // but fail to get a new bunlde of chunIds.
+    LOG(ERROR) << "allocate chunkid error, error code is: " << ret;
+  }
+  return ret;
 }
 
-void ChunkIdAllocatorImpl::Init(const std::shared_ptr<KVStorageClient> &client,
-                                const std::string &StoreKey,
+void ChunkIdAllocatorImpl::Init(const std::shared_ptr<KVStorageClient>& client,
+                                const std::string& StoreKey,
                                 uint64_t bundleSize) {
-    client_ = std::move(client);
-    storeKey_ = StoreKey;
-    bundleSize_ = bundleSize;
+  client_ = std::move(client);
+  storeKey_ = StoreKey;
+  bundleSize_ = bundleSize;
 }
 
 int ChunkIdAllocatorImpl::AllocateBundleIds(int bundleSize) {
-    // get the maximum value that has been allocated
-    std::string out;
+  // get the maximum value that has been allocated
+  std::string out;
 
-    int statCode = client_->Get(storeKey_, &out);
-    int ret = 0;
-    uint64_t alloc = nextId_;
-    if (EtcdErrCode::EtcdOK != statCode &&
-        EtcdErrCode::EtcdKeyNotExist != statCode) {
-        // -1: other error
-        LOG(ERROR) << "get store key: " << storeKey_
-                   << " err, errCode: " << statCode;
-        ret = UNKNOWN_ERROR;
-    } else if (EtcdErrCode::EtcdKeyNotExist == statCode) {
-        // key not exist
-        LOG(WARNING) << "key " << storeKey_ << " not found in etcd";
-    } else if (!DecodeID(out, &alloc)) {
-        // -2: value decode fails
-        // The value corresponding to the key exists, but the decode fails,
-        // indicating that an internal err has occurred
-        LOG(ERROR) << "decode id: " << out << " err";
-        ret = DECODE_ERROR;
-    } else {
-        // key exist and can be decode
-        lastId_ = alloc;
-    }
+  int statCode = client_->Get(storeKey_, &out);
+  int ret = 0;
+  uint64_t alloc = nextId_;
+  if (EtcdErrCode::EtcdOK != statCode &&
+      EtcdErrCode::EtcdKeyNotExist != statCode) {
+    // -1: other error
+    LOG(ERROR) << "get store key: " << storeKey_
+               << " err, errCode: " << statCode;
+    ret = UNKNOWN_ERROR;
+  } else if (EtcdErrCode::EtcdKeyNotExist == statCode) {
+    // key not exist
+    LOG(WARNING) << "key " << storeKey_ << " not found in etcd";
+  } else if (!DecodeID(out, &alloc)) {
+    // -2: value decode fails
+    // The value corresponding to the key exists, but the decode fails,
+    // indicating that an internal err has occurred
+    LOG(ERROR) << "decode id: " << out << " err";
+    ret = DECODE_ERROR;
+  } else {
+    // key exist and can be decode
+    lastId_ = alloc;
+  }
 
-    if (ret < 0) {
-        // get value Error
-        return ret;
-    }
-
-    uint64_t target = lastId_ + bundleSize;
-    statCode = client_->CompareAndSwap(storeKey_, out, EncodeID(target));
-    if (EtcdErrCode::EtcdOK != statCode) {
-        // -3: CAS error
-        LOG(ERROR) << "do CAS {preV: " << alloc << ", target: " << target
-                   << " err, errCode: " << statCode;
-        ret = CAS_ERROR;
-    } else {
-        // allocate ok
-        nextId_ = alloc + 1;
-        lastId_ = target;
-        LOG(INFO) << "allocate chunkId form " << out << " to " << target;
-    }
-
+  if (ret < 0) {
+    // get value Error
     return ret;
+  }
+
+  uint64_t target = lastId_ + bundleSize;
+  statCode = client_->CompareAndSwap(storeKey_, out, EncodeID(target));
+  if (EtcdErrCode::EtcdOK != statCode) {
+    // -3: CAS error
+    LOG(ERROR) << "do CAS {preV: " << alloc << ", target: " << target
+               << " err, errCode: " << statCode;
+    ret = CAS_ERROR;
+  } else {
+    // allocate ok
+    nextId_ = alloc + 1;
+    lastId_ = target;
+    LOG(INFO) << "allocate chunkId form " << out << " to " << target;
+  }
+
+  return ret;
 }
 
-bool ChunkIdAllocatorImpl::DecodeID(const std::string &value, uint64_t *out) {
-    return ::curve::common::StringToUll(value, out);
+bool ChunkIdAllocatorImpl::DecodeID(const std::string& value, uint64_t* out) {
+  return ::curve::common::StringToUll(value, out);
 }
 
 }  // namespace mds

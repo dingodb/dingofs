@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gtest/gtest.h>
-
 #include "curvefs/src/client/filesystem/message_queue.h"
+
+#include <gtest/gtest.h>
 
 namespace curvefs {
 namespace client {
@@ -30,47 +30,45 @@ namespace filesystem {
 
 class MessageQueueTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(MessageQueueTest, Basic) {
-    auto mq = std::make_shared<MessageQueue<int>>("test", 10);
+  auto mq = std::make_shared<MessageQueue<int>>("test", 10);
 
-    std::vector<int> receive;
-    mq->Subscribe([&receive](const int& number) {
-        receive.emplace_back(number);
-    });
-    mq->Start();
+  std::vector<int> receive;
+  mq->Subscribe(
+      [&receive](const int& number) { receive.emplace_back(number); });
+  mq->Start();
 
-    mq->Publish(1);
-    mq->Publish(2);
-    mq->Publish(3);
-    mq->Stop();
+  mq->Publish(1);
+  mq->Publish(2);
+  mq->Publish(3);
+  mq->Stop();
 
-    std::vector<int> expected{1, 2, 3};
-    ASSERT_EQ(receive, expected);
+  std::vector<int> expected{1, 2, 3};
+  ASSERT_EQ(receive, expected);
 }
 
 TEST_F(MessageQueueTest, PublishAfterStop) {
-    auto mq = std::make_shared<MessageQueue<int>>("test", 10);
+  auto mq = std::make_shared<MessageQueue<int>>("test", 10);
 
-    std::vector<int> receive;
-    mq->Subscribe([&receive](const int& number) {
-        receive.emplace_back(number);
-    });
-    mq->Start();
+  std::vector<int> receive;
+  mq->Subscribe(
+      [&receive](const int& number) { receive.emplace_back(number); });
+  mq->Start();
 
-    mq->Publish(1);
-    mq->Publish(2);
-    mq->Publish(3);
-    mq->Stop();
+  mq->Publish(1);
+  mq->Publish(2);
+  mq->Publish(3);
+  mq->Stop();
 
-    // The message queue will not consume any more messages after it has stopped
-    mq->Publish(4);
+  // The message queue will not consume any more messages after it has stopped
+  mq->Publish(4);
 
-    std::vector<int> expected{1, 2, 3};
-    ASSERT_EQ(receive, expected);
+  std::vector<int> expected{1, 2, 3};
+  ASSERT_EQ(receive, expected);
 }
 
 }  // namespace filesystem

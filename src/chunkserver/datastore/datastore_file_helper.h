@@ -24,9 +24,10 @@
 #define SRC_CHUNKSERVER_DATASTORE_DATASTORE_FILE_HELPER_H_
 
 #include <glog/logging.h>
-#include <vector>
-#include <string>
+
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "src/fs/local_filesystem.h"
 #include "src/fs/ext4_filesystem_impl.h"
@@ -34,52 +35,50 @@
 namespace curve {
 namespace chunkserver {
 
-using curve::fs::LocalFileSystem;
 using curve::fs::Ext4FileSystemImpl;
+using curve::fs::LocalFileSystem;
 
 class DatastoreFileHelper {
  public:
-    DatastoreFileHelper() {
-        // Use Ext4FileSystemImpl by default
-        fs_ = Ext4FileSystemImpl::getInstance();
-    }
+  DatastoreFileHelper() {
+    // Use Ext4FileSystemImpl by default
+    fs_ = Ext4FileSystemImpl::getInstance();
+  }
 
-    explicit DatastoreFileHelper(std::shared_ptr<LocalFileSystem> fs)
-        : fs_(fs) {}
+  explicit DatastoreFileHelper(std::shared_ptr<LocalFileSystem> fs) : fs_(fs) {}
 
-    virtual ~DatastoreFileHelper() {}
+  virtual ~DatastoreFileHelper() {}
 
-    /**
-     * Used to get the chunk file name and snapshot file name in the specified
-     * copyset directory
-     * @param baseDir: The directory where the data file of the copyset is
-     *                 located
-     * @param chunkFiles[out]: Returns the names of all chunk files in the
-     *                         directory; it can be nullptr
-     * @param snapFiles[out]: Returns the names of all snapshot files in the
-     *                        directory; it can be nullptr
-     * @return: return 0 on success, return -1 on failure
-     */
-    int ListFiles(const string& baseDir,
-                  vector<string>* chunkFiles,
-                  vector<string>* snapFiles);
+  /**
+   * Used to get the chunk file name and snapshot file name in the specified
+   * copyset directory
+   * @param baseDir: The directory where the data file of the copyset is
+   *                 located
+   * @param chunkFiles[out]: Returns the names of all chunk files in the
+   *                         directory; it can be nullptr
+   * @param snapFiles[out]: Returns the names of all snapshot files in the
+   *                        directory; it can be nullptr
+   * @return: return 0 on success, return -1 on failure
+   */
+  int ListFiles(const string& baseDir, vector<string>* chunkFiles,
+                vector<string>* snapFiles);
 
-    /**
-     * Determine whether the file is a snapshot file of a chunk
-     * @param fileName: file name
-     * @return true-is a snapshot file, false-not a snapshot file
-     */
-    static bool IsSnapshotFile(const string& fileName);
+  /**
+   * Determine whether the file is a snapshot file of a chunk
+   * @param fileName: file name
+   * @return true-is a snapshot file, false-not a snapshot file
+   */
+  static bool IsSnapshotFile(const string& fileName);
 
-    /**
-     * Determine whether the file is a chunk file
-     * @param fileName: file name
-     * @return true-is a chunk file, false-not a chunk file
-     */
-    static bool IsChunkFile(const string& fileName);
+  /**
+   * Determine whether the file is a chunk file
+   * @param fileName: file name
+   * @return true-is a chunk file, false-not a chunk file
+   */
+  static bool IsChunkFile(const string& fileName);
 
  private:
-    std::shared_ptr<LocalFileSystem> fs_;
+  std::shared_ptr<LocalFileSystem> fs_;
 };
 
 }  // namespace chunkserver

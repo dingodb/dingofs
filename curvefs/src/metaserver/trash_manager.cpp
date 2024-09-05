@@ -28,70 +28,69 @@ namespace curvefs {
 namespace metaserver {
 
 int TrashManager::Run() {
-    if (isStop_.exchange(false)) {
-        recycleThread_ =
-            Thread(&TrashManager::ScanLoop, this);
-        LOG(INFO) << "Start trash manager thread ok.";
-        return 0;
-    }
-    return -1;
+  if (isStop_.exchange(false)) {
+    recycleThread_ = Thread(&TrashManager::ScanLoop, this);
+    LOG(INFO) << "Start trash manager thread ok.";
+    return 0;
+  }
+  return -1;
 }
 
 void TrashManager::Fini() {
-    if (!isStop_.exchange(true)) {
-        LOG(INFO) << "stop trash manager ...";
-        sleeper_.interrupt();
-        recycleThread_.join();
-        options_ = {};
-    }
-    LOG(INFO) << "stop trash manager ok.";
+  if (!isStop_.exchange(true)) {
+    LOG(INFO) << "stop trash manager ...";
+    sleeper_.interrupt();
+    recycleThread_.join();
+    options_ = {};
+  }
+  LOG(INFO) << "stop trash manager ok.";
 }
 
 void TrashManager::ScanLoop() {
-     while (sleeper_.wait_for(std::chrono::seconds(options_.scanPeriodSec))) {
-         ScanEveryTrash();
-     }
+  while (sleeper_.wait_for(std::chrono::seconds(options_.scanPeriodSec))) {
+    ScanEveryTrash();
+  }
 }
 
 void TrashManager::ScanEveryTrash() {
-    std::map<uint32_t, std::shared_ptr<Trash>> temp;
-    {
-        curve::common::ReadLockGuard lg(rwLock_);
-        temp = trashs_;
+  std::map<uint32_t, std::shared_ptr<Trash>> temp;
+  {
+    curve::common::ReadLockGuard lg(rwLock_);
+    temp = trashs_;
+  }
+  for (auto& pair : temp) {
+    if (!pair.second->IsStop()) {
+      pair.second->ScanTrash();
     }
-    for (auto &pair : temp) {
-        if (!pair.second->IsStop()) {
-            pair.second->ScanTrash();
-        }
-    }
+  }
 }
 
 void TrashManager::Remove(uint32_t partitionId) {
-    curve::common::WriteLockGuard lg(rwLock_);
-    auto it = trashs_.find(partitionId);
-    if (it != trashs_.end()) {
-        LOG(INFO) << "Remove partition from trash manager, partitionId = "
-                  << partitionId;
-        it->second->StopScan();
-        trashs_.erase(it);
-    } else {
-        LOG(INFO) << "Remove partition from trash manager, "
-                  << "partiton not in trash, partitionId = " << partitionId;
-    }
+  curve::common::WriteLockGuard lg(rwLock_);
+  auto it = trashs_.find(partitionId);
+  if (it != trashs_.end()) {
+    LOG(INFO) << "Remove partition from trash manager, partitionId = "
+              << partitionId;
+    it->second->StopScan();
+    trashs_.erase(it);
+  } else {
+    LOG(INFO) << "Remove partition from trash manager, "
+              << "partiton not in trash, partitionId = " << partitionId;
+  }
 }
 
-void TrashManager::ListItems(std::list<TrashItem> *items) {
-    items->clear();
-    std::map<uint32_t, std::shared_ptr<Trash>> temp;
-    {
-        curve::common::ReadLockGuard lg(rwLock_);
-        temp = trashs_;
-    }
-    for (auto &pair : temp) {
-        std::list<TrashItem> newItems;
-        pair.second->ListItems(&newItems);
-        items->splice(items->end(), newItems);
-    }
+void TrashManager::ListItems(std::list<TrashItem>* items) {
+  items->clear();
+  std::map<uint32_t, std::shared_ptr<Trash>> temp;
+  {
+    curve::common::ReadLockGuard lg(rwLock_);
+    temp = trashs_;
+  }
+  for (auto& pair : temp) {
+    std::list<TrashItem> newItems;
+    pair.second->ListItems(&newItems);
+    items->splice(items->end(), newItems);
+  }
 }
 
 }  // namespace metaserver

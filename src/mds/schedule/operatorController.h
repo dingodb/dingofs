@@ -30,8 +30,8 @@ namespace curve {
 namespace mds {
 namespace schedule {
 using OperatorController =
-    OperatorControllerT<ChunkServerIdType, CopySetInfo, CopySetConf,
-                           Topology, ::curve::mds::topology::CopySetInfo>;
+    OperatorControllerT<ChunkServerIdType, CopySetInfo, CopySetConf, Topology,
+                        ::curve::mds::topology::CopySetInfo>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curve

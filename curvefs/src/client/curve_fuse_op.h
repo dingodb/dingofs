@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -23,13 +22,13 @@
 #ifndef CURVEFS_SRC_CLIENT_CURVE_FUSE_OP_H_
 #define CURVEFS_SRC_CLIENT_CURVE_FUSE_OP_H_
 
+#include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <assert.h>
 
 #include "curvefs/src/client/fuse_common.h"
 
@@ -37,9 +36,9 @@
 extern "C" {
 #endif
 
-int InitLog(const char *confPath, const char *argv0);
+int InitLog(const char* confPath, const char* argv0);
 
-int InitFuseClient(const struct MountOption *mountOption);
+int InitFuseClient(const struct MountOption* mountOption);
 
 void UnInitFuseClient();
 
@@ -59,7 +58,7 @@ void UnInitFuseClient();
  *
  * @param userdata the user data passed to fuse_session_new()
  */
-void FuseOpInit(void *userdata, struct fuse_conn_info *conn);
+void FuseOpInit(void* userdata, struct fuse_conn_info* conn);
 
 /**
  * Clean up filesystem.
@@ -72,7 +71,7 @@ void FuseOpInit(void *userdata, struct fuse_conn_info *conn);
  *
  * @param userdata the user data passed to fuse_session_new()
  */
-void FuseOpDestroy(void *userdata);
+void FuseOpDestroy(void* userdata);
 
 /**
  * Look up a directory entry by name and get its attributes.
@@ -85,7 +84,7 @@ void FuseOpDestroy(void *userdata);
  * @param parent inode number of the parent directory
  * @param name the name to look up
  */
-void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char *name);
+void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name);
 
 /**
  * Forget about an inode
@@ -144,8 +143,7 @@ void FuseOpForget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup);
  * @param ino the inode number
  * @param fi for future use, currently always NULL
  */
-void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino,
-         struct fuse_file_info *fi);
+void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 
 /**
  * Set file attributes
@@ -175,8 +173,8 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino,
  * @param to_set bit mask of attributes which should be set
  * @param fi file information, or NULL
  */
-void FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
-         int to_set, struct fuse_file_info *fi);
+void FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat* attr,
+                   int to_set, struct fuse_file_info* fi);
 
 /**
  * Read symbolic link
@@ -206,8 +204,8 @@ void FuseOpReadLink(fuse_req_t req, fuse_ino_t ino);
  * @param mode file type and mode with which to create the new file
  * @param rdev the device number (only valid if created file is a device)
  */
-void FuseOpMkNod(fuse_req_t req, fuse_ino_t parent, const char *name,
-           mode_t mode, dev_t rdev);
+void FuseOpMkNod(fuse_req_t req, fuse_ino_t parent, const char* name,
+                 mode_t mode, dev_t rdev);
 
 /**
  * Create a directory
@@ -221,8 +219,8 @@ void FuseOpMkNod(fuse_req_t req, fuse_ino_t parent, const char *name,
  * @param name to create
  * @param mode with which to create the new file
  */
-void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char *name,
-           mode_t mode);
+void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
+                 mode_t mode);
 
 /**
  * Remove a file
@@ -239,7 +237,7 @@ void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char *name,
  * @param parent inode number of the parent directory
  * @param name to remove
  */
-void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char *name);
+void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char* name);
 
 /**
  * Remove a directory
@@ -256,7 +254,7 @@ void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char *name);
  * @param parent inode number of the parent directory
  * @param name to remove
  */
-void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char *name);
+void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char* name);
 
 /**
  * Create a symbolic link
@@ -270,8 +268,8 @@ void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char *name);
  * @param parent inode number of the parent directory
  * @param name to create
  */
-void FuseOpSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
-         const char *name);
+void FuseOpSymlink(fuse_req_t req, const char* link, fuse_ino_t parent,
+                   const char* name);
 
 /** Rename a file
  *
@@ -302,9 +300,9 @@ void FuseOpSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
  * @param newparent inode number of the new parent directory
  * @param newname new name
  */
-void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char *name,
-        fuse_ino_t newparent, const char *newname,
-        unsigned int flags);
+void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char* name,
+                  fuse_ino_t newparent, const char* newname,
+                  unsigned int flags);
 
 /**
  * Create a hard link
@@ -319,7 +317,7 @@ void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char *name,
  * @param newname new name to create
  */
 void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
-          const char *newname);
+                const char* newname);
 
 /**
  * Open a file
@@ -345,7 +343,7 @@ void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
  *    expected to properly handle the O_APPEND flag and ensure
  *    that each write is appending to the end of the file.
  *
-     *  - When writeback caching is enabled, the kernel will
+ *  - When writeback caching is enabled, the kernel will
  *    handle O_APPEND. However, unless all changes to the file
  *    come through the kernel this will not work reliably. The
  *    filesystem should thus either ignore the O_APPEND flag
@@ -377,8 +375,7 @@ void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
  * @param ino the inode number
  * @param fi file information
  */
-void FuseOpOpen(fuse_req_t req, fuse_ino_t ino,
-          struct fuse_file_info *fi);
+void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 
 /**
  * Read data
@@ -406,7 +403,7 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino,
  * @param fi file information
  */
 void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-          struct fuse_file_info *fi);
+                struct fuse_file_info* fi);
 
 /**
  * Write data
@@ -434,8 +431,8 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
  * @param off offset to write to
  * @param fi file information
  */
-void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char *buf,
-           size_t size, off_t off, struct fuse_file_info *fi);
+void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
+                 off_t off, struct fuse_file_info* fi);
 
 /**
  * Flush method
@@ -475,8 +472,7 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char *buf,
  *
  * [close]: http://pubs.opengroup.org/onlinepubs/9699919799/functions/close.html
  */
-void FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
-           struct fuse_file_info *fi);
+void FuseOpFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 
 /**
  * Release an open file
@@ -503,8 +499,7 @@ void FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
  * @param ino the inode number
  * @param fi file information
  */
-void FuseOpRelease(fuse_req_t req, fuse_ino_t ino,
-         struct fuse_file_info *fi);
+void FuseOpRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 
 /**
  * Synchronize file contents
@@ -526,7 +521,7 @@ void FuseOpRelease(fuse_req_t req, fuse_ino_t ino,
  * @param fi file information
  */
 void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
-           struct fuse_file_info *fi);
+                 struct fuse_file_info* fi);
 
 /**
  * Open a directory
@@ -550,8 +545,7 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
  * @param ino the inode number
  * @param fi file information
  */
-void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino,
-         struct fuse_file_info *fi);
+void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi);
 
 /**
  * Read directory
@@ -566,7 +560,7 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino,
  * Returning a directory entry from readdir() does not affect
  * its lookup count.
  *
-     * If off_t is non-zero, then it will correspond to one of the off_t
+ * If off_t is non-zero, then it will correspond to one of the off_t
  * values that was previously returned by readdir() for the same
  * directory handle. In this case, readdir() should skip over entries
  * coming before the position defined by the off_t value. If entries
@@ -597,7 +591,7 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino,
  * @param fi file information
  */
 void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-         struct fuse_file_info *fi);
+                   struct fuse_file_info* fi);
 
 /**
  * Release an open directory
@@ -616,7 +610,7 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
  * @param fi file information
  */
 void FuseOpReleaseDir(fuse_req_t req, fuse_ino_t ino,
-            struct fuse_file_info *fi);
+                      struct fuse_file_info* fi);
 
 /**
  * Synchronize directory contents
@@ -641,7 +635,7 @@ void FuseOpReleaseDir(fuse_req_t req, fuse_ino_t ino,
  * @param fi file information
  */
 void FuseOpFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync,
-          struct fuse_file_info *fi);
+                    struct fuse_file_info* fi);
 
 /**
  * Get file system statistics
@@ -666,8 +660,8 @@ void FuseOpStatFs(fuse_req_t req, fuse_ino_t ino);
  * Valid replies:
  *   fuse_reply_err
  */
-void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char *name,
-          const char *value, size_t size, int flags);
+void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
+                    const char* value, size_t size, int flags);
 
 /**
  * Get an extended attribute
@@ -697,8 +691,8 @@ void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char *name,
  * @param name of the extended attribute
  * @param size maximum size of the value to send
  */
-void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char *name,
-          size_t size);
+void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
+                    size_t size);
 
 /**
  * List extended attribute names
@@ -745,7 +739,7 @@ void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size);
  * @param ino the inode number
  * @param name of the extended attribute
  */
-void FuseOpRemoveXattr(fuse_req_t req, fuse_ino_t ino, const char *name);
+void FuseOpRemoveXattr(fuse_req_t req, fuse_ino_t ino, const char* name);
 
 /**
  * Check file access permissions
@@ -796,8 +790,8 @@ void FuseOpAccess(fuse_req_t req, fuse_ino_t ino, int mask);
  * @param mode file type and mode with which to create the new file
  * @param fi file information
  */
-void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char *name,
-        mode_t mode, struct fuse_file_info *fi);
+void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
+                  mode_t mode, struct fuse_file_info* fi);
 
 /**
  * Test for a POSIX file lock
@@ -811,8 +805,8 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char *name,
  * @param fi file information
  * @param lock the region/type to test
  */
-void FuseOpGetLk(fuse_req_t req, fuse_ino_t ino,
-           struct fuse_file_info *fi, struct flock *lock);
+void FuseOpGetLk(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi,
+                 struct flock* lock);
 
 /**
  * Acquire, modify or release a POSIX file lock
@@ -836,9 +830,8 @@ void FuseOpGetLk(fuse_req_t req, fuse_ino_t ino,
  * @param lock the region/type to set
  * @param sleep locking operation may sleep
  */
-void FuseOpSetLk(fuse_req_t req, fuse_ino_t ino,
-           struct fuse_file_info *fi,
-           struct flock *lock, int sleep);
+void FuseOpSetLk(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi,
+                 struct flock* lock, int sleep);
 
 /**
  * Map block index within file to block index within device
@@ -860,8 +853,7 @@ void FuseOpSetLk(fuse_req_t req, fuse_ino_t ino,
  * @param blocksize unit of block index
  * @param idx block index within file
  */
-void FuseOpBmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
-          uint64_t idx);
+void FuseOpBmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize, uint64_t idx);
 
 /**
  * Ioctl
@@ -892,13 +884,13 @@ void FuseOpBmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
  * is truncated to 32 bits.
  */
 #if FUSE_USE_VERSION < 35
-void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, int cmd,
-           void *arg, struct fuse_file_info *fi, unsigned flags,
-           const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void* arg,
+                 struct fuse_file_info* fi, unsigned flags, const void* in_buf,
+                 size_t in_bufsz, size_t out_bufsz);
 #else
-void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
-           void *arg, struct fuse_file_info *fi, unsigned flags,
-           const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void* arg,
+                 struct fuse_file_info* fi, unsigned flags, const void* in_buf,
+                 size_t in_bufsz, size_t out_bufsz);
 #endif
 
 /**
@@ -930,8 +922,8 @@ void FuseOpIoctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
  * @param fi file information
  * @param ph poll handle to be used for notification
  */
-void FuseOpPoll(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
-          struct fuse_pollhandle *ph);
+void FuseOpPoll(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi,
+                struct fuse_pollhandle* ph);
 
 /**
  * Write data made available in a buffer
@@ -960,9 +952,8 @@ void FuseOpPoll(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
  * @param off offset to write to
  * @param fi file information
  */
-void FuseOpWriteBuf(fuse_req_t req, fuse_ino_t ino,
-           struct fuse_bufvec *bufv, off_t off,
-           struct fuse_file_info *fi);
+void FuseOpWriteBuf(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec* bufv,
+                    off_t off, struct fuse_file_info* fi);
 
 /**
  * Callback function for the retrieve request
@@ -976,8 +967,8 @@ void FuseOpWriteBuf(fuse_req_t req, fuse_ino_t ino,
  * @param offset the offset supplied to fuse_lowlevel_notify_retrieve()
  * @param bufv the buffer containing the returned data
  */
-void FuseOpRetrieveReply(fuse_req_t req, void *cookie, fuse_ino_t ino,
-            off_t offset, struct fuse_bufvec *bufv);
+void FuseOpRetrieveReply(fuse_req_t req, void* cookie, fuse_ino_t ino,
+                         off_t offset, struct fuse_bufvec* bufv);
 
 /**
  * Forget about multiple inodes
@@ -991,7 +982,7 @@ void FuseOpRetrieveReply(fuse_req_t req, void *cookie, fuse_ino_t ino,
  * @param req request handle
  */
 void FuseOpForgetMulti(fuse_req_t req, size_t count,
-              struct fuse_forget_data *forgets);
+                       struct fuse_forget_data* forgets);
 
 /**
  * Acquire, modify or release a BSD file lock
@@ -1008,8 +999,8 @@ void FuseOpForgetMulti(fuse_req_t req, size_t count,
  * @param fi file information
  * @param op the locking operation, see flock(2)
  */
-void FuseOpFlock(fuse_req_t req, fuse_ino_t ino,
-           struct fuse_file_info *fi, int op);
+void FuseOpFlock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi,
+                 int op);
 
 /**
  * Allocate requested space. If this function returns success then
@@ -1031,8 +1022,8 @@ void FuseOpFlock(fuse_req_t req, fuse_ino_t ino,
  * @param mode determines the operation to be performed on the given range,
  *             see fallocate(2)
  */
-void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode,
-           off_t offset, off_t length, struct fuse_file_info *fi);
+void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode, off_t offset,
+                     off_t length, struct fuse_file_info* fi);
 
 /**
  * Read directory with attributes
@@ -1059,9 +1050,8 @@ void FuseOpFallocate(fuse_req_t req, fuse_ino_t ino, int mode,
  * @param off offset to continue reading the directory stream
  * @param fi file information
  */
-void FuseOpReadDirPlus(
-        fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-        struct fuse_file_info *fi);
+void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+                       struct fuse_file_info* fi);
 
 /**
  * Copy a range of data from one file to another
@@ -1093,11 +1083,10 @@ void FuseOpReadDirPlus(
  * @param len maximum size of the data to copy
  * @param flags passed along with the copy_file_range() syscall
  */
-void FuseOpCopyFileRange(fuse_req_t req, fuse_ino_t ino_in,
-             off_t off_in, struct fuse_file_info *fi_in,
-             fuse_ino_t ino_out, off_t off_out,
-             struct fuse_file_info *fi_out, size_t len,
-             int flags);
+void FuseOpCopyFileRange(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
+                         struct fuse_file_info* fi_in, fuse_ino_t ino_out,
+                         off_t off_out, struct fuse_file_info* fi_out,
+                         size_t len, int flags);
 
 /**
  * Find next data or hole after the specified offset
@@ -1118,7 +1107,7 @@ void FuseOpCopyFileRange(fuse_req_t req, fuse_ino_t ino_in,
  * @param fi file information
  */
 void FuseOpLseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
-           struct fuse_file_info *fi);
+                 struct fuse_file_info* fi);
 
 #ifdef __cplusplus
 }  // extern "C"

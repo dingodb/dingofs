@@ -33,9 +33,9 @@ namespace copyset {
 
 class MockCopysetNodeManager : public CopysetNodeManager {
  public:
-    MOCK_METHOD2(GetCopysetNode, CopysetNode*(PoolId, CopysetId));
-    MOCK_METHOD2(PurgeCopysetNode, bool(PoolId, CopysetId));
-    MOCK_CONST_METHOD0(IsLoadFinished, bool());
+  MOCK_METHOD2(GetCopysetNode, CopysetNode*(PoolId, CopysetId));
+  MOCK_METHOD2(PurgeCopysetNode, bool(PoolId, CopysetId));
+  MOCK_CONST_METHOD0(IsLoadFinished, bool());
 };
 
 }  // namespace copyset

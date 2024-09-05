@@ -72,5 +72,3 @@ const int DISCARDSEGMENTKEYLEN = 26;
 }  // namespace curve
 
 #endif  // SRC_COMMON_NAMESPACE_DEFINE_H_
-
-

@@ -20,111 +20,108 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <map>
-#include <set>
-#include <list>
-#include <string>
-#include <memory>
-#include <utility>
-
 #include "curvefs/src/client/filesystem/rpc_client.h"
+
+#include <list>
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <utility>
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
-RPCClient::RPCClient(RPCOption option,
-                     ExternalMember member)
+RPCClient::RPCClient(RPCOption option, ExternalMember member)
     : option_(option),
       inodeManager_(member.inodeManager),
       dentryManager_(member.dentryManager) {}
 
 CURVEFS_ERROR RPCClient::GetAttr(Ino ino, InodeAttr* attr) {
-    CURVEFS_ERROR rc = inodeManager_->GetInodeAttr(ino, attr);
-    if (rc != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "rpc(getattr::GetInodeAttr) failed, retCode = " << rc
-                   << ", ino = " << ino;
-    }
-    return rc;
+  CURVEFS_ERROR rc = inodeManager_->GetInodeAttr(ino, attr);
+  if (rc != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "rpc(getattr::GetInodeAttr) failed, retCode = " << rc
+               << ", ino = " << ino;
+  }
+  return rc;
 }
 
-CURVEFS_ERROR RPCClient::Lookup(Ino parent,
-                                const std::string& name,
+CURVEFS_ERROR RPCClient::Lookup(Ino parent, const std::string& name,
                                 EntryOut* entryOut) {
-    Dentry dentry;
-    CURVEFS_ERROR rc = dentryManager_->GetDentry(parent, name, &dentry);
-    if (rc != CURVEFS_ERROR::OK) {
-        if (rc != CURVEFS_ERROR::NOTEXIST) {
-            LOG(ERROR) << "rpc(lookup::GetDentry) failed, retCode = " << rc
-                       << ", parent = " << parent << ", name = " << name;
-        }
-        return rc;
-    }
-
-    Ino ino = dentry.inodeid();
-    rc = inodeManager_->GetInodeAttr(ino, &entryOut->attr);
-    if (rc != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "rpc(lookup::GetInodeAttr) failed, retCode = " << rc
-                   << ", ino = " << ino;
+  Dentry dentry;
+  CURVEFS_ERROR rc = dentryManager_->GetDentry(parent, name, &dentry);
+  if (rc != CURVEFS_ERROR::OK) {
+    if (rc != CURVEFS_ERROR::NOTEXIST) {
+      LOG(ERROR) << "rpc(lookup::GetDentry) failed, retCode = " << rc
+                 << ", parent = " << parent << ", name = " << name;
     }
     return rc;
+  }
+
+  Ino ino = dentry.inodeid();
+  rc = inodeManager_->GetInodeAttr(ino, &entryOut->attr);
+  if (rc != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "rpc(lookup::GetInodeAttr) failed, retCode = " << rc
+               << ", ino = " << ino;
+  }
+  return rc;
 }
 
 CURVEFS_ERROR RPCClient::ReadDir(Ino ino,
                                  std::shared_ptr<DirEntryList>* entries) {
-    uint32_t limit = option_.listDentryLimit;
+  uint32_t limit = option_.listDentryLimit;
 
-    std::list<Dentry> dentries;
-    CURVEFS_ERROR rc = dentryManager_->ListDentry(ino, &dentries, limit);
-    if (rc != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "rpc(readdir::ListDentry) failed, retCode = " << rc
-                   << ", ino = " << ino;
-        return rc;
-    } else if (dentries.size() == 0) {
-        VLOG(3) << "rpc(readdir::ListDentry) success and directory is empty"
-                << ", ino = " << ino;
-        return rc;
+  std::list<Dentry> dentries;
+  CURVEFS_ERROR rc = dentryManager_->ListDentry(ino, &dentries, limit);
+  if (rc != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "rpc(readdir::ListDentry) failed, retCode = " << rc
+               << ", ino = " << ino;
+    return rc;
+  } else if (dentries.size() == 0) {
+    VLOG(3) << "rpc(readdir::ListDentry) success and directory is empty"
+            << ", ino = " << ino;
+    return rc;
+  }
+
+  std::set<uint64_t> inos;
+  std::map<uint64_t, InodeAttr> attrs;
+  std::for_each(dentries.begin(), dentries.end(),
+                [&](Dentry& dentry) { inos.emplace(dentry.inodeid()); });
+  rc = inodeManager_->BatchGetInodeAttrAsync(ino, &inos, &attrs);
+  if (rc != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "rpc(readdir::BatchGetInodeAttrAsync) failed"
+               << ", retCode = " << rc << ", ino = " << ino;
+    return rc;
+  }
+
+  DirEntry dirEntry;
+  for (const auto& dentry : dentries) {
+    Ino ino = dentry.inodeid();
+    auto iter = attrs.find(ino);
+    if (iter == attrs.end()) {
+      LOG(WARNING) << "rpc(readdir::BatchGetInodeAttrAsync) "
+                   << "missing attribute, ino = " << ino;
+      continue;
     }
 
-    std::set<uint64_t> inos;
-    std::map<uint64_t, InodeAttr> attrs;
-    std::for_each(dentries.begin(), dentries.end(), [&](Dentry& dentry){
-        inos.emplace(dentry.inodeid());
-    });
-    rc = inodeManager_->BatchGetInodeAttrAsync(ino, &inos, &attrs);
-    if (rc != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "rpc(readdir::BatchGetInodeAttrAsync) failed"
-                   << ", retCode = " << rc << ", ino = " << ino;
-        return rc;
-    }
-
-    DirEntry dirEntry;
-    for (const auto& dentry : dentries) {
-        Ino ino = dentry.inodeid();
-        auto iter = attrs.find(ino);
-        if (iter == attrs.end()) {
-            LOG(WARNING) << "rpc(readdir::BatchGetInodeAttrAsync) "
-                         << "missing attribute, ino = " << ino;
-            continue;
-        }
-
-        // NOTE: we can't use std::move() for attribute for hard link
-        // which will sharing inode attribute.
-        dirEntry.ino = ino;
-        dirEntry.name = std::move(dentry.name());
-        dirEntry.attr = iter->second;
-        (*entries)->Add(dirEntry);
-    }
-    return CURVEFS_ERROR::OK;
+    // NOTE: we can't use std::move() for attribute for hard link
+    // which will sharing inode attribute.
+    dirEntry.ino = ino;
+    dirEntry.name = std::move(dentry.name());
+    dirEntry.attr = iter->second;
+    (*entries)->Add(dirEntry);
+  }
+  return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR RPCClient::Open(Ino ino, std::shared_ptr<InodeWrapper>* inode) {
-    CURVEFS_ERROR rc = inodeManager_->GetInode(ino, *inode);
-    if (rc != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "rpc(open/GetInode) failed" << ", retCode = " << rc
-                   << ", ino = " << ino;
-    }
-    return rc;
+  CURVEFS_ERROR rc = inodeManager_->GetInode(ino, *inode);
+  if (rc != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "rpc(open/GetInode) failed"
+               << ", retCode = " << rc << ", ino = " << ino;
+  }
+  return rc;
 }
 
 }  // namespace filesystem

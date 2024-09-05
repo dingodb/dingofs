@@ -22,8 +22,8 @@
 namespace curvefs {
 namespace client {
 
-using ::curvefs::metaserver::InodeAttr;
 using ::curvefs::metaserver::Inode;
+using ::curvefs::metaserver::InodeAttr;
 
 InodeAttr ToInodeAttr(const Inode& inode);
 

@@ -30,53 +30,53 @@ namespace curvefs {
 namespace volume {
 
 std::ostream& operator<<(std::ostream& os, const AllocateHint& hint) {
-    auto offstr = [](uint64_t offset) {
-        if (offset == AllocateHint::INVALID_OFFSET) {
-            return std::string{"None"};
-        }
+  auto offstr = [](uint64_t offset) {
+    if (offset == AllocateHint::INVALID_OFFSET) {
+      return std::string{"None"};
+    }
 
-        return std::to_string(offset);
-    };
+    return std::to_string(offset);
+  };
 
-    os << "[type: " << hint.allocType << ", left: " << offstr(hint.leftOffset)
-       << ", right: " << offstr(hint.rightOffset) << "]";
+  os << "[type: " << hint.allocType << ", left: " << offstr(hint.leftOffset)
+     << ", right: " << offstr(hint.rightOffset) << "]";
 
-    return os;
+  return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const Extent& e) {
-    os << "[off: " << e.offset << " ~ len: " << e.len << "]";
-    return os;
+  os << "[off: " << e.offset << " ~ len: " << e.len << "]";
+  return os;
 }
 
 std::ostream& operator<<(std::ostream& os, const std::vector<Extent>& es) {
-    std::ostringstream oss;
+  std::ostringstream oss;
 
-    for (const auto& e : es) {
-        oss << e << " ";
-    }
+  for (const auto& e : es) {
+    oss << e << " ";
+  }
 
-    os << oss.str();
-    return os;
+  os << oss.str();
+  return os;
 }
 
 std::ostream& operator<<(std::ostream& os, AllocateType type) {
-    switch (type) {
-        case AllocateType::None:
-            os << "none";
-            break;
-        case AllocateType::Big:
-            os << "big";
-            break;
-        case AllocateType::Small:
-            os << "small";
-            break;
-        default:
-            os << "unknown";
-            break;
-    }
+  switch (type) {
+    case AllocateType::None:
+      os << "none";
+      break;
+    case AllocateType::Big:
+      os << "big";
+      break;
+    case AllocateType::Small:
+      os << "small";
+      break;
+    default:
+      os << "unknown";
+      break;
+  }
 
-    return os;
+  return os;
 }
 
 }  // namespace volume

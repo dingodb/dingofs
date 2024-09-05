@@ -24,10 +24,10 @@
 #include <gtest/gtest.h>
 
 int main(int argc, char* argv[]) {
-    // braft need it
-    butil::AtExitManager atExit;
+  // braft need it
+  butil::AtExitManager atExit;
 
-    testing::InitGoogleTest(&argc, argv);
+  testing::InitGoogleTest(&argc, argv);
 
-    return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }

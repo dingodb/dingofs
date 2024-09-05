@@ -26,25 +26,25 @@ namespace curve {
 namespace chunkserver {
 
 int prepare_segment(const std::string& path) {
-    int fd = ::open(path.c_str(), O_RDWR|O_CREAT, 0644);
-    if (fd < 0) {
-        LOG(ERROR) << "Create segment fail";
-        return -1;
-    }
+  int fd = ::open(path.c_str(), O_RDWR | O_CREAT, 0644);
+  if (fd < 0) {
+    LOG(ERROR) << "Create segment fail";
+    return -1;
+  }
 
-    if (::fallocate(fd, 0, 0, kSegmentSize) < 0) {
-        LOG(ERROR) << "fallocate fail";
-        return -1;
-    }
-    char* data = new char[kSegmentSize];
-    memset(data, 0, kSegmentSize);
-    if (pwrite(fd, data, kSegmentSize, 0) != kSegmentSize) {
-        LOG(ERROR) << "write failed";
-        return -1;
-    }
-    delete[] data;
-    close(fd);
-    return 0;
+  if (::fallocate(fd, 0, 0, kSegmentSize) < 0) {
+    LOG(ERROR) << "fallocate fail";
+    return -1;
+  }
+  char* data = new char[kSegmentSize];
+  memset(data, 0, kSegmentSize);
+  if (pwrite(fd, data, kSegmentSize, 0) != kSegmentSize) {
+    LOG(ERROR) << "write failed";
+    return -1;
+  }
+  delete[] data;
+  close(fd);
+  return 0;
 }
 
 }  // namespace chunkserver

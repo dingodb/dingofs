@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -23,11 +22,11 @@
 #include "curvefs/src/client/dentry_cache_manager.h"
 
 #include <cstdint>
-#include <string>
 #include <list>
-#include <vector>
-#include <utility>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 using ::curvefs::metaserver::MetaStatusCode_Name;
 
@@ -47,113 +46,110 @@ using NameLockGuard = ::curve::common::GenericNameLockGuard<Mutex>;
 using ::curvefs::client::filesystem::ToFSError;
 
 CURVEFS_ERROR DentryCacheManagerImpl::GetDentry(uint64_t parent,
-                                                const std::string &name,
-                                                Dentry *out) {
-    std::string key = GetDentryCacheKey(parent, name);
-    NameLockGuard lock(nameLock_, key);
+                                                const std::string& name,
+                                                Dentry* out) {
+  std::string key = GetDentryCacheKey(parent, name);
+  NameLockGuard lock(nameLock_, key);
 
-    MetaStatusCode ret = metaClient_->GetDentry(fsId_, parent, name, out);
-    if (ret != MetaStatusCode::OK) {
-        LOG_IF(ERROR, ret != MetaStatusCode::NOT_FOUND)
-            << "metaClient_ GetDentry failed, MetaStatusCode = " << ret
-            << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-            << ", parent = " << parent << ", name = " << name;
-        return ToFSError(ret);
-    }
-    return CURVEFS_ERROR::OK;
+  MetaStatusCode ret = metaClient_->GetDentry(fsId_, parent, name, out);
+  if (ret != MetaStatusCode::OK) {
+    LOG_IF(ERROR, ret != MetaStatusCode::NOT_FOUND)
+        << "metaClient_ GetDentry failed, MetaStatusCode = " << ret
+        << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+        << ", parent = " << parent << ", name = " << name;
+    return ToFSError(ret);
+  }
+  return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR DentryCacheManagerImpl::CreateDentry(const Dentry &dentry) {
-    std::string key = GetDentryCacheKey(dentry.parentinodeid(), dentry.name());
-    NameLockGuard lock(nameLock_, key);
-    MetaStatusCode ret = metaClient_->CreateDentry(dentry);
-    if (ret != MetaStatusCode::OK) {
-        LOG(ERROR) << "metaClient_ CreateDentry failed, MetaStatusCode = "
-                   << ret
-                   << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-                   << ", parent = " << dentry.parentinodeid()
-                   << ", name = " << dentry.name();
-        return ToFSError(ret);
-    }
+CURVEFS_ERROR DentryCacheManagerImpl::CreateDentry(const Dentry& dentry) {
+  std::string key = GetDentryCacheKey(dentry.parentinodeid(), dentry.name());
+  NameLockGuard lock(nameLock_, key);
+  MetaStatusCode ret = metaClient_->CreateDentry(dentry);
+  if (ret != MetaStatusCode::OK) {
+    LOG(ERROR) << "metaClient_ CreateDentry failed, MetaStatusCode = " << ret
+               << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+               << ", parent = " << dentry.parentinodeid()
+               << ", name = " << dentry.name();
+    return ToFSError(ret);
+  }
 
-    return CURVEFS_ERROR::OK;
+  return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR DentryCacheManagerImpl::DeleteDentry(uint64_t parent,
-                                                   const std::string &name,
+                                                   const std::string& name,
                                                    FsFileType type) {
-    std::string key = GetDentryCacheKey(parent, name);
-    NameLockGuard lock(nameLock_, key);
+  std::string key = GetDentryCacheKey(parent, name);
+  NameLockGuard lock(nameLock_, key);
 
-    MetaStatusCode ret = metaClient_->DeleteDentry(fsId_, parent, name, type);
-    if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
-        LOG(ERROR) << "metaClient_ DeleteInode failed, MetaStatusCode = " << ret
-                   << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-                   << ", parent = " << parent << ", name = " << name;
-        return ToFSError(ret);
-    }
-    return CURVEFS_ERROR::OK;
+  MetaStatusCode ret = metaClient_->DeleteDentry(fsId_, parent, name, type);
+  if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
+    LOG(ERROR) << "metaClient_ DeleteInode failed, MetaStatusCode = " << ret
+               << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+               << ", parent = " << parent << ", name = " << name;
+    return ToFSError(ret);
+  }
+  return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR DentryCacheManagerImpl::ListDentry(uint64_t parent,
-                                                 std::list<Dentry> *dentryList,
-                                                 uint32_t limit,
-                                                 bool onlyDir,
+                                                 std::list<Dentry>* dentryList,
+                                                 uint32_t limit, bool onlyDir,
                                                  uint32_t nlink) {
-    dentryList->clear();
-    // means no dir under this dir
-    if (onlyDir && nlink == 2) {
-        LOG(INFO) << "ListDentry parent = " << parent
-                  << ", onlyDir = 1 and nlink = 2, return directly";
-        return CURVEFS_ERROR::OK;
+  dentryList->clear();
+  // means no dir under this dir
+  if (onlyDir && nlink == 2) {
+    LOG(INFO) << "ListDentry parent = " << parent
+              << ", onlyDir = 1 and nlink = 2, return directly";
+    return CURVEFS_ERROR::OK;
+  }
+
+  MetaStatusCode ret = MetaStatusCode::OK;
+  bool perceed = true;
+  std::string last = "";
+  do {
+    std::list<Dentry> part;
+    ret = metaClient_->ListDentry(fsId_, parent, last, limit, onlyDir, &part);
+    VLOG(6) << "ListDentry fsId = " << fsId_ << ", parent = " << parent
+            << ", last = " << last << ", count = " << limit
+            << ", onlyDir = " << onlyDir << ", ret = " << ret
+            << ", part.size() = " << part.size();
+    if (ret != MetaStatusCode::OK) {
+      LOG(ERROR) << "metaClient_ ListDentry failed"
+                 << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+                 << ", parent = " << parent << ", last = " << last
+                 << ", count = " << limit << ", onlyDir = " << onlyDir;
+      return ToFSError(ret);
     }
 
-    MetaStatusCode ret = MetaStatusCode::OK;
-    bool perceed = true;
-    std::string last = "";
-    do {
-        std::list<Dentry> part;
-        ret = metaClient_->ListDentry(fsId_, parent, last, limit, onlyDir,
-                                      &part);
-        VLOG(6) << "ListDentry fsId = " << fsId_ << ", parent = " << parent
-                << ", last = " << last << ", count = " << limit
-                << ", onlyDir = " << onlyDir
-                << ", ret = " << ret << ", part.size() = " << part.size();
-        if (ret != MetaStatusCode::OK) {
-            LOG(ERROR) << "metaClient_ ListDentry failed"
-                       << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-                       << ", parent = " << parent << ", last = " << last
-                       << ", count = " << limit << ", onlyDir = " << onlyDir;
-            return ToFSError(ret);
+    if (!onlyDir) {
+      if (part.size() < limit) {
+        perceed = false;
+      }
+      if (!part.empty()) {
+        last = part.back().name();
+        dentryList->splice(dentryList->end(), part);
+      }
+    } else {
+      // means iterate over the range
+      if (part.empty()) {
+        perceed = false;
+      } else {
+        last = part.back().name();
+        if (part.back().type() != FsFileType::TYPE_DIRECTORY) {
+          part.pop_back();
         }
-
-        if (!onlyDir) {
-            if (part.size() < limit) {
-                perceed = false;
-            }
-            if (!part.empty()) {
-                last = part.back().name();
-                dentryList->splice(dentryList->end(), part);
-            }
-        } else {
-            // means iterate over the range
-            if (part.empty()) {
-                perceed = false;
-            } else {
-                last = part.back().name();
-                if (part.back().type() != FsFileType::TYPE_DIRECTORY) {
-                    part.pop_back();
-                }
-                dentryList->splice(dentryList->end(), part);
-                // means already get all the dir under this dir
-                if (nlink - dentryList->size() == 2) {
-                    perceed = false;
-                }
-            }
+        dentryList->splice(dentryList->end(), part);
+        // means already get all the dir under this dir
+        if (nlink - dentryList->size() == 2) {
+          perceed = false;
         }
-    } while (perceed);
+      }
+    }
+  } while (perceed);
 
-    return CURVEFS_ERROR::OK;
+  return CURVEFS_ERROR::OK;
 }
 
 }  // namespace client

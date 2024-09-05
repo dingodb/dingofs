@@ -23,8 +23,8 @@
 #ifndef CURVEFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 #define CURVEFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 
-#include "src/mds/schedule/scheduleMetricsTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
+#include "src/mds/schedule/scheduleMetricsTemplate.h"
 
 namespace curvefs {
 namespace mds {

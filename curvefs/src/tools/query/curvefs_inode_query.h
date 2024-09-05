@@ -29,14 +29,14 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "curvefs/src/tools/curvefs_tool.h"
 #include "curvefs/src/tools/curvefs_tool_define.h"
 #include "curvefs/src/tools/list/curvefs_partition_list.h"
-#include "curvefs/src/tools/query/curvefs_inode_s3infomap.h"
 #include "curvefs/src/tools/query/curvefs_inode.h"
+#include "curvefs/src/tools/query/curvefs_inode_s3infomap.h"
 
 namespace curvefs {
 namespace tools {
@@ -49,41 +49,41 @@ using PartitionInfoList =
 
 class InodeQueryTool : public CurvefsTool {
  public:
-    explicit InodeQueryTool(const std::string& cmd = kInodeQueryCmd,
-                            bool show = true)
-        : CurvefsTool(cmd),
-          partitionListTool_(kNoInvokeCmd, false),
-          inodeS3InfoMapTool_(kNoInvokeCmd, false),
-          inodeTool_(kNoInvokeCmd, false) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
-    int RunCommand() override;
+  explicit InodeQueryTool(const std::string& cmd = kInodeQueryCmd,
+                          bool show = true)
+      : CurvefsTool(cmd),
+        partitionListTool_(kNoInvokeCmd, false),
+        inodeS3InfoMapTool_(kNoInvokeCmd, false),
+        inodeTool_(kNoInvokeCmd, false) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
+  int RunCommand() override;
 
  protected:
-    /**
-     * @brief Find in fsId2PartitionList_ with fsid and inodeid and populate
-     * remaining fields
-     *
-     * @param inode
-     * @return true
-         found
-     * @return false not found  
-     */
-    bool GetInodeInfo(InodeBase* inode);
+  /**
+   * @brief Find in fsId2PartitionList_ with fsid and inodeid and populate
+   * remaining fields
+   *
+   * @param inode
+   * @return true
+       found
+   * @return false not found
+   */
+  bool GetInodeInfo(InodeBase* inode);
 
-    std::vector<InodeBase> inodeBases_;
-    list::PartitionListTool partitionListTool_;
-    InodeS3InfoMapTool inodeS3InfoMapTool_;
-    InodeTool inodeTool_;
-    std::unordered_map<uint32_t, PartitionInfoList> fsId2PartitionList_;
-    std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
-                       KeyEuqalInodeBase>
-        inode2S3ChunkInfoList_;
-    std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
-                       KeyEuqalInodeBase>
-        inode2InodeBaseInfoList_;
+  std::vector<InodeBase> inodeBases_;
+  list::PartitionListTool partitionListTool_;
+  InodeS3InfoMapTool inodeS3InfoMapTool_;
+  InodeTool inodeTool_;
+  std::unordered_map<uint32_t, PartitionInfoList> fsId2PartitionList_;
+  std::unordered_map<InodeBase, S3ChunkInfoList, HashInodeBase,
+                     KeyEuqalInodeBase>
+      inode2S3ChunkInfoList_;
+  std::unordered_map<InodeBase, std::vector<InodeBaseInfo>, HashInodeBase,
+                     KeyEuqalInodeBase>
+      inode2InodeBaseInfoList_;
 };
 
 }  // namespace query

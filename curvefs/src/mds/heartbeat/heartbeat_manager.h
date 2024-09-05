@@ -39,15 +39,15 @@
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/interruptible_sleeper.h"
 
-using ::curvefs::mds::topology::PoolIdType;
-using ::curvefs::mds::topology::CopySetIdType;
-using ::curvefs::mds::topology::Topology;
 using ::curvefs::mds::schedule::Coordinator;
+using ::curvefs::mds::topology::CopySetIdType;
+using ::curvefs::mds::topology::PoolIdType;
+using ::curvefs::mds::topology::Topology;
 
-using ::curve::common::Thread;
 using ::curve::common::Atomic;
-using ::curve::common::RWLock;
 using ::curve::common::InterruptibleSleeper;
+using ::curve::common::RWLock;
+using ::curve::common::Thread;
 
 namespace curvefs {
 namespace mds {
@@ -63,102 +63,102 @@ namespace heartbeat {
 
 class HeartbeatManager {
  public:
-    HeartbeatManager(const HeartbeatOption &option,
-                     const std::shared_ptr<Topology> &topology,
-                     const std::shared_ptr<Coordinator> &coordinator);
+  HeartbeatManager(const HeartbeatOption& option,
+                   const std::shared_ptr<Topology>& topology,
+                   const std::shared_ptr<Coordinator>& coordinator);
 
-    ~HeartbeatManager() { Stop(); }
+  ~HeartbeatManager() { Stop(); }
 
-    /**
-     * @brief Init Used by mds to initialize heartbeat module.
-     *             It registers all metaservers to metaserver health
-     *             checking module (class MetaserverHealthyChecker),
-     *             and initializes them to online status
-     */
-    void Init();
+  /**
+   * @brief Init Used by mds to initialize heartbeat module.
+   *             It registers all metaservers to metaserver health
+   *             checking module (class MetaserverHealthyChecker),
+   *             and initializes them to online status
+   */
+  void Init();
 
-    /**
-     * @brief Run Create a child thread for health checking module, which
-     *            inspect missing heartbeat of the metaserver
-     */
-    void Run();
+  /**
+   * @brief Run Create a child thread for health checking module, which
+   *            inspect missing heartbeat of the metaserver
+   */
+  void Run();
 
-    /*
-    * @brief Stop Stop background thread of heartbeat module
-    */
-    void Stop();
+  /*
+   * @brief Stop Stop background thread of heartbeat module
+   */
+  void Stop();
 
-    /**
-     * @brief MetaServerHeartbeat Manage heartbeat request
-     *
-     * @param[in] request RPC heartbeat request
-     * @param[out] response Response of heartbeat request
-     */
-    void MetaServerHeartbeat(const MetaServerHeartbeatRequest &request,
-                             MetaServerHeartbeatResponse *response);
-
- private:
-    /**
-     * @brief Background thread for heartbeat timeout inspection
-     */
-    void MetaServerHealthyChecker();
-
-    /**
-     * @brief CheckRequest Check the validity of a heartbeat request
-     *
-     * @return Return HeartbeatStatusCode::hbOK when valid, otherwise return
-     *         corresponding error code
-     */
-    HeartbeatStatusCode CheckRequest(
-        const MetaServerHeartbeatRequest &request);  // NOLINT
-
-    // TODO(lixiaocui): optimize, unify the names of the two CopySetInfo in
-    // heartbeat and topology // NOLINT
-    /**
-     * @brief Convert copyset data structure from heartbeat format
-     *        to topology format
-     *
-     * @param[in] info Copyset data reported by heartbeat
-     * @param[out] out Copyset data structure of topology module
-     *
-     * @return Return true if succeeded, false if failed
-     */
-    bool TransformHeartbeatCopySetInfoToTopologyOne(
-        const ::curvefs::mds::heartbeat::CopySetInfo &info,
-        ::curvefs::mds::topology::CopySetInfo *out);
-
-    /**
-     * @brief Extract ip address and port number from string, and fetch
-     *        corresponding metaserverID from topology. This is for receiving
-     *        heartbeat message since it's a string in format of 'ip:port:id'
-     *
-     * @param[in] peer Metaserver info in form of string 'ip:port:id'
-     *
-     * @return metaserverId fetch by ip address and port number
-     */
-    MetaServerIdType GetMetaserverIdByPeerStr(const std::string &peer);
-
-    void UpdateMetaServerSpace(const MetaServerHeartbeatRequest &request);
+  /**
+   * @brief MetaServerHeartbeat Manage heartbeat request
+   *
+   * @param[in] request RPC heartbeat request
+   * @param[out] response Response of heartbeat request
+   */
+  void MetaServerHeartbeat(const MetaServerHeartbeatRequest& request,
+                           MetaServerHeartbeatResponse* response);
 
  private:
-    // Dependencies of heartbeat
-    std::shared_ptr<Topology> topology_;
-    std::shared_ptr<Coordinator> coordinator_;
+  /**
+   * @brief Background thread for heartbeat timeout inspection
+   */
+  void MetaServerHealthyChecker();
 
-    // healthyChecker_ health checker running in background thread
-    std::shared_ptr<MetaserverHealthyChecker> healthyChecker_;
+  /**
+   * @brief CheckRequest Check the validity of a heartbeat request
+   *
+   * @return Return HeartbeatStatusCode::hbOK when valid, otherwise return
+   *         corresponding error code
+   */
+  HeartbeatStatusCode CheckRequest(
+      const MetaServerHeartbeatRequest& request);  // NOLINT
 
-    // topoUpdater_ update epoch, copyset relationship of topology
-    std::shared_ptr<TopoUpdater> topoUpdater_;
+  // TODO(lixiaocui): optimize, unify the names of the two CopySetInfo in
+  // heartbeat and topology // NOLINT
+  /**
+   * @brief Convert copyset data structure from heartbeat format
+   *        to topology format
+   *
+   * @param[in] info Copyset data reported by heartbeat
+   * @param[out] out Copyset data structure of topology module
+   *
+   * @return Return true if succeeded, false if failed
+   */
+  bool TransformHeartbeatCopySetInfoToTopologyOne(
+      const ::curvefs::mds::heartbeat::CopySetInfo& info,
+      ::curvefs::mds::topology::CopySetInfo* out);
 
-    std::shared_ptr<CopysetConfGenerator> copysetConfGenerator_;
+  /**
+   * @brief Extract ip address and port number from string, and fetch
+   *        corresponding metaserverID from topology. This is for receiving
+   *        heartbeat message since it's a string in format of 'ip:port:id'
+   *
+   * @param[in] peer Metaserver info in form of string 'ip:port:id'
+   *
+   * @return metaserverId fetch by ip address and port number
+   */
+  MetaServerIdType GetMetaserverIdByPeerStr(const std::string& peer);
 
-    // Manage metaserverHealthyChecker threads
-    Thread backEndThread_;
+  void UpdateMetaServerSpace(const MetaServerHeartbeatRequest& request);
 
-    Atomic<bool> isStop_;
-    InterruptibleSleeper sleeper_;
-    int metaserverHealthyCheckerRunInter_;
+ private:
+  // Dependencies of heartbeat
+  std::shared_ptr<Topology> topology_;
+  std::shared_ptr<Coordinator> coordinator_;
+
+  // healthyChecker_ health checker running in background thread
+  std::shared_ptr<MetaserverHealthyChecker> healthyChecker_;
+
+  // topoUpdater_ update epoch, copyset relationship of topology
+  std::shared_ptr<TopoUpdater> topoUpdater_;
+
+  std::shared_ptr<CopysetConfGenerator> copysetConfGenerator_;
+
+  // Manage metaserverHealthyChecker threads
+  Thread backEndThread_;
+
+  Atomic<bool> isStop_;
+  InterruptibleSleeper sleeper_;
+  int metaserverHealthyCheckerRunInter_;
 };
 
 }  // namespace heartbeat

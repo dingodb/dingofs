@@ -35,8 +35,8 @@ using ::google::protobuf::Message;
 
 // Generate an default initialized message
 // all required fields are set to the corresponding type's default value
-// NAME: full name including namespace of the message(e.g., curvefs.metaserver.Dentry)  // NOLINT
-// NOTES: does not support bytes/group
+// NAME: full name including namespace of the message(e.g.,
+// curvefs.metaserver.Dentry)  // NOLINT NOTES: does not support bytes/group
 std::unique_ptr<Message> GenerateAnDefaultInitializedMessage(
     const std::string& name);
 

@@ -36,98 +36,96 @@ namespace copyset {
 using ::curvefs::common::SetThreadName;
 
 void ApplyQueue::StartWorkers() {
-    for (uint32_t i = 0; i < option_.workerCount; ++i) {
-        std::string name = [this, i]() -> std::string {
-            if (option_.copysetNode == nullptr) {
-                return "apply";
-            }
+  for (uint32_t i = 0; i < option_.workerCount; ++i) {
+    std::string name = [this, i]() -> std::string {
+      if (option_.copysetNode == nullptr) {
+        return "apply";
+      }
 
-            return absl::StrCat("apply", ":", option_.copysetNode->GetPoolId(),
-                                "_", option_.copysetNode->GetCopysetId(), ":",
-                                i);
-        }();
-        auto taskThread =
-            absl::make_unique<TaskWorker>(option_.queueDepth, std::move(name));
-        taskThread->Start();
-        workers_.emplace_back(std::move(taskThread));
-    }
+      return absl::StrCat("apply", ":", option_.copysetNode->GetPoolId(), "_",
+                          option_.copysetNode->GetCopysetId(), ":", i);
+    }();
+    auto taskThread =
+        absl::make_unique<TaskWorker>(option_.queueDepth, std::move(name));
+    taskThread->Start();
+    workers_.emplace_back(std::move(taskThread));
+  }
 }
 
 bool ApplyQueue::Start(const ApplyQueueOption& option) {
-    if (running_) {
-        return true;
-    }
-
-    if (option.queueDepth < 1 || option.workerCount < 1) {
-        LOG(ERROR) << "ApplyQueue start failed, invalid argument, queue depth: "
-                   << option.queueDepth
-                   << ", worker count: " << option.workerCount;
-        return false;
-    }
-
-    option_ = option;
-
-    StartWorkers();
-    running_.store(true);
+  if (running_) {
     return true;
+  }
+
+  if (option.queueDepth < 1 || option.workerCount < 1) {
+    LOG(ERROR) << "ApplyQueue start failed, invalid argument, queue depth: "
+               << option.queueDepth << ", worker count: " << option.workerCount;
+    return false;
+  }
+
+  option_ = option;
+
+  StartWorkers();
+  running_.store(true);
+  return true;
 }
 
 void ApplyQueue::Flush() {
-    if (!running_.load(std::memory_order_relaxed)) {
-        return;
-    }
+  if (!running_.load(std::memory_order_relaxed)) {
+    return;
+  }
 
-    curve::common::CountDownEvent event(option_.workerCount);
+  curve::common::CountDownEvent event(option_.workerCount);
 
-    auto flush = [&event]() { event.Signal(); };
+  auto flush = [&event]() { event.Signal(); };
 
-    for (auto& worker : workers_) {
-        worker->tasks.Push(flush);
-    }
+  for (auto& worker : workers_) {
+    worker->tasks.Push(flush);
+  }
 
-    event.Wait();
+  event.Wait();
 }
 
 void ApplyQueue::Stop() {
-    if (!running_.exchange(false)) {
-        return;
-    }
+  if (!running_.exchange(false)) {
+    return;
+  }
 
-    LOG(INFO) << "Going to stop apply queue";
+  LOG(INFO) << "Going to stop apply queue";
 
-    for (auto& worker : workers_) {
-        worker->Stop();
-    }
+  for (auto& worker : workers_) {
+    worker->Stop();
+  }
 
-    workers_.clear();
-    LOG(INFO) << "Apply queue stopped";
+  workers_.clear();
+  LOG(INFO) << "Apply queue stopped";
 }
 
 void ApplyQueue::TaskWorker::Start() {
-    if (running.exchange(true)) {
-        return;
-    }
+  if (running.exchange(true)) {
+    return;
+  }
 
-    worker = std::thread(&TaskWorker::Work, this);
+  worker = std::thread(&TaskWorker::Work, this);
 }
 
 void ApplyQueue::TaskWorker::Stop() {
-    if (!running.exchange(false)) {
-        return;
-    }
+  if (!running.exchange(false)) {
+    return;
+  }
 
-    auto wakeup = []() {};
-    tasks.Push(wakeup);
+  auto wakeup = []() {};
+  tasks.Push(wakeup);
 
-    worker.join();
+  worker.join();
 }
 
 void ApplyQueue::TaskWorker::Work() {
-    SetThreadName(workerName_.c_str());
+  SetThreadName(workerName_.c_str());
 
-    while (running.load(std::memory_order_relaxed)) {
-        tasks.Pop()();
-    }
+  while (running.load(std::memory_order_relaxed)) {
+    tasks.Pop()();
+  }
 }
 
 }  // namespace copyset

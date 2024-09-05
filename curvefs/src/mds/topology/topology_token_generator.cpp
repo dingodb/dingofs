@@ -20,11 +20,11 @@
  * Author: wanghai01
  */
 
+#include "curvefs/src/mds/topology/topology_token_generator.h"
+
 #include <cstdlib>
 #include <ctime>
 #include <string>
-
-#include "curvefs/src/mds/topology/topology_token_generator.h"
 
 namespace curvefs {
 namespace mds {
@@ -32,11 +32,11 @@ namespace topology {
 
 // generate a token consists of 8 lower case letters
 std::string DefaultTokenGenerator::GenToken() {
-    std::string ret = "";
-    for (int i = 0; i < 8; i++) {
-        ret.push_back('a' + std::rand() % 26);
-    }
-    return ret;
+  std::string ret = "";
+  for (int i = 0; i < 8; i++) {
+    ret.push_back('a' + std::rand() % 26);
+  }
+  return ret;
 }
 
 }  // namespace topology

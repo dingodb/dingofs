@@ -31,21 +31,19 @@ namespace usage {
 
 class BaseToolTest : public testing::Test {};
 
-TEST(BaseToolTest, KB_test) {
-    ASSERT_EQ(ToReadableByte(521), "521 KB");
-}
+TEST(BaseToolTest, KB_test) { ASSERT_EQ(ToReadableByte(521), "521 KB"); }
 
 TEST(BaseToolTest, MB_test) {
-    ASSERT_EQ(ToReadableByte(2 * 1024 + 1), "2.00 MB");
+  ASSERT_EQ(ToReadableByte(2 * 1024 + 1), "2.00 MB");
 }
 
 TEST(BaseToolTest, GB_test) {
-    ASSERT_EQ(ToReadableByte(3 * 1024 * 1024 + 1023 * 1024), "4.00 GB");
+  ASSERT_EQ(ToReadableByte(3 * 1024 * 1024 + 1023 * 1024), "4.00 GB");
 }
 
 TEST(BaseToolTest, TB_test) {
-    uint64_t byte = 100ull * 1024 * 1024 * 1024;
-    ASSERT_EQ(ToReadableByte(byte), "100.00 TB");
+  uint64_t byte = 100ull * 1024 * 1024 * 1024;
+  ASSERT_EQ(ToReadableByte(byte), "100.00 TB");
 }
 
 }  // namespace usage

@@ -40,31 +40,25 @@ namespace storage {
 
 // TODO(wuhanqing): block cache and writer buffer manager's capacity should be
 //                  related to the number of copysets
-DEFINE_int64(rocksdb_block_cache_capacity,
-             8ULL << 30,
+DEFINE_int64(rocksdb_block_cache_capacity, 8ULL << 30,
              "Total block cache capacity for all rocksdb instances");
 
-DEFINE_int64(rocksdb_write_buffer_manager_capacity,
-             6ULL << 30,
+DEFINE_int64(rocksdb_write_buffer_manager_capacity, 6ULL << 30,
              "Total writer buffer capacity for all rocksdb instances");
 
 // https://github.com/facebook/rocksdb/wiki/Write-Buffer-Manager
-DEFINE_bool(rocksdb_WBM_cost_block_cache,
-            true,
+DEFINE_bool(rocksdb_WBM_cost_block_cache, true,
             "Control wether write buffer manager cost block cache");
 
 DEFINE_int32(
-    rocksdb_max_background_jobs,
-    16,
+    rocksdb_max_background_jobs, 16,
     "Maximum number of concurrent background jobs (compactions and flushes)");
 
 DEFINE_int32(
-    rocksdb_max_subcompactions,
-    4,
+    rocksdb_max_subcompactions, 4,
     "Maxinum number of threads to perform a compaction job by simultaneously");
 
-DEFINE_int32(rocksdb_level0_file_num_compaction_trigger,
-             1,
+DEFINE_int32(rocksdb_level0_file_num_compaction_trigger, 1,
              "Number of files to trigger level-0 compaction");
 
 // NOTE: now we enable `level_compaction_dynamic_level_bytes`,
@@ -74,36 +68,28 @@ DEFINE_int32(rocksdb_level0_file_num_compaction_trigger,
 // range scan performance skews caused by scanning excessed number of tombstones
 // for this reason, `rocksdb_level0_file_num_compaction_trigger`
 // should also been set to 1
-DEFINE_int64(rocksdb_max_bytes_for_level_base,
-             1ULL << 30,
+DEFINE_int64(rocksdb_max_bytes_for_level_base, 1ULL << 30,
              "Control maximum total data size for a level");
 
-DEFINE_double(rocksdb_memtable_prefix_bloom_size_ratio,
-              0.1,
+DEFINE_double(rocksdb_memtable_prefix_bloom_size_ratio, 0.1,
               "Rocksdb memtable prefix bloom size ratio");
 
-DEFINE_int64(rocksdb_unordered_cf_write_buffer_size,
-             64ULL << 20,
+DEFINE_int64(rocksdb_unordered_cf_write_buffer_size, 64ULL << 20,
              "Writer buffer size for unordered column family");
 
-DEFINE_int32(rocksdb_unordered_cf_max_write_buffer_number,
-             2,
+DEFINE_int32(rocksdb_unordered_cf_max_write_buffer_number, 2,
              "Number of writer buffer for unordered column family");
 
-DEFINE_int64(rocksdb_ordered_cf_write_buffer_size,
-             64ULL << 20,
+DEFINE_int64(rocksdb_ordered_cf_write_buffer_size, 64ULL << 20,
              "Writer buffer size for ordered column family");
 
-DEFINE_int32(rocksdb_ordered_cf_max_write_buffer_number,
-             2,
+DEFINE_int32(rocksdb_ordered_cf_max_write_buffer_number, 2,
              "Number of writer buffer for ordered column family");
 
-DEFINE_int32(rocksdb_max_write_buffer_size_to_maintain,
-             20ULL << 20,
+DEFINE_int32(rocksdb_max_write_buffer_size_to_maintain, 20ULL << 20,
              "The target number of write history bytes to hold in memory");
 
-DEFINE_int32(rocksdb_stats_dump_period_sec,
-             180,
+DEFINE_int32(rocksdb_stats_dump_period_sec, 180,
              "Dump rocksdb.stats to LOG every stats_dump_period_sec");
 
 namespace {
@@ -115,29 +101,27 @@ std::shared_ptr<MetricEventListener> metricEventListener;
 const char* const kOrderedColumnFamilyName = "ordered_column_family";
 
 void CreateBlockCacheAndWriterBufferManager() {
-    static std::once_flag createBlockCache;
-    std::call_once(createBlockCache, []() {
-        rocksdbBlockCache = rocksdb::NewLRUCache(
-            FLAGS_rocksdb_block_cache_capacity, 1, false, 0.9);
-    });
+  static std::once_flag createBlockCache;
+  std::call_once(createBlockCache, []() {
+    rocksdbBlockCache =
+        rocksdb::NewLRUCache(FLAGS_rocksdb_block_cache_capacity, 1, false, 0.9);
+  });
 
-    static std::once_flag createWriterBufferManager;
-    std::call_once(createWriterBufferManager, []() {
-        rocksdbWriteBufferManager =
-            std::make_shared<rocksdb::WriteBufferManager>(
-                FLAGS_rocksdb_write_buffer_manager_capacity,
-                FLAGS_rocksdb_WBM_cost_block_cache ? rocksdbBlockCache
-                                                   : nullptr);
-    });
+  static std::once_flag createWriterBufferManager;
+  std::call_once(createWriterBufferManager, []() {
+    rocksdbWriteBufferManager = std::make_shared<rocksdb::WriteBufferManager>(
+        FLAGS_rocksdb_write_buffer_manager_capacity,
+        FLAGS_rocksdb_WBM_cost_block_cache ? rocksdbBlockCache : nullptr);
+  });
 }
 
 std::shared_ptr<MetricEventListener> GetMetricEventListener() {
-    static std::once_flag once;
-    std::call_once(once, []() {
-        metricEventListener = std::make_shared<MetricEventListener>();
-    });
+  static std::once_flag once;
+  std::call_once(once, []() {
+    metricEventListener = std::make_shared<MetricEventListener>();
+  });
 
-    return metricEventListener;
+  return metricEventListener;
 }
 
 }  // namespace
@@ -145,128 +129,127 @@ std::shared_ptr<MetricEventListener> GetMetricEventListener() {
 void InitRocksdbOptions(
     rocksdb::DBOptions* options,
     std::vector<rocksdb::ColumnFamilyDescriptor>* columnFamilies,
-    bool createIfMissing,
-    bool errorIfExists) {
-    assert(options != nullptr);
-    assert(columnFamilies != nullptr);
-    columnFamilies->clear();
+    bool createIfMissing, bool errorIfExists) {
+  assert(options != nullptr);
+  assert(columnFamilies != nullptr);
+  columnFamilies->clear();
 
-    CreateBlockCacheAndWriterBufferManager();
+  CreateBlockCacheAndWriterBufferManager();
 
-    options->create_if_missing = createIfMissing;
-    options->error_if_exists = errorIfExists;
-    options->create_missing_column_families = true;
-    options->max_background_jobs = FLAGS_rocksdb_max_background_jobs;
-    options->atomic_flush = true;
-    options->bytes_per_sync = 1ULL << 20;  // 1MiB
-    options->write_buffer_manager = rocksdbWriteBufferManager;
-    options->info_log_level = rocksdb::INFO_LEVEL;
-    options->listeners.push_back(GetMetricEventListener());
-    options->statistics = rocksdb::CreateDBStatistics();
-    options->stats_dump_period_sec = FLAGS_rocksdb_stats_dump_period_sec;
-    options->max_subcompactions = FLAGS_rocksdb_max_subcompactions;
+  options->create_if_missing = createIfMissing;
+  options->error_if_exists = errorIfExists;
+  options->create_missing_column_families = true;
+  options->max_background_jobs = FLAGS_rocksdb_max_background_jobs;
+  options->atomic_flush = true;
+  options->bytes_per_sync = 1ULL << 20;  // 1MiB
+  options->write_buffer_manager = rocksdbWriteBufferManager;
+  options->info_log_level = rocksdb::INFO_LEVEL;
+  options->listeners.push_back(GetMetricEventListener());
+  options->statistics = rocksdb::CreateDBStatistics();
+  options->stats_dump_period_sec = FLAGS_rocksdb_stats_dump_period_sec;
+  options->max_subcompactions = FLAGS_rocksdb_max_subcompactions;
 
-    rocksdb::BlockBasedTableOptions tableOptions;
-    tableOptions.block_size = 16ULL << 10;  // 16KiB
-    tableOptions.block_cache = rocksdbBlockCache;
-    tableOptions.cache_index_and_filter_blocks = true;
-    tableOptions.pin_l0_filter_and_index_blocks_in_cache = true;
-    tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
+  rocksdb::BlockBasedTableOptions tableOptions;
+  tableOptions.block_size = 16ULL << 10;  // 16KiB
+  tableOptions.block_cache = rocksdbBlockCache;
+  tableOptions.cache_index_and_filter_blocks = true;
+  tableOptions.pin_l0_filter_and_index_blocks_in_cache = true;
+  tableOptions.filter_policy.reset(rocksdb::NewBloomFilterPolicy(10, false));
 
-    rocksdb::ColumnFamilyOptions defaultCfOptions;
-    defaultCfOptions.max_write_buffer_size_to_maintain =
-        FLAGS_rocksdb_max_write_buffer_size_to_maintain;
-    defaultCfOptions.enable_blob_files = true;
-    defaultCfOptions.level_compaction_dynamic_level_bytes = true;
-    defaultCfOptions.compaction_pri = rocksdb::kMinOverlappingRatio;
-    defaultCfOptions.level0_file_num_compaction_trigger =
-        FLAGS_rocksdb_level0_file_num_compaction_trigger;
-    defaultCfOptions.max_bytes_for_level_base =
-        FLAGS_rocksdb_max_bytes_for_level_base;
-    defaultCfOptions.prefix_extractor.reset(
-        rocksdb::NewFixedPrefixTransform(RocksDBStorage::GetKeyPrefixLength()));
-    defaultCfOptions.memtable_prefix_bloom_size_ratio =
-        FLAGS_rocksdb_memtable_prefix_bloom_size_ratio;
-    defaultCfOptions.table_factory.reset(
-        rocksdb::NewBlockBasedTableFactory(tableOptions));
-    const size_t slidingWindowSize = 10000;
-    const size_t deletionTrigger = 1000;
-    const double deletionRatio = 0.2;
-    defaultCfOptions.table_properties_collector_factories.emplace_back(
-        rocksdb::NewCompactOnDeletionCollectorFactory(
-            slidingWindowSize, deletionTrigger, deletionRatio));
+  rocksdb::ColumnFamilyOptions defaultCfOptions;
+  defaultCfOptions.max_write_buffer_size_to_maintain =
+      FLAGS_rocksdb_max_write_buffer_size_to_maintain;
+  defaultCfOptions.enable_blob_files = true;
+  defaultCfOptions.level_compaction_dynamic_level_bytes = true;
+  defaultCfOptions.compaction_pri = rocksdb::kMinOverlappingRatio;
+  defaultCfOptions.level0_file_num_compaction_trigger =
+      FLAGS_rocksdb_level0_file_num_compaction_trigger;
+  defaultCfOptions.max_bytes_for_level_base =
+      FLAGS_rocksdb_max_bytes_for_level_base;
+  defaultCfOptions.prefix_extractor.reset(
+      rocksdb::NewFixedPrefixTransform(RocksDBStorage::GetKeyPrefixLength()));
+  defaultCfOptions.memtable_prefix_bloom_size_ratio =
+      FLAGS_rocksdb_memtable_prefix_bloom_size_ratio;
+  defaultCfOptions.table_factory.reset(
+      rocksdb::NewBlockBasedTableFactory(tableOptions));
+  const size_t slidingWindowSize = 10000;
+  const size_t deletionTrigger = 1000;
+  const double deletionRatio = 0.2;
+  defaultCfOptions.table_properties_collector_factories.emplace_back(
+      rocksdb::NewCompactOnDeletionCollectorFactory(
+          slidingWindowSize, deletionTrigger, deletionRatio));
 
-    rocksdb::ColumnFamilyOptions orderedCfOptions = defaultCfOptions;
-    orderedCfOptions.write_buffer_size =
-        FLAGS_rocksdb_ordered_cf_write_buffer_size;
-    orderedCfOptions.max_write_buffer_number =
-        FLAGS_rocksdb_ordered_cf_max_write_buffer_number;
+  rocksdb::ColumnFamilyOptions orderedCfOptions = defaultCfOptions;
+  orderedCfOptions.write_buffer_size =
+      FLAGS_rocksdb_ordered_cf_write_buffer_size;
+  orderedCfOptions.max_write_buffer_number =
+      FLAGS_rocksdb_ordered_cf_max_write_buffer_number;
 
-    rocksdb::ColumnFamilyOptions unorderedCfOptions = defaultCfOptions;
-    unorderedCfOptions.write_buffer_size =
-        FLAGS_rocksdb_unordered_cf_write_buffer_size;
-    unorderedCfOptions.max_write_buffer_number =
-        FLAGS_rocksdb_unordered_cf_max_write_buffer_number;
+  rocksdb::ColumnFamilyOptions unorderedCfOptions = defaultCfOptions;
+  unorderedCfOptions.write_buffer_size =
+      FLAGS_rocksdb_unordered_cf_write_buffer_size;
+  unorderedCfOptions.max_write_buffer_number =
+      FLAGS_rocksdb_unordered_cf_max_write_buffer_number;
 
-    columnFamilies->push_back(rocksdb::ColumnFamilyDescriptor{
-        rocksdb::kDefaultColumnFamilyName, unorderedCfOptions});
-    columnFamilies->push_back(rocksdb::ColumnFamilyDescriptor{
-        kOrderedColumnFamilyName, orderedCfOptions});
+  columnFamilies->push_back(rocksdb::ColumnFamilyDescriptor{
+      rocksdb::kDefaultColumnFamilyName, unorderedCfOptions});
+  columnFamilies->push_back(rocksdb::ColumnFamilyDescriptor{
+      kOrderedColumnFamilyName, orderedCfOptions});
 }
 
 void ParseRocksdbOptions(curve::common::Configuration* conf) {
-    curve::common::GflagsLoadValueFromConfIfCmdNotSet dummy;
-    dummy.Load(conf, "rocksdb_block_cache_capacity",
-               "storage.rocksdb.block_cache_capacity",
-               &FLAGS_rocksdb_block_cache_capacity, /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_write_buffer_manager_capacity",
-               "storage.rocksdb.write_buffer_manager_capacity",
-               &FLAGS_rocksdb_write_buffer_manager_capacity,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_WBM_cost_block_cache",
-               "storage.rocksdb.WBM_cost_block_cache",
-               &FLAGS_rocksdb_WBM_cost_block_cache, /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_max_background_jobs",
-               "storage.rocksdb.max_background_jobs",
-               &FLAGS_rocksdb_max_background_jobs, /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_max_subcompactions",
-               "storage.rocksdb.max_subcompactions",
-               &FLAGS_rocksdb_max_subcompactions, /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_level0_file_num_compaction_trigger",
-               "storage.rocksdb.level0_file_num_compaction_trigger",
-               &FLAGS_rocksdb_level0_file_num_compaction_trigger,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_max_bytes_for_level_base",
-               "storage.rocksdb.max_bytes_for_level_base",
-               &FLAGS_rocksdb_max_bytes_for_level_base,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_memtable_prefix_bloom_size_ratio",
-               "storage.rocksdb.memtable_prefix_bloom_size_ratio",
-               &FLAGS_rocksdb_memtable_prefix_bloom_size_ratio,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_unordered_cf_write_buffer_size",
-               "storage.rocksdb.unordered_write_buffer_size",
-               &FLAGS_rocksdb_unordered_cf_write_buffer_size,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_unordered_cf_max_write_buffer_number",
-               "storage.rocksdb.unordered_max_write_buffer_number",
-               &FLAGS_rocksdb_unordered_cf_max_write_buffer_number,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_ordered_cf_write_buffer_size",
-               "storage.rocksdb.ordered_write_buffer_size",
-               &FLAGS_rocksdb_ordered_cf_write_buffer_size,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_ordered_cf_max_write_buffer_number",
-               "storage.rocksdb.ordered_max_write_buffer_number",
-               &FLAGS_rocksdb_ordered_cf_max_write_buffer_number,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_max_write_buffer_size_to_maintain",
-               "storage.rocksdb.max_write_buffer_size_to_maintain",
-               &FLAGS_rocksdb_max_write_buffer_size_to_maintain,
-               /*fatalIfMissing*/ false);
-    dummy.Load(conf, "rocksdb_stats_dump_period_sec",
-               "storage.rocksdb.stats_dump_period_sec",
-               &FLAGS_rocksdb_stats_dump_period_sec, /*fatalIfMissing*/ false);
+  curve::common::GflagsLoadValueFromConfIfCmdNotSet dummy;
+  dummy.Load(conf, "rocksdb_block_cache_capacity",
+             "storage.rocksdb.block_cache_capacity",
+             &FLAGS_rocksdb_block_cache_capacity, /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_write_buffer_manager_capacity",
+             "storage.rocksdb.write_buffer_manager_capacity",
+             &FLAGS_rocksdb_write_buffer_manager_capacity,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_WBM_cost_block_cache",
+             "storage.rocksdb.WBM_cost_block_cache",
+             &FLAGS_rocksdb_WBM_cost_block_cache, /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_max_background_jobs",
+             "storage.rocksdb.max_background_jobs",
+             &FLAGS_rocksdb_max_background_jobs, /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_max_subcompactions",
+             "storage.rocksdb.max_subcompactions",
+             &FLAGS_rocksdb_max_subcompactions, /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_level0_file_num_compaction_trigger",
+             "storage.rocksdb.level0_file_num_compaction_trigger",
+             &FLAGS_rocksdb_level0_file_num_compaction_trigger,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_max_bytes_for_level_base",
+             "storage.rocksdb.max_bytes_for_level_base",
+             &FLAGS_rocksdb_max_bytes_for_level_base,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_memtable_prefix_bloom_size_ratio",
+             "storage.rocksdb.memtable_prefix_bloom_size_ratio",
+             &FLAGS_rocksdb_memtable_prefix_bloom_size_ratio,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_unordered_cf_write_buffer_size",
+             "storage.rocksdb.unordered_write_buffer_size",
+             &FLAGS_rocksdb_unordered_cf_write_buffer_size,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_unordered_cf_max_write_buffer_number",
+             "storage.rocksdb.unordered_max_write_buffer_number",
+             &FLAGS_rocksdb_unordered_cf_max_write_buffer_number,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_ordered_cf_write_buffer_size",
+             "storage.rocksdb.ordered_write_buffer_size",
+             &FLAGS_rocksdb_ordered_cf_write_buffer_size,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_ordered_cf_max_write_buffer_number",
+             "storage.rocksdb.ordered_max_write_buffer_number",
+             &FLAGS_rocksdb_ordered_cf_max_write_buffer_number,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_max_write_buffer_size_to_maintain",
+             "storage.rocksdb.max_write_buffer_size_to_maintain",
+             &FLAGS_rocksdb_max_write_buffer_size_to_maintain,
+             /*fatalIfMissing*/ false);
+  dummy.Load(conf, "rocksdb_stats_dump_period_sec",
+             "storage.rocksdb.stats_dump_period_sec",
+             &FLAGS_rocksdb_stats_dump_period_sec, /*fatalIfMissing*/ false);
 }
 
 }  // namespace storage

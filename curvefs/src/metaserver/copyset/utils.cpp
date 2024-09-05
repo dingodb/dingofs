@@ -29,10 +29,10 @@ namespace metaserver {
 namespace copyset {
 
 std::string ToGroupIdString(PoolId poolId, CopysetId copysetId) {
-    std::ostringstream oss;
-    oss << "(" << poolId << ", " << copysetId << ", "
-        << ToGroupId(poolId, copysetId) << ")";
-    return oss.str();
+  std::ostringstream oss;
+  oss << "(" << poolId << ", " << copysetId << ", "
+      << ToGroupId(poolId, copysetId) << ")";
+  return oss.str();
 }
 
 }  // namespace copyset

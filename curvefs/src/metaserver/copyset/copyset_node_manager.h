@@ -38,82 +38,82 @@ namespace metaserver {
 namespace copyset {
 
 class CopysetNodeManager {
-    friend class CopysetReloader;
+  friend class CopysetReloader;
 
  public:
-    static CopysetNodeManager& GetInstance() {
-        static CopysetNodeManager instance;
-        return instance;
-    }
+  static CopysetNodeManager& GetInstance() {
+    static CopysetNodeManager instance;
+    return instance;
+  }
 
  public:
-    virtual ~CopysetNodeManager() = default;
+  virtual ~CopysetNodeManager() = default;
 
-    bool Init(const CopysetNodeOptions& options);
+  bool Init(const CopysetNodeOptions& options);
 
-    bool Start();
+  bool Start();
 
-    bool Stop();
+  bool Stop();
 
-    virtual CopysetNode* GetCopysetNode(PoolId poolId, CopysetId copysetId);
+  virtual CopysetNode* GetCopysetNode(PoolId poolId, CopysetId copysetId);
 
-    virtual std::shared_ptr<CopysetNode> GetSharedCopysetNode(
-        PoolId poolId, CopysetId copysetId);
+  virtual std::shared_ptr<CopysetNode> GetSharedCopysetNode(
+      PoolId poolId, CopysetId copysetId);
 
-    /**
-     * @return 0: not exist; 1: key exist and peers are exactly same;
-     * -1: key exist but peers are not exactly same
-     */
-    int IsCopysetNodeExist(const CreateCopysetRequest::Copyset& copyset);
+  /**
+   * @return 0: not exist; 1: key exist and peers are exactly same;
+   * -1: key exist but peers are not exactly same
+   */
+  int IsCopysetNodeExist(const CreateCopysetRequest::Copyset& copyset);
 
-    bool CreateCopysetNode(PoolId poolId, CopysetId copysetId,
-                           const braft::Configuration& conf,
-                           bool checkLoadFinish = true);
+  bool CreateCopysetNode(PoolId poolId, CopysetId copysetId,
+                         const braft::Configuration& conf,
+                         bool checkLoadFinish = true);
 
-    bool DeleteCopysetNode(PoolId poolId, CopysetId copysetId);
+  bool DeleteCopysetNode(PoolId poolId, CopysetId copysetId);
 
-    virtual bool PurgeCopysetNode(PoolId poolId, CopysetId copysetId);
+  virtual bool PurgeCopysetNode(PoolId poolId, CopysetId copysetId);
 
-    void GetAllCopysets(std::vector<CopysetNode*>* nodes) const;
+  void GetAllCopysets(std::vector<CopysetNode*>* nodes) const;
 
-    virtual bool IsLoadFinished() const;
-
- public:
-    CopysetNodeManager()
-        : options_(),
-          running_(false),
-          loadFinished_(false),
-          lock_(),
-          copysets_() {}
+  virtual bool IsLoadFinished() const;
 
  public:
-    /**
-     * @brief Add raft related services to server
-     */
-    void AddService(brpc::Server* server, const butil::EndPoint& listenAddr);
+  CopysetNodeManager()
+      : options_(),
+        running_(false),
+        loadFinished_(false),
+        lock_(),
+        copysets_() {}
+
+ public:
+  /**
+   * @brief Add raft related services to server
+   */
+  void AddService(brpc::Server* server, const butil::EndPoint& listenAddr);
 
  private:
-    bool DeleteCopysetNodeInternal(PoolId poolId, CopysetId copysetId,
-                                   bool removeData);
+  bool DeleteCopysetNodeInternal(PoolId poolId, CopysetId copysetId,
+                                 bool removeData);
 
  private:
-    using CopysetNodeMap =
-        std::unordered_map<braft::GroupId, std::shared_ptr<CopysetNode>>;
+  using CopysetNodeMap =
+      std::unordered_map<braft::GroupId, std::shared_ptr<CopysetNode>>;
 
-    CopysetNodeOptions options_;
+  CopysetNodeOptions options_;
 
-    std::atomic<bool> running_;
+  std::atomic<bool> running_;
 
-    // whether copyset is loaded finished, manager will reject create copyset
-    // request if load unfinished
-    std::atomic<bool> loadFinished_;
+  // whether copyset is loaded finished, manager will reject create copyset
+  // request if load unfinished
+  std::atomic<bool> loadFinished_;
 
-    // protected copysets_
-    mutable RWLock lock_;
+  // protected copysets_
+  mutable RWLock lock_;
 
-    CopysetNodeMap copysets_;
+  CopysetNodeMap copysets_;
 
-    CopysetTrash trash_;
+  CopysetTrash trash_;
 };
 
 }  // namespace copyset

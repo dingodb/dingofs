@@ -25,28 +25,29 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
 #include <memory>
 #include <string>
-#include "src/mds/nameserver2/clean_manager.h"
-#include "src/mds/nameserver2/async_delete_snapshot_entity.h"
 
+#include "src/mds/nameserver2/async_delete_snapshot_entity.h"
+#include "src/mds/nameserver2/clean_manager.h"
 
 namespace curve {
 namespace mds {
-class MockCleanManager: public CleanManagerInterface {
+class MockCleanManager : public CleanManagerInterface {
  public:
-    ~MockCleanManager() {}
-    MOCK_METHOD2(SubmitDeleteSnapShotFileJob, bool(const FileInfo&,
-        std::shared_ptr<AsyncDeleteSnapShotEntity>));
-    MOCK_METHOD1(GetTask, std::shared_ptr<Task>(TaskIDType id));
-    MOCK_METHOD1(SubmitDeleteCommonFileJob, bool(const FileInfo&));
-    MOCK_METHOD3(SubmitCleanDiscardSegmentJob,
-                 bool(const std::string&, const DiscardSegmentInfo&,
-                      ::curve::common::CountDownEvent*));
+  ~MockCleanManager() {}
+  MOCK_METHOD2(SubmitDeleteSnapShotFileJob,
+               bool(const FileInfo&,
+                    std::shared_ptr<AsyncDeleteSnapShotEntity>));
+  MOCK_METHOD1(GetTask, std::shared_ptr<Task>(TaskIDType id));
+  MOCK_METHOD1(SubmitDeleteCommonFileJob, bool(const FileInfo&));
+  MOCK_METHOD3(SubmitCleanDiscardSegmentJob,
+               bool(const std::string&, const DiscardSegmentInfo&,
+                    ::curve::common::CountDownEvent*));
 };
 
 }  // namespace mds
 }  // namespace curve
-
 
 #endif  // TEST_MDS_NAMESERVER2_MOCK_MOCK_CLEAN_MANAGER_H_

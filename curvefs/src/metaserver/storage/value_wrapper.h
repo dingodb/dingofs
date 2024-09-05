@@ -35,26 +35,26 @@ namespace storage {
 
 class ValueWrapper {
  public:
-    ValueWrapper() = default;
+  ValueWrapper() = default;
 
-    explicit ValueWrapper(const ValueType& value) {
-        value_.reset(value.New());
-        value_->CopyFrom(value);
-    }
+  explicit ValueWrapper(const ValueType& value) {
+    value_.reset(value.New());
+    value_->CopyFrom(value);
+  }
 
-    void Swap(ValueWrapper& other) noexcept {
-        using std::swap;
-        swap(value_, other.value_);
-    }
+  void Swap(ValueWrapper& other) noexcept {
+    using std::swap;
+    swap(value_, other.value_);
+  }
 
-    const ValueType* Message() const { return value_.get(); }
+  const ValueType* Message() const { return value_.get(); }
 
-    friend void swap(ValueWrapper& lhs, ValueWrapper& rhs) noexcept {
-        return lhs.Swap(rhs);
-    }
+  friend void swap(ValueWrapper& lhs, ValueWrapper& rhs) noexcept {
+    return lhs.Swap(rhs);
+  }
 
  private:
-    std::unique_ptr<ValueType> value_;
+  std::unique_ptr<ValueType> value_;
 };
 
 }  // namespace storage

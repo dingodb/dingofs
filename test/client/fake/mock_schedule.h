@@ -23,20 +23,20 @@
 #ifndef TEST_CLIENT_FAKE_MOCK_SCHEDULE_H_
 #define TEST_CLIENT_FAKE_MOCK_SCHEDULE_H_
 
-#include <gmock/gmock.h>
 #include <fiu.h>
+#include <gmock/gmock.h>
 
-#include <set>
 #include <atomic>
-#include <vector>
+#include <chrono>  // NOLINT
+#include <set>
 #include <string>
-#include <thread>    // NOLINT
-#include <chrono>    // NOLINT
+#include <thread>  // NOLINT
+#include <vector>
 
-#include "src/client/request_context.h"
-#include "src/client/request_closure.h"
-#include "src/client/request_scheduler.h"
 #include "src/client/client_common.h"
+#include "src/client/request_closure.h"
+#include "src/client/request_context.h"
+#include "src/client/request_scheduler.h"
 
 using ::testing::_;
 using ::testing::Invoke;
@@ -45,40 +45,32 @@ extern uint16_t sleeptimeMS;
 
 class Schedule {
  public:
-    Schedule() {
-      enableScheduleFailed = false;
-    }
+  Schedule() { enableScheduleFailed = false; }
 
-    int ScheduleRequest(
-        const std::vector<curve::client::RequestContext*>& reqlist);
+  int ScheduleRequest(
+      const std::vector<curve::client::RequestContext*>& reqlist);
 
-    bool enableScheduleFailed;
+  bool enableScheduleFailed;
 };
 
 class MockRequestScheduler : public curve::client::RequestScheduler {
  public:
-    using REQ = std::vector<curve::client::RequestContext*>;
-    MOCK_METHOD1(ScheduleRequest, int(const REQ&));
+  using REQ = std::vector<curve::client::RequestContext*>;
+  MOCK_METHOD1(ScheduleRequest, int(const REQ&));
 
-    void DelegateToFake() {
-        ON_CALL(*this, ScheduleRequest(_))
-            .WillByDefault(Invoke(&schedule, &Schedule::ScheduleRequest));
-    }
+  void DelegateToFake() {
+    ON_CALL(*this, ScheduleRequest(_))
+        .WillByDefault(Invoke(&schedule, &Schedule::ScheduleRequest));
+  }
 
-    int Fini() {
-       return 0;
-    }
+  int Fini() { return 0; }
 
-    void EnableScheduleFailed() {
-       schedule.enableScheduleFailed = true;
-    }
+  void EnableScheduleFailed() { schedule.enableScheduleFailed = true; }
 
-    void DisableScheduleFailed() {
-       schedule.enableScheduleFailed = false;
-    }
+  void DisableScheduleFailed() { schedule.enableScheduleFailed = false; }
 
  private:
-    Schedule schedule;
+  Schedule schedule;
 };
 
 #endif  // TEST_CLIENT_FAKE_MOCK_SCHEDULE_H_

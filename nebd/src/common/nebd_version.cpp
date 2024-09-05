@@ -30,23 +30,23 @@ namespace common {
 
 // https://gcc.gnu.org/onlinedocs/gcc-4.8.5/cpp/Stringification.html
 std::string NebdVersion() {
-    static const std::string version =
+  static const std::string version =
 #ifdef CURVEVERSION
-        std::string(STRINGIFY(CURVEVERSION));
+      std::string(STRINGIFY(CURVEVERSION));
 #else
-        std::string("unknown");
+      std::string("unknown");
 #endif
-    return version;
+  return version;
 }
 
 const char kNebdMetricPrefix[] = "nebd";
 const char kVersion[] = "version";
 
 void ExposeNebdVersion() {
-    static StringStatus version;
-    version.ExposeAs(kNebdMetricPrefix, kVersion);
-    version.Set(kVersion, NebdVersion());
-    version.Update();
+  static StringStatus version;
+  version.ExposeAs(kNebdMetricPrefix, kVersion);
+  version.Set(kVersion, NebdVersion());
+  version.Update();
 }
 
 }  // namespace common

@@ -23,48 +23,46 @@
 #ifndef CURVEFS_SRC_METASERVER_DENTRY_MANAGER_H_
 #define CURVEFS_SRC_METASERVER_DENTRY_MANAGER_H_
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <string>
 #include <vector>
-#include <atomic>
 
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/metaserver/transaction.h"
 #include "curvefs/src/metaserver/dentry_storage.h"
+#include "curvefs/src/metaserver/transaction.h"
 
 namespace curvefs {
 namespace metaserver {
 class DentryManager {
  public:
-    DentryManager(std::shared_ptr<DentryStorage> dentryStorage,
-                  std::shared_ptr<TxManager> txManger);
+  DentryManager(std::shared_ptr<DentryStorage> dentryStorage,
+                std::shared_ptr<TxManager> txManger);
 
-    MetaStatusCode CreateDentry(const Dentry& dentry);
+  MetaStatusCode CreateDentry(const Dentry& dentry);
 
-    // only invoked from snapshot loadding
-    MetaStatusCode CreateDentry(const DentryVec& vec, bool merge);
+  // only invoked from snapshot loadding
+  MetaStatusCode CreateDentry(const DentryVec& vec, bool merge);
 
-    MetaStatusCode DeleteDentry(const Dentry& dentry);
+  MetaStatusCode DeleteDentry(const Dentry& dentry);
 
-    MetaStatusCode GetDentry(Dentry* dentry);
+  MetaStatusCode GetDentry(Dentry* dentry);
 
-    MetaStatusCode ListDentry(const Dentry& dentry,
-                              std::vector<Dentry>* dentrys,
-                              uint32_t limit,
-                              bool onlyDir = false);
+  MetaStatusCode ListDentry(const Dentry& dentry, std::vector<Dentry>* dentrys,
+                            uint32_t limit, bool onlyDir = false);
 
-    void ClearDentry();
+  void ClearDentry();
 
-    MetaStatusCode HandleRenameTx(const std::vector<Dentry>& dentrys);
+  MetaStatusCode HandleRenameTx(const std::vector<Dentry>& dentrys);
 
  private:
-    void Log4Dentry(const std::string& request, const Dentry& dentry);
-    void Log4Code(const std::string& request, MetaStatusCode rc);
+  void Log4Dentry(const std::string& request, const Dentry& dentry);
+  void Log4Code(const std::string& request, MetaStatusCode rc);
 
  private:
-    std::shared_ptr<DentryStorage> dentryStorage_;
-    std::shared_ptr<TxManager> txManager_;
+  std::shared_ptr<DentryStorage> dentryStorage_;
+  std::shared_ptr<TxManager> txManager_;
 };
 
 }  // namespace metaserver

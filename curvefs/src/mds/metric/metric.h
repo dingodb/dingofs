@@ -39,33 +39,33 @@ namespace mds {
 // includes filesystem mount number and filesystem mountpoint lists
 class FsMountMetric {
  public:
-    explicit FsMountMetric(const std::string& fsname)
-        : fsname_(fsname),
-          count_("fs_" + fsname + "_mount_count"),
-          mtx_(),
-          mps_() {}
+  explicit FsMountMetric(const std::string& fsname)
+      : fsname_(fsname),
+        count_("fs_" + fsname + "_mount_count"),
+        mtx_(),
+        mps_() {}
 
-    void OnMount(const Mountpoint& mp);
-    void OnUnMount(const Mountpoint& mp);
-
- private:
-    // mountpoint metric key
-    // format is fs_mount_${fsname}_${host}_${port}_${mountdir}
-    std::string Key(const Mountpoint& mp);
+  void OnMount(const Mountpoint& mp);
+  void OnUnMount(const Mountpoint& mp);
 
  private:
-    const std::string fsname_;
+  // mountpoint metric key
+  // format is fs_mount_${fsname}_${host}_${port}_${mountdir}
+  std::string Key(const Mountpoint& mp);
 
-    // current number of fs mountpoints
-    bvar::Adder<int64_t> count_;
+ private:
+  const std::string fsname_;
 
-    using MountPointMetric =
-        std::unordered_map<std::string,
-                           std::unique_ptr<bvar::Status<std::string>>>;
-    // protect mps_
-    Mutex mtx_;
+  // current number of fs mountpoints
+  bvar::Adder<int64_t> count_;
 
-    MountPointMetric mps_;
+  using MountPointMetric =
+      std::unordered_map<std::string,
+                         std::unique_ptr<bvar::Status<std::string>>>;
+  // protect mps_
+  Mutex mtx_;
+
+  MountPointMetric mps_;
 };
 
 }  // namespace mds

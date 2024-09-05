@@ -25,8 +25,10 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <vector>
+
 #include <map>
+#include <vector>
+
 #include "src/mds/topology/topology_chunk_allocator.h"
 
 using ::curve::mds::topology::TopologyChunkAllocator;
@@ -34,24 +36,24 @@ using ::curve::mds::topology::TopologyChunkAllocator;
 namespace curve {
 namespace mds {
 
-class  MockTopologyChunkAllocator: public TopologyChunkAllocator {
+class MockTopologyChunkAllocator : public TopologyChunkAllocator {
  public:
-     using CopysetIdInfo = ::curve::mds::topology::CopysetIdInfo;
+  using CopysetIdInfo = ::curve::mds::topology::CopysetIdInfo;
 
-    ~MockTopologyChunkAllocator() {}
-    MOCK_METHOD4(AllocateChunkRandomInSingleLogicalPool,
-        bool(FileType, uint32_t,
-            ChunkSizeType chunkSize, std::vector<CopysetIdInfo> *));
+  ~MockTopologyChunkAllocator() {}
+  MOCK_METHOD4(AllocateChunkRandomInSingleLogicalPool,
+               bool(FileType, uint32_t, ChunkSizeType chunkSize,
+                    std::vector<CopysetIdInfo>*));
 
-    MOCK_METHOD4(AllocateChunkRoundRobinInSingleLogicalPool,
-        bool(FileType, uint32_t,
-            ChunkSizeType chunkSize, std::vector<CopysetIdInfo> *));
+  MOCK_METHOD4(AllocateChunkRoundRobinInSingleLogicalPool,
+               bool(FileType, uint32_t, ChunkSizeType chunkSize,
+                    std::vector<CopysetIdInfo>*));
 
-    MOCK_METHOD3(UpdateChunkFilePoolAllocConfig, void(bool, bool, uint32_t));
+  MOCK_METHOD3(UpdateChunkFilePoolAllocConfig, void(bool, bool, uint32_t));
 
-    MOCK_METHOD2(GetRemainingSpaceInLogicalPool,
-        void(const std::vector <PoolIdType>&,
-        std::map<PoolIdType, double>*));
+  MOCK_METHOD2(GetRemainingSpaceInLogicalPool,
+               void(const std::vector<PoolIdType>&,
+                    std::map<PoolIdType, double>*));
 };
 
 }  // namespace mds

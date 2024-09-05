@@ -25,8 +25,8 @@
 
 #include <gmock/gmock.h>
 
-#include "curvefs/src/client/volume/volume_storage.h"
 #include "curvefs/src/client/filesystem/meta.h"
+#include "curvefs/src/client/volume/volume_storage.h"
 
 namespace curvefs {
 namespace client {
@@ -35,11 +35,11 @@ using ::curvefs::client::filesystem::FileOut;
 
 class MockVolumeStorage : public VolumeStorage {
  public:
-    MOCK_METHOD4(Read, CURVEFS_ERROR(uint64_t, off_t, size_t, char*));
-    MOCK_METHOD5(Write,
-                 CURVEFS_ERROR(uint64_t, off_t, size_t, const char*, FileOut*));
-    MOCK_METHOD1(Flush, CURVEFS_ERROR(uint64_t));
-    MOCK_METHOD0(Shutdown, bool());
+  MOCK_METHOD4(Read, CURVEFS_ERROR(uint64_t, off_t, size_t, char*));
+  MOCK_METHOD5(Write,
+               CURVEFS_ERROR(uint64_t, off_t, size_t, const char*, FileOut*));
+  MOCK_METHOD1(Flush, CURVEFS_ERROR(uint64_t));
+  MOCK_METHOD0(Shutdown, bool());
 };
 
 }  // namespace client

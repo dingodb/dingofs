@@ -49,19 +49,19 @@ class UmountFsTool : public CurvefsToolRpc<curvefs::mds::UmountFsRequest,
                                            curvefs::mds::UmountFsResponse,
                                            curvefs::mds::MdsService_Stub> {
  public:
-    explicit UmountFsTool(const std::string& cmd = kUmountFsCmd)
-        : CurvefsToolRpc(cmd) {}
-    void PrintHelp() override;
+  explicit UmountFsTool(const std::string& cmd = kUmountFsCmd)
+      : CurvefsToolRpc(cmd) {}
+  void PrintHelp() override;
 
-    int RunCommand() override;
-    int Init() override;
+  int RunCommand() override;
+  int Init() override;
 
-    void InitHostsAddr() override;
+  void InitHostsAddr() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 };
 
 }  // namespace umount

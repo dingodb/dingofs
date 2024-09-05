@@ -24,8 +24,9 @@
 #define TEST_CHUNKSERVER_MOCK_CURVE_FILESYSTEM_ADAPTOR_H_
 
 #include <gmock/gmock.h>
-#include <string>
+
 #include <memory>
+#include <string>
 
 #include "src/chunkserver/raftsnapshot/curve_filesystem_adaptor.h"
 
@@ -34,14 +35,13 @@ namespace chunkserver {
 
 class MockCurveFilesystemAdaptor : public CurveFilesystemAdaptor {
  public:
-    MockCurveFilesystemAdaptor() {}
-    ~MockCurveFilesystemAdaptor() {}
-    MOCK_METHOD4(open, braft::FileAdaptor*(const std::string&,
-                                           int,
-                                           const ::google::protobuf::Message*,
-                                           butil::File::Error*));
-    MOCK_METHOD2(delete_file, bool(const std::string&, bool));
-    MOCK_METHOD2(rename, bool(const std::string&, const std::string&));
+  MockCurveFilesystemAdaptor() {}
+  ~MockCurveFilesystemAdaptor() {}
+  MOCK_METHOD4(open, braft::FileAdaptor*(const std::string&, int,
+                                         const ::google::protobuf::Message*,
+                                         butil::File::Error*));
+  MOCK_METHOD2(delete_file, bool(const std::string&, bool));
+  MOCK_METHOD2(rename, bool(const std::string&, const std::string&));
 };
 
 }  // namespace chunkserver

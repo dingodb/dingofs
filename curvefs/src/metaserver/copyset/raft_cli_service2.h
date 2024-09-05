@@ -39,38 +39,37 @@ namespace copyset {
 
 class RaftCliService2 : public CliService2 {
  public:
-    explicit RaftCliService2(CopysetNodeManager* manager);
+  explicit RaftCliService2(CopysetNodeManager* manager);
 
-    void GetLeader(google::protobuf::RpcController* controller,
-                   const GetLeaderRequest2* request,
-                   GetLeaderResponse2* response,
-                   google::protobuf::Closure* done) override;
-
-    void AddPeer(google::protobuf::RpcController* controller,
-                 const AddPeerRequest2* request, AddPeerResponse2* response,
+  void GetLeader(google::protobuf::RpcController* controller,
+                 const GetLeaderRequest2* request, GetLeaderResponse2* response,
                  google::protobuf::Closure* done) override;
 
-    void RemovePeer(google::protobuf::RpcController* controller,
-                    const RemovePeerRequest2* request,
-                    RemovePeerResponse2* response,
-                    google::protobuf::Closure* done) override;
+  void AddPeer(google::protobuf::RpcController* controller,
+               const AddPeerRequest2* request, AddPeerResponse2* response,
+               google::protobuf::Closure* done) override;
 
-    void ChangePeers(google::protobuf::RpcController* controller,
-                     const ChangePeersRequest2* request,
-                     ChangePeersResponse2* response,
-                     google::protobuf::Closure* done) override;
+  void RemovePeer(google::protobuf::RpcController* controller,
+                  const RemovePeerRequest2* request,
+                  RemovePeerResponse2* response,
+                  google::protobuf::Closure* done) override;
 
-    void TransferLeader(google::protobuf::RpcController* controller,
-                        const TransferLeaderRequest2* request,
-                        TransferLeaderResponse2* response,
-                        google::protobuf::Closure* done) override;
+  void ChangePeers(google::protobuf::RpcController* controller,
+                   const ChangePeersRequest2* request,
+                   ChangePeersResponse2* response,
+                   google::protobuf::Closure* done) override;
+
+  void TransferLeader(google::protobuf::RpcController* controller,
+                      const TransferLeaderRequest2* request,
+                      TransferLeaderResponse2* response,
+                      google::protobuf::Closure* done) override;
 
  private:
-    butil::Status GetNode(scoped_refptr<braft::NodeImpl>* node, PoolId poolId,
-                          CopysetId copysetId, const std::string& peerId);
+  butil::Status GetNode(scoped_refptr<braft::NodeImpl>* node, PoolId poolId,
+                        CopysetId copysetId, const std::string& peerId);
 
  private:
-    CopysetNodeManager* nodeManager_;
+  CopysetNodeManager* nodeManager_;
 };
 
 }  // namespace copyset

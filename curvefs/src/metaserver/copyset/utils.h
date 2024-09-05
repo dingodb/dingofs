@@ -34,19 +34,17 @@ namespace metaserver {
 namespace copyset {
 
 inline GroupNid ToGroupNid(PoolId poolId, CopysetId copysetId) {
-    return (static_cast<uint64_t>(poolId) << 32) | copysetId;
+  return (static_cast<uint64_t>(poolId) << 32) | copysetId;
 }
 
 inline GroupId ToGroupId(PoolId poolId, CopysetId copysetId) {
-    return std::to_string(ToGroupNid(poolId, copysetId));
+  return std::to_string(ToGroupNid(poolId, copysetId));
 }
 
-inline PoolId GetPoolId(GroupNid id) {
-    return id >> 32;
-}
+inline PoolId GetPoolId(GroupNid id) { return id >> 32; }
 
 inline CopysetId GetCopysetId(GroupNid id) {
-    return id & ((static_cast<uint64_t>(1) << 32) - 1);
+  return id & ((static_cast<uint64_t>(1) << 32) - 1);
 }
 
 // (poolid, copysetid, groupid)

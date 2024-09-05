@@ -20,11 +20,14 @@
  * Author: lixiaocui1
  */
 
-#include <fiu.h>
-#include <cstdlib>
-#include <thread> //NOLINT
-#include <csignal>
 #include "src/leader_election/leader_election.h"
+
+#include <fiu.h>
+
+#include <csignal>
+#include <cstdlib>
+#include <thread>  //NOLINT
+
 #include "src/common/concurrent/concurrent.h"
 
 using ::curve::common::Thread;
@@ -32,61 +35,58 @@ using ::curve::common::Thread;
 namespace curve {
 namespace election {
 int LeaderElection::CampaignLeader() {
-    LOG(INFO) << opt_.leaderUniqueName << " start campaign leader prefix: "
-        << realPrefix_;
+  LOG(INFO) << opt_.leaderUniqueName
+            << " start campaign leader prefix: " << realPrefix_;
 
-    int resCode = opt_.etcdCli->CampaignLeader(
-        realPrefix_,
-        opt_.leaderUniqueName,
-        opt_.sessionInterSec,
-        opt_.electionTimeoutMs,
-        &leaderOid_);
-    if (resCode == EtcdErrCode::EtcdCampaignLeaderSuccess) {
-        LOG(INFO) << opt_.leaderUniqueName << " campaign leader prefix:"
-            << realPrefix_ << " success";
-        return 0;
-    }
+  int resCode = opt_.etcdCli->CampaignLeader(
+      realPrefix_, opt_.leaderUniqueName, opt_.sessionInterSec,
+      opt_.electionTimeoutMs, &leaderOid_);
+  if (resCode == EtcdErrCode::EtcdCampaignLeaderSuccess) {
+    LOG(INFO) << opt_.leaderUniqueName
+              << " campaign leader prefix:" << realPrefix_ << " success";
+    return 0;
+  }
 
-    LOG(WARNING) << opt_.leaderUniqueName << " campaign leader prefix:"
-        << realPrefix_ << " err: " << resCode;
-    return -1;
+  LOG(WARNING) << opt_.leaderUniqueName
+               << " campaign leader prefix:" << realPrefix_
+               << " err: " << resCode;
+  return -1;
 }
 
 void LeaderElection::StartObserverLeader() {
-    Thread t(&LeaderElection::ObserveLeader, this);
-    t.detach();
+  Thread t(&LeaderElection::ObserveLeader, this);
+  t.detach();
 }
 
 int LeaderElection::LeaderResign() {
-    int res =
-        opt_.etcdCli->LeaderResign(leaderOid_, 1000 * opt_.sessionInterSec);
-    if (EtcdErrCode::EtcdLeaderResiginSuccess == res) {
-        LOG(INFO) << opt_.leaderUniqueName << " resign leader prefix:"
-            << realPrefix_ << " ok";
-        return 0;
-    }
+  int res = opt_.etcdCli->LeaderResign(leaderOid_, 1000 * opt_.sessionInterSec);
+  if (EtcdErrCode::EtcdLeaderResiginSuccess == res) {
+    LOG(INFO) << opt_.leaderUniqueName
+              << " resign leader prefix:" << realPrefix_ << " ok";
+    return 0;
+  }
 
-    LOG(WARNING) << opt_.leaderUniqueName << " resign leader prefix:"
-        << realPrefix_ << " err: " << res;
-    return -1;
+  LOG(WARNING) << opt_.leaderUniqueName
+               << " resign leader prefix:" << realPrefix_ << " err: " << res;
+  return -1;
 }
 
 int LeaderElection::ObserveLeader() {
-    LOG(INFO) << opt_.leaderUniqueName << " start observe for prefix:"
-        << realPrefix_;
-    int resCode =
-        opt_.etcdCli->LeaderObserve(leaderOid_, opt_.leaderUniqueName);
-    LOG(ERROR) << opt_.leaderUniqueName << " leader observe for prefix:"
-        << realPrefix_ << " occur error, errcode: " << resCode;
+  LOG(INFO) << opt_.leaderUniqueName
+            << " start observe for prefix:" << realPrefix_;
+  int resCode = opt_.etcdCli->LeaderObserve(leaderOid_, opt_.leaderUniqueName);
+  LOG(ERROR) << opt_.leaderUniqueName
+             << " leader observe for prefix:" << realPrefix_
+             << " occur error, errcode: " << resCode;
 
-    // for test
-    fiu_return_on("src/mds/leaderElection/observeLeader", -1);
+  // for test
+  fiu_return_on("src/mds/leaderElection/observeLeader", -1);
 
-    // 退出当前进程
-    LOG(INFO) << "mds is existing due to the error of leader observation";
-    raise(SIGTERM);
+  // 退出当前进程
+  LOG(INFO) << "mds is existing due to the error of leader observation";
+  raise(SIGTERM);
 
-    return -1;
+  return -1;
 }
 }  // namespace election
 }  // namespace curve

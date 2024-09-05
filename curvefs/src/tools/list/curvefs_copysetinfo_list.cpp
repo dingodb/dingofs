@@ -29,48 +29,47 @@ namespace tools {
 namespace list {
 
 void CopysetInfoListTool::PrintHelp() {
-    CurvefsToolRpc::PrintHelp();
-    std::cout << " [-mds=" << FLAGS_mdsAddr << "]";
-    std::cout << std::endl;
+  CurvefsToolRpc::PrintHelp();
+  std::cout << " [-mds=" << FLAGS_mdsAddr << "]";
+  std::cout << std::endl;
 }
 
 int CopysetInfoListTool::Init() {
-    if (CurvefsToolRpc::Init() != 0) {
-        return -1;
-    }
-    curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
-    curvefs::mds::topology::ListCopysetInfoRequest request;
-    AddRequest(request);
+  if (CurvefsToolRpc::Init() != 0) {
+    return -1;
+  }
+  curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
+  curvefs::mds::topology::ListCopysetInfoRequest request;
+  AddRequest(request);
 
-    service_stub_func_ = std::bind(
-        &curvefs::mds::topology::TopologyService_Stub::ListCopysetInfo,
-        service_stub_.get(), std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3, nullptr);
-    return 0;
+  service_stub_func_ =
+      std::bind(&curvefs::mds::topology::TopologyService_Stub::ListCopysetInfo,
+                service_stub_.get(), std::placeholders::_1,
+                std::placeholders::_2, std::placeholders::_3, nullptr);
+  return 0;
 }
 
 void CopysetInfoListTool::AddUpdateFlags() { AddUpdateFlagsFunc(SetMdsAddr); }
 
-bool CopysetInfoListTool::AfterSendRequestToHost(const std::string &host) {
-    (void)host;
-    bool ret = true;
-    if (controller_->Failed()) {
-        errorOutput_ << "get all copysetInfo from [ " << FLAGS_mdsAddr
-                     << "] fail, errorcode= " << controller_->ErrorCode()
-                     << ", error text " << controller_->ErrorText()
-                     << std::endl;
-        ret = false;
-    } else if (show_) {
-        for (auto const &i : response_->copysetvalues()) {
-            std::cout << "copyset["
-                      << copyset::GetCopysetKey(i.copysetinfo().poolid(),
-                                                i.copysetinfo().copysetid())
-                      << "]:" << std::endl
-                      << i.DebugString() << std::endl;
-        }
-        std::cout << std::endl;
+bool CopysetInfoListTool::AfterSendRequestToHost(const std::string& host) {
+  (void)host;
+  bool ret = true;
+  if (controller_->Failed()) {
+    errorOutput_ << "get all copysetInfo from [ " << FLAGS_mdsAddr
+                 << "] fail, errorcode= " << controller_->ErrorCode()
+                 << ", error text " << controller_->ErrorText() << std::endl;
+    ret = false;
+  } else if (show_) {
+    for (auto const& i : response_->copysetvalues()) {
+      std::cout << "copyset["
+                << copyset::GetCopysetKey(i.copysetinfo().poolid(),
+                                          i.copysetinfo().copysetid())
+                << "]:" << std::endl
+                << i.DebugString() << std::endl;
     }
-    return ret;
+    std::cout << std::endl;
+  }
+  return ret;
 }
 
 }  // namespace list

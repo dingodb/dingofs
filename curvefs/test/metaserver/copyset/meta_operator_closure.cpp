@@ -33,59 +33,57 @@ namespace copyset {
 
 class FakeClosure : public google::protobuf::Closure {
  public:
-    void Run() override {
-        std::lock_guard<std::mutex> lk(mtx_);
-        runned_ = true;
-        cond_.notify_one();
-    }
+  void Run() override {
+    std::lock_guard<std::mutex> lk(mtx_);
+    runned_ = true;
+    cond_.notify_one();
+  }
 
-    void WaitRunned() {
-        std::unique_lock<std::mutex> lk(mtx_);
-        cond_.wait(lk, [this]() { return runned_; });
-    }
+  void WaitRunned() {
+    std::unique_lock<std::mutex> lk(mtx_);
+    cond_.wait(lk, [this]() { return runned_; });
+  }
 
-    bool Runned() const {
-        return runned_;
-    }
+  bool Runned() const { return runned_; }
 
  private:
-    std::mutex mtx_;
-    std::condition_variable cond_;
-    bool runned_ = false;
+  std::mutex mtx_;
+  std::condition_variable cond_;
+  bool runned_ = false;
 };
 
 TEST(MetaOperatorClosureTest, TestOperatorSuccess) {
-    FakeClosure done;
-    CreateInodeRequest request;
-    CreateInodeResponse response;
+  FakeClosure done;
+  CreateInodeRequest request;
+  CreateInodeResponse response;
 
-    auto op = absl::make_unique<CreateInodeOperator>(nullptr, nullptr, &request,
-                                                     &response, &done);
+  auto op = absl::make_unique<CreateInodeOperator>(nullptr, nullptr, &request,
+                                                   &response, &done);
 
-    MetaOperatorClosure* metaClosure = new MetaOperatorClosure(op.release());
-    metaClosure->status().reset();
-    metaClosure->Run();
+  MetaOperatorClosure* metaClosure = new MetaOperatorClosure(op.release());
+  metaClosure->status().reset();
+  metaClosure->Run();
 
-    done.WaitRunned();
-    EXPECT_TRUE(done.Runned());
-    EXPECT_NE(MetaStatusCode::REDIRECTED, response.statuscode());
+  done.WaitRunned();
+  EXPECT_TRUE(done.Runned());
+  EXPECT_NE(MetaStatusCode::REDIRECTED, response.statuscode());
 }
 
 TEST(MetaOperatorClosureTest, TestLeaderRedirect) {
-    FakeClosure done;
-    CreateInodeRequest request;
-    CreateInodeResponse response;
+  FakeClosure done;
+  CreateInodeRequest request;
+  CreateInodeResponse response;
 
-    auto op = absl::make_unique<CreateInodeOperator>(nullptr, nullptr, &request,
-                                                     &response, &done);
+  auto op = absl::make_unique<CreateInodeOperator>(nullptr, nullptr, &request,
+                                                   &response, &done);
 
-    MetaOperatorClosure* metaClosure = new MetaOperatorClosure(op.release());
-    metaClosure->status().set_error(EINVAL, "invalid");
-    metaClosure->Run();
+  MetaOperatorClosure* metaClosure = new MetaOperatorClosure(op.release());
+  metaClosure->status().set_error(EINVAL, "invalid");
+  metaClosure->Run();
 
-    done.WaitRunned();
-    EXPECT_TRUE(done.Runned());
-    EXPECT_EQ(MetaStatusCode::REDIRECTED, response.statuscode());
+  done.WaitRunned();
+  EXPECT_TRUE(done.Runned());
+  EXPECT_EQ(MetaStatusCode::REDIRECTED, response.statuscode());
 }
 
 }  // namespace copyset

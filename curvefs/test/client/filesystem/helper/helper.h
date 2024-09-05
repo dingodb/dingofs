@@ -29,9 +29,7 @@
 
 namespace curvefs {
 namespace client {
-namespace filesystem {
-
-}  // namespace filesystem
+namespace filesystem {}  // namespace filesystem
 }  // namespace client
 }  // namespace curvefs
 

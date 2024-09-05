@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur Sept 3 2021
@@ -30,29 +29,28 @@ namespace client {
 namespace rpcclient {
 
 TEST(ChannelManagerTest, basic_test) {
-    std::unique_ptr<ChannelManager<uint32_t>> channelManager(
-        new ChannelManager<uint32_t>());
-    uint32_t leaderId = 123456789;
-    butil::EndPoint leaderAddr;
-    std::string leaderStr = "127.0.0.1:9109";
-    butil::str2endpoint(leaderStr.c_str(), &leaderAddr);
+  std::unique_ptr<ChannelManager<uint32_t>> channelManager(
+      new ChannelManager<uint32_t>());
+  uint32_t leaderId = 123456789;
+  butil::EndPoint leaderAddr;
+  std::string leaderStr = "127.0.0.1:9109";
+  butil::str2endpoint(leaderStr.c_str(), &leaderAddr);
 
-    for (int i = leaderId; i <= leaderId + 10000; ++i) {
-        ASSERT_TRUE(nullptr !=
-                    channelManager->GetOrCreateChannel(leaderId, leaderAddr));
-    }
+  for (int i = leaderId; i <= leaderId + 10000; ++i) {
+    ASSERT_TRUE(nullptr !=
+                channelManager->GetOrCreateChannel(leaderId, leaderAddr));
+  }
 }
 
 TEST(ChannelManagerTest, fail_test) {
-    std::unique_ptr<ChannelManager<uint32_t>> channelManager(
-        new ChannelManager<uint32_t>());
-    uint32_t leaderId = 123456789;
-    butil::EndPoint leaderAddr;
-    leaderAddr.ip = {0U};
-    leaderAddr.port = -1;
+  std::unique_ptr<ChannelManager<uint32_t>> channelManager(
+      new ChannelManager<uint32_t>());
+  uint32_t leaderId = 123456789;
+  butil::EndPoint leaderAddr;
+  leaderAddr.ip = {0U};
+  leaderAddr.port = -1;
 
-    ASSERT_EQ(nullptr,
-              channelManager->GetOrCreateChannel(leaderId, leaderAddr));
+  ASSERT_EQ(nullptr, channelManager->GetOrCreateChannel(leaderId, leaderAddr));
 }
 
 }  // namespace rpcclient

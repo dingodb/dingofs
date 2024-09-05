@@ -25,22 +25,22 @@
 #include <bthread/mutex.h>
 
 #include <list>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
-#include <memory>
 
+#include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/s3/client_s3.h"
+#include "curvefs/src/client/s3/disk_cache_read.h"
+#include "curvefs/src/client/s3/disk_cache_write.h"
+#include "curvefs/src/common/utils.h"
+#include "curvefs/src/common/wrap_posix.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/interruptible_sleeper.h"
 #include "src/common/lru_cache.h"
 #include "src/common/throttle.h"
 #include "src/common/wait_interval.h"
-#include "curvefs/src/common/wrap_posix.h"
-#include "curvefs/src/common/utils.h"
-#include "curvefs/src/client/s3/client_s3.h"
-#include "curvefs/src/client/s3/disk_cache_write.h"
-#include "curvefs/src/client/s3/disk_cache_read.h"
-#include "curvefs/src/client/common/config.h"
 namespace curvefs {
 namespace client {
 
@@ -55,149 +55,143 @@ using curvefs::common::SysUtils;
 
 class DiskCacheManager {
  public:
-    DiskCacheManager(std::shared_ptr<PosixWrapper> posixWrapper,
-                     std::shared_ptr<DiskCacheWrite> cacheWrite,
-                     std::shared_ptr<DiskCacheRead> cacheRead);
-    DiskCacheManager() {}
-    virtual ~DiskCacheManager() { TrimStop(); }
+  DiskCacheManager(std::shared_ptr<PosixWrapper> posixWrapper,
+                   std::shared_ptr<DiskCacheWrite> cacheWrite,
+                   std::shared_ptr<DiskCacheRead> cacheRead);
+  DiskCacheManager() {}
+  virtual ~DiskCacheManager() { TrimStop(); }
 
-    virtual int Init(std::shared_ptr<S3Client> client,
-        const S3ClientAdaptorOption option);
+  virtual int Init(std::shared_ptr<S3Client> client,
+                   const S3ClientAdaptorOption option);
 
-    virtual int UmountDiskCache();
-    virtual bool IsCached(const std::string &name);
+  virtual int UmountDiskCache();
+  virtual bool IsCached(const std::string& name);
 
-    /**
-     * @brief add obj to cachedObjName
-     * @param[in] name obj name
-     * @param[in] cacheWriteExist whether the obj is
-     *                            exist in cache write
-     */
-    void AddCache(const std::string &name);
+  /**
+   * @brief add obj to cachedObjName
+   * @param[in] name obj name
+   * @param[in] cacheWriteExist whether the obj is
+   *                            exist in cache write
+   */
+  void AddCache(const std::string& name);
 
-    int CreateDir();
-    std::string GetCacheReadFullDir();
-    std::string GetCacheWriteFullDir();
+  int CreateDir();
+  std::string GetCacheReadFullDir();
+  std::string GetCacheWriteFullDir();
 
-    int WriteDiskFile(const std::string fileName, const char *buf,
-                      uint64_t length, bool force = true);
-    void AsyncUploadEnqueue(const std::string objName);
-    virtual int WriteReadDirect(const std::string fileName, const char *buf,
-                                uint64_t length);
-    int ReadDiskFile(const std::string name, char *buf, uint64_t offset,
-                     uint64_t length);
-    int LinkWriteToRead(const std::string fileName,
-                        const std::string fullWriteDir,
-                        const std::string fullReadDir);
-    int UploadAllCacheWriteFile();
-    int UploadWriteCacheByInode(const std::string &inode);
-    int ClearReadCache(const std::list<std::string> &files);
-    /**
-     * @brief get use ratio of cache disk
-     * @return the use ratio
-     */
-    int64_t SetDiskFsUsedRatio();
-    virtual bool IsDiskCacheFull();
-    bool IsDiskCacheSafe();
-    /**
-     * @brief: start trim thread.
-     */
-    int TrimRun();
-    /**
-     * @brief: stop trim thread.
-     */
-    int TrimStop();
+  int WriteDiskFile(const std::string fileName, const char* buf,
+                    uint64_t length, bool force = true);
+  void AsyncUploadEnqueue(const std::string objName);
+  virtual int WriteReadDirect(const std::string fileName, const char* buf,
+                              uint64_t length);
+  int ReadDiskFile(const std::string name, char* buf, uint64_t offset,
+                   uint64_t length);
+  int LinkWriteToRead(const std::string fileName,
+                      const std::string fullWriteDir,
+                      const std::string fullReadDir);
+  int UploadAllCacheWriteFile();
+  int UploadWriteCacheByInode(const std::string& inode);
+  int ClearReadCache(const std::list<std::string>& files);
+  /**
+   * @brief get use ratio of cache disk
+   * @return the use ratio
+   */
+  int64_t SetDiskFsUsedRatio();
+  virtual bool IsDiskCacheFull();
+  bool IsDiskCacheSafe();
+  /**
+   * @brief: start trim thread.
+   */
+  int TrimRun();
+  /**
+   * @brief: stop trim thread.
+   */
+  int TrimStop();
 
-    void InitMetrics(const std::string &fsName);
+  void InitMetrics(const std::string& fsName);
 
-    /**
-     * @brief: has got the origin used size or not.
-     */
-    virtual bool IsDiskUsedInited() {
-        return diskUsedInit_.load();
-    }
+  /**
+   * @brief: has got the origin used size or not.
+   */
+  virtual bool IsDiskUsedInited() { return diskUsedInit_.load(); }
 
  private:
-    /**
-     * @brief add the used bytes of disk cache.
-     */
-    void AddDiskUsedBytes(uint64_t length) {
-        usedBytes_.fetch_add(length);
-        if (metric_.get() != nullptr)
-            metric_->diskUsedBytes.set_value(usedBytes_/1024/1024);
-        VLOG(9) << "add disk used size is: " << length
-                << ", now is: " << usedBytes_.load();
-        return;
-    }
-    /**
-     * @brief dec the used bytes of disk cache.
-     * can not dec disk used bytes after file have been loaded,
-     * because there are link in read cache
-     */
-    void DecDiskUsedBytes(uint64_t length) {
-        usedBytes_.fetch_sub(length);
-        assert(usedBytes_ >= 0);
-        if (metric_.get() != nullptr)
-            metric_->diskUsedBytes.set_value(usedBytes_);
-        VLOG(9) << "dec disk used size is: " << length
-                << ", now is: " << usedBytes_.load();
-        return;
-    }
-    void SetDiskInitUsedBytes();
-    uint64_t GetDiskUsedbytes() {
-        return usedBytes_.load();
-    }
+  /**
+   * @brief add the used bytes of disk cache.
+   */
+  void AddDiskUsedBytes(uint64_t length) {
+    usedBytes_.fetch_add(length);
+    if (metric_.get() != nullptr)
+      metric_->diskUsedBytes.set_value(usedBytes_ / 1024 / 1024);
+    VLOG(9) << "add disk used size is: " << length
+            << ", now is: " << usedBytes_.load();
+    return;
+  }
+  /**
+   * @brief dec the used bytes of disk cache.
+   * can not dec disk used bytes after file have been loaded,
+   * because there are link in read cache
+   */
+  void DecDiskUsedBytes(uint64_t length) {
+    usedBytes_.fetch_sub(length);
+    assert(usedBytes_ >= 0);
+    if (metric_.get() != nullptr) metric_->diskUsedBytes.set_value(usedBytes_);
+    VLOG(9) << "dec disk used size is: " << length
+            << ", now is: " << usedBytes_.load();
+    return;
+  }
+  void SetDiskInitUsedBytes();
+  uint64_t GetDiskUsedbytes() { return usedBytes_.load(); }
 
-    void InitQosParam();
-    /**
-     * @brief trim cache func.
-     */
-    void TrimCache();
+  void InitQosParam();
+  /**
+   * @brief trim cache func.
+   */
+  void TrimCache();
 
-    /**
-     * @brief whether the cache file is exceed maxFileNums_.
-     */
-    bool IsExceedFileNums();
+  /**
+   * @brief whether the cache file is exceed maxFileNums_.
+   */
+  bool IsExceedFileNums();
 
-    /**
-     * @brief check whether cache dir does not exist or there is no cache file
-     */
-    bool IsCacheClean();
+  /**
+   * @brief check whether cache dir does not exist or there is no cache file
+   */
+  bool IsCacheClean();
 
-    curve::common::Thread backEndThread_;
-    curve::common::Atomic<bool> isRunning_;
-    curve::common::InterruptibleSleeper sleeper_;
-    curve::common::WaitInterval waitIntervalSec_;
-    uint32_t trimCheckIntervalSec_;
-    uint32_t fullRatio_;
-    uint32_t safeRatio_;
-    uint64_t maxUsableSpaceBytes_;
-    uint64_t maxFileNums_;
-    uint32_t objectPrefix_;
-    // used bytes of disk cache
-    std::atomic<int64_t> usedBytes_;
-    // used ratio of the file system in disk cache
-    std::atomic<int32_t> diskFsUsedRatio_;
-    uint32_t cmdTimeoutSec_;
-    std::string cacheDir_;
-    std::shared_ptr<DiskCacheWrite> cacheWrite_;
-    std::shared_ptr<DiskCacheRead> cacheRead_;
+  curve::common::Thread backEndThread_;
+  curve::common::Atomic<bool> isRunning_;
+  curve::common::InterruptibleSleeper sleeper_;
+  curve::common::WaitInterval waitIntervalSec_;
+  uint32_t trimCheckIntervalSec_;
+  uint32_t fullRatio_;
+  uint32_t safeRatio_;
+  uint64_t maxUsableSpaceBytes_;
+  uint64_t maxFileNums_;
+  uint32_t objectPrefix_;
+  // used bytes of disk cache
+  std::atomic<int64_t> usedBytes_;
+  // used ratio of the file system in disk cache
+  std::atomic<int32_t> diskFsUsedRatio_;
+  uint32_t cmdTimeoutSec_;
+  std::string cacheDir_;
+  std::shared_ptr<DiskCacheWrite> cacheWrite_;
+  std::shared_ptr<DiskCacheRead> cacheRead_;
 
-    std::shared_ptr<SglLRUCache<std::string>> cachedObjName_;
+  std::shared_ptr<SglLRUCache<std::string>> cachedObjName_;
 
-    std::shared_ptr<S3Client> client_;
-    std::shared_ptr<PosixWrapper> posixWrapper_;
-    std::shared_ptr<DiskCacheMetric> metric_;
+  std::shared_ptr<S3Client> client_;
+  std::shared_ptr<PosixWrapper> posixWrapper_;
+  std::shared_ptr<DiskCacheMetric> metric_;
 
-    Throttle diskCacheThrottle_;
+  Throttle diskCacheThrottle_;
 
-    S3ClientAdaptorOption option_;
+  S3ClientAdaptorOption option_;
 
-    // has got the origin used size or not
-    std::atomic<bool> diskUsedInit_;
-    curve::common::Thread diskInitThread_;
+  // has got the origin used size or not
+  std::atomic<bool> diskUsedInit_;
+  curve::common::Thread diskInitThread_;
 };
-
 
 }  // namespace client
 }  // namespace curvefs

@@ -27,35 +27,35 @@ namespace tools {
 namespace status {
 
 void StatusTool::PrintHelp() {
-    CurvefsTool::PrintHelp();
-    std::cout << std::endl;
+  CurvefsTool::PrintHelp();
+  std::cout << std::endl;
 }
 
 int StatusTool::Init() {
-    mdsStatusTool_ = std::make_shared<MdsStatusTool>();
-    metaserverStatusTool_ = std::make_shared<MetaserverStatusTool>();
-    etcdStatusTool_ = std::make_shared<EtcdStatusTool>();
-    copysetStatutsTool_ = std::make_shared<CopysetStatusTool>();
-    return 0;
+  mdsStatusTool_ = std::make_shared<MdsStatusTool>();
+  metaserverStatusTool_ = std::make_shared<MetaserverStatusTool>();
+  etcdStatusTool_ = std::make_shared<EtcdStatusTool>();
+  copysetStatutsTool_ = std::make_shared<CopysetStatusTool>();
+  return 0;
 }
 
 int StatusTool::RunCommand() {
-    std::cout << "[mds]" << std::endl;
-    int mds_health = mdsStatusTool_->Run();
-    std::cout << std::endl << "[metaserver]" << std::endl;
-    int metaserver_health = metaserverStatusTool_->Run();
-    std::cout << std::endl << "[etcd]" << std::endl;
-    int etcd_health = etcdStatusTool_->Run();
-    std::cout << std::endl << "[copyset]" << std::endl;
-    int copyset_health = copysetStatutsTool_->Run();
-    std::cout << std::endl << "[cluster]" << std::endl;
-    if (mds_health != 0 || metaserver_health != 0 || etcd_health != 0 ||
-        copyset_health != 0) {
-        std::cout << "cluster is unhealthy!" << std::endl;
-        return -1;
-    }
-    std::cout << "cluster is healthy!" << std::endl;
-    return 0;
+  std::cout << "[mds]" << std::endl;
+  int mds_health = mdsStatusTool_->Run();
+  std::cout << std::endl << "[metaserver]" << std::endl;
+  int metaserver_health = metaserverStatusTool_->Run();
+  std::cout << std::endl << "[etcd]" << std::endl;
+  int etcd_health = etcdStatusTool_->Run();
+  std::cout << std::endl << "[copyset]" << std::endl;
+  int copyset_health = copysetStatutsTool_->Run();
+  std::cout << std::endl << "[cluster]" << std::endl;
+  if (mds_health != 0 || metaserver_health != 0 || etcd_health != 0 ||
+      copyset_health != 0) {
+    std::cout << "cluster is unhealthy!" << std::endl;
+    return -1;
+  }
+  std::cout << "cluster is healthy!" << std::endl;
+  return 0;
 }
 
 }  // namespace status

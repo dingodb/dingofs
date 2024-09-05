@@ -29,63 +29,63 @@ namespace tools {
 namespace status {
 
 int CopysetStatusTool::Init() {
-    copyInfoListTool_ = std::make_shared<list::CopysetInfoListTool>("", false);
-    copyInfoListTool_->Init();
-    return 0;
+  copyInfoListTool_ = std::make_shared<list::CopysetInfoListTool>("", false);
+  copyInfoListTool_->Init();
+  return 0;
 }
 
 void CopysetStatusTool::PrintHelp() {
-    CurvefsTool::PrintHelp();
-    std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
-    std::cout << std::endl;
+  CurvefsTool::PrintHelp();
+  std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
+  std::cout << std::endl;
 }
 
 int CopysetStatusTool::RunCommand() {
-    int ret = copyInfoListTool_->RunCommand();
-    auto response = copyInfoListTool_->GetResponse();
-    std::map<uint64_t,
-             std::vector<curvefs::metaserver::copyset::CopysetStatusResponse>>
-        key2Status;
-    if (!copyset::CopysetInfo2CopysetStatus(*response.get(), &key2Status)) {
-        ret = -1;
+  int ret = copyInfoListTool_->RunCommand();
+  auto response = copyInfoListTool_->GetResponse();
+  std::map<uint64_t,
+           std::vector<curvefs::metaserver::copyset::CopysetStatusResponse>>
+      key2Status;
+  if (!copyset::CopysetInfo2CopysetStatus(*response.get(), &key2Status)) {
+    ret = -1;
+  }
+
+  std::map<uint64_t, std::vector<curvefs::mds::topology::CopysetValue>>
+      key2Info;
+
+  if (!copyset::Response2CopysetInfo(*response.get(), &key2Info)) {
+    ret = -1;
+  }
+
+  bool isHealth = true;
+  for (auto const& i : key2Info) {
+    if (copyset::checkCopysetHelthy(i.second, key2Status[i.first]) !=
+        copyset::CheckResult::kHealthy) {
+      isHealth = false;
+      ret = -1;
+      break;
     }
-
-    std::map<uint64_t, std::vector<curvefs::mds::topology::CopysetValue>>
-        key2Info;
-
-    if (!copyset::Response2CopysetInfo(*response.get(), &key2Info)) {
-        ret = -1;
+  }
+  if (show_) {
+    if (isHealth && ret == 0) {
+      std::cout << "all copyset is healthy." << std::endl;
+    } else {
+      std::cout << "copysets is unhealthy." << std::endl;
     }
-
-    bool isHealth = true;
     for (auto const& i : key2Info) {
-        if (copyset::checkCopysetHelthy(i.second, key2Status[i.first]) !=
-            copyset::CheckResult::kHealthy) {
-            isHealth = false;
-            ret = -1;
-            break;
-        }
+      std::cout << "copyset[" << i.first << "]:\n-info:\n";
+      for (auto const& j : i.second) {
+        std::cout << j.ShortDebugString() << std::endl;
+      }
+      std::cout << "-status:\n";
+      for (auto const& j : key2Status[i.first]) {
+        std::cout << j.ShortDebugString() << std::endl;
+      }
+      std::cout << std::endl;
     }
-    if (show_) {
-        if (isHealth && ret == 0) {
-            std::cout << "all copyset is healthy." << std::endl;
-        } else {
-            std::cout << "copysets is unhealthy." << std::endl;
-        }
-        for (auto const& i : key2Info) {
-            std::cout << "copyset[" << i.first << "]:\n-info:\n";
-            for (auto const& j : i.second) {
-                std::cout << j.ShortDebugString() << std::endl;
-            }
-            std::cout << "-status:\n";
-            for (auto const& j : key2Status[i.first]) {
-                std::cout << j.ShortDebugString() << std::endl;
-            }
-            std::cout << std::endl;
-        }
-    }
+  }
 
-    return ret;
+  return ret;
 }
 
 }  // namespace status

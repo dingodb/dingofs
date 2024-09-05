@@ -21,7 +21,9 @@
  */
 
 #include "curvefs/src/mds/schedule/scheduler.h"
+
 #include <glog/logging.h>
+
 #include <algorithm>
 #include <map>
 #include <memory>
@@ -45,69 +47,67 @@ int64_t Scheduler::GetRunningInterval() const { return 0; }
  *    repeat step 2 and step 3 until step 2 can not find a avaliable zone
  */
 MetaServerIdType Scheduler::SelectBestPlacementMetaServer(
-    const CopySetInfo &copySetInfo, MetaServerIdType oldPeer) {
-    // all the metaservers in the same pysical pool
-    MetaServerInfo oldPeerInfo;
-    if (oldPeer != UNINITIALIZE_ID) {
-        if (!topo_->GetMetaServerInfo(oldPeer, &oldPeerInfo)) {
-            LOG(ERROR) << "TopoAdapter cannot get info of metaserver "
-                       << oldPeer;
-            return UNINITIALIZE_ID;
-        }
+    const CopySetInfo& copySetInfo, MetaServerIdType oldPeer) {
+  // all the metaservers in the same pysical pool
+  MetaServerInfo oldPeerInfo;
+  if (oldPeer != UNINITIALIZE_ID) {
+    if (!topo_->GetMetaServerInfo(oldPeer, &oldPeerInfo)) {
+      LOG(ERROR) << "TopoAdapter cannot get info of metaserver " << oldPeer;
+      return UNINITIALIZE_ID;
     }
+  }
 
-    PoolIdType poolId = copySetInfo.id.first;
-    std::vector<MetaServerInfo> metaServers =
-        topo_->GetMetaServersInPool(poolId);
-    if (metaServers.size() <= copySetInfo.peers.size()) {
-        LOG(ERROR) << "pool " << poolId << " has " << metaServers.size()
-                   << " metaservers, "
-                      "not bigger than copysetInfo peers size: "
-                   << copySetInfo.peers.size();
-        return UNINITIALIZE_ID;
-    }
-
-    // restriction on zone and server
-    std::set<ZoneIdType> excludeZones;
-    std::set<MetaServerIdType> excludeMetaservers;
-    for (auto &peer : copySetInfo.peers) {
-        excludeMetaservers.emplace(peer.id);
-        if (peer.id == oldPeer) {
-            continue;
-        }
-        excludeZones.emplace(peer.zoneId);
-    }
-
-    uint16_t standardZoneNum = topo_->GetStandardZoneNumInPool(poolId);
-    if (standardZoneNum <= 0) {
-        LOG(ERROR) << "topoAdapter find pool " << poolId
-                   << " standard zone num: " << standardZoneNum << " invalid";
-        return UNINITIALIZE_ID;
-    }
-
-    MetaServerIdType target = UNINITIALIZE_ID;
-    bool ret = topo_->ChooseNewMetaServerForCopyset(
-        poolId, excludeZones, excludeMetaservers, &target);
-    if (ret) {
-        return target;
-    }
-
-    LOG(WARNING) << "can not find new metaserver for copyset:"
-                 << copySetInfo.CopySetInfoStr() << ", oldPeer = " << oldPeer;
+  PoolIdType poolId = copySetInfo.id.first;
+  std::vector<MetaServerInfo> metaServers = topo_->GetMetaServersInPool(poolId);
+  if (metaServers.size() <= copySetInfo.peers.size()) {
+    LOG(ERROR) << "pool " << poolId << " has " << metaServers.size()
+               << " metaservers, "
+                  "not bigger than copysetInfo peers size: "
+               << copySetInfo.peers.size();
     return UNINITIALIZE_ID;
+  }
+
+  // restriction on zone and server
+  std::set<ZoneIdType> excludeZones;
+  std::set<MetaServerIdType> excludeMetaservers;
+  for (auto& peer : copySetInfo.peers) {
+    excludeMetaservers.emplace(peer.id);
+    if (peer.id == oldPeer) {
+      continue;
+    }
+    excludeZones.emplace(peer.zoneId);
+  }
+
+  uint16_t standardZoneNum = topo_->GetStandardZoneNumInPool(poolId);
+  if (standardZoneNum <= 0) {
+    LOG(ERROR) << "topoAdapter find pool " << poolId
+               << " standard zone num: " << standardZoneNum << " invalid";
+    return UNINITIALIZE_ID;
+  }
+
+  MetaServerIdType target = UNINITIALIZE_ID;
+  bool ret = topo_->ChooseNewMetaServerForCopyset(poolId, excludeZones,
+                                                  excludeMetaservers, &target);
+  if (ret) {
+    return target;
+  }
+
+  LOG(WARNING) << "can not find new metaserver for copyset:"
+               << copySetInfo.CopySetInfoStr() << ", oldPeer = " << oldPeer;
+  return UNINITIALIZE_ID;
 }
 
-bool Scheduler::CopysetAllPeersOnline(const CopySetInfo &copySetInfo) {
-    for (auto &peer : copySetInfo.peers) {
-        MetaServerInfo out;
-        if (!topo_->GetMetaServerInfo(peer.id, &out)) {
-            return false;
-        } else if (out.IsOffline()) {
-            return false;
-        }
+bool Scheduler::CopysetAllPeersOnline(const CopySetInfo& copySetInfo) {
+  for (auto& peer : copySetInfo.peers) {
+    MetaServerInfo out;
+    if (!topo_->GetMetaServerInfo(peer.id, &out)) {
+      return false;
+    } else if (out.IsOffline()) {
+      return false;
     }
+  }
 
-    return true;
+  return true;
 }
 
 }  // namespace schedule

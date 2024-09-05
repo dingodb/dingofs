@@ -57,11 +57,11 @@ using curvefs::metaserver::GetInodeResponse;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::ListDentryRequest;
 using curvefs::metaserver::ListDentryResponse;
+using curvefs::metaserver::ManageInodeType;
 using curvefs::metaserver::PrepareRenameTxRequest;
 using curvefs::metaserver::PrepareRenameTxResponse;
 using curvefs::metaserver::UpdateInodeRequest;
 using curvefs::metaserver::UpdateInodeResponse;
-using curvefs::metaserver::ManageInodeType;
 
 using curvefs::common::FSType;
 using curvefs::common::PartitionInfo;
@@ -72,16 +72,16 @@ using curvefs::common::Volume;
 
 using curvefs::mds::AllocateS3ChunkRequest;
 using curvefs::mds::AllocateS3ChunkResponse;
+using curvefs::mds::CommitTxRequest;
+using curvefs::mds::CommitTxResponse;
 using curvefs::mds::FsInfo;
 using curvefs::mds::FsStatus;
 using curvefs::mds::GetFsInfoRequest;
 using curvefs::mds::GetFsInfoResponse;
-using curvefs::mds::MountFsRequest;
-using curvefs::mds::MountFsResponse;
 using curvefs::mds::GetLatestTxIdRequest;
 using curvefs::mds::GetLatestTxIdResponse;
-using curvefs::mds::CommitTxRequest;
-using curvefs::mds::CommitTxResponse;
+using curvefs::mds::MountFsRequest;
+using curvefs::mds::MountFsResponse;
 using curvefs::mds::RefreshSessionRequest;
 using curvefs::mds::RefreshSessionResponse;
 using curvefs::mds::UmountFsRequest;
@@ -106,122 +106,113 @@ using curvefs::mds::topology::ListPartitionResponse;
 using curvefs::mds::topology::PartitionTxId;
 using curvefs::mds::topology::TopoStatusCode;
 
-using ::curvefs::mds::space::AllocateBlockGroupRequest;
-using ::curvefs::mds::space::AllocateBlockGroupResponse;
 using ::curvefs::mds::space::AcquireBlockGroupRequest;
 using ::curvefs::mds::space::AcquireBlockGroupResponse;
+using ::curvefs::mds::space::AllocateBlockGroupRequest;
+using ::curvefs::mds::space::AllocateBlockGroupResponse;
 using ::curvefs::mds::space::ReleaseBlockGroupRequest;
 using ::curvefs::mds::space::ReleaseBlockGroupResponse;
 
 using mds::Mountpoint;
 
 struct InodeParam {
-    uint64_t fsId;
-    uint64_t length;
-    uint32_t uid;
-    uint32_t gid;
-    uint32_t mode;
-    FsFileType type;
-    uint64_t rdev;
-    std::string symlink;
-    uint64_t parent;
-    ManageInodeType manageType = ManageInodeType::TYPE_NOT_MANAGE;
+  uint64_t fsId;
+  uint64_t length;
+  uint32_t uid;
+  uint32_t gid;
+  uint32_t mode;
+  FsFileType type;
+  uint64_t rdev;
+  std::string symlink;
+  uint64_t parent;
+  ManageInodeType manageType = ManageInodeType::TYPE_NOT_MANAGE;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const InodeParam& p) {
-    os << "fsid: " << p.fsId << ", length: " << p.length << ", uid: " << p.uid
-       << ", gid: " << p.gid << ", mode: " << p.mode << ", type: " << p.type
-       << ", rdev: " << p.rdev
-       << ", symlink: " << p.symlink;
+  os << "fsid: " << p.fsId << ", length: " << p.length << ", uid: " << p.uid
+     << ", gid: " << p.gid << ", mode: " << p.mode << ", type: " << p.type
+     << ", rdev: " << p.rdev << ", symlink: " << p.symlink;
 
-    return os;
+  return os;
 }
 
 class MDSBaseClient {
  public:
-    virtual ~MDSBaseClient() = default;
+  virtual ~MDSBaseClient() = default;
 
-    virtual void MountFs(const std::string& fsName, const Mountpoint& mountPt,
-                         MountFsResponse* response, brpc::Controller* cntl,
-                         brpc::Channel* channel);
+  virtual void MountFs(const std::string& fsName, const Mountpoint& mountPt,
+                       MountFsResponse* response, brpc::Controller* cntl,
+                       brpc::Channel* channel);
 
-    virtual void UmountFs(const std::string& fsName, const Mountpoint& mountPt,
-                          UmountFsResponse* response, brpc::Controller* cntl,
-                          brpc::Channel* channel);
+  virtual void UmountFs(const std::string& fsName, const Mountpoint& mountPt,
+                        UmountFsResponse* response, brpc::Controller* cntl,
+                        brpc::Channel* channel);
 
-    virtual void GetFsInfo(const std::string& fsName,
-                           GetFsInfoResponse* response, brpc::Controller* cntl,
-                           brpc::Channel* channel);
+  virtual void GetFsInfo(const std::string& fsName, GetFsInfoResponse* response,
+                         brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void GetFsInfo(uint32_t fsId, GetFsInfoResponse* response,
-                           brpc::Controller* cntl, brpc::Channel* channel);
+  virtual void GetFsInfo(uint32_t fsId, GetFsInfoResponse* response,
+                         brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void GetMetaServerInfo(uint32_t port, std::string ip,
-                                   GetMetaServerInfoResponse* response,
-                                   brpc::Controller* cntl,
-                                   brpc::Channel* channel);
-    virtual void GetMetaServerListInCopysets(
-        const LogicPoolID& logicalpooid,
-        const std::vector<CopysetID>& copysetidvec,
-        GetMetaServerListInCopySetsResponse* response, brpc::Controller* cntl,
-        brpc::Channel* channel);
-
-    virtual void CreatePartition(uint32_t fsID, uint32_t count,
-                                 CreatePartitionResponse* response,
+  virtual void GetMetaServerInfo(uint32_t port, std::string ip,
+                                 GetMetaServerInfoResponse* response,
                                  brpc::Controller* cntl,
                                  brpc::Channel* channel);
+  virtual void GetMetaServerListInCopysets(
+      const LogicPoolID& logicalpooid,
+      const std::vector<CopysetID>& copysetidvec,
+      GetMetaServerListInCopySetsResponse* response, brpc::Controller* cntl,
+      brpc::Channel* channel);
 
-    virtual void GetCopysetOfPartitions(
-        const std::vector<uint32_t>& partitionIDList,
-        GetCopysetOfPartitionResponse* response, brpc::Controller* cntl,
-        brpc::Channel* channel);
-
-    virtual void ListPartition(uint32_t fsID, ListPartitionResponse* response,
+  virtual void CreatePartition(uint32_t fsID, uint32_t count,
+                               CreatePartitionResponse* response,
                                brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
-                                AllocateS3ChunkResponse* response,
-                                brpc::Controller* cntl, brpc::Channel* channel);
+  virtual void GetCopysetOfPartitions(
+      const std::vector<uint32_t>& partitionIDList,
+      GetCopysetOfPartitionResponse* response, brpc::Controller* cntl,
+      brpc::Channel* channel);
 
-    virtual void RefreshSession(const RefreshSessionRequest& request,
-                                RefreshSessionResponse *response,
-                                brpc::Controller *cntl, brpc::Channel *channel);
+  virtual void ListPartition(uint32_t fsID, ListPartitionResponse* response,
+                             brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void GetLatestTxId(const GetLatestTxIdRequest& request,
-                               GetLatestTxIdResponse* response,
-                               brpc::Controller* cntl,
-                               brpc::Channel* channel);
+  virtual void AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
+                              AllocateS3ChunkResponse* response,
+                              brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void CommitTx(const CommitTxRequest& request,
-                          CommitTxResponse* response,
-                          brpc::Controller* cntl,
-                          brpc::Channel* channel);
+  virtual void RefreshSession(const RefreshSessionRequest& request,
+                              RefreshSessionResponse* response,
+                              brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void AllocateVolumeBlockGroup(uint32_t fsId,
-                                          uint32_t count,
-                                          const std::string& owner,
-                                          AllocateBlockGroupResponse* response,
-                                          brpc::Controller* cntl,
-                                          brpc::Channel* channel);
+  virtual void GetLatestTxId(const GetLatestTxIdRequest& request,
+                             GetLatestTxIdResponse* response,
+                             brpc::Controller* cntl, brpc::Channel* channel);
 
-    virtual void AcquireVolumeBlockGroup(uint32_t fsId,
-                                         uint64_t blockGroupOffset,
-                                         const std::string& owner,
-                                         AcquireBlockGroupResponse* response,
-                                         brpc::Controller* cntl,
-                                         brpc::Channel* channel);
+  virtual void CommitTx(const CommitTxRequest& request,
+                        CommitTxResponse* response, brpc::Controller* cntl,
+                        brpc::Channel* channel);
 
-    virtual void ReleaseVolumeBlockGroup(
-        uint32_t fsId,
-        const std::string& owner,
-        const std::vector<curvefs::mds::space::BlockGroup>& blockGroups,
-        ReleaseBlockGroupResponse* response,
-        brpc::Controller* cntl,
-        brpc::Channel* channel);
+  virtual void AllocateVolumeBlockGroup(uint32_t fsId, uint32_t count,
+                                        const std::string& owner,
+                                        AllocateBlockGroupResponse* response,
+                                        brpc::Controller* cntl,
+                                        brpc::Channel* channel);
 
-    virtual void AllocOrGetMemcacheCluster(
-        uint32_t fsId, AllocOrGetMemcacheClusterResponse* response,
-        brpc::Controller* cntl, brpc::Channel* channel);
+  virtual void AcquireVolumeBlockGroup(uint32_t fsId, uint64_t blockGroupOffset,
+                                       const std::string& owner,
+                                       AcquireBlockGroupResponse* response,
+                                       brpc::Controller* cntl,
+                                       brpc::Channel* channel);
+
+  virtual void ReleaseVolumeBlockGroup(
+      uint32_t fsId, const std::string& owner,
+      const std::vector<curvefs::mds::space::BlockGroup>& blockGroups,
+      ReleaseBlockGroupResponse* response, brpc::Controller* cntl,
+      brpc::Channel* channel);
+
+  virtual void AllocOrGetMemcacheCluster(
+      uint32_t fsId, AllocOrGetMemcacheClusterResponse* response,
+      brpc::Controller* cntl, brpc::Channel* channel);
 };
 
 }  // namespace rpcclient

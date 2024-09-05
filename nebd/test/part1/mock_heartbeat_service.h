@@ -23,9 +23,11 @@
 #ifndef NEBD_TEST_PART1_MOCK_HEARTBEAT_SERVICE_H_
 #define NEBD_TEST_PART1_MOCK_HEARTBEAT_SERVICE_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include <string>
+
 #include "nebd/src/common/heartbeat.pb.h"
 
 namespace nebd {
@@ -33,10 +35,10 @@ namespace client {
 
 class MockHeartBeatService : public NebdHeartbeatService {
  public:
-    MOCK_METHOD4(KeepAlive, void(::google::protobuf::RpcController* cntl,
-                                 const HeartbeatRequest* request,
-                                 HeartbeatResponse* response,
-                                 ::google::protobuf::Closure* done));
+  MOCK_METHOD4(KeepAlive, void(::google::protobuf::RpcController* cntl,
+                               const HeartbeatRequest* request,
+                               HeartbeatResponse* response,
+                               ::google::protobuf::Closure* done));
 };
 
 }  // namespace client

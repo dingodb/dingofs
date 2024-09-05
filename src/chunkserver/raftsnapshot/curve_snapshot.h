@@ -42,10 +42,12 @@
 #ifndef SRC_CHUNKSERVER_RAFTSNAPSHOT_CURVE_SNAPSHOT_H_
 #define SRC_CHUNKSERVER_RAFTSNAPSHOT_CURVE_SNAPSHOT_H_
 
-#include <braft/storage.h>
 #include <braft/snapshot.h>
-#include <vector>
+#include <braft/storage.h>
+
 #include <string>
+#include <vector>
+
 #include "src/chunkserver/raftsnapshot/curve_snapshot_attachment.h"
 #include "src/chunkserver/raftsnapshot/curve_snapshot_file_reader.h"
 
@@ -54,21 +56,22 @@ namespace chunkserver {
 
 // Describe the Snapshot on another machine
 class CurveSnapshot : public braft::Snapshot {
-friend class CurveSnapshotCopier;
+  friend class CurveSnapshotCopier;
+
  public:
-    // Get the path of the Snapshot
-    std::string get_path() override;
-    // List all the existing files in the Snapshot currently
-    void list_files(std::vector<std::string> *files) override;
-    // List all the attach files for the snapshot currently
-    void list_attach_files(std::vector<std::string> *files);
-    // Get the implementation-defined file_meta
-    int get_file_meta(const std::string& filename,
-                        ::google::protobuf::Message* file_meta) override;
+  // Get the path of the Snapshot
+  std::string get_path() override;
+  // List all the existing files in the Snapshot currently
+  void list_files(std::vector<std::string>* files) override;
+  // List all the attach files for the snapshot currently
+  void list_attach_files(std::vector<std::string>* files);
+  // Get the implementation-defined file_meta
+  int get_file_meta(const std::string& filename,
+                    ::google::protobuf::Message* file_meta) override;
 
  private:
-    braft::LocalSnapshotMetaTable _meta_table;
-    CurveSnapshotAttachMetaTable _attach_meta_table;
+  braft::LocalSnapshotMetaTable _meta_table;
+  CurveSnapshotAttachMetaTable _attach_meta_table;
 };
 
 }  // namespace chunkserver

@@ -41,32 +41,32 @@ class CopysetNodeManager;
 // Reload all existing copysets
 class CopysetReloader {
  public:
-    explicit CopysetReloader(CopysetNodeManager* copysetNodeManager);
+  explicit CopysetReloader(CopysetNodeManager* copysetNodeManager);
 
-    ~CopysetReloader() = default;
+  ~CopysetReloader() = default;
 
-    bool Init(const CopysetNodeOptions& options);
+  bool Init(const CopysetNodeOptions& options);
 
-    /**
-     * @brief Reload all existing copysets
-     */
-    bool ReloadCopysets();
-
- private:
-    bool ReloadOneCopyset(const std::string& copyset);
-
-    void LoadCopyset(PoolId poolId, CopysetId copysetId);
-
-    bool CheckCopysetUntilLoadFinished(CopysetNode* node);
-
-    void WaitLoadFinish();
+  /**
+   * @brief Reload all existing copysets
+   */
+  bool ReloadCopysets();
 
  private:
-    CopysetNodeManager* nodeManager_;
-    CopysetNodeOptions options_;
+  bool ReloadOneCopyset(const std::string& copyset);
 
-    std::unique_ptr<curve::common::TaskThreadPool<>> taskPool_;
-    std::atomic<bool> running_;
+  void LoadCopyset(PoolId poolId, CopysetId copysetId);
+
+  bool CheckCopysetUntilLoadFinished(CopysetNode* node);
+
+  void WaitLoadFinish();
+
+ private:
+  CopysetNodeManager* nodeManager_;
+  CopysetNodeOptions options_;
+
+  std::unique_ptr<curve::common::TaskThreadPool<>> taskPool_;
+  std::atomic<bool> running_;
 };
 
 }  // namespace copyset

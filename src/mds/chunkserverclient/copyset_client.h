@@ -24,15 +24,15 @@
 #define SRC_MDS_CHUNKSERVERCLIENT_COPYSET_CLIENT_H_
 
 #include <memory>
+
+#include "src/common/channel_pool.h"
+#include "src/mds/chunkserverclient/chunkserver_client.h"
+#include "src/mds/chunkserverclient/chunkserverclient_config.h"
 #include "src/mds/common/mds_define.h"
 #include "src/mds/topology/topology.h"
 
-#include "src/mds/chunkserverclient/chunkserver_client.h"
-#include "src/mds/chunkserverclient/chunkserverclient_config.h"
-#include "src/common/channel_pool.h"
-
-using ::curve::mds::topology::Topology;
 using ::curve::mds::topology::CopySetInfo;
+using ::curve::mds::topology::Topology;
 
 namespace curve {
 namespace mds {
@@ -40,78 +40,73 @@ namespace chunkserverclient {
 
 class CopysetClient {
  public:
-     /**
-      * @brief constructor
-      *
-      * @param topology
-      */
-    CopysetClient(std::shared_ptr<Topology> topo,
-        const ChunkServerClientOption &option,
-        std::shared_ptr<ChannelPool> channelPool)
-        : topo_(topo),
-          chunkserverClient_(
+  /**
+   * @brief constructor
+   *
+   * @param topology
+   */
+  CopysetClient(std::shared_ptr<Topology> topo,
+                const ChunkServerClientOption& option,
+                std::shared_ptr<ChannelPool> channelPool)
+      : topo_(topo),
+        chunkserverClient_(
             std::make_shared<ChunkServerClient>(topo, option, channelPool)),
-          updateLeaderRetryTimes_(option.updateLeaderRetryTimes),
-          updateLeaderRetryIntervalMs_(option.updateLeaderRetryIntervalMs) {
-    }
+        updateLeaderRetryTimes_(option.updateLeaderRetryTimes),
+        updateLeaderRetryIntervalMs_(option.updateLeaderRetryIntervalMs) {}
 
-    void SetChunkServerClient(std::shared_ptr<ChunkServerClient> csClient) {
-        chunkserverClient_ = csClient;
-    }
+  void SetChunkServerClient(std::shared_ptr<ChunkServerClient> csClient) {
+    chunkserverClient_ = csClient;
+  }
 
-    /**
-     * @brief delete the snapshot generated during the dump or from history left
-     *        over. If no snapshot is generated during the dump, modify the
-     *        correctedSn of the chunk
-     *
-     * @param logicPoolId
-     * @param copysetId
-     * @param chunkId
-     * @param correctedSn the version number that needs to be corrected when
-     *                    there is no snapshot file for the chunk
-     *
-     * @return error code
-     */
-    int DeleteChunkSnapshotOrCorrectSn(LogicalPoolID logicalPoolId,
-        CopysetID copysetId,
-        ChunkID chunkId,
-        uint64_t correctedSn);
+  /**
+   * @brief delete the snapshot generated during the dump or from history left
+   *        over. If no snapshot is generated during the dump, modify the
+   *        correctedSn of the chunk
+   *
+   * @param logicPoolId
+   * @param copysetId
+   * @param chunkId
+   * @param correctedSn the version number that needs to be corrected when
+   *                    there is no snapshot file for the chunk
+   *
+   * @return error code
+   */
+  int DeleteChunkSnapshotOrCorrectSn(LogicalPoolID logicalPoolId,
+                                     CopysetID copysetId, ChunkID chunkId,
+                                     uint64_t correctedSn);
 
-    /**
-     * @brief delete chunk files that are not snapshot files
-     *
-     * @param logicPoolId
-     * @param copysetId
-     * @param chunkId
-     * @param sn file version number
-     *
-     * @return error code
-     */
-    int DeleteChunk(LogicalPoolID logicalPoolId,
-        CopysetID copysetId,
-        ChunkID chunkId,
-        uint64_t sn);
+  /**
+   * @brief delete chunk files that are not snapshot files
+   *
+   * @param logicPoolId
+   * @param copysetId
+   * @param chunkId
+   * @param sn file version number
+   *
+   * @return error code
+   */
+  int DeleteChunk(LogicalPoolID logicalPoolId, CopysetID copysetId,
+                  ChunkID chunkId, uint64_t sn);
 
-    /**
-     * @brief update leader
-     *
-     * @param[int][out] copyset
-     *
-     * @return error code
-     */
-    int UpdateLeader(CopySetInfo *copyset);
+  /**
+   * @brief update leader
+   *
+   * @param[int][out] copyset
+   *
+   * @return error code
+   */
+  int UpdateLeader(CopySetInfo* copyset);
 
  private:
-    std::shared_ptr<Topology> topo_;
-    std::shared_ptr<ChunkServerClient> chunkserverClient_;
+  std::shared_ptr<Topology> topo_;
+  std::shared_ptr<ChunkServerClient> chunkserverClient_;
 
-    uint32_t updateLeaderRetryTimes_;
-    uint32_t updateLeaderRetryIntervalMs_;
+  uint32_t updateLeaderRetryTimes_;
+  uint32_t updateLeaderRetryIntervalMs_;
 };
 
 }  // namespace chunkserverclient
 }  // namespace mds
 }  // namespace curve
-
 
 #endif  // SRC_MDS_CHUNKSERVERCLIENT_COPYSET_CLIENT_H_

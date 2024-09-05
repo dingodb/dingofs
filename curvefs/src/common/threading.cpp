@@ -31,24 +31,22 @@ namespace common {
 
 namespace {
 
-pid_t gettid() {
-    return syscall(SYS_gettid);
-}
+pid_t gettid() { return syscall(SYS_gettid); }
 
 }  // namespace
 
 void SetThreadName(const char* name) {
-    // skip main thread
-    if (getpid() == gettid()) {
-        return;
-    }
+  // skip main thread
+  if (getpid() == gettid()) {
+    return;
+  }
 
-    int ret = prctl(PR_SET_NAME, name);
+  int ret = prctl(PR_SET_NAME, name);
 
-    if (ret != 0) {
-        LOG(WARNING) << "Failed to set thread name, tid: " << gettid()
-                     << ", error: " << errno;
-    }
+  if (ret != 0) {
+    LOG(WARNING) << "Failed to set thread name, tid: " << gettid()
+                 << ", error: " << errno;
+  }
 }
 
 }  // namespace common

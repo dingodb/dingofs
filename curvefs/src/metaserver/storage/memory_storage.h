@@ -23,20 +23,20 @@
 #ifndef CURVEFS_SRC_METASERVER_STORAGE_MEMORY_STORAGE_H_
 #define CURVEFS_SRC_METASERVER_STORAGE_MEMORY_STORAGE_H_
 
-#include <string>
 #include <memory>
-#include <utility>
+#include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "src/common/string_util.h"
-#include "src/common/concurrent/rw_lock.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/common.h"
-#include "curvefs/src/metaserver/storage/storage.h"
 #include "curvefs/src/metaserver/storage/iterator.h"
+#include "curvefs/src/metaserver/storage/storage.h"
 #include "curvefs/src/metaserver/storage/value_wrapper.h"
+#include "src/common/concurrent/rw_lock.h"
+#include "src/common/string_util.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -44,263 +44,237 @@ namespace storage {
 
 using ::curve::common::RWLock;
 using ::curve::common::StringStartWith;
-using ::curvefs::metaserver::Inode;
 using ::curvefs::metaserver::Dentry;
+using ::curvefs::metaserver::Inode;
 using ::curvefs::metaserver::S3ChunkInfoList;
 using ::curvefs::metaserver::VolumeExtentSlice;
 using STORAGE_TYPE = KVStorage::STORAGE_TYPE;
 
 class MemoryStorage : public KVStorage, public StorageTransaction {
  public:
-    using UnorderedContainerType =
-        std::unordered_map<std::string, ValueWrapper>;
+  using UnorderedContainerType = std::unordered_map<std::string, ValueWrapper>;
 
-    using UnorderedSeralizedContainerType =
-        std::unordered_map<std::string, std::string>;
+  using UnorderedSeralizedContainerType =
+      std::unordered_map<std::string, std::string>;
 
-    using OrderedContainerType =
-        absl::btree_map<std::string, ValueWrapper>;
+  using OrderedContainerType = absl::btree_map<std::string, ValueWrapper>;
 
-    using OrderedSeralizedContainerType =
-        absl::btree_map<std::string, std::string>;
+  using OrderedSeralizedContainerType =
+      absl::btree_map<std::string, std::string>;
 
  public:
-    explicit MemoryStorage(StorageOptions options);
+  explicit MemoryStorage(StorageOptions options);
 
-    STORAGE_TYPE Type() override;
+  STORAGE_TYPE Type() override;
 
-    bool Open() override;
+  bool Open() override;
 
-    bool Close() override;
+  bool Close() override;
 
-    StorageOptions GetStorageOptions() const override;
+  StorageOptions GetStorageOptions() const override;
 
-    Status HGet(const std::string& name,
-                const std::string& key,
-                ValueType* value) override;
+  Status HGet(const std::string& name, const std::string& key,
+              ValueType* value) override;
 
-    Status HSet(const std::string& name,
-                const std::string& key,
-                const ValueType& value) override;
+  Status HSet(const std::string& name, const std::string& key,
+              const ValueType& value) override;
 
-    Status HDel(const std::string& name, const std::string& key) override;
+  Status HDel(const std::string& name, const std::string& key) override;
 
-    std::shared_ptr<Iterator> HGetAll(const std::string& name) override;
+  std::shared_ptr<Iterator> HGetAll(const std::string& name) override;
 
-    size_t HSize(const std::string& name) override;
+  size_t HSize(const std::string& name) override;
 
-    Status HClear(const std::string& name) override;
+  Status HClear(const std::string& name) override;
 
-    Status SGet(const std::string& name,
-                const std::string& key,
-                ValueType* value) override;
+  Status SGet(const std::string& name, const std::string& key,
+              ValueType* value) override;
 
-    Status SSet(const std::string& name,
-                const std::string& key,
-                const ValueType& value) override;
+  Status SSet(const std::string& name, const std::string& key,
+              const ValueType& value) override;
 
-    Status SDel(const std::string& name, const std::string& key) override;
+  Status SDel(const std::string& name, const std::string& key) override;
 
-    std::shared_ptr<Iterator> SSeek(const std::string& name,
-                                    const std::string& prefix) override;
+  std::shared_ptr<Iterator> SSeek(const std::string& name,
+                                  const std::string& prefix) override;
 
-    std::shared_ptr<Iterator> SGetAll(const std::string& name) override;
+  std::shared_ptr<Iterator> SGetAll(const std::string& name) override;
 
-    size_t SSize(const std::string& name) override;
+  size_t SSize(const std::string& name) override;
 
-    Status SClear(const std::string& name) override;
+  Status SClear(const std::string& name) override;
 
-    // NOTE: now we can't support transaction for memory storage,
-    // so these interface is dummy, it will pretend everything works well.
-    std::shared_ptr<StorageTransaction> BeginTransaction() override;
+  // NOTE: now we can't support transaction for memory storage,
+  // so these interface is dummy, it will pretend everything works well.
+  std::shared_ptr<StorageTransaction> BeginTransaction() override;
 
-    Status Commit() override;
+  Status Commit() override;
 
-    Status Rollback() override;
+  Status Rollback() override;
 
-    bool Checkpoint(const std::string& dir,
-                    std::vector<std::string>* files) override;
+  bool Checkpoint(const std::string& dir,
+                  std::vector<std::string>* files) override;
 
-    bool Recover(const std::string& dir) override;
+  bool Recover(const std::string& dir) override;
 
  private:
-    RWLock rwLock_;
-    StorageOptions options_;
+  RWLock rwLock_;
+  StorageOptions options_;
 
-    std::unordered_map<std::string,
-                       std::shared_ptr<UnorderedContainerType>>
-        UnorderedContainerDict_;
+  std::unordered_map<std::string, std::shared_ptr<UnorderedContainerType>>
+      UnorderedContainerDict_;
 
-    std::unordered_map<std::string,
-                       std::shared_ptr<UnorderedSeralizedContainerType>>
-        UnorderedSeralizedContainerDict_;
+  std::unordered_map<std::string,
+                     std::shared_ptr<UnorderedSeralizedContainerType>>
+      UnorderedSeralizedContainerDict_;
 
-    std::unordered_map<std::string,
-                       std::shared_ptr<OrderedContainerType>>
-        OrderedContainerDict_;
+  std::unordered_map<std::string, std::shared_ptr<OrderedContainerType>>
+      OrderedContainerDict_;
 
-    std::unordered_map<std::string,
-                       std::shared_ptr<OrderedSeralizedContainerType>>
-        OrderedSeralizedContainerDict_;
+  std::unordered_map<std::string,
+                     std::shared_ptr<OrderedSeralizedContainerType>>
+      OrderedSeralizedContainerDict_;
 };
 
-template<typename ContainerType>
+template <typename ContainerType>
 class MemoryStorageIterator : public Iterator {
  public:
-    MemoryStorageIterator(std::shared_ptr<ContainerType> container,
-                          const std::string& prefix)
-        : prefix_(prefix),
-          status_(0),
-          prefixChecking_(true),
-          container_(container) {}
+  MemoryStorageIterator(std::shared_ptr<ContainerType> container,
+                        const std::string& prefix)
+      : prefix_(prefix),
+        status_(0),
+        prefixChecking_(true),
+        container_(container) {}
 
-    // NOTE: now we can't caclute the size for range operate
-    uint64_t Size() override {
-        return (prefix_.size() > 0) ? 0 : container_->size();
+  // NOTE: now we can't caclute the size for range operate
+  uint64_t Size() override {
+    return (prefix_.size() > 0) ? 0 : container_->size();
+  }
+
+  bool Valid() override {
+    if (status_ != 0) {
+      return false;
+    } else if (current_ == container_->end()) {
+      return false;
+    } else if (prefixChecking_ && prefix_.size() > 0 &&
+               !StringStartWith(current_->first, prefix_)) {
+      return false;
     }
+    return true;
+  }
 
-    bool Valid() override {
-        if (status_ != 0) {
-            return false;
-        } else if (current_ == container_->end()) {
-            return false;
-        } else if (prefixChecking_ && prefix_.size() > 0 &&
-            !StringStartWith(current_->first, prefix_)) {
-            return false;
-        }
-        return true;
-    }
+  void SeekToFirst() override {}
 
-    void SeekToFirst() override {}
+  void Next() override { current_++; }
 
-    void Next() override {
-        current_++;
-    }
+  std::string Key() override { return current_->first; }
 
-    std::string Key() override {
-        return current_->first;
-    }
+  std::string Value() override { return ""; }
 
-    std::string Value() override {
-        return "";
-    }
+  int Status() override { return status_; }
 
-    int Status() override {
-        return status_;
-    }
-
-    void DisablePrefixChecking() override {
-        prefixChecking_ = false;
-    }
+  void DisablePrefixChecking() override { prefixChecking_ = false; }
 
  protected:
-    std::string prefix_;
-    int status_;
-    bool prefixChecking_;
-    std::shared_ptr<ContainerType> container_;
-    typename ContainerType::const_iterator current_;
+  std::string prefix_;
+  int status_;
+  bool prefixChecking_;
+  std::shared_ptr<ContainerType> container_;
+  typename ContainerType::const_iterator current_;
 };
 
-template<typename ContainerType>
+template <typename ContainerType>
 class UnorderedContainerIterator : public MemoryStorageIterator<ContainerType> {
  public:
-    using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
+  using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
 
-    void SeekToFirst() override {
-        this->current_ = this->container_->begin();
-    }
+  void SeekToFirst() override { this->current_ = this->container_->begin(); }
 
-    std::string Value() override {
-        std::string svalue;
-        auto message = this->current_->second.Message();
-        if (!message->SerializeToString(&svalue)) {
-            this->status_ = -1;
-        }
-        return svalue;
+  std::string Value() override {
+    std::string svalue;
+    auto message = this->current_->second.Message();
+    if (!message->SerializeToString(&svalue)) {
+      this->status_ = -1;
     }
+    return svalue;
+  }
 
-    const ValueType* RawValue() const override {
-        return this->current_->second.Message();
-    }
+  const ValueType* RawValue() const override {
+    return this->current_->second.Message();
+  }
 
-    bool ParseFromValue(ValueType* value) override {
-        auto message = this->current_->second.Message();
-        value->CopyFrom(*message);
-        return true;
-    }
+  bool ParseFromValue(ValueType* value) override {
+    auto message = this->current_->second.Message();
+    value->CopyFrom(*message);
+    return true;
+  }
 };
 
-template<typename ContainerType>
-class UnorderedSeralizedContainerIterator :
-public MemoryStorageIterator<ContainerType> {
+template <typename ContainerType>
+class UnorderedSeralizedContainerIterator
+    : public MemoryStorageIterator<ContainerType> {
  public:
-    using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
+  using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
 
-    void SeekToFirst() override {
-        this->current_ = this->container_->begin();
-    }
+  void SeekToFirst() override { this->current_ = this->container_->begin(); }
 
-    std::string Value() override {
-        return this->current_->second;
-    }
+  std::string Value() override { return this->current_->second; }
 
-    bool ParseFromValue(ValueType* value) override {
-        if (!value->ParseFromString(this->current_->second)) {
-            return false;
-        }
-        return true;
+  bool ParseFromValue(ValueType* value) override {
+    if (!value->ParseFromString(this->current_->second)) {
+      return false;
     }
+    return true;
+  }
 };
 
-template<typename ContainerType>
+template <typename ContainerType>
 class OrderedContainerIterator : public MemoryStorageIterator<ContainerType> {
  public:
-    using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
+  using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
 
-    void SeekToFirst() override {
-        this->current_ = this->container_->lower_bound(this->prefix_);
-    }
+  void SeekToFirst() override {
+    this->current_ = this->container_->lower_bound(this->prefix_);
+  }
 
-    std::string Value() override {
-        std::string svalue;
-        auto message = this->current_->second.Message();
-        if (!message->SerializeToString(&svalue)) {
-            this->status_ = -1;
-        }
-        return svalue;
+  std::string Value() override {
+    std::string svalue;
+    auto message = this->current_->second.Message();
+    if (!message->SerializeToString(&svalue)) {
+      this->status_ = -1;
     }
+    return svalue;
+  }
 
-    const ValueType* RawValue() const override {
-        return this->current_->second.Message();
-    }
+  const ValueType* RawValue() const override {
+    return this->current_->second.Message();
+  }
 
-    bool ParseFromValue(ValueType* value) override {
-        auto message = this->current_->second.Message();
-        value->CopyFrom(*message);
-        return true;
-    }
+  bool ParseFromValue(ValueType* value) override {
+    auto message = this->current_->second.Message();
+    value->CopyFrom(*message);
+    return true;
+  }
 };
 
-template<typename ContainerType>
-class OrderedSeralizedContainerIterator :
-public MemoryStorageIterator<ContainerType> {
+template <typename ContainerType>
+class OrderedSeralizedContainerIterator
+    : public MemoryStorageIterator<ContainerType> {
  public:
-    using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
+  using MemoryStorageIterator<ContainerType>::MemoryStorageIterator;
 
-    void SeekToFirst() override {
-        this->current_ = this->container_->lower_bound(this->prefix_);
-    }
+  void SeekToFirst() override {
+    this->current_ = this->container_->lower_bound(this->prefix_);
+  }
 
-    std::string Value() override {
-        return this->current_->second;
-    }
+  std::string Value() override { return this->current_->second; }
 
-    bool ParseFromValue(ValueType* value) override {
-        if (!value->ParseFromString(this->current_->second)) {
-            return false;
-        }
-        return true;
+  bool ParseFromValue(ValueType* value) override {
+    if (!value->ParseFromString(this->current_->second)) {
+      return false;
     }
+    return true;
+  }
 };
 
 }  // namespace storage

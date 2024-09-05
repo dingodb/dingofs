@@ -20,41 +20,43 @@
  * Author: tongguangxun
  */
 
-#include <glog/logging.h>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <string>
 #include "src/common/net_common.h"
+
+#include <glog/logging.h>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <string>
 
 namespace curve {
 namespace common {
 TEST(Common, NetCommon) {
-    std::string addr = "123.0.0.1";
-    ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
-    addr = "123.0.0.1:65537";
-    ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
-    addr = "123.0.q.1:65537";
-    ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
-    addr = "123.0.0.1:657";
-    ASSERT_TRUE(NetCommon::CheckAddressValid(addr));
-    std::string ip;
-    uint32_t port;
-    addr = "123.0.0.1";
-    ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
-    addr = "123.0.0.1:65537";
-    ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
-    addr = "123.0.q.1:65537";
-    ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
-    addr = "123.0.0.1:657";
-    ASSERT_TRUE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
-    ASSERT_EQ("123.0.0.1", ip);
-    ASSERT_EQ(657, port);
+  std::string addr = "123.0.0.1";
+  ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
+  addr = "123.0.0.1:65537";
+  ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
+  addr = "123.0.q.1:65537";
+  ASSERT_FALSE(NetCommon::CheckAddressValid(addr));
+  addr = "123.0.0.1:657";
+  ASSERT_TRUE(NetCommon::CheckAddressValid(addr));
+  std::string ip;
+  uint32_t port;
+  addr = "123.0.0.1";
+  ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
+  addr = "123.0.0.1:65537";
+  ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
+  addr = "123.0.q.1:65537";
+  ASSERT_FALSE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
+  addr = "123.0.0.1:657";
+  ASSERT_TRUE(NetCommon::SplitAddrToIpPort(addr, &ip, &port));
+  ASSERT_EQ("123.0.0.1", ip);
+  ASSERT_EQ(657, port);
 }
 
 TEST(Common, GetLocalIP) {
-    std::string ip;
-    ASSERT_TRUE(NetCommon::GetLocalIP(&ip));
-    LOG(INFO) << "IP = " << ip.c_str();
+  std::string ip;
+  ASSERT_TRUE(NetCommon::GetLocalIP(&ip));
+  LOG(INFO) << "IP = " << ip.c_str();
 }
-}   // namespace common
-}   // namespace curve
+}  // namespace common
+}  // namespace curve

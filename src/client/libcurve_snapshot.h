@@ -27,10 +27,10 @@
 #include <string>
 #include <vector>
 
-#include "src/client/mds_client.h"
-#include "src/client/config_info.h"
 #include "src/client/client_common.h"
+#include "src/client/config_info.h"
 #include "src/client/iomanager4chunk.h"
+#include "src/client/mds_client.h"
 
 namespace curve {
 namespace client {
@@ -59,9 +59,8 @@ class SnapshotClient {
    * @param: seq是出参，获取该文件的版本信息
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
-  int CreateSnapShot(const std::string& filename,
-                                const UserInfo_t& userinfo,
-                                uint64_t* seq);
+  int CreateSnapShot(const std::string& filename, const UserInfo_t& userinfo,
+                     uint64_t* seq);
   /**
    * 删除快照
    * @param: userinfo是用户信息
@@ -69,9 +68,8 @@ class SnapshotClient {
    * @param: seq该文件的版本信息
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
-  int DeleteSnapShot(const std::string& filename,
-                                const UserInfo_t& userinfo,
-                                uint64_t seq);
+  int DeleteSnapShot(const std::string& filename, const UserInfo_t& userinfo,
+                     uint64_t seq);
   /**
    * 获取快照对应的文件信息
    * @param: userinfo是用户信息
@@ -80,10 +78,8 @@ class SnapshotClient {
    * @param: snapinfo是出参，保存当前文件的基础信息
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
-  int GetSnapShot(const std::string& fname,
-                             const UserInfo_t& userinfo,
-                             uint64_t seq,
-                             FInfo* snapinfo);
+  int GetSnapShot(const std::string& fname, const UserInfo_t& userinfo,
+                  uint64_t seq, FInfo* snapinfo);
   /**
    * 列出当前文件对应版本列表的文件信息
    * @param: userinfo是用户信息
@@ -92,10 +88,9 @@ class SnapshotClient {
    * @param: snapif是出参，获取多个seq号的文件信息
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
-  int ListSnapShot(const std::string& filename,
-                            const UserInfo_t& userinfo,
-                            const std::vector<uint64_t>* seqvec,
-                            std::map<uint64_t, FInfo>* snapif);
+  int ListSnapShot(const std::string& filename, const UserInfo_t& userinfo,
+                   const std::vector<uint64_t>* seqvec,
+                   std::map<uint64_t, FInfo>* snapif);
   /**
    * 获取快照数据segment信息
    * @param: userinfo是用户信息
@@ -106,10 +101,8 @@ class SnapshotClient {
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
   int GetSnapshotSegmentInfo(const std::string& filename,
-                            const UserInfo_t& userinfo,
-                            uint64_t seq,
-                            uint64_t offset,
-                            SegmentInfo *segInfo);
+                             const UserInfo_t& userinfo, uint64_t seq,
+                             uint64_t offset, SegmentInfo* segInfo);
 
   /**
    * 读取seq版本号的快照数据
@@ -122,7 +115,7 @@ class SnapshotClient {
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
   int ReadChunkSnapshot(ChunkIDInfo cidinfo, uint64_t seq, uint64_t offset,
-                        uint64_t len, char *buf, SnapCloneClosure* scc);
+                        uint64_t len, char* buf, SnapCloneClosure* scc);
   /**
    * 删除此次转储时产生的或者历史遗留的快照
    * 如果转储过程中没有产生快照，则修改chunk的correctedSn
@@ -130,13 +123,13 @@ class SnapshotClient {
    * @param: correctedSeq是chunk需要修正的版本
    */
   int DeleteChunkSnapshotOrCorrectSn(ChunkIDInfo cidinfo,
-                                                uint64_t correctedSeq);
+                                     uint64_t correctedSeq);
   /**
    * 获取chunk的版本信息，chunkInfo是出参
    * @param: cidinfo是当前chunk对应的id信息
    * @param: chunkInfo是快照的详细信息
    */
-  int GetChunkInfo(ChunkIDInfo cidinfo, ChunkInfoDetail *chunkInfo);
+  int GetChunkInfo(ChunkIDInfo cidinfo, ChunkInfoDetail* chunkInfo);
   /**
    * 获取快照状态
    * @param: userinfo是用户信息
@@ -144,9 +137,8 @@ class SnapshotClient {
    * @param: seq是文件版本号信息
    */
   int CheckSnapShotStatus(const std::string& filename,
-                                const UserInfo_t& userinfo,
-                                uint64_t seq,
-                                FileStatus* filestatus);
+                          const UserInfo_t& userinfo, uint64_t seq,
+                          FileStatus* filestatus);
   /**
    * @brief 创建clone文件
    * @detail
@@ -167,9 +159,8 @@ class SnapshotClient {
    */
   int CreateCloneFile(const std::string& source, const std::string& destination,
                       const UserInfo_t& userinfo, uint64_t size, uint64_t sn,
-                      uint32_t chunksize,
-                      uint64_t stripeUnit, uint64_t stripeCount,
-                      FInfo* fileinfo);
+                      uint32_t chunksize, uint64_t stripeUnit,
+                      uint64_t stripeCount, FInfo* fileinfo);
 
   /**
    * @brief lazy 创建clone chunk
@@ -182,8 +173,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int CreateCloneChunk(const std::string &location,
-                       const ChunkIDInfo &chunkidinfo, uint64_t sn,
+  int CreateCloneChunk(const std::string& location,
+                       const ChunkIDInfo& chunkidinfo, uint64_t sn,
                        uint64_t correntSn, uint64_t chunkSize,
                        SnapCloneClosure* scc);
 
@@ -197,9 +188,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int RecoverChunk(const ChunkIDInfo &chunkidinfo,
-                   uint64_t offset, uint64_t len,
-                   SnapCloneClosure* scc);
+  int RecoverChunk(const ChunkIDInfo& chunkidinfo, uint64_t offset,
+                   uint64_t len, SnapCloneClosure* scc);
 
   /**
    * @brief 通知mds完成Clone Meta
@@ -209,8 +199,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int CompleteCloneMeta(const std::string &destination,
-                                const UserInfo_t& userinfo);
+  int CompleteCloneMeta(const std::string& destination,
+                        const UserInfo_t& userinfo);
 
   /**
    * @brief 通知mds完成Clone Chunk
@@ -220,8 +210,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int CompleteCloneFile(const std::string &destination,
-                                const UserInfo_t& userinfo);
+  int CompleteCloneFile(const std::string& destination,
+                        const UserInfo_t& userinfo);
 
   /**
    * 设置clone文件状态
@@ -232,10 +222,9 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int SetCloneFileStatus(const std::string &filename,
-                          const FileStatus& filestatus,
-                          const UserInfo_t& userinfo,
-                          uint64_t fileID = 0);
+  int SetCloneFileStatus(const std::string& filename,
+                         const FileStatus& filestatus,
+                         const UserInfo_t& userinfo, uint64_t fileID = 0);
 
   /**
    * @brief 获取文件信息
@@ -246,9 +235,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int GetFileInfo(const std::string &filename,
-                                const UserInfo_t& userinfo,
-                                FInfo* fileInfo);
+  int GetFileInfo(const std::string& filename, const UserInfo_t& userinfo,
+                  FInfo* fileInfo);
 
   /**
    * @brief 查询或分配文件segment信息
@@ -259,10 +247,8 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int GetOrAllocateSegmentInfo(bool allocate,
-                                uint64_t offset,
-                                const FInfo_t* fi,
-                                SegmentInfo *segInfo);
+  int GetOrAllocateSegmentInfo(bool allocate, uint64_t offset,
+                               const FInfo_t* fi, SegmentInfo* segInfo);
 
   /**
    * @brief 为recover rename复制的文件
@@ -275,11 +261,9 @@ class SnapshotClient {
    *
    * @return 错误码
    */
-  int RenameCloneFile(const UserInfo_t& userinfo,
-                              uint64_t originId,
-                              uint64_t destinationId,
-                              const std::string &origin,
-                              const std::string &destination);
+  int RenameCloneFile(const UserInfo_t& userinfo, uint64_t originId,
+                      uint64_t destinationId, const std::string& origin,
+                      const std::string& destination);
 
   /**
    * 删除文件
@@ -287,9 +271,8 @@ class SnapshotClient {
    * @param: filename待删除的文件名
    * @param: id为文件id，默认值为0，如果用户不指定该值，不会传id到mds
    */
-  int DeleteFile(const std::string& filename,
-                            const UserInfo_t& userinfo,
-                            uint64_t id = 0);
+  int DeleteFile(const std::string& filename, const UserInfo_t& userinfo,
+                 uint64_t id = 0);
 
   /**
    * 析构，回收资源
@@ -298,7 +281,7 @@ class SnapshotClient {
   /**
    * 获取iomanager信息，测试代码使用
    */
-  IOManager4Chunk* GetIOManager4Chunk() {return &iomanager4chunk_;}
+  IOManager4Chunk* GetIOManager4Chunk() { return &iomanager4chunk_; }
 
  private:
   /**
@@ -308,18 +291,18 @@ class SnapshotClient {
    * @return: 成功返回LIBCURVE_ERROR::OK,否则LIBCURVE_ERROR::FAILED
    */
   int GetServerList(const LogicPoolID& lpid,
-                            const std::vector<CopysetID>& csid);
+                    const std::vector<CopysetID>& csid);
 
  private:
   // MDSClient负责与Metaserver通信，所有通信都走这个接口
-  MDSClient               mdsclient_;
+  MDSClient mdsclient_;
 
   // IOManager4Chunk用于管理发向chunkserver端的IO
-  IOManager4Chunk         iomanager4chunk_;
+  IOManager4Chunk iomanager4chunk_;
 
   // 用于client 配置读取
   ClientConfig clientconfig_;
 };
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve
 #endif  // SRC_CLIENT_LIBCURVE_SNAPSHOT_H_

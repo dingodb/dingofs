@@ -37,119 +37,114 @@ using brpc::ClosureGuard;
 void SpaceServiceImpl::AllocateBlockGroup(
     google::protobuf::RpcController* /*controller*/,
     const AllocateBlockGroupRequest* request,
-    AllocateBlockGroupResponse* response,
-    google::protobuf::Closure* done) {
-    ClosureGuard doneGuard(done);
+    AllocateBlockGroupResponse* response, google::protobuf::Closure* done) {
+  ClosureGuard doneGuard(done);
 
-    auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
-    if (!space) {
-        LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
-        response->set_status(SpaceErrNotFound);
-        return;
+  auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
+  if (!space) {
+    LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
+    response->set_status(SpaceErrNotFound);
+    return;
+  }
+
+  std::vector<BlockGroup> groups;
+  auto err =
+      space->AllocateBlockGroups(request->count(), request->owner(), &groups);
+  if (err != SpaceOk) {
+    LOG(ERROR) << "Allocate block groups failed, err: "
+               << SpaceErrCode_Name(err);
+  } else {
+    for (auto& group : groups) {
+      response->add_blockgroups()->Swap(&group);
     }
+  }
 
-    std::vector<BlockGroup> groups;
-    auto err =
-        space->AllocateBlockGroups(request->count(), request->owner(), &groups);
-    if (err != SpaceOk) {
-        LOG(ERROR) << "Allocate block groups failed, err: "
-                   << SpaceErrCode_Name(err);
-    } else {
-        for (auto& group : groups) {
-            response->add_blockgroups()->Swap(&group);
-        }
-    }
-
-    response->set_status(err);
+  response->set_status(err);
 }
 
 void SpaceServiceImpl::AcquireBlockGroup(
     google::protobuf::RpcController* /*controller*/,
     const AcquireBlockGroupRequest* request,
-    AcquireBlockGroupResponse* response,
-    google::protobuf::Closure* done) {
-    ClosureGuard doneGuard(done);
+    AcquireBlockGroupResponse* response, google::protobuf::Closure* done) {
+  ClosureGuard doneGuard(done);
 
-    auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
-    if (!space) {
-        LOG(WARNING) << "Volume space not found, fsid: " << request->fsid()
-                     << ", block group offset: " << request->blockgroupoffset();
-        response->set_status(SpaceErrNotFound);
-        return;
-    }
+  auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
+  if (!space) {
+    LOG(WARNING) << "Volume space not found, fsid: " << request->fsid()
+                 << ", block group offset: " << request->blockgroupoffset();
+    response->set_status(SpaceErrNotFound);
+    return;
+  }
 
-    auto err =
-        space->AcquireBlockGroup(request->blockgroupoffset(), request->owner(),
-                                 response->mutable_blockgroups());
-    if (err != SpaceOk) {
-        LOG(WARNING) << "Acquire block group failed, fsId: " << request->fsid()
-                     << ", block group offset: " << request->blockgroupoffset()
-                     << ", err: " << SpaceErrCode_Name(err);
-        response->clear_blockgroups();
-    }
+  auto err =
+      space->AcquireBlockGroup(request->blockgroupoffset(), request->owner(),
+                               response->mutable_blockgroups());
+  if (err != SpaceOk) {
+    LOG(WARNING) << "Acquire block group failed, fsId: " << request->fsid()
+                 << ", block group offset: " << request->blockgroupoffset()
+                 << ", err: " << SpaceErrCode_Name(err);
+    response->clear_blockgroups();
+  }
 
-    response->set_status(err);
+  response->set_status(err);
 }
 
 void SpaceServiceImpl::ReleaseBlockGroup(
     google::protobuf::RpcController* /*controller*/,
     const ReleaseBlockGroupRequest* request,
-    ReleaseBlockGroupResponse* response,
-    google::protobuf::Closure* done) {
-    ClosureGuard doneGuard(done);
+    ReleaseBlockGroupResponse* response, google::protobuf::Closure* done) {
+  ClosureGuard doneGuard(done);
 
-    auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
-    if (!space) {
-        LOG(WARNING) << "Volume space not found, fsId: " << request->fsid();
-        response->set_status(SpaceErrNotFound);
-        return;
-    }
+  auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
+  if (!space) {
+    LOG(WARNING) << "Volume space not found, fsId: " << request->fsid();
+    response->set_status(SpaceErrNotFound);
+    return;
+  }
 
-    std::vector<BlockGroup> groups(request->blockgroups().begin(),
-                                   request->blockgroups().end());
-    auto err = space->ReleaseBlockGroups(groups);
-    if (err != SpaceOk) {
-        LOG(WARNING) << "Release block group failed, fsId: " << request->fsid()
-                     << ", err: " << SpaceErrCode_Name(err);
-    }
+  std::vector<BlockGroup> groups(request->blockgroups().begin(),
+                                 request->blockgroups().end());
+  auto err = space->ReleaseBlockGroups(groups);
+  if (err != SpaceOk) {
+    LOG(WARNING) << "Release block group failed, fsId: " << request->fsid()
+                 << ", err: " << SpaceErrCode_Name(err);
+  }
 
-    response->set_status(err);
+  response->set_status(err);
 }
 
 void SpaceServiceImpl::StatSpace(
     google::protobuf::RpcController* /*controller*/,
-    const StatSpaceRequest* request,
-    StatSpaceResponse* response,
+    const StatSpaceRequest* request, StatSpaceResponse* response,
     google::protobuf::Closure* done) {
-    ClosureGuard doneGuard(done);
+  ClosureGuard doneGuard(done);
 
-    auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
-    if (!space) {
-        LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
-        response->set_status(SpaceErrNotFound);
-        return;
-    }
+  auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
+  if (!space) {
+    LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
+    response->set_status(SpaceErrNotFound);
+    return;
+  }
 
-    // TODO(wuhanqing): implement stat space
-    response->set_status(SpaceOk);
+  // TODO(wuhanqing): implement stat space
+  response->set_status(SpaceOk);
 }
 
 void SpaceServiceImpl::UpdateUsage(
     google::protobuf::RpcController* /*controller*/,
-    const UpdateUsageRequest* request,
-    UpdateUsageResponse* response,
+    const UpdateUsageRequest* request, UpdateUsageResponse* response,
     google::protobuf::Closure* done) {
-    ClosureGuard doneGuard(done);
+  ClosureGuard doneGuard(done);
 
-    auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
-    if (!space) {
-        LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
-        response->set_status(SpaceErrNotFound);
-        return;
-    }
+  auto* space = spaceMgr_->GetVolumeSpace(request->fsid());
+  if (!space) {
+    LOG(WARNING) << "Volume space not found, fsid: " << request->fsid();
+    response->set_status(SpaceErrNotFound);
+    return;
+  }
 
-    // TODO(wuhanqing): update usage
-    response->set_status(SpaceOk);
+  // TODO(wuhanqing): update usage
+  response->set_status(SpaceOk);
 }
 
 }  // namespace space

@@ -34,64 +34,63 @@ namespace curvefs {
 namespace mds {
 namespace topology {
 
-using curvefs::mds::POOLKEYPREFIX;
-using curvefs::mds::POOLKEYEND;
-using curvefs::mds::ZONEKEYPREFIX;
-using curvefs::mds::ZONEKEYEND;
-using curvefs::mds::SERVERKEYPREFIX;
-using curvefs::mds::SERVERKEYEND;
-using curvefs::mds::METASERVERKEYPREFIX;
-using curvefs::mds::METASERVERKEYEND;
-using curvefs::mds::CLUSTERINFOKEY;
-using curvefs::mds::COPYSETKEYPREFIX;
-using curvefs::mds::COPYSETKEYEND;
 using curve::common::EncodeBigEndian;
+using curvefs::mds::CLUSTERINFOKEY;
+using curvefs::mds::COPYSETKEYEND;
+using curvefs::mds::COPYSETKEYPREFIX;
+using curvefs::mds::METASERVERKEYEND;
+using curvefs::mds::METASERVERKEYPREFIX;
+using curvefs::mds::POOLKEYEND;
+using curvefs::mds::POOLKEYPREFIX;
+using curvefs::mds::SERVERKEYEND;
+using curvefs::mds::SERVERKEYPREFIX;
+using curvefs::mds::ZONEKEYEND;
+using curvefs::mds::ZONEKEYPREFIX;
 
 class TopologyStorageCodec {
  public:
-    // there are three types of function here:
-    // Encode__Key: attach item id to item prefix
-    // Encode__Data: convert data structure to a string
-    // Decode__Data: convert a string to data structure
-    std::string EncodePoolKey(PoolIdType id);
-    bool EncodePoolData(const Pool &data, std::string *value);
-    bool DecodePoolData(const std::string &value, Pool *data);
+  // there are three types of function here:
+  // Encode__Key: attach item id to item prefix
+  // Encode__Data: convert data structure to a string
+  // Decode__Data: convert a string to data structure
+  std::string EncodePoolKey(PoolIdType id);
+  bool EncodePoolData(const Pool& data, std::string* value);
+  bool DecodePoolData(const std::string& value, Pool* data);
 
-    std::string EncodeZoneKey(ZoneIdType id);
-    bool EncodeZoneData(const Zone &data, std::string *value);
-    bool DecodeZoneData(const std::string &value, Zone *data);
+  std::string EncodeZoneKey(ZoneIdType id);
+  bool EncodeZoneData(const Zone& data, std::string* value);
+  bool DecodeZoneData(const std::string& value, Zone* data);
 
-    std::string EncodeServerKey(ServerIdType id);
-    bool EncodeServerData(const Server &data, std::string *value);
-    bool DecodeServerData(const std::string &value, Server *data);
+  std::string EncodeServerKey(ServerIdType id);
+  bool EncodeServerData(const Server& data, std::string* value);
+  bool DecodeServerData(const std::string& value, Server* data);
 
-    std::string EncodeMetaServerKey(MetaServerIdType id);
-    bool EncodeMetaServerData(const MetaServer &data, std::string *value);
-    bool DecodeMetaServerData(const std::string &value, MetaServer *data);
+  std::string EncodeMetaServerKey(MetaServerIdType id);
+  bool EncodeMetaServerData(const MetaServer& data, std::string* value);
+  bool DecodeMetaServerData(const std::string& value, MetaServer* data);
 
-    std::string EncodeCopySetKey(const CopySetKey &id);
-    bool EncodeCopySetData(const CopySetInfo &data, std::string *value);
-    bool DecodeCopySetData(const std::string &value, CopySetInfo *data);
+  std::string EncodeCopySetKey(const CopySetKey& id);
+  bool EncodeCopySetData(const CopySetInfo& data, std::string* value);
+  bool DecodeCopySetData(const std::string& value, CopySetInfo* data);
 
-    std::string EncodePartitionKey(PartitionIdType id);
-    bool EncodePartitionData(const Partition &data, std::string *value);
-    bool DecodePartitionData(const std::string &value, Partition *data);
+  std::string EncodePartitionKey(PartitionIdType id);
+  bool EncodePartitionData(const Partition& data, std::string* value);
+  bool DecodePartitionData(const std::string& value, Partition* data);
 
-    bool EncodeClusterInfoData(const ClusterInformation &data,
-                               std::string *value);
-    bool DecodeClusterInfoData(const std::string &value,
-                              ClusterInformation *data);
+  bool EncodeClusterInfoData(const ClusterInformation& data,
+                             std::string* value);
+  bool DecodeClusterInfoData(const std::string& value,
+                             ClusterInformation* data);
 
-    std::string EncodeMemcacheClusterKey(MetaServerIdType id);
-    bool EncodeMemcacheClusterData(const MemcacheCluster& data,
-                                   std::string* value);
-    bool DecodeMemcacheClusterData(const std::string& value,
-                                  MemcacheCluster* data);
+  std::string EncodeMemcacheClusterKey(MetaServerIdType id);
+  bool EncodeMemcacheClusterData(const MemcacheCluster& data,
+                                 std::string* value);
+  bool DecodeMemcacheClusterData(const std::string& value,
+                                 MemcacheCluster* data);
 
-    std::string EncodeFs2MemcacheClusterKey(FsIdType fsId);
-    bool DecodeFs2MemcacheClusterKey(const std::string& value, FsIdType* data);
+  std::string EncodeFs2MemcacheClusterKey(FsIdType fsId);
+  bool DecodeFs2MemcacheClusterKey(const std::string& value, FsIdType* data);
 };
-
 
 }  // namespace topology
 }  // namespace mds

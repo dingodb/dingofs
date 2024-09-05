@@ -24,44 +24,42 @@
 namespace curve {
 namespace client {
 
-UnstableState
-UnstableHelper::GetCurrentUnstableState(ChunkServerID csId,
-                                        const butil::EndPoint &csEndPoint) {
-    std::string ip = butil::ip2str(csEndPoint.ip).c_str();
+UnstableState UnstableHelper::GetCurrentUnstableState(
+    ChunkServerID csId, const butil::EndPoint& csEndPoint) {
+  std::string ip = butil::ip2str(csEndPoint.ip).c_str();
 
-    mtx_.lock();
-    // 如果当前ip已经超过阈值，则直接返回chunkserver unstable
-    uint32_t unstabled = serverUnstabledChunkservers_[ip].size();
-    if (unstabled >= option_.serverUnstableThreshold) {
-        serverUnstabledChunkservers_[ip].emplace(csId);
-        mtx_.unlock();
-        return UnstableState::ChunkServerUnstable;
-    }
-
-    bool exceed =
-        timeoutTimes_[csId] > option_.maxStableChunkServerTimeoutTimes;
+  mtx_.lock();
+  // 如果当前ip已经超过阈值，则直接返回chunkserver unstable
+  uint32_t unstabled = serverUnstabledChunkservers_[ip].size();
+  if (unstabled >= option_.serverUnstableThreshold) {
+    serverUnstabledChunkservers_[ip].emplace(csId);
     mtx_.unlock();
+    return UnstableState::ChunkServerUnstable;
+  }
 
-    if (exceed == false) {
-        return UnstableState::NoUnstable;
-    }
+  bool exceed = timeoutTimes_[csId] > option_.maxStableChunkServerTimeoutTimes;
+  mtx_.unlock();
 
-    bool health = CheckChunkServerHealth(csEndPoint);
-    if (health) {
-        ClearTimeout(csId, csEndPoint);
-        return UnstableState::NoUnstable;
-    }
+  if (exceed == false) {
+    return UnstableState::NoUnstable;
+  }
 
-    mtx_.lock();
-    auto ret = serverUnstabledChunkservers_[ip].emplace(csId);
-    unstabled = serverUnstabledChunkservers_[ip].size();
-    mtx_.unlock();
+  bool health = CheckChunkServerHealth(csEndPoint);
+  if (health) {
+    ClearTimeout(csId, csEndPoint);
+    return UnstableState::NoUnstable;
+  }
 
-    if (ret.second && unstabled == option_.serverUnstableThreshold) {
-        return UnstableState::ServerUnstable;
-    } else {
-        return UnstableState::ChunkServerUnstable;
-    }
+  mtx_.lock();
+  auto ret = serverUnstabledChunkservers_[ip].emplace(csId);
+  unstabled = serverUnstabledChunkservers_[ip].size();
+  mtx_.unlock();
+
+  if (ret.second && unstabled == option_.serverUnstableThreshold) {
+    return UnstableState::ServerUnstable;
+  } else {
+    return UnstableState::ChunkServerUnstable;
+  }
 }
 
 }  // namespace client

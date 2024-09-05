@@ -23,6 +23,7 @@
 #define SRC_COMMON_ENCODE_H_
 
 #include <stdint.h>
+
 #include <cstdint>
 
 namespace curve {
@@ -30,28 +31,28 @@ namespace common {
 
 // NOTE: value passed to this function will convert to `uint64_t'
 static inline void EncodeBigEndian(char* buf, uint64_t value) {
-    buf[0] = (value >> 56) & 0xff;
-    buf[1] = (value >> 48) & 0xff;
-    buf[2] = (value >> 40) & 0xff;
-    buf[3] = (value >> 32) & 0xff;
-    buf[4] = (value >> 24) & 0xff;
-    buf[5] = (value >> 16) & 0xff;
-    buf[6] = (value >> 8) & 0xff;
-    buf[7] = value & 0xff;
+  buf[0] = (value >> 56) & 0xff;
+  buf[1] = (value >> 48) & 0xff;
+  buf[2] = (value >> 40) & 0xff;
+  buf[3] = (value >> 32) & 0xff;
+  buf[4] = (value >> 24) & 0xff;
+  buf[5] = (value >> 16) & 0xff;
+  buf[6] = (value >> 8) & 0xff;
+  buf[7] = value & 0xff;
 }
 
 inline uint64_t DecodeBigEndian(const char* buf) {
-    return (uint64_t(buf[0]) << 56) | (uint64_t(buf[1]) << 48) |
-           (uint64_t(buf[2]) << 40) | (uint64_t(buf[3]) << 32) |
-           (uint64_t(buf[4]) << 24) | (uint64_t(buf[5]) << 16) |
-           (uint64_t(buf[6]) << 8) | uint64_t(buf[7]);
+  return (uint64_t(buf[0]) << 56) | (uint64_t(buf[1]) << 48) |
+         (uint64_t(buf[2]) << 40) | (uint64_t(buf[3]) << 32) |
+         (uint64_t(buf[4]) << 24) | (uint64_t(buf[5]) << 16) |
+         (uint64_t(buf[6]) << 8) | uint64_t(buf[7]);
 }
 
 inline void EncodeBigEndian_uint32(char* buf, uint32_t value) {
-    buf[0] = (value >> 24) & 0xff;
-    buf[1] = (value >> 16) & 0xff;
-    buf[2] = (value >> 8) & 0xff;
-    buf[3] = value & 0xff;
+  buf[0] = (value >> 24) & 0xff;
+  buf[1] = (value >> 16) & 0xff;
+  buf[2] = (value >> 8) & 0xff;
+  buf[3] = value & 0xff;
 }
 
 }  // namespace common

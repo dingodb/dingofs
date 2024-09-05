@@ -33,35 +33,33 @@ namespace space {
 
 class MockSpaceService : public SpaceService {
  public:
-    MOCK_METHOD4(AllocateBlockGroup,
-                 void(google::protobuf::RpcController* controller,
-                      const AllocateBlockGroupRequest* request,
-                      AllocateBlockGroupResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(AllocateBlockGroup,
+               void(google::protobuf::RpcController* controller,
+                    const AllocateBlockGroupRequest* request,
+                    AllocateBlockGroupResponse* response,
+                    google::protobuf::Closure* done));
 
-    MOCK_METHOD4(AcquireBlockGroup,
-                 void(google::protobuf::RpcController* controller,
-                      const AcquireBlockGroupRequest* request,
-                      AcquireBlockGroupResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(AcquireBlockGroup,
+               void(google::protobuf::RpcController* controller,
+                    const AcquireBlockGroupRequest* request,
+                    AcquireBlockGroupResponse* response,
+                    google::protobuf::Closure* done));
 
-    MOCK_METHOD4(ReleaseBlockGroup,
-                 void(google::protobuf::RpcController* controller,
-                      const ReleaseBlockGroupRequest* request,
-                      ReleaseBlockGroupResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(ReleaseBlockGroup,
+               void(google::protobuf::RpcController* controller,
+                    const ReleaseBlockGroupRequest* request,
+                    ReleaseBlockGroupResponse* response,
+                    google::protobuf::Closure* done));
 
-    MOCK_METHOD4(StatSpace,
-                 void(google::protobuf::RpcController* controller,
-                      const StatSpaceRequest* request,
-                      StatSpaceResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(StatSpace, void(google::protobuf::RpcController* controller,
+                               const StatSpaceRequest* request,
+                               StatSpaceResponse* response,
+                               google::protobuf::Closure* done));
 
-    MOCK_METHOD4(UpdateUsage,
-                 void(google::protobuf::RpcController* controller,
-                      const UpdateUsageRequest* request,
-                      UpdateUsageResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(UpdateUsage, void(google::protobuf::RpcController* controller,
+                                 const UpdateUsageRequest* request,
+                                 UpdateUsageResponse* response,
+                                 google::protobuf::Closure* done));
 };
 
 }  // namespace space

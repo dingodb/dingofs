@@ -24,8 +24,8 @@
 #define TEST_CLIENT_MOCK_MOCK_REQUEST_CONTEXT_H_
 
 #include "src/client/client_common.h"
-#include "src/client/request_context.h"
 #include "src/client/request_closure.h"
+#include "src/client/request_context.h"
 #include "src/common/concurrent/count_down_event.h"
 
 namespace curve {
@@ -35,26 +35,26 @@ using FakeRequestContext = RequestContext;
 
 class FakeRequestClosure : public RequestClosure {
  public:
-    FakeRequestClosure(curve::common::CountDownEvent *cond,
-                       RequestContext *reqctx)
-        : RequestClosure(reqctx), cond_(cond) {}
+  FakeRequestClosure(curve::common::CountDownEvent* cond,
+                     RequestContext* reqctx)
+      : RequestClosure(reqctx), cond_(cond) {}
 
-    void Run() override {
-        if (0 == GetErrorCode()) {
-            LOG(INFO) << "success";
-        } else {
-            LOG(INFO) << "errno: " << GetErrorCode();
-        }
-        if (nullptr != cond_) {
-            cond_->Signal();
-        }
+  void Run() override {
+    if (0 == GetErrorCode()) {
+      LOG(INFO) << "success";
+    } else {
+      LOG(INFO) << "errno: " << GetErrorCode();
     }
+    if (nullptr != cond_) {
+      cond_->Signal();
+    }
+  }
 
  private:
-    curve::common::CountDownEvent *cond_;
+  curve::common::CountDownEvent* cond_;
 };
 
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve
 
 #endif  // TEST_CLIENT_MOCK_MOCK_REQUEST_CONTEXT_H_

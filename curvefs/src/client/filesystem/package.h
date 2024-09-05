@@ -34,14 +34,13 @@ namespace client {
 namespace filesystem {
 
 struct ExternalMember {  // external member depended by FileSystem
-    ExternalMember() = delete;
-    ExternalMember(std::shared_ptr<DentryCacheManager> dentryManager,
-                   std::shared_ptr<InodeCacheManager> inodeManager)
-        : dentryManager(dentryManager),
-          inodeManager(inodeManager) {}
+  ExternalMember() = delete;
+  ExternalMember(std::shared_ptr<DentryCacheManager> dentryManager,
+                 std::shared_ptr<InodeCacheManager> inodeManager)
+      : dentryManager(dentryManager), inodeManager(inodeManager) {}
 
-    std::shared_ptr<DentryCacheManager> dentryManager;
-    std::shared_ptr<InodeCacheManager> inodeManager;
+  std::shared_ptr<DentryCacheManager> dentryManager;
+  std::shared_ptr<InodeCacheManager> inodeManager;
 };
 
 }  // namespace filesystem

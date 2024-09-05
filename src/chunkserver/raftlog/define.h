@@ -47,7 +47,7 @@ namespace chunkserver {
 #define CURVE_SEGMENT_CLOSED_PATTERN "curve_log_%020" PRId64 "_%020" PRId64
 #define BRAFT_SEGMENT_OPEN_PATTERN "log_inprogress_%020" PRId64
 #define BRAFT_SEGMENT_CLOSED_PATTERN "log_%020" PRId64 "_%020" PRId64
-#define BRAFT_SEGMENT_META_FILE  "log_meta"
+#define BRAFT_SEGMENT_META_FILE "log_meta"
 
 // Format of Header, all fields are in network order
 // | -------------------- term (64bits) -------------------------  |
@@ -59,8 +59,8 @@ namespace chunkserver {
 const size_t kEntryHeaderSize = 28;
 
 enum CheckSumType {
-    CHECKSUM_MURMURHASH32 = 0,
-    CHECKSUM_CRC32 = 1,
+  CHECKSUM_MURMURHASH32 = 0,
+  CHECKSUM_CRC32 = 1,
 };
 
 }  // namespace chunkserver

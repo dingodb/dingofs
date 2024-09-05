@@ -21,6 +21,7 @@
  */
 
 #include "curvefs/src/client/filesystem/openfile.h"
+
 #include "curvefs/src/client/filesystem/utils.h"
 
 namespace curvefs {
@@ -29,12 +30,10 @@ namespace filesystem {
 
 OpenFiles::OpenFiles(OpenFilesOption option,
                      std::shared_ptr<DeferSync> deferSync)
-    : rwlock_(),
-      option_(option),
-      deferSync_(deferSync) {
-    files_ = std::make_shared<LRUType>(option.lruSize);
-    metric_ = std::make_shared<OpenfilesMetric>();
-    LOG(INFO) << "Using openfile lru cache, capacity " << option.lruSize;
+    : rwlock_(), option_(option), deferSync_(deferSync) {
+  files_ = std::make_shared<LRUType>(option.lruSize);
+  metric_ = std::make_shared<OpenfilesMetric>();
+  LOG(INFO) << "Using openfile lru cache, capacity " << option.lruSize;
 }
 
 /*
@@ -42,80 +41,79 @@ OpenFiles::OpenFiles(OpenFilesOption option,
  *   1) publish to message queue which will flush file to server with async
  *   2) delete file from lru cache
  */
-void OpenFiles::Delete(Ino ino,
-                       const std::shared_ptr<OpenFile>& file,
+void OpenFiles::Delete(Ino ino, const std::shared_ptr<OpenFile>& file,
                        bool flush) {
-    if (flush) {
-        deferSync_->Push(file->inode);
-    }
-    files_->Remove(ino);
-    metric_->AddOpenfiles(-1);
+  if (flush) {
+    deferSync_->Push(file->inode);
+  }
+  files_->Remove(ino);
+  metric_->AddOpenfiles(-1);
 
-    VLOG(1) << "Delete open file cache: ino = " << ino
-            << ", refs = " << file->refs
-            << ", mtime = " << InodeMtime(file->inode);
+  VLOG(1) << "Delete open file cache: ino = " << ino
+          << ", refs = " << file->refs
+          << ", mtime = " << InodeMtime(file->inode);
 }
 
 void OpenFiles::Evit(size_t size) {
-    Ino ino;
-    std::shared_ptr<OpenFile> file;
-    while (files_->Size() + size >= option_.lruSize) {
-        bool yes = files_->GetLast(&ino, &file);
-        if (!yes) {
-            break;
-        }
-        Delete(ino, file, true);
+  Ino ino;
+  std::shared_ptr<OpenFile> file;
+  while (files_->Size() + size >= option_.lruSize) {
+    bool yes = files_->GetLast(&ino, &file);
+    if (!yes) {
+      break;
     }
+    Delete(ino, file, true);
+  }
 }
 
 void OpenFiles::Open(Ino ino, std::shared_ptr<InodeWrapper> inode) {
-    WriteLockGuard lk(rwlock_);
+  WriteLockGuard lk(rwlock_);
 
-    Evit(1);
+  Evit(1);
 
-    std::shared_ptr<OpenFile> file;
-    bool yes = files_->Get(ino, &file);
-    if (yes) {
-        file->refs++;
-        return;
-    }
-
-    file = std::make_shared<OpenFile>(inode);
+  std::shared_ptr<OpenFile> file;
+  bool yes = files_->Get(ino, &file);
+  if (yes) {
     file->refs++;
-    files_->Put(ino, file);
-    metric_->AddOpenfiles(1);
+    return;
+  }
 
-    VLOG(1) << "Insert open file cache: ino = " << ino
-            << ", refs = " << file->refs
-            << ", mtime = " << InodeMtime(file->inode);
+  file = std::make_shared<OpenFile>(inode);
+  file->refs++;
+  files_->Put(ino, file);
+  metric_->AddOpenfiles(1);
+
+  VLOG(1) << "Insert open file cache: ino = " << ino
+          << ", refs = " << file->refs
+          << ", mtime = " << InodeMtime(file->inode);
 }
 
 bool OpenFiles::IsOpened(Ino ino, std::shared_ptr<InodeWrapper>* inode) {
-    ReadLockGuard lk(rwlock_);
-    std::shared_ptr<OpenFile> file;
-    bool yes = files_->Get(ino, &file);
-    if (!yes) {
-        return false;
-    }
-    *inode = file->inode;
-    return true;
+  ReadLockGuard lk(rwlock_);
+  std::shared_ptr<OpenFile> file;
+  bool yes = files_->Get(ino, &file);
+  if (!yes) {
+    return false;
+  }
+  *inode = file->inode;
+  return true;
 }
 
 void OpenFiles::Close(Ino ino) {
-    WriteLockGuard lk(rwlock_);
-    std::shared_ptr<OpenFile> file;
-    bool yes = files_->Get(ino, &file);
-    if (!yes) {
-        return;
-    }
+  WriteLockGuard lk(rwlock_);
+  std::shared_ptr<OpenFile> file;
+  bool yes = files_->Get(ino, &file);
+  if (!yes) {
+    return;
+  }
 
-    if (file->refs > 0) {
-        file->refs--;
-    }
+  if (file->refs > 0) {
+    file->refs--;
+  }
 
-    if (file->refs == 0) {
-        Delete(ino, file, false);  // file already flushed before close
-    }
+  if (file->refs == 0) {
+    Delete(ino, file, false);  // file already flushed before close
+  }
 }
 
 /*
@@ -123,20 +121,20 @@ void OpenFiles::Close(Ino ino) {
  *   flush all file to server and delete from LRU cache
  */
 void OpenFiles::CloseAll() {
-    WriteLockGuard lk(rwlock_);
-    Evit(option_.lruSize);
+  WriteLockGuard lk(rwlock_);
+  Evit(option_.lruSize);
 }
 
 bool OpenFiles::GetFileAttr(Ino ino, InodeAttr* attr) {
-    ReadLockGuard lk(rwlock_);
-    std::shared_ptr<OpenFile> file;
-    bool yes = files_->Get(ino, &file);
-    if (!yes) {
-        return false;
-    }
+  ReadLockGuard lk(rwlock_);
+  std::shared_ptr<OpenFile> file;
+  bool yes = files_->Get(ino, &file);
+  if (!yes) {
+    return false;
+  }
 
-    file->inode->GetInodeAttr(attr);
-    return true;
+  file->inode->GetInodeAttr(attr);
+  return true;
 }
 
 }  // namespace filesystem

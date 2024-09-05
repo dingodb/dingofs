@@ -54,11 +54,11 @@ class BaseDiskState {
 
   virtual ~BaseDiskState() = default;
 
-  virtual void IOSucc() {};
+  virtual void IOSucc(){};
 
-  virtual void IOErr() {};
+  virtual void IOErr(){};
 
-  virtual void Tick() {};
+  virtual void Tick(){};
 
   virtual DiskState GetDiskState() const { return kDiskStateUnknown; }
 

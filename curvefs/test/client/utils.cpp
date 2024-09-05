@@ -22,49 +22,49 @@ namespace curvefs {
 namespace client {
 
 InodeAttr ToInodeAttr(const Inode& inode) {
-    InodeAttr attr;
+  InodeAttr attr;
 
-    attr.set_inodeid(inode.inodeid());
-    attr.set_fsid(inode.fsid());
-    attr.set_length(inode.length());
-    attr.set_ctime(inode.ctime());
-    attr.set_ctime_ns(inode.ctime_ns());
-    attr.set_mtime(inode.mtime());
-    attr.set_mtime_ns(inode.mtime_ns());
-    attr.set_atime(inode.atime());
-    attr.set_atime_ns(inode.atime_ns());
+  attr.set_inodeid(inode.inodeid());
+  attr.set_fsid(inode.fsid());
+  attr.set_length(inode.length());
+  attr.set_ctime(inode.ctime());
+  attr.set_ctime_ns(inode.ctime_ns());
+  attr.set_mtime(inode.mtime());
+  attr.set_mtime_ns(inode.mtime_ns());
+  attr.set_atime(inode.atime());
+  attr.set_atime_ns(inode.atime_ns());
 
-    attr.set_uid(inode.uid());
-    attr.set_gid(inode.gid());
-    attr.set_mode(inode.mode());
-    attr.set_nlink(inode.nlink());
-    attr.set_type(inode.type());
+  attr.set_uid(inode.uid());
+  attr.set_gid(inode.gid());
+  attr.set_mode(inode.mode());
+  attr.set_nlink(inode.nlink());
+  attr.set_type(inode.type());
 
-    if (inode.has_symlink()) {
-        attr.set_symlink(inode.symlink());
-    }
+  if (inode.has_symlink()) {
+    attr.set_symlink(inode.symlink());
+  }
 
-    if (inode.has_rdev()) {
-        attr.set_rdev(inode.rdev());
-    }
+  if (inode.has_rdev()) {
+    attr.set_rdev(inode.rdev());
+  }
 
-    if (inode.has_dtime()) {
-        attr.set_dtime(inode.dtime());
-    }
+  if (inode.has_dtime()) {
+    attr.set_dtime(inode.dtime());
+  }
 
-    if (inode.has_openmpcount()) {
-        attr.set_openmpcount(inode.openmpcount());
-    }
+  if (inode.has_openmpcount()) {
+    attr.set_openmpcount(inode.openmpcount());
+  }
 
-    if (!inode.xattr().empty()) {
-        *attr.mutable_xattr() = inode.xattr();
-    }
+  if (!inode.xattr().empty()) {
+    *attr.mutable_xattr() = inode.xattr();
+  }
 
-    if (!inode.parent().empty()) {
-        *attr.mutable_parent() = inode.parent();
-    }
+  if (!inode.parent().empty()) {
+    *attr.mutable_parent() = inode.parent();
+  }
 
-    return attr;
+  return attr;
 }
 
 }  // namespace client

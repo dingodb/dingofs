@@ -30,7 +30,7 @@ namespace mds {
 namespace schedule {
 using OperatorFactory =
     curve::mds::schedule::OperatorFactoryT<MetaServerIdType, CopySetInfo,
-                                              CopySetConf>;
+                                           CopySetConf>;
 extern OperatorFactory operatorFactory;
 }  // namespace schedule
 }  // namespace mds

@@ -20,60 +20,63 @@
  * Author: lixiaocui
  */
 
-#include <glog/logging.h>
-#include <string>
 #include "src/idgenerator/etcd_id_generator.h"
+
+#include <glog/logging.h>
+
+#include <string>
+
 #include "src/common/string_util.h"
 
 namespace curve {
 namespace idgenerator {
 
 bool EtcdIdGenerator::GenID(uint64_t* id) {
-    std::lock_guard<curve::common::Mutex> guard(lock_);
+  std::lock_guard<curve::common::Mutex> guard(lock_);
 
-    if (nextId_ > bundleEnd_ || nextId_ == initialize_) {
-        if (!AllocateBundleIds(bundle_)) {
-            return false;
-        }
+  if (nextId_ > bundleEnd_ || nextId_ == initialize_) {
+    if (!AllocateBundleIds(bundle_)) {
+      return false;
     }
+  }
 
-    *id = nextId_++;
-    return true;
+  *id = nextId_++;
+  return true;
 }
 
 bool EtcdIdGenerator::AllocateBundleIds(int requiredNum) {
-    // get the maximum value that has been allocated
-    std::string out;
-    uint64_t alloc;
-    int errCode = client_->Get(storeKey_, &out);
-    // failed
-    if (EtcdErrCode::EtcdOK != errCode &&
-        EtcdErrCode::EtcdKeyNotExist != errCode) {
-        LOG(ERROR) << "get store key: " << storeKey_
-                   << " err, errCode: " << errCode;
-        return false;
-    } else if (EtcdErrCode::EtcdKeyNotExist == errCode) {
-        // key not exist, indicates the first allocation
-        alloc = initialize_;
-    } else if (!curve::common::StringToUll(out, &alloc)) {
-        // The value corresponding to the key exists, but the decode fails,
-        // indicating that an internal err has occurred, alarm!
-        LOG(ERROR) << "decode id: " << out << "err";
-        return false;
-    }
+  // get the maximum value that has been allocated
+  std::string out;
+  uint64_t alloc;
+  int errCode = client_->Get(storeKey_, &out);
+  // failed
+  if (EtcdErrCode::EtcdOK != errCode &&
+      EtcdErrCode::EtcdKeyNotExist != errCode) {
+    LOG(ERROR) << "get store key: " << storeKey_
+               << " err, errCode: " << errCode;
+    return false;
+  } else if (EtcdErrCode::EtcdKeyNotExist == errCode) {
+    // key not exist, indicates the first allocation
+    alloc = initialize_;
+  } else if (!curve::common::StringToUll(out, &alloc)) {
+    // The value corresponding to the key exists, but the decode fails,
+    // indicating that an internal err has occurred, alarm!
+    LOG(ERROR) << "decode id: " << out << "err";
+    return false;
+  }
 
-    const uint64_t target = alloc + requiredNum;
-    errCode = client_->CompareAndSwap(storeKey_, out, std::to_string(target));
-    if (EtcdErrCode::EtcdOK != errCode) {
-        LOG(ERROR) << "do CAS {preV: " << out << ", target: " << target
-                   << ", err, errCode: " << errCode;
-        return false;
-    }
+  const uint64_t target = alloc + requiredNum;
+  errCode = client_->CompareAndSwap(storeKey_, out, std::to_string(target));
+  if (EtcdErrCode::EtcdOK != errCode) {
+    LOG(ERROR) << "do CAS {preV: " << out << ", target: " << target
+               << ", err, errCode: " << errCode;
+    return false;
+  }
 
-    // assign values ​​to next and end
-    bundleEnd_ = target;
-    nextId_ = alloc + 1;
-    return true;
+  // assign values ​​to next and end
+  bundleEnd_ = target;
+  nextId_ = alloc + 1;
+  return true;
 }
 
 }  // namespace idgenerator

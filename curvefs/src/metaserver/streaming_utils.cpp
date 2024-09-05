@@ -32,30 +32,29 @@ namespace metaserver {
 
 MetaStatusCode StreamingSendVolumeExtent(StreamConnection* connection,
                                          const VolumeExtentList& extents) {
-    VLOG(9) << "StreamingSendVolumeExtent, extents: "
-            << extents.ShortDebugString();
-    for (const auto& slice : extents.slices()) {
-        butil::IOBuf data;
-        butil::IOBufAsZeroCopyOutputStream wrapper(&data);
-        if (!slice.SerializeToZeroCopyStream(&wrapper)) {
-            LOG(ERROR) << "Serialize volume slice failed, slice: "
-                       << slice.ShortDebugString();
-            return MetaStatusCode::PARAM_ERROR;
-        }
-
-        if (!connection->Write(data)) {
-            LOG(ERROR) << "Stream write failed, slice: "
-                       << slice.ShortDebugString();
-            return MetaStatusCode::RPC_STREAM_ERROR;
-        }
+  VLOG(9) << "StreamingSendVolumeExtent, extents: "
+          << extents.ShortDebugString();
+  for (const auto& slice : extents.slices()) {
+    butil::IOBuf data;
+    butil::IOBufAsZeroCopyOutputStream wrapper(&data);
+    if (!slice.SerializeToZeroCopyStream(&wrapper)) {
+      LOG(ERROR) << "Serialize volume slice failed, slice: "
+                 << slice.ShortDebugString();
+      return MetaStatusCode::PARAM_ERROR;
     }
 
-    if (!connection->WriteDone()) {
-        LOG(ERROR) << "Stream write done failed in server side";
-        return MetaStatusCode::RPC_STREAM_ERROR;
+    if (!connection->Write(data)) {
+      LOG(ERROR) << "Stream write failed, slice: " << slice.ShortDebugString();
+      return MetaStatusCode::RPC_STREAM_ERROR;
     }
+  }
 
-    return MetaStatusCode::OK;
+  if (!connection->WriteDone()) {
+    LOG(ERROR) << "Stream write done failed in server side";
+    return MetaStatusCode::RPC_STREAM_ERROR;
+  }
+
+  return MetaStatusCode::OK;
 }
 
 }  // namespace metaserver

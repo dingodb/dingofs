@@ -27,21 +27,21 @@ namespace curvefs {
 namespace volume {
 
 TEST(AllocatorTest, Common) {
-    auto allocator = Allocator::Create("", {});
-    EXPECT_FALSE(allocator);
+  auto allocator = Allocator::Create("", {});
+  EXPECT_FALSE(allocator);
 
-    allocator = Allocator::Create("group", {});
-    EXPECT_FALSE(allocator);
+  allocator = Allocator::Create("group", {});
+  EXPECT_FALSE(allocator);
 
-    AllocatorOption option;
-    option.bitmapAllocatorOption.length = 10 * kGiB;
-    option.bitmapAllocatorOption.sizePerBit = 4 * kMiB;
-    option.bitmapAllocatorOption.smallAllocProportion = 0.2;
-    allocator = Allocator::Create("bitmap", option);
-    EXPECT_TRUE(allocator);
+  AllocatorOption option;
+  option.bitmapAllocatorOption.length = 10 * kGiB;
+  option.bitmapAllocatorOption.sizePerBit = 4 * kMiB;
+  option.bitmapAllocatorOption.smallAllocProportion = 0.2;
+  allocator = Allocator::Create("bitmap", option);
+  EXPECT_TRUE(allocator);
 
-    auto* p = dynamic_cast<BitmapAllocator*>(allocator.get());
-    EXPECT_TRUE(p);
+  auto* p = dynamic_cast<BitmapAllocator*>(allocator.get());
+  EXPECT_TRUE(p);
 }
 
 }  // namespace volume

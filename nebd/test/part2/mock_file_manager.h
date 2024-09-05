@@ -24,6 +24,7 @@
 #define NEBD_TEST_PART2_MOCK_FILE_MANAGER_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
 #include <vector>
 
@@ -34,22 +35,22 @@ namespace server {
 
 class MockFileManager : public NebdFileManager {
  public:
-    MockFileManager() : NebdFileManager(nullptr) {}
-    ~MockFileManager() {}
+  MockFileManager() : NebdFileManager(nullptr) {}
+  ~MockFileManager() {}
 
-    MOCK_METHOD0(Fini, int());
-    MOCK_METHOD0(Run, int());
-    MOCK_METHOD2(Open, int(const std::string&, const OpenFlags*));
-    MOCK_METHOD2(Close, int(int, bool));
-    MOCK_METHOD2(Extend, int(int, int64_t));
-    MOCK_METHOD2(GetInfo, int(int, NebdFileInfo*));
-    MOCK_METHOD2(Discard, int(int, NebdServerAioContext*));
-    MOCK_METHOD2(AioRead, int(int, NebdServerAioContext*));
-    MOCK_METHOD2(AioWrite, int(int, NebdServerAioContext*));
-    MOCK_METHOD2(Flush, int(int, NebdServerAioContext*));
-    MOCK_METHOD1(InvalidCache, int(int));
-    MOCK_METHOD1(GetFileEntity, NebdFileEntityPtr(int));
-    MOCK_METHOD0(GetFileEntityMap, FileEntityMap());
+  MOCK_METHOD0(Fini, int());
+  MOCK_METHOD0(Run, int());
+  MOCK_METHOD2(Open, int(const std::string&, const OpenFlags*));
+  MOCK_METHOD2(Close, int(int, bool));
+  MOCK_METHOD2(Extend, int(int, int64_t));
+  MOCK_METHOD2(GetInfo, int(int, NebdFileInfo*));
+  MOCK_METHOD2(Discard, int(int, NebdServerAioContext*));
+  MOCK_METHOD2(AioRead, int(int, NebdServerAioContext*));
+  MOCK_METHOD2(AioWrite, int(int, NebdServerAioContext*));
+  MOCK_METHOD2(Flush, int(int, NebdServerAioContext*));
+  MOCK_METHOD1(InvalidCache, int(int));
+  MOCK_METHOD1(GetFileEntity, NebdFileEntityPtr(int));
+  MOCK_METHOD0(GetFileEntityMap, FileEntityMap());
 };
 
 }  // namespace server

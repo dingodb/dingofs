@@ -23,82 +23,87 @@
 #ifndef CURVEFS_TEST_MDS_MOCK_MOCK_METASERVER_H_
 #define CURVEFS_TEST_MDS_MOCK_MOCK_METASERVER_H_
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/metaserver.pb.h"
 
 namespace curvefs {
 namespace metaserver {
 class MockMetaserverService : public MetaServerService {
  public:
-    MOCK_METHOD4(GetDentry,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::GetDentryRequest* request,
-                      ::curvefs::metaserver::GetDentryResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(ListDentry,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::ListDentryRequest* request,
-                      ::curvefs::metaserver::ListDentryResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(CreateDentry,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::CreateDentryRequest* request,
-                      ::curvefs::metaserver::CreateDentryResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(DeleteDentry,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::DeleteDentryRequest* request,
-                      ::curvefs::metaserver::DeleteDentryResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(GetInode,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::GetInodeRequest* request,
-                      ::curvefs::metaserver::GetInodeResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(CreateInode,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::CreateInodeRequest* request,
-                      ::curvefs::metaserver::CreateInodeResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(CreateRootInode,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::metaserver::CreateRootInodeRequest* request,
-             ::curvefs::metaserver::CreateRootInodeResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(CreateManageInode,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::metaserver::CreateManageInodeRequest* request,
-             ::curvefs::metaserver::CreateManageInodeResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(UpdateInode,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::UpdateInodeRequest* request,
-                      ::curvefs::metaserver::UpdateInodeResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(DeleteInode,
-                 void(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::DeleteInodeRequest* request,
-                      ::curvefs::metaserver::DeleteInodeResponse* response,
-                      ::google::protobuf::Closure* done));
-    MOCK_METHOD4(CreatePartition,
-          void(::google::protobuf::RpcController* controller,
-               const ::curvefs::metaserver::CreatePartitionRequest* request,
-               ::curvefs::metaserver::CreatePartitionResponse* response,
-               ::google::protobuf::Closure* done));
-    MOCK_METHOD4(DeletePartition,
-          void(::google::protobuf::RpcController* controller,
-               const ::curvefs::metaserver::DeletePartitionRequest* request,
-               ::curvefs::metaserver::DeletePartitionResponse* response,
-               ::google::protobuf::Closure* done));
+  MOCK_METHOD4(GetDentry,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::GetDentryRequest* request,
+                    ::curvefs::metaserver::GetDentryResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(ListDentry,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::ListDentryRequest* request,
+                    ::curvefs::metaserver::ListDentryResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(CreateDentry,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::CreateDentryRequest* request,
+                    ::curvefs::metaserver::CreateDentryResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(DeleteDentry,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::DeleteDentryRequest* request,
+                    ::curvefs::metaserver::DeleteDentryResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(GetInode,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::GetInodeRequest* request,
+                    ::curvefs::metaserver::GetInodeResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(CreateInode,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::CreateInodeRequest* request,
+                    ::curvefs::metaserver::CreateInodeResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      CreateRootInode,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::CreateRootInodeRequest* request,
+           ::curvefs::metaserver::CreateRootInodeResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      CreateManageInode,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::CreateManageInodeRequest* request,
+           ::curvefs::metaserver::CreateManageInodeResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(UpdateInode,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::UpdateInodeRequest* request,
+                    ::curvefs::metaserver::UpdateInodeResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(DeleteInode,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::DeleteInodeRequest* request,
+                    ::curvefs::metaserver::DeleteInodeResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      CreatePartition,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::CreatePartitionRequest* request,
+           ::curvefs::metaserver::CreatePartitionResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      DeletePartition,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::DeletePartitionRequest* request,
+           ::curvefs::metaserver::DeletePartitionResponse* response,
+           ::google::protobuf::Closure* done));
 };
 
 namespace copyset {
 class MockCopysetService : public CopysetService {
  public:
-     MOCK_METHOD4(CreateCopysetNode,
-                 void(::google::protobuf::RpcController* controller,
-                      const CreateCopysetRequest* request,
-                      CreateCopysetResponse* response,
-                      ::google::protobuf::Closure* done));
+  MOCK_METHOD4(CreateCopysetNode,
+               void(::google::protobuf::RpcController* controller,
+                    const CreateCopysetRequest* request,
+                    CreateCopysetResponse* response,
+                    ::google::protobuf::Closure* done));
 };
 
 }  // namespace copyset

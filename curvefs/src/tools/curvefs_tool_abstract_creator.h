@@ -34,9 +34,9 @@ namespace tools {
 template <class CurvefsToolT>
 class CurvefsToolCreator {
  public:
-    static std::shared_ptr<CurvefsToolT> Create() {
-        return std::make_shared<CurvefsToolT>();
-    }
+  static std::shared_ptr<CurvefsToolT> Create() {
+    return std::make_shared<CurvefsToolT>();
+  }
 };
 
 }  // namespace tools

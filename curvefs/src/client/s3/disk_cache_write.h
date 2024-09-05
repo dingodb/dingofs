@@ -22,146 +22,141 @@
 #ifndef CURVEFS_SRC_CLIENT_S3_DISK_CACHE_WRITE_H_
 #define CURVEFS_SRC_CLIENT_S3_DISK_CACHE_WRITE_H_
 
-#include <sys/stat.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
+#include <sys/stat.h>
 
-#include <memory>
-#include <string>
 #include <list>
+#include <memory>
 #include <set>
+#include <string>
 
+#include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/s3/client_s3.h"
+#include "curvefs/src/client/s3/disk_cache_base.h"
+#include "curvefs/src/client/s3/disk_cache_read.h"
+#include "curvefs/src/common/utils.h"
+#include "curvefs/src/common/wrap_posix.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/interruptible_sleeper.h"
 #include "src/common/lru_cache.h"
 #include "src/common/throttle.h"
 #include "src/common/wait_interval.h"
-#include "curvefs/src/common/wrap_posix.h"
-#include "curvefs/src/common/utils.h"
-#include "curvefs/src/client/s3/client_s3.h"
-#include "curvefs/src/client/s3/disk_cache_read.h"
-#include "curvefs/src/client/common/config.h"
-#include "curvefs/src/client/s3/disk_cache_base.h"
 
 namespace curvefs {
 namespace client {
 
-using curvefs::common::PosixWrapper;
 using curve::common::InterruptibleSleeper;
-using ::curve::common::SglLRUCache;
 using curve::common::PutObjectAsyncCallBack;
+using ::curve::common::SglLRUCache;
+using curvefs::common::PosixWrapper;
 
 class DiskCacheWrite : public DiskCacheBase {
  public:
-    class SynchronizationTask {
-     public:
-        explicit SynchronizationTask(int eventNum) {
-            countDownEvent_.Reset(eventNum);
-            errorCount_ = 0;
-        }
-        void Wait() { countDownEvent_.Wait(); }
+  class SynchronizationTask {
+   public:
+    explicit SynchronizationTask(int eventNum) {
+      countDownEvent_.Reset(eventNum);
+      errorCount_ = 0;
+    }
+    void Wait() { countDownEvent_.Wait(); }
 
-        void Signal() { countDownEvent_.Signal(); }
+    void Signal() { countDownEvent_.Signal(); }
 
-        void SetError() { errorCount_.fetch_add(1); }
+    void SetError() { errorCount_.fetch_add(1); }
 
-        bool Success() { return errorCount_ == 0; }
+    bool Success() { return errorCount_ == 0; }
 
-     public:
-        curve::common::CountDownEvent countDownEvent_;
-        std::atomic<int> errorCount_;
-    };
+   public:
+    curve::common::CountDownEvent countDownEvent_;
+    std::atomic<int> errorCount_;
+  };
 
  public:
-    // init isRunning_ should here，
-    // otherwise when call AsyncUploadStop in ~DiskCacheWrite will failed:
-    // "terminate called after throwing an instance of 'std::system_error'"
-    DiskCacheWrite() : isRunning_(false) {}
-    virtual ~DiskCacheWrite() {
-       AsyncUploadStop();
-    }
-    void Init(std::shared_ptr<S3Client> client,
-              std::shared_ptr<PosixWrapper> posixWrapper,
-              const std::string cacheDir, uint32_t objectPrefix,
-              uint64_t asyncLoadPeriodMs,
-              std::shared_ptr<SglLRUCache<std::string>> cachedObjName);
-    /**
-     * @brief write obj to write cache disk
-     * @param[in] client S3Client
-     * @param[in] option config option
-     * @return success: 0, fail : < 0
-     */
-    virtual int WriteDiskFile(const std::string fileName,
-                              const char* buf, uint64_t length,
-                              bool force = true);
-    /**
-    * @brief after reboot，upload all files store in write cache to s3
-    */
-    virtual int UploadAllCacheWriteFile();
-    /**
-    * @brief remove from write cache
-    */
-    virtual int RemoveFile(const std::string fileName);
-    virtual int ReadFile(const std::string name, char** buf,
-      uint64_t* size);
-    /**
-     * @brief upload file in write cache to S3
-     * @param[in] name file name
-     * @param[in] syncTask wait upload finish
-     * @return success: 0, fail : < 0
-     */
-    virtual int
-    UploadFile(const std::string &name,
-               std::shared_ptr<SynchronizationTask> syncTask = nullptr);
+  // init isRunning_ should here，
+  // otherwise when call AsyncUploadStop in ~DiskCacheWrite will failed:
+  // "terminate called after throwing an instance of 'std::system_error'"
+  DiskCacheWrite() : isRunning_(false) {}
+  virtual ~DiskCacheWrite() { AsyncUploadStop(); }
+  void Init(std::shared_ptr<S3Client> client,
+            std::shared_ptr<PosixWrapper> posixWrapper,
+            const std::string cacheDir, uint32_t objectPrefix,
+            uint64_t asyncLoadPeriodMs,
+            std::shared_ptr<SglLRUCache<std::string>> cachedObjName);
+  /**
+   * @brief write obj to write cache disk
+   * @param[in] client S3Client
+   * @param[in] option config option
+   * @return success: 0, fail : < 0
+   */
+  virtual int WriteDiskFile(const std::string fileName, const char* buf,
+                            uint64_t length, bool force = true);
+  /**
+   * @brief after reboot，upload all files store in write cache to s3
+   */
+  virtual int UploadAllCacheWriteFile();
+  /**
+   * @brief remove from write cache
+   */
+  virtual int RemoveFile(const std::string fileName);
+  virtual int ReadFile(const std::string name, char** buf, uint64_t* size);
+  /**
+   * @brief upload file in write cache to S3
+   * @param[in] name file name
+   * @param[in] syncTask wait upload finish
+   * @return success: 0, fail : < 0
+   */
+  virtual int UploadFile(
+      const std::string& name,
+      std::shared_ptr<SynchronizationTask> syncTask = nullptr);
 
-    virtual int UploadFileByInode(const std::string &inode);
+  virtual int UploadFileByInode(const std::string& inode);
 
-    /**
-     * @brief: start async upload thread
-     */
-    virtual int AsyncUploadRun();
-    /**
-     * @brief enqueue the file, then upload to S3
-     * @param[in] objName obj name
-     */
-    virtual void AsyncUploadEnqueue(const std::string objName);
-    /**
-     * @brief: stop async upload thread.
-     */
-    virtual int AsyncUploadStop();
+  /**
+   * @brief: start async upload thread
+   */
+  virtual int AsyncUploadRun();
+  /**
+   * @brief enqueue the file, then upload to S3
+   * @param[in] objName obj name
+   */
+  virtual void AsyncUploadEnqueue(const std::string objName);
+  /**
+   * @brief: stop async upload thread.
+   */
+  virtual int AsyncUploadStop();
 
-    virtual void InitMetrics(std::shared_ptr<DiskCacheMetric> metric) {
-        metric_ = metric;
-    }
+  virtual void InitMetrics(std::shared_ptr<DiskCacheMetric> metric) {
+    metric_ = metric;
+  }
 
-    /**
-     * @brief check that cache dir does not exist or there is no cache file
-     */
-    virtual bool IsCacheClean();
+  /**
+   * @brief check that cache dir does not exist or there is no cache file
+   */
+  virtual bool IsCacheClean();
 
  private:
-    using DiskCacheBase::Init;
-    int AsyncUploadFunc();
-    void UploadFile(const std::list<std::string> &toUpload,
-                    std::shared_ptr<SynchronizationTask> syncTask = nullptr);
-    bool WriteCacheValid();
-    int GetUploadFile(const std::string &inode,
-                      std::list<std::string> *toUpload);
-    int FileExist(const std::string &inode);
+  using DiskCacheBase::Init;
+  int AsyncUploadFunc();
+  void UploadFile(const std::list<std::string>& toUpload,
+                  std::shared_ptr<SynchronizationTask> syncTask = nullptr);
+  bool WriteCacheValid();
+  int GetUploadFile(const std::string& inode, std::list<std::string>* toUpload);
+  int FileExist(const std::string& inode);
 
-    curve::common::Thread backEndThread_;
-    curve::common::Atomic<bool> isRunning_;
-    std::list<std::string> waitUpload_;
-    std::mutex mtx_;
-    std::condition_variable cond_;
-    InterruptibleSleeper sleeper_;
-    uint64_t asyncLoadPeriodMs_;
-    std::shared_ptr<S3Client> client_;
-    // file system operation encapsulation
-    std::shared_ptr<PosixWrapper> posixWrapper_;
-    std::shared_ptr<DiskCacheMetric> metric_;
+  curve::common::Thread backEndThread_;
+  curve::common::Atomic<bool> isRunning_;
+  std::list<std::string> waitUpload_;
+  std::mutex mtx_;
+  std::condition_variable cond_;
+  InterruptibleSleeper sleeper_;
+  uint64_t asyncLoadPeriodMs_;
+  std::shared_ptr<S3Client> client_;
+  // file system operation encapsulation
+  std::shared_ptr<PosixWrapper> posixWrapper_;
+  std::shared_ptr<DiskCacheMetric> metric_;
 
-    std::shared_ptr<SglLRUCache<std::string>> cachedObjName_;
+  std::shared_ptr<SglLRUCache<std::string>> cachedObjName_;
 };
 
 }  // namespace client

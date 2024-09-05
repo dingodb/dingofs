@@ -8,16 +8,15 @@
 #ifndef TEST_CLIENT_MOCK_MOCK_REQUEST_SCHEDULER_H_
 #define TEST_CLIENT_MOCK_MOCK_REQUEST_SCHEDULER_H_
 
-#include "src/client/request_scheduler.h"
-
 #include "gmock/gmock.h"
+#include "src/client/request_scheduler.h"
 
 namespace curve {
 namespace client {
 
 class MockRequestScheduler : public RequestScheduler {
  public:
-    MOCK_METHOD1(ReSchedule, int(RequestContext* ctx));
+  MOCK_METHOD1(ReSchedule, int(RequestContext* ctx));
 };
 
 }  // namespace client

@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -31,35 +30,35 @@ namespace curvefs {
 namespace client {
 
 struct ExtentAllocInfo {
-    // logical offset within single inode/file, aligned to storage's block size
-    uint64_t lOffset;
-    uint64_t len;
-    uint64_t pOffsetLeft;
-    uint64_t pOffsetRight;
-    bool leftHintAvailable = false;
-    bool rightHintAvailable = false;
+  // logical offset within single inode/file, aligned to storage's block size
+  uint64_t lOffset;
+  uint64_t len;
+  uint64_t pOffsetLeft;
+  uint64_t pOffsetRight;
+  bool leftHintAvailable = false;
+  bool rightHintAvailable = false;
 };
 
 // physical extent
 struct PExtent {
-    uint64_t len = 0;
-    uint64_t pOffset = 0;
-    bool UnWritten = true;
+  uint64_t len = 0;
+  uint64_t pOffset = 0;
+  bool UnWritten = true;
 
-    PExtent() = default;
+  PExtent() = default;
 
-    PExtent(uint64_t len, uint64_t poffset, bool unwritten)
-        : len(len), pOffset(poffset), UnWritten(unwritten) {}
+  PExtent(uint64_t len, uint64_t poffset, bool unwritten)
+      : len(len), pOffset(poffset), UnWritten(unwritten) {}
 };
 
 struct AllocPart {
-    ExtentAllocInfo allocInfo;
-    // allocate space is aligned to block size
-    // but user's write are not, so we need 'padding' and 'writelength' to
-    // indicate actual user's write request's on allocated space
-    size_t padding = 0;
-    size_t writelength = 0;
-    const char* data = nullptr;
+  ExtentAllocInfo allocInfo;
+  // allocate space is aligned to block size
+  // but user's write are not, so we need 'padding' and 'writelength' to
+  // indicate actual user's write request's on allocated space
+  size_t padding = 0;
+  size_t writelength = 0;
+  const char* data = nullptr;
 };
 
 }  // namespace client

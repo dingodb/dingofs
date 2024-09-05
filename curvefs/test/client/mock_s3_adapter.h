@@ -38,16 +38,16 @@ namespace client {
 
 class MockS3Adapter : public curve::common::S3Adapter {
  public:
-    MockS3Adapter() {}
-    ~MockS3Adapter() {}
+  MockS3Adapter() {}
+  ~MockS3Adapter() {}
 
-    MOCK_METHOD1(Init, void(const std::string&));
-    MOCK_METHOD3(PutObject, int(const Aws::String&, const char* buffer,
-                                const size_t bufferSize));
-    MOCK_METHOD1(PutObjectAsync, void(std::shared_ptr<PutObjectAsyncContext>));
-    MOCK_METHOD4(GetObject, int(const std::string&, char*, off_t, size_t));
-    MOCK_METHOD1(GetObjectAsync, void(std::shared_ptr<GetObjectAsyncContext>));
-    MOCK_METHOD1(ObjectExist, bool(const Aws::String &key));
+  MOCK_METHOD1(Init, void(const std::string&));
+  MOCK_METHOD3(PutObject, int(const Aws::String&, const char* buffer,
+                              const size_t bufferSize));
+  MOCK_METHOD1(PutObjectAsync, void(std::shared_ptr<PutObjectAsyncContext>));
+  MOCK_METHOD4(GetObject, int(const std::string&, char*, off_t, size_t));
+  MOCK_METHOD1(GetObjectAsync, void(std::shared_ptr<GetObjectAsyncContext>));
+  MOCK_METHOD1(ObjectExist, bool(const Aws::String& key));
 };
 }  // namespace client
 }  // namespace curvefs

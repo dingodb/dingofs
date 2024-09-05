@@ -25,104 +25,104 @@
 namespace curvefs {
 namespace metaserver {
 void RecycleManager::Init(const RecycleManagerOption& opt) {
-    mdsClient_ = opt.mdsClient;
-    metaClient_ = opt.metaClient;
-    scanPeriodSec_ = opt.scanPeriodSec;
-    scanLimit_ = opt.scanLimit;
+  mdsClient_ = opt.mdsClient;
+  metaClient_ = opt.metaClient;
+  scanPeriodSec_ = opt.scanPeriodSec;
+  scanLimit_ = opt.scanLimit;
 }
 
 void RecycleManager::Add(uint32_t partitionId,
                          const std::shared_ptr<RecycleCleaner>& cleaner,
                          copyset::CopysetNode* copysetNode) {
-    curve::common::WriteLockGuard lockGuard(rwLock_);
-    LOG(INFO) << "Add recycle cleaner to recycle mananager, fsId = "
-              << cleaner->GetFsId() << ", partititonId = " << partitionId;
-    cleaner->SetCopysetNode(copysetNode);
-    cleaner->SetMdsClient(mdsClient_);
-    cleaner->SetMetaClient(metaClient_);
-    cleaner->SetScanLimit(scanLimit_);
-    recycleCleanerList_.push_back(cleaner);
+  curve::common::WriteLockGuard lockGuard(rwLock_);
+  LOG(INFO) << "Add recycle cleaner to recycle mananager, fsId = "
+            << cleaner->GetFsId() << ", partititonId = " << partitionId;
+  cleaner->SetCopysetNode(copysetNode);
+  cleaner->SetMdsClient(mdsClient_);
+  cleaner->SetMetaClient(metaClient_);
+  cleaner->SetScanLimit(scanLimit_);
+  recycleCleanerList_.push_back(cleaner);
 }
 
 void RecycleManager::Remove(uint32_t partitionId) {
-    curve::common::WriteLockGuard lockGuard(rwLock_);
-    if (inProcessingCleaner_ != nullptr
-        && inProcessingCleaner_->GetPartitionId() == partitionId) {
-        inProcessingCleaner_->Stop();
-        LOG(INFO) << "remove partition from RecycleManager, partition is"
-                  << " in processing, stop this cleaner, partitionId = "
-                  << partitionId;
-        return;
-    }
+  curve::common::WriteLockGuard lockGuard(rwLock_);
+  if (inProcessingCleaner_ != nullptr &&
+      inProcessingCleaner_->GetPartitionId() == partitionId) {
+    inProcessingCleaner_->Stop();
+    LOG(INFO) << "remove partition from RecycleManager, partition is"
+              << " in processing, stop this cleaner, partitionId = "
+              << partitionId;
+    return;
+  }
 
-    for (auto it = recycleCleanerList_.begin();
-              it != recycleCleanerList_.end(); it++) {
-        if ((*it)->GetPartitionId() == partitionId) {
-            recycleCleanerList_.erase(it);
-            LOG(INFO) << "remove partition from RecycleManager, "
-                      << "partitionId = " << partitionId;
-            return;
-        }
+  for (auto it = recycleCleanerList_.begin(); it != recycleCleanerList_.end();
+       it++) {
+    if ((*it)->GetPartitionId() == partitionId) {
+      recycleCleanerList_.erase(it);
+      LOG(INFO) << "remove partition from RecycleManager, "
+                << "partitionId = " << partitionId;
+      return;
     }
+  }
 }
 
 void RecycleManager::Run() {
-    if (isStop_.exchange(false)) {
-        sleeper_.init();
-        thread_ = Thread(&RecycleManager::ScanLoop, this);
-        LOG(INFO) << "Start RecycleManager thread ok.";
-        return;
-    }
+  if (isStop_.exchange(false)) {
+    sleeper_.init();
+    thread_ = Thread(&RecycleManager::ScanLoop, this);
+    LOG(INFO) << "Start RecycleManager thread ok.";
+    return;
+  }
 
-    LOG(INFO) << "RecycleManager already runned.";
+  LOG(INFO) << "RecycleManager already runned.";
 }
 
 void RecycleManager::Stop() {
-    if (!isStop_.exchange(true)) {
-        LOG(INFO) << "stop RecycleManager manager ...";
-        sleeper_.interrupt();
-        thread_.join();
-        recycleCleanerList_.clear();
-        inProcessingCleaner_ = nullptr;
-    }
-    LOG(INFO) << "stop RecycleManager manager ok.";
+  if (!isStop_.exchange(true)) {
+    LOG(INFO) << "stop RecycleManager manager ...";
+    sleeper_.interrupt();
+    thread_.join();
+    recycleCleanerList_.clear();
+    inProcessingCleaner_ = nullptr;
+  }
+  LOG(INFO) << "stop RecycleManager manager ok.";
 }
 
 void RecycleManager::ScanLoop() {
-    LOG(INFO) << "RecycleManager start scan thread, scanPeriodSec = "
-              << scanPeriodSec_;
-    while (sleeper_.wait_for(std::chrono::seconds(scanPeriodSec_))) {
-        {
-            curve::common::WriteLockGuard lockGuard(rwLock_);
-            if (recycleCleanerList_.empty()) {
-                continue;
-            }
+  LOG(INFO) << "RecycleManager start scan thread, scanPeriodSec = "
+            << scanPeriodSec_;
+  while (sleeper_.wait_for(std::chrono::seconds(scanPeriodSec_))) {
+    {
+      curve::common::WriteLockGuard lockGuard(rwLock_);
+      if (recycleCleanerList_.empty()) {
+        continue;
+      }
 
-            inProcessingCleaner_ = recycleCleanerList_.front();
-            recycleCleanerList_.pop_front();
-        }
-
-        uint32_t partitionId = inProcessingCleaner_->GetPartitionId();
-        LOG(INFO) << "scan partition, partitionId = " << partitionId
-                  << ", fsId = " << inProcessingCleaner_->GetFsId();
-        bool deleteRecord = inProcessingCleaner_->ScanRecycle();
-        if (deleteRecord) {
-            LOG(INFO) << "delete record from clean manager, partitionId = "
-                      << partitionId << ", fsId = "
-                      << inProcessingCleaner_->GetFsId();
-        } else {
-            curve::common::WriteLockGuard lockGuard(rwLock_);
-            if (!inProcessingCleaner_->IsStop()) {
-                recycleCleanerList_.push_back(inProcessingCleaner_);
-            } else {
-                LOG(INFO) << "scan partition, cleaner is mark stoped, remove it"
-                          << ", partitionId = " << partitionId
-                          << ", fsId = " << inProcessingCleaner_->GetFsId();
-            }
-        }
-        inProcessingCleaner_ = nullptr;
+      inProcessingCleaner_ = recycleCleanerList_.front();
+      recycleCleanerList_.pop_front();
     }
-    LOG(INFO) << "RecycleManager stop scan thread.";
+
+    uint32_t partitionId = inProcessingCleaner_->GetPartitionId();
+    LOG(INFO) << "scan partition, partitionId = " << partitionId
+              << ", fsId = " << inProcessingCleaner_->GetFsId();
+    bool deleteRecord = inProcessingCleaner_->ScanRecycle();
+    if (deleteRecord) {
+      LOG(INFO) << "delete record from clean manager, partitionId = "
+                << partitionId
+                << ", fsId = " << inProcessingCleaner_->GetFsId();
+    } else {
+      curve::common::WriteLockGuard lockGuard(rwLock_);
+      if (!inProcessingCleaner_->IsStop()) {
+        recycleCleanerList_.push_back(inProcessingCleaner_);
+      } else {
+        LOG(INFO) << "scan partition, cleaner is mark stoped, remove it"
+                  << ", partitionId = " << partitionId
+                  << ", fsId = " << inProcessingCleaner_->GetFsId();
+      }
+    }
+    inProcessingCleaner_ = nullptr;
+  }
+  LOG(INFO) << "RecycleManager stop scan thread.";
 }
 }  // namespace metaserver
 }  // namespace curvefs

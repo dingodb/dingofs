@@ -25,12 +25,12 @@
 
 #include <memory>
 
-#include "src/common/lru_cache.h"
-#include "curvefs/src/client/inode_wrapper.h"
-#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
+#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/metric.h"
+#include "curvefs/src/client/inode_wrapper.h"
+#include "src/common/lru_cache.h"
 
 namespace curvefs {
 namespace client {
@@ -43,42 +43,42 @@ using ::curvefs::client::InodeWrapper;
 using ::curvefs::client::common::OpenFilesOption;
 
 struct OpenFile {
-    explicit OpenFile(std::shared_ptr<InodeWrapper> inode)
-        : inode(inode), refs(0) {}
+  explicit OpenFile(std::shared_ptr<InodeWrapper> inode)
+      : inode(inode), refs(0) {}
 
-    std::shared_ptr<InodeWrapper> inode;
-    uint64_t refs;
+  std::shared_ptr<InodeWrapper> inode;
+  uint64_t refs;
 };
 
 class OpenFiles {
  public:
-    using LRUType = LRUCache<Ino, std::shared_ptr<OpenFile>>;
+  using LRUType = LRUCache<Ino, std::shared_ptr<OpenFile>>;
 
  public:
-    explicit OpenFiles(OpenFilesOption option,
-                       std::shared_ptr<DeferSync> deferSync);
+  explicit OpenFiles(OpenFilesOption option,
+                     std::shared_ptr<DeferSync> deferSync);
 
-    void Open(Ino ino, std::shared_ptr<InodeWrapper> inode);
+  void Open(Ino ino, std::shared_ptr<InodeWrapper> inode);
 
-    bool IsOpened(Ino ino, std::shared_ptr<InodeWrapper>* inode);
+  bool IsOpened(Ino ino, std::shared_ptr<InodeWrapper>* inode);
 
-    void Close(Ino ino);
+  void Close(Ino ino);
 
-    void CloseAll();
+  void CloseAll();
 
-    bool GetFileAttr(Ino ino, InodeAttr* inode);
-
- private:
-    void Delete(Ino ino, const std::shared_ptr<OpenFile>& file, bool flush);
-
-    void Evit(size_t size);
+  bool GetFileAttr(Ino ino, InodeAttr* inode);
 
  private:
-    RWLock rwlock_;
-    OpenFilesOption option_;
-    std::shared_ptr<DeferSync> deferSync_;
-    std::shared_ptr<LRUType> files_;
-    std::shared_ptr<OpenfilesMetric> metric_;
+  void Delete(Ino ino, const std::shared_ptr<OpenFile>& file, bool flush);
+
+  void Evit(size_t size);
+
+ private:
+  RWLock rwlock_;
+  OpenFilesOption option_;
+  std::shared_ptr<DeferSync> deferSync_;
+  std::shared_ptr<LRUType> files_;
+  std::shared_ptr<OpenfilesMetric> metric_;
 };
 
 }  // namespace filesystem

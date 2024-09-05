@@ -29,37 +29,36 @@ namespace curve {
 namespace client {
 
 TEST(SplitorTest, NeedGetOrAllocateSegmentTest_ChunkNotAllocated) {
-    MetaCache metaCache;
+  MetaCache metaCache;
 
-    EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
-        MetaCacheErrorType::CHUNKINFO_NOT_FOUND, OpType::READ, {}, &metaCache));
-    EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
-        MetaCacheErrorType::CHUNKINFO_NOT_FOUND, OpType::WRITE, {},
-        &metaCache));
+  EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
+      MetaCacheErrorType::CHUNKINFO_NOT_FOUND, OpType::READ, {}, &metaCache));
+  EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
+      MetaCacheErrorType::CHUNKINFO_NOT_FOUND, OpType::WRITE, {}, &metaCache));
 }
 
 TEST(SplitorTest, NeedGetOrAllocateSegmentTest_ChunkAllocatedButInvalid) {
-    MetaCache metaCache;
+  MetaCache metaCache;
 
-    ChunkIDInfo chunkInfo;
-    chunkInfo.chunkExist = false;
+  ChunkIDInfo chunkInfo;
+  chunkInfo.chunkExist = false;
 
-    // write request always return true
-    EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
-        MetaCacheErrorType::OK, OpType::WRITE, chunkInfo, &metaCache));
+  // write request always return true
+  EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
+      MetaCacheErrorType::OK, OpType::WRITE, chunkInfo, &metaCache));
 
-    // read request with exclusive open return false
-    FInfo finfo;
-    finfo.openflags.exclusive = true;
-    metaCache.UpdateFileInfo(finfo);
-    EXPECT_FALSE(Splitor::NeedGetOrAllocateSegment(
-        MetaCacheErrorType::OK, OpType::READ, chunkInfo, &metaCache));
+  // read request with exclusive open return false
+  FInfo finfo;
+  finfo.openflags.exclusive = true;
+  metaCache.UpdateFileInfo(finfo);
+  EXPECT_FALSE(Splitor::NeedGetOrAllocateSegment(
+      MetaCacheErrorType::OK, OpType::READ, chunkInfo, &metaCache));
 
-    // read request with non-exclusive open return false
-    finfo.openflags.exclusive = false;
-    metaCache.UpdateFileInfo(finfo);
-    EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
-        MetaCacheErrorType::OK, OpType::READ, chunkInfo, &metaCache));
+  // read request with non-exclusive open return false
+  finfo.openflags.exclusive = false;
+  metaCache.UpdateFileInfo(finfo);
+  EXPECT_TRUE(Splitor::NeedGetOrAllocateSegment(
+      MetaCacheErrorType::OK, OpType::READ, chunkInfo, &metaCache));
 }
 
 }  // namespace client

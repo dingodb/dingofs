@@ -30,49 +30,48 @@ namespace curve {
 namespace client {
 
 RequestSenderManager::SenderPtr RequestSenderManager::GetOrCreateSender(
-    const ChunkServerID& leaderId,
-    const butil::EndPoint& leaderAddr,
+    const ChunkServerID& leaderId, const butil::EndPoint& leaderAddr,
     const IOSenderOption& senderopt) {
-    {
-        curve::common::ReadLockGuard guard(rwlock_);
-        auto iter = senderPool_.find(leaderId);
-        if (senderPool_.end() != iter) {
-            return iter->second;
-        }
-    }
-
-    curve::common::WriteLockGuard guard(rwlock_);
+  {
+    curve::common::ReadLockGuard guard(rwlock_);
     auto iter = senderPool_.find(leaderId);
     if (senderPool_.end() != iter) {
-        return iter->second;
+      return iter->second;
     }
+  }
 
-    SenderPtr sender = std::make_shared<RequestSender>(leaderId, leaderAddr);
-    int rc = sender->Init(senderopt);
-    if (rc != 0) {
-        return nullptr;
-    }
+  curve::common::WriteLockGuard guard(rwlock_);
+  auto iter = senderPool_.find(leaderId);
+  if (senderPool_.end() != iter) {
+    return iter->second;
+  }
 
-    senderPool_.emplace(leaderId, sender);
+  SenderPtr sender = std::make_shared<RequestSender>(leaderId, leaderAddr);
+  int rc = sender->Init(senderopt);
+  if (rc != 0) {
+    return nullptr;
+  }
 
-    return sender;
+  senderPool_.emplace(leaderId, sender);
+
+  return sender;
 }
 
 void RequestSenderManager::ResetSenderIfNotHealth(const ChunkServerID& csId) {
-    curve::common::WriteLockGuard guard(rwlock_);
-    auto iter = senderPool_.find(csId);
+  curve::common::WriteLockGuard guard(rwlock_);
+  auto iter = senderPool_.find(csId);
 
-    if (iter == senderPool_.end()) {
-        return;
-    }
+  if (iter == senderPool_.end()) {
+    return;
+  }
 
-    // 检查是否健康
-    if (iter->second->IsSocketHealth()) {
-        return;
-    }
+  // 检查是否健康
+  if (iter->second->IsSocketHealth()) {
+    return;
+  }
 
-    senderPool_.erase(iter);
+  senderPool_.erase(iter);
 }
 
-}   // namespace client
-}   // namespace curve
+}  // namespace client
+}  // namespace curve

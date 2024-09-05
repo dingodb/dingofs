@@ -23,141 +23,133 @@
 
 #include <string>
 
-#include "src/common/namespace_define.h"
 #include "src/common/encode.h"
-
+#include "src/common/namespace_define.h"
 
 namespace curve {
 namespace mds {
 namespace topology {
 
-std::string TopologyStorageCodec::EncodeLogicalPoolKey(
-    LogicalPoolIdType id) {
-    std::string key = LOGICALPOOLKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+std::string TopologyStorageCodec::EncodeLogicalPoolKey(LogicalPoolIdType id) {
+  std::string key = LOGICALPOOLKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeLogicalPoolData(
-    const LogicalPool &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeLogicalPoolData(const LogicalPool& data,
+                                                 std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeLogicalPoolData(
-    const std::string &value, LogicalPool *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeLogicalPoolData(const std::string& value,
+                                                 LogicalPool* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodePhysicalPoolKey(
-    PhysicalPoolIdType id) {
-    std::string key = PHYSICALPOOLKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+std::string TopologyStorageCodec::EncodePhysicalPoolKey(PhysicalPoolIdType id) {
+  std::string key = PHYSICALPOOLKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodePhysicalPoolData(
-    const PhysicalPool &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodePhysicalPoolData(const PhysicalPool& data,
+                                                  std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodePhysicalPoolData(
-    const std::string &value, PhysicalPool *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodePhysicalPoolData(const std::string& value,
+                                                  PhysicalPool* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodeZoneKey(
-    ZoneIdType id) {
-    std::string key = ZONEKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+std::string TopologyStorageCodec::EncodeZoneKey(ZoneIdType id) {
+  std::string key = ZONEKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeZoneData(
-    const Zone &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeZoneData(const Zone& data,
+                                          std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeZoneData(
-    const std::string &value, Zone *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeZoneData(const std::string& value,
+                                          Zone* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodeServerKey(
-    ServerIdType id) {
-    std::string key = SERVERKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+std::string TopologyStorageCodec::EncodeServerKey(ServerIdType id) {
+  std::string key = SERVERKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeServerData(
-    const Server &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeServerData(const Server& data,
+                                            std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeServerData(
-    const std::string &value, Server *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeServerData(const std::string& value,
+                                            Server* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodeChunkServerKey(
-    ChunkServerIdType id) {
-    std::string key = CHUNKSERVERKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
-    return key;
+std::string TopologyStorageCodec::EncodeChunkServerKey(ChunkServerIdType id) {
+  std::string key = CHUNKSERVERKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeChunkServerData(
-    const ChunkServer &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeChunkServerData(const ChunkServer& data,
+                                                 std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeChunkServerData(
-    const std::string &value, ChunkServer *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeChunkServerData(const std::string& value,
+                                                 ChunkServer* data) {
+  return data->ParseFromString(value);
 }
 
-std::string TopologyStorageCodec::EncodeCopySetKey(
-    const CopySetKey &id) {
-    std::string key = COPYSETKEYPREFIX;
-    size_t prefixLen = key.size();
-    key.resize(prefixLen + sizeof(uint64_t) + sizeof(uint64_t));
-    ::curve::common::EncodeBigEndian(&(key[prefixLen]), id.first);
-    ::curve::common::EncodeBigEndian(&(key[prefixLen + sizeof(uint64_t)]),
-        id.second);
-    return key;
+std::string TopologyStorageCodec::EncodeCopySetKey(const CopySetKey& id) {
+  std::string key = COPYSETKEYPREFIX;
+  size_t prefixLen = key.size();
+  key.resize(prefixLen + sizeof(uint64_t) + sizeof(uint64_t));
+  ::curve::common::EncodeBigEndian(&(key[prefixLen]), id.first);
+  ::curve::common::EncodeBigEndian(&(key[prefixLen + sizeof(uint64_t)]),
+                                   id.second);
+  return key;
 }
 
-bool TopologyStorageCodec::EncodeCopySetData(
-    const CopySetInfo &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeCopySetData(const CopySetInfo& data,
+                                             std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeCopySetData(
-    const std::string &value, CopySetInfo *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeCopySetData(const std::string& value,
+                                             CopySetInfo* data) {
+  return data->ParseFromString(value);
 }
 
-bool TopologyStorageCodec::EncodeClusterInfoData(
-    const ClusterInformation &data, std::string *value) {
-    return data.SerializeToString(value);
+bool TopologyStorageCodec::EncodeClusterInfoData(const ClusterInformation& data,
+                                                 std::string* value) {
+  return data.SerializeToString(value);
 }
 
-bool TopologyStorageCodec::DecodeCluserInfoData(const std::string &value,
-    ClusterInformation *data) {
-    return data->ParseFromString(value);
+bool TopologyStorageCodec::DecodeCluserInfoData(const std::string& value,
+                                                ClusterInformation* data) {
+  return data->ParseFromString(value);
 }
 
 }  // namespace topology
 }  // namespace mds
 }  // namespace curve
-

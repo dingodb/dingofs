@@ -24,133 +24,128 @@
 #define SRC_CHUNKSERVER_CLONE_COPYER_H_
 
 #include <glog/logging.h>
-#include <memory>
-#include <unordered_map>
-#include <string>
+
 #include <list>
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "include/chunkserver/chunkserver_common.h"
-#include "src/common/location_operator.h"
+#include "include/client/libcurve.h"
+#include "src/client/client_common.h"
 #include "src/client/config_info.h"
 #include "src/client/libcurve_file.h"
-#include "src/client/client_common.h"
-#include "include/client/libcurve.h"
+#include "src/common/location_operator.h"
 #include "src/common/s3_adapter.h"
 
 namespace curve {
 namespace chunkserver {
 
-using curve::common::S3Adapter;
 using curve::client::FileClient;
 using curve::client::UserInfo;
-using curve::common::LocationOperator;
-using curve::common::OriginType;
 using curve::common::GetObjectAsyncCallBack;
 using curve::common::GetObjectAsyncContext;
+using curve::common::LocationOperator;
+using curve::common::OriginType;
+using curve::common::S3Adapter;
 using std::string;
 
 class DownloadClosure;
 
 struct CopyerOptions {
-    // curvefs上的root用户信息
-    UserInfo curveUser;
-    // curvefs 的配置文件路径
-    std::string curveConf;
-    // s3adapter 的配置文件路径
-    std::string s3Conf;
-    // curve client的对象指针
-    std::shared_ptr<FileClient> curveClient;
-    // s3 adapter的对象指针
-    std::shared_ptr<S3Adapter> s3Client;
-    // curve file's time to live
-    uint64_t curveFileTimeoutSec;
+  // curvefs上的root用户信息
+  UserInfo curveUser;
+  // curvefs 的配置文件路径
+  std::string curveConf;
+  // s3adapter 的配置文件路径
+  std::string s3Conf;
+  // curve client的对象指针
+  std::shared_ptr<FileClient> curveClient;
+  // s3 adapter的对象指针
+  std::shared_ptr<S3Adapter> s3Client;
+  // curve file's time to live
+  uint64_t curveFileTimeoutSec;
 };
 
 struct AsyncDownloadContext {
-    // 源chunk的位置信息
-    string location;
-    // 请求下载数据在对象中的相对偏移
-    off_t offset;
-    // 请求下载数据的的长度
-    size_t size;
-    // 存放下载数据的缓冲区
-    char* buf;
+  // 源chunk的位置信息
+  string location;
+  // 请求下载数据在对象中的相对偏移
+  off_t offset;
+  // 请求下载数据的的长度
+  size_t size;
+  // 存放下载数据的缓冲区
+  char* buf;
 };
 
 struct CurveOpenTimestamp {
-    // Opened file id
-    int fd;
-    // Opened file name
-    string fileName;
-    // lastest use time, using seconds
-    int64_t lastUsedSec;
-    // Init functions
-    CurveOpenTimestamp(): fd(-1), fileName(""), lastUsedSec(0) {}
-    CurveOpenTimestamp(int _fd, string _file, uint64_t _lastUsedSec):
-        fd(_fd), fileName(_file), lastUsedSec(_lastUsedSec) {}
+  // Opened file id
+  int fd;
+  // Opened file name
+  string fileName;
+  // lastest use time, using seconds
+  int64_t lastUsedSec;
+  // Init functions
+  CurveOpenTimestamp() : fd(-1), fileName(""), lastUsedSec(0) {}
+  CurveOpenTimestamp(int _fd, string _file, uint64_t _lastUsedSec)
+      : fd(_fd), fileName(_file), lastUsedSec(_lastUsedSec) {}
 };
 
 std::ostream& operator<<(std::ostream& out, const AsyncDownloadContext& rhs);
 
 class OriginCopyer {
  public:
-    OriginCopyer();
-    virtual ~OriginCopyer() = default;
+  OriginCopyer();
+  virtual ~OriginCopyer() = default;
 
-    /**
-     * 初始化资源
-     * @param options: 配置信息
-     * @return: 成功返回0，失败返回-1
-     */
-    virtual int Init(const CopyerOptions& options);
+  /**
+   * 初始化资源
+   * @param options: 配置信息
+   * @return: 成功返回0，失败返回-1
+   */
+  virtual int Init(const CopyerOptions& options);
 
-    /**
-     * 释放资源
-     * @return: 成功返回0，失败返回-1
-     */
-    virtual int Fini();
+  /**
+   * 释放资源
+   * @return: 成功返回0，失败返回-1
+   */
+  virtual int Fini();
 
-    /**
-     * 异步地从源端拷贝数据
-     * @param done：包含下载请求的上下文信息，
-     * 数据下载完成后执行该closure进行回调
-     */
-    virtual void DownloadAsync(DownloadClosure* done);
-
- private:
-    void DownloadFromS3(const string& objectName,
-                       off_t off,
-                       size_t size,
-                       char* buf,
-                       DownloadClosure* done);
-    void DownloadFromCurve(const string& fileName,
-                          off_t off,
-                          size_t size,
-                          char* buf,
-                          DownloadClosure* done);
-    static void DeleteExpiredCurveCache(void* arg);
+  /**
+   * 异步地从源端拷贝数据
+   * @param done：包含下载请求的上下文信息，
+   * 数据下载完成后执行该closure进行回调
+   */
+  virtual void DownloadAsync(DownloadClosure* done);
 
  private:
-    // curvefs上的root用户信息
-    UserInfo curveUser_;
-    // mutex for protect curveOpenTime_
-    std::mutex timeMtx_;
-    // List to maintain curve file open timestamp
-    std::list<CurveOpenTimestamp> curveOpenTime_;
-    // curve file's time to live
-    uint64_t curveFileTimeoutSec_;
-    // 负责跟curve交互
-    std::shared_ptr<FileClient> curveClient_;
-    // 负责跟s3交互
-    std::shared_ptr<S3Adapter>  s3Client_;
-    // 保护fdMap_的互斥锁
-    std::mutex  mtx_;
-    // 文件名->文件fd 的映射
-    std::unordered_map<std::string, int> fdMap_;
-    // Timer for clean expired curve file
-    bthread::TimerThread timer_;
-    // timer's task id
-    bthread::TimerThread::TaskId timerId_;
+  void DownloadFromS3(const string& objectName, off_t off, size_t size,
+                      char* buf, DownloadClosure* done);
+  void DownloadFromCurve(const string& fileName, off_t off, size_t size,
+                         char* buf, DownloadClosure* done);
+  static void DeleteExpiredCurveCache(void* arg);
+
+ private:
+  // curvefs上的root用户信息
+  UserInfo curveUser_;
+  // mutex for protect curveOpenTime_
+  std::mutex timeMtx_;
+  // List to maintain curve file open timestamp
+  std::list<CurveOpenTimestamp> curveOpenTime_;
+  // curve file's time to live
+  uint64_t curveFileTimeoutSec_;
+  // 负责跟curve交互
+  std::shared_ptr<FileClient> curveClient_;
+  // 负责跟s3交互
+  std::shared_ptr<S3Adapter> s3Client_;
+  // 保护fdMap_的互斥锁
+  std::mutex mtx_;
+  // 文件名->文件fd 的映射
+  std::unordered_map<std::string, int> fdMap_;
+  // Timer for clean expired curve file
+  bthread::TimerThread timer_;
+  // timer's task id
+  bthread::TimerThread::TaskId timerId_;
 };
 
 }  // namespace chunkserver

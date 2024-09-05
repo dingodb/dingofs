@@ -24,6 +24,7 @@
 #define TEST_CHUNKSERVER_CLONE_MOCK_CLONE_COPYER_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
 
 #include "src/chunkserver/clone_copyer.h"
@@ -34,9 +35,9 @@ namespace chunkserver {
 class DownloadClosure;
 class MockChunkCopyer : public OriginCopyer {
  public:
-    MockChunkCopyer() = default;
-    ~MockChunkCopyer() = default;
-    MOCK_METHOD1(DownloadAsync, void(DownloadClosure*));
+  MockChunkCopyer() = default;
+  ~MockChunkCopyer() = default;
+  MOCK_METHOD1(DownloadAsync, void(DownloadClosure*));
 };
 
 }  // namespace chunkserver

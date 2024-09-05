@@ -34,28 +34,27 @@ namespace curvefs {
 namespace tools {
 
 enum class MetricStatusCode {
-    // success
-    kOK = 0,
-    // metric not found
-    kNotFound = -1,
-    // other error
-    kOtherErr = -2,
+  // success
+  kOK = 0,
+  // metric not found
+  kNotFound = -1,
+  // other error
+  kOtherErr = -2,
 };
 
 class MetricClient {
  public:
-    static MetricStatusCode GetMetric(const std::string& addr,
-                                      const std::string& subUri,
-                                      std::string* value);
-    static int GetKeyValueFromJson(const std::string& strJson,
+  static MetricStatusCode GetMetric(const std::string& addr,
+                                    const std::string& subUri,
+                                    std::string* value);
+  static int GetKeyValueFromJson(const std::string& strJson,
+                                 const std::string& key, std::string* value);
+  static int GetKeyValueFromString(const std::string& str,
                                    const std::string& key, std::string* value);
-    static int GetKeyValueFromString(const std::string& str,
-                                     const std::string& key,
-                                     std::string* value);
-    static void TrimMetricString(std::string* str);
+  static void TrimMetricString(std::string* str);
 
  protected:
-    static const int kHttpCodeNotFound = 404;
+  static const int kHttpCodeNotFound = 404;
 };
 
 }  // namespace tools

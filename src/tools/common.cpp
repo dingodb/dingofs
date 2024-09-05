@@ -29,23 +29,23 @@ namespace curve {
 namespace tool {
 
 void TrimMetricString(std::string* str) {
-    // 去掉头部空格
-    str->erase(0, str->find_first_not_of(" "));
-    // 去掉尾部回车
-    str->erase(str->find_last_not_of("\r\n") + 1);
-    // 去掉两边双引号
-    str->erase(0, str->find_first_not_of("\""));
-    str->erase(str->find_last_not_of("\"") + 1);
+  // 去掉头部空格
+  str->erase(0, str->find_first_not_of(" "));
+  // 去掉尾部回车
+  str->erase(str->find_last_not_of("\r\n") + 1);
+  // 去掉两边双引号
+  str->erase(0, str->find_first_not_of("\""));
+  str->erase(str->find_last_not_of("\"") + 1);
 }
 
 bool StringToBool(const std::string& strValue, bool defaultValue) {
-    std::string str = strValue;
-    transform(str.begin(), str.end(), str.begin(), ::tolower);
+  std::string str = strValue;
+  transform(str.begin(), str.end(), str.begin(), ::tolower);
 
-    bool istrue = (str == "true") || (str == "yes") || (str == "1");
-    bool isfalse = (str == "false") || (str == "no") || (str == "0");
-    bool ret = istrue ? true : isfalse ? false : defaultValue;
-    return ret;
+  bool istrue = (str == "true") || (str == "yes") || (str == "1");
+  bool isfalse = (str == "false") || (str == "no") || (str == "0");
+  bool ret = istrue ? true : isfalse ? false : defaultValue;
+  return ret;
 }
 
 }  // namespace tool

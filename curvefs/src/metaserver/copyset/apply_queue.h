@@ -42,53 +42,53 @@ namespace copyset {
 class CopysetNode;
 
 struct ApplyQueueOption {
-    uint32_t workerCount = 1;
-    uint32_t queueDepth = 1;
-    CopysetNode* copysetNode = nullptr;
+  uint32_t workerCount = 1;
+  uint32_t queueDepth = 1;
+  CopysetNode* copysetNode = nullptr;
 };
 
 class CURVE_CACHELINE_ALIGNMENT ApplyQueue {
  public:
-    ApplyQueue() : option_(), running_(false), workers_() {}
+  ApplyQueue() : option_(), running_(false), workers_() {}
 
-    bool Start(const ApplyQueueOption& option);
+  bool Start(const ApplyQueueOption& option);
 
-    template <typename Func, typename... Args>
-    void Push(uint64_t hash, Func&& f, Args&&... args) {
-        workers_[hash % option_.workerCount]->tasks.Push(
-            std::forward<Func>(f), std::forward<Args>(args)...);
-    }
+  template <typename Func, typename... Args>
+  void Push(uint64_t hash, Func&& f, Args&&... args) {
+    workers_[hash % option_.workerCount]->tasks.Push(
+        std::forward<Func>(f), std::forward<Args>(args)...);
+  }
 
-    void Flush();
+  void Flush();
+
+  void Stop();
+
+ private:
+  void StartWorkers();
+
+  struct TaskWorker {
+    TaskWorker(size_t cap, std::string workerName)
+        : running(false),
+          worker(),
+          tasks(cap),
+          workerName_(std::move(workerName)) {}
+
+    void Start();
 
     void Stop();
 
- private:
-    void StartWorkers();
+    void Work();
 
-    struct TaskWorker {
-        TaskWorker(size_t cap, std::string workerName)
-            : running(false),
-              worker(),
-              tasks(cap),
-              workerName_(std::move(workerName)) {}
-
-        void Start();
-
-        void Stop();
-
-        void Work();
-
-        std::atomic<bool> running;
-        std::thread worker;
-        curve::common::TaskQueue tasks;
-        std::string workerName_;
-    };
+    std::atomic<bool> running;
+    std::thread worker;
+    curve::common::TaskQueue tasks;
+    std::string workerName_;
+  };
 
  private:
-    ApplyQueueOption option_;
-    std::atomic<bool> running_;
-    std::vector<std::unique_ptr<TaskWorker>> workers_;
+  ApplyQueueOption option_;
+  std::atomic<bool> running_;
+  std::vector<std::unique_ptr<TaskWorker>> workers_;
 };
 
 }  // namespace copyset

@@ -30,38 +30,36 @@ namespace common {
 
 using curve::common::Configuration;
 
-void InitVolumeOption(Configuration *conf, VolumeOption *volumeOpt);
+void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt);
 
 TEST(TestInitVolumeOption, Common) {
-    Configuration conf;
-    VolumeOption volopt;
+  Configuration conf;
+  VolumeOption volopt;
 
-    conf.SetUInt64Value("volume.bigFileSize", 1ULL * 1024 * 1024);
-    conf.SetUInt64Value("volume.volBlockSize", 4096);
-    conf.SetUInt64Value("volume.fsBlockSize", 4096);
-    conf.SetUInt32Value("volume.blockGroup.allocateOnce", 4);
-    conf.SetStringValue("volume.allocator.type", "bitmap");
-    conf.SetUInt64Value("volume.bitmapAllocator.sizePerBit",
-                        4ULL * 1024 * 1024);
-    conf.SetDoubleValue("volume.bitmapAllocator.smallAllocProportion", 0.0);
+  conf.SetUInt64Value("volume.bigFileSize", 1ULL * 1024 * 1024);
+  conf.SetUInt64Value("volume.volBlockSize", 4096);
+  conf.SetUInt64Value("volume.fsBlockSize", 4096);
+  conf.SetUInt32Value("volume.blockGroup.allocateOnce", 4);
+  conf.SetStringValue("volume.allocator.type", "bitmap");
+  conf.SetUInt64Value("volume.bitmapAllocator.sizePerBit", 4ULL * 1024 * 1024);
+  conf.SetDoubleValue("volume.bitmapAllocator.smallAllocProportion", 0.0);
 
-    ASSERT_NO_FATAL_FAILURE({ InitVolumeOption(&conf, &volopt); });
+  ASSERT_NO_FATAL_FAILURE({ InitVolumeOption(&conf, &volopt); });
 }
 
 TEST(TestInitVolumeOption, TypeError) {
-    Configuration conf;
-    VolumeOption volopt;
+  Configuration conf;
+  VolumeOption volopt;
 
-    conf.SetUInt64Value("volume.bigFileSize", 1ULL * 1024 * 1024);
-    conf.SetUInt64Value("volume.volBlockSize", 4096);
-    conf.SetUInt64Value("volume.fsBlockSize", 4096);
-    conf.SetUInt32Value("volume.blockGroup.allocateOnce", 4);
-    conf.SetStringValue("volume.allocator.type", "xxx");
-    conf.SetUInt64Value("volume.bitmapAllocator.sizePerBit",
-                        4ULL * 1024 * 1024);
-    conf.SetDoubleValue("volume.bitmapAllocator.smallAllocProportion", 0.0);
+  conf.SetUInt64Value("volume.bigFileSize", 1ULL * 1024 * 1024);
+  conf.SetUInt64Value("volume.volBlockSize", 4096);
+  conf.SetUInt64Value("volume.fsBlockSize", 4096);
+  conf.SetUInt32Value("volume.blockGroup.allocateOnce", 4);
+  conf.SetStringValue("volume.allocator.type", "xxx");
+  conf.SetUInt64Value("volume.bitmapAllocator.sizePerBit", 4ULL * 1024 * 1024);
+  conf.SetDoubleValue("volume.bitmapAllocator.smallAllocProportion", 0.0);
 
-    ASSERT_DEATH({ InitVolumeOption(&conf, &volopt); }, "");
+  ASSERT_DEATH({ InitVolumeOption(&conf, &volopt); }, "");
 }
 
 }  // namespace common

@@ -24,9 +24,10 @@
 #define NEBD_TEST_PART2_MOCK_REQUEST_EXECUTOR_H_
 
 #include <gmock/gmock.h>
+
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "nebd/src/part2/request_executor.h"
 
@@ -35,27 +36,28 @@ namespace server {
 
 class MockFileInstance : public NebdFileInstance {
  public:
-    MockFileInstance() {}
-    ~MockFileInstance() {}
+  MockFileInstance() {}
+  ~MockFileInstance() {}
 };
 
 class MockRequestExecutor : public NebdRequestExecutor {
  public:
-    MockRequestExecutor() {}
-    ~MockRequestExecutor() {}
+  MockRequestExecutor() {}
+  ~MockRequestExecutor() {}
 
-    MOCK_METHOD2(Open, std::shared_ptr<NebdFileInstance>(const std::string&,
-                                                         const OpenFlags*));
-    MOCK_METHOD2(Reopen, std::shared_ptr<NebdFileInstance>(
-        const std::string&, const ExtendAttribute&));
-    MOCK_METHOD1(Close, int(NebdFileInstance*));
-    MOCK_METHOD2(Extend, int(NebdFileInstance*, int64_t));
-    MOCK_METHOD2(GetInfo, int(NebdFileInstance*, NebdFileInfo*));
-    MOCK_METHOD2(Discard, int(NebdFileInstance*, NebdServerAioContext*));
-    MOCK_METHOD2(AioRead, int(NebdFileInstance*, NebdServerAioContext*));
-    MOCK_METHOD2(AioWrite, int(NebdFileInstance*, NebdServerAioContext*));
-    MOCK_METHOD2(Flush, int(NebdFileInstance*, NebdServerAioContext*));
-    MOCK_METHOD1(InvalidCache, int(NebdFileInstance*));
+  MOCK_METHOD2(Open, std::shared_ptr<NebdFileInstance>(const std::string&,
+                                                       const OpenFlags*));
+  MOCK_METHOD2(Reopen,
+               std::shared_ptr<NebdFileInstance>(const std::string&,
+                                                 const ExtendAttribute&));
+  MOCK_METHOD1(Close, int(NebdFileInstance*));
+  MOCK_METHOD2(Extend, int(NebdFileInstance*, int64_t));
+  MOCK_METHOD2(GetInfo, int(NebdFileInstance*, NebdFileInfo*));
+  MOCK_METHOD2(Discard, int(NebdFileInstance*, NebdServerAioContext*));
+  MOCK_METHOD2(AioRead, int(NebdFileInstance*, NebdServerAioContext*));
+  MOCK_METHOD2(AioWrite, int(NebdFileInstance*, NebdServerAioContext*));
+  MOCK_METHOD2(Flush, int(NebdFileInstance*, NebdServerAioContext*));
+  MOCK_METHOD1(InvalidCache, int(NebdFileInstance*));
 };
 
 }  // namespace server

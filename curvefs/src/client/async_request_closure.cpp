@@ -46,69 +46,67 @@ AsyncRequestClosureBase::~AsyncRequestClosureBase() = default;
 
 namespace {
 bool IsOK(MetaStatusCode code) {
-    return code == MetaStatusCode::OK || code == MetaStatusCode::NOT_FOUND;
+  return code == MetaStatusCode::OK || code == MetaStatusCode::NOT_FOUND;
 }
 }  // namespace
 
 UpdateVolumeExtentClosure::UpdateVolumeExtentClosure(
-    const std::shared_ptr<InodeWrapper>& inode,
-    bool sync)
+    const std::shared_ptr<InodeWrapper>& inode, bool sync)
     : AsyncRequestClosureBase(inode), sync_(sync) {}
 
 CURVEFS_ERROR UpdateVolumeExtentClosure::Wait() {
-    assert(sync_);
+  assert(sync_);
 
-    std::unique_lock<bthread::Mutex> lk(mtx_);
-    while (!done_) {
-        cond_.wait(lk);
-    }
+  std::unique_lock<bthread::Mutex> lk(mtx_);
+  while (!done_) {
+    cond_.wait(lk);
+  }
 
-    return ToFSError(GetStatusCode());
+  return ToFSError(GetStatusCode());
 }
 
 void UpdateVolumeExtentClosure::Run() {
-    auto st = GetStatusCode();
-    if (!IsOK(st)) {
-        LOG(ERROR) << "UpdateVolumeExtent failed, error: "
-                   << MetaStatusCode_Name(st)
-                   << ", inodeid: " << inode_->GetInodeId();
-        inode_->MarkInodeError();
-    }
+  auto st = GetStatusCode();
+  if (!IsOK(st)) {
+    LOG(ERROR) << "UpdateVolumeExtent failed, error: "
+               << MetaStatusCode_Name(st)
+               << ", inodeid: " << inode_->GetInodeId();
+    inode_->MarkInodeError();
+  }
 
-    inode_->syncingVolumeExtentsMtx_.unlock();
+  inode_->syncingVolumeExtentsMtx_.unlock();
 
-    if (sync_) {
-        std::lock_guard<bthread::Mutex> lk(mtx_);
-        done_ = true;
-        cond_.notify_one();
-    } else {
-        delete this;
-    }
+  if (sync_) {
+    std::lock_guard<bthread::Mutex> lk(mtx_);
+    done_ = true;
+    cond_.notify_one();
+  } else {
+    delete this;
+  }
 }
 
 UpdateInodeAttrAndExtentClosure::UpdateInodeAttrAndExtentClosure(
-    const std::shared_ptr<InodeWrapper>& inode,
-    MetaServerClientDone* parent)
+    const std::shared_ptr<InodeWrapper>& inode, MetaServerClientDone* parent)
     : Base(inode), parent_(parent) {}
 
 void UpdateInodeAttrAndExtentClosure::Run() {
-    std::unique_ptr<UpdateInodeAttrAndExtentClosure> guard(this);
+  std::unique_ptr<UpdateInodeAttrAndExtentClosure> guard(this);
 
-    auto st = GetStatusCode();
-    if (!IsOK(st)) {
-        LOG(ERROR) << "UpdateInodeAttrAndExtent failed, error: "
-                   << MetaStatusCode_Name(st)
-                   << ", inode: " << inode_->GetInodeId();
-        inode_->MarkInodeError();
-    }
-    inode_->ClearDirty();
-    inode_->syncingVolumeExtentsMtx_.unlock();
-    inode_->ReleaseSyncingInode();
+  auto st = GetStatusCode();
+  if (!IsOK(st)) {
+    LOG(ERROR) << "UpdateInodeAttrAndExtent failed, error: "
+               << MetaStatusCode_Name(st)
+               << ", inode: " << inode_->GetInodeId();
+    inode_->MarkInodeError();
+  }
+  inode_->ClearDirty();
+  inode_->syncingVolumeExtentsMtx_.unlock();
+  inode_->ReleaseSyncingInode();
 
-    if (parent_ != nullptr) {
-        parent_->SetMetaStatusCode(st);
-        parent_->Run();
-    }
+  if (parent_ != nullptr) {
+    parent_->SetMetaStatusCode(st);
+    parent_->Run();
+  }
 }
 
 }  // namespace client

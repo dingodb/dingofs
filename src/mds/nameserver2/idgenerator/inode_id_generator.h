@@ -23,13 +23,13 @@
 #ifndef SRC_MDS_NAMESERVER2_IDGENERATOR_INODE_ID_GENERATOR_H_
 #define SRC_MDS_NAMESERVER2_IDGENERATOR_INODE_ID_GENERATOR_H_
 
-#include <string>
 #include <memory>
+#include <string>
 
-#include "src/mds/common/mds_define.h"
-#include "src/common/namespace_define.h"
-#include "src/common/concurrent/concurrent.h"
 #include "src//idgenerator/etcd_id_generator.h"
+#include "src/common/concurrent/concurrent.h"
+#include "src/common/namespace_define.h"
+#include "src/mds/common/mds_define.h"
 #include "src/mds/nameserver2/helper/namespace_helper.h"
 
 using ::curve::common::INODESTOREKEY;
@@ -43,33 +43,33 @@ using curve::kvstorage::KVStorageClient;
 
 class InodeIDGenerator {
  public:
-    virtual ~InodeIDGenerator() {}
+  virtual ~InodeIDGenerator() {}
 
-    /*
-    * @brief GenInodeId Generate a globally incremented ID
-    *
-    * @param[out] ID generated
-    *
-    * @return true if succeeded, false if failed
-    */
-    virtual bool GenInodeID(InodeID * id) = 0;
+  /*
+   * @brief GenInodeId Generate a globally incremented ID
+   *
+   * @param[out] ID generated
+   *
+   * @return true if succeeded, false if failed
+   */
+  virtual bool GenInodeID(InodeID* id) = 0;
 };
 
 class InodeIdGeneratorImp : public InodeIDGenerator {
  public:
-    explicit InodeIdGeneratorImp(std::shared_ptr<KVStorageClient> client) {
-        generator_ = std::make_shared<EtcdIdGenerator>(
-            client, INODESTOREKEY, USERSTARTINODEID, INODEBUNDLEALLOCATED);
-    }
-    virtual ~InodeIdGeneratorImp() {}
+  explicit InodeIdGeneratorImp(std::shared_ptr<KVStorageClient> client) {
+    generator_ = std::make_shared<EtcdIdGenerator>(
+        client, INODESTOREKEY, USERSTARTINODEID, INODEBUNDLEALLOCATED);
+  }
+  virtual ~InodeIdGeneratorImp() {}
 
-    bool GenInodeID(InodeID *id) override;
+  bool GenInodeID(InodeID* id) override;
 
  private:
-    std::shared_ptr<EtcdIdGenerator> generator_;
+  std::shared_ptr<EtcdIdGenerator> generator_;
 };
 
 }  // namespace mds
 }  // namespace curve
 
-#endif   // SRC_MDS_NAMESERVER2_IDGENERATOR_INODE_ID_GENERATOR_H_
+#endif  // SRC_MDS_NAMESERVER2_IDGENERATOR_INODE_ID_GENERATOR_H_

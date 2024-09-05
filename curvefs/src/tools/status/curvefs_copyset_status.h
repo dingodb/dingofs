@@ -38,18 +38,18 @@ namespace status {
 
 class CopysetStatusTool : public CurvefsTool {
  public:
-    explicit CopysetStatusTool(const std::string& command = kCopysetStatusCmd,
-                               bool show = true)
-        : CurvefsTool(command) {
-        show_ = show;
-    }
-    void PrintHelp() override;
+  explicit CopysetStatusTool(const std::string& command = kCopysetStatusCmd,
+                             bool show = true)
+      : CurvefsTool(command) {
+    show_ = show;
+  }
+  void PrintHelp() override;
 
-    int RunCommand() override;
-    int Init() override;
+  int RunCommand() override;
+  int Init() override;
 
  protected:
-    std::shared_ptr<list::CopysetInfoListTool> copyInfoListTool_;
+  std::shared_ptr<list::CopysetInfoListTool> copyInfoListTool_;
 };
 }  // namespace status
 }  // namespace tools

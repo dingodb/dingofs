@@ -25,15 +25,9 @@
 namespace curve {
 namespace snapshotcloneserver {
 
-int ThreadPool::Start() {
-    return threadPool_.Start(threadNum_);
-}
+int ThreadPool::Start() { return threadPool_.Start(threadNum_); }
 
-void ThreadPool::Stop() {
-    threadPool_.Stop();
-}
+void ThreadPool::Stop() { threadPool_.Stop(); }
 
 }  // namespace snapshotcloneserver
 }  // namespace curve
-
-

@@ -62,14 +62,14 @@ using MetaserverInfoType = mds::topology::MetaServerInfo;
  * @details
  */
 struct PoolPolicy {
-    uint32_t copysetNum;
-    uint32_t replicaNum;
-    uint32_t zoneNum;
-    bool error = false;
+  uint32_t copysetNum;
+  uint32_t replicaNum;
+  uint32_t zoneNum;
+  bool error = false;
 
-    explicit PoolPolicy(const std::string& jsonStr);
+  explicit PoolPolicy(const std::string& jsonStr);
 
-    friend std::ostream& operator<<(std::ostream& os, const PoolPolicy& policy);
+  friend std::ostream& operator<<(std::ostream& os, const PoolPolicy& policy);
 };
 
 class TopologyListTool
@@ -77,109 +77,109 @@ class TopologyListTool
                             curvefs::mds::topology::ListTopologyResponse,
                             curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit TopologyListTool(const std::string& cmd = kTopologyListCmd,
-                              bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
+  explicit TopologyListTool(const std::string& cmd = kTopologyListCmd,
+                            bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
 
-    friend class topology::TopologyTreeJson;
-
- protected:
-    bool OutputFile();
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-
-    /**
-     * @brief Get the PoolInfo From Response, fill into poolId2PoolInfo
-     * not include zoneId list (will be filled in GetZoneInfoFromResponse)
-     * will fill clusterId2CLusterInfo's poolId list
-     *
-     * @return true
-     * @return false
-     * @details
-     *
-     */
-    bool GetPoolInfoFromResponse();
-
-    /**
-     * @brief Get the ZoneInfo From Response, fill into zoneId2ZoneInfo
-     * not include serverId list (will be filled in GetServerInfoFromResponse)
-     * will fill poolId2PoolInfo's zoneId list
-     *
-     * @return true
-     * @return false
-     * @details
-     */
-    bool GetZoneInfoFromResponse();
-
-    /**
-     * @brief Get the ServerInfo From Response, fill into serverId2ServerInfo
-     * not include serverId list
-     * will fill zoneId2ZoneInfo's serverId list
-     *
-     * @return true
-     * @return false
-     * @details
-     */
-    bool GetServerInfoFromResponse();
-
-    /**
-     * @brief Get the MetaserverInfo From Response,
-     * fill into metaserverId2MetaserverInfo
-     * will fill serverId2ServerInfo's metaserverId list
-     *
-     * @return true
-     * @return false
-     * @details
-     */
-    bool GetMetaserverInfoFromResponse();
-
-    void ShowPoolInfo(const PoolInfoType& pool) const;
-
-    void ShowZoneInfo(const ZoneInfoType& zone) const;
-
-    void ShowServerInfo(const ServerInfoType& server) const;
-
-    void ShowMetaserverInfo(const MetaserverInfoType& metaserver) const;
+  friend class topology::TopologyTreeJson;
 
  protected:
-    std::string clusterId_;
-    /**
-     * poolId to clusterInfo and poolIds which belongs to pool
-     */
-    std::map<std::string, ClusterInfo> clusterId2CLusterInfo_;
+  bool OutputFile();
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
 
-    /**
-     * @brief poolId to poolInfo and zoneIds which belongs to pool
-     *
-     * @details
-     */
-    std::map<mds::topology::PoolIdType, PoolInfoType> poolId2PoolInfo_;
+  /**
+   * @brief Get the PoolInfo From Response, fill into poolId2PoolInfo
+   * not include zoneId list (will be filled in GetZoneInfoFromResponse)
+   * will fill clusterId2CLusterInfo's poolId list
+   *
+   * @return true
+   * @return false
+   * @details
+   *
+   */
+  bool GetPoolInfoFromResponse();
 
-    /**
-     * @brief zoneId to zoneInfo and serverIds which belongs to zone
-     *
-     * @details
-     */
-    std::map<mds::topology::ZoneIdType, ZoneInfoType> zoneId2ZoneInfo_;
+  /**
+   * @brief Get the ZoneInfo From Response, fill into zoneId2ZoneInfo
+   * not include serverId list (will be filled in GetServerInfoFromResponse)
+   * will fill poolId2PoolInfo's zoneId list
+   *
+   * @return true
+   * @return false
+   * @details
+   */
+  bool GetZoneInfoFromResponse();
 
-    /**
-     * @brief serverId to serverInfo and metaserverIds which belongs to server
-     *
-     * @details
-     */
-    std::map<mds::topology::ServerIdType, ServerInfoType> serverId2ServerInfo_;
+  /**
+   * @brief Get the ServerInfo From Response, fill into serverId2ServerInfo
+   * not include serverId list
+   * will fill zoneId2ZoneInfo's serverId list
+   *
+   * @return true
+   * @return false
+   * @details
+   */
+  bool GetServerInfoFromResponse();
 
-    /**
-     * @brief metaserverId to metaserverInfo
-     *
-     * @details
-     */
-    std::map<mds::topology::MetaServerIdType, MetaserverInfoType>
-        metaserverId2MetaserverInfo_;
+  /**
+   * @brief Get the MetaserverInfo From Response,
+   * fill into metaserverId2MetaserverInfo
+   * will fill serverId2ServerInfo's metaserverId list
+   *
+   * @return true
+   * @return false
+   * @details
+   */
+  bool GetMetaserverInfoFromResponse();
+
+  void ShowPoolInfo(const PoolInfoType& pool) const;
+
+  void ShowZoneInfo(const ZoneInfoType& zone) const;
+
+  void ShowServerInfo(const ServerInfoType& server) const;
+
+  void ShowMetaserverInfo(const MetaserverInfoType& metaserver) const;
+
+ protected:
+  std::string clusterId_;
+  /**
+   * poolId to clusterInfo and poolIds which belongs to pool
+   */
+  std::map<std::string, ClusterInfo> clusterId2CLusterInfo_;
+
+  /**
+   * @brief poolId to poolInfo and zoneIds which belongs to pool
+   *
+   * @details
+   */
+  std::map<mds::topology::PoolIdType, PoolInfoType> poolId2PoolInfo_;
+
+  /**
+   * @brief zoneId to zoneInfo and serverIds which belongs to zone
+   *
+   * @details
+   */
+  std::map<mds::topology::ZoneIdType, ZoneInfoType> zoneId2ZoneInfo_;
+
+  /**
+   * @brief serverId to serverInfo and metaserverIds which belongs to server
+   *
+   * @details
+   */
+  std::map<mds::topology::ServerIdType, ServerInfoType> serverId2ServerInfo_;
+
+  /**
+   * @brief metaserverId to metaserverInfo
+   *
+   * @details
+   */
+  std::map<mds::topology::MetaServerIdType, MetaserverInfoType>
+      metaserverId2MetaserverInfo_;
 };
 
 }  // namespace list

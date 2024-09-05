@@ -46,24 +46,24 @@ namespace chunkserver {
 
 std::string CurveSnapshot::get_path() { return std::string(); }
 
-void CurveSnapshot::list_files(std::vector<std::string> *files) {
-    return _meta_table.list_files(files);
+void CurveSnapshot::list_files(std::vector<std::string>* files) {
+  return _meta_table.list_files(files);
 }
 
-void CurveSnapshot::list_attach_files(std::vector<std::string> *files) {
-    return _attach_meta_table.list_files(files);
+void CurveSnapshot::list_attach_files(std::vector<std::string>* files) {
+  return _attach_meta_table.list_files(files);
 }
 
 int CurveSnapshot::get_file_meta(const std::string& filename,
-                                       ::google::protobuf::Message* file_meta) {
-    braft::LocalFileMeta* meta = NULL;
-    if (file_meta) {
-        meta = dynamic_cast<braft::LocalFileMeta*>(file_meta);
-        if (meta == NULL) {
-            return -1;
-        }
+                                 ::google::protobuf::Message* file_meta) {
+  braft::LocalFileMeta* meta = NULL;
+  if (file_meta) {
+    meta = dynamic_cast<braft::LocalFileMeta*>(file_meta);
+    if (meta == NULL) {
+      return -1;
     }
-    return _meta_table.get_file_meta(filename, meta);
+  }
+  return _meta_table.get_file_meta(filename, meta);
 }
 
 }  // namespace chunkserver

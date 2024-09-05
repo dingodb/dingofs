@@ -26,143 +26,149 @@
 //
 // Author: yanshiguang02@baidu.com
 
-#ifndef  SRC_COMMON_STRING_UTIL_H_
-#define  SRC_COMMON_STRING_UTIL_H_
+#ifndef SRC_COMMON_STRING_UTIL_H_
+#define SRC_COMMON_STRING_UTIL_H_
 
-#include <stdint.h>
-#include <stdio.h>
 #include <ctype.h>
 #include <glog/logging.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include <stdexcept>
 #include <string>
 #include <vector>
-#include <stdexcept>
 
 namespace curve {
 namespace common {
 
-inline void AddSplitStringToResult(const std::string &full,
-                                   const std::string &delim,
-                                   std::vector<std::string> *result) {
-    if (full.empty()) {
-        return;
+inline void AddSplitStringToResult(const std::string& full,
+                                   const std::string& delim,
+                                   std::vector<std::string>* result) {
+  if (full.empty()) {
+    return;
+  }
+
+  std::string tmp;
+  std::string::size_type pos_begin = full.find_first_not_of(delim);
+  std::string::size_type comma_pos = 0;
+
+  while (pos_begin != std::string::npos) {
+    comma_pos = full.find(delim, pos_begin);
+    if (comma_pos != std::string::npos) {
+      tmp = full.substr(pos_begin, comma_pos - pos_begin);
+      pos_begin = comma_pos + delim.length();
+    } else {
+      tmp = full.substr(pos_begin);
+      pos_begin = comma_pos;
     }
 
-    std::string tmp;
-    std::string::size_type pos_begin = full.find_first_not_of(delim);
-    std::string::size_type comma_pos = 0;
-
-    while (pos_begin != std::string::npos) {
-        comma_pos = full.find(delim, pos_begin);
-        if (comma_pos != std::string::npos) {
-            tmp = full.substr(pos_begin, comma_pos - pos_begin);
-            pos_begin = comma_pos + delim.length();
-        } else {
-            tmp = full.substr(pos_begin);
-            pos_begin = comma_pos;
-        }
-
-        if (!tmp.empty()) {
-            result->push_back(tmp);
-            tmp.clear();
-        }
+    if (!tmp.empty()) {
+      result->push_back(tmp);
+      tmp.clear();
     }
+  }
 }
 
-inline void SplitString(const std::string& full,
-                               const std::string& delim,
-                               std::vector<std::string>* result) {
-    result->clear();
-    AddSplitStringToResult(full, delim, result);
+inline void SplitString(const std::string& full, const std::string& delim,
+                        std::vector<std::string>* result) {
+  result->clear();
+  AddSplitStringToResult(full, delim, result);
 }
 
-inline bool StringToUl(const std::string &value, uint32_t *out) noexcept {
-    try {
-        *out = std::stoul(value);
-        return true;
-    } catch (std::invalid_argument &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    } catch (std::out_of_range &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    }
+inline bool StringToUl(const std::string& value, uint32_t* out) noexcept {
+  try {
+    *out = std::stoul(value);
+    return true;
+  } catch (std::invalid_argument& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  } catch (std::out_of_range& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  }
 }
 
-inline bool StringToUll(const std::string &value, uint64_t *out) noexcept {
-    try {
-        *out = std::stoull(value);
-        return true;
-    } catch (std::invalid_argument &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    } catch (std::out_of_range &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    }
+inline bool StringToUll(const std::string& value, uint64_t* out) noexcept {
+  try {
+    *out = std::stoull(value);
+    return true;
+  } catch (std::invalid_argument& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  } catch (std::out_of_range& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  }
 }
 
-inline bool StringToInt(const std::string &value, int32_t *out) noexcept {
-    try {
-        *out = std::stoi(value);
-        return true;
-    } catch (std::invalid_argument &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    } catch (std::out_of_range &e) {
-        LOG(ERROR) << "decode string:{" << value << "} to number err:"
-                   << e.what();
-        return false;
-    }
+inline bool StringToInt(const std::string& value, int32_t* out) noexcept {
+  try {
+    *out = std::stoi(value);
+    return true;
+  } catch (std::invalid_argument& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  } catch (std::out_of_range& e) {
+    LOG(ERROR) << "decode string:{" << value << "} to number err:" << e.what();
+    return false;
+  }
 }
 
 inline bool StringStartWith(const std::string& value,
                             const std::string& starting) {
-    return value.rfind(starting, 0) == 0;
+  return value.rfind(starting, 0) == 0;
 }
 
 inline bool StringEndsWith(const std::string& value,
                            const std::string& ending) {
-    if (ending.size() > value.size())
-        return false;
-    return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
+  if (ending.size() > value.size()) return false;
+  return std::equal(ending.rbegin(), ending.rend(), value.rbegin());
 }
 
 inline bool StringToTime(const std::string& value, uint64_t* expireTime) {
-    *expireTime = 0;
-    auto length = value.length();
-    if (0 == length) {
-        return false;
-    }
+  *expireTime = 0;
+  auto length = value.length();
+  if (0 == length) {
+    return false;
+  }
 
-    uint64_t base;
-    switch (value[length - 1]) {
-        case 's': base = 1; break;
-        case 'm': base = 60; break;
-        case 'h': base = 3600; break;
-        case 'd': base = 24 * 3600; break;
-        case 'M': base = 30 * 24 * 3600; break;
-        case 'y': base = 365 * 24 * 3600; break;
-        default: base = 0;
-    }
+  uint64_t base;
+  switch (value[length - 1]) {
+    case 's':
+      base = 1;
+      break;
+    case 'm':
+      base = 60;
+      break;
+    case 'h':
+      base = 3600;
+      break;
+    case 'd':
+      base = 24 * 3600;
+      break;
+    case 'M':
+      base = 30 * 24 * 3600;
+      break;
+    case 'y':
+      base = 365 * 24 * 3600;
+      break;
+    default:
+      base = 0;
+  }
 
-    uint64_t num;
-    if (0 == base || !StringToUll(value.substr(0, length - 1), &num)) {
-        return false;
-    }
+  uint64_t num;
+  if (0 == base || !StringToUll(value.substr(0, length - 1), &num)) {
+    return false;
+  }
 
-    *expireTime = num * base;
-    return true;
+  *expireTime = num * base;
+  return true;
 }
 
 inline std::string ToHexString(void* p) {
-    std::ostringstream oss;
-    oss << p;
-    return oss.str();
+  std::ostringstream oss;
+  oss << p;
+  return oss.str();
 }
 
 }  // namespace common

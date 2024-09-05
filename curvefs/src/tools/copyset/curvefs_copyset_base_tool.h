@@ -62,17 +62,17 @@ bool Response2CopysetInfo(
         key2Info);
 
 enum class CheckResult {
-    kHealthy = 0,
-    // the number of copysetInfo is greater than 1
-    kOverCopyset = -1,
-    // the number of copysetInfo is less than 1
-    kNoCopyset = -2,
-    // copyset topo is not ok
-    kTopoNotOk = -3,
-    // peer not match
-    kPeersNoSufficient = -4,
-    // peer op status not health
-    kPeerOpNotOk = -5,
+  kHealthy = 0,
+  // the number of copysetInfo is greater than 1
+  kOverCopyset = -1,
+  // the number of copysetInfo is less than 1
+  kNoCopyset = -2,
+  // copyset topo is not ok
+  kTopoNotOk = -3,
+  // peer not match
+  kPeersNoSufficient = -4,
+  // peer op status not health
+  kPeerOpNotOk = -5,
 };
 
 CheckResult checkCopysetHelthy(

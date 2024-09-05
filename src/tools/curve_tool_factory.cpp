@@ -26,75 +26,75 @@ namespace curve {
 namespace tool {
 
 std::shared_ptr<CurveTool> CurveToolFactory::GenerateCurveTool(
-                                    const std::string& command) {
-    if (StatusTool::SupportCommand(command)) {
-        return GenerateStatusTool();
-    } else if (NameSpaceTool::SupportCommand(command)) {
-        return GenerateNameSpaceTool();
-    } else if (ConsistencyCheck::SupportCommand(command)) {
-        return GenerateConsistencyCheck();
-    } else if (CurveCli::SupportCommand(command)) {
-        return GenerateCurveCli();
-    } else if (CopysetCheck::SupportCommand(command)) {
-        return GenerateCopysetCheck();
-    } else if (ScheduleTool::SupportCommand(command)) {
-        return GenerateScheduleTool();
-    } else if (CopysetTool::SupportCommand(command)) {
-        return GenerateCopysetTool();
-    } else {
-        return nullptr;
-    }
+    const std::string& command) {
+  if (StatusTool::SupportCommand(command)) {
+    return GenerateStatusTool();
+  } else if (NameSpaceTool::SupportCommand(command)) {
+    return GenerateNameSpaceTool();
+  } else if (ConsistencyCheck::SupportCommand(command)) {
+    return GenerateConsistencyCheck();
+  } else if (CurveCli::SupportCommand(command)) {
+    return GenerateCurveCli();
+  } else if (CopysetCheck::SupportCommand(command)) {
+    return GenerateCopysetCheck();
+  } else if (ScheduleTool::SupportCommand(command)) {
+    return GenerateScheduleTool();
+  } else if (CopysetTool::SupportCommand(command)) {
+    return GenerateCopysetTool();
+  } else {
+    return nullptr;
+  }
 }
 
 std::shared_ptr<StatusTool> CurveToolFactory::GenerateStatusTool() {
-    auto mdsClient = std::make_shared<MDSClient>();
-    auto etcdClient = std::make_shared<EtcdClient>();
-    auto copysetCheck = std::make_shared<CopysetCheckCore>(mdsClient);
-    auto metricClient = std::make_shared<MetricClient>();
-    auto snapshotCloneClient =
-                std::make_shared<SnapshotCloneClient>(metricClient);
-    auto versionTool = std::make_shared<VersionTool>(mdsClient, metricClient,
-                                                     snapshotCloneClient);
-    return std::make_shared<StatusTool>(mdsClient, etcdClient,
-                                       copysetCheck, versionTool,
-                                       metricClient, snapshotCloneClient);
+  auto mdsClient = std::make_shared<MDSClient>();
+  auto etcdClient = std::make_shared<EtcdClient>();
+  auto copysetCheck = std::make_shared<CopysetCheckCore>(mdsClient);
+  auto metricClient = std::make_shared<MetricClient>();
+  auto snapshotCloneClient =
+      std::make_shared<SnapshotCloneClient>(metricClient);
+  auto versionTool = std::make_shared<VersionTool>(mdsClient, metricClient,
+                                                   snapshotCloneClient);
+  return std::make_shared<StatusTool>(mdsClient, etcdClient, copysetCheck,
+                                      versionTool, metricClient,
+                                      snapshotCloneClient);
 }
 
 std::shared_ptr<NameSpaceTool> CurveToolFactory::GenerateNameSpaceTool() {
-    auto client = std::make_shared<MDSClient>();
-    auto core = std::make_shared<NameSpaceToolCore>(client);
-    return std::make_shared<NameSpaceTool>(core);
+  auto client = std::make_shared<MDSClient>();
+  auto core = std::make_shared<NameSpaceToolCore>(client);
+  return std::make_shared<NameSpaceTool>(core);
 }
 
-std::shared_ptr<ConsistencyCheck> CurveToolFactory::GenerateConsistencyCheck() {  //  NOLINT
-    auto client = std::make_shared<MDSClient>();
-    auto nameSpaceTool =
-        std::make_shared<NameSpaceToolCore>(client);
-    auto csClient = std::make_shared<ChunkServerClient>();
-    return std::make_shared<ConsistencyCheck>(nameSpaceTool, csClient);
+std::shared_ptr<ConsistencyCheck>
+CurveToolFactory::GenerateConsistencyCheck() {  //  NOLINT
+  auto client = std::make_shared<MDSClient>();
+  auto nameSpaceTool = std::make_shared<NameSpaceToolCore>(client);
+  auto csClient = std::make_shared<ChunkServerClient>();
+  return std::make_shared<ConsistencyCheck>(nameSpaceTool, csClient);
 }
 
 std::shared_ptr<CurveCli> CurveToolFactory::GenerateCurveCli() {
-    auto mdsClient = std::make_shared<MDSClient>();
-    return std::make_shared<CurveCli>(mdsClient);
+  auto mdsClient = std::make_shared<MDSClient>();
+  return std::make_shared<CurveCli>(mdsClient);
 }
 
 std::shared_ptr<CopysetCheck> CurveToolFactory::GenerateCopysetCheck() {
-    auto mdsClient = std::make_shared<MDSClient>();
-    auto core = std::make_shared<curve::tool::CopysetCheckCore>(mdsClient);
-    return std::make_shared<CopysetCheck>(core);
+  auto mdsClient = std::make_shared<MDSClient>();
+  auto core = std::make_shared<curve::tool::CopysetCheckCore>(mdsClient);
+  return std::make_shared<CopysetCheck>(core);
 }
 
 std::shared_ptr<ScheduleTool> CurveToolFactory::GenerateScheduleTool() {
-    auto mdsClient = std::make_shared<MDSClient>();
-    return std::make_shared<ScheduleTool>(mdsClient);
+  auto mdsClient = std::make_shared<MDSClient>();
+  return std::make_shared<ScheduleTool>(mdsClient);
 }
 
 std::shared_ptr<CopysetTool> CurveToolFactory::GenerateCopysetTool() {
-    auto mdsClient = std::make_shared<MDSClient>();
-    auto copysetCheck =
-                std::make_shared<curve::tool::CopysetCheckCore>(mdsClient);
-    return std::make_shared<CopysetTool>(copysetCheck, mdsClient);
+  auto mdsClient = std::make_shared<MDSClient>();
+  auto copysetCheck =
+      std::make_shared<curve::tool::CopysetCheckCore>(mdsClient);
+  return std::make_shared<CopysetTool>(copysetCheck, mdsClient);
 }
 
 }  // namespace tool

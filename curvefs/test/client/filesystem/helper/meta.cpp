@@ -27,104 +27,104 @@ namespace client {
 namespace filesystem {
 
 AttrOption AttrOption::type(FsFileType type) {
-    type_ = type;
-    return *this;
+  type_ = type;
+  return *this;
 }
 
 AttrOption AttrOption::mode(uint32_t mode) {
-    mode_ = mode;
-    return *this;
+  mode_ = mode;
+  return *this;
 }
 
 AttrOption AttrOption::nlink(uint32_t nlink) {
-    nlink_ = nlink;
-    return *this;
+  nlink_ = nlink;
+  return *this;
 }
 
 AttrOption AttrOption::uid(uint32_t uid) {
-    uid_ = uid;
-    return *this;
+  uid_ = uid;
+  return *this;
 }
 
 AttrOption AttrOption::gid(uint32_t gid) {
-    gid_ = gid;
-    return *this;
+  gid_ = gid;
+  return *this;
 }
 
 AttrOption AttrOption::length(uint64_t length) {
-    length_ = length;
-    return *this;
+  length_ = length;
+  return *this;
 }
 
 AttrOption AttrOption::rdev(uint64_t rdev) {
-    rdev_ = rdev;
-    return *this;
+  rdev_ = rdev;
+  return *this;
 }
 
 AttrOption AttrOption::atime(uint64_t seconds, uint32_t naoSeconds) {
-    atime_ = TimeSpec(seconds, naoSeconds);
-    return *this;
+  atime_ = TimeSpec(seconds, naoSeconds);
+  return *this;
 }
 
 AttrOption AttrOption::mtime(uint64_t seconds, uint32_t naoSeconds) {
-    mtime_ = TimeSpec(seconds, naoSeconds);
-    return *this;
+  mtime_ = TimeSpec(seconds, naoSeconds);
+  return *this;
 }
 
 AttrOption AttrOption::ctime(uint64_t seconds, uint32_t naoSeconds) {
-    ctime_ = TimeSpec(seconds, naoSeconds);
-    return *this;
+  ctime_ = TimeSpec(seconds, naoSeconds);
+  return *this;
 }
 
 InodeOption InodeOption::mtime(uint64_t seconds, uint32_t naoSeconds) {
-    mtime_ = TimeSpec(seconds, naoSeconds);
-    return *this;
+  mtime_ = TimeSpec(seconds, naoSeconds);
+  return *this;
 }
 
 InodeOption InodeOption::metaClient(
     std::shared_ptr<MetaServerClient> metaClient) {
-    metaClient_ = metaClient;
-    return *this;
+  metaClient_ = metaClient;
+  return *this;
 }
 
 InodeAttr MkAttr(Ino ino, AttrOption option) {
-    InodeAttr attr;
-    attr.set_inodeid(ino);
-    if (option.type_) { attr.set_type(option.type_); }
-    attr.set_mode(option.mode_);
-    attr.set_nlink(option.nlink_);
-    attr.set_uid(option.uid_);
-    attr.set_gid(option.gid_);
-    attr.set_length(option.length_);
-    attr.set_rdev(option.rdev_);
-    attr.set_atime(option.atime_.seconds);
-    attr.set_atime_ns(option.atime_.nanoSeconds);
-    attr.set_mtime(option.mtime_.seconds);
-    attr.set_mtime_ns(option.mtime_.nanoSeconds);
-    attr.set_ctime(option.ctime_.seconds);
-    attr.set_ctime_ns(option.ctime_.nanoSeconds);
-    return attr;
+  InodeAttr attr;
+  attr.set_inodeid(ino);
+  if (option.type_) {
+    attr.set_type(option.type_);
+  }
+  attr.set_mode(option.mode_);
+  attr.set_nlink(option.nlink_);
+  attr.set_uid(option.uid_);
+  attr.set_gid(option.gid_);
+  attr.set_length(option.length_);
+  attr.set_rdev(option.rdev_);
+  attr.set_atime(option.atime_.seconds);
+  attr.set_atime_ns(option.atime_.nanoSeconds);
+  attr.set_mtime(option.mtime_.seconds);
+  attr.set_mtime_ns(option.mtime_.nanoSeconds);
+  attr.set_ctime(option.ctime_.seconds);
+  attr.set_ctime_ns(option.ctime_.nanoSeconds);
+  return attr;
 }
 
 std::shared_ptr<InodeWrapper> MkInode(Ino ino, InodeOption option) {
-    Inode inode;
-    inode.set_inodeid(ino);
-    inode.set_mtime(option.mtime_.seconds);
-    inode.set_mtime_ns(option.mtime_.nanoSeconds);
-    return std::make_shared<InodeWrapper>(inode, option.metaClient_);
+  Inode inode;
+  inode.set_inodeid(ino);
+  inode.set_mtime(option.mtime_.seconds);
+  inode.set_mtime_ns(option.mtime_.nanoSeconds);
+  return std::make_shared<InodeWrapper>(inode, option.metaClient_);
 }
 
 Dentry MkDentry(Ino ino, const std::string& name) {
-    Dentry dentry;
-    dentry.set_inodeid(ino);
-    dentry.set_name(name);
-    return dentry;
+  Dentry dentry;
+  dentry.set_inodeid(ino);
+  dentry.set_name(name);
+  return dentry;
 }
 
-DirEntry MkDirEntry(Ino ino,
-                    const std::string& name,
-                    InodeAttr attr) {
-    return DirEntry(ino, name, attr);
+DirEntry MkDirEntry(Ino ino, const std::string& name, InodeAttr attr) {
+  return DirEntry(ino, name, attr);
 }
 
 }  // namespace filesystem

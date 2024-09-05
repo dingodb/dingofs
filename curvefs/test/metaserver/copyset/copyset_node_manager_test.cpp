@@ -51,250 +51,248 @@ const CopysetId kCopysetId = butil::fast_rand();
 
 class CopysetNodeManagerTest : public testing::Test {
  protected:
-    void SetUp() override {
-        nodeManager_ = &CopysetNodeManager::GetInstance();
-        fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
+  void SetUp() override {
+    nodeManager_ = &CopysetNodeManager::GetInstance();
+    fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
 
-        options_.ip = "127.0.0.1";
-        options_.port = kPort;
-        options_.raftNodeOptions.election_timeout_ms = 1000;
-        options_.raftNodeOptions.snapshot_interval_s = -1;
-        options_.dataUri = kCopysetUri;
-        options_.raftNodeOptions.log_uri = kCopysetUri;
-        options_.raftNodeOptions.raft_meta_uri = kCopysetUri;
-        options_.raftNodeOptions.snapshot_uri = kCopysetUri;
-        options_.loadConcurrency = 5;
-        options_.trashOptions.trashUri = kTrashUri;
-        options_.localFileSystem = fs_.get();
-        options_.storageOptions.type = "memory";
-    }
+    options_.ip = "127.0.0.1";
+    options_.port = kPort;
+    options_.raftNodeOptions.election_timeout_ms = 1000;
+    options_.raftNodeOptions.snapshot_interval_s = -1;
+    options_.dataUri = kCopysetUri;
+    options_.raftNodeOptions.log_uri = kCopysetUri;
+    options_.raftNodeOptions.raft_meta_uri = kCopysetUri;
+    options_.raftNodeOptions.snapshot_uri = kCopysetUri;
+    options_.loadConcurrency = 5;
+    options_.trashOptions.trashUri = kTrashUri;
+    options_.localFileSystem = fs_.get();
+    options_.storageOptions.type = "memory";
+  }
 
-    void TearDown() override {
-        nodeManager_->Stop();
-        system("rm -rf ./runlog/fs/copyset_node_manager");
-    }
+  void TearDown() override {
+    nodeManager_->Stop();
+    system("rm -rf ./runlog/fs/copyset_node_manager");
+  }
 
  protected:
-    std::shared_ptr<LocalFileSystem> fs_;
-    CopysetNodeManager* nodeManager_;
-    CopysetNodeOptions options_;
+  std::shared_ptr<LocalFileSystem> fs_;
+  CopysetNodeManager* nodeManager_;
+  CopysetNodeOptions options_;
 };
 
 TEST_F(CopysetNodeManagerTest, CommonTest) {
-    EXPECT_FALSE(nodeManager_->IsLoadFinished());
+  EXPECT_FALSE(nodeManager_->IsLoadFinished());
 
-    std::vector<CopysetNode*> nodes;
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_TRUE(nodes.empty());
+  std::vector<CopysetNode*> nodes;
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_TRUE(nodes.empty());
 
-    braft::Configuration conf;
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(1, 1, conf));
+  braft::Configuration conf;
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(1, 1, conf));
 
-    EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Init(options_));
 }
 
 TEST_F(CopysetNodeManagerTest, StartTest_DataUriError) {
-    auto errorOptions = options_;
-    errorOptions.dataUri = "hello, world";
+  auto errorOptions = options_;
+  errorOptions.dataUri = "hello, world";
 
-    EXPECT_TRUE(nodeManager_->Init(errorOptions));
+  EXPECT_TRUE(nodeManager_->Init(errorOptions));
 
-    // invalid data path it is considered the directory does not exist
-    EXPECT_TRUE(nodeManager_->Start());
-    EXPECT_TRUE(nodeManager_->Stop());
+  // invalid data path it is considered the directory does not exist
+  EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Stop());
 }
 
 TEST_F(CopysetNodeManagerTest, StartTest_ReloaderInitFailed) {
-    auto errorOptions = options_;
-    errorOptions.loadConcurrency = 0;
+  auto errorOptions = options_;
+  errorOptions.loadConcurrency = 0;
 
-    EXPECT_TRUE(nodeManager_->Init(errorOptions));
+  EXPECT_TRUE(nodeManager_->Init(errorOptions));
 
-    EXPECT_FALSE(nodeManager_->Start());
+  EXPECT_FALSE(nodeManager_->Start());
 
-    // double start always return false
-    EXPECT_FALSE(nodeManager_->Start());
+  // double start always return false
+  EXPECT_FALSE(nodeManager_->Start());
 
-    // stop return false if not started
-    EXPECT_FALSE(nodeManager_->Stop());
+  // stop return false if not started
+  EXPECT_FALSE(nodeManager_->Stop());
 }
 
 TEST_F(CopysetNodeManagerTest, InitTest_InitMoreThanOnce) {
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Init(options_));
 }
 
 TEST_F(CopysetNodeManagerTest, CreateCopysetTest_DoesNotAddService) {
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
-    EXPECT_EQ(nullptr, nodeManager_->GetCopysetNode(kPoolId, kCopysetId));
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  EXPECT_EQ(nullptr, nodeManager_->GetCopysetNode(kPoolId, kCopysetId));
 }
 
 TEST_F(CopysetNodeManagerTest, CreateCopysetTest_Common) {
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    brpc::Server server;
-    butil::ip_t ip;
-    EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
-    EXPECT_NO_FATAL_FAILURE(
-        nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
+  brpc::Server server;
+  butil::ip_t ip;
+  EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
+  EXPECT_NO_FATAL_FAILURE(
+      nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
 
-    EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    CreateCopysetRequest::Copyset copyset;
-    copyset.set_poolid(kPoolId);
-    copyset.set_copysetid(kCopysetId);
-    copyset.add_peers()->set_address("127.0.0.1:29920:0");
-    copyset.add_peers()->set_address("127.0.0.1:29921:0");
-    copyset.add_peers()->set_address("127.0.0.1:29922:0");
-    EXPECT_EQ(1, nodeManager_->IsCopysetNodeExist(copyset));
+  CreateCopysetRequest::Copyset copyset;
+  copyset.set_poolid(kPoolId);
+  copyset.set_copysetid(kCopysetId);
+  copyset.add_peers()->set_address("127.0.0.1:29920:0");
+  copyset.add_peers()->set_address("127.0.0.1:29921:0");
+  copyset.add_peers()->set_address("127.0.0.1:29922:0");
+  EXPECT_EQ(1, nodeManager_->IsCopysetNodeExist(copyset));
 
-    copyset.mutable_peers(0)->set_address("127.0.0.1:29923:0");
-    EXPECT_EQ(-1, nodeManager_->IsCopysetNodeExist(copyset));
+  copyset.mutable_peers(0)->set_address("127.0.0.1:29923:0");
+  EXPECT_EQ(-1, nodeManager_->IsCopysetNodeExist(copyset));
 
-    // create same copyset will failed
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  // create same copyset will failed
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    std::vector<CopysetNode*> nodes;
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_EQ(1, nodes.size());
-    EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
-    EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
+  std::vector<CopysetNode*> nodes;
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_EQ(1, nodes.size());
+  EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
+  EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
 }
 
 TEST_F(CopysetNodeManagerTest, CreateCopysetTest_InitRaftNodeFailed) {
-    // it's tricky, raft node will check ip != IP_ANY
-    options_.ip = "0.0.0.0";
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  // it's tricky, raft node will check ip != IP_ANY
+  options_.ip = "0.0.0.0";
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    brpc::Server server;
-    butil::ip_t ip;
-    EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
-    EXPECT_NO_FATAL_FAILURE(
-        nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
+  brpc::Server server;
+  butil::ip_t ip;
+  EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
+  EXPECT_NO_FATAL_FAILURE(
+      nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
 
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    EXPECT_EQ(nullptr, nodeManager_->GetCopysetNode(kPoolId, kCopysetId));
+  EXPECT_EQ(nullptr, nodeManager_->GetCopysetNode(kPoolId, kCopysetId));
 }
 
 TEST_F(CopysetNodeManagerTest, DeleteCopysetNodeTest_CopysetNodeNotExists) {
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_FALSE(nodeManager_->DeleteCopysetNode(kPoolId, kCopysetId));
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_FALSE(nodeManager_->DeleteCopysetNode(kPoolId, kCopysetId));
 }
 
 TEST_F(CopysetNodeManagerTest, DeleteCopysetNodeTest_Success) {
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    brpc::Server server;
-    butil::ip_t ip;
-    EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
-    EXPECT_NO_FATAL_FAILURE(
-        nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
+  brpc::Server server;
+  butil::ip_t ip;
+  EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
+  EXPECT_NO_FATAL_FAILURE(
+      nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
 
-    EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    // create same copyset will failed
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  // create same copyset will failed
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    std::vector<CopysetNode*> nodes;
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_EQ(1, nodes.size());
-    EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
-    EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
+  std::vector<CopysetNode*> nodes;
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_EQ(1, nodes.size());
+  EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
+  EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
 
-    EXPECT_TRUE(nodeManager_->DeleteCopysetNode(kPoolId, kCopysetId));
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_EQ(0, nodes.size());
+  EXPECT_TRUE(nodeManager_->DeleteCopysetNode(kPoolId, kCopysetId));
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_EQ(0, nodes.size());
 }
 
 TEST_F(CopysetNodeManagerTest,
        PurgeCopysetNodeTest_SuccessButRemoveDataFailed) {
-    MockLocalFileSystem mockfs;
+  MockLocalFileSystem mockfs;
 
-    CopysetTrashOptions trashoptions;
-    trashoptions.trashUri = "local:///mnt/data";
-    options_.trashOptions = trashoptions;
-    options_.localFileSystem = &mockfs;
+  CopysetTrashOptions trashoptions;
+  trashoptions.trashUri = "local:///mnt/data";
+  options_.trashOptions = trashoptions;
+  options_.localFileSystem = &mockfs;
 
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    brpc::Server server;
-    butil::ip_t ip;
-    EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
-    EXPECT_NO_FATAL_FAILURE(
-        nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
+  brpc::Server server;
+  butil::ip_t ip;
+  EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
+  EXPECT_NO_FATAL_FAILURE(
+      nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
 
-    EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    // create same copyset will failed
-    EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  // create same copyset will failed
+  EXPECT_FALSE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 
-    std::vector<CopysetNode*> nodes;
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_EQ(1, nodes.size());
-    EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
-    EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
+  std::vector<CopysetNode*> nodes;
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_EQ(1, nodes.size());
+  EXPECT_EQ(kPoolId, nodes[0]->GetPoolId());
+  EXPECT_EQ(kCopysetId, nodes[0]->GetCopysetId());
 
-    EXPECT_CALL(mockfs, DirExists(_))
-        .WillOnce(Return(false));
-    EXPECT_CALL(mockfs, Mkdir(_))
-        .WillOnce(Return(-1));
+  EXPECT_CALL(mockfs, DirExists(_)).WillOnce(Return(false));
+  EXPECT_CALL(mockfs, Mkdir(_)).WillOnce(Return(-1));
 
-    EXPECT_FALSE(nodeManager_->PurgeCopysetNode(kPoolId, kCopysetId));
-    nodeManager_->GetAllCopysets(&nodes);
-    EXPECT_EQ(0, nodes.size());
+  EXPECT_FALSE(nodeManager_->PurgeCopysetNode(kPoolId, kCopysetId));
+  nodeManager_->GetAllCopysets(&nodes);
+  EXPECT_EQ(0, nodes.size());
 }
 
 // issue 1631 reports when we use rocksdb as storage, after creating and
 // removing a copyset, next time create the same copyset will fail
 TEST_F(CopysetNodeManagerTest, ISSUE_1631) {
-    options_.storageOptions.type = "rocksdb";
+  options_.storageOptions.type = "rocksdb";
 
-    EXPECT_TRUE(nodeManager_->Init(options_));
-    EXPECT_TRUE(nodeManager_->Start());
+  EXPECT_TRUE(nodeManager_->Init(options_));
+  EXPECT_TRUE(nodeManager_->Start());
 
-    braft::Configuration conf;
-    EXPECT_EQ(0, conf.parse_from(kInitConf));
+  braft::Configuration conf;
+  EXPECT_EQ(0, conf.parse_from(kInitConf));
 
-    brpc::Server server;
-    butil::ip_t ip;
-    EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
-    EXPECT_NO_FATAL_FAILURE(
-        nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
+  brpc::Server server;
+  butil::ip_t ip;
+  EXPECT_EQ(0, butil::str2ip("127.0.0.1", &ip));
+  EXPECT_NO_FATAL_FAILURE(
+      nodeManager_->AddService(&server, butil::EndPoint(ip, kPort)));
 
-    // create copyset firstly
-    EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+  // create copyset firstly
+  EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
-    // then delete it
-    EXPECT_TRUE(nodeManager_->PurgeCopysetNode(kPoolId, kCopysetId));
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+  // then delete it
+  EXPECT_TRUE(nodeManager_->PurgeCopysetNode(kPoolId, kCopysetId));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
-    // create a same copyset again
-    EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
+  // create a same copyset again
+  EXPECT_TRUE(nodeManager_->CreateCopysetNode(kPoolId, kCopysetId, conf));
 }
 
 }  // namespace copyset

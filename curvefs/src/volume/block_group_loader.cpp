@@ -39,127 +39,124 @@
 namespace curvefs {
 namespace volume {
 
+using ::curve::common::align_up;
 using ::curve::common::BITMAP_UNIT_SIZE;
 using ::curve::common::BitRange;
-using ::curve::common::align_up;
 
 BitmapRange BlockGroupBitmapLoader::CalcBitmapRange() const {
-    BitmapRange range;
+  BitmapRange range;
 
-    range.length = blockGroupSize_ / blockSize_ / BITMAP_UNIT_SIZE;
+  range.length = blockGroupSize_ / blockSize_ / BITMAP_UNIT_SIZE;
 
-    switch (bitmapLocation_) {
-        case BitmapLocation::AtStart: {
-            range.offset = offset_;
-            break;
-        }
-
-        case BitmapLocation::AtEnd: {
-            range.offset = offset_ + blockGroupSize_ - range.length;
-            break;
-        }
-
-        default:
-            CHECK(false) << "not implemented";
+  switch (bitmapLocation_) {
+    case BitmapLocation::AtStart: {
+      range.offset = offset_;
+      break;
     }
 
-    return range;
+    case BitmapLocation::AtEnd: {
+      range.offset = offset_ + blockGroupSize_ - range.length;
+      break;
+    }
+
+    default:
+      CHECK(false) << "not implemented";
+  }
+
+  return range;
 }
 
 std::ostream& operator<<(std::ostream& os, BitmapRange range) {
-    os << "bitmap range offset: " << range.offset
-       << ", length: " << range.length;
+  os << "bitmap range offset: " << range.offset << ", length: " << range.length;
 
-    return os;
+  return os;
 }
 
 bool BlockGroupBitmapLoader::Load(AllocatorAndBitmapUpdater* out) {
-    AllocatorOption option = allocatorOption_;
-    option.bitmapAllocatorOption.startOffset = offset_;
-    option.bitmapAllocatorOption.length = blockGroupSize_;
-    // TODO(wuhanqing): load from config
-    option.bitmapAllocatorOption.sizePerBit = 4ull * 1024 * 1024;
-    option.bitmapAllocatorOption.smallAllocProportion = 0;
+  AllocatorOption option = allocatorOption_;
+  option.bitmapAllocatorOption.startOffset = offset_;
+  option.bitmapAllocatorOption.length = blockGroupSize_;
+  // TODO(wuhanqing): load from config
+  option.bitmapAllocatorOption.sizePerBit = 4ull * 1024 * 1024;
+  option.bitmapAllocatorOption.smallAllocProportion = 0;
 
-    auto allocator = Allocator::Create(option.type, option);
-    if (!allocator) {
-        LOG(ERROR) << "Create allocator failed";
-        return false;
-    }
+  auto allocator = Allocator::Create(option.type, option);
+  if (!allocator) {
+    LOG(ERROR) << "Create allocator failed";
+    return false;
+  }
 
-    std::unique_ptr<Bitmap> bitmap;
-    BitmapRange range;
-    std::vector<Extent> used;
-    if (!LoadBitmap(&bitmap, &range, &used)) {
-        LOG(ERROR) << "Failed to load bitmap";
-        return false;
-    }
+  std::unique_ptr<Bitmap> bitmap;
+  BitmapRange range;
+  std::vector<Extent> used;
+  if (!LoadBitmap(&bitmap, &range, &used)) {
+    LOG(ERROR) << "Failed to load bitmap";
+    return false;
+  }
 
-    if (!allocator->MarkUsed(used)) {
-        LOG(ERROR) << "Failed to init allocator from bitmap";
-        return false;
-    }
+  if (!allocator->MarkUsed(used)) {
+    LOG(ERROR) << "Failed to init allocator from bitmap";
+    return false;
+  }
 
-    out->allocator = std::move(allocator);
-    out->bitmapUpdater = absl::make_unique<BlockGroupBitmapUpdater>(
-        std::move(*bitmap), blockSize_, blockGroupSize_, offset_, range,
-        blockDev_);
+  out->allocator = std::move(allocator);
+  out->bitmapUpdater = absl::make_unique<BlockGroupBitmapUpdater>(
+      std::move(*bitmap), blockSize_, blockGroupSize_, offset_, range,
+      blockDev_);
 
-    return true;
+  return true;
 }
 
 bool BlockGroupBitmapLoader::LoadBitmap(std::unique_ptr<Bitmap>* bitmap,
                                         BitmapRange* bitmapRange,
                                         std::vector<Extent>* used) {
-    assert(bitmap != nullptr);
-    assert(bitmapRange != nullptr);
-    assert(used != nullptr);
+  assert(bitmap != nullptr);
+  assert(bitmapRange != nullptr);
+  assert(used != nullptr);
 
-    *bitmapRange = CalcBitmapRange();
+  *bitmapRange = CalcBitmapRange();
 
-    std::unique_ptr<char[]> data(new char[bitmapRange->length]);
+  std::unique_ptr<char[]> data(new char[bitmapRange->length]);
 
-    if (!clean_) {
-        ssize_t err = blockDev_->Read(data.get(), bitmapRange->offset,
-                                      bitmapRange->length);
-        if (err != static_cast<ssize_t>(bitmapRange->length)) {
-            LOG(ERROR) << "Failed to read bitmap from block device";
-            return false;
-        }
-
-        *bitmap = absl::make_unique<Bitmap>(
-            bitmapRange->length * BITMAP_UNIT_SIZE, data.release(),
-            /*transfer*/ true);
-
-        std::vector<BitRange> clearRange;
-        std::vector<BitRange> setRange;
-        (*bitmap)->Divide(0, bitmapRange->length * BITMAP_UNIT_SIZE,
-                          &clearRange, &setRange);
-
-        for (auto& range : setRange) {
-            used->emplace_back(
-                offset_ + range.beginIndex * blockSize_,
-                (range.endIndex + 1 - range.beginIndex) * blockSize_);
-        }
-    } else {
-        // we don't have mkfs now, so we clear the bitmap at first
-        memset(data.get(), 0, bitmapRange->length);
-        ssize_t err = blockDev_->Write(data.get(), bitmapRange->offset,
-                                       bitmapRange->length);
-        if (err != static_cast<ssize_t>(bitmapRange->length)) {
-            LOG(ERROR) << "Failed to clear bitmap";
-            return false;
-        }
-
-        *bitmap =
-            absl::make_unique<Bitmap>(bitmapRange->length * BITMAP_UNIT_SIZE,
-                                      data.release(), /*transfer*/ true);
+  if (!clean_) {
+    ssize_t err =
+        blockDev_->Read(data.get(), bitmapRange->offset, bitmapRange->length);
+    if (err != static_cast<ssize_t>(bitmapRange->length)) {
+      LOG(ERROR) << "Failed to read bitmap from block device";
+      return false;
     }
 
-    used->emplace_back(bitmapRange->offset,  // physical offset
-                       align_up<uint64_t>(bitmapRange->length, blockSize_));
+    *bitmap = absl::make_unique<Bitmap>(bitmapRange->length * BITMAP_UNIT_SIZE,
+                                        data.release(),
+                                        /*transfer*/ true);
 
-    return true;
+    std::vector<BitRange> clearRange;
+    std::vector<BitRange> setRange;
+    (*bitmap)->Divide(0, bitmapRange->length * BITMAP_UNIT_SIZE, &clearRange,
+                      &setRange);
+
+    for (auto& range : setRange) {
+      used->emplace_back(offset_ + range.beginIndex * blockSize_,
+                         (range.endIndex + 1 - range.beginIndex) * blockSize_);
+    }
+  } else {
+    // we don't have mkfs now, so we clear the bitmap at first
+    memset(data.get(), 0, bitmapRange->length);
+    ssize_t err =
+        blockDev_->Write(data.get(), bitmapRange->offset, bitmapRange->length);
+    if (err != static_cast<ssize_t>(bitmapRange->length)) {
+      LOG(ERROR) << "Failed to clear bitmap";
+      return false;
+    }
+
+    *bitmap = absl::make_unique<Bitmap>(bitmapRange->length * BITMAP_UNIT_SIZE,
+                                        data.release(), /*transfer*/ true);
+  }
+
+  used->emplace_back(bitmapRange->offset,  // physical offset
+                     align_up<uint64_t>(bitmapRange->length, blockSize_));
+
+  return true;
 }
 
 }  // namespace volume

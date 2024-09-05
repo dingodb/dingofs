@@ -21,8 +21,8 @@
  */
 
 #include <cstdint>
-#include <string>
 #include <map>
+#include <string>
 
 #ifndef CURVEFS_SRC_CLIENT_FILESYSTEM_XATTR_H_
 #define CURVEFS_SRC_CLIENT_FILESYSTEM_XATTR_H_
@@ -46,22 +46,18 @@ const char XATTR_DIR_PREFIX[] = "curve.dir";
 const char XATTR_WARMUP_OP[] = "curvefs.warmup.op";
 
 inline bool IsSpecialXAttr(const std::string& key) {
-    static std::map<std::string, bool> xattrs {
-        { XATTR_DIR_FILES, true },
-        { XATTR_DIR_SUBDIRS, true },
-        { XATTR_DIR_ENTRIES, true },
-        { XATTR_DIR_FBYTES, true },
-        { XATTR_DIR_RFILES, true },
-        { XATTR_DIR_RSUBDIRS, true },
-        { XATTR_DIR_RENTRIES, true },
-        { XATTR_DIR_RFBYTES, true },
-        { XATTR_DIR_PREFIX, true },
-    };
-    return xattrs.find(key) != xattrs.end();
+  static std::map<std::string, bool> xattrs{
+      {XATTR_DIR_FILES, true},    {XATTR_DIR_SUBDIRS, true},
+      {XATTR_DIR_ENTRIES, true},  {XATTR_DIR_FBYTES, true},
+      {XATTR_DIR_RFILES, true},   {XATTR_DIR_RSUBDIRS, true},
+      {XATTR_DIR_RENTRIES, true}, {XATTR_DIR_RFBYTES, true},
+      {XATTR_DIR_PREFIX, true},
+  };
+  return xattrs.find(key) != xattrs.end();
 }
 
 inline bool IsWarmupXAttr(const std::string& key) {
-    return key == XATTR_WARMUP_OP;
+  return key == XATTR_WARMUP_OP;
 }
 
 }  // namespace filesystem

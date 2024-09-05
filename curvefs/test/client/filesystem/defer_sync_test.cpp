@@ -21,6 +21,7 @@
  */
 
 #include "curvefs/src/client/filesystem/defer_sync.h"
+
 #include "curvefs/test/client/filesystem/helper/helper.h"
 
 namespace curvefs {
@@ -29,43 +30,41 @@ namespace filesystem {
 
 class DeferSyncTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        metaClient_ = std::make_shared<MockMetaServerClient>();
-    }
+  void SetUp() override {
+    metaClient_ = std::make_shared<MockMetaServerClient>();
+  }
 
-    void TearDown() override {
-        metaClient_ = nullptr;
-    }
+  void TearDown() override { metaClient_ = nullptr; }
 
  protected:
-    std::shared_ptr<MockMetaServerClient> metaClient_;
+  std::shared_ptr<MockMetaServerClient> metaClient_;
 };
 
 TEST_F(DeferSyncTest, Basic) {
-    auto builder = DeferSyncBuilder();
-    auto deferSync = builder.SetOption([&](DeferSyncOption* option){
-        option->delay = 3;
-    }).Build();
-    deferSync->Start();
+  auto builder = DeferSyncBuilder();
+  auto deferSync =
+      builder.SetOption([&](DeferSyncOption* option) { option->delay = 3; })
+          .Build();
+  deferSync->Start();
 
-    auto inode = MkInode(100, InodeOption().metaClient(metaClient_));
-    // EXPECT_CALL_INDOE_SYNC_TIMES(*metaClient_, 100 /* ino */, 1 /* times */);
-    inode->SetLength(100);  // make inode ditry to trigger sync
-    deferSync->Push(inode);
-    deferSync->Stop();
+  auto inode = MkInode(100, InodeOption().metaClient(metaClient_));
+  // EXPECT_CALL_INDOE_SYNC_TIMES(*metaClient_, 100 /* ino */, 1 /* times */);
+  inode->SetLength(100);  // make inode ditry to trigger sync
+  deferSync->Push(inode);
+  deferSync->Stop();
 }
 
 TEST_F(DeferSyncTest, Dirty) {
-    auto builder = DeferSyncBuilder();
-    auto deferSync = builder.SetOption([&](DeferSyncOption* option){
-        option->delay = 3;
-    }).Build();
-    deferSync->Start();
+  auto builder = DeferSyncBuilder();
+  auto deferSync =
+      builder.SetOption([&](DeferSyncOption* option) { option->delay = 3; })
+          .Build();
+  deferSync->Start();
 
-    auto inode = MkInode(100, InodeOption().metaClient(metaClient_));
-    EXPECT_CALL_INDOE_SYNC_TIMES(*metaClient_, 100 /* ino */, 0 /* times */);
-    deferSync->Push(inode);
-    deferSync->Stop();
+  auto inode = MkInode(100, InodeOption().metaClient(metaClient_));
+  EXPECT_CALL_INDOE_SYNC_TIMES(*metaClient_, 100 /* ino */, 0 /* times */);
+  deferSync->Push(inode);
+  deferSync->Stop();
 }
 
 }  // namespace filesystem

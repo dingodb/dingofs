@@ -39,41 +39,41 @@ using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::common::Peer;
 
 struct OngoingConfChange {
-    OngoingConfChange() : type(ConfigChangeType::NONE), alterPeer() {}
+  OngoingConfChange() : type(ConfigChangeType::NONE), alterPeer() {}
 
-    OngoingConfChange(ConfigChangeType type, const Peer& peer)
-        : type(type), alterPeer(peer) {}
+  OngoingConfChange(ConfigChangeType type, const Peer& peer)
+      : type(type), alterPeer(peer) {}
 
-    OngoingConfChange(ConfigChangeType type, Peer&& peer)
-        : type(type), alterPeer(std::move(peer)) {}
+  OngoingConfChange(ConfigChangeType type, Peer&& peer)
+      : type(type), alterPeer(std::move(peer)) {}
 
-    bool HasConfChange() const {
-        return type != ConfigChangeType::NONE && alterPeer.has_address();
-    }
+  bool HasConfChange() const {
+    return type != ConfigChangeType::NONE && alterPeer.has_address();
+  }
 
-    void Reset() {
-        type = ConfigChangeType::NONE;
-        alterPeer.clear_address();
-    }
+  void Reset() {
+    type = ConfigChangeType::NONE;
+    alterPeer.clear_address();
+  }
 
-    ConfigChangeType type;
-    Peer alterPeer;
+  ConfigChangeType type;
+  Peer alterPeer;
 };
 
 class CopysetNode;
 
 class OnConfChangeDone : public braft::Closure {
  public:
-    OnConfChangeDone(CopysetNode* node, braft::Closure* done,
-                     const OngoingConfChange& confChange)
-        : node_(node), done_(done), confChange_(confChange) {}
+  OnConfChangeDone(CopysetNode* node, braft::Closure* done,
+                   const OngoingConfChange& confChange)
+      : node_(node), done_(done), confChange_(confChange) {}
 
-    void Run() override;
+  void Run() override;
 
  private:
-    CopysetNode* node_;
-    braft::Closure* done_;
-    OngoingConfChange confChange_;
+  CopysetNode* node_;
+  braft::Closure* done_;
+  OngoingConfChange confChange_;
 };
 
 }  // namespace copyset

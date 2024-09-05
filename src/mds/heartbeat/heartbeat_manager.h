@@ -23,34 +23,34 @@
 #ifndef SRC_MDS_HEARTBEAT_HEARTBEAT_MANAGER_H_
 #define SRC_MDS_HEARTBEAT_HEARTBEAT_MANAGER_H_
 
-#include <vector>
-#include <map>
 #include <atomic>
-#include <string>
+#include <map>
 #include <memory>
+#include <string>
+#include <vector>
 
-#include "src/mds/topology/topology.h"
-#include "src/mds/common/mds_define.h"
-#include "src/mds/heartbeat/topo_updater.h"
-#include "src/mds/heartbeat/copyset_conf_generator.h"
-#include "src/mds/heartbeat/chunkserver_healthy_checker.h"
-#include "src/mds/schedule/coordinator.h"
+#include "proto/heartbeat.pb.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/interruptible_sleeper.h"
-#include "proto/heartbeat.pb.h"
+#include "src/mds/common/mds_define.h"
+#include "src/mds/heartbeat/chunkserver_healthy_checker.h"
+#include "src/mds/heartbeat/copyset_conf_generator.h"
+#include "src/mds/heartbeat/topo_updater.h"
+#include "src/mds/schedule/coordinator.h"
+#include "src/mds/topology/topology.h"
 #include "src/mds/topology/topology_stat.h"
 
+using ::curve::mds::schedule::Coordinator;
+using ::curve::mds::topology::CopySetIdType;
 using ::curve::mds::topology::CopySetInfo;
 using ::curve::mds::topology::PoolIdType;
-using ::curve::mds::topology::CopySetIdType;
 using ::curve::mds::topology::Topology;
 using ::curve::mds::topology::TopologyStat;
-using ::curve::mds::schedule::Coordinator;
 
-using ::curve::common::Thread;
 using ::curve::common::Atomic;
-using ::curve::common::RWLock;
 using ::curve::common::InterruptibleSleeper;
+using ::curve::common::RWLock;
+using ::curve::common::Thread;
 
 namespace curve {
 namespace mds {
@@ -63,7 +63,8 @@ namespace heartbeat {
 // 2. distribute copyset instruction, in cases like:
 //    - copyset reported by a chunkserver doesn't exist in mds, send 'empty'
 //      config to certain chunkserver for cleaning corresponding copyset
-//    - passing copyset information to scheduler (see UpdateChunkServerDiskStatus),   //NOLINT
+//    - passing copyset information to scheduler (see
+//    UpdateChunkServerDiskStatus),   //NOLINT
 //      check for any possible configuration changes
 //    - chunkserver not included in follower copyset configuration,
 //      send 'empty' config to certain chunkservers for cleaning
@@ -73,128 +74,125 @@ namespace heartbeat {
 
 class HeartbeatManager {
  public:
-    HeartbeatManager(HeartbeatOption option,
-        std::shared_ptr<Topology> topology,
-        std::shared_ptr<TopologyStat> topologyStat,
-        std::shared_ptr<Coordinator> coordinator);
+  HeartbeatManager(HeartbeatOption option, std::shared_ptr<Topology> topology,
+                   std::shared_ptr<TopologyStat> topologyStat,
+                   std::shared_ptr<Coordinator> coordinator);
 
-    ~HeartbeatManager() {
-        Stop();
-    }
+  ~HeartbeatManager() { Stop(); }
 
-    /**
-     * @brief Init Used by mds to initialize heartbeat module.
-     *             It registers all chunkservers to chunkserver health
-     *             checking module (class ChunkserverHealthyChecker),
-     *             and initializes them to online status
-     */
-    void Init();
+  /**
+   * @brief Init Used by mds to initialize heartbeat module.
+   *             It registers all chunkservers to chunkserver health
+   *             checking module (class ChunkserverHealthyChecker),
+   *             and initializes them to online status
+   */
+  void Init();
 
-    /**
-     * @brief Run Create a child thread for health checking module, which
-     *            inspect missing heartbeat of the chunkserver
-     */
-    void Run();
+  /**
+   * @brief Run Create a child thread for health checking module, which
+   *            inspect missing heartbeat of the chunkserver
+   */
+  void Run();
 
-    /*
-    * @brief Stop Stop background thread of heartbeat module
-    */
-    void Stop();
+  /*
+   * @brief Stop Stop background thread of heartbeat module
+   */
+  void Stop();
 
-    /**
-     * @brief ChunkServerHeartbeat Manage heartbeat request
-     *
-     * @param[in] request RPC heartbeat request
-     * @param[out] response Response of heartbeat request
-     */
-    void ChunkServerHeartbeat(const ChunkServerHeartbeatRequest &request,
-                                ChunkServerHeartbeatResponse *response);
+  /**
+   * @brief ChunkServerHeartbeat Manage heartbeat request
+   *
+   * @param[in] request RPC heartbeat request
+   * @param[out] response Response of heartbeat request
+   */
+  void ChunkServerHeartbeat(const ChunkServerHeartbeatRequest& request,
+                            ChunkServerHeartbeatResponse* response);
 
  private:
-    /**
-     * @brief Update disk status data of chunkserver
-     *
-     * @param request Heartbeat request
-     */
-    void UpdateChunkServerDiskStatus(
-        const ChunkServerHeartbeatRequest &request);
+  /**
+   * @brief Update disk status data of chunkserver
+   *
+   * @param request Heartbeat request
+   */
+  void UpdateChunkServerDiskStatus(const ChunkServerHeartbeatRequest& request);
 
-    /**
-     * @brief Update statistical data of chunkserver
-     *
-     * @param request Heartbeat request
-     */
-    void UpdateChunkServerStatistics(
-        const ChunkServerHeartbeatRequest &request);
+  /**
+   * @brief Update statistical data of chunkserver
+   *
+   * @param request Heartbeat request
+   */
+  void UpdateChunkServerStatistics(const ChunkServerHeartbeatRequest& request);
 
-    /**
-     * @brief Update version of chunkserver
-     *
-     * @param request Heartbeat request
-     */
-    void UpdateChunkServerVersion(const ChunkServerHeartbeatRequest &request);
+  /**
+   * @brief Update version of chunkserver
+   *
+   * @param request Heartbeat request
+   */
+  void UpdateChunkServerVersion(const ChunkServerHeartbeatRequest& request);
 
-    /**
-     * @brief Background thread for heartbeat timeout inspection
-     */
-    void ChunkServerHealthyChecker();
+  /**
+   * @brief Background thread for heartbeat timeout inspection
+   */
+  void ChunkServerHealthyChecker();
 
-    /**
-     * @brief CheckRequest Check the validity of a heartbeat request
-     *
-     * @return Return HeartbeatStatusCode::hbOK when valid, otherwise return
-     *         corresponding error code
-     */
-    HeartbeatStatusCode CheckRequest(const ChunkServerHeartbeatRequest &request);  // NOLINT
+  /**
+   * @brief CheckRequest Check the validity of a heartbeat request
+   *
+   * @return Return HeartbeatStatusCode::hbOK when valid, otherwise return
+   *         corresponding error code
+   */
+  HeartbeatStatusCode CheckRequest(
+      const ChunkServerHeartbeatRequest& request);  // NOLINT
 
-    // TODO(lixiaocui): optimize, unify the names of the two CopySetInfo in heartbeat and topology // NOLINT
-    /**
-     * @brief Convert copyset data structure from heartbeat format
-     *        to topology format
-     *
-     * @param[in] info Copyset data reported by heartbeat
-     * @param[out] out Copyset data structure of topology module
-     *
-     * @return Return true if succeeded, false if failed
-     */
-    bool FromHeartbeatCopySetInfoToTopologyOne(
-        const ::curve::mds::heartbeat::CopySetInfo &info,
-        ::curve::mds::topology::CopySetInfo *out);
+  // TODO(lixiaocui): optimize, unify the names of the two CopySetInfo in
+  // heartbeat and topology // NOLINT
+  /**
+   * @brief Convert copyset data structure from heartbeat format
+   *        to topology format
+   *
+   * @param[in] info Copyset data reported by heartbeat
+   * @param[out] out Copyset data structure of topology module
+   *
+   * @return Return true if succeeded, false if failed
+   */
+  bool FromHeartbeatCopySetInfoToTopologyOne(
+      const ::curve::mds::heartbeat::CopySetInfo& info,
+      ::curve::mds::topology::CopySetInfo* out);
 
-    /**
-     * @brief Extract ip address and port number from string, and fetch
-     *        corresponding chunkserverID from topology. This is for receiving
-     *        heartbeat message since it's a string in format of 'ip:port:id'
-     *
-     * @param[in] peer Chunkserver info in form of string 'ip:port:id'
-     *
-     * @return chunkserverId fetch by ip address and port number
-     */
-    ChunkServerIdType GetChunkserverIdByPeerStr(std::string peer);
+  /**
+   * @brief Extract ip address and port number from string, and fetch
+   *        corresponding chunkserverID from topology. This is for receiving
+   *        heartbeat message since it's a string in format of 'ip:port:id'
+   *
+   * @param[in] peer Chunkserver info in form of string 'ip:port:id'
+   *
+   * @return chunkserverId fetch by ip address and port number
+   */
+  ChunkServerIdType GetChunkserverIdByPeerStr(std::string peer);
 
  private:
-    // Dependencies of heartbeat
-    std::shared_ptr<Topology> topology_;
-    std::shared_ptr<TopologyStat> topologyStat_;
-    std::shared_ptr<Coordinator> coordinator_;
+  // Dependencies of heartbeat
+  std::shared_ptr<Topology> topology_;
+  std::shared_ptr<TopologyStat> topologyStat_;
+  std::shared_ptr<Coordinator> coordinator_;
 
-    // healthyChecker_ health checker running in background thread
-    std::shared_ptr<ChunkserverHealthyChecker> healthyChecker_;
-    // topoUpdater_ update epoch, copyset relationship of topology
-    std::shared_ptr<TopoUpdater> topoUpdater_;
-    // Decides whether an instruction to chunkserver is necessary according to old and new copyset info //NOLINT
-    // It can deal with cases below:
-    // 1. copyset reported by chunkserver doesn't exist in mds
-    // 2. leader copyset
-    // 3. chunkserver in not included in latest copyset
-    std::shared_ptr<CopysetConfGenerator> copysetConfGenerator_;
+  // healthyChecker_ health checker running in background thread
+  std::shared_ptr<ChunkserverHealthyChecker> healthyChecker_;
+  // topoUpdater_ update epoch, copyset relationship of topology
+  std::shared_ptr<TopoUpdater> topoUpdater_;
+  // Decides whether an instruction to chunkserver is necessary according to old
+  // and new copyset info //NOLINT It can deal with cases below:
+  // 1. copyset reported by chunkserver doesn't exist in mds
+  // 2. leader copyset
+  // 3. chunkserver in not included in latest copyset
+  std::shared_ptr<CopysetConfGenerator> copysetConfGenerator_;
 
-    // Manage chunkserverHealthyChecker threads
-    Thread backEndThread_;
+  // Manage chunkserverHealthyChecker threads
+  Thread backEndThread_;
 
-    Atomic<bool> isStop_;
-    InterruptibleSleeper sleeper_;
-    int chunkserverHealthyCheckerRunInter_;
+  Atomic<bool> isStop_;
+  InterruptibleSleeper sleeper_;
+  int chunkserverHealthyCheckerRunInter_;
 };
 
 }  // namespace heartbeat

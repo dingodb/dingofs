@@ -24,11 +24,12 @@
 #define CURVEFS_TEST_CLIENT_MOCK_INODE_CACHE_MANAGER_H_
 
 #include <gmock/gmock.h>
+
 #include <cstdint>
-#include <memory>
-#include <set>
 #include <list>
 #include <map>
+#include <memory>
+#include <set>
 
 #include "curvefs/src/client/inode_cache_manager.h"
 
@@ -37,44 +38,44 @@ namespace client {
 
 class MockInodeCacheManager : public InodeCacheManager {
  public:
-    MockInodeCacheManager() {}
-    ~MockInodeCacheManager() {}
+  MockInodeCacheManager() {}
+  ~MockInodeCacheManager() {}
 
-    MOCK_METHOD3(Init, CURVEFS_ERROR(RefreshDataOption option,
-                                     std::shared_ptr<OpenFiles> openFiles,
-                                     std::shared_ptr<DeferSync> deferSync));
+  MOCK_METHOD3(Init, CURVEFS_ERROR(RefreshDataOption option,
+                                   std::shared_ptr<OpenFiles> openFiles,
+                                   std::shared_ptr<DeferSync> deferSync));
 
-    MOCK_METHOD2(GetInode,
-                 CURVEFS_ERROR(uint64_t inodeId,
-                               std::shared_ptr<InodeWrapper> &out));  // NOLINT
+  MOCK_METHOD2(GetInode,
+               CURVEFS_ERROR(uint64_t inodeId,
+                             std::shared_ptr<InodeWrapper>& out));  // NOLINT
 
-    MOCK_METHOD2(GetInodeAttr, CURVEFS_ERROR(
-        uint64_t inodeId, InodeAttr *out));
+  MOCK_METHOD2(GetInodeAttr, CURVEFS_ERROR(uint64_t inodeId, InodeAttr* out));
 
-    MOCK_METHOD2(BatchGetInodeAttr, CURVEFS_ERROR(
-        std::set<uint64_t> *inodeIds, std::list<InodeAttr> *attrs));
+  MOCK_METHOD2(BatchGetInodeAttr, CURVEFS_ERROR(std::set<uint64_t>* inodeIds,
+                                                std::list<InodeAttr>* attrs));
 
-    MOCK_METHOD3(BatchGetInodeAttrAsync,
-        CURVEFS_ERROR(uint64_t parentId, std::set<uint64_t> *inodeIds,
-        std::map<uint64_t, InodeAttr> *attrs));
+  MOCK_METHOD3(BatchGetInodeAttrAsync,
+               CURVEFS_ERROR(uint64_t parentId, std::set<uint64_t>* inodeIds,
+                             std::map<uint64_t, InodeAttr>* attrs));
 
-    MOCK_METHOD2(BatchGetXAttr, CURVEFS_ERROR(
-        std::set<uint64_t> *inodeIds, std::list<XAttr> *xattrs));
+  MOCK_METHOD2(BatchGetXAttr, CURVEFS_ERROR(std::set<uint64_t>* inodeIds,
+                                            std::list<XAttr>* xattrs));
 
-    MOCK_METHOD2(CreateInode, CURVEFS_ERROR(const InodeParam &param,
-        std::shared_ptr<InodeWrapper> &out));     // NOLINT
+  MOCK_METHOD2(CreateInode,
+               CURVEFS_ERROR(const InodeParam& param,
+                             std::shared_ptr<InodeWrapper>& out));  // NOLINT
 
-    MOCK_METHOD2(CreateManageInode, CURVEFS_ERROR(const InodeParam &param,
-        std::shared_ptr<InodeWrapper> &out));     // NOLINT
+  MOCK_METHOD2(CreateManageInode,
+               CURVEFS_ERROR(const InodeParam& param,
+                             std::shared_ptr<InodeWrapper>& out));  // NOLINT
 
-    MOCK_METHOD1(DeleteInode, CURVEFS_ERROR(uint64_t inodeid));
+  MOCK_METHOD1(DeleteInode, CURVEFS_ERROR(uint64_t inodeid));
 
-    MOCK_METHOD1(ShipToFlush, void(
-        const std::shared_ptr<InodeWrapper> &inodeWrapper));
+  MOCK_METHOD1(ShipToFlush,
+               void(const std::shared_ptr<InodeWrapper>& inodeWrapper));
 };
 
 }  // namespace client
 }  // namespace curvefs
-
 
 #endif  // CURVEFS_TEST_CLIENT_MOCK_INODE_CACHE_MANAGER_H_

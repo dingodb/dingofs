@@ -20,11 +20,11 @@
  * Author: lixiaocui
  */
 
-
 #ifndef CURVEFS_TEST_CLIENT_RPCCLIENT_MOCK_MDS_SERVICE_H_
 #define CURVEFS_TEST_CLIENT_RPCCLIENT_MOCK_MDS_SERVICE_H_
 
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/mds.pb.h"
 
 namespace curvefs {
@@ -32,28 +32,27 @@ namespace client {
 namespace rpcclient {
 class MockMdsService : public curvefs::mds::MdsService {
  public:
-    MockMdsService() : MdsService() {}
-    ~MockMdsService() = default;
+  MockMdsService() : MdsService() {}
+  ~MockMdsService() = default;
 
-    MOCK_METHOD4(MountFs, void(::google::protobuf::RpcController *controller,
-                               const ::curvefs::mds::MountFsRequest *request,
-                               ::curvefs::mds::MountFsResponse *response,
-                               ::google::protobuf::Closure *done));
-    MOCK_METHOD4(UmountFs, void(::google::protobuf::RpcController *controller,
-                                const ::curvefs::mds::UmountFsRequest *request,
-                                ::curvefs::mds::UmountFsResponse *response,
-                                ::google::protobuf::Closure *done));
-    MOCK_METHOD4(GetFsInfo,
-                 void(::google::protobuf::RpcController *controller,
-                      const ::curvefs::mds::GetFsInfoRequest *request,
-                      ::curvefs::mds::GetFsInfoResponse *response,
-                      ::google::protobuf::Closure *done));
+  MOCK_METHOD4(MountFs, void(::google::protobuf::RpcController* controller,
+                             const ::curvefs::mds::MountFsRequest* request,
+                             ::curvefs::mds::MountFsResponse* response,
+                             ::google::protobuf::Closure* done));
+  MOCK_METHOD4(UmountFs, void(::google::protobuf::RpcController* controller,
+                              const ::curvefs::mds::UmountFsRequest* request,
+                              ::curvefs::mds::UmountFsResponse* response,
+                              ::google::protobuf::Closure* done));
+  MOCK_METHOD4(GetFsInfo, void(::google::protobuf::RpcController* controller,
+                               const ::curvefs::mds::GetFsInfoRequest* request,
+                               ::curvefs::mds::GetFsInfoResponse* response,
+                               ::google::protobuf::Closure* done));
 
-    MOCK_METHOD4(RefreshSession,
-                 void(::google::protobuf::RpcController *controller,
-                      const ::curvefs::mds::RefreshSessionRequest *request,
-                      ::curvefs::mds::RefreshSessionResponse *response,
-                      ::google::protobuf::Closure *done));
+  MOCK_METHOD4(RefreshSession,
+               void(::google::protobuf::RpcController* controller,
+                    const ::curvefs::mds::RefreshSessionRequest* request,
+                    ::curvefs::mds::RefreshSessionResponse* response,
+                    ::google::protobuf::Closure* done));
 };
 }  // namespace rpcclient
 }  // namespace client

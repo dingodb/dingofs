@@ -25,47 +25,47 @@
 
 #include <glog/logging.h>
 
-#include <string>
 #include <list>
-#include <set>
-#include <vector>
 #include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
-#include "curvefs/src/common/wrap_posix.h"
 #include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/common/wrap_posix.h"
 
 namespace curvefs {
 namespace client {
 
-using curvefs::common::PosixWrapper;
 using curvefs::client::metric::DiskCacheMetric;
+using curvefs::common::PosixWrapper;
 #define MODE 0644
 
 class DiskCacheBase {
  public:
-    DiskCacheBase() {}
-    virtual ~DiskCacheBase() {}
-    virtual void Init(std::shared_ptr<PosixWrapper> wrapper,
-                      const std::string cacheDir, uint32_t objectPrefix);
-    /**
-     * @brief Create Read/Write Cache Dir.
-    */
-    virtual int CreateIoDir(bool writreDir);
-    virtual bool IsFileExist(const std::string file);
-    virtual int CreateDir(const std::string name);
-    /**
-     * @brief Get Read/Write Cache full Dir(include CacheDir_).
-    */
-    virtual std::string GetCacheIoFullDir();
+  DiskCacheBase() {}
+  virtual ~DiskCacheBase() {}
+  virtual void Init(std::shared_ptr<PosixWrapper> wrapper,
+                    const std::string cacheDir, uint32_t objectPrefix);
+  /**
+   * @brief Create Read/Write Cache Dir.
+   */
+  virtual int CreateIoDir(bool writreDir);
+  virtual bool IsFileExist(const std::string file);
+  virtual int CreateDir(const std::string name);
+  /**
+   * @brief Get Read/Write Cache full Dir(include CacheDir_).
+   */
+  virtual std::string GetCacheIoFullDir();
 
-    virtual int LoadAllCacheFile(std::set<std::string> *cachedObj);
-    uint32_t objectPrefix_;
+  virtual int LoadAllCacheFile(std::set<std::string>* cachedObj);
+  uint32_t objectPrefix_;
 
  private:
-    std::string cacheIoDir_;
-    std::string cacheDir_;
-    // file system operation encapsulation
-    std::shared_ptr<PosixWrapper> posixWrapper_;
+  std::string cacheIoDir_;
+  std::string cacheDir_;
+  // file system operation encapsulation
+  std::shared_ptr<PosixWrapper> posixWrapper_;
 };
 
 }  // namespace client

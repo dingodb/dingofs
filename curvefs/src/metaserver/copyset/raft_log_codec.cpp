@@ -40,17 +40,17 @@ template <typename MetaOperatorT, typename RequestT>
 inline std::unique_ptr<MetaOperator> ParseFromRaftLog(CopysetNode* node,
                                                       OperatorType type,
                                                       const butil::IOBuf& log) {
-    butil::IOBufAsZeroCopyInputStream wrapper(log);
-    auto request = absl::make_unique<RequestT>();
+  butil::IOBufAsZeroCopyInputStream wrapper(log);
+  auto request = absl::make_unique<RequestT>();
 
-    bool success = request->ParseFromZeroCopyStream(&wrapper);
-    if (success) {
-        return absl::make_unique<MetaOperatorT>(node, request.release());
-    }
+  bool success = request->ParseFromZeroCopyStream(&wrapper);
+  if (success) {
+    return absl::make_unique<MetaOperatorT>(node, request.release());
+  }
 
-    LOG(ERROR) << "Fail to parse request from raft log, type: "
-               << OperatorTypeName(type);
-    return nullptr;
+  LOG(ERROR) << "Fail to parse request from raft log, type: "
+             << OperatorTypeName(type);
+  return nullptr;
 }
 
 }  // namespace
@@ -58,124 +58,121 @@ inline std::unique_ptr<MetaOperator> ParseFromRaftLog(CopysetNode* node,
 bool RaftLogCodec::Encode(OperatorType type,
                           const google::protobuf::Message* request,
                           butil::IOBuf* log) {
-    static_assert(
-        std::is_same<std::underlying_type<OperatorType>::type, uint32_t>::value,
-        "OperatorType underlying type must be uint32_t");
+  static_assert(
+      std::is_same<std::underlying_type<OperatorType>::type, uint32_t>::value,
+      "OperatorType underlying type must be uint32_t");
 
-    // 1. append operator type
-    const uint32_t networkType =
-        butil::HostToNet32(static_cast<uint32_t>(type));
-    log->append(&networkType, sizeof(networkType));
+  // 1. append operator type
+  const uint32_t networkType = butil::HostToNet32(static_cast<uint32_t>(type));
+  log->append(&networkType, sizeof(networkType));
 
-    // 2. append request length
-    // serialize will fail when request's size larger than INT_MAX, check this
-    // manually because `request->ByteSize()`'s behaviour is affected by NDEBUG
-    const uint64_t requestSize = request->ByteSizeLong();
-    if (CURVE_UNLIKELY(requestSize > INT_MAX)) {
-        LOG(ERROR) << "Request's size is too large, type: "
-                   << OperatorTypeName(type) << ", size: " << requestSize;
-        return false;
-    }
-
-    const uint32_t networkRequestSize =
-        butil::HostToNet32(static_cast<uint32_t>(requestSize));
-    log->append(&networkRequestSize, sizeof(networkRequestSize));
-
-    // 3. append serialized request
-    butil::IOBufAsZeroCopyOutputStream wrapper(log);
-    if (request->SerializeToZeroCopyStream(&wrapper)) {
-        return true;
-    }
-
-    LOG(ERROR) << "Fail to serialize request, type: " << OperatorTypeName(type)
-               << ", request: " << request->ShortDebugString();
-
+  // 2. append request length
+  // serialize will fail when request's size larger than INT_MAX, check this
+  // manually because `request->ByteSize()`'s behaviour is affected by NDEBUG
+  const uint64_t requestSize = request->ByteSizeLong();
+  if (CURVE_UNLIKELY(requestSize > INT_MAX)) {
+    LOG(ERROR) << "Request's size is too large, type: "
+               << OperatorTypeName(type) << ", size: " << requestSize;
     return false;
+  }
+
+  const uint32_t networkRequestSize =
+      butil::HostToNet32(static_cast<uint32_t>(requestSize));
+  log->append(&networkRequestSize, sizeof(networkRequestSize));
+
+  // 3. append serialized request
+  butil::IOBufAsZeroCopyOutputStream wrapper(log);
+  if (request->SerializeToZeroCopyStream(&wrapper)) {
+    return true;
+  }
+
+  LOG(ERROR) << "Fail to serialize request, type: " << OperatorTypeName(type)
+             << ", request: " << request->ShortDebugString();
+
+  return false;
 }
 
 std::unique_ptr<MetaOperator> RaftLogCodec::Decode(CopysetNode* node,
                                                    butil::IOBuf log) {
-    uint32_t logtype;
-    log.cutn(&logtype, kOperatorTypeSize);
-    logtype = butil::NetToHost32(logtype);
+  uint32_t logtype;
+  log.cutn(&logtype, kOperatorTypeSize);
+  logtype = butil::NetToHost32(logtype);
 
-    uint32_t metaSize;
-    log.cutn(&metaSize, sizeof(metaSize));
-    metaSize = butil::NetToHost32(metaSize);
+  uint32_t metaSize;
+  log.cutn(&metaSize, sizeof(metaSize));
+  metaSize = butil::NetToHost32(metaSize);
 
-    butil::IOBuf meta;
-    log.cutn(&meta, metaSize);
+  butil::IOBuf meta;
+  log.cutn(&meta, metaSize);
 
-    OperatorType type = static_cast<OperatorType>(logtype);
+  OperatorType type = static_cast<OperatorType>(logtype);
 
-    switch (type) {
-        case OperatorType::GetDentry:
-            return ParseFromRaftLog<GetDentryOperator, GetDentryRequest>(
-                node, type, meta);
-        case OperatorType::ListDentry:
-            return ParseFromRaftLog<ListDentryOperator, ListDentryRequest>(
-                node, type, meta);
-        case OperatorType::CreateDentry:
-            return ParseFromRaftLog<CreateDentryOperator, CreateDentryRequest>(
-                node, type, meta);
-        case OperatorType::DeleteDentry:
-            return ParseFromRaftLog<DeleteDentryOperator, DeleteDentryRequest>(
-                node, type, meta);
-        case OperatorType::GetInode:
-            return ParseFromRaftLog<GetInodeOperator, GetInodeRequest>(
-                node, type, meta);
-        case OperatorType::BatchGetInodeAttr:
-            return ParseFromRaftLog<BatchGetInodeAttrOperator,
-                                    BatchGetInodeAttrRequest>(node, type, meta);
-        case OperatorType::BatchGetXAttr:
-            return ParseFromRaftLog<BatchGetXAttrOperator,
-                                    BatchGetInodeAttrRequest>(node, type, meta);
-        case OperatorType::CreateInode:
-            return ParseFromRaftLog<CreateInodeOperator, CreateInodeRequest>(
-                node, type, meta);
-        case OperatorType::UpdateInode:
-            return ParseFromRaftLog<UpdateInodeOperator, UpdateInodeRequest>(
-                node, type, meta);
-        case OperatorType::DeleteInode:
-            return ParseFromRaftLog<DeleteInodeOperator, DeleteInodeRequest>(
-                node, type, meta);
-        case OperatorType::CreateRootInode:
-            return ParseFromRaftLog<CreateRootInodeOperator,
-                                    CreateRootInodeRequest>(node, type, meta);
-        case OperatorType::CreateManageInode:
-            return ParseFromRaftLog<CreateManageInodeOperator,
-                                    CreateManageInodeRequest>(node, type, meta);
-        case OperatorType::CreatePartition:
-            return ParseFromRaftLog<CreatePartitionOperator,
-                                    CreatePartitionRequest>(node, type, meta);
-        case OperatorType::DeletePartition:
-            return ParseFromRaftLog<DeletePartitionOperator,
-                                    DeletePartitionRequest>(node, type, meta);
-        case OperatorType::PrepareRenameTx:
-            return ParseFromRaftLog<PrepareRenameTxOperator,
-                                    PrepareRenameTxRequest>(node, type, meta);
-        case OperatorType::GetOrModifyS3ChunkInfo:
-            return ParseFromRaftLog<GetOrModifyS3ChunkInfoOperator,
-                                    GetOrModifyS3ChunkInfoRequest>(
-                                        node, type, meta);
-        case OperatorType::GetVolumeExtent:
-            return ParseFromRaftLog<GetVolumeExtentOperator,
-                                    GetVolumeExtentRequest>(node, type, meta);
-        case OperatorType::UpdateVolumeExtent:
-            return ParseFromRaftLog<UpdateVolumeExtentOperator,
-                                    UpdateVolumeExtentRequest>(node, type,
-                                                               meta);
-        // Add new case before `OperatorType::OperatorTypeMax`
-        case OperatorType::OperatorTypeMax:
-            break;
-    }
+  switch (type) {
+    case OperatorType::GetDentry:
+      return ParseFromRaftLog<GetDentryOperator, GetDentryRequest>(node, type,
+                                                                   meta);
+    case OperatorType::ListDentry:
+      return ParseFromRaftLog<ListDentryOperator, ListDentryRequest>(node, type,
+                                                                     meta);
+    case OperatorType::CreateDentry:
+      return ParseFromRaftLog<CreateDentryOperator, CreateDentryRequest>(
+          node, type, meta);
+    case OperatorType::DeleteDentry:
+      return ParseFromRaftLog<DeleteDentryOperator, DeleteDentryRequest>(
+          node, type, meta);
+    case OperatorType::GetInode:
+      return ParseFromRaftLog<GetInodeOperator, GetInodeRequest>(node, type,
+                                                                 meta);
+    case OperatorType::BatchGetInodeAttr:
+      return ParseFromRaftLog<BatchGetInodeAttrOperator,
+                              BatchGetInodeAttrRequest>(node, type, meta);
+    case OperatorType::BatchGetXAttr:
+      return ParseFromRaftLog<BatchGetXAttrOperator, BatchGetInodeAttrRequest>(
+          node, type, meta);
+    case OperatorType::CreateInode:
+      return ParseFromRaftLog<CreateInodeOperator, CreateInodeRequest>(
+          node, type, meta);
+    case OperatorType::UpdateInode:
+      return ParseFromRaftLog<UpdateInodeOperator, UpdateInodeRequest>(
+          node, type, meta);
+    case OperatorType::DeleteInode:
+      return ParseFromRaftLog<DeleteInodeOperator, DeleteInodeRequest>(
+          node, type, meta);
+    case OperatorType::CreateRootInode:
+      return ParseFromRaftLog<CreateRootInodeOperator, CreateRootInodeRequest>(
+          node, type, meta);
+    case OperatorType::CreateManageInode:
+      return ParseFromRaftLog<CreateManageInodeOperator,
+                              CreateManageInodeRequest>(node, type, meta);
+    case OperatorType::CreatePartition:
+      return ParseFromRaftLog<CreatePartitionOperator, CreatePartitionRequest>(
+          node, type, meta);
+    case OperatorType::DeletePartition:
+      return ParseFromRaftLog<DeletePartitionOperator, DeletePartitionRequest>(
+          node, type, meta);
+    case OperatorType::PrepareRenameTx:
+      return ParseFromRaftLog<PrepareRenameTxOperator, PrepareRenameTxRequest>(
+          node, type, meta);
+    case OperatorType::GetOrModifyS3ChunkInfo:
+      return ParseFromRaftLog<GetOrModifyS3ChunkInfoOperator,
+                              GetOrModifyS3ChunkInfoRequest>(node, type, meta);
+    case OperatorType::GetVolumeExtent:
+      return ParseFromRaftLog<GetVolumeExtentOperator, GetVolumeExtentRequest>(
+          node, type, meta);
+    case OperatorType::UpdateVolumeExtent:
+      return ParseFromRaftLog<UpdateVolumeExtentOperator,
+                              UpdateVolumeExtentRequest>(node, type, meta);
+    // Add new case before `OperatorType::OperatorTypeMax`
+    case OperatorType::OperatorTypeMax:
+      break;
+  }
 
-    // DO NOT make it as a default case in switch statement
-    // otherwise compiler WILL NOT warning on unhandled enumeration value
-    // see GCC warning options `-Wswitch` for more information
-    // https://gcc.gnu.org/onlinedocs/gcc-6.3.0/gcc/Warning-Options.html#Warning-Options
-    LOG(ERROR) << "unexpected type: " << static_cast<uint32_t>(type);
-    return nullptr;
+  // DO NOT make it as a default case in switch statement
+  // otherwise compiler WILL NOT warning on unhandled enumeration value
+  // see GCC warning options `-Wswitch` for more information
+  // https://gcc.gnu.org/onlinedocs/gcc-6.3.0/gcc/Warning-Options.html#Warning-Options
+  LOG(ERROR) << "unexpected type: " << static_cast<uint32_t>(type);
+  return nullptr;
 }
 
 }  // namespace copyset

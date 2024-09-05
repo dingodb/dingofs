@@ -39,67 +39,67 @@ constexpr uint64_t kGiB = 1024ULL * kMiB;
 constexpr uint64_t kTiB = 1024ULL * kGiB;
 
 struct Extent {
-    uint64_t offset = 0;
-    uint64_t len = 0;
+  uint64_t offset = 0;
+  uint64_t len = 0;
 
-    Extent() = default;
-    Extent(uint64_t o, uint64_t l) : offset(o), len(l) {}
+  Extent() = default;
+  Extent(uint64_t o, uint64_t l) : offset(o), len(l) {}
 
-    bool operator==(const Extent& e) const {
-        return offset == e.offset && len == e.len;
-    }
+  bool operator==(const Extent& e) const {
+    return offset == e.offset && len == e.len;
+  }
 };
 
 enum class AllocateType {
-    None,
-    Small,
-    Big,
+  None,
+  Small,
+  Big,
 };
 
 struct AllocateHint {
-    enum { INVALID_OFFSET = std::numeric_limits<uint64_t>::max() };
+  enum { INVALID_OFFSET = std::numeric_limits<uint64_t>::max() };
 
-    AllocateType allocType = AllocateType::None;
-    uint64_t leftOffset = INVALID_OFFSET;
-    uint64_t rightOffset = INVALID_OFFSET;
+  AllocateType allocType = AllocateType::None;
+  uint64_t leftOffset = INVALID_OFFSET;
+  uint64_t rightOffset = INVALID_OFFSET;
 
-    bool HasLeftHint() const { return leftOffset != INVALID_OFFSET; }
+  bool HasLeftHint() const { return leftOffset != INVALID_OFFSET; }
 
-    bool HasRightHint() const { return rightOffset != INVALID_OFFSET; }
+  bool HasRightHint() const { return rightOffset != INVALID_OFFSET; }
 
-    bool HasHint() const { return HasRightHint() || HasLeftHint(); }
+  bool HasHint() const { return HasRightHint() || HasLeftHint(); }
 };
 
 struct SpaceStat {
-    uint64_t total = 0;
-    uint64_t available = 0;
-    uint32_t blockSize = 0;
+  uint64_t total = 0;
+  uint64_t available = 0;
+  uint32_t blockSize = 0;
 
-    SpaceStat() = default;
-    SpaceStat(uint64_t total, uint64_t available, uint64_t blockSize)
-        : total(total), available(available), blockSize(blockSize) {}
+  SpaceStat() = default;
+  SpaceStat(uint64_t total, uint64_t available, uint64_t blockSize)
+      : total(total), available(available), blockSize(blockSize) {}
 };
 
 struct WritePart {
-    off_t offset = 0;
-    size_t length = 0;
-    const char* data = nullptr;
+  off_t offset = 0;
+  size_t length = 0;
+  const char* data = nullptr;
 
-    WritePart() = default;
+  WritePart() = default;
 
-    WritePart(off_t offset, size_t length, const char* data)
-        : offset(offset), length(length), data(data) {}
+  WritePart(off_t offset, size_t length, const char* data)
+      : offset(offset), length(length), data(data) {}
 };
 
 struct ReadPart {
-    off_t offset = 0;
-    size_t length = 0;
-    char* data = nullptr;
+  off_t offset = 0;
+  size_t length = 0;
+  char* data = nullptr;
 
-    ReadPart() = default;
+  ReadPart() = default;
 
-    ReadPart(off_t offset, size_t length, char* data)
-        : offset(offset), length(length), data(data) {}
+  ReadPart(off_t offset, size_t length, char* data)
+      : offset(offset), length(length), data(data) {}
 };
 
 std::ostream& operator<<(std::ostream& os, const Extent& e);

@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Mon Sept 4 2021
@@ -27,11 +26,12 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <bthread/condition_variable.h>
-
 #include <stdint.h>
-#include <vector>
-#include <string>
+
 #include <memory>
+#include <string>
+#include <vector>
+
 #include "curvefs/proto/cli2.pb.h"
 #include "curvefs/src/client/common/common.h"
 #include "src/client/client_common.h"
@@ -49,87 +49,85 @@ namespace client {
 namespace rpcclient {
 
 using PeerInfoList = std::vector<CopysetPeerInfo<MetaserverID>>;
-using Task2 = std::function<void(brpc::Channel *channel)>;
+using Task2 = std::function<void(brpc::Channel* channel)>;
 
 class GetLeaderTaskExecutor;
 struct Cli2TaskContext {
-    LogicPoolID poolID;
-    CopysetID copysetID;
-    std::string peerAddr;
+  LogicPoolID poolID;
+  CopysetID copysetID;
+  std::string peerAddr;
 
-    Cli2TaskContext(const LogicPoolID &poolid, const CopysetID &copysetid,
-                    const std::string &peeraddr)
-        : poolID(poolid), copysetID(copysetid), peerAddr(peeraddr) {}
+  Cli2TaskContext(const LogicPoolID& poolid, const CopysetID& copysetid,
+                  const std::string& peeraddr)
+      : poolID(poolid), copysetID(copysetid), peerAddr(peeraddr) {}
 };
 
 class Cli2Closure : public google::protobuf::Closure {
  public:
-    Cli2Closure() = default;
-    explicit Cli2Closure(const Cli2TaskContext &context,
-                         std::shared_ptr<GetLeaderTaskExecutor> taskexcutor)
-        : taskContext(context), excutor(taskexcutor) {}
+  Cli2Closure() = default;
+  explicit Cli2Closure(const Cli2TaskContext& context,
+                       std::shared_ptr<GetLeaderTaskExecutor> taskexcutor)
+      : taskContext(context), excutor(taskexcutor) {}
 
-    void Run() override;
+  void Run() override;
 
  public:
-    Cli2TaskContext taskContext;
-    std::shared_ptr<GetLeaderTaskExecutor> excutor;
+  Cli2TaskContext taskContext;
+  std::shared_ptr<GetLeaderTaskExecutor> excutor;
 
-    curvefs::metaserver::copyset::GetLeaderResponse2 response;
-    brpc::Controller cntl;
+  curvefs::metaserver::copyset::GetLeaderResponse2 response;
+  brpc::Controller cntl;
 };
 
 struct Cli2ClientImplOption {
-    uint32_t rpcTimeoutMs;
+  uint32_t rpcTimeoutMs;
 
-    explicit Cli2ClientImplOption(uint32_t rpcTimeoutMs = 500)
-        : rpcTimeoutMs(rpcTimeoutMs) {}
+  explicit Cli2ClientImplOption(uint32_t rpcTimeoutMs = 500)
+      : rpcTimeoutMs(rpcTimeoutMs) {}
 };
 
 class Cli2Client {
  public:
-    Cli2Client() {}
-    virtual ~Cli2Client() {}
+  Cli2Client() {}
+  virtual ~Cli2Client() {}
 
-
-    virtual bool GetLeader(const LogicPoolID &poolID,
-                           const CopysetID &copysetID,
-                           const PeerInfoList &peerInfoList,
-                           int16_t currentLeaderIndex, PeerAddr *peerAddr,
-                           MetaserverID *metaserverID) = 0;
+  virtual bool GetLeader(const LogicPoolID& poolID, const CopysetID& copysetID,
+                         const PeerInfoList& peerInfoList,
+                         int16_t currentLeaderIndex, PeerAddr* peerAddr,
+                         MetaserverID* metaserverID) = 0;
 };
 
 class GetLeaderTaskExecutor {
  public:
-    GetLeaderTaskExecutor() : finish_(false), success_(false) {}
+  GetLeaderTaskExecutor() : finish_(false), success_(false) {}
 
-    bool DoRPCTaskAndWait(const Task2 &task, const std::string &peerAddr);
+  bool DoRPCTaskAndWait(const Task2& task, const std::string& peerAddr);
 
-    void NotifyRpcFinish(bool success);
+  void NotifyRpcFinish(bool success);
 
  private:
-    bthread::ConditionVariable finishCv_;
-    bthread::Mutex finishMtx_;
+  bthread::ConditionVariable finishCv_;
+  bthread::Mutex finishMtx_;
 
-    bool finish_;
-    bool success_;
+  bool finish_;
+  bool success_;
 };
 
 class Cli2ClientImpl : public Cli2Client {
  public:
-    Cli2ClientImpl() = default;
-    explicit Cli2ClientImpl(const Cli2ClientImplOption &opt) : opt_(opt) {}
+  Cli2ClientImpl() = default;
+  explicit Cli2ClientImpl(const Cli2ClientImplOption& opt) : opt_(opt) {}
 
-    bool GetLeader(const LogicPoolID &pooID, const CopysetID &copysetID,
-                   const PeerInfoList &peerInfoList, int16_t currentLeaderIndex,
-                   PeerAddr *peerAddr, MetaserverID *metaserverID) override;
-
- private:
-    bool DoGetLeader(Cli2Closure *done, PeerAddr *peerAddr,
-                     MetaserverID *metaserverID);
+  bool GetLeader(const LogicPoolID& pooID, const CopysetID& copysetID,
+                 const PeerInfoList& peerInfoList, int16_t currentLeaderIndex,
+                 PeerAddr* peerAddr, MetaserverID* metaserverID) override;
 
  private:
-    Cli2ClientImplOption opt_;
+  bool DoGetLeader(Cli2Closure* done, PeerAddr* peerAddr,
+                   MetaserverID* metaserverID);
+
+ private:
+  Cli2ClientImplOption opt_;
 };
 
 }  // namespace rpcclient

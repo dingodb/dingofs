@@ -21,195 +21,196 @@
  */
 
 #include <glog/logging.h>
+
 #include <algorithm>
+
 #include "src/mds/common/mds_define.h"
-#include "src/mds/schedule/scheduler.h"
 #include "src/mds/schedule/operatorFactory.h"
+#include "src/mds/schedule/scheduler.h"
 #include "src/mds/schedule/scheduler_helper.h"
 
 namespace curve {
 namespace mds {
 namespace schedule {
 int RapidLeaderScheduler::Schedule() {
-    std::vector<PoolIdType> existLpoolsVec = topo_->GetLogicalpools();
+  std::vector<PoolIdType> existLpoolsVec = topo_->GetLogicalpools();
 
-    // schedule for every logical pool ID when lpid is uninitialized (0)
-    if (lpoolId_ == UNINTIALIZE_ID) {
-        for (PoolIdType lid : existLpoolsVec) {
-            DoRapidLeaderSchedule(lid);
-        }
-
-        return kScheduleErrCodeSuccess;
+  // schedule for every logical pool ID when lpid is uninitialized (0)
+  if (lpoolId_ == UNINTIALIZE_ID) {
+    for (PoolIdType lid : existLpoolsVec) {
+      DoRapidLeaderSchedule(lid);
     }
 
-    // for specified logical pool when logical pool ID is larger than 0
-    bool exist = (std::find(existLpoolsVec.begin(),
-        existLpoolsVec.end(), lpoolId_) != existLpoolsVec.end());
-    if (!exist) {
-        LOG(WARNING) << "RapidLeaderSchedule find logicalpool "
-            << lpoolId_ << " invalid";
-        return kScheduleErrCodeInvalidLogicalPool;
-    }
-
-    DoRapidLeaderSchedule(lpoolId_);
     return kScheduleErrCodeSuccess;
+  }
+
+  // for specified logical pool when logical pool ID is larger than 0
+  bool exist = (std::find(existLpoolsVec.begin(), existLpoolsVec.end(),
+                          lpoolId_) != existLpoolsVec.end());
+  if (!exist) {
+    LOG(WARNING) << "RapidLeaderSchedule find logicalpool " << lpoolId_
+                 << " invalid";
+    return kScheduleErrCodeInvalidLogicalPool;
+  }
+
+  DoRapidLeaderSchedule(lpoolId_);
+  return kScheduleErrCodeSuccess;
 }
 
 void RapidLeaderScheduler::DoRapidLeaderSchedule(LogicalPoolIdType lid) {
-    // calculate the leader distribution of current logical pool
-    LeaderStatInLogicalPool stat;
-    stat.lid = lid;
-    if (!LeaderStatInSpecifiedLogicalPool(&stat)) {
-        return;
-    }
-
-    int genNum = 0;
-    for (auto copysetInChunkserver : stat.distribute) {
-        ChunkServerIdType curChunkServer = copysetInChunkserver.first;
-        std::vector<CopySetInfo> copysetInfosInCS = copysetInChunkserver.second;
-
-        for (auto copysetInfoItem : copysetInfosInCS) {
-            // operator exist for this copyset
-            Operator op;
-            if (opController_->GetOperatorById(copysetInfoItem.id, &op)) {
-                continue;
-            }
-
-            // chose the target peer to transfer
-            ChunkServerIdType target = SelectTargetPeer(
-                curChunkServer, copysetInfoItem, stat);
-            if (target == UNINTIALIZE_ID) {
-                continue;
-            }
-
-            // generate operator
-            bool success = GenerateLeaderChangeOperatorForCopySet(
-                copysetInfoItem, target);
-
-            // update leader number on chunkserver
-            if (success) {
-                stat.leaderNumInChunkServer[target] += 1;
-                stat.leaderNumInChunkServer[curChunkServer] -= 1;
-                genNum++;
-            }
-        }
-    }
-
-    LOG(INFO) << "RapidLeaderScheduler generate " << genNum
-        << " operators in logical pool " << lid;
+  // calculate the leader distribution of current logical pool
+  LeaderStatInLogicalPool stat;
+  stat.lid = lid;
+  if (!LeaderStatInSpecifiedLogicalPool(&stat)) {
     return;
+  }
+
+  int genNum = 0;
+  for (auto copysetInChunkserver : stat.distribute) {
+    ChunkServerIdType curChunkServer = copysetInChunkserver.first;
+    std::vector<CopySetInfo> copysetInfosInCS = copysetInChunkserver.second;
+
+    for (auto copysetInfoItem : copysetInfosInCS) {
+      // operator exist for this copyset
+      Operator op;
+      if (opController_->GetOperatorById(copysetInfoItem.id, &op)) {
+        continue;
+      }
+
+      // chose the target peer to transfer
+      ChunkServerIdType target =
+          SelectTargetPeer(curChunkServer, copysetInfoItem, stat);
+      if (target == UNINTIALIZE_ID) {
+        continue;
+      }
+
+      // generate operator
+      bool success =
+          GenerateLeaderChangeOperatorForCopySet(copysetInfoItem, target);
+
+      // update leader number on chunkserver
+      if (success) {
+        stat.leaderNumInChunkServer[target] += 1;
+        stat.leaderNumInChunkServer[curChunkServer] -= 1;
+        genNum++;
+      }
+    }
+  }
+
+  LOG(INFO) << "RapidLeaderScheduler generate " << genNum
+            << " operators in logical pool " << lid;
+  return;
 }
 
 bool RapidLeaderScheduler::LeaderStatInSpecifiedLogicalPool(
-    LeaderStatInLogicalPool *stat) {
-    // get chunkserverInfo list and copyset list
-    auto chunkserverVec =
-        topo_->GetChunkServersInLogicalPool(stat->lid);
-    auto copysetVec =
-        topo_->GetCopySetInfosInLogicalPool(stat->lid);
-    if (chunkserverVec.size() == 0 || copysetVec.size() == 0) {
-        LOG(INFO) << "RapidLeaderScheduler find chunkserverSize="
-            << chunkserverVec.size() << ", copysetSize="
-            << copysetVec.size() << " in logicalPool=" << stat->lid;
-        return false;
-    }
+    LeaderStatInLogicalPool* stat) {
+  // get chunkserverInfo list and copyset list
+  auto chunkserverVec = topo_->GetChunkServersInLogicalPool(stat->lid);
+  auto copysetVec = topo_->GetCopySetInfosInLogicalPool(stat->lid);
+  if (chunkserverVec.size() == 0 || copysetVec.size() == 0) {
+    LOG(INFO) << "RapidLeaderScheduler find chunkserverSize="
+              << chunkserverVec.size() << ", copysetSize=" << copysetVec.size()
+              << " in logicalPool=" << stat->lid;
+    return false;
+  }
 
-    // get leader number on every chunkserver
-    for (const auto &info : chunkserverVec) {
-        stat->leaderNumInChunkServer[info.info.id] = info.leaderCount;
-    }
+  // get leader number on every chunkserver
+  for (const auto& info : chunkserverVec) {
+    stat->leaderNumInChunkServer[info.info.id] = info.leaderCount;
+  }
 
-    // get copyset info list for every chunkserver
-    SchedulerHelper::GetCopySetDistributionInOnlineChunkServer(
-        copysetVec, chunkserverVec, &stat->distribute);
-    SchedulerHelper::FilterCopySetDistributions(ChunkServerStatus::READWRITE,
-                    chunkserverVec, &stat->distribute);
-    // calculate average leader number for every chunkserver
-    stat->avgLeaderNum = copysetVec.size() / chunkserverVec.size();
+  // get copyset info list for every chunkserver
+  SchedulerHelper::GetCopySetDistributionInOnlineChunkServer(
+      copysetVec, chunkserverVec, &stat->distribute);
+  SchedulerHelper::FilterCopySetDistributions(
+      ChunkServerStatus::READWRITE, chunkserverVec, &stat->distribute);
+  // calculate average leader number for every chunkserver
+  stat->avgLeaderNum = copysetVec.size() / chunkserverVec.size();
 
-    return true;
+  return true;
 }
 
 ChunkServerIdType RapidLeaderScheduler::SelectTargetPeer(
-    ChunkServerIdType curChunkServerId, const CopySetInfo &info,
-    const LeaderStatInLogicalPool &stat) {
-    ChunkServerIdType selected = UNINTIALIZE_ID;
+    ChunkServerIdType curChunkServerId, const CopySetInfo& info,
+    const LeaderStatInLogicalPool& stat) {
+  ChunkServerIdType selected = UNINTIALIZE_ID;
 
-    // return uninitialize ID if current chunkserver is not the leader replica
-    bool curChunkServerIsLeader = (info.leader == curChunkServerId);
-    if (!curChunkServerIsLeader) {
-        return selected;
-    }
-
-    // also return uninitialize ID if peers number is no more than 1
-    bool copysetPeerNumMoreThanOne = (info.peers.size() > 1);
-    if (!copysetPeerNumMoreThanOne) {
-        return selected;
-    }
-
-    // the replica with least leader number
-    int possibleSelected = MinLeaderNumInCopySetPeers(info, stat);
-    if (possibleSelected == static_cast<int>(curChunkServerId)) {
-        return selected;
-    }
-
-    // determine whether the replica with least leader number is a possible target //NOLINT
-    if (!PossibleTargetPeerConfirm(curChunkServerId, possibleSelected, stat)) {
-        return selected;
-    }
-
-    selected = possibleSelected;
+  // return uninitialize ID if current chunkserver is not the leader replica
+  bool curChunkServerIsLeader = (info.leader == curChunkServerId);
+  if (!curChunkServerIsLeader) {
     return selected;
+  }
+
+  // also return uninitialize ID if peers number is no more than 1
+  bool copysetPeerNumMoreThanOne = (info.peers.size() > 1);
+  if (!copysetPeerNumMoreThanOne) {
+    return selected;
+  }
+
+  // the replica with least leader number
+  int possibleSelected = MinLeaderNumInCopySetPeers(info, stat);
+  if (possibleSelected == static_cast<int>(curChunkServerId)) {
+    return selected;
+  }
+
+  // determine whether the replica with least leader number is a possible target
+  // //NOLINT
+  if (!PossibleTargetPeerConfirm(curChunkServerId, possibleSelected, stat)) {
+    return selected;
+  }
+
+  selected = possibleSelected;
+  return selected;
 }
 
 ChunkServerIdType RapidLeaderScheduler::MinLeaderNumInCopySetPeers(
-    const CopySetInfo &info, const LeaderStatInLogicalPool &stat) {
-    int minLeaderCount = stat.leaderNumInChunkServer.at(info.peers[0].id);
-    ChunkServerIdType target = info.peers[0].id;
-    for (auto peer : info.peers) {
-        if (stat.leaderNumInChunkServer.at(peer.id) < minLeaderCount) {
-            minLeaderCount = stat.leaderNumInChunkServer.at(peer.id);
-            target = peer.id;
-        }
+    const CopySetInfo& info, const LeaderStatInLogicalPool& stat) {
+  int minLeaderCount = stat.leaderNumInChunkServer.at(info.peers[0].id);
+  ChunkServerIdType target = info.peers[0].id;
+  for (auto peer : info.peers) {
+    if (stat.leaderNumInChunkServer.at(peer.id) < minLeaderCount) {
+      minLeaderCount = stat.leaderNumInChunkServer.at(peer.id);
+      target = peer.id;
     }
+  }
 
-    return target;
+  return target;
 }
 
 bool RapidLeaderScheduler::PossibleTargetPeerConfirm(
     ChunkServerIdType origLeader, ChunkServerIdType targetLeader,
-    const LeaderStatInLogicalPool &stat) {
-    // the target chunkserver should satisfy the requrement below:
-    // 1. the difference of leader number between source and target is greater than 1. //NOLINT
-    // 2. current number of leader on a source node should be greater than the average value //NOLINT
-    int leaderNumInOriginCS = stat.leaderNumInChunkServer.at(origLeader);
-    int leaderNumInTargetCS = stat.leaderNumInChunkServer.at(targetLeader);
+    const LeaderStatInLogicalPool& stat) {
+  // the target chunkserver should satisfy the requrement below:
+  // 1. the difference of leader number between source and target is greater
+  // than 1. //NOLINT
+  // 2. current number of leader on a source node should be greater than the
+  // average value //NOLINT
+  int leaderNumInOriginCS = stat.leaderNumInChunkServer.at(origLeader);
+  int leaderNumInTargetCS = stat.leaderNumInChunkServer.at(targetLeader);
 
-    return  leaderNumInOriginCS - leaderNumInTargetCS > 1 &&
-        leaderNumInOriginCS > stat.avgLeaderNum;
+  return leaderNumInOriginCS - leaderNumInTargetCS > 1 &&
+         leaderNumInOriginCS > stat.avgLeaderNum;
 }
 
 bool RapidLeaderScheduler::GenerateLeaderChangeOperatorForCopySet(
-    const CopySetInfo &info, ChunkServerIdType targetLeader) {
-    //  create operator
-    auto op = operatorFactory.CreateTransferLeaderOperator(
-        info, targetLeader, OperatorPriority::NormalPriority);
-    op.timeLimit = std::chrono::seconds(transTimeSec_);
+    const CopySetInfo& info, ChunkServerIdType targetLeader) {
+  //  create operator
+  auto op = operatorFactory.CreateTransferLeaderOperator(
+      info, targetLeader, OperatorPriority::NormalPriority);
+  op.timeLimit = std::chrono::seconds(transTimeSec_);
 
-    // add the operator to controller
-    if (!opController_->AddOperator(op)) {
-        LOG(WARNING) << "leaderScheduler generatre operator "
-                    << op.OpToString()
-                    << " for " << info.CopySetInfoStr()
-                    << " fail, add to operator controller fail";
-        return false;
-    } else {
-        LOG(INFO) << "leaderScheduler generatre operator "
-                    << op.OpToString()
-                    << " for " << info.CopySetInfoStr() << " success";
-    }
+  // add the operator to controller
+  if (!opController_->AddOperator(op)) {
+    LOG(WARNING) << "leaderScheduler generatre operator " << op.OpToString()
+                 << " for " << info.CopySetInfoStr()
+                 << " fail, add to operator controller fail";
+    return false;
+  } else {
+    LOG(INFO) << "leaderScheduler generatre operator " << op.OpToString()
+              << " for " << info.CopySetInfoStr() << " success";
+  }
 
-    return true;
+  return true;
 }
 
 }  // namespace schedule

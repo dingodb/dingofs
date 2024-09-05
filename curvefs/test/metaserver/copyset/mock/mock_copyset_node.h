@@ -35,16 +35,16 @@ namespace copyset {
 
 class MockCopysetNode : public CopysetNode {
  public:
-    MockCopysetNode() : CopysetNode(0, 0, {}, nullptr) {}
+  MockCopysetNode() : CopysetNode(0, 0, {}, nullptr) {}
 
-    MOCK_CONST_METHOD0(GetConfEpoch, uint64_t());
-    MOCK_METHOD1(TransferLeader, butil::Status(const Peer&));
-    MOCK_METHOD2(AddPeer, void(const Peer&, braft::Closure*));
-    MOCK_METHOD2(RemovePeer, void(const Peer&, braft::Closure*));
-    MOCK_METHOD2(ChangePeers, void(const std::vector<Peer>&, braft::Closure*));
-    MOCK_CONST_METHOD1(ListPeers, void(std::vector<Peer>*));
-    MOCK_CONST_METHOD0(IsLeaderTerm, bool());
-    MOCK_METHOD1(Propose, void(const braft::Task& task));
+  MOCK_CONST_METHOD0(GetConfEpoch, uint64_t());
+  MOCK_METHOD1(TransferLeader, butil::Status(const Peer&));
+  MOCK_METHOD2(AddPeer, void(const Peer&, braft::Closure*));
+  MOCK_METHOD2(RemovePeer, void(const Peer&, braft::Closure*));
+  MOCK_METHOD2(ChangePeers, void(const std::vector<Peer>&, braft::Closure*));
+  MOCK_CONST_METHOD1(ListPeers, void(std::vector<Peer>*));
+  MOCK_CONST_METHOD0(IsLeaderTerm, bool());
+  MOCK_METHOD1(Propose, void(const braft::Task& task));
 };
 
 }  // namespace copyset

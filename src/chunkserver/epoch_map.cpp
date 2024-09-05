@@ -20,72 +20,67 @@
  * Author: xuchaojie
  */
 
-
 #include "src/chunkserver/epoch_map.h"
 
 namespace curve {
 namespace chunkserver {
 
 bool EpochMap::UpdateEpoch(uint64_t fileId, uint64_t epoch) {
-    {
-        common::ReadLockGuard rlg(mapMutex_);
-        auto it = internalMap_.find(fileId);
-        if (it != internalMap_.end()) {
-            uint64_t current = it->second.load(std::memory_order_acquire);
-            if (current > epoch) {
-                LOG(WARNING) << "UpdateEpoch failed, current: (" << fileId
-                             << ", " << current
-                             << "), target epoch: " << epoch;
-                return false;
-            }
-
-            while (!it->second.compare_exchange_strong(
-                        current, epoch, std::memory_order_acq_rel)) {
-                if (current > epoch) {
-                    LOG(WARNING) << "UpdateEpoch failed, current: (" << fileId
-                                 << ", " << current
-                                 << "), target epoch: " << epoch;
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-    {
-        common::WriteLockGuard wlg(mapMutex_);
-        auto it = internalMap_.find(fileId);
-        if (it != internalMap_.end()) {
-            if (it->second.load(std::memory_order_acquire) <= epoch) {
-                it->second.store(epoch, std::memory_order_release);
-                return true;
-            } else {
-                LOG(WARNING) << "UpdateEpoch failed, current: ("
-                    << fileId << ", "
-                    << it->second.load(std::memory_order_acquire)
-                    << "), target epoch: " << epoch;
-                return false;
-            }
-        } else {
-            internalMap_.emplace(fileId, epoch);
-            return true;
-        }
-    }
-}
-
-bool EpochMap::CheckEpoch(uint64_t fileId, uint64_t epoch) {
+  {
     common::ReadLockGuard rlg(mapMutex_);
     auto it = internalMap_.find(fileId);
     if (it != internalMap_.end()) {
-        if (it->second.load(std::memory_order_acquire) == epoch) {
-            return true;
-        } else {
-            return false;
+      uint64_t current = it->second.load(std::memory_order_acquire);
+      if (current > epoch) {
+        LOG(WARNING) << "UpdateEpoch failed, current: (" << fileId << ", "
+                     << current << "), target epoch: " << epoch;
+        return false;
+      }
+
+      while (!it->second.compare_exchange_strong(current, epoch,
+                                                 std::memory_order_acq_rel)) {
+        if (current > epoch) {
+          LOG(WARNING) << "UpdateEpoch failed, current: (" << fileId << ", "
+                       << current << "), target epoch: " << epoch;
+          return false;
         }
-    } else {
-        return true;
+      }
+      return true;
     }
+  }
+  {
+    common::WriteLockGuard wlg(mapMutex_);
+    auto it = internalMap_.find(fileId);
+    if (it != internalMap_.end()) {
+      if (it->second.load(std::memory_order_acquire) <= epoch) {
+        it->second.store(epoch, std::memory_order_release);
+        return true;
+      } else {
+        LOG(WARNING) << "UpdateEpoch failed, current: (" << fileId << ", "
+                     << it->second.load(std::memory_order_acquire)
+                     << "), target epoch: " << epoch;
+        return false;
+      }
+    } else {
+      internalMap_.emplace(fileId, epoch);
+      return true;
+    }
+  }
 }
 
+bool EpochMap::CheckEpoch(uint64_t fileId, uint64_t epoch) {
+  common::ReadLockGuard rlg(mapMutex_);
+  auto it = internalMap_.find(fileId);
+  if (it != internalMap_.end()) {
+    if (it->second.load(std::memory_order_acquire) == epoch) {
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return true;
+  }
+}
 
 }  // namespace chunkserver
 }  // namespace curve

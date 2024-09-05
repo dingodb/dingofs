@@ -30,103 +30,97 @@ namespace client {
 CurveClient::CurveClient() : fileClient_(new FileClient()) {}
 
 CurveClient::~CurveClient() {
-    delete fileClient_;
-    fileClient_ = nullptr;
+  delete fileClient_;
+  fileClient_ = nullptr;
 }
 
 int CurveClient::Init(const std::string& configPath) {
-    return fileClient_->Init(configPath);
+  return fileClient_->Init(configPath);
 }
 
-void CurveClient::UnInit() {
-    return fileClient_->UnInit();
-}
+void CurveClient::UnInit() { return fileClient_->UnInit(); }
 
 int CurveClient::IncreaseEpoch(const std::string& filename) {
-    curve::client::UserInfo userInfo;
-    std::string realFileName;
-    bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
-        filename, &realFileName, &userInfo.owner);
+  curve::client::UserInfo userInfo;
+  std::string realFileName;
+  bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
+      filename, &realFileName, &userInfo.owner);
 
-    if (!ret) {
-        LOG(ERROR) << "Get User Info from filename failed!";
-        return -LIBCURVE_ERROR::FAILED;
-    }
-    return fileClient_->IncreaseEpoch(realFileName, userInfo);
+  if (!ret) {
+    LOG(ERROR) << "Get User Info from filename failed!";
+    return -LIBCURVE_ERROR::FAILED;
+  }
+  return fileClient_->IncreaseEpoch(realFileName, userInfo);
 }
 
-int CurveClient::Open(const std::string& filename,
-                      const OpenFlags& openflags) {
-    curve::client::UserInfo userInfo;
-    std::string realFileName;
-    bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
-        filename, &realFileName, &userInfo.owner);
+int CurveClient::Open(const std::string& filename, const OpenFlags& openflags) {
+  curve::client::UserInfo userInfo;
+  std::string realFileName;
+  bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
+      filename, &realFileName, &userInfo.owner);
 
-    if (!ret) {
-        LOG(ERROR) << "Get User Info from filename failed!";
-        return -LIBCURVE_ERROR::FAILED;
-    }
+  if (!ret) {
+    LOG(ERROR) << "Get User Info from filename failed!";
+    return -LIBCURVE_ERROR::FAILED;
+  }
 
-    return fileClient_->Open(realFileName, userInfo, openflags);
+  return fileClient_->Open(realFileName, userInfo, openflags);
 }
 
 int CurveClient::ReOpen(const std::string& filename,
                         const OpenFlags& openflags) {
-    return Open(filename, openflags);
+  return Open(filename, openflags);
 }
 
-int CurveClient::Close(int fd) {
-    return fileClient_->Close(fd);
-}
+int CurveClient::Close(int fd) { return fileClient_->Close(fd); }
 
-int CurveClient::Extend(const std::string& filename,
-                        int64_t newsize) {
-    curve::client::UserInfo userInfo;
-    std::string realFileName;
-    bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
-        filename, &realFileName, &userInfo.owner);
+int CurveClient::Extend(const std::string& filename, int64_t newsize) {
+  curve::client::UserInfo userInfo;
+  std::string realFileName;
+  bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
+      filename, &realFileName, &userInfo.owner);
 
-    if (!ret) {
-        LOG(ERROR) << "Get User Info from filename failed!";
-        return -LIBCURVE_ERROR::FAILED;
-    }
+  if (!ret) {
+    LOG(ERROR) << "Get User Info from filename failed!";
+    return -LIBCURVE_ERROR::FAILED;
+  }
 
-    return fileClient_->Extend(realFileName, userInfo, newsize);
+  return fileClient_->Extend(realFileName, userInfo, newsize);
 }
 
 int64_t CurveClient::StatFile(const std::string& filename) {
-    FileStatInfo fileStatInfo;
-    curve::client::UserInfo userInfo;
-    std::string realFileName;
-    bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
-        filename, &realFileName, &userInfo.owner);
+  FileStatInfo fileStatInfo;
+  curve::client::UserInfo userInfo;
+  std::string realFileName;
+  bool ret = curve::client::ServiceHelper::GetUserInfoFromFilename(
+      filename, &realFileName, &userInfo.owner);
 
-    if (!ret) {
-        LOG(ERROR) << "Get User Info from filename failed!";
-        return -LIBCURVE_ERROR::FAILED;
-    }
+  if (!ret) {
+    LOG(ERROR) << "Get User Info from filename failed!";
+    return -LIBCURVE_ERROR::FAILED;
+  }
 
-    int rc = fileClient_->StatFile(realFileName, userInfo, &fileStatInfo);
-    return rc == LIBCURVE_ERROR::OK ? fileStatInfo.length : rc;
+  int rc = fileClient_->StatFile(realFileName, userInfo, &fileStatInfo);
+  return rc == LIBCURVE_ERROR::OK ? fileStatInfo.length : rc;
 }
 
 int CurveClient::AioRead(int fd, CurveAioContext* aioctx,
                          UserDataType dataType) {
-    return fileClient_->AioRead(fd, aioctx, dataType);
+  return fileClient_->AioRead(fd, aioctx, dataType);
 }
 
 int CurveClient::AioWrite(int fd, CurveAioContext* aioctx,
                           UserDataType dataType) {
-    return fileClient_->AioWrite(fd, aioctx, dataType);
+  return fileClient_->AioWrite(fd, aioctx, dataType);
 }
 
 int CurveClient::AioDiscard(int fd, CurveAioContext* aioctx) {
-    return fileClient_->AioDiscard(fd, aioctx);
+  return fileClient_->AioDiscard(fd, aioctx);
 }
 
 void CurveClient::SetFileClient(FileClient* client) {
-    delete fileClient_;
-    fileClient_ = client;
+  delete fileClient_;
+  fileClient_ = client;
 }
 
 }  // namespace client

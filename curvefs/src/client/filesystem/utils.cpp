@@ -20,48 +20,48 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <glog/logging.h>
-
 #include "curvefs/src/client/filesystem/utils.h"
+
+#include <glog/logging.h>
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
 bool IsDir(const InodeAttr& attr) {
-    return attr.type() == FsFileType::TYPE_DIRECTORY;
+  return attr.type() == FsFileType::TYPE_DIRECTORY;
 }
 
 bool IsS3File(const InodeAttr& attr) {
-    return attr.type() == FsFileType::TYPE_S3;
+  return attr.type() == FsFileType::TYPE_S3;
 }
 
 bool IsVolmeFile(const InodeAttr& attr) {
-    return attr.type() == FsFileType::TYPE_FILE;
+  return attr.type() == FsFileType::TYPE_FILE;
 }
 
 bool IsSymLink(const InodeAttr& attr) {
-    return attr.type() == FsFileType::TYPE_SYM_LINK;
+  return attr.type() == FsFileType::TYPE_SYM_LINK;
 }
 
 TimeSpec AttrMtime(const InodeAttr& attr) {
-    return TimeSpec(attr.mtime(), attr.mtime_ns());
+  return TimeSpec(attr.mtime(), attr.mtime_ns());
 }
 
 TimeSpec AttrCtime(const InodeAttr& attr) {
-    return TimeSpec(attr.ctime(), attr.ctime_ns());
+  return TimeSpec(attr.ctime(), attr.ctime_ns());
 }
 
 TimeSpec InodeMtime(const std::shared_ptr<InodeWrapper> inode) {
-    InodeAttr attr;
-    inode->GetInodeAttr(&attr);
-    return AttrMtime(attr);
+  InodeAttr attr;
+  inode->GetInodeAttr(&attr);
+  return AttrMtime(attr);
 }
 
 TimeSpec Now() {
-    struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
-    return TimeSpec(now.tv_sec, now.tv_nsec);
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME, &now);
+  return TimeSpec(now.tv_sec, now.tv_nsec);
 }
 
 }  // namespace filesystem

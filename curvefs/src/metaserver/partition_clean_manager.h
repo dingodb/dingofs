@@ -24,8 +24,9 @@
 
 #include <list>
 #include <memory>
-#include "curvefs/src/metaserver/partition_cleaner.h"
+
 #include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/metaserver/partition_cleaner.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -34,61 +35,59 @@ using ::curvefs::client::rpcclient::MdsClient;
 using ::curvefs::client::rpcclient::MdsClientImpl;
 
 struct PartitionCleanOption {
-    uint32_t scanPeriodSec;
-    uint32_t inodeDeletePeriodMs;
-    std::shared_ptr<S3ClientAdaptor> s3Adaptor;
-    std::shared_ptr<MdsClient> mdsClient;
+  uint32_t scanPeriodSec;
+  uint32_t inodeDeletePeriodMs;
+  std::shared_ptr<S3ClientAdaptor> s3Adaptor;
+  std::shared_ptr<MdsClient> mdsClient;
 };
 
 class PartitionCleanManager {
  public:
-    PartitionCleanManager() {
-        isStop_ = true;
-        inProcessingCleaner_ = nullptr;
-        LOG(INFO) << "PartitionCleanManager constructor.";
-    }
+  PartitionCleanManager() {
+    isStop_ = true;
+    inProcessingCleaner_ = nullptr;
+    LOG(INFO) << "PartitionCleanManager constructor.";
+  }
 
-    static PartitionCleanManager& GetInstance() {
-        static PartitionCleanManager instance_;
-        return instance_;
-    }
+  static PartitionCleanManager& GetInstance() {
+    static PartitionCleanManager instance_;
+    return instance_;
+  }
 
-    void Add(uint32_t partitionId,
-             const std::shared_ptr<PartitionCleaner>& cleaner,
-             copyset::CopysetNode *copysetNode);
+  void Add(uint32_t partitionId,
+           const std::shared_ptr<PartitionCleaner>& cleaner,
+           copyset::CopysetNode* copysetNode);
 
-    void Init(const PartitionCleanOption& option) {
-        scanPeriodSec_ = option.scanPeriodSec;
-        inodeDeletePeriodMs_ = option.inodeDeletePeriodMs;
-        S3ClientAdaptor_ = option.s3Adaptor;
-        mdsClient_ = option.mdsClient;
-        partitionCleanerCount.expose_as("partition_clean_manager_", "cleaner");
-    }
+  void Init(const PartitionCleanOption& option) {
+    scanPeriodSec_ = option.scanPeriodSec;
+    inodeDeletePeriodMs_ = option.inodeDeletePeriodMs;
+    S3ClientAdaptor_ = option.s3Adaptor;
+    mdsClient_ = option.mdsClient;
+    partitionCleanerCount.expose_as("partition_clean_manager_", "cleaner");
+  }
 
-    void Run();
+  void Run();
 
-    void Fini();
+  void Fini();
 
-    void ScanLoop();
+  void ScanLoop();
 
-    void Remove(uint32_t partitionId);
+  void Remove(uint32_t partitionId);
 
-    uint32_t GetCleanerCount() {
-        return partitionCleanerCount.get_value();
-    }
+  uint32_t GetCleanerCount() { return partitionCleanerCount.get_value(); }
 
  private:
-    std::list<std::shared_ptr<PartitionCleaner>> partitonCleanerList_;
-    std::shared_ptr<PartitionCleaner> inProcessingCleaner_;
-    std::shared_ptr<S3ClientAdaptor> S3ClientAdaptor_;
-    std::shared_ptr<MdsClient> mdsClient_;
-    uint32_t scanPeriodSec_;
-    uint32_t inodeDeletePeriodMs_;
-    Atomic<bool> isStop_;
-    Thread thread_;
-    InterruptibleSleeper sleeper_;
-    curve::common::RWLock rwLock_;
-    bvar::Adder<uint32_t> partitionCleanerCount;
+  std::list<std::shared_ptr<PartitionCleaner>> partitonCleanerList_;
+  std::shared_ptr<PartitionCleaner> inProcessingCleaner_;
+  std::shared_ptr<S3ClientAdaptor> S3ClientAdaptor_;
+  std::shared_ptr<MdsClient> mdsClient_;
+  uint32_t scanPeriodSec_;
+  uint32_t inodeDeletePeriodMs_;
+  Atomic<bool> isStop_;
+  Thread thread_;
+  InterruptibleSleeper sleeper_;
+  curve::common::RWLock rwLock_;
+  bvar::Adder<uint32_t> partitionCleanerCount;
 };
 }  // namespace metaserver
 }  // namespace curvefs

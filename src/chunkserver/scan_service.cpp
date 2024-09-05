@@ -25,13 +25,13 @@
 namespace curve {
 namespace chunkserver {
 
-void ScanServiceImpl::FollowScanMap(RpcController *controller,
-                       const FollowScanMapRequest *request,
-                       FollowScanMapResponse *response,
-                       Closure *done) {
-    (void)controller;
-    brpc::ClosureGuard doneGuard(done);
-    scanManager_->DealFollowerScanMap(*request, response);
+void ScanServiceImpl::FollowScanMap(RpcController* controller,
+                                    const FollowScanMapRequest* request,
+                                    FollowScanMapResponse* response,
+                                    Closure* done) {
+  (void)controller;
+  brpc::ClosureGuard doneGuard(done);
+  scanManager_->DealFollowerScanMap(*request, response);
 }
 }  // namespace chunkserver
 }  // namespace curve

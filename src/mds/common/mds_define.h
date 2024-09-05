@@ -98,11 +98,9 @@ const int kTopoErrCodeLogicalPoolExist = -19;
 }  // namespace mds
 }  // namespace curve
 
-
 namespace curve {
 namespace mds {
 namespace schedule {
-
 
 const int kScheduleErrCodeSuccess = 0;
 // RapidLeaderSchedule Error Code
@@ -120,12 +118,12 @@ namespace mds {
 typedef uint64_t InodeID;
 typedef uint64_t ChunkID;
 
-typedef  uint64_t SeqNum;
+typedef uint64_t SeqNum;
 
 const uint64_t kKB = 1024;
-const uint64_t kMB = 1024*kKB;
-const uint64_t kGB = 1024*kMB;
-const uint64_t kTB = 1024*kGB;
+const uint64_t kMB = 1024 * kKB;
+const uint64_t kGB = 1024 * kMB;
+const uint64_t kTB = 1024 * kGB;
 
 // curve default root path and inodeid
 const InodeID ROOTINODEID = 0;
@@ -133,8 +131,8 @@ const char ROOTFILENAME[] = "/";
 
 // directory and inodeid of the recycle bin of curvefs
 const InodeID RECYCLEBININODEID = 1;
-const std::string RECYCLEBINDIRNAME = "RecycleBin"; //NOLINT
-const std::string RECYCLEBINDIR = "/" + RECYCLEBINDIRNAME;  //NOLINT
+const std::string RECYCLEBINDIRNAME = "RecycleBin";         // NOLINT
+const std::string RECYCLEBINDIR = "/" + RECYCLEBINDIRNAME;  // NOLINT
 const InodeID USERSTARTINODEID = 2;
 
 // curve root user name
@@ -162,6 +160,5 @@ const uint32_t kInvalidPort = 0;
 
 }  // namespace mds
 }  // namespace curve
-
 
 #endif  // SRC_MDS_COMMON_MDS_DEFINE_H_

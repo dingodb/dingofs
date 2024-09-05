@@ -24,6 +24,7 @@
 #define SRC_MDS_NAMESERVER2_METRIC_H_
 
 #include <bvar/bvar.h>
+
 #include <string>
 
 namespace curve {
@@ -31,26 +32,26 @@ namespace mds {
 
 class SegmentDiscardMetric {
  public:
-    SegmentDiscardMetric()
-        : prefix_("mds_nameserver_discard"),
-          totalCleanedSegments_(prefix_ + "_total_cleaned_segment_count"),
-          pendingSegments_(prefix_ + "_pending_segment_count"),
-          totalCleanedSize_(prefix_ + "_total_cleaned_size"),
-          pendingSize_(prefix_ + "_pending_size") {}
+  SegmentDiscardMetric()
+      : prefix_("mds_nameserver_discard"),
+        totalCleanedSegments_(prefix_ + "_total_cleaned_segment_count"),
+        pendingSegments_(prefix_ + "_pending_segment_count"),
+        totalCleanedSize_(prefix_ + "_total_cleaned_size"),
+        pendingSize_(prefix_ + "_pending_size") {}
 
-    ~SegmentDiscardMetric() = default;
+  ~SegmentDiscardMetric() = default;
 
-    void OnReceiveDiscardRequest(int64_t size);
-    void OnDiscardFinish(int64_t size);
+  void OnReceiveDiscardRequest(int64_t size);
+  void OnDiscardFinish(int64_t size);
 
  public:
-    const std::string prefix_;
+  const std::string prefix_;
 
-    bvar::Adder<int64_t> totalCleanedSegments_;
-    bvar::Adder<int64_t> pendingSegments_;
+  bvar::Adder<int64_t> totalCleanedSegments_;
+  bvar::Adder<int64_t> pendingSegments_;
 
-    bvar::Adder<int64_t> totalCleanedSize_;
-    bvar::Adder<int64_t> pendingSize_;
+  bvar::Adder<int64_t> totalCleanedSize_;
+  bvar::Adder<int64_t> pendingSize_;
 };
 
 }  // namespace mds

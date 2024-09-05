@@ -30,68 +30,66 @@ namespace tools {
 namespace query {
 
 void PartitionQueryTool::PrintHelp() {
-    CurvefsToolRpc::PrintHelp();
-    std::cout << " -partitionId=" << FLAGS_partitionId
-              << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
-    std::cout << std::endl;
+  CurvefsToolRpc::PrintHelp();
+  std::cout << " -partitionId=" << FLAGS_partitionId
+            << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
+  std::cout << std::endl;
 }
 
 int PartitionQueryTool::Init() {
-    if (CurvefsToolRpc::Init() != 0) {
-        return -1;
-    }
+  if (CurvefsToolRpc::Init() != 0) {
+    return -1;
+  }
 
-    curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
+  curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
 
-    std::vector<std::string> partitionId;
-    curve::common::SplitString(FLAGS_partitionId, ",", &partitionId);
-    curvefs::mds::topology::GetCopysetOfPartitionRequest request;
-    for (auto const& i : partitionId) {
-        request.add_partitionid(std::stoul(i));
-    }
-    AddRequest(request);
+  std::vector<std::string> partitionId;
+  curve::common::SplitString(FLAGS_partitionId, ",", &partitionId);
+  curvefs::mds::topology::GetCopysetOfPartitionRequest request;
+  for (auto const& i : partitionId) {
+    request.add_partitionid(std::stoul(i));
+  }
+  AddRequest(request);
 
-    service_stub_func_ = std::bind(
-        &curvefs::mds::topology::TopologyService_Stub::GetCopysetOfPartition,
-        service_stub_.get(), std::placeholders::_1, std::placeholders::_2,
-        std::placeholders::_3, nullptr);
+  service_stub_func_ = std::bind(
+      &curvefs::mds::topology::TopologyService_Stub::GetCopysetOfPartition,
+      service_stub_.get(), std::placeholders::_1, std::placeholders::_2,
+      std::placeholders::_3, nullptr);
 
-    return 0;
+  return 0;
 }
 
 void PartitionQueryTool::AddUpdateFlags() {
-    AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
+  AddUpdateFlagsFunc(curvefs::tools::SetMdsAddr);
 }
 
 bool PartitionQueryTool::AfterSendRequestToHost(const std::string& host) {
-    if (controller_->Failed()) {
-        errorOutput_ << "send query partition request\n"
-                     << requestQueue_.front().DebugString()
-                     << "\nto mds: " << host
-                     << " failed, errorcode= " << controller_->ErrorCode()
-                     << ", error text " << controller_->ErrorText()
-                     << std::endl;
-        return false;
-    } else if (response_->statuscode() != curvefs::mds::topology::TOPO_OK) {
-        std::cerr << "query partition [" << FLAGS_partitionId
-                  << "] error, error code=" << response_->statuscode()
-                  << " error name is "
-                  << curvefs::mds::topology::TopoStatusCode_Name(
-                         response_->statuscode())
-                  << std::endl;
-    } else if (show_) {
-        std::cout << response_->DebugString() << std::endl;
-    }
-    return true;
+  if (controller_->Failed()) {
+    errorOutput_ << "send query partition request\n"
+                 << requestQueue_.front().DebugString() << "\nto mds: " << host
+                 << " failed, errorcode= " << controller_->ErrorCode()
+                 << ", error text " << controller_->ErrorText() << std::endl;
+    return false;
+  } else if (response_->statuscode() != curvefs::mds::topology::TOPO_OK) {
+    std::cerr << "query partition [" << FLAGS_partitionId
+              << "] error, error code=" << response_->statuscode()
+              << " error name is "
+              << curvefs::mds::topology::TopoStatusCode_Name(
+                     response_->statuscode())
+              << std::endl;
+  } else if (show_) {
+    std::cout << response_->DebugString() << std::endl;
+  }
+  return true;
 }
 
 bool PartitionQueryTool::CheckRequiredFlagDefault() {
-    google::CommandLineFlagInfo info;
-    if (CheckPartitionIdDefault(&info)) {
-        std::cerr << "no -partitionId=***, please use -example!" << std::endl;
-        return true;
-    }
-    return false;
+  google::CommandLineFlagInfo info;
+  if (CheckPartitionIdDefault(&info)) {
+    std::cerr << "no -partitionId=***, please use -example!" << std::endl;
+    return true;
+  }
+  return false;
 }
 
 }  // namespace query

@@ -25,13 +25,13 @@
 
 #include <brpc/channel.h>
 
-#include <thread>   // NOLINT
 #include <memory>
 #include <string>
+#include <thread>  // NOLINT
 
+#include "nebd/src/common/interrupt_sleep.h"
 #include "nebd/src/part1/nebd_common.h"
 #include "nebd/src/part1/nebd_metacache.h"
-#include "nebd/src/common/interrupt_sleep.h"
 
 namespace nebd {
 namespace client {
@@ -40,56 +40,54 @@ namespace client {
 // 定期向nebd-server发送已打开文件的心跳信息
 class HeartbeatManager {
  public:
-    explicit HeartbeatManager(std::shared_ptr<NebdClientMetaCache> metaCache);
+  explicit HeartbeatManager(std::shared_ptr<NebdClientMetaCache> metaCache);
 
-    ~HeartbeatManager() {
-       Stop();
-    }
+  ~HeartbeatManager() { Stop(); }
 
-    /**
-     * @brief: 启动心跳线程
-     */
-    void Run();
+  /**
+   * @brief: 启动心跳线程
+   */
+  void Run();
 
-    /**
-     * @brief: 停止心跳线程
-     */
-    void Stop();
+  /**
+   * @brief: 停止心跳线程
+   */
+  void Stop();
 
-    /**
-     * @brief 初始化
-     * @param heartbeatOption heartbeat 配置项
-     * @return 0 初始化成功 / -1 初始化失败
-     */
-    int Init(const HeartbeatOption& option);
+  /**
+   * @brief 初始化
+   * @param heartbeatOption heartbeat 配置项
+   * @return 0 初始化成功 / -1 初始化失败
+   */
+  int Init(const HeartbeatOption& option);
 
  private:
-    /**
-     * @brief: 心跳线程执行函数，定期发送心跳消息
-     */
-    void HeartBetaThreadFunc();
+  /**
+   * @brief: 心跳线程执行函数，定期发送心跳消息
+   */
+  void HeartBetaThreadFunc();
 
-    /**
-     * @brief: 向part2发送心跳消息，包括当前已打开的卷信息
-     */
-    void SendHeartBeat();
+  /**
+   * @brief: 向part2发送心跳消息，包括当前已打开的卷信息
+   */
+  void SendHeartBeat();
 
  private:
-    brpc::Channel channel_;
+  brpc::Channel channel_;
 
-    HeartbeatOption heartbeatOption_;
+  HeartbeatOption heartbeatOption_;
 
-    std::shared_ptr<NebdClientMetaCache>  metaCache_;
+  std::shared_ptr<NebdClientMetaCache> metaCache_;
 
-    std::thread heartbeatThread_;
-    nebd::common::InterruptibleSleeper sleeper_;
+  std::thread heartbeatThread_;
+  nebd::common::InterruptibleSleeper sleeper_;
 
-    std::atomic<bool> running_;
-    std::atomic<uint64_t> logId_;
-    // nebd version
-    std::string nebdVersion_;
-    // process id
-    int pid_;
+  std::atomic<bool> running_;
+  std::atomic<uint64_t> logId_;
+  // nebd version
+  std::string nebdVersion_;
+  // process id
+  int pid_;
 };
 
 }  // namespace client

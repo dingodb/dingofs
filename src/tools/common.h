@@ -24,8 +24,9 @@
 #define SRC_TOOLS_COMMON_H_
 
 #include <gflags/gflags.h>
-#include <string>
+
 #include <algorithm>
+#include <string>
 
 DECLARE_uint32(logicalPoolId);
 DECLARE_uint32(copysetId);

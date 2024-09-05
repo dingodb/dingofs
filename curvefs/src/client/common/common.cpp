@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur Sept 3 2021
@@ -22,60 +21,61 @@
  */
 
 #include "curvefs/src/client/common/common.h"
+
 #include "src/common/string_util.h"
 
 namespace curvefs {
 namespace client {
 namespace common {
 
-std::ostream &operator<<(std::ostream &os, MetaServerOpType optype) {
-    switch (optype) {
+std::ostream& operator<<(std::ostream& os, MetaServerOpType optype) {
+  switch (optype) {
     case MetaServerOpType::GetDentry:
-        os << "GetDentry";
-        break;
+      os << "GetDentry";
+      break;
     case MetaServerOpType::ListDentry:
-        os << "ListDentry";
-        break;
+      os << "ListDentry";
+      break;
     case MetaServerOpType::CreateDentry:
-        os << "CreateDentry";
-        break;
+      os << "CreateDentry";
+      break;
     case MetaServerOpType::DeleteDentry:
-        os << "DeleteDentry";
-        break;
+      os << "DeleteDentry";
+      break;
     case MetaServerOpType::PrepareRenameTx:
-        os << "PrepareRenameTx";
-        break;
+      os << "PrepareRenameTx";
+      break;
     case MetaServerOpType::GetInode:
-        os << "GetInode";
-        break;
+      os << "GetInode";
+      break;
     case MetaServerOpType::BatchGetInodeAttr:
-        os << "BatchGetInodeAttr";
-        break;
+      os << "BatchGetInodeAttr";
+      break;
     case MetaServerOpType::BatchGetXAttr:
-        os << "BatchGetXAttr";
-        break;
+      os << "BatchGetXAttr";
+      break;
     case MetaServerOpType::UpdateInode:
-        os << "UpdateInode";
-        break;
+      os << "UpdateInode";
+      break;
     case MetaServerOpType::CreateInode:
-        os << "CreateInode";
-        break;
+      os << "CreateInode";
+      break;
     case MetaServerOpType::DeleteInode:
-        os << "DeleteInode";
-        break;
+      os << "DeleteInode";
+      break;
     case MetaServerOpType::GetOrModifyS3ChunkInfo:
-        os << "GetOrModifyS3ChunkInfo";
-        break;
+      os << "GetOrModifyS3ChunkInfo";
+      break;
     case MetaServerOpType::GetVolumeExtent:
-        os << "GetVolumeExtent";
-        break;
+      os << "GetVolumeExtent";
+      break;
     case MetaServerOpType::UpdateVolumeExtent:
-        os << "UpdateVolumeExtent";
-        break;
+      os << "UpdateVolumeExtent";
+      break;
     default:
-        os << "Unknow opType";
-    }
-    return os;
+      os << "Unknow opType";
+  }
+  return os;
 }
 
 const char kCurveFsWarmupOpAdd[] = "add";
@@ -84,38 +84,37 @@ const char kCurveFsWarmupTypeList[] = "list";
 const char kCurveFsWarmupTypeSingle[] = "single";
 
 WarmupOpType GetWarmupOpType(const std::string& op) {
-    auto ret = WarmupOpType::kWarmupOpUnknown;
-    if (op == kCurveFsWarmupOpAdd) {
-        ret = WarmupOpType::kWarmupOpAdd;
-    }
-    if (op == kCurveFsWarmupOpQuery) {
-        ret = WarmupOpType::kWarmupOpQuery;
-    }
-    return ret;
+  auto ret = WarmupOpType::kWarmupOpUnknown;
+  if (op == kCurveFsWarmupOpAdd) {
+    ret = WarmupOpType::kWarmupOpAdd;
+  }
+  if (op == kCurveFsWarmupOpQuery) {
+    ret = WarmupOpType::kWarmupOpQuery;
+  }
+  return ret;
 }
 
 WarmupType GetWarmupType(const std::string& type) {
-    auto ret =
-        WarmupType::kWarmupTypeUnknown;
-    if (type == kCurveFsWarmupTypeList) {
-        ret = WarmupType::kWarmupTypeList;
-    } else if (type == kCurveFsWarmupTypeSingle) {
-        ret = WarmupType::kWarmupTypeSingle;
-    }
-    return ret;
+  auto ret = WarmupType::kWarmupTypeUnknown;
+  if (type == kCurveFsWarmupTypeList) {
+    ret = WarmupType::kWarmupTypeList;
+  } else if (type == kCurveFsWarmupTypeSingle) {
+    ret = WarmupType::kWarmupTypeSingle;
+  }
+  return ret;
 }
 
 const char kCurveFsWarmupStorageDisk[] = "disk";
 const char kCurveFsWarmupStorageKvclient[] = "kvclient";
 
-WarmupStorageType GetWarmupStorageType(const std::string &type) {
-    auto ret = WarmupStorageType::kWarmupStorageTypeUnknown;
-    if (type == kCurveFsWarmupStorageDisk) {
-        ret = WarmupStorageType::kWarmupStorageTypeDisk;
-    } else if (type == kCurveFsWarmupStorageKvclient) {
-        ret = WarmupStorageType::kWarmupStorageTypeKvClient;
-    }
-    return ret;
+WarmupStorageType GetWarmupStorageType(const std::string& type) {
+  auto ret = WarmupStorageType::kWarmupStorageTypeUnknown;
+  if (type == kCurveFsWarmupStorageDisk) {
+    ret = WarmupStorageType::kWarmupStorageTypeDisk;
+  } else if (type == kCurveFsWarmupStorageKvclient) {
+    ret = WarmupStorageType::kWarmupStorageTypeKvClient;
+  }
+  return ret;
 }
 
 using ::curve::common::StringToUll;
@@ -123,39 +122,38 @@ using ::curve::common::StringToUll;
 // if direction is true means '+', false means '-'
 // is direction is true, add second to first
 // if direction is false, sub second from first
-bool AddUllStringToFirst(std::string *first, uint64_t second, bool direction) {
-    uint64_t firstNum = 0;
-    uint64_t secondNum = second;
-    if (StringToUll(*first, &firstNum)) {
-        if (direction) {
-            *first = std::to_string(firstNum + secondNum);
-        } else {
-            if (firstNum < secondNum) {
-                *first = std::to_string(0);
-                LOG(WARNING) << "AddUllStringToFirst failed when minus,"
-                             << " first = " << firstNum
-                             << ", second = " << secondNum;
-                return false;
-            }
-            *first = std::to_string(firstNum - secondNum);
-        }
+bool AddUllStringToFirst(std::string* first, uint64_t second, bool direction) {
+  uint64_t firstNum = 0;
+  uint64_t secondNum = second;
+  if (StringToUll(*first, &firstNum)) {
+    if (direction) {
+      *first = std::to_string(firstNum + secondNum);
     } else {
-        LOG(ERROR) << "StringToUll failed, first = " << *first
-                   << ", second = " << second;
+      if (firstNum < secondNum) {
+        *first = std::to_string(0);
+        LOG(WARNING) << "AddUllStringToFirst failed when minus,"
+                     << " first = " << firstNum << ", second = " << secondNum;
         return false;
+      }
+      *first = std::to_string(firstNum - secondNum);
     }
-    return true;
+  } else {
+    LOG(ERROR) << "StringToUll failed, first = " << *first
+               << ", second = " << second;
+    return false;
+  }
+  return true;
 }
 
-bool AddUllStringToFirst(uint64_t *first, const std::string &second) {
-    uint64_t secondNum = 0;
-    if (StringToUll(second, &secondNum)) {
-        *first += secondNum;
-        return true;
-    }
+bool AddUllStringToFirst(uint64_t* first, const std::string& second) {
+  uint64_t secondNum = 0;
+  if (StringToUll(second, &secondNum)) {
+    *first += secondNum;
+    return true;
+  }
 
-    LOG(ERROR) << "StringToUll failed, second = " << second;
-    return false;
+  LOG(ERROR) << "StringToUll failed, second = " << second;
+  return false;
 }
 
 }  // namespace common

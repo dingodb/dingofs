@@ -24,33 +24,39 @@
 #define CURVEFS_TEST_MDS_MOCK_MOCK_METASERVER_CLIENT_H_
 
 #include <gmock/gmock.h>
+
 #include <set>
 #include <string>
+
 #include "curvefs/src/mds/metaserverclient/metaserver_client.h"
 
 namespace curvefs {
 namespace mds {
 class MockMetaserverClient : public MetaserverClient {
  public:
-    explicit MockMetaserverClient(const MetaserverOptions& option) :
-                                  MetaserverClient(option) {}
-    MOCK_METHOD2(GetLeader, FSStatusCode(const LeaderCtx &ctx,
-                                         std::string *leader));
-    MOCK_METHOD2(DeleteInode, FSStatusCode(uint32_t fsId, uint64_t inodeId));
-    MOCK_METHOD8(CreateRootInode, FSStatusCode(uint32_t fsId, uint32_t poolId,
-        uint32_t copysetId, uint32_t partitionId, uint32_t uid,
-        uint32_t gid, uint32_t mode, const std::set<std::string> &addrs));
-    MOCK_METHOD7(CreatePartition, FSStatusCode(uint32_t fsId, uint32_t poolId,
-                                 uint32_t copysetId, uint32_t partitionId,
-                                 uint64_t idStart, uint64_t idEnd,
-                                 const std::set<std::string> &addrs));
-    MOCK_METHOD3(CreateCopySet, FSStatusCode(uint32_t poolId,
-            uint32_t copysetId, const std::set<std::string> &addrs));
-    MOCK_METHOD4(DeletePartition, FSStatusCode(uint32_t poolId,
-        uint32_t copysetId, uint32_t partitionId,
-        const std::set<std::string> &addrs));
-    MOCK_METHOD3(CreateCopySetOnOneMetaserver, FSStatusCode(uint32_t poolId,
-                 uint32_t copysetId, const std::string &addr));
+  explicit MockMetaserverClient(const MetaserverOptions& option)
+      : MetaserverClient(option) {}
+  MOCK_METHOD2(GetLeader,
+               FSStatusCode(const LeaderCtx& ctx, std::string* leader));
+  MOCK_METHOD2(DeleteInode, FSStatusCode(uint32_t fsId, uint64_t inodeId));
+  MOCK_METHOD8(CreateRootInode,
+               FSStatusCode(uint32_t fsId, uint32_t poolId, uint32_t copysetId,
+                            uint32_t partitionId, uint32_t uid, uint32_t gid,
+                            uint32_t mode, const std::set<std::string>& addrs));
+  MOCK_METHOD7(CreatePartition,
+               FSStatusCode(uint32_t fsId, uint32_t poolId, uint32_t copysetId,
+                            uint32_t partitionId, uint64_t idStart,
+                            uint64_t idEnd,
+                            const std::set<std::string>& addrs));
+  MOCK_METHOD3(CreateCopySet, FSStatusCode(uint32_t poolId, uint32_t copysetId,
+                                           const std::set<std::string>& addrs));
+  MOCK_METHOD4(DeletePartition,
+               FSStatusCode(uint32_t poolId, uint32_t copysetId,
+                            uint32_t partitionId,
+                            const std::set<std::string>& addrs));
+  MOCK_METHOD3(CreateCopySetOnOneMetaserver,
+               FSStatusCode(uint32_t poolId, uint32_t copysetId,
+                            const std::string& addr));
 };
 
 }  // namespace mds

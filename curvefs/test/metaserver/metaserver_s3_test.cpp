@@ -40,55 +40,55 @@ using ::testing::SetArgPointee;
 
 class ClientS3Test : public testing::Test {
  protected:
-    ClientS3Test() {}
-    ~ClientS3Test() {}
-    virtual void SetUp() {
-        s3Adapter_ = std::make_shared<curve::common::MockS3Adapter>();
-        s3Client_ = new S3ClientImpl();
-        s3Client_->SetAdaptor(s3Adapter_);
-    }
+  ClientS3Test() {}
+  ~ClientS3Test() {}
+  virtual void SetUp() {
+    s3Adapter_ = std::make_shared<curve::common::MockS3Adapter>();
+    s3Client_ = new S3ClientImpl();
+    s3Client_->SetAdaptor(s3Adapter_);
+  }
 
-    virtual void TearDown() {
-        delete s3Client_;
-        s3Client_ = nullptr;
-    }
+  virtual void TearDown() {
+    delete s3Client_;
+    s3Client_ = nullptr;
+  }
 
  protected:
-    std::shared_ptr<curve::common::MockS3Adapter> s3Adapter_;
-    S3ClientImpl* s3Client_;
+  std::shared_ptr<curve::common::MockS3Adapter> s3Adapter_;
+  S3ClientImpl* s3Client_;
 };
 
 TEST_F(ClientS3Test, delete_object_not_exist) {
-    EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(-1));
-    EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(false));
-    int ret = s3Client_->Delete("123");
-    ASSERT_EQ(ret, 1);
+  EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(-1));
+  EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(false));
+  int ret = s3Client_->Delete("123");
+  ASSERT_EQ(ret, 1);
 }
 
 TEST_F(ClientS3Test, delete_error) {
-    EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(-1));
-    EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(true));
-    int ret = s3Client_->Delete("123");
-    ASSERT_EQ(ret, -1);
+  EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(-1));
+  EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(true));
+  int ret = s3Client_->Delete("123");
+  ASSERT_EQ(ret, -1);
 }
 
 TEST_F(ClientS3Test, delete_sucess) {
-    EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(true));
-    EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(0));
-    int ret = s3Client_->Delete("123");
-    ASSERT_EQ(ret, 0);
+  EXPECT_CALL(*s3Adapter_, ObjectExist(_)).WillRepeatedly(Return(true));
+  EXPECT_CALL(*s3Adapter_, DeleteObject(_)).WillRepeatedly(Return(0));
+  int ret = s3Client_->Delete("123");
+  ASSERT_EQ(ret, 0);
 }
 
 TEST_F(ClientS3Test, delete_batch_fail) {
-    EXPECT_CALL(*s3Adapter_, DeleteObjects(_)).WillOnce(Return(-1));
-    int ret = s3Client_->DeleteBatch({"123", "456"});
-    ASSERT_EQ(ret, -1);
+  EXPECT_CALL(*s3Adapter_, DeleteObjects(_)).WillOnce(Return(-1));
+  int ret = s3Client_->DeleteBatch({"123", "456"});
+  ASSERT_EQ(ret, -1);
 }
 
 TEST_F(ClientS3Test, delete_batch_sucess) {
-    EXPECT_CALL(*s3Adapter_, DeleteObjects(_)).WillOnce(Return(0));
-    int ret = s3Client_->DeleteBatch({"123", "456"});
-    ASSERT_EQ(ret, 0);
+  EXPECT_CALL(*s3Adapter_, DeleteObjects(_)).WillOnce(Return(0));
+  int ret = s3Client_->DeleteBatch({"123", "456"});
+  ASSERT_EQ(ret, 0);
 }
 }  // namespace metaserver
 }  // namespace curvefs

@@ -39,34 +39,30 @@ using ::curvefs::volume::WritePart;
 
 class ExtentSlice {
  public:
-    explicit ExtentSlice(uint64_t offset);
+  explicit ExtentSlice(uint64_t offset);
 
-    explicit ExtentSlice(const VolumeExtentSlice& slice);
+  explicit ExtentSlice(const VolumeExtentSlice& slice);
 
-    void DivideForWrite(uint64_t offset,
-                        uint64_t len,
-                        const char* data,
-                        std::vector<WritePart>* allocated,
-                        std::vector<AllocPart>* needAlloc) const;
+  void DivideForWrite(uint64_t offset, uint64_t len, const char* data,
+                      std::vector<WritePart>* allocated,
+                      std::vector<AllocPart>* needAlloc) const;
 
-    void DivideForRead(uint64_t offset,
-                       uint64_t len,
-                       char* data,
-                       std::vector<ReadPart>* reads,
-                       std::vector<ReadPart>* holes) const;
+  void DivideForRead(uint64_t offset, uint64_t len, char* data,
+                     std::vector<ReadPart>* reads,
+                     std::vector<ReadPart>* holes) const;
 
-    void Merge(uint64_t loffset, const PExtent& extent);
+  void Merge(uint64_t loffset, const PExtent& extent);
 
-    // mark [off ~ len] written, return whether internal state is changed or not
-    bool MarkWritten(uint64_t offset, uint64_t len);
+  // mark [off ~ len] written, return whether internal state is changed or not
+  bool MarkWritten(uint64_t offset, uint64_t len);
 
-    VolumeExtentSlice ToVolumeExtentSlice() const;
+  VolumeExtentSlice ToVolumeExtentSlice() const;
 
-    std::map<uint64_t, PExtent> GetExtentsForTesting() const;
+  std::map<uint64_t, PExtent> GetExtentsForTesting() const;
 
  private:
-    uint64_t offset_;
-    std::map<uint64_t, PExtent> extents_;
+  uint64_t offset_;
+  std::map<uint64_t, PExtent> extents_;
 };
 
 }  // namespace client

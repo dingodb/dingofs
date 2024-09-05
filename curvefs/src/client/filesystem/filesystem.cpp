@@ -321,8 +321,9 @@ CURVEFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
                  << ": attribute not found in wacther";
     return CURVEFS_ERROR::STALE;
   } else if (mtime != InodeMtime(inode)) {
-    LOG(WARNING) << "open(" << ino << "): stale file handler" << ", cache("
-                 << mtime << ") vs remote(" << InodeMtime(inode) << ")";
+    LOG(WARNING) << "open(" << ino << "): stale file handler"
+                 << ", cache(" << mtime << ") vs remote(" << InodeMtime(inode)
+                 << ")";
     return CURVEFS_ERROR::STALE;
   }
 

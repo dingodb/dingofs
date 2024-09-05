@@ -23,6 +23,7 @@
 #ifndef CURVEFS_TEST_MDS_MOCK_MOCK_CLI2_H_
 #define CURVEFS_TEST_MDS_MOCK_MOCK_CLI2_H_
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/cli2.pb.h"
 
 namespace curvefs {
@@ -31,11 +32,10 @@ namespace copyset {
 
 class MockCliService2 : public CliService2 {
  public:
-    MOCK_METHOD4(GetLeader,
-    void(::google::protobuf::RpcController* controller,
-                      const GetLeaderRequest2* request,
-                      GetLeaderResponse2* response,
-                      ::google::protobuf::Closure* done));
+  MOCK_METHOD4(GetLeader, void(::google::protobuf::RpcController* controller,
+                               const GetLeaderRequest2* request,
+                               GetLeaderResponse2* response,
+                               ::google::protobuf::Closure* done));
 };
 
 }  // namespace copyset

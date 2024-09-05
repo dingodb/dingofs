@@ -47,165 +47,159 @@ static unsigned int seed = time(nullptr);
 
 class SpaceServiceTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        service_ = absl::make_unique<SpaceServiceImpl>(&spaceMgr_);
-        server_.AddService(service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE);
+  void SetUp() override {
+    service_ = absl::make_unique<SpaceServiceImpl>(&spaceMgr_);
+    server_.AddService(service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE);
 
-        bool success = false;
-        int retry = 0;
+    bool success = false;
+    int retry = 0;
 
-        do {
-            listening_.port = rand_r(&seed) % 20000 + 20000;  // [20000 ~ 39999)
+    do {
+      listening_.port = rand_r(&seed) % 20000 + 20000;  // [20000 ~ 39999)
 
-            int ret = server_.Start(listening_, nullptr);
-            if (!ret) {
-                LOG(INFO) << "Listening on " << listening_;
-                success = true;
-                break;
-            }
-        } while (retry++ < kRetryTimes);
+      int ret = server_.Start(listening_, nullptr);
+      if (!ret) {
+        LOG(INFO) << "Listening on " << listening_;
+        success = true;
+        break;
+      }
+    } while (retry++ < kRetryTimes);
 
-        ASSERT_TRUE(success);
-    }
+    ASSERT_TRUE(success);
+  }
 
-    void TearDown() override {
-        server_.Stop(0);
-        server_.Join();
-    }
+  void TearDown() override {
+    server_.Stop(0);
+    server_.Join();
+  }
 
  protected:
-    int port_;
-    brpc::Server server_;
-    MockSpaceManager spaceMgr_;
-    std::unique_ptr<SpaceServiceImpl> service_;
-    butil::EndPoint listening_;
+  int port_;
+  brpc::Server server_;
+  MockSpaceManager spaceMgr_;
+  std::unique_ptr<SpaceServiceImpl> service_;
+  butil::EndPoint listening_;
 };
 
 TEST_F(SpaceServiceTest, FsNotFound) {
-    brpc::Channel channel;
-    ASSERT_EQ(0, channel.Init(listening_, nullptr));
+  brpc::Channel channel;
+  ASSERT_EQ(0, channel.Init(listening_, nullptr));
 
-    EXPECT_CALL(spaceMgr_, GetVolumeSpace(_))
-        .WillRepeatedly(Return(nullptr));
+  EXPECT_CALL(spaceMgr_, GetVolumeSpace(_)).WillRepeatedly(Return(nullptr));
 
-#define NotFoundTest(type)                                            \
-    do {                                                              \
-        auto request = GenerateAnDefaultInitializedMessage(           \
-            "curvefs.mds.space." STRINGIFY(type) "Request");          \
-        ASSERT_TRUE(request);                                         \
-        type##Response response;                                      \
-        brpc::Controller cntl;                                        \
-        SpaceService_Stub stub(&channel);                             \
-        stub.type(&cntl, static_cast<type##Request*>(request.get()),  \
-                  &response, nullptr);                                \
-        ASSERT_FALSE(cntl.Failed());                                  \
-        ASSERT_EQ(SpaceErrCode::SpaceErrNotFound, response.status()); \
-    } while (0)
+#define NotFoundTest(type)                                                  \
+  do {                                                                      \
+    auto request = GenerateAnDefaultInitializedMessage(                     \
+        "curvefs.mds.space." STRINGIFY(type) "Request");                    \
+    ASSERT_TRUE(request);                                                   \
+    type##Response response;                                                \
+    brpc::Controller cntl;                                                  \
+    SpaceService_Stub stub(&channel);                                       \
+    stub.type(&cntl, static_cast<type##Request*>(request.get()), &response, \
+              nullptr);                                                     \
+    ASSERT_FALSE(cntl.Failed());                                            \
+    ASSERT_EQ(SpaceErrCode::SpaceErrNotFound, response.status());           \
+  } while (0)
 
-    NotFoundTest(AllocateBlockGroup);
-    NotFoundTest(AcquireBlockGroup);
-    NotFoundTest(ReleaseBlockGroup);
-    NotFoundTest(StatSpace);
-    NotFoundTest(UpdateUsage);
+  NotFoundTest(AllocateBlockGroup);
+  NotFoundTest(AcquireBlockGroup);
+  NotFoundTest(ReleaseBlockGroup);
+  NotFoundTest(StatSpace);
+  NotFoundTest(UpdateUsage);
 
 #undef NotFoundTest
 }
 
 TEST_F(SpaceServiceTest, AllcoateBlockGroupTest) {
-    brpc::Channel channel;
-    ASSERT_EQ(0, channel.Init(listening_, nullptr));
+  brpc::Channel channel;
+  ASSERT_EQ(0, channel.Init(listening_, nullptr));
 
-    for (auto err : {SpaceErrNoSpace, SpaceOk}) {
-        MockVolumeSpace volumeSpace;
-        EXPECT_CALL(spaceMgr_, GetVolumeSpace(_))
-            .WillOnce(Return(&volumeSpace));
+  for (auto err : {SpaceErrNoSpace, SpaceOk}) {
+    MockVolumeSpace volumeSpace;
+    EXPECT_CALL(spaceMgr_, GetVolumeSpace(_)).WillOnce(Return(&volumeSpace));
 
-        EXPECT_CALL(volumeSpace, AllocateBlockGroups(_, _, _))
-            .WillOnce(Return(err));
+    EXPECT_CALL(volumeSpace, AllocateBlockGroups(_, _, _))
+        .WillOnce(Return(err));
 
-        auto request = GenerateAnDefaultInitializedMessage(
-            "curvefs.mds.space.AllocateBlockGroupRequest");
-        ASSERT_TRUE(request);
+    auto request = GenerateAnDefaultInitializedMessage(
+        "curvefs.mds.space.AllocateBlockGroupRequest");
+    ASSERT_TRUE(request);
 
-        AllocateBlockGroupResponse response;
-        brpc::Controller cntl;
-        SpaceService_Stub stub(&channel);
+    AllocateBlockGroupResponse response;
+    brpc::Controller cntl;
+    SpaceService_Stub stub(&channel);
 
-        stub.AllocateBlockGroup(
-            &cntl, static_cast<AllocateBlockGroupRequest*>(request.get()),
-            &response, nullptr);
-        ASSERT_FALSE(cntl.Failed());
-        ASSERT_EQ(err, response.status());
-    }
+    stub.AllocateBlockGroup(
+        &cntl, static_cast<AllocateBlockGroupRequest*>(request.get()),
+        &response, nullptr);
+    ASSERT_FALSE(cntl.Failed());
+    ASSERT_EQ(err, response.status());
+  }
 }
 
 TEST_F(SpaceServiceTest, AcquireBlockGroupTest) {
-    brpc::Channel channel;
-    ASSERT_EQ(0, channel.Init(listening_, nullptr));
+  brpc::Channel channel;
+  ASSERT_EQ(0, channel.Init(listening_, nullptr));
 
-    for (auto err : {SpaceErrNoSpace, SpaceOk}) {
-        MockVolumeSpace volumeSpace;
-        EXPECT_CALL(spaceMgr_, GetVolumeSpace(_))
-            .WillOnce(Return(&volumeSpace));
+  for (auto err : {SpaceErrNoSpace, SpaceOk}) {
+    MockVolumeSpace volumeSpace;
+    EXPECT_CALL(spaceMgr_, GetVolumeSpace(_)).WillOnce(Return(&volumeSpace));
 
-        EXPECT_CALL(volumeSpace, AcquireBlockGroup(_, _, _))
-            .WillOnce(
-                Invoke([err](uint64_t blockGroupOffset,
-                             const std::string& owner, BlockGroup* group) {
-                    if (err != SpaceOk) {
-                        return err;
-                    }
+    EXPECT_CALL(volumeSpace, AcquireBlockGroup(_, _, _))
+        .WillOnce(Invoke([err](uint64_t blockGroupOffset,
+                               const std::string& owner, BlockGroup* group) {
+          if (err != SpaceOk) {
+            return err;
+          }
 
-                    group->set_offset(blockGroupOffset);
-                    group->set_size(0);
-                    group->set_available(0);
-                    group->set_bitmaplocation(BitmapLocation::AtEnd);
+          group->set_offset(blockGroupOffset);
+          group->set_size(0);
+          group->set_available(0);
+          group->set_bitmaplocation(BitmapLocation::AtEnd);
 
-                    return err;
-                }));
+          return err;
+        }));
 
-        auto request = GenerateAnDefaultInitializedMessage(
-            "curvefs.mds.space.AcquireBlockGroupRequest");
-        ASSERT_TRUE(request);
+    auto request = GenerateAnDefaultInitializedMessage(
+        "curvefs.mds.space.AcquireBlockGroupRequest");
+    ASSERT_TRUE(request);
 
-        AcquireBlockGroupResponse response;
-        brpc::Controller cntl;
-        SpaceService_Stub stub(&channel);
+    AcquireBlockGroupResponse response;
+    brpc::Controller cntl;
+    SpaceService_Stub stub(&channel);
 
-        stub.AcquireBlockGroup(
-            &cntl, static_cast<AcquireBlockGroupRequest*>(request.get()),
-            &response, nullptr);
-        ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
-        ASSERT_EQ(err, response.status());
-    }
+    stub.AcquireBlockGroup(
+        &cntl, static_cast<AcquireBlockGroupRequest*>(request.get()), &response,
+        nullptr);
+    ASSERT_FALSE(cntl.Failed()) << cntl.ErrorText();
+    ASSERT_EQ(err, response.status());
+  }
 }
 
 TEST_F(SpaceServiceTest, ReleaseBlockGroupTest) {
-    brpc::Channel channel;
-    ASSERT_EQ(0, channel.Init(listening_, nullptr));
+  brpc::Channel channel;
+  ASSERT_EQ(0, channel.Init(listening_, nullptr));
 
-    for (auto err : {SpaceErrNoSpace, SpaceOk}) {
-        MockVolumeSpace volumeSpace;
-        EXPECT_CALL(spaceMgr_, GetVolumeSpace(_))
-            .WillOnce(Return(&volumeSpace));
+  for (auto err : {SpaceErrNoSpace, SpaceOk}) {
+    MockVolumeSpace volumeSpace;
+    EXPECT_CALL(spaceMgr_, GetVolumeSpace(_)).WillOnce(Return(&volumeSpace));
 
-        EXPECT_CALL(volumeSpace, ReleaseBlockGroups(_))
-            .WillOnce(Return(err));
+    EXPECT_CALL(volumeSpace, ReleaseBlockGroups(_)).WillOnce(Return(err));
 
-        auto request = GenerateAnDefaultInitializedMessage(
-            "curvefs.mds.space.ReleaseBlockGroupRequest");
-        ASSERT_TRUE(request);
+    auto request = GenerateAnDefaultInitializedMessage(
+        "curvefs.mds.space.ReleaseBlockGroupRequest");
+    ASSERT_TRUE(request);
 
-        ReleaseBlockGroupResponse response;
-        brpc::Controller cntl;
-        SpaceService_Stub stub(&channel);
+    ReleaseBlockGroupResponse response;
+    brpc::Controller cntl;
+    SpaceService_Stub stub(&channel);
 
-        stub.ReleaseBlockGroup(
-            &cntl, static_cast<ReleaseBlockGroupRequest*>(request.get()),
-            &response, nullptr);
-        ASSERT_FALSE(cntl.Failed());
-        ASSERT_EQ(err, response.status());
-    }
+    stub.ReleaseBlockGroup(
+        &cntl, static_cast<ReleaseBlockGroupRequest*>(request.get()), &response,
+        nullptr);
+    ASSERT_FALSE(cntl.Failed());
+    ASSERT_EQ(err, response.status());
+  }
 }
 
 }  // namespace space

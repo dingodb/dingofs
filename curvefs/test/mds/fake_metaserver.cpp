@@ -28,11 +28,11 @@ void FakeMetaserverImpl::GetDentry(
     const ::curvefs::metaserver::GetDentryRequest* request,
     ::curvefs::metaserver::GetDentryResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::ListDentry(
@@ -40,11 +40,11 @@ void FakeMetaserverImpl::ListDentry(
     const ::curvefs::metaserver::ListDentryRequest* request,
     ::curvefs::metaserver::ListDentryResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::CreateDentry(
@@ -52,11 +52,11 @@ void FakeMetaserverImpl::CreateDentry(
     const ::curvefs::metaserver::CreateDentryRequest* request,
     ::curvefs::metaserver::CreateDentryResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::DeleteDentry(
@@ -64,11 +64,11 @@ void FakeMetaserverImpl::DeleteDentry(
     const ::curvefs::metaserver::DeleteDentryRequest* request,
     ::curvefs::metaserver::DeleteDentryResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::GetInode(
@@ -76,11 +76,11 @@ void FakeMetaserverImpl::GetInode(
     const ::curvefs::metaserver::GetInodeRequest* request,
     ::curvefs::metaserver::GetInodeResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::CreateInode(
@@ -88,11 +88,11 @@ void FakeMetaserverImpl::CreateInode(
     const ::curvefs::metaserver::CreateInodeRequest* request,
     ::curvefs::metaserver::CreateInodeResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::CreateRootInode(
@@ -100,11 +100,11 @@ void FakeMetaserverImpl::CreateRootInode(
     const ::curvefs::metaserver::CreateRootInodeRequest* request,
     ::curvefs::metaserver::CreateRootInodeResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::UpdateInode(
@@ -112,11 +112,11 @@ void FakeMetaserverImpl::UpdateInode(
     const ::curvefs::metaserver::UpdateInodeRequest* request,
     ::curvefs::metaserver::UpdateInodeResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 
 void FakeMetaserverImpl::DeleteInode(
@@ -124,11 +124,11 @@ void FakeMetaserverImpl::DeleteInode(
     const ::curvefs::metaserver::DeleteInodeRequest* request,
     ::curvefs::metaserver::DeleteInodeResponse* response,
     ::google::protobuf::Closure* done) {
-    brpc::ClosureGuard doneGuard(done);
-    // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
-    MetaStatusCode status = MetaStatusCode::OK;
-    response->set_statuscode(status);
-    return;
+  brpc::ClosureGuard doneGuard(done);
+  // brpc::Controller* cntl = static_cast<brpc::Controller*>(controller);
+  MetaStatusCode status = MetaStatusCode::OK;
+  response->set_statuscode(status);
+  return;
 }
 }  // namespace metaserver
 }  // namespace curvefs

@@ -21,8 +21,9 @@
  */
 
 #include "curvefs/src/metaserver/trash.h"
-#include "src/common/timeutility.h"
+
 #include "curvefs/proto/mds.pb.h"
+#include "src/common/timeutility.h"
 
 using ::curve::common::TimeUtility;
 
@@ -33,218 +34,211 @@ using ::curvefs::mds::FsInfo;
 using ::curvefs::mds::FSStatusCode;
 
 void TrashOption::InitTrashOptionFromConf(std::shared_ptr<Configuration> conf) {
-    conf->GetValueFatalIfFail("trash.scanPeriodSec", &scanPeriodSec);
-    conf->GetValueFatalIfFail("trash.expiredAfterSec", &expiredAfterSec);
+  conf->GetValueFatalIfFail("trash.scanPeriodSec", &scanPeriodSec);
+  conf->GetValueFatalIfFail("trash.expiredAfterSec", &expiredAfterSec);
 }
 
-void TrashImpl::Init(const TrashOption &option) {
-    options_ = option;
-    s3Adaptor_ = option.s3Adaptor;
-    mdsClient_ = option.mdsClient;
-    isStop_ = false;
+void TrashImpl::Init(const TrashOption& option) {
+  options_ = option;
+  s3Adaptor_ = option.s3Adaptor;
+  mdsClient_ = option.mdsClient;
+  isStop_ = false;
 }
 
 void TrashImpl::Add(uint32_t fsId, uint64_t inodeId, uint32_t dtime) {
-    TrashItem item;
-    item.fsId = fsId;
-    item.inodeId = inodeId;
-    item.dtime = dtime;
+  TrashItem item;
+  item.fsId = fsId;
+  item.inodeId = inodeId;
+  item.dtime = dtime;
 
-    LockGuard lg(itemsMutex_);
-    if (isStop_) {
-        return;
-    }
-    trashItems_.push_back(item);
-    VLOG(6) << "Add Trash Item success, item.fsId = " << item.fsId
-            << ", item.inodeId = " << item.inodeId
-            << ", item.dtime = " << item.dtime;
+  LockGuard lg(itemsMutex_);
+  if (isStop_) {
+    return;
+  }
+  trashItems_.push_back(item);
+  VLOG(6) << "Add Trash Item success, item.fsId = " << item.fsId
+          << ", item.inodeId = " << item.inodeId
+          << ", item.dtime = " << item.dtime;
 }
 
 void TrashImpl::ScanTrash() {
-    LockGuard lgScan(scanMutex_);
-    std::list<TrashItem> temp;
-    {
-        LockGuard lgItems(itemsMutex_);
-        trashItems_.swap(temp);
+  LockGuard lgScan(scanMutex_);
+  std::list<TrashItem> temp;
+  {
+    LockGuard lgItems(itemsMutex_);
+    trashItems_.swap(temp);
+  }
+
+  for (auto it = temp.begin(); it != temp.end();) {
+    if (isStop_) {
+      return;
     }
-
-    for (auto it = temp.begin(); it != temp.end();) {
-        if (isStop_) {
-            return;
-        }
-        if (NeedDelete(*it)) {
-            MetaStatusCode ret = DeleteInodeAndData(*it);
-            if (MetaStatusCode::NOT_FOUND == ret) {
-                it = temp.erase(it);
-                continue;
-            }
-            if (ret != MetaStatusCode::OK) {
-                LOG(ERROR) << "DeleteInodeAndData fail, fsId = " << it->fsId
-                           << ", inodeId = " << it->inodeId
-                           << ", ret = " << MetaStatusCode_Name(ret);
-                it++;
-                continue;
-            }
-            VLOG(6) << "Trash Delete Inode, fsId = " << it->fsId
-                    << ", inodeId = " << it->inodeId;
-            it = temp.erase(it);
-        } else {
-            it++;
-        }
-    }
-
-    {
-        LockGuard lgItems(itemsMutex_);
-        trashItems_.splice(trashItems_.end(), temp);
-    }
-}
-
-void TrashImpl::StopScan() {
-    isStop_ = true;
-}
-
-bool TrashImpl::IsStop() {
-    return isStop_;
-}
-
-bool TrashImpl::NeedDelete(const TrashItem &item) {
-    uint32_t now = TimeUtility::GetTimeofDaySec();
-    Inode inode;
-    MetaStatusCode ret =
-        inodeStorage_->Get(Key4Inode(item.fsId, item.inodeId), &inode);
-    if (MetaStatusCode::NOT_FOUND == ret) {
-        LOG(WARNING) << "GetInode find inode not exist, fsId = " << item.fsId
-                     << ", inodeId = " << item.inodeId
-                     << ", ret = " << MetaStatusCode_Name(ret);
-        return true;
-    } else if (ret != MetaStatusCode::OK) {
-        LOG(WARNING) << "GetInode fail, fsId = " << item.fsId
-                     << ", inodeId = " << item.inodeId
-                     << ", ret = " << MetaStatusCode_Name(ret);
-        return false;
-    }
-
-    // for compatibility, if fs recycleTimeHour is 0, use old trash logic
-    // if fs recycleTimeHour is 0, use trash wait until expiredAfterSec
-    // if fs recycleTimeHour is not 0, return true
-    uint64_t recycleTimeHour = GetFsRecycleTimeHour(item.fsId);
-    if (recycleTimeHour == 0) {
-        return ((now - item.dtime) >= options_.expiredAfterSec);
+    if (NeedDelete(*it)) {
+      MetaStatusCode ret = DeleteInodeAndData(*it);
+      if (MetaStatusCode::NOT_FOUND == ret) {
+        it = temp.erase(it);
+        continue;
+      }
+      if (ret != MetaStatusCode::OK) {
+        LOG(ERROR) << "DeleteInodeAndData fail, fsId = " << it->fsId
+                   << ", inodeId = " << it->inodeId
+                   << ", ret = " << MetaStatusCode_Name(ret);
+        it++;
+        continue;
+      }
+      VLOG(6) << "Trash Delete Inode, fsId = " << it->fsId
+              << ", inodeId = " << it->inodeId;
+      it = temp.erase(it);
     } else {
-        return true;
+      it++;
     }
+  }
+
+  {
+    LockGuard lgItems(itemsMutex_);
+    trashItems_.splice(trashItems_.end(), temp);
+  }
+}
+
+void TrashImpl::StopScan() { isStop_ = true; }
+
+bool TrashImpl::IsStop() { return isStop_; }
+
+bool TrashImpl::NeedDelete(const TrashItem& item) {
+  uint32_t now = TimeUtility::GetTimeofDaySec();
+  Inode inode;
+  MetaStatusCode ret =
+      inodeStorage_->Get(Key4Inode(item.fsId, item.inodeId), &inode);
+  if (MetaStatusCode::NOT_FOUND == ret) {
+    LOG(WARNING) << "GetInode find inode not exist, fsId = " << item.fsId
+                 << ", inodeId = " << item.inodeId
+                 << ", ret = " << MetaStatusCode_Name(ret);
+    return true;
+  } else if (ret != MetaStatusCode::OK) {
+    LOG(WARNING) << "GetInode fail, fsId = " << item.fsId
+                 << ", inodeId = " << item.inodeId
+                 << ", ret = " << MetaStatusCode_Name(ret);
+    return false;
+  }
+
+  // for compatibility, if fs recycleTimeHour is 0, use old trash logic
+  // if fs recycleTimeHour is 0, use trash wait until expiredAfterSec
+  // if fs recycleTimeHour is not 0, return true
+  uint64_t recycleTimeHour = GetFsRecycleTimeHour(item.fsId);
+  if (recycleTimeHour == 0) {
+    return ((now - item.dtime) >= options_.expiredAfterSec);
+  } else {
+    return true;
+  }
 }
 
 uint64_t TrashImpl::GetFsRecycleTimeHour(uint32_t fsId) {
+  FsInfo fsInfo;
+  uint64_t recycleTimeHour = 0;
+  if (fsInfoMap_.find(fsId) == fsInfoMap_.end()) {
+    auto ret = mdsClient_->GetFsInfo(fsId, &fsInfo);
+    if (ret != FSStatusCode::OK) {
+      if (FSStatusCode::NOT_FOUND == ret) {
+        LOG(ERROR) << "The fs not exist, fsId = " << fsId;
+        return 0;
+      } else {
+        LOG(ERROR) << "GetFsInfo failed, FSStatusCode = " << ret
+                   << ", FSStatusCode_Name = " << FSStatusCode_Name(ret)
+                   << ", fsId = " << fsId;
+        return 0;
+      }
+    }
+    fsInfoMap_.insert({fsId, fsInfo});
+  } else {
+    fsInfo = fsInfoMap_.find(fsId)->second;
+  }
+
+  if (fsInfo.has_recycletimehour()) {
+    recycleTimeHour = fsInfo.recycletimehour();
+  } else {
+    recycleTimeHour = 0;
+  }
+  return recycleTimeHour;
+}
+
+MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
+  Inode inode;
+  MetaStatusCode ret =
+      inodeStorage_->Get(Key4Inode(item.fsId, item.inodeId), &inode);
+  if (ret != MetaStatusCode::OK) {
+    LOG(WARNING) << "GetInode fail, fsId = " << item.fsId
+                 << ", inodeId = " << item.inodeId
+                 << ", ret = " << MetaStatusCode_Name(ret);
+    return ret;
+  }
+
+  if (FsFileType::TYPE_FILE == inode.type()) {
+    // TODO(xuchaojie) : delete on volume
+  } else if (FsFileType::TYPE_S3 == inode.type()) {
+    // get s3info from mds
     FsInfo fsInfo;
-    uint64_t recycleTimeHour = 0;
-    if (fsInfoMap_.find(fsId) == fsInfoMap_.end()) {
-        auto ret = mdsClient_->GetFsInfo(fsId, &fsInfo);
-        if (ret != FSStatusCode::OK) {
-            if (FSStatusCode::NOT_FOUND == ret) {
-                LOG(ERROR) << "The fs not exist, fsId = " << fsId;
-                return 0;
-            } else {
-                LOG(ERROR)
-                    << "GetFsInfo failed, FSStatusCode = " << ret
-                    << ", FSStatusCode_Name = " << FSStatusCode_Name(ret)
-                    << ", fsId = " << fsId;
-                return 0;
-            }
-        }
-        fsInfoMap_.insert({fsId, fsInfo});
-    } else {
-        fsInfo = fsInfoMap_.find(fsId)->second;
-    }
-
-    if (fsInfo.has_recycletimehour()) {
-        recycleTimeHour = fsInfo.recycletimehour();
-    } else {
-        recycleTimeHour = 0;
-    }
-    return recycleTimeHour;
-}
-
-MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem &item) {
-    Inode inode;
-    MetaStatusCode ret =
-        inodeStorage_->Get(Key4Inode(item.fsId, item.inodeId), &inode);
-    if (ret != MetaStatusCode::OK) {
-        LOG(WARNING) << "GetInode fail, fsId = " << item.fsId
-                     << ", inodeId = " << item.inodeId
-                     << ", ret = " << MetaStatusCode_Name(ret);
-        return ret;
-    }
-
-    if (FsFileType::TYPE_FILE == inode.type()) {
-        // TODO(xuchaojie) : delete on volume
-    } else if (FsFileType::TYPE_S3 == inode.type()) {
-        // get s3info from mds
-        FsInfo fsInfo;
-        if (fsInfoMap_.find(item.fsId) == fsInfoMap_.end()) {
-            auto ret = mdsClient_->GetFsInfo(item.fsId, &fsInfo);
-            if (ret != FSStatusCode::OK) {
-                if (FSStatusCode::NOT_FOUND == ret) {
-                    LOG(ERROR) << "The fsName not exist, fsId = " << item.fsId;
-                    return MetaStatusCode::S3_DELETE_ERR;
-                } else {
-                    LOG(ERROR)
-                        << "GetFsInfo failed, FSStatusCode = " << ret
-                        << ", FSStatusCode_Name = " << FSStatusCode_Name(ret)
-                        << ", fsId = " << item.fsId;
-                    return MetaStatusCode::S3_DELETE_ERR;
-                }
-            }
-            fsInfoMap_.insert({item.fsId, fsInfo});
+    if (fsInfoMap_.find(item.fsId) == fsInfoMap_.end()) {
+      auto ret = mdsClient_->GetFsInfo(item.fsId, &fsInfo);
+      if (ret != FSStatusCode::OK) {
+        if (FSStatusCode::NOT_FOUND == ret) {
+          LOG(ERROR) << "The fsName not exist, fsId = " << item.fsId;
+          return MetaStatusCode::S3_DELETE_ERR;
         } else {
-            fsInfo = fsInfoMap_.find(item.fsId)->second;
+          LOG(ERROR) << "GetFsInfo failed, FSStatusCode = " << ret
+                     << ", FSStatusCode_Name = " << FSStatusCode_Name(ret)
+                     << ", fsId = " << item.fsId;
+          return MetaStatusCode::S3_DELETE_ERR;
         }
-        const auto& s3Info = fsInfo.detail().s3info();
-        // reinit s3 adaptor
-        S3ClientAdaptorOption clientAdaptorOption;
-        s3Adaptor_->GetS3ClientAdaptorOption(&clientAdaptorOption);
-        clientAdaptorOption.blockSize = s3Info.blocksize();
-        clientAdaptorOption.chunkSize = s3Info.chunksize();
-        clientAdaptorOption.objectPrefix = s3Info.objectprefix();
-        s3Adaptor_->Reinit(clientAdaptorOption, s3Info.ak(), s3Info.sk(),
-            s3Info.endpoint(), s3Info.bucketname());
-        ret = inodeStorage_->PaddingInodeS3ChunkInfo(item.fsId,
-          item.inodeId, inode.mutable_s3chunkinfomap());
-        if (ret != MetaStatusCode::OK) {
-            LOG(ERROR) << "GetInode chunklist fail, fsId = " << item.fsId
-                << ", inodeId = " << item.inodeId
-                << ", retCode = " << MetaStatusCode_Name(ret);
-            return ret;
-        }
-        if (inode.s3chunkinfomap().empty()) {
-            LOG(WARNING) << "GetInode chunklist empty, fsId = " << item.fsId
-                << ", inodeId = " << item.inodeId;
-            return MetaStatusCode::NOT_FOUND;
-        }
-        VLOG(9) << "DeleteInodeAndData, inode: "
-            << inode.ShortDebugString();
-        int retVal = s3Adaptor_->Delete(inode);
-        if (retVal != 0) {
-            LOG(ERROR) << "S3ClientAdaptor delete s3 data failed"
-                       << ", ret = " << retVal << ", fsId = " << item.fsId
-                       << ", inodeId = " << item.inodeId;
-            return MetaStatusCode::S3_DELETE_ERR;
-        }
+      }
+      fsInfoMap_.insert({item.fsId, fsInfo});
+    } else {
+      fsInfo = fsInfoMap_.find(item.fsId)->second;
     }
-    ret = inodeStorage_->Delete(Key4Inode(item.fsId, item.inodeId));
-    if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
-        LOG(ERROR) << "Delete Inode fail, fsId = " << item.fsId
-                   << ", inodeId = " << item.inodeId
-                   << ", ret = " << MetaStatusCode_Name(ret);
-        return ret;
+    const auto& s3Info = fsInfo.detail().s3info();
+    // reinit s3 adaptor
+    S3ClientAdaptorOption clientAdaptorOption;
+    s3Adaptor_->GetS3ClientAdaptorOption(&clientAdaptorOption);
+    clientAdaptorOption.blockSize = s3Info.blocksize();
+    clientAdaptorOption.chunkSize = s3Info.chunksize();
+    clientAdaptorOption.objectPrefix = s3Info.objectprefix();
+    s3Adaptor_->Reinit(clientAdaptorOption, s3Info.ak(), s3Info.sk(),
+                       s3Info.endpoint(), s3Info.bucketname());
+    ret = inodeStorage_->PaddingInodeS3ChunkInfo(
+        item.fsId, item.inodeId, inode.mutable_s3chunkinfomap());
+    if (ret != MetaStatusCode::OK) {
+      LOG(ERROR) << "GetInode chunklist fail, fsId = " << item.fsId
+                 << ", inodeId = " << item.inodeId
+                 << ", retCode = " << MetaStatusCode_Name(ret);
+      return ret;
     }
-    return MetaStatusCode::OK;
+    if (inode.s3chunkinfomap().empty()) {
+      LOG(WARNING) << "GetInode chunklist empty, fsId = " << item.fsId
+                   << ", inodeId = " << item.inodeId;
+      return MetaStatusCode::NOT_FOUND;
+    }
+    VLOG(9) << "DeleteInodeAndData, inode: " << inode.ShortDebugString();
+    int retVal = s3Adaptor_->Delete(inode);
+    if (retVal != 0) {
+      LOG(ERROR) << "S3ClientAdaptor delete s3 data failed"
+                 << ", ret = " << retVal << ", fsId = " << item.fsId
+                 << ", inodeId = " << item.inodeId;
+      return MetaStatusCode::S3_DELETE_ERR;
+    }
+  }
+  ret = inodeStorage_->Delete(Key4Inode(item.fsId, item.inodeId));
+  if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
+    LOG(ERROR) << "Delete Inode fail, fsId = " << item.fsId
+               << ", inodeId = " << item.inodeId
+               << ", ret = " << MetaStatusCode_Name(ret);
+    return ret;
+  }
+  return MetaStatusCode::OK;
 }
 
-void TrashImpl::ListItems(std::list<TrashItem> *items) {
-    LockGuard lgScan(scanMutex_);
-    LockGuard lgItems(itemsMutex_);
-    *items = trashItems_;
+void TrashImpl::ListItems(std::list<TrashItem>* items) {
+  LockGuard lgScan(scanMutex_);
+  LockGuard lgItems(itemsMutex_);
+  *items = trashItems_;
 }
 
 }  // namespace metaserver

@@ -45,19 +45,18 @@ namespace space {
 
 class AbstractVolumeSpace {
  public:
-    virtual ~AbstractVolumeSpace() = default;
+  virtual ~AbstractVolumeSpace() = default;
 
-    virtual SpaceErrCode AllocateBlockGroups(
-        uint32_t count,
-        const std::string& owner,
-        std::vector<BlockGroup>* blockGroups) = 0;
+  virtual SpaceErrCode AllocateBlockGroups(
+      uint32_t count, const std::string& owner,
+      std::vector<BlockGroup>* blockGroups) = 0;
 
-    virtual SpaceErrCode AcquireBlockGroup(uint64_t blockGroupOffset,
-                                           const std::string& owner,
-                                           BlockGroup* group) = 0;
+  virtual SpaceErrCode AcquireBlockGroup(uint64_t blockGroupOffset,
+                                         const std::string& owner,
+                                         BlockGroup* group) = 0;
 
-    virtual SpaceErrCode ReleaseBlockGroups(
-        const std::vector<BlockGroup>& blockGroups) = 0;
+  virtual SpaceErrCode ReleaseBlockGroups(
+      const std::vector<BlockGroup>& blockGroups) = 0;
 };
 
 using ::curvefs::common::BitmapLocation;
@@ -65,118 +64,112 @@ using ::curvefs::common::Volume;
 
 class VolumeSpace final : public AbstractVolumeSpace {
  public:
-    static std::unique_ptr<VolumeSpace> Create(uint32_t fsId,
-                                               const Volume& volume,
-                                               BlockGroupStorage* storage,
-                                               FsStorage* fsStorage);
+  static std::unique_ptr<VolumeSpace> Create(uint32_t fsId,
+                                             const Volume& volume,
+                                             BlockGroupStorage* storage,
+                                             FsStorage* fsStorage);
 
-    VolumeSpace(const VolumeSpace&) = delete;
-    VolumeSpace& operator=(const VolumeSpace&) = delete;
+  VolumeSpace(const VolumeSpace&) = delete;
+  VolumeSpace& operator=(const VolumeSpace&) = delete;
 
-    /**
-     * @brief Allocate block groups
-     */
-    SpaceErrCode AllocateBlockGroups(
-        uint32_t count,
-        const std::string& owner,
-        std::vector<BlockGroup>* blockGroups) override;
+  /**
+   * @brief Allocate block groups
+   */
+  SpaceErrCode AllocateBlockGroups(
+      uint32_t count, const std::string& owner,
+      std::vector<BlockGroup>* blockGroups) override;
 
-    /**
-     * @brief Acquire a designated block group by offset
-     */
-    SpaceErrCode AcquireBlockGroup(uint64_t blockGroupOffset,
-                                   const std::string& owner,
-                                   BlockGroup* group) override;
+  /**
+   * @brief Acquire a designated block group by offset
+   */
+  SpaceErrCode AcquireBlockGroup(uint64_t blockGroupOffset,
+                                 const std::string& owner,
+                                 BlockGroup* group) override;
 
-    /**
-     * @brief Release block groups
-     */
-    SpaceErrCode ReleaseBlockGroups(
-        const std::vector<BlockGroup>& blockGroups) override;
+  /**
+   * @brief Release block groups
+   */
+  SpaceErrCode ReleaseBlockGroups(
+      const std::vector<BlockGroup>& blockGroups) override;
 
-    /**
-     * @brief Remove all block groups and persistent records that belong to
-     *        current volume
-     * @return return SpaceOk if success, otherwise return error code
-     */
-    SpaceErrCode RemoveAllBlockGroups();
-
- private:
-    VolumeSpace(uint32_t fsId,
-                Volume volume,
-                BlockGroupStorage* storage,
-                FsStorage* fsStorage);
+  /**
+   * @brief Remove all block groups and persistent records that belong to
+   *        current volume
+   * @return return SpaceOk if success, otherwise return error code
+   */
+  SpaceErrCode RemoveAllBlockGroups();
 
  private:
-    SpaceErrCode AllocateBlockGroupsInternal(
-        uint32_t count,
-        const std::string& owner,
-        std::vector<BlockGroup>* blockGroups);
+  VolumeSpace(uint32_t fsId, Volume volume, BlockGroupStorage* storage,
+              FsStorage* fsStorage);
 
-    uint32_t AllocateFromAvailableGroups(uint32_t count,
+ private:
+  SpaceErrCode AllocateBlockGroupsInternal(
+      uint32_t count, const std::string& owner,
+      std::vector<BlockGroup>* blockGroups);
+
+  uint32_t AllocateFromAvailableGroups(uint32_t count, const std::string& owner,
+                                       std::vector<BlockGroup>* groups);
+
+  uint32_t AllocateFromCleanGroups(uint32_t count, const std::string& owner,
+                                   std::vector<BlockGroup>* groups);
+
+  SpaceErrCode AcquireBlockGroupInternal(uint64_t blockGroupOffset,
                                          const std::string& owner,
-                                         std::vector<BlockGroup>* groups);
+                                         BlockGroup* group);
 
-    uint32_t AllocateFromCleanGroups(uint32_t count,
-                                     const std::string& owner,
-                                     std::vector<BlockGroup>* groups);
+  SpaceErrCode ExtendVolume();
 
-    SpaceErrCode AcquireBlockGroupInternal(uint64_t blockGroupOffset,
-                                           const std::string& owner,
-                                           BlockGroup* group);
+  bool UpdateFsInfo(uint64_t origin, uint64_t extended);
 
-    SpaceErrCode ExtendVolume();
-
-    bool UpdateFsInfo(uint64_t origin, uint64_t extended);
-
-    void AddCleanGroups(uint64_t origin, uint64_t extended);
+  void AddCleanGroups(uint64_t origin, uint64_t extended);
 
  private:
-    // persist block group to backend storage
-    SpaceErrCode PersistBlockGroup(const BlockGroup& group);
-    SpaceErrCode PersistBlockGroups(const std::vector<BlockGroup>& blockGroups);
+  // persist block group to backend storage
+  SpaceErrCode PersistBlockGroup(const BlockGroup& group);
+  SpaceErrCode PersistBlockGroups(const std::vector<BlockGroup>& blockGroups);
 
-    // remove corresponding block group from backend storage
-    SpaceErrCode ClearBlockGroup(const BlockGroup& group);
+  // remove corresponding block group from backend storage
+  SpaceErrCode ClearBlockGroup(const BlockGroup& group);
 
  private:
-    FRIEND_TEST(VolumeSpaceTest, TestAutoExtendVolumeSuccess);
+  FRIEND_TEST(VolumeSpaceTest, TestAutoExtendVolumeSuccess);
 
-    const uint32_t fsId_;
-    Volume volume_;
+  const uint32_t fsId_;
+  Volume volume_;
 
-    mutable bthread::Mutex mtx_;
+  mutable bthread::Mutex mtx_;
 
-    // block groups are divided into three types
-    // 1. allocated
-    //    these block groups are now owned by clients(curve-fuse or
-    //    curvefs-metaserver), these block groups are forbidden to reallocate to
-    //    other clients.
-    //    allocated block groups are persisted into storage.
-    // 2. available
-    //    these block groups had been used by some clients, but now they don't
-    //    have owners, and their space is partial used. so they can be
-    //    reallocated to other clients.
-    //    available block groups are persisted into storage, but doesn't have to
-    //    do this, we persist these block groups for two reasons, first, we can
-    //    statistics space usage more convenient, second is we can reallocate
-    //    these block groups to its previous owner.
-    // 3. clean
-    //    these block groups' space is never used, and they can be allocated to
-    //    other clients.
+  // block groups are divided into three types
+  // 1. allocated
+  //    these block groups are now owned by clients(curve-fuse or
+  //    curvefs-metaserver), these block groups are forbidden to reallocate to
+  //    other clients.
+  //    allocated block groups are persisted into storage.
+  // 2. available
+  //    these block groups had been used by some clients, but now they don't
+  //    have owners, and their space is partial used. so they can be
+  //    reallocated to other clients.
+  //    available block groups are persisted into storage, but doesn't have to
+  //    do this, we persist these block groups for two reasons, first, we can
+  //    statistics space usage more convenient, second is we can reallocate
+  //    these block groups to its previous owner.
+  // 3. clean
+  //    these block groups' space is never used, and they can be allocated to
+  //    other clients.
 
-    // key is block group offset
-    std::unordered_map<uint64_t, BlockGroup> allocatedGroups_;
+  // key is block group offset
+  std::unordered_map<uint64_t, BlockGroup> allocatedGroups_;
 
-    // key is block group offset
-    std::unordered_map<uint64_t, BlockGroup> availableGroups_;
+  // key is block group offset
+  std::unordered_map<uint64_t, BlockGroup> availableGroups_;
 
-    // stores clean block groups' offset
-    std::unordered_set<uint64_t> cleanGroups_;
+  // stores clean block groups' offset
+  std::unordered_set<uint64_t> cleanGroups_;
 
-    BlockGroupStorage* storage_;
+  BlockGroupStorage* storage_;
 
-    FsStorage* fsStorage_;
+  FsStorage* fsStorage_;
 };
 
 // Calculate extended size based on origin with factor, and the result size is

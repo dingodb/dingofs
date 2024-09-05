@@ -26,16 +26,16 @@ namespace curve {
 namespace mds {
 
 void SegmentDiscardMetric::OnReceiveDiscardRequest(int64_t size) {
-    pendingSegments_ << 1;
-    pendingSize_ << size;
+  pendingSegments_ << 1;
+  pendingSize_ << size;
 }
 
 void SegmentDiscardMetric::OnDiscardFinish(int64_t size) {
-    pendingSegments_ << -1;
-    pendingSize_ << -size;
+  pendingSegments_ << -1;
+  pendingSize_ << -size;
 
-    totalCleanedSegments_ << 1;
-    totalCleanedSize_ << size;
+  totalCleanedSegments_ << 1;
+  totalCleanedSize_ << size;
 }
 
 }  // namespace mds

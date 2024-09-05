@@ -20,16 +20,18 @@
  * Author: charisu
  */
 
-#include <gtest/gtest.h>
 #include "src/tools/schedule_tool.h"
+
+#include <gtest/gtest.h>
+
 #include "test/tools/mock/mock_mds_client.h"
 
-using ::testing::_;
-using ::testing::Return;
-using ::testing::DoAll;
-using ::testing::SetArgPointee;
-using curve::mds::topology::LogicalPoolType;
 using curve::mds::topology::AllocateStatus;
+using curve::mds::topology::LogicalPoolType;
+using ::testing::_;
+using ::testing::DoAll;
+using ::testing::Return;
+using ::testing::SetArgPointee;
 
 DECLARE_int32(logical_pool_id);
 DECLARE_bool(scheduleAll);
@@ -39,70 +41,61 @@ namespace tool {
 
 class ScheduleToolTest : public ::testing::Test {
  protected:
-    void SetUp() {
-        client_ = std::make_shared<curve::tool::MockMDSClient>();
-    }
-    void TearDown() {
-        client_ = nullptr;
-    }
+  void SetUp() { client_ = std::make_shared<curve::tool::MockMDSClient>(); }
+  void TearDown() { client_ = nullptr; }
 
-    void GetLogicalPoolForTest(PoolIdType id,
-                        curve::mds::topology::LogicalPoolInfo *lpInfo) {
-        lpInfo->set_logicalpoolid(id);
-        lpInfo->set_logicalpoolname("defaultLogicalPool");
-        lpInfo->set_physicalpoolid(1);
-        lpInfo->set_type(LogicalPoolType::PAGEFILE);
-        lpInfo->set_createtime(1574218021);
-        lpInfo->set_redundanceandplacementpolicy(
-            "{\"zoneNum\": 3, \"copysetNum\": 4000, \"replicaNum\": 3}");
-        lpInfo->set_userpolicy("{\"policy\": 1}");
-        lpInfo->set_allocatestatus(AllocateStatus::ALLOW);
-    }
+  void GetLogicalPoolForTest(PoolIdType id,
+                             curve::mds::topology::LogicalPoolInfo* lpInfo) {
+    lpInfo->set_logicalpoolid(id);
+    lpInfo->set_logicalpoolname("defaultLogicalPool");
+    lpInfo->set_physicalpoolid(1);
+    lpInfo->set_type(LogicalPoolType::PAGEFILE);
+    lpInfo->set_createtime(1574218021);
+    lpInfo->set_redundanceandplacementpolicy(
+        "{\"zoneNum\": 3, \"copysetNum\": 4000, \"replicaNum\": 3}");
+    lpInfo->set_userpolicy("{\"policy\": 1}");
+    lpInfo->set_allocatestatus(AllocateStatus::ALLOW);
+  }
 
-    std::shared_ptr<curve::tool::MockMDSClient> client_;
+  std::shared_ptr<curve::tool::MockMDSClient> client_;
 };
 
 TEST_F(ScheduleToolTest, ScheduleAll) {
-    ScheduleTool scheduleTool(client_);
-    std::vector<LogicalPoolInfo> pools;
-    for (int i = 1; i <= 3; ++i) {
-        LogicalPoolInfo pool;
-        GetLogicalPoolForTest(i, &pool);
-        pools.emplace_back(pool);
-    }
-    EXPECT_CALL(*client_, Init(_))
-        .Times(1)
-        .WillOnce(Return(0));
-    EXPECT_CALL(*client_, ListLogicalPoolsInCluster(_))
-        .Times(1)
-        .WillOnce(DoAll(SetArgPointee<0>(pools),
-                        Return(0)));
-    EXPECT_CALL(*client_, RapidLeaderSchedule(_))
-        .Times(3)
-        .WillOnce(Return(-1))
-        .WillRepeatedly(Return(0));
-    // common
-    ASSERT_EQ(-1, scheduleTool.RunCommand(kRapidLeaderSchedule));
+  ScheduleTool scheduleTool(client_);
+  std::vector<LogicalPoolInfo> pools;
+  for (int i = 1; i <= 3; ++i) {
+    LogicalPoolInfo pool;
+    GetLogicalPoolForTest(i, &pool);
+    pools.emplace_back(pool);
+  }
+  EXPECT_CALL(*client_, Init(_)).Times(1).WillOnce(Return(0));
+  EXPECT_CALL(*client_, ListLogicalPoolsInCluster(_))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<0>(pools), Return(0)));
+  EXPECT_CALL(*client_, RapidLeaderSchedule(_))
+      .Times(3)
+      .WillOnce(Return(-1))
+      .WillRepeatedly(Return(0));
+  // common
+  ASSERT_EQ(-1, scheduleTool.RunCommand(kRapidLeaderSchedule));
 }
 
 TEST_F(ScheduleToolTest, ScheduleOne) {
-    ScheduleTool scheduleTool(client_);
-    ASSERT_TRUE(scheduleTool.SupportCommand(kRapidLeaderSchedule));
-    ASSERT_FALSE(scheduleTool.SupportCommand("wrong-command"));
-    scheduleTool.PrintHelp(kRapidLeaderSchedule);
-    scheduleTool.PrintHelp("wrong-command");
-    EXPECT_CALL(*client_, Init(_))
-        .Times(2)
-        .WillRepeatedly(Return(0));
-    EXPECT_CALL(*client_, RapidLeaderSchedule(_))
-        .Times(2)
-        .WillOnce(Return(0))
-        .WillOnce(Return(-1));
-    FLAGS_scheduleAll = false;
-    // common
-    ASSERT_EQ(0, scheduleTool.RunCommand(kRapidLeaderSchedule));
-    // rapid leader schedule fail
-    ASSERT_EQ(-1, scheduleTool.RunCommand(kRapidLeaderSchedule));
+  ScheduleTool scheduleTool(client_);
+  ASSERT_TRUE(scheduleTool.SupportCommand(kRapidLeaderSchedule));
+  ASSERT_FALSE(scheduleTool.SupportCommand("wrong-command"));
+  scheduleTool.PrintHelp(kRapidLeaderSchedule);
+  scheduleTool.PrintHelp("wrong-command");
+  EXPECT_CALL(*client_, Init(_)).Times(2).WillRepeatedly(Return(0));
+  EXPECT_CALL(*client_, RapidLeaderSchedule(_))
+      .Times(2)
+      .WillOnce(Return(0))
+      .WillOnce(Return(-1));
+  FLAGS_scheduleAll = false;
+  // common
+  ASSERT_EQ(0, scheduleTool.RunCommand(kRapidLeaderSchedule));
+  // rapid leader schedule fail
+  ASSERT_EQ(-1, scheduleTool.RunCommand(kRapidLeaderSchedule));
 }
 
 }  // namespace tool

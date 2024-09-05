@@ -30,210 +30,209 @@ namespace curvefs {
 namespace client {
 
 TEST(ExtentCacheGetDirtyExtentTest, EmptyTest) {
-    ExtentCache cache;
-    auto pb = cache.GetDirtyExtents();
-    ASSERT_TRUE(pb.slices().empty());
+  ExtentCache cache;
+  auto pb = cache.GetDirtyExtents();
+  ASSERT_TRUE(pb.slices().empty());
 }
 
 TEST(ExtentCacheGetDirtyExtentTest, Case1) {
-    for (auto written : {true, false}) {
-        ExtentCache cache;
-
-        PExtent pext;
-        pext.len = 1 * kMiB;
-        pext.pOffset = 2 * kMiB;
-        pext.UnWritten = !written;
-
-        cache.Merge(4 * kMiB, pext);
-
-        auto pb = cache.GetDirtyExtents();
-        ASSERT_EQ(1, pb.slices().size());
-
-        const auto& slice = pb.slices(0);
-
-        ASSERT_EQ(1, slice.extents().size());
-
-        const auto& first = slice.extents(0);
-        ASSERT_EQ(1 * kMiB, first.length());
-        ASSERT_EQ(2 * kMiB, first.volumeoffset());
-        ASSERT_EQ(4 * kMiB, first.fsoffset());
-        ASSERT_EQ(written, first.isused());
-    }
-}
-
-
-// |----|----|----|----|
-//  ^^^^      ^^^^
-// written   written
-TEST(ExtentCacheGetDirtyExtentTest, Case2) {
+  for (auto written : {true, false}) {
     ExtentCache cache;
 
     PExtent pext;
-    pext.len = 4 * kMiB;
-    pext.pOffset = 0 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(0 * kMiB, pext);
+    pext.len = 1 * kMiB;
+    pext.pOffset = 2 * kMiB;
+    pext.UnWritten = !written;
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 4 * kMiB;
-    pext.UnWritten = true;
     cache.Merge(4 * kMiB, pext);
-
-    pext.len = 4 * kMiB;
-    pext.pOffset = 8 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(8 * kMiB, pext);
-
-    pext.len = 4 * kMiB;
-    pext.pOffset = 12 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(12 * kMiB, pext);
-
-    cache.MarkWritten(0 * kMiB, 4 * kMiB);
-    cache.MarkWritten(8 * kMiB, 4 * kMiB);
 
     auto pb = cache.GetDirtyExtents();
     ASSERT_EQ(1, pb.slices().size());
 
     const auto& slice = pb.slices(0);
 
-    ASSERT_EQ(4, slice.extents_size());
+    ASSERT_EQ(1, slice.extents().size());
 
-    auto& first = slice.extents(0);
-    auto& second = slice.extents(1);
-    auto& third = slice.extents(2);
-    auto& fourth = slice.extents(3);
+    const auto& first = slice.extents(0);
+    ASSERT_EQ(1 * kMiB, first.length());
+    ASSERT_EQ(2 * kMiB, first.volumeoffset());
+    ASSERT_EQ(4 * kMiB, first.fsoffset());
+    ASSERT_EQ(written, first.isused());
+  }
+}
 
-    ASSERT_EQ(4 * kMiB, first.length());
-    ASSERT_EQ(0 * kMiB, first.volumeoffset());
-    ASSERT_EQ(0 * kMiB, first.fsoffset());
-    ASSERT_EQ(true, first.isused());
+// |----|----|----|----|
+//  ^^^^      ^^^^
+// written   written
+TEST(ExtentCacheGetDirtyExtentTest, Case2) {
+  ExtentCache cache;
 
-    ASSERT_EQ(4 * kMiB, second.length());
-    ASSERT_EQ(4 * kMiB, second.volumeoffset());
-    ASSERT_EQ(4 * kMiB, second.fsoffset());
-    ASSERT_EQ(false, second.isused());
+  PExtent pext;
+  pext.len = 4 * kMiB;
+  pext.pOffset = 0 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(0 * kMiB, pext);
 
-    ASSERT_EQ(4 * kMiB, third.length());
-    ASSERT_EQ(8 * kMiB, third.volumeoffset());
-    ASSERT_EQ(8 * kMiB, third.fsoffset());
-    ASSERT_EQ(true, third.isused());
+  pext.len = 4 * kMiB;
+  pext.pOffset = 4 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(4 * kMiB, pext);
 
-    ASSERT_EQ(4 * kMiB, fourth.length());
-    ASSERT_EQ(12 * kMiB, fourth.volumeoffset());
-    ASSERT_EQ(12 * kMiB, fourth.fsoffset());
-    ASSERT_EQ(false, fourth.isused());
+  pext.len = 4 * kMiB;
+  pext.pOffset = 8 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(8 * kMiB, pext);
+
+  pext.len = 4 * kMiB;
+  pext.pOffset = 12 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(12 * kMiB, pext);
+
+  cache.MarkWritten(0 * kMiB, 4 * kMiB);
+  cache.MarkWritten(8 * kMiB, 4 * kMiB);
+
+  auto pb = cache.GetDirtyExtents();
+  ASSERT_EQ(1, pb.slices().size());
+
+  const auto& slice = pb.slices(0);
+
+  ASSERT_EQ(4, slice.extents_size());
+
+  auto& first = slice.extents(0);
+  auto& second = slice.extents(1);
+  auto& third = slice.extents(2);
+  auto& fourth = slice.extents(3);
+
+  ASSERT_EQ(4 * kMiB, first.length());
+  ASSERT_EQ(0 * kMiB, first.volumeoffset());
+  ASSERT_EQ(0 * kMiB, first.fsoffset());
+  ASSERT_EQ(true, first.isused());
+
+  ASSERT_EQ(4 * kMiB, second.length());
+  ASSERT_EQ(4 * kMiB, second.volumeoffset());
+  ASSERT_EQ(4 * kMiB, second.fsoffset());
+  ASSERT_EQ(false, second.isused());
+
+  ASSERT_EQ(4 * kMiB, third.length());
+  ASSERT_EQ(8 * kMiB, third.volumeoffset());
+  ASSERT_EQ(8 * kMiB, third.fsoffset());
+  ASSERT_EQ(true, third.isused());
+
+  ASSERT_EQ(4 * kMiB, fourth.length());
+  ASSERT_EQ(12 * kMiB, fourth.volumeoffset());
+  ASSERT_EQ(12 * kMiB, fourth.fsoffset());
+  ASSERT_EQ(false, fourth.isused());
 }
 
 // |----|----|----|----|
 //       ^^^^ ^^^^
 //        written
 TEST(ExtentCacheGetDirtyExtentTest, Case3) {
-    ExtentCache cache;
+  ExtentCache cache;
 
-    PExtent pext;
-    pext.len = 4 * kMiB;
-    pext.pOffset = 0 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(0 * kMiB, pext);
+  PExtent pext;
+  pext.len = 4 * kMiB;
+  pext.pOffset = 0 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(0 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 4 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(4 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 4 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(4 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 8 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(8 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 8 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(8 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 12 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(12 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 12 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(12 * kMiB, pext);
 
-    cache.MarkWritten(4 * kMiB, 8 * kMiB);
+  cache.MarkWritten(4 * kMiB, 8 * kMiB);
 
-    auto pb = cache.GetDirtyExtents();
-    ASSERT_EQ(1, pb.slices().size());
+  auto pb = cache.GetDirtyExtents();
+  ASSERT_EQ(1, pb.slices().size());
 
-    const auto& slice = pb.slices(0);
-    ASSERT_EQ(3, slice.extents_size());
+  const auto& slice = pb.slices(0);
+  ASSERT_EQ(3, slice.extents_size());
 
-    auto& first = slice.extents(0);
-    auto& second = slice.extents(1);
-    auto& third = slice.extents(2);
+  auto& first = slice.extents(0);
+  auto& second = slice.extents(1);
+  auto& third = slice.extents(2);
 
-    ASSERT_EQ(4 * kMiB, first.length());
-    ASSERT_EQ(0 * kMiB, first.volumeoffset());
-    ASSERT_EQ(0 * kMiB, first.fsoffset());
-    ASSERT_EQ(false, first.isused());
+  ASSERT_EQ(4 * kMiB, first.length());
+  ASSERT_EQ(0 * kMiB, first.volumeoffset());
+  ASSERT_EQ(0 * kMiB, first.fsoffset());
+  ASSERT_EQ(false, first.isused());
 
-    ASSERT_EQ(8 * kMiB, second.length());
-    ASSERT_EQ(4 * kMiB, second.volumeoffset());
-    ASSERT_EQ(4 * kMiB, second.fsoffset());
-    ASSERT_EQ(true, second.isused());
+  ASSERT_EQ(8 * kMiB, second.length());
+  ASSERT_EQ(4 * kMiB, second.volumeoffset());
+  ASSERT_EQ(4 * kMiB, second.fsoffset());
+  ASSERT_EQ(true, second.isused());
 
-    ASSERT_EQ(4 * kMiB, third.length());
-    ASSERT_EQ(12 * kMiB, third.volumeoffset());
-    ASSERT_EQ(12 * kMiB, third.fsoffset());
-    ASSERT_EQ(false, third.isused());
+  ASSERT_EQ(4 * kMiB, third.length());
+  ASSERT_EQ(12 * kMiB, third.volumeoffset());
+  ASSERT_EQ(12 * kMiB, third.fsoffset());
+  ASSERT_EQ(false, third.isused());
 }
 
 // |----|----|----|----|
 //  ^^^^           ^^^^
 // written        written
 TEST(ExtentCacheGetDirtyExtentTest, Case4) {
-    ExtentCache cache;
+  ExtentCache cache;
 
-    PExtent pext;
-    pext.len = 4 * kMiB;
-    pext.pOffset = 0 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(0 * kMiB, pext);
+  PExtent pext;
+  pext.len = 4 * kMiB;
+  pext.pOffset = 0 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(0 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 4 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(4 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 4 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(4 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 8 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(8 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 8 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(8 * kMiB, pext);
 
-    pext.len = 4 * kMiB;
-    pext.pOffset = 12 * kMiB;
-    pext.UnWritten = true;
-    cache.Merge(12 * kMiB, pext);
+  pext.len = 4 * kMiB;
+  pext.pOffset = 12 * kMiB;
+  pext.UnWritten = true;
+  cache.Merge(12 * kMiB, pext);
 
-    cache.MarkWritten(0 * kMiB, 4 * kMiB);
-    cache.MarkWritten(12 * kMiB, 4 * kMiB);
+  cache.MarkWritten(0 * kMiB, 4 * kMiB);
+  cache.MarkWritten(12 * kMiB, 4 * kMiB);
 
-    auto pb = cache.GetDirtyExtents();
-    ASSERT_EQ(1, pb.slices().size());
+  auto pb = cache.GetDirtyExtents();
+  ASSERT_EQ(1, pb.slices().size());
 
-    const auto& slice = pb.slices(0);
-    ASSERT_EQ(3, slice.extents_size());
+  const auto& slice = pb.slices(0);
+  ASSERT_EQ(3, slice.extents_size());
 
-    auto& first = slice.extents(0);
-    auto& second = slice.extents(1);
-    auto& third = slice.extents(2);
+  auto& first = slice.extents(0);
+  auto& second = slice.extents(1);
+  auto& third = slice.extents(2);
 
-    ASSERT_EQ(4 * kMiB, first.length());
-    ASSERT_EQ(0 * kMiB, first.volumeoffset());
-    ASSERT_EQ(0 * kMiB, first.fsoffset());
-    ASSERT_EQ(true, first.isused());
+  ASSERT_EQ(4 * kMiB, first.length());
+  ASSERT_EQ(0 * kMiB, first.volumeoffset());
+  ASSERT_EQ(0 * kMiB, first.fsoffset());
+  ASSERT_EQ(true, first.isused());
 
-    ASSERT_EQ(8 * kMiB, second.length());
-    ASSERT_EQ(4 * kMiB, second.volumeoffset());
-    ASSERT_EQ(4 * kMiB, second.fsoffset());
-    ASSERT_EQ(false, second.isused());
+  ASSERT_EQ(8 * kMiB, second.length());
+  ASSERT_EQ(4 * kMiB, second.volumeoffset());
+  ASSERT_EQ(4 * kMiB, second.fsoffset());
+  ASSERT_EQ(false, second.isused());
 
-    ASSERT_EQ(4 * kMiB, third.length());
-    ASSERT_EQ(12 * kMiB, third.volumeoffset());
-    ASSERT_EQ(12 * kMiB, third.fsoffset());
-    ASSERT_EQ(true, third.isused());
+  ASSERT_EQ(4 * kMiB, third.length());
+  ASSERT_EQ(12 * kMiB, third.volumeoffset());
+  ASSERT_EQ(12 * kMiB, third.fsoffset());
+  ASSERT_EQ(true, third.isused());
 }
 
 }  // namespace client

@@ -33,15 +33,15 @@ namespace metaserver {
 namespace copyset {
 
 void MetaOperatorClosure::Run() {
-    std::unique_ptr<MetaOperatorClosure> selfGuard(this);
-    std::unique_ptr<MetaOperator> operatorGuard(operator_);
-    brpc::ClosureGuard doneGuard(operator_->Closure());
+  std::unique_ptr<MetaOperatorClosure> selfGuard(this);
+  std::unique_ptr<MetaOperator> operatorGuard(operator_);
+  brpc::ClosureGuard doneGuard(operator_->Closure());
 
-    if (status().ok()) {
-        return;
-    }
+  if (status().ok()) {
+    return;
+  }
 
-    operator_->RedirectRequest();
+  operator_->RedirectRequest();
 }
 
 }  // namespace copyset

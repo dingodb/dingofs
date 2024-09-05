@@ -20,20 +20,21 @@
  * Author: charisu
  */
 
-#include <gtest/gtest.h>
 #include "src/tools/common.h"
 
+#include <gtest/gtest.h>
+
 TEST(ToolMDSClientHelperTest, Trim) {
-    std::string str = "test";
-    curve::tool::TrimMetricString(&str);
-    ASSERT_EQ("test", str);
-    str = " test";
-    curve::tool::TrimMetricString(&str);
-    ASSERT_EQ("test", str);
-    str = " test\r\n";
-    curve::tool::TrimMetricString(&str);
-    ASSERT_EQ("test", str);
-    str = " \"test\"\r\n";
-    curve::tool::TrimMetricString(&str);
-    ASSERT_EQ("test", str);
+  std::string str = "test";
+  curve::tool::TrimMetricString(&str);
+  ASSERT_EQ("test", str);
+  str = " test";
+  curve::tool::TrimMetricString(&str);
+  ASSERT_EQ("test", str);
+  str = " test\r\n";
+  curve::tool::TrimMetricString(&str);
+  ASSERT_EQ("test", str);
+  str = " \"test\"\r\n";
+  curve::tool::TrimMetricString(&str);
+  ASSERT_EQ("test", str);
 }

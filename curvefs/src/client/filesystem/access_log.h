@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <unistd.h>
 #include <butil/time.h>
-#include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
+#include <spdlog/spdlog.h>
+#include <unistd.h>
 
-#include <string>
 #include <memory>
+#include <string>
 
 #include "absl/strings/str_format.h"
 #include "curvefs/src/client/common/config.h"
@@ -51,35 +51,34 @@ using MessageHandler = std::function<std::string()>;
 static std::shared_ptr<spdlog::logger> Logger;
 
 bool InitAccessLog(const std::string& prefix) {
-    std::string filename = StrFormat("%s/access_%d.log", prefix, getpid());
-    Logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
-    spdlog::flush_every(std::chrono::seconds(1));
-    return true;
+  std::string filename = StrFormat("%s/access_%d.log", prefix, getpid());
+  Logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
+  spdlog::flush_every(std::chrono::seconds(1));
+  return true;
 }
 
 struct AccessLogGuard {
-    explicit AccessLogGuard(MessageHandler handler)
-        : enable(FLAGS_access_logging),
-          handler(handler) {
-        if (!enable) {
-            return;
-        }
-
-        timer.start();
+  explicit AccessLogGuard(MessageHandler handler)
+      : enable(FLAGS_access_logging), handler(handler) {
+    if (!enable) {
+      return;
     }
 
-    ~AccessLogGuard() {
-        if (!enable) {
-            return;
-        }
+    timer.start();
+  }
 
-        timer.stop();
-        Logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+  ~AccessLogGuard() {
+    if (!enable) {
+      return;
     }
 
-    bool enable;
-    MessageHandler handler;
-    butil::Timer timer;
+    timer.stop();
+    Logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+  }
+
+  bool enable;
+  MessageHandler handler;
+  butil::Timer timer;
 };
 
 }  // namespace filesystem

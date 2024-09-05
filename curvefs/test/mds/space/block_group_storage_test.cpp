@@ -42,103 +42,103 @@ static constexpr uint64_t kOffset = 10ULL * 1024 * 1024 * 1024;
 
 class BlockGroupStorageTest : public ::testing::Test {
  protected:
-    void SetUp() override {
-        etcdclient_ = std::make_shared<MockEtcdClientImpl>();
-        storage_ = absl::make_unique<BlockGroupStorageImpl>(etcdclient_);
+  void SetUp() override {
+    etcdclient_ = std::make_shared<MockEtcdClientImpl>();
+    storage_ = absl::make_unique<BlockGroupStorageImpl>(etcdclient_);
 
-        auto message = test::GenerateAnDefaultInitializedMessage(
-            "curvefs.mds.space.BlockGroup");
+    auto message = test::GenerateAnDefaultInitializedMessage(
+        "curvefs.mds.space.BlockGroup");
 
-        ASSERT_TRUE(message);
+    ASSERT_TRUE(message);
 
-        auto* blockgroup = dynamic_cast<BlockGroup*>(message.get());
-        ASSERT_NE(nullptr, blockgroup);
+    auto* blockgroup = dynamic_cast<BlockGroup*>(message.get());
+    ASSERT_NE(nullptr, blockgroup);
 
-        blockGroup_.reset(blockgroup);
-        message.release();
-    }
+    blockGroup_.reset(blockgroup);
+    message.release();
+  }
 
  protected:
-    std::shared_ptr<MockEtcdClientImpl> etcdclient_;
-    std::unique_ptr<BlockGroup> blockGroup_;
-    std::unique_ptr<BlockGroupStorage> storage_;
+  std::shared_ptr<MockEtcdClientImpl> etcdclient_;
+  std::unique_ptr<BlockGroup> blockGroup_;
+  std::unique_ptr<BlockGroupStorage> storage_;
 };
 
 TEST_F(BlockGroupStorageTest, TestPutBlockGroup_EncodeError) {
-    // missing required fields
-    blockGroup_->clear_size();
+  // missing required fields
+  blockGroup_->clear_size();
 
-    EXPECT_CALL(*etcdclient_, Put(_, _)).Times(0);
+  EXPECT_CALL(*etcdclient_, Put(_, _)).Times(0);
 
-    ASSERT_EQ(SpaceErrEncode,
-              storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
+  ASSERT_EQ(SpaceErrEncode,
+            storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
 }
 
 TEST_F(BlockGroupStorageTest, TestPutBlockGroup_PutError) {
-    EXPECT_CALL(*etcdclient_, Put(_, _))
-        .WillOnce(Return(EtcdErrCode::EtcdInternal));
+  EXPECT_CALL(*etcdclient_, Put(_, _))
+      .WillOnce(Return(EtcdErrCode::EtcdInternal));
 
-    ASSERT_EQ(SpaceErrStorage,
-              storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
+  ASSERT_EQ(SpaceErrStorage,
+            storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
 }
 
 TEST_F(BlockGroupStorageTest, TestPutBlockGroup_Success) {
-    EXPECT_CALL(*etcdclient_, Put(_, _)).WillOnce(Return(EtcdErrCode::EtcdOK));
+  EXPECT_CALL(*etcdclient_, Put(_, _)).WillOnce(Return(EtcdErrCode::EtcdOK));
 
-    ASSERT_EQ(SpaceOk, storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
+  ASSERT_EQ(SpaceOk, storage_->PutBlockGroup(kFsId, kOffset, *blockGroup_));
 }
 
 TEST_F(BlockGroupStorageTest, TestRemoveBlockGroup_RemoveSuccess) {
-    EXPECT_CALL(*etcdclient_, Delete(_)).WillOnce(Return(EtcdErrCode::EtcdOK));
+  EXPECT_CALL(*etcdclient_, Delete(_)).WillOnce(Return(EtcdErrCode::EtcdOK));
 
-    ASSERT_EQ(SpaceOk, storage_->RemoveBlockGroup(kFsId, kOffset));
+  ASSERT_EQ(SpaceOk, storage_->RemoveBlockGroup(kFsId, kOffset));
 }
 
 TEST_F(BlockGroupStorageTest, TestRemoveBlockGroup_KeyNotExist) {
-    EXPECT_CALL(*etcdclient_, Delete(_))
-        .WillOnce(Return(EtcdErrCode::EtcdKeyNotExist));
+  EXPECT_CALL(*etcdclient_, Delete(_))
+      .WillOnce(Return(EtcdErrCode::EtcdKeyNotExist));
 
-    ASSERT_EQ(SpaceErrNotFound, storage_->RemoveBlockGroup(kFsId, kOffset));
+  ASSERT_EQ(SpaceErrNotFound, storage_->RemoveBlockGroup(kFsId, kOffset));
 }
 
 TEST_F(BlockGroupStorageTest, TestListBlockGroup_ListError) {
-    using type = std::vector<std::string>*;
-    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
-        .WillOnce(Return(EtcdErrCode::EtcdInternal));
+  using type = std::vector<std::string>*;
+  EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
+      .WillOnce(Return(EtcdErrCode::EtcdInternal));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceErrStorage, storage_->ListBlockGroups(kFsId, &groups));
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceErrStorage, storage_->ListBlockGroups(kFsId, &groups));
 }
 
 TEST_F(BlockGroupStorageTest, TestListBlockGroup_DecodeError) {
-    using type = std::vector<std::string>*;
-    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
-        .WillOnce(Invoke([](const std::string&, const std::string&,
-                            std::vector<std::string>* values) {
-            values->push_back("hello, world");
-            return 0;
-        }));
+  using type = std::vector<std::string>*;
+  EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
+      .WillOnce(Invoke([](const std::string&, const std::string&,
+                          std::vector<std::string>* values) {
+        values->push_back("hello, world");
+        return 0;
+      }));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceErrDecode, storage_->ListBlockGroups(kFsId, &groups));
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceErrDecode, storage_->ListBlockGroups(kFsId, &groups));
 }
 
 TEST_F(BlockGroupStorageTest, TestListBlockGroup_Success) {
-    using type = std::vector<std::string>*;
-    EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
-        .WillOnce(Invoke([this](const std::string&, const std::string&,
-                                std::vector<std::string>* values) {
-            std::string value;
-            blockGroup_->SerializeToString(&value);
-            values->push_back(std::move(value));
-            return 0;
-        }));
+  using type = std::vector<std::string>*;
+  EXPECT_CALL(*etcdclient_, List(_, _, Matcher<type>(_)))
+      .WillOnce(Invoke([this](const std::string&, const std::string&,
+                              std::vector<std::string>* values) {
+        std::string value;
+        blockGroup_->SerializeToString(&value);
+        values->push_back(std::move(value));
+        return 0;
+      }));
 
-    std::vector<BlockGroup> groups;
-    ASSERT_EQ(SpaceOk, storage_->ListBlockGroups(kFsId, &groups));
-    ASSERT_EQ(1, groups.size());
-    ASSERT_TRUE(google::protobuf::util::MessageDifferencer::Equals(
-        groups[0], *blockGroup_));
+  std::vector<BlockGroup> groups;
+  ASSERT_EQ(SpaceOk, storage_->ListBlockGroups(kFsId, &groups));
+  ASSERT_EQ(1, groups.size());
+  ASSERT_TRUE(google::protobuf::util::MessageDifferencer::Equals(groups[0],
+                                                                 *blockGroup_));
 }
 
 }  // namespace space

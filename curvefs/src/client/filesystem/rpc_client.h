@@ -27,9 +27,9 @@
 #include <string>
 
 #include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/filesystem/dir_cache.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/package.h"
-#include "curvefs/src/client/filesystem/dir_cache.h"
 
 namespace curvefs {
 namespace client {
@@ -39,23 +39,20 @@ using ::curvefs::client::common::RPCOption;
 
 class RPCClient {
  public:
-    RPCClient(RPCOption option,
-              ExternalMember member);
+  RPCClient(RPCOption option, ExternalMember member);
 
-    CURVEFS_ERROR GetAttr(Ino ino, InodeAttr* attr);
+  CURVEFS_ERROR GetAttr(Ino ino, InodeAttr* attr);
 
-    CURVEFS_ERROR Lookup(Ino parent,
-                         const std::string& name,
-                         EntryOut* entryOut);
+  CURVEFS_ERROR Lookup(Ino parent, const std::string& name, EntryOut* entryOut);
 
-    CURVEFS_ERROR ReadDir(Ino ino, std::shared_ptr<DirEntryList>* entries);
+  CURVEFS_ERROR ReadDir(Ino ino, std::shared_ptr<DirEntryList>* entries);
 
-    CURVEFS_ERROR Open(Ino ino, std::shared_ptr<InodeWrapper>* inode);
+  CURVEFS_ERROR Open(Ino ino, std::shared_ptr<InodeWrapper>* inode);
 
  private:
-    RPCOption option_;
-    std::shared_ptr<InodeCacheManager> inodeManager_;
-    std::shared_ptr<DentryCacheManager> dentryManager_;
+  RPCOption option_;
+  std::shared_ptr<InodeCacheManager> inodeManager_;
+  std::shared_ptr<DentryCacheManager> dentryManager_;
 };
 
 }  // namespace filesystem

@@ -26,35 +26,35 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "src/tools/copyset_check_core.h"
 #include "src/tools/curve_tool.h"
 #include "src/tools/curve_tool_define.h"
 #include "src/tools/mds_client.h"
-#include "src/tools/copyset_check_core.h"
 
 namespace curve {
 namespace tool {
 
 class CopysetTool : public CurveTool {
  public:
-    CopysetTool(std::shared_ptr<CopysetCheckCore> copysetCheck,
-                std::shared_ptr<MDSClient> mdsClient) :
-                    copysetCheck_(copysetCheck), mdsClient_(mdsClient),
-                    inited_(false) {}
+  CopysetTool(std::shared_ptr<CopysetCheckCore> copysetCheck,
+              std::shared_ptr<MDSClient> mdsClient)
+      : copysetCheck_(copysetCheck), mdsClient_(mdsClient), inited_(false) {}
 
-    int RunCommand(const std::string& command) override;
+  int RunCommand(const std::string& command) override;
 
-    void PrintHelp(const std::string& command) override;
+  void PrintHelp(const std::string& command) override;
 
-    static bool SupportCommand(const std::string& command);
+  static bool SupportCommand(const std::string& command);
 
  private:
-    int Init();
-    int SetCopysetsUnAvailable();
-    int SetCopysetsAvailable();
+  int Init();
+  int SetCopysetsUnAvailable();
+  int SetCopysetsAvailable();
 
-    std::shared_ptr<CopysetCheckCore> copysetCheck_;
-    std::shared_ptr<MDSClient> mdsClient_;
-    bool inited_;
+  std::shared_ptr<CopysetCheckCore> copysetCheck_;
+  std::shared_ptr<MDSClient> mdsClient_;
+  bool inited_;
 };
 
 }  // namespace tool

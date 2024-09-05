@@ -20,14 +20,15 @@
  * Author: charisu
  */
 
-#include <gtest/gtest.h>
 #include "src/tools/chunkserver_client.h"
-#include "test/client/fake/mockMDS.h"
+
+#include <gtest/gtest.h>
+
 #include "test/client/fake/fakeMDS.h"
+#include "test/client/fake/mockMDS.h"
 
-using curve::chunkserver::GetChunkInfoResponse;
 using curve::chunkserver::CHUNK_OP_STATUS;
-
+using curve::chunkserver::GetChunkInfoResponse;
 
 DECLARE_string(chunkserver_list);
 namespace brpc {
@@ -39,112 +40,108 @@ namespace tool {
 
 class ChunkServerClientTest : public ::testing::Test {
  protected:
-    ChunkServerClientTest() : fakemds("test") {}
-    void SetUp() {
-        FLAGS_chunkserver_list = "127.0.0.1:9191:0";
-        brpc::FLAGS_health_check_interval = -1;
-        fakemds.Initialize();
-        fakemds.CreateFakeChunkservers(false);
-    }
-    void TearDown() {
-        fakemds.UnInitialize();
-    }
-    ChunkServerClient client;
-    FakeMDS fakemds;
+  ChunkServerClientTest() : fakemds("test") {}
+  void SetUp() {
+    FLAGS_chunkserver_list = "127.0.0.1:9191:0";
+    brpc::FLAGS_health_check_interval = -1;
+    fakemds.Initialize();
+    fakemds.CreateFakeChunkservers(false);
+  }
+  void TearDown() { fakemds.UnInitialize(); }
+  ChunkServerClient client;
+  FakeMDS fakemds;
 };
 
 TEST_F(ChunkServerClientTest, Init) {
-    ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
-    ASSERT_EQ(-1, client.Init("1235"));
+  ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
+  ASSERT_EQ(-1, client.Init("1235"));
 }
 
 TEST_F(ChunkServerClientTest, GetRaftStatus) {
-    std::vector<FakeRaftStateService *> statServices =
-                                    fakemds.GetRaftStateService();
-    // 正常情况
-    butil::IOBuf iobuf;
-    iobuf.append("test");
-    statServices[0]->SetBuf(iobuf);
-    ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
-    ASSERT_EQ(0, client.GetRaftStatus(&iobuf));
+  std::vector<FakeRaftStateService*> statServices =
+      fakemds.GetRaftStateService();
+  // 正常情况
+  butil::IOBuf iobuf;
+  iobuf.append("test");
+  statServices[0]->SetBuf(iobuf);
+  ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
+  ASSERT_EQ(0, client.GetRaftStatus(&iobuf));
 
-    // 传入空指针
-    ASSERT_EQ(-1, client.GetRaftStatus(nullptr));
+  // 传入空指针
+  ASSERT_EQ(-1, client.GetRaftStatus(nullptr));
 
-    // RPC失败的情况
-    statServices[0]->SetFailed(true);
-    ASSERT_EQ(-1, client.GetRaftStatus(&iobuf));
+  // RPC失败的情况
+  statServices[0]->SetFailed(true);
+  ASSERT_EQ(-1, client.GetRaftStatus(&iobuf));
 }
 
 TEST_F(ChunkServerClientTest, CheckChunkServerOnline) {
-    std::vector<FakeChunkService *> chunkServices = fakemds.GetChunkservice();
-    brpc::Controller cntl;
-    std::unique_ptr<GetChunkInfoResponse> response(
-                    new GetChunkInfoResponse());
-    response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
-    std::unique_ptr<FakeReturn> fakeret(
-        new FakeReturn(&cntl, static_cast<void*>(response.get())));
-    chunkServices[0]->SetGetChunkInfo(fakeret.get());
-    // 正常情况
-    ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
-    ASSERT_EQ(true, client.CheckChunkServerOnline());
+  std::vector<FakeChunkService*> chunkServices = fakemds.GetChunkservice();
+  brpc::Controller cntl;
+  std::unique_ptr<GetChunkInfoResponse> response(new GetChunkInfoResponse());
+  response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
+  std::unique_ptr<FakeReturn> fakeret(
+      new FakeReturn(&cntl, static_cast<void*>(response.get())));
+  chunkServices[0]->SetGetChunkInfo(fakeret.get());
+  // 正常情况
+  ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
+  ASSERT_EQ(true, client.CheckChunkServerOnline());
 
-    // RPC失败的情况
-    cntl.SetFailed("fail for test");
-    ASSERT_EQ(false, client.CheckChunkServerOnline());
+  // RPC失败的情况
+  cntl.SetFailed("fail for test");
+  ASSERT_EQ(false, client.CheckChunkServerOnline());
 }
 
 TEST_F(ChunkServerClientTest, GetCopysetStatus2) {
-    auto copysetServices = fakemds.GetCreateCopysetService();
-    CopysetStatusRequest request;
-    CopysetStatusResponse response;
-    curve::common::Peer *peer = new curve::common::Peer();
-    peer->set_address("127.0.0.1:9191");
-    request.set_logicpoolid(1);
-    request.set_copysetid(1001);
-    request.set_allocated_peer(peer);
-    request.set_queryhash(true);
+  auto copysetServices = fakemds.GetCreateCopysetService();
+  CopysetStatusRequest request;
+  CopysetStatusResponse response;
+  curve::common::Peer* peer = new curve::common::Peer();
+  peer->set_address("127.0.0.1:9191");
+  request.set_logicpoolid(1);
+  request.set_copysetid(1001);
+  request.set_allocated_peer(peer);
+  request.set_queryhash(true);
 
-    // 正常情况
-    ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
-    ASSERT_EQ(0, client.GetCopysetStatus(request, &response));
+  // 正常情况
+  ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
+  ASSERT_EQ(0, client.GetCopysetStatus(request, &response));
 
-    // 返回码不ok的情况
-    copysetServices[0]->SetStatus(
-        COPYSET_OP_STATUS::COPYSET_OP_STATUS_COPYSET_NOTEXIST);
-    ASSERT_EQ(-1, client.GetCopysetStatus(request, &response));
+  // 返回码不ok的情况
+  copysetServices[0]->SetStatus(
+      COPYSET_OP_STATUS::COPYSET_OP_STATUS_COPYSET_NOTEXIST);
+  ASSERT_EQ(-1, client.GetCopysetStatus(request, &response));
 
-    // RPC失败的情况
-    brpc::Controller cntl;
-    std::unique_ptr<FakeReturn> fakeret(new FakeReturn(&cntl, nullptr));
-    copysetServices[0]->SetFakeReturn(fakeret.get());
-    ASSERT_EQ(-1, client.GetCopysetStatus(request, &response));
+  // RPC失败的情况
+  brpc::Controller cntl;
+  std::unique_ptr<FakeReturn> fakeret(new FakeReturn(&cntl, nullptr));
+  copysetServices[0]->SetFakeReturn(fakeret.get());
+  ASSERT_EQ(-1, client.GetCopysetStatus(request, &response));
 }
 
 TEST_F(ChunkServerClientTest, GetChunkHash) {
-    std::vector<FakeChunkService *> chunkServices = fakemds.GetChunkservice();
-    brpc::Controller cntl;
-    std::unique_ptr<GetChunkHashResponse> response(
-                    new GetChunkHashResponse());
-    response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
-    response->set_hash("1234");
-    std::unique_ptr<FakeReturn> fakeret(
-        new FakeReturn(&cntl, static_cast<void*>(response.get())));
-    chunkServices[0]->SetGetChunkHash(fakeret.get());
-    Chunk chunk(1, 100, 1001);
-    // 正常情况
-    ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
-    std::string hash;
-    ASSERT_EQ(0, client.GetChunkHash(chunk, &hash));
-    ASSERT_EQ("1234", hash);
+  std::vector<FakeChunkService*> chunkServices = fakemds.GetChunkservice();
+  brpc::Controller cntl;
+  std::unique_ptr<GetChunkHashResponse> response(new GetChunkHashResponse());
+  response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_SUCCESS);
+  response->set_hash("1234");
+  std::unique_ptr<FakeReturn> fakeret(
+      new FakeReturn(&cntl, static_cast<void*>(response.get())));
+  chunkServices[0]->SetGetChunkHash(fakeret.get());
+  Chunk chunk(1, 100, 1001);
+  // 正常情况
+  ASSERT_EQ(0, client.Init("127.0.0.1:9191"));
+  std::string hash;
+  ASSERT_EQ(0, client.GetChunkHash(chunk, &hash));
+  ASSERT_EQ("1234", hash);
 
-    // RPC失败的情况
-    cntl.SetFailed("fail for test");
-    ASSERT_EQ(-1, client.GetChunkHash(chunk, &hash));
+  // RPC失败的情况
+  cntl.SetFailed("fail for test");
+  ASSERT_EQ(-1, client.GetChunkHash(chunk, &hash));
 
-    // 返回码不为ok
-    response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_FAILURE_UNKNOWN);
-    ASSERT_EQ(-1, client.GetChunkHash(chunk, &hash));
+  // 返回码不为ok
+  response->set_status(CHUNK_OP_STATUS::CHUNK_OP_STATUS_FAILURE_UNKNOWN);
+  ASSERT_EQ(-1, client.GetChunkHash(chunk, &hash));
 }
 
 }  // namespace tool

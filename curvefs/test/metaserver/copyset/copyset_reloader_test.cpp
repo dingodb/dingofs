@@ -50,122 +50,119 @@ const int kTestPort = 29950;
 
 class CopysetReloaderTest : public testing::Test {
  protected:
-    void SetUp() override {
-        fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
-        ASSERT_NE(nullptr, fs_);
+  void SetUp() override {
+    fs_ = LocalFsFactory::CreateFs(FileSystemType::EXT4, "");
+    ASSERT_NE(nullptr, fs_);
 
-        copysetNodeOptions_.dataUri = kCopysetDataUri;
-        copysetNodeOptions_.raftNodeOptions.log_uri = kCopysetDataUri;
-        copysetNodeOptions_.raftNodeOptions.raft_meta_uri = kCopysetDataUri;
-        copysetNodeOptions_.raftNodeOptions.snapshot_uri = kCopysetDataUri;
+    copysetNodeOptions_.dataUri = kCopysetDataUri;
+    copysetNodeOptions_.raftNodeOptions.log_uri = kCopysetDataUri;
+    copysetNodeOptions_.raftNodeOptions.raft_meta_uri = kCopysetDataUri;
+    copysetNodeOptions_.raftNodeOptions.snapshot_uri = kCopysetDataUri;
 
-        copysetNodeOptions_.ip = "127.0.0.1";
-        copysetNodeOptions_.port = 29950;
+    copysetNodeOptions_.ip = "127.0.0.1";
+    copysetNodeOptions_.port = 29950;
 
-        copysetNodeOptions_.loadConcurrency = 10;
-        copysetNodeOptions_.checkRetryTimes = 3;
-        copysetNodeOptions_.finishLoadMargin = 1000;
-        copysetNodeOptions_.localFileSystem = fs_.get();
+    copysetNodeOptions_.loadConcurrency = 10;
+    copysetNodeOptions_.checkRetryTimes = 3;
+    copysetNodeOptions_.finishLoadMargin = 1000;
+    copysetNodeOptions_.localFileSystem = fs_.get();
 
-        copysetNodeOptions_.trashOptions.trashUri = kCopysetDataUri;
+    copysetNodeOptions_.trashOptions.trashUri = kCopysetDataUri;
 
-        copysetNodeOptions_.storageOptions.type = "memory";
+    copysetNodeOptions_.storageOptions.type = "memory";
 
-        // disable raft snapshot
-        copysetNodeOptions_.raftNodeOptions.snapshot_interval_s = -1;
-        copysetNodeOptions_.raftNodeOptions.catchup_margin = 50;
-    }
+    // disable raft snapshot
+    copysetNodeOptions_.raftNodeOptions.snapshot_interval_s = -1;
+    copysetNodeOptions_.raftNodeOptions.catchup_margin = 50;
+  }
 
-    void TearDown() override {
-        ::system("rm -rf ./runlog/copyset_reloader_test");
-    }
+  void TearDown() override {
+    ::system("rm -rf ./runlog/copyset_reloader_test");
+  }
 
  protected:
-    CopysetNodeOptions copysetNodeOptions_;
-    CopysetNodeManager copysetNodeManager_;
-    std::shared_ptr<LocalFileSystem> fs_;
+  CopysetNodeOptions copysetNodeOptions_;
+  CopysetNodeManager copysetNodeManager_;
+  std::shared_ptr<LocalFileSystem> fs_;
 };
 
 TEST_F(CopysetReloaderTest, InitTest_LoadConcurrencyIsZero) {
-    copysetNodeOptions_.loadConcurrency = 0;
+  copysetNodeOptions_.loadConcurrency = 0;
 
-    CopysetReloader reloader(&copysetNodeManager_);
-    EXPECT_FALSE(reloader.Init(copysetNodeOptions_));
+  CopysetReloader reloader(&copysetNodeManager_);
+  EXPECT_FALSE(reloader.Init(copysetNodeOptions_));
 }
 
 TEST_F(CopysetReloaderTest, InitTest_Success) {
-    copysetNodeOptions_.loadConcurrency = 1;
+  copysetNodeOptions_.loadConcurrency = 1;
 
-    CopysetReloader reloader(&copysetNodeManager_);
-    EXPECT_TRUE(reloader.Init(copysetNodeOptions_));
+  CopysetReloader reloader(&copysetNodeManager_);
+  EXPECT_TRUE(reloader.Init(copysetNodeOptions_));
 }
 
 TEST_F(CopysetReloaderTest, ReloadCopysetsTest_DirNotExists) {
-    std::unique_ptr<MockLocalFileSystem> mocklfs(new MockLocalFileSystem());
-    copysetNodeOptions_.localFileSystem = mocklfs.get();
+  std::unique_ptr<MockLocalFileSystem> mocklfs(new MockLocalFileSystem());
+  copysetNodeOptions_.localFileSystem = mocklfs.get();
 
-    CopysetReloader copysetReloader(&copysetNodeManager_);
+  CopysetReloader copysetReloader(&copysetNodeManager_);
 
-    EXPECT_CALL(*mocklfs, DirExists(_))
-        .WillOnce(Return(false));
+  EXPECT_CALL(*mocklfs, DirExists(_)).WillOnce(Return(false));
 
-    EXPECT_TRUE(copysetReloader.Init(copysetNodeOptions_));
-    EXPECT_TRUE(copysetReloader.ReloadCopysets());
+  EXPECT_TRUE(copysetReloader.Init(copysetNodeOptions_));
+  EXPECT_TRUE(copysetReloader.ReloadCopysets());
 }
 
 TEST_F(CopysetReloaderTest, ReloadCopysetsTest_ListDirFailed) {
-    std::unique_ptr<MockLocalFileSystem> mocklfs(new MockLocalFileSystem());
-    copysetNodeOptions_.localFileSystem = mocklfs.get();
+  std::unique_ptr<MockLocalFileSystem> mocklfs(new MockLocalFileSystem());
+  copysetNodeOptions_.localFileSystem = mocklfs.get();
 
-    CopysetReloader copysetReloader(&copysetNodeManager_);
+  CopysetReloader copysetReloader(&copysetNodeManager_);
 
-    EXPECT_CALL(*mocklfs, DirExists(_))
-        .WillOnce(Return(true));
+  EXPECT_CALL(*mocklfs, DirExists(_)).WillOnce(Return(true));
 
-    EXPECT_CALL(*mocklfs, List(_, _))
-        .WillOnce(Return(-1));
+  EXPECT_CALL(*mocklfs, List(_, _)).WillOnce(Return(-1));
 
-    EXPECT_TRUE(copysetReloader.Init(copysetNodeOptions_));
-    EXPECT_FALSE(copysetReloader.ReloadCopysets());
+  EXPECT_TRUE(copysetReloader.Init(copysetNodeOptions_));
+  EXPECT_FALSE(copysetReloader.ReloadCopysets());
 }
 
 TEST_F(CopysetReloaderTest, ReloadCopysetTest) {
-    PoolId poolId = 1;
-    CopysetId copysetId = 12345;
-    braft::Configuration conf;
+  PoolId poolId = 1;
+  CopysetId copysetId = 12345;
+  braft::Configuration conf;
 
-    butil::EndPoint listenAddr;
-    ASSERT_EQ(
-        0, butil::str2endpoint(("127.0.0.1:" + std::to_string(29950)).c_str(),
-                               &listenAddr));
-    brpc::Server server;
-    copysetNodeManager_.AddService(&server, listenAddr);
+  butil::EndPoint listenAddr;
+  ASSERT_EQ(0,
+            butil::str2endpoint(("127.0.0.1:" + std::to_string(29950)).c_str(),
+                                &listenAddr));
+  brpc::Server server;
+  copysetNodeManager_.AddService(&server, listenAddr);
 
-    EXPECT_TRUE(copysetNodeManager_.Init(copysetNodeOptions_));
-    EXPECT_TRUE(copysetNodeManager_.Start());
+  EXPECT_TRUE(copysetNodeManager_.Init(copysetNodeOptions_));
+  EXPECT_TRUE(copysetNodeManager_.Start());
 
-    for (int i = 0; i < 5; ++i) {
-        EXPECT_TRUE(
-            copysetNodeManager_.CreateCopysetNode(poolId, copysetId + i, conf));
-    }
+  for (int i = 0; i < 5; ++i) {
+    EXPECT_TRUE(
+        copysetNodeManager_.CreateCopysetNode(poolId, copysetId + i, conf));
+  }
 
-    std::vector<CopysetNode*> nodes;
-    copysetNodeManager_.GetAllCopysets(&nodes);
-    EXPECT_EQ(5, nodes.size());
-    EXPECT_TRUE(copysetNodeManager_.Stop());
+  std::vector<CopysetNode*> nodes;
+  copysetNodeManager_.GetAllCopysets(&nodes);
+  EXPECT_EQ(5, nodes.size());
+  EXPECT_TRUE(copysetNodeManager_.Stop());
 
-    nodes.clear();
-    copysetNodeManager_.GetAllCopysets(&nodes);
-    EXPECT_EQ(0, nodes.size());
+  nodes.clear();
+  copysetNodeManager_.GetAllCopysets(&nodes);
+  EXPECT_EQ(0, nodes.size());
 
-    // re-start copyset node manger, this will trigger copysets reload
-    LOG(INFO) << "re-start copyset node manager";
-    EXPECT_TRUE(copysetNodeManager_.Start());
-    nodes.clear();
-    copysetNodeManager_.GetAllCopysets(&nodes);
-    EXPECT_EQ(5, nodes.size());
+  // re-start copyset node manger, this will trigger copysets reload
+  LOG(INFO) << "re-start copyset node manager";
+  EXPECT_TRUE(copysetNodeManager_.Start());
+  nodes.clear();
+  copysetNodeManager_.GetAllCopysets(&nodes);
+  EXPECT_EQ(5, nodes.size());
 
-    EXPECT_TRUE(copysetNodeManager_.Stop());
+  EXPECT_TRUE(copysetNodeManager_.Stop());
 }
 
 }  // namespace copyset

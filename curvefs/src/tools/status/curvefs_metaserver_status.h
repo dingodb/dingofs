@@ -35,20 +35,20 @@ namespace status {
 
 class MetaserverStatusTool : public StatusBaseTool {
  public:
-    explicit MetaserverStatusTool(
-        const std::string& cmd = kMetaserverStatusCmd,
-        const std::string& hostType = kHostTypeMetaserver)
-        : StatusBaseTool(cmd, hostType) {}
-    void PrintHelp() override;
-    void InitHostsAddr() override;
-    int Init() override;
+  explicit MetaserverStatusTool(
+      const std::string& cmd = kMetaserverStatusCmd,
+      const std::string& hostType = kHostTypeMetaserver)
+      : StatusBaseTool(cmd, hostType) {}
+  void PrintHelp() override;
+  void InitHostsAddr() override;
+  int Init() override;
 
  protected:
-    void AddUpdateFlags() override;
-    int ProcessMetrics() override;
-    void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
-                        const std::string& value,
-                        const MetricStatusCode& statusCode) override;
+  void AddUpdateFlags() override;
+  int ProcessMetrics() override;
+  void AfterGetMetric(const std::string hostAddr, const std::string& subUri,
+                      const std::string& value,
+                      const MetricStatusCode& statusCode) override;
 };
 
 }  // namespace status

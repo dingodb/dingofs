@@ -42,41 +42,39 @@ namespace space {
 // The caller can get a proxy by mds hosts through `GetOrCreateProxy`, same
 // hosts with different order will get the same one.
 class MdsProxyManager {
-    FRIEND_TEST(MdsProxyManagerTest, GetSameProxy);
-    FRIEND_TEST(MdsProxyManagerTest, GetDifferentProxy);
-    FRIEND_TEST(MdsProxyManagerTest, EmptyHosts);
+  FRIEND_TEST(MdsProxyManagerTest, GetSameProxy);
+  FRIEND_TEST(MdsProxyManagerTest, GetDifferentProxy);
+  FRIEND_TEST(MdsProxyManagerTest, EmptyHosts);
 
  public:
-    static MdsProxyManager& GetInstance() {
-        static MdsProxyManager manager;
-        return manager;
-    }
+  static MdsProxyManager& GetInstance() {
+    static MdsProxyManager manager;
+    return manager;
+  }
 
-    static void SetProxyOptions(const MdsProxyOptions& opts) {
-        options_ = opts;
-    }
+  static void SetProxyOptions(const MdsProxyOptions& opts) { options_ = opts; }
 
-    // Get or create an proxy
-    MdsProxy* GetOrCreateProxy(std::vector<std::string> hosts);
+  // Get or create an proxy
+  MdsProxy* GetOrCreateProxy(std::vector<std::string> hosts);
 
  private:
-    MdsProxyManager() = default;
-    ~MdsProxyManager() = default;
+  MdsProxyManager() = default;
+  ~MdsProxyManager() = default;
 
-    struct Slot {
-        RWLock lock;
-        // key: sorted ip:ports of curvebs cluster.
-        // value: proxy to the cluster.
-        std::map<std::vector<std::string>, std::unique_ptr<MdsProxy>> proxies;
-    };
+  struct Slot {
+    RWLock lock;
+    // key: sorted ip:ports of curvebs cluster.
+    // value: proxy to the cluster.
+    std::map<std::vector<std::string>, std::unique_ptr<MdsProxy>> proxies;
+  };
 
-    static MdsProxy* CreateProxy(Slot* slot, std::vector<std::string>&& hosts);
+  static MdsProxy* CreateProxy(Slot* slot, std::vector<std::string>&& hosts);
 
-    static constexpr size_t kSlot = 32;
+  static constexpr size_t kSlot = 32;
 
-    static MdsProxyOptions options_;
+  static MdsProxyOptions options_;
 
-    Slot slots_[kSlot];
+  Slot slots_[kSlot];
 };
 
 }  // namespace space

@@ -36,18 +36,15 @@ namespace space {
 
 class MockVolumeSpace : public AbstractVolumeSpace {
  public:
-    MOCK_METHOD3(AllocateBlockGroups,
-                 SpaceErrCode(uint32_t,
-                              const std::string&,
-                              std::vector<BlockGroup>*));
+  MOCK_METHOD3(AllocateBlockGroups, SpaceErrCode(uint32_t, const std::string&,
+                                                 std::vector<BlockGroup>*));
 
-    MOCK_METHOD3(AcquireBlockGroup,
-                 SpaceErrCode(uint64_t blockGroupOffset,
-                              const std::string& owner,
-                              BlockGroup* group));
+  MOCK_METHOD3(AcquireBlockGroup,
+               SpaceErrCode(uint64_t blockGroupOffset, const std::string& owner,
+                            BlockGroup* group));
 
-    MOCK_METHOD1(ReleaseBlockGroups,
-                 SpaceErrCode(const std::vector<BlockGroup>& blockGroups));
+  MOCK_METHOD1(ReleaseBlockGroups,
+               SpaceErrCode(const std::vector<BlockGroup>& blockGroups));
 };
 
 }  // namespace space

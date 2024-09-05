@@ -33,36 +33,32 @@ namespace filesystem {
 
 class DirCacheMetric {
  public:
-    DirCacheMetric() = default;
+  DirCacheMetric() = default;
 
-    void AddEntries(int64_t n) {
-        metric_.nentries << n;
-    }
+  void AddEntries(int64_t n) { metric_.nentries << n; }
 
  private:
-    struct Metric {
-        Metric() : nentries("filesystem_dircache", "nentries") {}
-        bvar::Adder<int64_t> nentries;
-    };
+  struct Metric {
+    Metric() : nentries("filesystem_dircache", "nentries") {}
+    bvar::Adder<int64_t> nentries;
+  };
 
-    Metric metric_;
+  Metric metric_;
 };
 
 class OpenfilesMetric {
  public:
-    OpenfilesMetric() = default;
+  OpenfilesMetric() = default;
 
-    void AddOpenfiles(int64_t n) {
-        metric_.nfiles << n;
-    }
+  void AddOpenfiles(int64_t n) { metric_.nfiles << n; }
 
  private:
-    struct Metric {
-        Metric() : nfiles("filesystem_openfiles", "nfiles") {}
-        bvar::Adder<int64_t> nfiles;
-    };
+  struct Metric {
+    Metric() : nfiles("filesystem_openfiles", "nfiles") {}
+    bvar::Adder<int64_t> nfiles;
+  };
 
-    Metric metric_;
+  Metric metric_;
 };
 
 }  // namespace filesystem

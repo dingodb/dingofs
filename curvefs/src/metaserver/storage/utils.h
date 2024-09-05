@@ -23,8 +23,8 @@
 #ifndef CURVEFS_SRC_METASERVER_STORAGE_UTILS_H_
 #define CURVEFS_SRC_METASERVER_STORAGE_UTILS_H_
 
-#include <string>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "absl/container/btree_set.h"
@@ -36,8 +36,7 @@ namespace storage {
 
 using ::curve::common::RWLock;
 
-bool GetFileSystemSpaces(const std::string& path,
-                         uint64_t* capacity,
+bool GetFileSystemSpaces(const std::string& path, uint64_t* capacity,
                          uint64_t* available);
 
 bool GetProcMemory(uint64_t* vmRSS);

@@ -29,19 +29,19 @@ namespace metaserver {
 namespace copyset {
 
 void OnConfChangeDone::Run() {
-    node_->OnConfChangeComplete();
+  node_->OnConfChangeComplete();
 
-    LOG_IF(WARNING, !status().ok())
-        << "Copyset: " << node_->Name() << " "
-        << curve::mds::heartbeat::ConfigChangeType_Name(confChange_.type)
-        << " failed";
+  LOG_IF(WARNING, !status().ok())
+      << "Copyset: " << node_->Name() << " "
+      << curve::mds::heartbeat::ConfigChangeType_Name(confChange_.type)
+      << " failed";
 
-    if (done_) {
-        done_->status() = status();
-        done_->Run();
-    }
+  if (done_) {
+    done_->status() = status();
+    done_->Run();
+  }
 
-    delete this;
+  delete this;
 }
 
 }  // namespace copyset

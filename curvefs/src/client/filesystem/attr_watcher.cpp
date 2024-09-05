@@ -20,8 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "curvefs/src/client/filesystem/utils.h"
 #include "curvefs/src/client/filesystem/attr_watcher.h"
+
+#include "curvefs/src/client/filesystem/utils.h"
 
 namespace curvefs {
 namespace client {
@@ -35,81 +36,80 @@ AttrWatcher::AttrWatcher(AttrWatcherOption option,
       dirCache_(dirCache) {}
 
 void AttrWatcher::RemeberMtime(const InodeAttr& attr) {
-    WriteLockGuard lk(rwlock_);
-    modifiedAt_->Put(attr.inodeid(), AttrMtime(attr));
+  WriteLockGuard lk(rwlock_);
+  modifiedAt_->Put(attr.inodeid(), AttrMtime(attr));
 }
 
 bool AttrWatcher::GetMtime(Ino ino, TimeSpec* time) {
-    ReadLockGuard lk(rwlock_);
-    return modifiedAt_->Get(ino, time);
+  ReadLockGuard lk(rwlock_);
+  return modifiedAt_->Get(ino, time);
 }
 
 void AttrWatcher::UpdateDirEntryAttr(Ino ino, const InodeAttr& attr) {
-    std::shared_ptr<DirEntryList> entries;
-    for (const auto parent : attr.parent()) {
-        bool yes = dirCache_->Get(parent, &entries);
-        if (!yes) {
-            continue;
-        }
-
-        entries->UpdateAttr(ino, attr);
-
-        VLOG(1) << "Write back attribute to dir entry cache: ino = " << ino
-                << ", attr = " << attr.ShortDebugString();
+  std::shared_ptr<DirEntryList> entries;
+  for (const auto parent : attr.parent()) {
+    bool yes = dirCache_->Get(parent, &entries);
+    if (!yes) {
+      continue;
     }
+
+    entries->UpdateAttr(ino, attr);
+
+    VLOG(1) << "Write back attribute to dir entry cache: ino = " << ino
+            << ", attr = " << attr.ShortDebugString();
+  }
 }
 
 void AttrWatcher::UpdateDirEntryLength(Ino ino, const InodeAttr& open) {
-    std::shared_ptr<DirEntryList> entries;
-    for (const auto parent : open.parent()) {
-        bool yes = dirCache_->Get(parent, &entries);
-        if (!yes) {
-            continue;
-        }
-
-        entries->UpdateLength(ino, open);
-
-        VLOG(1) << "Write back file length to dir entry cache: ino = " << ino
-                << ", attr = " << open.ShortDebugString();
+  std::shared_ptr<DirEntryList> entries;
+  for (const auto parent : open.parent()) {
+    bool yes = dirCache_->Get(parent, &entries);
+    if (!yes) {
+      continue;
     }
+
+    entries->UpdateLength(ino, open);
+
+    VLOG(1) << "Write back file length to dir entry cache: ino = " << ino
+            << ", attr = " << open.ShortDebugString();
+  }
 }
 
 AttrWatcherGuard::AttrWatcherGuard(std::shared_ptr<AttrWatcher> watcher,
-                                   InodeAttr* attr,
-                                   ReplyType type,
+                                   InodeAttr* attr, ReplyType type,
                                    bool writeBack)
     : watcher(watcher), attr(attr), type(type), writeBack(writeBack) {
-    InodeAttr open;
-    Ino ino = attr->inodeid();
-    bool yes = watcher->openFiles_->GetFileAttr(ino, &open);
-    if (!yes) {
-        return;
-    }
+  InodeAttr open;
+  Ino ino = attr->inodeid();
+  bool yes = watcher->openFiles_->GetFileAttr(ino, &open);
+  if (!yes) {
+    return;
+  }
 
-    attr->set_length(open.length());
-    attr->set_mtime(open.mtime());
-    attr->set_mtime_ns(open.mtime_ns());
-    if (AttrCtime(open) > AttrCtime(*attr)) {
-        attr->set_ctime(open.ctime());
-        attr->set_ctime_ns(open.ctime_ns());
-    }
+  attr->set_length(open.length());
+  attr->set_mtime(open.mtime());
+  attr->set_mtime_ns(open.mtime_ns());
+  if (AttrCtime(open) > AttrCtime(*attr)) {
+    attr->set_ctime(open.ctime());
+    attr->set_ctime_ns(open.ctime_ns());
+  }
 }
 
 AttrWatcherGuard::~AttrWatcherGuard() {
-    switch (type) {
-        case ReplyType::ATTR:
-            watcher->RemeberMtime(*attr);
-            if (writeBack) {
-                watcher->UpdateDirEntryAttr(attr->inodeid(), *attr);
-            }
-            break;
+  switch (type) {
+    case ReplyType::ATTR:
+      watcher->RemeberMtime(*attr);
+      if (writeBack) {
+        watcher->UpdateDirEntryAttr(attr->inodeid(), *attr);
+      }
+      break;
 
-        case ReplyType::ONLY_LENGTH:
-            if (writeBack) {
-                watcher->UpdateDirEntryLength(attr->inodeid(), *attr);
-            }
-            break;
-    }
+    case ReplyType::ONLY_LENGTH:
+      if (writeBack) {
+        watcher->UpdateDirEntryLength(attr->inodeid(), *attr);
+      }
+      break;
+  }
 }
 
 }  // namespace filesystem

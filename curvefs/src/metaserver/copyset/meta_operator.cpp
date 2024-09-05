@@ -37,9 +37,8 @@
 #include "curvefs/src/metaserver/streaming_utils.h"
 #include "src/common/timeutility.h"
 
-static bvar::LatencyRecorder
-    g_concurrent_fast_apply_wait_latency("concurrent_fast_apply_wait");
-
+static bvar::LatencyRecorder g_concurrent_fast_apply_wait_latency(
+    "concurrent_fast_apply_wait");
 
 namespace curvefs {
 namespace metaserver {
@@ -49,131 +48,130 @@ using ::curve::common::TimeUtility;
 using ::curvefs::common::StreamConnection;
 
 MetaOperator::~MetaOperator() {
-    if (ownRequest_ && request_) {
-        delete request_;
-        request_ = nullptr;
-    }
+  if (ownRequest_ && request_) {
+    delete request_;
+    request_ = nullptr;
+  }
 }
 
 void MetaOperator::Propose() {
-    brpc::ClosureGuard doneGuard(done_);
+  brpc::ClosureGuard doneGuard(done_);
 
-    // check if current node is leader
-    if (!IsLeaderTerm()) {
-        RedirectRequest();
-        return;
-    }
+  // check if current node is leader
+  if (!IsLeaderTerm()) {
+    RedirectRequest();
+    return;
+  }
 
-    // check if operator can bypass propose to raft
-    if (CanBypassPropose()) {
-        FastApplyTask();
-        doneGuard.release();
-        return;
-    }
+  // check if operator can bypass propose to raft
+  if (CanBypassPropose()) {
+    FastApplyTask();
+    doneGuard.release();
+    return;
+  }
 
-    // propose to raft
-    if (ProposeTask()) {
-        doneGuard.release();
-    }
+  // propose to raft
+  if (ProposeTask()) {
+    doneGuard.release();
+  }
 }
 
 void MetaOperator::RedirectRequest() { Redirect(); }
 
 bool MetaOperator::ProposeTask() {
-    timerPropose.start();
-    butil::IOBuf log;
-    bool success = RaftLogCodec::Encode(GetOperatorType(), request_, &log);
-    if (!success) {
-        LOG(ERROR) << "meta request encode failed, type: "
-                   << OperatorTypeName(GetOperatorType())
-                   << ", request: " << request_->ShortDebugString();
-        OnFailed(MetaStatusCode::UNKNOWN_ERROR);
-        return false;
-    }
+  timerPropose.start();
+  butil::IOBuf log;
+  bool success = RaftLogCodec::Encode(GetOperatorType(), request_, &log);
+  if (!success) {
+    LOG(ERROR) << "meta request encode failed, type: "
+               << OperatorTypeName(GetOperatorType())
+               << ", request: " << request_->ShortDebugString();
+    OnFailed(MetaStatusCode::UNKNOWN_ERROR);
+    return false;
+  }
 
-    braft::Task task;
-    task.data = &log;
-    task.done = new MetaOperatorClosure(this);
-    task.expected_term = node_->LeaderTerm();
+  braft::Task task;
+  task.data = &log;
+  task.done = new MetaOperatorClosure(this);
+  task.expected_term = node_->LeaderTerm();
 
-    node_->Propose(task);
+  node_->Propose(task);
 
-    return true;
+  return true;
 }
 
 void MetaOperator::FastApplyTask() {
-    butil::Timer timer;
-    timer.start();
-    auto task =
-        std::bind(&MetaOperator::OnApply, this, node_->GetAppliedIndex(),
-                  new MetaOperatorClosure(this), TimeUtility::GetTimeofDayUs());
-    node_->GetApplyQueue()->Push(HashCode(), std::move(task));
-    timer.stop();
-    g_concurrent_fast_apply_wait_latency << timer.u_elapsed();
+  butil::Timer timer;
+  timer.start();
+  auto task =
+      std::bind(&MetaOperator::OnApply, this, node_->GetAppliedIndex(),
+                new MetaOperatorClosure(this), TimeUtility::GetTimeofDayUs());
+  node_->GetApplyQueue()->Push(HashCode(), std::move(task));
+  timer.stop();
+  g_concurrent_fast_apply_wait_latency << timer.u_elapsed();
 }
 
 bool GetInodeOperator::CanBypassPropose() const {
-    auto *req = static_cast<const GetInodeRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  auto* req = static_cast<const GetInodeRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 bool ListDentryOperator::CanBypassPropose() const {
-    auto *req = static_cast<const ListDentryRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  auto* req = static_cast<const ListDentryRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 bool BatchGetInodeAttrOperator::CanBypassPropose() const {
-    auto *req = static_cast<const BatchGetInodeAttrRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  auto* req = static_cast<const BatchGetInodeAttrRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 bool BatchGetXAttrOperator::CanBypassPropose() const {
-    auto *req = static_cast<const BatchGetXAttrRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  auto* req = static_cast<const BatchGetXAttrRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 bool GetDentryOperator::CanBypassPropose() const {
-    auto *req = static_cast<const GetDentryRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  auto* req = static_cast<const GetDentryRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 bool GetVolumeExtentOperator::CanBypassPropose() const {
-    const auto *req = static_cast<const GetVolumeExtentRequest *>(request_);
-    return req->has_appliedindex() &&
-           node_->GetAppliedIndex() >= req->appliedindex();
+  const auto* req = static_cast<const GetVolumeExtentRequest*>(request_);
+  return req->has_appliedindex() &&
+         node_->GetAppliedIndex() >= req->appliedindex();
 }
 
 #define OPERATOR_ON_APPLY(TYPE)                                                \
-    void TYPE##Operator::OnApply(int64_t index,                                \
-                                 google::protobuf::Closure *done,              \
-                                 uint64_t startTimeUs) {                       \
-        brpc::ClosureGuard doneGuard(done);                                    \
-        uint64_t timeUs = TimeUtility::GetTimeofDayUs();                       \
-        node_->GetMetric()->WaitInQueueLatency(OperatorType::TYPE,             \
-                                               timeUs - startTimeUs);          \
-        auto status = node_->GetMetaStore()->TYPE(                             \
-            static_cast<const TYPE##Request *>(request_),                      \
-            static_cast<TYPE##Response *>(response_));                         \
-        uint64_t executeTime = TimeUtility::GetTimeofDayUs() - timeUs;         \
-        node_->GetMetric()->ExecuteLatency(OperatorType::TYPE, executeTime);   \
-        if (status == MetaStatusCode::OK) {                                    \
-            node_->UpdateAppliedIndex(index);                                  \
-            static_cast<TYPE##Response *>(response_)->set_appliedindex(        \
-                std::max<uint64_t>(index, node_->GetAppliedIndex()));          \
-            node_->GetMetric()->OnOperatorComplete(                            \
-                OperatorType::TYPE,                                            \
-                TimeUtility::GetTimeofDayUs() - startTimeUs, true);            \
-        } else {                                                               \
-            node_->GetMetric()->OnOperatorComplete(                            \
-                OperatorType::TYPE,                                            \
-                TimeUtility::GetTimeofDayUs() - startTimeUs, false);           \
-        }                                                                      \
-    }
+  void TYPE##Operator::OnApply(int64_t index, google::protobuf::Closure* done, \
+                               uint64_t startTimeUs) {                         \
+    brpc::ClosureGuard doneGuard(done);                                        \
+    uint64_t timeUs = TimeUtility::GetTimeofDayUs();                           \
+    node_->GetMetric()->WaitInQueueLatency(OperatorType::TYPE,                 \
+                                           timeUs - startTimeUs);              \
+    auto status = node_->GetMetaStore()                                        \
+                      -> TYPE(static_cast<const TYPE##Request*>(request_),     \
+                              static_cast<TYPE##Response*>(response_));        \
+    uint64_t executeTime = TimeUtility::GetTimeofDayUs() - timeUs;             \
+    node_->GetMetric()->ExecuteLatency(OperatorType::TYPE, executeTime);       \
+    if (status == MetaStatusCode::OK) {                                        \
+      node_->UpdateAppliedIndex(index);                                        \
+      static_cast<TYPE##Response*>(response_)->set_appliedindex(               \
+          std::max<uint64_t>(index, node_->GetAppliedIndex()));                \
+      node_->GetMetric()->OnOperatorComplete(                                  \
+          OperatorType::TYPE, TimeUtility::GetTimeofDayUs() - startTimeUs,     \
+          true);                                                               \
+    } else {                                                                   \
+      node_->GetMetric()->OnOperatorComplete(                                  \
+          OperatorType::TYPE, TimeUtility::GetTimeofDayUs() - startTimeUs,     \
+          false);                                                              \
+    }                                                                          \
+  }
 
 OPERATOR_ON_APPLY(GetDentry);
 OPERATOR_ON_APPLY(ListDentry);
@@ -198,112 +196,112 @@ OPERATOR_ON_APPLY(UpdateVolumeExtent);
 // so we redefine OnApply() and OnApplyFromLog() instead of using macro.
 // It may not be an elegant implementation, can you provide a better idea?
 void GetOrModifyS3ChunkInfoOperator::OnApply(int64_t index,
-                                             google::protobuf::Closure *done,
+                                             google::protobuf::Closure* done,
                                              uint64_t startTimeUs) {
-    MetaStatusCode rc;
-    auto request = static_cast<const GetOrModifyS3ChunkInfoRequest *>(request_);
-    auto response = static_cast<GetOrModifyS3ChunkInfoResponse *>(response_);
-    auto metastore = node_->GetMetaStore();
-    std::shared_ptr<StreamConnection> connection;
-    std::shared_ptr<Iterator> iterator;
-    auto streamServer = metastore->GetStreamServer();
+  MetaStatusCode rc;
+  auto request = static_cast<const GetOrModifyS3ChunkInfoRequest*>(request_);
+  auto response = static_cast<GetOrModifyS3ChunkInfoResponse*>(response_);
+  auto metastore = node_->GetMetaStore();
+  std::shared_ptr<StreamConnection> connection;
+  std::shared_ptr<Iterator> iterator;
+  auto streamServer = metastore->GetStreamServer();
 
-    {
-        brpc::ClosureGuard doneGuard(done);
+  {
+    brpc::ClosureGuard doneGuard(done);
 
-        rc = metastore->GetOrModifyS3ChunkInfo(request, response, &iterator);
-        if (rc == MetaStatusCode::OK) {
-            node_->UpdateAppliedIndex(index);
-            response->set_appliedindex(
-                std::max<uint64_t>(index, node_->GetAppliedIndex()));
-            node_->GetMetric()->OnOperatorComplete(
-                OperatorType::GetOrModifyS3ChunkInfo,
-                TimeUtility::GetTimeofDayUs() - startTimeUs, true);
-        } else {
-            node_->GetMetric()->OnOperatorComplete(
-                OperatorType::GetOrModifyS3ChunkInfo,
-                TimeUtility::GetTimeofDayUs() - startTimeUs, false);
-        }
-
-        brpc::Controller *cntl = static_cast<brpc::Controller *>(cntl_);
-        if (rc != MetaStatusCode::OK || !request->returns3chunkinfomap() ||
-            !request->supportstreaming()) {
-            return;
-        }
-
-        // rc == MetaStatusCode::OK && streaming
-        connection = streamServer->Accept(cntl);
-        if (nullptr == connection) {
-            LOG(ERROR) << "Accept stream connection failed in server-side";
-            response->set_statuscode(MetaStatusCode::RPC_STREAM_ERROR);
-            return;
-        }
+    rc = metastore->GetOrModifyS3ChunkInfo(request, response, &iterator);
+    if (rc == MetaStatusCode::OK) {
+      node_->UpdateAppliedIndex(index);
+      response->set_appliedindex(
+          std::max<uint64_t>(index, node_->GetAppliedIndex()));
+      node_->GetMetric()->OnOperatorComplete(
+          OperatorType::GetOrModifyS3ChunkInfo,
+          TimeUtility::GetTimeofDayUs() - startTimeUs, true);
+    } else {
+      node_->GetMetric()->OnOperatorComplete(
+          OperatorType::GetOrModifyS3ChunkInfo,
+          TimeUtility::GetTimeofDayUs() - startTimeUs, false);
     }
 
-    rc = metastore->SendS3ChunkInfoByStream(connection, iterator);
-    if (rc != MetaStatusCode::OK) {
-        LOG(ERROR) << "Sending s3chunkinfo by stream failed";
+    brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_);
+    if (rc != MetaStatusCode::OK || !request->returns3chunkinfomap() ||
+        !request->supportstreaming()) {
+      return;
     }
+
+    // rc == MetaStatusCode::OK && streaming
+    connection = streamServer->Accept(cntl);
+    if (nullptr == connection) {
+      LOG(ERROR) << "Accept stream connection failed in server-side";
+      response->set_statuscode(MetaStatusCode::RPC_STREAM_ERROR);
+      return;
+    }
+  }
+
+  rc = metastore->SendS3ChunkInfoByStream(connection, iterator);
+  if (rc != MetaStatusCode::OK) {
+    LOG(ERROR) << "Sending s3chunkinfo by stream failed";
+  }
 }
 
 void GetVolumeExtentOperator::OnApply(int64_t index,
-                                      google::protobuf::Closure *done,
+                                      google::protobuf::Closure* done,
                                       uint64_t startTimeUs) {
-    brpc::ClosureGuard doneGuard(done);
-    const auto *request = static_cast<const GetVolumeExtentRequest *>(request_);
-    auto *response = static_cast<GetVolumeExtentResponse *>(response_);
-    auto *metaStore = node_->GetMetaStore();
+  brpc::ClosureGuard doneGuard(done);
+  const auto* request = static_cast<const GetVolumeExtentRequest*>(request_);
+  auto* response = static_cast<GetVolumeExtentResponse*>(response_);
+  auto* metaStore = node_->GetMetaStore();
 
-    auto st = metaStore->GetVolumeExtent(request, response);
-    node_->GetMetric()->OnOperatorComplete(
-        OperatorType::GetVolumeExtent,
-        TimeUtility::GetTimeofDayUs() - startTimeUs, st == MetaStatusCode::OK);
+  auto st = metaStore->GetVolumeExtent(request, response);
+  node_->GetMetric()->OnOperatorComplete(
+      OperatorType::GetVolumeExtent,
+      TimeUtility::GetTimeofDayUs() - startTimeUs, st == MetaStatusCode::OK);
 
-    if (st != MetaStatusCode::OK) {
-        return;
-    }
+  if (st != MetaStatusCode::OK) {
+    return;
+  }
 
-    response->set_appliedindex(index);
-    if (!request->streaming()) {
-        return;
-    }
+  response->set_appliedindex(index);
+  if (!request->streaming()) {
+    return;
+  }
 
-    // in streaming mode, swap slices out and send them by streaming
-    VolumeExtentList extents;
-    response->mutable_slices()->Swap(&extents);
-    response->clear_slices();
+  // in streaming mode, swap slices out and send them by streaming
+  VolumeExtentList extents;
+  response->mutable_slices()->Swap(&extents);
+  response->clear_slices();
 
-    // accept client's streaming request
-    auto *cntl = static_cast<brpc::Controller *>(cntl_);
-    auto streamingServer = metaStore->GetStreamServer();
-    auto connection = streamingServer->Accept(cntl);
-    if (connection == nullptr) {
-        LOG(ERROR) << "Accept streaming connection failed";
-        response->set_statuscode(MetaStatusCode::RPC_STREAM_ERROR);
-        return;
-    }
+  // accept client's streaming request
+  auto* cntl = static_cast<brpc::Controller*>(cntl_);
+  auto streamingServer = metaStore->GetStreamServer();
+  auto connection = streamingServer->Accept(cntl);
+  if (connection == nullptr) {
+    LOG(ERROR) << "Accept streaming connection failed";
+    response->set_statuscode(MetaStatusCode::RPC_STREAM_ERROR);
+    return;
+  }
 
-    // run done
-    done->Run();
-    doneGuard.release();
+  // run done
+  done->Run();
+  doneGuard.release();
 
-    // send volume extent
-    st = StreamingSendVolumeExtent(connection.get(), extents);
-    if (st != MetaStatusCode::OK) {
-        LOG(ERROR) << "Send volume extents by stream failed";
-    }
+  // send volume extent
+  st = StreamingSendVolumeExtent(connection.get(), extents);
+  if (st != MetaStatusCode::OK) {
+    LOG(ERROR) << "Send volume extents by stream failed";
+  }
 }
 
-#define OPERATOR_ON_APPLY_FROM_LOG(TYPE)                                       \
-    void TYPE##Operator::OnApplyFromLog(uint64_t startTimeUs) {                \
-        std::unique_ptr<TYPE##Operator> selfGuard(this);                       \
-        TYPE##Response response;                                               \
-        auto status = node_->GetMetaStore()->TYPE(                             \
-            static_cast<const TYPE##Request *>(request_), &response);          \
-        node_->GetMetric()->OnOperatorCompleteFromLog(                         \
-            OperatorType::TYPE, TimeUtility::GetTimeofDayUs() - startTimeUs,   \
-            status == MetaStatusCode::OK);                                     \
-    }
+#define OPERATOR_ON_APPLY_FROM_LOG(TYPE)                                 \
+  void TYPE##Operator::OnApplyFromLog(uint64_t startTimeUs) {            \
+    std::unique_ptr<TYPE##Operator> selfGuard(this);                     \
+    TYPE##Response response;                                             \
+    auto status = node_->GetMetaStore() -> TYPE(                         \
+        static_cast<const TYPE##Request*>(request_), &response);         \
+    node_->GetMetric()->OnOperatorCompleteFromLog(                       \
+        OperatorType::TYPE, TimeUtility::GetTimeofDayUs() - startTimeUs, \
+        status == MetaStatusCode::OK);                                   \
+  }
 
 OPERATOR_ON_APPLY_FROM_LOG(CreateDentry);
 OPERATOR_ON_APPLY_FROM_LOG(DeleteDentry);
@@ -320,25 +318,25 @@ OPERATOR_ON_APPLY_FROM_LOG(UpdateVolumeExtent);
 #undef OPERATOR_ON_APPLY_FROM_LOG
 
 void GetOrModifyS3ChunkInfoOperator::OnApplyFromLog(uint64_t startTimeUs) {
-    std::unique_ptr<GetOrModifyS3ChunkInfoOperator> selfGuard(this);
-    GetOrModifyS3ChunkInfoRequest request;
-    GetOrModifyS3ChunkInfoResponse response;
-    std::shared_ptr<Iterator> iterator;
-    request = *static_cast<const GetOrModifyS3ChunkInfoRequest *>(request_);
-    request.set_returns3chunkinfomap(false);
-    auto status = node_->GetMetaStore()->GetOrModifyS3ChunkInfo(
-        &request, &response, &iterator);
-    node_->GetMetric()->OnOperatorCompleteFromLog(
-        OperatorType::GetOrModifyS3ChunkInfo,
-        TimeUtility::GetTimeofDayUs() - startTimeUs,
-        status == MetaStatusCode::OK);
+  std::unique_ptr<GetOrModifyS3ChunkInfoOperator> selfGuard(this);
+  GetOrModifyS3ChunkInfoRequest request;
+  GetOrModifyS3ChunkInfoResponse response;
+  std::shared_ptr<Iterator> iterator;
+  request = *static_cast<const GetOrModifyS3ChunkInfoRequest*>(request_);
+  request.set_returns3chunkinfomap(false);
+  auto status = node_->GetMetaStore()->GetOrModifyS3ChunkInfo(
+      &request, &response, &iterator);
+  node_->GetMetric()->OnOperatorCompleteFromLog(
+      OperatorType::GetOrModifyS3ChunkInfo,
+      TimeUtility::GetTimeofDayUs() - startTimeUs,
+      status == MetaStatusCode::OK);
 }
 
-#define READONLY_OPERATOR_ON_APPLY_FROM_LOG(TYPE)                              \
-    void TYPE##Operator::OnApplyFromLog(uint64_t startTimeUs) {                \
-        (void)startTimeUs;                                                     \
-        std::unique_ptr<TYPE##Operator> selfGuard(this);                       \
-    }
+#define READONLY_OPERATOR_ON_APPLY_FROM_LOG(TYPE)             \
+  void TYPE##Operator::OnApplyFromLog(uint64_t startTimeUs) { \
+    (void)startTimeUs;                                        \
+    std::unique_ptr<TYPE##Operator> selfGuard(this);          \
+  }
 
 // below operator are readonly, so on apply from log do nothing
 READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetDentry);
@@ -350,11 +348,11 @@ READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetVolumeExtent);
 
 #undef READONLY_OPERATOR_ON_APPLY_FROM_LOG
 
-#define OPERATOR_REDIRECT(TYPE)                                                \
-    void TYPE##Operator::Redirect() {                                          \
-        static_cast<TYPE##Response *>(response_)->set_statuscode(              \
-            MetaStatusCode::REDIRECTED);                                       \
-    }
+#define OPERATOR_REDIRECT(TYPE)                              \
+  void TYPE##Operator::Redirect() {                          \
+    static_cast<TYPE##Response*>(response_)->set_statuscode( \
+        MetaStatusCode::REDIRECTED);                         \
+  }
 
 OPERATOR_REDIRECT(GetDentry);
 OPERATOR_REDIRECT(ListDentry);
@@ -377,10 +375,10 @@ OPERATOR_REDIRECT(UpdateVolumeExtent);
 
 #undef OPERATOR_REDIRECT
 
-#define OPERATOR_ON_FAILED(TYPE)                                               \
-    void TYPE##Operator::OnFailed(MetaStatusCode code) {                       \
-        static_cast<TYPE##Response *>(response_)->set_statuscode(code);        \
-    }
+#define OPERATOR_ON_FAILED(TYPE)                                   \
+  void TYPE##Operator::OnFailed(MetaStatusCode code) {             \
+    static_cast<TYPE##Response*>(response_)->set_statuscode(code); \
+  }
 
 OPERATOR_ON_FAILED(GetDentry);
 OPERATOR_ON_FAILED(ListDentry);
@@ -403,10 +401,10 @@ OPERATOR_ON_FAILED(UpdateVolumeExtent);
 
 #undef OPERATOR_ON_FAILED
 
-#define OPERATOR_HASH_CODE(TYPE)                                               \
-    uint64_t TYPE##Operator::HashCode() const {                                \
-        return static_cast<const TYPE##Request *>(request_)->partitionid();    \
-    }
+#define OPERATOR_HASH_CODE(TYPE)                                       \
+  uint64_t TYPE##Operator::HashCode() const {                          \
+    return static_cast<const TYPE##Request*>(request_)->partitionid(); \
+  }
 
 OPERATOR_HASH_CODE(GetDentry);
 OPERATOR_HASH_CODE(ListDentry);
@@ -428,21 +426,21 @@ OPERATOR_HASH_CODE(UpdateVolumeExtent);
 
 #undef OPERATOR_HASH_CODE
 
-#define PARTITION_OPERATOR_HASH_CODE(TYPE)                                     \
-    uint64_t TYPE##Operator::HashCode() const {                                \
-        return static_cast<const TYPE##Request *>(request_)                    \
-            ->partition()                                                      \
-            .partitionid();                                                    \
-    }
+#define PARTITION_OPERATOR_HASH_CODE(TYPE)             \
+  uint64_t TYPE##Operator::HashCode() const {          \
+    return static_cast<const TYPE##Request*>(request_) \
+        ->partition()                                  \
+        .partitionid();                                \
+  }
 
 PARTITION_OPERATOR_HASH_CODE(CreatePartition);
 
 #undef PARTITION_OPERATOR_HASH_CODE
 
-#define OPERATOR_TYPE(TYPE)                                                    \
-    OperatorType TYPE##Operator::GetOperatorType() const {                     \
-        return OperatorType::TYPE;                                             \
-    }
+#define OPERATOR_TYPE(TYPE)                              \
+  OperatorType TYPE##Operator::GetOperatorType() const { \
+    return OperatorType::TYPE;                           \
+  }
 
 OPERATOR_TYPE(GetDentry);
 OPERATOR_TYPE(ListDentry);

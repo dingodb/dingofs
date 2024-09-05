@@ -25,6 +25,7 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+
 #include <memory>
 
 #include "nebd/proto/heartbeat.pb.h"
@@ -35,17 +36,17 @@ namespace server {
 
 class NebdHeartbeatServiceImpl : public nebd::client::NebdHeartbeatService {
  public:
-    explicit NebdHeartbeatServiceImpl(
-        std::shared_ptr<HeartbeatManager> heartbeatManager)
-        : heartbeatManager_(heartbeatManager) {}
-    virtual ~NebdHeartbeatServiceImpl() {}
-    virtual void KeepAlive(google::protobuf::RpcController* cntl_base,
-                           const nebd::client::HeartbeatRequest* request,
-                           nebd::client::HeartbeatResponse* response,
-                           google::protobuf::Closure* done);
+  explicit NebdHeartbeatServiceImpl(
+      std::shared_ptr<HeartbeatManager> heartbeatManager)
+      : heartbeatManager_(heartbeatManager) {}
+  virtual ~NebdHeartbeatServiceImpl() {}
+  virtual void KeepAlive(google::protobuf::RpcController* cntl_base,
+                         const nebd::client::HeartbeatRequest* request,
+                         nebd::client::HeartbeatResponse* response,
+                         google::protobuf::Closure* done);
 
  private:
-    std::shared_ptr<HeartbeatManager> heartbeatManager_;
+  std::shared_ptr<HeartbeatManager> heartbeatManager_;
 };
 
 }  // namespace server

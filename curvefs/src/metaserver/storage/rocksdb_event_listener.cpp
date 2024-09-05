@@ -44,52 +44,49 @@ MetricEventListener::MetricEventListener()
 
 void MetricEventListener::OnFlushBegin(rocksdb::DB* db,
                                        const rocksdb::FlushJobInfo& /*info*/) {
-    (void)db;
-    flushing_ << 1;
-    rocksdbFlushStart = butil::cpuwide_time_us();
+  (void)db;
+  flushing_ << 1;
+  rocksdbFlushStart = butil::cpuwide_time_us();
 }
 
-void MetricEventListener::OnFlushCompleted(
-    rocksdb::DB* db,
-    const rocksdb::FlushJobInfo& info) {
-    (void)db;
-    flushing_ << -1;
-    flushLatency_ << (butil::cpuwide_time_us() - rocksdbFlushStart);
-    flushedBytes_ << info.table_properties.data_size;
+void MetricEventListener::OnFlushCompleted(rocksdb::DB* db,
+                                           const rocksdb::FlushJobInfo& info) {
+  (void)db;
+  flushing_ << -1;
+  flushLatency_ << (butil::cpuwide_time_us() - rocksdbFlushStart);
+  flushedBytes_ << info.table_properties.data_size;
 }
 
 void MetricEventListener::OnMemTableSealed(
     const rocksdb::MemTableInfo& /*info*/) {
-    sealedMemtable_ << 1;
+  sealedMemtable_ << 1;
 }
 
 void MetricEventListener::OnCompactionBegin(
-    rocksdb::DB* db,
-    const rocksdb::CompactionJobInfo& /*info*/) {
-    (void)db;
-    compacting_ << 1;
-    rocksdbCompactionStart = butil::cpuwide_time_us();
+    rocksdb::DB* db, const rocksdb::CompactionJobInfo& /*info*/) {
+  (void)db;
+  compacting_ << 1;
+  rocksdbCompactionStart = butil::cpuwide_time_us();
 }
 
 void MetricEventListener::OnCompactionCompleted(
-    rocksdb::DB* db,
-    const rocksdb::CompactionJobInfo& /*info*/) {
-    (void)db;
-    compacting_ << -1;
-    compactionLatency_ << (butil::cpuwide_time_us() - rocksdbCompactionStart);
+    rocksdb::DB* db, const rocksdb::CompactionJobInfo& /*info*/) {
+  (void)db;
+  compacting_ << -1;
+  compactionLatency_ << (butil::cpuwide_time_us() - rocksdbCompactionStart);
 }
 
 void MetricEventListener::OnStallConditionsChanged(
     const rocksdb::WriteStallInfo& info) {
-    switch (info.condition.cur) {
-        case rocksdb::WriteStallCondition::kNormal:
-            return;
-        case rocksdb::WriteStallCondition::kDelayed:
-            delayedWrite_ << 1;
-            return;
-        case rocksdb::WriteStallCondition::kStopped:
-            stoppedWrite_ << 1;
-    }
+  switch (info.condition.cur) {
+    case rocksdb::WriteStallCondition::kNormal:
+      return;
+    case rocksdb::WriteStallCondition::kDelayed:
+      delayedWrite_ << 1;
+      return;
+    case rocksdb::WriteStallCondition::kStopped:
+      stoppedWrite_ << 1;
+  }
 }
 
 }  // namespace storage

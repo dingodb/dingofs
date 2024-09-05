@@ -33,12 +33,12 @@ namespace copyset {
 
 class MockRaftCli2Service : public copyset::CliService2 {
  public:
-    MOCK_METHOD4(
-        GetLeader,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::metaserver::copyset::GetLeaderRequest2* request,
-             ::curvefs::metaserver::copyset::GetLeaderResponse2* response,
-             ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      GetLeader,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::metaserver::copyset::GetLeaderRequest2* request,
+           ::curvefs::metaserver::copyset::GetLeaderResponse2* response,
+           ::google::protobuf::Closure* done));
 };
 
 }  // namespace copyset

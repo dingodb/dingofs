@@ -20,46 +20,48 @@
  * Author: lixiaocui
  */
 
-#include <vector>
-#include "src/common/string_util.h"
 #include "curvefs/src/common/s3util.h"
+
+#include <vector>
+
+#include "src/common/string_util.h"
 
 namespace curvefs {
 namespace common {
 namespace s3util {
 
-std::string GenPathByObjName(const std::string &objName,
+std::string GenPathByObjName(const std::string& objName,
                              uint32_t objectPrefix_) {
-    std::vector<std::string> objs;
-    uint64_t inodeid;
-    curve::common::SplitString(objName, "_", &objs);
-    if (objectPrefix_ == 0) {
-        return objName;
-    } else if (objectPrefix_ == 1) {
-        inodeid = std::stoll(objs[1]);
-        return objs[0] + "/" + std::to_string(inodeid/1000/1000) + "/" +
-               std::to_string(inodeid/1000) + "/" + objName;
-    } else {
-        inodeid = std::stoll(objs[1]);
-        return objs[0] + "/" + std::to_string(inodeid%256) + "/" +
-               std::to_string(inodeid/1000) + "/" + objName;
-    }
+  std::vector<std::string> objs;
+  uint64_t inodeid;
+  curve::common::SplitString(objName, "_", &objs);
+  if (objectPrefix_ == 0) {
+    return objName;
+  } else if (objectPrefix_ == 1) {
+    inodeid = std::stoll(objs[1]);
+    return objs[0] + "/" + std::to_string(inodeid / 1000 / 1000) + "/" +
+           std::to_string(inodeid / 1000) + "/" + objName;
+  } else {
+    inodeid = std::stoll(objs[1]);
+    return objs[0] + "/" + std::to_string(inodeid % 256) + "/" +
+           std::to_string(inodeid / 1000) + "/" + objName;
+  }
 }
 
-bool ValidNameOfInode(const std::string &inode, const std::string &objName,
+bool ValidNameOfInode(const std::string& inode, const std::string& objName,
                       uint32_t objectPrefix) {
-    std::vector<std::string> res, objs;
-    if (objectPrefix == 0) {
-        curve::common::SplitString(objName, "_", &res);
-        return res.size() == 5 && res[1] == inode;
-    } else {
-        curve::common::SplitString(objName, "/", &objs);
-        if (objs.size() == 4) {
-            curve::common::SplitString(objs[3], "_", &res);
-            return res.size() == 5 && res[1] == inode;
-        }
-        return false;
+  std::vector<std::string> res, objs;
+  if (objectPrefix == 0) {
+    curve::common::SplitString(objName, "_", &res);
+    return res.size() == 5 && res[1] == inode;
+  } else {
+    curve::common::SplitString(objName, "/", &objs);
+    if (objs.size() == 4) {
+      curve::common::SplitString(objs[3], "_", &res);
+      return res.size() == 5 && res[1] == inode;
     }
+    return false;
+  }
 }
 }  // namespace s3util
 }  // namespace common

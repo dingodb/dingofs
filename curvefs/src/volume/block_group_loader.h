@@ -40,54 +40,50 @@ using ::curvefs::common::BitmapLocation;
 class BlockDeviceClient;
 
 struct AllocatorAndBitmapUpdater {
-    uint64_t blockGroupOffset;
-    std::unique_ptr<Allocator> allocator;
-    std::unique_ptr<BlockGroupBitmapUpdater> bitmapUpdater;
+  uint64_t blockGroupOffset;
+  std::unique_ptr<Allocator> allocator;
+  std::unique_ptr<BlockGroupBitmapUpdater> bitmapUpdater;
 };
 
 // load bitmap for each block group
 class BlockGroupBitmapLoader {
  public:
-    BlockGroupBitmapLoader(BlockDeviceClient* client,
-                           uint32_t blockSize,
-                           uint64_t offset,
-                           uint64_t blockGroupSize,
-                           BitmapLocation location,
-                           bool clean,
-                           const AllocatorOption& option)
-        : blockDev_(client),
-          offset_(offset),
-          blockGroupSize_(blockGroupSize),
-          blockSize_(blockSize),
-          bitmapLocation_(location),
-          clean_(clean),
-          allocatorOption_(option) {}
+  BlockGroupBitmapLoader(BlockDeviceClient* client, uint32_t blockSize,
+                         uint64_t offset, uint64_t blockGroupSize,
+                         BitmapLocation location, bool clean,
+                         const AllocatorOption& option)
+      : blockDev_(client),
+        offset_(offset),
+        blockGroupSize_(blockGroupSize),
+        blockSize_(blockSize),
+        bitmapLocation_(location),
+        clean_(clean),
+        allocatorOption_(option) {}
 
-    BlockGroupBitmapLoader(const BlockGroupBitmapLoader&) = delete;
-    BlockGroupBitmapLoader& operator=(const BlockGroupBitmapLoader&) = delete;
+  BlockGroupBitmapLoader(const BlockGroupBitmapLoader&) = delete;
+  BlockGroupBitmapLoader& operator=(const BlockGroupBitmapLoader&) = delete;
 
-    /**
-     * @brief Create a allocator and bitmap updater that corresponding to
-     *        current block group
-     * @return return true if success, otherwise, return false
-     */
-    bool Load(AllocatorAndBitmapUpdater* out);
+  /**
+   * @brief Create a allocator and bitmap updater that corresponding to
+   *        current block group
+   * @return return true if success, otherwise, return false
+   */
+  bool Load(AllocatorAndBitmapUpdater* out);
 
  private:
-    BitmapRange CalcBitmapRange() const;
+  BitmapRange CalcBitmapRange() const;
 
-    bool LoadBitmap(std::unique_ptr<Bitmap>* bitmap,
-                    BitmapRange* bitmapRange,
-                    std::vector<Extent>* used);
+  bool LoadBitmap(std::unique_ptr<Bitmap>* bitmap, BitmapRange* bitmapRange,
+                  std::vector<Extent>* used);
 
  private:
-    BlockDeviceClient* blockDev_;
-    uint64_t offset_;
-    uint64_t blockGroupSize_;
-    uint32_t blockSize_;
-    BitmapLocation bitmapLocation_;
-    bool clean_;
-    const AllocatorOption& allocatorOption_;
+  BlockDeviceClient* blockDev_;
+  uint64_t offset_;
+  uint64_t blockGroupSize_;
+  uint32_t blockSize_;
+  BitmapLocation bitmapLocation_;
+  bool clean_;
+  const AllocatorOption& allocatorOption_;
 };
 
 }  // namespace volume

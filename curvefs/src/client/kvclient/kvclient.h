@@ -34,23 +34,23 @@ namespace client {
 
 class KVClient {
  public:
-    KVClient() = default;
-    ~KVClient() = default;
+  KVClient() = default;
+  ~KVClient() = default;
 
-    virtual void Init() {}
+  virtual void Init() {}
 
-    virtual void UnInit() {}
+  virtual void UnInit() {}
 
-    /**
-     * @param: errorlog: if error occurred, the errorlog will take
-     *         the error info and log.
-     * @return: success return true, else return false;
-     */
-    virtual bool Set(const std::string &key, const char *value,
-                     const uint64_t value_len, std::string *errorlog) = 0;
+  /**
+   * @param: errorlog: if error occurred, the errorlog will take
+   *         the error info and log.
+   * @return: success return true, else return false;
+   */
+  virtual bool Set(const std::string& key, const char* value,
+                   const uint64_t value_len, std::string* errorlog) = 0;
 
-    virtual bool Get(const std::string &key, char *value, uint64_t offset,
-                     uint64_t length, std::string *errorlog) = 0;
+  virtual bool Get(const std::string& key, char* value, uint64_t offset,
+                   uint64_t length, std::string* errorlog) = 0;
 };
 
 }  // namespace client

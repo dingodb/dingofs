@@ -20,17 +20,20 @@
  * Author: lixiaocui
  */
 
-#include <glog/logging.h>
-#include <string>
 #include "src/mds/nameserver2/idgenerator/inode_id_generator.h"
+
+#include <glog/logging.h>
+
+#include <string>
+
 #include "src/common/string_util.h"
 #include "src/mds/nameserver2/helper/namespace_helper.h"
 
 namespace curve {
 namespace mds {
 
-bool InodeIdGeneratorImp::GenInodeID(InodeID *id) {
-    return generator_->GenID(id);
+bool InodeIdGeneratorImp::GenInodeID(InodeID* id) {
+  return generator_->GenID(id);
 }
 
 }  // namespace mds

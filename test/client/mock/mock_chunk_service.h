@@ -32,14 +32,14 @@ namespace chunkserver {
 
 class MockChunkService : public ChunkService {
  public:
-    MOCK_METHOD4(WriteChunk,
-                 void(::google::protobuf::RpcController *controller,
-                      const ChunkRequest *request, ChunkResponse *response,
-                      ::google::protobuf::Closure *done));
-    MOCK_METHOD4(ReadChunk,
-                 void(::google::protobuf::RpcController *controller,
-                      const ChunkRequest *request, ChunkResponse *response,
-                      ::google::protobuf::Closure *done));
+  MOCK_METHOD4(WriteChunk,
+               void(::google::protobuf::RpcController* controller,
+                    const ChunkRequest* request, ChunkResponse* response,
+                    ::google::protobuf::Closure* done));
+  MOCK_METHOD4(ReadChunk,
+               void(::google::protobuf::RpcController* controller,
+                    const ChunkRequest* request, ChunkResponse* response,
+                    ::google::protobuf::Closure* done));
 };
 
 }  // namespace chunkserver

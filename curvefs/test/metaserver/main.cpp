@@ -23,23 +23,23 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-using ::testing::AtLeast;
-using ::testing::StrEq;
 using ::testing::_;
+using ::testing::AtLeast;
+using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::ReturnArg;
-using ::testing::DoAll;
-using ::testing::SetArgPointee;
 using ::testing::SaveArg;
+using ::testing::SetArgPointee;
+using ::testing::StrEq;
 
 namespace curvefs {
 namespace metaserver {
 
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    ::testing::InitGoogleMock(&argc, argv);
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  ::testing::InitGoogleMock(&argc, argv);
 
-    return RUN_ALL_TESTS();
+  return RUN_ALL_TESTS();
 }
 
 }  // namespace metaserver

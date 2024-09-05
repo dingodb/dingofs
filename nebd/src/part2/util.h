@@ -23,9 +23,9 @@
 #ifndef NEBD_SRC_PART2_UTIL_H_
 #define NEBD_SRC_PART2_UTIL_H_
 
-#include <string>
 #include <mutex>  // NOLINT
 #include <ostream>
+#include <string>
 
 #include "nebd/src/part2/define.h"
 
@@ -48,17 +48,17 @@ bool operator!=(const NebdFileMeta& lMeta, const NebdFileMeta& rMeta);
 
 class FdAllocator {
  public:
-    FdAllocator() : fd_(0) {}
-    ~FdAllocator() {}
+  FdAllocator() : fd_(0) {}
+  ~FdAllocator() {}
 
-    // fd的有效值范围为[1, INT_MAX]
-    int GetNext();
-    // 初始化fd的值
-    void InitFd(int fd);
+  // fd的有效值范围为[1, INT_MAX]
+  int GetNext();
+  // 初始化fd的值
+  void InitFd(int fd);
 
  private:
-    std::mutex mtx_;
-    int fd_;
+  std::mutex mtx_;
+  int fd_;
 };
 
 }  // namespace server

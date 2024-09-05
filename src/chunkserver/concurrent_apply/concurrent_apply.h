@@ -39,8 +39,8 @@
 #include "src/common/concurrent/count_down_event.h"
 #include "src/common/concurrent/task_queue.h"
 
-using curve::common::CountDownEvent;
 using curve::chunkserver::CHUNK_OP_TYPE;
+using curve::common::CountDownEvent;
 
 namespace curve {
 namespace chunkserver {
@@ -49,93 +49,92 @@ namespace concurrent {
 using ::curve::common::GenericTaskQueue;
 
 struct ConcurrentApplyOption {
-    int wconcurrentsize;
-    int wqueuedepth;
-    int rconcurrentsize;
-    int rqueuedepth;
+  int wconcurrentsize;
+  int wqueuedepth;
+  int rconcurrentsize;
+  int rqueuedepth;
 };
 
-enum class ThreadPoolType {READ, WRITE};
+enum class ThreadPoolType { READ, WRITE };
 
 class CURVE_CACHELINE_ALIGNMENT ConcurrentApplyModule {
  public:
-    ConcurrentApplyModule(): start_(false),
-                             rconcurrentsize_(0),
-                             rqueuedepth_(0),
-                             wconcurrentsize_(0),
-                             wqueuedepth_(0),
-                             cond_(0) {}
+  ConcurrentApplyModule()
+      : start_(false),
+        rconcurrentsize_(0),
+        rqueuedepth_(0),
+        wconcurrentsize_(0),
+        wqueuedepth_(0),
+        cond_(0) {}
 
-    /**
-     * Init: initialize ConcurrentApplyModule
-     * @param[in] wconcurrentsize: num of write threads
-     * @param[in] wqueuedepth: depth of write queue in ervery thread
-     * @param[in] rconcurrentsizee: num of read threads
-     * @param[in] wqueuedephth: depth of read queue in every thread
-     */
-    bool Init(const ConcurrentApplyOption &opt);
+  /**
+   * Init: initialize ConcurrentApplyModule
+   * @param[in] wconcurrentsize: num of write threads
+   * @param[in] wqueuedepth: depth of write queue in ervery thread
+   * @param[in] rconcurrentsizee: num of read threads
+   * @param[in] wqueuedephth: depth of read queue in every thread
+   */
+  bool Init(const ConcurrentApplyOption& opt);
 
-    /**
-     * Push: apply task will be push to ConcurrentApplyModule
-     * @param[in] key: used to hash task to specified queue
-     * @param[in] optype: operation type defined in proto
-     * @param[in] f: task
-     * @param[in] args: param to excute task
-     */
-    template <class F, class... Args>
-    bool Push(uint64_t key, CHUNK_OP_TYPE optype, F&& f, Args&&... args) {
-        switch (Schedule(optype)) {
-            case ThreadPoolType::READ:
-                rapplyMap_[Hash(key, rconcurrentsize_)]->tq.Push(
-                        std::forward<F>(f), std::forward<Args>(args)...);
-                break;
-            case ThreadPoolType::WRITE:
-                wapplyMap_[Hash(key, wconcurrentsize_)]->tq.Push(
-                        std::forward<F>(f), std::forward<Args>(args)...);
-                break;
-        }
-
-        return true;
+  /**
+   * Push: apply task will be push to ConcurrentApplyModule
+   * @param[in] key: used to hash task to specified queue
+   * @param[in] optype: operation type defined in proto
+   * @param[in] f: task
+   * @param[in] args: param to excute task
+   */
+  template <class F, class... Args>
+  bool Push(uint64_t key, CHUNK_OP_TYPE optype, F&& f, Args&&... args) {
+    switch (Schedule(optype)) {
+      case ThreadPoolType::READ:
+        rapplyMap_[Hash(key, rconcurrentsize_)]->tq.Push(
+            std::forward<F>(f), std::forward<Args>(args)...);
+        break;
+      case ThreadPoolType::WRITE:
+        wapplyMap_[Hash(key, wconcurrentsize_)]->tq.Push(
+            std::forward<F>(f), std::forward<Args>(args)...);
+        break;
     }
 
-    /**
-     * Flush: finish all task in write threads
-     */
-    void Flush();
+    return true;
+  }
 
-    void Stop();
+  /**
+   * Flush: finish all task in write threads
+   */
+  void Flush();
 
- private:
-    bool checkOptAndInit(const ConcurrentApplyOption &option);
-
-    void Run(ThreadPoolType type, int index);
-
-    static ThreadPoolType Schedule(CHUNK_OP_TYPE optype);
-
-    void InitThreadPool(ThreadPoolType type, int concorrent, int depth);
-
-    static int Hash(uint64_t key, int concurrent) {
-        return key % concurrent;
-    }
+  void Stop();
 
  private:
-    struct TaskThread {
-        std::thread th;
-        GenericTaskQueue<bthread::Mutex, bthread::ConditionVariable> tq;
-        explicit TaskThread(size_t capacity) : tq(capacity) {}
-    };
+  bool checkOptAndInit(const ConcurrentApplyOption& option);
 
-    bool start_;
-    int rconcurrentsize_;
-    int rqueuedepth_;
-    int wconcurrentsize_;
-    int wqueuedepth_;
-    CountDownEvent cond_;
-    CURVE_CACHELINE_ALIGNMENT std::unordered_map<int, TaskThread*> wapplyMap_;
-    CURVE_CACHELINE_ALIGNMENT std::unordered_map<int, TaskThread*> rapplyMap_;
+  void Run(ThreadPoolType type, int index);
+
+  static ThreadPoolType Schedule(CHUNK_OP_TYPE optype);
+
+  void InitThreadPool(ThreadPoolType type, int concorrent, int depth);
+
+  static int Hash(uint64_t key, int concurrent) { return key % concurrent; }
+
+ private:
+  struct TaskThread {
+    std::thread th;
+    GenericTaskQueue<bthread::Mutex, bthread::ConditionVariable> tq;
+    explicit TaskThread(size_t capacity) : tq(capacity) {}
+  };
+
+  bool start_;
+  int rconcurrentsize_;
+  int rqueuedepth_;
+  int wconcurrentsize_;
+  int wqueuedepth_;
+  CountDownEvent cond_;
+  CURVE_CACHELINE_ALIGNMENT std::unordered_map<int, TaskThread*> wapplyMap_;
+  CURVE_CACHELINE_ALIGNMENT std::unordered_map<int, TaskThread*> rapplyMap_;
 };
-}   // namespace concurrent
-}   // namespace chunkserver
-}   // namespace curve
+}  // namespace concurrent
+}  // namespace chunkserver
+}  // namespace curve
 
 #endif  // SRC_CHUNKSERVER_CONCURRENT_APPLY_CONCURRENT_APPLY_H_

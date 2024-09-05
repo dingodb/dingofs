@@ -28,8 +28,8 @@
 namespace curve {
 namespace chunkserver {
 
-using ::google::protobuf::RpcController;
 using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class CopysetNodeManager;
 
@@ -38,42 +38,38 @@ class CopysetNodeManager;
  */
 class CopysetServiceImpl : public CopysetService {
  public:
-    explicit CopysetServiceImpl(CopysetNodeManager* copysetNodeManager) :
-        copysetNodeManager_(copysetNodeManager) {}
-    ~CopysetServiceImpl() {}
+  explicit CopysetServiceImpl(CopysetNodeManager* copysetNodeManager)
+      : copysetNodeManager_(copysetNodeManager) {}
+  ~CopysetServiceImpl() {}
 
-    /**
-     * 创建复制组，一次只能创建一个
-     */
-    void CreateCopysetNode(RpcController *controller,
-                           const CopysetRequest *request,
-                           CopysetResponse *response,
-                           Closure *done);
+  /**
+   * 创建复制组，一次只能创建一个
+   */
+  void CreateCopysetNode(RpcController* controller,
+                         const CopysetRequest* request,
+                         CopysetResponse* response, Closure* done);
 
-    /*
-     * 创建复制组，一次可以创建多个
-     */
-    void CreateCopysetNode2(RpcController *controller,
-                            const CopysetRequest2 *request,
-                            CopysetResponse2 *response,
-                            Closure *done);
+  /*
+   * 创建复制组，一次可以创建多个
+   */
+  void CreateCopysetNode2(RpcController* controller,
+                          const CopysetRequest2* request,
+                          CopysetResponse2* response, Closure* done);
 
-    /**
-     * @brief Delete broken copyset
-     */
-    void DeleteBrokenCopyset(RpcController* controller,
-                             const CopysetRequest* request,
-                             CopysetResponse* response,
-                             Closure* done);
+  /**
+   * @brief Delete broken copyset
+   */
+  void DeleteBrokenCopyset(RpcController* controller,
+                           const CopysetRequest* request,
+                           CopysetResponse* response, Closure* done);
 
-    void GetCopysetStatus(RpcController *controller,
-                          const CopysetStatusRequest *request,
-                          CopysetStatusResponse *response,
-                          Closure *done);
+  void GetCopysetStatus(RpcController* controller,
+                        const CopysetStatusRequest* request,
+                        CopysetStatusResponse* response, Closure* done);
 
  private:
-    // 复制组管理者
-    CopysetNodeManager* copysetNodeManager_;
+  // 复制组管理者
+  CopysetNodeManager* copysetNodeManager_;
 };
 
 }  // namespace chunkserver

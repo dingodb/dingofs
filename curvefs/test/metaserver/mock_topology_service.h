@@ -24,6 +24,7 @@
 #define CURVEFS_TEST_METASERVER_MOCK_TOPOLOGY_SERVICE_H_
 
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/topology.pb.h"
 
 namespace curvefs {
@@ -32,14 +33,14 @@ namespace topology {
 
 class MockTopologyService : public TopologyService {
  public:
-    MockTopologyService() : TopologyService() {}
-    ~MockTopologyService() = default;
+  MockTopologyService() : TopologyService() {}
+  ~MockTopologyService() = default;
 
-    MOCK_METHOD4(RegistMetaServer,
-                 void(google::protobuf::RpcController* cntl_base,
-                      const MetaServerRegistRequest* request,
-                      MetaServerRegistResponse* response,
-                      google::protobuf::Closure* done));
+  MOCK_METHOD4(RegistMetaServer,
+               void(google::protobuf::RpcController* cntl_base,
+                    const MetaServerRegistRequest* request,
+                    MetaServerRegistResponse* response,
+                    google::protobuf::Closure* done));
 };
 }  // namespace topology
 }  // namespace mds

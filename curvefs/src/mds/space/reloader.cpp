@@ -38,39 +38,38 @@ Reloader::Reloader(SpaceManager* manager, int concurrency)
     : manager_(manager),
       taskPool_(absl::make_unique<TaskThreadPool<>>()),
       error_(SpaceOk) {
-    taskPool_->Start(concurrency);
+  taskPool_->Start(concurrency);
 }
 
 void Reloader::Add(const FsInfo& fsInfo) {
-    taskPool_->Enqueue(&Reloader::ReloadOne, this, fsInfo);
+  taskPool_->Enqueue(&Reloader::ReloadOne, this, fsInfo);
 }
 
 void Reloader::ReloadOne(const FsInfo& fsInfo) {
-    butil::Timer timer;
-    timer.start();
-    auto err = manager_->AddVolume(fsInfo);
-    timer.stop();
+  butil::Timer timer;
+  timer.start();
+  auto err = manager_->AddVolume(fsInfo);
+  timer.stop();
 
-    if (err != SpaceOk) {
-        LOG(WARNING) << "Reload volume space failed, fsId: " << fsInfo.fsid()
-                     << ", err: " << SpaceErrCode_Name(err);
+  if (err != SpaceOk) {
+    LOG(WARNING) << "Reload volume space failed, fsId: " << fsInfo.fsid()
+                 << ", err: " << SpaceErrCode_Name(err);
 
-        // only record the first occurred error
-        SpaceErrCode expected = SpaceOk;
-        error_.compare_exchange_strong(expected, err,
-                                       std::memory_order_relaxed);
-    } else {
-        LOG(INFO) << "Reload volume space succeeded, fsId: " << fsInfo.fsid()
-                  << ", elapsed " << timer.m_elapsed(.0) << " ms";
-    }
+    // only record the first occurred error
+    SpaceErrCode expected = SpaceOk;
+    error_.compare_exchange_strong(expected, err, std::memory_order_relaxed);
+  } else {
+    LOG(INFO) << "Reload volume space succeeded, fsId: " << fsInfo.fsid()
+              << ", elapsed " << timer.m_elapsed(.0) << " ms";
+  }
 }
 
 SpaceErrCode Reloader::Wait() {
-    while (taskPool_->QueueSize() != 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
+  while (taskPool_->QueueSize() != 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
 
-    return error_;
+  return error_;
 }
 
 }  // namespace space

@@ -54,208 +54,207 @@ using ::curve::kvstorage::EtcdClientImp;
 namespace curvefs {
 namespace mds {
 
-const char *kEtcdAddr = "127.0.0.1:20032";
-const char *kMdsListenAddr = "127.0.0.1:20035";
+const char* kEtcdAddr = "127.0.0.1:20032";
+const char* kMdsListenAddr = "127.0.0.1:20035";
 
 class MdsTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
+  void SetUp() override {}
 
-    void TearDown() override {}
+  void TearDown() override {}
 
-    static void ClearEnv() { system("rm -rf curve_fs_test_mds.etcd"); }
+  static void ClearEnv() { system("rm -rf curve_fs_test_mds.etcd"); }
 
-    static void StartEtcd() {
-        etcdPid_ = fork();
+  static void StartEtcd() {
+    etcdPid_ = fork();
 
-        ASSERT_GE(etcdPid_, 0);
+    ASSERT_GE(etcdPid_, 0);
 
-        if (etcdPid_ == 0) {
-            std::string cmd =
-                std::string("etcd --listen-client-urls") +
-                std::string(" 'http://localhost:20032'") +
-                std::string(" --advertise-client-urls") +
-                std::string(" 'http://localhost:20032'") +
-                std::string(" --listen-peer-urls 'http://localhost:20033'") +
-                std::string(" --name curve_fs_test_mds");
+    if (etcdPid_ == 0) {
+      std::string cmd =
+          std::string("etcd --listen-client-urls") +
+          std::string(" 'http://localhost:20032'") +
+          std::string(" --advertise-client-urls") +
+          std::string(" 'http://localhost:20032'") +
+          std::string(" --listen-peer-urls 'http://localhost:20033'") +
+          std::string(" --name curve_fs_test_mds");
 
-            LOG(INFO) << "start etcd: " << cmd;
+      LOG(INFO) << "start etcd: " << cmd;
 
-            ASSERT_EQ(0, execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr));
-            exit(0);
-        }
-
-        auto client = std::make_shared<EtcdClientImp>();
-        EtcdConf conf{const_cast<char *>(kEtcdAddr),
-                      static_cast<int>(strlen(kEtcdAddr)), 1000};
-        uint64_t now = curve::common::TimeUtility::GetTimeofDaySec();
-        bool initSucc = false;
-        while (curve::common::TimeUtility::GetTimeofDaySec() - now <= 50) {
-            if (0 == client->Init(conf, 0, 3)) {
-                initSucc = true;
-                break;
-            }
-        }
-
-        ASSERT_TRUE(initSucc);
-        ASSERT_EQ(EtcdErrCode::EtcdDeadlineExceeded,
-                  client->Put("06", "hello word"));
-        ASSERT_EQ(EtcdErrCode::EtcdDeadlineExceeded,
-                  client->CompareAndSwap("04", "10", "110"));
-        client->CloseClient();
+      ASSERT_EQ(0, execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr));
+      exit(0);
     }
 
-    static void SetUpTestCase() {
-        ClearEnv();
-        StartEtcd();
+    auto client = std::make_shared<EtcdClientImp>();
+    EtcdConf conf{const_cast<char*>(kEtcdAddr),
+                  static_cast<int>(strlen(kEtcdAddr)), 1000};
+    uint64_t now = curve::common::TimeUtility::GetTimeofDaySec();
+    bool initSucc = false;
+    while (curve::common::TimeUtility::GetTimeofDaySec() - now <= 50) {
+      if (0 == client->Init(conf, 0, 3)) {
+        initSucc = true;
+        break;
+      }
     }
 
-    static void TearDownTestCase() {
-        system(("kill -9 " + std::to_string(etcdPid_)).c_str());
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        ClearEnv();
-    }
+    ASSERT_TRUE(initSucc);
+    ASSERT_EQ(EtcdErrCode::EtcdDeadlineExceeded,
+              client->Put("06", "hello word"));
+    ASSERT_EQ(EtcdErrCode::EtcdDeadlineExceeded,
+              client->CompareAndSwap("04", "10", "110"));
+    client->CloseClient();
+  }
+
+  static void SetUpTestCase() {
+    ClearEnv();
+    StartEtcd();
+  }
+
+  static void TearDownTestCase() {
+    system(("kill -9 " + std::to_string(etcdPid_)).c_str());
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    ClearEnv();
+  }
 
  protected:
-    static pid_t etcdPid_;
+  static pid_t etcdPid_;
 };
 
 pid_t MdsTest::etcdPid_ = 0;
 
 void GetChunkIds(std::shared_ptr<curve::common::Configuration> conf,
-                 int numChunkIds, vector<uint64_t> *data) {
-    brpc::Channel channel;
-    std::string allocateServer(kMdsListenAddr);
-    if (channel.Init(allocateServer.c_str(), NULL) != 0) {
-        LOG(ERROR) << "Fail to init channel to allocate Server"
-                   << " for alloc chunkId, allocate server is "
-                   << allocateServer;
-        return;
+                 int numChunkIds, vector<uint64_t>* data) {
+  brpc::Channel channel;
+  std::string allocateServer(kMdsListenAddr);
+  if (channel.Init(allocateServer.c_str(), NULL) != 0) {
+    LOG(ERROR) << "Fail to init channel to allocate Server"
+               << " for alloc chunkId, allocate server is " << allocateServer;
+    return;
+  }
+
+  brpc::Controller* cntl = new brpc::Controller();
+  AllocateS3ChunkRequest request;
+  AllocateS3ChunkResponse response;
+  curvefs::mds::MdsService_Stub stub(&channel);
+  request.set_fsid(0);
+  request.set_chunkidnum(1);
+  for (int i = 0; i < numChunkIds; ++i) {
+    stub.AllocateS3Chunk(cntl, &request, &response, nullptr);
+
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Allocate s3 chunkid Failed, errorcode = "
+                   << cntl->ErrorCode()
+                   << ", error content:" << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id();
+      delete cntl;
+      cntl = nullptr;
+      return;
     }
 
-    brpc::Controller *cntl = new brpc::Controller();
-    AllocateS3ChunkRequest request;
-    AllocateS3ChunkResponse response;
-    curvefs::mds::MdsService_Stub stub(&channel);
-    request.set_fsid(0);
-    request.set_chunkidnum(1);
-    for (int i = 0; i < numChunkIds; ++i) {
-        stub.AllocateS3Chunk(cntl, &request, &response, nullptr);
-
-        if (cntl->Failed()) {
-            LOG(WARNING) << "Allocate s3 chunkid Failed, errorcode = "
-                         << cntl->ErrorCode()
-                         << ", error content:" << cntl->ErrorText()
-                         << ", log id = " << cntl->log_id();
-            delete cntl;
-            cntl = nullptr;
-            return;
-        }
-
-        ::curvefs::mds::FSStatusCode ssCode = response.statuscode();
-        if (ssCode != ::curvefs::mds::FSStatusCode::OK) {
-            LOG(WARNING) << "Allocate s3 chunkid response Failed, retCode = "
-                         << ssCode;
-            delete cntl;
-            cntl = nullptr;
-            return;
-        }
-
-        uint64_t chunkId = response.beginchunkid();
-        data->push_back(chunkId);
-        cntl->Reset();
+    ::curvefs::mds::FSStatusCode ssCode = response.statuscode();
+    if (ssCode != ::curvefs::mds::FSStatusCode::OK) {
+      LOG(WARNING) << "Allocate s3 chunkid response Failed, retCode = "
+                   << ssCode;
+      delete cntl;
+      cntl = nullptr;
+      return;
     }
-    delete cntl;
-    cntl = nullptr;
+
+    uint64_t chunkId = response.beginchunkid();
+    data->push_back(chunkId);
+    cntl->Reset();
+  }
+  delete cntl;
+  cntl = nullptr;
 }
 
 TEST_F(MdsTest, test_chunkIds_allocate) {
-    curvefs::mds::MDS mds;
-    auto conf = std::make_shared<Configuration>();
-    conf->SetConfigPath("curvefs/conf/mds.conf");
-    ASSERT_TRUE(conf->LoadConfig());
-    conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
-    conf->SetStringValue("etcd.endpoint", kEtcdAddr);
+  curvefs::mds::MDS mds;
+  auto conf = std::make_shared<Configuration>();
+  conf->SetConfigPath("curvefs/conf/mds.conf");
+  ASSERT_TRUE(conf->LoadConfig());
+  conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
+  conf->SetStringValue("etcd.endpoint", kEtcdAddr);
 
-    mds.InitOptions(conf);
+  mds.InitOptions(conf);
 
-    mds.Init();
+  mds.Init();
 
-    std::thread mdsThread(&MDS::Run, &mds);
+  std::thread mdsThread(&MDS::Run, &mds);
 
-    sleep(3);
+  sleep(3);
 
-    vector<uint64_t> data;
-    const int size = 1001;
-    GetChunkIds(conf, size, &data);
+  vector<uint64_t> data;
+  const int size = 1001;
+  GetChunkIds(conf, size, &data);
 
-    LOG(INFO) << "all get " << data.size() << " chunkIds";
-    ASSERT_EQ(size, data.size());
+  LOG(INFO) << "all get " << data.size() << " chunkIds";
+  ASSERT_EQ(size, data.size());
 
-    mds.Stop();
+  mds.Stop();
 
-    mdsThread.join();
+  mdsThread.join();
 }
 
 TEST_F(MdsTest, test1) {
-    curvefs::mds::MDS mds;
-    auto conf = std::make_shared<Configuration>();
-    conf->SetConfigPath("curvefs/conf/mds.conf");
-    ASSERT_TRUE(conf->LoadConfig());
-    conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
-    conf->SetStringValue("etcd.endpoint", kEtcdAddr);
+  curvefs::mds::MDS mds;
+  auto conf = std::make_shared<Configuration>();
+  conf->SetConfigPath("curvefs/conf/mds.conf");
+  ASSERT_TRUE(conf->LoadConfig());
+  conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
+  conf->SetStringValue("etcd.endpoint", kEtcdAddr);
 
-    // initialize MDS options
-    mds.InitOptions(conf);
+  // initialize MDS options
+  mds.InitOptions(conf);
 
-    // Initialize other modules after winning election
-    mds.Init();
+  // Initialize other modules after winning election
+  mds.Init();
 
-    // start mds server and wait CTRL+C to quit
-    // mds.Run();
-    std::thread mdsThread(&MDS::Run, &mds);
+  // start mds server and wait CTRL+C to quit
+  // mds.Run();
+  std::thread mdsThread(&MDS::Run, &mds);
 
-    // sleep 5s
-    sleep(5);
+  // sleep 5s
+  sleep(5);
 
-    // stop server and background threads
-    mds.Stop();
-    mdsThread.join();
+  // stop server and background threads
+  mds.Stop();
+  mdsThread.join();
 }
 
 TEST_F(MdsTest, test2) {
-    curvefs::mds::MDS mds;
-    auto conf = std::make_shared<Configuration>();
-    conf->SetConfigPath("curvefs/conf/mds.conf");
-    ASSERT_TRUE(conf->LoadConfig());
-    conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
-    conf->SetStringValue("etcd.endpoint", kEtcdAddr);
+  curvefs::mds::MDS mds;
+  auto conf = std::make_shared<Configuration>();
+  conf->SetConfigPath("curvefs/conf/mds.conf");
+  ASSERT_TRUE(conf->LoadConfig());
+  conf->SetStringValue("mds.listen.addr", kMdsListenAddr);
+  conf->SetStringValue("etcd.endpoint", kEtcdAddr);
 
-    // initialize MDS options
-    mds.InitOptions(conf);
+  // initialize MDS options
+  mds.InitOptions(conf);
 
-    // not init, run
-    mds.Run();
-    mds.Run();
+  // not init, run
+  mds.Run();
+  mds.Run();
 
-    // not start, stop
-    mds.Stop();
-    mds.Stop();
+  // not start, stop
+  mds.Stop();
+  mds.Stop();
 
-    // Initialize other modules after winning election
-    mds.Init();
-    mds.Init();
+  // Initialize other modules after winning election
+  mds.Init();
+  mds.Init();
 
-    // start mds server and wait CTRL+C to quit
-    // mds.Run();
-    std::thread mdsThread(&MDS::Run, &mds);
+  // start mds server and wait CTRL+C to quit
+  // mds.Run();
+  std::thread mdsThread(&MDS::Run, &mds);
 
-    // sleep 5s
-    sleep(3);
+  // sleep 5s
+  sleep(3);
 
-    // stop server and background threads
-    mds.Stop();
-    mdsThread.join();
+  // stop server and background threads
+  mds.Stop();
+  mdsThread.join();
 }
 
 }  // namespace mds

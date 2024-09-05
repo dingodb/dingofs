@@ -27,48 +27,48 @@
 
 // rpc request配置项
 struct RequestOption {
-    // 同步rpc的最大重试次数
-    int64_t syncRpcMaxRetryTimes;
-    // rpc请求的重试间隔
-    int64_t rpcRetryIntervalUs;
-    // rpc请求的最大重试间隔
-    int64_t rpcRetryMaxIntervalUs;
-    // rpc hostdown情况下的重试时间
-    int64_t rpcHostDownRetryIntervalUs;
-    // brpc的健康检查周期时间
-    int64_t rpcHealthCheckIntervalS;
-    // brpc从rpc失败到进行健康检查的最大时间间隔
-    int64_t rpcMaxDelayHealthCheckIntervalMs;
-    // rpc发送执行队列个数
-    uint32_t rpcSendExecQueueNum = 2;
+  // 同步rpc的最大重试次数
+  int64_t syncRpcMaxRetryTimes;
+  // rpc请求的重试间隔
+  int64_t rpcRetryIntervalUs;
+  // rpc请求的最大重试间隔
+  int64_t rpcRetryMaxIntervalUs;
+  // rpc hostdown情况下的重试时间
+  int64_t rpcHostDownRetryIntervalUs;
+  // brpc的健康检查周期时间
+  int64_t rpcHealthCheckIntervalS;
+  // brpc从rpc失败到进行健康检查的最大时间间隔
+  int64_t rpcMaxDelayHealthCheckIntervalMs;
+  // rpc发送执行队列个数
+  uint32_t rpcSendExecQueueNum = 2;
 };
 
 // 日志配置项
 struct LogOption {
-    // 日志存放目录
-    std::string logPath;
+  // 日志存放目录
+  std::string logPath;
 };
 
 // nebd client配置项
 struct NebdClientOption {
-    // part2 socket file address
-    std::string serverAddress;
-    // 文件锁路径
-    std::string fileLockPath;
-    // rpc request配置项
-    RequestOption requestOption;
-    // 日志配置项
-    LogOption logOption;
+  // part2 socket file address
+  std::string serverAddress;
+  // 文件锁路径
+  std::string fileLockPath;
+  // rpc request配置项
+  RequestOption requestOption;
+  // 日志配置项
+  LogOption logOption;
 };
 
 // heartbeat配置项
 struct HeartbeatOption {
-    // part2 socket file address
-    std::string serverAddress;
-    // heartbeat间隔
-    int64_t intervalS;
-    // heartbeat rpc超时时间
-    int64_t rpcTimeoutMs;
+  // part2 socket file address
+  std::string serverAddress;
+  // heartbeat间隔
+  int64_t intervalS;
+  // heartbeat rpc超时时间
+  int64_t rpcTimeoutMs;
 };
 
 #endif  // NEBD_SRC_PART1_NEBD_COMMON_H_

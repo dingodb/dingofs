@@ -45,7 +45,7 @@ void DefaultIdGenerator::initChunkServerIdGenerator(ChunkServerIdType idMax) {
 }
 
 void DefaultIdGenerator::initCopySetIdGenerator(
-    const std::map<PoolIdType, CopySetIdType> &idMaxMap) {
+    const std::map<PoolIdType, CopySetIdType>& idMaxMap) {
   copySetIdGentor_.clear();
   for (auto it : idMaxMap) {
     copySetIdGentor_[it.first].init(it.second);
@@ -60,9 +60,7 @@ PoolIdType DefaultIdGenerator::GenPhysicalPoolId() {
   return physicalPoolIdGentor_.GenId();
 }
 
-ZoneIdType DefaultIdGenerator::GenZoneId() {
-  return zoneIdGentor_.GenId();
-}
+ZoneIdType DefaultIdGenerator::GenZoneId() { return zoneIdGentor_.GenId(); }
 
 ServerIdType DefaultIdGenerator::GenServerId() {
   return serverIdGentor_.GenId();
@@ -79,4 +77,3 @@ CopySetIdType DefaultIdGenerator::GenCopySetId(PoolIdType logicalPoolId) {
 }  // namespace topology
 }  // namespace mds
 }  // namespace curve
-

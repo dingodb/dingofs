@@ -38,69 +38,71 @@ enum SchedulerType {
 
 struct ScheduleOption {
  public:
-    // copyset scheduler switch
-    bool enableCopysetScheduler;
-    // leader scheduler switch
-    bool enableLeaderScheduler;
-    // recover switch
-    bool enableRecoverScheduler;
-    // replica switch
-    bool enableReplicaScheduler;
-    // scan switch
-    bool enableScanScheduler;
+  // copyset scheduler switch
+  bool enableCopysetScheduler;
+  // leader scheduler switch
+  bool enableLeaderScheduler;
+  // recover switch
+  bool enableRecoverScheduler;
+  // replica switch
+  bool enableReplicaScheduler;
+  // scan switch
+  bool enableScanScheduler;
 
-    // xxxSchedulerIntervalSec: time interval of calculation for xxx scheduling
-    uint32_t copysetSchedulerIntervalSec;
-    uint32_t leaderSchedulerIntervalSec;
-    uint32_t recoverSchedulerIntervalSec;
-    uint32_t replicaSchedulerIntervalSec;
-    uint32_t scanSchedulerIntervalSec;
+  // xxxSchedulerIntervalSec: time interval of calculation for xxx scheduling
+  uint32_t copysetSchedulerIntervalSec;
+  uint32_t leaderSchedulerIntervalSec;
+  uint32_t recoverSchedulerIntervalSec;
+  uint32_t replicaSchedulerIntervalSec;
+  uint32_t scanSchedulerIntervalSec;
 
-    // number of copyset that can operate configuration changing at the same time on single chunkserver //NOLINT
-    uint32_t operatorConcurrent;
+  // number of copyset that can operate configuration changing at the same time
+  // on single chunkserver //NOLINT
+  uint32_t operatorConcurrent;
 
-    // xxxTimeLimitSec: time limit for xxx, operation will be considered
-    // overtime and cancel if exceed this limit
-    uint32_t transferLeaderTimeLimitSec;
-    uint32_t addPeerTimeLimitSec;
-    uint32_t removePeerTimeLimitSec;
-    uint32_t changePeerTimeLimitSec;
-    uint32_t scanPeerTimeLimitSec;
+  // xxxTimeLimitSec: time limit for xxx, operation will be considered
+  // overtime and cancel if exceed this limit
+  uint32_t transferLeaderTimeLimitSec;
+  uint32_t addPeerTimeLimitSec;
+  uint32_t removePeerTimeLimitSec;
+  uint32_t changePeerTimeLimitSec;
+  uint32_t scanPeerTimeLimitSec;
 
-    // for copysetScheduler, the (range of the number of copyset on chunkserver)
-    // should not exceed (average number of copyset on chunkserver * copysetNumRangePercent) //NOLINT
-    float copysetNumRangePercent;
-    // configuration changes should try to guarantee that the scatter-width
-    // of chunkserver not exceed minScatterWith * (1 + scatterWidthRangePerent)
-    float scatterWithRangePerent;
-    // the failing chunkserver threshold for operating a recovery, if exceed, no
-    // attempt on recovery will be committed
-    uint32_t chunkserverFailureTolerance;
-    // chunkserver can be the target leader on leader scheduling only after
-    // starting for chunkserverCoolingTimeSec.
-    // when a chunkserver start running, the copysets will replay the journal,
-    // and during the leader transferring I/O on chunkserver will be suspended.
-    // if the chunkserver is under journal replaying when leader transferring
-    // operation arrive, the operation will wait for the replay and will be
-    // stuck and exceed the 'leadertimeout' if the replay takes too long time.
-    uint32_t chunkserverCoolingTimeSec;
+  // for copysetScheduler, the (range of the number of copyset on chunkserver)
+  // should not exceed (average number of copyset on chunkserver *
+  // copysetNumRangePercent) //NOLINT
+  float copysetNumRangePercent;
+  // configuration changes should try to guarantee that the scatter-width
+  // of chunkserver not exceed minScatterWith * (1 + scatterWidthRangePerent)
+  float scatterWithRangePerent;
+  // the failing chunkserver threshold for operating a recovery, if exceed, no
+  // attempt on recovery will be committed
+  uint32_t chunkserverFailureTolerance;
+  // chunkserver can be the target leader on leader scheduling only after
+  // starting for chunkserverCoolingTimeSec.
+  // when a chunkserver start running, the copysets will replay the journal,
+  // and during the leader transferring I/O on chunkserver will be suspended.
+  // if the chunkserver is under journal replaying when leader transferring
+  // operation arrive, the operation will wait for the replay and will be
+  // stuck and exceed the 'leadertimeout' if the replay takes too long time.
+  uint32_t chunkserverCoolingTimeSec;
 
-    // ScanScheduler: scan start hour in one day ([0-23])
-    uint32_t scanStartHour;
+  // ScanScheduler: scan start hour in one day ([0-23])
+  uint32_t scanStartHour;
 
-    // ScanScheduler: scan end hour in one day ([0-23])
-    uint32_t scanEndHour;
+  // ScanScheduler: scan end hour in one day ([0-23])
+  uint32_t scanEndHour;
 
-    // ScanScheduler: scan interval for the same copyset
-    uint32_t scanIntervalSec;
+  // ScanScheduler: scan interval for the same copyset
+  uint32_t scanIntervalSec;
 
-    // ScanScheduler: maximum number of scan copysets at the same time
-    // for every logical pool
-    uint32_t scanConcurrentPerPool;
+  // ScanScheduler: maximum number of scan copysets at the same time
+  // for every logical pool
+  uint32_t scanConcurrentPerPool;
 
-    // ScanScheduler: maximum number of scan copysets at the same time
-    // for every chunkserver
-    uint32_t scanConcurrentPerChunkserver;
+  // ScanScheduler: maximum number of scan copysets at the same time
+  // for every chunkserver
+  uint32_t scanConcurrentPerChunkserver;
 };
 
 }  // namespace schedule

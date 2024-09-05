@@ -28,8 +28,8 @@
 
 #include <memory>
 
-#include "curvefs/src/client/rpcclient/task_excutor.h"
 #include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/rpcclient/task_excutor.h"
 
 namespace curvefs {
 namespace client {
@@ -43,13 +43,12 @@ namespace internal {
 
 class AsyncRequestClosureBase : public rpcclient::MetaServerClientDone {
  public:
-    explicit AsyncRequestClosureBase(
-        const std::shared_ptr<InodeWrapper>& inode);
+  explicit AsyncRequestClosureBase(const std::shared_ptr<InodeWrapper>& inode);
 
-    ~AsyncRequestClosureBase() override;
+  ~AsyncRequestClosureBase() override;
 
  protected:
-    std::shared_ptr<InodeWrapper> inode_;
+  std::shared_ptr<InodeWrapper> inode_;
 };
 
 }  // namespace internal
@@ -71,34 +70,34 @@ class AsyncRequestClosureBase : public rpcclient::MetaServerClientDone {
 //
 class UpdateVolumeExtentClosure : public internal::AsyncRequestClosureBase {
  public:
-    UpdateVolumeExtentClosure(const std::shared_ptr<InodeWrapper>& inode,
-                              bool sync);
+  UpdateVolumeExtentClosure(const std::shared_ptr<InodeWrapper>& inode,
+                            bool sync);
 
-    void Run() override;
+  void Run() override;
 
-    // Wait request finished, and return status code
-    // Invoked only on sync mode, otherwise the behaviour is undefined
-    CURVEFS_ERROR Wait();
+  // Wait request finished, and return status code
+  // Invoked only on sync mode, otherwise the behaviour is undefined
+  CURVEFS_ERROR Wait();
 
  private:
-    bool sync_;
-    bool done_ = false;
-    bthread::Mutex mtx_;
-    bthread::ConditionVariable cond_;
+  bool sync_;
+  bool done_ = false;
+  bthread::Mutex mtx_;
+  bthread::ConditionVariable cond_;
 };
 
 class UpdateInodeAttrAndExtentClosure
     : public internal::AsyncRequestClosureBase {
  public:
-    using Base = AsyncRequestClosureBase;
+  using Base = AsyncRequestClosureBase;
 
-    UpdateInodeAttrAndExtentClosure(const std::shared_ptr<InodeWrapper>& inode,
-                                    MetaServerClientDone* parent);
+  UpdateInodeAttrAndExtentClosure(const std::shared_ptr<InodeWrapper>& inode,
+                                  MetaServerClientDone* parent);
 
-    void Run() override;
+  void Run() override;
 
  private:
-    MetaServerClientDone* parent_;
+  MetaServerClientDone* parent_;
 };
 
 }  // namespace client

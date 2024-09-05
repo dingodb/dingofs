@@ -25,6 +25,7 @@
 
 #include <list>
 #include <memory>
+
 #include "curvefs/src/mds/topology/topology.h"
 #include "curvefs/src/mds/topology/topology_item.h"
 
@@ -37,34 +38,34 @@ namespace heartbeat {
 using curvefs::mds::topology::CopySetIdType;
 class TopoUpdater {
  public:
-    explicit TopoUpdater(const std::shared_ptr<Topology> &topo) : topo_(topo) {}
-    ~TopoUpdater() {}
+  explicit TopoUpdater(const std::shared_ptr<Topology>& topo) : topo_(topo) {}
+  ~TopoUpdater() {}
 
-    /*
-     * @brief UpdateCopysetTopo this function will be called by leader copyset
-     *                   for updating copyset epoch, replicas relationship and
-     *                   statistical data according to reportCopySetInfo
-     * @param[in] reportCopySetInfo copyset info reported by metaserver
-     */
-    void UpdateCopysetTopo(
-        const ::curvefs::mds::topology::CopySetInfo &reportCopySetInfo);
+  /*
+   * @brief UpdateCopysetTopo this function will be called by leader copyset
+   *                   for updating copyset epoch, replicas relationship and
+   *                   statistical data according to reportCopySetInfo
+   * @param[in] reportCopySetInfo copyset info reported by metaserver
+   */
+  void UpdateCopysetTopo(
+      const ::curvefs::mds::topology::CopySetInfo& reportCopySetInfo);
 
-    /*
-     * @brief UpdatePartitionTopo this function will be called by leader copyset
-     *                   for updating partition info
-     * @param[in] partitionList partition info list reported by metaserver
-     */
-    void UpdatePartitionTopo(
-        CopySetIdType copySetId,
-        const std::list<::curvefs::mds::topology::Partition> &partitionList);
+  /*
+   * @brief UpdatePartitionTopo this function will be called by leader copyset
+   *                   for updating partition info
+   * @param[in] partitionList partition info list reported by metaserver
+   */
+  void UpdatePartitionTopo(
+      CopySetIdType copySetId,
+      const std::list<::curvefs::mds::topology::Partition>& partitionList);
 
  public:
-    // public for test
-    bool CanPartitionStatusChange(PartitionStatus statusInTopo,
-                                  PartitionStatus statusInHeartbeat);
+  // public for test
+  bool CanPartitionStatusChange(PartitionStatus statusInTopo,
+                                PartitionStatus statusInHeartbeat);
 
  private:
-    std::shared_ptr<Topology> topo_;
+  std::shared_ptr<Topology> topo_;
 };
 }  // namespace heartbeat
 }  // namespace mds

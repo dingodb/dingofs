@@ -36,78 +36,78 @@ using ::curvefs::common::S3Info;
 using ::curvefs::common::Volume;
 
 TEST(CodecTest, TestEncodeProtobufMessage) {
-    mds::FsInfo fsinfo;
+  mds::FsInfo fsinfo;
 
-    // empty message
-    ASSERT_FALSE(fsinfo.IsInitialized());
+  // empty message
+  ASSERT_FALSE(fsinfo.IsInitialized());
 
-    fsinfo.set_fsid(1);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(FSType::TYPE_VOLUME);
-    fsinfo.set_enablesumindir(false);
-    fsinfo.set_owner("test");
-    fsinfo.set_txsequence(0);
-    fsinfo.set_txowner("owner");
+  fsinfo.set_fsid(1);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(FSType::TYPE_VOLUME);
+  fsinfo.set_enablesumindir(false);
+  fsinfo.set_owner("test");
+  fsinfo.set_txsequence(0);
+  fsinfo.set_txowner("owner");
 
-    Volume volume;
-    volume.set_blocksize(4096);
-    volume.set_volumename("/curvefs");
-    volume.set_user("test");
-    volume.set_blockgroupsize(4096);
-    volume.set_bitmaplocation(curvefs::common::BitmapLocation::AtEnd);
-    volume.set_slicesize(1ULL * 1024 * 1024 * 1024);
-    volume.set_autoextend(false);
+  Volume volume;
+  volume.set_blocksize(4096);
+  volume.set_volumename("/curvefs");
+  volume.set_user("test");
+  volume.set_blockgroupsize(4096);
+  volume.set_bitmaplocation(curvefs::common::BitmapLocation::AtEnd);
+  volume.set_slicesize(1ULL * 1024 * 1024 * 1024);
+  volume.set_autoextend(false);
 
-    fsinfo.mutable_detail()->set_allocated_volume(new Volume(volume));
+  fsinfo.mutable_detail()->set_allocated_volume(new Volume(volume));
 
-    std::string value1;
-    std::string value2;
+  std::string value1;
+  std::string value2;
 
-    ASSERT_TRUE(EncodeProtobufMessage(fsinfo, &value1));
-    ASSERT_TRUE(fsinfo.SerializeToString(&value2));
-    ASSERT_EQ(value1, value2);
+  ASSERT_TRUE(EncodeProtobufMessage(fsinfo, &value1));
+  ASSERT_TRUE(fsinfo.SerializeToString(&value2));
+  ASSERT_EQ(value1, value2);
 }
 
 TEST(CodecTest, TestDecodeProtobufMessage) {
-    mds::FsInfo fsinfo;
+  mds::FsInfo fsinfo;
 
-    fsinfo.set_fsid(1);
-    fsinfo.set_fsname("hello");
-    fsinfo.set_status(mds::FsStatus::INITED);
-    fsinfo.set_rootinodeid(1);
-    fsinfo.set_capacity(8192);
-    fsinfo.set_blocksize(4096);
-    fsinfo.set_mountnum(0);
-    fsinfo.set_fstype(FSType::TYPE_VOLUME);
-    fsinfo.set_enablesumindir(false);
-    fsinfo.set_owner("test");
-    fsinfo.set_txsequence(0);
-    fsinfo.set_txowner("owner");
+  fsinfo.set_fsid(1);
+  fsinfo.set_fsname("hello");
+  fsinfo.set_status(mds::FsStatus::INITED);
+  fsinfo.set_rootinodeid(1);
+  fsinfo.set_capacity(8192);
+  fsinfo.set_blocksize(4096);
+  fsinfo.set_mountnum(0);
+  fsinfo.set_fstype(FSType::TYPE_VOLUME);
+  fsinfo.set_enablesumindir(false);
+  fsinfo.set_owner("test");
+  fsinfo.set_txsequence(0);
+  fsinfo.set_txowner("owner");
 
-    Volume volume;
-    volume.set_blocksize(4096);
-    volume.set_volumename("/curvefs");
-    volume.set_user("test");
-    volume.set_blockgroupsize(4096);
-    volume.set_bitmaplocation(curvefs::common::BitmapLocation::AtEnd);
-    volume.set_slicesize(1ULL * 1024 * 1024 * 1024);
-    volume.set_autoextend(false);
+  Volume volume;
+  volume.set_blocksize(4096);
+  volume.set_volumename("/curvefs");
+  volume.set_user("test");
+  volume.set_blockgroupsize(4096);
+  volume.set_bitmaplocation(curvefs::common::BitmapLocation::AtEnd);
+  volume.set_slicesize(1ULL * 1024 * 1024 * 1024);
+  volume.set_autoextend(false);
 
-    fsinfo.mutable_detail()->set_allocated_volume(new Volume(volume));
+  fsinfo.mutable_detail()->set_allocated_volume(new Volume(volume));
 
-    std::string value;
-    ASSERT_TRUE(EncodeProtobufMessage(fsinfo, &value));
+  std::string value;
+  ASSERT_TRUE(EncodeProtobufMessage(fsinfo, &value));
 
-    mds::FsInfo decoded;
-    ASSERT_TRUE(DecodeProtobufMessage(value, &decoded));
+  mds::FsInfo decoded;
+  ASSERT_TRUE(DecodeProtobufMessage(value, &decoded));
 
-    ASSERT_TRUE(
-        google::protobuf::util::MessageDifferencer::Equals(fsinfo, decoded));
+  ASSERT_TRUE(
+      google::protobuf::util::MessageDifferencer::Equals(fsinfo, decoded));
 }
 
 }  // namespace codec

@@ -38,20 +38,16 @@ namespace codec {
  */
 std::string EncodeFsName(const std::string& fsName);
 
-inline std::string FsNameStoreKey() {
-    return mds::FS_NAME_KEY_PREFIX;
-}
+inline std::string FsNameStoreKey() { return mds::FS_NAME_KEY_PREFIX; }
 
-inline std::string FsNameStoreEndKey() {
-    return mds::FS_NAME_KEY_END;
-}
+inline std::string FsNameStoreEndKey() { return mds::FS_NAME_KEY_END; }
 
 /**
  * @brief Serialize Protobuf Message to string
  */
 inline bool EncodeProtobufMessage(const google::protobuf::Message& message,
                                   std::string* out) {
-    return message.SerializeToString(out);
+  return message.SerializeToString(out);
 }
 
 /**
@@ -59,7 +55,7 @@ inline bool EncodeProtobufMessage(const google::protobuf::Message& message,
  */
 template <typename Message>
 inline bool DecodeProtobufMessage(const std::string& encode, Message* message) {
-    return message->ParseFromString(encode);
+  return message->ParseFromString(encode);
 }
 
 std::string EncodeBlockGroupKey(uint32_t fsId, uint64_t offset);

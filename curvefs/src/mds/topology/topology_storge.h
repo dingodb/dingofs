@@ -40,61 +40,61 @@ namespace topology {
 
 class TopologyStorage {
  public:
-    TopologyStorage() {}
-    virtual ~TopologyStorage() {}
+  TopologyStorage() {}
+  virtual ~TopologyStorage() {}
 
-    virtual bool LoadPool(std::unordered_map<PoolIdType, Pool> *poolMap,
-                          PoolIdType *maxPoolId) = 0;
-    virtual bool LoadZone(std::unordered_map<ZoneIdType, Zone> *zoneMap,
-                          ZoneIdType *maxZoneId) = 0;
-    virtual bool LoadServer(std::unordered_map<ServerIdType, Server> *serverMap,
-                            ServerIdType *maxServerId) = 0;
-    virtual bool LoadMetaServer(
-        std::unordered_map<MetaServerIdType, MetaServer> *metaServerMap,
-        MetaServerIdType *maxMetaServerId) = 0;
-    virtual bool LoadCopySet(
-        std::map<CopySetKey, CopySetInfo> *copySetMap,
-        std::map<PoolIdType, CopySetIdType> *copySetIdMaxMap) = 0;
-    virtual bool LoadPartition(
-        std::unordered_map<PartitionIdType, Partition>* partitionMap,
-        PartitionIdType* maxPartitionId) = 0;
+  virtual bool LoadPool(std::unordered_map<PoolIdType, Pool>* poolMap,
+                        PoolIdType* maxPoolId) = 0;
+  virtual bool LoadZone(std::unordered_map<ZoneIdType, Zone>* zoneMap,
+                        ZoneIdType* maxZoneId) = 0;
+  virtual bool LoadServer(std::unordered_map<ServerIdType, Server>* serverMap,
+                          ServerIdType* maxServerId) = 0;
+  virtual bool LoadMetaServer(
+      std::unordered_map<MetaServerIdType, MetaServer>* metaServerMap,
+      MetaServerIdType* maxMetaServerId) = 0;
+  virtual bool LoadCopySet(
+      std::map<CopySetKey, CopySetInfo>* copySetMap,
+      std::map<PoolIdType, CopySetIdType>* copySetIdMaxMap) = 0;
+  virtual bool LoadPartition(
+      std::unordered_map<PartitionIdType, Partition>* partitionMap,
+      PartitionIdType* maxPartitionId) = 0;
 
-    virtual bool StoragePool(const Pool &data) = 0;
-    virtual bool StorageZone(const Zone &data) = 0;
-    virtual bool StorageServer(const Server &data) = 0;
-    virtual bool StorageMetaServer(const MetaServer &data) = 0;
-    virtual bool StorageCopySet(const CopySetInfo &data) = 0;
-    virtual bool StoragePartition(const Partition &data) = 0;
+  virtual bool StoragePool(const Pool& data) = 0;
+  virtual bool StorageZone(const Zone& data) = 0;
+  virtual bool StorageServer(const Server& data) = 0;
+  virtual bool StorageMetaServer(const MetaServer& data) = 0;
+  virtual bool StorageCopySet(const CopySetInfo& data) = 0;
+  virtual bool StoragePartition(const Partition& data) = 0;
 
-    virtual bool DeletePool(PoolIdType id) = 0;
-    virtual bool DeleteZone(ZoneIdType id) = 0;
-    virtual bool DeleteServer(ServerIdType id) = 0;
-    virtual bool DeleteMetaServer(MetaServerIdType id) = 0;
-    virtual bool DeleteCopySet(CopySetKey key) = 0;
-    virtual bool DeletePartition(PartitionIdType id) = 0;
+  virtual bool DeletePool(PoolIdType id) = 0;
+  virtual bool DeleteZone(ZoneIdType id) = 0;
+  virtual bool DeleteServer(ServerIdType id) = 0;
+  virtual bool DeleteMetaServer(MetaServerIdType id) = 0;
+  virtual bool DeleteCopySet(CopySetKey key) = 0;
+  virtual bool DeletePartition(PartitionIdType id) = 0;
 
-    virtual bool UpdatePool(const Pool &data) = 0;
-    virtual bool UpdateZone(const Zone &data) = 0;
-    virtual bool UpdateServer(const Server &data) = 0;
-    virtual bool UpdateMetaServer(const MetaServer &data) = 0;
-    virtual bool UpdateCopySet(const CopySetInfo &data) = 0;
-    virtual bool UpdatePartition(const Partition &data) = 0;
-    virtual bool UpdatePartitions(const std::vector<Partition> &datas) = 0;
+  virtual bool UpdatePool(const Pool& data) = 0;
+  virtual bool UpdateZone(const Zone& data) = 0;
+  virtual bool UpdateServer(const Server& data) = 0;
+  virtual bool UpdateMetaServer(const MetaServer& data) = 0;
+  virtual bool UpdateCopySet(const CopySetInfo& data) = 0;
+  virtual bool UpdatePartition(const Partition& data) = 0;
+  virtual bool UpdatePartitions(const std::vector<Partition>& datas) = 0;
 
-    virtual bool LoadClusterInfo(std::vector<ClusterInformation> *info) = 0;
-    virtual bool StorageClusterInfo(const ClusterInformation& info) = 0;
+  virtual bool LoadClusterInfo(std::vector<ClusterInformation>* info) = 0;
+  virtual bool StorageClusterInfo(const ClusterInformation& info) = 0;
 
-    virtual bool LoadMemcacheCluster(
-        std::unordered_map<MemcacheClusterIdType, MemcacheCluster>*
-            memcacheCluster,
-        MemcacheClusterIdType* maxMemcacheClusterId) = 0;
-    virtual bool StorageMemcacheCluster(const MemcacheCluster& cluster) = 0;
+  virtual bool LoadMemcacheCluster(
+      std::unordered_map<MemcacheClusterIdType, MemcacheCluster>*
+          memcacheCluster,
+      MemcacheClusterIdType* maxMemcacheClusterId) = 0;
+  virtual bool StorageMemcacheCluster(const MemcacheCluster& cluster) = 0;
 
-    virtual bool LoadFs2MemcacheCluster(
-        std::unordered_map<FsIdType, MemcacheClusterIdType>*
-            fs2MemcacheCluster) = 0;
-    virtual bool StorageFs2MemcacheCluster(
-        FsIdType fsId, MemcacheClusterIdType memcacheClusterId) = 0;
+  virtual bool LoadFs2MemcacheCluster(
+      std::unordered_map<FsIdType, MemcacheClusterIdType>*
+          fs2MemcacheCluster) = 0;
+  virtual bool StorageFs2MemcacheCluster(
+      FsIdType fsId, MemcacheClusterIdType memcacheClusterId) = 0;
 };
 
 }  // namespace topology

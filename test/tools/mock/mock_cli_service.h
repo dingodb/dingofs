@@ -23,66 +23,56 @@
 #ifndef TEST_TOOLS_MOCK_MOCK_CLI_SERVICE_H_
 #define TEST_TOOLS_MOCK_MOCK_CLI_SERVICE_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include "proto/cli2.pb.h"
 
 namespace curve {
 namespace tool {
 
-using ::google::protobuf::RpcController;
-using ::google::protobuf::Closure;
 using ::curve::chunkserver::CliService2;
 using ::curve::chunkserver::GetLeaderRequest2;
 using ::curve::chunkserver::GetLeaderResponse2;
 using ::curve::chunkserver::RemovePeerRequest2;
 using ::curve::chunkserver::RemovePeerResponse2;
-using ::curve::chunkserver::TransferLeaderRequest2;
-using ::curve::chunkserver::TransferLeaderResponse2;
 using ::curve::chunkserver::ResetPeerRequest2;
 using ::curve::chunkserver::ResetPeerResponse2;
-using ::curve::chunkserver::SnapshotRequest2;
-using ::curve::chunkserver::SnapshotResponse2;
 using ::curve::chunkserver::SnapshotAllRequest;
 using ::curve::chunkserver::SnapshotAllResponse;
+using ::curve::chunkserver::SnapshotRequest2;
+using ::curve::chunkserver::SnapshotResponse2;
+using ::curve::chunkserver::TransferLeaderRequest2;
+using ::curve::chunkserver::TransferLeaderResponse2;
+using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class MockCliService : public CliService2 {
  public:
-    MOCK_METHOD4(GetLeader,
-        void(RpcController *controller,
-        const GetLeaderRequest2 *request,
-        GetLeaderResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(GetLeader,
+               void(RpcController* controller, const GetLeaderRequest2* request,
+                    GetLeaderResponse2* response, Closure* done));
 
-    MOCK_METHOD4(RemovePeer,
-        void(RpcController *controller,
-        const RemovePeerRequest2 *request,
-        RemovePeerResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(RemovePeer, void(RpcController* controller,
+                                const RemovePeerRequest2* request,
+                                RemovePeerResponse2* response, Closure* done));
 
-    MOCK_METHOD4(TransferLeader,
-        void(RpcController *controller,
-        const TransferLeaderRequest2 *request,
-        TransferLeaderResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(TransferLeader,
+               void(RpcController* controller,
+                    const TransferLeaderRequest2* request,
+                    TransferLeaderResponse2* response, Closure* done));
 
-    MOCK_METHOD4(ResetPeer,
-        void(RpcController *controller,
-        const ResetPeerRequest2 *request,
-        ResetPeerResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(ResetPeer,
+               void(RpcController* controller, const ResetPeerRequest2* request,
+                    ResetPeerResponse2* response, Closure* done));
 
-    MOCK_METHOD4(Snapshot,
-        void(RpcController *controller,
-        const SnapshotRequest2 *request,
-        SnapshotResponse2 *response,
-        Closure *done));
+  MOCK_METHOD4(Snapshot,
+               void(RpcController* controller, const SnapshotRequest2* request,
+                    SnapshotResponse2* response, Closure* done));
 
-    MOCK_METHOD4(SnapshotAll,
-        void(RpcController *controller,
-        const SnapshotAllRequest *request,
-        SnapshotAllResponse *response,
-        Closure *done));
+  MOCK_METHOD4(SnapshotAll, void(RpcController* controller,
+                                 const SnapshotAllRequest* request,
+                                 SnapshotAllResponse* response, Closure* done));
 };
 }  // namespace tool
 }  // namespace curve

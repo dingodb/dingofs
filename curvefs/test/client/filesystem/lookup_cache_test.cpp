@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gtest/gtest.h>
-
 #include "curvefs/src/client/filesystem/lookup_cache.h"
+
+#include <gtest/gtest.h>
 
 namespace curvefs {
 namespace client {
@@ -30,59 +30,59 @@ namespace filesystem {
 
 class LookupCacheTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(LookupCacheTest, Basic) {
-    auto option = LookupCacheOption{ lruSize: 10, negativeTimeoutSec: 1 };
-    auto cache = std::make_shared<LookupCache>(option);
+  auto option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 1};
+  auto cache = std::make_shared<LookupCache>(option);
 
-    ASSERT_FALSE(cache->Get(1, "f1"));
+  ASSERT_FALSE(cache->Get(1, "f1"));
 
-    cache->Put(1, "f1");
-    ASSERT_TRUE(cache->Get(1, "f1"));
+  cache->Put(1, "f1");
+  ASSERT_TRUE(cache->Get(1, "f1"));
 }
 
 TEST_F(LookupCacheTest, Enable) {
-    // CASE 1: cache off, negativeTimeoutSec = 0.
-    auto option = LookupCacheOption{ lruSize: 10, negativeTimeoutSec: 0 };
-    auto cache = std::make_shared<LookupCache>(option);
-    cache->Put(1, "f1");
-    ASSERT_FALSE(cache->Get(1, "f1"));
+  // CASE 1: cache off, negativeTimeoutSec = 0.
+  auto option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 0};
+  auto cache = std::make_shared<LookupCache>(option);
+  cache->Put(1, "f1");
+  ASSERT_FALSE(cache->Get(1, "f1"));
 
-    // CASE 2: cache on, negativeTimeoutSec = 1.
-    option = LookupCacheOption{ lruSize: 10, negativeTimeoutSec: 1 };
-    cache = std::make_shared<LookupCache>(option);
-    cache->Put(1, "f1");
-    ASSERT_TRUE(cache->Get(1, "f1"));
+  // CASE 2: cache on, negativeTimeoutSec = 1.
+  option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 1};
+  cache = std::make_shared<LookupCache>(option);
+  cache->Put(1, "f1");
+  ASSERT_TRUE(cache->Get(1, "f1"));
 }
 
 TEST_F(LookupCacheTest, Timeout) {
-    auto option = LookupCacheOption{ lruSize: 10, negativeTimeoutSec: 1 };
-    auto cache = std::make_shared<LookupCache>(option);
+  auto option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 1};
+  auto cache = std::make_shared<LookupCache>(option);
 
-    // CASE 1: cache hit.
-    cache->Put(1, "f1");
-    ASSERT_TRUE(cache->Get(1, "f1"));
+  // CASE 1: cache hit.
+  cache->Put(1, "f1");
+  ASSERT_TRUE(cache->Get(1, "f1"));
 
-    // CASE 2: cache miss due to expiration.
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    ASSERT_FALSE(cache->Get(1, "f1"));
+  // CASE 2: cache miss due to expiration.
+  std::this_thread::sleep_for(std::chrono::seconds(1));
+  ASSERT_FALSE(cache->Get(1, "f1"));
 }
 
 TEST_F(LookupCacheTest, LRUSize) {
-    auto option = LookupCacheOption{ lruSize: 1, negativeTimeoutSec: 1 };
-    auto cache = std::make_shared<LookupCache>(option);
+  auto option = LookupCacheOption{lruSize : 1, negativeTimeoutSec : 1};
+  auto cache = std::make_shared<LookupCache>(option);
 
-    // CASE 1: cache hit.
-    cache->Put(1, "f1");
-    ASSERT_TRUE(cache->Get(1, "f1"));
+  // CASE 1: cache hit.
+  cache->Put(1, "f1");
+  ASSERT_TRUE(cache->Get(1, "f1"));
 
-    // CASE 2: cache miss due to eviction.
-    cache->Put(1, "f2");
-    ASSERT_FALSE(cache->Get(1, "f1"));
-    ASSERT_TRUE(cache->Get(1, "f2"));
+  // CASE 2: cache miss due to eviction.
+  cache->Put(1, "f2");
+  ASSERT_FALSE(cache->Get(1, "f1"));
+  ASSERT_TRUE(cache->Get(1, "f2"));
 }
 
 }  // namespace filesystem

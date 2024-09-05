@@ -39,22 +39,17 @@ using ::curvefs::client::filesystem::FileOut;
 
 class VolumeStorage {
  public:
-    virtual ~VolumeStorage() = default;
+  virtual ~VolumeStorage() = default;
 
-    virtual CURVEFS_ERROR Read(uint64_t ino,
-                               off_t offset,
-                               size_t len,
-                               char* data) = 0;
+  virtual CURVEFS_ERROR Read(uint64_t ino, off_t offset, size_t len,
+                             char* data) = 0;
 
-    virtual CURVEFS_ERROR Write(uint64_t ino,
-                                off_t offset,
-                                size_t len,
-                                const char* data,
-                                FileOut* fileOut) = 0;
+  virtual CURVEFS_ERROR Write(uint64_t ino, off_t offset, size_t len,
+                              const char* data, FileOut* fileOut) = 0;
 
-    virtual CURVEFS_ERROR Flush(uint64_t ino) = 0;
+  virtual CURVEFS_ERROR Flush(uint64_t ino) = 0;
 
-    virtual bool Shutdown() = 0;
+  virtual bool Shutdown() = 0;
 };
 
 }  // namespace client

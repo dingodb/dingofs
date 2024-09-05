@@ -25,11 +25,12 @@
 
 #include <map>
 #include <memory>
-#include "src/mds/common/mds_define.h"
-#include "src/kvstorageclient/etcd_client.h"
 
-using ::curve::mds::topology::PoolIdType;
+#include "src/kvstorageclient/etcd_client.h"
+#include "src/mds/common/mds_define.h"
+
 using ::curve::kvstorage::EtcdClientImp;
+using ::curve::mds::topology::PoolIdType;
 
 namespace curve {
 namespace mds {
@@ -37,14 +38,14 @@ extern const int GETBUNDLE;
 
 class AllocStatisticHelper {
  public:
-    // get the segment value corresponding to the recorded physicalPool
-    static int GetExistSegmentAllocValues(
-        std::map<PoolIdType, int64_t> *out,
-        const std::shared_ptr<EtcdClientImp> &client);
+  // get the segment value corresponding to the recorded physicalPool
+  static int GetExistSegmentAllocValues(
+      std::map<PoolIdType, int64_t>* out,
+      const std::shared_ptr<EtcdClientImp>& client);
 
-    static int CalculateSegmentAlloc(
-        int64_t revision, const std::shared_ptr<EtcdClientImp> &client,
-        std::map<PoolIdType, int64_t> *out);
+  static int CalculateSegmentAlloc(int64_t revision,
+                                   const std::shared_ptr<EtcdClientImp>& client,
+                                   std::map<PoolIdType, int64_t>* out);
 };
 }  // namespace mds
 }  // namespace curve

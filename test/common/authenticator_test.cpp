@@ -20,20 +20,21 @@
  * Author: yangyaokai
  */
 
-#include <gtest/gtest.h>
-#include <string>
-
 #include "src/common/authenticator.h"
+
+#include <gtest/gtest.h>
+
+#include <string>
 
 namespace curve {
 namespace common {
 
 TEST(AuthenticatorTEST, basic_test) {
-    std::string key = "123456";
-    std::string data = "/data/123";
-    std::string sig = Authenticator::CalcString2Signature(data, key);
-    std::string expect = "ZKNsnF9DXRxeb0+xTgFD2zLYkQnE6Sy/g2ebqWEAdlc=";
-    ASSERT_STREQ(sig.c_str(), expect.c_str());
+  std::string key = "123456";
+  std::string data = "/data/123";
+  std::string sig = Authenticator::CalcString2Signature(data, key);
+  std::string expect = "ZKNsnF9DXRxeb0+xTgFD2zLYkQnE6Sy/g2ebqWEAdlc=";
+  ASSERT_STREQ(sig.c_str(), expect.c_str());
 }
 
 }  // namespace common

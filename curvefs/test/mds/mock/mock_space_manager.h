@@ -33,10 +33,10 @@ namespace space {
 
 class MockSpaceManager : public SpaceManager {
  public:
-    MOCK_CONST_METHOD1(GetVolumeSpace, AbstractVolumeSpace*(uint32_t));
-    MOCK_METHOD1(AddVolume, SpaceErrCode(const FsInfo&));
-    MOCK_METHOD1(RemoveVolume, SpaceErrCode(uint32_t));
-    MOCK_METHOD1(DeleteVolume, SpaceErrCode(uint32_t));
+  MOCK_CONST_METHOD1(GetVolumeSpace, AbstractVolumeSpace*(uint32_t));
+  MOCK_METHOD1(AddVolume, SpaceErrCode(const FsInfo&));
+  MOCK_METHOD1(RemoveVolume, SpaceErrCode(uint32_t));
+  MOCK_METHOD1(DeleteVolume, SpaceErrCode(uint32_t));
 };
 
 }  // namespace space

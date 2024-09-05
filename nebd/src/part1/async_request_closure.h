@@ -32,110 +32,82 @@ namespace nebd {
 namespace client {
 
 struct AsyncRequestClosure : public google::protobuf::Closure {
-    AsyncRequestClosure(int fd,
-                        NebdClientAioContext* ctx,
-                        const RequestOption& option)
-      : fd(fd),
-        aioCtx(ctx),
-        requestOption_(option) {}
+  AsyncRequestClosure(int fd, NebdClientAioContext* ctx,
+                      const RequestOption& option)
+      : fd(fd), aioCtx(ctx), requestOption_(option) {}
 
-    void Run() override;
+  void Run() override;
 
-    virtual RetCode GetResponseRetCode() const = 0;
+  virtual RetCode GetResponseRetCode() const = 0;
 
-    int64_t GetRpcRetryIntervalUs(int64_t retryCount) const;
+  int64_t GetRpcRetryIntervalUs(int64_t retryCount) const;
 
-    void Retry() const;
+  void Retry() const;
 
-    // 请求fd
-    int fd;
+  // 请求fd
+  int fd;
 
-    // 请求上下文信息
-    NebdClientAioContext* aioCtx;
+  // 请求上下文信息
+  NebdClientAioContext* aioCtx;
 
-    // brpc请求的controller
-    brpc::Controller cntl;
+  // brpc请求的controller
+  brpc::Controller cntl;
 
-    RequestOption requestOption_;
+  RequestOption requestOption_;
 };
 
 struct AioWriteClosure : public AsyncRequestClosure {
-    AioWriteClosure(int fd,
-                    NebdClientAioContext* ctx,
-                    const RequestOption& option)
-      : AsyncRequestClosure(
-          fd,
-          ctx,
-          option) {}
+  AioWriteClosure(int fd, NebdClientAioContext* ctx,
+                  const RequestOption& option)
+      : AsyncRequestClosure(fd, ctx, option) {}
 
-    WriteResponse response;
+  WriteResponse response;
 
-    RetCode GetResponseRetCode() const override {
-        return response.retcode();
-    }
+  RetCode GetResponseRetCode() const override { return response.retcode(); }
 };
 
 struct AioReadClosure : public AsyncRequestClosure {
-    AioReadClosure(int fd,
-                   NebdClientAioContext* ctx,
-                   const RequestOption& option)
-      : AsyncRequestClosure(
-          fd,
-          ctx,
-          option) {}
+  AioReadClosure(int fd, NebdClientAioContext* ctx, const RequestOption& option)
+      : AsyncRequestClosure(fd, ctx, option) {}
 
-    ReadResponse response;
+  ReadResponse response;
 
-    RetCode GetResponseRetCode() const override {
-        return response.retcode();
-    }
+  RetCode GetResponseRetCode() const override { return response.retcode(); }
 };
 
 struct AioDiscardClosure : public AsyncRequestClosure {
-    AioDiscardClosure(int fd,
-                      NebdClientAioContext* ctx,
-                      const RequestOption& option)
-      : AsyncRequestClosure(
-          fd,
-          ctx,
-          option) {}
+  AioDiscardClosure(int fd, NebdClientAioContext* ctx,
+                    const RequestOption& option)
+      : AsyncRequestClosure(fd, ctx, option) {}
 
-    DiscardResponse response;
+  DiscardResponse response;
 
-    RetCode GetResponseRetCode() const override {
-        return response.retcode();
-    }
+  RetCode GetResponseRetCode() const override { return response.retcode(); }
 };
 
 struct AioFlushClosure : public AsyncRequestClosure {
-    AioFlushClosure(int fd,
-                    NebdClientAioContext* ctx,
-                    const RequestOption& option)
-      : AsyncRequestClosure(
-          fd,
-          ctx,
-          option) {}
+  AioFlushClosure(int fd, NebdClientAioContext* ctx,
+                  const RequestOption& option)
+      : AsyncRequestClosure(fd, ctx, option) {}
 
-    FlushResponse response;
+  FlushResponse response;
 
-    RetCode GetResponseRetCode() const override {
-        return response.retcode();
-    }
+  RetCode GetResponseRetCode() const override { return response.retcode(); }
 };
 
 inline const char* OpTypeToString(LIBAIO_OP opType) {
-    switch (opType) {
+  switch (opType) {
     case LIBAIO_OP::LIBAIO_OP_READ:
-        return "Read";
+      return "Read";
     case LIBAIO_OP::LIBAIO_OP_WRITE:
-        return "Write";
+      return "Write";
     case LIBAIO_OP::LIBAIO_OP_DISCARD:
-        return "Discard";
+      return "Discard";
     case LIBAIO_OP::LIBAIO_OP_FLUSH:
-        return "Flush";
+      return "Flush";
     default:
-        return "Unknown";
-    }
+      return "Unknown";
+  }
 }
 
 }  // namespace client

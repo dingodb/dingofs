@@ -33,16 +33,14 @@ namespace copyset {
 
 class MetaOperatorClosure : public braft::Closure {
  public:
-    explicit MetaOperatorClosure(MetaOperator* op) : operator_(op) {}
+  explicit MetaOperatorClosure(MetaOperator* op) : operator_(op) {}
 
-    void Run() override;
+  void Run() override;
 
-    MetaOperator* GetOperator() const {
-        return operator_;
-    }
+  MetaOperator* GetOperator() const { return operator_; }
 
  private:
-    MetaOperator* operator_;
+  MetaOperator* operator_;
 };
 
 }  // namespace copyset

@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -25,84 +24,81 @@
 #define CURVEFS_SRC_CLIENT_DENTRY_CACHE_MANAGER_H_
 
 #include <cstdint>
+#include <list>
+#include <map>
 #include <memory>
 #include <string>
-#include <list>
 #include <unordered_map>
-#include <map>
 #include <utility>
 
+#include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/concurrent/name_lock.h"
-#include "curvefs/src/client/filesystem/error.h"
 
 using ::curvefs::metaserver::Dentry;
 
 namespace curvefs {
 namespace client {
 
+using ::curvefs::client::filesystem::CURVEFS_ERROR;
 using rpcclient::MetaServerClient;
 using rpcclient::MetaServerClientImpl;
-using ::curvefs::client::filesystem::CURVEFS_ERROR;
 
 static const char* kDentryKeyDelimiter = ":";
 
 class DentryCacheManager {
  public:
-    DentryCacheManager() : fsId_(0) {}
-    virtual ~DentryCacheManager() {}
+  DentryCacheManager() : fsId_(0) {}
+  virtual ~DentryCacheManager() {}
 
-    void SetFsId(uint32_t fsId) {
-        fsId_ = fsId;
-    }
+  void SetFsId(uint32_t fsId) { fsId_ = fsId; }
 
-    virtual CURVEFS_ERROR GetDentry(uint64_t parent,
-        const std::string &name, Dentry *out) = 0;
+  virtual CURVEFS_ERROR GetDentry(uint64_t parent, const std::string& name,
+                                  Dentry* out) = 0;
 
-    virtual CURVEFS_ERROR CreateDentry(const Dentry &dentry) = 0;
+  virtual CURVEFS_ERROR CreateDentry(const Dentry& dentry) = 0;
 
-    virtual CURVEFS_ERROR DeleteDentry(uint64_t parent,
-        const std::string &name,
-        FsFileType type) = 0;
+  virtual CURVEFS_ERROR DeleteDentry(uint64_t parent, const std::string& name,
+                                     FsFileType type) = 0;
 
-    virtual CURVEFS_ERROR ListDentry(uint64_t parent,
-        std::list<Dentry> *dentryList, uint32_t limit,
-        bool onlyDir = false, uint32_t nlink = 0) = 0;
+  virtual CURVEFS_ERROR ListDentry(uint64_t parent,
+                                   std::list<Dentry>* dentryList,
+                                   uint32_t limit, bool onlyDir = false,
+                                   uint32_t nlink = 0) = 0;
 
  protected:
-    uint32_t fsId_;
+  uint32_t fsId_;
 };
 
 class DentryCacheManagerImpl : public DentryCacheManager {
  public:
-    DentryCacheManagerImpl()
+  DentryCacheManagerImpl()
       : metaClient_(std::make_shared<MetaServerClientImpl>()) {}
 
-    explicit DentryCacheManagerImpl(
-        const std::shared_ptr<MetaServerClient> &metaClient)
+  explicit DentryCacheManagerImpl(
+      const std::shared_ptr<MetaServerClient>& metaClient)
       : metaClient_(metaClient) {}
 
-    CURVEFS_ERROR GetDentry(uint64_t parent,
-        const std::string &name, Dentry *out) override;
+  CURVEFS_ERROR GetDentry(uint64_t parent, const std::string& name,
+                          Dentry* out) override;
 
-    CURVEFS_ERROR CreateDentry(const Dentry &dentry) override;
+  CURVEFS_ERROR CreateDentry(const Dentry& dentry) override;
 
-    CURVEFS_ERROR DeleteDentry(uint64_t parent,
-        const std::string &name,
-        FsFileType type) override;
+  CURVEFS_ERROR DeleteDentry(uint64_t parent, const std::string& name,
+                             FsFileType type) override;
 
-    CURVEFS_ERROR ListDentry(uint64_t parent,
-        std::list<Dentry> *dentryList, uint32_t limit,
-        bool dirOnly = false, uint32_t nlink = 0) override;
+  CURVEFS_ERROR ListDentry(uint64_t parent, std::list<Dentry>* dentryList,
+                           uint32_t limit, bool dirOnly = false,
+                           uint32_t nlink = 0) override;
 
-    std::string GetDentryCacheKey(uint64_t parent, const std::string &name) {
-        return std::to_string(parent) + kDentryKeyDelimiter + name;
-    }
+  std::string GetDentryCacheKey(uint64_t parent, const std::string& name) {
+    return std::to_string(parent) + kDentryKeyDelimiter + name;
+  }
 
  private:
-    std::shared_ptr<MetaServerClient> metaClient_;
-    curve::common::GenericNameLock<Mutex> nameLock_;
+  std::shared_ptr<MetaServerClient> metaClient_;
+  curve::common::GenericNameLock<Mutex> nameLock_;
 };
 
 }  // namespace client

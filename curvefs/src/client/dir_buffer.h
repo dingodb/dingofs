@@ -14,7 +14,6 @@
  *  limitations under the License.
  */
 
-
 /*
  * Project: curve
  * Created Date: Thur May 27 2021
@@ -24,10 +23,10 @@
 #ifndef CURVEFS_SRC_CLIENT_DIR_BUFFER_H_
 #define CURVEFS_SRC_CLIENT_DIR_BUFFER_H_
 
-#include <cstdint>
-#include <unordered_map>
-#include <deque>
 #include <atomic>
+#include <cstdint>
+#include <deque>
+#include <unordered_map>
 
 #include "src/common/concurrent/concurrent.h"
 
@@ -35,34 +34,30 @@ namespace curvefs {
 namespace client {
 
 struct DirBufferHead {
-    bool wasRead;
-    size_t size;
-    char *p;
-    DirBufferHead()
-        : wasRead(false),
-          size(0),
-          p(nullptr) {}
+  bool wasRead;
+  size_t size;
+  char* p;
+  DirBufferHead() : wasRead(false), size(0), p(nullptr) {}
 };
 
 // directory buffer
 class DirBuffer {
  public:
-    DirBuffer() :
-        index_(0) {}
-    // New a buffer head, and return a dindex
-    uint64_t DirBufferNew();
-    // Get the buffer head by the dindex
-    DirBufferHead* DirBufferGet(uint64_t dindex);
-    // Release the buffer and buffer head by the dindex
-    void DirBufferRelease(uint64_t dindex);
-    // Release all buffer and buffer head
-    void DirBufferFreeAll();
+  DirBuffer() : index_(0) {}
+  // New a buffer head, and return a dindex
+  uint64_t DirBufferNew();
+  // Get the buffer head by the dindex
+  DirBufferHead* DirBufferGet(uint64_t dindex);
+  // Release the buffer and buffer head by the dindex
+  void DirBufferRelease(uint64_t dindex);
+  // Release all buffer and buffer head
+  void DirBufferFreeAll();
 
  private:
-    std::unordered_map<uint64_t, DirBufferHead*> buffer_;
-    curve::common::RWLock bufferMtx_;
+  std::unordered_map<uint64_t, DirBufferHead*> buffer_;
+  curve::common::RWLock bufferMtx_;
 
-    curve::common::Atomic<uint64_t> index_;
+  curve::common::Atomic<uint64_t> index_;
 };
 
 }  // namespace client

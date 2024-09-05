@@ -51,12 +51,10 @@ DEFINE_uint64(volumeBlockSize, 4096, "volume block size");
 DEFINE_string(volumeName, "volume", "volume name");
 DEFINE_string(volumeUser, "user", "volume user");
 DEFINE_string(volumePassword, "user", "volume user");
-DEFINE_uint64(volumeBlockGroupSize,
-              128ULL * 1024 * 1024,
+DEFINE_uint64(volumeBlockGroupSize, 128ULL * 1024 * 1024,
               "volume block group size");
 
-DEFINE_string(volumeBitmapLocation,
-              "AtStart",
+DEFINE_string(volumeBitmapLocation, "AtStart",
               "volume space bitmap location, support |AtStart| and |AtEnd|");
 
 static constexpr uint64_t kGiB = 1ULL * 1024 * 1024 * 1024;
@@ -64,8 +62,7 @@ DEFINE_uint64(volumeSliceSize, 1 * kGiB, "volume extents slice size");
 
 DEFINE_bool(volumeAutoExtend, false, "auto extend volume when space used up");
 DEFINE_double(volumeExtendFactor, 1.5, "auto extend factor");
-DEFINE_string(volumeCluster,
-              "127.0.0.1:6666,127.0.0.1:6667,127.0.0.1:6668",
+DEFINE_string(volumeCluster, "127.0.0.1:6666,127.0.0.1:6667,127.0.0.1:6668",
               "curvebs cluster");
 
 DEFINE_string(s3_ak, "ak", "s3 ak");
@@ -103,9 +100,9 @@ template <class FlagInfoT>
 void SetFlagInfo(curve::common::Configuration* conf,
                  google::CommandLineFlagInfo* info, const std::string& key,
                  FlagInfoT* flag) {
-    if (GetCommandLineFlagInfo(key.c_str(), info) && info->is_default) {
-        conf->GetValueFatalIfFail(key, flag);
-    }
+  if (GetCommandLineFlagInfo(key.c_str(), info) && info->is_default) {
+    conf->GetValueFatalIfFail(key, flag);
+  }
 }
 
 // Used for flagname and the name in the configuration file is inconsistent
@@ -114,15 +111,15 @@ void SetDiffFlagInfo(curve::common::Configuration* conf,
                      google::CommandLineFlagInfo* info,
                      const std::string& flagName, const std::string& key,
                      FlagInfoT* flag) {
-    if (GetCommandLineFlagInfo(flagName.c_str(), info) && info->is_default) {
-        conf->GetValueFatalIfFail(key, flag);
-    }
+  if (GetCommandLineFlagInfo(flagName.c_str(), info) && info->is_default) {
+    conf->GetValueFatalIfFail(key, flag);
+  }
 }
 
 template <class FlagInfoT>
 bool CheckFlagInfoDefault(google::CommandLineFlagInfo* info,
                           const std::string& key) {
-    return (GetCommandLineFlagInfo(key.c_str(), info) && info->is_default);
+  return (GetCommandLineFlagInfo(key.c_str(), info) && info->is_default);
 }
 
 /* set flag */
@@ -184,39 +181,30 @@ std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
                                   "volumePassword", &FLAGS_volumePassword);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetVolumeBlockGroupSize = std::bind(&SetFlagInfo<uint64_t>,
-                                        std::placeholders::_1,
-                                        std::placeholders::_2,
-                                        "volumeBlockGroupSize",
-                                        &FLAGS_volumeBlockGroupSize);
+    SetVolumeBlockGroupSize = std::bind(
+        &SetFlagInfo<uint64_t>, std::placeholders::_1, std::placeholders::_2,
+        "volumeBlockGroupSize", &FLAGS_volumeBlockGroupSize);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetVolumeBitmapLocation = std::bind(&SetFlagInfo<fLS::clstring>,
-                                        std::placeholders::_1,
-                                        std::placeholders::_2,
-                                        "volumeBitmapLocation",
-                                        &FLAGS_volumeBitmapLocation);
+    SetVolumeBitmapLocation =
+        std::bind(&SetFlagInfo<fLS::clstring>, std::placeholders::_1,
+                  std::placeholders::_2, "volumeBitmapLocation",
+                  &FLAGS_volumeBitmapLocation);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetVolumeAutoExtend = std::bind(&SetFlagInfo<bool>,
-                                        std::placeholders::_1,
-                                        std::placeholders::_2,
-                                        "autoExtend",
-                                        &FLAGS_volumeAutoExtend);
+    SetVolumeAutoExtend =
+        std::bind(&SetFlagInfo<bool>, std::placeholders::_1,
+                  std::placeholders::_2, "autoExtend", &FLAGS_volumeAutoExtend);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetVolumeExtendFactor = std::bind(&SetFlagInfo<double>,
-                                        std::placeholders::_1,
-                                        std::placeholders::_2,
-                                        "extendFactor",
-                                        &FLAGS_volumeExtendFactor);
+    SetVolumeExtendFactor = std::bind(
+        &SetFlagInfo<double>, std::placeholders::_1, std::placeholders::_2,
+        "extendFactor", &FLAGS_volumeExtendFactor);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetVolumeCluster = std::bind(&SetFlagInfo<fLS::clstring>,
-                                 std::placeholders::_1,
-                                 std::placeholders::_2,
-                                 "volumeCluster",
-                                 &FLAGS_volumeCluster);
+    SetVolumeCluster =
+        std::bind(&SetFlagInfo<fLS::clstring>, std::placeholders::_1,
+                  std::placeholders::_2, "volumeCluster", &FLAGS_volumeCluster);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
     SetS3_ak = std::bind(&SetDiffFlagInfo<fLS::clstring>, std::placeholders::_1,
@@ -272,9 +260,9 @@ std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
         "rpcRetryIntervalUs", &FLAGS_rpcRetryIntervalUs);
 
 std::function<void(curve::common::Configuration*, google::CommandLineFlagInfo*)>
-    SetRecycleTimeHour = std::bind(
-        &SetFlagInfo<uint32_t>, std::placeholders::_1, std::placeholders::_2,
-        "recycleTimeHour", &FLAGS_recycleTimeHour);
+    SetRecycleTimeHour = std::bind(&SetFlagInfo<uint32_t>,
+                                   std::placeholders::_1, std::placeholders::_2,
+                                   "recycleTimeHour", &FLAGS_recycleTimeHour);
 
 /* check flag */
 std::function<bool(google::CommandLineFlagInfo*)> CheckMetaserverIdDefault =
@@ -315,134 +303,132 @@ std::function<bool(google::CommandLineFlagInfo*)> CheckInodeIdDefault =
 /* translate to string */
 
 auto StrVec2Str(const std::vector<std::string>& strVec) -> std::string {
-    std::stringstream ret;
-    for (auto const& i : strVec) {
-        ret << i << " ";
-    }
-    return ret.str();
+  std::stringstream ret;
+  for (auto const& i : strVec) {
+    ret << i << " ";
+  }
+  return ret.str();
 };
 
 std::string HeartbeatCopysetInfo2Str(
     const mds::heartbeat::CopySetInfo& copySetInfo) {
-    std::stringstream ret;
-    ret << "poolId: " << copySetInfo.poolid()
-        << " copysetId: " << copySetInfo.copysetid() << " peers: [ ";
-    for (auto const& i : copySetInfo.peers()) {
-        ret << CommomPeer2Str(i) << " ";
-    }
-    ret << "] epoch: " << copySetInfo.epoch()
-        << "leader peer: " << CommomPeer2Str(copySetInfo.leaderpeer())
-        << " partitioninfo: [ ";
-    for (auto const& i : copySetInfo.partitioninfolist()) {
-        CommomPartitionInfo2Str(i);
-    }
-    ret << " ]";
-    return ret.str();
+  std::stringstream ret;
+  ret << "poolId: " << copySetInfo.poolid()
+      << " copysetId: " << copySetInfo.copysetid() << " peers: [ ";
+  for (auto const& i : copySetInfo.peers()) {
+    ret << CommomPeer2Str(i) << " ";
+  }
+  ret << "] epoch: " << copySetInfo.epoch()
+      << "leader peer: " << CommomPeer2Str(copySetInfo.leaderpeer())
+      << " partitioninfo: [ ";
+  for (auto const& i : copySetInfo.partitioninfolist()) {
+    CommomPartitionInfo2Str(i);
+  }
+  ret << " ]";
+  return ret.str();
 }
 
 std::string CommomPeer2Str(const common::Peer& peer) {
-    std::stringstream ret;
-    ret << "id: " << peer.id() << " address: " << peer.address();
-    return ret.str();
+  std::stringstream ret;
+  ret << "id: " << peer.id() << " address: " << peer.address();
+  return ret.str();
 }
 
 std::string CommomPartitionInfo2Str(const common::PartitionInfo& partition) {
-    std::stringstream ret;
-    ret << "fsId: " << partition.fsid() << " poolId: " << partition.poolid()
-        << " copysetId: " << partition.copysetid()
-        << " partitionId: " << partition.partitionid()
-        << " start: " << partition.start() << " end: " << partition.end()
-        << " txId: " << partition.txid() << " nextId: " << partition.nextid()
-        << " status: ";
-    if (partition.status() == common::PartitionStatus::READWRITE) {
-        ret << "rw ";
-    } else if (partition.status() == common::PartitionStatus::READONLY) {
-        ret << "r ";
-    } else {
-        ret << "unknown ";
-    }
-    ret << "inodeNum: " << partition.inodenum()
-        << " dentryNum: " << partition.status();
-    return ret.str();
+  std::stringstream ret;
+  ret << "fsId: " << partition.fsid() << " poolId: " << partition.poolid()
+      << " copysetId: " << partition.copysetid()
+      << " partitionId: " << partition.partitionid()
+      << " start: " << partition.start() << " end: " << partition.end()
+      << " txId: " << partition.txid() << " nextId: " << partition.nextid()
+      << " status: ";
+  if (partition.status() == common::PartitionStatus::READWRITE) {
+    ret << "rw ";
+  } else if (partition.status() == common::PartitionStatus::READONLY) {
+    ret << "r ";
+  } else {
+    ret << "unknown ";
+  }
+  ret << "inodeNum: " << partition.inodenum()
+      << " dentryNum: " << partition.status();
+  return ret.str();
 }
 
 std::string CopysetOpStatus2Str(
     const metaserver::copyset::COPYSET_OP_STATUS& op_status) {
-    std::stringstream ret;
-    switch (op_status) {
-        case metaserver::copyset::COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS:
-            ret << "success ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::COPYSET_OP_STATUS_EXIST:
-            ret << "exist ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::
-            COPYSET_OP_STATUS_COPYSET_NOTEXIST:
-            ret << "no exist ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::
-            COPYSET_OP_STATUS_COPYSET_IS_HEALTHY:
-            ret << "health ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::
-            COPYSET_OP_STATUS_PARSE_PEER_ERROR:
-            ret << "parse peer error ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::
-            COPYSET_OP_STATUS_PEER_MISMATCH:
-            ret << "parse mismatch ";
-            break;
-        case metaserver::copyset::COPYSET_OP_STATUS::
-            COPYSET_OP_STATUS_FAILURE_UNKNOWN:
-        default:
-            ret << "failure unknown ";
-            break;
-    }
-    return ret.str();
+  std::stringstream ret;
+  switch (op_status) {
+    case metaserver::copyset::COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS:
+      ret << "success ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::COPYSET_OP_STATUS_EXIST:
+      ret << "exist ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::
+        COPYSET_OP_STATUS_COPYSET_NOTEXIST:
+      ret << "no exist ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::
+        COPYSET_OP_STATUS_COPYSET_IS_HEALTHY:
+      ret << "health ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::
+        COPYSET_OP_STATUS_PARSE_PEER_ERROR:
+      ret << "parse peer error ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::
+        COPYSET_OP_STATUS_PEER_MISMATCH:
+      ret << "parse mismatch ";
+      break;
+    case metaserver::copyset::COPYSET_OP_STATUS::
+        COPYSET_OP_STATUS_FAILURE_UNKNOWN:
+    default:
+      ret << "failure unknown ";
+      break;
+  }
+  return ret.str();
 }
 
 std::string PoolInfo2Str(const mds::topology::PoolInfo& poolInfo) {
-    std::stringstream ret;
-    ret << "poolId:" << poolInfo.poolid()
-        << ", poolName:" << poolInfo.poolname()
-        << ", createTime:" << poolInfo.createtime() << ", policy:{ "
-        << list::PoolPolicy(poolInfo.redundanceandplacementpolicy()) << " }";
-    return ret.str();
+  std::stringstream ret;
+  ret << "poolId:" << poolInfo.poolid() << ", poolName:" << poolInfo.poolname()
+      << ", createTime:" << poolInfo.createtime() << ", policy:{ "
+      << list::PoolPolicy(poolInfo.redundanceandplacementpolicy()) << " }";
+  return ret.str();
 }
 
 std::string ZoneInfo2Str(const mds::topology::ZoneInfo& zoneInfo) {
-    std::stringstream ret;
-    ret << "zoneId:" << zoneInfo.zoneid()
-        << ", zoneName:" << zoneInfo.zonename()
-        << ", poolId:" << zoneInfo.poolid() << " ";
-    return ret.str();
+  std::stringstream ret;
+  ret << "zoneId:" << zoneInfo.zoneid() << ", zoneName:" << zoneInfo.zonename()
+      << ", poolId:" << zoneInfo.poolid() << " ";
+  return ret.str();
 }
 
 std::string ServerInfo2Str(const mds::topology::ServerInfo& serverInfo) {
-    std::stringstream ret;
-    ret << "serverId:" << serverInfo.serverid()
-        << ", hostname:" << serverInfo.hostname()
-        << ", internalIp:" << serverInfo.internalip()
-        << ", internalPort:" << serverInfo.internalport()
-        << ", externalIp:" << serverInfo.externalip()
-        << ", externalPort:" << serverInfo.externalport()
-        << ", zoneId:" << serverInfo.zoneid()
-        << ", poolId:" << serverInfo.poolid() << " ";
-    return ret.str();
+  std::stringstream ret;
+  ret << "serverId:" << serverInfo.serverid()
+      << ", hostname:" << serverInfo.hostname()
+      << ", internalIp:" << serverInfo.internalip()
+      << ", internalPort:" << serverInfo.internalport()
+      << ", externalIp:" << serverInfo.externalip()
+      << ", externalPort:" << serverInfo.externalport()
+      << ", zoneId:" << serverInfo.zoneid()
+      << ", poolId:" << serverInfo.poolid() << " ";
+  return ret.str();
 }
 
 std::string MetaserverInfo2Str(
     const mds::topology::MetaServerInfo& metaserver) {
-    std::stringstream ret;
-    ret << "metaserverId:" << metaserver.metaserverid()
-        << ", hostname:" << metaserver.hostname()
-        << ", InternalIp:" << metaserver.internalip()
-        << ", internalPort:" << metaserver.internalport()
-        << ", externalIp:" << metaserver.externalip()
-        << ", externalPort:" << metaserver.externalport() << ", onlineState:"
-        << mds::topology::OnlineState_Name(metaserver.onlinestate())
-        << ", serverId:" << metaserver.serverid();
-    return ret.str();
+  std::stringstream ret;
+  ret << "metaserverId:" << metaserver.metaserverid()
+      << ", hostname:" << metaserver.hostname()
+      << ", InternalIp:" << metaserver.internalip()
+      << ", internalPort:" << metaserver.internalport()
+      << ", externalIp:" << metaserver.externalip()
+      << ", externalPort:" << metaserver.externalport() << ", onlineState:"
+      << mds::topology::OnlineState_Name(metaserver.onlinestate())
+      << ", serverId:" << metaserver.serverid();
+  return ret.str();
 }
 
 }  // namespace tools

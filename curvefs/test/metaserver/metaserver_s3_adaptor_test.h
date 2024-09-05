@@ -48,12 +48,12 @@ template <typename RpcRequestType, typename RpcResponseType,
 void S3RpcService(google::protobuf::RpcController* cntl_base,
                   const RpcRequestType* request, RpcResponseType* response,
                   google::protobuf::Closure* done) {
-    if (RpcFailed) {
-        brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
-        cntl->SetFailed(112, "Not connected to");
-    }
-    LOG(INFO) << "run s3 prc service, response.chunkid:" << response->chunkid();
-    done->Run();
+  if (RpcFailed) {
+    brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
+    cntl->SetFailed(112, "Not connected to");
+  }
+  LOG(INFO) << "run s3 prc service, response.chunkid:" << response->chunkid();
+  done->Run();
 }
 
 // use global_chunk_id_ to record chunk id
@@ -64,14 +64,13 @@ void S3RpcService_ChunkId(google::protobuf::RpcController* cntl_base,
                           const RpcRequestType* request,
                           RpcResponseType* response,
                           google::protobuf::Closure* done) {
-    if (RpcFailed) {
-        brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
-        cntl->SetFailed(112, "Not connected to");
-    }
-    response->set_chunkid(++global_chunk_id_);
-    LOG(INFO) << "run s3 prc service, response.chunkid: "
-              << response->chunkid();
-    done->Run();
+  if (RpcFailed) {
+    brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
+    cntl->SetFailed(112, "Not connected to");
+  }
+  response->set_chunkid(++global_chunk_id_);
+  LOG(INFO) << "run s3 prc service, response.chunkid: " << response->chunkid();
+  done->Run();
 }
 
 // use global_version_ to record version
@@ -82,13 +81,13 @@ void S3RpcService_Version(google::protobuf::RpcController* cntl_base,
                           const RpcRequestType* request,
                           RpcResponseType* response,
                           google::protobuf::Closure* done) {
-    if (RpcFailed) {
-        brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
-        cntl->SetFailed(112, "Not connected to");
-    }
-    response->set_version(++global_version_);
-    LOG(INFO) << "run s3 prc service, response.version:" << response->version();
-    done->Run();
+  if (RpcFailed) {
+    brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
+    cntl->SetFailed(112, "Not connected to");
+  }
+  response->set_version(++global_version_);
+  LOG(INFO) << "run s3 prc service, response.version:" << response->version();
+  done->Run();
 }
 
 }  // namespace metaserver

@@ -42,17 +42,17 @@ class FsInfoListTool
                             curvefs::mds::ListClusterFsInfoResponse,
                             curvefs::mds::MdsService_Stub> {
  public:
-    explicit FsInfoListTool(const std::string& cmd = kFsInfoListCmd,
-                            bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
+  explicit FsInfoListTool(const std::string& cmd = kFsInfoListCmd,
+                          bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
 };
 }  // namespace list
 }  // namespace tools

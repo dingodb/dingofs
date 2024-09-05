@@ -23,25 +23,27 @@
 #ifndef TEST_TOOLS_MOCK_MOCK_SNAPSHOT_CLONE_CLIENT_H_
 #define TEST_TOOLS_MOCK_MOCK_SNAPSHOT_CLONE_CLIENT_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <string>
+#include <gtest/gtest.h>
+
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
+
 #include "src/tools/snapshot_clone_client.h"
 
 namespace curve {
 namespace tool {
 class MockSnapshotCloneClient : public SnapshotCloneClient {
  public:
-    MockSnapshotCloneClient() :
-            SnapshotCloneClient(std::make_shared<MetricClient>()) {}
-    MOCK_METHOD2(Init, int(const std::string&, const std::string&));
-    MOCK_METHOD0(GetActiveAddrs, std::vector<std::string>());
-    MOCK_METHOD1(GetOnlineStatus, void(std::map<std::string, bool>*));
-    MOCK_CONST_METHOD0(GetDummyServerMap,
-                    const std::map<std::string, std::string>&());
+  MockSnapshotCloneClient()
+      : SnapshotCloneClient(std::make_shared<MetricClient>()) {}
+  MOCK_METHOD2(Init, int(const std::string&, const std::string&));
+  MOCK_METHOD0(GetActiveAddrs, std::vector<std::string>());
+  MOCK_METHOD1(GetOnlineStatus, void(std::map<std::string, bool>*));
+  MOCK_CONST_METHOD0(GetDummyServerMap,
+                     const std::map<std::string, std::string>&());
 };
 }  // namespace tool
 }  // namespace curve

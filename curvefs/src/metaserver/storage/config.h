@@ -36,26 +36,26 @@ namespace metaserver {
 namespace storage {
 
 struct StorageOptions {
-    std::string type;
+  std::string type;
 
-    uint64_t maxMemoryQuotaBytes;
+  uint64_t maxMemoryQuotaBytes;
 
-    uint64_t maxDiskQuotaBytes;
+  uint64_t maxDiskQuotaBytes;
 
-    std::string dataDir;
+  std::string dataDir;
 
-    // only memory storage interested the below config item
-    bool compression;
+  // only memory storage interested the below config item
+  bool compression;
 
-    // only rocksdb storage interested the below config item
-    uint64_t statsDumpPeriodSec;
+  // only rocksdb storage interested the below config item
+  uint64_t statsDumpPeriodSec;
 
-    size_t keyPrefixLength;
+  size_t keyPrefixLength;
 
-    // misc config item
-    uint64_t s3MetaLimitSizeInsideInode;
+  // misc config item
+  uint64_t s3MetaLimitSizeInsideInode;
 
-    curve::fs::LocalFileSystem* localFileSystem = nullptr;
+  curve::fs::LocalFileSystem* localFileSystem = nullptr;
 };
 
 }  // namespace storage

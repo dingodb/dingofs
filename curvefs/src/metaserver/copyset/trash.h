@@ -36,22 +36,22 @@ namespace metaserver {
 namespace copyset {
 
 struct CopysetTrashOptions {
-    // trash path
-    // format is ${protocol}://{relative or absolute path}
-    // e.g., local:///mnt/trash
-    std::string trashUri;
+  // trash path
+  // format is ${protocol}://{relative or absolute path}
+  // e.g., local:///mnt/trash
+  std::string trashUri;
 
-    // after a copyset has been moved to trashUri for |expiredAfterSec| seconds
-    // its data can be deleted
-    // Default: 1 hour
-    uint32_t expiredAfterSec;
+  // after a copyset has been moved to trashUri for |expiredAfterSec| seconds
+  // its data can be deleted
+  // Default: 1 hour
+  uint32_t expiredAfterSec;
 
-    // backend thread scan interval in seconds
-    // Default: 5 minnute
-    uint32_t scanPeriodSec;
+  // backend thread scan interval in seconds
+  // Default: 5 minnute
+  uint32_t scanPeriodSec;
 
-    CopysetTrashOptions()
-        : trashUri(), expiredAfterSec(60 * 60), scanPeriodSec(5 * 60) {}
+  CopysetTrashOptions()
+      : trashUri(), expiredAfterSec(60 * 60), scanPeriodSec(5 * 60) {}
 };
 
 // when heartbeat judges that current server is not int the coyset
@@ -60,36 +60,35 @@ struct CopysetTrashOptions {
 // space after a period time
 class CopysetTrash {
  public:
-    CopysetTrash();
+  CopysetTrash();
 
-    bool Init(const CopysetTrashOptions& options,
-              curve::fs::LocalFileSystem* fs);
+  bool Init(const CopysetTrashOptions& options, curve::fs::LocalFileSystem* fs);
 
-    bool Start();
+  bool Start();
 
-    bool Stop();
+  bool Stop();
 
-    bool RecycleCopyset(const std::string& copysetAbsolutePath);
-
- private:
-    void DeleteExpiredCopysets();
-
-    bool CreateTrashDirIfNotExist();
-
-    std::string GenerateCopysetRecyclePath(
-        const std::string& copysetAbsolutePath);
-
-    bool IsCopysetDirExpired(const std::string& dir);
-
-    bool IsCopysetDirNameValid(const std::string& dir) const;
+  bool RecycleCopyset(const std::string& copysetAbsolutePath);
 
  private:
-    CopysetTrashOptions options_;
-    curve::fs::LocalFileSystem* lfs_;
-    std::string trashDir_;
-    std::atomic<bool> running_;
-    std::thread recycleThread_;
-    curve::common::InterruptibleSleeper sleeper_;
+  void DeleteExpiredCopysets();
+
+  bool CreateTrashDirIfNotExist();
+
+  std::string GenerateCopysetRecyclePath(
+      const std::string& copysetAbsolutePath);
+
+  bool IsCopysetDirExpired(const std::string& dir);
+
+  bool IsCopysetDirNameValid(const std::string& dir) const;
+
+ private:
+  CopysetTrashOptions options_;
+  curve::fs::LocalFileSystem* lfs_;
+  std::string trashDir_;
+  std::atomic<bool> running_;
+  std::thread recycleThread_;
+  curve::common::InterruptibleSleeper sleeper_;
 };
 
 }  // namespace copyset

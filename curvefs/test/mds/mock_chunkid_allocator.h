@@ -34,12 +34,11 @@ namespace mds {
 
 class MockChunkIdAllocatorImpl : public ChunkIdAllocatorImpl {
  public:
-  MOCK_METHOD( int, GenChunkId, (uint64_t idNum, uint64_t *chunkId) , (override));
+  MOCK_METHOD(int, GenChunkId, (uint64_t idNum, uint64_t* chunkId), (override));
 
   MOCK_METHOD(void, Init,
-              (const std::shared_ptr<KVStorageClient> &client,
-               const std::string &chunkIdStoreKey,
-               uint64_t bundleSize),
+              (const std::shared_ptr<KVStorageClient>& client,
+               const std::string& chunkIdStoreKey, uint64_t bundleSize),
               (override));
 
   MOCK_METHOD(int, AllocateBundleIds, (int bundleSize), (override));

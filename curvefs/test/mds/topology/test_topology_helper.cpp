@@ -26,65 +26,57 @@ namespace curvefs {
 namespace mds {
 namespace topology {
 
-bool ComparePool(const Pool &lh, const Pool &rh) {
-    return lh.GetId() == rh.GetId() &&
-           lh.GetName() == rh.GetName() &&
-           lh.GetRedundanceAndPlaceMentPolicyJsonStr() ==
-           rh.GetRedundanceAndPlaceMentPolicyJsonStr() &&
-           lh.GetCreateTime() == rh.GetCreateTime();
+bool ComparePool(const Pool& lh, const Pool& rh) {
+  return lh.GetId() == rh.GetId() && lh.GetName() == rh.GetName() &&
+         lh.GetRedundanceAndPlaceMentPolicyJsonStr() ==
+             rh.GetRedundanceAndPlaceMentPolicyJsonStr() &&
+         lh.GetCreateTime() == rh.GetCreateTime();
 }
 
-bool CompareZone(const Zone &lh, const Zone &rh) {
-    return lh.GetId() == rh.GetId() &&
-           lh.GetName() == rh.GetName() &&
-           lh.GetPoolId() == rh.GetPoolId();
+bool CompareZone(const Zone& lh, const Zone& rh) {
+  return lh.GetId() == rh.GetId() && lh.GetName() == rh.GetName() &&
+         lh.GetPoolId() == rh.GetPoolId();
 }
 
-bool CompareServer(const Server &lh, const Server &rh) {
-    return lh.GetId() == rh.GetId() &&
-           lh.GetHostName() == rh.GetHostName() &&
-           lh.GetInternalIp() == rh.GetInternalIp() &&
-           lh.GetInternalPort() == rh.GetInternalPort() &&
-           lh.GetExternalIp() == rh.GetExternalIp() &&
-           lh.GetExternalPort() == rh.GetExternalPort() &&
-           lh.GetZoneId() == rh.GetZoneId() &&
-           lh.GetPoolId() == rh.GetPoolId();
+bool CompareServer(const Server& lh, const Server& rh) {
+  return lh.GetId() == rh.GetId() && lh.GetHostName() == rh.GetHostName() &&
+         lh.GetInternalIp() == rh.GetInternalIp() &&
+         lh.GetInternalPort() == rh.GetInternalPort() &&
+         lh.GetExternalIp() == rh.GetExternalIp() &&
+         lh.GetExternalPort() == rh.GetExternalPort() &&
+         lh.GetZoneId() == rh.GetZoneId() && lh.GetPoolId() == rh.GetPoolId();
 }
 
-bool CompareMetaServer(const MetaServer &lh, const MetaServer &rh) {
-    return lh.GetId() == rh.GetId() &&
-           lh.GetHostName() == rh.GetHostName() &&
-           lh.GetToken() == rh.GetToken() &&
-           lh.GetServerId() == rh.GetServerId() &&
-           lh.GetInternalIp() == rh.GetInternalIp() &&
-           lh.GetInternalPort() == rh.GetInternalPort() &&
-           lh.GetExternalIp() == rh.GetExternalIp() &&
-           lh.GetExternalPort() == rh.GetExternalPort() &&
-           lh.GetStartUpTime() == rh.GetStartUpTime() &&
-           lh.GetMetaServerSpace().GetDiskThreshold() ==
-               rh.GetMetaServerSpace().GetDiskThreshold() &&
-           lh.GetMetaServerSpace().GetDiskUsed() ==
-               rh.GetMetaServerSpace().GetDiskUsed() &&
-           lh.GetMetaServerSpace().GetMemoryUsed() ==
-               rh.GetMetaServerSpace().GetMemoryUsed() &&
-           lh.GetDirtyFlag() == rh.GetDirtyFlag();
+bool CompareMetaServer(const MetaServer& lh, const MetaServer& rh) {
+  return lh.GetId() == rh.GetId() && lh.GetHostName() == rh.GetHostName() &&
+         lh.GetToken() == rh.GetToken() &&
+         lh.GetServerId() == rh.GetServerId() &&
+         lh.GetInternalIp() == rh.GetInternalIp() &&
+         lh.GetInternalPort() == rh.GetInternalPort() &&
+         lh.GetExternalIp() == rh.GetExternalIp() &&
+         lh.GetExternalPort() == rh.GetExternalPort() &&
+         lh.GetStartUpTime() == rh.GetStartUpTime() &&
+         lh.GetMetaServerSpace().GetDiskThreshold() ==
+             rh.GetMetaServerSpace().GetDiskThreshold() &&
+         lh.GetMetaServerSpace().GetDiskUsed() ==
+             rh.GetMetaServerSpace().GetDiskUsed() &&
+         lh.GetMetaServerSpace().GetMemoryUsed() ==
+             rh.GetMetaServerSpace().GetMemoryUsed() &&
+         lh.GetDirtyFlag() == rh.GetDirtyFlag();
 }
 
-bool CompareCopysetInfo(const CopySetInfo &lh, const CopySetInfo &rh) {
-    return lh.GetPoolId() == rh.GetPoolId() &&
-           lh.GetId() == rh.GetId() &&
-           lh.GetEpoch() == rh.GetEpoch() &&
-           lh.GetCopySetMembersStr() == rh.GetCopySetMembersStr();
+bool CompareCopysetInfo(const CopySetInfo& lh, const CopySetInfo& rh) {
+  return lh.GetPoolId() == rh.GetPoolId() && lh.GetId() == rh.GetId() &&
+         lh.GetEpoch() == rh.GetEpoch() &&
+         lh.GetCopySetMembersStr() == rh.GetCopySetMembersStr();
 }
 
-bool ComparePartition(const Partition &lh, const Partition &rh) {
-    return lh.GetFsId() == rh.GetFsId() &&
-           lh.GetPoolId() == rh.GetPoolId() &&
-           lh.GetCopySetId() == rh.GetCopySetId() &&
-           lh.GetPartitionId() == rh.GetPartitionId() &&
-           lh.GetIdStart() == rh.GetIdStart() &&
-           lh.GetIdEnd() == rh.GetIdEnd() &&
-           lh.GetTxId() == rh.GetTxId();
+bool ComparePartition(const Partition& lh, const Partition& rh) {
+  return lh.GetFsId() == rh.GetFsId() && lh.GetPoolId() == rh.GetPoolId() &&
+         lh.GetCopySetId() == rh.GetCopySetId() &&
+         lh.GetPartitionId() == rh.GetPartitionId() &&
+         lh.GetIdStart() == rh.GetIdStart() && lh.GetIdEnd() == rh.GetIdEnd() &&
+         lh.GetTxId() == rh.GetTxId();
 }
 
 }  // namespace topology

@@ -20,8 +20,9 @@
  * Author: yangyaokai
  */
 
-#include "src/chunkserver/datastore/filename_operator.h"
 #include "src/chunkserver/datastore/datastore_file_helper.h"
+
+#include "src/chunkserver/datastore/filename_operator.h"
 
 namespace curve {
 namespace chunkserver {
@@ -29,43 +30,40 @@ namespace chunkserver {
 int DatastoreFileHelper::ListFiles(const string& baseDir,
                                    vector<string>* chunkFiles,
                                    vector<string>* snapFiles) {
-    vector<string> files;
-    int rc = fs_->List(baseDir, &files);
-    if (rc < 0 && rc != -ENOENT) {
-        LOG(ERROR) << "List " << baseDir << " failed.";
-        return -1;
-    }
+  vector<string> files;
+  int rc = fs_->List(baseDir, &files);
+  if (rc < 0 && rc != -ENOENT) {
+    LOG(ERROR) << "List " << baseDir << " failed.";
+    return -1;
+  }
 
-    for (auto &file : files) {
-        FileNameOperator::FileInfo info =
-            FileNameOperator::ParseFileName(file);
-        if (info.type == FileNameOperator::FileType::CHUNK) {
-            // If chunkFiles is nullptr, the chunk file name is not returned
-            if (chunkFiles != nullptr) {
-                chunkFiles->emplace_back(file);
-            }
-        } else if (info.type == FileNameOperator::FileType::SNAPSHOT) {
-            // If snapFiles is nullptr, the snapshot file name is not returned
-            if (snapFiles != nullptr) {
-                snapFiles->emplace_back(file);
-            }
-        } else {
-            LOG(WARNING) << "Unknown file: " << file;
-        }
+  for (auto& file : files) {
+    FileNameOperator::FileInfo info = FileNameOperator::ParseFileName(file);
+    if (info.type == FileNameOperator::FileType::CHUNK) {
+      // If chunkFiles is nullptr, the chunk file name is not returned
+      if (chunkFiles != nullptr) {
+        chunkFiles->emplace_back(file);
+      }
+    } else if (info.type == FileNameOperator::FileType::SNAPSHOT) {
+      // If snapFiles is nullptr, the snapshot file name is not returned
+      if (snapFiles != nullptr) {
+        snapFiles->emplace_back(file);
+      }
+    } else {
+      LOG(WARNING) << "Unknown file: " << file;
     }
-    return 0;
+  }
+  return 0;
 }
 
 bool DatastoreFileHelper::IsSnapshotFile(const string& fileName) {
-    FileNameOperator::FileInfo info =
-            FileNameOperator::ParseFileName(fileName);
-    return info.type == FileNameOperator::FileType::SNAPSHOT;
+  FileNameOperator::FileInfo info = FileNameOperator::ParseFileName(fileName);
+  return info.type == FileNameOperator::FileType::SNAPSHOT;
 }
 
 bool DatastoreFileHelper::IsChunkFile(const string& fileName) {
-    FileNameOperator::FileInfo info =
-            FileNameOperator::ParseFileName(fileName);
-    return info.type == FileNameOperator::FileType::CHUNK;
+  FileNameOperator::FileInfo info = FileNameOperator::ParseFileName(fileName);
+  return info.type == FileNameOperator::FileType::CHUNK;
 }
 
 }  // namespace chunkserver

@@ -40,21 +40,21 @@ class FsQueryTool : public CurvefsToolRpc<curvefs::mds::GetFsInfoRequest,
                                           curvefs::mds::GetFsInfoResponse,
                                           curvefs::mds::MdsService_Stub> {
  public:
-    explicit FsQueryTool(const std::string& cmd = kFsQueryCmd, bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
+  explicit FsQueryTool(const std::string& cmd = kFsQueryCmd, bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
 
-    void PrintHelp() override;
-    int Init() override;
-
- protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    std::vector<std::string> requestValueVec_;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
+
+ protected:
+  std::vector<std::string> requestValueVec_;
 };
 
 }  // namespace query

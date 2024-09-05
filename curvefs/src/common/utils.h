@@ -23,7 +23,6 @@
 #ifndef CURVEFS_SRC_COMMON_UTILS_H_
 #define CURVEFS_SRC_COMMON_UTILS_H_
 
-
 #include <string>
 
 namespace curvefs {
@@ -31,9 +30,9 @@ namespace common {
 
 class SysUtils {
  public:
-    SysUtils() {}
-    ~SysUtils() {}
-    std::string RunSysCmd(const std::string& cmd);
+  SysUtils() {}
+  ~SysUtils() {}
+  std::string RunSysCmd(const std::string& cmd);
 };
 
 }  // namespace common

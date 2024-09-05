@@ -20,24 +20,27 @@
  * Author: hzchenwei7
  */
 
-#ifndef  TEST_MDS_NAMESERVER2_MOCK_MOCK_SNAPSHOTCLONE_CLIENT_H_
-#define  TEST_MDS_NAMESERVER2_MOCK_MOCK_SNAPSHOTCLONE_CLIENT_H_
+#ifndef TEST_MDS_NAMESERVER2_MOCK_MOCK_SNAPSHOTCLONE_CLIENT_H_
+#define TEST_MDS_NAMESERVER2_MOCK_MOCK_SNAPSHOTCLONE_CLIENT_H_
 
 #include <gmock/gmock.h>
+
 #include <string>
 #include <vector>
+
 #include "src/mds/snapshotcloneclient/snapshotclone_client.h"
 
 namespace curve {
 namespace mds {
 namespace snapshotcloneclient {
-class MockSnapshotCloneClient: public SnapshotCloneClient {
+class MockSnapshotCloneClient : public SnapshotCloneClient {
  public:
-    ~MockSnapshotCloneClient() {}
-    MOCK_METHOD1(Init, void(const SnapshotCloneClientOption &option));
+  ~MockSnapshotCloneClient() {}
+  MOCK_METHOD1(Init, void(const SnapshotCloneClientOption& option));
 
-    MOCK_METHOD4(GetCloneRefStatus, StatusCode(std::string, std::string,
-      CloneRefStatus *, std::vector<DestFileInfo> *));
+  MOCK_METHOD4(GetCloneRefStatus,
+               StatusCode(std::string, std::string, CloneRefStatus*,
+                          std::vector<DestFileInfo>*));
 };
 }  // namespace snapshotcloneclient
 }  // namespace mds

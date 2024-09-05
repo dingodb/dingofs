@@ -20,16 +20,16 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <glog/logging.h>
 #include <brpc/channel.h>
 #include <brpc/stream.h>
+#include <glog/logging.h>
 
+#include <condition_variable>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
-#include <memory>
-#include <functional>
 #include <unordered_map>
-#include <condition_variable>
 
 #ifndef CURVEFS_SRC_COMMON_RPC_STREAM_H_
 #define CURVEFS_SRC_COMMON_RPC_STREAM_H_
@@ -38,22 +38,21 @@ namespace curvefs {
 namespace common {
 
 struct StreamOptions {
-    StreamOptions()
-        : idleTimeoutMs(500) {}
+  StreamOptions() : idleTimeoutMs(500) {}
 
-    explicit StreamOptions(uint64_t idleTimeoutMs)
-        : idleTimeoutMs(idleTimeoutMs) {}
+  explicit StreamOptions(uint64_t idleTimeoutMs)
+      : idleTimeoutMs(idleTimeoutMs) {}
 
-    uint64_t idleTimeoutMs;
+  uint64_t idleTimeoutMs;
 };
 
 enum class StreamStatus {
-    STREAM_OK,
-    STREAM_ERROR,
-    STREAM_EOF,
-    STREAM_TIMEOUT,
-    STREAM_CLOSE,
-    STREAM_UNKNOWN,
+  STREAM_OK,
+  STREAM_ERROR,
+  STREAM_EOF,
+  STREAM_TIMEOUT,
+  STREAM_CLOSE,
+  STREAM_UNKNOWN,
 };
 
 std::ostream& operator<<(std::ostream& os, const StreamStatus status);
@@ -62,97 +61,94 @@ using ReceiveCallback = std::function<bool(butil::IOBuf*)>;
 
 class StreamConnection {
  public:
-    friend class StreamClient;
-    friend class StreamServer;
+  friend class StreamClient;
+  friend class StreamServer;
 
  public:
-    StreamConnection();
+  StreamConnection();
 
-    StreamConnection(brpc::StreamId streamId,
-                     const ReceiveCallback& callback);
+  StreamConnection(brpc::StreamId streamId, const ReceiveCallback& callback);
 
-    bool Write(const butil::IOBuf& buffer);
+  bool Write(const butil::IOBuf& buffer);
 
-    bool WriteDone();
+  bool WriteDone();
 
-    StreamStatus WaitAllDataReceived();
+  StreamStatus WaitAllDataReceived();
 
-    brpc::StreamId GetStreamId();
-
- private:
-    std::string GetEOFMessage();
-
-    void SetStatus(StreamStatus status);
-
-    bool InvokeReceiveCallback(butil::IOBuf*);
-
-    void Wait();
-
-    void Notify();
+  brpc::StreamId GetStreamId();
 
  private:
-    static const std::string kEOFMessage_;
+  std::string GetEOFMessage();
 
-    brpc::StreamId streamId_;
+  void SetStatus(StreamStatus status);
 
-    ReceiveCallback callback_;
+  bool InvokeReceiveCallback(butil::IOBuf*);
 
-    StreamStatus status_;
+  void Wait();
 
-    std::mutex mtx_;
+  void Notify();
 
-    std::condition_variable cond_;
+ private:
+  static const std::string kEOFMessage_;
+
+  brpc::StreamId streamId_;
+
+  ReceiveCallback callback_;
+
+  StreamStatus status_;
+
+  std::mutex mtx_;
+
+  std::condition_variable cond_;
 };
 
 class StreamClient : public brpc::StreamInputHandler {
  public:
-    StreamClient() = default;
+  StreamClient() = default;
 
-    ~StreamClient();
+  ~StreamClient();
 
-    std::shared_ptr<StreamConnection> Connect(brpc::Controller* cntl,
-                                              const ReceiveCallback& callback,
-                                              StreamOptions options);
+  std::shared_ptr<StreamConnection> Connect(brpc::Controller* cntl,
+                                            const ReceiveCallback& callback,
+                                            StreamOptions options);
 
-    void Close(std::shared_ptr<StreamConnection> connection);
-
- private:
-    std::shared_ptr<StreamConnection> GetConnection(brpc::StreamId id);
-
-    int on_received_messages(brpc::StreamId id,
-                             butil::IOBuf* const buffers[],
-                             size_t size) override;
-
-    void on_idle_timeout(brpc::StreamId id) override;
-
-    void on_closed(brpc::StreamId id) override;
+  void Close(std::shared_ptr<StreamConnection> connection);
 
  private:
-    std::mutex mtx_;
-    std::unordered_map<brpc::StreamId,
-                       std::shared_ptr<StreamConnection>> connections_;
+  std::shared_ptr<StreamConnection> GetConnection(brpc::StreamId id);
+
+  int on_received_messages(brpc::StreamId id, butil::IOBuf* const buffers[],
+                           size_t size) override;
+
+  void on_idle_timeout(brpc::StreamId id) override;
+
+  void on_closed(brpc::StreamId id) override;
+
+ private:
+  std::mutex mtx_;
+  std::unordered_map<brpc::StreamId, std::shared_ptr<StreamConnection>>
+      connections_;
 };
 
 class StreamServer : public brpc::StreamInputHandler {
  public:
-    StreamServer() = default;
+  StreamServer() = default;
 
-    ~StreamServer();
+  ~StreamServer();
 
-    std::shared_ptr<StreamConnection> Accept(brpc::Controller* cntl);
-
- private:
-    int on_received_messages(brpc::StreamId id,
-                             butil::IOBuf* const buffers[],
-                             size_t size) override;
-
-    void on_idle_timeout(brpc::StreamId id) override;
-
-    void on_closed(brpc::StreamId id) override;
+  std::shared_ptr<StreamConnection> Accept(brpc::Controller* cntl);
 
  private:
-    std::mutex mtx_;
-    std::unordered_map<brpc::StreamId, bool> streamIds_;
+  int on_received_messages(brpc::StreamId id, butil::IOBuf* const buffers[],
+                           size_t size) override;
+
+  void on_idle_timeout(brpc::StreamId id) override;
+
+  void on_closed(brpc::StreamId id) override;
+
+ private:
+  std::mutex mtx_;
+  std::unordered_map<brpc::StreamId, bool> streamIds_;
 };
 
 }  // namespace common

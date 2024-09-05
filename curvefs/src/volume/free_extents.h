@@ -23,10 +23,10 @@
 #ifndef CURVEFS_SRC_VOLUME_FREE_EXTENTS_H_
 #define CURVEFS_SRC_VOLUME_FREE_EXTENTS_H_
 
+#include <cassert>
 #include <cstdint>
 #include <map>
 #include <vector>
-#include <cassert>
 
 #include "curvefs/src/volume/common.h"
 
@@ -45,88 +45,85 @@ namespace volume {
 //        `maxExtentSize`
 class FreeExtents {
  public:
-    // Role 1
-    FreeExtents(const uint64_t off, const uint64_t len);
+  // Role 1
+  FreeExtents(const uint64_t off, const uint64_t len);
 
-    // Role 2
-    explicit FreeExtents(const uint64_t maxExtentSize);
+  // Role 2
+  explicit FreeExtents(const uint64_t maxExtentSize);
 
-    FreeExtents(const uint64_t maxExtentSize,
-                const uint64_t off,
-                const uint64_t len);
+  FreeExtents(const uint64_t maxExtentSize, const uint64_t off,
+              const uint64_t len);
 
-    FreeExtents(const FreeExtents&) = delete;
+  FreeExtents(const FreeExtents&) = delete;
 
-    FreeExtents& operator=(const FreeExtents&) = delete;
+  FreeExtents& operator=(const FreeExtents&) = delete;
 
-    /**
-     * @brief DeAllocate space
-     */
-    void DeAlloc(const uint64_t off, const uint64_t len) {
-        assert(len != 0);
+  /**
+   * @brief DeAllocate space
+   */
+  void DeAlloc(const uint64_t off, const uint64_t len) {
+    assert(len != 0);
 
-        DeAllocInternal(off, len);
-        available_ += len;
-        assert(length_ == 0 || available_ <= length_);
-    }
+    DeAllocInternal(off, len);
+    available_ += len;
+    assert(length_ == 0 || available_ <= length_);
+  }
 
-    /**
-     * @brief Allocate space
-     */
-    uint64_t Alloc(const uint64_t size,
-                   const AllocateHint& hint,
-                   std::vector<Extent>* exts) {
-        auto alloc = AllocInternal(size, hint, exts);
-        assert(length_ == 0 || available_ <= length_);
+  /**
+   * @brief Allocate space
+   */
+  uint64_t Alloc(const uint64_t size, const AllocateHint& hint,
+                 std::vector<Extent>* exts) {
+    auto alloc = AllocInternal(size, hint, exts);
+    assert(length_ == 0 || available_ <= length_);
 
-        available_ -= alloc;
+    available_ -= alloc;
 
-        return alloc;
-    }
+    return alloc;
+  }
 
-    /**
-     * @brief Mark extent: [off, len] used
-     */
-    void MarkUsed(const uint64_t off, const uint64_t len) {
-        assert(len != 0);
-        MarkUsedInternal(off, len);
-        available_ -= len;
-        assert(length_ == 0 || available_ <= length_);
-    }
+  /**
+   * @brief Mark extent: [off, len] used
+   */
+  void MarkUsed(const uint64_t off, const uint64_t len) {
+    assert(len != 0);
+    MarkUsedInternal(off, len);
+    available_ -= len;
+    assert(length_ == 0 || available_ <= length_);
+  }
 
-    uint64_t AvailableSize() const { return available_; }
+  uint64_t AvailableSize() const { return available_; }
 
-    /**
-     * @brief Get current available extents
-     */
-    std::map<uint64_t, uint64_t> AvailableExtents() const { return extents_; }
+  /**
+   * @brief Get current available extents
+   */
+  std::map<uint64_t, uint64_t> AvailableExtents() const { return extents_; }
 
-    /**
-     * @brief Get current available blocks
-     * @return Total size of available blocks
-     */
-    uint64_t AvailableBlocks(std::map<uint64_t, uint64_t>* blocks);
+  /**
+   * @brief Get current available blocks
+   * @return Total size of available blocks
+   */
+  uint64_t AvailableBlocks(std::map<uint64_t, uint64_t>* blocks);
 
-    friend std::ostream& operator<<(std::ostream& os, const FreeExtents& e);
+  friend std::ostream& operator<<(std::ostream& os, const FreeExtents& e);
 
  private:
-    uint64_t AllocInternal(uint64_t size,
-                           const AllocateHint& hint,
-                           std::vector<Extent>* exts);
+  uint64_t AllocInternal(uint64_t size, const AllocateHint& hint,
+                         std::vector<Extent>* exts);
 
-    void DeAllocInternal(const uint64_t off, const uint64_t len);
+  void DeAllocInternal(const uint64_t off, const uint64_t len);
 
-    void MarkUsedInternal(const uint64_t off, const uint64_t len);
+  void MarkUsedInternal(const uint64_t off, const uint64_t len);
 
  private:
-    const uint64_t startOffset_;
-    const uint64_t length_;
-    const uint64_t maxLength_;
-    const uint64_t maxExtentSize_;
-    uint64_t available_;
+  const uint64_t startOffset_;
+  const uint64_t length_;
+  const uint64_t maxLength_;
+  const uint64_t maxExtentSize_;
+  uint64_t available_;
 
-    std::map<uint64_t, uint64_t> extents_;
-    std::map<uint64_t, uint64_t> blocks_;
+  std::map<uint64_t, uint64_t> extents_;
+  std::map<uint64_t, uint64_t> blocks_;
 };
 
 }  // namespace volume

@@ -20,28 +20,27 @@
  * Author: chenwei
  */
 
-#include <memory>
 #include "curvefs/src/mds/heartbeat/heartbeat_service.h"
+
+#include <memory>
 
 namespace curvefs {
 namespace mds {
 namespace heartbeat {
 HeartbeatServiceImpl::HeartbeatServiceImpl(
     std::shared_ptr<HeartbeatManager> heartbeatManager) {
-    this->heartbeatManager_ = heartbeatManager;
+  this->heartbeatManager_ = heartbeatManager;
 }
 
 void HeartbeatServiceImpl::MetaServerHeartbeat(
-    ::google::protobuf::RpcController *controller,
-    const ::curvefs::mds::heartbeat::MetaServerHeartbeatRequest *request,
-    ::curvefs::mds::heartbeat::MetaServerHeartbeatResponse *response,
-    ::google::protobuf::Closure *done) {
-    (void)controller;
-    brpc::ClosureGuard doneGuard(done);
-    heartbeatManager_->MetaServerHeartbeat(*request, response);
+    ::google::protobuf::RpcController* controller,
+    const ::curvefs::mds::heartbeat::MetaServerHeartbeatRequest* request,
+    ::curvefs::mds::heartbeat::MetaServerHeartbeatResponse* response,
+    ::google::protobuf::Closure* done) {
+  (void)controller;
+  brpc::ClosureGuard doneGuard(done);
+  heartbeatManager_->MetaServerHeartbeat(*request, response);
 }
 }  // namespace heartbeat
 }  // namespace mds
 }  // namespace curvefs
-
-

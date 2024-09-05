@@ -38,41 +38,41 @@ static const std::vector<AllocateType> kAllocTypes = {
 class BitmapAllocatorBruteTests
     : public ::testing::TestWithParam<BitmapAllocatorOption> {
  protected:
-    void SetUp() override {
-        opt_ = GetParam();
-        allocator_.reset(new BitmapAllocator(opt_));
-    }
+  void SetUp() override {
+    opt_ = GetParam();
+    allocator_.reset(new BitmapAllocator(opt_));
+  }
 
  protected:
-    BitmapAllocatorOption opt_;
-    std::unique_ptr<BitmapAllocator> allocator_;
+  BitmapAllocatorOption opt_;
+  std::unique_ptr<BitmapAllocator> allocator_;
 };
 
 TEST_P(BitmapAllocatorBruteTests, TestAllocAllSpace) {
-    for (int i = 0; i < 3; ++i) {
-        LOG(INFO) << "loop " << i << ", " << *allocator_;
-        Extents exts;
+  for (int i = 0; i < 3; ++i) {
+    LOG(INFO) << "loop " << i << ", " << *allocator_;
+    Extents exts;
 
-        // alloc all available space
-        while (allocator_->AvailableSize() > 0) {
-            AllocateHint hint;
-            auto allocSize = kAllocSizes[rand() % kAllocSizes.size()];
-            hint.allocType = kAllocTypes[rand() % kAllocTypes.size()];
+    // alloc all available space
+    while (allocator_->AvailableSize() > 0) {
+      AllocateHint hint;
+      auto allocSize = kAllocSizes[rand() % kAllocSizes.size()];
+      hint.allocType = kAllocTypes[rand() % kAllocTypes.size()];
 
-            allocSize = std::min(allocSize, allocator_->AvailableSize());
-            ASSERT_EQ(allocSize, allocator_->Alloc(allocSize, hint, &exts));
-        }
-
-        ASSERT_EQ(0, allocator_->AvailableSize());
-        ASSERT_EQ(opt_.length, TotalLength(exts));
-
-        // test no overlap extents
-        ASSERT_TRUE(ExtentsContinuous(exts));
-
-        // return all allocated extents
-        allocator_->DeAlloc(exts);
-        ASSERT_EQ(opt_.length, allocator_->AvailableSize());
+      allocSize = std::min(allocSize, allocator_->AvailableSize());
+      ASSERT_EQ(allocSize, allocator_->Alloc(allocSize, hint, &exts));
     }
+
+    ASSERT_EQ(0, allocator_->AvailableSize());
+    ASSERT_EQ(opt_.length, TotalLength(exts));
+
+    // test no overlap extents
+    ASSERT_TRUE(ExtentsContinuous(exts));
+
+    // return all allocated extents
+    allocator_->DeAlloc(exts);
+    ASSERT_EQ(opt_.length, allocator_->AvailableSize());
+  }
 }
 
 INSTANTIATE_TEST_CASE_P(

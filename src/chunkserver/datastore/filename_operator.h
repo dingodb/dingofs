@@ -37,54 +37,51 @@ using std::vector;
 
 class FileNameOperator {
  public:
-    enum class FileType {
-        CHUNK,
-        SNAPSHOT,
-        UNKNOWN,
-    };
+  enum class FileType {
+    CHUNK,
+    SNAPSHOT,
+    UNKNOWN,
+  };
 
-    struct FileInfo {
-        FileType    type;
-        ChunkID     id;
-        SequenceNum sn;
-    };
+  struct FileInfo {
+    FileType type;
+    ChunkID id;
+    SequenceNum sn;
+  };
 
-    FileNameOperator() {}
-    virtual ~FileNameOperator() {}
+  FileNameOperator() {}
+  virtual ~FileNameOperator() {}
 
-    static inline string GenerateChunkFileName(ChunkID id) {
-        return "chunk_" + std::to_string(id);
+  static inline string GenerateChunkFileName(ChunkID id) {
+    return "chunk_" + std::to_string(id);
+  }
+
+  static inline string GenerateSnapshotName(ChunkID id, SequenceNum sn) {
+    return GenerateChunkFileName(id) + "_snap_" + std::to_string(sn);
+  }
+
+  static inline FileInfo ParseFileName(const string& fileName) {
+    vector<string> elements;
+    ::curve::common::SplitString(fileName, "_", &elements);
+    FileInfo info;
+    info.type = FileType::UNKNOWN;
+
+    // The format of the chunk file name is chunk_id
+    // The format of snapshot file name is chunk_id_snap_sn
+    // Separate file names with "_" and parse file information
+    // If the above format is not met, the file type is UNKNOWN
+    if (elements.size() == 2 && elements[0].compare("chunk") == 0) {
+      info.id = std::stoull(elements[1]);
+      info.type = FileType::CHUNK;
+    } else if (elements.size() == 4 && elements[0].compare("chunk") == 0 &&
+               elements[2].compare("snap") == 0) {
+      info.id = std::stoull(elements[1]);
+      info.sn = std::stoull(elements[3]);
+      info.type = FileType::SNAPSHOT;
     }
 
-    static inline string GenerateSnapshotName(ChunkID id, SequenceNum sn) {
-        return GenerateChunkFileName(id)
-                + "_snap_" + std::to_string(sn);
-    }
-
-    static inline FileInfo ParseFileName(const string& fileName) {
-        vector<string> elements;
-        ::curve::common::SplitString(fileName, "_", &elements);
-        FileInfo info;
-        info.type = FileType::UNKNOWN;
-
-        // The format of the chunk file name is chunk_id
-        // The format of snapshot file name is chunk_id_snap_sn
-        // Separate file names with "_" and parse file information
-        // If the above format is not met, the file type is UNKNOWN
-        if (elements.size() == 2
-            && elements[0].compare("chunk") == 0) {
-            info.id = std::stoull(elements[1]);
-            info.type = FileType::CHUNK;
-        } else if (elements.size() == 4
-                   && elements[0].compare("chunk") == 0
-                   && elements[2].compare("snap") == 0) {
-            info.id = std::stoull(elements[1]);
-            info.sn = std::stoull(elements[3]);
-            info.type = FileType::SNAPSHOT;
-        }
-
-        return info;
-    }
+    return info;
+  }
 };
 
 }  // namespace chunkserver

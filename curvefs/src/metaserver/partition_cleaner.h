@@ -40,69 +40,66 @@ using ::curvefs::mds::FsInfo;
 
 class PartitionCleaner {
  public:
-    explicit PartitionCleaner(const std::shared_ptr<Partition> &partition)
-        : partition_(partition) {
-        isStop_ = false;
-        LOG(INFO) << "PartitionCleaner poolId = "
-                  << partition->GetPoolId() << ", partitionId = "
-                  << partition->GetPartitionId();
-    }
+  explicit PartitionCleaner(const std::shared_ptr<Partition>& partition)
+      : partition_(partition) {
+    isStop_ = false;
+    LOG(INFO) << "PartitionCleaner poolId = " << partition->GetPoolId()
+              << ", partitionId = " << partition->GetPartitionId();
+  }
 
-    void SetIndoDeletePeriod(uint32_t periodMs) {
-        inodeDeletePeriodMs_ = periodMs;
-    }
+  void SetIndoDeletePeriod(uint32_t periodMs) {
+    inodeDeletePeriodMs_ = periodMs;
+  }
 
-    void SetS3Aapter(std::shared_ptr<S3ClientAdaptor> s3Adaptor) {
-        s3Adaptor_ = s3Adaptor;
-    }
+  void SetS3Aapter(std::shared_ptr<S3ClientAdaptor> s3Adaptor) {
+    s3Adaptor_ = s3Adaptor;
+  }
 
-    void SetCopysetNode(copyset::CopysetNode *copysetNode) {
-        copysetNode_ = copysetNode;
-    }
+  void SetCopysetNode(copyset::CopysetNode* copysetNode) {
+    copysetNode_ = copysetNode;
+  }
 
-    void SetMdsClient(std::shared_ptr<MdsClient> mdsClient) {
-        mdsClient_ = mdsClient;
-    }
+  void SetMdsClient(std::shared_ptr<MdsClient> mdsClient) {
+    mdsClient_ = mdsClient;
+  }
 
-    bool ScanPartition();
-    MetaStatusCode CleanDataAndDeleteInode(const Inode &inode);
-    MetaStatusCode DeleteInode(const Inode& inode);
-    MetaStatusCode DeletePartition();
-    uint32_t GetPartitionId() {
-        return partition_->GetPartitionId();
-    }
+  bool ScanPartition();
+  MetaStatusCode CleanDataAndDeleteInode(const Inode& inode);
+  MetaStatusCode DeleteInode(const Inode& inode);
+  MetaStatusCode DeletePartition();
+  uint32_t GetPartitionId() { return partition_->GetPartitionId(); }
 
-    void Stop() { isStop_ = true; }
+  void Stop() { isStop_ = true; }
 
-    bool IsStop() { return isStop_; }
+  bool IsStop() { return isStop_; }
 
  private:
-    std::shared_ptr<Partition> partition_;
-    copyset::CopysetNode *copysetNode_;
-    std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
-    std::shared_ptr<MdsClient> mdsClient_;
-    bool isStop_;
-    uint32_t inodeDeletePeriodMs_;
-    std::unordered_map<uint32_t, FsInfo> fsInfoMap_;
+  std::shared_ptr<Partition> partition_;
+  copyset::CopysetNode* copysetNode_;
+  std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
+  std::shared_ptr<MdsClient> mdsClient_;
+  bool isStop_;
+  uint32_t inodeDeletePeriodMs_;
+  std::unordered_map<uint32_t, FsInfo> fsInfoMap_;
 };
 
 class PartitionCleanerClosure : public google::protobuf::Closure {
  private:
-    std::mutex mutex_;
-    std::condition_variable cond_;
-    bool runned_ = false;
+  std::mutex mutex_;
+  std::condition_variable cond_;
+  bool runned_ = false;
 
  public:
-    void Run() override {
-        std::lock_guard<std::mutex> l(mutex_);
-        runned_ = true;
-        cond_.notify_one();
-    }
+  void Run() override {
+    std::lock_guard<std::mutex> l(mutex_);
+    runned_ = true;
+    cond_.notify_one();
+  }
 
-    void WaitRunned() {
-        std::unique_lock<std::mutex> ul(mutex_);
-        cond_.wait(ul, [this]() { return runned_; });
-    }
+  void WaitRunned() {
+    std::unique_lock<std::mutex> ul(mutex_);
+    cond_.wait(ul, [this]() { return runned_; });
+  }
 };
 
 }  // namespace metaserver

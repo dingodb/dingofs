@@ -20,77 +20,74 @@
  * Author: tongguangxun
  */
 
+#include "test/integration/client/common/file_operation.h"
+
 #include <glog/logging.h>
 
-#include <map>
-#include <cmath>
-#include <numeric>
-#include <chrono>   //  NOLINT
-#include <atomic>
-#include <thread>   //  NOLINT
 #include <algorithm>
+#include <atomic>
+#include <chrono>  //  NOLINT
+#include <cmath>
 #include <functional>
+#include <map>
+#include <numeric>
+#include <thread>  //  NOLINT
 
-#include "src/common/timeutility.h"
 #include "include/client/libcurve.h"
 #include "src/client/inflight_controller.h"
-#include "test/integration/client/common/file_operation.h"
+#include "src/common/timeutility.h"
 
 namespace curve {
 namespace test {
 int FileCommonOperation::Open(const std::string& filename,
                               const std::string& owner) {
-    C_UserInfo_t userinfo;
-    memset(userinfo.owner, 0, 256);
-    memcpy(userinfo.owner, owner.c_str(), owner.size());
+  C_UserInfo_t userinfo;
+  memset(userinfo.owner, 0, 256);
+  memcpy(userinfo.owner, owner.c_str(), owner.size());
 
-    // 先创建文件
-    int ret = Create(filename.c_str(), &userinfo, 100*1024*1024*1024ul);
-    if (ret != LIBCURVE_ERROR::OK && ret != -LIBCURVE_ERROR::EXISTS) {
-        LOG(ERROR) << "file create failed! " << ret
-                   << ", filename = " << filename;
-        return -1;
-    }
+  // 先创建文件
+  int ret = Create(filename.c_str(), &userinfo, 100 * 1024 * 1024 * 1024ul);
+  if (ret != LIBCURVE_ERROR::OK && ret != -LIBCURVE_ERROR::EXISTS) {
+    LOG(ERROR) << "file create failed! " << ret << ", filename = " << filename;
+    return -1;
+  }
 
-    // 再打开文件
-    int fd = ::Open(filename.c_str(), &userinfo);
-    if (fd < 0 && ret != -LIBCURVE_ERROR::FILE_OCCUPIED) {
-        LOG(ERROR) << "Open file failed!";
-        return -1;
-    }
+  // 再打开文件
+  int fd = ::Open(filename.c_str(), &userinfo);
+  if (fd < 0 && ret != -LIBCURVE_ERROR::FILE_OCCUPIED) {
+    LOG(ERROR) << "Open file failed!";
+    return -1;
+  }
 
-    return fd;
+  return fd;
 }
 
-void FileCommonOperation::Close(int fd) {
-    ::Close(fd);
-}
+void FileCommonOperation::Close(int fd) { ::Close(fd); }
 
 int FileCommonOperation::Open(const std::string& filename,
-                              const std::string& owner,
-                              uint64_t stripeUnit, uint64_t stripeCount) {
-    C_UserInfo_t userinfo;
-    memset(userinfo.owner, 0, 256);
-    memcpy(userinfo.owner, owner.c_str(), owner.size());
+                              const std::string& owner, uint64_t stripeUnit,
+                              uint64_t stripeCount) {
+  C_UserInfo_t userinfo;
+  memset(userinfo.owner, 0, 256);
+  memcpy(userinfo.owner, owner.c_str(), owner.size());
 
-    // 先创建文件
-    int ret = ::Create2(filename.c_str(), &userinfo,
-               100*1024*1024*1024ul, stripeUnit, stripeCount);
-    if (ret != LIBCURVE_ERROR::OK && ret != -LIBCURVE_ERROR::EXISTS) {
-        LOG(ERROR) << "file create failed! " << ret
-                   << ", filename = " << filename;
-        return -1;
-    }
+  // 先创建文件
+  int ret = ::Create2(filename.c_str(), &userinfo, 100 * 1024 * 1024 * 1024ul,
+                      stripeUnit, stripeCount);
+  if (ret != LIBCURVE_ERROR::OK && ret != -LIBCURVE_ERROR::EXISTS) {
+    LOG(ERROR) << "file create failed! " << ret << ", filename = " << filename;
+    return -1;
+  }
 
-    // 再打开文件
-    int fd = ::Open(filename.c_str(), &userinfo);
-    if (fd < 0 && ret != -LIBCURVE_ERROR::FILE_OCCUPIED) {
-        LOG(ERROR) << "Open file failed!";
-        return -1;
-    }
+  // 再打开文件
+  int fd = ::Open(filename.c_str(), &userinfo);
+  if (fd < 0 && ret != -LIBCURVE_ERROR::FILE_OCCUPIED) {
+    LOG(ERROR) << "Open file failed!";
+    return -1;
+  }
 
-    return fd;
+  return fd;
 }
 
-}   //  namespace test
-}   //  namespace curve
+}  //  namespace test
+}  //  namespace curve

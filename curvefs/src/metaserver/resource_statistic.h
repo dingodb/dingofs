@@ -31,30 +31,29 @@ namespace curvefs {
 namespace metaserver {
 
 struct StorageStatistics {
-    uint64_t maxMemoryQuotaBytes;
-    uint64_t maxDiskQuotaBytes;
-    uint64_t memoryUsageBytes;
-    uint64_t diskUsageBytes;
+  uint64_t maxMemoryQuotaBytes;
+  uint64_t maxDiskQuotaBytes;
+  uint64_t memoryUsageBytes;
+  uint64_t diskUsageBytes;
 };
 
 class ResourceCollector {
  public:
-    ResourceCollector(uint64_t diskQuota,
-                      uint64_t memQuota,
-                      std::string dataRoot);
+  ResourceCollector(uint64_t diskQuota, uint64_t memQuota,
+                    std::string dataRoot);
 
-    void SetDataRoot(const std::string& dataRoot);
+  void SetDataRoot(const std::string& dataRoot);
 
-    void SetDiskQuota(uint64_t diskQuotaBytes);
+  void SetDiskQuota(uint64_t diskQuotaBytes);
 
-    void SetMemoryQuota(uint64_t memQuotaBytes);
+  void SetMemoryQuota(uint64_t memQuotaBytes);
 
-    bool GetResourceStatistic(StorageStatistics* statistics);
+  bool GetResourceStatistic(StorageStatistics* statistics);
 
  private:
-    uint64_t diskQuotaBytes_;
-    uint64_t memQuotaBytes_;
-    std::string dataRoot_;
+  uint64_t diskQuotaBytes_;
+  uint64_t memQuotaBytes_;
+  std::string dataRoot_;
 };
 
 }  // namespace metaserver

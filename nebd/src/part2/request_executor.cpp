@@ -21,6 +21,7 @@
  */
 
 #include "nebd/src/part2/request_executor.h"
+
 #include "nebd/src/part2/request_executor_curve.h"
 
 namespace nebd {
@@ -28,33 +29,32 @@ namespace server {
 
 NebdRequestExecutor* g_test_executor = nullptr;
 
-NebdRequestExecutor*
-NebdRequestExecutorFactory::GetExecutor(NebdFileType type) {
-    NebdRequestExecutor* executor = nullptr;
-    switch (type) {
-        case NebdFileType::CURVE:
-            executor = &CurveRequestExecutor::GetInstance();
-            break;
-        case NebdFileType::TEST:
-            executor = g_test_executor;
-            break;
-        default:
-            break;
-    }
-    return executor;
+NebdRequestExecutor* NebdRequestExecutorFactory::GetExecutor(
+    NebdFileType type) {
+  NebdRequestExecutor* executor = nullptr;
+  switch (type) {
+    case NebdFileType::CURVE:
+      executor = &CurveRequestExecutor::GetInstance();
+      break;
+    case NebdFileType::TEST:
+      executor = g_test_executor;
+      break;
+    default:
+      break;
+  }
+  return executor;
 }
 
-NebdFileInstancePtr
-NebdFileInstanceFactory::GetInstance(NebdFileType type) {
-    NebdFileInstancePtr instance = nullptr;
-    switch (type) {
-        case NebdFileType::CURVE:
-            instance = std::make_shared<CurveFileInstance>();
-            break;
-        default:
-            break;
-    }
-    return instance;
+NebdFileInstancePtr NebdFileInstanceFactory::GetInstance(NebdFileType type) {
+  NebdFileInstancePtr instance = nullptr;
+  switch (type) {
+    case NebdFileType::CURVE:
+      instance = std::make_shared<CurveFileInstance>();
+      break;
+    default:
+      break;
+  }
+  return instance;
 }
 
 }  // namespace server

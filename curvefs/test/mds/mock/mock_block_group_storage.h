@@ -35,11 +35,11 @@ namespace space {
 
 class MockBlockGroupStorage : public BlockGroupStorage {
  public:
-    MOCK_METHOD3(PutBlockGroup,
-                 SpaceErrCode(uint32_t, uint64_t, const BlockGroup&));
-    MOCK_METHOD2(RemoveBlockGroup, SpaceErrCode(uint32_t, uint64_t));
-    MOCK_METHOD2(ListBlockGroups,
-                 SpaceErrCode(uint32_t, std::vector<BlockGroup>*));
+  MOCK_METHOD3(PutBlockGroup,
+               SpaceErrCode(uint32_t, uint64_t, const BlockGroup&));
+  MOCK_METHOD2(RemoveBlockGroup, SpaceErrCode(uint32_t, uint64_t));
+  MOCK_METHOD2(ListBlockGroups,
+               SpaceErrCode(uint32_t, std::vector<BlockGroup>*));
 };
 
 }  // namespace space

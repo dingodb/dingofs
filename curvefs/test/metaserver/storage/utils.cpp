@@ -20,34 +20,33 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "curvefs/test/metaserver/storage/utils.h"
 
+#include <algorithm>
+#include <iomanip>
+#include <iostream>
+#include <limits>
 #include <random>
 #include <sstream>
-#include <iomanip>
-#include <limits>
-#include <iostream>
-#include <algorithm>
-
-#include "curvefs/test/metaserver/storage/utils.h"
 
 namespace curvefs {
 namespace metaserver {
 namespace storage {
 
 std::string RandomString() {
-    uint64_t maxUint64 = std::numeric_limits<uint64_t>::max();
-    std::random_device dev;
-    std::mt19937 rng(dev());
-    std::uniform_int_distribution<std::mt19937::result_type> dist(0, maxUint64);
+  uint64_t maxUint64 = std::numeric_limits<uint64_t>::max();
+  std::random_device dev;
+  std::mt19937 rng(dev());
+  std::uniform_int_distribution<std::mt19937::result_type> dist(0, maxUint64);
 
-    std::ostringstream oss;
-    oss << std::setw(std::to_string(maxUint64).size())
-        << std::setfill('0') << dist(rng);
-    return oss.str();
+  std::ostringstream oss;
+  oss << std::setw(std::to_string(maxUint64).size()) << std::setfill('0')
+      << dist(rng);
+  return oss.str();
 }
 
 std::string RandomStoragePath(std::string basedir) {
-    return basedir + "_" + RandomString();
+  return basedir + "_" + RandomString();
 }
 
 }  // namespace storage

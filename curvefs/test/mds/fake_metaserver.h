@@ -24,50 +24,51 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
+
 #include "curvefs/proto/metaserver.pb.h"
 
 namespace curvefs {
 namespace metaserver {
 class FakeMetaserverImpl : public MetaServerService {
  public:
-    FakeMetaserverImpl() {}
-    void GetDentry(::google::protobuf::RpcController* controller,
-                   const ::curvefs::metaserver::GetDentryRequest* request,
-                   ::curvefs::metaserver::GetDentryResponse* response,
-                   ::google::protobuf::Closure* done);
-    void ListDentry(::google::protobuf::RpcController* controller,
-                    const ::curvefs::metaserver::ListDentryRequest* request,
-                    ::curvefs::metaserver::ListDentryResponse* response,
-                    ::google::protobuf::Closure* done);
-    void CreateDentry(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::CreateDentryRequest* request,
-                      ::curvefs::metaserver::CreateDentryResponse* response,
-                      ::google::protobuf::Closure* done);
-    void DeleteDentry(::google::protobuf::RpcController* controller,
-                      const ::curvefs::metaserver::DeleteDentryRequest* request,
-                      ::curvefs::metaserver::DeleteDentryResponse* response,
-                      ::google::protobuf::Closure* done);
-    void GetInode(::google::protobuf::RpcController* controller,
-                  const ::curvefs::metaserver::GetInodeRequest* request,
-                  ::curvefs::metaserver::GetInodeResponse* response,
+  FakeMetaserverImpl() {}
+  void GetDentry(::google::protobuf::RpcController* controller,
+                 const ::curvefs::metaserver::GetDentryRequest* request,
+                 ::curvefs::metaserver::GetDentryResponse* response,
+                 ::google::protobuf::Closure* done);
+  void ListDentry(::google::protobuf::RpcController* controller,
+                  const ::curvefs::metaserver::ListDentryRequest* request,
+                  ::curvefs::metaserver::ListDentryResponse* response,
                   ::google::protobuf::Closure* done);
-    void CreateInode(::google::protobuf::RpcController* controller,
-                     const ::curvefs::metaserver::CreateInodeRequest* request,
-                     ::curvefs::metaserver::CreateInodeResponse* response,
-                     ::google::protobuf::Closure* done);
-    void CreateRootInode(
-        ::google::protobuf::RpcController* controller,
-        const ::curvefs::metaserver::CreateRootInodeRequest* request,
-        ::curvefs::metaserver::CreateRootInodeResponse* response,
-        ::google::protobuf::Closure* done);
-    void UpdateInode(::google::protobuf::RpcController* controller,
-                     const ::curvefs::metaserver::UpdateInodeRequest* request,
-                     ::curvefs::metaserver::UpdateInodeResponse* response,
-                     ::google::protobuf::Closure* done);
-    void DeleteInode(::google::protobuf::RpcController* controller,
-                     const ::curvefs::metaserver::DeleteInodeRequest* request,
-                     ::curvefs::metaserver::DeleteInodeResponse* response,
-                     ::google::protobuf::Closure* done);
+  void CreateDentry(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::CreateDentryRequest* request,
+                    ::curvefs::metaserver::CreateDentryResponse* response,
+                    ::google::protobuf::Closure* done);
+  void DeleteDentry(::google::protobuf::RpcController* controller,
+                    const ::curvefs::metaserver::DeleteDentryRequest* request,
+                    ::curvefs::metaserver::DeleteDentryResponse* response,
+                    ::google::protobuf::Closure* done);
+  void GetInode(::google::protobuf::RpcController* controller,
+                const ::curvefs::metaserver::GetInodeRequest* request,
+                ::curvefs::metaserver::GetInodeResponse* response,
+                ::google::protobuf::Closure* done);
+  void CreateInode(::google::protobuf::RpcController* controller,
+                   const ::curvefs::metaserver::CreateInodeRequest* request,
+                   ::curvefs::metaserver::CreateInodeResponse* response,
+                   ::google::protobuf::Closure* done);
+  void CreateRootInode(
+      ::google::protobuf::RpcController* controller,
+      const ::curvefs::metaserver::CreateRootInodeRequest* request,
+      ::curvefs::metaserver::CreateRootInodeResponse* response,
+      ::google::protobuf::Closure* done);
+  void UpdateInode(::google::protobuf::RpcController* controller,
+                   const ::curvefs::metaserver::UpdateInodeRequest* request,
+                   ::curvefs::metaserver::UpdateInodeResponse* response,
+                   ::google::protobuf::Closure* done);
+  void DeleteInode(::google::protobuf::RpcController* controller,
+                   const ::curvefs::metaserver::DeleteInodeRequest* request,
+                   ::curvefs::metaserver::DeleteInodeResponse* response,
+                   ::google::protobuf::Closure* done);
 };
 
 }  // namespace metaserver

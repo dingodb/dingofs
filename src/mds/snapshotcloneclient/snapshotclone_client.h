@@ -25,8 +25,9 @@
 
 #include <string>
 #include <vector>
-#include "src/common/snapshotclone/snapshotclone_define.h"
+
 #include "proto/nameserver2.pb.h"  // for retcode StatusCode
+#include "src/common/snapshotclone/snapshotclone_define.h"
 
 using curve::mds::StatusCode;
 using curve::snapshotcloneserver::CloneRefStatus;
@@ -36,50 +37,48 @@ namespace mds {
 namespace snapshotcloneclient {
 
 struct SnapshotCloneClientOption {
-    std::string snapshotCloneAddr;
+  std::string snapshotCloneAddr;
 };
 
 struct DestFileInfo {
-    std::string filename;
-    uint64_t inodeid;
+  std::string filename;
+  uint64_t inodeid;
 };
 
 class SnapshotCloneClient {
  public:
-    SnapshotCloneClient()
-        : addr_(""), inited_(false) {}
+  SnapshotCloneClient() : addr_(""), inited_(false) {}
 
-    virtual ~SnapshotCloneClient() {}
+  virtual ~SnapshotCloneClient() {}
 
-    virtual void Init(const SnapshotCloneClientOption &option);
+  virtual void Init(const SnapshotCloneClientOption& option);
 
-    /**
-     * @brief get the clone ref status of a file. As a clone src file,
-     *        find if has clone ref.
-     *
-     * @param filename the name of clone src file
-     * @param user the user of clone src file
-     * @param status return 0 means no ref, return 1 means has ref,
-     *               return 2 means not sure, need check fileCheckList
-     * @param fileCheckList the need check dest file info list
-     *
-     * @return error code
-     */
-    virtual StatusCode GetCloneRefStatus(std::string filename, std::string user,
-                                  CloneRefStatus *status,
-                                  std::vector<DestFileInfo> *fileCheckList);
+  /**
+   * @brief get the clone ref status of a file. As a clone src file,
+   *        find if has clone ref.
+   *
+   * @param filename the name of clone src file
+   * @param user the user of clone src file
+   * @param status return 0 means no ref, return 1 means has ref,
+   *               return 2 means not sure, need check fileCheckList
+   * @param fileCheckList the need check dest file info list
+   *
+   * @return error code
+   */
+  virtual StatusCode GetCloneRefStatus(
+      std::string filename, std::string user, CloneRefStatus* status,
+      std::vector<DestFileInfo>* fileCheckList);
 
-    // test only
-    virtual bool GetInitStatus();
+  // test only
+  virtual bool GetInitStatus();
 
  private:
-    std::string addr_;
-    bool inited_;
+  std::string addr_;
+  bool inited_;
 };
 
 }  // namespace snapshotcloneclient
 }  // namespace mds
 }  // namespace curve
-
 
 #endif  // SRC_MDS_SNAPSHOTCLONECLIENT_SNAPSHOTCLONE_CLIENT_H_

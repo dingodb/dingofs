@@ -41,17 +41,17 @@ class CopysetInfoListTool
                             curvefs::mds::topology::ListCopysetInfoResponse,
                             curvefs::mds::topology::TopologyService_Stub> {
  public:
-    explicit CopysetInfoListTool(const std::string& cmd = kCopysetInfoListCmd,
-                                 bool show = true)
-        : CurvefsToolRpc(cmd) {
-        show_ = show;
-    }
-    void PrintHelp() override;
-    int Init() override;
+  explicit CopysetInfoListTool(const std::string& cmd = kCopysetInfoListCmd,
+                               bool show = true)
+      : CurvefsToolRpc(cmd) {
+    show_ = show;
+  }
+  void PrintHelp() override;
+  int Init() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
 };
 
 }  // namespace list

@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include <gtest/gtest.h>
-
 #include "curvefs/src/client/filesystem/error.h"
+
+#include <gtest/gtest.h>
 
 namespace curvefs {
 namespace client {
@@ -30,29 +30,29 @@ namespace filesystem {
 
 class ErrorTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(ErrorTest, StrErr) {
-    ASSERT_EQ(StrErr(CURVEFS_ERROR::OK), "OK");
-    ASSERT_EQ(StrErr(CURVEFS_ERROR::INTERNAL), "internal error");
-    ASSERT_EQ(StrErr(CURVEFS_ERROR::INVALIDPARAM), "invalid argument");
-    ASSERT_EQ(StrErr(CURVEFS_ERROR::STALE), "stale file handler");
-    ASSERT_EQ(StrErr(CURVEFS_ERROR::UNKNOWN), "unknown");
+  ASSERT_EQ(StrErr(CURVEFS_ERROR::OK), "OK");
+  ASSERT_EQ(StrErr(CURVEFS_ERROR::INTERNAL), "internal error");
+  ASSERT_EQ(StrErr(CURVEFS_ERROR::INVALIDPARAM), "invalid argument");
+  ASSERT_EQ(StrErr(CURVEFS_ERROR::STALE), "stale file handler");
+  ASSERT_EQ(StrErr(CURVEFS_ERROR::UNKNOWN), "unknown");
 }
 
 TEST_F(ErrorTest, SysErr) {
-    ASSERT_EQ(SysErr(CURVEFS_ERROR::OK), 0);
-    ASSERT_EQ(SysErr(CURVEFS_ERROR::INTERNAL), EIO);
-    ASSERT_EQ(SysErr(CURVEFS_ERROR::INVALIDPARAM), EINVAL);
-    ASSERT_EQ(SysErr(CURVEFS_ERROR::STALE), ESTALE);
-    ASSERT_EQ(SysErr(CURVEFS_ERROR::UNKNOWN), EIO);
+  ASSERT_EQ(SysErr(CURVEFS_ERROR::OK), 0);
+  ASSERT_EQ(SysErr(CURVEFS_ERROR::INTERNAL), EIO);
+  ASSERT_EQ(SysErr(CURVEFS_ERROR::INVALIDPARAM), EINVAL);
+  ASSERT_EQ(SysErr(CURVEFS_ERROR::STALE), ESTALE);
+  ASSERT_EQ(SysErr(CURVEFS_ERROR::UNKNOWN), EIO);
 }
 
 TEST_F(ErrorTest, ToFSError) {
-    ASSERT_EQ(ToFSError(MetaStatusCode::OK), CURVEFS_ERROR::OK);
-    ASSERT_EQ(ToFSError(MetaStatusCode::NOT_FOUND), CURVEFS_ERROR::NOTEXIST);
+  ASSERT_EQ(ToFSError(MetaStatusCode::OK), CURVEFS_ERROR::OK);
+  ASSERT_EQ(ToFSError(MetaStatusCode::NOT_FOUND), CURVEFS_ERROR::NOTEXIST);
 }
 
 }  // namespace filesystem

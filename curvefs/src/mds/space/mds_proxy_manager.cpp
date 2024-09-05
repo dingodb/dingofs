@@ -41,47 +41,46 @@ namespace space {
 MdsProxyOptions MdsProxyManager::options_;
 
 MdsProxy* MdsProxyManager::GetOrCreateProxy(std::vector<std::string> hosts) {
-    if (hosts.empty()) {
-        LOG(WARNING) << "Hosts is empty";
-        return nullptr;
+  if (hosts.empty()) {
+    LOG(WARNING) << "Hosts is empty";
+    return nullptr;
+  }
+
+  std::sort(hosts.begin(), hosts.end());
+
+  auto& slot =
+      slots_[absl::Hash<std::vector<std::string>>{}(hosts) & (kSlot - 1)];
+
+  {
+    ReadLockGuard guard(slot.lock);
+    auto it = slot.proxies.find(hosts);
+    if (it != slot.proxies.end()) {
+      return it->second.get();
+    }
+  }
+
+  {
+    WriteLockGuard guard(slot.lock);
+    auto it = slot.proxies.find(hosts);
+    if (it != slot.proxies.end()) {
+      return it->second.get();
     }
 
-    std::sort(hosts.begin(), hosts.end());
-
-    auto& slot =
-        slots_[absl::Hash<std::vector<std::string>>{}(hosts) & (kSlot - 1)];
-
-    {
-        ReadLockGuard guard(slot.lock);
-        auto it = slot.proxies.find(hosts);
-        if (it != slot.proxies.end()) {
-            return it->second.get();
-        }
-    }
-
-    {
-        WriteLockGuard guard(slot.lock);
-        auto it = slot.proxies.find(hosts);
-        if (it != slot.proxies.end()) {
-            return it->second.get();
-        }
-
-        return CreateProxy(&slot, std::move(hosts));
-    }
+    return CreateProxy(&slot, std::move(hosts));
+  }
 }
 
 MdsProxy* MdsProxyManager::CreateProxy(Slot* slot,
                                        std::vector<std::string>&& hosts) {
-    auto proxy = MdsProxy::Create(hosts, options_);
-    if (proxy == nullptr) {
-        LOG(ERROR) << "Fail to create mds proxy, cluster: "
-                   << ConcatHosts(hosts);
-        return nullptr;
-    }
+  auto proxy = MdsProxy::Create(hosts, options_);
+  if (proxy == nullptr) {
+    LOG(ERROR) << "Fail to create mds proxy, cluster: " << ConcatHosts(hosts);
+    return nullptr;
+  }
 
-    auto* ret = proxy.get();
-    slot->proxies.emplace(std::move(hosts), std::move(proxy));
-    return ret;
+  auto* ret = proxy.get();
+  slot->proxies.emplace(std::move(hosts), std::move(proxy));
+  return ret;
 }
 
 }  // namespace space

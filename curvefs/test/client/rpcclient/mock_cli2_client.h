@@ -23,8 +23,8 @@
 #ifndef CURVEFS_TEST_CLIENT_RPCCLIENT_MOCK_CLI2_CLIENT_H_
 #define CURVEFS_TEST_CLIENT_RPCCLIENT_MOCK_CLI2_CLIENT_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <string>
 
@@ -39,14 +39,14 @@ namespace rpcclient {
 
 class MockCli2Client : public Cli2Client {
  public:
-    MockCli2Client() {}
-    ~MockCli2Client() {}
+  MockCli2Client() {}
+  ~MockCli2Client() {}
 
-    MOCK_METHOD6(GetLeader,
-                 bool(const LogicPoolID &poolID, const CopysetID &copysetID,
-                      const PeerInfoList &peerInfoList,
-                      int16_t currentLeaderIndex, PeerAddr *peerAddr,
-                      MetaserverID *metaserverID));
+  MOCK_METHOD6(GetLeader,
+               bool(const LogicPoolID& poolID, const CopysetID& copysetID,
+                    const PeerInfoList& peerInfoList,
+                    int16_t currentLeaderIndex, PeerAddr* peerAddr,
+                    MetaserverID* metaserverID));
 };
 }  // namespace rpcclient
 }  // namespace client

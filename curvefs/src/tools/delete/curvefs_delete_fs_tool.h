@@ -26,8 +26,8 @@
 #include <brpc/server.h>
 #include <gflags/gflags.h>
 
-#include <string>
 #include <iostream>
+#include <string>
 
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/src/tools/curvefs_tool.h"
@@ -42,18 +42,18 @@ class DeleteFsTool : public CurvefsToolRpc<curvefs::mds::DeleteFsRequest,
                                            curvefs::mds::DeleteFsResponse,
                                            curvefs::mds::MdsService_Stub> {
  public:
-    explicit DeleteFsTool(const std::string& cmd = kDeleteFsCmd)
-        : CurvefsToolRpc(cmd) {}
+  explicit DeleteFsTool(const std::string& cmd = kDeleteFsCmd)
+      : CurvefsToolRpc(cmd) {}
 
-    void PrintHelp() override;
-    int Init() override;
-    void InitHostsAddr() override;
-    int RunCommand() override;
+  void PrintHelp() override;
+  int Init() override;
+  void InitHostsAddr() override;
+  int RunCommand() override;
 
  protected:
-    void AddUpdateFlags() override;
-    bool AfterSendRequestToHost(const std::string& host) override;
-    bool CheckRequiredFlagDefault() override;
+  void AddUpdateFlags() override;
+  bool AfterSendRequestToHost(const std::string& host) override;
+  bool CheckRequiredFlagDefault() override;
 
  protected:
 };

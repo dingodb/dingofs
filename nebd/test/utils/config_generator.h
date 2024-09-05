@@ -36,44 +36,42 @@ static const char* kNebdClientConfigPath = "nebd/etc/nebd/nebd-client.conf";
 
 class NebdClientConfigGenerator {
  public:
-    NebdClientConfigGenerator() {
-        LoadDefaultConfig();
+  NebdClientConfigGenerator() { LoadDefaultConfig(); }
+
+  void SetConfigPath(const std::string& configPath) {
+    configPath_ = configPath;
+  }
+
+  void SetConfigOptions(const std::vector<std::string>& options) {
+    for (const auto& opt : options) {
+      auto pos = opt.find("=");
+      std::string key = opt.substr(0, pos);
+      std::string value = opt.substr(pos + 1);
+      SetKV(key, value);
+    }
+  }
+
+  bool Generate() {
+    if (configPath_.empty()) {
+      return false;
     }
 
-    void SetConfigPath(const std::string& configPath) {
-        configPath_ = configPath;
-    }
-
-    void SetConfigOptions(const std::vector<std::string>& options) {
-        for (const auto& opt : options) {
-            auto pos = opt.find("=");
-            std::string key = opt.substr(0, pos);
-            std::string value = opt.substr(pos + 1);
-            SetKV(key, value);
-        }
-    }
-
-    bool Generate() {
-        if (configPath_.empty()) {
-            return false;
-        }
-
-        conf_.SetConfigPath(configPath_);
-        return conf_.SaveConfig();
-    }
+    conf_.SetConfigPath(configPath_);
+    return conf_.SaveConfig();
+  }
 
  private:
-    void LoadDefaultConfig() {
-        conf_.SetConfigPath(kNebdClientConfigPath);
-        conf_.LoadConfig();
-    }
+  void LoadDefaultConfig() {
+    conf_.SetConfigPath(kNebdClientConfigPath);
+    conf_.LoadConfig();
+  }
 
-    void SetKV(const std::string& key, const std::string& value) {
-        conf_.SetValue(key, value);
-    }
+  void SetKV(const std::string& key, const std::string& value) {
+    conf_.SetValue(key, value);
+  }
 
-    std::string configPath_;
-    nebd::common::Configuration conf_;
+  std::string configPath_;
+  nebd::common::Configuration conf_;
 };
 
 }  // namespace common

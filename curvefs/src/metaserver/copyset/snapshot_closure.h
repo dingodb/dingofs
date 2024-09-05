@@ -37,14 +37,14 @@ namespace copyset {
 
 class OnSnapshotSaveDoneClosure : public google::protobuf::Closure {
  public:
-    virtual ~OnSnapshotSaveDoneClosure() = default;
+  virtual ~OnSnapshotSaveDoneClosure() = default;
 
-    virtual void SetSuccess() = 0;
+  virtual void SetSuccess() = 0;
 
-    virtual void SetError(MetaStatusCode code) = 0;
+  virtual void SetError(MetaStatusCode code) = 0;
 
-    // After dump/save metadata, we should add filenames to `SnapshotWriter`
-    virtual braft::SnapshotWriter* GetSnapshotWriter() const = 0;
+  // After dump/save metadata, we should add filenames to `SnapshotWriter`
+  virtual braft::SnapshotWriter* GetSnapshotWriter() const = 0;
 };
 
 }  // namespace copyset

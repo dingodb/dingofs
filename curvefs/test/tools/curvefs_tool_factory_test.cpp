@@ -42,28 +42,27 @@ using ::testing::SetArgPointee;
 
 class FactoryTest : public testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 
  protected:
-    CurvefsToolFactory factory_;
+  CurvefsToolFactory factory_;
 };
 
 TEST_F(FactoryTest, create_tool_sucess_test) {
-    std::shared_ptr<CurvefsTool> tool =
-        factory_.GenerateCurvefsTool(kVersionCmd);
-    ASSERT_EQ(typeid(*tool), typeid(VersionTool));
+  std::shared_ptr<CurvefsTool> tool = factory_.GenerateCurvefsTool(kVersionCmd);
+  ASSERT_EQ(typeid(*tool), typeid(VersionTool));
 }
 
 TEST_F(FactoryTest, create_tool_fail_test) {
-    std::shared_ptr<CurvefsTool> tool = factory_.GenerateCurvefsTool("RTTI");
-    ASSERT_EQ(tool, nullptr);
+  std::shared_ptr<CurvefsTool> tool = factory_.GenerateCurvefsTool("RTTI");
+  ASSERT_EQ(tool, nullptr);
 }
 
 TEST_F(FactoryTest, creator_test) {
-    std::shared_ptr<CurvefsTool> tool =
-        CurvefsToolCreator<VersionTool>().Create();
-    ASSERT_EQ(typeid(*tool), typeid(VersionTool));
+  std::shared_ptr<CurvefsTool> tool =
+      CurvefsToolCreator<VersionTool>().Create();
+  ASSERT_EQ(typeid(*tool), typeid(VersionTool));
 }
 
 }  // namespace version

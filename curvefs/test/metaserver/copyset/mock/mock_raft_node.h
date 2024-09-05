@@ -37,27 +37,27 @@ using ::curvefs::metaserver::copyset::RaftNode;
 
 class MockRaftNode : public RaftNode {
  public:
-    MockRaftNode() : RaftNode({}, {}) {}
+  MockRaftNode() : RaftNode({}, {}) {}
 
-    MOCK_METHOD0(node_id, braft::NodeId());
-    MOCK_METHOD0(leader_id, braft::PeerId());
-    MOCK_METHOD0(is_leader, bool());
-    MOCK_METHOD1(init, int(const braft::NodeOptions&));
-    MOCK_METHOD1(shutdown, void(braft::Closure*));
-    MOCK_METHOD0(join, void());
-    MOCK_METHOD1(apply, void(const braft::Task&));
-    MOCK_METHOD1(list_peers, butil::Status(std::vector<braft::PeerId>*));
-    MOCK_METHOD2(add_peer, void(const braft::PeerId&, braft::Closure*));
-    MOCK_METHOD2(remove_peer, void(const braft::PeerId&, braft::Closure*));
-    MOCK_METHOD2(change_peers,
-                 void(const braft::Configuration&, braft::Closure*));
-    MOCK_METHOD1(reset_peers, butil::Status(const braft::Configuration&));
-    MOCK_METHOD1(snapshot, void(braft::Closure*));
-    MOCK_METHOD1(reset_election_timeout_ms, void(int));
-    MOCK_METHOD1(transfer_leadership_to, int(const braft::PeerId&));
-    MOCK_METHOD2(read_committed_user_log,
-                 butil::Status(const int64_t, braft::UserLog*));
-    MOCK_METHOD1(get_status, void(braft::NodeStatus*));
+  MOCK_METHOD0(node_id, braft::NodeId());
+  MOCK_METHOD0(leader_id, braft::PeerId());
+  MOCK_METHOD0(is_leader, bool());
+  MOCK_METHOD1(init, int(const braft::NodeOptions&));
+  MOCK_METHOD1(shutdown, void(braft::Closure*));
+  MOCK_METHOD0(join, void());
+  MOCK_METHOD1(apply, void(const braft::Task&));
+  MOCK_METHOD1(list_peers, butil::Status(std::vector<braft::PeerId>*));
+  MOCK_METHOD2(add_peer, void(const braft::PeerId&, braft::Closure*));
+  MOCK_METHOD2(remove_peer, void(const braft::PeerId&, braft::Closure*));
+  MOCK_METHOD2(change_peers,
+               void(const braft::Configuration&, braft::Closure*));
+  MOCK_METHOD1(reset_peers, butil::Status(const braft::Configuration&));
+  MOCK_METHOD1(snapshot, void(braft::Closure*));
+  MOCK_METHOD1(reset_election_timeout_ms, void(int));
+  MOCK_METHOD1(transfer_leadership_to, int(const braft::PeerId&));
+  MOCK_METHOD2(read_committed_user_log,
+               butil::Status(const int64_t, braft::UserLog*));
+  MOCK_METHOD1(get_status, void(braft::NodeStatus*));
 };
 
 }  // namespace copyset

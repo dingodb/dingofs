@@ -20,83 +20,82 @@
  * Author: Xinlong-Chen
  */
 
+#include "curvefs/src/client/metric/client_metric.h"
+
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "curvefs/src/client/metric/client_metric.h"
-
+using ::curvefs::client::metric::ClientOpMetric;
+using ::curvefs::client::metric::DiskCacheMetric;
+using ::curvefs::client::metric::FSMetric;
+using ::curvefs::client::metric::KVClientMetric;
 using ::curvefs::client::metric::MDSClientMetric;
 using ::curvefs::client::metric::MetaServerClientMetric;
-using ::curvefs::client::metric::ClientOpMetric;
-using ::curvefs::client::metric::S3MultiManagerMetric;
-using ::curvefs::client::metric::FSMetric;
-using ::curvefs::client::metric::S3Metric;
-using ::curvefs::client::metric::DiskCacheMetric;
-using ::curvefs::client::metric::KVClientMetric;
 using ::curvefs::client::metric::S3ChunkInfoMetric;
+using ::curvefs::client::metric::S3Metric;
+using ::curvefs::client::metric::S3MultiManagerMetric;
 using ::curvefs::client::metric::WarmupManagerS3Metric;
-
 
 namespace curvefs {
 namespace client {
 
 class ClientMetricTest : public ::testing::Test {
  protected:
-    void SetUp() override {}
-    void TearDown() override {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(ClientMetricTest, test_prefix) {
-    {
-        const char* prefix = "curvefs_mds_client";
-        ASSERT_EQ(0, ::strcmp(MDSClientMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_mds_client";
+    ASSERT_EQ(0, ::strcmp(MDSClientMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_metaserver_client";
-        ASSERT_EQ(0, ::strcmp(MetaServerClientMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_metaserver_client";
+    ASSERT_EQ(0, ::strcmp(MetaServerClientMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_client";
-        ASSERT_EQ(0, ::strcmp(ClientOpMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_client";
+    ASSERT_EQ(0, ::strcmp(ClientOpMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_client_manager";
-        ASSERT_EQ(0, ::strcmp(S3MultiManagerMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_client_manager";
+    ASSERT_EQ(0, ::strcmp(S3MultiManagerMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_client";
-        ASSERT_EQ(0, ::strcmp(FSMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_client";
+    ASSERT_EQ(0, ::strcmp(FSMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_s3";
-        ASSERT_EQ(0, ::strcmp(S3Metric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_s3";
+    ASSERT_EQ(0, ::strcmp(S3Metric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_disk_cache";
-        ASSERT_EQ(0, ::strcmp(DiskCacheMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_disk_cache";
+    ASSERT_EQ(0, ::strcmp(DiskCacheMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_kvclient";
-        ASSERT_EQ(0, ::strcmp(KVClientMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_kvclient";
+    ASSERT_EQ(0, ::strcmp(KVClientMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "inode_s3_chunk_info";
-        ASSERT_EQ(0, ::strcmp(S3ChunkInfoMetric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "inode_s3_chunk_info";
+    ASSERT_EQ(0, ::strcmp(S3ChunkInfoMetric::prefix.c_str(), prefix));
+  }
 
-    {
-        const char* prefix = "curvefs_warmup";
-        ASSERT_EQ(0, ::strcmp(WarmupManagerS3Metric::prefix.c_str(), prefix));
-    }
+  {
+    const char* prefix = "curvefs_warmup";
+    ASSERT_EQ(0, ::strcmp(WarmupManagerS3Metric::prefix.c_str(), prefix));
+  }
 }
 
 }  // namespace client

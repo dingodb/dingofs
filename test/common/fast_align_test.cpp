@@ -28,26 +28,26 @@ namespace curve {
 namespace common {
 
 TEST(FastAlignTest, TestAlignUp) {
-    ASSERT_EQ(0, align_up(0, 512));
-    ASSERT_EQ(512, align_up(1, 512));
-    ASSERT_EQ(512, align_up(511, 512));
-    ASSERT_EQ(1024, align_up(513, 512));
+  ASSERT_EQ(0, align_up(0, 512));
+  ASSERT_EQ(512, align_up(1, 512));
+  ASSERT_EQ(512, align_up(511, 512));
+  ASSERT_EQ(1024, align_up(513, 512));
 }
 
 TEST(FastAlignTest, TestAlignDown) {
-    ASSERT_EQ(0, align_down(0, 512));
-    ASSERT_EQ(0, align_down(1, 512));
-    ASSERT_EQ(0, align_down(511, 512));
-    ASSERT_EQ(512, align_down(512, 512));
-    ASSERT_EQ(512, align_down(513, 512));
+  ASSERT_EQ(0, align_down(0, 512));
+  ASSERT_EQ(0, align_down(1, 512));
+  ASSERT_EQ(0, align_down(511, 512));
+  ASSERT_EQ(512, align_down(512, 512));
+  ASSERT_EQ(512, align_down(513, 512));
 }
 
 TEST(FastAlignTest, TestIsAligned) {
-    ASSERT_TRUE(is_aligned(512, 512));
-    ASSERT_TRUE(is_aligned(4096, 512));
+  ASSERT_TRUE(is_aligned(512, 512));
+  ASSERT_TRUE(is_aligned(4096, 512));
 
-    ASSERT_FALSE(is_aligned(511, 512));
-    ASSERT_FALSE(is_aligned(4095, 4096));
+  ASSERT_FALSE(is_aligned(511, 512));
+  ASSERT_FALSE(is_aligned(4095, 4096));
 }
 
 }  // namespace common

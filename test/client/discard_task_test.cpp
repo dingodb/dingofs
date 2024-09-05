@@ -36,94 +36,89 @@ using ::testing::Return;
 
 class DiscardTaskTest : public ::testing::Test {
  public:
-    void SetUp() override {
-        metric.reset(new DiscardMetric("DiscardTaskTest"));
-        discardTaskManager_.reset(new DiscardTaskManager(metric.get()));
+  void SetUp() override {
+    metric.reset(new DiscardMetric("DiscardTaskTest"));
+    discardTaskManager_.reset(new DiscardTaskManager(metric.get()));
 
-        mockMetaCache_.reset(new MockMetaCache());
-        mockMDSClient_.reset(new MockMDSClient());
+    mockMetaCache_.reset(new MockMetaCache());
+    mockMDSClient_.reset(new MockMDSClient());
 
-        fileInfo_.fullPathName = "/TestDiscardTask";
-        fileInfo_.chunksize = 16ull * 1024 * 1024;
-        fileInfo_.segmentsize = 1ull * 1024 * 1024 * 1024;
+    fileInfo_.fullPathName = "/TestDiscardTask";
+    fileInfo_.chunksize = 16ull * 1024 * 1024;
+    fileInfo_.segmentsize = 1ull * 1024 * 1024 * 1024;
 
-        mockMetaCache_->UpdateFileInfo(fileInfo_);
-    }
+    mockMetaCache_->UpdateFileInfo(fileInfo_);
+  }
 
-    void TearDown() override {
-        discardTaskManager_->Stop();
-    }
+  void TearDown() override { discardTaskManager_->Stop(); }
 
  protected:
-    FInfo fileInfo_;
-    std::unique_ptr<DiscardTaskManager> discardTaskManager_;
-    std::unique_ptr<MockMetaCache> mockMetaCache_;
-    std::unique_ptr<MockMDSClient> mockMDSClient_;
-    std::unique_ptr<DiscardMetric> metric;
+  FInfo fileInfo_;
+  std::unique_ptr<DiscardTaskManager> discardTaskManager_;
+  std::unique_ptr<MockMetaCache> mockMetaCache_;
+  std::unique_ptr<MockMDSClient> mockMDSClient_;
+  std::unique_ptr<DiscardMetric> metric;
 };
 
 TEST_F(DiscardTaskTest, TestDiscardBitmapCleared) {
-    SegmentIndex segmentIndex = 100;
-    uint64_t offset = segmentIndex * 1024ull * 1024 * 1024;
-    DiscardTask task(discardTaskManager_.get(), segmentIndex,
-                     mockMetaCache_.get(), mockMDSClient_.get(), metric.get());
+  SegmentIndex segmentIndex = 100;
+  uint64_t offset = segmentIndex * 1024ull * 1024 * 1024;
+  DiscardTask task(discardTaskManager_.get(), segmentIndex,
+                   mockMetaCache_.get(), mockMDSClient_.get(), metric.get());
 
-    EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset)).Times(0);
-    EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex)).Times(0);
+  EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset)).Times(0);
+  EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex)).Times(0);
 
-    ASSERT_NO_FATAL_FAILURE(task.Run());
+  ASSERT_NO_FATAL_FAILURE(task.Run());
 }
 
 TEST_F(DiscardTaskTest, TestAllDiscard) {
-    SegmentIndex segmentIndex = 100;
-    uint64_t offset = segmentIndex * 1024ull * 1024 * 1024;
-    DiscardTask task(discardTaskManager_.get(), segmentIndex,
-                     mockMetaCache_.get(), mockMDSClient_.get(), metric.get());
+  SegmentIndex segmentIndex = 100;
+  uint64_t offset = segmentIndex * 1024ull * 1024 * 1024;
+  DiscardTask task(discardTaskManager_.get(), segmentIndex,
+                   mockMetaCache_.get(), mockMDSClient_.get(), metric.get());
 
-    // mdsclient return OK
-    {
-        // set all bit
-        FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
-        segment->GetBitmap().Set();
+  // mdsclient return OK
+  {
+    // set all bit
+    FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
+    segment->GetBitmap().Set();
 
-        EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
-            .WillOnce(Return(LIBCURVE_ERROR::OK));
-        EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex))
-            .Times(1);
+    EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
+        .WillOnce(Return(LIBCURVE_ERROR::OK));
+    EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex)).Times(1);
 
-        ASSERT_NO_FATAL_FAILURE(task.Run());
-        ASSERT_FALSE(segment->IsAllBitSet());
-    }
+    ASSERT_NO_FATAL_FAILURE(task.Run());
+    ASSERT_FALSE(segment->IsAllBitSet());
+  }
 
-    // mdsclient return under snapshot
-    {
-        // set all bit
-        FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
-        segment->GetBitmap().Set();
+  // mdsclient return under snapshot
+  {
+    // set all bit
+    FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
+    segment->GetBitmap().Set();
 
-        EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
-            .WillOnce(Return(LIBCURVE_ERROR::UNDER_SNAPSHOT));
-        EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex))
-            .Times(0);
+    EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
+        .WillOnce(Return(LIBCURVE_ERROR::UNDER_SNAPSHOT));
+    EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex)).Times(0);
 
-        ASSERT_NO_FATAL_FAILURE(task.Run());
-        ASSERT_TRUE(segment->IsAllBitSet());
-    }
+    ASSERT_NO_FATAL_FAILURE(task.Run());
+    ASSERT_TRUE(segment->IsAllBitSet());
+  }
 
-    // mdsclient return failed
-    {
-        // set all bit
-        FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
-        segment->GetBitmap().Set();
+  // mdsclient return failed
+  {
+    // set all bit
+    FileSegment* segment = mockMetaCache_->GetFileSegment(segmentIndex);
+    segment->GetBitmap().Set();
 
-        EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
-            .WillOnce(Return(LIBCURVE_ERROR::FAILED));
-        EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex))
-            .Times(0);
+    EXPECT_CALL(*mockMDSClient_, DeAllocateSegment(_, offset))
+        .WillOnce(Return(LIBCURVE_ERROR::FAILED));
+    EXPECT_CALL(*mockMetaCache_, CleanChunksInSegment(segmentIndex)).Times(0);
 
-        ASSERT_NO_FATAL_FAILURE(task.Run());
-        ASSERT_TRUE(segment->IsAllBitSet());
-    }
+    ASSERT_NO_FATAL_FAILURE(task.Run());
+    ASSERT_TRUE(segment->IsAllBitSet());
+  }
 }
 
 }  // namespace client

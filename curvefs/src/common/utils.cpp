@@ -20,31 +20,30 @@
  * Author: hzwuhongsong
  */
 
-#include <glog/logging.h>
+#include "curvefs/src/common/utils.h"
 
+#include <glog/logging.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
-#include "curvefs/src/common/utils.h"
 
 namespace curvefs {
 namespace common {
 
 std::string SysUtils::RunSysCmd(const std::string& cmd) {
-    char buf[512] = "";
-    FILE *fp = NULL;
-    if ( (fp = popen(cmd.c_str(), "r")) == NULL ) {
-        LOG(ERROR) << "popen failed, errno: " << errno;
-        return nullptr;
-    }
-    std::string output;
-    while (fgets(buf, sizeof(buf), fp)) {
-        output += buf;
-    }
-    pclose(fp);
-    VLOG(9) << "result: " << output;
-    return output;
+  char buf[512] = "";
+  FILE* fp = NULL;
+  if ((fp = popen(cmd.c_str(), "r")) == NULL) {
+    LOG(ERROR) << "popen failed, errno: " << errno;
+    return nullptr;
+  }
+  std::string output;
+  while (fgets(buf, sizeof(buf), fp)) {
+    output += buf;
+  }
+  pclose(fp);
+  VLOG(9) << "result: " << output;
+  return output;
 }
 
 }  // namespace common

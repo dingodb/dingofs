@@ -20,9 +20,9 @@
  * Author: xuchaojie
  */
 
-#include <json/json.h>
-
 #include "src/common/snapshotclone/snapshotclone_define.h"
+
+#include <json/json.h>
 
 namespace curve {
 namespace snapshotcloneserver {
@@ -91,19 +91,15 @@ std::map<int, std::string> code2Msg = {
     {kErrCodeNotSupport, "Not support."},
 };
 
-std::string BuildErrorMessage(
-    int errCode,
-    const std::string &requestId,
-    const std::string &uuid) {
-    Json::Value mainObj;
-    mainObj[kCodeStr] = std::to_string(errCode);
-    mainObj[kMessageStr] = code2Msg[errCode];
-    mainObj[kRequestIdStr] = requestId;
-    mainObj[kUUIDStr] = uuid;
-    return mainObj.toStyledString();
+std::string BuildErrorMessage(int errCode, const std::string& requestId,
+                              const std::string& uuid) {
+  Json::Value mainObj;
+  mainObj[kCodeStr] = std::to_string(errCode);
+  mainObj[kMessageStr] = code2Msg[errCode];
+  mainObj[kRequestIdStr] = requestId;
+  mainObj[kUUIDStr] = uuid;
+  return mainObj.toStyledString();
 }
 
 }  // namespace snapshotcloneserver
 }  // namespace curve
-
-

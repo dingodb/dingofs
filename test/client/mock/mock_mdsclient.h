@@ -31,7 +31,7 @@ namespace client {
 
 class MockMDSClient : public MDSClient {
  public:
-    MOCK_METHOD2(DeAllocateSegment, LIBCURVE_ERROR(const FInfo*, uint64_t));
+  MOCK_METHOD2(DeAllocateSegment, LIBCURVE_ERROR(const FInfo*, uint64_t));
 };
 
 }  // namespace client

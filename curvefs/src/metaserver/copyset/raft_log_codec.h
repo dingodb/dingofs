@@ -34,21 +34,21 @@ namespace copyset {
 
 class RaftLogCodec {
  public:
-    /**
-     * @brief Encode request and type to butil::IOBuf
-     */
-    static bool Encode(OperatorType type,
-                       const google::protobuf::Message* request,
-                       butil::IOBuf* log);
+  /**
+   * @brief Encode request and type to butil::IOBuf
+   */
+  static bool Encode(OperatorType type,
+                     const google::protobuf::Message* request,
+                     butil::IOBuf* log);
 
-    /**
-     * @brief Decode from butil::IOBuf and create corresponding metaoperator
-     */
-    static std::unique_ptr<MetaOperator> Decode(CopysetNode* node,
-                                                butil::IOBuf log);
+  /**
+   * @brief Decode from butil::IOBuf and create corresponding metaoperator
+   */
+  static std::unique_ptr<MetaOperator> Decode(CopysetNode* node,
+                                              butil::IOBuf log);
 
  private:
-    static constexpr size_t kOperatorTypeSize = sizeof(OperatorType);
+  static constexpr size_t kOperatorTypeSize = sizeof(OperatorType);
 };
 
 }  // namespace copyset

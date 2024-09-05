@@ -39,7 +39,6 @@ namespace client {
 
 class DiscardTaskManager;
 
-
 /**
  * DiscardTask corresponding to one segment discard task.
  * It's main function is to send DeAllocateSegment request to MDS
@@ -47,35 +46,30 @@ class DiscardTaskManager;
  */
 class DiscardTask {
  public:
-    DiscardTask(DiscardTaskManager* taskManager, SegmentIndex segmentIndex,
-                MetaCache* metaCache, MDSClient* mdsClient,
-                DiscardMetric* metric)
-        : taskManager_(taskManager),
-          segmentIndex_(segmentIndex),
-          metaCache_(metaCache),
-          mdsClient_(mdsClient),
-          timerId_(0),
-          metric_(metric) {}
+  DiscardTask(DiscardTaskManager* taskManager, SegmentIndex segmentIndex,
+              MetaCache* metaCache, MDSClient* mdsClient, DiscardMetric* metric)
+      : taskManager_(taskManager),
+        segmentIndex_(segmentIndex),
+        metaCache_(metaCache),
+        mdsClient_(mdsClient),
+        timerId_(0),
+        metric_(metric) {}
 
-    void Run();
+  void Run();
 
-    bthread_timer_t Id() const {
-        return timerId_;
-    }
+  bthread_timer_t Id() const { return timerId_; }
 
-    void SetId(bthread_timer_t id) {
-        timerId_ = id;
-    }
+  void SetId(bthread_timer_t id) { timerId_ = id; }
 
  private:
-    DiscardTaskManager* taskManager_;
-    SegmentIndex segmentIndex_;
-    MetaCache* metaCache_;
-    MDSClient* mdsClient_;
-    bthread_timer_t timerId_;
-    DiscardMetric* metric_;
+  DiscardTaskManager* taskManager_;
+  SegmentIndex segmentIndex_;
+  MetaCache* metaCache_;
+  MDSClient* mdsClient_;
+  bthread_timer_t timerId_;
+  DiscardMetric* metric_;
 
-    static std::atomic<uint64_t> taskId_;
+  static std::atomic<uint64_t> taskId_;
 };
 
 /**
@@ -83,24 +77,25 @@ class DiscardTask {
  */
 class DiscardTaskManager {
  public:
-    explicit DiscardTaskManager(DiscardMetric* metric);
+  explicit DiscardTaskManager(DiscardMetric* metric);
 
-    void OnTaskFinish(bthread_timer_t timerId);
+  void OnTaskFinish(bthread_timer_t timerId);
 
-    bool ScheduleTask(SegmentIndex segmentIndex, MetaCache* metaCache,
-                      MDSClient* mdsclient, timespec abstime);
+  bool ScheduleTask(SegmentIndex segmentIndex, MetaCache* metaCache,
+                    MDSClient* mdsclient, timespec abstime);
 
-    /**
-     * @brief Cancel all unfinished discard tasks
-     */
-    void Stop();
+  /**
+   * @brief Cancel all unfinished discard tasks
+   */
+  void Stop();
 
  private:
-    bthread::Mutex mtx_;
-    bthread::ConditionVariable cond_;
-    std::unordered_map<bthread_timer_t, std::unique_ptr<DiscardTask>> unfinishedTasks_;  // NOLINT
+  bthread::Mutex mtx_;
+  bthread::ConditionVariable cond_;
+  std::unordered_map<bthread_timer_t, std::unique_ptr<DiscardTask>>
+      unfinishedTasks_;  // NOLINT
 
-    DiscardMetric* metric_;
+  DiscardMetric* metric_;
 };
 
 }  // namespace client

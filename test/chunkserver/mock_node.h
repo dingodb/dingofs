@@ -23,8 +23,8 @@
 #ifndef TEST_CHUNKSERVER_MOCK_NODE_H_
 #define TEST_CHUNKSERVER_MOCK_NODE_H_
 
-#include <gmock/gmock.h>
 #include <braft/raft.h>
+#include <gmock/gmock.h>
 
 #include <string>
 #include <vector>
@@ -34,40 +34,37 @@
 namespace curve {
 namespace chunkserver {
 
-using ::braft::UserLog;
-using ::braft::Task;
 using ::braft::NodeId;
+using ::braft::Task;
+using ::braft::UserLog;
 
 class MockNode : public RaftNode {
  public:
-    MockNode(const LogicPoolID &logicPoolId,
-             const CopysetID &copysetId)
-        : RaftNode(ToGroupIdString(logicPoolId, copysetId),
-                   PeerId("127.0.0.1:3200:0")) {
-    }
+  MockNode(const LogicPoolID& logicPoolId, const CopysetID& copysetId)
+      : RaftNode(ToGroupIdString(logicPoolId, copysetId),
+                 PeerId("127.0.0.1:3200:0")) {}
 
-    MOCK_METHOD0(node_id, NodeId());
-    MOCK_METHOD0(leader_id, PeerId());
-    MOCK_METHOD0(is_leader, bool());
-    MOCK_METHOD1(init, int(const NodeOptions&));
-    MOCK_METHOD1(shutdown, void(braft::Closure*));
-    MOCK_METHOD0(join, void(void));
-    MOCK_METHOD1(apply, void(const Task&));
-    MOCK_METHOD1(list_peers, butil::Status(std::vector<PeerId>*));
-    MOCK_METHOD2(add_peer, void(const PeerId&, braft::Closure*));
-    MOCK_METHOD2(remove_peer, void(const PeerId&, braft::Closure*));
-    MOCK_METHOD2(change_peers, void(const Configuration&, braft::Closure*));
-    MOCK_METHOD1(reset_peers, butil::Status(const Configuration&));
-    MOCK_METHOD1(snapshot, void(braft::Closure*));
-    MOCK_METHOD1(vote, void(int));
-    MOCK_METHOD1(reset_election_timeout_ms, void(int));
-    MOCK_METHOD1(transfer_leadership_to, int(const PeerId&));
-    MOCK_METHOD2(read_committed_user_log, butil::Status(const int64_t,
-                                                        UserLog*));
-    MOCK_METHOD1(get_status, void(NodeStatus*));
-    MOCK_METHOD0(enter_readonly_mode, void(void));
-    MOCK_METHOD0(leave_readonly_mode, void(void));
-    MOCK_METHOD0(readonly, bool());
+  MOCK_METHOD0(node_id, NodeId());
+  MOCK_METHOD0(leader_id, PeerId());
+  MOCK_METHOD0(is_leader, bool());
+  MOCK_METHOD1(init, int(const NodeOptions&));
+  MOCK_METHOD1(shutdown, void(braft::Closure*));
+  MOCK_METHOD0(join, void(void));
+  MOCK_METHOD1(apply, void(const Task&));
+  MOCK_METHOD1(list_peers, butil::Status(std::vector<PeerId>*));
+  MOCK_METHOD2(add_peer, void(const PeerId&, braft::Closure*));
+  MOCK_METHOD2(remove_peer, void(const PeerId&, braft::Closure*));
+  MOCK_METHOD2(change_peers, void(const Configuration&, braft::Closure*));
+  MOCK_METHOD1(reset_peers, butil::Status(const Configuration&));
+  MOCK_METHOD1(snapshot, void(braft::Closure*));
+  MOCK_METHOD1(vote, void(int));
+  MOCK_METHOD1(reset_election_timeout_ms, void(int));
+  MOCK_METHOD1(transfer_leadership_to, int(const PeerId&));
+  MOCK_METHOD2(read_committed_user_log, butil::Status(const int64_t, UserLog*));
+  MOCK_METHOD1(get_status, void(NodeStatus*));
+  MOCK_METHOD0(enter_readonly_mode, void(void));
+  MOCK_METHOD0(leave_readonly_mode, void(void));
+  MOCK_METHOD0(readonly, bool());
 };
 
 }  // namespace chunkserver

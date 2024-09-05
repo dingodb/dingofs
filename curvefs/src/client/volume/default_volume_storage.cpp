@@ -52,160 +52,154 @@ template <typename IOPart,
           typename = absl::void_t<decltype(std::declval<IOPart>().offset),
                                   decltype(std::declval<IOPart>().length)>>
 std::ostream& operator<<(std::ostream& os, const std::vector<IOPart>& iov) {
-    if (iov.empty()) {
-        os << "empty";
-        return os;
-    }
-
-    std::ostringstream oss;
-    oss << "{";
-    for (const auto& io : iov) {
-        oss << io.offset << "~" << io.length << ",";
-    }
-
-    oss << "}";
-    os << oss.str();
-
+  if (iov.empty()) {
+    os << "empty";
     return os;
+  }
+
+  std::ostringstream oss;
+  oss << "{";
+  for (const auto& io : iov) {
+    oss << io.offset << "~" << io.length << ",";
+  }
+
+  oss << "}";
+  os << oss.str();
+
+  return os;
 }
 
 }  // namespace
 
-CURVEFS_ERROR DefaultVolumeStorage::Write(uint64_t ino,
-                                          off_t offset,
-                                          size_t len,
-                                          const char* data,
+CURVEFS_ERROR DefaultVolumeStorage::Write(uint64_t ino, off_t offset,
+                                          size_t len, const char* data,
                                           FileOut* fileOut) {
-    std::shared_ptr<InodeWrapper> inodeWrapper;
-    LatencyUpdater updater(&metric_.writeLatency);
-    auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
-    if (ret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "Fail to get inode, ino: " << ino << ", error: " << ret;
-        return ret;
+  std::shared_ptr<InodeWrapper> inodeWrapper;
+  LatencyUpdater updater(&metric_.writeLatency);
+  auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
+  if (ret != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "Fail to get inode, ino: " << ino << ", error: " << ret;
+    return ret;
+  }
+
+  auto* extentCache = inodeWrapper->GetMutableExtentCache();
+
+  std::vector<WritePart> writes;
+  if (!PrepareWriteRequest(offset, len, data, extentCache, spaceManager_,
+                           &writes)) {
+    LOG(ERROR) << "Prepare write requests error, ino: " << ino
+               << ", offset: " << offset << ", len: " << len;
+    return CURVEFS_ERROR::NO_SPACE;
+  }
+
+  VLOG(9) << "write ino: " << ino << ", offset: " << offset << ", len: " << len
+          << ", block write requests: " << writes;
+
+  ssize_t nr = blockDeviceClient_->Writev(writes);
+  // TODO(wuhanqing): enable check `nr != len`, currently, backend storage
+  // will return larger value if write request is smaller than backend
+  // storage's block size
+  if (nr < 0 /*|| nr != len*/) {
+    LOG(ERROR) << "Block device write error, ino: " << ino
+               << ", offset: " << offset << ", length: " << len
+               << ", nr: " << nr;
+    return CURVEFS_ERROR::IO_ERROR;
+  }
+
+  extentCache->MarkWritten(offset, len);
+
+  {
+    auto lk = inodeWrapper->GetUniqueLock();
+    if (offset + len > inodeWrapper->GetLengthLocked()) {
+      inodeWrapper->SetLengthLocked(offset + len);
     }
 
-    auto* extentCache = inodeWrapper->GetMutableExtentCache();
+    inodeWrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
+    inodeWrapper->GetInodeAttrLocked(&fileOut->attr);
+  }
 
-    std::vector<WritePart> writes;
-    if (!PrepareWriteRequest(offset, len, data, extentCache, spaceManager_,
-                             &writes)) {
-        LOG(ERROR) << "Prepare write requests error, ino: " << ino
-                   << ", offset: " << offset << ", len: " << len;
-        return CURVEFS_ERROR::NO_SPACE;
-    }
+  inodeCacheManager_->ShipToFlush(inodeWrapper);
 
-    VLOG(9) << "write ino: " << ino << ", offset: " << offset
-            << ", len: " << len << ", block write requests: " << writes;
+  VLOG(9) << "writer end, ino: " << ino << ", offset: " << offset
+          << ", len: " << len;
 
-    ssize_t nr = blockDeviceClient_->Writev(writes);
-    // TODO(wuhanqing): enable check `nr != len`, currently, backend storage
-    // will return larger value if write request is smaller than backend
-    // storage's block size
-    if (nr < 0 /*|| nr != len*/) {
-        LOG(ERROR) << "Block device write error, ino: " << ino
-                   << ", offset: " << offset << ", length: " << len
-                   << ", nr: " << nr;
-        return CURVEFS_ERROR::IO_ERROR;
-    }
-
-    extentCache->MarkWritten(offset, len);
-
-    {
-        auto lk = inodeWrapper->GetUniqueLock();
-        if (offset + len > inodeWrapper->GetLengthLocked()) {
-            inodeWrapper->SetLengthLocked(offset + len);
-        }
-
-        inodeWrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
-        inodeWrapper->GetInodeAttrLocked(&fileOut->attr);
-    }
-
-    inodeCacheManager_->ShipToFlush(inodeWrapper);
-
-    VLOG(9) << "writer end, ino: " << ino << ", offset: " << offset
-            << ", len: " << len;
-
-    return CURVEFS_ERROR::OK;
+  return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR DefaultVolumeStorage::Read(uint64_t ino,
-                                         off_t offset,
-                                         size_t len,
+CURVEFS_ERROR DefaultVolumeStorage::Read(uint64_t ino, off_t offset, size_t len,
                                          char* data) {
-    VLOG(9) << "read start, ino: " << ino << ", offset: " << offset
-            << ", len: " << len;
+  VLOG(9) << "read start, ino: " << ino << ", offset: " << offset
+          << ", len: " << len;
 
-    std::shared_ptr<InodeWrapper> inodeWrapper;
-    LatencyUpdater updater(&metric_.readLatency);
-    auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
-    if (ret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "Get inode error, ino: " << ino << ", error: " << ret;
-        return ret;
-    }
+  std::shared_ptr<InodeWrapper> inodeWrapper;
+  LatencyUpdater updater(&metric_.readLatency);
+  auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
+  if (ret != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "Get inode error, ino: " << ino << ", error: " << ret;
+    return ret;
+  }
 
-    auto* extentCache = inodeWrapper->GetMutableExtentCache();
-    std::vector<ReadPart> reads;
-    std::vector<ReadPart> holes;
-    extentCache->DivideForRead(offset, len, data, &reads, &holes);
+  auto* extentCache = inodeWrapper->GetMutableExtentCache();
+  std::vector<ReadPart> reads;
+  std::vector<ReadPart> holes;
+  extentCache->DivideForRead(offset, len, data, &reads, &holes);
 
+  VLOG(9) << "read ino: " << ino << ", offset: " << offset << ", len: " << len
+          << ", read holes: " << holes;
+
+  for (auto& hole : holes) {
+    memset(hole.data, 0, hole.length);
+  }
+
+  if (!reads.empty()) {
     VLOG(9) << "read ino: " << ino << ", offset: " << offset << ", len: " << len
-            << ", read holes: " << holes;
+            << ", block read requests: " << reads;
 
-    for (auto& hole : holes) {
-        memset(hole.data, 0, hole.length);
+    ssize_t nr = blockDeviceClient_->Readv(reads);
+    // TODO(wuhanqing): enable check `(nr+total) != len`, currently, backend
+    // storage will return larger value if write request is smaller than
+    // backend storage's block size
+    if (nr < 0 /*|| (nr + total) != len*/) {
+      LOG(ERROR) << "Block device read error, ino: " << ino
+                 << ", offset: " << offset << ", length: " << len;
+      return CURVEFS_ERROR::IO_ERROR;
     }
+  }
 
-    if (!reads.empty()) {
-        VLOG(9) << "read ino: " << ino << ", offset: " << offset
-            << ", len: " << len << ", block read requests: " << reads;
+  // TODO(all): check whether inode is opened with 'NO_ATIME'
+  {
+    auto lock = inodeWrapper->GetUniqueLock();
+    inodeWrapper->UpdateTimestampLocked(kAccessTime);
+  }
+  inodeCacheManager_->ShipToFlush(inodeWrapper);
 
-        ssize_t nr = blockDeviceClient_->Readv(reads);
-        // TODO(wuhanqing): enable check `(nr+total) != len`, currently, backend
-        // storage will return larger value if write request is smaller than
-        // backend storage's block size
-        if (nr < 0 /*|| (nr + total) != len*/) {
-            LOG(ERROR) << "Block device read error, ino: " << ino
-                       << ", offset: " << offset << ", length: " << len;
-            return CURVEFS_ERROR::IO_ERROR;
-        }
-    }
+  VLOG(9) << "read end, ino: " << ino << ", offset: " << offset
+          << ", len: " << len;
 
-    // TODO(all): check whether inode is opened with 'NO_ATIME'
-    {
-        auto lock = inodeWrapper->GetUniqueLock();
-        inodeWrapper->UpdateTimestampLocked(kAccessTime);
-    }
-    inodeCacheManager_->ShipToFlush(inodeWrapper);
-
-    VLOG(9) << "read end, ino: " << ino << ", offset: " << offset
-            << ", len: " << len;
-
-    return CURVEFS_ERROR::OK;
+  return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR DefaultVolumeStorage::Flush(uint64_t ino) {
-    if (!common::FLAGS_enableCto) {
-        return CURVEFS_ERROR::OK;
-    }
+  if (!common::FLAGS_enableCto) {
+    return CURVEFS_ERROR::OK;
+  }
 
-    LatencyUpdater updater(&metric_.flushLatency);
-    std::shared_ptr<InodeWrapper> inodeWrapper;
-    auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
-    if (ret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "Get inode error, ino: " << ino << ", error: " << ret;
-        return ret;
-    }
-
-    auto lk = inodeWrapper->GetUniqueLock();
-    ret = inodeWrapper->Sync();
-    LOG_IF(ERROR, ret != CURVEFS_ERROR::OK)
-        << "Flush sync inode error, ino: " << ino << ", error: " << ret;
+  LatencyUpdater updater(&metric_.flushLatency);
+  std::shared_ptr<InodeWrapper> inodeWrapper;
+  auto ret = inodeCacheManager_->GetInode(ino, inodeWrapper);
+  if (ret != CURVEFS_ERROR::OK) {
+    LOG(ERROR) << "Get inode error, ino: " << ino << ", error: " << ret;
     return ret;
+  }
+
+  auto lk = inodeWrapper->GetUniqueLock();
+  ret = inodeWrapper->Sync();
+  LOG_IF(ERROR, ret != CURVEFS_ERROR::OK)
+      << "Flush sync inode error, ino: " << ino << ", error: " << ret;
+  return ret;
 }
 
-bool DefaultVolumeStorage::Shutdown() {
-    return true;
-}
+bool DefaultVolumeStorage::Shutdown() { return true; }
 
 }  // namespace client
 }  // namespace curvefs

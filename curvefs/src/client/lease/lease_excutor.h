@@ -23,13 +23,13 @@
 #ifndef CURVEFS_SRC_CLIENT_LEASE_LEASE_EXCUTOR_H_
 #define CURVEFS_SRC_CLIENT_LEASE_LEASE_EXCUTOR_H_
 
+#include <atomic>
 #include <memory>
 #include <string>
-#include <atomic>
 
-#include "curvefs/src/client/rpcclient/metacache.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/client/rpcclient/metacache.h"
 #include "src/client/lease_executor.h"
 
 using curve::client::LeaseExecutorBase;
@@ -44,39 +44,37 @@ namespace client {
 
 class LeaseExecutor : public LeaseExecutorBase {
  public:
-    LeaseExecutor(const LeaseOpt &opt, std::shared_ptr<MetaCache> metaCache,
-                  std::shared_ptr<MdsClient> mdsCli,
-                  std::atomic<bool>* enableSumInDir)
-         : opt_(opt), metaCache_(metaCache), mdsCli_(mdsCli),
-         enableSumInDir_(enableSumInDir) {}
+  LeaseExecutor(const LeaseOpt& opt, std::shared_ptr<MetaCache> metaCache,
+                std::shared_ptr<MdsClient> mdsCli,
+                std::atomic<bool>* enableSumInDir)
+      : opt_(opt),
+        metaCache_(metaCache),
+        mdsCli_(mdsCli),
+        enableSumInDir_(enableSumInDir) {}
 
-    ~LeaseExecutor();
+  ~LeaseExecutor();
 
-    bool Start();
+  bool Start();
 
-    void Stop();
+  void Stop();
 
-    /**
-     * refresh lease with mds and update resource
-     */
-    bool RefreshLease() override;
+  /**
+   * refresh lease with mds and update resource
+   */
+  bool RefreshLease() override;
 
-    void SetFsName(const std::string& fsName) {
-       fsName_ = fsName;
-    }
+  void SetFsName(const std::string& fsName) { fsName_ = fsName; }
 
-    void SetMountPoint(const Mountpoint& mp) {
-       mountpoint_ = mp;
-    }
+  void SetMountPoint(const Mountpoint& mp) { mountpoint_ = mp; }
 
  private:
-    LeaseOpt opt_;
-    std::shared_ptr<MetaCache> metaCache_;
-    std::shared_ptr<MdsClient> mdsCli_;
-    std::unique_ptr<RefreshSessionTask> task_;
-    std::string fsName_;
-    Mountpoint mountpoint_;
-    std::atomic<bool>* enableSumInDir_;
+  LeaseOpt opt_;
+  std::shared_ptr<MetaCache> metaCache_;
+  std::shared_ptr<MdsClient> mdsCli_;
+  std::unique_ptr<RefreshSessionTask> task_;
+  std::string fsName_;
+  Mountpoint mountpoint_;
+  std::atomic<bool>* enableSumInDir_;
 };
 
 }  // namespace client

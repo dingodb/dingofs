@@ -55,60 +55,60 @@ using MetaserverInfoType = mds::topology::MetaServerInfo;
 
 class TopologyTreeJson {
  public:
-    explicit TopologyTreeJson(const list::TopologyListTool& topologyTool);
+  explicit TopologyTreeJson(const list::TopologyListTool& topologyTool);
 
  protected:
-    std::string clusterId_;
-    /**
-     * poolId to clusterInfo and poolIds which belongs to pool
-     */
-    std::map<std::string, ClusterInfo> clusterId2CLusterInfo_;
+  std::string clusterId_;
+  /**
+   * poolId to clusterInfo and poolIds which belongs to pool
+   */
+  std::map<std::string, ClusterInfo> clusterId2CLusterInfo_;
 
-    /**
-     * @brief poolId to poolInfo and zoneIds which belongs to pool
-     *
-     * @details
-     */
-    std::map<mds::topology::PoolIdType, PoolInfoType> poolId2PoolInfo_;
+  /**
+   * @brief poolId to poolInfo and zoneIds which belongs to pool
+   *
+   * @details
+   */
+  std::map<mds::topology::PoolIdType, PoolInfoType> poolId2PoolInfo_;
 
-    /**
-     * @brief zoneId to zoneInfo and serverIds which belongs to zone
-     *
-     * @details
-     */
-    std::map<mds::topology::ZoneIdType, ZoneInfoType> zoneId2ZoneInfo_;
+  /**
+   * @brief zoneId to zoneInfo and serverIds which belongs to zone
+   *
+   * @details
+   */
+  std::map<mds::topology::ZoneIdType, ZoneInfoType> zoneId2ZoneInfo_;
 
-    /**
-     * @brief serverId to serverInfo and metaserverIds which belongs to server
-     *
-     * @details
-     */
-    std::map<mds::topology::ServerIdType, ServerInfoType> serverId2ServerInfo_;
+  /**
+   * @brief serverId to serverInfo and metaserverIds which belongs to server
+   *
+   * @details
+   */
+  std::map<mds::topology::ServerIdType, ServerInfoType> serverId2ServerInfo_;
 
-    /**
-     * @brief metaserverId to metaserverInfo
-     *
-     * @details
-     */
-    std::map<mds::topology::MetaServerIdType, MetaserverInfoType>
-        metaserverId2MetaserverInfo_;
+  /**
+   * @brief metaserverId to metaserverInfo
+   *
+   * @details
+   */
+  std::map<mds::topology::MetaServerIdType, MetaserverInfoType>
+      metaserverId2MetaserverInfo_;
 
  public:
-    bool BuildClusterMapPools(Json::Value* pools);
+  bool BuildClusterMapPools(Json::Value* pools);
 
-    bool BuildClusterMapServers(Json::Value* servers);
+  bool BuildClusterMapServers(Json::Value* servers);
 
-    bool BuildJsonValue(Json::Value* value, const std::string& jsonType);
+  bool BuildJsonValue(Json::Value* value, const std::string& jsonType);
 
-    bool GetClusterTree(Json::Value* cluster, const std::string& clusterId);
+  bool GetClusterTree(Json::Value* cluster, const std::string& clusterId);
 
-    bool GetPoolTree(Json::Value* pool, uint64_t poolId);
+  bool GetPoolTree(Json::Value* pool, uint64_t poolId);
 
-    bool GetZoneTree(Json::Value* zone, uint64_t zoneId);
+  bool GetZoneTree(Json::Value* zone, uint64_t zoneId);
 
-    bool GetServerTree(Json::Value* server, uint64_t serverId);
+  bool GetServerTree(Json::Value* server, uint64_t serverId);
 
-    bool GetMetaserverTree(Json::Value* metaserver, uint64_t metaserverId);
+  bool GetMetaserverTree(Json::Value* metaserver, uint64_t metaserverId);
 };
 
 }  // namespace topology

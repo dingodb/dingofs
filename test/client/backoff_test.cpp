@@ -30,83 +30,77 @@ namespace curve {
 namespace client {
 
 TEST(ClientClosure, OverLoadBackOffTest) {
-    FailureRequestOption failopt;
-    failopt.chunkserverMaxRetrySleepIntervalUS = 8000000;
-    failopt.chunkserverOPRetryIntervalUS = 500000;
+  FailureRequestOption failopt;
+  failopt.chunkserverMaxRetrySleepIntervalUS = 8000000;
+  failopt.chunkserverOPRetryIntervalUS = 500000;
 
-    ClientClosure::SetFailureRequestOption(failopt);
+  ClientClosure::SetFailureRequestOption(failopt);
 
-    for (int i = 1; i < 1000; i++) {
-        if (i < ClientClosure::backoffParam_.maxOverloadPow) {
-            uint64_t curTime =
-                failopt.chunkserverOPRetryIntervalUS * std::pow(2, i);
-            ASSERT_LE(ClientClosure::OverLoadBackOff(i),
-                      curTime + 0.1 * curTime);
-            ASSERT_GE(ClientClosure::OverLoadBackOff(i),
-                      curTime - 0.1 * curTime);
-        } else {
-            ASSERT_LE(ClientClosure::OverLoadBackOff(i),
-                      failopt.chunkserverMaxRetrySleepIntervalUS +
-                          0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
-            ASSERT_GE(ClientClosure::OverLoadBackOff(i),
-                      failopt.chunkserverMaxRetrySleepIntervalUS -
-                          0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
-        }
+  for (int i = 1; i < 1000; i++) {
+    if (i < ClientClosure::backoffParam_.maxOverloadPow) {
+      uint64_t curTime = failopt.chunkserverOPRetryIntervalUS * std::pow(2, i);
+      ASSERT_LE(ClientClosure::OverLoadBackOff(i), curTime + 0.1 * curTime);
+      ASSERT_GE(ClientClosure::OverLoadBackOff(i), curTime - 0.1 * curTime);
+    } else {
+      ASSERT_LE(ClientClosure::OverLoadBackOff(i),
+                failopt.chunkserverMaxRetrySleepIntervalUS +
+                    0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
+      ASSERT_GE(ClientClosure::OverLoadBackOff(i),
+                failopt.chunkserverMaxRetrySleepIntervalUS -
+                    0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
     }
+  }
 
-    failopt.chunkserverMaxRetrySleepIntervalUS = 64000000;
-    failopt.chunkserverOPRetryIntervalUS = 500000;
+  failopt.chunkserverMaxRetrySleepIntervalUS = 64000000;
+  failopt.chunkserverOPRetryIntervalUS = 500000;
 
-    ClientClosure::SetFailureRequestOption(failopt);
+  ClientClosure::SetFailureRequestOption(failopt);
 
-    for (int i = 1; i < 1000; i++) {
-        if (i < ClientClosure::backoffParam_.maxOverloadPow) {
-            uint64_t curTime =
-                failopt.chunkserverOPRetryIntervalUS * std::pow(2, i);
-            ASSERT_LE(ClientClosure::OverLoadBackOff(i),
-                      curTime + 0.1 * curTime);
-            ASSERT_GE(ClientClosure::OverLoadBackOff(i),
-                      curTime - 0.1 * curTime);
-        } else {
-            ASSERT_LE(ClientClosure::OverLoadBackOff(i),
-                      failopt.chunkserverMaxRetrySleepIntervalUS +
-                          0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
-            ASSERT_GE(ClientClosure::OverLoadBackOff(i),
-                      failopt.chunkserverMaxRetrySleepIntervalUS -
-                          0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
-        }
+  for (int i = 1; i < 1000; i++) {
+    if (i < ClientClosure::backoffParam_.maxOverloadPow) {
+      uint64_t curTime = failopt.chunkserverOPRetryIntervalUS * std::pow(2, i);
+      ASSERT_LE(ClientClosure::OverLoadBackOff(i), curTime + 0.1 * curTime);
+      ASSERT_GE(ClientClosure::OverLoadBackOff(i), curTime - 0.1 * curTime);
+    } else {
+      ASSERT_LE(ClientClosure::OverLoadBackOff(i),
+                failopt.chunkserverMaxRetrySleepIntervalUS +
+                    0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
+      ASSERT_GE(ClientClosure::OverLoadBackOff(i),
+                failopt.chunkserverMaxRetrySleepIntervalUS -
+                    0.1 * failopt.chunkserverMaxRetrySleepIntervalUS);
     }
+  }
 }
 
 TEST(ClientClosure, TimeoutBackOffTest) {
-    FailureRequestOption failopt;
-    failopt.chunkserverMaxRPCTimeoutMS = 3000;
-    failopt.chunkserverRPCTimeoutMS = 500;
+  FailureRequestOption failopt;
+  failopt.chunkserverMaxRPCTimeoutMS = 3000;
+  failopt.chunkserverRPCTimeoutMS = 500;
 
-    ClientClosure::SetFailureRequestOption(failopt);
+  ClientClosure::SetFailureRequestOption(failopt);
 
-    for (int i = 1; i < 1000; i++) {
-        if (i < ClientClosure::backoffParam_.maxTimeoutPow) {
-            uint64_t curTime = failopt.chunkserverRPCTimeoutMS * std::pow(2, i);
-            ASSERT_EQ(ClientClosure::TimeoutBackOff(i), curTime);
-        } else {
-            ASSERT_EQ(ClientClosure::TimeoutBackOff(i), 2000);
-        }
+  for (int i = 1; i < 1000; i++) {
+    if (i < ClientClosure::backoffParam_.maxTimeoutPow) {
+      uint64_t curTime = failopt.chunkserverRPCTimeoutMS * std::pow(2, i);
+      ASSERT_EQ(ClientClosure::TimeoutBackOff(i), curTime);
+    } else {
+      ASSERT_EQ(ClientClosure::TimeoutBackOff(i), 2000);
     }
+  }
 
-    failopt.chunkserverMaxRPCTimeoutMS = 4000;
-    failopt.chunkserverRPCTimeoutMS = 500;
+  failopt.chunkserverMaxRPCTimeoutMS = 4000;
+  failopt.chunkserverRPCTimeoutMS = 500;
 
-    ClientClosure::SetFailureRequestOption(failopt);
+  ClientClosure::SetFailureRequestOption(failopt);
 
-    for (int i = 1; i < 1000; i++) {
-        if (i < ClientClosure::backoffParam_.maxTimeoutPow) {
-            uint64_t curTime = failopt.chunkserverRPCTimeoutMS * std::pow(2, i);
-            ASSERT_EQ(ClientClosure::TimeoutBackOff(i), curTime);
-        } else {
-            ASSERT_EQ(ClientClosure::TimeoutBackOff(i), 4000);
-        }
+  for (int i = 1; i < 1000; i++) {
+    if (i < ClientClosure::backoffParam_.maxTimeoutPow) {
+      uint64_t curTime = failopt.chunkserverRPCTimeoutMS * std::pow(2, i);
+      ASSERT_EQ(ClientClosure::TimeoutBackOff(i), curTime);
+    } else {
+      ASSERT_EQ(ClientClosure::TimeoutBackOff(i), 4000);
     }
+  }
 }
 
 }  // namespace client

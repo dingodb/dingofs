@@ -20,21 +20,19 @@
  * Author: wuhanqing
  */
 
-#include <gtest/gtest.h>
-#include <gflags/gflags.h>
 #include <brpc/server.h>
+#include <gflags/gflags.h>
+#include <gtest/gtest.h>
 
-#include <mutex>  // NOLINT
-#include <condition_variable>  // NOLINT
 #include <atomic>
+#include <condition_variable>  // NOLINT
+#include <mutex>               // NOLINT
 
-#include "nebd/src/part1/nebd_client.h"
 #include "nebd/src/part1/libnebd.h"
 #include "nebd/src/part1/libnebd_file.h"
-
+#include "nebd/src/part1/nebd_client.h"
 #include "nebd/test/part1/fake_file_service.h"
 #include "nebd/test/part1/mock_file_service.h"
-
 #include "nebd/test/utils/config_generator.h"
 
 const char* kFileName = "nebd-lib-test-filename";
@@ -51,158 +49,157 @@ std::condition_variable cond;
 std::atomic<bool> aioOpReturn{false};
 
 void AioCallBack(NebdClientAioContext* ctx) {
-    ASSERT_EQ(0, ctx->ret);
-    ASSERT_EQ(0, ctx->retryCount);
-    std::lock_guard<std::mutex> lk(mtx);
-    aioOpReturn = true;
-    cond.notify_one();
-    delete ctx;
+  ASSERT_EQ(0, ctx->ret);
+  ASSERT_EQ(0, ctx->retryCount);
+  std::lock_guard<std::mutex> lk(mtx);
+  aioOpReturn = true;
+  cond.notify_one();
+  delete ctx;
 }
 
 class NebdLibTest : public ::testing::Test {
  public:
-    void SetUp() override {
-        ::system("mkdir -p /etc/nebd");
-        std::string copyCmd = "cp " + std::string(kNebdClientConf)
-                            + " /etc/nebd/nebd-client.conf";
-        LOG(INFO) << copyCmd;
-        int ret = ::system(copyCmd.c_str());
-        ASSERT_EQ(0, ret) << "copy config file failed";
-    }
+  void SetUp() override {
+    ::system("mkdir -p /etc/nebd");
+    std::string copyCmd =
+        "cp " + std::string(kNebdClientConf) + " /etc/nebd/nebd-client.conf";
+    LOG(INFO) << copyCmd;
+    int ret = ::system(copyCmd.c_str());
+    ASSERT_EQ(0, ret) << "copy config file failed";
+  }
 
-    void TearDown() override {}
+  void TearDown() override {}
 
-    void AddFakeService() {
-        ASSERT_EQ(0, server.AddService(
-            &fakeService,
-            brpc::SERVER_DOESNT_OWN_SERVICE)) << "Add service failed";
-    }
+  void AddFakeService() {
+    ASSERT_EQ(0,
+              server.AddService(&fakeService, brpc::SERVER_DOESNT_OWN_SERVICE))
+        << "Add service failed";
+  }
 
-    void StartServer(const std::string& address = kNebdServerTestAddress) {
-        ASSERT_EQ(0, server.Start(
-            address.c_str(), nullptr)) << "Start server failed";
-    }
+  void StartServer(const std::string& address = kNebdServerTestAddress) {
+    ASSERT_EQ(0, server.Start(address.c_str(), nullptr))
+        << "Start server failed";
+  }
 
-    void StopServer() {
-        server.Stop(0);
-        server.Join();
-    }
+  void StopServer() {
+    server.Stop(0);
+    server.Join();
+  }
 
-    brpc::Server server;
-    FakeNebdFileService fakeService;
-    MockNebdFileService mockService;
+  brpc::Server server;
+  FakeNebdFileService fakeService;
+  MockNebdFileService mockService;
 };
 
 TEST_F(NebdLibTest, CommonTest) {
-    AddFakeService();
-    StartServer();
+  AddFakeService();
+  StartServer();
 
-    ASSERT_EQ(0, nebd_lib_init());
-    ASSERT_EQ(0, nebd_lib_init());
+  ASSERT_EQ(0, nebd_lib_init());
+  ASSERT_EQ(0, nebd_lib_init());
 
-    int fd = nebd_lib_open(kFileName);
-    ASSERT_GE(fd, 0);
+  int fd = nebd_lib_open(kFileName);
+  ASSERT_GE(fd, 0);
 
-    ASSERT_EQ(0, nebd_lib_resize(fd, kFileSize));
-    ASSERT_EQ(kFileSize, nebd_lib_filesize(fd));
-    ASSERT_EQ(kFileSize, nebd_lib_getinfo(fd));
-    ASSERT_EQ(0, nebd_lib_invalidcache(fd));
+  ASSERT_EQ(0, nebd_lib_resize(fd, kFileSize));
+  ASSERT_EQ(kFileSize, nebd_lib_filesize(fd));
+  ASSERT_EQ(kFileSize, nebd_lib_getinfo(fd));
+  ASSERT_EQ(0, nebd_lib_invalidcache(fd));
 
-    ASSERT_EQ(-1, nebd_lib_pread(fd, 0, 0, 0));
-    ASSERT_EQ(-1, nebd_lib_pwrite(fd, 0, 0, 0));
+  ASSERT_EQ(-1, nebd_lib_pread(fd, 0, 0, 0));
+  ASSERT_EQ(-1, nebd_lib_pwrite(fd, 0, 0, 0));
 
-    char buffer[kBufSize];
+  char buffer[kBufSize];
 
-    {
-        NebdClientAioContext* ctx = new NebdClientAioContext();
-        ctx->buf = buffer;
-        ctx->offset = 0;
-        ctx->length = kBufSize;
-        ctx->ret = 0;
-        ctx->op = LIBAIO_OP_WRITE;
-        ctx->cb = AioCallBack;
-        ctx->retryCount = 0;
+  {
+    NebdClientAioContext* ctx = new NebdClientAioContext();
+    ctx->buf = buffer;
+    ctx->offset = 0;
+    ctx->length = kBufSize;
+    ctx->ret = 0;
+    ctx->op = LIBAIO_OP_WRITE;
+    ctx->cb = AioCallBack;
+    ctx->retryCount = 0;
 
-        aioOpReturn = false;
-        ASSERT_EQ(0, AioWrite4Nebd(fd, ctx));
-        std::unique_lock<std::mutex> ulk(mtx);
-        cond.wait(ulk, []() { return aioOpReturn.load(); });
-        ASSERT_TRUE(aioOpReturn.load());
-    }
+    aioOpReturn = false;
+    ASSERT_EQ(0, AioWrite4Nebd(fd, ctx));
+    std::unique_lock<std::mutex> ulk(mtx);
+    cond.wait(ulk, []() { return aioOpReturn.load(); });
+    ASSERT_TRUE(aioOpReturn.load());
+  }
 
-    {
-        NebdClientAioContext* ctx = new NebdClientAioContext();
-        ctx->buf = buffer;
-        ctx->offset = 0;
-        ctx->length = kBufSize;
-        ctx->ret = 0;
-        ctx->op = LIBAIO_OP_READ;
-        ctx->cb = AioCallBack;
-        ctx->retryCount = 0;
+  {
+    NebdClientAioContext* ctx = new NebdClientAioContext();
+    ctx->buf = buffer;
+    ctx->offset = 0;
+    ctx->length = kBufSize;
+    ctx->ret = 0;
+    ctx->op = LIBAIO_OP_READ;
+    ctx->cb = AioCallBack;
+    ctx->retryCount = 0;
 
-        aioOpReturn = false;
-        ASSERT_EQ(0, AioRead4Nebd(fd, ctx));
-        std::unique_lock<std::mutex> ulk2(mtx);
-        cond.wait(ulk2, []() { return aioOpReturn.load(); });
-        ASSERT_TRUE(aioOpReturn.load());
-    }
+    aioOpReturn = false;
+    ASSERT_EQ(0, AioRead4Nebd(fd, ctx));
+    std::unique_lock<std::mutex> ulk2(mtx);
+    cond.wait(ulk2, []() { return aioOpReturn.load(); });
+    ASSERT_TRUE(aioOpReturn.load());
+  }
 
-    {
-        NebdClientAioContext* ctx = new NebdClientAioContext();
-        ctx->buf = 0;
-        ctx->offset = 0;
-        ctx->length = kBufSize;
-        ctx->ret = 0;
-        ctx->op = LIBAIO_OP_DISCARD;
-        ctx->cb = AioCallBack;
-        ctx->retryCount = 0;
+  {
+    NebdClientAioContext* ctx = new NebdClientAioContext();
+    ctx->buf = 0;
+    ctx->offset = 0;
+    ctx->length = kBufSize;
+    ctx->ret = 0;
+    ctx->op = LIBAIO_OP_DISCARD;
+    ctx->cb = AioCallBack;
+    ctx->retryCount = 0;
 
-        aioOpReturn = false;
-        ASSERT_EQ(0, Discard4Nebd(fd, ctx));
-        std::unique_lock<std::mutex> ulk2(mtx);
-        cond.wait(ulk2, []() { return aioOpReturn.load(); });
-        ASSERT_TRUE(aioOpReturn.load());
-    }
+    aioOpReturn = false;
+    ASSERT_EQ(0, Discard4Nebd(fd, ctx));
+    std::unique_lock<std::mutex> ulk2(mtx);
+    cond.wait(ulk2, []() { return aioOpReturn.load(); });
+    ASSERT_TRUE(aioOpReturn.load());
+  }
 
-    {
-        NebdClientAioContext* ctx = new NebdClientAioContext();
-        ctx->buf = 0;
-        ctx->offset = 0;
-        ctx->length = kBufSize;
-        ctx->ret = 0;
-        ctx->op = LIBAIO_OP_FLUSH;
-        ctx->cb = AioCallBack;
-        ctx->retryCount = 0;
+  {
+    NebdClientAioContext* ctx = new NebdClientAioContext();
+    ctx->buf = 0;
+    ctx->offset = 0;
+    ctx->length = kBufSize;
+    ctx->ret = 0;
+    ctx->op = LIBAIO_OP_FLUSH;
+    ctx->cb = AioCallBack;
+    ctx->retryCount = 0;
 
-        aioOpReturn = false;
-        ASSERT_EQ(0, Flush4Nebd(fd, ctx));
-        std::unique_lock<std::mutex> ulk2(mtx);
-        cond.wait(ulk2, []() { return aioOpReturn.load(); });
-        ASSERT_TRUE(aioOpReturn.load());
-    }
+    aioOpReturn = false;
+    ASSERT_EQ(0, Flush4Nebd(fd, ctx));
+    std::unique_lock<std::mutex> ulk2(mtx);
+    cond.wait(ulk2, []() { return aioOpReturn.load(); });
+    ASSERT_TRUE(aioOpReturn.load());
+  }
 
-    ASSERT_EQ(0, nebd_lib_close(fd));
-    ASSERT_EQ(0, nebd_lib_uninit());
-    ASSERT_EQ(0, nebd_lib_uninit());
-    StopServer();
+  ASSERT_EQ(0, nebd_lib_close(fd));
+  ASSERT_EQ(0, nebd_lib_uninit());
+  ASSERT_EQ(0, nebd_lib_uninit());
+  StopServer();
 }
 
 }  // namespace client
 }  // namespace nebd
 
 int main(int argc, char* argv[]) {
-    std::vector<std::string> nebdConfig {
-        std::string("nebdserver.serverAddress=") + kNebdServerTestAddress,
-        std::string("metacache.fileLockPath=/tmp"),
-        std::string("request.syncRpcMaxRetryTimes=10"),
-        std::string("log.path=.")
-    };
+  std::vector<std::string> nebdConfig{
+      std::string("nebdserver.serverAddress=") + kNebdServerTestAddress,
+      std::string("metacache.fileLockPath=/tmp"),
+      std::string("request.syncRpcMaxRetryTimes=10"),
+      std::string("log.path=.")};
 
-    nebd::common::NebdClientConfigGenerator generator;
-    generator.SetConfigPath(kNebdClientConf);
-    generator.SetConfigOptions(nebdConfig);
-    generator.Generate();
+  nebd::common::NebdClientConfigGenerator generator;
+  generator.SetConfigPath(kNebdClientConf);
+  generator.SetConfigOptions(nebdConfig);
+  generator.Generate();
 
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
 }

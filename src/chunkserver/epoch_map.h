@@ -33,17 +33,17 @@ namespace chunkserver {
 
 class EpochMap {
  public:
-    EpochMap() {}
-    ~EpochMap() {}
+  EpochMap() {}
+  ~EpochMap() {}
 
-    bool UpdateEpoch(uint64_t fileId, uint64_t epoch);
+  bool UpdateEpoch(uint64_t fileId, uint64_t epoch);
 
-    bool CheckEpoch(uint64_t fileId, uint64_t epoch);
+  bool CheckEpoch(uint64_t fileId, uint64_t epoch);
 
  private:
-    // volumeid => epoch
-    std::map<uint64_t, std::atomic<uint64_t> > internalMap_;
-    curve::common::WritePreferedRWLock mapMutex_;
+  // volumeid => epoch
+  std::map<uint64_t, std::atomic<uint64_t> > internalMap_;
+  curve::common::WritePreferedRWLock mapMutex_;
 };
 
 }  // namespace chunkserver

@@ -26,26 +26,26 @@ namespace curvefs {
 namespace mds {
 
 void FsMetric::OnMount(const std::string& fsname, const Mountpoint& mp) {
-    std::lock_guard<Mutex> lock(mtx_);
+  std::lock_guard<Mutex> lock(mtx_);
 
-    auto iter = metrics_.find(fsname);
-    if (iter == metrics_.end()) {
-        auto r = metrics_.emplace(fsname, new FsMountMetric(fsname));
-        iter = r.first;
-    }
+  auto iter = metrics_.find(fsname);
+  if (iter == metrics_.end()) {
+    auto r = metrics_.emplace(fsname, new FsMountMetric(fsname));
+    iter = r.first;
+  }
 
-    iter->second->OnMount(mp);
+  iter->second->OnMount(mp);
 }
 
 void FsMetric::OnUnMount(const std::string& fsname, const Mountpoint& mp) {
-    std::lock_guard<Mutex> lock(mtx_);
+  std::lock_guard<Mutex> lock(mtx_);
 
-    auto iter = metrics_.find(fsname);
-    if (iter == metrics_.end()) {
-        return;
-    }
+  auto iter = metrics_.find(fsname);
+  if (iter == metrics_.end()) {
+    return;
+  }
 
-    iter->second->OnUnMount(mp);
+  iter->second->OnUnMount(mp);
 }
 
 }  // namespace mds

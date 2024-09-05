@@ -24,6 +24,7 @@
 #define CURVEFS_TEST_CLIENT_RPCCLIENT_MOCK_TOPOLOGY_SERVICE_H_
 
 #include <gmock/gmock.h>
+
 #include "curvefs/proto/topology.pb.h"
 
 namespace curvefs {
@@ -31,50 +32,50 @@ namespace client {
 namespace rpcclient {
 class MockTopologyService : public curvefs::mds::topology::TopologyService {
  public:
-    MockTopologyService() : TopologyService() {}
-    ~MockTopologyService() = default;
+  MockTopologyService() : TopologyService() {}
+  ~MockTopologyService() = default;
 
-    MOCK_METHOD4(
-        GetMetaServer,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::GetMetaServerInfoRequest* request,
-             ::curvefs::mds::topology::GetMetaServerInfoResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(
-        GetMetaServerListInCopysets,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::GetMetaServerListInCopySetsRequest*
-                 request,
-             ::curvefs::mds::topology::GetMetaServerListInCopySetsResponse*
-                 response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(
-        CreatePartition,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::CreatePartitionRequest* request,
-             ::curvefs::mds::topology::CreatePartitionResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(
-        ListPartition,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::ListPartitionRequest* request,
-             ::curvefs::mds::topology::ListPartitionResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(
-        GetCopysetOfPartition,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::GetCopysetOfPartitionRequest*
-                 request,
-             ::curvefs::mds::topology::GetCopysetOfPartitionResponse* response,
-             ::google::protobuf::Closure* done));
-    MOCK_METHOD4(
-        AllocOrGetMemcacheCluster,
-        void(::google::protobuf::RpcController* controller,
-             const ::curvefs::mds::topology::AllocOrGetMemcacheClusterRequest*
-                 request,
-             ::curvefs::mds::topology::AllocOrGetMemcacheClusterResponse*
-                 response,
-             ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      GetMetaServer,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::mds::topology::GetMetaServerInfoRequest* request,
+           ::curvefs::mds::topology::GetMetaServerInfoResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      GetMetaServerListInCopysets,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::mds::topology::GetMetaServerListInCopySetsRequest*
+               request,
+           ::curvefs::mds::topology::GetMetaServerListInCopySetsResponse*
+               response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      CreatePartition,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::mds::topology::CreatePartitionRequest* request,
+           ::curvefs::mds::topology::CreatePartitionResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      ListPartition,
+      void(::google::protobuf::RpcController* controller,
+           const ::curvefs::mds::topology::ListPartitionRequest* request,
+           ::curvefs::mds::topology::ListPartitionResponse* response,
+           ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      GetCopysetOfPartition,
+      void(
+          ::google::protobuf::RpcController* controller,
+          const ::curvefs::mds::topology::GetCopysetOfPartitionRequest* request,
+          ::curvefs::mds::topology::GetCopysetOfPartitionResponse* response,
+          ::google::protobuf::Closure* done));
+  MOCK_METHOD4(
+      AllocOrGetMemcacheCluster,
+      void(
+          ::google::protobuf::RpcController* controller,
+          const ::curvefs::mds::topology::AllocOrGetMemcacheClusterRequest*
+              request,
+          ::curvefs::mds::topology::AllocOrGetMemcacheClusterResponse* response,
+          ::google::protobuf::Closure* done));
 };
 }  // namespace rpcclient
 }  // namespace client

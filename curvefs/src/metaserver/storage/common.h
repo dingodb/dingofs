@@ -23,7 +23,6 @@
 #ifndef CURVEFS_SRC_METASERVER_STORAGE_COMMON_H_
 #define CURVEFS_SRC_METASERVER_STORAGE_COMMON_H_
 
-
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
 

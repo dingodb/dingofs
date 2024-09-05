@@ -32,27 +32,27 @@ constexpr uint64_t kGiB = 1024ULL * kMiB;
 constexpr uint64_t kTiB = 1024ULL * kGiB;
 
 std::string ToReadableByte(uint64_t byte) {
-    // Convert byte KB to a appropriate magnitude
-    // like 1024KB to 1 MB
-    std::stringstream ss;
-    ss.setf(std::ios::fixed);
-    ss.precision(2);  // 2 decimal places
-    if (byte >= 1 * kTiB) {
-        // TB
-        ss << double(byte) / double(kTiB) << " TiB";
-    } else if (byte >= 1 * kGiB) {
-        // GB
-        ss << double(byte) / double(kGiB) << " GiB";
-    } else if (byte >= 1 * kMiB) {
-        // MB
-        ss << double(byte) / double(kMiB) << " MiB";
-    } else if (byte >= 1 * kKiB) {
-        // KB
-        ss << double(byte) / double(kKiB) << " KiB";
-    } else {
-        ss << double(byte)  << " Byte";
-    }
-    return ss.str();
+  // Convert byte KB to a appropriate magnitude
+  // like 1024KB to 1 MB
+  std::stringstream ss;
+  ss.setf(std::ios::fixed);
+  ss.precision(2);  // 2 decimal places
+  if (byte >= 1 * kTiB) {
+    // TB
+    ss << double(byte) / double(kTiB) << " TiB";
+  } else if (byte >= 1 * kGiB) {
+    // GB
+    ss << double(byte) / double(kGiB) << " GiB";
+  } else if (byte >= 1 * kMiB) {
+    // MB
+    ss << double(byte) / double(kMiB) << " MiB";
+  } else if (byte >= 1 * kKiB) {
+    // KB
+    ss << double(byte) / double(kKiB) << " KiB";
+  } else {
+    ss << double(byte) << " Byte";
+  }
+  return ss.str();
 }
 }  // namespace usage
 }  // namespace tools

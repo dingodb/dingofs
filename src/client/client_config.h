@@ -33,17 +33,15 @@ namespace client {
 
 class ClientConfig {
  public:
-    int Init(const std::string& configpath);
+  int Init(const std::string& configpath);
 
-    FileServiceOption GetFileServiceOption() const {
-        return fileServiceOption_;
-    }
+  FileServiceOption GetFileServiceOption() const { return fileServiceOption_; }
 
-    int GetDummyserverStartPort();
+  int GetDummyserverStartPort();
 
  private:
-    FileServiceOption fileServiceOption_;
-    common::Configuration conf_;
+  FileServiceOption fileServiceOption_;
+  common::Configuration conf_;
 };
 
 }  // namespace client

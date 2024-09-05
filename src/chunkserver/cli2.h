@@ -37,50 +37,42 @@ namespace chunkserver {
  */
 
 // 获取leader
-butil::Status GetLeader(const LogicPoolID &logicPoolId,
-                        const CopysetID &copysetId,
-                        const Configuration &conf,
-                        Peer *leader);
+butil::Status GetLeader(const LogicPoolID& logicPoolId,
+                        const CopysetID& copysetId, const Configuration& conf,
+                        Peer* leader);
 
 // 增加一个peer
-butil::Status AddPeer(const LogicPoolID &logicPoolId,
-                      const CopysetID &copysetId,
-                      const Configuration &conf,
-                      const Peer &peer,
-                      const braft::cli::CliOptions &options);
+butil::Status AddPeer(const LogicPoolID& logicPoolId,
+                      const CopysetID& copysetId, const Configuration& conf,
+                      const Peer& peer, const braft::cli::CliOptions& options);
 
 // 移除一个peer
-butil::Status RemovePeer(const LogicPoolID &logicPoolId,
-                         const CopysetID &copysetId,
-                         const Configuration &conf,
-                         const Peer &peer,
-                         const braft::cli::CliOptions &options);
+butil::Status RemovePeer(const LogicPoolID& logicPoolId,
+                         const CopysetID& copysetId, const Configuration& conf,
+                         const Peer& peer,
+                         const braft::cli::CliOptions& options);
 
 // 变更配置
-butil::Status ChangePeers(const LogicPoolID &logicPoolId,
-                          const CopysetID &copysetId,
-                          const Configuration &conf,
-                          const Configuration &newPeers,
-                          const braft::cli::CliOptions &options);
+butil::Status ChangePeers(const LogicPoolID& logicPoolId,
+                          const CopysetID& copysetId, const Configuration& conf,
+                          const Configuration& newPeers,
+                          const braft::cli::CliOptions& options);
 
 // 转移leader
-butil::Status TransferLeader(const LogicPoolID &logicPoolId,
-                             const CopysetID &copysetId,
-                             const Configuration &conf,
-                             const Peer &peer,
-                             const braft::cli::CliOptions &options);
+butil::Status TransferLeader(const LogicPoolID& logicPoolId,
+                             const CopysetID& copysetId,
+                             const Configuration& conf, const Peer& peer,
+                             const braft::cli::CliOptions& options);
 
 // 重置复制组
-butil::Status ResetPeer(const LogicPoolID &logicPoolId,
-                        const CopysetID &copysetId,
-                        const Configuration& newPeers,
-                        const Peer& requestPeer,
+butil::Status ResetPeer(const LogicPoolID& logicPoolId,
+                        const CopysetID& copysetId,
+                        const Configuration& newPeers, const Peer& requestPeer,
                         const braft::cli::CliOptions& options);
 
 // 触发快照
-butil::Status Snapshot(const LogicPoolID &logicPoolId,
-                       const CopysetID &copysetId,
-                       const Peer& peer,
+butil::Status Snapshot(const LogicPoolID& logicPoolId,
+                       const CopysetID& copysetId, const Peer& peer,
                        const braft::cli::CliOptions& options);
 
 // 给chunkserver上全部copyset副本触发快照

@@ -24,9 +24,9 @@
 #define TEST_MDS_MOCK_MOCK_CHUNKSERVERCLIENT_H_
 
 #include <memory>
+
 #include "src/mds/chunkserverclient/chunkserver_client.h"
 #include "src/mds/chunkserverclient/chunkserverclient_config.h"
-
 
 using ::curve::mds::topology::ChunkServerIdType;
 
@@ -36,29 +36,21 @@ namespace chunkserverclient {
 
 class MockChunkServerClient : public ChunkServerClient {
  public:
-    MockChunkServerClient(std::shared_ptr<Topology> topo,
-        const ChunkServerClientOption &option,
-        std::shared_ptr<ChannelPool> channelPool)
-        : ChunkServerClient(topo, option, channelPool) {}
-    MOCK_METHOD5(DeleteChunkSnapshotOrCorrectSn,
-        int(ChunkServerIdType csId,
-        LogicalPoolID logicalPoolId,
-        CopysetID copysetId,
-        ChunkID chunkId,
-        uint64_t sn));
+  MockChunkServerClient(std::shared_ptr<Topology> topo,
+                        const ChunkServerClientOption& option,
+                        std::shared_ptr<ChannelPool> channelPool)
+      : ChunkServerClient(topo, option, channelPool) {}
+  MOCK_METHOD5(DeleteChunkSnapshotOrCorrectSn,
+               int(ChunkServerIdType csId, LogicalPoolID logicalPoolId,
+                   CopysetID copysetId, ChunkID chunkId, uint64_t sn));
 
-    MOCK_METHOD5(DeleteChunk,
-        int(ChunkServerIdType csId,
-        LogicalPoolID logicalPoolId,
-        CopysetID copysetId,
-        ChunkID chunkId,
-        uint64_t sn));
+  MOCK_METHOD5(DeleteChunk,
+               int(ChunkServerIdType csId, LogicalPoolID logicalPoolId,
+                   CopysetID copysetId, ChunkID chunkId, uint64_t sn));
 
-    MOCK_METHOD4(GetLeader,
-        int(ChunkServerIdType csId,
-        LogicalPoolID logicalPoolId,
-        CopysetID copysetId,
-        ChunkServerIdType * leader));
+  MOCK_METHOD4(GetLeader,
+               int(ChunkServerIdType csId, LogicalPoolID logicalPoolId,
+                   CopysetID copysetId, ChunkServerIdType* leader));
 };
 
 }  // namespace chunkserverclient

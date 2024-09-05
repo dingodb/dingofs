@@ -24,9 +24,11 @@
 #define CURVEFS_TEST_CLIENT_MOCK_DENTRY_CACHE_MAMAGER_H_
 
 #include <gmock/gmock.h>
+
 #include <cstdint>
-#include <string>
 #include <list>
+#include <string>
+
 #include "curvefs/src/client/dentry_cache_manager.h"
 
 namespace curvefs {
@@ -34,25 +36,22 @@ namespace client {
 
 class MockDentryCacheManager : public DentryCacheManager {
  public:
-    MockDentryCacheManager() {}
-    ~MockDentryCacheManager() {}
+  MockDentryCacheManager() {}
+  ~MockDentryCacheManager() {}
 
-    MOCK_METHOD3(GetDentry, CURVEFS_ERROR(uint64_t parent,
-        const std::string &name, Dentry *out));
+  MOCK_METHOD3(GetDentry, CURVEFS_ERROR(uint64_t parent,
+                                        const std::string& name, Dentry* out));
 
-    MOCK_METHOD1(CreateDentry, CURVEFS_ERROR(const Dentry &dentry));
+  MOCK_METHOD1(CreateDentry, CURVEFS_ERROR(const Dentry& dentry));
 
-    MOCK_METHOD3(DeleteDentry, CURVEFS_ERROR(uint64_t parent,
-                                             const std::string &name,
-                                             FsFileType type));
+  MOCK_METHOD3(DeleteDentry,
+               CURVEFS_ERROR(uint64_t parent, const std::string& name,
+                             FsFileType type));
 
-    MOCK_METHOD5(ListDentry, CURVEFS_ERROR(uint64_t parent,
-                                           std::list<Dentry> *dentryList,
-                                           uint32_t limit,
-                                           bool onlyDir,
-                                           uint32_t nlink));
+  MOCK_METHOD5(ListDentry,
+               CURVEFS_ERROR(uint64_t parent, std::list<Dentry>* dentryList,
+                             uint32_t limit, bool onlyDir, uint32_t nlink));
 };
-
 
 }  // namespace client
 }  // namespace curvefs

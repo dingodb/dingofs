@@ -23,26 +23,25 @@
 #ifndef TEST_TOOLS_MOCK_MOCK_COPYSET_SERVICE_H_
 #define TEST_TOOLS_MOCK_MOCK_COPYSET_SERVICE_H_
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 #include "proto/copyset.pb.h"
 
 namespace curve {
 namespace tool {
 
-using ::google::protobuf::RpcController;
-using ::google::protobuf::Closure;
-using ::curve::chunkserver::CopysetService;
 using ::curve::chunkserver::CopysetRequest;
 using ::curve::chunkserver::CopysetResponse;
+using ::curve::chunkserver::CopysetService;
+using ::google::protobuf::Closure;
+using ::google::protobuf::RpcController;
 
 class MockCopysetService : public CopysetService {
  public:
-    MOCK_METHOD4(DeleteBrokenCopyset,
-                 void(RpcController* controller,
-                      const CopysetRequest* request,
-                      CopysetResponse* response,
-                      Closure* done));
+  MOCK_METHOD4(DeleteBrokenCopyset,
+               void(RpcController* controller, const CopysetRequest* request,
+                    CopysetResponse* response, Closure* done));
 };
 
 }  // namespace tool

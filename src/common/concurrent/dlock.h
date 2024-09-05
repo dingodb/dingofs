@@ -23,11 +23,11 @@
 #ifndef SRC_COMMON_CONCURRENT_DLOCK_H_
 #define SRC_COMMON_CONCURRENT_DLOCK_H_
 
-#include <string>
 #include <memory>
-#include "src/kvstorageclient/etcd_client.h"
-#include "src/common/uncopyable.h"
+#include <string>
 
+#include "src/common/uncopyable.h"
+#include "src/kvstorageclient/etcd_client.h"
 
 namespace curve {
 namespace common {
@@ -36,69 +36,67 @@ using curve::common::Uncopyable;
 using curve::kvstorage::KVStorageClient;
 
 struct DLockOpts {
-    std::string pfx;
-    int retryTimes;
-    // the interface timeout，unit is millisecond
-    int ctx_timeoutMS;
-    // the session and lease timeout, unit is second
-    int ttlSec;
+  std::string pfx;
+  int retryTimes;
+  // the interface timeout，unit is millisecond
+  int ctx_timeoutMS;
+  // the session and lease timeout, unit is second
+  int ttlSec;
 };
-
 
 class DLock : public Uncopyable {
  public:
-    explicit DLock(const DLockOpts &opts) : locker_(0), opts_(opts) {}
-    virtual ~DLock();
+  explicit DLock(const DLockOpts& opts) : locker_(0), opts_(opts) {}
+  virtual ~DLock();
 
-    /**
-     * @brief Init the etcd Mutex
-     *
-     * @return lock leaseid
-     */
-    virtual int64_t Init();
+  /**
+   * @brief Init the etcd Mutex
+   *
+   * @return lock leaseid
+   */
+  virtual int64_t Init();
 
-    /**
-     * @brief lock the object
-     *
-     * @return error code EtcdErrCode
-     */
-    virtual int Lock();
+  /**
+   * @brief lock the object
+   *
+   * @return error code EtcdErrCode
+   */
+  virtual int Lock();
 
-    /**
-     * // TODO(wanghai01): if etcd used updated to v3.5, the TryLock can be used
-     *
-     * EtcdMutexTryLock (not support at etcd v3.4)
-     *
-     * @brief try to lock the object
-     *
-     * @return error code EtcdErrCode
-     */
-    // int TryLock();
+  /**
+   * // TODO(wanghai01): if etcd used updated to v3.5, the TryLock can be used
+   *
+   * EtcdMutexTryLock (not support at etcd v3.4)
+   *
+   * @brief try to lock the object
+   *
+   * @return error code EtcdErrCode
+   */
+  // int TryLock();
 
-    /**
-     * @brief unlock the object
-     *
-     * @return error code EtcdErrCode
-     */
-    virtual int Unlock();
+  /**
+   * @brief unlock the object
+   *
+   * @return error code EtcdErrCode
+   */
+  virtual int Unlock();
 
-    /**
-     * @brief get lock key
-     *
-     * @return lock key
-     */
-    virtual std::string GetPrefix();
-
- private:
-    bool NeedRetry(int errCode);
+  /**
+   * @brief get lock key
+   *
+   * @return lock key
+   */
+  virtual std::string GetPrefix();
 
  private:
-    int64_t locker_;
-    const DLockOpts &opts_;
+  bool NeedRetry(int errCode);
+
+ private:
+  int64_t locker_;
+  const DLockOpts& opts_;
 };
 
 }  // namespace common
 }  // namespace curve
-
 
 #endif  // SRC_COMMON_CONCURRENT_DLOCK_H_
