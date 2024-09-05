@@ -197,6 +197,7 @@ class MemCachedClient : public KVClient {
     }
 
  private:
+    using KVClient::Init;
     memcached_server_st *server_;
     memcached_st *client_;
 };

@@ -109,5 +109,5 @@ done
 
 cp conf/client.conf $prefix/conf/curvebs-client.conf
 
-docker pull opencurvedocker/curve-base:$3
-docker build -t "$2" "$docker_prefix"
+#docker pull opencurvedocker/curve-base:$3
+#docker build -t "$2" "$docker_prefix"

@@ -68,6 +68,9 @@ dep:
 install:
 	@bash util/install.sh --stor=$(stor) --prefix=$(prefix) --only=$(only)
 
+install_and_config:
+	@bash util/install_and_config.sh $(stor) $(tag) $(os)
+
 image:
 	@bash util/image.sh $(stor) $(tag) $(os)
 

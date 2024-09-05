@@ -72,11 +72,6 @@ struct EtcdConf {
     char *Endpoints;
     int len;
     int DialTimeout;
-    int authEnable;
-    char *username;
-    int usernameLen;
-    char *password;
-    int passwordLen;
 };
 
 struct Operation {
@@ -139,111 +134,87 @@ extern "C" {
 
 
 // TODO(lixiaocui): 日志打印看是否需要glog
-//
-
-extern GoUint32 NewEtcdClientV3(struct EtcdConf p0);
-
+extern enum EtcdErrCode NewEtcdClientV3(struct EtcdConf conf);
 extern void EtcdCloseClient();
-
-extern GoUint32 EtcdClientPut(int p0, char* p1, char* p2, int p3, int p4);
+extern enum EtcdErrCode EtcdClientPut(int timeout, char* key, char* value, int keyLen, int valueLen);
 
 /* Return type for EtcdClientPutRewtihRevision */
 struct EtcdClientPutRewtihRevision_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	GoInt64 r1;
 };
-
-extern struct EtcdClientPutRewtihRevision_return EtcdClientPutRewtihRevision(int p0, char* p1, char* p2, int p3, int p4);
+extern struct EtcdClientPutRewtihRevision_return EtcdClientPutRewtihRevision(int timeout, char* key, char* value, int keyLen, int valueLen);
 
 /* Return type for EtcdClientGet */
 struct EtcdClientGet_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	char* r1;
 	GoInt r2;
 	GoInt64 r3;
 };
-
-extern struct EtcdClientGet_return EtcdClientGet(int p0, char* p1, int p2);
+extern struct EtcdClientGet_return EtcdClientGet(int timeout, char* key, int keyLen);
 
 /* Return type for EtcdClientList */
 struct EtcdClientList_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	GoUint64 r1;
 	GoInt64 r2;
 };
 
 // TODO(lixiaocui): list可能需要有长度限制
-//
-
-extern struct EtcdClientList_return EtcdClientList(int p0, char* p1, char* p2, int p3, int p4);
+extern struct EtcdClientList_return EtcdClientList(int timeout, char* startKey, char* endKey, int startLen, int endLen);
 
 /* Return type for EtcdClientListWithLimitAndRevision */
 struct EtcdClientListWithLimitAndRevision_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	GoUint64 r1;
 	GoInt r2;
 	GoInt64 r3;
 };
-
-extern struct EtcdClientListWithLimitAndRevision_return EtcdClientListWithLimitAndRevision(unsigned int p0, char* p1, char* p2, int p3, int p4, GoInt64 p5, GoInt64 p6);
-
-extern GoUint32 EtcdClientDelete(int p0, char* p1, int p2);
+extern struct EtcdClientListWithLimitAndRevision_return EtcdClientListWithLimitAndRevision(unsigned int timeout, char* startKey, char* endKey, int startLen, int endLen, GoInt64 limit, GoInt64 startRevision);
+extern enum EtcdErrCode EtcdClientDelete(int timeout, char* key, int keyLen);
 
 /* Return type for EtcdClientDeleteRewithRevision */
 struct EtcdClientDeleteRewithRevision_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	GoInt64 r1;
 };
-
-extern struct EtcdClientDeleteRewithRevision_return EtcdClientDeleteRewithRevision(int p0, char* p1, int p2);
-
-extern GoUint32 EtcdClientTxn2(int p0, struct Operation p1, struct Operation p2);
-
-extern GoUint32 EtcdClientTxn3(int p0, struct Operation p1, struct Operation p2, struct Operation p3);
-
-extern GoUint32 EtcdClientCompareAndSwap(int p0, char* p1, char* p2, char* p3, int p4, int p5, int p6);
+extern struct EtcdClientDeleteRewithRevision_return EtcdClientDeleteRewithRevision(int timeout, char* key, int keyLen);
+extern enum EtcdErrCode EtcdClientTxn2(int timeout, struct Operation op1, struct Operation op2);
+extern enum EtcdErrCode EtcdClientTxn3(int timeout, struct Operation op1, struct Operation op2, struct Operation op3);
+extern enum EtcdErrCode EtcdClientCompareAndSwap(int timeout, char* key, char* prev, char* target, int keyLen, int preLen, int targetLen);
 
 /* Return type for EtcdElectionCampaign */
 struct EtcdElectionCampaign_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	GoUint64 r1;
 };
-
-extern struct EtcdElectionCampaign_return EtcdElectionCampaign(char* p0, int p1, char* p2, int p3, GoUint32 p4, GoUint32 p5);
-
-extern GoUint32 EtcdLeaderObserve(GoUint64 p0, char* p1, int p2);
-
-extern GoUint32 EtcdLeaderResign(GoUint64 p0, GoUint64 p1);
+extern struct EtcdElectionCampaign_return EtcdElectionCampaign(char* pfx, int pfxLen, char* leaderName, int nameLen, GoUint32 sessionInterSec, GoUint32 electionTimeoutMs);
+extern enum EtcdErrCode EtcdLeaderObserve(GoUint64 leaderOid, char* leaderName, int nameLen);
+extern enum EtcdErrCode EtcdLeaderResign(GoUint64 leaderOid, GoUint64 timeout);
 
 /* Return type for EtcdClientGetSingleObject */
 struct EtcdClientGetSingleObject_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	char* r1;
 	GoInt r2;
 };
-
-extern struct EtcdClientGetSingleObject_return EtcdClientGetSingleObject(GoUint64 p0);
+extern struct EtcdClientGetSingleObject_return EtcdClientGetSingleObject(GoUint64 oid);
 
 /* Return type for EtcdClientGetMultiObject */
 struct EtcdClientGetMultiObject_return {
-	GoUint32 r0;
+	enum EtcdErrCode r0;
 	char* r1;
 	GoInt r2;
 	char* r3;
 	GoInt r4;
 };
-
-extern struct EtcdClientGetMultiObject_return EtcdClientGetMultiObject(GoUint64 p0, GoInt p1);
-
-extern void EtcdClientRemoveObject(GoUint64 p0);
-
-extern int64_t NewEtcdMutex(char* p0, int p1, GoInt p2);
-
-extern GoUint32 EtcdMutexLock(int p0, int64_t p1);
-
-extern GoUint32 EtcdMutexUnlock(int p0, int64_t p1);
-
-extern void DestoryEtcdMutex(int64_t p0);
+extern struct EtcdClientGetMultiObject_return EtcdClientGetMultiObject(GoUint64 oid, GoInt serial);
+extern void EtcdClientRemoveObject(GoUint64 oid);
+extern int64_t NewEtcdMutex(char* pfx, int pfxLen, GoInt ttl);
+extern enum EtcdErrCode EtcdMutexLock(int timeout, int64_t id);
+extern enum EtcdErrCode EtcdMutexUnlock(int timeout, int64_t id);
+extern void DestoryEtcdMutex(int64_t id);
 
 #ifdef __cplusplus
 }
