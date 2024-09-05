@@ -60,9 +60,11 @@ class PreallocatedIOStream : public Aws::IOStream {
   }
 };
 
+// https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Range_requests
 Aws::String GetObjectRequestRange(uint64_t offset, uint64_t len) {
-  auto range =
-      "bytes=" + std::to_string(offset) + "-" + std::to_string(offset + len);
+  CHECK_GT(len, 0);
+  auto range = "bytes=" + std::to_string(offset) + "-" +
+               std::to_string(offset + len - 1);
   return {range.data(), range.size()};
 }
 
