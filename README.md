@@ -1,4 +1,5 @@
-
+[![ci-build](https://github.com/dingodb/dingofs/actions/workflows/ci-build.yml/badge.svg)](https://github.com/dingodb/dingofs/actions/workflows/ci-build.yml)
+[![docker-publish](https://github.com/dingodb/dingofs/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/dingodb/dingofs/actions/workflows/docker-publish.yml)
 
 <div align=center> <img src="docs/images/curve-logo1-nobg.png" width = 45%>
 
@@ -268,4 +269,4 @@ Made with [contrib.rocks](https://contrib.rocks).
 - [Double Week Meetings](https://github.com/opencurve/curve-meetup-slides/tree/main/2022): We have an online community meeting every two weeks which talk about what Curve is doing and planning to do. The time and links of the meeting are public in the user group and [Double Week Meetings](https://github.com/opencurve/curve-meetup-slides/tree/main/2022).
 
 
-<img src="docs/images/curve-wechat.jpeg" style="zoom: 65%;" />
+<img src="docs/images/dingo_contact.jpg" style="zoom: 65%;" />
