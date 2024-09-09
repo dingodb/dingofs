@@ -59,3 +59,9 @@ bash build.sh
 
 bash buildfs.sh
 ```
+
+### Generate compile_commands.json
+```sh
+bazel run @hedron_compile_commands//:refresh_all
+```
+
