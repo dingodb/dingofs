@@ -1,3 +1,6 @@
+# Ensure GOPATH/bin is in the PATH
+export PATH=$PATH:$(go env GOPATH)/bin
+
 # proto dir
 mkdir -p proto
 # proto

@@ -1,0 +1,48 @@
+name: CI Build
+
+on:
+  #push:
+  #  branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: dingodatabase/dingofs-base:rocky9.3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set Safe Dir
+      run: git config --global --add safe.directory $PWD
+
+    - name: Clone Submodules
+      run: |
+        git submodule sync
+        git submodule update --init --recursive 
+
+    - name: Build dependencies
+      run: make dep stor=fs
+ 
+    - name: Build dingofs
+      run: make build stor=fs only=//curvefs/src/* release=1
+
+    - name: Install dingofs
+      run: |
+        make install_and_config stor=fs tag=dingodatabase/dingofs:latest
+
+    - name: Archive the dingofs directory
+      run: |
+        tar -czvf dingofs.tar.gz -C curvefs/docker/debian9 curvefs
+
+    - name: Copy artifactory to another workflow
+      uses: actions/upload-artifact@v4
+      with:
+          name: dingofs
+          path: ./dingofs.tar.gz
+          compression-level: 0
+

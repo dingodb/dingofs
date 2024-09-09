@@ -195,8 +195,9 @@ class MemCachedClient : public KVClient {
   }
 
  private:
-  memcached_server_st* server_;
-  memcached_st* client_;
+    using KVClient::Init;
+    memcached_server_st *server_;
+    memcached_st *client_;
 };
 
 }  //  namespace client
