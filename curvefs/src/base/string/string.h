@@ -58,7 +58,7 @@ inline bool Strs2Ints(const std::vector<std::string>& strs,
     return false;
   }
 
-  for (int i = 0; i < strs.size(); i++) {
+  for (size_t i = 0; i < strs.size(); i++) {
     if (!Str2Int(strs[i], nums[i])) {
       return false;
     }

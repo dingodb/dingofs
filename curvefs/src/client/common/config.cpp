@@ -305,7 +305,7 @@ namespace {
 void SplitDiskCacheOption(DiskCacheOption option,
                           std::vector<DiskCacheOption>* options) {
   std::vector<std::string> dirs = StrSplit(option.cache_dir, ";");
-  for (int i = 0; i < dirs.size(); i++) {
+  for (size_t i = 0; i < dirs.size(); i++) {
     uint64_t cache_size = option.cache_size;
     std::vector<std::string> items = StrSplit(dirs[i], ":");
     if (items.size() > 2 ||
