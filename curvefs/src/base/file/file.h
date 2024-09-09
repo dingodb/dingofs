@@ -25,6 +25,7 @@
 
 #include <sys/stat.h>
 
+#include <cstdint>
 #include <string>
 
 namespace curvefs {

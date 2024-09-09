@@ -23,6 +23,7 @@
 #ifndef CURVEFS_SRC_BASE_TIME_TIME_H_
 #define CURVEFS_SRC_BASE_TIME_TIME_H_
 
+#include <cstdint>
 #include <ostream>
 
 namespace curvefs {
