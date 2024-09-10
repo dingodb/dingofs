@@ -163,8 +163,6 @@ cd ${dir}/thirdparties/etcdclient &&
     make all &&
     cd $OLDPWD
 
-cp ${dir}/thirdparties/etcdclient/libetcdclient.h ${dir}/include/etcdclient/etcdclient.h
-
 if [ $(gcc -dumpversion | awk -F'.' '{print $1}') -le 6 ]; then
     bazelflags=''
 else
