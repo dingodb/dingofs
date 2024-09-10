@@ -108,6 +108,7 @@ do
 done
 
 cp conf/client.conf $prefix/conf/curvebs-client.conf
+cp thirdparties/etcdclient/libetcdclient.so $docker_prefix/
 
-docker pull opencurvedocker/curve-base:$3
+docker pull dingodatabase/dingofs-base:$3
 docker build -t "$2" "$docker_prefix"

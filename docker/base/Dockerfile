@@ -4,7 +4,7 @@ ENV TZ=Asia/Shanghai
 
 SHELL ["/bin/bash", "-c"]
 
-COPY cmake-3.30.1-linux-x86_64.tar.gz musl-1.2.5.tar.gz protoc-25.1-linux-x86_64.zip go1.23.0.linux-amd64.tar.gz bazel-4.2.4-linux-x86_64 /tmp/
+COPY cmake-3.30.1-linux-x86_64.tar.gz musl-1.2.5.tar.gz protoc-25.1-linux-x86_64.zip go1.23.0.linux-amd64.tar.gz bazel-4.2.4-linux-x86_64 jemalloc-5.3.0.tar.bz2 /tmp/
 
 # Step 1: Update the repository configuration to use Aliyun mirrors
 RUN sed -e 's|^mirrorlist=|#mirrorlist=|g' \
@@ -16,7 +16,7 @@ RUN sed -e 's|^mirrorlist=|#mirrorlist=|g' \
 # Step 2: Install necessary packages and set up the environment
 RUN dnf update -y  \
     && dnf install -y epel-release  \
-    && dnf install -y wget tar git gcc-toolset-13* perl flex bison patch fuse3-devel  libnl3-devel libunwind-devel python3-devel \
+    && dnf install -y wget tar git gcc-toolset-13* perl flex bison patch fuse3-devel  libnl3-devel libunwind-devel python3-devel net-tools iproute bzip2 vim \
     && dnf clean all \
     && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
     && echo ${TZ} > /etc/timezone
@@ -33,5 +33,7 @@ RUN cd /tmp && unzip protoc-25.1-linux-x86_64.zip -d $HOME/.local
 RUN cd /tmp && tar -zxvf musl-1.2.5.tar.gz && cd musl-1.2.5 && ./configure && make && make install
 
 RUN cd /tmp && cp bazel-4.2.4-linux-x86_64 /usr/bin/bazel && chmod a+x /usr/bin/bazel
+
+RUN cd /tmp && tar -xjvf jemalloc-5.3.0.tar.bz2 && cd jemalloc-5.3.0 && ./configure && make && make install
 
 ENV PATH=/opt/rh/gcc-toolset-13/root/usr/bin:/usr/local/go/bin:/root/go/bin:/root/.local/bin:/usr/local/musl/bin:$PATH

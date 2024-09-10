@@ -2,6 +2,7 @@
 
 We provide docker images of different operating systems to support compilation and development.including
 
+- base
 - rocky8.9
 - rocky9.3
 - ubuntu22.04
@@ -13,6 +14,8 @@ For different operating systems, we can refer to the following commands to build
 
 ``````
 cd dingofs 
+
+docker build docker/base/ -t dingodatabase/dingofs-base:rocky9
 
 docker build docker/rocky8/  -t dingofs-rocky-8.9-dev
 

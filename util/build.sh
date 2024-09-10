@@ -228,17 +228,11 @@ build_target() {
 build_requirements() {
     if [[ "$g_stor" == "fs" || $g_ci -eq 1 ]]; then
 		(cd third-party && cmake -S . -B build && cmake --build build -j 16)
-        #kernel_version=`uname -r | awk -F . '{print $1 * 1000 + $2}'`
-        #if [ $kernel_version -gt 5001 ]; then
-        #    g_build_opts+=("--define IO_URING_SUPPORT=1")
-        #fi
-        #g_rocksdb_root="${PWD}/thirdparties/rocksdb"
-        #(cd ${g_rocksdb_root} && make build from_source=${g_build_rocksdb} && make install prefix=${g_rocksdb_root})
-        #g_memcache_root="${PWD}/thirdparties/memcache"
-        #(cd ${g_memcache_root} && make build)
     fi
     g_etcdclient_root="thirdparties/etcdclient"
     (cd ${g_etcdclient_root} && make clean && make all)
+    cp ${g_etcdclient_root}/libetcdclient.h include/etcdclient/etcdclient.h
+    cp ${g_etcdclient_root}/libetcdclient.so include/etcdclient/
 }
 
 main() {

@@ -151,4 +151,6 @@ core.*
 
 third-party/build
 third-party/installed
+
 curvefs_python/BUILD
+include/etcdclient/etcdclient.h

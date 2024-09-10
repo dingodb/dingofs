@@ -5,6 +5,11 @@ on:
     workflows: ["CI Build"]
     types:
       - completed
+    on:
+      branches:
+        - master
+      pull_requests:
+        - merged
 
 jobs:
   docker:

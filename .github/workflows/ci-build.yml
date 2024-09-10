@@ -1,8 +1,8 @@
 name: CI Build
 
 on:
-  #push:
-  #  branches: [ "master" ]
+  push:
+    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 
@@ -12,7 +12,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: dingodatabase/dingofs-base:rocky9.3
+    container: dingodatabase/dingofs-base:rocky9
 
     steps:
     - uses: actions/checkout@v4
