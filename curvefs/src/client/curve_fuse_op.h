@@ -23,7 +23,6 @@
 #define CURVEFS_SRC_CLIENT_CURVE_FUSE_OP_H_
 
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,9 +35,9 @@
 extern "C" {
 #endif
 
-int InitLog(const char* confPath, const char* argv0);
+int InitLog(const char* conf_path, const char* argv0);
 
-int InitFuseClient(const struct MountOption* mountOption);
+int InitFuseClient(const struct MountOption* mount_option);
 
 void UnInitFuseClient();
 
