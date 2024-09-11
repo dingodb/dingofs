@@ -227,7 +227,12 @@ build_target() {
 
 build_requirements() {
     if [[ "$g_stor" == "fs" || $g_ci -eq 1 ]]; then
-		(cd third-party && cmake -S . -B build && cmake --build build -j 16)
+        git submodule sync && git submodule update --init --recursive
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to update git submodules"
+            exit 1
+        fi
+		(cd third-party && rm -rf build installed && cmake -S . -B build && cmake --build build -j)
     fi
     g_etcdclient_root="thirdparties/etcdclient"
     (cd ${g_etcdclient_root} && make clean && make all)

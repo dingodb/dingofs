@@ -37,7 +37,7 @@ jobs:
 
     - name: Archive the dingofs directory
       run: |
-        tar -czvf dingofs.tar.gz -C curvefs/docker/debian9 curvefs
+        tar -czvf dingofs.tar.gz -C curvefs/docker/rocky9 curvefs
 
     - name: Copy artifactory to another workflow
       uses: actions/upload-artifact@v4
