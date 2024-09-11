@@ -25,6 +25,7 @@
 #include "curvefs/src/base/filepath/filepath.h"
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/filesystem/utils.h"
+#include "glog/logging.h"
 
 namespace curvefs {
 namespace client {
@@ -37,7 +38,18 @@ using ::curvefs::base::string::StrSplit;
 
 EntryWatcher::EntryWatcher(const std::string& nocto_suffix) {
   nocto_ = std::make_unique<LRUType>(65536);
-  suffixs_ = StrSplit(nocto_suffix, ":");
+
+  if (nocto_suffix.empty()) {
+    return;
+  }
+
+  std::vector<std::string> suffixs = StrSplit(nocto_suffix, ":");
+  for (const auto& suffix : suffixs) {
+    VLOG(3) << "nocto_suffix " << nocto_suffix << ", split suffix " << suffix;
+    if (!suffix.empty()) {
+      suffixs_.push_back(suffix);
+    }
+  }
 }
 
 void EntryWatcher::Remeber(const InodeAttr& attr, const std::string& filename) {
