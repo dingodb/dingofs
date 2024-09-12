@@ -232,7 +232,7 @@ build_requirements() {
             echo "Error: Failed to update git submodules"
             exit 1
         fi
-		(cd third-party && rm -rf build installed && cmake -S . -B build && cmake --build build -j)
+		(cd third-party && rm -rf build installed && cmake -S . -B build && cmake --build build -j 16)
     fi
     g_etcdclient_root="thirdparties/etcdclient"
     (cd ${g_etcdclient_root} && make clean && make all)

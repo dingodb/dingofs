@@ -5,16 +5,14 @@ on:
     workflows: ["CI Build"]
     types:
       - completed
-    on:
-      branches:
-        - master
-      pull_requests:
-        - merged
+  push:
+    tags:
+      - '*'
 
 jobs:
   docker:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
 
     steps:
     - name: Checkout repository
@@ -43,11 +41,20 @@ jobs:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+    - name: Docker meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: dingodatabase/dingofs
+        tags: |
+          type=ref,event=tag
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,prefix=,format=long
+
     - name: Build and push
       uses: docker/build-push-action@v6
       with:
-        context: ./curvefs/docker/debian9
-        file: ./curvefs/docker/debian9/Dockerfile
+        context: ./curvefs/docker/rocky9
+        file: ./curvefs/docker/rocky9/Dockerfile
         push: true
-        tags: |
-          dingodatabase/dingofs:latest
+        tags: ${{ steps.meta.outputs.tags }}
