@@ -602,9 +602,8 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
   auto fs = client->GetFileSystem();
   METRIC_GUARD(Read);
   AccessLogGuard log([&]() {
-    return StrFormat("write (%d,%d,%d,%d): %s (%d), content:(%s)", ino, size,
-                     off, fi->fh, StrErr(rc), file_out.nwritten,
-                     std::string(buf, size));
+    return StrFormat("write (%d,%d,%d,%d): %s (%d)", ino, size, off, fi->fh,
+                     StrErr(rc), file_out.nwritten);
   });
 
   WriteThrottleAdd(size);
