@@ -108,7 +108,7 @@ do
 done
 
 cp conf/client.conf $prefix/conf/curvebs-client.conf
-cp thirdparties/etcdclient/libetcdclient.so $docker_prefix/
+cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 
 docker pull dingodatabase/dingofs-base:$3
 docker build --no-cache -t "$2" "$docker_prefix"

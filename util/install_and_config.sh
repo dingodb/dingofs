@@ -102,4 +102,4 @@ do
 done
 
 cp conf/client.conf $prefix/conf/curvebs-client.conf
-cp thirdparties/etcdclient/libetcdclient.so $docker_prefix/
+cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
