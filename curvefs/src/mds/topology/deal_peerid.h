@@ -47,33 +47,36 @@ inline std::string BuildPeerIdWithAddr(const std::string& addr,
   return addr + ":" + std::to_string(idx);
 }
 
-inline bool SplitPeerId(const std::string& peerId, std::string* ip,
+inline bool SplitPeerId(const std::string& peer_id, std::string* ip,
                         uint32_t* port, uint32_t* idx = nullptr) {
+  VLOG(6) << "peer_id: " << peer_id;
   std::vector<std::string> items;
-  SplitString(peerId, ":", &items);
-  if (3 == items.size()) {
-    *ip = items[0];
-    if (!StringToUl(items[1], port)) {
+  SplitString(peer_id, ":", &items);
+  CHECK(items.size() >= 3) << "peer_id format error: " << peer_id;
+
+  *ip = items[0];
+
+  if (!StringToUl(items[1], port)) {
+    return false;
+  }
+
+  if (idx != nullptr) {
+    if (!StringToUl(items[2], idx)) {
       return false;
     }
-    if (idx != nullptr) {
-      if (!StringToUl(items[2], idx)) {
-        return false;
-      }
-    }
-    return true;
   }
-  return false;
+
+  return true;
 }
 
-inline bool SplitPeerId(const std::string& peerId, std::string* addr) {
+inline bool SplitPeerId(const std::string& peer_id, std::string* addr) {
+  VLOG(6) << "peer_id: " << peer_id;
   std::vector<std::string> items;
-  curve::common::SplitString(peerId, ":", &items);
-  if (3 == items.size()) {
-    *addr = items[0] + ":" + items[1];
-    return true;
-  }
-  return false;
+  curve::common::SplitString(peer_id, ":", &items);
+  CHECK(items.size() >= 3) << "peer_id format error: " << peer_id;
+
+  *addr = items[0] + ":" + items[1];
+  return true;
 }
 
 inline bool SplitAddrToIpPort(const std::string& addr, std::string* ipstr,
