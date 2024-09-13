@@ -30,7 +30,7 @@ jobs:
       run: ls -la
 
     - name: Extract artifact
-      run: tar -xzvf dingofs.tar.gz -C curvefs/docker/debian9
+      run: tar -xzvf dingofs.tar.gz -C curvefs/docker/rocky9
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
