@@ -187,7 +187,7 @@ TEST_F(HeartbeatTaskExecutorTest, TransferLeader_Success) {
   conf->set_poolid(1);
   conf->set_copysetid(1);
   conf->set_epoch(1);
-  conf->set_type(curve::mds::heartbeat::ConfigChangeType::TRANSFER_LEADER);
+  conf->set_type(curvefs::mds::heartbeat::ConfigChangeType::TRANSFER_LEADER);
   auto* peer = conf->add_peers();
   peer->set_address(current_ + ":0");
 
@@ -211,7 +211,7 @@ TEST_F(HeartbeatTaskExecutorTest, AddPeer_Success) {
   conf->set_poolid(1);
   conf->set_copysetid(1);
   conf->set_epoch(1);
-  conf->set_type(curve::mds::heartbeat::ConfigChangeType::ADD_PEER);
+  conf->set_type(curvefs::mds::heartbeat::ConfigChangeType::ADD_PEER);
   auto* peer = conf->add_peers();
   peer->set_address(current_ + ":0");
 
@@ -235,7 +235,7 @@ TEST_F(HeartbeatTaskExecutorTest, RemovePeer_Success) {
   conf->set_poolid(1);
   conf->set_copysetid(1);
   conf->set_epoch(1);
-  conf->set_type(curve::mds::heartbeat::ConfigChangeType::REMOVE_PEER);
+  conf->set_type(curvefs::mds::heartbeat::ConfigChangeType::REMOVE_PEER);
   auto* peer = conf->add_peers();
   peer->set_address(current_ + ":0");
 
@@ -259,7 +259,7 @@ TEST_F(HeartbeatTaskExecutorTest, ChangePeer_Success) {
   conf->set_poolid(1);
   conf->set_copysetid(1);
   conf->set_epoch(1);
-  conf->set_type(curve::mds::heartbeat::ConfigChangeType::CHANGE_PEER);
+  conf->set_type(curvefs::mds::heartbeat::ConfigChangeType::CHANGE_PEER);
   auto* peer = conf->add_peers();
   peer->set_address(current_ + ":0");
 

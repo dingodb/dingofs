@@ -20,8 +20,8 @@
  * @Author: chenwei
  */
 
+#include "curvefs/src/mds/schedule/operatorFactoryTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "src/mds/schedule/operatorFactoryTemplate.h"
 
 #ifndef CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORY_H_
 #define CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORY_H_
@@ -29,8 +29,8 @@ namespace curvefs {
 namespace mds {
 namespace schedule {
 using OperatorFactory =
-    curve::mds::schedule::OperatorFactoryT<MetaServerIdType, CopySetInfo,
-                                           CopySetConf>;
+    OperatorFactoryT<MetaServerIdType, CopySetInfo, CopySetConf>;
+
 extern OperatorFactory operatorFactory;
 }  // namespace schedule
 }  // namespace mds

@@ -23,27 +23,18 @@
 #ifndef CURVEFS_SRC_MDS_SCHEDULE_OPERATORSTEP_H_
 #define CURVEFS_SRC_MDS_SCHEDULE_OPERATORSTEP_H_
 
-#include <cstdint>
-#include <string>
-
+#include "curvefs/src/mds/schedule/operatorStepTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "src/mds/schedule/operatorStepTemplate.h"
 
 namespace curvefs {
 namespace mds {
 namespace schedule {
-using OperatorStep =
-    curve::mds::schedule::OperatorStepT<MetaServerIdType, CopySetInfo,
-                                        CopySetConf>;
-using RemovePeer = curve::mds::schedule::RemovePeerT<MetaServerIdType,
-                                                     CopySetInfo, CopySetConf>;
-using AddPeer =
-    curve::mds::schedule::AddPeerT<MetaServerIdType, CopySetInfo, CopySetConf>;
+using OperatorStep = OperatorStepT<MetaServerIdType, CopySetInfo, CopySetConf>;
+using RemovePeer = RemovePeerT<MetaServerIdType, CopySetInfo, CopySetConf>;
+using AddPeer = AddPeerT<MetaServerIdType, CopySetInfo, CopySetConf>;
 using TransferLeader =
-    curve::mds::schedule::TransferLeaderT<MetaServerIdType, CopySetInfo,
-                                          CopySetConf>;
-using ChangePeer = curve::mds::schedule::ChangePeerT<MetaServerIdType,
-                                                     CopySetInfo, CopySetConf>;
+    TransferLeaderT<MetaServerIdType, CopySetInfo, CopySetConf>;
+using ChangePeer = ChangePeerT<MetaServerIdType, CopySetInfo, CopySetConf>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curvefs

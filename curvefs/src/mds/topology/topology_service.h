@@ -42,138 +42,134 @@ class TopologyServiceImpl : public TopologyService {
   explicit TopologyServiceImpl(std::shared_ptr<TopologyManager> topology)
       : topologyManager_(topology) {}
 
-  virtual ~TopologyServiceImpl() {}
+  ~TopologyServiceImpl() override = default;
 
-  virtual void RegistMetaServer(google::protobuf::RpcController* cntl_base,
-                                const MetaServerRegistRequest* request,
-                                MetaServerRegistResponse* response,
-                                google::protobuf::Closure* done);
+  void RegistMetaServer(google::protobuf::RpcController* cntl_base,
+                        const MetaServerRegistRequest* request,
+                        MetaServerRegistResponse* response,
+                        google::protobuf::Closure* done) override;
 
-  virtual void ListMetaServer(google::protobuf::RpcController* cntl_base,
-                              const ListMetaServerRequest* request,
-                              ListMetaServerResponse* response,
-                              google::protobuf::Closure* done);
+  void ListMetaServer(google::protobuf::RpcController* cntl_base,
+                      const ListMetaServerRequest* request,
+                      ListMetaServerResponse* response,
+                      google::protobuf::Closure* done) override;
 
-  virtual void GetMetaServer(google::protobuf::RpcController* cntl_base,
-                             const GetMetaServerInfoRequest* request,
-                             GetMetaServerInfoResponse* response,
-                             google::protobuf::Closure* done);
+  void GetMetaServer(google::protobuf::RpcController* cntl_base,
+                     const GetMetaServerInfoRequest* request,
+                     GetMetaServerInfoResponse* response,
+                     google::protobuf::Closure* done) override;
 
-  virtual void DeleteMetaServer(google::protobuf::RpcController* cntl_base,
-                                const DeleteMetaServerRequest* request,
-                                DeleteMetaServerResponse* response,
-                                google::protobuf::Closure* done);
+  void DeleteMetaServer(google::protobuf::RpcController* cntl_base,
+                        const DeleteMetaServerRequest* request,
+                        DeleteMetaServerResponse* response,
+                        google::protobuf::Closure* done) override;
 
-  virtual void RegistServer(google::protobuf::RpcController* cntl_base,
-                            const ServerRegistRequest* request,
-                            ServerRegistResponse* response,
-                            google::protobuf::Closure* done);
+  void RegistServer(google::protobuf::RpcController* cntl_base,
+                    const ServerRegistRequest* request,
+                    ServerRegistResponse* response,
+                    google::protobuf::Closure* done) override;
 
-  virtual void GetServer(google::protobuf::RpcController* cntl_base,
-                         const GetServerRequest* request,
-                         GetServerResponse* response,
-                         google::protobuf::Closure* done);
+  void GetServer(google::protobuf::RpcController* cntl_base,
+                 const GetServerRequest* request, GetServerResponse* response,
+                 google::protobuf::Closure* done) override;
 
-  virtual void DeleteServer(google::protobuf::RpcController* cntl_base,
-                            const DeleteServerRequest* request,
-                            DeleteServerResponse* response,
-                            google::protobuf::Closure* done);
+  void DeleteServer(google::protobuf::RpcController* cntl_base,
+                    const DeleteServerRequest* request,
+                    DeleteServerResponse* response,
+                    google::protobuf::Closure* done) override;
 
-  virtual void ListZoneServer(google::protobuf::RpcController* cntl_base,
-                              const ListZoneServerRequest* request,
-                              ListZoneServerResponse* response,
-                              google::protobuf::Closure* done);
+  void ListZoneServer(google::protobuf::RpcController* cntl_base,
+                      const ListZoneServerRequest* request,
+                      ListZoneServerResponse* response,
+                      google::protobuf::Closure* done) override;
 
-  virtual void CreateZone(google::protobuf::RpcController* cntl_base,
-                          const CreateZoneRequest* request,
-                          CreateZoneResponse* response,
-                          google::protobuf::Closure* done);
+  void CreateZone(google::protobuf::RpcController* cntl_base,
+                  const CreateZoneRequest* request,
+                  CreateZoneResponse* response,
+                  google::protobuf::Closure* done) override;
 
-  virtual void DeleteZone(google::protobuf::RpcController* cntl_base,
-                          const DeleteZoneRequest* request,
-                          DeleteZoneResponse* response,
-                          google::protobuf::Closure* done);
+  void DeleteZone(google::protobuf::RpcController* cntl_base,
+                  const DeleteZoneRequest* request,
+                  DeleteZoneResponse* response,
+                  google::protobuf::Closure* done) override;
 
-  virtual void GetZone(google::protobuf::RpcController* cntl_base,
-                       const GetZoneRequest* request, GetZoneResponse* response,
-                       google::protobuf::Closure* done);
+  void GetZone(google::protobuf::RpcController* cntl_base,
+               const GetZoneRequest* request, GetZoneResponse* response,
+               google::protobuf::Closure* done) override;
 
-  virtual void ListPoolZone(google::protobuf::RpcController* cntl_base,
-                            const ListPoolZoneRequest* request,
-                            ListPoolZoneResponse* response,
-                            google::protobuf::Closure* done);
+  void ListPoolZone(google::protobuf::RpcController* cntl_base,
+                    const ListPoolZoneRequest* request,
+                    ListPoolZoneResponse* response,
+                    google::protobuf::Closure* done) override;
 
-  virtual void CreatePool(google::protobuf::RpcController* cntl_base,
-                          const CreatePoolRequest* request,
-                          CreatePoolResponse* response,
-                          google::protobuf::Closure* done);
+  void CreatePool(google::protobuf::RpcController* cntl_base,
+                  const CreatePoolRequest* request,
+                  CreatePoolResponse* response,
+                  google::protobuf::Closure* done) override;
 
-  virtual void DeletePool(google::protobuf::RpcController* cntl_base,
-                          const DeletePoolRequest* request,
-                          DeletePoolResponse* response,
-                          google::protobuf::Closure* done);
+  void DeletePool(google::protobuf::RpcController* cntl_base,
+                  const DeletePoolRequest* request,
+                  DeletePoolResponse* response,
+                  google::protobuf::Closure* done) override;
 
-  virtual void GetPool(google::protobuf::RpcController* cntl_base,
-                       const GetPoolRequest* request, GetPoolResponse* response,
-                       google::protobuf::Closure* done);
+  void GetPool(google::protobuf::RpcController* cntl_base,
+               const GetPoolRequest* request, GetPoolResponse* response,
+               google::protobuf::Closure* done) override;
 
-  virtual void ListPool(google::protobuf::RpcController* cntl_base,
-                        const ListPoolRequest* request,
-                        ListPoolResponse* response,
-                        google::protobuf::Closure* done);
+  void ListPool(google::protobuf::RpcController* cntl_base,
+                const ListPoolRequest* request, ListPoolResponse* response,
+                google::protobuf::Closure* done) override;
 
-  virtual void GetMetaServerListInCopysets(
+  void GetMetaServerListInCopysets(
       google::protobuf::RpcController* cntl_base,
       const GetMetaServerListInCopySetsRequest* request,
       GetMetaServerListInCopySetsResponse* response,
-      google::protobuf::Closure* done);
+      google::protobuf::Closure* done) override;
 
-  virtual void CreatePartition(::google::protobuf::RpcController* cntl_base,
-                               const CreatePartitionRequest* request,
-                               CreatePartitionResponse* response,
-                               ::google::protobuf::Closure* done);
+  void CreatePartition(::google::protobuf::RpcController* cntl_base,
+                       const CreatePartitionRequest* request,
+                       CreatePartitionResponse* response,
+                       ::google::protobuf::Closure* done) override;
 
-  virtual void DeletePartition(::google::protobuf::RpcController* cntl_base,
-                               const DeletePartitionRequest* request,
-                               DeletePartitionResponse* response,
-                               ::google::protobuf::Closure* done);
+  void DeletePartition(::google::protobuf::RpcController* cntl_base,
+                       const DeletePartitionRequest* request,
+                       DeletePartitionResponse* response,
+                       ::google::protobuf::Closure* done) override;
 
-  virtual void CommitTx(::google::protobuf::RpcController* cntl_base,
-                        const CommitTxRequest* request,
-                        CommitTxResponse* response,
-                        ::google::protobuf::Closure* done);
+  void CommitTx(::google::protobuf::RpcController* cntl_base,
+                const CommitTxRequest* request, CommitTxResponse* response,
+                ::google::protobuf::Closure* done) override;
 
-  virtual void ListPartition(::google::protobuf::RpcController* cntl_base,
-                             const ListPartitionRequest* request,
-                             ListPartitionResponse* response,
-                             ::google::protobuf::Closure* done);
+  void ListPartition(::google::protobuf::RpcController* cntl_base,
+                     const ListPartitionRequest* request,
+                     ListPartitionResponse* response,
+                     ::google::protobuf::Closure* done) override;
 
-  virtual void GetCopysetOfPartition(
-      ::google::protobuf::RpcController* cntl_base,
-      const GetCopysetOfPartitionRequest* request,
-      GetCopysetOfPartitionResponse* response,
-      ::google::protobuf::Closure* done);
+  void GetCopysetOfPartition(::google::protobuf::RpcController* cntl_base,
+                             const GetCopysetOfPartitionRequest* request,
+                             GetCopysetOfPartitionResponse* response,
+                             ::google::protobuf::Closure* done) override;
 
-  virtual void GetCopysetsInfo(::google::protobuf::RpcController* cntl_base,
-                               const GetCopysetsInfoRequest* request,
-                               GetCopysetsInfoResponse* response,
-                               ::google::protobuf::Closure* done);
+  void GetCopysetsInfo(::google::protobuf::RpcController* cntl_base,
+                       const GetCopysetsInfoRequest* request,
+                       GetCopysetsInfoResponse* response,
+                       ::google::protobuf::Closure* done) override;
 
-  virtual void ListCopysetInfo(::google::protobuf::RpcController* cntl_base,
-                               const ListCopysetInfoRequest* request,
-                               ListCopysetInfoResponse* response,
-                               ::google::protobuf::Closure* done);
+  void ListCopysetInfo(::google::protobuf::RpcController* cntl_base,
+                       const ListCopysetInfoRequest* request,
+                       ListCopysetInfoResponse* response,
+                       ::google::protobuf::Closure* done) override;
 
-  virtual void StatMetadataUsage(
+  void StatMetadataUsage(
       ::google::protobuf::RpcController* controller,
       const ::curvefs::mds::topology::StatMetadataUsageRequest* request,
       ::curvefs::mds::topology::StatMetadataUsageResponse* response,
-      ::google::protobuf::Closure* done);
+      ::google::protobuf::Closure* done) override;
 
-  virtual void ListTopology(::google::protobuf::RpcController* controller,
-                            const ListTopologyRequest* request,
-                            ListTopologyResponse* response,
-                            ::google::protobuf::Closure* done);
+  void ListTopology(::google::protobuf::RpcController* controller,
+                    const ListTopologyRequest* request,
+                    ListTopologyResponse* response,
+                    ::google::protobuf::Closure* done) override;
 
   /**
    * @brief
@@ -191,11 +187,10 @@ class TopologyServiceImpl : public TopologyService {
    thing)
    * @param done
    */
-  virtual void RegistMemcacheCluster(
-      ::google::protobuf::RpcController* controller,
-      const RegistMemcacheClusterRequest* request,
-      RegistMemcacheClusterResponse* response,
-      ::google::protobuf::Closure* done);
+  void RegistMemcacheCluster(::google::protobuf::RpcController* controller,
+                             const RegistMemcacheClusterRequest* request,
+                             RegistMemcacheClusterResponse* response,
+                             ::google::protobuf::Closure* done) override;
 
   /**
    * @brief
@@ -208,10 +203,10 @@ class TopologyServiceImpl : public TopologyService {
               2. TOPO_MEMCACHECLUSTER_NOT_FOUND: no memcacheCluster
    * @param done
    */
-  virtual void ListMemcacheCluster(
-      ::google::protobuf::RpcController* controller,
-      const ListMemcacheClusterRequest* request,
-      ListMemcacheClusterResponse* response, ::google::protobuf::Closure* done);
+  void ListMemcacheCluster(::google::protobuf::RpcController* controller,
+                           const ListMemcacheClusterRequest* request,
+                           ListMemcacheClusterResponse* response,
+                           ::google::protobuf::Closure* done) override;
 
   /**
    * @brief Get or Alloc one Memcache Cluster
@@ -224,11 +219,11 @@ class TopologyServiceImpl : public TopologyService {
               2. TOPO_MEMCACHECLUSTER_NOT_FOUND: no memcacheCluster
    * @param done
    */
-  virtual void AllocOrGetMemcacheCluster(
+  void AllocOrGetMemcacheCluster(
       ::google::protobuf::RpcController* controller,
       const AllocOrGetMemcacheClusterRequest* request,
       AllocOrGetMemcacheClusterResponse* response,
-      ::google::protobuf::Closure* done);
+      ::google::protobuf::Closure* done) override;
 
  private:
   std::shared_ptr<TopologyManager> topologyManager_;

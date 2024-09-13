@@ -25,8 +25,6 @@
 #include "curvefs/src/mds/schedule/operatorFactory.h"
 #include "curvefs/src/mds/schedule/scheduler.h"
 
-using ::curve::mds::topology::UNINTIALIZE_ID;
-
 namespace curvefs {
 namespace mds {
 namespace schedule {

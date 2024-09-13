@@ -45,8 +45,8 @@
 namespace curvefs {
 namespace metaserver {
 
-using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::mds::heartbeat::ConfigChangeInfo;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 using ::curvefs::metaserver::copyset::CopysetService_Stub;
 using ::curvefs::metaserver::copyset::ToGroupIdString;
 

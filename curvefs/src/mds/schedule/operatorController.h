@@ -23,16 +23,15 @@
 #ifndef CURVEFS_SRC_MDS_SCHEDULE_OPERATORCONTROLLER_H_
 #define CURVEFS_SRC_MDS_SCHEDULE_OPERATORCONTROLLER_H_
 
+#include "curvefs/src/mds/schedule/operatorControllerTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "curvefs/src/mds/topology/topology.h"
-#include "src/mds/schedule/operatorControllerTemplate.h"
 
 namespace curvefs {
 namespace mds {
 namespace schedule {
-using OperatorController = curve::mds::schedule::OperatorControllerT<
-    MetaServerIdType, CopySetInfo, CopySetConf, Topology,
-    ::curvefs::mds::topology::CopySetInfo>;
+using OperatorController =
+    OperatorControllerT<MetaServerIdType, CopySetInfo, CopySetConf, Topology,
+                        ::curvefs::mds::topology::CopySetInfo>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curvefs

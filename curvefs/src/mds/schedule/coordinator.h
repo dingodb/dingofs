@@ -43,7 +43,7 @@ namespace curvefs {
 namespace mds {
 namespace schedule {
 using ::curve::common::InterruptibleSleeper;
-using ::curve::mds::heartbeat::ConfigChangeType;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 class Coordinator {
  public:
   Coordinator() = default;

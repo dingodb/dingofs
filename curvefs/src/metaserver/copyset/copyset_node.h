@@ -46,8 +46,8 @@ namespace metaserver {
 namespace copyset {
 
 using ::braft::PeerId;
-using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::common::Peer;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 using ::curvefs::metaserver::MetaStore;
 
 class CopysetNodeManager;

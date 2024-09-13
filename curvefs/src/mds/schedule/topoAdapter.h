@@ -39,8 +39,8 @@
 namespace curvefs {
 namespace mds {
 namespace schedule {
-using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::mds::heartbeat::ConfigChangeInfo;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 using ::curvefs::mds::topology::CopySetIdType;
 using ::curvefs::mds::topology::CopySetKey;
 using ::curvefs::mds::topology::EpochType;

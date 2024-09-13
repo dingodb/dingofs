@@ -35,8 +35,8 @@ namespace curvefs {
 namespace metaserver {
 namespace copyset {
 
-using ::curve::mds::heartbeat::ConfigChangeType;
 using ::curvefs::common::Peer;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 
 struct OngoingConfChange {
   OngoingConfChange() : type(ConfigChangeType::NONE), alterPeer() {}

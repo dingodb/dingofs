@@ -33,7 +33,7 @@ void OnConfChangeDone::Run() {
 
   LOG_IF(WARNING, !status().ok())
       << "Copyset: " << node_->Name() << " "
-      << curve::mds::heartbeat::ConfigChangeType_Name(confChange_.type)
+      << curvefs::mds::heartbeat::ConfigChangeType_Name(confChange_.type)
       << " failed";
 
   if (done_) {

@@ -16,16 +16,9 @@
 
 syntax = "proto2";
 import "curvefs/proto/common.proto";
-import "proto/heartbeat.proto";
 package curvefs.mds.heartbeat;
 option cc_generic_services = true;
 option go_package = "curvefs/proto/heartbeat";
-
-// TODO(cw123): add copyset resource usage state later
-// message CopySetState {
-//     required uint64 momoryUsedByte = 1;  // the momory this copyset used
-//     required uint64 diskUsedByte = 2;  // the disk this copyset used
-// };
 
 message CopySetInfo {
     required uint32 poolId = 1;
@@ -41,9 +34,26 @@ message CopySetInfo {
     // required CopySetState state = 9;
 };
 
+enum ConfigChangeType {
+    // 配置变更命令： leader转换
+    TRANSFER_LEADER = 1;
+    // 配置变更命令： 复制组增加一个成员
+    ADD_PEER = 2;
+    // 配置变更命令： 复制组删除一个成员
+    REMOVE_PEER = 3;
+    // 配置变更命令： 没有配置变更
+    NONE = 4;
+    // 配置变更命令：change复制组一个成员
+    CHANGE_PEER = 5;
+    // start scan on the peer
+    START_SCAN_PEER = 6;
+    // cancel scan on the peer
+    CANCEL_SCAN_PEER = 7;
+};
+
 message ConfigChangeInfo {
     required common.Peer peer = 1;
-    required curve.mds.heartbeat.ConfigChangeType type = 2;
+    required ConfigChangeType type = 2;
     required bool finished = 3;
     optional CandidateError err = 4;
 };
@@ -88,7 +98,7 @@ message CopySetConf {
     required uint32 copysetId = 2;
     repeated common.Peer peers = 3;
     required uint64 epoch = 4;
-    optional curve.mds.heartbeat.ConfigChangeType type = 5;
+    optional ConfigChangeType type = 5;
     // configchangeItem is the target node
     // for TRANSFER_LEADER: the target peer;
     // for ADD_PEER: the peer to add;

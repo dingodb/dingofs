@@ -25,16 +25,14 @@
 
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/schedule/operatorStep.h"
+#include "curvefs/src/mds/schedule/operatorTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
 #include "curvefs/src/mds/topology/topology_item.h"
-#include "src/mds/schedule/operatorTemplate.h"
 
 namespace curvefs {
 namespace mds {
 namespace schedule {
-using curve::mds::schedule::OperatorPriority;
-using Operator =
-    curve::mds::schedule::OperatorT<MetaServerIdType, CopySetInfo, CopySetConf>;
+using Operator = OperatorT<MetaServerIdType, CopySetInfo, CopySetConf>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curvefs

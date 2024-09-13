@@ -42,6 +42,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto:topology_cc_proto",
+        "//proto:heartbeat_cc_proto",
         "//src/common:curve_common",
         "//src/mds/topology",
         "@brpc//:brpc",

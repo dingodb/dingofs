@@ -23,15 +23,15 @@
 #ifndef CURVEFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 #define CURVEFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 
+#include "curvefs/src/mds/schedule/scheduleMetricsTemplate.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "src/mds/schedule/scheduleMetricsTemplate.h"
 
 namespace curvefs {
 namespace mds {
 namespace schedule {
-using ScheduleMetrics = curve::mds::schedule::ScheduleMetricsT<
-    MetaServerIdType, CopySetInfo, CopySetConf, Topology,
-    ::curvefs::mds::topology::CopySetInfo>;
+using ScheduleMetrics =
+    ScheduleMetricsT<MetaServerIdType, CopySetInfo, CopySetConf, Topology,
+                     ::curvefs::mds::topology::CopySetInfo>;
 }  // namespace schedule
 }  // namespace mds
 }  // namespace curvefs

@@ -25,9 +25,7 @@
 #include <glog/logging.h>
 
 #include <memory>
-#include <set>
 #include <string>
-#include <thread>  //NOLINT
 #include <utility>
 
 #include "curvefs/src/mds/common/mds_define.h"

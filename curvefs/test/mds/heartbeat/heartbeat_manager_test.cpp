@@ -31,7 +31,7 @@
 #include "curvefs/test/mds/mock/mock_topology.h"
 #include "src/common/timeutility.h"
 
-using ::curve::mds::heartbeat::ConfigChangeType;
+using ::curvefs::mds::heartbeat::ConfigChangeType;
 using ::curvefs::mds::topology::MockIdGenerator;
 using ::curvefs::mds::topology::MockStorage;
 using ::curvefs::mds::topology::MockTokenGenerator;
