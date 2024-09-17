@@ -77,7 +77,7 @@ func GetMetaserverAddrs(caller *cobra.Command) ([]string, []string, *cmderror.Cm
 	listTopo := NewListTopologyCommand()
 	listTopo.Cmd.SetArgs([]string{"--format", config.FORMAT_NOOUT})
 	listTopo.Cmd.SilenceErrors = true
-	config.AlignFlagsValue(caller, listTopo.Cmd, []string{})
+	config.AlignFlagsValue(caller, listTopo.Cmd, []string{config.CURVEFS_MDSADDR})
 	err := listTopo.Cmd.Execute()
 	if err != nil {
 		retErr := cmderror.ErrGetMetaserverAddr()
