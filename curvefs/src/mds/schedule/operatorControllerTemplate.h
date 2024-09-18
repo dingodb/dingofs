@@ -23,7 +23,6 @@
 
 #include "curvefs/src/mds/schedule/operatorTemplate.h"
 #include "curvefs/src/mds/schedule/scheduleMetricsTemplate.h"
-#include "curvefs/src/mds/topology/topology.h"
 
 namespace curvefs {
 namespace mds {

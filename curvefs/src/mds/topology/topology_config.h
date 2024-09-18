@@ -23,8 +23,7 @@
 #ifndef CURVEFS_SRC_MDS_TOPOLOGY_TOPOLOGY_CONFIG_H_
 #define CURVEFS_SRC_MDS_TOPOLOGY_TOPOLOGY_CONFIG_H_
 
-#include <string>
-
+#include <cstdint>
 namespace curvefs {
 namespace mds {
 namespace topology {

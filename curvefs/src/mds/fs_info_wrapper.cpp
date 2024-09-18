@@ -26,66 +26,61 @@
 #include <google/protobuf/util/message_differencer.h>
 
 #include <algorithm>
-#include <limits>
 
 #include "curvefs/src/base/string/string.h"
-#include "curvefs/src/mds/codec/codec.h"
 
 namespace curvefs {
 namespace mds {
 
 using ::curvefs::base::string::GenUuid;
-using ::curvefs::common::S3Info;
-using ::curvefs::common::Volume;
-using google::protobuf::util::MessageDifferencer;
 
 FsInfoWrapper::FsInfoWrapper(const ::curvefs::mds::CreateFsRequest* request,
-                             uint64_t fsId, uint64_t rootInodeId) {
-  FsInfo fsInfo;
-  fsInfo.set_fsname(request->fsname());
-  fsInfo.set_fsid(fsId);
-  fsInfo.set_status(FsStatus::NEW);
-  fsInfo.set_rootinodeid(rootInodeId);
-  fsInfo.set_blocksize(request->blocksize());
-  fsInfo.set_mountnum(0);
-  fsInfo.set_enablesumindir(request->enablesumindir());
-  fsInfo.set_txsequence(0);
-  fsInfo.set_txowner("");
-  fsInfo.set_uuid(GenUuid());
+                             uint64_t fs_id, uint64_t root_inode_id) {
+  FsInfo fs_info;
+  fs_info.set_fsname(request->fsname());
+  fs_info.set_fsid(fs_id);
+  fs_info.set_status(FsStatus::NEW);
+  fs_info.set_rootinodeid(root_inode_id);
+  fs_info.set_blocksize(request->blocksize());
+  fs_info.set_mountnum(0);
+  fs_info.set_enablesumindir(request->enablesumindir());
+  fs_info.set_txsequence(0);
+  fs_info.set_txowner("");
+  fs_info.set_uuid(GenUuid());
   if (request->has_recycletimehour()) {
-    fsInfo.set_recycletimehour(request->recycletimehour());
+    fs_info.set_recycletimehour(request->recycletimehour());
   }
 
   const auto& detail = request->fsdetail();
-  fsInfo.set_allocated_detail(new FsDetail(detail));
+  fs_info.set_allocated_detail(new FsDetail(detail));
 
   switch (request->fstype()) {
     case FSType::TYPE_S3:
-      fsInfo.set_fstype(FSType::TYPE_S3);
-      fsInfo.set_capacity(request->capacity());
+      fs_info.set_fstype(FSType::TYPE_S3);
+      fs_info.set_capacity(request->capacity());
       break;
     case FSType::TYPE_VOLUME:
-      fsInfo.set_fstype(FSType::TYPE_VOLUME);
-      fsInfo.set_capacity(detail.volume().volumesize());
+      fs_info.set_fstype(FSType::TYPE_VOLUME);
+      fs_info.set_capacity(detail.volume().volumesize());
       break;
     case FSType::TYPE_HYBRID:
-      fsInfo.set_fstype(FSType::TYPE_HYBRID);
+      fs_info.set_fstype(FSType::TYPE_HYBRID);
       // TODO(huyao): set capacity for hybrid fs
-      fsInfo.set_capacity(
+      fs_info.set_capacity(
           std::min(detail.volume().volumesize(), request->capacity()));
       break;
   }
 
-  fsInfo.set_owner(request->owner());
-  fsInfo_ = std::move(fsInfo);
+  fs_info.set_owner(request->owner());
+  fsInfo_ = std::move(fs_info);
 }
 
 bool FsInfoWrapper::IsMountPointExist(const Mountpoint& mp) const {
   return std::find_if(fsInfo_.mountpoints().begin(),
                       fsInfo_.mountpoints().end(),
-                      [mp](const Mountpoint& mountPoint) {
-                        return mp.path() == mountPoint.path() &&
-                               mp.hostname() == mountPoint.hostname();
+                      [mp](const Mountpoint& mount_point) {
+                        return mp.path() == mount_point.path() &&
+                               mp.hostname() == mount_point.hostname();
                       }) != fsInfo_.mountpoints().end();
 }
 
@@ -94,13 +89,13 @@ bool FsInfoWrapper::IsMountPointConflict(const Mountpoint& mp) const {
 
   bool exist =
       std::find_if(fsInfo_.mountpoints().begin(), fsInfo_.mountpoints().end(),
-                   [&](const Mountpoint& mountPoint) {
-                     if (mountPoint.has_cto() && mountPoint.cto()) {
+                   [&](const Mountpoint& mount_point) {
+                     if (mount_point.has_cto() && mount_point.cto()) {
                        cto = true;
                      }
 
-                     return mp.path() == mountPoint.path() &&
-                            mp.hostname() == mountPoint.hostname();
+                     return mp.path() == mount_point.path() &&
+                            mp.hostname() == mount_point.hostname();
                    }) != fsInfo_.mountpoints().end();
 
   // NOTE:
@@ -124,10 +119,10 @@ void FsInfoWrapper::AddMountPoint(const Mountpoint& mp) {
 FSStatusCode FsInfoWrapper::DeleteMountPoint(const Mountpoint& mp) {
   auto iter =
       std::find_if(fsInfo_.mountpoints().begin(), fsInfo_.mountpoints().end(),
-                   [mp](const Mountpoint& mountPoint) {
-                     return mp.path() == mountPoint.path() &&
-                            mp.hostname() == mountPoint.hostname() &&
-                            mp.port() == mountPoint.port();
+                   [mp](const Mountpoint& mount_point) {
+                     return mp.path() == mount_point.path() &&
+                            mp.hostname() == mount_point.hostname() &&
+                            mp.port() == mount_point.port();
                    });
 
   bool found = iter != fsInfo_.mountpoints().end();

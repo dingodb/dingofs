@@ -44,17 +44,17 @@ int MetaserverQueryTool::Init() {
 
   curve::common::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
 
-  std::vector<std::string> metaserverIdVec;
-  std::vector<std::string> metaserverAddrVec;
+  std::vector<std::string> metaserver_id_vec;
+  std::vector<std::string> metaserver_addr_vec;
   google::CommandLineFlagInfo info;
   if (CheckMetaserverIdDefault(&info) && !CheckMetaserverAddrDefault(&info)) {
     // only use mateserverAddr in this case
-    curve::common::SplitString(FLAGS_metaserverAddr, ",", &metaserverAddrVec);
+    curve::common::SplitString(FLAGS_metaserverAddr, ",", &metaserver_addr_vec);
   } else {
-    curve::common::SplitString(FLAGS_metaserverId, ",", &metaserverIdVec);
+    curve::common::SplitString(FLAGS_metaserverId, ",", &metaserver_id_vec);
   }
 
-  for (auto const& i : metaserverAddrVec) {
+  for (auto const& i : metaserver_addr_vec) {
     std::string ip;
     uint32_t port;
     if (curvefs::mds::topology::SplitAddrToIpPort(i, &ip, &port)) {
@@ -68,7 +68,7 @@ int MetaserverQueryTool::Init() {
     }
   }
 
-  for (auto const& i : metaserverIdVec) {
+  for (auto const& i : metaserver_id_vec) {
     curvefs::mds::topology::GetMetaServerInfoRequest request;
     request.set_metaserverid(std::stoul(i));
     requestQueue_.push(request);

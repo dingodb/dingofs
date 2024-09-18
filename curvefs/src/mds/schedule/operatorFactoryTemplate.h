@@ -14,13 +14,16 @@
  *  limitations under the License.
  */
 
+#ifndef CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORYTEMPLATE_H_
+#define CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORYTEMPLATE_H_
+
+#include <chrono>
 #include <memory>
 
 #include "curvefs/src/mds/schedule/operatorStepTemplate.h"
 #include "curvefs/src/mds/schedule/operatorTemplate.h"
 
-#ifndef CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORYTEMPLATE_H_
-#define CURVEFS_SRC_MDS_SCHEDULE_OPERATORFACTORYTEMPLATE_H_
+using ::std::chrono::steady_clock;
 namespace curvefs {
 namespace mds {
 namespace schedule {

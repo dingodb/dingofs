@@ -20,6 +20,8 @@
  * @Author: chenwei
  */
 
+#include <random>
+
 #include "curvefs/src/mds/schedule/operatorFactory.h"
 #include "curvefs/src/mds/schedule/scheduler.h"
 

@@ -27,8 +27,8 @@
 #include <string>
 
 #include "curvefs/proto/heartbeat.pb.h"
+#include "curvefs/src/mds/topology/deal_peerid.h"
 
-using ::curvefs::mds::heartbeat::ConfigChangeInfo;
 using ::curvefs::mds::topology::TopoStatusCode;
 using std::chrono::milliseconds;
 
@@ -36,45 +36,45 @@ namespace curvefs {
 namespace mds {
 namespace heartbeat {
 bool CopysetConfGenerator::GenCopysetConf(
-    MetaServerIdType reportId,
-    const ::curvefs::mds::topology::CopySetInfo& reportCopySetInfo,
-    const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
-    ::curvefs::mds::heartbeat::CopySetConf* copysetConf) {
+    MetaServerIdType report_id,
+    const ::curvefs::mds::topology::CopySetInfo& report_copy_set_info,
+    const ::curvefs::mds::heartbeat::ConfigChangeInfo& config_ch_info,
+    ::curvefs::mds::heartbeat::CopySetConf* copyset_conf) {
   // if copyset is creating return false directly
-  if (topo_->IsCopysetCreating(reportCopySetInfo.GetCopySetKey())) {
+  if (topo_->IsCopysetCreating(report_copy_set_info.GetCopySetKey())) {
     return false;
   }
 
   // reported copyset not exist in topology
   // in this case an empty configuration will be sent to metaserver
   // to delete it
-  ::curvefs::mds::topology::CopySetInfo recordCopySetInfo;
-  if (!topo_->GetCopySet(reportCopySetInfo.GetCopySetKey(),
-                         &recordCopySetInfo)) {
+  ::curvefs::mds::topology::CopySetInfo record_copy_set_info;
+  if (!topo_->GetCopySet(report_copy_set_info.GetCopySetKey(),
+                         &record_copy_set_info)) {
     LOG(ERROR) << "heartbeatManager receive copyset("
-               << reportCopySetInfo.GetPoolId() << ","
-               << reportCopySetInfo.GetId()
+               << report_copy_set_info.GetPoolId() << ","
+               << report_copy_set_info.GetId()
                << ") information, but can not get info from topology";
-    copysetConf->set_poolid(reportCopySetInfo.GetPoolId());
-    copysetConf->set_copysetid(reportCopySetInfo.GetId());
-    copysetConf->set_epoch(0);
+    copyset_conf->set_poolid(report_copy_set_info.GetPoolId());
+    copyset_conf->set_copysetid(report_copy_set_info.GetId());
+    copyset_conf->set_epoch(0);
     return true;
   }
 
-  if (reportCopySetInfo.GetLeader() == reportId) {
-    MetaServerIdType candidate =
-        LeaderGenCopysetConf(reportCopySetInfo, configChInfo, copysetConf);
+  if (report_copy_set_info.GetLeader() == report_id) {
+    MetaServerIdType candidate = LeaderGenCopysetConf(
+        report_copy_set_info, config_ch_info, copyset_conf);
     // new config to dispatch available, update candidate to topology
     if (candidate != ::curvefs::mds::topology::UNINITIALIZE_ID) {
-      auto newCopySetInfo = reportCopySetInfo;
-      newCopySetInfo.SetCandidate(candidate);
-      TopoStatusCode updateCode = topo_->UpdateCopySetTopo(newCopySetInfo);
-      if (TopoStatusCode::TOPO_OK != updateCode) {
+      auto new_copy_set_info = report_copy_set_info;
+      new_copy_set_info.SetCandidate(candidate);
+      TopoStatusCode update_code = topo_->UpdateCopySetTopo(new_copy_set_info);
+      if (TopoStatusCode::TOPO_OK != update_code) {
         // error occurs when update to memory of topology
         LOG(WARNING) << "topoUpdater update copyset("
-                     << reportCopySetInfo.GetPoolId() << ","
-                     << reportCopySetInfo.GetId()
-                     << ") got error code: " << updateCode;
+                     << report_copy_set_info.GetPoolId() << ","
+                     << report_copy_set_info.GetId()
+                     << ") got error code: " << update_code;
         return false;
       } else {
         // update to memory successfully
@@ -85,32 +85,33 @@ bool CopysetConfGenerator::GenCopysetConf(
       return false;
     }
   } else {
-    return FollowerGenCopysetConf(reportId, reportCopySetInfo,
-                                  recordCopySetInfo, copysetConf);
+    return FollowerGenCopysetConf(report_id, report_copy_set_info,
+                                  record_copy_set_info, copyset_conf);
   }
 }
 
 MetaServerIdType CopysetConfGenerator::LeaderGenCopysetConf(
-    const ::curvefs::mds::topology::CopySetInfo& copySetInfo,
-    const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
-    ::curvefs::mds::heartbeat::CopySetConf* copysetConf) {
+    const ::curvefs::mds::topology::CopySetInfo& copy_set_info,
+    const ::curvefs::mds::heartbeat::ConfigChangeInfo& config_ch_info,
+    ::curvefs::mds::heartbeat::CopySetConf* copyset_conf) {
   // pass data to scheduler
-  return coordinator_->CopySetHeartbeat(copySetInfo, configChInfo, copysetConf);
+  return coordinator_->CopySetHeartbeat(copy_set_info, config_ch_info,
+                                        copyset_conf);
 }
 
 bool CopysetConfGenerator::FollowerGenCopysetConf(
-    MetaServerIdType reportId,
-    const ::curvefs::mds::topology::CopySetInfo& reportCopySetInfo,
-    const ::curvefs::mds::topology::CopySetInfo& recordCopySetInfo,
-    ::curvefs::mds::heartbeat::CopySetConf* copysetConf) {
+    MetaServerIdType report_id,
+    const ::curvefs::mds::topology::CopySetInfo& report_copy_set_info,
+    const ::curvefs::mds::topology::CopySetInfo& record_copy_set_info,
+    ::curvefs::mds::heartbeat::CopySetConf* copyset_conf) {
   // if there's no candidate on a copyset, and epoch on MDS is larger or equal
   // to what non-leader copy report,
   // copy(ies) can be deleted according to the configuration of MDS
 
   // epoch that MDS recorded >= epoch reported
-  if (recordCopySetInfo.GetEpoch() >= reportCopySetInfo.GetEpoch()) {
-    steady_clock::duration timePass = steady_clock::now() - mdsStartTime_;
-    if (timePass < milliseconds(cleanFollowerAfterMs_)) {
+  if (record_copy_set_info.GetEpoch() >= report_copy_set_info.GetEpoch()) {
+    steady_clock::duration time_pass = steady_clock::now() - mdsStartTime_;
+    if (time_pass < milliseconds(cleanFollowerAfterMs_)) {
       LOG_FIRST_N(INFO, 1) << "begin to clean follower copyset after "
                            << cleanFollowerAfterMs_ / 1000
                            << " seconds of mds start";
@@ -119,44 +120,44 @@ bool CopysetConfGenerator::FollowerGenCopysetConf(
     // judge whether the reporting metaserver is in the copyset it reported,
     // and whether this metaserver is a candidate or going to be added into
     // the copyset
-    bool exist = recordCopySetInfo.HasMember(reportId);
-    if (exist || reportId == recordCopySetInfo.GetCandidate() ||
-        coordinator_->MetaserverGoingToAdd(reportId,
-                                           reportCopySetInfo.GetCopySetKey())) {
+    bool exist = record_copy_set_info.HasMember(report_id);
+    if (exist || report_id == record_copy_set_info.GetCandidate() ||
+        coordinator_->MetaserverGoingToAdd(
+            report_id, report_copy_set_info.GetCopySetKey())) {
       return false;
     } else {
-      LOG(WARNING) << "report metaserver: " << reportId
+      LOG(WARNING) << "report metaserver: " << report_id
                    << " is not a replica or candidate of copyset("
-                   << recordCopySetInfo.GetPoolId() << ","
-                   << recordCopySetInfo.GetId() << ")";
+                   << record_copy_set_info.GetPoolId() << ","
+                   << record_copy_set_info.GetId() << ")";
     }
 
     // if the metaserver doesn't belong to any of the copyset, MDS will
     // dispatch the configuration
-    copysetConf->set_poolid(recordCopySetInfo.GetPoolId());
-    copysetConf->set_copysetid(recordCopySetInfo.GetId());
-    copysetConf->set_epoch(recordCopySetInfo.GetEpoch());
-    if (recordCopySetInfo.HasCandidate()) {
-      std::string candidateAddr =
-          BuildPeerByMetaserverId(recordCopySetInfo.GetCandidate());
-      if (candidateAddr.empty()) {
+    copyset_conf->set_poolid(record_copy_set_info.GetPoolId());
+    copyset_conf->set_copysetid(record_copy_set_info.GetId());
+    copyset_conf->set_epoch(record_copy_set_info.GetEpoch());
+    if (record_copy_set_info.HasCandidate()) {
+      std::string candidate_addr =
+          BuildPeerByMetaserverId(record_copy_set_info.GetCandidate());
+      if (candidate_addr.empty()) {
         return false;
       }
-      auto replica = new ::curvefs::common::Peer();
-      replica->set_id(recordCopySetInfo.GetCandidate());
-      replica->set_address(candidateAddr);
+      auto* replica = new ::curvefs::common::Peer();
+      replica->set_id(record_copy_set_info.GetCandidate());
+      replica->set_address(candidate_addr);
       // memory of replica will be free by proto
-      copysetConf->set_allocated_configchangeitem(replica);
+      copyset_conf->set_allocated_configchangeitem(replica);
     }
 
-    for (auto& peer : recordCopySetInfo.GetCopySetMembers()) {
-      std::string addPeer = BuildPeerByMetaserverId(peer);
-      if (addPeer.empty()) {
+    for (const auto& peer : record_copy_set_info.GetCopySetMembers()) {
+      std::string add_peer = BuildPeerByMetaserverId(peer);
+      if (add_peer.empty()) {
         return false;
       }
-      auto replica = copysetConf->add_peers();
+      auto* replica = copyset_conf->add_peers();
       replica->set_id(peer);
-      replica->set_address(addPeer);
+      replica->set_address(add_peer);
     }
     return true;
   }
@@ -164,14 +165,14 @@ bool CopysetConfGenerator::FollowerGenCopysetConf(
 }
 
 std::string CopysetConfGenerator::BuildPeerByMetaserverId(
-    MetaServerIdType msId) {
-  MetaServer metaServer;
-  if (!topo_->GetMetaServer(msId, &metaServer)) {
+    MetaServerIdType ms_id) {
+  MetaServer meta_server;
+  if (!topo_->GetMetaServer(ms_id, &meta_server)) {
     return "";
   }
 
-  return ::curvefs::mds::topology::BuildPeerIdWithIpPort(
-      metaServer.GetInternalIp(), metaServer.GetInternalPort(), 0);
+  return topology::BuildPeerIdWithIpPort(meta_server.GetInternalIp(),
+                                         meta_server.GetInternalPort(), 0);
 }
 }  // namespace heartbeat
 }  // namespace mds

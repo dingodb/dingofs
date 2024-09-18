@@ -23,17 +23,14 @@
 #ifndef CURVEFS_SRC_MDS_FS_MANAGER_H_
 #define CURVEFS_SRC_MDS_FS_MANAGER_H_
 
-#include <atomic>
 #include <map>
 #include <memory>
-#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/topology.pb.h"
-#include "curvefs/src/common/define.h"
 #include "curvefs/src/mds/common/types.h"
 #include "curvefs/src/mds/dlock/dlock.h"
 #include "curvefs/src/mds/fs_info_wrapper.h"
@@ -42,10 +39,7 @@
 #include "curvefs/src/mds/space/manager.h"
 #include "curvefs/src/mds/topology/topology.h"
 #include "curvefs/src/mds/topology/topology_manager.h"
-#include "curvefs/src/mds/topology/topology_storage_codec.h"
-#include "curvefs/src/mds/topology/topology_storge_etcd.h"
 #include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/name_lock.h"
 #include "src/common/interruptible_sleeper.h"
 #include "src/common/s3_adapter.h"
 
@@ -76,18 +70,17 @@ struct FsManagerOption {
 
 class FsManager {
  public:
-  FsManager(const std::shared_ptr<FsStorage>& fsStorage,
-            const std::shared_ptr<SpaceManager>& spaceManager,
-            const std::shared_ptr<MetaserverClient>& metaserverClient,
-            const std::shared_ptr<TopologyManager>& topoManager,
-            const std::shared_ptr<S3Adapter>& s3Adapter,
+  FsManager(const std::shared_ptr<FsStorage>& fs_storage,
+            const std::shared_ptr<SpaceManager>& space_manager,
+            const std::shared_ptr<MetaserverClient>& metaserver_client,
+            const std::shared_ptr<TopologyManager>& topo_manager,
+            const std::shared_ptr<S3Adapter>& s3_adapter,
             const std::shared_ptr<DLock>& dlock, const FsManagerOption& option)
-      : fsStorage_(fsStorage),
-        spaceManager_(spaceManager),
-        metaserverClient_(metaserverClient),
-        nameLock_(),
-        topoManager_(topoManager),
-        s3Adapter_(s3Adapter),
+      : fsStorage_(fs_storage),
+        spaceManager_(space_manager),
+        metaserverClient_(metaserver_client),
+        topoManager_(topo_manager),
+        s3Adapter_(s3_adapter),
         dlock_(dlock),
         isStop_(true),
         option_(option) {}
@@ -99,7 +92,7 @@ class FsManager {
   void BackEndFunc();
   void ScanFs(const FsInfoWrapper& wrapper);
 
-  static bool CheckFsName(const std::string& fsName);
+  static bool CheckFsName(const std::string& fs_name);
 
   /**
    * @brief create fs, the fs name can not repeat
@@ -110,7 +103,7 @@ class FsManager {
    *         else return error code
    */
   FSStatusCode CreateFs(const ::curvefs::mds::CreateFsRequest* request,
-                        FsInfo* fsInfo);
+                        FsInfo* fs_info);
 
   /**
    * @brief delete fs, fs must unmount first
@@ -120,7 +113,7 @@ class FsManager {
    * @return If success return OK; if fs has mount point, return FS_BUSY;
    *         else return error code
    */
-  FSStatusCode DeleteFs(const std::string& fsName);
+  FSStatusCode DeleteFs(const std::string& fs_name);
 
   /**
    * @brief Mount fs, mount point can not repeat. It will increate
@@ -136,8 +129,8 @@ class FsManager {
    *         if fs has same mount point or cto not consistent, return
    *         MOUNT_POINT_CONFLICT; else return error code
    */
-  FSStatusCode MountFs(const std::string& fsName, const Mountpoint& mountpoint,
-                       FsInfo* fsInfo);
+  FSStatusCode MountFs(const std::string& fs_name, const Mountpoint& mountpoint,
+                       FsInfo* fs_info);
 
   /**
    * @brief Umount fs, it will decrease mountNum.
@@ -149,7 +142,7 @@ class FsManager {
    * @return If success return OK;
    *         else return error code
    */
-  FSStatusCode UmountFs(const std::string& fsName,
+  FSStatusCode UmountFs(const std::string& fs_name,
                         const Mountpoint& mountpoint);
 
   /**
@@ -160,7 +153,7 @@ class FsManager {
    *
    * @return If success return OK; else return error code
    */
-  FSStatusCode GetFsInfo(const std::string& fsName, FsInfo* fsInfo);
+  FSStatusCode GetFsInfo(const std::string& fs_name, FsInfo* fs_info);
 
   /**
    * @brief get fs info by fsid
@@ -170,7 +163,7 @@ class FsManager {
    *
    * @return If success return OK; else return error code
    */
-  FSStatusCode GetFsInfo(uint32_t fsId, FsInfo* fsInfo);
+  FSStatusCode GetFsInfo(uint32_t fs_id, FsInfo* fs_info);
 
   /**
    * @brief get fs info by fsid and fsname
@@ -181,11 +174,12 @@ class FsManager {
    *
    * @return If success return OK; else return error code
    */
-  FSStatusCode GetFsInfo(const std::string& fsName, uint32_t fsId,
-                         FsInfo* fsInfo);
+  FSStatusCode GetFsInfo(const std::string& fs_name, uint32_t fs_id,
+                         FsInfo* fs_info);
 
   void GetAllFsInfo(
-      ::google::protobuf::RepeatedPtrField<::curvefs::mds::FsInfo>* fsInfoVec);
+      ::google::protobuf::RepeatedPtrField<::curvefs::mds::FsInfo>*
+          fs_info_vec);
 
   void RefreshSession(const RefreshSessionRequest* request,
                       RefreshSessionResponse* response);
@@ -205,35 +199,35 @@ class FsManager {
 
  private:
   // return 0: ExactlySame; 1: uncomplete, -1: neither
-  int IsExactlySameOrCreateUnComplete(const std::string& fsName, FSType fsType,
-                                      uint64_t blocksize,
+  int IsExactlySameOrCreateUnComplete(const std::string& fs_name,
+                                      FSType fs_type, uint64_t blocksize,
                                       const FsDetail& detail);
 
   // send request to metaserver to DeletePartition, if response returns
   // FSStatusCode::OK or FSStatusCode::UNDER_DELETING, returns true;
   // else returns false
-  bool DeletePartiton(std::string fsName, const PartitionInfo& partition);
+  bool DeletePartiton(std::string fs_name, const PartitionInfo& partition);
 
   // set partition status to DELETING in topology
   bool SetPartitionToDeleting(const PartitionInfo& partition);
 
   FSStatusCode ReloadMountedFsVolumeSpace();
 
-  void GetLatestTxId(const uint32_t fsId, std::vector<PartitionTxId>* txIds);
+  void GetLatestTxId(uint32_t fs_id, std::vector<PartitionTxId>* tx_ids);
 
-  FSStatusCode IncreaseFsTxSequence(const std::string& fsName,
+  FSStatusCode IncreaseFsTxSequence(const std::string& fs_name,
                                     const std::string& owner,
                                     uint64_t* sequence);
 
-  FSStatusCode GetFsTxSequence(const std::string& fsName, uint64_t* sequence);
+  FSStatusCode GetFsTxSequence(const std::string& fs_name, uint64_t* sequence);
 
   void UpdateClientAliveTime(const Mountpoint& mountpoint,
-                             const std::string& fsName,
-                             bool addMountPoint = true);
+                             const std::string& fs_name,
+                             bool add_mount_point = true);
 
   // add mount point to fs if client restore session
   FSStatusCode AddMountPoint(const Mountpoint& mountpoint,
-                             const std::string& fsName);
+                             const std::string& fs_name);
 
   void DeleteClientAliveTime(const std::string& mountpoint);
 
@@ -243,7 +237,6 @@ class FsManager {
 
   bool FillVolumeInfo(common::Volume* volume);
 
- private:
   std::shared_ptr<FsStorage> fsStorage_;
   std::shared_ptr<SpaceManager> spaceManager_;
   std::shared_ptr<MetaserverClient> metaserverClient_;

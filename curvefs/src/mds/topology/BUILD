@@ -48,5 +48,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/common:curve_common",
+        "@brpc//:brpc",
     ],
 )

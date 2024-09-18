@@ -23,11 +23,8 @@
 #ifndef CURVEFS_SRC_MDS_HEARTBEAT_HEARTBEAT_MANAGER_H_
 #define CURVEFS_SRC_MDS_HEARTBEAT_HEARTBEAT_MANAGER_H_
 
-#include <atomic>
-#include <map>
 #include <memory>
 #include <string>
-#include <vector>
 
 #include "curvefs/proto/heartbeat.pb.h"
 #include "curvefs/src/mds/common/mds_define.h"
@@ -140,7 +137,6 @@ class HeartbeatManager {
 
   void UpdateMetaServerSpace(const MetaServerHeartbeatRequest& request);
 
- private:
   // Dependencies of heartbeat
   std::shared_ptr<Topology> topology_;
   std::shared_ptr<Coordinator> coordinator_;

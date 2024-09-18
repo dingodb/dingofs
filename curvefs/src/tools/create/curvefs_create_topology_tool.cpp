@@ -24,6 +24,10 @@
 
 #include "curvefs/src/tools/create/curvefs_create_topology_tool.h"
 
+#include <fstream>
+
+#include "src/common/string_util.h"
+
 DECLARE_string(mds_addr);
 DECLARE_string(cluster_map);
 DECLARE_string(confPath);
@@ -53,9 +57,9 @@ void UpdateFlagsFromConf(curve::common::Configuration* conf) {
 }
 
 int CurvefsBuildTopologyTool::Init() {
-  std::string confPath = FLAGS_confPath.c_str();
+  std::string conf_path = FLAGS_confPath;
   curve::common::Configuration conf;
-  conf.SetConfigPath(confPath);
+  conf.SetConfigPath(conf_path);
   UpdateFlagsFromConf(&conf);
   SplitString(FLAGS_mds_addr, ",", &mdsAddressStr_);
   if (mdsAddressStr_.size() <= 0) {
@@ -63,7 +67,7 @@ int CurvefsBuildTopologyTool::Init() {
     return kRetCodeCommonErr;
   }
 
-  for (auto addr : mdsAddressStr_) {
+  for (const auto& addr : mdsAddressStr_) {
     butil::EndPoint endpt;
     if (butil::str2endpoint(addr.c_str(), &endpt) < 0) {
       LOG(ERROR) << "Invalid sub mds ip:port provided: " << addr;
@@ -80,11 +84,11 @@ int CurvefsBuildTopologyTool::TryAnotherMdsAddress() {
     return kRetCodeCommonErr;
   }
   mdsAddressIndex_ = (mdsAddressIndex_ + 1) % mdsAddressStr_.size();
-  std::string mdsAddress = mdsAddressStr_[mdsAddressIndex_];
-  LOG(INFO) << "try mds address(" << mdsAddressIndex_ << "): " << mdsAddress;
-  int ret = channel_.Init(mdsAddress.c_str(), NULL);
+  std::string mds_address = mdsAddressStr_[mdsAddressIndex_];
+  LOG(INFO) << "try mds address(" << mdsAddressIndex_ << "): " << mds_address;
+  int ret = channel_.Init(mds_address.c_str(), nullptr);
   if (ret != 0) {
-    LOG(ERROR) << "Fail to init channel to mdsAddress: " << mdsAddress;
+    LOG(ERROR) << "Fail to init channel to mdsAddress: " << mds_address;
   }
   return ret;
 }
@@ -183,29 +187,29 @@ int CurvefsBuildTopologyTool::InitPoolData() {
     return -1;
   }
   for (const auto& pool : clusterMap_[kPools]) {
-    Pool poolData;
+    Pool pool_data;
     if (!pool[kName].isString()) {
       LOG(ERROR) << "pool name must be string";
       return -1;
     }
-    poolData.name = pool[kName].asString();
+    pool_data.name = pool[kName].asString();
     if (!pool[kReplicasNum].isUInt()) {
       LOG(ERROR) << "pool replicasnum must be uint";
       return -1;
     }
-    poolData.replicasNum = pool[kReplicasNum].asUInt();
+    pool_data.replicasNum = pool[kReplicasNum].asUInt();
     if (!pool[kCopysetNum].isUInt64()) {
       LOG(ERROR) << "pool copysetnum must be uint64";
       return -1;
     }
-    poolData.copysetNum = pool[kCopysetNum].asUInt64();
+    pool_data.copysetNum = pool[kCopysetNum].asUInt64();
     if (!pool[kZoneNum].isUInt64()) {
       LOG(ERROR) << "pool zonenum must be uint64";
       return -1;
     }
-    poolData.zoneNum = pool[kZoneNum].asUInt();
+    pool_data.zoneNum = pool[kZoneNum].asUInt();
 
-    poolDatas.emplace_back(poolData);
+    poolDatas_.emplace_back(pool_data);
   }
   return 0;
 }
@@ -216,54 +220,54 @@ int CurvefsBuildTopologyTool::InitServerZoneData() {
     return -1;
   }
   for (const auto& server : clusterMap_[kServers]) {
-    Server serverData;
-    Zone zoneData;
+    Server server_data;
+    Zone zone_data;
     if (!server[kName].isString()) {
       LOG(ERROR) << "server name must be string";
       return -1;
     }
-    serverData.name = server[kName].asString();
+    server_data.name = server[kName].asString();
     if (!server[kInternalIp].isString()) {
       LOG(ERROR) << "server internal ip must be string";
       return -1;
     }
-    serverData.internalIp = server[kInternalIp].asString();
+    server_data.internalIp = server[kInternalIp].asString();
     if (!server[kInternalPort].isUInt()) {
       LOG(ERROR) << "server internal port must be uint";
       return -1;
     }
-    serverData.internalPort = server[kInternalPort].asUInt();
+    server_data.internalPort = server[kInternalPort].asUInt();
     if (!server[kExternalIp].isString()) {
       LOG(ERROR) << "server internal port must be string";
       return -1;
     }
-    serverData.externalIp = server[kExternalIp].asString();
+    server_data.externalIp = server[kExternalIp].asString();
     if (!server[kExternalPort].isUInt()) {
       LOG(ERROR) << "server internal port must be string";
       return -1;
     }
-    serverData.externalPort = server[kExternalPort].asUInt();
+    server_data.externalPort = server[kExternalPort].asUInt();
     if (!server[kZone].isString()) {
       LOG(ERROR) << "server zone must be string";
       return -1;
     }
-    serverData.zoneName = server[kZone].asString();
-    zoneData.name = server[kZone].asString();
+    server_data.zoneName = server[kZone].asString();
+    zone_data.name = server[kZone].asString();
     if (!server[kPool].isString()) {
       LOG(ERROR) << "server pool must be string";
       return -1;
     }
-    serverData.poolName = server[kPool].asString();
-    zoneData.poolName = server[kPool].asString();
+    server_data.poolName = server[kPool].asString();
+    zone_data.poolName = server[kPool].asString();
 
-    serverDatas.emplace_back(serverData);
+    serverDatas_.emplace_back(server_data);
 
-    if (std::find_if(zoneDatas.begin(), zoneDatas.end(),
-                     [serverData](Zone& data) {
-                       return (data.poolName == serverData.poolName) &&
-                              (data.name == serverData.zoneName);
-                     }) == zoneDatas.end()) {
-      zoneDatas.emplace_back(zoneData);
+    if (std::find_if(zoneDatas_.begin(), zoneDatas_.end(),
+                     [server_data](Zone& data) {
+                       return (data.poolName == server_data.poolName) &&
+                              (data.name == server_data.zoneName);
+                     }) == zoneDatas_.end()) {
+      zoneDatas_.emplace_back(zone_data);
     }
   }
   return 0;
@@ -272,74 +276,74 @@ int CurvefsBuildTopologyTool::InitServerZoneData() {
 int CurvefsBuildTopologyTool::ScanCluster() {
   // get pools and compare
   // De-duplication
-  std::list<PoolInfo> poolInfos;
-  int ret = ListPool(&poolInfos);
+  std::list<PoolInfo> pool_infos;
+  int ret = ListPool(&pool_infos);
   if (ret != 0) {
     return ret;
   }
 
-  for (auto it = poolInfos.begin(); it != poolInfos.end(); it++) {
-    auto ix =
-        std::find_if(poolDatas.begin(), poolDatas.end(),
-                     [it](Pool& data) { return data.name == it->poolname(); });
-    if (ix != poolDatas.end()) {
-      poolDatas.erase(ix);
+  for (auto& pool_info : pool_infos) {
+    auto ix = std::find_if(
+        poolDatas_.begin(), poolDatas_.end(),
+        [&pool_info](Pool& data) { return data.name == pool_info.poolname(); });
+    if (ix != poolDatas_.end()) {
+      poolDatas_.erase(ix);
     } else {
-      poolToDel.emplace_back(it->poolid());
+      poolToDel_.emplace_back(pool_info.poolid());
     }
   }
 
   // get zone and compare
   // De-duplication
-  std::list<ZoneInfo> zoneInfos;
-  for (auto pool : poolInfos) {
-    ret = GetZonesInPool(pool.poolid(), &zoneInfos);
+  std::list<ZoneInfo> zone_infos;
+  for (const auto& pool : pool_infos) {
+    ret = GetZonesInPool(pool.poolid(), &zone_infos);
     if (ret != 0) {
       return ret;
     }
   }
 
-  for (auto it = zoneInfos.begin(); it != zoneInfos.end(); it++) {
-    auto ix =
-        std::find_if(zoneDatas.begin(), zoneDatas.end(), [it](Zone& data) {
-          return (data.poolName == it->poolname()) &&
-                 (data.name == it->zonename());
-        });
-    if (ix != zoneDatas.end()) {
-      zoneDatas.erase(ix);
+  for (auto& zone_info : zone_infos) {
+    auto ix = std::find_if(zoneDatas_.begin(), zoneDatas_.end(),
+                           [&zone_info](Zone& data) {
+                             return (data.poolName == zone_info.poolname()) &&
+                                    (data.name == zone_info.zonename());
+                           });
+    if (ix != zoneDatas_.end()) {
+      zoneDatas_.erase(ix);
     } else {
-      zoneToDel.emplace_back(it->zoneid());
+      zoneToDel_.emplace_back(zone_info.zoneid());
     }
   }
 
   // get server and compare
   // De-duplication
-  std::list<ServerInfo> serverInfos;
-  for (auto zone : zoneInfos) {
-    ret = GetServersInZone(zone.zoneid(), &serverInfos);
+  std::list<ServerInfo> server_infos;
+  for (const auto& zone : zone_infos) {
+    ret = GetServersInZone(zone.zoneid(), &server_infos);
     if (ret != 0) {
       return ret;
     }
   }
 
-  for (auto it = serverInfos.begin(); it != serverInfos.end(); it++) {
-    auto ix = std::find_if(serverDatas.begin(), serverDatas.end(),
-                           [it](Server& data) {
-                             return (data.name == it->hostname()) &&
-                                    (data.zoneName == it->zonename()) &&
-                                    (data.poolName == it->poolname());
+  for (auto& server_info : server_infos) {
+    auto ix = std::find_if(serverDatas_.begin(), serverDatas_.end(),
+                           [&server_info](Server& data) {
+                             return (data.name == server_info.hostname()) &&
+                                    (data.zoneName == server_info.zonename()) &&
+                                    (data.poolName == server_info.poolname());
                            });
-    if (ix != serverDatas.end()) {
-      serverDatas.erase(ix);
+    if (ix != serverDatas_.end()) {
+      serverDatas_.erase(ix);
     } else {
-      serverToDel.emplace_back(it->serverid());
+      serverToDel_.emplace_back(server_info.serverid());
     }
   }
 
   return 0;
 }
 
-int CurvefsBuildTopologyTool::ListPool(std::list<PoolInfo>* poolInfos) {
+int CurvefsBuildTopologyTool::ListPool(std::list<PoolInfo>* pool_infos) {
   TopologyService_Stub stub(&channel_);
   ListPoolRequest request;
   ListPoolResponse response;
@@ -362,13 +366,13 @@ int CurvefsBuildTopologyTool::ListPool(std::list<PoolInfo>* poolInfos) {
   }
 
   for (int i = 0; i < response.poolinfos_size(); i++) {
-    poolInfos->emplace_back(response.poolinfos(i));
+    pool_infos->emplace_back(response.poolinfos(i));
   }
   return 0;
 }
 
 int CurvefsBuildTopologyTool::GetZonesInPool(PoolIdType poolid,
-                                             std::list<ZoneInfo>* zoneInfos) {
+                                             std::list<ZoneInfo>* zone_infos) {
   TopologyService_Stub stub(&channel_);
   ListPoolZoneRequest request;
   ListPoolZoneResponse response;
@@ -395,13 +399,13 @@ int CurvefsBuildTopologyTool::GetZonesInPool(PoolIdType poolid,
   }
 
   for (int i = 0; i < response.zones_size(); i++) {
-    zoneInfos->emplace_back(response.zones(i));
+    zone_infos->emplace_back(response.zones(i));
   }
   return 0;
 }
 
 int CurvefsBuildTopologyTool::GetServersInZone(
-    ZoneIdType zoneid, std::list<ServerInfo>* serverInfos) {
+    ZoneIdType zoneid, std::list<ServerInfo>* server_infos) {
   TopologyService_Stub stub(&channel_);
   ListZoneServerRequest request;
   ListZoneServerResponse response;
@@ -427,14 +431,14 @@ int CurvefsBuildTopologyTool::GetServersInZone(
   }
 
   for (int i = 0; i < response.serverinfo_size(); i++) {
-    serverInfos->emplace_back(response.serverinfo(i));
+    server_infos->emplace_back(response.serverinfo(i));
   }
   return 0;
 }
 
 int CurvefsBuildTopologyTool::RemovePoolsNotInNewTopo() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : poolToDel) {
+  for (auto it : poolToDel_) {
     DeletePoolRequest request;
     DeletePoolResponse response;
     request.set_poolid(it);
@@ -470,7 +474,7 @@ int CurvefsBuildTopologyTool::RemovePoolsNotInNewTopo() {
 
 int CurvefsBuildTopologyTool::RemoveZonesNotInNewTopo() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : zoneToDel) {
+  for (auto it : zoneToDel_) {
     DeleteZoneRequest request;
     DeleteZoneResponse response;
     request.set_zoneid(it);
@@ -504,7 +508,7 @@ int CurvefsBuildTopologyTool::RemoveZonesNotInNewTopo() {
 
 int CurvefsBuildTopologyTool::RemoveServersNotInNewTopo() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : serverToDel) {
+  for (auto it : serverToDel_) {
     DeleteServerRequest request;
     DeleteServerResponse response;
     request.set_serverid(it);
@@ -539,17 +543,17 @@ int CurvefsBuildTopologyTool::RemoveServersNotInNewTopo() {
 
 int CurvefsBuildTopologyTool::CreatePool() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : poolDatas) {
+  for (auto it : poolDatas_) {
     CreatePoolRequest request;
     CreatePoolResponse response;
     request.set_poolname(it.name);
-    std::string replicaNumStr = std::to_string(it.replicasNum);
-    std::string copysetNumStr = std::to_string(it.copysetNum);
-    std::string zoneNumStr = std::to_string(it.zoneNum);
-    std::string rapString = "{\"replicaNum\":" + replicaNumStr +
-                            ", \"copysetNum\":" + copysetNumStr +
-                            ", \"zoneNum\":" + zoneNumStr + "}";
-    request.set_redundanceandplacementpolicy(rapString);
+    std::string replica_num_str = std::to_string(it.replicasNum);
+    std::string copyset_num_str = std::to_string(it.copysetNum);
+    std::string zone_num_str = std::to_string(it.zoneNum);
+    std::string rap_string = "{\"replicaNum\":" + replica_num_str +
+                             ", \"copysetNum\":" + copyset_num_str +
+                             ", \"zoneNum\":" + zone_num_str + "}";
+    request.set_redundanceandplacementpolicy(rap_string);
 
     brpc::Controller cntl;
     cntl.set_timeout_ms(FLAGS_rpcTimeoutMs);
@@ -582,7 +586,7 @@ int CurvefsBuildTopologyTool::CreatePool() {
 
 int CurvefsBuildTopologyTool::CreateZone() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : zoneDatas) {
+  for (auto it : zoneDatas_) {
     CreateZoneRequest request;
     CreateZoneResponse response;
     request.set_zonename(it.name);
@@ -618,7 +622,7 @@ int CurvefsBuildTopologyTool::CreateZone() {
 
 int CurvefsBuildTopologyTool::CreateServer() {
   TopologyService_Stub stub(&channel_);
-  for (auto it : serverDatas) {
+  for (auto it : serverDatas_) {
     ServerRegistRequest request;
     ServerRegistResponse response;
     request.set_hostname(it.name);
@@ -662,9 +666,9 @@ int CurvefsBuildTopologyTool::CreateServer() {
 
 int CurvefsBuildTopologyTool::RunCommand() {
   int ret = 0;
-  int maxTry = GetMaxTry();
+  int max_try = GetMaxTry();
   int retry = 0;
-  for (; retry < maxTry; retry++) {
+  for (; retry < max_try; retry++) {
     ret = TryAnotherMdsAddress();
     if (ret < 0) {
       return kRetCodeCommonErr;
@@ -675,7 +679,7 @@ int CurvefsBuildTopologyTool::RunCommand() {
       break;
     }
   }
-  if (retry >= maxTry) {
+  if (retry >= max_try) {
     LOG(ERROR) << "rpc retry times exceed.";
     return kRetCodeCommonErr;
   }

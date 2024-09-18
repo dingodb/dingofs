@@ -22,11 +22,6 @@
 
 #include "curvefs/src/mds/schedule/operatorFactory.h"
 
-#include <cstdint>
-#include <memory>
-
-using ::std::chrono::steady_clock;
-
 namespace curvefs {
 namespace mds {
 namespace schedule {

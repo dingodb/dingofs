@@ -28,8 +28,8 @@ namespace curvefs {
 namespace mds {
 namespace heartbeat {
 HeartbeatServiceImpl::HeartbeatServiceImpl(
-    std::shared_ptr<HeartbeatManager> heartbeatManager) {
-  this->heartbeatManager_ = heartbeatManager;
+    std::shared_ptr<HeartbeatManager> heartbeat_manager) {
+  this->heartbeatManager_ = heartbeat_manager;
 }
 
 void HeartbeatServiceImpl::MetaServerHeartbeat(
@@ -38,7 +38,7 @@ void HeartbeatServiceImpl::MetaServerHeartbeat(
     ::curvefs::mds::heartbeat::MetaServerHeartbeatResponse* response,
     ::google::protobuf::Closure* done) {
   (void)controller;
-  brpc::ClosureGuard doneGuard(done);
+  brpc::ClosureGuard done_guard(done);
   heartbeatManager_->MetaServerHeartbeat(*request, response);
 }
 }  // namespace heartbeat

@@ -30,6 +30,7 @@
 
 #include "curvefs/src/mds/mds_service.h"
 #include "curvefs/src/mds/space/mds_proxy_manager.h"
+#include "curvefs/src/mds/space/service.h"
 #include "src/common/curve_version.h"
 
 namespace brpc {
@@ -40,7 +41,6 @@ namespace curvefs {
 namespace mds {
 
 using ::curve::election::LeaderElection;
-using ::curve::idgenerator::EtcdIdGenerator;
 using ::curve::kvstorage::EtcdClientImp;
 using ::curvefs::mds::space::SpaceManagerImpl;
 using ::curvefs::mds::space::SpaceServiceImpl;
@@ -60,7 +60,7 @@ MDS::MDS()
       status_(),
       etcdEndpoint_() {}
 
-MDS::~MDS() {}
+MDS::~MDS() = default;
 
 void MDS::InitOptions(std::shared_ptr<Configuration> conf) {
   conf_ = std::move(conf);
@@ -74,90 +74,90 @@ void MDS::InitOptions(std::shared_ptr<Configuration> conf) {
   InitMdsProxyManagerOptions(&options_.bsMdsProxyOptions);
 }
 
-void MDS::InitMetaServerOption(MetaserverOptions* metaserverOption) {
+void MDS::InitMetaServerOption(MetaserverOptions* metaserver_option) {
   conf_->GetValueFatalIfFail("metaserver.addr",
-                             &metaserverOption->metaserverAddr);
+                             &metaserver_option->metaserverAddr);
   conf_->GetValueFatalIfFail("metaserver.rpcTimeoutMs",
-                             &metaserverOption->rpcTimeoutMs);
+                             &metaserver_option->rpcTimeoutMs);
   conf_->GetValueFatalIfFail("metaserver.rpcRertyTimes",
-                             &metaserverOption->rpcRetryTimes);
+                             &metaserver_option->rpcRetryTimes);
   conf_->GetValueFatalIfFail("metaserver.rpcRetryIntervalUs",
-                             &metaserverOption->rpcRetryIntervalUs);
+                             &metaserver_option->rpcRetryIntervalUs);
 }
 
-void MDS::InitTopologyOption(TopologyOption* topologyOption) {
+void MDS::InitTopologyOption(TopologyOption* topology_option) {
   conf_->GetValueFatalIfFail("mds.topology.TopologyUpdateToRepoSec",
-                             &topologyOption->topologyUpdateToRepoSec);
+                             &topology_option->topologyUpdateToRepoSec);
   conf_->GetValueFatalIfFail("mds.topology.MaxPartitionNumberInCopyset",
-                             &topologyOption->maxPartitionNumberInCopyset);
+                             &topology_option->maxPartitionNumberInCopyset);
   conf_->GetValueFatalIfFail("mds.topology.IdNumberInPartition",
-                             &topologyOption->idNumberInPartition);
+                             &topology_option->idNumberInPartition);
   conf_->GetValueFatalIfFail("mds.topology.CreatePartitionNumber",
-                             &topologyOption->createPartitionNumber);
+                             &topology_option->createPartitionNumber);
   conf_->GetValueFatalIfFail("mds.topology.MaxCopysetNumInMetaserver",
-                             &topologyOption->maxCopysetNumInMetaserver);
+                             &topology_option->maxCopysetNumInMetaserver);
   conf_->GetValueFatalIfFail("mds.topology.UpdateMetricIntervalSec",
-                             &topologyOption->UpdateMetricIntervalSec);
+                             &topology_option->UpdateMetricIntervalSec);
 }
 
-void MDS::InitScheduleOption(ScheduleOption* scheduleOption) {
+void MDS::InitScheduleOption(ScheduleOption* schedule_option) {
   conf_->GetValueFatalIfFail("mds.enable.recover.scheduler",
-                             &scheduleOption->enableRecoverScheduler);
+                             &schedule_option->enableRecoverScheduler);
   conf_->GetValueFatalIfFail("mds.enable.copyset.scheduler",
-                             &scheduleOption->enableCopysetScheduler);
+                             &schedule_option->enableCopysetScheduler);
   conf_->GetValueFatalIfFail("mds.enable.leader.scheduler",
-                             &scheduleOption->enableLeaderScheduler);
+                             &schedule_option->enableLeaderScheduler);
   conf_->GetValueFatalIfFail("mds.copyset.scheduler.balanceRatioPercent",
-                             &scheduleOption->balanceRatioPercent);
+                             &schedule_option->balanceRatioPercent);
 
   conf_->GetValueFatalIfFail("mds.recover.scheduler.intervalSec",
-                             &scheduleOption->recoverSchedulerIntervalSec);
+                             &schedule_option->recoverSchedulerIntervalSec);
   conf_->GetValueFatalIfFail("mds.copyset.scheduler.intervalSec",
-                             &scheduleOption->copysetSchedulerIntervalSec);
+                             &schedule_option->copysetSchedulerIntervalSec);
   conf_->GetValueFatalIfFail("mds.leader.scheduler.intervalSec",
-                             &scheduleOption->leaderSchedulerIntervalSec);
+                             &schedule_option->leaderSchedulerIntervalSec);
 
   conf_->GetValueFatalIfFail("mds.schduler.operator.concurrent",
-                             &scheduleOption->operatorConcurrent);
+                             &schedule_option->operatorConcurrent);
   conf_->GetValueFatalIfFail("mds.schduler.transfer.limitSec",
-                             &scheduleOption->transferLeaderTimeLimitSec);
+                             &schedule_option->transferLeaderTimeLimitSec);
   conf_->GetValueFatalIfFail("mds.scheduler.add.limitSec",
-                             &scheduleOption->addPeerTimeLimitSec);
+                             &schedule_option->addPeerTimeLimitSec);
   conf_->GetValueFatalIfFail("mds.scheduler.remove.limitSec",
-                             &scheduleOption->removePeerTimeLimitSec);
+                             &schedule_option->removePeerTimeLimitSec);
   conf_->GetValueFatalIfFail("mds.scheduler.change.limitSec",
-                             &scheduleOption->changePeerTimeLimitSec);
+                             &schedule_option->changePeerTimeLimitSec);
   conf_->GetValueFatalIfFail("mds.scheduler.metaserver.cooling.timeSec",
-                             &scheduleOption->metaserverCoolingTimeSec);
+                             &schedule_option->metaserverCoolingTimeSec);
 }
 
-void MDS::InitDLockOptions(DLockOptions* dLockOptions) {
-  conf_->GetValueFatalIfFail("dlock.ttl_ms", &dLockOptions->ttlMs);
+void MDS::InitDLockOptions(DLockOptions* d_lock_options) {
+  conf_->GetValueFatalIfFail("dlock.ttl_ms", &d_lock_options->ttlMs);
   conf_->GetValueFatalIfFail("dlock.try_timeout_ms",
-                             &dLockOptions->tryTimeoutMs);
+                             &d_lock_options->tryTimeoutMs);
   conf_->GetValueFatalIfFail("dlock.try_interval_ms",
-                             &dLockOptions->tryIntervalMs);
+                             &d_lock_options->tryIntervalMs);
 }
 
-void MDS::InitFsManagerOptions(FsManagerOption* fsManagerOption) {
+void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
   conf_->GetValueFatalIfFail("mds.fsmanager.backEndThreadRunInterSec",
-                             &fsManagerOption->backEndThreadRunInterSec);
+                             &fs_manager_option->backEndThreadRunInterSec);
 
   LOG_IF(ERROR, !conf_->GetUInt32Value("mds.fsmanager.client.timeoutSec",
-                                       &fsManagerOption->clientTimeoutSec))
+                                       &fs_manager_option->clientTimeoutSec))
       << "Get `mds.fsmanager.client.timeoutSec` from conf error, use "
          "default value: "
-      << fsManagerOption->clientTimeoutSec;
+      << fs_manager_option->clientTimeoutSec;
 
   LOG_IF(ERROR,
          !conf_->GetUInt32Value("mds.fsmanager.reloadSpaceConcurrency",
-                                &fsManagerOption->spaceReloadConcurrency))
+                                &fs_manager_option->spaceReloadConcurrency))
       << "Get `mds.fsmanager.reloadSpaceConcurrency` from conf error, use "
          "default value: "
-      << fsManagerOption->spaceReloadConcurrency;
+      << fs_manager_option->spaceReloadConcurrency;
 
   ::curve::common::InitS3AdaptorOptionExceptS3InfoOption(
-      conf_.get(), &fsManagerOption->s3AdapterOption);
+      conf_.get(), &fs_manager_option->s3AdapterOption);
 }
 
 void MDS::Init() {
@@ -179,13 +179,13 @@ void MDS::Init() {
   InitTopologyManager(options_.topologyOptions);
   InitCoordinator();
   InitHeartbeatManager();
-  FsManagerOption fsManagerOption;
-  InitFsManagerOptions(&fsManagerOption);
+  FsManagerOption fs_manager_option;
+  InitFsManagerOptions(&fs_manager_option);
 
   s3Adapter_ = std::make_shared<S3Adapter>();
-  fsManager_ = std::make_shared<FsManager>(fsStorage_, spaceManager_,
-                                           metaserverClient_, topologyManager_,
-                                           s3Adapter_, dlock, fsManagerOption);
+  fsManager_ = std::make_shared<FsManager>(
+      fsStorage_, spaceManager_, metaserverClient_, topologyManager_,
+      s3Adapter_, dlock, fs_manager_option);
   LOG_IF(FATAL, !fsManager_->Init()) << "fsManager Init fail";
 
   chunkIdAllocator_ = std::make_shared<ChunkIdAllocatorImpl>(etcdClient_);
@@ -196,16 +196,16 @@ void MDS::Init() {
 }
 
 void MDS::InitTopology(const TopologyOption& option) {
-  auto topologyIdGenerator = std::make_shared<DefaultIdGenerator>();
-  auto topologyTokenGenerator = std::make_shared<DefaultTokenGenerator>();
+  auto topology_id_generator = std::make_shared<DefaultIdGenerator>();
+  auto topology_token_generator = std::make_shared<DefaultTokenGenerator>();
 
   auto codec = std::make_shared<TopologyStorageCodec>();
-  auto topologyStorage =
+  auto topology_storage =
       std::make_shared<TopologyStorageEtcd>(etcdClient_, codec);
   LOG(INFO) << "init topologyStorage success.";
 
   topology_ = std::make_shared<TopologyImpl>(
-      topologyIdGenerator, topologyTokenGenerator, topologyStorage);
+      topology_id_generator, topology_token_generator, topology_storage);
   LOG_IF(FATAL, topology_->Init(option) < 0) << "init topology fail.";
   LOG(INFO) << "init topology success.";
 }
@@ -224,11 +224,11 @@ void MDS::InitTopologyMetricService(const TopologyOption& option) {
 }
 
 void MDS::InitCoordinator() {
-  auto scheduleMetrics = std::make_shared<ScheduleMetrics>(topology_);
-  auto topoAdapter =
+  auto schedule_metrics = std::make_shared<ScheduleMetrics>(topology_);
+  auto topo_adapter =
       std::make_shared<TopoAdapterImpl>(topology_, topologyManager_);
-  coordinator_ = std::make_shared<Coordinator>(topoAdapter);
-  coordinator_->InitScheduler(options_.scheduleOption, scheduleMetrics);
+  coordinator_ = std::make_shared<Coordinator>(topo_adapter);
+  coordinator_->InitScheduler(options_.scheduleOption, schedule_metrics);
 }
 
 void MDS::Run() {
@@ -249,26 +249,26 @@ void MDS::Run() {
 
   brpc::Server server;
   // add heartbeat service
-  HeartbeatServiceImpl heartbeatService(heartbeatManager_);
-  LOG_IF(FATAL, server.AddService(&heartbeatService,
+  HeartbeatServiceImpl heartbeat_service(heartbeatManager_);
+  LOG_IF(FATAL, server.AddService(&heartbeat_service,
                                   brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
       << "add heartbeatService error";
 
   // add mds service
-  MdsServiceImpl mdsService(fsManager_, chunkIdAllocator_);
+  MdsServiceImpl mds_service(fsManager_, chunkIdAllocator_);
   LOG_IF(FATAL,
-         server.AddService(&mdsService, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+         server.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
       << "add mdsService error";
 
   // add topology service
-  TopologyServiceImpl topologyService(topologyManager_);
-  LOG_IF(FATAL, server.AddService(&topologyService,
+  TopologyServiceImpl topology_service(topologyManager_);
+  LOG_IF(FATAL, server.AddService(&topology_service,
                                   brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
       << "add topologyService error";
 
-  SpaceServiceImpl spaceService(spaceManager_.get());
-  LOG_IF(FATAL,
-         server.AddService(&spaceService, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+  SpaceServiceImpl space_service(spaceManager_.get());
+  LOG_IF(FATAL, server.AddService(&space_service,
+                                  brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
       << "add space service error";
 
   // start rpc server
@@ -310,12 +310,12 @@ void MDS::StartDummyServer() {
 void MDS::StartCompaginLeader() {
   InitEtcdClient();
 
-  LeaderElectionOptions electionOption;
-  InitLeaderElectionOption(&electionOption);
-  electionOption.etcdCli = etcdClient_;
-  electionOption.campaginPrefix = "";
+  LeaderElectionOptions election_option;
+  InitLeaderElectionOption(&election_option);
+  election_option.etcdCli = etcdClient_;
+  election_option.campaginPrefix = "";
 
-  InitLeaderElection(electionOption);
+  InitLeaderElection(election_option);
 
   while (0 != leaderElection_->CampaignLeader()) {
     LOG(INFO) << leaderElection_->GetLeaderName()
@@ -332,44 +332,44 @@ void MDS::InitEtcdClient() {
     return;
   }
 
-  EtcdConf etcdConf;
-  InitEtcdConf(&etcdConf);
+  EtcdConf etcd_conf;
+  InitEtcdConf(&etcd_conf);
 
-  int etcdTimeout = 0;
-  int etcdRetryTimes = 0;
-  conf_->GetValueFatalIfFail("etcd.operation.timeoutMs", &etcdTimeout);
-  conf_->GetValueFatalIfFail("etcd.retry.times", &etcdRetryTimes);
+  int etcd_timeout = 0;
+  int etcd_retry_times = 0;
+  conf_->GetValueFatalIfFail("etcd.operation.timeoutMs", &etcd_timeout);
+  conf_->GetValueFatalIfFail("etcd.retry.times", &etcd_retry_times);
 
   etcdClient_ = std::make_shared<EtcdClientImp>();
 
-  int r = etcdClient_->Init(etcdConf, etcdTimeout, etcdRetryTimes);
+  int r = etcdClient_->Init(etcd_conf, etcd_timeout, etcd_retry_times);
   LOG_IF(FATAL, r != EtcdErrCode::EtcdOK)
       << "Init etcd client error: " << r
-      << ", etcd address: " << std::string(etcdConf.Endpoints, etcdConf.len)
-      << ", etcdtimeout: " << etcdConf.DialTimeout
-      << ", operation timeout: " << etcdTimeout
-      << ", etcd retrytimes: " << etcdRetryTimes;
+      << ", etcd address: " << std::string(etcd_conf.Endpoints, etcd_conf.len)
+      << ", etcdtimeout: " << etcd_conf.DialTimeout
+      << ", operation timeout: " << etcd_timeout
+      << ", etcd retrytimes: " << etcd_retry_times;
 
   LOG_IF(FATAL, !CheckEtcd()) << "Check etcd failed";
 
   LOG(INFO) << "Init etcd client succeeded, etcd address: "
-            << std::string(etcdConf.Endpoints, etcdConf.len)
-            << ", etcdtimeout: " << etcdConf.DialTimeout
-            << ", operation timeout: " << etcdTimeout
-            << ", etcd retrytimes: " << etcdRetryTimes;
+            << std::string(etcd_conf.Endpoints, etcd_conf.len)
+            << ", etcdtimeout: " << etcd_conf.DialTimeout
+            << ", operation timeout: " << etcd_timeout
+            << ", etcd retrytimes: " << etcd_retry_times;
 
   etcdClientInited_ = true;
 }
 
-void MDS::InitEtcdConf(EtcdConf* etcdConf) {
+void MDS::InitEtcdConf(EtcdConf* etcd_conf) {
   conf_->GetValueFatalIfFail("etcd.endpoint", &etcdEndpoint_);
-  conf_->GetValueFatalIfFail("etcd.dailtimeoutMs", &etcdConf->DialTimeout);
+  conf_->GetValueFatalIfFail("etcd.dailtimeoutMs", &etcd_conf->DialTimeout);
 
   LOG(INFO) << "etcd.endpoint: " << etcdEndpoint_;
-  LOG(INFO) << "etcd.dailtimeoutMs: " << etcdConf->DialTimeout;
+  LOG(INFO) << "etcd.dailtimeoutMs: " << etcd_conf->DialTimeout;
 
-  etcdConf->len = etcdEndpoint_.size();
-  etcdConf->Endpoints = &etcdEndpoint_[0];
+  etcd_conf->len = etcdEndpoint_.size();
+  etcd_conf->Endpoints = etcdEndpoint_.data();
 }
 
 bool MDS::CheckEtcd() {
@@ -397,25 +397,25 @@ void MDS::InitLeaderElection(const LeaderElectionOptions& option) {
   leaderElection_ = std::make_shared<LeaderElection>(option);
 }
 
-void MDS::InitHeartbeatOption(HeartbeatOption* heartbeatOption) {
+void MDS::InitHeartbeatOption(HeartbeatOption* heartbeat_option) {
   conf_->GetValueFatalIfFail("mds.heartbeat.intervalMs",
-                             &heartbeatOption->heartbeatIntervalMs);
+                             &heartbeat_option->heartbeatIntervalMs);
   conf_->GetValueFatalIfFail("mds.heartbeat.misstimeoutMs",
-                             &heartbeatOption->heartbeatMissTimeOutMs);
+                             &heartbeat_option->heartbeatMissTimeOutMs);
   conf_->GetValueFatalIfFail("mds.heartbeat.offlinetimeoutMs",
-                             &heartbeatOption->offLineTimeOutMs);
+                             &heartbeat_option->offLineTimeOutMs);
   conf_->GetValueFatalIfFail("mds.heartbeat.clean_follower_afterMs",
-                             &heartbeatOption->cleanFollowerAfterMs);
+                             &heartbeat_option->cleanFollowerAfterMs);
 }
 
 void MDS::InitHeartbeatManager() {
   // init option
-  HeartbeatOption heartbeatOption;
-  InitHeartbeatOption(&heartbeatOption);
+  HeartbeatOption heartbeat_option;
+  InitHeartbeatOption(&heartbeat_option);
 
-  heartbeatOption.mdsStartTime = steady_clock::now();
+  heartbeat_option.mdsStartTime = steady_clock::now();
   heartbeatManager_ = std::make_shared<HeartbeatManager>(
-      heartbeatOption, topology_, coordinator_);
+      heartbeat_option, topology_, coordinator_);
   heartbeatManager_->Init();
 }
 

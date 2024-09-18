@@ -28,7 +28,6 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/proto/heartbeat.pb.h"
 #include "curvefs/src/mds/chunkid_allocator.h"
 #include "curvefs/src/mds/dlock/dlock.h"
 #include "curvefs/src/mds/fs_manager.h"
@@ -36,7 +35,6 @@
 #include "curvefs/src/mds/schedule/coordinator.h"
 #include "curvefs/src/mds/space/manager.h"
 #include "curvefs/src/mds/space/mds_proxy_options.h"
-#include "curvefs/src/mds/space/service.h"
 #include "curvefs/src/mds/topology/topology.h"
 #include "curvefs/src/mds/topology/topology_config.h"
 #include "curvefs/src/mds/topology/topology_metric.h"
@@ -118,20 +116,19 @@ class MDS {
 
  private:
   void InitEtcdClient();
-  void InitEtcdConf(EtcdConf* etcdConf);
+  void InitEtcdConf(EtcdConf* etcd_conf);
   bool CheckEtcd();
 
   void InitLeaderElectionOption(LeaderElectionOptions* option);
   void InitLeaderElection(const LeaderElectionOptions& option);
 
-  void InitHeartbeatOption(HeartbeatOption* heartbeatOption);
-  void InitScheduleOption(ScheduleOption* scheduleOption);
+  void InitHeartbeatOption(HeartbeatOption* heartbeat_option);
+  void InitScheduleOption(ScheduleOption* schedule_option);
 
-  void InitDLockOptions(DLockOptions* dLockOptions);
+  void InitDLockOptions(DLockOptions* d_lock_options);
 
- private:
-  void InitMetaServerOption(MetaserverOptions* metaserverOption);
-  void InitTopologyOption(TopologyOption* topologyOption);
+  void InitMetaServerOption(MetaserverOptions* metaserver_option);
+  void InitTopologyOption(TopologyOption* topology_option);
 
   void InitTopology(const TopologyOption& option);
 
@@ -143,11 +140,10 @@ class MDS {
 
   void InitCoordinator();
 
-  void InitFsManagerOptions(FsManagerOption* fsManagerOption);
+  void InitFsManagerOptions(FsManagerOption* fs_manager_option);
 
   void InitMdsProxyManagerOptions(MdsProxyOptions* options);
 
- private:
   // mds configuration items
   std::shared_ptr<Configuration> conf_;
   // initialized or not

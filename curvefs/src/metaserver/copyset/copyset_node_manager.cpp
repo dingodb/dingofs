@@ -245,7 +245,7 @@ void CopysetNodeManager::GetAllCopysets(
     std::vector<CopysetNode*>* nodes) const {
   nodes->clear();
   ReadLockGuard lock(lock_);
-  for (auto& copyset : copysets_) {
+  for (const auto& copyset : copysets_) {
     nodes->push_back(copyset.second.get());
   }
 }

@@ -26,6 +26,7 @@
 #include "curvefs/src/tools/copyset/curvefs_copyset_status.h"
 #include "curvefs/src/tools/create/curvefs_create_fs.h"
 #include "curvefs/src/tools/create/curvefs_create_topology_tool.h"
+#include "curvefs/src/tools/curvefs_tool_abstract_creator.h"
 #include "curvefs/src/tools/curvefs_tool_define.h"
 #include "curvefs/src/tools/delete/curvefs_delete_fs_tool.h"
 #include "curvefs/src/tools/delete/curvefs_delete_partition_tool.h"

@@ -26,6 +26,8 @@
 
 #include <ctime>
 
+#include "curvefs/src/mds/topology/deal_peerid.h"
+
 namespace curvefs {
 namespace mds {
 
@@ -53,19 +55,19 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
     Request* request, Response* response, const LeaderCtx& ctx,
     void (T::*func)(google::protobuf::RpcController*, const Request*, Response*,
                     google::protobuf::Closure*)) {
-  bool refreshLeader = true;
-  uint32_t maxRetry = options_.rpcRetryTimes;
+  bool refresh_leader = true;
+  uint32_t max_retry = options_.rpcRetryTimes;
 
   std::string leader;
-  auto poolId = ctx.poolId;
-  auto copysetId = ctx.copysetId;
+  auto pool_id = ctx.poolId;
+  auto copyset_id = ctx.copysetId;
   brpc::Controller cntl;
   do {
-    if (refreshLeader) {
+    if (refresh_leader) {
       auto ret = GetLeader(ctx, &leader);
       if (ret != FSStatusCode::OK) {
-        LOG(ERROR) << "Get leader fail"
-                   << ", poolId = " << poolId << ", copysetId = " << copysetId;
+        LOG(ERROR) << "Get leader fail" << ", poolId = " << pool_id
+                   << ", copysetId = " << copyset_id;
         return ret;
       }
       if (channel_.Init(leader.c_str(), nullptr) != 0) {
@@ -80,25 +82,22 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
     (stub.*func)(&cntl, request, response, nullptr);
     if (cntl.Failed()) {
       LOG(WARNING) << "rpc error: " << cntl.ErrorText();
-      if (cntl.ErrorCode() == EHOSTDOWN || cntl.ErrorCode() == brpc::ELOGOFF) {
-        refreshLeader = true;
-      } else {
-        refreshLeader = false;
-      }
+      refresh_leader =
+          (cntl.ErrorCode() == EHOSTDOWN || cntl.ErrorCode() == brpc::ELOGOFF);
     } else {
       switch (response->statuscode()) {
         case MetaStatusCode::OVERLOAD:
-          refreshLeader = false;
+          refresh_leader = false;
           break;
         case MetaStatusCode::REDIRECTED:
-          refreshLeader = true;
+          refresh_leader = true;
           break;
         default:
           return FSStatusCode::UNKNOWN_ERROR;
       }
     }
-    maxRetry--;
-  } while (maxRetry > 0);
+    max_retry--;
+  } while (max_retry > 0);
 
   if (cntl.Failed()) {
     LOG(ERROR) << "rpc error: " << cntl.ErrorText();
@@ -127,19 +126,18 @@ FSStatusCode MetaserverClient::GetLeader(const LeaderCtx& ctx,
     CliService2_Stub stub(&channel_);
     stub.GetLeader(&cntl, &request, &response, nullptr);
 
-    uint32_t maxRetry = options_.rpcRetryTimes;
-    while (cntl.Failed() && (maxRetry > 0)) {
-      int32_t retCode = cntl.ErrorCode();
-      LOG(WARNING) << "GetLeader failed"
-                   << ", poolid = " << ctx.poolId
+    uint32_t max_retry = options_.rpcRetryTimes;
+    while (cntl.Failed() && (max_retry > 0)) {
+      int32_t ret_code = cntl.ErrorCode();
+      LOG(WARNING) << "GetLeader failed" << ", poolid = " << ctx.poolId
                    << ", copysetId = " << ctx.copysetId
-                   << ", errorCode = " << retCode
+                   << ", errorCode = " << ret_code
                    << ", Rpc error = " << cntl.ErrorText();
-      if (retCode == EHOSTDOWN || retCode == ECONNRESET ||
-          retCode == ECONNREFUSED || retCode == brpc::ELOGOFF) {
+      if (ret_code == EHOSTDOWN || ret_code == ECONNRESET ||
+          ret_code == ECONNREFUSED || ret_code == brpc::ELOGOFF) {
         break;
       }
-      maxRetry--;
+      max_retry--;
       bthread_usleep(options_.rpcRetryIntervalUs);
       cntl.Reset();
       cntl.set_timeout_ms(options_.rpcTimeoutMs);
@@ -148,7 +146,7 @@ FSStatusCode MetaserverClient::GetLeader(const LeaderCtx& ctx,
 
     if (response.has_leader()) {
       std::string ip;
-      uint32_t port;
+      uint32_t port = 0;
       SplitPeerId(response.leader().address(), &ip, &port);
       *leader = ip + ":" + std::to_string(port);
       return FSStatusCode::OK;
@@ -158,15 +156,15 @@ FSStatusCode MetaserverClient::GetLeader(const LeaderCtx& ctx,
 }
 
 FSStatusCode MetaserverClient::CreateRootInode(
-    uint32_t fsId, uint32_t poolId, uint32_t copysetId, uint32_t partitionId,
-    uint32_t uid, uint32_t gid, uint32_t mode,
+    uint32_t fs_id, uint32_t pool_id, uint32_t copyset_id,
+    uint32_t partition_id, uint32_t uid, uint32_t gid, uint32_t mode,
     const std::set<std::string>& addrs) {
   CreateRootInodeRequest request;
   CreateRootInodeResponse response;
-  request.set_poolid(poolId);
-  request.set_copysetid(copysetId);
-  request.set_partitionid(partitionId);
-  request.set_fsid(fsId);
+  request.set_poolid(pool_id);
+  request.set_copysetid(copyset_id);
+  request.set_partitionid(partition_id);
+  request.set_fsid(fs_id);
   request.set_uid(uid);
   request.set_gid(gid);
   request.set_mode(mode);
@@ -208,19 +206,19 @@ FSStatusCode MetaserverClient::CreateRootInode(
 }
 
 FSStatusCode MetaserverClient::CreateManageInode(
-    uint32_t fsId, uint32_t poolId, uint32_t copysetId, uint32_t partitionId,
-    uint32_t uid, uint32_t gid, uint32_t mode, ManageInodeType manageType,
-    const std::set<std::string>& addrs) {
+    uint32_t fs_id, uint32_t pool_id, uint32_t copyset_id,
+    uint32_t partition_id, uint32_t uid, uint32_t gid, uint32_t mode,
+    ManageInodeType manage_type, const std::set<std::string>& addrs) {
   CreateManageInodeRequest request;
   CreateManageInodeResponse response;
-  request.set_poolid(poolId);
-  request.set_copysetid(copysetId);
-  request.set_partitionid(partitionId);
-  request.set_fsid(fsId);
+  request.set_poolid(pool_id);
+  request.set_copysetid(copyset_id);
+  request.set_partitionid(partition_id);
+  request.set_fsid(fs_id);
   request.set_uid(uid);
   request.set_gid(gid);
   request.set_mode(mode);
-  request.set_managetype(manageType);
+  request.set_managetype(manage_type);
 
   auto fp = &MetaServerService_Stub::CreateManageInode;
   LeaderCtx ctx;
@@ -254,18 +252,18 @@ FSStatusCode MetaserverClient::CreateManageInode(
 }
 
 FSStatusCode MetaserverClient::CreateDentry(
-    uint32_t fsId, uint32_t poolId, uint32_t copysetId, uint32_t partitionId,
-    uint64_t parentInodeId, const std::string& name, uint64_t inodeId,
-    const std::set<std::string>& addrs) {
+    uint32_t fs_id, uint32_t pool_id, uint32_t copyset_id,
+    uint32_t partition_id, uint64_t parent_inode_id, const std::string& name,
+    uint64_t inode_id, const std::set<std::string>& addrs) {
   CreateDentryRequest request;
   CreateDentryResponse response;
-  request.set_poolid(poolId);
-  request.set_copysetid(copysetId);
-  request.set_partitionid(partitionId);
+  request.set_poolid(pool_id);
+  request.set_copysetid(copyset_id);
+  request.set_partitionid(partition_id);
   Dentry* d = new Dentry;
-  d->set_fsid(fsId);
-  d->set_inodeid(inodeId);
-  d->set_parentinodeid(parentInodeId);
+  d->set_fsid(fs_id);
+  d->set_inodeid(inode_id);
+  d->set_parentinodeid(parent_inode_id);
   d->set_name(name);
   d->set_txid(0);
   d->set_type(FsFileType::TYPE_DIRECTORY);
@@ -300,17 +298,17 @@ FSStatusCode MetaserverClient::CreateDentry(
 }
 
 FSStatusCode MetaserverClient::DeleteDentry(
-    uint32_t poolId, uint32_t copysetId, uint32_t partitionId, uint32_t fsId,
-    uint64_t parentInodeId, const std::string& name,
+    uint32_t pool_id, uint32_t copyset_id, uint32_t partition_id,
+    uint32_t fs_id, uint64_t parent_inode_id, const std::string& name,
     const std::set<std::string>& addrs) {
   DeleteDentryRequest request;
   DeleteDentryResponse response;
-  request.set_poolid(poolId);
-  request.set_copysetid(copysetId);
-  request.set_partitionid(partitionId);
-  request.set_fsid(fsId);
+  request.set_poolid(pool_id);
+  request.set_copysetid(copyset_id);
+  request.set_partitionid(partition_id);
+  request.set_fsid(fs_id);
   request.set_txid(0);
-  request.set_parentinodeid(parentInodeId);
+  request.set_parentinodeid(parent_inode_id);
   request.set_name(name);
   request.set_type(FsFileType::TYPE_DIRECTORY);
 
@@ -342,7 +340,8 @@ FSStatusCode MetaserverClient::DeleteDentry(
   }
 }
 
-FSStatusCode MetaserverClient::DeleteInode(uint32_t fsId, uint64_t inodeId) {
+// FIXME: NOT UNDERSTAND
+FSStatusCode MetaserverClient::DeleteInode(uint32_t fs_id, uint64_t inode_id) {
   DeleteInodeRequest request;
   DeleteInodeResponse response;
 
@@ -359,8 +358,8 @@ FSStatusCode MetaserverClient::DeleteInode(uint32_t fsId, uint64_t inodeId) {
   request.set_poolid(0);
   request.set_copysetid(0);
   request.set_partitionid(0);
-  request.set_fsid(fsId);
-  request.set_inodeid(inodeId);
+  request.set_fsid(fs_id);
+  request.set_inodeid(inode_id);
   // TODO(@威姐): 适配新的proto
   request.set_copysetid(1);
   request.set_poolid(1);
@@ -369,15 +368,15 @@ FSStatusCode MetaserverClient::DeleteInode(uint32_t fsId, uint64_t inodeId) {
   stub.DeleteInode(&cntl, &request, &response, nullptr);
 
   if (cntl.Failed()) {
-    LOG(ERROR) << "DeleteInode failed"
-               << ", fsId = " << fsId << ", inodeId = " << inodeId
+    LOG(ERROR) << "DeleteInode failed" << ", fsId = " << fs_id
+               << ", inodeId = " << inode_id
                << ", Rpc error = " << cntl.ErrorText();
     return FSStatusCode::RPC_ERROR;
   }
 
   if (response.statuscode() != MetaStatusCode::OK) {
-    LOG(ERROR) << "DeleteInode failed, fsId = " << fsId
-               << ", inodeId = " << inodeId << ", ret = "
+    LOG(ERROR) << "DeleteInode failed, fsId = " << fs_id
+               << ", inodeId = " << inode_id << ", ret = "
                << FSStatusCode_Name(FSStatusCode::DELETE_INODE_ERROR);
     return FSStatusCode::DELETE_INODE_ERROR;
   }
@@ -386,17 +385,18 @@ FSStatusCode MetaserverClient::DeleteInode(uint32_t fsId, uint64_t inodeId) {
 }
 
 FSStatusCode MetaserverClient::CreatePartition(
-    uint32_t fsId, uint32_t poolId, uint32_t copysetId, uint32_t partitionId,
-    uint64_t idStart, uint64_t idEnd, const std::set<std::string>& addrs) {
+    uint32_t fs_id, uint32_t pool_id, uint32_t copyset_id,
+    uint32_t partition_id, uint64_t id_start, uint64_t id_end,
+    const std::set<std::string>& addrs) {
   curvefs::metaserver::CreatePartitionRequest request;
   curvefs::metaserver::CreatePartitionResponse response;
   PartitionInfo* partition = request.mutable_partition();
-  partition->set_fsid(fsId);
-  partition->set_poolid(poolId);
-  partition->set_copysetid(copysetId);
-  partition->set_partitionid(partitionId);
-  partition->set_start(idStart);
-  partition->set_end(idEnd);
+  partition->set_fsid(fs_id);
+  partition->set_poolid(pool_id);
+  partition->set_copysetid(copyset_id);
+  partition->set_partitionid(partition_id);
+  partition->set_start(id_start);
+  partition->set_end(id_end);
   partition->set_txid(0);
   partition->set_status(PartitionStatus::READWRITE);
   LOG(INFO) << "CreatePartition request: " << request.ShortDebugString();
@@ -419,7 +419,7 @@ FSStatusCode MetaserverClient::CreatePartition(
   } else {
     switch (response.statuscode()) {
       case MetaStatusCode::OK:
-        LOG(INFO) << "CreatePartition success, partitionId = " << partitionId;
+        LOG(INFO) << "CreatePartition success, partitionId = " << partition_id;
         return FSStatusCode::OK;
       case MetaStatusCode::PARTITION_EXIST:
         LOG(ERROR) << "CreatePartition failed, partition exist.";
@@ -434,19 +434,19 @@ FSStatusCode MetaserverClient::CreatePartition(
 }
 
 FSStatusCode MetaserverClient::DeletePartition(
-    uint32_t poolId, uint32_t copysetId, uint32_t partitionId,
+    uint32_t pool_id, uint32_t copyset_id, uint32_t partition_id,
     const std::set<std::string>& addrs) {
   curvefs::metaserver::DeletePartitionRequest request;
   curvefs::metaserver::DeletePartitionResponse response;
-  request.set_poolid(poolId);
-  request.set_copysetid(copysetId);
-  request.set_partitionid(partitionId);
+  request.set_poolid(pool_id);
+  request.set_copysetid(copyset_id);
+  request.set_partitionid(partition_id);
 
   auto fp = &MetaServerService_Stub::DeletePartition;
   LeaderCtx ctx;
   ctx.addrs = addrs;
-  ctx.poolId = poolId;
-  ctx.copysetId = copysetId;
+  ctx.poolId = pool_id;
+  ctx.copysetId = copyset_id;
   auto ret = SendRpc2MetaServer(&request, &response, ctx, fp);
 
   if (FSStatusCode::RPC_ERROR == ret) {
@@ -463,7 +463,8 @@ FSStatusCode MetaserverClient::DeletePartition(
       case MetaStatusCode::PARTITION_NOT_FOUND:
         return FSStatusCode::OK;
       case MetaStatusCode::PARTITION_DELETING:
-        LOG(INFO) << "DeletePartition partition deleting, id = " << partitionId;
+        LOG(INFO) << "DeletePartition partition deleting, id = "
+                  << partition_id;
         return FSStatusCode::UNDER_DELETING;
       default:
         LOG(ERROR) << "DeletePartition failed, request = "
@@ -475,13 +476,13 @@ FSStatusCode MetaserverClient::DeletePartition(
 }
 
 FSStatusCode MetaserverClient::CreateCopySet(
-    uint32_t poolId, uint32_t copysetId, const std::set<std::string>& addrs) {
+    uint32_t pool_id, uint32_t copyset_id, const std::set<std::string>& addrs) {
   CreateCopysetRequest request;
   CreateCopysetResponse response;
-  auto copyset = request.add_copysets();
-  copyset->set_poolid(poolId);
-  copyset->set_copysetid(copysetId);
-  for (auto item : addrs) {
+  auto* copyset = request.add_copysets();
+  copyset->set_poolid(pool_id);
+  copyset->set_copysetid(copyset_id);
+  for (const auto& item : addrs) {
     copyset->add_peers()->set_address(BuildPeerIdWithAddr(item));
   }
 
@@ -496,14 +497,14 @@ FSStatusCode MetaserverClient::CreateCopySet(
     CopysetService_Stub stub(&channel_);
     stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
-    uint32_t maxRetry = options_.rpcRetryTimes;
-    while (cntl.Failed() && maxRetry > 0) {
-      LOG(WARNING) << "Create copyset failed"
-                   << " from " << cntl.remote_side() << " to "
-                   << cntl.local_side() << " errCode = " << cntl.ErrorCode()
+    uint32_t max_retry = options_.rpcRetryTimes;
+    while (cntl.Failed() && max_retry > 0) {
+      LOG(WARNING) << "Create copyset failed" << " from " << cntl.remote_side()
+                   << " to " << cntl.local_side()
+                   << " errCode = " << cntl.ErrorCode()
                    << " errorText = " << cntl.ErrorText()
-                   << ", then will retry " << maxRetry << " times.";
-      maxRetry--;
+                   << ", then will retry " << max_retry << " times.";
+      max_retry--;
       bthread_usleep(options_.rpcRetryIntervalUs);
       cntl.Reset();
       cntl.set_timeout_ms(options_.rpcTimeoutMs);
@@ -516,9 +517,8 @@ FSStatusCode MetaserverClient::CreateCopySet(
     }
 
     if (response.status() != COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS) {
-      LOG(ERROR) << "Create copyset failed."
-                 << " from " << cntl.remote_side() << " to "
-                 << cntl.local_side()
+      LOG(ERROR) << "Create copyset failed." << " from " << cntl.remote_side()
+                 << " to " << cntl.local_side()
                  << " request = " << request.ShortDebugString()
                  << " error code = " << response.status();
       return FSStatusCode::CREATE_COPYSET_ERROR;
@@ -528,13 +528,13 @@ FSStatusCode MetaserverClient::CreateCopySet(
 }
 
 FSStatusCode MetaserverClient::CreateCopySetOnOneMetaserver(
-    uint32_t poolId, uint32_t copysetId, const std::string& addr) {
+    uint32_t pool_id, uint32_t copyset_id, const std::string& addr) {
   CreateCopysetRequest request;
   CreateCopysetResponse response;
 
-  auto copyset = request.add_copysets();
-  copyset->set_poolid(poolId);
-  copyset->set_copysetid(copysetId);
+  auto* copyset = request.add_copysets();
+  copyset->set_poolid(pool_id);
+  copyset->set_copysetid(copyset_id);
 
   if (channel_.Init(addr.c_str(), nullptr) != 0) {
     LOG(ERROR) << "Init channel to metaserver: " << addr << " failed!";
@@ -546,9 +546,9 @@ FSStatusCode MetaserverClient::CreateCopySetOnOneMetaserver(
   CopysetService_Stub stub(&channel_);
   stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
-  uint32_t maxRetry = options_.rpcRetryTimes;
-  while (cntl.Failed() && maxRetry > 0) {
-    maxRetry--;
+  uint32_t max_retry = options_.rpcRetryTimes;
+  while (cntl.Failed() && max_retry > 0) {
+    max_retry--;
     bthread_usleep(options_.rpcRetryIntervalUs);
     cntl.Reset();
     cntl.set_timeout_ms(options_.rpcTimeoutMs);
@@ -561,8 +561,8 @@ FSStatusCode MetaserverClient::CreateCopySetOnOneMetaserver(
   }
 
   if (response.status() != COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS) {
-    LOG(ERROR) << "Create copyset failed."
-               << " from " << cntl.remote_side() << " to " << cntl.local_side()
+    LOG(ERROR) << "Create copyset failed." << " from " << cntl.remote_side()
+               << " to " << cntl.local_side()
                << " request = " << request.ShortDebugString()
                << " error code = " << response.status();
     return FSStatusCode::CREATE_COPYSET_ERROR;

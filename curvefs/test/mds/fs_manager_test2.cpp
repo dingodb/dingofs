@@ -27,6 +27,8 @@
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/src/mds/fs_manager.h"
 #include "curvefs/src/mds/metaserverclient/metaserver_client.h"
+#include "curvefs/src/mds/topology/topology_storage_codec.h"
+#include "curvefs/src/mds/topology/topology_storge_etcd.h"
 #include "curvefs/test/mds/mock/mock_cli2.h"
 #include "curvefs/test/mds/mock/mock_fs_stroage.h"
 #include "curvefs/test/mds/mock/mock_metaserver.h"
@@ -35,19 +37,12 @@
 #include "test/common/mock_s3_adapter.h"
 
 using ::curve::common::MockS3Adapter;
-using ::curvefs::mds::topology::CreatePartitionRequest;
-using ::curvefs::mds::topology::CreatePartitionResponse;
 using ::curvefs::mds::topology::DefaultIdGenerator;
 using ::curvefs::mds::topology::DefaultTokenGenerator;
 using ::curvefs::mds::topology::MockEtcdClient;
-using ::curvefs::mds::topology::MockIdGenerator;
-using ::curvefs::mds::topology::MockStorage;
-using ::curvefs::mds::topology::MockTokenGenerator;
-using ::curvefs::mds::topology::MockTopology;
 using ::curvefs::mds::topology::MockTopologyManager;
 using ::curvefs::mds::topology::TopologyIdGenerator;
 using ::curvefs::mds::topology::TopologyImpl;
-using ::curvefs::mds::topology::TopologyManager;
 using ::curvefs::mds::topology::TopologyStorageCodec;
 using ::curvefs::mds::topology::TopologyStorageEtcd;
 using ::curvefs::mds::topology::TopologyTokenGenerator;

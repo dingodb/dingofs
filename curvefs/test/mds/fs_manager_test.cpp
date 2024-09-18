@@ -28,8 +28,10 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
+#include "curvefs/src/common/define.h"
+#include "curvefs/src/mds/topology/topology_storage_codec.h"
+#include "curvefs/src/mds/topology/topology_storge_etcd.h"
 #include "curvefs/test/mds/mock/mock_cli2.h"
-#include "curvefs/test/mds/mock/mock_fs_stroage.h"
 #include "curvefs/test/mds/mock/mock_metaserver.h"
 #include "curvefs/test/mds/mock/mock_space_manager.h"
 #include "curvefs/test/mds/mock/mock_topology.h"

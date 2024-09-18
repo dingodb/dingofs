@@ -551,14 +551,14 @@ bool CopysetNode::FetchLeaderStatus(const braft::PeerId& leaderId,
 }
 
 void CopysetNode::ListPeers(std::vector<Peer>* peers) const {
-  std::vector<braft::PeerId> tmpPeers;
+  std::vector<braft::PeerId> tmp_peers;
 
   {
     std::lock_guard<Mutex> lock(confMtx_);
-    conf_.list_peers(&tmpPeers);
+    conf_.list_peers(&tmp_peers);
   }
 
-  for (auto& p : tmpPeers) {
+  for (auto& p : tmp_peers) {
     Peer peer;
     peer.set_address(p.to_string());
     peers->emplace_back(std::move(peer));

@@ -40,10 +40,10 @@ class HeartbeatServiceImpl : public HeartbeatService {
  public:
   HeartbeatServiceImpl() = default;
   explicit HeartbeatServiceImpl(
-      std::shared_ptr<HeartbeatManager> heartbeatManager);
+      std::shared_ptr<HeartbeatManager> heartbeat_manager);
   ~HeartbeatServiceImpl() override = default;
 
-  void MetaServerHeartbeat(google::protobuf::RpcController* cntl_base,
+  void MetaServerHeartbeat(google::protobuf::RpcController* controller,
                            const MetaServerHeartbeatRequest* request,
                            MetaServerHeartbeatResponse* response,
                            google::protobuf::Closure* done) override;

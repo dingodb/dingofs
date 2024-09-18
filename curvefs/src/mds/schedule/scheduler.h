@@ -25,16 +25,12 @@
 
 #include <map>
 #include <memory>
-#include <set>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "curvefs/src/mds/schedule/operator.h"
 #include "curvefs/src/mds/schedule/operatorController.h"
 #include "curvefs/src/mds/schedule/schedule_define.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "curvefs/src/mds/topology/topology.h"
 
 namespace curvefs {
 namespace mds {

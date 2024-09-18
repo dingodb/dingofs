@@ -32,7 +32,6 @@
 #include "curvefs/proto/copyset.pb.h"
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/mds/topology/deal_peerid.h"
 
 using curvefs::common::PartitionInfo;
 using curvefs::common::PartitionStatus;
@@ -65,51 +64,52 @@ class MetaserverClient {
     options_ = option;
   }
 
-  virtual ~MetaserverClient() {}
+  virtual ~MetaserverClient() = default;
 
   virtual FSStatusCode GetLeader(const LeaderCtx& tx, std::string* leader);
 
-  virtual FSStatusCode DeleteInode(uint32_t fsId, uint64_t inodeId);
+  virtual FSStatusCode DeleteInode(uint32_t fs_id, uint64_t inode_id);
 
-  virtual FSStatusCode CreateRootInode(uint32_t fsId, uint32_t poolId,
-                                       uint32_t copysetId, uint32_t partitionId,
-                                       uint32_t uid, uint32_t gid,
-                                       uint32_t mode,
+  virtual FSStatusCode CreateRootInode(uint32_t fs_id, uint32_t pool_id,
+                                       uint32_t copyset_id,
+                                       uint32_t partition_id, uint32_t uid,
+                                       uint32_t gid, uint32_t mode,
                                        const std::set<std::string>& addrs);
 
-  virtual FSStatusCode CreateManageInode(uint32_t fsId, uint32_t poolId,
-                                         uint32_t copysetId,
-                                         uint32_t partitionId, uint32_t uid,
+  virtual FSStatusCode CreateManageInode(uint32_t fs_id, uint32_t pool_id,
+                                         uint32_t copyset_id,
+                                         uint32_t partition_id, uint32_t uid,
                                          uint32_t gid, uint32_t mode,
-                                         ManageInodeType manageType,
+                                         ManageInodeType manage_type,
                                          const std::set<std::string>& addrs);
 
-  virtual FSStatusCode CreateDentry(uint32_t fsId, uint32_t poolId,
-                                    uint32_t copysetId, uint32_t partitionId,
-                                    uint64_t parentInodeId,
-                                    const std::string& name, uint64_t inodeId,
+  virtual FSStatusCode CreateDentry(uint32_t fs_id, uint32_t pool_id,
+                                    uint32_t copyset_id, uint32_t partition_id,
+                                    uint64_t parent_inode_id,
+                                    const std::string& name, uint64_t inode_id,
                                     const std::set<std::string>& addrs);
 
-  virtual FSStatusCode DeleteDentry(uint32_t poolId, uint32_t copysetId,
-                                    uint32_t partitionId, uint32_t fsId,
-                                    uint64_t parentInodeId,
+  virtual FSStatusCode DeleteDentry(uint32_t pool_id, uint32_t copyset_id,
+                                    uint32_t partition_id, uint32_t fs_id,
+                                    uint64_t parent_inode_id,
                                     const std::string& name,
                                     const std::set<std::string>& addrs);
 
-  virtual FSStatusCode CreatePartition(uint32_t fsId, uint32_t poolId,
-                                       uint32_t copysetId, uint32_t partitionId,
-                                       uint64_t idStart, uint64_t idEnd,
+  virtual FSStatusCode CreatePartition(uint32_t fs_id, uint32_t pool_id,
+                                       uint32_t copyset_id,
+                                       uint32_t partition_id, uint64_t id_start,
+                                       uint64_t id_end,
                                        const std::set<std::string>& addrs);
 
-  virtual FSStatusCode DeletePartition(uint32_t poolId, uint32_t copysetId,
-                                       uint32_t partitionId,
+  virtual FSStatusCode DeletePartition(uint32_t pool_id, uint32_t copyset_id,
+                                       uint32_t partition_id,
                                        const std::set<std::string>& addrs);
 
-  virtual FSStatusCode CreateCopySet(uint32_t poolId, uint32_t copysetId,
+  virtual FSStatusCode CreateCopySet(uint32_t pool_id, uint32_t copyset_id,
                                      const std::set<std::string>& addrs);
 
-  virtual FSStatusCode CreateCopySetOnOneMetaserver(uint32_t poolId,
-                                                    uint32_t copysetId,
+  virtual FSStatusCode CreateCopySetOnOneMetaserver(uint32_t pool_id,
+                                                    uint32_t copyset_id,
                                                     const std::string& addr);
 
  private:
@@ -119,7 +119,6 @@ class MetaserverClient {
       void (T::*func)(google::protobuf::RpcController*, const Request*,
                       Response*, google::protobuf::Closure*));
 
- private:
   MetaserverOptions options_;
   brpc::Channel channel_;
 };

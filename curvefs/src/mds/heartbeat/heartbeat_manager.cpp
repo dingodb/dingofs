@@ -26,17 +26,14 @@
 
 #include <list>
 #include <set>
-#include <utility>
 
 #include "curvefs/src/mds/topology/deal_peerid.h"
-#include "src/common/string_util.h"
 
 using ::curvefs::mds::topology::CopySetIdType;
 using ::curvefs::mds::topology::CopySetKey;
 using ::curvefs::mds::topology::MetaServer;
 using ::curvefs::mds::topology::MetaServerSpace;
 using ::curvefs::mds::topology::PoolIdType;
-using ::curvefs::mds::topology::SplitPeerId;
 using ::curvefs::mds::topology::TopoStatusCode;
 using ::curvefs::mds::topology::UNINITIALIZE_ID;
 
@@ -128,11 +125,11 @@ void HeartbeatManager::MetaServerHeartbeat(
   UpdateMetaServerSpace(request);
 
   // dealing with copysets included in the heartbeat request
-  for (auto& value : request.copysetinfos()) {
+  for (const auto& value : request.copysetinfos()) {
     // convert copysetInfo from heartbeat format to topology format
-    ::curvefs::mds::topology::CopySetInfo reportCopySetInfo;
+    ::curvefs::mds::topology::CopySetInfo report_copy_set_info;
     if (!TransformHeartbeatCopySetInfoToTopologyOne(value,
-                                                    &reportCopySetInfo)) {
+                                                    &report_copy_set_info)) {
       LOG(ERROR) << "heartbeatManager receive copyset(" << value.poolid() << ","
                  << value.copysetid()
                  << ") information, but can not transfer to topology one";
@@ -142,27 +139,27 @@ void HeartbeatManager::MetaServerHeartbeat(
 
     // forward reported copyset info to CopysetConfGenerator
     CopySetConf conf;
-    ConfigChangeInfo configChInfo;
+    ConfigChangeInfo config_ch_info;
     if (copysetConfGenerator_->GenCopysetConf(
-            request.metaserverid(), reportCopySetInfo, value.configchangeinfo(),
-            &conf)) {
+            request.metaserverid(), report_copy_set_info,
+            value.configchangeinfo(), &conf)) {
       CopySetConf* res = response->add_needupdatecopysets();
       *res = conf;
     }
 
     // convert partitionInfo from heartbeat format to topology format
-    std::list<::curvefs::mds::topology::Partition> partitionList;
+    std::list<::curvefs::mds::topology::Partition> partition_list;
     for (int32_t i = 0; i < value.partitioninfolist_size(); i++) {
-      partitionList.emplace_back(value.partitioninfolist(i));
+      partition_list.emplace_back(value.partitioninfolist(i));
     }
 
     // if a copyset is the leader, update (e.g. epoch) topology according
     // to its info
-    if (request.metaserverid() == reportCopySetInfo.GetLeader()) {
-      topoUpdater_->UpdateCopysetTopo(reportCopySetInfo);
+    if (request.metaserverid() == report_copy_set_info.GetLeader()) {
+      topoUpdater_->UpdateCopysetTopo(report_copy_set_info);
       if (!value.has_iscopysetloading() || !value.iscopysetloading()) {
-        topoUpdater_->UpdatePartitionTopo(reportCopySetInfo.GetId(),
-                                          partitionList);
+        topoUpdater_->UpdatePartitionTopo(report_copy_set_info.GetId(),
+                                          partition_list);
       }
     }
   }
@@ -170,10 +167,10 @@ void HeartbeatManager::MetaServerHeartbeat(
 
 HeartbeatStatusCode HeartbeatManager::CheckRequest(
     const MetaServerHeartbeatRequest& request) {
-  MetaServer metaServer;
+  MetaServer meta_server;
 
   // check for validity of metaserver id
-  if (!topology_->GetMetaServer(request.metaserverid(), &metaServer)) {
+  if (!topology_->GetMetaServer(request.metaserverid(), &meta_server)) {
     LOG(ERROR) << "heartbeatManager receive heartbeat from metaServer: "
                << request.metaserverid() << ", ip:" << request.ip()
                << ", port:" << request.port()
@@ -182,25 +179,25 @@ HeartbeatStatusCode HeartbeatManager::CheckRequest(
   }
 
   // mismatch ip address reported by metaserver and mds record
-  if (request.ip() != metaServer.GetInternalIp() ||
-      request.port() != metaServer.GetInternalPort()) {
+  if (request.ip() != meta_server.GetInternalIp() ||
+      request.port() != meta_server.GetInternalPort()) {
     LOG(ERROR) << "heartbeatManager receive heartbeat from metaServer: "
                << request.metaserverid()
                << ", but find report ip:" << request.ip()
                << ", report port:" << request.port()
                << " do not consistent with topo record ip:"
-               << metaServer.GetInternalIp()
-               << ", record port:" << metaServer.GetInternalPort();
+               << meta_server.GetInternalIp()
+               << ", record port:" << meta_server.GetInternalPort();
     return HeartbeatStatusCode::hbMetaServerIpPortNotMatch;
   }
 
   // mismatch token reported by metaserver and mds record
-  if (request.token() != metaServer.GetToken()) {
+  if (request.token() != meta_server.GetToken()) {
     LOG(ERROR) << "heartbeatManager receive heartbeat from metaServer"
                << request.metaserverid()
                << ", but fine report token:" << request.token()
                << " do not consistent with topo record token:"
-               << metaServer.GetToken();
+               << meta_server.GetToken();
     return HeartbeatStatusCode::hbMetaServerTokenNotMatch;
   }
   return HeartbeatStatusCode::hbOK;
@@ -209,10 +206,10 @@ HeartbeatStatusCode HeartbeatManager::CheckRequest(
 bool HeartbeatManager::TransformHeartbeatCopySetInfoToTopologyOne(
     const ::curvefs::mds::heartbeat::CopySetInfo& info,
     ::curvefs::mds::topology::CopySetInfo* out) {
-  ::curvefs::mds::topology::CopySetInfo topoCopysetInfo(
+  ::curvefs::mds::topology::CopySetInfo topo_copyset_info(
       static_cast<PoolIdType>(info.poolid()), info.copysetid());
   // set epoch
-  topoCopysetInfo.SetEpoch(info.epoch());
+  topo_copyset_info.SetEpoch(info.epoch());
 
   // set peers
   std::set<MetaServerIdType> peers;
@@ -231,7 +228,7 @@ bool HeartbeatManager::TransformHeartbeatCopySetInfoToTopologyOne(
     }
     peers.emplace(res);
   }
-  topoCopysetInfo.SetCopySetMembers(peers);
+  topo_copyset_info.SetCopySetMembers(peers);
 
   if (leader == UNINITIALIZE_ID) {
     LOG(WARNING) << "leader not found, poolid: " << info.poolid()
@@ -239,7 +236,7 @@ bool HeartbeatManager::TransformHeartbeatCopySetInfoToTopologyOne(
   }
 
   // set leader
-  topoCopysetInfo.SetLeader(leader);
+  topo_copyset_info.SetLeader(leader);
 
   // set info of configuration changes
   if (info.configchangeinfo().IsInitialized()) {
@@ -251,10 +248,10 @@ bool HeartbeatManager::TransformHeartbeatCopySetInfoToTopologyOne(
                  << info.configchangeinfo().peer().address();
       return false;
     }
-    topoCopysetInfo.SetCandidate(res);
+    topo_copyset_info.SetCandidate(res);
   }
 
-  *out = topoCopysetInfo;
+  *out = topo_copyset_info;
   return true;
 }
 
@@ -270,9 +267,9 @@ MetaServerIdType HeartbeatManager::GetMetaserverIdByPeerStr(
   }
 
   // fetch metaserverId according to ip:port pair
-  MetaServer metaServer;
-  if (topology_->GetMetaServer(ip, port, &metaServer)) {
-    return metaServer.GetId();
+  MetaServer meta_server;
+  if (topology_->GetMetaServer(ip, port, &meta_server)) {
+    return meta_server.GetId();
   }
 
   LOG(ERROR) << "heartbeatManager can not get metaServer ip: " << ip

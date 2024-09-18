@@ -30,21 +30,15 @@
 #include <glog/logging.h>
 #include <json/json.h>
 
-#include <fstream>
 #include <list>
-#include <map>
-#include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
 #include "curvefs/proto/topology.pb.h"
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/tools/curvefs_tool.h"
-#include "curvefs/src/tools/curvefs_tool_abstract_creator.h"
 #include "curvefs/src/tools/curvefs_tool_define.h"
 #include "src/common/configuration.h"
-#include "src/common/string_util.h"
 
 namespace curvefs {
 namespace mds {
@@ -77,9 +71,10 @@ class CurvefsBuildTopologyTool : public curvefs::tools::CurvefsTool {
       : curvefs::tools::CurvefsTool(
             std::string(curvefs::tools::kCreateTopologyCmd),
             std::string(curvefs::tools::kProgrameName)) {}
-  ~CurvefsBuildTopologyTool() {}
 
-  int Init();
+  ~CurvefsBuildTopologyTool() override = default;
+
+  int Init() override;
 
   int InitTopoData();
 
@@ -95,7 +90,7 @@ class CurvefsBuildTopologyTool : public curvefs::tools::CurvefsTool {
               << curvefs::tools::kConfPathHelp << std::endl;
   }
 
-  int RunCommand();
+  int RunCommand() override;
 
   int Run() override {
     if (Init() < 0) {
@@ -113,11 +108,11 @@ class CurvefsBuildTopologyTool : public curvefs::tools::CurvefsTool {
 
  public:
   // for unit test
-  const std::list<Server>& GetServerDatas() { return serverDatas; }
+  const std::list<Server>& GetServerDatas() { return serverDatas_; }
 
-  const std::list<Zone>& GetZoneDatas() { return zoneDatas; }
+  const std::list<Zone>& GetZoneDatas() { return zoneDatas_; }
 
-  const std::list<Pool>& GetPoolDatas() { return poolDatas; }
+  const std::list<Pool>& GetPoolDatas() { return poolDatas_; }
 
  private:
   int ReadClusterMap();
@@ -134,20 +129,19 @@ class CurvefsBuildTopologyTool : public curvefs::tools::CurvefsTool {
 
   int DealFailedRet(int ret, std::string operation);
 
-  int ListPool(std::list<PoolInfo>* poolInfos);
+  int ListPool(std::list<PoolInfo>* pool_infos);
 
-  int GetZonesInPool(PoolIdType poolid, std::list<ZoneInfo>* zoneInfos);
+  int GetZonesInPool(PoolIdType poolid, std::list<ZoneInfo>* zone_infos);
 
-  int GetServersInZone(ZoneIdType zoneid, std::list<ServerInfo>* serverInfos);
+  int GetServersInZone(ZoneIdType zoneid, std::list<ServerInfo>* server_infos);
 
- private:
-  std::list<Server> serverDatas;
-  std::list<Zone> zoneDatas;
-  std::list<Pool> poolDatas;
+  std::list<Server> serverDatas_;
+  std::list<Zone> zoneDatas_;
+  std::list<Pool> poolDatas_;
 
-  std::list<ServerIdType> serverToDel;
-  std::list<ZoneIdType> zoneToDel;
-  std::list<PoolIdType> poolToDel;
+  std::list<ServerIdType> serverToDel_;
+  std::list<ZoneIdType> zoneToDel_;
+  std::list<PoolIdType> poolToDel_;
 
   std::vector<std::string> mdsAddressStr_;
   int mdsAddressIndex_;

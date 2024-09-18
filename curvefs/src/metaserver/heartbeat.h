@@ -27,10 +27,8 @@
 #include <braft/node_manager.h>
 
 #include <atomic>
-#include <map>
 #include <memory>
 #include <string>
-#include <thread>  //NOLINT
 #include <vector>
 
 #include "curvefs/proto/heartbeat.pb.h"
@@ -82,8 +80,8 @@ class HeartbeatTaskExecutor;
  */
 class Heartbeat {
  public:
-  Heartbeat() {}
-  ~Heartbeat() {}
+  Heartbeat() = default;
+  ~Heartbeat() = default;
 
   /**
    * @brief init heartbeat subsystem
@@ -140,7 +138,6 @@ class Heartbeat {
  private:
   friend class HeartbeatTest;
 
- private:
   Thread hbThread_;
 
   std::atomic<bool> toStop_;
@@ -172,7 +169,8 @@ class Heartbeat {
 // execute tasks from heartbeat response
 class HeartbeatTaskExecutor {
  public:
-  HeartbeatTaskExecutor(CopysetNodeManager* mgr, const butil::EndPoint& ep);
+  HeartbeatTaskExecutor(CopysetNodeManager* mgr,
+                        const butil::EndPoint& endpoint);
 
   void ExecTasks(const HeartbeatResponse& response);
 
@@ -187,7 +185,6 @@ class HeartbeatTaskExecutor {
 
   bool NeedPurge(const CopySetConf& conf);
 
- private:
   CopysetNodeManager* copysetMgr_;
   butil::EndPoint ep_;
 };

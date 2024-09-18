@@ -43,12 +43,12 @@ class FsInfoWrapper {
  public:
   FsInfoWrapper() = default;
 
-  explicit FsInfoWrapper(const FsInfo& fsInfo) : fsInfo_(fsInfo) {}
+  explicit FsInfoWrapper(const FsInfo& fs_info) : fsInfo_(fs_info) {}
 
-  explicit FsInfoWrapper(FsInfo&& fsInfo) : fsInfo_(std::move(fsInfo)) {}
+  explicit FsInfoWrapper(FsInfo&& fs_info) : fsInfo_(std::move(fs_info)) {}
 
-  FsInfoWrapper(const ::curvefs::mds::CreateFsRequest* request, uint64_t fsId,
-                uint64_t rootInodeId);
+  FsInfoWrapper(const ::curvefs::mds::CreateFsRequest* request, uint64_t fs_id,
+                uint64_t root_inode_id);
 
   FsInfoWrapper(const FsInfoWrapper& other) = default;
   FsInfoWrapper& operator=(const FsInfoWrapper& other) = default;
@@ -102,11 +102,11 @@ class FsInfoWrapper {
 
   uint64_t IncreaseFsTxSequence(const std::string& owner) {
     if (!fsInfo_.has_txowner() || fsInfo_.txowner() != owner) {
-      uint64_t txSequence = 0;
+      uint64_t tx_sequence = 0;
       if (fsInfo_.has_txsequence()) {
-        txSequence = fsInfo_.txsequence();
+        tx_sequence = fsInfo_.txsequence();
       }
-      fsInfo_.set_txsequence(txSequence + 1);
+      fsInfo_.set_txsequence(tx_sequence + 1);
       fsInfo_.set_txowner(owner);
     }
     return fsInfo_.txsequence();

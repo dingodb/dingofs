@@ -29,7 +29,6 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include <fstream>
 #include <list>
 #include <memory>
 #include <utility>
@@ -37,7 +36,6 @@
 
 #include "curvefs/src/metaserver/copyset/utils.h"
 #include "curvefs/src/metaserver/resource_statistic.h"
-#include "curvefs/src/metaserver/storage/storage.h"
 #include "src/common/string_util.h"
 #include "src/common/timeutility.h"
 #include "src/common/uri_parser.h"
@@ -47,7 +45,6 @@ namespace metaserver {
 
 using ::curvefs::mds::heartbeat::ConfigChangeInfo;
 using ::curvefs::mds::heartbeat::ConfigChangeType;
-using ::curvefs::metaserver::copyset::CopysetService_Stub;
 using ::curvefs::metaserver::copyset::ToGroupIdString;
 
 namespace {
@@ -85,13 +82,13 @@ int Heartbeat::Init(const HeartbeatOptions& options) {
   toStop_.store(false, std::memory_order_release);
   options_ = options;
 
-  std::string copysetDataPath =
+  std::string copyset_data_path =
       curve::common::UriParser::GetPathFromUri(options_.storeUri);
   // get the metaserver data dir, because copysets dir doesn't exist at
   // beginning  // NOLINT
-  auto pathList = curve::common::UriParser::ParseDirPath(copysetDataPath);
-  if (pathList.size() > 1) {
-    auto it = pathList.end();
+  auto path_list = curve::common::UriParser::ParseDirPath(copyset_data_path);
+  if (path_list.size() > 1) {
+    auto it = path_list.end();
     std::advance(it, -2);
     storePath_ = *it;
   } else {
@@ -99,12 +96,12 @@ int Heartbeat::Init(const HeartbeatOptions& options) {
     return -1;
   }
 
-  butil::ip_t msIp;
-  if (butil::str2ip(options_.ip.c_str(), &msIp) < 0) {
+  butil::ip_t ms_ip;
+  if (butil::str2ip(options_.ip.c_str(), &ms_ip) < 0) {
     LOG(ERROR) << "Invalid Metaserver IP provided: " << options_.ip;
     return -1;
   }
-  msEp_ = butil::EndPoint(msIp, options_.port);
+  msEp_ = butil::EndPoint(ms_ip, options_.port);
   LOG(INFO) << "Metaserver address: " << options_.ip << ":" << options_.port;
 
   // mdsEps can not empty
@@ -133,7 +130,7 @@ int Heartbeat::Init(const HeartbeatOptions& options) {
 
   startUpTime_ = ::curve::common::TimeUtility::GetTimeofDaySec();
 
-  taskExecutor_.reset(new HeartbeatTaskExecutor(copysetMan_, msEp_));
+  taskExecutor_ = std::make_unique<HeartbeatTaskExecutor>(copysetMan_, msEp_);
 
   return 0;
 }
@@ -166,17 +163,17 @@ int Heartbeat::Fini() {
 void Heartbeat::BuildCopysetInfo(curvefs::mds::heartbeat::CopySetInfo* info,
                                  CopysetNode* copyset) {
   int ret;
-  PoolId poolId = copyset->GetPoolId();
-  CopysetId copysetId = copyset->GetCopysetId();
+  PoolId pool_id = copyset->GetPoolId();
+  CopysetId copyset_id = copyset->GetCopysetId();
 
-  info->set_poolid(poolId);
-  info->set_copysetid(copysetId);
+  info->set_poolid(pool_id);
+  info->set_copysetid(copyset_id);
   info->set_epoch(copyset->GetConfEpoch());
 
   std::vector<Peer> peers;
   copyset->ListPeers(&peers);
-  for (Peer peer : peers) {
-    auto replica = info->add_peers();
+  for (const Peer& peer : peers) {
+    auto* replica = info->add_peers();
     replica->set_address(peer.address().c_str());
   }
 
@@ -185,33 +182,33 @@ void Heartbeat::BuildCopysetInfo(curvefs::mds::heartbeat::CopySetInfo* info,
   replica->set_address(leader.to_string());
   info->set_allocated_leaderpeer(replica);
 
-  bool isLoading = copyset->IsLoading();
-  info->set_iscopysetloading(isLoading);
+  bool is_loading = copyset->IsLoading();
+  info->set_iscopysetloading(is_loading);
 
   // add partition info
-  if (isLoading) {
+  if (is_loading) {
     LOG(WARNING) << "build copyset info for heartbeat get partition "
-                 << "list fail, because copyset is loading, poolId = " << poolId
-                 << ", copysetId = " << copysetId;
+                 << "list fail, because copyset is loading, poolId = "
+                 << pool_id << ", copysetId = " << copyset_id;
   } else {
-    std::list<PartitionInfo> partitionInfoList;
-    bool ret = copyset->GetPartitionInfoList(&partitionInfoList);
+    std::list<PartitionInfo> partition_info_list;
+    bool ret = copyset->GetPartitionInfoList(&partition_info_list);
     if (ret) {
-      for (auto& it : partitionInfoList) {
+      for (auto& it : partition_info_list) {
         info->add_partitioninfolist()->CopyFrom(it);
       }
     } else {
       LOG(WARNING) << "build copyset info for heartbeat get partition "
                    << "list fail, because copyset is loading, poolId = "
-                   << poolId << ", copysetId = " << copysetId;
+                   << pool_id << ", copysetId = " << copyset_id;
       info->set_iscopysetloading(true);
     }
   }
 
-  ConfigChangeInfo confChangeInfo;
-  ret = GatherCopysetConfChange(copyset, &confChangeInfo);
+  ConfigChangeInfo conf_change_info;
+  ret = GatherCopysetConfChange(copyset, &conf_change_info);
   if (ret == 0) {
-    *info->mutable_configchangeinfo() = std::move(confChangeInfo);
+    *info->mutable_configchangeinfo() = std::move(conf_change_info);
   }
 }
 
@@ -258,7 +255,7 @@ int Heartbeat::BuildRequest(HeartbeatRequest* req) {
   req->set_copysetcount(copysets.size());
   int leaders = 0;
 
-  for (auto copyset : copysets) {
+  for (auto* copyset : copysets) {
     curvefs::mds::heartbeat::CopySetInfo* info = req->add_copysetinfos();
 
     BuildCopysetInfo(info, copyset);
@@ -297,16 +294,16 @@ void Heartbeat::DumpHeartbeatRequest(const HeartbeatRequest& request) {
   for (int i = 0; i < request.copysetinfos_size(); i++) {
     const curvefs::mds::heartbeat::CopySetInfo& info = request.copysetinfos(i);
 
-    std::string peersStr = "";
+    std::string peers_str;
     for (int j = 0; j < info.peers_size(); j++) {
-      peersStr += info.peers(j).address() + ",";
+      peers_str += info.peers(j).address() + ",";
     }
 
     VLOG(6) << "Copyset " << i << " "
             << copyset::ToGroupIdString(info.poolid(), info.copysetid())
             << ", epoch: " << info.epoch()
             << ", leader: " << info.leaderpeer().address()
-            << ", peers: " << peersStr;
+            << ", peers: " << peers_str;
   }
 }
 
@@ -314,7 +311,7 @@ void Heartbeat::DumpHeartbeatResponse(const HeartbeatResponse& response) {
   VLOG(3) << "Received heartbeat response, statusCode = "
           << response.statuscode();
 
-  for (auto& conf : response.needupdatecopysets()) {
+  for (const auto& conf : response.needupdatecopysets()) {
     VLOG(3) << "need update copyset: " << conf.ShortDebugString();
   }
 }
@@ -322,7 +319,7 @@ void Heartbeat::DumpHeartbeatResponse(const HeartbeatResponse& response) {
 int Heartbeat::SendHeartbeat(const HeartbeatRequest& request,
                              HeartbeatResponse* response) {
   brpc::Channel channel;
-  if (channel.Init(mdsEps_[inServiceIndex_].c_str(), NULL) != 0) {
+  if (channel.Init(mdsEps_[inServiceIndex_].c_str(), nullptr) != 0) {
     LOG(ERROR) << msEp_.ip << ":" << msEp_.port
                << " Fail to init channel to MDS " << mdsEps_[inServiceIndex_];
     return -1;
@@ -362,15 +359,15 @@ int Heartbeat::SendHeartbeat(const HeartbeatRequest& request,
 
 void Heartbeat::HeartbeatWorker() {
   int ret;
-  int errorIntervalSec = 2;
+  int error_interval_sec = 2;
 
   LOG(INFO) << "Starting Heartbeat worker thread.";
 
   // Handling abnormal situations such as conf equal to 0
   if (options_.intervalSec <= 4) {
-    errorIntervalSec = 2;
+    error_interval_sec = 2;
   } else {
-    errorIntervalSec = options_.intervalSec / 2;
+    error_interval_sec = options_.intervalSec / 2;
   }
 
   while (!toStop_.load(std::memory_order_acquire)) {
@@ -381,7 +378,7 @@ void Heartbeat::HeartbeatWorker() {
     ret = BuildRequest(&req);
     if (ret != 0) {
       LOG(ERROR) << "Failed to build heartbeat request";
-      ::sleep(errorIntervalSec);
+      ::sleep(error_interval_sec);
       continue;
     }
 
@@ -389,7 +386,7 @@ void Heartbeat::HeartbeatWorker() {
     ret = SendHeartbeat(req, &resp);
     if (ret != 0) {
       LOG(WARNING) << "Failed to send heartbeat to MDS";
-      ::sleep(errorIntervalSec);
+      ::sleep(error_interval_sec);
       continue;
     }
 
@@ -405,13 +402,13 @@ HeartbeatTaskExecutor::HeartbeatTaskExecutor(CopysetNodeManager* mgr,
     : copysetMgr_(mgr), ep_(endpoint) {}
 
 void HeartbeatTaskExecutor::ExecTasks(const HeartbeatResponse& response) {
-  for (auto& conf : response.needupdatecopysets()) {
+  for (const auto& conf : response.needupdatecopysets()) {
     ExecOneTask(conf);
   }
 }
 
 void HeartbeatTaskExecutor::ExecOneTask(const CopySetConf& conf) {
-  auto copyset = copysetMgr_->GetCopysetNode(conf.poolid(), conf.copysetid());
+  auto* copyset = copysetMgr_->GetCopysetNode(conf.poolid(), conf.copysetid());
   if (!copyset) {
     LOG(WARNING) << "Failed to find copyset: " << CopysetName(conf);
     return;
@@ -422,10 +419,10 @@ void HeartbeatTaskExecutor::ExecOneTask(const CopySetConf& conf) {
     return;
   }
 
-  const auto epochInCopyset = copyset->GetConfEpoch();
-  if (conf.epoch() != epochInCopyset) {
+  const auto epoch_in_copyset = copyset->GetConfEpoch();
+  if (conf.epoch() != epoch_in_copyset) {
     LOG(WARNING) << "Config change epoch: " << conf.epoch()
-                 << " isn't same as current: " << epochInCopyset
+                 << " isn't same as current: " << epoch_in_copyset
                  << ", copyset: " << copyset->Name()
                  << ", refuse config change";
     return;
@@ -488,7 +485,7 @@ void HeartbeatTaskExecutor::DoChangePeer(CopysetNode* node,
             << ", removing: " << conf.oldpeer().address();
 
   std::vector<Peer> newpeers;
-  for (auto& p : conf.peers()) {
+  for (const auto& p : conf.peers()) {
     if (p.address() != conf.oldpeer().address()) {
       newpeers.emplace_back(p);
     }

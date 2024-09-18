@@ -46,12 +46,12 @@ class CopysetConfGenerator {
  public:
   CopysetConfGenerator(std::shared_ptr<Topology> topo,
                        std::shared_ptr<Coordinator> coordinator,
-                       steady_clock::time_point mdsStartTime,
-                       uint64_t cleanFollowerAfterMs)
+                       steady_clock::time_point mds_start_time,
+                       uint64_t clean_follower_after_ms)
       : topo_(topo),
         coordinator_(coordinator),
-        mdsStartTime_(mdsStartTime),
-        cleanFollowerAfterMs_(cleanFollowerAfterMs) {}
+        mdsStartTime_(mds_start_time),
+        cleanFollowerAfterMs_(clean_follower_after_ms) {}
 
   /*
    * @brief GenCopysetConf  decide if there's any new config for metaserver
@@ -65,10 +65,10 @@ class CopysetConfGenerator {
    * @return true if there's any configuration, false if not
    */
   bool GenCopysetConf(
-      MetaServerIdType reportId,
-      const ::curvefs::mds::topology::CopySetInfo& reportCopySetInfo,
-      const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
-      ::curvefs::mds::heartbeat::CopySetConf* copysetConf);
+      MetaServerIdType report_id,
+      const ::curvefs::mds::topology::CopySetInfo& report_copy_set_info,
+      const ::curvefs::mds::heartbeat::ConfigChangeInfo& config_ch_info,
+      ::curvefs::mds::heartbeat::CopySetConf* copyset_conf);
 
  private:
   /*
@@ -84,9 +84,9 @@ class CopysetConfGenerator {
    *           apart from UNINITIALIZE_ID
    */
   MetaServerIdType LeaderGenCopysetConf(
-      const ::curvefs::mds::topology::CopySetInfo& copySetInfo,
-      const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
-      ::curvefs::mds::heartbeat::CopySetConf* copysetConf);
+      const ::curvefs::mds::topology::CopySetInfo& copy_set_info,
+      const ::curvefs::mds::heartbeat::ConfigChangeInfo& config_ch_info,
+      ::curvefs::mds::heartbeat::CopySetConf* copyset_conf);
 
   /*
    * @brief FollowerGenCopysetConf deal with follower copyset info.
@@ -103,10 +103,10 @@ class CopysetConfGenerator {
    * @return true if there's any config instruction, false if not
    */
   bool FollowerGenCopysetConf(
-      MetaServerIdType reportId,
-      const ::curvefs::mds::topology::CopySetInfo& reportCopySetInfo,
-      const ::curvefs::mds::topology::CopySetInfo& recordCopySetInfo,
-      ::curvefs::mds::heartbeat::CopySetConf* copysetConf);
+      MetaServerIdType report_id,
+      const ::curvefs::mds::topology::CopySetInfo& report_copy_set_info,
+      const ::curvefs::mds::topology::CopySetInfo& record_copy_set_info,
+      ::curvefs::mds::heartbeat::CopySetConf* copyset_conf);
 
   /*
    * @brief BuildPeerByMetaserverId generate a string in the format of
@@ -116,9 +116,8 @@ class CopysetConfGenerator {
    *
    * @return string 'ip:port:id' generated, '' if there's any error
    */
-  std::string BuildPeerByMetaserverId(MetaServerIdType csId);
+  std::string BuildPeerByMetaserverId(MetaServerIdType ms_id);
 
- private:
   std::shared_ptr<Topology> topo_;
   std::shared_ptr<Coordinator> coordinator_;
 

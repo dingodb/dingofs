@@ -448,7 +448,7 @@ class MetaServer {
   mutable ::curve::common::RWLock mutex_;
 };
 
-typedef std::pair<PoolIdType, CopySetIdType> CopySetKey;
+using CopySetKey = std::pair<PoolIdType, CopySetIdType>;
 
 struct CopysetIdInfo {
   PoolIdType poolId;

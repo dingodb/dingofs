@@ -24,15 +24,14 @@
 
 #include <glog/logging.h>
 
-#include <chrono>  // NOLINT
+#include <chrono>
 #include <cstdint>
+#include <random>
 #include <utility>
 
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/topology/topology_item.h"
 #include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/rw_lock.h"
-#include "src/common/timeutility.h"
 #include "src/common/uuid.h"
 
 namespace curvefs {
@@ -53,8 +52,8 @@ MetaServerIdType TopologyImpl::AllocateMetaServerId() {
   return idGenerator_->GenMetaServerId();
 }
 
-CopySetIdType TopologyImpl::AllocateCopySetId(PoolIdType poolId) {
-  return idGenerator_->GenCopySetId(poolId);
+CopySetIdType TopologyImpl::AllocateCopySetId(PoolIdType pool_id) {
+  return idGenerator_->GenCopySetId(pool_id);
 }
 
 PartitionIdType TopologyImpl::AllocatePartitionId() {
@@ -70,7 +69,7 @@ MemcacheClusterIdType TopologyImpl::AllocateMemCacheClusterId() {
 }
 
 TopoStatusCode TopologyImpl::AddPool(const Pool& data) {
-  WriteLockGuard wlockPool(poolMutex_);
+  WriteLockGuard wlock_pool(poolMutex_);
   if (poolMap_.find(data.GetId()) == poolMap_.end()) {
     if (!storage_->StoragePool(data)) {
       return TopoStatusCode::TOPO_STORGE_FAIL;
@@ -83,8 +82,8 @@ TopoStatusCode TopologyImpl::AddPool(const Pool& data) {
 }
 
 TopoStatusCode TopologyImpl::AddZone(const Zone& data) {
-  ReadLockGuard rlockPool(poolMutex_);
-  WriteLockGuard wlockZone(zoneMutex_);
+  ReadLockGuard rlock_pool(poolMutex_);
+  WriteLockGuard wlock_zone(zoneMutex_);
   auto it = poolMap_.find(data.GetPoolId());
   if (it != poolMap_.end()) {
     if (zoneMap_.find(data.GetId()) == zoneMap_.end()) {
@@ -103,8 +102,8 @@ TopoStatusCode TopologyImpl::AddZone(const Zone& data) {
 }
 
 TopoStatusCode TopologyImpl::AddServer(const Server& data) {
-  ReadLockGuard rlockZone(zoneMutex_);
-  WriteLockGuard wlockServer(serverMutex_);
+  ReadLockGuard rlock_zone(zoneMutex_);
+  WriteLockGuard wlock_server(serverMutex_);
   auto it = zoneMap_.find(data.GetZoneId());
   if (it != zoneMap_.end()) {
     if (serverMap_.find(data.GetId()) == serverMap_.end()) {
@@ -124,18 +123,18 @@ TopoStatusCode TopologyImpl::AddServer(const Server& data) {
 
 TopoStatusCode TopologyImpl::AddMetaServer(const MetaServer& data) {
   // find the pool that the meatserver belongs to
-  PoolIdType poolId = UNINITIALIZE_ID;
-  TopoStatusCode ret = GetPoolIdByServerId(data.GetServerId(), &poolId);
+  PoolIdType pool_id = UNINITIALIZE_ID;
+  TopoStatusCode ret = GetPoolIdByServerId(data.GetServerId(), &pool_id);
   if (ret != TopoStatusCode::TOPO_OK) {
     return ret;
   }
 
   // fetch lock on pool, server and metaserver
-  WriteLockGuard wlockPool(poolMutex_);
-  uint64_t metaserverThreshold = 0;
+  WriteLockGuard wlock_pool(poolMutex_);
+  uint64_t metaserver_threshold = 0;
   {
-    ReadLockGuard rlockServer(serverMutex_);
-    WriteLockGuard wlockMetaServer(metaServerMutex_);
+    ReadLockGuard rlock_server(serverMutex_);
+    WriteLockGuard wlock_meta_server(metaServerMutex_);
     auto it = serverMap_.find(data.GetServerId());
     if (it != serverMap_.end()) {
       if (metaServerMap_.find(data.GetId()) == metaServerMap_.end()) {
@@ -144,7 +143,7 @@ TopoStatusCode TopologyImpl::AddMetaServer(const MetaServer& data) {
         }
         it->second.AddMetaServer(data.GetId());
         metaServerMap_[data.GetId()] = data;
-        metaserverThreshold = data.GetMetaServerSpace().GetDiskThreshold();
+        metaserver_threshold = data.GetMetaServerSpace().GetDiskThreshold();
       } else {
         return TopoStatusCode::TOPO_ID_DUPLICATED;
       }
@@ -154,11 +153,11 @@ TopoStatusCode TopologyImpl::AddMetaServer(const MetaServer& data) {
   }
 
   // update pool
-  auto it = poolMap_.find(poolId);
+  auto it = poolMap_.find(pool_id);
   if (it != poolMap_.end()) {
-    uint64_t totalThreshold = it->second.GetDiskThreshold();
-    totalThreshold += metaserverThreshold;
-    it->second.SetDiskThreshold(totalThreshold);
+    uint64_t total_threshold = it->second.GetDiskThreshold();
+    total_threshold += metaserver_threshold;
+    it->second.SetDiskThreshold(total_threshold);
   } else {
     return TopoStatusCode::TOPO_POOL_NOT_FOUND;
   }
@@ -167,7 +166,7 @@ TopoStatusCode TopologyImpl::AddMetaServer(const MetaServer& data) {
 }
 
 TopoStatusCode TopologyImpl::RemovePool(PoolIdType id) {
-  WriteLockGuard wlockPool(poolMutex_);
+  WriteLockGuard wlock_pool(poolMutex_);
   auto it = poolMap_.find(id);
   if (it != poolMap_.end()) {
     if (it->second.GetZoneList().size() != 0) {
@@ -185,8 +184,8 @@ TopoStatusCode TopologyImpl::RemovePool(PoolIdType id) {
 }
 
 TopoStatusCode TopologyImpl::RemoveZone(ZoneIdType id) {
-  WriteLockGuard wlockPool(poolMutex_);
-  WriteLockGuard wlockZone(zoneMutex_);
+  WriteLockGuard wlock_pool(poolMutex_);
+  WriteLockGuard wlock_zone(zoneMutex_);
   auto it = zoneMap_.find(id);
   if (it != zoneMap_.end()) {
     if (it->second.GetServerList().size() != 0) {
@@ -207,8 +206,8 @@ TopoStatusCode TopologyImpl::RemoveZone(ZoneIdType id) {
 }
 
 TopoStatusCode TopologyImpl::RemoveServer(ServerIdType id) {
-  WriteLockGuard wlockZone(zoneMutex_);
-  WriteLockGuard wlockServer(serverMutex_);
+  WriteLockGuard wlock_zone(zoneMutex_);
+  WriteLockGuard wlock_server(serverMutex_);
   auto it = serverMap_.find(id);
   if (it != serverMap_.end()) {
     if (it->second.GetMetaServerList().size() != 0) {
@@ -229,11 +228,11 @@ TopoStatusCode TopologyImpl::RemoveServer(ServerIdType id) {
 }
 
 TopoStatusCode TopologyImpl::RemoveMetaServer(MetaServerIdType id) {
-  WriteLockGuard wlockServer(serverMutex_);
-  WriteLockGuard wlockMetaServer(metaServerMutex_);
+  WriteLockGuard wlock_server(serverMutex_);
+  WriteLockGuard wlock_meta_server(metaServerMutex_);
   auto it = metaServerMap_.find(id);
   if (it != metaServerMap_.end()) {
-    uint64_t metaserverThreshold =
+    uint64_t metaserver_threshold =
         it->second.GetMetaServerSpace().GetDiskThreshold();
     if (!storage_->DeleteMetaServer(id)) {
       return TopoStatusCode::TOPO_STORGE_FAIL;
@@ -245,12 +244,12 @@ TopoStatusCode TopologyImpl::RemoveMetaServer(MetaServerIdType id) {
     metaServerMap_.erase(it);
 
     // update pool
-    WriteLockGuard wlockPool(poolMutex_);
-    PoolIdType poolId = ix->second.GetPoolId();
-    auto it = poolMap_.find(poolId);
+    WriteLockGuard wlock_pool(poolMutex_);
+    PoolIdType pool_id = ix->second.GetPoolId();
+    auto it = poolMap_.find(pool_id);
     if (it != poolMap_.end()) {
       it->second.SetDiskThreshold(it->second.GetDiskThreshold() -
-                                  metaserverThreshold);
+                                  metaserver_threshold);
     } else {
       return TopoStatusCode::TOPO_POOL_NOT_FOUND;
     }
@@ -261,7 +260,7 @@ TopoStatusCode TopologyImpl::RemoveMetaServer(MetaServerIdType id) {
 }
 
 TopoStatusCode TopologyImpl::UpdatePool(const Pool& data) {
-  WriteLockGuard wlockPool(poolMutex_);
+  WriteLockGuard wlock_pool(poolMutex_);
   auto it = poolMap_.find(data.GetId());
   if (it != poolMap_.end()) {
     if (!storage_->UpdatePool(data)) {
@@ -275,7 +274,7 @@ TopoStatusCode TopologyImpl::UpdatePool(const Pool& data) {
 }
 
 TopoStatusCode TopologyImpl::UpdateZone(const Zone& data) {
-  WriteLockGuard wlockZone(zoneMutex_);
+  WriteLockGuard wlock_zone(zoneMutex_);
   auto it = zoneMap_.find(data.GetId());
   if (it != zoneMap_.end()) {
     if (!storage_->UpdateZone(data)) {
@@ -289,7 +288,7 @@ TopoStatusCode TopologyImpl::UpdateZone(const Zone& data) {
 }
 
 TopoStatusCode TopologyImpl::UpdateServer(const Server& data) {
-  WriteLockGuard wlockServer(serverMutex_);
+  WriteLockGuard wlock_server(serverMutex_);
   auto it = serverMap_.find(data.GetId());
   if (it != serverMap_.end()) {
     if (!storage_->UpdateServer(data)) {
@@ -303,13 +302,13 @@ TopoStatusCode TopologyImpl::UpdateServer(const Server& data) {
 }
 
 TopoStatusCode TopologyImpl::UpdateMetaServerOnlineState(
-    const OnlineState& onlineState, MetaServerIdType id) {
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
+    const OnlineState& online_state, MetaServerIdType id) {
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
   auto it = metaServerMap_.find(id);
   if (it != metaServerMap_.end()) {
-    if (onlineState != it->second.GetOnlineState()) {
-      WriteLockGuard wlockMetaServer(it->second.GetRWLockRef());
-      it->second.SetOnlineState(onlineState);
+    if (online_state != it->second.GetOnlineState()) {
+      WriteLockGuard wlock_meta_server(it->second.GetRWLockRef());
+      it->second.SetOnlineState(online_state);
     }
     return TopoStatusCode::TOPO_OK;
   } else {
@@ -318,75 +317,71 @@ TopoStatusCode TopologyImpl::UpdateMetaServerOnlineState(
 }
 
 TopoStatusCode TopologyImpl::GetPoolIdByMetaserverId(MetaServerIdType id,
-                                                     PoolIdType* poolIdOut) {
-  *poolIdOut = UNINITIALIZE_ID;
+                                                     PoolIdType* pool_id_out) {
+  *pool_id_out = UNINITIALIZE_ID;
   MetaServer metaserver;
   if (!GetMetaServer(id, &metaserver)) {
     LOG(ERROR) << "TopologyImpl::GetPoolIdByMetaserverId "
-               << "Fail On GetMetaServer, "
-               << "metaserverId = " << id;
+               << "Fail On GetMetaServer, " << "metaserverId = " << id;
     return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
   }
-  return GetPoolIdByServerId(metaserver.GetServerId(), poolIdOut);
+  return GetPoolIdByServerId(metaserver.GetServerId(), pool_id_out);
 }
 
 TopoStatusCode TopologyImpl::GetPoolIdByServerId(ServerIdType id,
-                                                 PoolIdType* poolIdOut) {
-  *poolIdOut = UNINITIALIZE_ID;
+                                                 PoolIdType* pool_id_out) {
+  *pool_id_out = UNINITIALIZE_ID;
   Server server;
   if (!GetServer(id, &server)) {
-    LOG(ERROR) << "TopologyImpl::GetPoolIdByServerId "
-               << "Fail On GetServer, "
+    LOG(ERROR) << "TopologyImpl::GetPoolIdByServerId " << "Fail On GetServer, "
                << "serverId = " << id;
     return TopoStatusCode::TOPO_SERVER_NOT_FOUND;
   }
 
-  *poolIdOut = server.GetPoolId();
+  *pool_id_out = server.GetPoolId();
   return TopoStatusCode::TOPO_OK;
 }
 
 TopoStatusCode TopologyImpl::UpdateMetaServerSpace(const MetaServerSpace& space,
                                                    MetaServerIdType id) {
   // find pool it belongs to
-  PoolIdType belongPoolId = UNINITIALIZE_ID;
-  TopoStatusCode ret = GetPoolIdByMetaserverId(id, &belongPoolId);
+  PoolIdType belong_pool_id = UNINITIALIZE_ID;
+  TopoStatusCode ret = GetPoolIdByMetaserverId(id, &belong_pool_id);
   if (ret != TopoStatusCode::TOPO_OK) {
     return ret;
   }
 
   // fetch write lock of the pool and read lock of metaserver map
-  WriteLockGuard wlocklPool(poolMutex_);
-  int64_t diffThreshold = 0;
+  WriteLockGuard wlockl_pool(poolMutex_);
+  int64_t diff_threshold = 0;
   {
-    ReadLockGuard rlockMetaServerMap(metaServerMutex_);
+    ReadLockGuard rlock_meta_server_map(metaServerMutex_);
     auto it = metaServerMap_.find(id);
     if (it != metaServerMap_.end()) {
-      WriteLockGuard wlockMetaServer(it->second.GetRWLockRef());
-      diffThreshold = space.GetDiskThreshold() -
-                      it->second.GetMetaServerSpace().GetDiskThreshold();
-      int64_t diffUsed =
-          space.GetDiskUsed() - it->second.GetMetaServerSpace().GetDiskUsed();
-      int64_t diffDiskMinRequire =
-          space.GetDiskMinRequire() -
-          it->second.GetMetaServerSpace().GetDiskMinRequire();
-      int64_t diffMemoryThreshold =
-          space.GetMemoryThreshold() -
-          it->second.GetMetaServerSpace().GetMemoryThreshold();
-      int64_t diffMemoryUsed = space.GetMemoryUsed() -
-                               it->second.GetMetaServerSpace().GetMemoryUsed();
-      int64_t diffMemoryMinRequire =
-          space.GetMemoryMinRequire() -
-          it->second.GetMetaServerSpace().GetMemoryMinRequire();
+      WriteLockGuard wlock_meta_server(it->second.GetRWLockRef());
+      const MetaServerSpace& old_server_space = it->second.GetMetaServerSpace();
 
-      if (diffThreshold != 0 || diffUsed != 0 || diffDiskMinRequire != 0 ||
-          diffMemoryThreshold != 0 || diffMemoryUsed != 0 ||
-          diffMemoryMinRequire != 0) {
-        DVLOG(6) << "update metaserver, diffThreshold = " << diffThreshold
-                 << ", diffUsed = " << diffUsed
-                 << ", diffDiskMinRequire = " << diffDiskMinRequire
-                 << ", diffMemoryThreshold = " << diffMemoryThreshold
-                 << ", diffMemoryUsed = " << diffMemoryUsed
-                 << ", diffMemoryMinRequire = " << diffMemoryMinRequire;
+      diff_threshold =
+          space.GetDiskThreshold() - old_server_space.GetDiskThreshold();
+      int64_t diff_used = space.GetDiskUsed() - old_server_space.GetDiskUsed();
+      int64_t diff_disk_min_require =
+          space.GetDiskMinRequire() - old_server_space.GetDiskMinRequire();
+      int64_t diff_memory_threshold =
+          space.GetMemoryThreshold() - old_server_space.GetMemoryThreshold();
+      int64_t diff_memory_used =
+          space.GetMemoryUsed() - old_server_space.GetMemoryUsed();
+      int64_t diff_memory_min_require =
+          space.GetMemoryMinRequire() - old_server_space.GetMemoryMinRequire();
+
+      if (diff_threshold != 0 || diff_used != 0 || diff_disk_min_require != 0 ||
+          diff_memory_threshold != 0 || diff_memory_used != 0 ||
+          diff_memory_min_require != 0) {
+        DVLOG(6) << "update metaserver, diffThreshold = " << diff_threshold
+                 << ", diffUsed = " << diff_used
+                 << ", diffDiskMinRequire = " << diff_disk_min_require
+                 << ", diffMemoryThreshold = " << diff_memory_threshold
+                 << ", diffMemoryUsed = " << diff_memory_used
+                 << ", diffMemoryMinRequire = " << diff_memory_min_require;
         it->second.SetMetaServerSpace(space);
         it->second.SetDirtyFlag(true);
       } else {
@@ -398,14 +393,14 @@ TopoStatusCode TopologyImpl::UpdateMetaServerSpace(const MetaServerSpace& space,
     }
   }
 
-  if (diffThreshold != 0) {
+  if (diff_threshold != 0) {
     // update pool
-    auto it = poolMap_.find(belongPoolId);
+    auto it = poolMap_.find(belong_pool_id);
     if (it != poolMap_.end()) {
-      uint64_t totalThreshold = it->second.GetDiskThreshold();
-      totalThreshold += diffThreshold;
-      DVLOG(6) << "update pool to " << totalThreshold;
-      it->second.SetDiskThreshold(totalThreshold);
+      uint64_t total_threshold = it->second.GetDiskThreshold();
+      total_threshold += diff_threshold;
+      DVLOG(6) << "update pool to " << total_threshold;
+      it->second.SetDiskThreshold(total_threshold);
     } else {
       return TopoStatusCode::TOPO_POOL_NOT_FOUND;
     }
@@ -416,10 +411,10 @@ TopoStatusCode TopologyImpl::UpdateMetaServerSpace(const MetaServerSpace& space,
 
 TopoStatusCode TopologyImpl::UpdateMetaServerStartUpTime(uint64_t time,
                                                          MetaServerIdType id) {
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
   auto it = metaServerMap_.find(id);
   if (it != metaServerMap_.end()) {
-    WriteLockGuard wlockMetaServer(it->second.GetRWLockRef());
+    WriteLockGuard wlock_meta_server(it->second.GetRWLockRef());
     it->second.SetStartUpTime(time);
     return TopoStatusCode::TOPO_OK;
   } else {
@@ -427,69 +422,69 @@ TopoStatusCode TopologyImpl::UpdateMetaServerStartUpTime(uint64_t time,
   }
 }
 
-PoolIdType TopologyImpl::FindPool(const std::string& poolName) const {
-  ReadLockGuard rlockPool(poolMutex_);
-  for (auto it = poolMap_.begin(); it != poolMap_.end(); it++) {
-    if (it->second.GetName() == poolName) {
-      return it->first;
+PoolIdType TopologyImpl::FindPool(const std::string& pool_name) const {
+  ReadLockGuard rlock_pool(poolMutex_);
+  for (const auto& it : poolMap_) {
+    if (it.second.GetName() == pool_name) {
+      return it.first;
     }
   }
   return static_cast<PoolIdType>(UNINITIALIZE_ID);
 }
 
-ZoneIdType TopologyImpl::FindZone(const std::string& zoneName,
-                                  const std::string& poolName) const {
-  PoolIdType poolId = FindPool(poolName);
-  return FindZone(zoneName, poolId);
+ZoneIdType TopologyImpl::FindZone(const std::string& zone_name,
+                                  const std::string& pool_name) const {
+  PoolIdType pool_id = FindPool(pool_name);
+  return FindZone(zone_name, pool_id);
 }
 
-ZoneIdType TopologyImpl::FindZone(const std::string& zoneName,
-                                  PoolIdType poolId) const {
-  ReadLockGuard rlockZone(zoneMutex_);
-  for (auto it = zoneMap_.begin(); it != zoneMap_.end(); it++) {
-    if ((it->second.GetPoolId() == poolId) &&
-        (it->second.GetName() == zoneName)) {
-      return it->first;
+ZoneIdType TopologyImpl::FindZone(const std::string& zone_name,
+                                  PoolIdType pool_id) const {
+  ReadLockGuard rlock_zone(zoneMutex_);
+  for (const auto& it : zoneMap_) {
+    if ((it.second.GetPoolId() == pool_id) &&
+        (it.second.GetName() == zone_name)) {
+      return it.first;
     }
   }
   return static_cast<ZoneIdType>(UNINITIALIZE_ID);
 }
 
 ServerIdType TopologyImpl::FindServerByHostName(
-    const std::string& hostName) const {
-  ReadLockGuard rlockServer(serverMutex_);
-  for (auto it = serverMap_.begin(); it != serverMap_.end(); it++) {
-    if (it->second.GetHostName() == hostName) {
-      return it->first;
+    const std::string& host_name) const {
+  ReadLockGuard rlock_server(serverMutex_);
+  for (const auto& it : serverMap_) {
+    if (it.second.GetHostName() == host_name) {
+      return it.first;
     }
   }
   return static_cast<ServerIdType>(UNINITIALIZE_ID);
 }
 
-ServerIdType TopologyImpl::FindServerByHostIpPort(const std::string& hostIp,
+ServerIdType TopologyImpl::FindServerByHostIpPort(const std::string& host_ip,
                                                   uint32_t port) const {
-  ReadLockGuard rlockServer(serverMutex_);
-  for (auto it = serverMap_.begin(); it != serverMap_.end(); it++) {
-    if (it->second.GetInternalIp() == hostIp) {
-      if (0 == it->second.GetInternalPort()) {
-        return it->first;
-      } else if (port == it->second.GetInternalPort()) {
-        return it->first;
+  ReadLockGuard rlock_server(serverMutex_);
+  for (const auto& it : serverMap_) {
+    if (it.second.GetInternalIp() == host_ip) {
+      if (0 == it.second.GetInternalPort()) {
+        return it.first;
+      } else if (port == it.second.GetInternalPort()) {
+        return it.first;
       }
-    } else if (it->second.GetExternalIp() == hostIp) {
-      if (0 == it->second.GetExternalPort()) {
-        return it->first;
-      } else if (port == it->second.GetExternalPort()) {
-        return it->first;
+    } else if (it.second.GetExternalIp() == host_ip) {
+      if (0 == it.second.GetExternalPort()) {
+        return it.first;
+      } else if (port == it.second.GetExternalPort()) {
+        return it.first;
       }
     }
   }
   return static_cast<ServerIdType>(UNINITIALIZE_ID);
 }
 
-bool TopologyImpl::GetPool(PoolIdType poolId, Pool* out) const {
-  ReadLockGuard rlockPool(poolMutex_);
-  auto it = poolMap_.find(poolId);
+bool TopologyImpl::GetPool(PoolIdType pool_id, Pool* out) const {
+  ReadLockGuard rlock_pool(poolMutex_);
+  auto it = poolMap_.find(pool_id);
   if (it != poolMap_.end()) {
     *out = it->second;
     return true;
@@ -497,9 +492,9 @@ bool TopologyImpl::GetPool(PoolIdType poolId, Pool* out) const {
   return false;
 }
 
-bool TopologyImpl::GetZone(ZoneIdType zoneId, Zone* out) const {
-  ReadLockGuard rlockZone(zoneMutex_);
-  auto it = zoneMap_.find(zoneId);
+bool TopologyImpl::GetZone(ZoneIdType zone_id, Zone* out) const {
+  ReadLockGuard rlock_zone(zoneMutex_);
+  auto it = zoneMap_.find(zone_id);
   if (it != zoneMap_.end()) {
     *out = it->second;
     return true;
@@ -507,9 +502,9 @@ bool TopologyImpl::GetZone(ZoneIdType zoneId, Zone* out) const {
   return false;
 }
 
-bool TopologyImpl::GetServer(ServerIdType serverId, Server* out) const {
-  ReadLockGuard rlockServer(serverMutex_);
-  auto it = serverMap_.find(serverId);
+bool TopologyImpl::GetServer(ServerIdType server_id, Server* out) const {
+  ReadLockGuard rlock_server(serverMutex_);
+  auto it = serverMap_.find(server_id);
   if (it != serverMap_.end()) {
     *out = it->second;
     return true;
@@ -517,26 +512,26 @@ bool TopologyImpl::GetServer(ServerIdType serverId, Server* out) const {
   return false;
 }
 
-bool TopologyImpl::GetMetaServer(MetaServerIdType metaserverId,
+bool TopologyImpl::GetMetaServer(MetaServerIdType metaserver_id,
                                  MetaServer* out) const {
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
-  auto it = metaServerMap_.find(metaserverId);
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
+  auto it = metaServerMap_.find(metaserver_id);
   if (it != metaServerMap_.end()) {
-    ReadLockGuard rlockMetaServer(it->second.GetRWLockRef());
+    ReadLockGuard rlock_meta_server(it->second.GetRWLockRef());
     *out = it->second;
     return true;
   }
   return false;
 }
 
-bool TopologyImpl::GetMetaServer(const std::string& hostIp, uint32_t port,
+bool TopologyImpl::GetMetaServer(const std::string& host_ip, uint32_t port,
                                  MetaServer* out) const {
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
-  for (auto it = metaServerMap_.begin(); it != metaServerMap_.end(); it++) {
-    ReadLockGuard rlockMetaServer(it->second.GetRWLockRef());
-    if (it->second.GetInternalIp() == hostIp &&
-        it->second.GetInternalPort() == port) {
-      *out = it->second;
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
+  for (const auto& it : metaServerMap_) {
+    ReadLockGuard rlock_meta_server(it.second.GetRWLockRef());
+    if (it.second.GetInternalIp() == host_ip &&
+        it.second.GetInternalPort() == port) {
+      *out = it.second;
       return true;
     }
   }
@@ -544,10 +539,10 @@ bool TopologyImpl::GetMetaServer(const std::string& hostIp, uint32_t port,
 }
 
 TopoStatusCode TopologyImpl::AddPartition(const Partition& data) {
-  WriteLockGuard wlockCluster(clusterMutex_);
-  ReadLockGuard rlockPool(poolMutex_);
-  WriteLockGuard wlockCopyset(copySetMutex_);
-  WriteLockGuard wlockPartition(partitionMutex_);
+  WriteLockGuard wlock_cluster(clusterMutex_);
+  ReadLockGuard rlock_pool(poolMutex_);
+  WriteLockGuard wlock_copyset(copySetMutex_);
+  WriteLockGuard wlock_partition(partitionMutex_);
   PartitionIdType id = data.GetPartitionId();
 
   if (poolMap_.find(data.GetPoolId()) != poolMap_.end()) {
@@ -583,8 +578,8 @@ TopoStatusCode TopologyImpl::AddPartition(const Partition& data) {
 }
 
 TopoStatusCode TopologyImpl::RemovePartition(PartitionIdType id) {
-  WriteLockGuard wlockCopySet(copySetMutex_);
-  WriteLockGuard wlockPartition(partitionMutex_);
+  WriteLockGuard wlock_copy_set(copySetMutex_);
+  WriteLockGuard wlock_partition(partitionMutex_);
   auto it = partitionMap_.find(id);
   if (it != partitionMap_.end()) {
     if (!storage_->DeletePartition(id)) {
@@ -604,7 +599,7 @@ TopoStatusCode TopologyImpl::RemovePartition(PartitionIdType id) {
 }
 
 TopoStatusCode TopologyImpl::UpdatePartition(const Partition& data) {
-  WriteLockGuard wlockPartition(partitionMutex_);
+  WriteLockGuard wlock_partition(partitionMutex_);
   auto it = partitionMap_.find(data.GetPartitionId());
   if (it != partitionMap_.end()) {
     if (!storage_->UpdatePartition(data)) {
@@ -618,9 +613,9 @@ TopoStatusCode TopologyImpl::UpdatePartition(const Partition& data) {
 }
 
 TopoStatusCode TopologyImpl::UpdatePartitionStatistic(
-    uint32_t partitionId, PartitionStatistic statistic) {
-  WriteLockGuard wlockPartition(partitionMutex_);
-  auto it = partitionMap_.find(partitionId);
+    uint32_t partition_id, PartitionStatistic statistic) {
+  WriteLockGuard wlock_partition(partitionMutex_);
+  auto it = partitionMap_.find(partition_id);
   if (it != partitionMap_.end()) {
     Partition temp = it->second;
     temp.SetStatus(statistic.status);
@@ -631,33 +626,33 @@ TopoStatusCode TopologyImpl::UpdatePartitionStatistic(
     if (!storage_->UpdatePartition(temp)) {
       return TopoStatusCode::TOPO_STORGE_FAIL;
     }
-    it->second = std::move(temp);
+    it->second = temp;
     return TopoStatusCode::TOPO_OK;
   } else {
     return TopoStatusCode::TOPO_PARTITION_NOT_FOUND;
   }
 }
 
-TopoStatusCode TopologyImpl::UpdatePartitionStatus(PartitionIdType partitionId,
+TopoStatusCode TopologyImpl::UpdatePartitionStatus(PartitionIdType partition_id,
                                                    PartitionStatus status) {
-  WriteLockGuard wlockPartition(partitionMutex_);
-  auto it = partitionMap_.find(partitionId);
+  WriteLockGuard wlock_partition(partitionMutex_);
+  auto it = partitionMap_.find(partition_id);
   if (it != partitionMap_.end()) {
     Partition temp = it->second;
     temp.SetStatus(status);
     if (!storage_->UpdatePartition(temp)) {
       return TopoStatusCode::TOPO_STORGE_FAIL;
     }
-    it->second = std::move(temp);
+    it->second = temp;
     return TopoStatusCode::TOPO_OK;
   } else {
     return TopoStatusCode::TOPO_PARTITION_NOT_FOUND;
   }
 }
 
-bool TopologyImpl::GetPartition(PartitionIdType partitionId, Partition* out) {
-  ReadLockGuard rlockPartition(partitionMutex_);
-  auto it = partitionMap_.find(partitionId);
+bool TopologyImpl::GetPartition(PartitionIdType partition_id, Partition* out) {
+  ReadLockGuard rlock_partition(partitionMutex_);
+  auto it = partitionMap_.find(partition_id);
   if (it != partitionMap_.end()) {
     *out = it->second;
     return true;
@@ -667,13 +662,13 @@ bool TopologyImpl::GetPartition(PartitionIdType partitionId, Partition* out) {
 
 bool TopologyImpl::GetCopysetOfPartition(PartitionIdType id,
                                          CopySetInfo* out) const {
-  ReadLockGuard rlockPartition(partitionMutex_);
+  ReadLockGuard rlock_partition(partitionMutex_);
   auto it = partitionMap_.find(id);
   if (it != partitionMap_.end()) {
-    PoolIdType poolId = it->second.GetPoolId();
-    CopySetIdType csId = it->second.GetCopySetId();
-    CopySetKey key(poolId, csId);
-    ReadLockGuard rlockCopyset(copySetMutex_);
+    PoolIdType pool_id = it->second.GetPoolId();
+    CopySetIdType cs_id = it->second.GetCopySetId();
+    CopySetKey key(pool_id, cs_id);
+    ReadLockGuard rlock_copyset(copySetMutex_);
     auto iter = copySetMap_.find(key);
     if (iter != copySetMap_.end()) {
       *out = iter->second;
@@ -684,7 +679,7 @@ bool TopologyImpl::GetCopysetOfPartition(PartitionIdType id,
 }
 
 std::list<CopySetKey> TopologyImpl::GetAvailableCopysetKeyList() const {
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   std::list<CopySetKey> result;
   for (auto const& it : copySetMap_) {
     if (it.second.GetPartitionNum() >= option_.maxPartitionNumberInCopyset) {
@@ -697,7 +692,7 @@ std::list<CopySetKey> TopologyImpl::GetAvailableCopysetKeyList() const {
 }
 
 std::vector<CopySetInfo> TopologyImpl::GetAvailableCopysetList() const {
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   std::vector<CopySetInfo> result;
   for (auto const& it : copySetMap_) {
     if (it.second.GetPartitionNum() >= option_.maxPartitionNumberInCopyset) {
@@ -718,15 +713,15 @@ int TopologyImpl::GetOneRandomNumber(int start, int end) const {
 }
 
 bool TopologyImpl::GetAvailableCopyset(CopySetInfo* out) const {
-  std::list<CopySetKey> copysetList = GetAvailableCopysetKeyList();
-  if (copysetList.size() == 0) {
+  std::list<CopySetKey> copyset_list = GetAvailableCopysetKeyList();
+  if (copyset_list.size() == 0) {
     return false;
   }
 
   // random select one copyset
-  int randomValue = GetOneRandomNumber(0, copysetList.size() - 1);
-  auto iter = copysetList.begin();
-  std::advance(iter, randomValue);
+  int random_value = GetOneRandomNumber(0, copyset_list.size() - 1);
+  auto iter = copyset_list.begin();
+  std::advance(iter, random_value);
   auto it = copySetMap_.find(*iter);
   if (it != copySetMap_.end()) {
     *out = it->second;
@@ -736,7 +731,7 @@ bool TopologyImpl::GetAvailableCopyset(CopySetInfo* out) const {
 }
 
 int TopologyImpl::GetAvailableCopysetNum() const {
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   int num = 0;
   for (auto const& it : copySetMap_) {
     if (it.second.GetPartitionNum() >= option_.maxPartitionNumberInCopyset) {
@@ -750,34 +745,34 @@ int TopologyImpl::GetAvailableCopysetNum() const {
 std::list<Partition> TopologyImpl::GetPartitionOfFs(
     FsIdType id, PartitionFilter filter) const {
   std::list<Partition> ret;
-  ReadLockGuard rlockPartitionMap(partitionMutex_);
-  for (auto it = partitionMap_.begin(); it != partitionMap_.end(); it++) {
-    if (it->second.GetFsId() == id && filter(it->second)) {
-      ret.push_back(it->second);
+  ReadLockGuard rlock_partition_map(partitionMutex_);
+  for (const auto& it : partitionMap_) {
+    if (it.second.GetFsId() == id && filter(it.second)) {
+      ret.push_back(it.second);
     }
   }
   return ret;
 }
 
 std::list<Partition> TopologyImpl::GetPartitionInfosInPool(
-    PoolIdType poolId, PartitionFilter filter) const {
+    PoolIdType pool_id, PartitionFilter filter) const {
   std::list<Partition> ret;
-  ReadLockGuard rlockPartitionMap(partitionMutex_);
-  for (auto it = partitionMap_.begin(); it != partitionMap_.end(); it++) {
-    if (it->second.GetPoolId() == poolId && filter(it->second)) {
-      ret.push_back(it->second);
+  ReadLockGuard rlock_partition_map(partitionMutex_);
+  for (const auto& it : partitionMap_) {
+    if (it.second.GetPoolId() == pool_id && filter(it.second)) {
+      ret.push_back(it.second);
     }
   }
   return ret;
 }
 
 std::list<Partition> TopologyImpl::GetPartitionInfosInCopyset(
-    CopySetIdType copysetId) const {
+    CopySetIdType copyset_id) const {
   std::list<Partition> ret;
-  ReadLockGuard rlockPartitionMap(partitionMutex_);
-  for (auto it = partitionMap_.begin(); it != partitionMap_.end(); it++) {
-    if (it->second.GetCopySetId() == copysetId) {
-      ret.push_back(it->second);
+  ReadLockGuard rlock_partition_map(partitionMutex_);
+  for (const auto& it : partitionMap_) {
+    if (it.second.GetCopySetId() == copyset_id) {
+      ret.push_back(it.second);
     }
   }
   return ret;
@@ -787,11 +782,11 @@ std::list<Partition> TopologyImpl::GetPartitionInfosInCopyset(
 std::vector<MetaServerIdType> TopologyImpl::GetMetaServerInCluster(
     MetaServerFilter filter) const {
   std::vector<MetaServerIdType> ret;
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
-  for (auto it = metaServerMap_.begin(); it != metaServerMap_.end(); it++) {
-    ReadLockGuard rlockMetaServer(it->second.GetRWLockRef());
-    if (filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
+  for (const auto& it : metaServerMap_) {
+    ReadLockGuard rlock_meta_server(it.second.GetRWLockRef());
+    if (filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -800,10 +795,10 @@ std::vector<MetaServerIdType> TopologyImpl::GetMetaServerInCluster(
 std::vector<ServerIdType> TopologyImpl::GetServerInCluster(
     ServerFilter filter) const {
   std::vector<ServerIdType> ret;
-  ReadLockGuard rlockServer(serverMutex_);
-  for (auto it = serverMap_.begin(); it != serverMap_.end(); it++) {
-    if (filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_server(serverMutex_);
+  for (const auto& it : serverMap_) {
+    if (filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -812,10 +807,10 @@ std::vector<ServerIdType> TopologyImpl::GetServerInCluster(
 std::vector<ZoneIdType> TopologyImpl::GetZoneInCluster(
     ZoneFilter filter) const {
   std::vector<ZoneIdType> ret;
-  ReadLockGuard rlockZone(zoneMutex_);
-  for (auto it = zoneMap_.begin(); it != zoneMap_.end(); it++) {
-    if (filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_zone(zoneMutex_);
+  for (const auto& it : zoneMap_) {
+    if (filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -824,10 +819,10 @@ std::vector<ZoneIdType> TopologyImpl::GetZoneInCluster(
 std::vector<PoolIdType> TopologyImpl::GetPoolInCluster(
     PoolFilter filter) const {
   std::vector<PoolIdType> ret;
-  ReadLockGuard rlockPool(poolMutex_);
-  for (auto it = poolMap_.begin(); it != poolMap_.end(); it++) {
-    if (filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_pool(poolMutex_);
+  for (const auto& it : poolMap_) {
+    if (filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -836,11 +831,11 @@ std::vector<PoolIdType> TopologyImpl::GetPoolInCluster(
 std::list<MetaServerIdType> TopologyImpl::GetMetaServerInServer(
     ServerIdType id, MetaServerFilter filter) const {
   std::list<MetaServerIdType> ret;
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
-  for (auto it = metaServerMap_.begin(); it != metaServerMap_.end(); it++) {
-    ReadLockGuard rlockMetaServer(it->second.GetRWLockRef());
-    if (it->second.GetServerId() == id && filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
+  for (const auto& it : metaServerMap_) {
+    ReadLockGuard rlock_meta_server(it.second.GetRWLockRef());
+    if (it.second.GetServerId() == id && filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -849,8 +844,8 @@ std::list<MetaServerIdType> TopologyImpl::GetMetaServerInServer(
 std::list<MetaServerIdType> TopologyImpl::GetMetaServerInZone(
     ZoneIdType id, MetaServerFilter filter) const {
   std::list<MetaServerIdType> ret;
-  std::list<ServerIdType> serverList = GetServerInZone(id);
-  for (ServerIdType s : serverList) {
+  std::list<ServerIdType> server_list = GetServerInZone(id);
+  for (ServerIdType s : server_list) {
     std::list<MetaServerIdType> temp = GetMetaServerInServer(s, filter);
     ret.splice(ret.begin(), temp);
   }
@@ -860,8 +855,8 @@ std::list<MetaServerIdType> TopologyImpl::GetMetaServerInZone(
 std::list<MetaServerIdType> TopologyImpl::GetMetaServerInPool(
     PoolIdType id, MetaServerFilter filter) const {
   std::list<MetaServerIdType> ret;
-  std::list<ZoneIdType> zoneList = GetZoneInPool(id);
-  for (ZoneIdType z : zoneList) {
+  std::list<ZoneIdType> zone_list = GetZoneInPool(id);
+  for (ZoneIdType z : zone_list) {
     std::list<MetaServerIdType> temp = GetMetaServerInZone(z, filter);
     ret.splice(ret.begin(), temp);
   }
@@ -876,10 +871,10 @@ uint32_t TopologyImpl::GetMetaServerNumInPool(PoolIdType id,
 std::list<ServerIdType> TopologyImpl::GetServerInZone(
     ZoneIdType id, ServerFilter filter) const {
   std::list<ServerIdType> ret;
-  ReadLockGuard rlockServer(serverMutex_);
-  for (auto it = serverMap_.begin(); it != serverMap_.end(); it++) {
-    if (it->second.GetZoneId() == id && filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_server(serverMutex_);
+  for (const auto& it : serverMap_) {
+    if (it.second.GetZoneId() == id && filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
@@ -888,36 +883,36 @@ std::list<ServerIdType> TopologyImpl::GetServerInZone(
 std::list<ZoneIdType> TopologyImpl::GetZoneInPool(PoolIdType id,
                                                   ZoneFilter filter) const {
   std::list<ZoneIdType> ret;
-  ReadLockGuard rlockZone(zoneMutex_);
-  for (auto it = zoneMap_.begin(); it != zoneMap_.end(); it++) {
-    if (it->second.GetPoolId() == id && filter(it->second)) {
-      ret.push_back(it->first);
+  ReadLockGuard rlock_zone(zoneMutex_);
+  for (const auto& it : zoneMap_) {
+    if (it.second.GetPoolId() == id && filter(it.second)) {
+      ret.push_back(it.first);
     }
   }
   return ret;
 }
 
 std::vector<CopySetIdType> TopologyImpl::GetCopySetsInPool(
-    PoolIdType poolId, CopySetFilter filter) const {
+    PoolIdType pool_id, CopySetFilter filter) const {
   std::vector<CopySetIdType> ret;
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   for (const auto& it : copySetMap_) {
-    if (it.first.first == poolId && filter(it.second)) {
+    if (it.first.first == pool_id && filter(it.second)) {
       ret.push_back(it.first.second);
     }
   }
   return ret;
 }
 
-uint32_t TopologyImpl::GetCopySetNumInPool(PoolIdType poolId,
+uint32_t TopologyImpl::GetCopySetNumInPool(PoolIdType pool_id,
                                            CopySetFilter filter) const {
-  return GetCopySetsInPool(poolId, filter).size();
+  return GetCopySetsInPool(pool_id, filter).size();
 }
 
 std::vector<CopySetKey> TopologyImpl::GetCopySetsInCluster(
     CopySetFilter filter) const {
   std::vector<CopySetKey> ret;
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   for (const auto& it : copySetMap_) {
     if (filter(it.second)) {
       ret.push_back(it.first);
@@ -927,11 +922,11 @@ std::vector<CopySetKey> TopologyImpl::GetCopySetsInCluster(
 }
 
 std::vector<CopySetInfo> TopologyImpl::GetCopySetInfosInPool(
-    PoolIdType poolId, CopySetFilter filter) const {
+    PoolIdType pool_id, CopySetFilter filter) const {
   std::vector<CopySetInfo> ret;
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   for (const auto& it : copySetMap_) {
-    if (it.first.first == poolId && filter(it.second)) {
+    if (it.first.first == pool_id && filter(it.second)) {
       ret.push_back(it.second);
     }
   }
@@ -941,7 +936,7 @@ std::vector<CopySetInfo> TopologyImpl::GetCopySetInfosInPool(
 std::vector<CopySetKey> TopologyImpl::GetCopySetsInMetaServer(
     MetaServerIdType id, CopySetFilter filter) const {
   std::vector<CopySetKey> ret;
-  ReadLockGuard rlockCopySet(copySetMutex_);
+  ReadLockGuard rlock_copy_set(copySetMutex_);
   for (const auto& it : copySetMap_) {
     if (it.second.GetCopySetMembers().count(id) > 0 && filter(it.second)) {
       ret.push_back(it.first);
@@ -958,88 +953,88 @@ TopoStatusCode TopologyImpl::Init(const TopologyOption& option) {
     return ret;
   }
 
-  PoolIdType maxPoolId;
-  if (!storage_->LoadPool(&poolMap_, &maxPoolId)) {
+  PoolIdType max_pool_id;
+  if (!storage_->LoadPool(&poolMap_, &max_pool_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadPool fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initPoolIdGenerator(maxPoolId);
+  idGenerator_->initPoolIdGenerator(max_pool_id);
   LOG(INFO) << "[TopologyImpl::init], LoadPool success, "
             << "pool num = " << poolMap_.size();
 
-  ZoneIdType maxZoneId;
-  if (!storage_->LoadZone(&zoneMap_, &maxZoneId)) {
+  ZoneIdType max_zone_id;
+  if (!storage_->LoadZone(&zoneMap_, &max_zone_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadZone fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initZoneIdGenerator(maxZoneId);
+  idGenerator_->initZoneIdGenerator(max_zone_id);
   LOG(INFO) << "[TopologyImpl::init], LoadZone success, "
             << "zone num = " << zoneMap_.size();
 
-  ServerIdType maxServerId;
-  if (!storage_->LoadServer(&serverMap_, &maxServerId)) {
+  ServerIdType max_server_id;
+  if (!storage_->LoadServer(&serverMap_, &max_server_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadServer fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initServerIdGenerator(maxServerId);
+  idGenerator_->initServerIdGenerator(max_server_id);
   LOG(INFO) << "[TopologyImpl::init], LoadServer success, "
             << "server num = " << serverMap_.size();
 
-  MetaServerIdType maxMetaServerId;
-  if (!storage_->LoadMetaServer(&metaServerMap_, &maxMetaServerId)) {
+  MetaServerIdType max_meta_server_id;
+  if (!storage_->LoadMetaServer(&metaServerMap_, &max_meta_server_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadMetaServer fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initMetaServerIdGenerator(maxMetaServerId);
+  idGenerator_->initMetaServerIdGenerator(max_meta_server_id);
   LOG(INFO) << "[TopologyImpl::init], LoadMetaServer success, "
             << "metaserver num = " << metaServerMap_.size();
 
   // update pool capacity
-  for (auto pair : metaServerMap_) {
-    PoolIdType poolId = UNINITIALIZE_ID;
-    TopoStatusCode ret = GetPoolIdByMetaserverId(pair.second.GetId(), &poolId);
+  for (const auto& pair : metaServerMap_) {
+    PoolIdType pool_id = UNINITIALIZE_ID;
+    TopoStatusCode ret = GetPoolIdByMetaserverId(pair.second.GetId(), &pool_id);
     if (ret != TopoStatusCode::TOPO_OK) {
       return ret;
     }
 
-    auto it = poolMap_.find(poolId);
+    auto it = poolMap_.find(pool_id);
     if (it != poolMap_.end()) {
-      uint64_t totalThreshold =
+      uint64_t total_threshold =
           it->second.GetDiskThreshold() +
           pair.second.GetMetaServerSpace().GetDiskThreshold();
-      it->second.SetDiskThreshold(totalThreshold);
+      it->second.SetDiskThreshold(total_threshold);
     } else {
       LOG(ERROR) << "TopologyImpl::Init Fail On Get Pool, "
-                 << "poolId = " << poolId;
+                 << "poolId = " << pool_id;
       return TopoStatusCode::TOPO_POOL_NOT_FOUND;
     }
   }
   LOG(INFO) << "Calc Pool capacity success.";
 
-  std::map<PoolIdType, CopySetIdType> copySetIdMaxMap;
-  if (!storage_->LoadCopySet(&copySetMap_, &copySetIdMaxMap)) {
+  std::map<PoolIdType, CopySetIdType> copy_set_id_max_map;
+  if (!storage_->LoadCopySet(&copySetMap_, &copy_set_id_max_map)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadCopySet fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initCopySetIdGenerator(copySetIdMaxMap);
+  idGenerator_->initCopySetIdGenerator(copy_set_id_max_map);
   LOG(INFO) << "[TopologyImpl::init], LoadCopySet success, "
             << "copyset num = " << copySetMap_.size();
 
-  PartitionIdType maxPartitionId;
-  if (!storage_->LoadPartition(&partitionMap_, &maxPartitionId)) {
+  PartitionIdType max_partition_id;
+  if (!storage_->LoadPartition(&partitionMap_, &max_partition_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadPartition fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initPartitionIdGenerator(maxPartitionId);
+  idGenerator_->initPartitionIdGenerator(max_partition_id);
 
   // MemcacheCluster
-  MemcacheClusterIdType maxMemcacheClusterId;
+  MemcacheClusterIdType max_memcache_cluster_id;
   if (!storage_->LoadMemcacheCluster(&memcacheClusterMap_,
-                                     &maxMemcacheClusterId)) {
+                                     &max_memcache_cluster_id)) {
     LOG(ERROR) << "[TopologyImpl::init], LoadMemcacheCluster fail.";
     return TopoStatusCode::TOPO_STORGE_FAIL;
   }
-  idGenerator_->initMemcacheClusterIdGenerator(maxMemcacheClusterId);
+  idGenerator_->initMemcacheClusterIdGenerator(max_memcache_cluster_id);
 
   // Fs2MemcacheCLuster
   if (!storage_->LoadFs2MemcacheCluster(&fs2MemcacheCluster_)) {
@@ -1074,16 +1069,16 @@ TopoStatusCode TopologyImpl::Init(const TopologyOption& option) {
   }
 
   for (const auto& it : metaServerMap_) {
-    ServerIdType sId = it.second.GetServerId();
-    serverMap_[sId].AddMetaServer(it.first);
+    ServerIdType s_id = it.second.GetServerId();
+    serverMap_[s_id].AddMetaServer(it.first);
   }
 
   return TopoStatusCode::TOPO_OK;
 }
 
 TopoStatusCode TopologyImpl::AddCopySet(const CopySetInfo& data) {
-  ReadLockGuard rlockPool(poolMutex_);
-  WriteLockGuard wlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_pool(poolMutex_);
+  WriteLockGuard wlock_copy_set_map(copySetMutex_);
   auto it = poolMap_.find(data.GetPoolId());
   if (it != poolMap_.end()) {
     CopySetKey key(data.GetPoolId(), data.GetId());
@@ -1102,14 +1097,14 @@ TopoStatusCode TopologyImpl::AddCopySet(const CopySetInfo& data) {
 }
 
 TopoStatusCode TopologyImpl::AddCopySetCreating(const CopySetKey& key) {
-  WriteLockGuard wlockCopySetCreating(copySetCreatingMutex_);
+  WriteLockGuard wlock_copy_set_creating(copySetCreatingMutex_);
   auto iter = copySetCreating_.insert(key);
   return iter.second ? TopoStatusCode::TOPO_OK
                      : TopoStatusCode::TOPO_ID_DUPLICATED;
 }
 
 TopoStatusCode TopologyImpl::RemoveCopySet(CopySetKey key) {
-  WriteLockGuard wlockCopySetMap(copySetMutex_);
+  WriteLockGuard wlock_copy_set_map(copySetMutex_);
   auto it = copySetMap_.find(key);
   if (it != copySetMap_.end()) {
     if (!storage_->DeleteCopySet(key)) {
@@ -1123,16 +1118,16 @@ TopoStatusCode TopologyImpl::RemoveCopySet(CopySetKey key) {
 }
 
 void TopologyImpl::RemoveCopySetCreating(CopySetKey key) {
-  WriteLockGuard wlockCopySetCreating(copySetCreatingMutex_);
+  WriteLockGuard wlock_copy_set_creating(copySetCreatingMutex_);
   copySetCreating_.erase(key);
 }
 
 TopoStatusCode TopologyImpl::UpdateCopySetTopo(const CopySetInfo& data) {
-  ReadLockGuard rlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_copy_set_map(copySetMutex_);
   CopySetKey key(data.GetPoolId(), data.GetId());
   auto it = copySetMap_.find(key);
   if (it != copySetMap_.end()) {
-    WriteLockGuard wlockCopySet(it->second.GetRWLockRef());
+    WriteLockGuard wlock_copy_set(it->second.GetRWLockRef());
     it->second.SetLeader(data.GetLeader());
     it->second.SetEpoch(data.GetEpoch());
     it->second.SetCopySetMembers(data.GetCopySetMembers());
@@ -1153,13 +1148,13 @@ TopoStatusCode TopologyImpl::UpdateCopySetTopo(const CopySetInfo& data) {
 
 TopoStatusCode TopologyImpl::SetCopySetAvalFlag(const CopySetKey& key,
                                                 bool aval) {
-  ReadLockGuard rlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_copy_set_map(copySetMutex_);
   auto it = copySetMap_.find(key);
   if (it != copySetMap_.end()) {
-    WriteLockGuard wlockCopySet(it->second.GetRWLockRef());
-    auto copysetInfo = it->second;
-    copysetInfo.SetAvailableFlag(aval);
-    bool ret = storage_->UpdateCopySet(copysetInfo);
+    WriteLockGuard wlock_copy_set(it->second.GetRWLockRef());
+    auto copyset_info = it->second;
+    copyset_info.SetAvailableFlag(aval);
+    bool ret = storage_->UpdateCopySet(copyset_info);
     if (!ret) {
       LOG(ERROR) << "UpdateCopySet met storage error";
       return TopoStatusCode::TOPO_STORGE_FAIL;
@@ -1174,10 +1169,10 @@ TopoStatusCode TopologyImpl::SetCopySetAvalFlag(const CopySetKey& key,
 }
 
 bool TopologyImpl::GetCopySet(CopySetKey key, CopySetInfo* out) const {
-  ReadLockGuard rlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_copy_set_map(copySetMutex_);
   auto it = copySetMap_.find(key);
   if (it != copySetMap_.end()) {
-    ReadLockGuard rlockCopySet(it->second.GetRWLockRef());
+    ReadLockGuard rlock_copy_set(it->second.GetRWLockRef());
     *out = it->second;
     return true;
   } else {
@@ -1212,11 +1207,11 @@ void TopologyImpl::BackEndFunc() {
 
 void TopologyImpl::FlushCopySetToStorage() {
   std::vector<PoolIdType> pools = GetPoolInCluster();
-  for (const auto poolId : pools) {
-    ReadLockGuard rlockCopySetMap(copySetMutex_);
+  for (const auto pool_id : pools) {
+    ReadLockGuard rlock_copy_set_map(copySetMutex_);
     for (auto& c : copySetMap_) {
-      WriteLockGuard wlockCopySet(c.second.GetRWLockRef());
-      if (c.second.GetDirtyFlag() && c.second.GetPoolId() == poolId) {
+      WriteLockGuard wlock_copy_set(c.second.GetRWLockRef());
+      if (c.second.GetDirtyFlag() && c.second.GetPoolId() == pool_id) {
         c.second.SetDirtyFlag(false);
         if (!storage_->UpdateCopySet(c.second)) {
           LOG(WARNING) << "update copyset(" << c.second.GetPoolId() << ","
@@ -1228,19 +1223,19 @@ void TopologyImpl::FlushCopySetToStorage() {
 }
 
 void TopologyImpl::FlushMetaServerToStorage() {
-  std::vector<MetaServer> toUpdate;
+  std::vector<MetaServer> to_update;
   {
-    ReadLockGuard rlockMetaServerMap(metaServerMutex_);
+    ReadLockGuard rlock_meta_server_map(metaServerMutex_);
     for (auto& c : metaServerMap_) {
       // update DirtyFlag only, thus only read lock is needed
-      ReadLockGuard rlockMetaServer(c.second.GetRWLockRef());
+      ReadLockGuard rlock_meta_server(c.second.GetRWLockRef());
       if (c.second.GetDirtyFlag()) {
         c.second.SetDirtyFlag(false);
-        toUpdate.push_back(c.second);
+        to_update.push_back(c.second);
       }
     }
   }
-  for (const auto& v : toUpdate) {
+  for (const auto& v : to_update) {
     if (!storage_->UpdateMetaServer(v)) {
       LOG(WARNING) << "update metaserver to repo fail"
                    << ", metaserverid = " << v.GetId();
@@ -1274,13 +1269,13 @@ bool TopologyImpl::GetClusterInfo(ClusterInformation* info) {
 
 // update partition tx, and ensure atomicity
 TopoStatusCode TopologyImpl::UpdatePartitionTxIds(
-    std::vector<PartitionTxId> txIds) {
+    std::vector<PartitionTxId> tx_ids) {
   std::vector<Partition> partitions;
-  WriteLockGuard wlockPartition(partitionMutex_);
-  for (auto item : txIds) {
+  WriteLockGuard wlock_partition(partitionMutex_);
+  for (const auto& item : tx_ids) {
     auto it = partitionMap_.find(item.partitionid());
     if (it != partitionMap_.end()) {
-      ReadLockGuard rlockPartition(it->second.GetRWLockRef());
+      ReadLockGuard rlock_partition(it->second.GetRWLockRef());
       Partition tmp = it->second;
       tmp.SetTxId(item.txid());
       partitions.emplace_back(tmp);
@@ -1292,7 +1287,7 @@ TopoStatusCode TopologyImpl::UpdatePartitionTxIds(
   }
   if (storage_->UpdatePartitions(partitions)) {
     // update memory
-    for (auto item : partitions) {
+    for (const auto& item : partitions) {
       partitionMap_[item.GetPartitionId()] = item;
     }
     return TopoStatusCode::TOPO_OK;
@@ -1302,19 +1297,20 @@ TopoStatusCode TopologyImpl::UpdatePartitionTxIds(
 }
 
 TopoStatusCode TopologyImpl::ChooseNewMetaServerForCopyset(
-    PoolIdType poolId, const std::set<ZoneIdType>& unavailableZones,
-    const std::set<MetaServerIdType>& unavailableMs, MetaServerIdType* target) {
+    PoolIdType pool_id, const std::set<ZoneIdType>& unavailable_zones,
+    const std::set<MetaServerIdType>& unavailable_ms,
+    MetaServerIdType* target) {
   MetaServerFilter filter = [](const MetaServer& ms) {
     return ms.GetOnlineState() == OnlineState::ONLINE;
   };
 
-  auto metaservers = GetMetaServerInPool(poolId, filter);
+  auto metaservers = GetMetaServerInPool(pool_id, filter);
   *target = UNINITIALIZE_ID;
-  double tempUsedPercent = 100;
+  double temp_used_percent = 100;
 
   for (const auto& it : metaservers) {
-    auto iter = unavailableMs.find(it);
-    if (iter != unavailableMs.end()) {
+    auto iter = unavailable_ms.find(it);
+    if (iter != unavailable_ms.end()) {
       continue;
     }
 
@@ -1322,14 +1318,14 @@ TopoStatusCode TopologyImpl::ChooseNewMetaServerForCopyset(
     if (GetMetaServer(it, &metaserver)) {
       Server server;
       if (GetServer(metaserver.GetServerId(), &server)) {
-        auto iter = unavailableZones.find(server.GetZoneId());
-        if (iter == unavailableZones.end()) {
+        auto iter = unavailable_zones.find(server.GetZoneId());
+        if (iter == unavailable_zones.end()) {
           double used =
               metaserver.GetMetaServerSpace().GetResourceUseRatioPercent();
           if (metaserver.GetMetaServerSpace().IsMetaserverResourceAvailable() &&
-              used < tempUsedPercent) {
+              used < temp_used_percent) {
             *target = it;
-            tempUsedPercent = used;
+            temp_used_percent = used;
           }
         }
       } else {
@@ -1338,8 +1334,7 @@ TopoStatusCode TopologyImpl::ChooseNewMetaServerForCopyset(
         return TopoStatusCode::TOPO_SERVER_NOT_FOUND;
       }
     } else {
-      LOG(ERROR) << "get metaserver failed,"
-                 << " the metaserver id = " << it;
+      LOG(ERROR) << "get metaserver failed," << " the metaserver id = " << it;
       return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
     }
   }
@@ -1351,7 +1346,7 @@ TopoStatusCode TopologyImpl::ChooseNewMetaServerForCopyset(
 }
 
 uint32_t TopologyImpl::GetCopysetNumInMetaserver(MetaServerIdType id) const {
-  ReadLockGuard rlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_copy_set_map(copySetMutex_);
   uint32_t num = 0;
   for (const auto& it : copySetMap_) {
     if (it.second.HasMember(id)) {
@@ -1363,7 +1358,7 @@ uint32_t TopologyImpl::GetCopysetNumInMetaserver(MetaServerIdType id) const {
 }
 
 uint32_t TopologyImpl::GetLeaderNumInMetaserver(MetaServerIdType id) const {
-  ReadLockGuard rlockCopySetMap(copySetMutex_);
+  ReadLockGuard rlock_copy_set_map(copySetMutex_);
   uint32_t num = 0;
   for (const auto& it : copySetMap_) {
     if (it.second.GetLeader() == id) {
@@ -1386,91 +1381,91 @@ void TopologyImpl::GetAvailableMetaserversUnlock(
 }
 
 TopoStatusCode TopologyImpl::GenCandidateMapUnlock(
-    PoolIdType poolId,
-    std::map<ZoneIdType, std::vector<MetaServerIdType>>* candidateMap) {
+    PoolIdType pool_id,
+    std::map<ZoneIdType, std::vector<MetaServerIdType>>* candidate_map) {
   // 1. get all online and available metaserver
   std::vector<const MetaServer*> metaservers;
   GetAvailableMetaserversUnlock(&metaservers);
-  for (auto it : metaservers) {
-    ServerIdType serverId = it->GetServerId();
+  for (const auto* it : metaservers) {
+    ServerIdType server_id = it->GetServerId();
     Server server;
-    if (!GetServer(serverId, &server)) {
+    if (!GetServer(server_id, &server)) {
       LOG(ERROR) << "get server failed when choose metaservers,"
-                 << " the serverId = " << serverId;
+                 << " the serverId = " << server_id;
       return TopoStatusCode::TOPO_SERVER_NOT_FOUND;
     }
 
-    if (poolId != server.GetPoolId()) {
+    if (pool_id != server.GetPoolId()) {
       continue;
     }
 
-    ZoneIdType zoneId = server.GetZoneId();
-    (*candidateMap)[zoneId].push_back(it->GetId());
+    ZoneIdType zone_id = server.GetZoneId();
+    (*candidate_map)[zone_id].push_back(it->GetId());
   }
 
   return TopoStatusCode::TOPO_OK;
 }
 
 TopoStatusCode TopologyImpl::GenCopysetAddrBatchForPool(
-    PoolIdType poolId, uint16_t replicaNum,
-    std::list<CopysetCreateInfo>* copysetList) {
+    PoolIdType pool_id, uint16_t replica_num,
+    std::list<CopysetCreateInfo>* copyset_list) {
   // 1. genarate candidateMap
-  std::map<ZoneIdType, std::vector<MetaServerIdType>> candidateMap;
-  auto ret = GenCandidateMapUnlock(poolId, &candidateMap);
+  std::map<ZoneIdType, std::vector<MetaServerIdType>> candidate_map;
+  auto ret = GenCandidateMapUnlock(pool_id, &candidate_map);
   if (ret != TopoStatusCode::TOPO_OK) {
-    LOG(ERROR) << "generate candidate map for pool " << poolId
+    LOG(ERROR) << "generate candidate map for pool " << pool_id
                << "fail, retCode = " << TopoStatusCode_Name(ret);
     return ret;
   }
 
   // 2. return error if candidate map has no enough replicaNum
-  if (candidateMap.size() < replicaNum) {
+  if (candidate_map.size() < replica_num) {
     LOG(WARNING) << "can not find available metaserver for copyset, "
-                 << "poolId = " << poolId
-                 << " need replica num = " << replicaNum
+                 << "poolId = " << pool_id
+                 << " need replica num = " << replica_num
                  << ", but only has available zone num = "
-                 << candidateMap.size();
+                 << candidate_map.size();
     return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
   }
 
   // 3. get min size in case of the metaserver num in zone is different
-  uint32_t minSize = UINT32_MAX;
-  std::vector<ZoneIdType> zoneIds;
-  for (auto it = candidateMap.begin(); it != candidateMap.end(); it++) {
-    if (it->second.size() < minSize) {
-      minSize = it->second.size();
+  uint32_t min_size = UINT32_MAX;
+  std::vector<ZoneIdType> zone_ids;
+  for (auto& it : candidate_map) {
+    if (it.second.size() < min_size) {
+      min_size = it.second.size();
     }
-    zoneIds.push_back(it->first);
+    zone_ids.push_back(it.first);
   }
 
   // 4. generate enough copyset
-  uint32_t createCount = 0;
+  uint32_t create_count = 0;
 
   thread_local static std::random_device rd;
-  thread_local static std::mt19937 randomGenerator(rd());
-  while (createCount < minSize * replicaNum) {
-    for (auto& it : candidateMap) {
-      std::shuffle(it.second.begin(), it.second.end(), randomGenerator);
+  thread_local static std::mt19937 random_generator(rd());
+  while (create_count < min_size * replica_num) {
+    for (auto& it : candidate_map) {
+      std::shuffle(it.second.begin(), it.second.end(), random_generator);
     }
 
-    std::shuffle(zoneIds.begin(), zoneIds.end(), randomGenerator);
+    std::shuffle(zone_ids.begin(), zone_ids.end(), random_generator);
 
-    std::vector<MetaServerIdType> msIds;
-    for (uint32_t i = 0; i < minSize; i++) {
-      for (const auto& zoneId : zoneIds) {
-        msIds.push_back(candidateMap[zoneId][i]);
+    std::vector<MetaServerIdType> ms_ids;
+    for (uint32_t i = 0; i < min_size; i++) {
+      for (const auto& zone_id : zone_ids) {
+        ms_ids.push_back(candidate_map[zone_id][i]);
       }
     }
 
-    for (size_t i = 0; i < msIds.size() / replicaNum; i++) {
-      CopysetCreateInfo copysetInfo;
-      copysetInfo.poolId = poolId;
-      copysetInfo.copysetId = UNINITIALIZE_ID;
-      for (int j = 0; j < replicaNum; j++) {
-        copysetInfo.metaServerIds.insert(msIds[i * replicaNum + j]);
+    for (size_t i = 0; i < ms_ids.size() / replica_num; i++) {
+      CopysetCreateInfo copyset_info;
+      copyset_info.poolId = pool_id;
+      copyset_info.copysetId = UNINITIALIZE_ID;
+      for (int j = 0; j < replica_num; j++) {
+        copyset_info.metaServerIds.insert(ms_ids[i * replica_num + j]);
       }
-      copysetList->emplace_back(copysetInfo);
-      createCount++;
+      copyset_list->emplace_back(copyset_info);
+      create_count++;
     }
   }
 
@@ -1480,39 +1475,37 @@ TopoStatusCode TopologyImpl::GenCopysetAddrBatchForPool(
 // Check if there is no copy on the pool.
 // Generate copyset on the empty copyset pools.
 void TopologyImpl::GenCopysetIfPoolEmptyUnlocked(
-    std::list<CopysetCreateInfo>* copysetList) {
+    std::list<CopysetCreateInfo>* copyset_list) {
   for (const auto& it : poolMap_) {
-    PoolIdType poolId = it.first;
-    uint32_t metaserverNum = GetMetaServerNumInPool(poolId);
-    if (metaserverNum == 0) {
+    PoolIdType pool_id = it.first;
+    uint32_t metaserver_num = GetMetaServerNumInPool(pool_id);
+    if (metaserver_num == 0) {
       continue;
     }
 
-    uint32_t copysetNum = GetCopySetNumInPool(poolId);
-    if (copysetNum != 0) {
+    uint32_t copyset_num = GetCopySetNumInPool(pool_id);
+    if (copyset_num != 0) {
       continue;
     }
 
-    uint16_t replicaNum = it.second.GetReplicaNum();
-    if (replicaNum == 0) {
-      LOG(INFO) << "Initial Generate copyset addr, skip pool " << poolId
+    uint16_t replica_num = it.second.GetReplicaNum();
+    if (replica_num == 0) {
+      LOG(INFO) << "Initial Generate copyset addr, skip pool " << pool_id
                 << ", replicaNum is 0";
       continue;
     }
-    std::list<CopysetCreateInfo> tempCopysetList;
+    std::list<CopysetCreateInfo> temp_copyset_list;
     TopoStatusCode ret =
-        GenCopysetAddrBatchForPool(poolId, replicaNum, &tempCopysetList);
+        GenCopysetAddrBatchForPool(pool_id, replica_num, &temp_copyset_list);
     if (TopoStatusCode::TOPO_OK == ret) {
-      LOG(INFO) << "Initial Generate copyset addr for pool " << poolId
-                << " success, gen copyset num = " << tempCopysetList.size();
-      copysetList->splice(copysetList->end(), tempCopysetList);
+      LOG(INFO) << "Initial Generate copyset addr for pool " << pool_id
+                << " success, gen copyset num = " << temp_copyset_list.size();
+      copyset_list->splice(copyset_list->end(), temp_copyset_list);
     } else {
-      LOG(WARNING) << "Initial Generate copyset addr for pool " << poolId
+      LOG(WARNING) << "Initial Generate copyset addr for pool " << pool_id
                    << " fail, statusCode = " << TopoStatusCode_Name(ret);
     }
   }
-
-  return;
 }
 
 // generate at least needCreateNum copyset addr in this function
@@ -1522,57 +1515,58 @@ void TopologyImpl::GenCopysetIfPoolEmptyUnlocked(
 // 3. according to the pool order of step 2, generate copyset add in the pool
 //    in turn until enough copyset add is generated
 TopoStatusCode TopologyImpl::GenSubsequentCopysetAddrBatchUnlocked(
-    uint32_t needCreateNum, std::list<CopysetCreateInfo>* copysetList) {
-  LOG(INFO) << "GenSubsequentCopysetAddrBatch needCreateNum = " << needCreateNum
-            << ", copysetList size = " << copysetList->size() << " begin";
+    uint32_t need_create_num, std::list<CopysetCreateInfo>* copyset_list) {
+  LOG(INFO) << "GenSubsequentCopysetAddrBatch needCreateNum = "
+            << need_create_num
+            << ", copysetList size = " << copyset_list->size() << " begin";
 
   MetaServerFilter filter = [](const MetaServer& ms) {
     return ms.GetOnlineState() == OnlineState::ONLINE;
   };
 
-  std::vector<Pool> poolList;
+  std::vector<Pool> pool_list;
   for (const auto& it : poolMap_) {
     if (GetMetaServerNumInPool(it.first, filter) != 0) {
-      poolList.push_back(it.second);
+      pool_list.push_back(it.second);
     }
   }
 
   // sort pool list by copyset average num
-  std::sort(poolList.begin(), poolList.end(),
-            [=](const Pool& a, const Pool& b) {
-              PoolIdType poolId1 = a.GetId();
-              PoolIdType poolId2 = b.GetId();
-              uint32_t copysetNum1 = GetCopySetNumInPool(poolId1);
-              uint32_t copysetNum2 = GetCopySetNumInPool(poolId2);
-              uint32_t metaserverNum1 = GetMetaServerNumInPool(poolId1, filter);
-              uint32_t metaserverNum2 = GetMetaServerNumInPool(poolId2, filter);
-              double avaCopysetNum1 = copysetNum1 * 1.0 / metaserverNum1;
-              double avaCopysetNum2 = copysetNum2 * 1.0 / metaserverNum2;
-              return avaCopysetNum1 < avaCopysetNum2;
-            });
+  std::sort(
+      pool_list.begin(), pool_list.end(), [=](const Pool& a, const Pool& b) {
+        PoolIdType pool_id1 = a.GetId();
+        PoolIdType pool_id2 = b.GetId();
+        uint32_t copyset_num1 = GetCopySetNumInPool(pool_id1);
+        uint32_t copyset_num2 = GetCopySetNumInPool(pool_id2);
+        uint32_t metaserver_num1 = GetMetaServerNumInPool(pool_id1, filter);
+        uint32_t metaserver_num2 = GetMetaServerNumInPool(pool_id2, filter);
+        double ava_copyset_num1 = copyset_num1 * 1.0 / metaserver_num1;
+        double ava_copyset_num2 = copyset_num2 * 1.0 / metaserver_num2;
+        return ava_copyset_num1 < ava_copyset_num2;
+      });
 
-  while (copysetList->size() < needCreateNum) {
-    for (auto it = poolList.begin(); it != poolList.end();) {
-      PoolIdType poolId = it->GetId();
-      uint16_t replicaNum = it->GetReplicaNum();
-      std::list<CopysetCreateInfo> tempCopysetList;
+  while (copyset_list->size() < need_create_num) {
+    for (auto it = pool_list.begin(); it != pool_list.end();) {
+      PoolIdType pool_id = it->GetId();
+      uint16_t replica_num = it->GetReplicaNum();
+      std::list<CopysetCreateInfo> temp_copyset_list;
       TopoStatusCode ret =
-          GenCopysetAddrBatchForPool(poolId, replicaNum, &tempCopysetList);
+          GenCopysetAddrBatchForPool(pool_id, replica_num, &temp_copyset_list);
       if (TopoStatusCode::TOPO_OK == ret) {
-        copysetList->splice(copysetList->end(), tempCopysetList);
-        if (copysetList->size() >= needCreateNum) {
+        copyset_list->splice(copyset_list->end(), temp_copyset_list);
+        if (copyset_list->size() >= need_create_num) {
           return TopoStatusCode::TOPO_OK;
         }
         it++;
       } else {
-        LOG(WARNING) << "Generate " << needCreateNum
-                     << " copyset addr for pool " << poolId
+        LOG(WARNING) << "Generate " << need_create_num
+                     << " copyset addr for pool " << pool_id
                      << "fail, statusCode = " << TopoStatusCode_Name(ret);
-        it = poolList.erase(it);
+        it = pool_list.erase(it);
       }
     }
 
-    if (copysetList->size() == 0 || poolList.size() == 0) {
+    if (copyset_list->size() == 0 || pool_list.size() == 0) {
       LOG(ERROR) << "can not find available metaserver for copyset.";
       return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
     }
@@ -1589,26 +1583,27 @@ TopoStatusCode TopologyImpl::GenSubsequentCopysetAddrBatchUnlocked(
 // 2. Sort the pools according to the average number of copies,
 //    and traverse each pool to create copies until the number is sufficient.
 TopoStatusCode TopologyImpl::GenCopysetAddrBatch(
-    uint32_t needCreateNum, std::list<CopysetCreateInfo>* copysetList) {
-  ReadLockGuard rlockPool(poolMutex_);
-  ReadLockGuard rlockMetaserver(metaServerMutex_);
-  ReadLockGuard rlockCopyset(copySetMutex_);
+    uint32_t need_create_num, std::list<CopysetCreateInfo>* copyset_list) {
+  ReadLockGuard rlock_pool(poolMutex_);
+  ReadLockGuard rlock_metaserver(metaServerMutex_);
+  ReadLockGuard rlock_copyset(copySetMutex_);
 
-  GenCopysetIfPoolEmptyUnlocked(copysetList);
-  if (copysetList->size() > needCreateNum) {
+  GenCopysetIfPoolEmptyUnlocked(copyset_list);
+  if (copyset_list->size() > need_create_num) {
     return TopoStatusCode::TOPO_OK;
   }
 
-  return GenSubsequentCopysetAddrBatchUnlocked(needCreateNum, copysetList);
+  return GenSubsequentCopysetAddrBatchUnlocked(need_create_num, copyset_list);
 }
 
-uint32_t TopologyImpl::GetPartitionIndexOfFS(FsIdType fsId) {
+uint32_t TopologyImpl::GetPartitionIndexOfFS(FsIdType fs_id) {
   ReadLockGuard rlock(clusterMutex_);
-  return clusterInfo_.GetPartitionIndexOfFS(fsId);
+  return clusterInfo_.GetPartitionIndexOfFS(fs_id);
 }
 
 std::vector<CopySetInfo> TopologyImpl::ListCopysetInfo() const {
   std::vector<CopySetInfo> ret;
+  ret.reserve(copySetMap_.size());
   for (auto const& i : copySetMap_) {
     ret.emplace_back(i.second);
   }
@@ -1618,25 +1613,25 @@ std::vector<CopySetInfo> TopologyImpl::ListCopysetInfo() const {
 void TopologyImpl::GetMetaServersSpace(
     ::google::protobuf::RepeatedPtrField<curvefs::mds::topology::MetadataUsage>*
         spaces) {
-  ReadLockGuard rlockMetaServerMap(metaServerMutex_);
+  ReadLockGuard rlock_meta_server_map(metaServerMutex_);
   for (auto const& i : metaServerMap_) {
-    ReadLockGuard rlockMetaServer(i.second.GetRWLockRef());
-    auto metaServerUsage = new curvefs::mds::topology::MetadataUsage();
-    metaServerUsage->set_metaserveraddr(
+    ReadLockGuard rlock_meta_server(i.second.GetRWLockRef());
+    auto* meta_server_usage = new curvefs::mds::topology::MetadataUsage();
+    meta_server_usage->set_metaserveraddr(
         i.second.GetInternalIp() + ":" +
         std::to_string(i.second.GetInternalPort()));
     auto const& space = i.second.GetMetaServerSpace();
-    metaServerUsage->set_total(space.GetDiskThreshold());
-    metaServerUsage->set_used(space.GetDiskUsed());
-    spaces->AddAllocated(metaServerUsage);
+    meta_server_usage->set_total(space.GetDiskThreshold());
+    meta_server_usage->set_used(space.GetDiskUsed());
+    spaces->AddAllocated(meta_server_usage);
   }
 }
 
-std::string TopologyImpl::GetHostNameAndPortById(MetaServerIdType msId) {
+std::string TopologyImpl::GetHostNameAndPortById(MetaServerIdType ms_id) {
   // get target metaserver
   MetaServer ms;
-  if (!GetMetaServer(msId, &ms)) {
-    LOG(INFO) << "get metaserver " << msId << " err";
+  if (!GetMetaServer(ms_id, &ms)) {
+    LOG(INFO) << "get metaserver " << ms_id << " err";
     return "";
   }
 
@@ -1652,15 +1647,15 @@ std::string TopologyImpl::GetHostNameAndPortById(MetaServerIdType msId) {
 }
 
 bool TopologyImpl::IsCopysetCreating(const CopySetKey& key) const {
-  ReadLockGuard rlockCopySetCreating(copySetCreatingMutex_);
+  ReadLockGuard rlock_copy_set_creating(copySetCreatingMutex_);
   return copySetCreating_.count(key) != 0;
 }
 
 bool TopologyImpl::RefreshPartitionIndexOfFS(
-    const std::unordered_map<PartitionIdType, Partition>& partitionMap) {
+    const std::unordered_map<PartitionIdType, Partition>& partition_map) {
   // <fsId, partitionNum>
   std::map<uint32_t, uint32_t> tmap;
-  for (const auto& it : partitionMap) {
+  for (const auto& it : partition_map) {
     tmap[it.second.GetFsId()]++;
   }
   for (const auto& it : tmap) {
@@ -1670,7 +1665,7 @@ bool TopologyImpl::RefreshPartitionIndexOfFS(
 }
 
 std::list<MemcacheServer> TopologyImpl::ListMemcacheServers() const {
-  ReadLockGuard rlockMemcacheCluster(memcacheClusterMutex_);
+  ReadLockGuard rlock_memcache_cluster(memcacheClusterMutex_);
   std::list<MemcacheServer> ret;
   for (auto const& cluster : memcacheClusterMap_) {
     auto const& servers = cluster.second.GetServers();
@@ -1680,7 +1675,7 @@ std::list<MemcacheServer> TopologyImpl::ListMemcacheServers() const {
 }
 
 TopoStatusCode TopologyImpl::AddMemcacheCluster(const MemcacheCluster& data) {
-  WriteLockGuard wlockMemcacheCluster(memcacheClusterMutex_);
+  WriteLockGuard wlock_memcache_cluster(memcacheClusterMutex_);
   // storage_ to storage
   TopoStatusCode ret = TopoStatusCode::TOPO_OK;
   if (!storage_->StorageMemcacheCluster(data)) {
@@ -1693,7 +1688,7 @@ TopoStatusCode TopologyImpl::AddMemcacheCluster(const MemcacheCluster& data) {
 }
 
 TopoStatusCode TopologyImpl::AddMemcacheCluster(MemcacheCluster&& data) {
-  WriteLockGuard wlockMemcacheCluster(memcacheClusterMutex_);
+  WriteLockGuard wlock_memcache_cluster(memcacheClusterMutex_);
   // storage_ to storage
   TopoStatusCode ret = TopoStatusCode::TOPO_OK;
   if (!storage_->StorageMemcacheCluster(data)) {
@@ -1706,7 +1701,7 @@ TopoStatusCode TopologyImpl::AddMemcacheCluster(MemcacheCluster&& data) {
 
 std::list<MemcacheCluster> TopologyImpl::ListMemcacheClusters() const {
   std::list<MemcacheCluster> ret;
-  ReadLockGuard rlockMemcacheCluster(memcacheClusterMutex_);
+  ReadLockGuard rlock_memcache_cluster(memcacheClusterMutex_);
   for (auto const& cluster : memcacheClusterMap_) {
     ret.emplace_back(cluster.second);
   }
@@ -1714,23 +1709,23 @@ std::list<MemcacheCluster> TopologyImpl::ListMemcacheClusters() const {
 }
 
 TopoStatusCode TopologyImpl::AllocOrGetMemcacheCluster(
-    FsIdType fsId, MemcacheClusterInfo* cluster) {
+    FsIdType fs_id, MemcacheClusterInfo* cluster) {
   TopoStatusCode ret = TopoStatusCode::TOPO_OK;
-  WriteLockGuard wlockFs2MemcacheCluster(fs2MemcacheClusterMutex_);
-  ReadLockGuard rlockMemcacheCluster(memcacheClusterMutex_);
-  if (fs2MemcacheCluster_.find(fsId) != fs2MemcacheCluster_.end()) {
-    *cluster = memcacheClusterMap_[fs2MemcacheCluster_[fsId]];
+  WriteLockGuard wlock_fs2_memcache_cluster(fs2MemcacheClusterMutex_);
+  ReadLockGuard rlock_memcache_cluster(memcacheClusterMutex_);
+  if (fs2MemcacheCluster_.find(fs_id) != fs2MemcacheCluster_.end()) {
+    *cluster = memcacheClusterMap_[fs2MemcacheCluster_[fs_id]];
   } else if (memcacheClusterMap_.empty()) {
     ret = TopoStatusCode::TOPO_MEMCACHECLUSTER_NOT_FOUND;
   } else {
-    int randId =
+    int rand_id =
         static_cast<int>(butil::fast_rand()) % memcacheClusterMap_.size();
     auto iter = memcacheClusterMap_.cbegin();
-    std::advance(iter, randId);
-    if (!storage_->StorageFs2MemcacheCluster(fsId, iter->first)) {
+    std::advance(iter, rand_id);
+    if (!storage_->StorageFs2MemcacheCluster(fs_id, iter->first)) {
       ret = TopoStatusCode::TOPO_STORGE_FAIL;
     } else {
-      fs2MemcacheCluster_[fsId] = iter->first;
+      fs2MemcacheCluster_[fs_id] = iter->first;
       *cluster = iter->second;
     }
   }

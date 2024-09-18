@@ -51,10 +51,10 @@ using std::string;
 class TopologyManager {
  public:
   TopologyManager(const std::shared_ptr<Topology>& topology,
-                  std::shared_ptr<MetaserverClient> metaserverClient)
-      : topology_(topology), metaserverClient_(metaserverClient) {}
+                  std::shared_ptr<MetaserverClient> metaserver_client)
+      : topology_(topology), metaserverClient_(metaserver_client) {}
 
-  virtual ~TopologyManager() {}
+  virtual ~TopologyManager() = default;
 
   virtual void Init(const TopologyOption& option);
 
@@ -113,11 +113,11 @@ class TopologyManager {
                                DeletePartitionResponse* response);
 
   virtual TopoStatusCode CreatePartitionsAndGetMinPartition(
-      FsIdType fsId, PartitionInfo* partition);
+      FsIdType fs_id, PartitionInfo* partition);
 
-  virtual TopoStatusCode DeletePartition(uint32_t partitionId);
+  virtual TopoStatusCode DeletePartition(uint32_t partition_id);
 
-  virtual TopoStatusCode CommitTxId(const std::vector<PartitionTxId>& txIds);
+  virtual TopoStatusCode CommitTxId(const std::vector<PartitionTxId>& tx_ids);
 
   virtual void CommitTx(const CommitTxRequest* request,
                         CommitTxResponse* response);
@@ -129,25 +129,26 @@ class TopologyManager {
   virtual void ListPartition(const ListPartitionRequest* request,
                              ListPartitionResponse* response);
 
-  virtual void ListPartitionOfFs(FsIdType fsId, std::list<PartitionInfo>* list);
+  virtual void ListPartitionOfFs(FsIdType fs_id,
+                                 std::list<PartitionInfo>* list);
 
-  virtual void GetLatestPartitionsTxId(const std::vector<PartitionTxId>& txIds,
-                                       std::vector<PartitionTxId>* needUpdate);
+  virtual void GetLatestPartitionsTxId(const std::vector<PartitionTxId>& tx_ids,
+                                       std::vector<PartitionTxId>* need_update);
 
-  virtual TopoStatusCode UpdatePartitionStatus(PartitionIdType partitionId,
+  virtual TopoStatusCode UpdatePartitionStatus(PartitionIdType partition_id,
                                                PartitionStatus status);
 
   virtual void GetCopysetOfPartition(
       const GetCopysetOfPartitionRequest* request,
       GetCopysetOfPartitionResponse* response);
 
-  virtual TopoStatusCode GetCopysetMembers(const PoolIdType poolId,
-                                           const CopySetIdType copysetId,
+  virtual TopoStatusCode GetCopysetMembers(PoolIdType pool_id,
+                                           CopySetIdType copyset_id,
                                            std::set<std::string>* addrs);
 
-  virtual bool CreateCopysetNodeOnMetaServer(PoolIdType poolId,
-                                             CopySetIdType copysetId,
-                                             MetaServerIdType metaServerId);
+  virtual bool CreateCopysetNodeOnMetaServer(PoolIdType pool_id,
+                                             CopySetIdType copyset_id,
+                                             MetaServerIdType meta_server_id);
 
   virtual void GetCopysetsInfo(const GetCopysetsInfoRequest* request,
                                GetCopysetsInfoResponse* response);
@@ -177,19 +178,20 @@ class TopologyManager {
       AllocOrGetMemcacheClusterResponse* response);
 
  private:
-  TopoStatusCode CreateEnoughCopyset(int32_t createNum);
+  TopoStatusCode CreateEnoughCopyset(int32_t create_num);
 
   TopoStatusCode CreateCopyset(const CopysetCreateInfo& copyset);
 
-  virtual void GetCopysetInfo(const uint32_t& poolId, const uint32_t& copysetId,
-                              CopysetValue* copysetValue);
+  virtual void GetCopysetInfo(const uint32_t& pool_id,
+                              const uint32_t& copyset_id,
+                              CopysetValue* copyset_value);
 
-  virtual void ClearCopysetCreating(PoolIdType poolId, CopySetIdType copysetId);
-  TopoStatusCode CreatePartitionOnCopyset(FsIdType fsId,
+  virtual void ClearCopysetCreating(PoolIdType pool_id,
+                                    CopySetIdType copyset_id);
+  TopoStatusCode CreatePartitionOnCopyset(FsIdType fs_id,
                                           const CopySetInfo& copyset,
                                           PartitionInfo* info);
 
- private:
   std::shared_ptr<Topology> topology_;
   std::shared_ptr<MetaserverClient> metaserverClient_;
 
@@ -197,7 +199,7 @@ class TopologyManager {
    * @brief register mutex for metaserver, preventing duplicate registration
    *        in concurrent scenario
    */
-  NameLock registMsMutex;
+  NameLock registMsMutex_;
 
   /**
    * @brief register mutex for memcachecluster,

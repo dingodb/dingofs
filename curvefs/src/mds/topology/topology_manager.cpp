@@ -26,21 +26,15 @@
 #include <sys/types.h>
 
 #include <algorithm>
-#include <chrono>  //NOLINT
 #include <list>
 #include <set>
 #include <string>
-#include <thread>  //NOLINT
 #include <utility>
 #include <vector>
 
-#include "brpc/channel.h"
-#include "brpc/controller.h"
-#include "brpc/server.h"
 #include "curvefs/src/mds/common/mds_define.h"
+#include "curvefs/src/mds/topology/deal_peerid.h"
 #include "curvefs/src/mds/topology/topology_item.h"
-#include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/name_lock.h"
 
 namespace curvefs {
 namespace mds {
@@ -50,16 +44,16 @@ void TopologyManager::Init(const TopologyOption& option) { option_ = option; }
 
 void TopologyManager::RegistMetaServer(const MetaServerRegistRequest* request,
                                        MetaServerRegistResponse* response) {
-  std::string hostIp = request->internalip();
+  std::string host_ip = request->internalip();
   uint32_t port = request->internalport();
-  NameLockGuard lock(registMsMutex, hostIp + ":" + std::to_string(port));
+  NameLockGuard lock(registMsMutex_, host_ip + ":" + std::to_string(port));
 
   // here we get metaserver already registered in the cluster that have
   // the same ip and port as what we're trying to register and are running
   // normally
-  std::vector<MetaServerIdType> list =
-      topology_->GetMetaServerInCluster([&hostIp, &port](const MetaServer& ms) {
-        return (ms.GetInternalIp() == hostIp) &&
+  std::vector<MetaServerIdType> list = topology_->GetMetaServerInCluster(
+      [&host_ip, &port](const MetaServer& ms) {
+        return (ms.GetInternalIp() == host_ip) &&
                (ms.GetInternalPort() == port) &&
                (ms.GetOnlineState() != OnlineState::OFFLINE);
       });
@@ -68,20 +62,20 @@ void TopologyManager::RegistMetaServer(const MetaServerRegistRequest* request,
     // port in the cluster) to promise the idempotence of the interface.
     // If metaserver has copyset, return TOPO_METASERVER_EXIST;
     // else return OK
-    auto copysetList = topology_->GetCopySetsInMetaServer(list[0]);
-    if (copysetList.empty()) {
+    auto copyset_list = topology_->GetCopySetsInMetaServer(list[0]);
+    if (copyset_list.empty()) {
       MetaServer ms;
       topology_->GetMetaServer(list[0], &ms);
       response->set_statuscode(TopoStatusCode::TOPO_OK);
       response->set_metaserverid(ms.GetId());
       response->set_token(ms.GetToken());
       LOG(WARNING) << "Received duplicated registMetaServer message, "
-                   << "metaserver is empty, hostip = " << hostIp
+                   << "metaserver is empty, hostip = " << host_ip
                    << ", port = " << port;
     } else {
       response->set_statuscode(TopoStatusCode::TOPO_METASERVER_EXIST);
       LOG(ERROR) << "Received duplicated registMetaServer message, "
-                 << "metaserver is not empty, hostip = " << hostIp
+                 << "metaserver is not empty, hostip = " << host_ip
                  << ", port = " << port;
     }
 
@@ -94,24 +88,24 @@ void TopologyManager::RegistMetaServer(const MetaServerRegistRequest* request,
     return;
   }
 
-  ServerIdType serverId = topology_->FindServerByHostIpPort(
+  ServerIdType server_id = topology_->FindServerByHostIpPort(
       request->internalip(), request->internalport());
-  if (serverId == static_cast<ServerIdType>(UNINITIALIZE_ID)) {
+  if (server_id == static_cast<ServerIdType>(UNINITIALIZE_ID)) {
     response->set_statuscode(TopoStatusCode::TOPO_SERVER_NOT_FOUND);
     return;
   }
 
-  MetaServerIdType metaServerId = topology_->AllocateMetaServerId();
-  if (metaServerId == static_cast<MetaServerIdType>(UNINITIALIZE_ID)) {
+  MetaServerIdType meta_server_id = topology_->AllocateMetaServerId();
+  if (meta_server_id == static_cast<MetaServerIdType>(UNINITIALIZE_ID)) {
     response->set_statuscode(TopoStatusCode::TOPO_ALLOCATE_ID_FAIL);
     return;
   }
 
   std::string token = topology_->AllocateToken();
   Server server;
-  bool foundServer = topology_->GetServer(serverId, &server);
-  if (!foundServer) {
-    LOG(ERROR) << "Get server " << serverId << " from topology fail";
+  bool found_server = topology_->GetServer(server_id, &server);
+  if (!found_server) {
+    LOG(ERROR) << "Get server " << server_id << " from topology fail";
     response->set_statuscode(TopoStatusCode::TOPO_SERVER_NOT_FOUND);
     return;
   }
@@ -125,7 +119,7 @@ void TopologyManager::RegistMetaServer(const MetaServerRegistRequest* request,
     }
   }
 
-  MetaServer metaserver(metaServerId, request->hostname(), token, serverId,
+  MetaServer metaserver(meta_server_id, request->hostname(), token, server_id,
                         request->internalip(), request->internalport(),
                         request->externalip(), request->externalport(), ONLINE);
 
@@ -147,20 +141,20 @@ void TopologyManager::ListMetaServer(const ListMetaServerRequest* request,
     return;
   }
 
-  std::list<MetaServerIdType> metaserverList = server.GetMetaServerList();
+  std::list<MetaServerIdType> metaserver_list = server.GetMetaServerList();
   response->set_statuscode(TopoStatusCode::TOPO_OK);
 
-  for (MetaServerIdType id : metaserverList) {
+  for (MetaServerIdType id : metaserver_list) {
     MetaServer ms;
     if (topology_->GetMetaServer(id, &ms)) {
-      MetaServerInfo* msInfo = response->add_metaserverinfos();
-      msInfo->set_metaserverid(ms.GetId());
-      msInfo->set_hostname(ms.GetHostName());
-      msInfo->set_internalip(ms.GetInternalIp());
-      msInfo->set_internalport(ms.GetInternalPort());
-      msInfo->set_externalip(ms.GetExternalIp());
-      msInfo->set_externalport(ms.GetExternalPort());
-      msInfo->set_onlinestate(ms.GetOnlineState());
+      MetaServerInfo* ms_info = response->add_metaserverinfos();
+      ms_info->set_metaserverid(ms.GetId());
+      ms_info->set_hostname(ms.GetHostName());
+      ms_info->set_internalip(ms.GetInternalIp());
+      ms_info->set_internalport(ms.GetInternalPort());
+      ms_info->set_externalip(ms.GetExternalIp());
+      ms_info->set_externalport(ms.GetExternalPort());
+      ms_info->set_onlinestate(ms.GetOnlineState());
     } else {
       LOG(ERROR) << "Topology has counter an internal error: "
                  << "[func:] ListMetaServer, "
@@ -189,14 +183,14 @@ void TopologyManager::GetMetaServer(const GetMetaServerInfoRequest* request,
     return;
   }
   response->set_statuscode(TopoStatusCode::TOPO_OK);
-  MetaServerInfo* msInfo = response->mutable_metaserverinfo();
-  msInfo->set_metaserverid(ms.GetId());
-  msInfo->set_hostname(ms.GetHostName());
-  msInfo->set_internalip(ms.GetInternalIp());
-  msInfo->set_internalport(ms.GetInternalPort());
-  msInfo->set_externalip(ms.GetExternalIp());
-  msInfo->set_externalport(ms.GetExternalPort());
-  msInfo->set_onlinestate(ms.GetOnlineState());
+  MetaServerInfo* ms_info = response->mutable_metaserverinfo();
+  ms_info->set_metaserverid(ms.GetId());
+  ms_info->set_hostname(ms.GetHostName());
+  ms_info->set_internalip(ms.GetInternalIp());
+  ms_info->set_internalport(ms.GetInternalPort());
+  ms_info->set_externalip(ms.GetExternalIp());
+  ms_info->set_externalport(ms.GetExternalPort());
+  ms_info->set_onlinestate(ms.GetOnlineState());
 }
 
 void TopologyManager::DeleteMetaServer(const DeleteMetaServerRequest* request,
@@ -207,53 +201,53 @@ void TopologyManager::DeleteMetaServer(const DeleteMetaServerRequest* request,
 
 void TopologyManager::RegistServer(const ServerRegistRequest* request,
                                    ServerRegistResponse* response) {
-  Pool pPool;
-  if (!topology_->GetPool(request->poolname(), &pPool)) {
+  Pool p_pool;
+  if (!topology_->GetPool(request->poolname(), &p_pool)) {
     response->set_statuscode(TopoStatusCode::TOPO_POOL_NOT_FOUND);
     return;
   }
 
   Zone zone;
-  if (!topology_->GetZone(request->zonename(), pPool.GetId(), &zone)) {
+  if (!topology_->GetZone(request->zonename(), p_pool.GetId(), &zone)) {
     response->set_statuscode(TopoStatusCode::TOPO_ZONE_NOT_FOUND);
     return;
   }
 
-  uint32_t internalPort = 0;
+  uint32_t internal_port = 0;
   if (request->has_internalport()) {
-    internalPort = request->internalport();
+    internal_port = request->internalport();
   }
-  uint32_t externalPort = 0;
+  uint32_t external_port = 0;
   if (request->has_externalport()) {
-    externalPort = request->externalport();
+    external_port = request->externalport();
   }
 
   // check whether there's any duplicated ip&port
-  if (topology_->FindServerByHostIpPort(request->internalip(), internalPort) !=
+  if (topology_->FindServerByHostIpPort(request->internalip(), internal_port) !=
       static_cast<ServerIdType>(UNINITIALIZE_ID)) {
     response->set_statuscode(TopoStatusCode::TOPO_IP_PORT_DUPLICATED);
     return;
   } else if (topology_->FindServerByHostIpPort(request->externalip(),
-                                               externalPort) !=
+                                               external_port) !=
              static_cast<ServerIdType>(UNINITIALIZE_ID)) {
     response->set_statuscode(TopoStatusCode::TOPO_IP_PORT_DUPLICATED);
     return;
   }
 
-  ServerIdType serverId = topology_->AllocateServerId();
-  if (serverId == static_cast<ServerIdType>(UNINITIALIZE_ID)) {
+  ServerIdType server_id = topology_->AllocateServerId();
+  if (server_id == static_cast<ServerIdType>(UNINITIALIZE_ID)) {
     response->set_statuscode(TopoStatusCode::TOPO_ALLOCATE_ID_FAIL);
     return;
   }
 
-  Server server(serverId, request->hostname(), request->internalip(),
-                internalPort, request->externalip(), externalPort, zone.GetId(),
-                pPool.GetId());
+  Server server(server_id, request->hostname(), request->internalip(),
+                internal_port, request->externalip(), external_port,
+                zone.GetId(), p_pool.GetId());
 
   TopoStatusCode errcode = topology_->AddServer(server);
   if (TopoStatusCode::TOPO_OK == errcode) {
     response->set_statuscode(TopoStatusCode::TOPO_OK);
-    response->set_serverid(serverId);
+    response->set_serverid(server_id);
   } else {
     response->set_statuscode(errcode);
   }
@@ -659,9 +653,8 @@ TopoStatusCode TopologyManager::CreatePartitionOnCopyset(
   FSStatusCode retcode = metaserverClient_->CreatePartition(
       fsId, poolId, copysetId, partitionId, idStart, idEnd, copysetMemberAddr);
   if (FSStatusCode::OK != retcode) {
-    LOG(ERROR) << "CreatePartition failed, "
-               << "fsId = " << fsId << ", poolId = " << poolId
-               << ", copysetId = " << copysetId
+    LOG(ERROR) << "CreatePartition failed, " << "fsId = " << fsId
+               << ", poolId = " << poolId << ", copysetId = " << copysetId
                << ", partitionId = " << partitionId;
     return TopoStatusCode::TOPO_CREATE_PARTITION_FAIL;
   }
@@ -1060,8 +1053,8 @@ TopoStatusCode TopologyManager::GetCopysetMembers(
       }
     }
   } else {
-    LOG(ERROR) << "Get copyset failed."
-               << " poolId = " << poolId << ", copysetId = " << copysetId;
+    LOG(ERROR) << "Get copyset failed." << " poolId = " << poolId
+               << ", copysetId = " << copysetId;
     return TopoStatusCode::TOPO_COPYSET_NOT_FOUND;
   }
   return TopoStatusCode::TOPO_OK;
@@ -1137,8 +1130,8 @@ void TopologyManager::GetCopysetInfo(const uint32_t& poolId,
 
     copysetValue->set_allocated_copysetinfo(valueCopysetInfo);
   } else {
-    LOG(ERROR) << "Get copyset failed."
-               << " poolId=" << poolId << " copysetId=" << copysetId;
+    LOG(ERROR) << "Get copyset failed." << " poolId=" << poolId
+               << " copysetId=" << copysetId;
     copysetValue->set_statuscode(TopoStatusCode::TOPO_COPYSET_NOT_FOUND);
   }
 }
@@ -1300,8 +1293,8 @@ void TopologyManager::ListMetaserverOfCluster(
 }
 
 TopoStatusCode TopologyManager::UpdatePartitionStatus(
-    PartitionIdType partitionId, PartitionStatus status) {
-  return topology_->UpdatePartitionStatus(partitionId, status);
+    PartitionIdType partition_id, PartitionStatus status) {
+  return topology_->UpdatePartitionStatus(partition_id, status);
 }
 
 void TopologyManager::RegistMemcacheCluster(
@@ -1312,13 +1305,13 @@ void TopologyManager::RegistMemcacheCluster(
   WriteLockGuard lock(registMemcacheClusterMutex_);
 
   // idempotence
-  std::list<MemcacheCluster> clusterList = topology_->ListMemcacheClusters();
-  MemcacheCluster mCluster(0,
-                           std::list<MemcacheServer>(request->servers().begin(),
-                                                     request->servers().end()));
-  for (auto const& cluster : clusterList) {
-    mCluster.SetId(cluster.GetId());
-    if (cluster == mCluster) {
+  std::list<MemcacheCluster> cluster_list = topology_->ListMemcacheClusters();
+  MemcacheCluster m_cluster(
+      0, std::list<MemcacheServer>(request->servers().begin(),
+                                   request->servers().end()));
+  for (auto const& cluster : cluster_list) {
+    m_cluster.SetId(cluster.GetId());
+    if (cluster == m_cluster) {
       // has registered memcache cluster
       response->set_clusterid(cluster.GetId());
       return;
@@ -1326,19 +1319,19 @@ void TopologyManager::RegistMemcacheCluster(
   }
 
   // Guarantee the uniqueness of memcacheServer
-  std::list<MemcacheServer> serverRegisted = topology_->ListMemcacheServers();
-  std::list<MemcacheServer> serverList;
+  std::list<MemcacheServer> server_registed = topology_->ListMemcacheServers();
+  std::list<MemcacheServer> server_list;
   for (auto const& server : request->servers()) {
     auto cmp = [server](const MemcacheServer& ms) { return ms == server; };
-    if (std::find_if(serverRegisted.begin(), serverRegisted.end(), cmp) !=
-        serverRegisted.end()) {
+    if (std::find_if(server_registed.begin(), server_registed.end(), cmp) !=
+        server_registed.end()) {
       LOG(ERROR) << "Regist MemcacheCluster failed! Server["
                  << server.ShortDebugString()
                  << "] already existsin another cluster";
       response->set_statuscode(TopoStatusCode::TOPO_IP_PORT_DUPLICATED);
       break;
     }
-    serverList.emplace_back(server);
+    server_list.emplace_back(server);
   }
 
   if (response->statuscode() == TopoStatusCode::TOPO_OK) {
@@ -1347,10 +1340,10 @@ void TopologyManager::RegistMemcacheCluster(
     if (id == static_cast<MemcacheClusterIdType>(UNINITIALIZE_ID)) {
       response->set_statuscode(TopoStatusCode::TOPO_ALLOCATE_ID_FAIL);
     } else {
-      MemcacheCluster cluster(id, std::move(serverList));
-      TopoStatusCode errorCode =
+      MemcacheCluster cluster(id, std::move(server_list));
+      TopoStatusCode error_code =
           topology_->AddMemcacheCluster(std::move(cluster));
-      response->set_statuscode(errorCode);
+      response->set_statuscode(error_code);
       response->set_clusterid(id);
     }
   }
@@ -1358,10 +1351,10 @@ void TopologyManager::RegistMemcacheCluster(
 
 void TopologyManager::ListMemcacheCluster(
     ListMemcacheClusterResponse* response) {
-  std::list<MemcacheCluster> clusterList = topology_->ListMemcacheClusters();
-  if (!clusterList.empty()) {
+  std::list<MemcacheCluster> cluster_list = topology_->ListMemcacheClusters();
+  if (!cluster_list.empty()) {
     response->set_statuscode(TopoStatusCode::TOPO_OK);
-    for (auto& cluster : clusterList) {
+    for (auto& cluster : cluster_list) {
       (*response->add_memcacheclusters()) = std::move(cluster);
     }
   } else {
@@ -1372,9 +1365,9 @@ void TopologyManager::ListMemcacheCluster(
 void TopologyManager::AllocOrGetMemcacheCluster(
     const AllocOrGetMemcacheClusterRequest* request,
     AllocOrGetMemcacheClusterResponse* response) {
-  auto statusCode = topology_->AllocOrGetMemcacheCluster(
+  auto status_code = topology_->AllocOrGetMemcacheCluster(
       request->fsid(), response->mutable_cluster());
-  response->set_statuscode(statusCode);
+  response->set_statuscode(status_code);
 }
 
 }  // namespace topology

@@ -26,7 +26,6 @@
 #include <map>
 #include <memory>
 #include <string>
-#include <thread>  //NOLINT
 #include <vector>
 
 #include "curvefs/proto/schedule.pb.h"
@@ -35,7 +34,6 @@
 #include "curvefs/src/mds/schedule/schedule_define.h"
 #include "curvefs/src/mds/schedule/scheduler.h"
 #include "curvefs/src/mds/schedule/topoAdapter.h"
-#include "curvefs/src/mds/topology/topology.h"
 #include "curvefs/src/mds/topology/topology_item.h"
 #include "src/common/interruptible_sleeper.h"
 
@@ -59,13 +57,13 @@ class Coordinator {
    *         UNINITIALIZE_ID if not
    */
   virtual MetaServerIdType CopySetHeartbeat(
-      const ::curvefs::mds::topology::CopySetInfo& originInfo,
-      const ::curvefs::mds::heartbeat::ConfigChangeInfo& configChInfo,
-      ::curvefs::mds::heartbeat::CopySetConf* newConf);
+      const ::curvefs::mds::topology::CopySetInfo& origin_info,
+      const ::curvefs::mds::heartbeat::ConfigChangeInfo& config_ch_info,
+      ::curvefs::mds::heartbeat::CopySetConf* out);
 
   virtual ScheduleStatusCode QueryMetaServerRecoverStatus(
-      const std::vector<MetaServerIdType>& idList,
-      std::map<MetaServerIdType, bool>* statusMap);
+      const std::vector<MetaServerIdType>& id_list,
+      std::map<MetaServerIdType, bool>* status_map);
 
   /**
    * @brief determine whether the specified metaserver is the target of the
@@ -74,7 +72,7 @@ class Coordinator {
    * @param[in] msId Metaserver specified
    * @param[in] key Copyset specified
    */
-  virtual bool MetaserverGoingToAdd(MetaServerIdType msId, CopySetKey key);
+  virtual bool MetaserverGoingToAdd(MetaServerIdType ms_id, CopySetKey key);
 
   /**
    * @brief Initialize the scheduler according to the configuration
@@ -163,7 +161,6 @@ class Coordinator {
 
   bool IsMetaServerRecover(const MetaServerInfo& info);
 
- private:
   std::shared_ptr<TopoAdapter> topo_;
   ScheduleOption conf_;
 

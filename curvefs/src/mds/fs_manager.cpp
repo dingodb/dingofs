@@ -26,7 +26,6 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <sys/stat.h>  // for S_IFDIR
 
-#include <limits>
 #include <list>
 #include <regex>  // NOLINT
 #include <string>
@@ -36,10 +35,12 @@
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/space.pb.h"
+#include "curvefs/src/common/define.h"
 #include "curvefs/src/mds/common/types.h"
 #include "curvefs/src/mds/metric/fs_metric.h"
 #include "curvefs/src/mds/space/mds_proxy_manager.h"
 #include "curvefs/src/mds/space/reloader.h"
+#include "src/common/string_util.h"
 
 namespace curvefs {
 namespace mds {
@@ -91,9 +92,9 @@ void FsManager::Uninit() {
   LOG(INFO) << "FsManager Uninit ok.";
 }
 
-bool FsManager::DeletePartiton(std::string fsName,
+bool FsManager::DeletePartiton(std::string fs_name,
                                const PartitionInfo& partition) {
-  LOG(INFO) << "delete fs partition, fsName = " << fsName
+  LOG(INFO) << "delete fs partition, fsName = " << fs_name
             << ", partitionId = " << partition.partitionid();
   // send rpc to metaserver, get copyset members
   std::set<std::string> addrs;
@@ -111,7 +112,7 @@ bool FsManager::DeletePartiton(std::string fsName,
       partition.poolid(), partition.copysetid(), partition.partitionid(),
       addrs);
   if (ret != FSStatusCode::OK && ret != FSStatusCode::UNDER_DELETING) {
-    LOG(ERROR) << "delete partition fail, fsName = " << fsName
+    LOG(ERROR) << "delete partition fail, fsName = " << fs_name
                << ", partitionId = " << partition.partitionid()
                << ", errCode = " << FSStatusCode_Name(ret);
     return false;
@@ -138,9 +139,9 @@ void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
     return;
   }
 
-  std::list<PartitionInfo> partitionList;
-  topoManager_->ListPartitionOfFs(wrapper.GetFsId(), &partitionList);
-  if (partitionList.empty()) {
+  std::list<PartitionInfo> partition_list;
+  topoManager_->ListPartitionOfFs(wrapper.GetFsId(), &partition_list);
+  if (partition_list.empty()) {
     LOG(INFO) << "fs has no partition, delete fs record, fsName = "
               << wrapper.GetFsName() << ", fsId = " << wrapper.GetFsId();
 
@@ -162,7 +163,7 @@ void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
     return;
   }
 
-  for (const PartitionInfo& partition : partitionList) {
+  for (const PartitionInfo& partition : partition_list) {
     if (partition.status() != PartitionStatus::DELETING) {
       if (!DeletePartiton(wrapper.GetFsName(), partition)) {
         continue;
@@ -175,9 +176,9 @@ void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
 void FsManager::BackEndFunc() {
   while (sleeper_.wait_for(
       std::chrono::seconds(option_.backEndThreadRunInterSec))) {
-    std::vector<FsInfoWrapper> wrapperVec;
-    fsStorage_->GetAll(&wrapperVec);
-    for (const FsInfoWrapper& wrapper : wrapperVec) {
+    std::vector<FsInfoWrapper> wrapper_vec;
+    fsStorage_->GetAll(&wrapper_vec);
+    for (const FsInfoWrapper& wrapper : wrapper_vec) {
       ScanFs(wrapper);
     }
   }
@@ -212,24 +213,25 @@ void FsManager::CheckMountPoint() {
     tmap = mpTimeRecorder_;
   }
   uint64_t now = ::curve::common::TimeUtility::GetTimeofDaySec();
-  for (auto iter = tmap.begin(); iter != tmap.end(); iter++) {
-    std::string fsName = iter->second.first;
-    std::string mountpath = iter->first;
-    if (now - iter->second.second > option_.clientTimeoutSec) {
+  for (auto& iter : tmap) {
+    std::string fs_name = iter.second.first;
+    std::string mountpath = iter.first;
+    if (now - iter.second.second > option_.clientTimeoutSec) {
       Mountpoint mountpoint;
       if (!Str2MountPoint(mountpath, &mountpoint)) {
         LOG(ERROR) << "mountpath to mountpoint failed, mountpath = "
                    << mountpath;
-        DeleteClientAliveTime(iter->first);
+        DeleteClientAliveTime(iter.first);
       } else {
-        auto ret = UmountFs(fsName, mountpoint);
+        auto ret = UmountFs(fs_name, mountpoint);
         if (ret != FSStatusCode::OK &&
             ret != FSStatusCode::MOUNT_POINT_NOT_EXIST) {
-          LOG(WARNING) << "umount fs = " << fsName
+          LOG(WARNING) << "umount fs = " << fs_name
                        << " form mountpoint = " << mountpath
                        << " failed when client timeout";
         } else {
-          LOG(INFO) << "umount fs = " << fsName << " mountpoint = " << mountpath
+          LOG(INFO) << "umount fs = " << fs_name
+                    << " mountpoint = " << mountpath
                     << " success after client timeout.";
         }
       }
@@ -244,68 +246,69 @@ void FsManager::BackEndCheckMountPoint() {
   }
 }
 
-bool FsManager::CheckFsName(const std::string& fsName) {
-  static const std::regex reg("^([a-z0-9]+\\-?)+$");
-  if (!std::regex_match(fsName.cbegin(), fsName.cend(), reg)) {
-    LOG(ERROR) << "fsname is invalid, fsname = " << fsName;
+bool FsManager::CheckFsName(const std::string& fs_name) {
+  static const std::regex kReg("^([a-z0-9]+\\-?)+$");
+  if (!std::regex_match(fs_name.cbegin(), fs_name.cend(), kReg)) {
+    LOG(ERROR) << "fsname is invalid, fsname = " << fs_name;
     return false;
   }
   return true;
 }
 
 FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
-                                 FsInfo* fsInfo) {
-  const auto& fsName = request->fsname();
-  const auto& blockSize = request->blocksize();
-  const auto& fsType = request->fstype();
+                                 FsInfo* fs_info) {
+  const auto& fs_name = request->fsname();
+  const auto& block_size = request->blocksize();
+  const auto& fs_type = request->fstype();
   const auto& detail = request->fsdetail();
 
-  NameLockGuard lock(nameLock_, fsName);
+  NameLockGuard lock(nameLock_, fs_name);
   FsInfoWrapper wrapper;
-  bool skipCreateNewFs = false;
+  bool skip_create_new_fs = false;
 
   // query fs
   // TODO(cw123): if fs status is FsStatus::New, here need more consideration
-  if (fsStorage_->Exist(fsName)) {
-    int existRet =
-        IsExactlySameOrCreateUnComplete(fsName, fsType, blockSize, detail);
-    if (existRet == 0) {
-      LOG(INFO) << "CreateFs success, fs exist, fsName = " << fsName
-                << ", fstype = " << FSType_Name(fsType)
-                << ", blocksize = " << blockSize
+  if (fsStorage_->Exist(fs_name)) {
+    int exist_ret =
+        IsExactlySameOrCreateUnComplete(fs_name, fs_type, block_size, detail);
+    if (exist_ret == 0) {
+      LOG(INFO) << "CreateFs success, fs exist, fsName = " << fs_name
+                << ", fstype = " << FSType_Name(fs_type)
+                << ", blocksize = " << block_size
                 << ", detail = " << detail.ShortDebugString();
-      fsStorage_->Get(fsName, &wrapper);
-      *fsInfo = wrapper.ProtoFsInfo();
+      fsStorage_->Get(fs_name, &wrapper);
+      *fs_info = wrapper.ProtoFsInfo();
       return FSStatusCode::OK;
     }
 
-    if (existRet == 1) {
+    if (exist_ret == 1) {
       LOG(INFO) << "CreateFs found previous create operation uncompleted"
-                << ", fsName = " << fsName
-                << ", fstype = " << FSType_Name(fsType)
-                << ", blocksize = " << blockSize
+                << ", fsName = " << fs_name
+                << ", fstype = " << FSType_Name(fs_type)
+                << ", blocksize = " << block_size
                 << ", detail = " << detail.ShortDebugString();
-      skipCreateNewFs = true;
+      skip_create_new_fs = true;
     } else {
       return FSStatusCode::FS_EXIST;
     }
   }
 
   // check fsname
-  if (!CheckFsName(fsName)) {
+  if (!CheckFsName(fs_name)) {
     return FSStatusCode::FSNAME_INVALID;
   }
 
   // check s3info
-  if (!skipCreateNewFs && detail.has_s3info()) {
-    const auto& s3Info = detail.s3info();
-    option_.s3AdapterOption.ak = s3Info.ak();
-    option_.s3AdapterOption.sk = s3Info.sk();
-    option_.s3AdapterOption.s3Address = s3Info.endpoint();
-    option_.s3AdapterOption.bucketName = s3Info.bucketname();
+  if (!skip_create_new_fs && detail.has_s3info()) {
+    const auto& s3_info = detail.s3info();
+    option_.s3AdapterOption.ak = s3_info.ak();
+    option_.s3AdapterOption.sk = s3_info.sk();
+    option_.s3AdapterOption.s3Address = s3_info.endpoint();
+    option_.s3AdapterOption.bucketName = s3_info.bucketname();
     s3Adapter_->Reinit(option_.s3AdapterOption);
     if (!s3Adapter_->BucketExist()) {
-      LOG(ERROR) << "CreateFs " << fsName << " error, s3info is not available!";
+      LOG(ERROR) << "CreateFs " << fs_name
+                 << " error, s3info is not available!";
       return FSStatusCode::S3_INFO_ERROR;
     }
   }
@@ -322,23 +325,23 @@ FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
     LOG(INFO) << "Volume info: " << detail.volume().ShortDebugString();
   }
 
-  if (!skipCreateNewFs) {
-    uint64_t fsId = fsStorage_->NextFsId();
-    if (fsId == INVALID_FS_ID) {
-      LOG(ERROR) << "Generator fs id failed, fsName = " << fsName;
+  if (!skip_create_new_fs) {
+    uint64_t fs_id = fsStorage_->NextFsId();
+    if (fs_id == INVALID_FS_ID) {
+      LOG(ERROR) << "Generator fs id failed, fsName = " << fs_name;
       return FSStatusCode::INTERNAL_ERROR;
     }
 
-    wrapper = FsInfoWrapper(request, fsId, GetRootId());
+    wrapper = FsInfoWrapper(request, fs_id, GetRootId());
 
     FSStatusCode ret = fsStorage_->Insert(wrapper);
     if (ret != FSStatusCode::OK) {
-      LOG(ERROR) << "CreateFs fail, insert fs fail, fsName = " << fsName
+      LOG(ERROR) << "CreateFs fail, insert fs fail, fsName = " << fs_name
                  << ", ret = " << FSStatusCode_Name(ret);
       return ret;
     }
   } else {
-    fsStorage_->Get(fsName, &wrapper);
+    fsStorage_->Get(fs_name, &wrapper);
   }
 
   uint32_t uid = 0;                 // TODO(cw123)
@@ -349,93 +352,93 @@ FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
   std::set<std::string> addrs;
 
   // handle create fs error
-  bool isValidTime =
+  bool is_valid_time =
       (request->has_recycletimehour() && request->recycletimehour() != 0);
-  std::unordered_map<FSStatusCode, std::string> errorMap{
+  std::unordered_map<FSStatusCode, std::string> error_map{
       {FSStatusCode::INSERT_ROOT_INODE_ERROR, "insert root inode fail"},
       {FSStatusCode::INSERT_MANAGE_INODE_FAIL, "insert trash inode fail"},
       {FSStatusCode::INSERT_DENTRY_FAIL, "insert trash dentry fail"},
       {FSStatusCode::UPDATE_FS_FAIL, "create trash inode fail"}};
 
-  auto cleanUpOnCreateFsFailure =
-      [&](FSStatusCode rootStatus, FSStatusCode failureStage) -> FSStatusCode {
-    if (errorMap.find(failureStage) == errorMap.end()) {
-      return rootStatus;
+  auto clean_up_on_create_fs_failure =
+      [&](FSStatusCode root_status,
+          FSStatusCode failure_stage) -> FSStatusCode {
+    if (error_map.find(failure_stage) == error_map.end()) {
+      return root_status;
     }
 
-    FSStatusCode childStatus = FSStatusCode::OK;
-    switch (failureStage) {
+    FSStatusCode child_status = FSStatusCode::OK;
+    switch (failure_stage) {
       case FSStatusCode::UPDATE_FS_FAIL:
-        if (isValidTime) {
-          childStatus = metaserverClient_->DeleteDentry(
+        if (is_valid_time) {
+          child_status = metaserverClient_->DeleteDentry(
               wrapper.GetFsId(), partition.poolid(), partition.copysetid(),
               partition.partitionid(), ROOTINODEID, RECYCLENAME, addrs);
-          if (childStatus != FSStatusCode::OK) {
-            LOG(ERROR) << "CreateFs fail, " << errorMap[failureStage]
+          if (child_status != FSStatusCode::OK) {
+            LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
                        << ", then delete recycle dentry fail"
-                       << ", fsName = " << fsName
-                       << ", ret = " << FSStatusCode_Name(childStatus);
-            return childStatus;
+                       << ", fsName = " << fs_name
+                       << ", ret = " << FSStatusCode_Name(child_status);
+            return child_status;
           }
         }
         FALLTHROUGH_INTENDED;
       case FSStatusCode::INSERT_DENTRY_FAIL:
-        if (isValidTime) {
-          childStatus =
+        if (is_valid_time) {
+          child_status =
               metaserverClient_->DeleteInode(wrapper.GetFsId(), RECYCLEINODEID);
-          if (childStatus != FSStatusCode::OK) {
-            LOG(ERROR) << "CreateFs fail, " << errorMap[failureStage]
+          if (child_status != FSStatusCode::OK) {
+            LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
                        << ", then delete recycle inode fail"
-                       << ", fsName = " << fsName
-                       << ", ret = " << FSStatusCode_Name(childStatus);
-            return childStatus;
+                       << ", fsName = " << fs_name
+                       << ", ret = " << FSStatusCode_Name(child_status);
+            return child_status;
           }
         }
         FALLTHROUGH_INTENDED;
       case FSStatusCode::INSERT_MANAGE_INODE_FAIL:
-        childStatus =
+        child_status =
             metaserverClient_->DeleteInode(wrapper.GetFsId(), GetRootId());
-        if (childStatus != FSStatusCode::OK) {
-          LOG(ERROR) << "CreateFs fail, " << errorMap[failureStage]
+        if (child_status != FSStatusCode::OK) {
+          LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
                      << ", then delete root inode fail"
-                     << ", fsName = " << fsName
-                     << ", ret = " << FSStatusCode_Name(childStatus);
-          return childStatus;
+                     << ", fsName = " << fs_name
+                     << ", ret = " << FSStatusCode_Name(child_status);
+          return child_status;
         }
         FALLTHROUGH_INTENDED;
       case FSStatusCode::INSERT_ROOT_INODE_ERROR:
-        if (FSStatusCode::CREATE_PARTITION_ERROR != rootStatus) {
+        if (FSStatusCode::CREATE_PARTITION_ERROR != root_status) {
           if (TopoStatusCode::TOPO_OK !=
               topoManager_->DeletePartition(partition.partitionid())) {
-            LOG(ERROR) << "CreateFs fail, " << errorMap[failureStage]
+            LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
                        << ", then delete partition fail"
-                       << ", fsName = " << fsName << ", ret = "
+                       << ", fsName = " << fs_name << ", ret = "
                        << FSStatusCode_Name(
                               FSStatusCode::DELETE_PARTITION_ERROR);
             return FSStatusCode::DELETE_PARTITION_ERROR;
           }
         }
 
-        childStatus = fsStorage_->Delete(fsName);
-        if (childStatus != FSStatusCode::OK) {
-          LOG(ERROR) << "CreateFs fail, " << errorMap[failureStage]
-                     << ", then delete fs fail"
-                     << ", fsName = " << fsName
-                     << ", ret = " << FSStatusCode_Name(childStatus);
-          return childStatus;
+        child_status = fsStorage_->Delete(fs_name);
+        if (child_status != FSStatusCode::OK) {
+          LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
+                     << ", then delete fs fail" << ", fsName = " << fs_name
+                     << ", ret = " << FSStatusCode_Name(child_status);
+          return child_status;
         }
         break;
       default:
-        return rootStatus;
+        return root_status;
     }
-    return rootStatus;
+    return root_status;
   };
 
   // create partition
   FSStatusCode ret = FSStatusCode::OK;
-  TopoStatusCode topoRet = topoManager_->CreatePartitionsAndGetMinPartition(
+  TopoStatusCode topo_ret = topoManager_->CreatePartitionsAndGetMinPartition(
       wrapper.GetFsId(), &partition);
-  if (TopoStatusCode::TOPO_OK != topoRet) {
+  if (TopoStatusCode::TOPO_OK != topo_ret) {
     LOG(ERROR) << "CreateFs fail, create partition fail"
                << ", fsId = " << wrapper.GetFsId();
     ret = FSStatusCode::CREATE_PARTITION_ERROR;
@@ -457,26 +460,27 @@ FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
   }
   if (ret != FSStatusCode::OK && ret != FSStatusCode::INODE_EXIST) {
     LOG(ERROR) << "CreateFs fail, "
-               << errorMap[FSStatusCode::INSERT_ROOT_INODE_ERROR]
-               << ", fsName = " << fsName
+               << error_map[FSStatusCode::INSERT_ROOT_INODE_ERROR]
+               << ", fsName = " << fs_name
                << ", ret = " << FSStatusCode_Name(ret);
     // delete partition if created
-    return cleanUpOnCreateFsFailure(ret, FSStatusCode::INSERT_ROOT_INODE_ERROR);
+    return clean_up_on_create_fs_failure(ret,
+                                         FSStatusCode::INSERT_ROOT_INODE_ERROR);
   }
 
   // if trash time is not 0, create trash inode and dentry for fs
-  if (isValidTime) {
+  if (is_valid_time) {
     ret = metaserverClient_->CreateManageInode(
         wrapper.GetFsId(), partition.poolid(), partition.copysetid(),
         partition.partitionid(), uid, gid, mode, ManageInodeType::TYPE_RECYCLE,
         addrs);
     if (ret != FSStatusCode::OK && ret != FSStatusCode::INODE_EXIST) {
       LOG(ERROR) << "CreateFs fail, "
-                 << errorMap[FSStatusCode::INSERT_MANAGE_INODE_FAIL]
-                 << ", fsName = " << fsName
+                 << error_map[FSStatusCode::INSERT_MANAGE_INODE_FAIL]
+                 << ", fsName = " << fs_name
                  << ", ret = " << FSStatusCode_Name(ret);
-      return cleanUpOnCreateFsFailure(ret,
-                                      FSStatusCode::INSERT_MANAGE_INODE_FAIL);
+      return clean_up_on_create_fs_failure(
+          ret, FSStatusCode::INSERT_MANAGE_INODE_FAIL);
     }
 
     ret = metaserverClient_->CreateDentry(wrapper.GetFsId(), partition.poolid(),
@@ -485,10 +489,11 @@ FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
                                           RECYCLENAME, RECYCLEINODEID, addrs);
     if (ret != FSStatusCode::OK) {
       LOG(ERROR) << "CreateFs fail, "
-                 << errorMap[FSStatusCode::INSERT_DENTRY_FAIL]
-                 << ", fsName = " << fsName
+                 << error_map[FSStatusCode::INSERT_DENTRY_FAIL]
+                 << ", fsName = " << fs_name
                  << ", ret = " << FSStatusCode_Name(ret);
-      return cleanUpOnCreateFsFailure(ret, FSStatusCode::INSERT_DENTRY_FAIL);
+      return clean_up_on_create_fs_failure(ret,
+                                           FSStatusCode::INSERT_DENTRY_FAIL);
     }
   }
 
@@ -497,32 +502,32 @@ FSStatusCode FsManager::CreateFs(const ::curvefs::mds::CreateFsRequest* request,
   // for persistence consider
   ret = fsStorage_->Update(wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(ERROR) << "CreateFs fail, " << errorMap[FSStatusCode::UPDATE_FS_FAIL]
-               << ", fsName = " << fsName
+    LOG(ERROR) << "CreateFs fail, " << error_map[FSStatusCode::UPDATE_FS_FAIL]
+               << ", fsName = " << fs_name
                << ", ret = " << FSStatusCode_Name(ret);
     // delete recycle dentry and recyle inode if created
-    return cleanUpOnCreateFsFailure(ret, FSStatusCode::UPDATE_FS_FAIL);
+    return clean_up_on_create_fs_failure(ret, FSStatusCode::UPDATE_FS_FAIL);
   }
 
-  *fsInfo = std::move(wrapper).ProtoFsInfo();
+  *fs_info = std::move(wrapper).ProtoFsInfo();
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::DeleteFs(const std::string& fsName) {
-  NameLockGuard lock(nameLock_, fsName);
+FSStatusCode FsManager::DeleteFs(const std::string& fs_name) {
+  NameLockGuard lock(nameLock_, fs_name);
 
   // 1. query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "DeleteFs fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "DeleteFs fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
 
   // 2. check mount point num
   if (!wrapper.IsMountPointEmpty()) {
-    LOG(WARNING) << "DeleteFs fail, mount point exist, fsName = " << fsName;
+    LOG(WARNING) << "DeleteFs fail, mount point exist, fsName = " << fs_name;
     for (auto& it : wrapper.MountPoints()) {
       LOG(WARNING) << "mountpoint [" << it.ShortDebugString() << "] exist";
     }
@@ -532,28 +537,28 @@ FSStatusCode FsManager::DeleteFs(const std::string& fsName) {
   // 3. check fs status
   FsStatus status = wrapper.GetStatus();
   if (status == FsStatus::NEW || status == FsStatus::INITED) {
-    FsInfoWrapper newWrapper = wrapper;
+    FsInfoWrapper new_wrapper = wrapper;
     // update fs status to deleting
-    newWrapper.SetStatus(FsStatus::DELETING);
+    new_wrapper.SetStatus(FsStatus::DELETING);
     // change fs name to oldname+"_deleting_"+fsid+deletetime
     uint64_t now = ::curve::common::TimeUtility::GetTimeofDaySec();
-    newWrapper.SetFsName(fsName + "_deleting_" +
-                         std::to_string(wrapper.GetFsId()) + "_" +
-                         std::to_string(now));
+    new_wrapper.SetFsName(fs_name + "_deleting_" +
+                          std::to_string(wrapper.GetFsId()) + "_" +
+                          std::to_string(now));
     // for persistence consider
-    ret = fsStorage_->Rename(wrapper, newWrapper);
+    ret = fsStorage_->Rename(wrapper, new_wrapper);
     if (ret != FSStatusCode::OK) {
       LOG(ERROR) << "DeleteFs fail, update fs to deleting and rename fail"
-                 << ", fsName = " << fsName
+                 << ", fsName = " << fs_name
                  << ", ret = " << FSStatusCode_Name(ret);
       return ret;
     }
     return FSStatusCode::OK;
   } else if (status == FsStatus::DELETING) {
-    LOG(WARNING) << "DeleteFs already in deleting, fsName = " << fsName;
+    LOG(WARNING) << "DeleteFs already in deleting, fsName = " << fs_name;
     return FSStatusCode::UNDER_DELETING;
   } else {
-    LOG(ERROR) << "DeleteFs fs in wrong status, fsName = " << fsName
+    LOG(ERROR) << "DeleteFs fs in wrong status, fsName = " << fs_name
                << ", fs status = " << FsStatus_Name(status);
     return FSStatusCode::UNKNOWN_ERROR;
   }
@@ -561,15 +566,15 @@ FSStatusCode FsManager::DeleteFs(const std::string& fsName) {
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::MountFs(const std::string& fsName,
-                                const Mountpoint& mountpoint, FsInfo* fsInfo) {
-  NameLockGuard lock(nameLock_, fsName);
+FSStatusCode FsManager::MountFs(const std::string& fs_name,
+                                const Mountpoint& mountpoint, FsInfo* fs_info) {
+  NameLockGuard lock(nameLock_, fs_name);
 
   // query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "MountFs fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "MountFs fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
@@ -578,16 +583,16 @@ FSStatusCode FsManager::MountFs(const std::string& fsName,
   FsStatus status = wrapper.GetStatus();
   switch (status) {
     case FsStatus::NEW:
-      LOG(WARNING) << "MountFs fs is not inited, fsName = " << fsName;
+      LOG(WARNING) << "MountFs fs is not inited, fsName = " << fs_name;
       return FSStatusCode::NOT_INITED;
     case FsStatus::INITED:
       // inited status, go on process
       break;
     case FsStatus::DELETING:
-      LOG(WARNING) << "MountFs fs is in deleting, fsName = " << fsName;
+      LOG(WARNING) << "MountFs fs is in deleting, fsName = " << fs_name;
       return FSStatusCode::UNDER_DELETING;
     default:
-      LOG(ERROR) << "MountFs fs in wrong status, fsName = " << fsName
+      LOG(ERROR) << "MountFs fs in wrong status, fsName = " << fs_name
                  << ", fs status = " << FsStatus_Name(status);
       return FSStatusCode::UNKNOWN_ERROR;
   }
@@ -595,13 +600,13 @@ FSStatusCode FsManager::MountFs(const std::string& fsName,
   // check param
   if (!mountpoint.has_cto()) {
     LOG(WARNING) << "MountFs fail, mount point miss cto param, fsName = "
-                 << fsName << ", fs status = " << FsStatus_Name(status);
+                 << fs_name << ", fs status = " << FsStatus_Name(status);
     return FSStatusCode::PARAM_ERROR;
   }
 
   // mount point conflict
   if (wrapper.IsMountPointConflict(mountpoint)) {
-    LOG(WARNING) << "MountFs fail, mount point conflict, fsName = " << fsName
+    LOG(WARNING) << "MountFs fail, mount point conflict, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString();
     return FSStatusCode::MOUNT_POINT_CONFLICT;
   }
@@ -609,10 +614,10 @@ FSStatusCode FsManager::MountFs(const std::string& fsName,
   // If this is the first mountpoint, init space,
   if (wrapper.GetFsType() == FSType::TYPE_VOLUME &&
       wrapper.IsMountPointEmpty()) {
-    const auto& tempFsInfo = wrapper.ProtoFsInfo();
-    auto ret = spaceManager_->AddVolume(tempFsInfo);
+    const auto& temp_fs_info = wrapper.ProtoFsInfo();
+    auto ret = spaceManager_->AddVolume(temp_fs_info);
     if (ret != space::SpaceOk) {
-      LOG(ERROR) << "MountFs fail, init space fail, fsName = " << fsName
+      LOG(ERROR) << "MountFs fail, init space fail, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(INIT_SPACE_ERROR);
       return INIT_SPACE_ERROR;
@@ -624,30 +629,30 @@ FSStatusCode FsManager::MountFs(const std::string& fsName,
   // for persistence consider
   ret = fsStorage_->Update(wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "MountFs fail, update fs fail, fsName = " << fsName
+    LOG(WARNING) << "MountFs fail, update fs fail, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
   // update client alive time
-  UpdateClientAliveTime(mountpoint, fsName, false);
+  UpdateClientAliveTime(mountpoint, fs_name, false);
 
   // convert fs info
   FsMetric::GetInstance().OnMount(wrapper.GetFsName(), mountpoint);
-  *fsInfo = std::move(wrapper).ProtoFsInfo();
+  *fs_info = std::move(wrapper).ProtoFsInfo();
 
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::UmountFs(const std::string& fsName,
+FSStatusCode FsManager::UmountFs(const std::string& fs_name,
                                  const Mountpoint& mountpoint) {
-  NameLockGuard lock(nameLock_, fsName);
+  NameLockGuard lock(nameLock_, fs_name);
 
   // 1. query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "UmountFs fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "UmountFs fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
@@ -655,7 +660,7 @@ FSStatusCode FsManager::UmountFs(const std::string& fsName,
   // 2. umount
   if (!wrapper.IsMountPointExist(mountpoint)) {
     ret = FSStatusCode::MOUNT_POINT_NOT_EXIST;
-    LOG(WARNING) << "UmountFs fail, mount point not exist, fsName = " << fsName
+    LOG(WARNING) << "UmountFs fail, mount point not exist, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
@@ -664,7 +669,8 @@ FSStatusCode FsManager::UmountFs(const std::string& fsName,
   ret = wrapper.DeleteMountPoint(mountpoint);
   if (ret != FSStatusCode::OK) {
     LOG(WARNING) << "UmountFs fail, delete mount point fail, fsName = "
-                 << fsName << ", mountpoint = " << mountpoint.ShortDebugString()
+                 << fs_name
+                 << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
@@ -678,13 +684,13 @@ FSStatusCode FsManager::UmountFs(const std::string& fsName,
       wrapper.IsMountPointEmpty()) {
     auto ret = spaceManager_->RemoveVolume(wrapper.GetFsId());
     if (ret != space::SpaceOk) {
-      LOG(ERROR) << "UmountFs fail, uninit space fail, fsName = " << fsName
+      LOG(ERROR) << "UmountFs fail, uninit space fail, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << space::SpaceErrCode_Name(ret);
       return UNINIT_SPACE_ERROR;
     }
 
-    LOG(INFO) << "Remove volume space success, fsName = " << fsName
+    LOG(INFO) << "Remove volume space success, fsName = " << fs_name
               << ", fsId = " << wrapper.GetFsId();
   }
 
@@ -692,74 +698,74 @@ FSStatusCode FsManager::UmountFs(const std::string& fsName,
   // for persistence consider
   ret = fsStorage_->Update(wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "UmountFs fail, update fs fail, fsName = " << fsName
+    LOG(WARNING) << "UmountFs fail, update fs fail, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
 
-  FsMetric::GetInstance().OnUnMount(fsName, mountpoint);
+  FsMetric::GetInstance().OnUnMount(fs_name, mountpoint);
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::GetFsInfo(const std::string& fsName, FsInfo* fsInfo) {
+FSStatusCode FsManager::GetFsInfo(const std::string& fs_name, FsInfo* fs_info) {
   // 1. query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
 
-  *fsInfo = wrapper.ProtoFsInfo();
+  *fs_info = wrapper.ProtoFsInfo();
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::GetFsInfo(uint32_t fsId, FsInfo* fsInfo) {
+FSStatusCode FsManager::GetFsInfo(uint32_t fs_id, FsInfo* fs_info) {
   // 1. query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsId, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_id, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsId = " << fsId
+    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsId = " << fs_id
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
 
-  *fsInfo = wrapper.ProtoFsInfo();
+  *fs_info = wrapper.ProtoFsInfo();
   return FSStatusCode::OK;
 }
 
-FSStatusCode FsManager::GetFsInfo(const std::string& fsName, uint32_t fsId,
-                                  FsInfo* fsInfo) {
+FSStatusCode FsManager::GetFsInfo(const std::string& fs_name, uint32_t fs_id,
+                                  FsInfo* fs_info) {
   // 1. query fs by fsName
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "GetFsInfo fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
 
   // 2. check fsId
-  if (wrapper.GetFsId() != fsId) {
-    LOG(WARNING) << "GetFsInfo fail, fsId missmatch, fsName = " << fsName
-                 << ", param fsId = " << fsId
+  if (wrapper.GetFsId() != fs_id) {
+    LOG(WARNING) << "GetFsInfo fail, fsId missmatch, fsName = " << fs_name
+                 << ", param fsId = " << fs_id
                  << ", fsInfo.fsId = " << wrapper.GetFsId();
     return FSStatusCode::PARAM_ERROR;
   }
 
-  *fsInfo = wrapper.ProtoFsInfo();
+  *fs_info = wrapper.ProtoFsInfo();
   return FSStatusCode::OK;
 }
 
-int FsManager::IsExactlySameOrCreateUnComplete(const std::string& fsName,
-                                               FSType fsType,
+int FsManager::IsExactlySameOrCreateUnComplete(const std::string& fs_name,
+                                               FSType fs_type,
                                                uint64_t blocksize,
                                                const FsDetail& detail) {
-  FsInfoWrapper existFs;
+  FsInfoWrapper exist_fs;
 
-  auto volumeInfoComparator = [](common::Volume lhs, common::Volume rhs) {
+  auto volume_info_comparator = [](common::Volume lhs, common::Volume rhs) {
     // only compare required fields
     // 1. clear `volumeSize` and `extendAlignment`
     // 2. if `autoExtend` is true, `extendFactor` must be equal too
@@ -771,29 +777,29 @@ int FsManager::IsExactlySameOrCreateUnComplete(const std::string& fsName,
     return google::protobuf::util::MessageDifferencer::Equals(lhs, rhs);
   };
 
-  auto checkFsInfo = [fsType, volumeInfoComparator](const FsDetail& lhs,
-                                                    const FsDetail& rhs) {
-    switch (fsType) {
+  auto check_fs_info = [fs_type, volume_info_comparator](const FsDetail& lhs,
+                                                         const FsDetail& rhs) {
+    switch (fs_type) {
       case curvefs::common::FSType::TYPE_S3:
         return MessageDifferencer::Equals(lhs.s3info(), rhs.s3info());
       case curvefs::common::FSType::TYPE_VOLUME:
-        return volumeInfoComparator(lhs.volume(), rhs.volume());
+        return volume_info_comparator(lhs.volume(), rhs.volume());
       case curvefs::common::FSType::TYPE_HYBRID:
         return MessageDifferencer::Equals(lhs.s3info(), rhs.s3info()) &&
-               volumeInfoComparator(lhs.volume(), rhs.volume());
+               volume_info_comparator(lhs.volume(), rhs.volume());
     }
 
     return false;
   };
 
   // assume fsname exists
-  fsStorage_->Get(fsName, &existFs);
-  if (fsName == existFs.GetFsName() && fsType == existFs.GetFsType() &&
-      blocksize == existFs.GetBlockSize() &&
-      checkFsInfo(detail, existFs.GetFsDetail())) {
-    if (FsStatus::NEW == existFs.GetStatus()) {
+  fsStorage_->Get(fs_name, &exist_fs);
+  if (fs_name == exist_fs.GetFsName() && fs_type == exist_fs.GetFsType() &&
+      blocksize == exist_fs.GetBlockSize() &&
+      check_fs_info(detail, exist_fs.GetFsDetail())) {
+    if (FsStatus::NEW == exist_fs.GetStatus()) {
       return 1;
-    } else if (FsStatus::INITED == existFs.GetStatus()) {
+    } else if (FsStatus::INITED == exist_fs.GetStatus()) {
       return 0;
     }
   }
@@ -803,11 +809,11 @@ int FsManager::IsExactlySameOrCreateUnComplete(const std::string& fsName,
 uint64_t FsManager::GetRootId() { return ROOTINODEID; }
 
 void FsManager::GetAllFsInfo(
-    ::google::protobuf::RepeatedPtrField<::curvefs::mds::FsInfo>* fsInfoVec) {
-  std::vector<FsInfoWrapper> wrapperVec;
-  fsStorage_->GetAll(&wrapperVec);
-  for (auto const& i : wrapperVec) {
-    *fsInfoVec->Add() = i.ProtoFsInfo();
+    ::google::protobuf::RepeatedPtrField<::curvefs::mds::FsInfo>* fs_info_vec) {
+  std::vector<FsInfoWrapper> wrapper_vec;
+  fsStorage_->GetAll(&wrapper_vec);
+  for (auto const& i : wrapper_vec) {
+    *fs_info_vec->Add() = i.ProtoFsInfo();
   }
   LOG(INFO) << "get all fsinfo.";
 }
@@ -862,25 +868,25 @@ FSStatusCode FsManager::ReloadMountedFsVolumeSpace() {
   return FSStatusCode::OK;
 }
 
-void FsManager::GetLatestTxId(const uint32_t fsId,
-                              std::vector<PartitionTxId>* txIds) {
+void FsManager::GetLatestTxId(const uint32_t fs_id,
+                              std::vector<PartitionTxId>* tx_ids) {
   std::list<PartitionInfo> list;
-  topoManager_->ListPartitionOfFs(fsId, &list);
+  topoManager_->ListPartitionOfFs(fs_id, &list);
   for (const auto& item : list) {
-    PartitionTxId partitionTxId;
-    partitionTxId.set_partitionid(item.partitionid());
-    partitionTxId.set_txid(item.txid());
-    txIds->push_back(std::move(partitionTxId));
+    PartitionTxId partition_tx_id;
+    partition_tx_id.set_partitionid(item.partitionid());
+    partition_tx_id.set_txid(item.txid());
+    tx_ids->push_back(std::move(partition_tx_id));
   }
 }
 
-FSStatusCode FsManager::IncreaseFsTxSequence(const std::string& fsName,
+FSStatusCode FsManager::IncreaseFsTxSequence(const std::string& fs_name,
                                              const std::string& owner,
                                              uint64_t* sequence) {
   FsInfoWrapper wrapper;
-  FSStatusCode rc = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode rc = fsStorage_->Get(fs_name, &wrapper);
   if (rc != FSStatusCode::OK) {
-    LOG(WARNING) << "Increase fs transaction sequence fail, fsName=" << fsName
+    LOG(WARNING) << "Increase fs transaction sequence fail, fsName=" << fs_name
                  << ", retCode=" << FSStatusCode_Name(rc);
     return rc;
   }
@@ -888,7 +894,7 @@ FSStatusCode FsManager::IncreaseFsTxSequence(const std::string& fsName,
   *sequence = wrapper.IncreaseFsTxSequence(owner);
   rc = fsStorage_->Update(wrapper);
   if (rc != FSStatusCode::OK) {
-    LOG(WARNING) << "Increase fs transaction sequence fail, fsName=" << fsName
+    LOG(WARNING) << "Increase fs transaction sequence fail, fsName=" << fs_name
                  << ", retCode=" << FSStatusCode_Name(rc);
     return rc;
   }
@@ -896,12 +902,12 @@ FSStatusCode FsManager::IncreaseFsTxSequence(const std::string& fsName,
   return rc;
 }
 
-FSStatusCode FsManager::GetFsTxSequence(const std::string& fsName,
+FSStatusCode FsManager::GetFsTxSequence(const std::string& fs_name,
                                         uint64_t* sequence) {
   FsInfoWrapper wrapper;
-  FSStatusCode rc = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode rc = fsStorage_->Get(fs_name, &wrapper);
   if (rc != FSStatusCode::OK) {
-    LOG(WARNING) << "Get fs transaction sequence fail, fsName=" << fsName
+    LOG(WARNING) << "Get fs transaction sequence fail, fsName=" << fs_name
                  << ", retCode=" << FSStatusCode_Name(rc);
     return rc;
   }
@@ -912,7 +918,7 @@ FSStatusCode FsManager::GetFsTxSequence(const std::string& fsName,
 
 void FsManager::GetLatestTxId(const GetLatestTxIdRequest* request,
                               GetLatestTxIdResponse* response) {
-  std::vector<PartitionTxId> txIds;
+  std::vector<PartitionTxId> tx_ids;
   if (!request->has_fsid()) {
     response->set_statuscode(FSStatusCode::PARAM_ERROR);
     LOG(ERROR) << "Bad GetLatestTxId request which missing fsid"
@@ -920,45 +926,45 @@ void FsManager::GetLatestTxId(const GetLatestTxIdRequest* request,
     return;
   }
 
-  uint32_t fsId = request->fsid();
+  uint32_t fs_id = request->fsid();
   if (!request->lock()) {
-    GetLatestTxId(fsId, &txIds);
+    GetLatestTxId(fs_id, &tx_ids);
     response->set_statuscode(FSStatusCode::OK);
-    *response->mutable_txids() = {txIds.begin(), txIds.end()};
+    *response->mutable_txids() = {tx_ids.begin(), tx_ids.end()};
     return;
   }
 
   // lock for multi-mount rename
   FSStatusCode rc;
-  const std::string& fsName = request->fsname();
+  const std::string& fs_name = request->fsname();
   const std::string& uuid = request->uuid();
-  LOCK_STATUS status = dlock_->Lock(fsName, uuid);
+  LOCK_STATUS status = dlock_->Lock(fs_name, uuid);
   if (status != LOCK_STATUS::OK) {
     rc = (status == LOCK_STATUS::TIMEOUT) ? FSStatusCode::LOCK_TIMEOUT
                                           : FSStatusCode::LOCK_FAILED;
     response->set_statuscode(rc);
-    LOG(WARNING) << "DLock lock failed, fsName=" << fsName << ", uuid=" << uuid
+    LOG(WARNING) << "DLock lock failed, fsName=" << fs_name << ", uuid=" << uuid
                  << ", retCode=" << FSStatusCode_Name(rc);
     return;
   }
 
   // status = LOCK_STATUS::OK
-  NameLockGuard lock(nameLock_, fsName);
-  if (!dlock_->CheckOwner(fsName, uuid)) {  // double check
+  NameLockGuard lock(nameLock_, fs_name);
+  if (!dlock_->CheckOwner(fs_name, uuid)) {  // double check
     LOG(WARNING) << "DLock lock failed for owner transfer"
-                 << ", fsName=" << fsName << ", owner=" << uuid;
+                 << ", fsName=" << fs_name << ", owner=" << uuid;
     response->set_statuscode(FSStatusCode::LOCK_FAILED);
     return;
   }
 
-  uint64_t txSequence;
-  rc = IncreaseFsTxSequence(fsName, uuid, &txSequence);
+  uint64_t tx_sequence;
+  rc = IncreaseFsTxSequence(fs_name, uuid, &tx_sequence);
   if (rc == FSStatusCode::OK) {
-    GetLatestTxId(fsId, &txIds);
-    *response->mutable_txids() = {txIds.begin(), txIds.end()};
-    response->set_txsequence(txSequence);
-    LOG(INFO) << "Acquire dlock success, fsName=" << fsName << ", uuid=" << uuid
-              << ", txSequence=" << txSequence;
+    GetLatestTxId(fs_id, &tx_ids);
+    *response->mutable_txids() = {tx_ids.begin(), tx_ids.end()};
+    response->set_txsequence(tx_sequence);
+    LOG(INFO) << "Acquire dlock success, fsName=" << fs_name
+              << ", uuid=" << uuid << ", txSequence=" << tx_sequence;
   } else {
     LOG(ERROR) << "Increase fs txSequence failed";
   }
@@ -967,12 +973,12 @@ void FsManager::GetLatestTxId(const GetLatestTxIdRequest* request,
 
 void FsManager::CommitTx(const CommitTxRequest* request,
                          CommitTxResponse* response) {
-  std::vector<PartitionTxId> txIds = {
+  std::vector<PartitionTxId> tx_ids = {
       request->partitiontxids().begin(),
       request->partitiontxids().end(),
   };
   if (!request->lock()) {
-    if (topoManager_->CommitTxId(txIds) == TopoStatusCode::TOPO_OK) {
+    if (topoManager_->CommitTxId(tx_ids) == TopoStatusCode::TOPO_OK) {
       response->set_statuscode(FSStatusCode::OK);
     } else {
       LOG(ERROR) << "Commit txid failed";
@@ -983,13 +989,13 @@ void FsManager::CommitTx(const CommitTxRequest* request,
 
   // lock for multi-mountpoints
   FSStatusCode rc;
-  std::string fsName = request->fsname();
-  std::string uuid = request->uuid();
-  LOCK_STATUS status = dlock_->Lock(fsName, uuid);
+  const std::string& fs_name = request->fsname();
+  const std::string& uuid = request->uuid();
+  LOCK_STATUS status = dlock_->Lock(fs_name, uuid);
   if (status != LOCK_STATUS::OK) {
     rc = (status == LOCK_STATUS::TIMEOUT) ? FSStatusCode::LOCK_TIMEOUT
                                           : FSStatusCode::LOCK_FAILED;
-    LOG(WARNING) << "DLock lock failed, fsName=" << fsName << ", uuid=" << uuid
+    LOG(WARNING) << "DLock lock failed, fsName=" << fs_name << ", uuid=" << uuid
                  << ", retCode=" << FSStatusCode_Name(rc);
     response->set_statuscode(rc);
     return;
@@ -997,31 +1003,31 @@ void FsManager::CommitTx(const CommitTxRequest* request,
 
   // status = LOCK_STATUS::OK
   {
-    NameLockGuard lock(nameLock_, fsName);
-    if (!dlock_->CheckOwner(fsName, uuid)) {  // double check
+    NameLockGuard lock(nameLock_, fs_name);
+    if (!dlock_->CheckOwner(fs_name, uuid)) {  // double check
       LOG(WARNING) << "DLock lock failed for owner transfer"
-                   << ", fsName=" << fsName << ", owner=" << uuid;
+                   << ", fsName=" << fs_name << ", owner=" << uuid;
       response->set_statuscode(FSStatusCode::LOCK_FAILED);
       return;
     }
 
     // txSequence mismatch
-    uint64_t txSequence;
-    rc = GetFsTxSequence(fsName, &txSequence);
+    uint64_t tx_sequence;
+    rc = GetFsTxSequence(fs_name, &tx_sequence);
     if (rc != FSStatusCode::OK) {
       LOG(ERROR) << "Get fs tx sequence failed";
       response->set_statuscode(rc);
       return;
-    } else if (txSequence != request->txsequence()) {
-      LOG(ERROR) << "Commit tx with txSequence mismatch, fsName=" << fsName
-                 << ", uuid=" << uuid << ", current txSequence=" << txSequence
+    } else if (tx_sequence != request->txsequence()) {
+      LOG(ERROR) << "Commit tx with txSequence mismatch, fsName=" << fs_name
+                 << ", uuid=" << uuid << ", current txSequence=" << tx_sequence
                  << ", commit txSequence=" << request->txsequence();
       response->set_statuscode(FSStatusCode::COMMIT_TX_SEQUENCE_MISMATCH);
       return;
     }
 
     // commit txId
-    if (topoManager_->CommitTxId(txIds) == TopoStatusCode::TOPO_OK) {
+    if (topoManager_->CommitTxId(tx_ids) == TopoStatusCode::TOPO_OK) {
       response->set_statuscode(FSStatusCode::OK);
     } else {
       LOG(ERROR) << "Commit txid failed";
@@ -1031,14 +1037,14 @@ void FsManager::CommitTx(const CommitTxRequest* request,
 
   // we can ignore the UnLock result for the
   // lock can releaseed automaticlly by timeout
-  dlock_->UnLock(fsName, uuid);
+  dlock_->UnLock(fs_name, uuid);
 }
 
 // after mds restart need rebuild mountpoint ttl recorder
 void FsManager::RebuildTimeRecorder() {
-  std::vector<FsInfoWrapper> fsInfos;
-  fsStorage_->GetAll(&fsInfos);
-  for (auto const& info : fsInfos) {
+  std::vector<FsInfoWrapper> fs_infos;
+  fsStorage_->GetAll(&fs_infos);
+  for (auto const& info : fs_infos) {
     for (auto const& mount : info.MountPoints()) {
       UpdateClientAliveTime(mount, info.GetFsName(), false);
     }
@@ -1047,14 +1053,14 @@ void FsManager::RebuildTimeRecorder() {
 }
 
 FSStatusCode FsManager::AddMountPoint(const Mountpoint& mountpoint,
-                                      const std::string& fsName) {
+                                      const std::string& fs_name) {
   LOG(INFO) << "AddMountPoint mountpoint = " << mountpoint.DebugString()
-            << ", fsName = " << fsName;
+            << ", fsName = " << fs_name;
   // 1. query fs
   FsInfoWrapper wrapper;
-  FSStatusCode ret = fsStorage_->Get(fsName, &wrapper);
+  FSStatusCode ret = fsStorage_->Get(fs_name, &wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "AddMountPoint fail, get fs fail, fsName = " << fsName
+    LOG(WARNING) << "AddMountPoint fail, get fs fail, fsName = " << fs_name
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
   }
@@ -1064,7 +1070,7 @@ FSStatusCode FsManager::AddMountPoint(const Mountpoint& mountpoint,
   // for persistence consider
   ret = fsStorage_->Update(wrapper);
   if (ret != FSStatusCode::OK) {
-    LOG(WARNING) << "AddMountPoint update fs fail, fsName = " << fsName
+    LOG(WARNING) << "AddMountPoint update fs fail, fsName = " << fs_name
                  << ", mountpoint = " << mountpoint.ShortDebugString()
                  << ", errCode = " << FSStatusCode_Name(ret);
     return ret;
@@ -1074,26 +1080,26 @@ FSStatusCode FsManager::AddMountPoint(const Mountpoint& mountpoint,
 }
 
 void FsManager::UpdateClientAliveTime(const Mountpoint& mountpoint,
-                                      const std::string& fsName,
-                                      bool addMountPoint) {
-  VLOG(1) << "UpdateClientAliveTime fsName = " << fsName
+                                      const std::string& fs_name,
+                                      bool add_mount_point) {
+  VLOG(1) << "UpdateClientAliveTime fsName = " << fs_name
           << ", mp = " << mountpoint.DebugString()
-          << ". addMountPoint = " << addMountPoint;
+          << ". addMountPoint = " << add_mount_point;
   std::string mountpath;
   MountPoint2Str(mountpoint, &mountpath);
   WriteLockGuard wlock(recorderMutex_);
-  if (addMountPoint) {
+  if (add_mount_point) {
     auto iter = mpTimeRecorder_.find(mountpath);
     // client hang timeout and recover later
     // need add mountpoint to fsInfo
     if (iter == mpTimeRecorder_.end()) {
-      if (AddMountPoint(mountpoint, fsName) != FSStatusCode::OK) {
+      if (AddMountPoint(mountpoint, fs_name) != FSStatusCode::OK) {
         return;
       }
     }
   }
   mpTimeRecorder_[mountpath] =
-      std::make_pair(fsName, ::curve::common::TimeUtility::GetTimeofDaySec());
+      std::make_pair(fs_name, ::curve::common::TimeUtility::GetTimeofDaySec());
 }
 
 void FsManager::DeleteClientAliveTime(const std::string& mountpoint) {

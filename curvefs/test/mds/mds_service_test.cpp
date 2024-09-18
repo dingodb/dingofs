@@ -28,16 +28,16 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include <functional>
 #include <string>
 
+#include "curvefs/src/mds/topology/topology_storage_codec.h"
+#include "curvefs/src/mds/topology/topology_storge_etcd.h"
 #include "curvefs/test/mds/fake_metaserver.h"
 #include "curvefs/test/mds/mock/mock_cli2.h"
 #include "curvefs/test/mds/mock/mock_kvstorage_client.h"
 #include "curvefs/test/mds/mock/mock_space_manager.h"
 #include "curvefs/test/mds/mock/mock_topology.h"
 #include "curvefs/test/mds/utils.h"
-#include "proto/nameserver2.pb.h"
 #include "test/common/mock_s3_adapter.h"
 
 using ::curve::common::MockS3Adapter;
@@ -45,19 +45,12 @@ using ::curvefs::common::S3Info;
 using ::curvefs::common::Volume;
 using ::curvefs::mds::RefreshSessionRequest;
 using ::curvefs::mds::RefreshSessionResponse;
-using ::curvefs::mds::topology::CreatePartitionRequest;
-using ::curvefs::mds::topology::CreatePartitionResponse;
 using ::curvefs::mds::topology::DefaultIdGenerator;
 using ::curvefs::mds::topology::DefaultTokenGenerator;
 using ::curvefs::mds::topology::MockEtcdClient;
-using ::curvefs::mds::topology::MockIdGenerator;
-using ::curvefs::mds::topology::MockStorage;
-using ::curvefs::mds::topology::MockTokenGenerator;
-using ::curvefs::mds::topology::MockTopology;
 using ::curvefs::mds::topology::MockTopologyManager;
 using ::curvefs::mds::topology::TopologyIdGenerator;
 using ::curvefs::mds::topology::TopologyImpl;
-using ::curvefs::mds::topology::TopologyManager;
 using ::curvefs::mds::topology::TopologyStorageCodec;
 using ::curvefs::mds::topology::TopologyStorageEtcd;
 using ::curvefs::mds::topology::TopologyTokenGenerator;
