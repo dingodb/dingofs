@@ -25,6 +25,8 @@
 #include <string>
 #include <vector>
 
+#include "braft/configuration.h"
+#include "butil/endpoint.h"
 #include "src/common/string_util.h"
 
 namespace curvefs {
@@ -49,33 +51,31 @@ inline std::string BuildPeerIdWithAddr(const std::string& addr,
 
 inline bool SplitPeerId(const std::string& peer_id, std::string* ip,
                         uint32_t* port, uint32_t* idx = nullptr) {
-  VLOG(6) << "peer_id: " << peer_id;
-  std::vector<std::string> items;
-  SplitString(peer_id, ":", &items);
-  CHECK(items.size() >= 3) << "peer_id format error: " << peer_id;
-
-  *ip = items[0];
-
-  if (!StringToUl(items[1], port)) {
+  braft::PeerId node;
+  if (node.parse(peer_id) != 0) {
+    LOG(ERROR) << "parse peer_id failed: " << peer_id;
     return false;
   }
 
+  *ip = butil::ip2str(node.addr.ip).c_str();
+  *port = node.addr.port;
+
   if (idx != nullptr) {
-    if (!StringToUl(items[2], idx)) {
-      return false;
-    }
+    *idx = node.idx;
   }
 
   return true;
 }
 
 inline bool SplitPeerId(const std::string& peer_id, std::string* addr) {
-  VLOG(6) << "peer_id: " << peer_id;
-  std::vector<std::string> items;
-  curve::common::SplitString(peer_id, ":", &items);
-  CHECK(items.size() >= 3) << "peer_id format error: " << peer_id;
+  braft::PeerId node;
+  if (node.parse(peer_id) != 0) {
+    LOG(ERROR) << "parse peer_id failed: " << peer_id;
+    return false;
+  }
 
-  *addr = items[0] + ":" + items[1];
+  *addr = butil::endpoint2str(node.addr).c_str();
+
   return true;
 }
 
