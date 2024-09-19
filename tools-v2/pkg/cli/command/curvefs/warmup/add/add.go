@@ -95,6 +95,7 @@ func (aCmd *AddCommand) Init(cmd *cobra.Command, args []string) error {
 	// check has curvefs mountpoint
 	mountpoints, err := cobrautil.GetCurveFSMountPoints()
 	if err.TypeCode() != cmderror.CODE_SUCCESS {
+		aCmd.Error = err
 		return err.ToError()
 	} else if len(mountpoints) == 0 {
 		return errors.New("no curvefs mountpoint found")

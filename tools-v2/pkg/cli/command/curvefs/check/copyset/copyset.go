@@ -105,9 +105,9 @@ func (cCmd *CopysetCommand) Init(cmd *cobra.Command, args []string) error {
 	var queryCopysetErr *cmderror.CmdError
 	cCmd.key2Copyset, queryCopysetErr = copyset.QueryCopysetInfoStatus(cCmd.Cmd)
 	if queryCopysetErr.TypeCode() != cmderror.CODE_SUCCESS {
+		cCmd.Error = queryCopysetErr
 		return queryCopysetErr.ToError()
 	}
-	cCmd.Error = queryCopysetErr
 	header := []string{cobrautil.ROW_COPYSET_KEY, cobrautil.ROW_COPYSET_ID,
 		cobrautil.ROW_POOL_ID, cobrautil.ROW_STATUS, cobrautil.ROW_LOG_GAP,
 		cobrautil.ROW_EXPLAIN,
@@ -137,6 +137,7 @@ func (cCmd *CopysetCommand) Init(cmd *cobra.Command, args []string) error {
 	cCmd.copysetKey2LeaderInfo = &key2LeaderInfo
 	err := cCmd.UpdateCopysteGap(timeout)
 	if err.TypeCode() != cmderror.CODE_SUCCESS {
+		cCmd.Error = err
 		return err.ToError()
 	}
 	return nil

@@ -91,6 +91,7 @@ func (fCmd *FsCommand) AddFlags() {
 func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(fCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		fCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 
@@ -144,7 +145,7 @@ func (fCmd *FsCommand) updateTable(info *mds.UmountFsResponse) *cmderror.CmdErro
 	row[cobrautil.ROW_MOUNTPOINT] = fCmd.mountpoint
 	err := cmderror.ErrUmountFs(int(info.GetStatusCode()))
 	row[cobrautil.ROW_RESULT] = err.Message
-	
+
 	list := cobrautil.Map2List(row, fCmd.Header)
 	fCmd.TableNew.Append(list)
 

@@ -90,6 +90,7 @@ func (cCmd *CacheCommand) AddFlags() {
 func (cCmd *CacheCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(cCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		cCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 	cCmd.Rpc = &ListCacheRpc{

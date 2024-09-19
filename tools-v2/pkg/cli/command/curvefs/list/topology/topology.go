@@ -122,6 +122,7 @@ func (tCmd *TopologyCommand) AddFlags() {
 func (tCmd *TopologyCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(tCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		tCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 	tCmd.Rpc.Request = &topology.ListTopologyRequest{}

@@ -93,6 +93,7 @@ func (fCmd *FsCommand) AddFlags() {
 func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(fCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		fCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 	fCmd.Rpc = &ListFsRpc{}
@@ -131,7 +132,7 @@ func (fCmd *FsCommand) RunCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (fCmd *FsCommand)updateTable() {
+func (fCmd *FsCommand) updateTable() {
 	fssInfo := fCmd.response.GetFsInfo()
 	rows := make([]map[string]string, 0)
 	for _, fsInfo := range fssInfo {

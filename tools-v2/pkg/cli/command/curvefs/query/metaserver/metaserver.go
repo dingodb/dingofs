@@ -92,6 +92,7 @@ func (mCmd *MetaserverCommand) AddFlags() {
 func (mCmd *MetaserverCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(mCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		mCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 

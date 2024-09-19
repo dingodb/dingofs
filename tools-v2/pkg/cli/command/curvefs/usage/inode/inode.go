@@ -80,6 +80,7 @@ func (iCmd *InodeNumCommand) AddFlags() {
 func (iCmd *InodeNumCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(iCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		iCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 

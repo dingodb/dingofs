@@ -75,8 +75,8 @@ func NewCopysetCommand() *cobra.Command {
 func NewListCopysetCommand() *CopysetCommand {
 	copysetCmd := &CopysetCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
-			Use:   "copyset",
-			Short: "list all copyset info of the curvefs",
+			Use:     "copyset",
+			Short:   "list all copyset info of the curvefs",
 			Example: copysetExample,
 		},
 	}
@@ -93,6 +93,7 @@ func (cCmd *CopysetCommand) AddFlags() {
 func (cCmd *CopysetCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(cCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		cCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 	cCmd.Rpc = &ListCopysetRpc{}

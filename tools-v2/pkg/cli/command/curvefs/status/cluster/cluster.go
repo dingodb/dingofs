@@ -50,7 +50,7 @@ type ClusterCommand struct {
 	type2Table map[string]*tablewriter.Table
 	type2Func  map[string]func(caller *cobra.Command) (*interface{}, *tablewriter.Table, *cmderror.CmdError, cobrautil.ClUSTER_HEALTH_STATUS)
 	serverList []string
-	health  cobrautil.ClUSTER_HEALTH_STATUS
+	health     cobrautil.ClUSTER_HEALTH_STATUS
 }
 
 var _ basecmd.FinalCurveCmdFunc = (*ClusterCommand)(nil) // check interface
@@ -62,8 +62,8 @@ const (
 func NewClusterCommand() *cobra.Command {
 	cCmd := &ClusterCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
-			Use:   "cluster",
-			Short: "get status of the curvefs",
+			Use:     "cluster",
+			Short:   "get status of the curvefs",
 			Example: clusterExample,
 		},
 	}

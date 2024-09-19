@@ -107,6 +107,7 @@ func (iCmd *InodeCommand) Prepare() error {
 
 	fsId2PartitionList, errGet := partition.GetFsPartition(iCmd.Cmd)
 	if errGet.TypeCode() != cmderror.CODE_SUCCESS {
+		iCmd.Error = errGet
 		return errGet.ToError()
 	}
 	partitionInfoList := (*fsId2PartitionList)[fsId]

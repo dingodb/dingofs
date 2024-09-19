@@ -69,9 +69,9 @@ func (mpCmd *MountpointCommand) Init(cmd *cobra.Command, args []string) error {
 	var fsInfoErr *cmderror.CmdError
 	mpCmd.fsInfo, fsInfoErr = fs.GetClusterFsInfo(mpCmd.Cmd)
 	if fsInfoErr.TypeCode() != cmderror.CODE_SUCCESS {
+		mpCmd.Error = fsInfoErr
 		return fmt.Errorf(fsInfoErr.Message)
 	}
-	mpCmd.Error = fsInfoErr
 
 	header := []string{cobrautil.ROW_FS_ID, cobrautil.ROW_FS_NAME, cobrautil.ROW_MOUNTPOINT}
 	mpCmd.SetHeader(header)

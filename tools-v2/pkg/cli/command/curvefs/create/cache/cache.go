@@ -51,7 +51,7 @@ var _ basecmd.RpcFunc = (*CreateCacheRpc)(nil) // check interface
 
 type CacheCommand struct {
 	basecmd.FinalCurveCmd
-	Rpc      *CreateCacheRpc
+	Rpc *CreateCacheRpc
 }
 
 var _ basecmd.FinalCurveCmdFunc = (*CacheCommand)(nil) // check interface
@@ -91,6 +91,7 @@ func (cCmd *CacheCommand) AddFlags() {
 func (cCmd *CacheCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(cCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		cCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 	cCmd.Rpc = &CreateCacheRpc{}

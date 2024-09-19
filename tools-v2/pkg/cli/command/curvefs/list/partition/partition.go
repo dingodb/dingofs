@@ -92,6 +92,7 @@ func (pCmd *PartitionCommand) AddFlags() {
 func (pCmd *PartitionCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(pCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		pCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 
@@ -211,7 +212,7 @@ func (pCmd *PartitionCommand) RunCommand(cmd *cobra.Command, args []string) erro
 }
 
 func (pCmd *PartitionCommand) ResultPlainOutput() error {
-	if pCmd.TableNew.NumLines() ==0 {
+	if pCmd.TableNew.NumLines() == 0 {
 		fmt.Println("no partition in cluster")
 		return nil
 	}

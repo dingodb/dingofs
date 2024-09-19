@@ -87,6 +87,7 @@ func (fCmd *FsCommand) AddFlags() {
 func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	addrs, addrErr := config.GetFsMdsAddrSlice(fCmd.Cmd)
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		fCmd.Error = addrErr
 		return fmt.Errorf(addrErr.Message)
 	}
 
