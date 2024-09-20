@@ -207,7 +207,7 @@ func GetEtcdStatus(caller *cobra.Command) (*interface{}, *tablewriter.Table, *cm
 		fmt.Sprintf("--%s", config.FORMAT), config.FORMAT_NOOUT,
 	})
 	config.AlignFlagsValue(caller, etcdCmd.Cmd, []string{
-		config.RPCRETRYTIMES, config.RPCTIMEOUT, config.CURVEFS_MDSADDR,
+		config.RPCRETRYTIMES, config.RPCTIMEOUT, config.CURVEFS_MDSADDR, config.CURVEFS_ETCDADDR,
 	})
 	etcdCmd.Cmd.SilenceErrors = true
 	etcdCmd.Cmd.Execute()

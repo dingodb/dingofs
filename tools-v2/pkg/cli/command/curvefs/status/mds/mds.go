@@ -195,7 +195,7 @@ func GetMdsStatus(caller *cobra.Command) (*interface{}, *tablewriter.Table, *cmd
 	mdsCmd.Cmd.SetArgs([]string{
 		fmt.Sprintf("--%s", config.FORMAT), config.FORMAT_NOOUT,
 	})
-	config.AlignFlagsValue(caller, mdsCmd.Cmd, []string{config.RPCRETRYTIMES, config.RPCTIMEOUT, config.CURVEFS_MDSADDR})
+	config.AlignFlagsValue(caller, mdsCmd.Cmd, []string{config.RPCRETRYTIMES, config.RPCTIMEOUT, config.CURVEFS_MDSADDR, config.CURVEFS_MDSDUMMYADDR})
 	mdsCmd.Cmd.SilenceErrors = true
 	mdsCmd.Cmd.Execute()
 	return &mdsCmd.Result, mdsCmd.TableNew, mdsCmd.Error, mdsCmd.health

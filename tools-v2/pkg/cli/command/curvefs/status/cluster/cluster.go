@@ -75,6 +75,8 @@ func (cCmd *ClusterCommand) AddFlags() {
 	config.AddRpcRetryTimesFlag(cCmd.Cmd)
 	config.AddRpcTimeoutFlag(cCmd.Cmd)
 	config.AddFsMdsAddrFlag(cCmd.Cmd)
+	config.AddFsMdsDummyAddrFlag(cCmd.Cmd)
+	config.AddEtcdAddrFlag(cCmd.Cmd)
 }
 
 func (cCmd *ClusterCommand) Init(cmd *cobra.Command, args []string) error {
