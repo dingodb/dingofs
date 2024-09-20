@@ -76,7 +76,6 @@ void S3ClientImpl::DownloadAsync(
           << ",offset:" << context->offset << ",length:" << context->len;
 
   s3Adapter_->GetObjectAsync(context);
-  return;
 }
 
 }  // namespace client

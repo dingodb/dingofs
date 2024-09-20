@@ -281,11 +281,15 @@ int S3Adapter::PutObject(const Aws::String& key, const char* buffer,
   request.SetBody(Aws::MakeShared<PreallocatedIOStream>(AWS_ALLOCATE_TAG,
                                                         buffer, buffer_size));
 
+  s3_object_put_sync_num_ << 1;
+
   if (throttle_) {
     throttle_->Add(false, buffer_size);
   }
 
   auto response = s3Client_->PutObject(request);
+  s3_object_put_sync_num_ << -1;
+
   if (response.IsSuccess()) {
     return 0;
   } else {
@@ -308,6 +312,8 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
   request.SetBody(Aws::MakeShared<PreallocatedIOStream>(
       AWS_ALLOCATE_TAG, context->buffer, context->bufferSize));
 
+  s3_object_put_async_num_ << 1;
+
   auto origin_callback = context->cb;
   auto wrapper_callback =
       [this,
@@ -318,11 +324,14 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
       };
 
   Aws::S3::PutObjectResponseReceivedHandler handler =
-      [context](const Aws::S3::S3Client* /*client*/,
-                const Aws::S3::Model::PutObjectRequest& /*request*/,
-                const Aws::S3::Model::PutObjectOutcome& response,
-                const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
-                    aws_ctx) {
+      [context, this](
+          const Aws::S3::S3Client* /*client*/,
+          const Aws::S3::Model::PutObjectRequest& /*request*/,
+          const Aws::S3::Model::PutObjectOutcome& response,
+          const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
+              aws_ctx) {
+        s3_object_put_async_num_ << -1;
+
         std::shared_ptr<PutObjectAsyncContext> ctx =
             std::const_pointer_cast<PutObjectAsyncContext>(
                 std::dynamic_pointer_cast<const PutObjectAsyncContext>(
@@ -344,6 +353,7 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
 
   inflightBytesThrottle_->OnStart(context->bufferSize);
   context->cb = std::move(wrapper_callback);
+
   s3Client_->PutObjectAsync(request, handler, context);
 }
 
@@ -351,11 +361,17 @@ int S3Adapter::GetObject(const Aws::String& key, std::string* data) {
   Aws::S3::Model::GetObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(key);
+
+  s3_object_get_sync_num_ << 1;
+
   std::stringstream ss;
   if (throttle_) {
     throttle_->Add(true, 1);
   }
+
   auto response = s3Client_->GetObject(request);
+  s3_object_get_sync_num_ << -1;
+
   if (response.IsSuccess()) {
     ss << response.GetResult().GetBody().rdbuf();
     *data = ss.str();
@@ -378,10 +394,15 @@ int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
     return Aws::New<PreallocatedIOStream>(AWS_ALLOCATE_TAG, buf, len);
   });
 
+  s3_object_get_sync_num_ << 1;
+
   if (throttle_) {
     throttle_->Add(true, len);
   }
+
   auto response = s3Client_->GetObject(request);
+  s3_object_get_sync_num_ << -1;
+
   if (response.IsSuccess()) {
     return 0;
   } else {
@@ -402,6 +423,8 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
                                           context->len);
   });
 
+  s3_object_get_async_num_ << 1;
+
   auto origin_callback = context->cb;
   auto wrapper_callback =
       [this, origin_callback](
@@ -418,6 +441,8 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
              const Aws::S3::Model::GetObjectOutcome& response,
              const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
                  aws_ctx) {
+        s3_object_get_async_num_ << -1;
+
         std::shared_ptr<GetObjectAsyncContext> ctx =
             std::const_pointer_cast<GetObjectAsyncContext>(
                 std::dynamic_pointer_cast<const GetObjectAsyncContext>(

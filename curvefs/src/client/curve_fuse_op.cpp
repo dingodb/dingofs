@@ -381,7 +381,6 @@ void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
 
 void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   CURVEFS_ERROR rc;
-  LOG(WARNING) << "GetAttr is called, ino = " << ino << ", rc: " << StrErr(rc);
   AttrOut attr_out;
   auto* client = Client();
   auto fs = client->GetFileSystem();
@@ -391,8 +390,6 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   });
 
   rc = client->FuseOpGetAttr(req, ino, fi, &attr_out);
-  LOG(WARNING) << "GetAttr is called, ino = " << ino
-               << ", after req rc: " << StrErr(rc);
   if (rc != CURVEFS_ERROR::OK) {
     return fs->ReplyError(req, rc);
   }

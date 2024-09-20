@@ -58,6 +58,7 @@
 #include <mutex>
 #include <string>
 
+#include "bvar/reducer.h"
 #include "src/common/configuration.h"
 #include "src/common/throttle.h"
 
@@ -136,11 +137,14 @@ struct PutObjectAsyncContext : public Aws::Client::AsyncCallerContext {
 
 class S3Adapter {
  public:
-  S3Adapter() {
-    clientCfg_ = nullptr;
-    s3Client_ = nullptr;
-    throttle_ = nullptr;
-  }
+  S3Adapter()
+      : clientCfg_(nullptr),
+        s3Client_(nullptr),
+        throttle_(nullptr),
+        s3_object_put_async_num_("s3_object_put_async_num"),
+        s3_object_put_sync_num_("s3_object_put_sync_num"),
+        s3_object_get_async_num_("s3_object_get_async_num"),
+        s3_object_get_sync_num_("s3_object_get_sync_num") {}
 
   virtual ~S3Adapter() { Deinit(); }
 
@@ -355,6 +359,11 @@ class S3Adapter {
   Throttle* throttle_;
 
   std::unique_ptr<AsyncRequestInflightBytesThrottle> inflightBytesThrottle_;
+
+  bvar::Adder<uint64_t> s3_object_put_async_num_;
+  bvar::Adder<uint64_t> s3_object_put_sync_num_;
+  bvar::Adder<uint64_t> s3_object_get_async_num_;
+  bvar::Adder<uint64_t> s3_object_get_sync_num_;
 };
 
 class FakeS3Adapter final : public S3Adapter {

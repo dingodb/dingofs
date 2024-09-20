@@ -91,6 +91,7 @@ cc_library(
     deps = [
         "//src/common:curve_common",
         "@glog//:glog",
+        "@brpc//:brpc",
         "@aws//:aws",
     ],
 )
