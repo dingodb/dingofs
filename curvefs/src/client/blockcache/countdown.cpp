@@ -59,11 +59,6 @@ void Countdown::Wait(uint64_t key) {
   }
 }
 
-bool Countdown::Empty() {
-  std::unique_lock<std::mutex> lk(mutex_);
-  return counters_.empty();
-}
-
 }  // namespace blockcache
 }  // namespace client
 }  // namespace curvefs

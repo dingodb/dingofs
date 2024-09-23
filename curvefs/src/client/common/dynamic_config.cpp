@@ -41,6 +41,11 @@ DEFINE_bool(block_cache_logging, true, "enable block cache log");
 
 DEFINE_validator(block_cache_logging, &PassBool);
 
+// disk cache
+DEFINE_bool(drop_page_cache, true, "drop page cache for disk cache");
+
+DEFINE_validator(drop_page_cache, &PassBool);
+
 // disk cache manager
 DEFINE_uint64(disk_cache_expire_second, 0,
               "cache expire time, 0 means never expired");

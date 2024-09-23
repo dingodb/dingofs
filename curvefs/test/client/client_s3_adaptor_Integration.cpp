@@ -137,12 +137,11 @@ class ClientS3IntegrationTest : public testing::Test {
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
     option.pageSize = 64 * 1024;
-    option.intervalSec = 5000;
+    option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;
     option.readCacheMaxByte = 104857600;
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
-    option.chunkFlushThreads = 5;
     option.objectPrefix = 0;
     std::shared_ptr<MockInodeCacheManager> mockInodeManager(&mockInodeManager_);
     std::shared_ptr<MockMdsClient> mockMdsClient(&mockMdsClient_);

@@ -35,6 +35,7 @@
 
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
+#include "curvefs/src/client/datastream/data_stream.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
@@ -65,6 +66,7 @@ using ::curve::common::PutObjectAsyncContext;
 using curve::common::S3Adapter;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::BlockKey;
+using ::curvefs::client::datastream::DataStream;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::S3ChunkInfo;
 using curvefs::metaserver::S3ChunkInfoList;
@@ -149,7 +151,7 @@ class DataCache : public std::enable_shared_from_this<DataCache> {
     for (; iter != dataMap_.end(); iter++) {
       auto pageIter = iter->second.begin();
       for (; pageIter != iter->second.end(); pageIter++) {
-        delete[] pageIter->second->data;
+        DataStream::GetInstance().FreePage(pageIter->second->data);
         delete pageIter->second;
       }
     }
@@ -505,30 +507,6 @@ class FsCacheManager {
   }
 
   virtual uint64_t GetDataCacheMaxSize() { return writeCacheMaxByte_; }
-
-  void WaitFlush() {
-    std::unique_lock<std::mutex> lk(mutex_);
-    isWaiting_ = true;
-    cond_.wait(lk);
-  }
-
-  void FlushSignal() {
-    std::lock_guard<std::mutex> lk(mutex_);
-    if (isWaiting_) {
-      isWaiting_ = false;
-      cond_.notify_all();
-    }
-  }
-
-  bool WriteCacheIsFull() {
-    if (writeCacheMaxByte_ <= 0) return true;
-    return wDataCacheByte_.load(std::memory_order_relaxed) > writeCacheMaxByte_;
-  }
-
-  virtual uint64_t MemCacheRatio() {
-    return 100 * wDataCacheByte_.load(std::memory_order_relaxed) /
-           writeCacheMaxByte_;
-  }
 
   uint64_t GetLruByte() {
     std::lock_guard<std::mutex> lk(lruMtx_);

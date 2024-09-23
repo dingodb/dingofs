@@ -31,6 +31,7 @@
 #include "curvefs/src/base/hash/ketama_con_hash.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/disk_cache.h"
+#include "curvefs/src/client/blockcache/disk_cache_watcher.h"
 #include "curvefs/src/client/common/config.h"
 
 namespace curvefs {
@@ -73,6 +74,7 @@ class DiskCacheGroup : public CacheStore {
   std::vector<DiskCacheOption> options_;
   std::unique_ptr<ConHash> chash_;
   std::unordered_map<std::string, std::shared_ptr<DiskCache>> stores_;
+  std::unique_ptr<DiskCacheWatcher> watcher_;
 };
 
 }  // namespace blockcache

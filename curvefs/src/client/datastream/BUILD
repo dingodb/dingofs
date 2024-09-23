@@ -17,22 +17,13 @@
 load("//:copts.bzl", "BASE_FLAGS", "CURVE_DEFAULT_COPTS")
 
 cc_library(
-    name = "blockcache_lib",
+    name = "datastream_lib",
     srcs = glob(["*.cpp"]),
     hdrs = glob(["*.h"]),
     copts = CURVE_DEFAULT_COPTS,
     visibility = ["//visibility:public"],
     deps = [
         "//src/common:curve_common",
-        "//src/common:curve_s3_adapter",
-        "//curvefs/src/base:curvefs_base_lib",
-        "//curvefs/src/common:curvefs_common",
         "//curvefs/src/client/common:common",
-        "//curvefs/src/client/metric:client_metric",
-        "@glog//:glog",
-        "@gflags//:gflags",
-        "@brpc//:brpc",
-        "@spdlog//:spdlog",
-        "@com_google_absl//absl/cleanup",
     ],
 )

@@ -23,6 +23,10 @@
 #ifndef SRC_COMMON_CONCURRENT_TASK_THREAD_POOL_H_
 #define SRC_COMMON_CONCURRENT_TASK_THREAD_POOL_H_
 
+#include <glog/logging.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+
 #include <atomic>
 #include <climits>
 #include <condition_variable>  //NOLINT
@@ -40,6 +44,26 @@
 namespace curve {
 namespace common {
 
+namespace {
+
+pid_t GetTid() { return syscall(SYS_gettid); }
+
+void SetThreadName(const char* name) {
+  // skip main thread
+  if (getpid() == GetTid()) {
+    return;
+  }
+
+  int ret = prctl(PR_SET_NAME, name);
+
+  if (ret != 0) {
+    LOG(WARNING) << "Failed to set thread name, tid: " << GetTid()
+                 << ", error: " << errno;
+  }
+}
+
+}  // namespace
+
 using Task = std::function<void()>;
 
 // 异步运行回调的线程池
@@ -47,8 +71,13 @@ template <typename MutexT = std::mutex,
           typename CondVarT = std::condition_variable>
 class TaskThreadPool : public Uncopyable {
  public:
-  TaskThreadPool()
-      : mutex_(), notEmpty_(), notFull_(), capacity_(-1), running_(false) {}
+  TaskThreadPool(const std::string& thread_name = "task_thread_pool")
+      : thread_name_(thread_name),
+        mutex_(),
+        notEmpty_(),
+        notFull_(),
+        capacity_(-1),
+        running_(false) {}
 
   virtual ~TaskThreadPool() {
     if (running_.load(std::memory_order_acquire)) {
@@ -135,6 +164,7 @@ class TaskThreadPool : public Uncopyable {
  protected:
   /*线程工作时执行的函数*/
   virtual void ThreadFunc() {
+    SetThreadName(thread_name_.c_str());
     while (running_.load(std::memory_order_acquire)) {
       Task task(Take());
       /* ThreadPool 退出的时候，queue 为空，那么会返回无效的 task */
@@ -165,12 +195,13 @@ class TaskThreadPool : public Uncopyable {
   }
 
  protected:
+  std::string thread_name_;
   mutable MutexT mutex_;
   CondVarT notEmpty_;
   CondVarT notFull_;
   std::vector<std::unique_ptr<std::thread>> threads_;
   std::deque<Task> queue_;
-  int capacity_;
+  int capacity_;  // FIXME: use uint64_t
   std::atomic<bool> running_;
 };
 

@@ -117,8 +117,6 @@ class BlockCacheBuilder {
     return BlockCacheOption{
         .cache_store = "disk",
         .stage = true,
-        .flush_workers = 2,
-        .flush_queue_size = 10,
         .upload_stage_workers = 2,
         .upload_stage_queue_size = 10,
         .disk_cache_options =

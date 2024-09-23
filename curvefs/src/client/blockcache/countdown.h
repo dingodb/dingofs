@@ -20,6 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#ifndef CURVEFS_SRC_CLIENT_BLOCKCACHE_COUNTDOWN_H_
+#define CURVEFS_SRC_CLIENT_BLOCKCACHE_COUNTDOWN_H_
+
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -44,8 +47,6 @@ class Countdown {
 
   void Wait(uint64_t key);
 
-  bool Empty();
-
  private:
   std::mutex mutex_;
   std::unordered_map<uint64_t, Counter> counters_;
@@ -54,3 +55,5 @@ class Countdown {
 }  // namespace blockcache
 }  // namespace client
 }  // namespace curvefs
+
+#endif  //  CURVEFS_SRC_CLIENT_BLOCKCACHE_COUNTDOWN_H_

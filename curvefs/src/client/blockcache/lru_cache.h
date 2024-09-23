@@ -24,6 +24,7 @@
 #define CURVEFS_SRC_CLIENT_BLOCKCACHE_LRU_CACHE_H_
 
 #include <functional>
+#include <memory>
 #include <string_view>
 
 #include "curvefs/src/client/blockcache/lru_common.h"
@@ -51,9 +52,11 @@ class LRUCache {
 
   virtual bool Get(const CacheKey& key, CacheValue* value);
 
-  virtual std::shared_ptr<CacheItems> Evict(FilterFunc filter);
+  virtual CacheItems Evict(FilterFunc filter);
 
   virtual size_t Size();
+
+  virtual void Clear();
 
  private:
   void EvictAllNodes(ListNode* list);

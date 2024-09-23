@@ -29,6 +29,8 @@
 #include <mutex>
 #include <string>
 
+#include "curvefs/src/client/blockcache/block_cache_metric.h"
+#include "curvefs/src/client/blockcache/block_cache_uploader.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/countdown.h"
 #include "curvefs/src/client/blockcache/error.h"
@@ -98,21 +100,19 @@ class BlockCacheImpl : public BlockCache {
   StoreType GetStoreType() override;
 
  private:
-  friend class BlockCacheBuilder;
+  void WaitAllStageUploaded();
 
  private:
-  void UploadStageBlock(const BlockKey& key, const std::string& path,
-                        bool from_reload);
-
-  void WaitStageBlocksUploaded();
+  friend class BlockCacheBuilder;
 
  private:
   BlockCacheOption option_;
   std::atomic<bool> running_;
   std::shared_ptr<S3Client> s3_;
   std::shared_ptr<CacheStore> store_;
-  std::shared_ptr<Countdown> staging_;
-  std::unique_ptr<TaskThreadPool<>> uploading_;
+  std::shared_ptr<Countdown> stage_count_;
+  std::shared_ptr<BlockCacheUploader> uploader_;
+  std::unique_ptr<BlockCacheMetric> metric_;
 };
 
 }  // namespace blockcache

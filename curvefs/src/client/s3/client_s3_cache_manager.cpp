@@ -29,10 +29,13 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
+#include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
-#include "curvefs/src/client/blockcache/thread_pool.h"
+#include "curvefs/src/client/datastream/data_stream.h"
+#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
 #include "curvefs/src/client/metric/client_metric.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
@@ -53,13 +56,15 @@ static S3MultiManagerMetric* g_s3MultiManagerMetric =
 namespace curvefs {
 namespace client {
 
+using ::curvefs::base::string::StrFormat;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::Block;
 using ::curvefs::client::blockcache::CacheStore;
-using ::curvefs::client::blockcache::FlushThreadPool;
 using ::curvefs::client::blockcache::GetObjectAsyncContext;
 using ::curvefs::client::blockcache::S3ClientImpl;
 using ::curvefs::client::blockcache::StrErr;
+using ::curvefs::client::datastream::DataStream;
+using ::curvefs::client::filesystem::Ino;
 
 void FsCacheManager::DataCacheNumInc() {
   g_s3MultiManagerMetric->writeDataCacheNum << 1;
@@ -201,23 +206,18 @@ bool FsCacheManager::Delete(std::list<DataCachePtr>::iterator iter) {
 }
 
 CURVEFS_ERROR FsCacheManager::FsSync(bool force) {
-  CURVEFS_ERROR ret;
-  std::unordered_map<uint64_t, FileCacheManagerPtr> tmp;
+  std::unordered_map<uint64_t, FileCacheManagerPtr> pending;
   {
     WriteLockGuard writeLockGuard(rwLock_);
-    tmp = fileCacheManagerMap_;
+    pending = fileCacheManagerMap_;
   }
 
-  auto iter = tmp.begin();
-  for (; iter != tmp.end(); iter++) {
-    ret = iter->second->Flush(force);
+  auto post_flush = [&](Ino ino, FileCacheManagerPtr file, CURVEFS_ERROR ret) {
     if (ret == CURVEFS_ERROR::OK) {
       WriteLockGuard writeLockGuard(rwLock_);
-      auto iter1 = fileCacheManagerMap_.find(iter->first);
+      auto iter1 = fileCacheManagerMap_.find(ino);
       if (iter1 == fileCacheManagerMap_.end()) {
-        VLOG(1) << "FsSync, chunk cache for inodeid: " << iter->first
-                << " is removed";
-        continue;
+        VLOG(1) << "FsSync, chunk cache for inodeid: " << ino << " is removed";
       } else {
         VLOG(9) << "FileCacheManagerPtr count:" << iter1->second.use_count()
                 << ", inodeId:" << iter1->first;
@@ -233,9 +233,9 @@ CURVEFS_ERROR FsCacheManager::FsSync(bool force) {
         }
       }
     } else if (ret == CURVEFS_ERROR::NOTEXIST) {
-      iter->second->ReleaseCache();
+      file->ReleaseCache();
       WriteLockGuard writeLockGuard(rwLock_);
-      auto iter1 = fileCacheManagerMap_.find(iter->first);
+      auto iter1 = fileCacheManagerMap_.find(ino);
       if (iter1 != fileCacheManagerMap_.end()) {
         VLOG(9) << "Release FileCacheManager, inode id: "
                 << iter1->second->GetInodeId();
@@ -244,11 +244,26 @@ CURVEFS_ERROR FsCacheManager::FsSync(bool force) {
       }
     } else {
       LOG(ERROR) << "fs fssync error, ret: " << ret;
-      return ret;
     }
-  }
+  };
 
-  return CURVEFS_ERROR::OK;
+  std::atomic<uint64_t> count(pending.size());
+  CountDownEvent count_down_event(count);
+  CURVEFS_ERROR rc = CURVEFS_ERROR::OK;
+  for (const auto& item : pending) {
+    Ino ino = item.first;
+    auto file = item.second;
+    DataStream::GetInstance().EnterFlushFileQueue([&, ino, file, post_flush]() {
+      auto code = file->Flush(force);
+      post_flush(ino, file, code);
+      if (code != CURVEFS_ERROR::OK && code != CURVEFS_ERROR::NOTEXIST) {
+        rc = code;
+      }
+      count_down_event.Signal();
+    });
+  }
+  count_down_event.Wait();
+  return rc;
 }
 
 int FileCacheManager::Write(uint64_t offset, uint64_t length,
@@ -281,9 +296,12 @@ void FileCacheManager::WriteChunk(uint64_t index, uint64_t chunkPos,
   VLOG(9) << "WriteChunk start, index: " << index << ", chunkPos: " << chunkPos;
   ChunkCacheManagerPtr chunkCacheManager = FindOrCreateChunkCacheManager(index);
   WriteLockGuard writeLockGuard(chunkCacheManager->rwLockChunk_);  // todo
+
+  DataCachePtr dataCache;
   std::vector<DataCachePtr> mergeDataCacheVer;
-  DataCachePtr dataCache = chunkCacheManager->FindWriteableDataCache(
+  dataCache = chunkCacheManager->FindWriteableDataCache(
       chunkPos, writeLen, &mergeDataCacheVer, inode_);
+
   if (dataCache) {
     dataCache->Write(chunkPos, writeLen, dataBuf, mergeDataCacheVer);
   } else {
@@ -1486,9 +1504,7 @@ void ChunkCacheManager::WriteNewDataCache(S3ClientAdaptorImpl* s3ClientAdaptor,
                                   chunkPos, len, data, kvClientManager_);
   VLOG(9) << "WriteNewDataCache chunkPos:" << chunkPos << ", len:" << len
           << ", new len:" << dataCache->GetLen() << ",chunkIndex:" << index_;
-
   WriteLockGuard writeLockGuard(rwLockWrite_);
-
   auto ret = dataWCacheMap_.emplace(chunkPos, dataCache);
   if (!ret.second) {
     LOG(ERROR) << "dataCache emplace failed.";
@@ -1563,7 +1579,6 @@ void ChunkCacheManager::ReleaseCache() {
           dataWCache.second->GetActualLen());
     }
     dataWCacheMap_.clear();
-    s3ClientAdaptor_->GetFsCacheManager()->FlushSignal();
   }
   WriteLockGuard writeLockGuard(rwLockRead_);
   auto iter = dataRCacheMap_.begin();
@@ -1630,10 +1645,6 @@ void ChunkCacheManager::ReleaseWriteDataCache(const DataCachePtr& dataCache) {
   VLOG(9) << "chunk flush DataCacheByteDec len:" << dataCache->GetActualLen();
   s3ClientAdaptor_->GetFsCacheManager()->DataCacheByteDec(
       dataCache->GetActualLen());
-  if (!s3ClientAdaptor_->GetFsCacheManager()->WriteCacheIsFull()) {
-    VLOG(9) << "write cache is not full, signal wait.";
-    s3ClientAdaptor_->GetFsCacheManager()->FlushSignal();
-  }
 }
 
 CURVEFS_ERROR ChunkCacheManager::Flush(uint64_t inodeId, bool force,
@@ -1770,8 +1781,7 @@ DataCache::DataCache(S3ClientAdaptorImpl* s3ClientAdaptor,
       }
 
       PageData* pageData = new PageData();
-      pageData->data = new char[pageSize];
-      memset(pageData->data, 0, pageSize);
+      pageData->data = DataStream::GetInstance().NewPage();
       memcpy(pageData->data + pagePos, data + dataOffset, m);
       if (pagePos + m < pageSize) {
         tailZeroLen = pageSize - pagePos - m;
@@ -1836,8 +1846,7 @@ void DataCache::CopyBufToDataCache(uint64_t dataCachePos, uint64_t len,
         pageData = pdMap[pageIndex];
       } else {
         pageData = new PageData();
-        pageData->data = new char[pageSize];
-        memset(pageData->data, 0, pageSize);
+        pageData->data = DataStream::GetInstance().NewPage();
         pageData->index = pageIndex;
         pdMap.emplace(pageIndex, pageData);
         addLen += pageSize;
@@ -1896,8 +1905,7 @@ void DataCache::AddDataBefore(uint64_t len, const char* data) {
         pageData = pdMap[pageIndex];
       } else {
         pageData = new PageData();
-        pageData->data = new char[pageSize];
-        memset(pageData->data, 0, pageSize);
+        pageData->data = DataStream::GetInstance().NewPage();
         pageData->index = pageIndex;
         pdMap.emplace(pageIndex, pageData);
       }
@@ -2097,7 +2105,6 @@ void DataCache::Write(uint64_t chunkPos, uint64_t len, const char* data,
       CopyBufToDataCache(chunkPos - chunkPos_, len, data);
       addByte = actualLen_ - oldSize;
       s3ClientAdaptor_->GetFsCacheManager()->DataCacheByteInc(addByte);
-      return;
     }
   }
   return;
@@ -2136,7 +2143,7 @@ void DataCache::Truncate(uint64_t size) {
       if (pagePos == 0) {
         if (pdMap.count(pageIndex)) {
           pageData = pdMap[pageIndex];
-          delete pageData->data;
+          DataStream::GetInstance().FreePage(pageData->data);
           pdMap.erase(pageIndex);
           actualLen_ -= pageSize;
         }
@@ -2352,15 +2359,16 @@ void DataCache::FlushTaskExecute(
       auto context = fblock.context;
       BlockKey key = fblock.key;
       Block block(context->buffer, context->bufferSize);
-      FlushThreadPool::GetInstance().Enqueue([&, key, block, callback]() {
-        for (;;) {
-          auto rc = block_cache->Put(key, block);
-          if (rc == BCACHE_ERROR::OK) {
-            callback(context);
-            break;
-          }
-        }
-      });
+      DataStream::GetInstance().EnterFlushSliceQueue(
+          [&, key, block, callback]() {
+            for (;;) {
+              auto rc = block_cache->Put(key, block);
+              if (rc == BCACHE_ERROR::OK) {
+                callback(context);
+                break;
+              }
+            }
+          });
     }
   }
   // kvtask execute

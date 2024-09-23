@@ -35,6 +35,8 @@
 #include "curvefs/src/base/filepath/filepath.h"
 #include "curvefs/src/base/math/math.h"
 #include "curvefs/src/base/string/string.h"
+#include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/common/dynamic_config.h"
 
 namespace curvefs {
 namespace client {
@@ -147,8 +149,12 @@ BCACHE_ERROR PosixFileSystem::CloseDir(::DIR* dir) {
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR PosixFileSystem::Create(const std::string& path, int* fd) {
+BCACHE_ERROR PosixFileSystem::Create(const std::string& path, int* fd,
+                                     bool io_direct) {
   int flags = O_TRUNC | O_WRONLY | O_CREAT;
+  if (io_direct) {
+    flags = flags | O_DIRECT;
+  }
   *fd = ::open(path.c_str(), flags, 0644);
   if (*fd < 0) {
     return PosixError(errno, "open(%s,%#x,0644)", path, flags);
@@ -172,32 +178,33 @@ BCACHE_ERROR PosixFileSystem::LSeek(int fd, off_t offset, int whence) {
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR PosixFileSystem::Write(int fd, const char* buffer, size_t count) {
-  while (count > 0) {
-    ssize_t nwritten = ::write(fd, buffer, count);
+BCACHE_ERROR PosixFileSystem::Write(int fd, const char* buffer, size_t length) {
+  while (length > 0) {
+    ssize_t nwritten = ::write(fd, buffer, length);
     if (nwritten < 0) {
       if (errno == EINTR) {
         continue;  // retry
       }
       // error
-      return PosixError(errno, "write(%d,%d)", fd, count);
+      return PosixError(errno, "write(%d,%d)", fd, length);
     }
     // success
     buffer += nwritten;
-    count -= nwritten;
+    length -= nwritten;
   }
+
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR PosixFileSystem::Read(int fd, char* buffer, size_t count) {
+BCACHE_ERROR PosixFileSystem::Read(int fd, char* buffer, size_t length) {
   for (;;) {
-    ssize_t n = ::read(fd, buffer, count);
+    ssize_t n = ::read(fd, buffer, length);
     if (n < 0) {
       if (errno == EINTR) {
         continue;  // retry
       }
       // error
-      return PosixError(errno, "read(%d,%d)", fd, count);
+      return PosixError(errno, "read(%d,%d)", fd, length);
     }
     break;  // success
   }
@@ -236,6 +243,13 @@ BCACHE_ERROR PosixFileSystem::StatFS(const std::string& path,
                                      struct statfs* statfs) {
   if (::statfs(path.c_str(), statfs) < 0) {
     return PosixError(errno, "statfs(%s)", path);
+  }
+  return BCACHE_ERROR::OK;
+}
+
+BCACHE_ERROR PosixFileSystem::FAdvise(int fd, int advise) {
+  if (::posix_fadvise(fd, 0, 0, advise) != 0) {
+    return PosixError(errno, "posix_fadvise(%d, 0, 0, %d)", fd, advise);
   }
   return BCACHE_ERROR::OK;
 }
@@ -310,7 +324,7 @@ BCACHE_ERROR LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
 }
 
 BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
-                                        const char* buffer, size_t count) {
+                                        const char* buffer, size_t length) {
   auto rc = MkDirs(ParentDir(path));
   if (rc != BCACHE_ERROR::OK) {
     return rc;
@@ -318,9 +332,9 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
 
   int fd;
   std::string tmp = path + ".tmp";
-  rc = posix_->Create(tmp, &fd);
+  rc = posix_->Create(tmp, &fd, IsAligned(0, length));
   if (rc == BCACHE_ERROR::OK) {
-    rc = posix_->Write(fd, buffer, count);
+    rc = posix_->Write(fd, buffer, length);
     posix_->Close(fd);
     if (rc == BCACHE_ERROR::OK) {
       rc = posix_->Rename(tmp, path);
@@ -331,7 +345,7 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
 
 BCACHE_ERROR LocalFileSystem::ReadFile(const std::string& path,
                                        std::shared_ptr<char>& buffer,
-                                       size_t* length) {
+                                       size_t* length, bool drop_page_cache) {
   struct stat stat;
   auto rc = posix_->Stat(path, &stat);
   if (rc != BCACHE_ERROR::OK) {
@@ -356,6 +370,10 @@ BCACHE_ERROR LocalFileSystem::ReadFile(const std::string& path,
   buffer = std::shared_ptr<char>(new char[size], std::default_delete<char[]>());
   rc = posix_->Read(fd, buffer.get(), size);
   posix_->Close(fd);
+
+  if (rc == BCACHE_ERROR::OK && drop_page_cache) {
+    posix_->FAdvise(fd, POSIX_FADV_DONTNEED);
+  }
   return rc;
 }
 
@@ -394,6 +412,11 @@ BCACHE_ERROR LocalFileSystem::GetDiskUsage(const std::string& path,
 }
 
 BCACHE_ERROR LocalFileSystem::Do(DoFunc func) { return func(posix_); }
+
+bool LocalFileSystem::IsAligned(off_t offset, size_t length) {
+  return (offset % IO_ALIGNED_BLOCK_SIZE == 0) &&
+         (length % IO_ALIGNED_BLOCK_SIZE == 0);
+}
 
 std::shared_ptr<LocalFileSystem> NewTempLocalFileSystem() {
   return std::make_shared<LocalFileSystem>();

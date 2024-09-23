@@ -89,8 +89,7 @@ struct S3ClientAdaptorOption {
   uint64_t pageSize;
   uint32_t prefetchBlocks;
   uint32_t prefetchExecQueueNum;
-  uint32_t intervalSec;
-  uint32_t chunkFlushThreads;
+  uint32_t intervalMs;
   uint32_t flushIntervalSec;
   uint64_t writeCacheMaxByte;
   uint64_t readCacheMaxByte;
@@ -191,6 +190,41 @@ struct FileSystemOption {
 };
 // }
 
+// { data stream option
+struct BackgroundFlushOption {
+  double trigger_force_memory_ratio;
+};
+
+struct FileOption {
+  uint64_t flush_workers;
+  uint64_t flush_queue_size;
+};
+
+struct SliceOption {
+  uint64_t flush_workers;
+  uint64_t flush_queue_size;
+};
+
+struct ChunkOption {
+  uint64_t flush_workers;
+  uint64_t flush_queue_size;
+};
+
+struct PageOption {
+  uint64_t page_size;
+  uint64_t total_size;
+  bool use_pool;
+};
+
+struct DataStreamOption {
+  BackgroundFlushOption background_flush_option;
+  FileOption file_option;
+  ChunkOption chunk_option;
+  SliceOption slice_option;
+  PageOption page_option;
+};
+// }
+
 // { block cache option
 struct DiskCacheOption {
   uint32_t index;
@@ -201,8 +235,10 @@ struct DiskCacheOption {
 struct BlockCacheOption {
   std::string cache_store;
   bool stage;
-  uint32_t flush_workers;
-  uint32_t flush_queue_size;
+  uint32_t flush_file_workers;
+  uint32_t flush_file_queue_size;
+  uint32_t flush_slice_workers;
+  uint32_t flush_slice_queue_size;
   uint64_t upload_stage_workers;
   uint64_t upload_stage_queue_size;
   std::vector<DiskCacheOption> disk_cache_options;
@@ -223,6 +259,7 @@ struct FuseClientOption {
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
   FileSystemOption fileSystemOption;
+  DataStreamOption data_stream_option;
   BlockCacheOption block_cache_option;
 
   uint32_t listDentryLimit;
