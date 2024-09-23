@@ -26,6 +26,7 @@
 
 #include <memory>
 
+#include "absl/cleanup/cleanup.h"
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/base/time/time.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
@@ -41,6 +42,7 @@ namespace client {
 namespace blockcache {
 
 using ::curvefs::base::string::GenUuid;
+using ::curvefs::base::string::TrimSpace;
 using ::curvefs::base::time::TimeNow;
 
 using DiskCacheTotalMetric = ::curvefs::client::metric::DiskCacheMetric;
@@ -82,7 +84,6 @@ DiskCache::DiskCache(DiskCacheOption option)
   manager_ = std::make_shared<DiskCacheManager>(option.cache_size, layout_, fs_,
                                                 metric_);
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
-  task_pool_ = absl::make_unique<TaskThreadPool<>>();
 }
 
 BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
@@ -98,13 +99,12 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
     }
   }
 
-  uploader_ = uploader;                 // uploader callback
+  uploader_ = uploader;  // uploader callback
+  metric_->Init();
   disk_state_machine_->Start();         // monitor disk state
   disk_state_health_checker_->Start();  // probe disk health
   manager_->Start();                    // manage disk capacity, cache expire
   loader_->Start(uploader);             // load stage and cache block
-  task_pool_->Start(1);
-  task_pool_->Enqueue(&DiskCache::CheckLockFile, this);  // check lock file
   metric_->SetUuid(uuid_);
   metric_->SetCacheStatus(kCacheUp);
 
@@ -119,7 +119,6 @@ BCACHE_ERROR DiskCache::Shutdown() {
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is shutting down...";
 
-  task_pool_->Stop();
   loader_->Stop();
   manager_->Stop();
   disk_state_health_checker_->Stop();
@@ -132,11 +131,11 @@ BCACHE_ERROR DiskCache::Shutdown() {
 BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
-  MetricGuard guard(metric_, [&](DiskCacheMetric* metric) {
+  auto metric_guard = ::absl::MakeCleanup([&] {
     if (rc == BCACHE_ERROR::OK) {
-      metric->AddStageBlock(1);
+      metric_->AddStageBlock(1);
     } else {
-      metric->AddStageSkip();
+      metric_->AddStageSkip();
     }
   });
   LogGuard log([&]() {
@@ -159,13 +158,13 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block) {
 
   timer.NextPhase(Phase::LINK);
   rc = fs_->HardLink(stage_path, cache_path);
-  if (rc != BCACHE_ERROR::OK) {
-    rc = BCACHE_ERROR::OK;  // ignore link error
-    LOG(WARNING) << "Link " << stage_path << " to " << cache_path
-                 << " failed: " << StrErr(rc);
-  } else {
+  if (rc == BCACHE_ERROR::OK) {
     timer.NextPhase(Phase::CACHE_ADD);
     manager_->Add(key, CacheValue(block.size, TimeNow()));
+  } else {
+    LOG(WARNING) << "Link " << stage_path << " to " << cache_path
+                 << " failed: " << StrErr(rc);
+    rc = BCACHE_ERROR::OK;  // ignore link error
   }
 
   timer.NextPhase(Phase::ENQUEUE_UPLOAD);
@@ -175,30 +174,23 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block) {
 
 BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key) {
   BCACHE_ERROR rc;
-  MetricGuard guard(metric_, [&](DiskCacheMetric* metric) {
+  auto metric_guard = ::absl::MakeCleanup([&] {
     if (rc == BCACHE_ERROR::OK) {
-      metric->AddStageBlock(-1);
+      metric_->AddStageBlock(-1);
     }
   });
   LogGuard log([&]() {
     return StrFormat("removestage(%s): %s", key.Filename(), StrErr(rc));
   });
 
-  rc = Check(WANT_EXEC);
-  if (rc == BCACHE_ERROR::OK) {
-    rc = fs_->RemoveFile(GetStagePath(key));
-  }
+  // FIXME: Should we invoke Check(WANT_EXEC)?
+  rc = fs_->RemoveFile(GetStagePath(key));
   return rc;
 }
 
 BCACHE_ERROR DiskCache::Cache(const BlockKey& key, const Block& block) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
-  MetricGuard guard(metric_, [&](DiskCacheMetric* metric) {
-    if (rc == BCACHE_ERROR::OK) {
-      metric->AddCacheBlock(1, block.size);
-    }
-  });
   LogGuard log([&]() {
     return StrFormat("cache(%s,%d): %s%s", key.Filename(), block.size,
                      StrErr(rc), timer.ToString());
@@ -224,11 +216,11 @@ BCACHE_ERROR DiskCache::Load(const BlockKey& key,
                              std::shared_ptr<BlockReader>& reader) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
-  MetricGuard guard(metric_, [&](DiskCacheMetric* metric) {
+  auto metric_guard = ::absl::MakeCleanup([&] {
     if (rc == BCACHE_ERROR::OK) {
-      metric->AddCacheHit();
+      metric_->AddCacheHit();
     } else {
-      metric->AddCacheMiss();
+      metric_->AddCacheMiss();
     }
   });
   LogGuard log([&]() {
@@ -289,35 +281,23 @@ BCACHE_ERROR DiskCache::CreateDirs() {
 BCACHE_ERROR DiskCache::LoadLockFile() {
   size_t length;
   std::shared_ptr<char> buffer;
-  auto path = layout_->GetLockPath();
-  auto rc = fs_->ReadFile(path, buffer, &length);
+  auto lock_path = layout_->GetLockPath();
+  auto rc = fs_->ReadFile(lock_path, buffer, &length);
   if (rc == BCACHE_ERROR::OK) {
-    uuid_ = std::string(buffer.get(), length);
+    uuid_ = TrimSpace(std::string(buffer.get(), length));
   } else if (rc == BCACHE_ERROR::NOT_FOUND) {
     uuid_ = GenUuid();
-    rc = fs_->WriteFile(path, uuid_.c_str(), uuid_.size());
+    rc = fs_->WriteFile(lock_path, uuid_.c_str(), uuid_.size());
   }
   return rc;
-}
-
-void DiskCache::CheckLockFile() {
-  while (running_.load(std::memory_order_relaxed)) {
-    bool find = fs_->FileExists(layout_->GetLockPath());
-    if (find) {
-      metric_->SetCacheStatus(kCacheUp);
-    } else {
-      metric_->SetCacheStatus(kCacheDown);
-    }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-  }
 }
 
 // Check cache status:
 //   1. check running status (UP/DOWN)
 //   2. check disk healthy (HEALTHY/UNHEALTHY)
-//   3. check disk free space (full OR not)
+//   3. check disk free space (FULL or NOT)
 BCACHE_ERROR DiskCache::Check(uint8_t want) {
-  if (metric_->GetCacheStatus() == kCacheDown) {
+  if (!running_.load(std::memory_order_relaxed)) {
     return BCACHE_ERROR::CACHE_DOWN;
   }
 

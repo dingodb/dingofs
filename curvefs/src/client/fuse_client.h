@@ -64,12 +64,11 @@
 using ::curve::common::Atomic;
 using ::curve::common::InterruptibleSleeper;
 using ::curve::common::Thread;
+using ::curve::common::Throttle;
 using ::curvefs::client::metric::FSMetric;
 using ::curvefs::common::FSType;
 using ::curvefs::metaserver::DentryFlag;
 using ::curvefs::metaserver::ManageInodeType;
-using ::curvefs::client::metric::FSMetric;
-using ::curve::common::Throttle;
 
 namespace curvefs {
 namespace client {

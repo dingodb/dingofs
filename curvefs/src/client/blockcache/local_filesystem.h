@@ -35,6 +35,8 @@
 #include "curvefs/src/client/blockcache/disk_state_machine_impl.h"
 #include "curvefs/src/client/blockcache/error.h"
 
+#define IO_ALIGNED_BLOCK_SIZE 4096
+
 namespace curvefs {
 namespace client {
 namespace blockcache {
@@ -57,15 +59,15 @@ class PosixFileSystem {
 
   BCACHE_ERROR CloseDir(::DIR* dir);
 
-  BCACHE_ERROR Create(const std::string& path, int* fd);
+  BCACHE_ERROR Create(const std::string& path, int* fd, bool io_direct);
 
   BCACHE_ERROR Open(const std::string& path, int flags, int* fd);
 
   BCACHE_ERROR LSeek(int fd, off_t offset, int whence);
 
-  BCACHE_ERROR Write(int fd, const char* buffer, size_t count);
+  BCACHE_ERROR Write(int fd, const char* buffer, size_t length);
 
-  BCACHE_ERROR Read(int fd, char* buffer, size_t count);
+  BCACHE_ERROR Read(int fd, char* buffer, size_t length);
 
   BCACHE_ERROR Close(int fd);
 
@@ -76,6 +78,8 @@ class PosixFileSystem {
   BCACHE_ERROR Rename(const std::string& oldpath, const std::string& newpath);
 
   BCACHE_ERROR StatFS(const std::string& path, struct statfs* statfs);
+
+  BCACHE_ERROR FAdvise(int fd, int advise);
 
  private:
   template <typename... Args>
@@ -128,10 +132,10 @@ class LocalFileSystem {
   BCACHE_ERROR Walk(const std::string& prefix, WalkFunc func);
 
   BCACHE_ERROR WriteFile(const std::string& path, const char* buffer,
-                         size_t count);
+                         size_t length);
 
   BCACHE_ERROR ReadFile(const std::string& path, std::shared_ptr<char>& buffer,
-                        size_t* length);
+                        size_t* length, bool drop_page_cache = false);
 
   BCACHE_ERROR RemoveFile(const std::string& path);
 
@@ -142,6 +146,9 @@ class LocalFileSystem {
   BCACHE_ERROR GetDiskUsage(const std::string& path, struct StatDisk* stat);
 
   BCACHE_ERROR Do(DoFunc func);
+
+ private:
+  bool IsAligned(off_t offset, size_t length);
 
  private:
   std::shared_ptr<PosixFileSystem> posix_;

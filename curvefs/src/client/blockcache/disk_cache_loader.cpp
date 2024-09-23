@@ -49,7 +49,7 @@ DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
       fs_(fs),
       manager_(manager),
       metric_(metric),
-      task_pool_(absl::make_unique<TaskThreadPool<>>()) {}
+      task_pool_(absl::make_unique<TaskThreadPool<>>("disk_cache_loader")) {}
 
 void DiskCacheLoader::Start(CacheStore::UploadFunc uploader) {
   if (running_.exchange(true)) {
@@ -74,7 +74,7 @@ void DiskCacheLoader::Stop() {
 
   LOG(INFO) << "Stop disk cache loading thread...";
   task_pool_->Stop();
-  metric_->SetLoadStatus(kStopped);
+  metric_->SetLoadStatus(kLoadStopped);
   LOG(INFO) << "Disk cache loading thread stopped.";
 }
 
@@ -136,6 +136,7 @@ bool DiskCacheLoader::LoadBlock(const std::string& prefix, const FileInfo& file,
   }
 
   if (type == BlockType::STAGE_BLOCK) {
+    metric_->AddStageBlock(1);
     uploader_(key, path, true);
   } else if (type == BlockType::CACHE_BLOCK) {
     manager_->Add(key, CacheValue(file.size, file.atime));

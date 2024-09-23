@@ -23,11 +23,15 @@
 #include "curvefs/src/client/blockcache/disk_cache_group.h"
 
 #include <cassert>
+#include <memory>
 #include <numeric>
 
 #include "curvefs/src/base/hash/ketama_con_hash.h"
 #include "curvefs/src/base/math/math.h"
+#include "curvefs/src/client/blockcache/disk_cache_layout.h"
 #include "curvefs/src/client/blockcache/disk_cache_metric.h"
+#include "curvefs/src/client/blockcache/disk_cache_watcher.h"
+#include "curvefs/src/client/blockcache/local_filesystem.h"
 
 namespace curvefs {
 namespace client {
@@ -38,7 +42,9 @@ using ::curvefs::base::hash::KetamaConHash;
 using DiskCacheTotalMetric = ::curvefs::client::metric::DiskCacheMetric;
 
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
-    : options_(options), chash_(std::make_unique<KetamaConHash>()) {}
+    : options_(options),
+      chash_(std::make_unique<KetamaConHash>()),
+      watcher_(std::make_unique<DiskCacheWatcher>()) {}
 
 BCACHE_ERROR DiskCacheGroup::Init(UploadFunc uploader) {
   auto weights = CalcWeights(options_);
@@ -51,11 +57,13 @@ BCACHE_ERROR DiskCacheGroup::Init(UploadFunc uploader) {
 
     stores_[store->Id()] = store;
     chash_->AddNode(store->Id(), weights[i]);
+    watcher_->Add(options_[i].cache_dir, store);
     LOG(INFO) << "Add disk cache (dir=" << options_[i].cache_dir
               << ", weight=" << weights[i] << ") to disk cache group success.";
   }
 
   chash_->Final();
+  watcher_->Start(uploader);
   return BCACHE_ERROR::OK;
 }
 
@@ -66,6 +74,7 @@ BCACHE_ERROR DiskCacheGroup::Shutdown() {
       return rc;
     }
   }
+  watcher_->Stop();
   return BCACHE_ERROR::OK;
 }
 

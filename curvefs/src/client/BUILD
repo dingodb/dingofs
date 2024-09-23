@@ -75,6 +75,7 @@ cc_library(
         "//curvefs/src/common:curvefs_common",
         "//curvefs/src/client/lease:curvefs_lease",
         "//curvefs/src/client/kvclient:memcached_client_lib",
+        "//curvefs/src/client/datastream:datastream_lib",
         "//curvefs/src/client/blockcache:blockcache_lib",
         ":filesystem_xattr",
         "//src/client:curve_client",

@@ -106,9 +106,9 @@ TEST_F(LRUCacheTest, Evict) {
     }
     return FilterStatus::EVICT_IT;
   });
-  ASSERT_EQ(evicted->size(), 2);
-  ASSERT_EQ((*evicted)[0].value.size, 2);
-  ASSERT_EQ((*evicted)[1].value.size, 3);
+  ASSERT_EQ(evicted.size(), 2);
+  ASSERT_EQ(evicted[0].value.size, 2);
+  ASSERT_EQ(evicted[1].value.size, 3);
   ASSERT_EQ(cache->Size(), 1);
 }
 
@@ -127,13 +127,13 @@ TEST_F(LRUCacheTest, EvictPolicy) {
   ASSERT_EQ(cache->Size(), 3);
 
   int cnt = 0;
-  auto evicted = cache->Evict([&](const CacheValue& value) {
+  auto evicted = cache->Evict([&](const CacheValue&) {
     if (++cnt > 1) {
       return FilterStatus::FINISH;
     }
     return FilterStatus::EVICT_IT;
   });
-  ASSERT_EQ(evicted->size(), 1);
+  ASSERT_EQ(evicted.size(), 1);
   ASSERT_EQ(cache->Size(), 2);
 
   ASSERT_TRUE(cache->Get(Key(1), &out));
@@ -153,7 +153,7 @@ TEST_F(LRUCacheTest, Size) {
 
   auto evicted =
       cache->Evict([&](const CacheValue&) { return FilterStatus::EVICT_IT; });
-  ASSERT_EQ(evicted->size(), 3);
+  ASSERT_EQ(evicted.size(), 3);
   ASSERT_EQ(cache->Size(), 0);
 
   cache->Add(Key(1), Value(1));

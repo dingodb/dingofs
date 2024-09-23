@@ -28,6 +28,7 @@
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
+#include "curvefs/src/client/datastream/data_stream.h"
 #include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/kvclient/memcache_client.h"
 
@@ -50,6 +51,7 @@ using ::curvefs::client::blockcache::BlockCacheImpl;
 using ::curvefs::client::blockcache::S3ClientImpl;
 using curvefs::client::common::FLAGS_enableCto;
 using curvefs::client::common::FLAGS_supportKVcache;
+using ::curvefs::client::datastream::DataStream;
 using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
 using curvefs::mds::topology::MemcacheClusterInfo;
 using curvefs::mds::topology::MemcacheServerInfo;
@@ -75,22 +77,19 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
 
   S3ClientImpl::GetInstance()->Init(opt.s3Opt.s3AdaptrOpt);
 
-  const uint64_t writeCacheMaxByte =
-      opt.s3Opt.s3ClientAdaptorOpt.writeCacheMaxByte;
-  if (writeCacheMaxByte < MIN_WRITE_CACHE_SIZE) {
-    LOG(ERROR) << "writeCacheMaxByte is too small"
-               << ", at least " << MIN_WRITE_CACHE_SIZE
-               << " (8MB)"
-                  ", writeCacheMaxByte = "
-               << writeCacheMaxByte;
-    return CURVEFS_ERROR::CACHETOOSMALL;
-  }
-
+  auto page_option = option.data_stream_option.page_option;
+  auto max_memory_size = page_option.total_size;
   auto fsCacheManager = std::make_shared<FsCacheManager>(
       dynamic_cast<S3ClientAdaptorImpl*>(s3Adaptor_.get()),
-      opt.s3Opt.s3ClientAdaptorOpt.readCacheMaxByte, writeCacheMaxByte,
+      opt.s3Opt.s3ClientAdaptorOpt.readCacheMaxByte, max_memory_size,
       opt.s3Opt.s3ClientAdaptorOpt.readCacheThreads, kvClientManager_);
 
+  // data stream
+  if (!DataStream::GetInstance().Init(option.data_stream_option)) {
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  // block cache
   auto block_cache_option = option.block_cache_option;
   std::string uuid = StrFormat("%d-%s", fsInfo_->fsid(), fsInfo_->fsname());
   if (fsInfo_->has_uuid()) {
@@ -98,6 +97,7 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
   }
   RewriteCacheDir(&block_cache_option, uuid);
   auto block_cache = std::make_shared<BlockCacheImpl>(block_cache_option);
+
   return s3Adaptor_->Init(
       opt.s3Opt.s3ClientAdaptorOpt, S3ClientImpl::GetInstance(), inodeManager_,
       mdsClient_, fsCacheManager, block_cache, kvClientManager_, true);
@@ -139,6 +139,7 @@ void FuseS3Client::UnInit() {
   FuseClient::UnInit();
   s3Adaptor_->Stop();
   S3ClientImpl::GetInstance()->Destroy();
+  DataStream::GetInstance().Shutdown();
   curve::common::S3Adapter::Shutdown();
 }
 

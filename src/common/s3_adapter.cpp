@@ -90,8 +90,8 @@ void InitS3AdaptorOptionExceptS3InfoOption(Configuration* conf,
          !conf->GetIntValue("s3.connectTimeout", &s3_opt->connectTimeout));
   LOG_IF(FATAL,
          !conf->GetIntValue("s3.requestTimeout", &s3_opt->requestTimeout));
-  LOG_IF(FATAL,
-         !conf->GetIntValue("s3.asyncThreadNum", &s3_opt->asyncThreadNum));
+  LOG_IF(FATAL, !conf->GetIntValue("data_stream.s3.async_upload_workers",
+                                   &s3_opt->asyncThreadNum));
   LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
                                       &s3_opt->iopsTotalLimit));
   LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",

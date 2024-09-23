@@ -31,6 +31,8 @@
 
 #include "absl/memory/memory.h"
 #include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/datastream/data_stream.h"
+#include "curvefs/src/client/s3/client_s3_cache_manager.h"
 #include "curvefs/src/common/metric_utils.h"
 #include "curvefs/src/common/s3util.h"
 
@@ -39,6 +41,7 @@ namespace curvefs {
 namespace client {
 
 using ::curvefs::client::blockcache::BCACHE_ERROR;
+using ::curvefs::client::datastream::DataStream;
 
 CURVEFS_ERROR
 S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
@@ -62,7 +65,6 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   memCacheNearfullRatio_ = option.nearfullRatio;
   throttleBaseSleepUs_ = option.baseSleepUs;
   flushIntervalSec_ = option.flushIntervalSec;
-  chunkFlushThreads_ = option.chunkFlushThreads;
   maxReadRetryIntervalMs_ = option.maxReadRetryIntervalMs;
   readRetryIntervalMs_ = option.readRetryIntervalMs;
   objectPrefix_ = option.objectPrefix;
@@ -70,11 +72,12 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   inodeManager_ = inodeManager;
   mdsClient_ = mdsClient;
   fsCacheManager_ = fsCacheManager;
-  waitInterval_.Init(option.intervalSec * 1000);
+  waitInterval_.Init(option.intervalMs);
   block_cache_ = block_cache;
   kvClientManager_ = std::move(kvClientManager);
 
-  {  // init block cache
+  // init block cache
+  {
     auto rc = block_cache_->Init();
     if (rc != BCACHE_ERROR::OK) {
       LOG(ERROR) << "Init bcache cache failed: " << StrErr(rc);
@@ -103,7 +106,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
             << ", chunk size: " << chunkSize_
             << ", prefetchBlocks: " << prefetchBlocks_
             << ", prefetchExecQueueNum: " << prefetchExecQueueNum_
-            << ", intervalSec: " << option.intervalSec
+            << ", intervalMs: " << option.intervalMs
             << ", flushIntervalSec: " << option.flushIntervalSec
             << ", writeCacheMaxByte: " << option.writeCacheMaxByte
             << ", readCacheMaxByte: " << option.readCacheMaxByte
@@ -111,7 +114,6 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
             << ", nearfullRatio: " << option.nearfullRatio
             << ", baseSleepUs: " << option.baseSleepUs;
   // start chunk flush threads
-  taskPool_.Start(chunkFlushThreads_);
   return CURVEFS_ERROR::OK;
 }
 
@@ -120,25 +122,12 @@ int S3ClientAdaptorImpl::Write(uint64_t inodeId, uint64_t offset,
   VLOG(6) << "write start offset:" << offset << ", len:" << length
           << ", fsId:" << fsId_ << ", inodeId:" << inodeId;
   uint64_t start = butil::cpuwide_time_us();
+
   {
     std::lock_guard<std::mutex> lockGuard(ioMtx_);
     fsCacheManager_->DataCacheByteInc(length);
-    uint64_t size = fsCacheManager_->GetDataCacheSize();
-    const uint64_t maxSize = fsCacheManager_->GetDataCacheMaxSize();
-    if (size >= maxSize) {
-      VLOG(6) << "write cache is full, wait flush. size: " << size
-              << ", maxSize: " << maxSize;
-      // offer to do flush
-      waitInterval_.StopWait();
-      fsCacheManager_->WaitFlush();
-    }
   }
-  const uint64_t memCacheRatio = fsCacheManager_->MemCacheRatio();
-  int64_t exceedRatio = memCacheRatio - memCacheNearfullRatio_;
-  if (exceedRatio > 0) {
-    // offer to do flush
-    waitInterval_.StopWait();
-  }
+
   FileCacheManagerPtr fileCacheManager =
       fsCacheManager_->FindOrCreateFileCacheManager(fsId_, inodeId);
   int ret = fileCacheManager->Write(offset, length, buf);
@@ -272,17 +261,16 @@ void S3ClientAdaptorImpl::BackGroundFlush() {
         cond_.wait(lck);
       }
     }
-    if (fsCacheManager_->MemCacheRatio() > memCacheNearfullRatio_) {
+
+    if (DataStream::GetInstance().MemoryNearFull()) {
       VLOG(3) << "BackGroundFlush radically, write cache num is: "
-              << fsCacheManager_->GetDataCacheNum()
-              << "cache ratio is: " << fsCacheManager_->MemCacheRatio();
+              << fsCacheManager_->GetDataCacheNum();
       fsCacheManager_->FsSync(true);
 
     } else {
       waitInterval_.WaitForNextExcution();
       VLOG(6) << "BackGroundFlush, write cache num is:"
-              << fsCacheManager_->GetDataCacheNum()
-              << "cache ratio is: " << fsCacheManager_->MemCacheRatio();
+              << fsCacheManager_->GetDataCacheNum();
       fsCacheManager_->FsSync(false);
       VLOG(6) << "background fssync end";
     }
@@ -305,7 +293,6 @@ int S3ClientAdaptorImpl::Stop() {
     }
   }
   block_cache_->Shutdown();
-  taskPool_.Stop();
   return 0;
 }
 
@@ -357,7 +344,7 @@ CURVEFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
 void S3ClientAdaptorImpl::Enqueue(
     std::shared_ptr<FlushChunkCacheContext> context) {
   auto task = [this, context]() { this->FlushChunkClosure(context); };
-  taskPool_.Enqueue(task);
+  DataStream::GetInstance().EnterFlushChunkQueue(task);
 }
 
 int S3ClientAdaptorImpl::FlushChunkClosure(

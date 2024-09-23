@@ -28,13 +28,13 @@
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
+#include "curvefs/src/client/blockcache/block_cache_metric.h"
 #include "curvefs/src/client/blockcache/disk_cache_group.h"
 #include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/blockcache/local_filesystem.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/blockcache/mem_cache.h"
 #include "curvefs/src/client/blockcache/phase_timer.h"
-#include "curvefs/src/client/blockcache/thread_pool.h"
 
 namespace curvefs {
 namespace client {
@@ -44,41 +44,36 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option)
     : option_(option),
       running_(false),
       s3_(S3ClientImpl::GetInstance()),
-      staging_(std::make_shared<Countdown>()),
-      uploading_(absl::make_unique<TaskThreadPool<>>()) {
+      stage_count_(std::make_shared<Countdown>()) {
   if (option.cache_store == "none") {
     store_ = std::make_shared<MemCache>();
   } else {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   }
+  uploader_ = std::make_shared<BlockCacheUploader>(store_, s3_, stage_count_);
+
+  auto aux_member = BlockCacheMetric::AuxMember{.uploader = uploader_};
+  metric_ = std::make_unique<BlockCacheMetric>(option, aux_member);
 }
 
 BCACHE_ERROR BlockCacheImpl::Init() {
-  if (running_.exchange(true)) {
-    return BCACHE_ERROR::OK;  // already initialized
-  }
-
-  FlushThreadPool::GetInstance().Init(option_.flush_workers,
-                                      option_.flush_queue_size);
-  uploading_->Start(option_.upload_stage_workers,
+  if (!running_.exchange(true)) {
+    uploader_->Init(option_.upload_stage_workers,
                     option_.upload_stage_queue_size);
-  return store_->Init(
-      [this](const BlockKey& key, const std::string& path, bool reload) {
-        uploading_->Enqueue(&BlockCacheImpl::UploadStageBlock, this, key, path,
-                            reload);
-      });
+    return store_->Init([this](const BlockKey& key,
+                               const std::string& stage_path,
+                               bool from_reload) {
+      uploader_->AddStageBlock(key, stage_path, from_reload);
+    });
+  }
   return BCACHE_ERROR::OK;
 }
 
 BCACHE_ERROR BlockCacheImpl::Shutdown() {
-  if (!running_.exchange(false)) {
-    return BCACHE_ERROR::OK;  // already shutting down
+  if (running_.exchange(false)) {
+    WaitAllStageUploaded();
+    store_->Shutdown();
   }
-
-  FlushThreadPool::GetInstance().Stop();
-  store_->Shutdown();
-  WaitStageBlocksUploaded();
-  uploading_->Stop();
   return BCACHE_ERROR::OK;
 }
 
@@ -92,10 +87,14 @@ BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block) {
 
   if (option_.stage) {
     timer.NextPhase(Phase::STAGE_BLOCK);
+    // TODO: Block should upload to s3 directly if disk reach bandwith
+    // throttle for perfomance.
     rc = store_->Stage(key, block);
     if (rc == BCACHE_ERROR::OK) {
-      staging_->Add(key.ino, 1);
       return rc;
+    } else if (rc == BCACHE_ERROR::CACHE_FULL) {
+      LOG_EVERY_SECOND(WARNING)
+          << "Stage block " << key.Filename() << " failed: " << StrErr(rc);
     } else if (rc != BCACHE_ERROR::NOT_SUPPORTED) {
       LOG(WARNING) << "Stage block " << key.Filename()
                    << " failed: " << StrErr(rc);
@@ -104,7 +103,8 @@ BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block) {
 
   // TODO: Cache the block which put to storage directly
   timer.NextPhase(Phase::S3_PUT);
-  return s3_->Put(key.StoreKey(), block.data, block.size);
+  rc = s3_->Put(key.StoreKey(), block.data, block.size);
+  return rc;
 }
 
 BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
@@ -135,18 +135,6 @@ BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
   return rc;
 }
 
-BCACHE_ERROR BlockCacheImpl::Flush(uint64_t ino) {
-  BCACHE_ERROR rc = BCACHE_ERROR::OK;
-  LogGuard log([&]() { return StrFormat("flush(%d): %s", ino, StrErr(rc)); });
-
-  staging_->Wait(ino);
-  return rc;
-}
-
-bool BlockCacheImpl::IsCached(const BlockKey& key) {
-  return store_->IsCached(key);
-}
-
 BCACHE_ERROR BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
   BCACHE_ERROR rc;
   LogGuard log([&]() {
@@ -158,6 +146,18 @@ BCACHE_ERROR BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
   return rc;
 }
 
+BCACHE_ERROR BlockCacheImpl::Flush(uint64_t ino) {
+  BCACHE_ERROR rc = BCACHE_ERROR::OK;
+  LogGuard log([&]() { return StrFormat("flush(%d): %s", ino, StrErr(rc)); });
+
+  stage_count_->Wait(ino);
+  return rc;
+}
+
+bool BlockCacheImpl::IsCached(const BlockKey& key) {
+  return store_->IsCached(key);
+}
+
 StoreType BlockCacheImpl::GetStoreType() {
   if (option_.cache_store == "none") {
     return StoreType::NONE;
@@ -165,44 +165,8 @@ StoreType BlockCacheImpl::GetStoreType() {
   return StoreType::DISK;
 }
 
-void BlockCacheImpl::UploadStageBlock(const BlockKey& key,
-                                      const std::string& stage_path,
-                                      bool from_reload) {
-  size_t length;
-  std::shared_ptr<char> buffer;
-  auto fs = NewTempLocalFileSystem();
-  auto rc = fs->ReadFile(stage_path, buffer, &length);
-  if (rc != BCACHE_ERROR::OK) {
-    LOG(ERROR) << "Read stage block (" << key.Filename()
-               << ") failed: " << StrErr(rc);
-    uploading_->Enqueue(&BlockCacheImpl::UploadStageBlock, this, key,
-                        stage_path, from_reload);
-    return;
-  }
-
-  auto callback = [&, key, buffer, this](int code) {
-    if (code != 0) {
-      LOG(ERROR) << "Object " << key.Filename()
-                 << " upload failed, retCode=" << code;
-      return true;  // retry
-    }
-
-    if (!from_reload) {
-      staging_->Add(key.ino, -1);
-    }
-
-    auto rc = store_->RemoveStage(key);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Remove stage (" << key.Filename()
-                 << ") failed: " << StrErr(rc);
-    }
-    return false;
-  };
-  s3_->AsyncPut(key.StoreKey(), buffer.get(), length, callback);
-}
-
-void BlockCacheImpl::WaitStageBlocksUploaded() {
-  while (running_.load(std::memory_order_relaxed) && !staging_->Empty()) {
+void BlockCacheImpl::WaitAllStageUploaded() {
+  while (uploader_->GetPendingSize() != 0) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
 }

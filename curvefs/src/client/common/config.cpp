@@ -175,17 +175,16 @@ void InitBlockDeviceOption(Configuration* conf,
 
 void InitS3Option(Configuration* conf, S3Option* s3Opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
-  conf->GetValueFatalIfFail("s3.pageSize", &s3Opt->s3ClientAdaptorOpt.pageSize);
+  conf->GetValueFatalIfFail("data_stream.page.size",
+                            &s3Opt->s3ClientAdaptorOpt.pageSize);
   conf->GetValueFatalIfFail("s3.prefetchBlocks",
                             &s3Opt->s3ClientAdaptorOpt.prefetchBlocks);
   conf->GetValueFatalIfFail("s3.prefetchExecQueueNum",
                             &s3Opt->s3ClientAdaptorOpt.prefetchExecQueueNum);
-  conf->GetValueFatalIfFail("s3.threadScheduleInterval",
-                            &s3Opt->s3ClientAdaptorOpt.intervalSec);
-  conf->GetValueFatalIfFail("s3.cacheFlushIntervalSec",
+  conf->GetValueFatalIfFail("data_stream.background_flush.interval_ms",
+                            &s3Opt->s3ClientAdaptorOpt.intervalMs);
+  conf->GetValueFatalIfFail("data_stream.slice.stay_in_memory_max_second",
                             &s3Opt->s3ClientAdaptorOpt.flushIntervalSec);
-  conf->GetValueFatalIfFail("s3.chunkFlushThreads",
-                            &s3Opt->s3ClientAdaptorOpt.chunkFlushThreads);
   conf->GetValueFatalIfFail("s3.writeCacheMaxByte",
                             &s3Opt->s3ClientAdaptorOpt.writeCacheMaxByte);
   conf->GetValueFatalIfFail("s3.readCacheMaxByte",
@@ -300,6 +299,50 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
   }
 }
 
+void InitDataStreamOption(Configuration* c, DataStreamOption* option) {
+  {  // background flush option
+    auto* o = &option->background_flush_option;
+    c->GetValueFatalIfFail(
+        "data_stream.background_flush.trigger_force_memory_ratio",
+        &o->trigger_force_memory_ratio);
+  }
+  {  // file option
+    auto* o = &option->file_option;
+    c->GetValueFatalIfFail("data_stream.file.flush_workers", &o->flush_workers);
+    c->GetValueFatalIfFail("data_stream.file.flush_queue_size",
+                           &o->flush_queue_size);
+  }
+  {  // chunk option
+    auto* o = &option->chunk_option;
+    c->GetValueFatalIfFail("data_stream.chunk.flush_workers",
+                           &o->flush_workers);
+    c->GetValueFatalIfFail("data_stream.chunk.flush_queue_size",
+                           &o->flush_queue_size);
+  }
+  {  // slice option
+    auto* o = &option->slice_option;
+    c->GetValueFatalIfFail("data_stream.slice.flush_workers",
+                           &o->flush_workers);
+    c->GetValueFatalIfFail("data_stream.slice.flush_queue_size",
+                           &o->flush_queue_size);
+  }
+  {  // page option
+    auto* o = &option->page_option;
+    c->GetValueFatalIfFail("data_stream.page.size", &o->page_size);
+    c->GetValueFatalIfFail("data_stream.page.total_size_mb", &o->total_size);
+    c->GetValueFatalIfFail("data_stream.page.use_pool", &o->use_pool);
+
+    if (o->page_size == 0) {
+      CHECK(false) << "Page size must greater than 0.";
+    }
+
+    o->total_size = o->total_size * kMiB;
+    if (o->total_size < 8 * kMiB) {
+      CHECK(false) << "Page total size must greater than 8MiB.";
+    }
+  }
+}
+
 namespace {
 
 void SplitDiskCacheOption(DiskCacheOption option,
@@ -327,9 +370,6 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   {  // block cache option
     c->GetValueFatalIfFail("block_cache.stage", &option->stage);
     c->GetValueFatalIfFail("block_cache.logging", &FLAGS_block_cache_logging);
-    c->GetValueFatalIfFail("block_cache.flush_workers", &option->flush_workers);
-    c->GetValueFatalIfFail("block_cache.flush_queue_size",
-                           &option->flush_queue_size);
     c->GetValueFatalIfFail("block_cache.upload_stage_workers",
                            &option->upload_stage_workers);
     c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
@@ -348,6 +388,8 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
                            &FLAGS_disk_cache_free_space_ratio);
     c->GetValueFatalIfFail("disk_cache.cache_expire_second",
                            &FLAGS_disk_cache_expire_second);
+    c->GetValueFatalIfFail("disk_cache.drop_page_cache",
+                           &FLAGS_drop_page_cache);
 
     o.cache_size = o.cache_size * kMiB;
     SplitDiskCacheOption(o, &option->disk_cache_options);
@@ -388,6 +430,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
   InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
   InitFileSystemOption(conf, &clientOption->fileSystemOption);
+  InitDataStreamOption(conf, &clientOption->data_stream_option);
   InitBlockCacheOption(conf, &clientOption->block_cache_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",

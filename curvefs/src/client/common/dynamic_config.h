@@ -34,11 +34,14 @@ namespace common {
 /**
  * You can modify the config on the fly, e.g.
  *
- * curl -s * http://127.0.0.1:9000/flags/block_cache_logging?setvalue=true
+ * curl -s http://127.0.0.1:9000/flags/block_cache_logging?setvalue=true
  */
 
 // block cache logging
 DECLARE_bool(block_cache_logging);
+
+// disk cache
+DECLARE_bool(drop_page_cache);
 
 // disk cache manager
 DECLARE_uint64(disk_cache_expire_second);

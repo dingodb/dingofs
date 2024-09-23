@@ -23,6 +23,7 @@
 #ifndef CURVEFS_SRC_BASE_STRING_STRING_H_
 #define CURVEFS_SRC_BASE_STRING_STRING_H_
 
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -67,6 +68,21 @@ inline bool Strs2Ints(const std::vector<std::string>& strs,
 }
 
 inline std::string GenUuid() { return UUIDGenerator().GenerateUUID(); }
+
+inline std::string TrimSpace(const std::string& str) {
+  std::string s = str;
+
+  s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+            return !std::isspace(ch);
+          }));
+
+  s.erase(std::find_if(s.rbegin(), s.rend(),
+                       [](unsigned char ch) { return !std::isspace(ch); })
+              .base(),
+          s.end());
+
+  return s;
+}
 
 }  // namespace string
 }  // namespace base

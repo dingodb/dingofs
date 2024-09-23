@@ -23,6 +23,7 @@
 #include "curvefs/src/client/blockcache/lru_cache.h"
 
 #include <cassert>
+#include <memory>
 
 #include "absl/cleanup/cleanup.h"
 #include "curvefs/src/base/time/time.h"
@@ -35,7 +36,7 @@ namespace blockcache {
 using ::curvefs::base::cache::NewLRUCache;
 using ::curvefs::base::time::TimeNow;
 
-CacheItems LRUCache::evicted_items_ = CacheItems();
+CacheItems LRUCache::evicted_items_;
 
 LRUCache::LRUCache() {
   // naming hash? yeah, it manage kv mapping and value's life cycle
@@ -45,9 +46,7 @@ LRUCache::LRUCache() {
 }
 
 LRUCache::~LRUCache() {
-  EvictAllNodes(&inactive_);
-  EvictAllNodes(&active_);
-  evicted_items_.clear();
+  Clear();
   delete hash_;
 }
 
@@ -71,15 +70,24 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
   return true;
 }
 
-std::shared_ptr<CacheItems> LRUCache::Evict(FilterFunc filter) {
-  evicted_items_.clear();
+CacheItems LRUCache::Evict(FilterFunc filter) {
+  evicted_items_ = CacheItems();
   if (EvictNode(&inactive_, filter)) {  // continue
     EvictNode(&active_, filter);
   }
-  return std::make_shared<CacheItems>(std::move(evicted_items_));
+
+  CacheItems out;
+  out.swap(evicted_items_);
+  return out;
 }
 
 size_t LRUCache::Size() { return hash_->TotalCharge(); }
+
+void LRUCache::Clear() {
+  EvictAllNodes(&inactive_);
+  EvictAllNodes(&active_);
+  evicted_items_.clear();
+}
 
 void LRUCache::EvictAllNodes(ListNode* list) {
   ListNode* curr = list->next;
@@ -116,7 +124,10 @@ void LRUCache::DeleteNode(const std::string_view& key, void* value) {
   ListNode* node = reinterpret_cast<ListNode*>(value);
 
   CacheKey k;
-  assert(k.ParseFilename(key));
+  bool ok = k.ParseFilename(key);
+  if (!ok) {
+    assert(ok);
+  }
   evicted_items_.emplace_back(CacheItem(k, node->value));
 
   delete node;

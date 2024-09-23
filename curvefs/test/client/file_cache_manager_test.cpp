@@ -68,12 +68,11 @@ class FileCacheManagerTest : public testing::Test {
     option.baseSleepUs = 500;
     option.objectPrefix = 0;
     option.pageSize = 64 * 1024;
-    option.intervalSec = 5000;
+    option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;
     option.readCacheMaxByte = 104857600;
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
-    option.chunkFlushThreads = 5;
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
     auto fsCacheManager = std::make_shared<FsCacheManager>(
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,

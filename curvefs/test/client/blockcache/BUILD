@@ -129,3 +129,12 @@ cc_test(
     visibility = ["//visibility:public"],
     linkstatic=1,
 )
+
+cc_test(
+    name = "test_memory_pool",
+    srcs = [ "test_memory_pool.cpp" ],
+    deps = BLOCKCACHE_TEST_DEPS,
+    copts = CURVE_TEST_COPTS,
+    visibility = ["//visibility:public"],
+    linkstatic=1,
+)

@@ -56,7 +56,7 @@ class DiskCacheManager {
     CACHE_EXPIRED,
   };
 
-  using MessageType = std::pair<std::shared_ptr<CacheItems>, DeleteFrom>;
+  using MessageType = std::pair<CacheItems, DeleteFrom>;
   using MessageQueueType = MessageQueue<MessageType>;
 
  public:
@@ -85,9 +85,9 @@ class DiskCacheManager {
 
   void CleanupExpire();
 
-  void DeleteBlocks(const std::shared_ptr<CacheItems>& to_del, DeleteFrom);
+  void DeleteBlocks(const CacheItems& to_del, DeleteFrom);
 
-  void AddUsedBytes(int64_t bytes);
+  void UpdateUsage(int64_t n, int64_t bytes);
 
   std::string GetCachePath(const CacheKey& key);
 

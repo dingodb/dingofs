@@ -216,7 +216,6 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   uint32_t prefetchExecQueueNum_;
   std::string allocateServerEps_;
   uint32_t flushIntervalSec_;
-  uint32_t chunkFlushThreads_;
   uint32_t memCacheNearfullRatio_;
   uint32_t throttleBaseSleepUs_;
   uint32_t maxReadRetryIntervalMs_;
@@ -238,8 +237,6 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   uint32_t pageSize_;
 
   int FlushChunkClosure(std::shared_ptr<FlushChunkCacheContext> context);
-
-  TaskThreadPool<bthread::Mutex, bthread::ConditionVariable> taskPool_;
 
   std::shared_ptr<KVClientManager> kvClientManager_ = nullptr;
 };
