@@ -65,7 +65,11 @@ var (
 )
 
 func InitConfig() {
+	// configure file priority
+	// command line (--conf curve.yaml) > environment variables(CONF=/opt/curve.yaml) > default (~/.curve/curve.yaml)
 	if ConfPath != "" {
+		viper.SetConfigFile(ConfPath)
+	} else if ConfPath = os.Getenv("CONF"); ConfPath != "" {
 		viper.SetConfigFile(ConfPath)
 	} else {
 		// using home directory and /etc/curve as default configuration file path

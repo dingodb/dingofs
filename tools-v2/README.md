@@ -105,8 +105,12 @@ wget https://curve-tool.nos-eastchina1.126.net/config/curve.yaml
 
 Please modify the `mdsAddr, mdsDummyAddr, etcdAddr` under `curvefs/bs` in the template.yaml file as required
 
+configure file priority
+environment variables(CONF=/opt/curve.yaml) > default (~/.curve/curve.yaml)
 ```bash
 mv curve.yaml ~/.curve/curve.yaml
+or
+export CONF=/opt/curve.yaml
 ```
 
 ### Introduction
