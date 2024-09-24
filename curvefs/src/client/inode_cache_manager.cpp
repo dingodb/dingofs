@@ -58,7 +58,7 @@ using curvefs::client::common::FLAGS_enableCto;
     LOG_IF(ERROR, ret != MetaStatusCode::NOT_FOUND)                          \
         << "metaClient_ GetInode failed, MetaStatusCode = " << ret           \
         << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)            \
-        << ", inodeid = " << INODEID;                                        \
+        << ", inodeId=" << (INODEID);                                        \
     return ToFSError(ret);                                                   \
   }
 
@@ -74,7 +74,7 @@ InodeCacheManagerImpl::GetInode(uint64_t inodeId,
   NameLockGuard lock(nameLock_, std::to_string(inodeId));
   bool yes = openFiles_->IsOpened(inodeId, &out);
   if (yes) {
-    VLOG(3) << "GetInode from openFiles, inodeId:" << inodeId;
+    VLOG(3) << "GetInode from openFiles, inodeId=" << inodeId;
     return CURVEFS_ERROR::OK;
   }
 
@@ -88,7 +88,7 @@ InodeCacheManagerImpl::GetInode(uint64_t inodeId,
 
   // refresh data
   REFRESH_DATA_REMOTE(out, streaming);
-  VLOG(3) << "GetInode from metaserver, inodeId:" << inodeId;
+  VLOG(3) << "GetInode from metaserver, inodeId=" << inodeId;
 
   return CURVEFS_ERROR::OK;
 }
@@ -102,14 +102,14 @@ CURVEFS_ERROR InodeCacheManagerImpl::GetInodeAttr(uint64_t inodeId,
   MetaStatusCode ret = metaClient_->BatchGetInodeAttr(fsId_, inodeIds, &attrs);
   if (MetaStatusCode::OK != ret) {
     LOG(ERROR) << "metaClient BatchGetInodeAttr failed"
-               << ", inodeId = " << inodeId << ", MetaStatusCode = " << ret
+               << ", inodeId=" << inodeId << ", MetaStatusCode = " << ret
                << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret);
     return ToFSError(ret);
   }
 
   if (attrs.size() != 1) {
     LOG(ERROR) << "metaClient BatchGetInodeAttr error,"
-               << " getSize is 1, inodeId = " << inodeId
+               << " getSize is 1, inodeId=" << inodeId
                << "but real size = " << attrs.size();
     return CURVEFS_ERROR::INTERNAL;
   }
@@ -216,7 +216,7 @@ CURVEFS_ERROR InodeCacheManagerImpl::DeleteInode(uint64_t inodeId) {
   if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
     LOG(ERROR) << "metaClient_ DeleteInode failed, MetaStatusCode = " << ret
                << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-               << ", inodeId = " << inodeId;
+               << ", inodeId=" << inodeId;
     return ToFSError(ret);
   }
   return CURVEFS_ERROR::OK;

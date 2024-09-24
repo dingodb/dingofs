@@ -109,7 +109,7 @@ class TimerImpl::BThreadPool {
 
  private:
   void ThreadProc(bthread_t id) {
-    VLOG(9) << "bthread id:" << id << " started.";
+    VLOG(12) << "bthread id:" << id << " started.";
 
     while (true) {
       std::function<void()> task;
@@ -134,7 +134,7 @@ class TimerImpl::BThreadPool {
       (task)();
     }
 
-    VLOG(9) << "bthread id:" << id << " started.";
+    VLOG(12) << "bthread id:" << id << " started.";
   }
 
   bthread_mutex_t mutex_;

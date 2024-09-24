@@ -178,12 +178,14 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     VLOG(3) << "fs sync signal";
     cond_.notify_one();
   }
+
   void FsSyncSignalAndDataCacheInc() {
     std::lock_guard<std::mutex> lk(mtx_);
     fsCacheManager_->DataCacheNumInc();
     VLOG(3) << "fs sync signal";
     cond_.notify_one();
   }
+
   void SetFsId(uint32_t fsId) { fsId_ = fsId; }
   uint32_t GetFsId() { return fsId_; }
   uint32_t GetPageSize() { return pageSize_; }

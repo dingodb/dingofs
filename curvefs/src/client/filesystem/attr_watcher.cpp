@@ -55,7 +55,7 @@ void AttrWatcher::UpdateDirEntryAttr(Ino ino, const InodeAttr& attr) {
 
     entries->UpdateAttr(ino, attr);
 
-    VLOG(1) << "Write back attribute to dir entry cache: ino = " << ino
+    VLOG(1) << "Write back attribute to dir entry cache: inodeId=" << ino
             << ", attr = " << attr.ShortDebugString();
   }
 }
@@ -70,7 +70,7 @@ void AttrWatcher::UpdateDirEntryLength(Ino ino, const InodeAttr& open) {
 
     entries->UpdateLength(ino, open);
 
-    VLOG(1) << "Write back file length to dir entry cache: ino = " << ino
+    VLOG(1) << "Write back file length to dir entry cache: inodeId=" << ino
             << ", attr = " << open.ShortDebugString();
   }
 }
@@ -80,8 +80,8 @@ AttrWatcherGuard::AttrWatcherGuard(std::shared_ptr<AttrWatcher> watcher,
                                    bool writeBack)
     : watcher(watcher), attr(attr), type(type), writeBack(writeBack) {
   InodeAttr open;
-  Ino ino = attr->inodeid();
-  bool yes = watcher->openFiles_->GetFileAttr(ino, &open);
+  Ino inode_id = attr->inodeid();
+  bool yes = watcher->openFiles_->GetFileAttr(inode_id, &open);
   if (!yes) {
     return;
   }

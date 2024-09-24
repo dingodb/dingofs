@@ -47,14 +47,14 @@ void InodeObjectsService::default_method(
       CHECK(inode_cache_manager_ != nullptr)
           << "inode_cache_manager_ is nullptr";
 
-      VLOG(6) << "Get inode objects, inodeId:" << inode_id;
+      VLOG(6) << "Get inode objects, inodeId=" << inode_id;
 
       std::shared_ptr<InodeWrapper> inode_wrapper;
       CURVEFS_ERROR ret =
           inode_cache_manager_->GetInode(inode_id, inode_wrapper);
       if (ret != CURVEFS_ERROR::OK) {
-        LOG(INFO) << "Get inode failed, inodeId:" << inode_id;
-        os << "Get inode failed, inodeId:" << inode_id << "\n";
+        LOG(INFO) << "Get inode failed, inodeId=" << inode_id;
+        os << "Get inode failed, inodeId=" << inode_id << "\n";
         return;
       } else {
         Inode inode = inode_wrapper->GetInode();
@@ -75,8 +75,8 @@ void InodeObjectsService::default_method(
         os << flat_file.FormatStringWithHeader();
       }
     } else {
-      LOG(INFO) << "Invalid inodeId: " << path;
-      cntl->SetFailed(brpc::ENOMETHOD, "Invalid inodeId: %s", path.c_str());
+      LOG(INFO) << "Invalid inodeId=" << path;
+      cntl->SetFailed(brpc::ENOMETHOD, "Invalid inodeId= %s", path.c_str());
     }
   }
 

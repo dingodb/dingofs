@@ -186,7 +186,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
   CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
-               << ", inodeid = " << ino;
+               << ", inodeId=" << ino;
     return ret;
   }
 
@@ -216,7 +216,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
     for (const auto& it : inode->parent()) {
       auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, true);
       if (tret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << it
+        LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId=" << it
                    << ", xattr = " << xattr.DebugString();
       }
     }
@@ -266,7 +266,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
   CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
-               << ", inodeid = " << ino;
+               << ", inodeId=" << ino;
     return ret;
   }
   uint64_t fileSize = inodeWrapper->GetLength();
@@ -363,7 +363,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpLink(fuse_req_t req, fuse_ino_t ino,
                                        fuse_ino_t newparent,
                                        const char* newname,
                                        EntryOut* entryOut) {
-  VLOG(1) << "FuseOpLink, ino: " << ino << ", newparent: " << newparent
+  VLOG(1) << "FuseOpLink, inodeId=" << ino << ", newparent: " << newparent
           << ", newname: " << newname;
   return FuseClient::FuseOpLink(req, ino, newparent, newname,
                                 FsFileType::TYPE_S3, entryOut);
@@ -380,12 +380,12 @@ CURVEFS_ERROR FuseS3Client::FuseOpFsync(fuse_req_t req, fuse_ino_t ino,
                                         struct fuse_file_info* fi) {
   (void)req;
   (void)fi;
-  VLOG(1) << "FuseOpFsync, ino: " << ino << ", datasync: " << datasync;
+  VLOG(1) << "FuseOpFsync, inodeId=" << ino << ", datasync: " << datasync;
 
   CURVEFS_ERROR ret = s3Adaptor_->Flush(ino);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "s3Adaptor_ flush failed, ret = " << ret
-               << ", inodeid = " << ino;
+               << ", inodeId=" << ino;
     return ret;
   }
   if (datasync != 0) {
@@ -395,7 +395,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpFsync(fuse_req_t req, fuse_ino_t ino,
   ret = inodeManager_->GetInode(ino, inodeWrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
-               << ", inodeid = " << ino;
+               << ", inodeId=" << ino;
     return ret;
   }
   ::curve::common::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
@@ -410,7 +410,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
                                         struct fuse_file_info* fi) {
   (void)req;
   (void)fi;
-  VLOG(1) << "FuseOpFlush, ino: " << ino;
+  VLOG(1) << "FuseOpFlush, inodeId=" << ino;
   CURVEFS_ERROR ret = CURVEFS_ERROR::OK;
 
   if (ino == STATSINODEID) return ret;
@@ -422,16 +422,16 @@ CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
     ret = s3Adaptor_->FlushAllCache(ino);
     if (ret != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "FuseOpFlush, flush all cache fail, ret = " << ret
-                 << ", ino: " << ino;
+                 << ", inodeId=" << ino;
       return ret;
     }
-    VLOG(3) << "FuseOpFlush, flush to s3 ok";
+    VLOG(3) << "FuseOpFlush, flush to s3 ok, inodeId=" << ino;
 
     std::shared_ptr<InodeWrapper> inodeWrapper;
     ret = inodeManager_->GetInode(ino, inodeWrapper);
     if (ret != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "FuseOpFlush, inodeManager get inode fail, ret = " << ret
-                 << ", ino: " << ino;
+                 << ", inodeId=" << ino;
       return ret;
     }
 
@@ -439,7 +439,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
     ret = inodeWrapper->Sync();
     if (ret != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "FuseOpFlush, inode sync s3 chunk info fail, ret = " << ret
-                 << ", ino: " << ino;
+                 << ", inodeId=" << ino;
       return ret;
     }
     // if disableCto, flush just flush data in memory
@@ -447,12 +447,12 @@ CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
     ret = s3Adaptor_->Flush(ino);
     if (ret != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "FuseOpFlush, flush to diskcache failed, ret = " << ret
-                 << ", ino: " << ino;
+                 << ", inodeId=" << ino;
       return ret;
     }
   }
 
-  VLOG(1) << "FuseOpFlush, ino: " << ino << " flush ok";
+  VLOG(1) << "FuseOpFlush, inodeId=" << ino << " flush ok";
   return CURVEFS_ERROR::OK;
 }
 
