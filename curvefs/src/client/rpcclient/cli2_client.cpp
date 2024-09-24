@@ -37,7 +37,7 @@ void Cli2Closure::Run() {
     LOG(INFO) << "GetLeader returned from " << cntl.remote_side()
               << ", logicpool id = " << taskContext.poolID
               << ", copyset id = " << taskContext.copysetID
-              << ", leader = " << response.DebugString();
+              << ", leader = " << response.leader().address();
     success = true;
   }
 

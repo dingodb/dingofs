@@ -461,9 +461,8 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
     return ret;
   }
 
-  VLOG(6) << "inodeManager CreateInode success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode
+  VLOG(6) << "inodeManager CreateInode success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode
           << ", inode id = " << inodeWrapper->GetInodeId();
 
   Dentry dentry;
@@ -492,15 +491,13 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
-  VLOG(6) << "dentryManager_ CreateDentry success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode;
+  VLOG(6) << "dentryManager_ CreateDentry success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode;
 
   if (enableSumInDir_.load()) {
     // update parent summary info
@@ -515,8 +512,7 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -558,9 +554,8 @@ CURVEFS_ERROR FuseClient::DeleteNode(uint64_t ino, fuse_ino_t parent,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kSubOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
@@ -633,9 +628,8 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
     return ret;
   }
 
-  VLOG(6) << "inodeManager CreateManageNode success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode
+  VLOG(6) << "inodeManager CreateManageNode success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode
           << ", inode id = " << inodeWrapper->GetInodeId();
 
   Dentry dentry;
@@ -665,15 +659,13 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
-  VLOG(6) << "dentryManager_ CreateDentry success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode;
+  VLOG(6) << "dentryManager_ CreateDentry success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode;
 
   if (enableSumInDir_.load()) {
     // update parent summary info
@@ -688,8 +680,7 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -1005,7 +996,7 @@ CURVEFS_ERROR FuseClient::FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino,
                                         struct stat* attr, int to_set,
                                         struct fuse_file_info* fi,
                                         struct AttrOut* attrOut) {
-  VLOG(1) << "FuseOpSetAttr to_set: " << to_set << ", ino: " << ino
+  VLOG(1) << "FuseOpSetAttr to_set: " << to_set << ", inodeid=" << ino
           << ", attr: " << *attr;
   std::shared_ptr<InodeWrapper> inodeWrapper;
   CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
@@ -1072,8 +1063,7 @@ CURVEFS_ERROR FuseClient::FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino,
       for (const auto& it : inode->parent()) {
         auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, direction);
         if (tret != CURVEFS_ERROR::OK) {
-          LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                     << " inodeId = " << it
+          LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << it
                      << ", xattr = " << xattr.DebugString();
         }
       }
@@ -1092,7 +1082,7 @@ CURVEFS_ERROR FuseClient::FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino,
                                          const char* name, std::string* value,
                                          size_t size) {
   (void)req;
-  VLOG(9) << "FuseOpGetXattr, ino: " << ino << ", name: " << name
+  VLOG(9) << "FuseOpGetXattr, inodeid=" << ino << ", name: " << name
           << ", size = " << size;
 
   if (option_.fileSystemOption.disableXAttr && !IsSpecialXAttr(name)) {
@@ -1134,7 +1124,7 @@ CURVEFS_ERROR FuseClient::FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino,
                                          size_t size, int flags) {
   std::string strname(name);
   std::string strvalue(value, size);
-  VLOG(1) << "FuseOpSetXattr ino: " << ino << ", name: " << name
+  VLOG(1) << "FuseOpSetXattr inodeid=" << ino << ", name: " << name
           << ", size = " << size << ", strvalue: " << strvalue;
 
   if (option_.fileSystemOption.disableXAttr && !IsSpecialXAttr(name)) {
@@ -1173,7 +1163,7 @@ CURVEFS_ERROR FuseClient::FuseOpListXattr(fuse_req_t req, fuse_ino_t ino,
                                           char* value, size_t size,
                                           size_t* realSize) {
   (void)req;
-  VLOG(1) << "FuseOpListXattr, ino: " << ino << ", size = " << size;
+  VLOG(1) << "FuseOpListXattr, inodeid=" << ino << ", size = " << size;
   InodeAttr inodeAttr;
   CURVEFS_ERROR ret = inodeManager_->GetInodeAttr(ino, &inodeAttr);
   if (ret != CURVEFS_ERROR::OK) {
@@ -1279,9 +1269,9 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
   ret = UpdateParentMCTimeAndNlink(parent, FsFileType::TYPE_SYM_LINK,
                                    NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", link:" << link << ", parent: " << parent
-               << ", name: " << name << ", type: " << FsFileType::TYPE_SYM_LINK;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", link:" << link
+               << ", parent: " << parent << ", name: " << name
+               << ", type: " << FsFileType::TYPE_SYM_LINK;
     return ret;
   }
 
@@ -1294,8 +1284,7 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -1381,7 +1370,7 @@ CURVEFS_ERROR FuseClient::FuseOpLink(fuse_req_t req, fuse_ino_t ino,
 CURVEFS_ERROR FuseClient::FuseOpReadLink(fuse_req_t req, fuse_ino_t ino,
                                          std::string* linkStr) {
   (void)req;
-  VLOG(1) << "FuseOpReadLink, ino: " << ino << ", linkStr: " << linkStr;
+  VLOG(1) << "FuseOpReadLink, inodeid=" << ino << ", linkStr: " << linkStr;
   InodeAttr attr;
   CURVEFS_ERROR ret = inodeManager_->GetInodeAttr(ino, &attr);
   if (ret != CURVEFS_ERROR::OK) {
@@ -1436,8 +1425,7 @@ FuseClient::SetMountStatus(const struct MountOption* mountOption) {
   }
 
   LOG(INFO) << "Mount " << fsName << " on " << mountpoint_.ShortDebugString()
-            << " success!"
-            << " enableSumInDir = " << enableSumInDir_.load();
+            << " success!" << " enableSumInDir = " << enableSumInDir_.load();
 
   fsMetric_ = std::make_shared<FSMetric>(fsName);
 

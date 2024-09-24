@@ -120,36 +120,36 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
 int S3ClientAdaptorImpl::Write(uint64_t inodeId, uint64_t offset,
                                uint64_t length, const char* buf) {
   VLOG(6) << "write start offset:" << offset << ", len:" << length
-          << ", fsId:" << fsId_ << ", inodeId:" << inodeId;
-  uint64_t start = butil::cpuwide_time_us();
-
+          << ", fsId:" << fsId_ << ", inodeid=" << inodeId;
   {
-    std::lock_guard<std::mutex> lockGuard(ioMtx_);
+    std::lock_guard<std::mutex> lock_guard(ioMtx_);
+    // TODO: maybe no need add then dec
     fsCacheManager_->DataCacheByteInc(length);
   }
 
-  FileCacheManagerPtr fileCacheManager =
+  FileCacheManagerPtr file_cache_manager =
       fsCacheManager_->FindOrCreateFileCacheManager(fsId_, inodeId);
-  int ret = fileCacheManager->Write(offset, length, buf);
+  int ret = file_cache_manager->Write(offset, length, buf);
   fsCacheManager_->DataCacheByteDec(length);
-  VLOG(6) << "write end inodeId: " << inodeId << ", ret: " << ret;
+  VLOG(6) << "write end inodeid=" << inodeId << ", ret: " << ret;
   return ret;
 }
 
 int S3ClientAdaptorImpl::Read(uint64_t inodeId, uint64_t offset,
                               uint64_t length, char* buf) {
   VLOG(6) << "read start offset:" << offset << ", len:" << length
-          << ", fsId:" << fsId_ << ", inodeId:" << inodeId;
-  uint64_t start = butil::cpuwide_time_us();
-  FileCacheManagerPtr fileCacheManager =
+          << ", fsId:" << fsId_ << ", inodeid=" << inodeId;
+
+  FileCacheManagerPtr file_cache_manager =
       fsCacheManager_->FindOrCreateFileCacheManager(fsId_, inodeId);
-  int ret = fileCacheManager->Read(inodeId, offset, length, buf);
-  VLOG(6) << "read end inodeId:" << inodeId << ",ret:" << ret;
+  int ret = file_cache_manager->Read(inodeId, offset, length, buf);
+  VLOG(6) << "read end inodeid=" << inodeId << ", ret:" << ret;
   if (ret < 0) {
     return ret;
   }
+
   VLOG(6) << "read end offset:" << offset << ", len:" << length
-          << ", fsId:" << fsId_ << ", inodeId:" << inodeId;
+          << ", fsId:" << fsId_ << ", inodeid=" << inodeId;
   return ret;
 }
 
@@ -239,7 +239,7 @@ CURVEFS_ERROR S3ClientAdaptorImpl::Flush(uint64_t inodeId) {
   if (!fileCacheManager) {
     return CURVEFS_ERROR::OK;
   }
-  VLOG(6) << "Flush data of inodeId:" << inodeId;
+  VLOG(6) << "Flush data of inodeid=" << inodeId;
   return fileCacheManager->Flush(true, false);
 }
 
@@ -313,7 +313,7 @@ int S3ClientAdaptorImpl::ExecAsyncDownloadTask(
 }
 
 CURVEFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
-  VLOG(6) << "FlushAllCache, inodeId:" << inodeId;
+  VLOG(6) << "FlushAllCache, inodeid=" << inodeId;
   FileCacheManagerPtr fileCacheManager =
       fsCacheManager_->FindFileCacheManager(inodeId);
   if (!fileCacheManager) {
@@ -321,7 +321,7 @@ CURVEFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
   }
 
   // force flush data in memory to s3
-  VLOG(6) << "FlushAllCache, flush memory data of inodeId:" << inodeId;
+  VLOG(6) << "FlushAllCache, flush memory data of inodeid=" << inodeId;
   CURVEFS_ERROR ret = fileCacheManager->Flush(true, false);
   if (ret != CURVEFS_ERROR::OK) {
     return ret;
@@ -329,8 +329,8 @@ CURVEFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
 
   // force flush data in diskcache to s3
   if (!kvClientManager_ && HasDiskCache()) {
-    VLOG(6) << "FlushAllCache, wait inodeId:" << inodeId
-            << "related chunk upload to s3";
+    VLOG(6) << "FlushAllCache, wait inodeid=" << inodeId
+            << " related chunk upload to s3";
 
     auto rc = block_cache_->Flush(inodeId);
     if (rc != BCACHE_ERROR::OK) {

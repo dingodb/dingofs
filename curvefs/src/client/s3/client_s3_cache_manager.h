@@ -40,7 +40,6 @@
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
 #include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/task_thread_pool.h"
 #include "src/common/s3_adapter.h"
 
 using curve::common::ReadLockGuard;
@@ -55,7 +54,6 @@ class ChunkCacheManager;
 class FileCacheManager;
 class FsCacheManager;
 class DataCache;
-class S3ReadRequest;
 using FileCacheManagerPtr = std::shared_ptr<FileCacheManager>;
 using ChunkCacheManagerPtr = std::shared_ptr<ChunkCacheManager>;
 using DataCachePtr = std::shared_ptr<DataCache>;
@@ -81,7 +79,7 @@ struct ReadRequest {
 
   std::string DebugString() const {
     std::ostringstream os;
-    os << "ReadRequest ( index = " << index << ", chunkPos = " << chunkPos
+    os << "ReadRequest ( chunkIndex = " << index << ", chunkPos = " << chunkPos
        << ", len = " << len << ", bufOffset = " << bufOffset << " )";
     return os.str();
   }

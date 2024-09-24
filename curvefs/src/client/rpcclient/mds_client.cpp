@@ -318,8 +318,7 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
     }
     TopoStatusCode ret = response.statuscode();
     LOG_IF(WARNING, TopoStatusCode::TOPO_OK != 0)
-        << "GetMetaServerList failed"
-        << ", errocde = " << response.statuscode()
+        << "GetMetaServerList failed" << ", errocde = " << response.statuscode()
         << ", log id = " << cntl->log_id();
     return ret;
   };
@@ -630,7 +629,7 @@ FSStatusCode MdsClientImpl::GetLatestTxId(const GetLatestTxIdRequest& request,
                    << ", errmsg = " << FSStatusCode_Name(rc);
     }
 
-    VLOG(3) << "GetLatestTxId [response]: " << response->DebugString();
+    VLOG(12) << "GetLatestTxId [response]: " << response->DebugString();
     return rc;
   };
 

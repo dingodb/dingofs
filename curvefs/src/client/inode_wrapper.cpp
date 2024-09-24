@@ -336,7 +336,6 @@ CURVEFS_ERROR InodeWrapper::UnLink(uint64_t parent) {
   curve::common::UniqueLock lg(mtx_);
   REFRESH_NLINK;
   uint32_t old = inode_.nlink();
-  VLOG(1) << "Unlink inode = " << inode_.DebugString();
   if (old > 0) {
     uint32_t newnlink = old - 1;
     if (newnlink == 1 && inode_.type() == FsFileType::TYPE_DIRECTORY) {
@@ -399,7 +398,7 @@ CURVEFS_ERROR InodeWrapper::UnLink(uint64_t parent) {
     return CURVEFS_ERROR::OK;
   }
   LOG(ERROR) << "Unlink find nlink <= 0, nlink = " << old
-             << ", inode = " << inode_.inodeid();
+             << ", inodeid=" << inode_.inodeid();
   return CURVEFS_ERROR::INTERNAL;
 }
 
@@ -453,8 +452,6 @@ CURVEFS_ERROR InodeWrapper::Sync(bool internal) {
 }
 
 void InodeWrapper::Async(MetaServerClientDone* done, bool internal) {
-  VLOG(9) << "async inode: " << inode_.ShortDebugString();
-
   switch (inode_.type()) {
     case FsFileType::TYPE_S3:
       return AsyncS3(done, internal);
@@ -467,7 +464,7 @@ void InodeWrapper::Async(MetaServerClientDone* done, bool internal) {
   }
 
   CHECK(false) << "Unexpected inode type: " << inode_.type() << ", "
-               << inode_.ShortDebugString();
+               << inode_.inodeid();
 }
 
 void InodeWrapper::AsyncFlushAttrAndExtents(MetaServerClientDone* done,

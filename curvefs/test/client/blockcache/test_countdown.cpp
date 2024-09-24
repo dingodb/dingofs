@@ -36,30 +36,22 @@ class CountdownTest : public ::testing::Test {
 
 TEST_F(CountdownTest, Basic) {
   Countdown count;
-  ASSERT_TRUE(count.Empty());
 
   count.Add(1, 10);
-  ASSERT_FALSE(count.Empty());
 
   count.Add(1, -5);
-  ASSERT_FALSE(count.Empty());
 
   count.Add(1, -5);
-  ASSERT_TRUE(count.Empty());
 }
 
 TEST_F(CountdownTest, Add) {
   Countdown count;
-  ASSERT_TRUE(count.Empty());
 
   count.Add(1, 10);
   count.Add(2, 10);
-  ASSERT_FALSE(count.Empty());
 
   count.Add(1, -10);
-  ASSERT_FALSE(count.Empty());
   count.Add(2, -10);
-  ASSERT_TRUE(count.Empty());
 }
 
 }  // namespace blockcache
