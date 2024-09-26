@@ -22,6 +22,8 @@
 
 #include "curvefs/src/client/blockcache/countdown.h"
 
+#include <glog/logging.h>
+
 #include <cassert>
 
 namespace curvefs {
@@ -37,7 +39,7 @@ void Countdown::Add(uint64_t key, int64_t n) {
 
   auto& counter = counters_[key];
   counter.count += n;
-  assert(counter.count >= 0);
+  CHECK(counter.count >= 0);
   if (counter.count == 0) {
     auto cond = counter.cond;
     counters_.erase(key);

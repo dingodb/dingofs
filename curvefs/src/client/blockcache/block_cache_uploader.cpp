@@ -121,7 +121,7 @@ void BlockCacheUploader::UploadBlock(const BlockKey& key, bool from_reload,
                                      std::shared_ptr<char> buffer,
                                      size_t length,
                                      std::shared_ptr<LogGuard> log_guard) {
-  auto callback = [&, key, buffer, log_guard, this](int code) {
+  auto callback = [&, key, from_reload, buffer, log_guard, this](int code) {
     if (code != 0) {
       LOG(ERROR) << "Object " << key.Filename()
                  << " upload failed, retCode=" << code;
