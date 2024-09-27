@@ -21,9 +21,9 @@
 package pool
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/spf13/cobra"
 )
 

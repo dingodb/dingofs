@@ -25,13 +25,13 @@ package cmderror
 import (
 	"fmt"
 
-	fscopyset "github.com/opencurve/curve/tools-v2/proto/curvefs/proto/copyset"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/mds"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/topology"
-	"github.com/opencurve/curve/tools-v2/proto/proto/copyset"
-	"github.com/opencurve/curve/tools-v2/proto/proto/nameserver2"
-	"github.com/opencurve/curve/tools-v2/proto/proto/topology/statuscode"
-	bs_topo_statuscode "github.com/opencurve/curve/tools-v2/proto/proto/topology/statuscode"
+	fscopyset "github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/copyset"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/mds"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/copyset"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/nameserver2"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/topology/statuscode"
+	bs_topo_statuscode "github.com/dingodb/dingofs/tools-v2/proto/proto/topology/statuscode"
 )
 
 // It is considered here that the importance of the error is related to the

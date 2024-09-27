@@ -1,7 +1,7 @@
 package cluster
 
 import (
-	"github.com/opencurve/curve/tools-v2/proto/proto/topology"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/topology"
 )
 
 type LogicalPool struct {

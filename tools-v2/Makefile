@@ -31,9 +31,9 @@ DAEMON_OUTPUT := sbin/daemon
 GIT_COMMIT=$(shell git rev-parse HEAD)
 GIT_DIRTY=$(shell test -n "`git status -s | grep -v third-party`" && echo "+CHANGES" || true)
 BUILD_DATE=$(shell date '+%Y-%m-%dT%H:%M:%SZ')
-VERSION_FLAG := -X github.com/opencurve/curve/tools-v2/pkg/cli/command/version.Version=$(version)
-VERSION_FLAG += -X github.com/opencurve/curve/tools-v2/pkg/cli/command/version.GitCommit=${GIT_COMMIT}${GIT_DIRTY}
-VERSION_FLAG += -X github.com/opencurve/curve/tools-v2/pkg/cli/command/version.BuildDate=${BUILD_DATE} 
+VERSION_FLAG := -X github.com/dingodb/dingofs/tools-v2/pkg/cli/command/version.Version=$(version)
+VERSION_FLAG += -X github.com/dingodb/dingofs/tools-v2/pkg/cli/command/version.GitCommit=${GIT_COMMIT}${GIT_DIRTY}
+VERSION_FLAG += -X github.com/dingodb/dingofs/tools-v2/pkg/cli/command/version.BuildDate=${BUILD_DATE} 
 
 # build flags
 CGO_BUILD_LDFLAGS := -s -w -linkmode external
@@ -68,7 +68,7 @@ debug: proto
 	$(GOENV) $(GO) build -o $(DAEMON_OUTPUT) $(DEBUG_FLAGS) $(DAEMON_PACKAGES)
 
 init: proto
-	go mod init github.com/opencurve/curve/tools-v2
+	go mod init github.com/dingodb/dingofs/tools-v2
 	go mod tidy
 
 proto: install_grpc_protobuf

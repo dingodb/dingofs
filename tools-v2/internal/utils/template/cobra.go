@@ -27,7 +27,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/term"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

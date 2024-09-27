@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"github.com/cilium/cilium/pkg/mountinfo"
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 )
 
 const (

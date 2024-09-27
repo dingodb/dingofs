@@ -26,10 +26,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/common"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/topology"
-	"github.com/opencurve/curve/tools-v2/proto/proto/nameserver2"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/common"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/nameserver2"
 )
 
 func TranslateFsType(fsType string) (common.FSType, *cmderror.CmdError) {

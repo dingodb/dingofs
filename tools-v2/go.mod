@@ -1,4 +1,4 @@
-module github.com/opencurve/curve/tools-v2
+module github.com/dingodb/dingofs/tools-v2
 
 go 1.19
 

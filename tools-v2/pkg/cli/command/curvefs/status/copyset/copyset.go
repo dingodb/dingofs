@@ -27,13 +27,13 @@ import (
 	"strings"
 
 	"github.com/olekukonko/tablewriter"
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	cobrautil "github.com/opencurve/curve/tools-v2/internal/utils"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	checkCopyset "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/check/copyset"
-	listCopyset "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/copyset"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	checkCopyset "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/check/copyset"
+	listCopyset "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/copyset"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/spf13/cobra"
 )
 

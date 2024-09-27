@@ -23,12 +23,12 @@ package chunkserver
 import (
 	"context"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
-	"github.com/opencurve/curve/tools-v2/proto/proto/schedule"
-	"github.com/opencurve/curve/tools-v2/proto/proto/topology/statuscode"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/schedule"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/topology/statuscode"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )

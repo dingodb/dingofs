@@ -25,12 +25,12 @@ package update
 import (
 	"github.com/spf13/cobra"
 
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/update/file"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/update/leader"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/update/peer"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/update/scan_state"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/update/throttle"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/update/file"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/update/leader"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/update/peer"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/update/scan_state"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/update/throttle"
 )
 
 type UpdateCommand struct {

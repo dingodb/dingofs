@@ -21,7 +21,7 @@
  */
 package main
 
-import "github.com/opencurve/curve/tools-v2/pkg/daemon"
+import "github.com/dingodb/dingofs/tools-v2/pkg/daemon"
 
 func main() {
 	daemon.Execute()

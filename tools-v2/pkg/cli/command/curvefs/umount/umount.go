@@ -23,7 +23,7 @@
 package umount
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/spf13/cobra"
 )
 

@@ -27,10 +27,10 @@ import (
 
 	"google.golang.org/grpc"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/proto/proto/common"
-	"github.com/opencurve/curve/tools-v2/proto/proto/copyset"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/common"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/copyset"
 )
 
 // DeleteBrokenCopysetRPC the rpc client for the rpc function DeleteBrokenCopyset

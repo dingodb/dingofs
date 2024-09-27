@@ -34,7 +34,7 @@ import (
 	"strings"
 
 	"github.com/gookit/color"
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 )
 
 const (

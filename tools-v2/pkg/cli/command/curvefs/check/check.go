@@ -23,8 +23,8 @@
 package check
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/check/copyset"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/check/copyset"
 	"github.com/spf13/cobra"
 )
 

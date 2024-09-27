@@ -29,10 +29,10 @@ import (
 	"strings"
 	"time"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/proto/proto/cli2"
-	"github.com/opencurve/curve/tools-v2/proto/proto/common"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/cli2"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/common"
 	"google.golang.org/grpc"
 )
 

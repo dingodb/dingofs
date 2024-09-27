@@ -25,13 +25,13 @@ package mountpoint
 import (
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	cobrautil "github.com/opencurve/curve/tools-v2/internal/utils"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/fs"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
-	mds "github.com/opencurve/curve/tools-v2/proto/curvefs/proto/mds"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/fs"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	mds "github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/mds"
 	"github.com/spf13/cobra"
 )
 

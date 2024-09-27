@@ -25,11 +25,11 @@ package etcd
 import (
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	cobrautil "github.com/opencurve/curve/tools-v2/internal/utils"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	config "github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"

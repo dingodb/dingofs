@@ -23,10 +23,10 @@
 package create
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/create/cache"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/create/fs"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/create/topology"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/create/cache"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/create/fs"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/create/topology"
 	"github.com/spf13/cobra"
 )
 

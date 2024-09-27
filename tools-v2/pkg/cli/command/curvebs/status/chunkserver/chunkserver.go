@@ -23,14 +23,14 @@ package chunkserver
 import (
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	cobrautil "github.com/opencurve/curve/tools-v2/internal/utils"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	listchunkserver "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/chunkserver"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/query/chunkserver"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
-	"github.com/opencurve/curve/tools-v2/proto/proto/topology"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	listchunkserver "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/chunkserver"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/query/chunkserver"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/topology"
 	"github.com/spf13/cobra"
 )
 

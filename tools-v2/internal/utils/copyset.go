@@ -24,11 +24,11 @@ package cobrautil
 
 import (
 	"github.com/gookit/color"
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/copyset"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/heartbeat"
-	bscopyset "github.com/opencurve/curve/tools-v2/proto/proto/copyset"
-	bsheartbeat "github.com/opencurve/curve/tools-v2/proto/proto/heartbeat"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/copyset"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/heartbeat"
+	bscopyset "github.com/dingodb/dingofs/tools-v2/proto/proto/copyset"
+	bsheartbeat "github.com/dingodb/dingofs/tools-v2/proto/proto/heartbeat"
 )
 
 type CopysetInfoStatus struct {

@@ -23,12 +23,12 @@
 package status
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/status/cluster"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/status/copyset"
-	etcd "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/status/etcd"
-	mds "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/status/mds"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/status/metaserver"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status/cluster"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status/copyset"
+	etcd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status/etcd"
+	mds "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status/mds"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status/metaserver"
 	"github.com/spf13/cobra"
 )
 

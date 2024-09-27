@@ -6,7 +6,7 @@ import (
 
 	"reflect"
 
-	"github.com/opencurve/curve/tools-v2/proto/proto/common"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/common"
 )
 
 func ptrUint64(val uint64) *uint64 {

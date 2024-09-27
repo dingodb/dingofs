@@ -25,7 +25,7 @@ package cobrautil
 import (
 	"syscall"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 )
 
  func GetTimeofDayUs() (uint64, *cmderror.CmdError) {

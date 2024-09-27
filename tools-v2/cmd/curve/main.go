@@ -23,7 +23,7 @@
 package main
 
 import (
-	cli "github.com/opencurve/curve/tools-v2/pkg/cli"
+	cli "github.com/dingodb/dingofs/tools-v2/pkg/cli"
 )
 
 func main() {

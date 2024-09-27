@@ -23,10 +23,10 @@
 package create
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/create/cluster"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/create/dir"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/create/file"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/create/cluster"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/create/dir"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/create/file"
 	"github.com/spf13/cobra"
 )
 

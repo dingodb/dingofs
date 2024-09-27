@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 )
 
 const (

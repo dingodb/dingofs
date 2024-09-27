@@ -27,9 +27,9 @@ import (
 	"errors"
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/spf13/viper"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"

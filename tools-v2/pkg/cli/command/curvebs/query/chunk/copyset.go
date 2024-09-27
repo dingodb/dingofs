@@ -24,13 +24,13 @@ package chunk
 import (
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/query/file"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/query/seginfo"
-	"github.com/opencurve/curve/tools-v2/pkg/config"
-	"github.com/opencurve/curve/tools-v2/pkg/output"
-	"github.com/opencurve/curve/tools-v2/proto/proto/nameserver2"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/query/file"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/query/seginfo"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/dingodb/dingofs/tools-v2/proto/proto/nameserver2"
 	"github.com/spf13/cobra"
 )
 

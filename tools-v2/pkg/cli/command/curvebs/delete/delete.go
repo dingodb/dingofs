@@ -9,9 +9,9 @@ package delete
 import (
 	"github.com/spf13/cobra"
 
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/delete/file"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/delete/peer"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/delete/file"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/delete/peer"
 )
 
 type DeleteCommand struct {

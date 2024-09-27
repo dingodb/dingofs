@@ -23,9 +23,9 @@
 package usage
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	inode "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/usage/inode"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/usage/metadata"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	inode "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/usage/inode"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/usage/metadata"
 	"github.com/spf13/cobra"
 )
 

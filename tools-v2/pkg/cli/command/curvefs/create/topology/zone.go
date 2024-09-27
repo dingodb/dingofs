@@ -26,10 +26,10 @@ import (
 	"context"
 	"fmt"
 
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
-	cobrautil "github.com/opencurve/curve/tools-v2/internal/utils"
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/proto/curvefs/proto/topology"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 )

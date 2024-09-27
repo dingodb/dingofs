@@ -29,7 +29,7 @@ import (
 	"strconv"
 
 	"github.com/gookit/color"
-	cmderror "github.com/opencurve/curve/tools-v2/internal/error"
+	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

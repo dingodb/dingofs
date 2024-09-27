@@ -23,9 +23,9 @@
 package warmup
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/warmup/add"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/warmup/query"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/warmup/add"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/warmup/query"
 	"github.com/spf13/cobra"
 )
 

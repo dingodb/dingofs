@@ -23,13 +23,13 @@
 package list
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/cache"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/copyset"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/fs"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/mountpoint"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/partition"
-	topology "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs/list/topology"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/cache"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/copyset"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/fs"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/mountpoint"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/partition"
+	topology "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list/topology"
 	"github.com/spf13/cobra"
 )
 

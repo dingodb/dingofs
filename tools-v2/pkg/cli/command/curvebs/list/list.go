@@ -23,13 +23,13 @@
 package list
 
 import (
-	basecmd "github.com/opencurve/curve/tools-v2/pkg/cli/command"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/chunkserver"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/client"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/dir"
-	logicalpool "github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/logicalPool"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/server"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs/list/space"
+	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/chunkserver"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/client"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/dir"
+	logicalpool "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/logicalPool"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/server"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs/list/space"
 	"github.com/spf13/cobra"
 )
 

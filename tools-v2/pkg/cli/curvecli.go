@@ -29,11 +29,11 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	cobratemplate "github.com/opencurve/curve/tools-v2/internal/utils/template"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvebs"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/curvefs"
-	"github.com/opencurve/curve/tools-v2/pkg/cli/command/version"
-	config "github.com/opencurve/curve/tools-v2/pkg/config"
+	cobratemplate "github.com/dingodb/dingofs/tools-v2/internal/utils/template"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvebs"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/version"
+	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
 )
 
 func addSubCommands(cmd *cobra.Command) {
