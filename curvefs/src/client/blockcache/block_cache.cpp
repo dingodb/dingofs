@@ -29,6 +29,8 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "curvefs/src/client/blockcache/block_cache_metric.h"
+#include "curvefs/src/client/blockcache/block_cache_throttle.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/disk_cache_group.h"
 #include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/blockcache/local_filesystem.h"
@@ -44,26 +46,27 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option)
     : option_(option),
       running_(false),
       s3_(S3ClientImpl::GetInstance()),
-      stage_count_(std::make_shared<Countdown>()) {
+      stage_count_(std::make_shared<Countdown>()),
+      throttle_(std::make_unique<BlockCacheThrottle>()) {
   if (option.cache_store == "none") {
     store_ = std::make_shared<MemCache>();
   } else {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   }
-  uploader_ = std::make_shared<BlockCacheUploader>(store_, s3_, stage_count_);
-
-  auto aux_member = BlockCacheMetric::AuxMember{.uploader = uploader_};
-  metric_ = std::make_unique<BlockCacheMetric>(option, aux_member);
+  uploader_ = std::make_shared<BlockCacheUploader>(s3_, store_, stage_count_);
+  metric_ = std::make_unique<BlockCacheMetric>(
+      option, BlockCacheMetric::AuxMember(uploader_, throttle_));
 }
 
 BCACHE_ERROR BlockCacheImpl::Init() {
   if (!running_.exchange(true)) {
+    throttle_->Start();
     uploader_->Init(option_.upload_stage_workers,
                     option_.upload_stage_queue_size);
     return store_->Init([this](const BlockKey& key,
                                const std::string& stage_path,
-                               bool from_reload) {
-      uploader_->AddStageBlock(key, stage_path, from_reload);
+                               BlockContext ctx) {
+      uploader_->AddStageBlock(key, stage_path, ctx);
     });
   }
   return BCACHE_ERROR::OK;
@@ -71,13 +74,16 @@ BCACHE_ERROR BlockCacheImpl::Init() {
 
 BCACHE_ERROR BlockCacheImpl::Shutdown() {
   if (running_.exchange(false)) {
-    WaitAllStageUploaded();
+    uploader_->WaitAllUploaded();  // wait all stage blocks uploaded
+    uploader_->Shutdown();
     store_->Shutdown();
+    throttle_->Stop();
   }
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block) {
+BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block,
+                                 BlockContext ctx) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
   LogGuard log([&]() {
@@ -85,11 +91,10 @@ BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block) {
                      timer.ToString());
   });
 
-  if (option_.stage) {
+  auto wait = throttle_->Add(block.size);  // stage throttle
+  if (option_.stage && !wait) {
     timer.NextPhase(Phase::STAGE_BLOCK);
-    // TODO: Block should upload to s3 directly if disk reach bandwith
-    // throttle for perfomance.
-    rc = store_->Stage(key, block);
+    rc = store_->Stage(key, block, ctx);
     if (rc == BCACHE_ERROR::OK) {
       return rc;
     } else if (rc == BCACHE_ERROR::CACHE_FULL) {
@@ -101,7 +106,7 @@ BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block) {
     }
   }
 
-  // TODO: Cache the block which put to storage directly
+  // TODO(@Wine93): Cache the block which put to storage directly
   timer.NextPhase(Phase::S3_PUT);
   rc = s3_->Put(key.StoreKey(), block.data, block.size);
   return rc;
@@ -147,10 +152,10 @@ BCACHE_ERROR BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
 }
 
 BCACHE_ERROR BlockCacheImpl::Flush(uint64_t ino) {
-  BCACHE_ERROR rc = BCACHE_ERROR::OK;
+  BCACHE_ERROR rc;
   LogGuard log([&]() { return StrFormat("flush(%d): %s", ino, StrErr(rc)); });
 
-  stage_count_->Wait(ino);
+  rc = stage_count_->Wait(ino);
   return rc;
 }
 
@@ -163,12 +168,6 @@ StoreType BlockCacheImpl::GetStoreType() {
     return StoreType::NONE;
   }
   return StoreType::DISK;
-}
-
-void BlockCacheImpl::WaitAllStageUploaded() {
-  while (uploader_->GetPendingSize() != 0) {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-  }
 }
 
 }  // namespace blockcache

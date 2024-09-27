@@ -58,7 +58,8 @@ TEST_F(BlockCacheTest, Put) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  ASSERT_EQ(block_cache->Put(key, block), BCACHE_ERROR::OK);
+  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  ASSERT_EQ(block_cache->Put(key, block, ctx), BCACHE_ERROR::OK);
   ASSERT_TRUE(block_cache->IsCached(key));
 
   std::this_thread::sleep_for(std::chrono::seconds(1));

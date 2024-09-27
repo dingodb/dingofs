@@ -101,9 +101,10 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
   RewriteCacheDir(&block_cache_option, uuid);
   auto block_cache = std::make_shared<BlockCacheImpl>(block_cache_option);
 
-  return s3Adaptor_->Init(
-      opt.s3Opt.s3ClientAdaptorOpt, S3ClientImpl::GetInstance(), inodeManager_,
-      mdsClient_, fsCacheManager, block_cache, kvClientManager_, true);
+  return s3Adaptor_->Init(opt.s3Opt.s3ClientAdaptorOpt,
+                          S3ClientImpl::GetInstance(), inodeManager_,
+                          mdsClient_, fsCacheManager, GetFileSystem(),
+                          block_cache, kvClientManager_, true);
 }
 
 bool FuseS3Client::InitKVCache(const KVClientManagerOpt& opt) {

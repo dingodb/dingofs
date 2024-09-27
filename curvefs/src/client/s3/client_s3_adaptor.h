@@ -36,6 +36,7 @@
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/inode_cache_manager.h"
 #include "curvefs/src/client/metric/client_metric.h"
 #include "curvefs/src/client/rpcclient/mds_client.h"
@@ -52,6 +53,7 @@ using ::curvefs::client::blockcache::S3Client;
 using ::curvefs::client::blockcache::StoreType;
 using curvefs::client::common::DiskCacheType;
 using curvefs::client::common::S3ClientAdaptorOption;
+using ::curvefs::client::filesystem::FileSystem;
 using curvefs::client::metric::InterfaceMetric;
 using curvefs::client::metric::S3Metric;
 using curvefs::metaserver::Inode;
@@ -76,6 +78,7 @@ class S3ClientAdaptor {
                              std::shared_ptr<InodeCacheManager> inodeManager,
                              std::shared_ptr<MdsClient> mdsClient,
                              std::shared_ptr<FsCacheManager> fsCacheManager,
+                             std::shared_ptr<FileSystem> filesystem,
                              std::shared_ptr<BlockCache> block_cache,
                              std::shared_ptr<KVClientManager> kvClientManager,
                              bool startBackGround = false) = 0;
@@ -129,6 +132,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
        std::shared_ptr<InodeCacheManager> inodeManager,
        std::shared_ptr<MdsClient> mdsClient,
        std::shared_ptr<FsCacheManager> fsCacheManager,
+       std::shared_ptr<FileSystem> filesystem,
        std::shared_ptr<BlockCache> block_cache,
        std::shared_ptr<KVClientManager> kvClientManager,
        bool startBackGround = false);
@@ -163,6 +167,8 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   std::shared_ptr<InodeCacheManager> GetInodeCacheManager() {
     return inodeManager_;
   }
+
+  std::shared_ptr<FileSystem> GetFileSystem() { return filesystem_; }
 
   std::shared_ptr<BlockCache> GetBlockCache() { return block_cache_; }
 
@@ -229,6 +235,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   curve::common::WaitInterval waitInterval_;
   std::shared_ptr<FsCacheManager> fsCacheManager_;
   std::shared_ptr<InodeCacheManager> inodeManager_;
+  std::shared_ptr<FileSystem> filesystem_;
   std::shared_ptr<BlockCache> block_cache_;
   std::shared_ptr<MdsClient> mdsClient_;
   uint32_t fsId_;

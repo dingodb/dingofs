@@ -235,6 +235,8 @@ struct DiskCacheOption {
 struct BlockCacheOption {
   std::string cache_store;
   bool stage;
+  bool stage_throttle_enable;
+  uint64_t stage_throttle_bandwidth_mb;
   uint32_t flush_file_workers;
   uint32_t flush_file_queue_size;
   uint32_t flush_slice_workers;

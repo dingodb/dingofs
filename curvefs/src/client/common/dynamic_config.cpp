@@ -36,10 +36,16 @@ bool PassInt32(const char*, int32_t) { return true; }
 bool PassBool(const char*, bool) { return true; }
 };  // namespace
 
-// block cache logging
-DEFINE_bool(block_cache_logging, true, "enable block cache log");
+// block cache
+DEFINE_bool(block_cache_logging, true, "enable block cache logging");
+DEFINE_bool(block_cache_stage_bandwidth_throttle_enable, false,
+            "enable block cache stage bandwidth throttle");
+DEFINE_uint64(block_cache_stage_bandwidth_throttle_mb, 102400,
+              "block cache stage bandwidth throttle");
 
 DEFINE_validator(block_cache_logging, &PassBool);
+DEFINE_validator(block_cache_stage_bandwidth_throttle_enable, &PassBool);
+DEFINE_validator(block_cache_stage_bandwidth_throttle_mb, &PassUint64);
 
 // disk cache
 DEFINE_bool(drop_page_cache, true, "drop page cache for disk cache");

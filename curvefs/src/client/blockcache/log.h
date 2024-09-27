@@ -49,6 +49,8 @@ class LogGuard {
   butil::Timer timer_;
 };
 
+void LogIt(const std::string& message);
+
 }  // namespace blockcache
 }  // namespace client
 }  // namespace curvefs

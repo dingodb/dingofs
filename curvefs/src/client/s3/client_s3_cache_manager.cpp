@@ -23,6 +23,7 @@
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 
 #include <bvar/bvar.h>
+#include <malloc.h>
 #include <sys/types.h>
 
 #include <utility>
@@ -32,6 +33,7 @@
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/blockcache/local_filesystem.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
 #include "curvefs/src/client/datastream/data_stream.h"
@@ -59,6 +61,8 @@ namespace client {
 using ::curvefs::base::string::StrFormat;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::Block;
+using ::curvefs::client::blockcache::BlockContext;
+using ::curvefs::client::blockcache::BlockFrom;
 using ::curvefs::client::blockcache::CacheStore;
 using ::curvefs::client::blockcache::GetObjectAsyncContext;
 using ::curvefs::client::blockcache::S3ClientImpl;
@@ -2239,7 +2243,7 @@ CURVEFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
   // generate flush task
   std::vector<FlushBlock> s3Tasks;
   std::vector<std::shared_ptr<SetKVCacheTask>> kvCacheTasks;
-  char* data = new (std::nothrow) char[len_];
+  char* data = reinterpret_cast<char*>(memalign(IO_ALIGNED_BLOCK_SIZE, len_));
   if (!data) {
     LOG(ERROR) << "new data failed.";
     return CURVEFS_ERROR::INTERNAL;
@@ -2255,7 +2259,7 @@ CURVEFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
 
   // exec flush task
   FlushTaskExecute(toS3, s3Tasks, kvCacheTasks);
-  delete[] data;
+  free(data);
 
   // inode ship to flush
   std::shared_ptr<InodeWrapper> inodeWrapper;
@@ -2353,16 +2357,22 @@ void DataCache::FlushTaskExecute(
   };
 
   // s3task execute
+  auto fs = s3ClientAdaptor_->GetFileSystem();
+  auto entry_watcher = fs->BorrowMember().entry_watcher;
   auto block_cache = s3ClientAdaptor_->GetBlockCache();
   if (s3PendingTaskCal.load()) {
     for (const auto& fblock : s3Tasks) {
       auto context = fblock.context;
       BlockKey key = fblock.key;
       Block block(context->buffer, context->bufferSize);
+      auto from = entry_watcher->ShouldWriteback(key.ino)
+                      ? BlockFrom::NOCTO_FLUSH
+                      : BlockFrom::CTO_FLUSH;
+      BlockContext ctx(from);
       DataStream::GetInstance().EnterFlushSliceQueue(
-          [&, key, block, callback]() {
+          [&, key, block, ctx, callback]() {
             for (;;) {
-              auto rc = block_cache->Put(key, block);
+              auto rc = block_cache->Put(key, block, ctx);
               if (rc == BCACHE_ERROR::OK) {
                 callback(context);
                 break;

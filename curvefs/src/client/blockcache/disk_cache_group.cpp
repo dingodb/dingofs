@@ -28,6 +28,7 @@
 
 #include "curvefs/src/base/hash/ketama_con_hash.h"
 #include "curvefs/src/base/math/math.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/disk_cache_layout.h"
 #include "curvefs/src/client/blockcache/disk_cache_metric.h"
 #include "curvefs/src/client/blockcache/disk_cache_watcher.h"
@@ -78,11 +79,12 @@ BCACHE_ERROR DiskCacheGroup::Shutdown() {
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR DiskCacheGroup::Stage(const BlockKey& key, const Block& block) {
+BCACHE_ERROR DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
+                                   BlockContext ctx) {
   BCACHE_ERROR rc;
   DiskCacheMetricGuard guard(
       &rc, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
-  rc = GetStore(key)->Stage(key, block);
+  rc = GetStore(key)->Stage(key, block, ctx);
   return rc;
 }
 

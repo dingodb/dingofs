@@ -79,7 +79,8 @@ class ClientS3AdaptorTest : public testing::Test {
     option.objectPrefix = 0;
     kvClientManager_ = nullptr;
     s3ClientAdaptor_->Init(option, nullptr, mockInodeManager_, mockMdsClient_,
-                           mockFsCacheManager_, nullptr, kvClientManager_);
+                           mockFsCacheManager_, nullptr, nullptr,
+                           kvClientManager_);
   }
 
   void TearDown() override {}

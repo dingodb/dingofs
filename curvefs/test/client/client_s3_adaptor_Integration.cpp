@@ -151,7 +151,7 @@ class ClientS3IntegrationTest : public testing::Test {
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,
         option.readCacheThreads, kvClientManager_);
     s3ClientAdaptor_->Init(option, mockS3Client, mockInodeManager,
-                           mockMdsClient, fsCacheManager, nullptr,
+                           mockMdsClient, fsCacheManager, nullptr, nullptr,
                            kvClientManager_);
     s3ClientAdaptor_->SetFsId(2);
     curvefs::client::common::FLAGS_enableCto = false;

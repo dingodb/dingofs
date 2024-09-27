@@ -45,7 +45,8 @@ class MockBlockCache : public BlockCache {
 
   MOCK_METHOD0(Shutdown, BCACHE_ERROR());
 
-  MOCK_METHOD2(Put, BCACHE_ERROR(const BlockKey& key, const Block& block));
+  MOCK_METHOD3(Put, BCACHE_ERROR(const BlockKey& key, const Block& block,
+                                 BlockContext ctx));
 
   MOCK_METHOD5(Range, BCACHE_ERROR(const BlockKey& key, off_t offset,
                                    size_t size, char* buffer, bool retrive));

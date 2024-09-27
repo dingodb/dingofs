@@ -28,6 +28,8 @@
 #include <mutex>
 #include <unordered_map>
 
+#include "curvefs/src/client/blockcache/error.h"
+
 namespace curvefs {
 namespace client {
 namespace blockcache {
@@ -43,15 +45,16 @@ class Countdown {
  public:
   Countdown() = default;
 
-  void Add(uint64_t key, int64_t n);
+  void Add(uint64_t key, int64_t n, bool has_error = false);
 
-  void Wait(uint64_t key);
+  BCACHE_ERROR Wait(uint64_t key);
 
   size_t Size();
 
  private:
   std::mutex mutex_;
   std::unordered_map<uint64_t, Counter> counters_;
+  std::unordered_map<uint64_t, bool> has_error_;
 };
 
 }  // namespace blockcache

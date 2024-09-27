@@ -87,6 +87,8 @@ class MessageQueue {
 
   void Subscribe(MessageHandler handler) { handler_ = handler; }
 
+  size_t Size() { return queue_.Size(); }
+
  private:
   void Consumer() {
     SetThreadName(name_.c_str());

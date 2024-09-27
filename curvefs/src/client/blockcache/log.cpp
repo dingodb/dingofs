@@ -67,6 +67,12 @@ LogGuard::~LogGuard() {
   logger->info("{0} <{1:.6f}>", handler_(), timer_.u_elapsed() / 1e6);
 }
 
+void LogIt(const std::string& message) {
+  if (FLAGS_block_cache_logging) {
+    logger->info(message);
+  }
+}
+
 }  // namespace blockcache
 }  // namespace client
 }  // namespace curvefs

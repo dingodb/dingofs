@@ -57,7 +57,7 @@ class DataCacheTest : public testing::Test {
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,
         option.readCacheThreads, nullptr);
     s3ClientAdaptor_->Init(option, nullptr, nullptr, nullptr, fsCacheManager,
-                           nullptr, nullptr);
+                           nullptr, nullptr, nullptr);
     mockChunkCacheManager_ = std::make_shared<MockChunkCacheManager>();
     uint64_t offset = 512 * 1024;
     uint64_t len = 1024 * 1024;

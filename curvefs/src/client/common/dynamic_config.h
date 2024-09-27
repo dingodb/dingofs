@@ -39,6 +39,8 @@ namespace common {
 
 // block cache logging
 DECLARE_bool(block_cache_logging);
+DECLARE_bool(block_cache_stage_bandwidth_throttle_enable);
+DECLARE_uint64(block_cache_stage_bandwidth_throttle_mb);
 
 // disk cache
 DECLARE_bool(drop_page_cache);

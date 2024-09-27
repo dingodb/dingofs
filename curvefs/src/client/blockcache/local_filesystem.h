@@ -148,7 +148,7 @@ class LocalFileSystem {
   BCACHE_ERROR Do(DoFunc func);
 
  private:
-  bool IsAligned(off_t offset, size_t length);
+  bool IsAligned(uint64_t n);
 
  private:
   std::shared_ptr<PosixFileSystem> posix_;

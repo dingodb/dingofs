@@ -369,6 +369,10 @@ void SplitDiskCacheOption(DiskCacheOption option,
 void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   {  // block cache option
     c->GetValueFatalIfFail("block_cache.stage", &option->stage);
+    c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_enable",
+                           &FLAGS_block_cache_stage_bandwidth_throttle_enable);
+    c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_mb",
+                           &FLAGS_block_cache_stage_bandwidth_throttle_mb);
     c->GetValueFatalIfFail("block_cache.logging", &FLAGS_block_cache_logging);
     c->GetValueFatalIfFail("block_cache.upload_stage_workers",
                            &option->upload_stage_workers);

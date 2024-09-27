@@ -42,7 +42,7 @@ class MemCache : public CacheStore {
 
   BCACHE_ERROR Shutdown() override { return BCACHE_ERROR::OK; }
 
-  BCACHE_ERROR Stage(const BlockKey&, const Block&) override {
+  BCACHE_ERROR Stage(const BlockKey&, const Block&, BlockContext) override {
     return BCACHE_ERROR::NOT_SUPPORTED;
   }
 

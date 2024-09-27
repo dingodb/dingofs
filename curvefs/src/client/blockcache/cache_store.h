@@ -72,6 +72,18 @@ struct Block {
   size_t size;
 };
 
+enum class BlockFrom {
+  CTO_FLUSH,
+  NOCTO_FLUSH,
+  RELOAD,
+};
+
+struct BlockContext {
+  BlockContext(BlockFrom from) : from(from) {}
+
+  BlockFrom from;
+};
+
 class BlockReader {
  public:
   virtual BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) = 0;
@@ -82,14 +94,15 @@ class BlockReader {
 class CacheStore {
  public:
   using UploadFunc = std::function<void(
-      const BlockKey& key, const std::string& stage_path, bool reload)>;
+      const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
 
  public:
   virtual BCACHE_ERROR Init(UploadFunc uploader) = 0;
 
   virtual BCACHE_ERROR Shutdown() = 0;
 
-  virtual BCACHE_ERROR Stage(const BlockKey& key, const Block& block) = 0;
+  virtual BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
+                             BlockContext ctx) = 0;
 
   virtual BCACHE_ERROR RemoveStage(const BlockKey& key) = 0;
 

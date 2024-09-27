@@ -22,6 +22,7 @@
 
 #include <sstream>
 
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/mem_cache.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
@@ -44,7 +45,8 @@ TEST_F(MemCacheTest, Basic) {
 
   ASSERT_EQ(store->Init(nullptr), BCACHE_ERROR::OK);
   ASSERT_EQ(store->Shutdown(), BCACHE_ERROR::OK);
-  ASSERT_EQ(store->Stage(key, block), BCACHE_ERROR::NOT_SUPPORTED);
+  ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::CTO_FLUSH)),
+            BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_EQ(store->RemoveStage(key), BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_EQ(store->Cache(key, block), BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_EQ(store->Load(key, reader), BCACHE_ERROR::NOT_SUPPORTED);

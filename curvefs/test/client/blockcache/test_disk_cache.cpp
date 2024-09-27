@@ -46,7 +46,8 @@ TEST_F(DiskCacheTest, Basic) {
   auto _ = MakeCleanup([&]() { builder.Cleanup(); });
 
   auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   std::string id = disk_cache->Id();
@@ -64,13 +65,14 @@ TEST_F(DiskCacheTest, Stage) {
   auto disk_cache = builder.Build();
   std::vector<BlockKey> staging;
   auto rc = disk_cache->Init([&](const BlockKey& key, const std::string&,
-                                 bool) { staging.emplace_back(key); });
+                                 BlockContext) { staging.emplace_back(key); });
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  rc = disk_cache->Stage(key, block);
+  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   auto fs = NewTempLocalFileSystem();
@@ -90,13 +92,15 @@ TEST_F(DiskCacheTest, RemoveStage) {
   auto _ = MakeCleanup([&]() { builder.Cleanup(); });
 
   auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  rc = disk_cache->Stage(key, block);
+  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   auto fs = NewTempLocalFileSystem();
@@ -114,7 +118,8 @@ TEST_F(DiskCacheTest, Cache) {
   auto _ = MakeCleanup([&]() { builder.Cleanup(); });
 
   auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
@@ -141,7 +146,8 @@ TEST_F(DiskCacheTest, IsCached) {
   auto _ = MakeCleanup([&]() { builder.Cleanup(); });
 
   auto disk_cache = builder.Build();
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
@@ -151,7 +157,8 @@ TEST_F(DiskCacheTest, IsCached) {
   ASSERT_FALSE(disk_cache->IsCached(key_200));
 
   auto block = BlockBuilder().Build("xyz");
-  rc = disk_cache->Stage(key_100, block);
+  auto ctx = BlockContext(BlockFrom::RELOAD);
+  rc = disk_cache->Stage(key_100, block, ctx);
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   ASSERT_TRUE(disk_cache->IsCached(key_100));
 

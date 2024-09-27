@@ -49,6 +49,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
                           std::shared_ptr<InodeCacheManager> inodeManager,
                           std::shared_ptr<MdsClient> mdsClient,
                           std::shared_ptr<FsCacheManager> fsCacheManager,
+                          std::shared_ptr<FileSystem> filesystem,
                           std::shared_ptr<BlockCache> block_cache,
                           std::shared_ptr<KVClientManager> kvClientManager,
                           bool startBackGround) {
@@ -73,6 +74,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   mdsClient_ = mdsClient;
   fsCacheManager_ = fsCacheManager;
   waitInterval_.Init(option.intervalMs);
+  filesystem_ = filesystem;
   block_cache_ = block_cache;
   kvClientManager_ = std::move(kvClientManager);
 

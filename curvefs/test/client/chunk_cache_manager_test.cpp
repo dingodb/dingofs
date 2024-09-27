@@ -60,7 +60,7 @@ class ChunkCacheManagerTest : public testing::Test {
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,
         option.readCacheThreads, nullptr);
     s3ClientAdaptor_->Init(option, nullptr, nullptr, nullptr, fsCacheManager_,
-                           nullptr, nullptr);
+                           nullptr, nullptr, nullptr);
     chunkCacheManager_ =
         std::make_shared<ChunkCacheManager>(index, s3ClientAdaptor_, nullptr);
   }

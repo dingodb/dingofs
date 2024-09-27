@@ -29,6 +29,7 @@
 #include <string>
 
 #include "curvefs/src/client/blockcache/block_cache.h"
+#include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 
@@ -36,16 +37,18 @@ namespace curvefs {
 namespace client {
 
 using ::curvefs::client::blockcache::BlockCache;
+using ::curvefs::client::filesystem::FileSystem;
 
 class MockS3ClientAdaptor : public S3ClientAdaptor {
  public:
-  MOCK_METHOD8(Init,
+  MOCK_METHOD9(Init,
                CURVEFS_ERROR(const S3ClientAdaptorOption& option,
                              std::shared_ptr<S3Client> client,
                              std::shared_ptr<InodeCacheManager> inodeManager,
                              std::shared_ptr<MdsClient> mdsClient,
                              std::shared_ptr<FsCacheManager> fsCacheManager,
-                             std::shared_ptr<BlockCache> blockCache,
+                             std::shared_ptr<FileSystem> filesystem,
+                             std::shared_ptr<BlockCache> block_cache,
                              std::shared_ptr<KVClientManager> kvClientManager,
                              bool startBackGround));
 

@@ -26,11 +26,12 @@
 #include <atomic>
 #include <memory>
 #include <mutex>
-#include <vector>
 
+#include "curvefs/src/client/blockcache/block_cache_uploader_cmmon.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/countdown.h"
-#include "curvefs/src/client/blockcache/log.h"
+#include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/blockcache/phase_timer.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
 #include "src/common/concurrent/task_thread_pool.h"
 
@@ -40,22 +41,13 @@ namespace blockcache {
 
 using ::curve::common::TaskThreadPool;
 
-class BlockCacheMetric;
-
+// How it works:
+//               add                   scan                     put
+// [stage block]----> [pending queue] -----> [uploading queue] ----> [s3]
 class BlockCacheUploader {
-  struct PendingItem {
-    PendingItem(const BlockKey& key, const std::string& stage_path,
-                bool from_reload)
-        : key(key), stage_path(stage_path), from_reload(from_reload) {}
-
-    BlockKey key;
-    std::string stage_path;
-    bool from_reload;
-  };
-
  public:
-  BlockCacheUploader(std::shared_ptr<CacheStore> store,
-                     std::shared_ptr<S3Client> s3,
+  BlockCacheUploader(std::shared_ptr<S3Client> s3,
+                     std::shared_ptr<CacheStore> store,
                      std::shared_ptr<Countdown> stage_count);
 
   virtual ~BlockCacheUploader() = default;
@@ -65,39 +57,44 @@ class BlockCacheUploader {
   void Shutdown();
 
   void AddStageBlock(const BlockKey& key, const std::string& stage_path,
-                     bool from_reload);
+                     BlockContext ctx);
 
-  size_t GetPendingSize();
-
- private:
-  friend class BlockCacheMetric;
+  void WaitAllUploaded();
 
  private:
-  void ScanStageBlock();
+  friend class BlockCacheMetricHelper;
 
-  void UploadStageBlock(const PendingItem& item);
+ private:
+  bool CanUpload(const std::vector<StageBlock>& blocks);
 
-  BCACHE_ERROR ReadBlock(const BlockKey& key, const std::string& stage_path,
+  void ScaningWorker();
+
+  void UploadingWorker();
+
+  void UploadStageBlock(const StageBlock& stage_block);
+
+  BCACHE_ERROR ReadBlock(const StageBlock& stage_block,
                          std::shared_ptr<char>& buffer, size_t* length);
 
-  void UploadBlock(const BlockKey& key, bool from_reload,
-                   std::shared_ptr<char> buffer, size_t length,
-                   std::shared_ptr<LogGuard> log_guard);
+  void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
+                   size_t length, PhaseTimer timer);
 
-  void PreUpload(const BlockKey& key, bool from_reload);
+  void Staging(const StageBlock& stage_block);
 
-  void PostUpload(const BlockKey& key, bool from_reload, bool success);
+  void Uploaded(const StageBlock& stage_block, bool success);
+
+  bool NeedCount(const StageBlock& stage_block);
 
  private:
   std::mutex mutex_;
   std::atomic<bool> running_;
-  std::vector<PendingItem> slow_queue_;
-  std::vector<PendingItem> fast_queue_;
-  std::shared_ptr<CacheStore> store_;
   std::shared_ptr<S3Client> s3_;
+  std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
+  std::shared_ptr<PendingQueue> pending_queue_;
+  std::shared_ptr<UploadingQueue> uploading_queue_;
   std::unique_ptr<TaskThreadPool<>> scan_stage_thread_pool_;
-  std::shared_ptr<TaskThreadPool<>> upload_stage_thread_pool_;
+  std::unique_ptr<TaskThreadPool<>> upload_stage_thread_pool_;
 };
 
 }  // namespace blockcache

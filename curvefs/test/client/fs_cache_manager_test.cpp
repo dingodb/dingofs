@@ -60,7 +60,7 @@ class FsCacheManagerTest : public testing::Test {
         s3ClientAdaptor_, maxReadCacheByte_, maxWriteCacheByte,
         option.readCacheThreads, nullptr);
     s3ClientAdaptor_->Init(option, nullptr, nullptr, nullptr, fsCacheManager_,
-                           nullptr, nullptr);
+                           nullptr, nullptr, nullptr);
     s3ClientAdaptor_->SetFsId(2);
 
     mockChunkCacheManager_ = std::make_shared<MockChunkCacheManager>();

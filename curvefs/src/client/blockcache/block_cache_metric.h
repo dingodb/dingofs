@@ -28,31 +28,65 @@
 #include <memory>
 #include <string>
 
+#include "curvefs/src/client/blockcache/block_cache_throttle.h"
 #include "curvefs/src/client/blockcache/block_cache_uploader.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/common/config.h"
+#include "curvefs/src/client/common/dynamic_config.h"
 #include "src/common/concurrent/task_thread_pool.h"
 
 namespace curvefs {
 namespace client {
 namespace blockcache {
 
+USING_FLAG(block_cache_stage_bandwidth_throttle_enable);
+USING_FLAG(block_cache_stage_bandwidth_throttle_mb);
+
 using ::curve::common::TaskThreadPool;
 using ::curvefs::client::common::BlockCacheOption;
 
-static uint32_t GetQueueSize(void* arg) {
-  auto* thread_pool = reinterpret_cast<TaskThreadPool<>*>(arg);
-  return thread_pool->QueueSize();
-}
+class BlockCacheMetricHelper {
+ public:
+  static void PrintUploading(std::ostream& os, void* arg) {
+    auto* uploader = reinterpret_cast<BlockCacheUploader*>(arg);
+    struct StatBlocks stat;
+    uploader->uploading_queue_->Stat(&stat);
+    os << stat.num_total << "," << stat.num_from_cto << ","
+       << stat.num_from_nocto << "," << stat.num_from_reload;
+  }
 
-static size_t GetPendingBlocks(void* arg) {
-  auto* uploader = reinterpret_cast<BlockCacheUploader*>(arg);
-  return uploader->GetPendingSize();
-}
+  static void PrintPending(std::ostream& os, void* arg) {
+    auto* uploader = reinterpret_cast<BlockCacheUploader*>(arg);
+    struct StatBlocks stat;
+    uploader->pending_queue_->Stat(&stat);
+    os << stat.num_total << "," << stat.num_from_cto << ","
+       << stat.num_from_nocto << "," << stat.num_from_reload;
+  }
+
+  static bool IsThrottleEnable(void*) {
+    return FLAGS_block_cache_stage_bandwidth_throttle_enable;
+  }
+
+  static uint64_t GetThrottleLimit(void* arg) {
+    auto* throttle = reinterpret_cast<BlockCacheThrottle*>(arg);
+    return throttle->current_bandwidth_throttle_mb_;
+  }
+
+  static bool IsThrottleOverflow(void* arg) {
+    auto* throttle = reinterpret_cast<BlockCacheThrottle*>(arg);
+    return throttle->waiting_;
+  }
+};
 
 class BlockCacheMetric {
  public:
   struct AuxMember {
+    AuxMember(std::shared_ptr<BlockCacheUploader> uploader,
+              std::shared_ptr<BlockCacheThrottle> throttle)
+        : uploader(uploader), throttle(throttle) {}
+
     std::shared_ptr<BlockCacheUploader> uploader;
+    std::shared_ptr<BlockCacheThrottle> throttle;
   };
 
  public:
@@ -69,17 +103,31 @@ class BlockCacheMetric {
     Metric(const std::string& prefix, AuxMember aux_member)
         : upload_stage_workers(prefix, "upload_stage_workers", 0),
           upload_stage_queue_size(prefix, "upload_stage_queue_size", 0),
-          upload_stage_pending_blocks(prefix, "upload_stage_pending_blocks",
-                                      &GetPendingBlocks,
-                                      aux_member.uploader.get()),
-          upload_stage_pending_tasks(
-              prefix, "upload_stage_pending_tasks", &GetQueueSize,
-              aux_member.uploader->upload_stage_thread_pool_.get()) {}
+          stage_blocks_on_pending(prefix, "stage_blocks_on_pending",
+                                  &BlockCacheMetricHelper::PrintPending,
+                                  aux_member.uploader.get()),
+          stage_blocks_on_uploading(prefix, "stage_blocks_on_uploading",
+                                    &BlockCacheMetricHelper::PrintUploading,
+                                    aux_member.uploader.get()),
+          stage_bandwidth_throttle_enable(
+              prefix, "stage_bandwidth_throttle_enable",
+              &BlockCacheMetricHelper::IsThrottleEnable,
+              aux_member.throttle.get()),
+          stage_bandwidth_throttle_mb(prefix, "stage_bandwidth_throttle_mb",
+                                      &BlockCacheMetricHelper::GetThrottleLimit,
+                                      aux_member.throttle.get()),
+          stage_bandwidth_throttle_overflow(
+              prefix, "stage_bandwidth_throttle_overflow",
+              &BlockCacheMetricHelper::IsThrottleOverflow,
+              aux_member.throttle.get()) {}
 
     bvar::Status<uint32_t> upload_stage_workers;
     bvar::Status<uint32_t> upload_stage_queue_size;
-    bvar::PassiveStatus<size_t> upload_stage_pending_blocks;
-    bvar::PassiveStatus<uint32_t> upload_stage_pending_tasks;
+    bvar::PassiveStatus<std::string> stage_blocks_on_pending;
+    bvar::PassiveStatus<std::string> stage_blocks_on_uploading;
+    bvar::PassiveStatus<bool> stage_bandwidth_throttle_enable;
+    bvar::PassiveStatus<uint64_t> stage_bandwidth_throttle_mb;
+    bvar::PassiveStatus<bool> stage_bandwidth_throttle_overflow;
   };
 
   Metric metric_;

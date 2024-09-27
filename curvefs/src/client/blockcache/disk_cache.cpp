@@ -128,7 +128,8 @@ BCACHE_ERROR DiskCache::Shutdown() {
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block) {
+BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
+                              BlockContext ctx) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
   auto metric_guard = ::absl::MakeCleanup([&] {
@@ -168,7 +169,7 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::ENQUEUE_UPLOAD);
-  uploader_(key, stage_path, false);
+  uploader_(key, stage_path, ctx);
   return rc;
 }
 
@@ -183,7 +184,7 @@ BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key) {
     return StrFormat("removestage(%s): %s", key.Filename(), StrErr(rc));
   });
 
-  // FIXME: Should we invoke Check(WANT_EXEC)?
+  // TODO(@Wine93): Should we invoke Check(WANT_EXEC)?
   rc = fs_->RemoveFile(GetStagePath(key));
   return rc;
 }

@@ -24,6 +24,7 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/test/client/blockcache/helper/builder.h"
 #include "glog/logging.h"
@@ -57,9 +58,8 @@ TEST_F(DiskCacheLoaderTest, LoadStage) {
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   std::vector<BlockKey> uploading;
-  rc = disk_cache->Init([&](const BlockKey& key, const std::string&, bool) {
-    uploading.emplace_back(key);
-  });
+  rc = disk_cache->Init([&](const BlockKey& key, const std::string&,
+                            BlockContext) { uploading.emplace_back(key); });
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   std::this_thread::sleep_for(std::chrono::seconds(3));  // wait for reload
   ASSERT_FALSE(disk_cache->IsCached(key));
@@ -82,7 +82,8 @@ TEST_F(DiskCacheLoaderTest, LoadCache) {
   auto rc = fs->WriteFile(cache_path, "xyz", 3);
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
-  rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   std::this_thread::sleep_for(std::chrono::seconds(3));  // wait for reload
   ASSERT_TRUE(disk_cache->IsCached(key));

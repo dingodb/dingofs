@@ -25,7 +25,6 @@
 #include <butil/time.h>
 
 #include <atomic>
-#include <iomanip>
 
 #include "curvefs/src/base/filepath/filepath.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
@@ -58,10 +57,10 @@ void DiskCacheLoader::Start(CacheStore::UploadFunc uploader) {
 
   uploader_ = uploader;
   task_pool_->Start(2);
-  task_pool_->Enqueue(&DiskCacheLoader::LoadAll, this, layout_->GetStageDir(),
-                      BlockType::STAGE_BLOCK);
-  task_pool_->Enqueue(&DiskCacheLoader::LoadAll, this, layout_->GetCacheDir(),
-                      BlockType::CACHE_BLOCK);
+  task_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
+                      layout_->GetStageDir(), BlockType::STAGE_BLOCK);
+  task_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
+                      layout_->GetCacheDir(), BlockType::CACHE_BLOCK);
 
   metric_->SetLoadStatus(kOnLoading);
   LOG(INFO) << "Disk cache loading thread start success.";
@@ -83,7 +82,7 @@ bool DiskCacheLoader::IsLoading() {
 }
 
 // If load failed, it only takes up some spaces.
-void DiskCacheLoader::LoadAll(const std::string& root, BlockType type) {
+void DiskCacheLoader::LoadAllBlocks(const std::string& root, BlockType type) {
   Timer timer;
   BCACHE_ERROR rc;
   uint64_t num_blocks = 0, num_invalids = 0, size = 0;
@@ -94,7 +93,7 @@ void DiskCacheLoader::LoadAll(const std::string& root, BlockType type) {
       return BCACHE_ERROR::ABORT;
     }
 
-    if (LoadBlock(prefix, file, type)) {
+    if (LoadOneBlock(prefix, file, type)) {
       num_blocks++;
       size += file.size;
     } else {
@@ -120,8 +119,8 @@ void DiskCacheLoader::LoadAll(const std::string& root, BlockType type) {
   }
 }
 
-bool DiskCacheLoader::LoadBlock(const std::string& prefix, const FileInfo& file,
-                                BlockType type) {
+bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
+                                   const FileInfo& file, BlockType type) {
   BlockKey key;
   std::string name = file.name;
   std::string path = PathJoin({prefix, name});
@@ -137,7 +136,7 @@ bool DiskCacheLoader::LoadBlock(const std::string& prefix, const FileInfo& file,
 
   if (type == BlockType::STAGE_BLOCK) {
     metric_->AddStageBlock(1);
-    uploader_(key, path, true);
+    uploader_(key, path, BlockContext(BlockFrom::RELOAD));
   } else if (type == BlockType::CACHE_BLOCK) {
     manager_->Add(key, CacheValue(file.size, file.atime));
   }

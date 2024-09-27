@@ -69,13 +69,15 @@ class PhaseTimer {
   };
 
  public:
-  PhaseTimer() = default;
+  PhaseTimer();
 
   virtual ~PhaseTimer() = default;
 
   void NextPhase(Phase phase);
 
   std::string ToString();
+
+  int64_t TotalUElapsed();
 
  private:
   void StopPreTimer();
@@ -85,6 +87,7 @@ class PhaseTimer {
   std::string StrPhase(Phase phase);
 
  private:
+  ::butil::Timer g_timer_;
   std::vector<Timer> timers_;
 };
 

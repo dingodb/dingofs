@@ -80,7 +80,7 @@ class FileCacheManagerTest : public testing::Test {
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
     mockS3Client_ = std::make_shared<MockS3Client>();
     s3ClientAdaptor_->Init(option, mockS3Client_, mockInodeManager_, nullptr,
-                           fsCacheManager, nullptr, nullptr);
+                           fsCacheManager, nullptr, nullptr, nullptr);
     s3ClientAdaptor_->SetFsId(fsId);
 
     threadPool_->Start(option.readCacheThreads);

@@ -24,6 +24,7 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
+#include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/test/client/blockcache/helper/builder.h"
 #include "glog/logging.h"
@@ -50,20 +51,22 @@ TEST_F(DiskCacheManagerTest, CleanupFull) {
     builder.Cleanup();
   });
 
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   auto key_100 = BlockKeyBuilder().Build(100);
   auto key_200 = BlockKeyBuilder().Build(200);
   auto block = BlockBuilder().Build(std::string(10, '0'));
-  ASSERT_EQ(disk_cache->Stage(key_100, block), BCACHE_ERROR::OK);
-  ASSERT_EQ(disk_cache->Stage(key_200, block), BCACHE_ERROR::OK);
+  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  ASSERT_EQ(disk_cache->Stage(key_100, block, ctx), BCACHE_ERROR::OK);
+  ASSERT_EQ(disk_cache->Stage(key_200, block, ctx), BCACHE_ERROR::OK);
   ASSERT_TRUE(disk_cache->IsCached(key_100));
   ASSERT_TRUE(disk_cache->IsCached(key_200));
 
   // NOTE: key_100, key_200 is in active, so we will evict key_300 firstly
   auto key_300 = BlockKeyBuilder().Build(300);
-  ASSERT_EQ(disk_cache->Stage(key_300, block), BCACHE_ERROR::OK);
+  ASSERT_EQ(disk_cache->Stage(key_300, block, ctx), BCACHE_ERROR::OK);
   ASSERT_TRUE(disk_cache->IsCached(key_100));
   ASSERT_TRUE(disk_cache->IsCached(key_200));
   ASSERT_FALSE(disk_cache->IsCached(key_300));
@@ -78,12 +81,14 @@ TEST_F(DiskCacheManagerTest, CleanupExpire) {
     builder.Cleanup();
   });
 
-  auto rc = disk_cache->Init([](const BlockKey&, const std::string&, bool) {});
+  auto rc = disk_cache->Init(
+      [](const BlockKey&, const std::string&, BlockContext) {});
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build(std::string(10, '0'));
-  ASSERT_EQ(disk_cache->Stage(key, block), BCACHE_ERROR::OK);
+  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  ASSERT_EQ(disk_cache->Stage(key, block, ctx), BCACHE_ERROR::OK);
   ASSERT_TRUE(disk_cache->IsCached(key));
 
   std::this_thread::sleep_for(std::chrono::seconds(5));

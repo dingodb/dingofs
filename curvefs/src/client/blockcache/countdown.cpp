@@ -26,11 +26,13 @@
 
 #include <cassert>
 
+#include "curvefs/src/client/blockcache/error.h"
+
 namespace curvefs {
 namespace client {
 namespace blockcache {
 
-void Countdown::Add(uint64_t key, int64_t n) {
+void Countdown::Add(uint64_t key, int64_t n, bool has_error) {
   std::unique_lock<std::mutex> lk(mutex_);
   auto it = counters_.find(key);
   if (it == counters_.end()) {
@@ -39,6 +41,9 @@ void Countdown::Add(uint64_t key, int64_t n) {
 
   auto& counter = counters_[key];
   counter.count += n;
+  if (has_error) {
+    has_error_[key] = true;
+  }
   CHECK(counter.count >= 0);
   if (counter.count == 0) {
     auto cond = counter.cond;
@@ -47,18 +52,25 @@ void Countdown::Add(uint64_t key, int64_t n) {
   }
 }
 
-void Countdown::Wait(uint64_t key) {
+BCACHE_ERROR Countdown::Wait(uint64_t key) {
   std::unique_lock<std::mutex> lk(mutex_);
   while (true) {
     auto it = counters_.find(key);
     if (it == counters_.end()) {
-      return;
+      break;
     }
 
     // The cond will released after wait() return
     auto cond = it->second.cond;
     cond->wait(lk);
   }
+
+  auto it = has_error_.find(key);
+  if (it == has_error_.end()) {
+    return BCACHE_ERROR::OK;
+  }
+  has_error_.erase(it);
+  return BCACHE_ERROR::NOT_FOUND;
 }
 
 size_t Countdown::Size() {

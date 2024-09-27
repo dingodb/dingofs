@@ -332,7 +332,9 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
 
   int fd;
   std::string tmp = path + ".tmp";
-  rc = posix_->Create(tmp, &fd, IsAligned(0, length));
+  bool use_direct =
+      IsAligned(length) && IsAligned(reinterpret_cast<std::uintptr_t>(buffer));
+  rc = posix_->Create(tmp, &fd, use_direct);
   if (rc == BCACHE_ERROR::OK) {
     rc = posix_->Write(fd, buffer, length);
     posix_->Close(fd);
@@ -413,9 +415,8 @@ BCACHE_ERROR LocalFileSystem::GetDiskUsage(const std::string& path,
 
 BCACHE_ERROR LocalFileSystem::Do(DoFunc func) { return func(posix_); }
 
-bool LocalFileSystem::IsAligned(off_t offset, size_t length) {
-  return (offset % IO_ALIGNED_BLOCK_SIZE == 0) &&
-         (length % IO_ALIGNED_BLOCK_SIZE == 0);
+bool LocalFileSystem::IsAligned(uint64_t n) {
+  return n % IO_ALIGNED_BLOCK_SIZE == 0;
 }
 
 std::shared_ptr<LocalFileSystem> NewTempLocalFileSystem() {

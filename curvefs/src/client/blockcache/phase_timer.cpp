@@ -33,6 +33,8 @@ namespace blockcache {
 using ::curvefs::base::string::StrFormat;
 using ::curvefs::base::string::StrJoin;
 
+PhaseTimer::PhaseTimer() { g_timer_.start(); }
+
 void PhaseTimer::StopPreTimer() {
   if (!timers_.empty()) {
     timers_.back().Stop();
@@ -88,6 +90,11 @@ std::string PhaseTimer::ToString() {
     return "";
   }
   return " (" + StrJoin(out, ",") + ")";
+}
+
+int64_t PhaseTimer::TotalUElapsed() {
+  g_timer_.stop();
+  return g_timer_.u_elapsed();
 }
 
 }  // namespace blockcache

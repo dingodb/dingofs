@@ -62,10 +62,10 @@ class DiskCacheLoader {
   virtual bool IsLoading();
 
  private:
-  void LoadAll(const std::string& root, BlockType type);
+  void LoadAllBlocks(const std::string& root, BlockType type);
 
-  bool LoadBlock(const std::string& prefix, const FileInfo& file,
-                 BlockType type);
+  bool LoadOneBlock(const std::string& prefix, const FileInfo& file,
+                    BlockType type);
 
   std::string ToString(BlockType type);
 
