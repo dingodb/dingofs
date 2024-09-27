@@ -23,6 +23,7 @@
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 
 #include <bvar/bvar.h>
+#include <malloc.h>
 #include <sys/types.h>
 
 #include <utility>
@@ -32,6 +33,7 @@
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/error.h"
+#include "curvefs/src/client/blockcache/local_filesystem.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
 #include "curvefs/src/client/datastream/data_stream.h"
@@ -2260,7 +2262,7 @@ CURVEFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
   // generate flush task
   std::vector<FlushBlock> s3Tasks;
   std::vector<std::shared_ptr<SetKVCacheTask>> kvCacheTasks;
-  char* data = new (std::nothrow) char[len_];
+  char* data = reinterpret_cast<char*>(memalign(IO_ALIGNED_BLOCK_SIZE, len_));
   if (!data) {
     LOG(ERROR) << "new data failed.";
     return CURVEFS_ERROR::INTERNAL;
@@ -2276,7 +2278,7 @@ CURVEFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
 
   // exec flush task
   FlushTaskExecute(toS3, s3Tasks, kvCacheTasks);
-  delete[] data;
+  free(data);
 
   // inode ship to flush
   std::shared_ptr<InodeWrapper> inodeWrapper;
