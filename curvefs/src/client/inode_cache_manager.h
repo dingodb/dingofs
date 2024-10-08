@@ -28,9 +28,6 @@
 #include <map>
 #include <memory>
 #include <set>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/client/common/config.h"
@@ -41,7 +38,7 @@
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/client/rpcclient/task_excutor.h"
 #include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/name_lock.h"
+#include "src/common/concurrent/generic_name_lock.h"
 #include "src/common/interruptible_sleeper.h"
 #include "src/common/lru_cache.h"
 

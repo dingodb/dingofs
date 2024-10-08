@@ -23,14 +23,12 @@
 #ifndef CURVEFS_SRC_CLIENT_FUSE_S3_CLIENT_H_
 #define CURVEFS_SRC_CLIENT_FUSE_S3_CLIENT_H_
 
-#include <list>
 #include <memory>
-#include <string>
-#include <utility>
-#include <vector>
 
+#include "brpc/server.h"
 #include "curvefs/src/client/fuse_client.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
+#include "curvefs/src/client/service/inode_objects_service.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
 #include "curvefs/src/volume/common.h"
 #include "src/common/s3_adapter.h"
@@ -113,10 +111,14 @@ class FuseS3Client : public FuseClient {
 
   void FlushData() override;
 
- private:
+  CURVEFS_ERROR InitBrpcServer() override;
+
   // s3 adaptor
   std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
   std::shared_ptr<KVClientManager> kvClientManager_;
+
+  brpc::Server server_;
+  InodeObjectsService inode_object_service_;
 };
 
 }  // namespace client

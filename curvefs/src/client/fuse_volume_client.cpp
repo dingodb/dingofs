@@ -49,7 +49,11 @@ CURVEFS_ERROR FuseVolumeClient::Init(const FuseClientOption& option) {
   volOpts_ = option.volumeOpt;
 
   CURVEFS_ERROR ret = FuseClient::Init(option);
+  if (ret != CURVEFS_ERROR::OK) {
+    return ret;
+  }
 
+  ret = InitBrpcServer();
   if (ret != CURVEFS_ERROR::OK) {
     return ret;
   }
@@ -64,7 +68,7 @@ CURVEFS_ERROR FuseVolumeClient::Init(const FuseClientOption& option) {
     return CURVEFS_ERROR::INTERNAL;
   }
 
-  return ret;
+  return CURVEFS_ERROR::OK;
 }
 
 void FuseVolumeClient::UnInit() {

@@ -23,14 +23,13 @@
 #include "curvefs/src/client/fuse_s3_client.h"
 
 #include <memory>
-#include <vector>
 
-#include "curvefs/src/base/string/string.h"
 #include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
 #include "curvefs/src/client/datastream/data_stream.h"
 #include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/kvclient/memcache_client.h"
+#include "src/common/net_common.h"
 
 namespace curvefs {
 namespace client {
@@ -54,12 +53,16 @@ using curvefs::client::common::FLAGS_supportKVcache;
 using ::curvefs::client::datastream::DataStream;
 using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
 using curvefs::mds::topology::MemcacheClusterInfo;
-using curvefs::mds::topology::MemcacheServerInfo;
 
 CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
   FuseClientOption opt(option);
 
   CURVEFS_ERROR ret = FuseClient::Init(opt);
+  if (ret != CURVEFS_ERROR::OK) {
+    return ret;
+  }
+
+  ret = InitBrpcServer();
   if (ret != CURVEFS_ERROR::OK) {
     return ret;
   }
@@ -212,8 +215,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
     for (const auto& it : inode->parent()) {
       auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, true);
       if (tret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                   << " inodeId = " << it
+        LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << it
                    << ", xattr = " << xattr.DebugString();
       }
     }
@@ -458,6 +460,60 @@ void FuseS3Client::FlushData() {
   do {
     ret = s3Adaptor_->FsSync();
   } while (ret != CURVEFS_ERROR::OK);
+}
+
+static bool StartBrpcServer(brpc::Server& server, brpc::ServerOptions* options,
+                            uint32_t start_port, uint32_t end_port,
+                            uint32_t* listen_port) {
+  static std::once_flag flag;
+  std::call_once(flag, [&]() {
+    while (start_port < end_port) {
+      if (server.Start(start_port, options) == 0) {
+        LOG(INFO) << "Start brpc server success, listen port = " << start_port;
+        *listen_port = start_port;
+        break;
+      }
+
+      ++start_port;
+    }
+  });
+
+  if (start_port >= end_port) {
+    LOG(ERROR) << "Start brpc server failed, start_port = " << start_port;
+    return false;
+  }
+
+  return true;
+}
+
+CURVEFS_ERROR FuseS3Client::InitBrpcServer() {
+  inode_object_service_.Init(inodeManager_);
+
+  if (server_.AddService(&inode_object_service_,
+                         brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+    LOG(ERROR) << "Fail to add InodeObjectsService";
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  brpc::ServerOptions brpc_server_options;
+
+  uint32_t listen_port = 0;
+  if (!StartBrpcServer(server_, &brpc_server_options,
+                       option_.dummyServerStartPort, PORT_LIMIT,
+                       &listen_port)) {
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  std::string local_ip;
+  if (!curve::common::NetCommon::GetLocalIP(&local_ip)) {
+    LOG(ERROR) << "Get local ip failed!";
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  curve::client::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
+  curve::client::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+
+  return CURVEFS_ERROR::OK;
 }
 
 }  // namespace client

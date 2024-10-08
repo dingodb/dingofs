@@ -42,7 +42,6 @@
 #include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
 #include "curvefs/src/common/dynamic_vlog.h"
-#include "curvefs/src/common/metric_utils.h"
 #include "src/common/configuration.h"
 #include "src/common/gflags_helper.h"
 

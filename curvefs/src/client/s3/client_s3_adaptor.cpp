@@ -336,6 +336,9 @@ CURVEFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
     if (rc != BCACHE_ERROR::OK) {
       return CURVEFS_ERROR::INTERNAL;
     }
+
+    VLOG(6) << "FlushAllCache, inodeId:" << inodeId
+            << " related chunk upload to s3 done";
   }
 
   return ret;

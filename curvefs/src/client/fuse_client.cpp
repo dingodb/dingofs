@@ -23,31 +23,21 @@
 #include "curvefs/src/client/fuse_client.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <list>
 #include <memory>
-#include <set>
 #include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
-#include "absl/memory/memory.h"
-#include "curvefs/proto/mds.pb.h"
-#include "curvefs/src/client/client_operator.h"
-#include "curvefs/src/client/common/common.h"
+#include "brpc/server.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_wrapper.h"
-#include "curvefs/src/client/warmup/warmup_manager.h"
-#include "curvefs/src/client/xattr_manager.h"
+#include "curvefs/src/client/service/metrics_dumper.h"
 #include "curvefs/src/common/define.h"
 #include "src/client/client_common.h"
-#include "src/common/dummyserver.h"
 #include "src/common/net_common.h"
-
-#define PORT_LIMIT 65535
 
 using ::curvefs::client::filesystem::DirEntry;
 using ::curvefs::client::filesystem::DirEntryList;
@@ -59,16 +49,12 @@ using ::curvefs::client::filesystem::MAX_XATTR_VALUE_LENGTH;
 using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
 using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
 using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_PREFIX;
 using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
 using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
 using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
 using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
 using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
-using ::curvefs::common::S3Info;
-using ::curvefs::common::Volume;
 using ::curvefs::mds::FSStatusCode_Name;
-using ::curvefs::mds::topology::PartitionTxId;
 
 #define RETURN_IF_UNSUCCESS(action) \
   do {                              \
@@ -105,7 +91,6 @@ namespace curvefs {
 namespace client {
 
 using common::FLAGS_enableCto;
-using common::MetaCacheOpt;
 using rpcclient::ChannelManager;
 using rpcclient::Cli2ClientImpl;
 using rpcclient::MetaCache;
@@ -154,21 +139,6 @@ CURVEFS_ERROR FuseClient::Init(const FuseClientOption& option) {
   xattrManager_ = std::make_shared<XattrManager>(inodeManager_, dentryManager_,
                                                  option_.listDentryLimit,
                                                  option_.listDentryThreads);
-
-  uint32_t listenPort = 0;
-  if (!curve::common::StartBrpcDummyserver(option.dummyServerStartPort,
-                                           PORT_LIMIT, &listenPort)) {
-    return CURVEFS_ERROR::INTERNAL;
-  }
-
-  std::string localIp;
-  if (!curve::common::NetCommon::GetLocalIP(&localIp)) {
-    LOG(ERROR) << "Get local ip failed!";
-    return CURVEFS_ERROR::INTERNAL;
-  }
-  curve::client::ClientDummyServerInfo::GetInstance().SetPort(listenPort);
-  curve::client::ClientDummyServerInfo::GetInstance().SetIP(localIp);
-
   {
     ExternalMember member(dentryManager_, inodeManager_);
     fs_ = std::make_shared<FileSystem>(option_.fileSystemOption, member);
@@ -362,13 +332,13 @@ CURVEFS_ERROR FuseClient::FuseOpOpen(fuse_req_t req, fuse_ino_t ino,
     auto handler = fs_->NewHandler();
     fi->fh = handler->fh;
 
-    curve::common::MetricsDumper metricsDumper;
+    MetricsDumper metrics_dumper;
     bvar::DumpOptions opts;
     // opts.white_wildcards =
     // "dingofs_s3_adaptor_read_bps;dingofs_fuse_op_write_lat_qps";
     // opts.black_wildcards = "*var5";
-    int ret = bvar::Variable::dump_exposed(&metricsDumper, &opts);
-    std::string contents = metricsDumper.contents();
+    int ret = bvar::Variable::dump_exposed(&metrics_dumper, &opts);
+    std::string contents = metrics_dumper.Contents();
 
     size_t len = contents.size();
     if (len == 0) return CURVEFS_ERROR::NODATA;
@@ -461,9 +431,8 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
     return ret;
   }
 
-  VLOG(6) << "inodeManager CreateInode success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode
+  VLOG(6) << "inodeManager CreateInode success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode
           << ", inode id = " << inodeWrapper->GetInodeId();
 
   Dentry dentry;
@@ -492,15 +461,13 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
-  VLOG(6) << "dentryManager_ CreateDentry success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode;
+  VLOG(6) << "dentryManager_ CreateDentry success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode;
 
   if (enableSumInDir_.load()) {
     // update parent summary info
@@ -515,8 +482,7 @@ FuseClient::MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -558,9 +524,8 @@ CURVEFS_ERROR FuseClient::DeleteNode(uint64_t ino, fuse_ino_t parent,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kSubOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
@@ -633,9 +598,8 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
     return ret;
   }
 
-  VLOG(6) << "inodeManager CreateManageNode success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode
+  VLOG(6) << "inodeManager CreateManageNode success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode
           << ", inode id = " << inodeWrapper->GetInodeId();
 
   Dentry dentry;
@@ -665,15 +629,13 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
 
   ret = UpdateParentMCTimeAndNlink(parent, type, NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", parent: " << parent << ", name: " << name
-               << ", type: " << type;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", parent: " << parent
+               << ", name: " << name << ", type: " << type;
     return ret;
   }
 
-  VLOG(6) << "dentryManager_ CreateDentry success"
-          << ", parent = " << parent << ", name = " << name
-          << ", mode = " << mode;
+  VLOG(6) << "dentryManager_ CreateDentry success" << ", parent = " << parent
+          << ", name = " << name << ", mode = " << mode;
 
   if (enableSumInDir_.load()) {
     // update parent summary info
@@ -688,8 +650,7 @@ CURVEFS_ERROR FuseClient::CreateManageNode(fuse_req_t req, uint64_t parent,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -1072,8 +1033,7 @@ CURVEFS_ERROR FuseClient::FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino,
       for (const auto& it : inode->parent()) {
         auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, direction);
         if (tret != CURVEFS_ERROR::OK) {
-          LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                     << " inodeId = " << it
+          LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << it
                      << ", xattr = " << xattr.DebugString();
         }
       }
@@ -1279,9 +1239,9 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
   ret = UpdateParentMCTimeAndNlink(parent, FsFileType::TYPE_SYM_LINK,
                                    NlinkChange::kAddOne);
   if (ret != CURVEFS_ERROR::OK) {
-    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed"
-               << ", link:" << link << ", parent: " << parent
-               << ", name: " << name << ", type: " << FsFileType::TYPE_SYM_LINK;
+    LOG(ERROR) << "UpdateParentMCTimeAndNlink failed" << ", link:" << link
+               << ", parent: " << parent << ", name: " << name
+               << ", type: " << FsFileType::TYPE_SYM_LINK;
     return ret;
   }
 
@@ -1294,8 +1254,7 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
         {XATTR_DIR_FBYTES, std::to_string(inodeWrapper->GetLength())});
     auto tret = xattrManager_->UpdateParentInodeXattr(parent, xattr, true);
     if (tret != CURVEFS_ERROR::OK) {
-      LOG(ERROR) << "UpdateParentInodeXattr failed,"
-                 << " inodeId = " << parent
+      LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId = " << parent
                  << ", xattr = " << xattr.DebugString();
     }
   }
@@ -1436,8 +1395,7 @@ FuseClient::SetMountStatus(const struct MountOption* mountOption) {
   }
 
   LOG(INFO) << "Mount " << fsName << " on " << mountpoint_.ShortDebugString()
-            << " success!"
-            << " enableSumInDir = " << enableSumInDir_.load();
+            << " success!" << " enableSumInDir = " << enableSumInDir_.load();
 
   fsMetric_ = std::make_shared<FSMetric>(fsName);
 
@@ -1480,6 +1438,49 @@ void FuseClient::InitQosParam() {
   if (ret != 0) {
     LOG(ERROR) << "Create fuse client throttle timer failed!";
   }
+}
+
+static bool StartBrpcDummyserver(uint32_t start_port, uint32_t end_port,
+                                 uint32_t* listen_port) {
+  static std::once_flag flag;
+  std::call_once(flag, [&]() {
+    while (start_port < end_port) {
+      int ret = brpc::StartDummyServerAt(start_port);
+      if (ret >= 0) {
+        LOG(INFO) << "Start dummy server success, listen port = " << start_port;
+        *listen_port = start_port;
+        break;
+      }
+
+      ++start_port;
+    }
+  });
+
+  if (start_port >= end_port) {
+    LOG(ERROR) << "Start dummy server failed, start_port = " << start_port;
+    return false;
+  }
+
+  return true;
+}
+
+CURVEFS_ERROR FuseClient::InitBrpcServer() {
+  uint32_t listen_port = 0;
+  if (!StartBrpcDummyserver(option_.dummyServerStartPort, PORT_LIMIT,
+                            &listen_port)) {
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  std::string local_ip;
+  if (!curve::common::NetCommon::GetLocalIP(&local_ip)) {
+    LOG(ERROR) << "Get local ip failed!";
+    return CURVEFS_ERROR::INTERNAL;
+  }
+
+  curve::client::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
+  curve::client::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+
+  return CURVEFS_ERROR::OK;
 }
 
 }  // namespace client

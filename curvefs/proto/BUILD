@@ -126,3 +126,14 @@ proto_library(
     name = "curvefs_schedule_proto",
     srcs = ["schedule.proto"],
 )
+
+cc_proto_library(
+    name = "curvefs_client_h2_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":curvefs_client_h2_proto"],
+)
+
+proto_library(
+    name = "curvefs_client_h2_proto",
+    srcs = ["client_h2.proto"],
+)

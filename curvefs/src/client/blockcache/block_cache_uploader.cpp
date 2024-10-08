@@ -40,7 +40,7 @@ USING_FLAG(drop_page_cache);
 BlockCacheUploader::BlockCacheUploader(std::shared_ptr<CacheStore> store,
                                        std::shared_ptr<S3Client> s3,
                                        std::shared_ptr<Countdown> stage_count)
-    : store_(store), s3_(s3), stage_count_(stage_count) {
+    : running_(false), store_(store), s3_(s3), stage_count_(stage_count) {
   scan_stage_thread_pool_ =
       std::make_unique<TaskThreadPool<>>("scan_stage_worker");
   upload_stage_thread_pool_ =

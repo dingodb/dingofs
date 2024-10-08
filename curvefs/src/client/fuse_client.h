@@ -28,12 +28,8 @@
 #include <unistd.h>
 
 #include <atomic>
-#include <list>
-#include <map>
 #include <memory>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/proto/mds.pb.h"
@@ -41,7 +37,6 @@
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/dentry_cache_manager.h"
-#include "curvefs/src/client/dir_buffer.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/fuse_common.h"
@@ -53,11 +48,11 @@
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
 #include "curvefs/src/client/xattr_manager.h"
-#include "curvefs/src/common/define.h"
 #include "curvefs/src/common/fast_align.h"
-#include "curvefs/src/common/s3util.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/throttle.h"
+
+#define PORT_LIMIT 65535
 
 #define DirectIOAlignment 512
 
@@ -108,7 +103,7 @@ class FuseClient {
         mdsBase_(nullptr),
         isStop_(true) {}
 
-  virtual ~FuseClient() {}
+  virtual ~FuseClient() = default;
 
   FuseClient(const std::shared_ptr<MdsClient>& mdsClient,
              const std::shared_ptr<MetaServerClient>& metaClient,
@@ -346,6 +341,8 @@ class FuseClient {
         curve::client::ClientDummyServerInfo::GetInstance().GetPort());
     return 0;
   }
+
+  virtual CURVEFS_ERROR InitBrpcServer();
 
  private:
   virtual void FlushData() = 0;
