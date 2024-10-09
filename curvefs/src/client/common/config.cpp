@@ -359,7 +359,7 @@ void SplitDiskCacheOption(DiskCacheOption option,
     DiskCacheOption o = option;
     o.index = i;
     o.cache_dir = items[0];
-    o.cache_size = cache_size;
+    o.cache_size = cache_size * kMiB;
     options->emplace_back(o);
   }
 }
@@ -394,8 +394,6 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
                            &FLAGS_disk_cache_expire_second);
     c->GetValueFatalIfFail("disk_cache.drop_page_cache",
                            &FLAGS_drop_page_cache);
-
-    o.cache_size = o.cache_size * kMiB;
     SplitDiskCacheOption(o, &option->disk_cache_options);
   }
 

@@ -53,7 +53,7 @@ void DiskCacheWatcher::Start(UploadFunc uploader) {
   if (!running_.exchange(true)) {
     uploader_ = uploader;
     CHECK(task_pool_->Start(1) == 0);
-    task_pool_->Enqueue(&DiskCacheWatcher::CheckLockFile, this);
+    task_pool_->Enqueue(&DiskCacheWatcher::WatchingWorker, this);
   }
 }
 
@@ -63,16 +63,16 @@ void DiskCacheWatcher::Stop() {
   }
 }
 
-void DiskCacheWatcher::CheckLockFile() {
+void DiskCacheWatcher::WatchingWorker() {
   while (running_.load(std::memory_order_relaxed)) {
     for (size_t i = 0; i < watch_stores_.size(); i++) {
-      CheckOne(&watch_stores_[i]);
+      CheckLockFile(&watch_stores_[i]);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 }
 
-void DiskCacheWatcher::CheckOne(WatchStore* watch_store) {
+void DiskCacheWatcher::CheckLockFile(WatchStore* watch_store) {
   auto fs = NewTempLocalFileSystem();
   auto root_dir = watch_store->root_dir;
   auto layout = DiskCacheLayout(root_dir);

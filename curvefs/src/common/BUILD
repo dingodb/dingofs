@@ -34,6 +34,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/common:curve_common",
+        "//curvefs/src/client/blockcache:cachestore_lib",
         "@gflags//:gflags",
         "@glog//:glog",
     ],

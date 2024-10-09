@@ -17,6 +17,16 @@
 load("//:copts.bzl", "BASE_FLAGS", "CURVE_DEFAULT_COPTS")
 
 cc_library(
+    name = "cachestore_lib",
+    hdrs = [
+        "cache_store.h",
+        "error.h"
+    ],
+    copts = CURVE_DEFAULT_COPTS,
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "blockcache_lib",
     srcs = glob(["*.cpp"]),
     hdrs = glob(["*.h"]),

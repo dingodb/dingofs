@@ -47,18 +47,22 @@ using ::curvefs::client::common::BlockCacheOption;
 
 class BlockCacheMetricHelper {
  public:
-  static void PrintUploading(std::ostream& os, void* arg) {
-    auto* uploader = reinterpret_cast<BlockCacheUploader*>(arg);
+  static void PrintOnPending(std::ostream& os, void* arg) {
+    auto pending_queue =
+        reinterpret_cast<BlockCacheUploader*>(arg)->pending_queue_;
+
     struct StatBlocks stat;
-    uploader->uploading_queue_->Stat(&stat);
+    pending_queue->Stat(&stat);
     os << stat.num_total << "," << stat.num_from_cto << ","
        << stat.num_from_nocto << "," << stat.num_from_reload;
   }
 
-  static void PrintPending(std::ostream& os, void* arg) {
-    auto* uploader = reinterpret_cast<BlockCacheUploader*>(arg);
+  static void PrintOnUploading(std::ostream& os, void* arg) {
+    auto uploading_queue =
+        reinterpret_cast<BlockCacheUploader*>(arg)->uploading_queue_;
+
     struct StatBlocks stat;
-    uploader->pending_queue_->Stat(&stat);
+    uploading_queue->Stat(&stat);
     os << stat.num_total << "," << stat.num_from_cto << ","
        << stat.num_from_nocto << "," << stat.num_from_reload;
   }
@@ -90,39 +94,42 @@ class BlockCacheMetric {
   };
 
  public:
-  BlockCacheMetric(BlockCacheOption option, AuxMember aux_member)
-      : metric_("dingofs_block_cache", aux_member) {
+  BlockCacheMetric(BlockCacheOption option, AuxMember aux_members)
+      : metric_("dingofs_block_cache", aux_members) {
     metric_.upload_stage_workers.set_value(option.upload_stage_workers);
-    metric_.upload_stage_queue_size.set_value(option.upload_stage_queue_size);
+    metric_.upload_stage_queue_capacity.set_value(
+        option.upload_stage_queue_size);
   }
 
   virtual ~BlockCacheMetric() = default;
 
  private:
   struct Metric {
-    Metric(const std::string& prefix, AuxMember aux_member)
-        : upload_stage_workers(prefix, "upload_stage_workers", 0),
-          upload_stage_queue_size(prefix, "upload_stage_queue_size", 0),
+    Metric(const std::string& prefix, AuxMember aux_members)
+        :  // upload stage
+          upload_stage_workers(prefix, "upload_stage_workers", 0),
+          upload_stage_queue_capacity(prefix, "upload_stage_queue_capacity", 0),
           stage_blocks_on_pending(prefix, "stage_blocks_on_pending",
-                                  &BlockCacheMetricHelper::PrintPending,
-                                  aux_member.uploader.get()),
+                                  &BlockCacheMetricHelper::PrintOnPending,
+                                  aux_members.uploader.get()),
           stage_blocks_on_uploading(prefix, "stage_blocks_on_uploading",
-                                    &BlockCacheMetricHelper::PrintUploading,
-                                    aux_member.uploader.get()),
+                                    &BlockCacheMetricHelper::PrintOnUploading,
+                                    aux_members.uploader.get()),
+          // stage bandwidth throttle
           stage_bandwidth_throttle_enable(
               prefix, "stage_bandwidth_throttle_enable",
               &BlockCacheMetricHelper::IsThrottleEnable,
-              aux_member.throttle.get()),
+              aux_members.throttle.get()),
           stage_bandwidth_throttle_mb(prefix, "stage_bandwidth_throttle_mb",
                                       &BlockCacheMetricHelper::GetThrottleLimit,
-                                      aux_member.throttle.get()),
+                                      aux_members.throttle.get()),
           stage_bandwidth_throttle_overflow(
               prefix, "stage_bandwidth_throttle_overflow",
               &BlockCacheMetricHelper::IsThrottleOverflow,
-              aux_member.throttle.get()) {}
+              aux_members.throttle.get()) {}
 
     bvar::Status<uint32_t> upload_stage_workers;
-    bvar::Status<uint32_t> upload_stage_queue_size;
+    bvar::Status<uint32_t> upload_stage_queue_capacity;
     bvar::PassiveStatus<std::string> stage_blocks_on_pending;
     bvar::PassiveStatus<std::string> stage_blocks_on_uploading;
     bvar::PassiveStatus<bool> stage_bandwidth_throttle_enable;

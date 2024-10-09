@@ -60,9 +60,9 @@ class DiskCacheWatcher {
   void Stop();
 
  private:
-  void CheckLockFile();
+  void WatchingWorker();
 
-  void CheckOne(WatchStore* watch_store);
+  void CheckLockFile(WatchStore* watch_store);
 
   bool CheckUuId(const std::string& lock_path, const std::string& uuid);
 

@@ -26,37 +26,20 @@
 #include <cstdint>
 #include <string>
 
+#include "curvefs/src/client/blockcache/cache_store.h"
+
 namespace curvefs {
 namespace common {
 namespace s3util {
 
+using ::curvefs::client::blockcache::BlockKey;
+
 inline std::string GenObjName(uint64_t chunkid, uint64_t index,
                               uint64_t compaction, uint64_t fsid,
                               uint64_t inodeid, uint32_t objectPrefix) {
-  std::string objName;
-  if (objectPrefix == 0) {
-    objName = std::to_string(fsid) + "_" + std::to_string(inodeid) + "_" +
-              std::to_string(chunkid) + "_" + std::to_string(index) + "_" +
-              std::to_string(compaction);
-  } else if (objectPrefix == 1) {
-    objName = std::to_string(fsid) + "/" +
-              std::to_string(inodeid / 1000 / 1000) + "/" +
-              std::to_string(inodeid / 1000) + "/" + std::to_string(fsid) +
-              "_" + std::to_string(inodeid) + "_" + std::to_string(chunkid) +
-              "_" + std::to_string(index) + "_" + std::to_string(compaction);
-  } else {
-    objName = std::to_string(fsid) + "/" + std::to_string(inodeid % 256) + "/" +
-              std::to_string(inodeid / 1000) + "/" + std::to_string(fsid) +
-              "_" + std::to_string(inodeid) + "_" + std::to_string(chunkid) +
-              "_" + std::to_string(index) + "_" + std::to_string(compaction);
-  }
-  return objName;
+  BlockKey key(fsid, inodeid, chunkid, index, compaction);
+  return key.StoreKey();
 }
-
-bool ValidNameOfInode(const std::string& inode, const std::string& objName,
-                      uint32_t objectPrefix);
-
-std::string GenPathByObjName(const std::string& objName, uint32_t objectPrefix);
 
 }  // namespace s3util
 }  // namespace common
