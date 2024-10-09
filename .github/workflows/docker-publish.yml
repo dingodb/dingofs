@@ -5,26 +5,64 @@ on:
     workflows: ["CI Build"]
     types:
       - completed
-  push:
-    tags:
-      - '*'
 
 jobs:
   docker:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Download artifact
+    - name: Download event type file
+      uses: actions/download-artifact@v4
+      with:
+        name: event
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GH_TOKEN }}
+        path: ./
+
+    - name: Download tag name file
+      if: ${{ env.EVENT == 'tag' }}
+      uses: actions/download-artifact@v4
+      with:
+        name: tag_name
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GH_TOKEN }}
+        path: ./
+
+    - name: Download dingofs artifact
       uses: actions/download-artifact@v4
       with:
         name: dingofs
         run-id: ${{ github.event.workflow_run.id }}
         github-token: ${{ secrets.GH_TOKEN }}
         path: ./
+
+    - name: Config trigger event env
+      run: |
+        if [ -f event.txt ]; then
+          echo "EVENT=$(cat event.txt)" >> $GITHUB_ENV
+        fi
+
+    - name: Config push tag env
+      if: ${{ env.EVENT == 'tag' }}
+      run: |
+        if [ -f tag_name.txt ]; then
+          echo "TAG_NAME=$(cat tag_name.txt)" >> $GITHUB_ENV
+        fi
+    
+    - name: Print env info
+      run: |
+        echo "trigger event type is ${{ env.EVENT }}"
+        if [ "${{ env.EVENT }}" == "pull_request" ]; then
+          echo "pull request haven't merged, not need to publish image."
+          exit 0
+        fi
+        if [ -n "${{ env.TAG_NAME }}" ]; then
+          echo "tag name is ${{ env.TAG_NAME }}"
+        fi
 
     - name: List directory contents after download
       run: ls -la
@@ -47,7 +85,7 @@ jobs:
       with:
         images: dingodatabase/dingofs
         tags: |
-          type=ref,event=tag
+          type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
           type=raw,value=latest,enable={{is_default_branch}}
           type=sha,prefix=,format=long
 
