@@ -12,7 +12,7 @@
 	url = https://github.com/albertito/libfiu
 [submodule "thirdparties/brpc/brpc"]
 	path = third-party/brpc
-	url = https://github.com/dingodb/brpc
+	url = https://github.com/apache/brpc.git
 [submodule "thirdparties/braft/braft"]
 	path = third-party/braft
 	url = https://github.com/dingodb/braft
