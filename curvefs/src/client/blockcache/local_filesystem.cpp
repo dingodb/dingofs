@@ -82,6 +82,9 @@ BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,
     case EEXIST:
       rc = BCACHE_ERROR::EXISTS;
       break;
+    case EINVAL:
+      rc = BCACHE_ERROR::INVALID_ARGUMENT;
+      break;
     default:  // IO error
       break;
   }
@@ -150,9 +153,9 @@ BCACHE_ERROR PosixFileSystem::CloseDir(::DIR* dir) {
 }
 
 BCACHE_ERROR PosixFileSystem::Create(const std::string& path, int* fd,
-                                     bool io_direct) {
+                                     bool use_direct) {
   int flags = O_TRUNC | O_WRONLY | O_CREAT;
-  if (io_direct) {
+  if (use_direct) {
     flags = flags | O_DIRECT;
   }
   *fd = ::open(path.c_str(), flags, 0644);
@@ -324,7 +327,8 @@ BCACHE_ERROR LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
 }
 
 BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
-                                        const char* buffer, size_t length) {
+                                        const char* buffer, size_t length,
+                                        bool use_direct) {
   auto rc = MkDirs(ParentDir(path));
   if (rc != BCACHE_ERROR::OK) {
     return rc;
@@ -332,8 +336,10 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
 
   int fd;
   std::string tmp = path + ".tmp";
-  bool use_direct =
-      IsAligned(length) && IsAligned(reinterpret_cast<std::uintptr_t>(buffer));
+  if (use_direct) {
+    use_direct = IsAligned(length) &&
+                 IsAligned(reinterpret_cast<std::uintptr_t>(buffer));
+  }
   rc = posix_->Create(tmp, &fd, use_direct);
   if (rc == BCACHE_ERROR::OK) {
     rc = posix_->Write(fd, buffer, length);

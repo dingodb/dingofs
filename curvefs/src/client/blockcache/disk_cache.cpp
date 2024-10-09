@@ -30,6 +30,7 @@
 #include "curvefs/src/base/string/string.h"
 #include "curvefs/src/base/time/time.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
+#include "curvefs/src/client/blockcache/disk_cache_layout.h"
 #include "curvefs/src/client/blockcache/disk_cache_manager.h"
 #include "curvefs/src/client/blockcache/disk_cache_metric.h"
 #include "curvefs/src/client/blockcache/error.h"
@@ -74,7 +75,7 @@ void BlockReaderImpl::Close() {
 }
 
 DiskCache::DiskCache(DiskCacheOption option)
-    : option_(option), running_(false) {
+    : option_(option), running_(false), use_direct_write_(false) {
   metric_ = std::make_shared<DiskCacheMetric>(option);
   layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
   disk_state_machine_ = std::make_shared<DiskStateMachineImpl>();
@@ -98,6 +99,10 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
       return rc;
     }
   }
+
+  // Detect filesystem whether support direct IO,
+  // filesystem like tmpfs (/dev/shm) will not support it.
+  DetectDirectIO();
 
   uploader_ = uploader;  // uploader callback
   metric_->Init();
@@ -152,7 +157,7 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
   timer.NextPhase(Phase::WRITE_FILE);
   std::string stage_path(GetStagePath(key));
   std::string cache_path(GetCachePath(key));
-  rc = fs_->WriteFile(stage_path, block.data, block.size);
+  rc = fs_->WriteFile(stage_path, block.data, block.size, use_direct_write_);
   if (rc != BCACHE_ERROR::OK) {
     return rc;
   }
@@ -203,7 +208,8 @@ BCACHE_ERROR DiskCache::Cache(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::WRITE_FILE);
-  rc = fs_->WriteFile(GetCachePath(key), block.data, block.size);
+  rc = fs_->WriteFile(GetCachePath(key), block.data, block.size,
+                      use_direct_write_);
   if (rc != BCACHE_ERROR::OK) {
     return rc;
   }
@@ -291,6 +297,28 @@ BCACHE_ERROR DiskCache::LoadLockFile() {
     rc = fs_->WriteFile(lock_path, uuid_.c_str(), uuid_.size());
   }
   return rc;
+}
+
+void DiskCache::DetectDirectIO() {
+  std::string filepath = layout_->GetDetectPath();
+  auto rc = fs_->Do([filepath](const std::shared_ptr<PosixFileSystem> posix) {
+    int fd;
+    auto rc = posix->Create(filepath, &fd, true);
+    posix->Close(fd);
+    posix->Unlink(filepath);
+    return rc;
+  });
+
+  if (rc == BCACHE_ERROR::OK) {
+    use_direct_write_ = true;
+    LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
+              << ") supports direct IO.";
+  } else {
+    use_direct_write_ = false;
+    LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
+              << ") not support direct IO, using buffer IO, detect rc = " << rc;
+  }
+  metric_->SetUseDirectWrite(use_direct_write_);
 }
 
 // Check cache status:

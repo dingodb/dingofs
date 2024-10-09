@@ -32,6 +32,7 @@ namespace blockcache {
 
 enum class BCACHE_ERROR {
   OK,
+  INVALID_ARGUMENT,
   NOT_FOUND,
   EXISTS,
   NOT_DIRECTORY,

@@ -31,6 +31,7 @@ namespace blockcache {
 
 static const std::unordered_map<BCACHE_ERROR, std::string> errors = {
     {BCACHE_ERROR::OK, "OK"},
+    {BCACHE_ERROR::INVALID_ARGUMENT, "invalid argument"},
     {BCACHE_ERROR::NOT_FOUND, "not found"},
     {BCACHE_ERROR::EXISTS, "already exists"},
     {BCACHE_ERROR::NOT_DIRECTORY, "not a directory"},

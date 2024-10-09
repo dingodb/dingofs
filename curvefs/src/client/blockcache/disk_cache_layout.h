@@ -59,6 +59,7 @@ using ::curvefs::base::filepath::PathJoin;
  *   |               ├── 2_21626898_4096_0_0
  *   |               └── 2_21626898_4097_0_0
  *   ├── probe
+ *   ├── .detect
  *   └── .lock
  */
 class DiskCacheLayout {
@@ -72,6 +73,8 @@ class DiskCacheLayout {
   std::string GetCacheDir() const { return PathJoin({root_dir_, "cache"}); }
 
   std::string GetProbeDir() const { return PathJoin({root_dir_, "probe"}); }
+
+  std::string GetDetectPath() const { return PathJoin({root_dir_, ".detect"}); }
 
   std::string GetLockPath() const { return PathJoin({root_dir_, ".lock"}); }
 

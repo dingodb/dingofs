@@ -94,6 +94,8 @@ class DiskCache : public CacheStore {
 
   BCACHE_ERROR LoadLockFile();
 
+  void DetectDirectIO();
+
   // check running status, disk healthy and disk free space
   BCACHE_ERROR Check(uint8_t want);
 
@@ -123,6 +125,7 @@ class DiskCache : public CacheStore {
   std::shared_ptr<LocalFileSystem> fs_;
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
+  bool use_direct_write_;
 };
 
 }  // namespace blockcache

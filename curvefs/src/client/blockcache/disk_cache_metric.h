@@ -75,6 +75,7 @@ class DiskCacheMetric {
     metric_.cache_blocks.reset();
     metric_.cache_bytes.reset();
     metric_.cache_full.set_value(false);
+    metric_.use_direct_write.set_value(false);
   }
 
   void SetUuid(const std::string& value) { metric_.uuid.set_value(value); }
@@ -116,6 +117,10 @@ class DiskCacheMetric {
 
   void SetCacheFull(bool is_full) { metric_.cache_full.set_value(is_full); }
 
+  void SetUseDirectWrite(bool use_direct_write) {
+    metric_.use_direct_write.set_value(use_direct_write);
+  }
+
  private:
   struct Metric {
     Metric(const std::string& prefix) {
@@ -134,6 +139,7 @@ class DiskCacheMetric {
       cache_blocks.expose_as(prefix, "cache_blocks");
       cache_bytes.expose_as(prefix, "cache_bytes");
       cache_full.expose_as(prefix, "cache_full");
+      use_direct_write.expose_as(prefix, "use_direct_write");
     }
 
     bvar::Status<std::string> uuid;
@@ -151,6 +157,7 @@ class DiskCacheMetric {
     bvar::Adder<int64_t> cache_blocks;
     bvar::Adder<int64_t> cache_bytes;
     bvar::Status<bool> cache_full;
+    bvar::Status<bool> use_direct_write;
   };
 
   DiskCacheOption option_;

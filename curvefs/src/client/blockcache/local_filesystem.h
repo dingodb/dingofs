@@ -59,7 +59,7 @@ class PosixFileSystem {
 
   BCACHE_ERROR CloseDir(::DIR* dir);
 
-  BCACHE_ERROR Create(const std::string& path, int* fd, bool io_direct);
+  BCACHE_ERROR Create(const std::string& path, int* fd, bool use_direct);
 
   BCACHE_ERROR Open(const std::string& path, int flags, int* fd);
 
@@ -132,7 +132,7 @@ class LocalFileSystem {
   BCACHE_ERROR Walk(const std::string& prefix, WalkFunc func);
 
   BCACHE_ERROR WriteFile(const std::string& path, const char* buffer,
-                         size_t length);
+                         size_t length, bool use_direct = false);
 
   BCACHE_ERROR ReadFile(const std::string& path, std::shared_ptr<char>& buffer,
                         size_t* length, bool drop_page_cache = false);
