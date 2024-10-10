@@ -215,13 +215,15 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del, DeleteFrom from) {
   for (const auto& item : to_del) {
     CacheKey key = item.key;
     CacheValue value = item.value;
-    auto rc = fs_->RemoveFile(GetCachePath(key));
+    std::string cache_path = GetCachePath(key);
+    auto rc = fs_->RemoveFile(cache_path);
     if (rc == BCACHE_ERROR::NOT_FOUND) {
-      LOG(WARNING) << "Cache block " << key.Filename() << " already deleted.";
+      LOG(WARNING) << "Cache block (path=" << cache_path
+                   << ") already deleted.";
       continue;
     } else if (rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Delete cache block " << key.Filename()
-                 << " failed: " << StrErr(rc);
+      LOG(ERROR) << "Delete cache block (path=" << cache_path
+                 << ") failed: " << StrErr(rc);
       continue;
     }
 

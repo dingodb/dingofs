@@ -86,6 +86,12 @@ class Cache {
   // REQUIRES: handle must have been returned by a method on *this.
   virtual void Release(Handle* handle) = 0;
 
+  // Return the key encapsulated in a handle returned by a
+  // successful Lookup().
+  // REQUIRES: handle must not have been released yet.
+  // REQUIRES: handle must have been returned by a method on *this.
+  virtual std::string_view Key(Handle* handle) = 0;
+
   // Return the value encapsulated in a handle returned by a
   // successful Lookup().
   // REQUIRES: handle must not have been released yet.

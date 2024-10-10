@@ -76,14 +76,14 @@ BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,
     case 0:
       rc = BCACHE_ERROR::OK;
       break;
+    case EINVAL:
+      rc = BCACHE_ERROR::INVALID_ARGUMENT;
+      break;
     case ENOENT:
       rc = BCACHE_ERROR::NOT_FOUND;
       break;
     case EEXIST:
       rc = BCACHE_ERROR::EXISTS;
-      break;
-    case EINVAL:
-      rc = BCACHE_ERROR::INVALID_ARGUMENT;
       break;
     default:  // IO error
       break;
@@ -92,7 +92,7 @@ BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,
   // log & update disk state
   std::ostringstream message;
   message << StrFormat(format, args...) << ": " << ::strerror(code);
-  if (rc == BCACHE_ERROR::IO_ERROR) {
+  if (rc == BCACHE_ERROR::IO_ERROR || rc == BCACHE_ERROR::INVALID_ARGUMENT) {
     LOG(ERROR) << message.str();
   } else if (rc == BCACHE_ERROR::NOT_FOUND) {
     LOG(WARNING) << message.str();

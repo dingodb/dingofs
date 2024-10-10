@@ -22,6 +22,8 @@
 
 #include "curvefs/src/client/blockcache/lru_cache.h"
 
+#include <glog/logging.h>
+
 #include <cassert>
 #include <memory>
 
@@ -36,7 +38,10 @@ namespace blockcache {
 using ::curvefs::base::cache::NewLRUCache;
 using ::curvefs::base::time::TimeNow;
 
-CacheItems LRUCache::evicted_items_;
+static void FreeNode(const std::string_view&, void* value) {
+  ListNode* node = reinterpret_cast<ListNode*>(value);
+  delete node;
+}
 
 LRUCache::LRUCache() {
   // naming hash? yeah, it manage kv mapping and value's life cycle
@@ -71,14 +76,11 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
 }
 
 CacheItems LRUCache::Evict(FilterFunc filter) {
-  evicted_items_ = CacheItems();
-  if (EvictNode(&inactive_, filter)) {  // continue
-    EvictNode(&active_, filter);
+  CacheItems evicted;
+  if (EvictNode(&inactive_, filter, &evicted)) {  // continue
+    EvictNode(&active_, filter, &evicted);
   }
-
-  CacheItems out;
-  out.swap(evicted_items_);
-  return out;
+  return evicted;
 }
 
 size_t LRUCache::Size() { return hash_->TotalCharge(); }
@@ -86,55 +88,10 @@ size_t LRUCache::Size() { return hash_->TotalCharge(); }
 void LRUCache::Clear() {
   EvictAllNodes(&inactive_);
   EvictAllNodes(&active_);
-  evicted_items_.clear();
-}
-
-void LRUCache::EvictAllNodes(ListNode* list) {
-  ListNode* curr = list->next;
-  while (curr != list) {
-    ListNode* next = curr->next;
-    ListRemove(curr);
-    Delete(curr);
-    curr = next;
-  }
-}
-
-bool LRUCache::EvictNode(ListNode* list, FilterFunc filter) {
-  ListNode* curr = list->next;
-  while (curr != list) {
-    ListNode* next = curr->next;
-    auto rc = filter(curr->value);
-    if (rc == FilterStatus::EVICT_IT) {
-      ListRemove(curr);
-      Delete(curr);
-    } else if (rc == FilterStatus::SKIP) {
-      // do nothing
-    } else if (rc == FilterStatus::FINISH) {
-      return false;
-    } else {
-      assert(false);  // never happen
-    }
-
-    curr = next;
-  }
-  return true;
-}
-
-void LRUCache::DeleteNode(const std::string_view& key, void* value) {
-  ListNode* node = reinterpret_cast<ListNode*>(value);
-
-  CacheKey k;
-  bool ok = k.ParseFilename(key);
-  if (!ok) {
-    assert(ok);
-  }
-  evicted_items_.emplace_back(CacheItem(k, node->value));
-
-  delete node;
 }
 
 void LRUCache::Insert(const std::string& key, ListNode* node) {
-  auto* handle = hash_->Insert(key, node, 1, &LRUCache::DeleteNode);
+  auto* handle = hash_->Insert(key, node, 1, &FreeNode);
   node->handle = handle;
 }
 
@@ -151,6 +108,47 @@ bool LRUCache::Lookup(const std::string& key, ListNode** node) {
 void LRUCache::Delete(ListNode* node) {
   hash_->Release(node->handle);
   hash_->Prune();  // invoke DeleteNode for all evitected cache node
+}
+
+CacheItem LRUCache::KV(ListNode* node) {
+  CacheKey key;
+  // we use CacheKey.Filename() as hash key
+  auto filename = hash_->Key(node->handle);
+  CHECK(key.ParseFilename(filename));
+  return CacheItem(key, node->value);
+}
+
+bool LRUCache::EvictNode(ListNode* list, FilterFunc filter,
+                         CacheItems* evicted) {
+  ListNode* curr = list->next;
+  while (curr != list) {
+    ListNode* next = curr->next;
+    auto rc = filter(curr->value);
+    if (rc == FilterStatus::EVICT_IT) {
+      evicted->emplace_back(KV(curr));
+      ListRemove(curr);
+      Delete(curr);
+    } else if (rc == FilterStatus::SKIP) {
+      // do nothing
+    } else if (rc == FilterStatus::FINISH) {
+      return false;
+    } else {
+      CHECK(false);  // never happen
+    }
+
+    curr = next;
+  }
+  return true;
+}
+
+void LRUCache::EvictAllNodes(ListNode* list) {
+  ListNode* curr = list->next;
+  while (curr != list) {
+    ListNode* next = curr->next;
+    ListRemove(curr);
+    Delete(curr);
+    curr = next;
+  }
 }
 
 }  // namespace blockcache

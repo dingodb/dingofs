@@ -39,7 +39,9 @@ enum class FilterStatus {
   FINISH,
 };
 
-// protect by DiskCacheManager
+// How it implements:
+//  hash table: using base::Cache
+//  lru policy: manage inactive and active list
 class LRUCache {
   using FilterFunc = std::function<FilterStatus(const CacheValue& value)>;
 
@@ -59,23 +61,23 @@ class LRUCache {
   virtual void Clear();
 
  private:
-  void EvictAllNodes(ListNode* list);
-
-  bool EvictNode(ListNode* list, FilterFunc filter);
-
-  static void DeleteNode(const std::string_view& key, void* value);
-
   void Insert(const std::string& key, ListNode* node);
 
   bool Lookup(const std::string& key, ListNode** node);
 
   void Delete(ListNode* node);
 
+  CacheItem KV(ListNode* node);
+
+  // return true if should continue to evict
+  bool EvictNode(ListNode* list, FilterFunc filter, CacheItems* evicted);
+
+  void EvictAllNodes(ListNode* list);
+
  private:
   Cache* hash_;  // mapping: CacheKey -> ListNode*
   ListNode active_;
   ListNode inactive_;
-  static CacheItems evicted_items_;
 };
 
 }  // namespace blockcache

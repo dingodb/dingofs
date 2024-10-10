@@ -162,16 +162,15 @@ void BlockCacheUploader::UploadStageBlock(const StageBlock& stage_block) {
 BCACHE_ERROR BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
                                            std::shared_ptr<char>& buffer,
                                            size_t* length) {
-  auto key = stage_block.key;
   auto stage_path = stage_block.stage_path;
   auto fs = NewTempLocalFileSystem();
   auto rc = fs->ReadFile(stage_path, buffer, length, FLAGS_drop_page_cache);
   if (rc == BCACHE_ERROR::NOT_FOUND) {
-    LOG(ERROR) << "Stage block (" << key.Filename()
-               << ") already deleted, drop it!";
+    LOG(ERROR) << "Stage block (path=" << stage_path
+               << ") already deleted, abort upload!";
   } else if (rc != BCACHE_ERROR::OK) {
-    LOG(ERROR) << "Read stage block (" << key.Filename()
-               << ") failed: " << StrErr(rc);
+    LOG(ERROR) << "Read stage block (path=" << stage_path
+               << ") failed: " << StrErr(rc) << ", abort upload!";
   }
   return rc;
 }
@@ -187,17 +186,20 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
       return true;  // retry
     }
 
-    auto rc = store_->RemoveStage(key);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Remove stage block (" << key.Filename()
-                 << ") failed: " << StrErr(rc);
-    }
-
+    RemoveBlock(stage_block);
     Uploaded(stage_block, true);
     Log(stage_block, length, BCACHE_ERROR::OK, timer);
     return false;
   };
   s3_->AsyncPut(stage_block.key.StoreKey(), buffer.get(), length, retry_cb);
+}
+
+void BlockCacheUploader::RemoveBlock(const StageBlock& stage_block) {
+  auto rc = store_->RemoveStage(stage_block.key);
+  if (rc != BCACHE_ERROR::OK) {
+    LOG(WARNING) << "Remove stage block (path=" << stage_block.stage_path
+                 << ") after upload failed: " << StrErr(rc);
+  }
 }
 
 void BlockCacheUploader::Staging(const StageBlock& stage_block) {

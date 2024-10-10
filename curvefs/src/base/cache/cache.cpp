@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <string_view>
 
 namespace curvefs {
 namespace base {
@@ -455,6 +456,10 @@ class ShardedLRUCache : public Cache {
   void Erase(const std::string_view& key) override {
     const uint32_t hash = HashSlice(key);
     shard_[Shard(hash)].Erase(key, hash);
+  }
+
+  std::string_view Key(Handle* handle) override {
+    return reinterpret_cast<LRUHandle*>(handle)->key();
   }
 
   void* Value(Handle* handle) override {

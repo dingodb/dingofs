@@ -100,12 +100,10 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
     }
   }
 
-  // Detect filesystem whether support direct IO,
-  // filesystem like tmpfs (/dev/shm) will not support it.
-  DetectDirectIO();
-
-  uploader_ = uploader;  // uploader callback
-  metric_->Init();
+  uploader_ = uploader;
+  metric_->Init();   // For restart
+  DetectDirectIO();  // Detect filesystem whether support direct IO, filesystem
+                     // like tmpfs (/dev/shm) will not support it.
   disk_state_machine_->Start();         // monitor disk state
   disk_state_health_checker_->Start();  // probe disk health
   manager_->Start();                    // manage disk capacity, cache expire

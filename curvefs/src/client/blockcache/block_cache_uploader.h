@@ -79,6 +79,8 @@ class BlockCacheUploader {
   void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
                    size_t length, PhaseTimer timer);
 
+  void RemoveBlock(const StageBlock& stage_block);
+
   void Staging(const StageBlock& stage_block);
 
   void Uploaded(const StageBlock& stage_block, bool success);
