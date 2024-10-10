@@ -75,7 +75,7 @@ install_pkg $1 $prefix
 install_pkg $1 $prefix etcd
 install_pkg $1 $prefix monitor
 
-#if [ "$1" == "fs" ];then 
+#if [ "$1" == "fs" ];then
 #    copy_file ./thirdparties/memcache/libmemcached-1.1.2/build-libmemcached/src/libmemcached/libmemcached.so $docker_prefix
 #    copy_file ./thirdparties/memcache/libmemcached-1.1.2/build-libmemcached/src/libmemcached/libmemcached.so.11 $docker_prefix
 #    copy_file ./thirdparties/memcache/libmemcached-1.1.2/build-libmemcached/src/libhashkit/libhashkit.so.2 $docker_prefix
@@ -110,5 +110,6 @@ done
 cp conf/client.conf $prefix/conf/curvebs-client.conf
 cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 
-docker pull dingodatabase/dingofs-base:$3
-docker build --no-cache -t "$2" "$docker_prefix"
+g_docker="${CURVE_DOCKER:=docker}"
+${g_docker} pull dingodatabase/dingofs-base:$3
+${g_docker} build --no-cache -t "$2" "$docker_prefix"

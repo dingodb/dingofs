@@ -23,6 +23,8 @@
 #ifndef CURVEFS_SRC_CLIENT_BLOCKCACHE_CACHE_STORE_H_
 #define CURVEFS_SRC_CLIENT_BLOCKCACHE_CACHE_STORE_H_
 
+#include <glog/logging.h>
+
 #include <functional>
 #include <string>
 
@@ -81,7 +83,15 @@ enum class BlockFrom {
 struct BlockContext {
   BlockContext(BlockFrom from) : from(from) {}
 
+  BlockContext(BlockFrom from, const std::string& store_id)
+      : from(from), store_id(store_id) {
+    if (!store_id.empty()) {  // Only for block which from reload
+      CHECK(from == BlockFrom::RELOAD);
+    }
+  }
+
   BlockFrom from;
+  std::string store_id;
 };
 
 class BlockReader {
@@ -104,7 +114,7 @@ class CacheStore {
   virtual BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
                              BlockContext ctx) = 0;
 
-  virtual BCACHE_ERROR RemoveStage(const BlockKey& key) = 0;
+  virtual BCACHE_ERROR RemoveStage(const BlockKey& key, BlockContext ctx) = 0;
 
   virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
 

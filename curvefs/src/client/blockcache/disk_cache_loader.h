@@ -55,7 +55,7 @@ class DiskCacheLoader {
 
   virtual ~DiskCacheLoader() = default;
 
-  virtual void Start(UploadFunc uploader);
+  virtual void Start(const std::string& disk_id, UploadFunc uploader);
 
   virtual void Stop();
 
@@ -70,6 +70,7 @@ class DiskCacheLoader {
   std::string ToString(BlockType type);
 
  private:
+  std::string disk_id_;
   UploadFunc uploader_;
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheLayout> layout_;
