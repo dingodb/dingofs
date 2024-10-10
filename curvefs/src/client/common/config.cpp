@@ -354,6 +354,8 @@ void SplitDiskCacheOption(DiskCacheOption option,
     if (items.size() > 2 ||
         (items.size() == 2 && !Str2Int(items[1], &cache_size))) {
       CHECK(false) << "Invalid cache dir: " << dirs[i];
+    } else if (cache_size == 0) {
+      CHECK(false) << "Cache size must greater than 0.";
     }
 
     DiskCacheOption o = option;
@@ -394,7 +396,9 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
                            &FLAGS_disk_cache_expire_second);
     c->GetValueFatalIfFail("disk_cache.drop_page_cache",
                            &FLAGS_drop_page_cache);
-    SplitDiskCacheOption(o, &option->disk_cache_options);
+    if (option->cache_store == "disk") {
+      SplitDiskCacheOption(o, &option->disk_cache_options);
+    }
   }
 
   {  // disk state option
