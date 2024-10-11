@@ -88,8 +88,20 @@ BCACHE_ERROR DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
   return rc;
 }
 
-BCACHE_ERROR DiskCacheGroup::RemoveStage(const BlockKey& key) {
-  return GetStore(key)->RemoveStage(key);
+BCACHE_ERROR DiskCacheGroup::RemoveStage(const BlockKey& key,
+                                         BlockContext ctx) {
+  auto store = GetStore(key);
+
+  // We should pass the request to specified store if |ctx.store_id|
+  // is not empty, because add/delete cache will leads the consistent hash
+  // changed. so when we restart the store after add/delete some stores, the
+  // stage block will be reloaded by one store to upload, but the RemoveStage
+  // request maybe pass to another store to handle after upload success.
+  if (!ctx.store_id.empty()) {
+    store = stores_[ctx.store_id];
+    CHECK(store != nullptr);
+  }
+  return store->RemoveStage(key, ctx);
 }
 
 BCACHE_ERROR DiskCacheGroup::Cache(const BlockKey& key, const Block& block) {

@@ -195,7 +195,7 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
 }
 
 void BlockCacheUploader::RemoveBlock(const StageBlock& stage_block) {
-  auto rc = store_->RemoveStage(stage_block.key);
+  auto rc = store_->RemoveStage(stage_block.key, stage_block.ctx);
   if (rc != BCACHE_ERROR::OK) {
     LOG(WARNING) << "Remove stage block (path=" << stage_block.stage_path
                  << ") after upload failed: " << StrErr(rc);

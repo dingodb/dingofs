@@ -46,7 +46,7 @@ class MemCache : public CacheStore {
     return BCACHE_ERROR::NOT_SUPPORTED;
   }
 
-  BCACHE_ERROR RemoveStage(const BlockKey&) override {
+  BCACHE_ERROR RemoveStage(const BlockKey&, BlockContext) override {
     return BCACHE_ERROR::NOT_SUPPORTED;
   }
 

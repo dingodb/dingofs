@@ -78,7 +78,7 @@ class DiskCache : public CacheStore {
   BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
                      BlockContext ctx) override;
 
-  BCACHE_ERROR RemoveStage(const BlockKey& key) override;
+  BCACHE_ERROR RemoveStage(const BlockKey& key, BlockContext ctx) override;
 
   BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
 

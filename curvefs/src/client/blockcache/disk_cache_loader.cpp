@@ -50,11 +50,13 @@ DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
       metric_(metric),
       task_pool_(absl::make_unique<TaskThreadPool<>>("disk_cache_loader")) {}
 
-void DiskCacheLoader::Start(CacheStore::UploadFunc uploader) {
+void DiskCacheLoader::Start(const std::string& disk_id,
+                            CacheStore::UploadFunc uploader) {
   if (running_.exchange(true)) {
     return;  // already running
   }
 
+  disk_id_ = disk_id;
   uploader_ = uploader;
   task_pool_->Start(2);
   task_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
@@ -126,17 +128,19 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
   std::string path = PathJoin({prefix, name});
 
   if (HasSuffix(name, ".tmp") || !key.ParseFilename(name)) {
-    LOG(INFO) << "Remove invalid block, filename=" << name;
     auto rc = fs_->RemoveFile(path);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(WARNING) << "Remove invalid block failed: " << StrErr(rc);
+    if (rc == BCACHE_ERROR::OK) {
+      LOG(INFO) << "Remove invalid block (path=" << path << ") success.";
+    } else {
+      LOG(WARNING) << "Remove invalid block (path=" << path
+                   << ") failed: " << StrErr(rc);
     }
     return false;
   }
 
   if (type == BlockType::STAGE_BLOCK) {
     metric_->AddStageBlock(1);
-    uploader_(key, path, BlockContext(BlockFrom::RELOAD));
+    uploader_(key, path, BlockContext(BlockFrom::RELOAD, disk_id_));
   } else if (type == BlockType::CACHE_BLOCK) {
     manager_->Add(key, CacheValue(file.size, file.atime));
   }

@@ -107,7 +107,7 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
   disk_state_machine_->Start();         // monitor disk state
   disk_state_health_checker_->Start();  // probe disk health
   manager_->Start();                    // manage disk capacity, cache expire
-  loader_->Start(uploader);             // load stage and cache block
+  loader_->Start(uuid_, uploader);      // load stage and cache block
   metric_->SetUuid(uuid_);
   metric_->SetCacheStatus(kCacheUp);
 
@@ -176,7 +176,7 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
   return rc;
 }
 
-BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key) {
+BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key, BlockContext ctx) {
   BCACHE_ERROR rc;
   auto metric_guard = ::absl::MakeCleanup([&] {
     if (rc == BCACHE_ERROR::OK) {
@@ -187,7 +187,8 @@ BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key) {
     return StrFormat("removestage(%s): %s", key.Filename(), StrErr(rc));
   });
 
-  // TODO(@Wine93): Should we invoke Check(WANT_EXEC)?
+  // NOTE: we will try to delete stage file even if the disk cache
+  //       is down or unhealthy, so we remove the Check(...) here.
   rc = fs_->RemoveFile(GetStagePath(key));
   return rc;
 }
