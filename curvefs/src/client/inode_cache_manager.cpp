@@ -74,6 +74,7 @@ InodeCacheManagerImpl::GetInode(uint64_t inodeId,
   NameLockGuard lock(nameLock_, std::to_string(inodeId));
   bool yes = openFiles_->IsOpened(inodeId, &out);
   if (yes) {
+    VLOG(3) << "GetInode from openFiles, inodeId:" << inodeId;
     return CURVEFS_ERROR::OK;
   }
 
@@ -87,6 +88,7 @@ InodeCacheManagerImpl::GetInode(uint64_t inodeId,
 
   // refresh data
   REFRESH_DATA_REMOTE(out, streaming);
+  VLOG(3) << "GetInode from metaserver, inodeId:" << inodeId;
 
   return CURVEFS_ERROR::OK;
 }

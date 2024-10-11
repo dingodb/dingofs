@@ -58,7 +58,8 @@ void InodeObjectsService::default_method(
         return;
       } else {
         Inode inode = inode_wrapper->GetInode();
-        FlatFile flat_file(inode.fsid(), inode.inodeid());
+        FlatFile flat_file(inode.fsid(), inode.inodeid(),
+                           s3_adapter_->GetBlockSize());
 
         for (const auto& chunk : inode.s3chunkinfomap()) {
           uint64_t chunk_index = chunk.first;

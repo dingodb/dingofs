@@ -24,6 +24,7 @@
 
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/filesystem/xattr.h"
+#include "glog/logging.h"
 #include "src/common/string_util.h"
 
 namespace curvefs {
@@ -454,9 +455,9 @@ CURVEFS_ERROR XattrManager::GetXattr(const char* name, std::string* value,
 CURVEFS_ERROR XattrManager::UpdateParentInodeXattr(uint64_t parentId,
                                                    const XAttr& xattr,
                                                    bool direction) {
-  VLOG(9) << "UpdateParentInodeXattr inodeId = " << parentId
+  VLOG(6) << "UpdateParentInodeXattr inodeId = " << parentId
           << ", direction = " << direction
-          << ", \nxattr = " << xattr.DebugString();
+          << ", xattr = " << xattr.ShortDebugString();
   std::shared_ptr<InodeWrapper> pInodeWrapper;
   CURVEFS_ERROR ret = inodeManager_->GetInode(parentId, pInodeWrapper);
   if (ret != CURVEFS_ERROR::OK) {
@@ -566,6 +567,7 @@ CURVEFS_ERROR XattrManager::UpdateParentXattrAfterRename(
       return rc;
     }
   }
+
   return rc;
 }
 

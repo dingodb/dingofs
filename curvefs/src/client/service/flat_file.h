@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <map>
+#include <sstream>
 #include <string>
 
 #include "curvefs/proto/metaserver.pb.h"
@@ -54,7 +55,7 @@ class FlatFileChunk {
   std::string ToString() const {
     std::ostringstream os;
     for (const auto& slice : file_offset_slice_) {
-      os << "file_offset: " << slice.first << slice.second.ToString() << "\n";
+      os << slice.second.ToString() << "\n";
     }
     return os.str();
   }
@@ -68,14 +69,145 @@ class FlatFileChunk {
   std::map<uint64_t, FlatFileSlice> file_offset_slice_;
 };
 
+struct BlockObj {
+  uint64_t file_offset;
+  uint64_t obj_len;
+  bool zero;
+  uint64_t version;
+  uint64_t chunk_id;
+  uint64_t block_index;
+
+  std::string ToString() const {
+    std::ostringstream os;
+    os << "[file_offset: " << file_offset << ", obj_len: " << obj_len
+       << ", zero: " << zero << ", version: " << version
+       << ", chunk_id: " << chunk_id << ", block_index: " << block_index << "]";
+    return os.str();
+  }
+};
+
+struct BlockObjSlice {
+  uint64_t file_offset;  // slice start offset
+  uint64_t len;          // slice length
+  BlockObj obj;          // block object
+};
+
+class S3ChunkHoler {
+ public:
+  S3ChunkHoler(const S3ChunkInfo& chunk_info, uint64_t block_size)
+      : chunk_info_(chunk_info), block_size_(block_size) {
+    Init();
+  }
+
+  ~S3ChunkHoler() = default;
+
+  std::string ToString() const {
+    std::ostringstream os;
+    os << "S3ChunkInfo :" << chunk_info_.ShortDebugString() << "\n";
+
+    for (const auto& block : offset_to_block_) {
+      os << block.second.ToString() << "\n";
+    }
+    return os.str();
+  }
+
+  std::vector<BlockObj> GetBlockObj(const FlatFileSlice& slice) const {
+    CHECK_EQ(slice.chunk_id, chunk_info_.chunkid());
+    CHECK_GE(slice.file_offset, chunk_info_.offset());
+    CHECK_LE((slice.file_offset + slice.len),
+             (chunk_info_.offset() + chunk_info_.len()));
+
+    std::vector<BlockObj> overlap_block_objs;
+
+    auto start_iter = offset_to_block_.lower_bound(slice.file_offset);
+    if (start_iter != offset_to_block_.begin()) {
+      start_iter--;
+      const BlockObj& block_obj = start_iter->second;
+      overlap_block_objs.push_back(block_obj);
+      start_iter++;
+    }
+
+    while (start_iter != offset_to_block_.end() &&
+           start_iter->first < (slice.file_offset + slice.len)) {
+      const BlockObj& block_obj = start_iter->second;
+      overlap_block_objs.push_back(block_obj);
+      start_iter++;
+    }
+
+    CHECK(!overlap_block_objs.empty());
+
+    return overlap_block_objs;
+  }
+
+  std::vector<BlockObjSlice> GetBlockObjSlice(
+      const FlatFileSlice& slice) const {
+    CHECK_EQ(slice.chunk_id, chunk_info_.chunkid());
+    CHECK_GE(slice.file_offset, chunk_info_.offset());
+    CHECK_LE(slice.len, chunk_info_.len());
+
+    std::vector<BlockObj> overlap_block_objs = GetBlockObj(slice);
+
+    std::vector<BlockObjSlice> obj_slices;
+
+    for (const auto& block_obj : overlap_block_objs) {
+      uint64_t start_offset =
+          std::max(slice.file_offset, block_obj.file_offset);
+      uint64_t end_offset = std::min(slice.file_offset + slice.len,
+                                     block_obj.file_offset + block_obj.obj_len);
+      uint64_t len = end_offset - start_offset;
+
+      BlockObjSlice obj_slice = {start_offset, len, block_obj};
+      obj_slices.push_back(obj_slice);
+    }
+
+    return obj_slices;
+  }
+
+  const std::map<uint64_t, BlockObj>& GetOffsetToBlock() const {
+    return offset_to_block_;
+  }
+
+ private:
+  void Init() {
+    uint64_t block_index = chunk_info_.offset() / block_size_;
+    uint64_t chunk_end = chunk_info_.len() + chunk_info_.offset();
+    uint64_t offset = chunk_info_.offset();
+
+    uint64_t chunk_id = chunk_info_.chunkid();
+
+    while (offset < chunk_end) {
+      uint64_t block_boundary = (block_index + 1) * block_size_;
+      uint64_t obj_len = std::min(block_boundary, chunk_end) - offset;
+
+      BlockObj block_obj = {
+          offset,   obj_len,     chunk_info_.zero(), chunk_info_.compaction(),
+          chunk_id, block_index,
+      };
+
+      CHECK(offset_to_block_.insert({offset, block_obj}).second);
+
+      block_index++;
+      offset += obj_len;
+    }
+  }
+
+  S3ChunkInfo chunk_info_;
+  uint64_t block_size_;
+  std::map<uint64_t, BlockObj> offset_to_block_;
+};
+
 class FlatFile {
  public:
-  FlatFile(uint64_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) {}
+  FlatFile(uint64_t fs_id, uint64_t ino, uint64_t block_size)
+      : fs_id_(fs_id), ino_(ino), block_size_(block_size) {}
 
   ~FlatFile() = default;
 
   void InsertChunkInfo(uint64_t chunk_index, const S3ChunkInfo& chunk_info) {
-    chunk_id_to_chunk_info_[chunk_info.chunkid()] = chunk_info;
+    CHECK(chunk_id_to_s3_chunk_holer_
+              .insert(
+                  {chunk_info.chunkid(), S3ChunkHoler(chunk_info, block_size_)})
+              .second);
 
     FlatFileSlice slice = {chunk_info.offset(), chunk_info.len(),
                            chunk_info.chunkid()};
@@ -85,9 +217,9 @@ class FlatFile {
   std::string ToString() const {
     std::ostringstream os;
     os << "chunk_id_to_chunk_info_:\n";
-    for (const auto& chunk : chunk_id_to_chunk_info_) {
-      os << "chunk_id: " << chunk.first
-         << ", chunk_info: " << chunk.second.DebugString();
+    for (const auto& chunk_holder : chunk_id_to_s3_chunk_holer_) {
+      os << "chunk_id: " << chunk_holder.first << chunk_holder.second.ToString()
+         << "\n";
     }
 
     os << "\n chunk_index_flat_file_chunk_:\n";
@@ -101,33 +233,38 @@ class FlatFile {
     std::ostringstream os;
     os << std::left << std::setw(20) << "file_offset" << std::setw(20) << "len"
        << std::setw(20) << "block_offset" << std::setw(40) << "block_name"
-       << std::setw(20) << "block_len" << std::setw(20) << "block_size"
-       << std::setw(4) << "zero" << "\n";
+       << std::setw(20) << "block_len" << std::setw(4) << "zero" << "\n";
 
     for (const auto& flat_file_chunk_iter : chunk_index_flat_file_chunk_) {
-      uint64_t chunk_index = flat_file_chunk_iter.first;
       const FlatFileChunk& flat_file_chunk = flat_file_chunk_iter.second;
 
       for (const auto& flat_file_slice_iter :
            flat_file_chunk.file_offset_slice_) {
         const FlatFileSlice& flat_file_slice = flat_file_slice_iter.second;
 
-        auto iter = chunk_id_to_chunk_info_.find(flat_file_slice.chunk_id);
-        CHECK(iter != chunk_id_to_chunk_info_.end())
+        auto iter = chunk_id_to_s3_chunk_holer_.find(flat_file_slice.chunk_id);
+        CHECK(iter != chunk_id_to_s3_chunk_holer_.end())
             << "chunk_id: " << flat_file_slice.chunk_id << " not found";
 
-        const S3ChunkInfo& chunk_info = iter->second;
+        const S3ChunkHoler& chunk_holder = iter->second;
 
-        uint64_t block_offset =
-            flat_file_slice.file_offset - chunk_info.offset();
-        blockcache::BlockKey key(fs_id_, ino_, chunk_info.chunkid(),
-                                 chunk_index, chunk_info.compaction());
+        std::vector<BlockObjSlice> obj_slices =
+            chunk_holder.GetBlockObjSlice(flat_file_slice);
 
-        os << std::left << std::setw(20) << flat_file_slice.file_offset
-           << std::setw(20) << flat_file_slice.len << std::setw(20)
-           << block_offset << std::setw(40) << key.StoreKey() << std::setw(20)
-           << chunk_info.len() << std::setw(20) << chunk_info.size()
-           << std::setw(4) << (chunk_info.zero() ? "true" : "false") << "\n";
+        for (const auto& obj_slice : obj_slices) {
+          blockcache::BlockKey key(fs_id_, ino_, obj_slice.obj.chunk_id,
+                                   obj_slice.obj.block_index,
+                                   obj_slice.obj.version);
+
+          uint64_t block_offset =
+              obj_slice.file_offset - obj_slice.obj.file_offset;
+
+          os << std::left << std::setw(20) << obj_slice.file_offset
+             << std::setw(20) << obj_slice.len << std::setw(20) << block_offset
+             << std::setw(40) << key.StoreKey() << std::setw(20)
+             << obj_slice.obj.obj_len << std::setw(20)
+             << (obj_slice.obj.zero ? "true" : "false") << "\n";
+        }
       }
     }
 
@@ -137,7 +274,10 @@ class FlatFile {
  private:
   uint64_t fs_id_;  // filesystem id
   uint64_t ino_;    // inode id
-  std::map<uint64_t, S3ChunkInfo> chunk_id_to_chunk_info_;
+  uint64_t block_size_;
+  // chunk id to s3 chunk holder
+  std::map<uint64_t, S3ChunkHoler> chunk_id_to_s3_chunk_holer_;
+  //  chunk index to flat file chunk
   std::map<uint64_t, FlatFileChunk> chunk_index_flat_file_chunk_;
 };
 

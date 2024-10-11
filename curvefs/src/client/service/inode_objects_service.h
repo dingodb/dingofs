@@ -19,6 +19,7 @@
 
 #include "curvefs/proto/client_h2.pb.h"
 #include "curvefs/src/client/inode_cache_manager.h"
+#include "curvefs/src/client/s3/client_s3_adaptor.h"
 
 namespace curvefs {
 namespace client {
@@ -28,8 +29,11 @@ class InodeObjectsService : public inode_objects {
 
   ~InodeObjectsService() override = default;
 
-  void Init(std::shared_ptr<InodeCacheManager> inode_cache_manager) {
+  void Init(std::shared_ptr<S3ClientAdaptor> s3_adapter,
+            std::shared_ptr<InodeCacheManager> inode_cache_manager) {
+    CHECK(s3_adapter != nullptr) << "s3_adapter is nullptr";
     CHECK(inode_cache_manager != nullptr) << "inode_cache_manager is nullptr";
+    s3_adapter_ = std::move(s3_adapter);
     inode_cache_manager_ = std::move(inode_cache_manager);
   }
 
@@ -39,6 +43,7 @@ class InodeObjectsService : public inode_objects {
                       google::protobuf::Closure* done) override;
 
  private:
+  std::shared_ptr<S3ClientAdaptor> s3_adapter_;
   std::shared_ptr<InodeCacheManager> inode_cache_manager_;
 };
 

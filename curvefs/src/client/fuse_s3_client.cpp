@@ -488,7 +488,7 @@ static bool StartBrpcServer(brpc::Server& server, brpc::ServerOptions* options,
 }
 
 CURVEFS_ERROR FuseS3Client::InitBrpcServer() {
-  inode_object_service_.Init(inodeManager_);
+  inode_object_service_.Init(s3Adaptor_, inodeManager_);
 
   if (server_.AddService(&inode_object_service_,
                          brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
