@@ -74,6 +74,8 @@ class DiskCacheManager {
 
   virtual BCACHE_ERROR Get(const BlockKey& key, CacheValue* value);
 
+  virtual void Delete(const BlockKey& key);
+
   virtual bool StageFull() const;
 
   virtual bool CacheFull() const;

@@ -57,13 +57,13 @@ LRUCache::~LRUCache() {
 
 void LRUCache::Add(const CacheKey& key, const CacheValue& value) {
   ListNode* node = new ListNode(value);
-  Insert(key.Filename(), node);
+  HashInsert(key.Filename(), node);
   ListAddFront(&inactive_, node);
 }
 
 bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
   ListNode* node;
-  bool find = Lookup(key.Filename(), &node);
+  bool find = HashLookup(key.Filename(), &node);
   if (!find) {
     return false;
   }
@@ -72,6 +72,19 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
   ListAddFront(&active_, node);
   node->value.atime = TimeNow();  // update access time
   *value = node->value;
+  return true;
+}
+
+bool LRUCache::Delete(const CacheKey& key, CacheValue* deleted) {
+  ListNode* node;
+  bool find = HashLookup(key.Filename(), &node);
+  if (!find) {
+    return false;
+  }
+
+  *deleted = node->value;
+  ListRemove(node);
+  HashDelete(node);
   return true;
 }
 
@@ -90,12 +103,12 @@ void LRUCache::Clear() {
   EvictAllNodes(&active_);
 }
 
-void LRUCache::Insert(const std::string& key, ListNode* node) {
+void LRUCache::HashInsert(const std::string& key, ListNode* node) {
   auto* handle = hash_->Insert(key, node, 1, &FreeNode);
   node->handle = handle;
 }
 
-bool LRUCache::Lookup(const std::string& key, ListNode** node) {
+bool LRUCache::HashLookup(const std::string& key, ListNode** node) {
   auto* handle = hash_->Lookup(key);
   if (nullptr == handle) {
     return false;
@@ -105,9 +118,9 @@ bool LRUCache::Lookup(const std::string& key, ListNode** node) {
   return true;
 }
 
-void LRUCache::Delete(ListNode* node) {
+void LRUCache::HashDelete(ListNode* node) {
   hash_->Release(node->handle);
-  hash_->Prune();  // invoke DeleteNode for all evitected cache node
+  hash_->Prune();  // invoke FreeNode for all evitected cache node
 }
 
 CacheItem LRUCache::KV(ListNode* node) {
@@ -127,7 +140,7 @@ bool LRUCache::EvictNode(ListNode* list, FilterFunc filter,
     if (rc == FilterStatus::EVICT_IT) {
       evicted->emplace_back(KV(curr));
       ListRemove(curr);
-      Delete(curr);
+      HashDelete(curr);
     } else if (rc == FilterStatus::SKIP) {
       // do nothing
     } else if (rc == FilterStatus::FINISH) {
@@ -146,7 +159,7 @@ void LRUCache::EvictAllNodes(ListNode* list) {
   while (curr != list) {
     ListNode* next = curr->next;
     ListRemove(curr);
-    Delete(curr);
+    HashDelete(curr);
     curr = next;
   }
 }

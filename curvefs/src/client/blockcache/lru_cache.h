@@ -54,6 +54,8 @@ class LRUCache {
 
   virtual bool Get(const CacheKey& key, CacheValue* value);
 
+  virtual bool Delete(const CacheKey& key, CacheValue* deleted);
+
   virtual CacheItems Evict(FilterFunc filter);
 
   virtual size_t Size();
@@ -61,11 +63,11 @@ class LRUCache {
   virtual void Clear();
 
  private:
-  void Insert(const std::string& key, ListNode* node);
+  void HashInsert(const std::string& key, ListNode* node);
 
-  bool Lookup(const std::string& key, ListNode** node);
+  bool HashLookup(const std::string& key, ListNode** node);
 
-  void Delete(ListNode* node);
+  void HashDelete(ListNode* node);
 
   CacheItem KV(ListNode* node);
 

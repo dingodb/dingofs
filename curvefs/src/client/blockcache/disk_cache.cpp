@@ -250,6 +250,11 @@ BCACHE_ERROR DiskCache::Load(const BlockKey& key,
     }
     return rc;
   });
+
+  // Delete corresponding key of block which maybe already deleted by accident.
+  if (rc == BCACHE_ERROR::NOT_FOUND) {
+    manager_->Delete(key);
+  }
   return rc;
 }
 

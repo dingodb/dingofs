@@ -112,6 +112,14 @@ BCACHE_ERROR DiskCacheManager::Get(const CacheKey& key, CacheValue* value) {
   return BCACHE_ERROR::NOT_FOUND;
 }
 
+void DiskCacheManager::Delete(const CacheKey& key) {
+  LockGuard lk(mutex_);
+  CacheValue value;
+  if (lru_->Delete(key, &value)) {  // exist
+    UpdateUsage(-1, -value.size);
+  }
+}
+
 bool DiskCacheManager::StageFull() const {
   return stage_full_.load(std::memory_order_acquire);
 }
