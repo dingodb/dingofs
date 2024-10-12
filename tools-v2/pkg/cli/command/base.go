@@ -32,12 +32,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	process "github.com/dingodb/dingofs/tools-v2/internal/utils/process"
 	cobratemplate "github.com/dingodb/dingofs/tools-v2/internal/utils/template"
 	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -376,7 +376,7 @@ func GetRpcListResponse(rpcList []*Rpc, rpcFunc []RpcFunc) ([]interface{}, []*cm
 	}
 
 	count := 0
-	retRes := make([]interface{}, chanSize)
+	retRes := make([]interface{}, len(rpcList))
 	var vecErrs []*cmderror.CmdError
 	for res := range results {
 		if res.Error.TypeCode() != cmderror.CODE_SUCCESS {
