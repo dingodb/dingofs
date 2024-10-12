@@ -23,15 +23,6 @@ jobs:
         github-token: ${{ secrets.GH_TOKEN }}
         path: ./
 
-    - name: Download tag name file
-      if: ${{ env.EVENT == 'tag' }}
-      uses: actions/download-artifact@v4
-      with:
-        name: tag_name
-        run-id: ${{ github.event.workflow_run.id }}
-        github-token: ${{ secrets.GH_TOKEN }}
-        path: ./
-
     - name: Download dingofs artifact
       uses: actions/download-artifact@v4
       with:
@@ -46,6 +37,15 @@ jobs:
           echo "EVENT=$(cat event.txt)" >> $GITHUB_ENV
         fi
 
+    - name: Download tag name file
+      if: ${{ env.EVENT == 'tag' }}
+      uses: actions/download-artifact@v4
+      with:
+        name: tag_name
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GH_TOKEN }}
+        path: ./
+
     - name: Config push tag env
       if: ${{ env.EVENT == 'tag' }}
       run: |
@@ -54,32 +54,39 @@ jobs:
         fi
     
     - name: Print env info
+      id: check-event
       run: |
         echo "trigger event type is ${{ env.EVENT }}"
+        echo "continue=true" >> $GITHUB_OUTPUT
         if [ "${{ env.EVENT }}" == "pull_request" ]; then
           echo "pull request haven't merged, not need to publish image."
-          exit 0
+          echo "continue=false" >> $GITHUB_OUTPUT
         fi
         if [ -n "${{ env.TAG_NAME }}" ]; then
-          echo "tag name is ${{ env.TAG_NAME }}"
+          echo "tag name is ${{ env.TAG_NAME }}, need to publish image."
         fi
 
     - name: List directory contents after download
+      if: steps.check-event.outputs.continue == 'true'
       run: ls -la
 
     - name: Extract artifact
+      if: steps.check-event.outputs.continue == 'true'
       run: tar -xzvf dingofs.tar.gz -C curvefs/docker/rocky9
 
     - name: Set up Docker Buildx
+      if: steps.check-event.outputs.continue == 'true'
       uses: docker/setup-buildx-action@v3
 
     - name: Login to Docker Hub
+      if: steps.check-event.outputs.continue == 'true'
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Docker meta
+      if: steps.check-event.outputs.continue == 'true'
       id: meta
       uses: docker/metadata-action@v5
       with:
@@ -90,6 +97,7 @@ jobs:
           type=sha,prefix=,format=long
 
     - name: Build and push
+      if: steps.check-event.outputs.continue == 'true'
       uses: docker/build-push-action@v6
       with:
         context: ./curvefs/docker/rocky9
