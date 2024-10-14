@@ -93,6 +93,8 @@ class DiskCacheManager {
 
   std::string GetCachePath(const CacheKey& key);
 
+  static std::string StrFrom(DeleteFrom from);
+
  private:
   Mutex mutex_;
   uint64_t used_bytes_;

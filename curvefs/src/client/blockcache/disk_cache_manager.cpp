@@ -235,6 +235,9 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del, DeleteFrom from) {
       continue;
     }
 
+    VLOG(3) << "Cache block (path=" << cache_path << ") deleted for "
+            << StrFrom(from) << ", free " << value.size << " bytes.";
+
     num_deleted++;
     bytes_freed += value.size;
   }
@@ -242,9 +245,8 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del, DeleteFrom from) {
 
   LOG(INFO) << StrFormat(
       "%d cache blocks deleted for %s, free %.2f MiB, costs %.6f seconds.",
-      num_deleted,
-      from == DeleteFrom::CACHE_FULL ? "cache full" : "cache expired",
-      static_cast<double>(bytes_freed) / kMiB, timer.u_elapsed() / 1e6);
+      num_deleted, StrFrom(from), static_cast<double>(bytes_freed) / kMiB,
+      timer.u_elapsed() / 1e6);
 }
 
 void DiskCacheManager::UpdateUsage(int64_t n, int64_t bytes) {
@@ -255,6 +257,14 @@ void DiskCacheManager::UpdateUsage(int64_t n, int64_t bytes) {
 
 std::string DiskCacheManager::GetCachePath(const CacheKey& key) {
   return layout_->GetCachePath(key);
+}
+
+std::string DiskCacheManager::StrFrom(DeleteFrom from) {
+  if (from == DeleteFrom::CACHE_FULL) {
+    return "cache full";
+  } else {
+    return "cache expired";
+  }
 }
 
 }  // namespace blockcache

@@ -66,7 +66,8 @@ class DiskCacheMetric {
     metric_.capacity.set_value(option_.cache_size);
     metric_.free_space_ratio.set_value(FLAGS_disk_cache_free_space_ratio);
     metric_.load_status.set_value(kLoadStopped);
-    metric_.cache_status.set_value(kCacheDown);
+    metric_.running_status.set_value(kCacheDown);
+    metric_.healthy_status.set_value("unknown");
     metric_.stage_skips.reset();
     metric_.stage_blocks.reset();
     metric_.stage_full.set_value(false);
@@ -86,12 +87,16 @@ class DiskCacheMetric {
 
   std::string GetLoadStatus() const { return metric_.load_status.get_value(); }
 
-  void SetCacheStatus(const std::string& value) {
-    metric_.cache_status.set_value(value);
+  void SetRunningStatus(const std::string& value) {
+    metric_.running_status.set_value(value);
   }
 
-  std::string GetCacheStatus() const {
-    return metric_.cache_status.get_value();
+  std::string GetRunningStatus() const {
+    return metric_.running_status.get_value();
+  }
+
+  void SetHealthyStatus(const std::string& value) {
+    metric_.healthy_status.set_value(value);
   }
 
   void SetUsedBytes(int64_t used_bytes) {
@@ -130,7 +135,8 @@ class DiskCacheMetric {
       capacity.expose_as(prefix, "capacity");
       free_space_ratio.expose_as(prefix, "free_space_ratio");
       load_status.expose_as(prefix, "load_status");
-      cache_status.expose_as(prefix, "status");
+      running_status.expose_as(prefix, "running_status");
+      healthy_status.expose_as(prefix, "healthy_status");
       stage_skips.expose_as(prefix, "stage_skips");  // stage
       stage_blocks.expose_as(prefix, "stage_blocks");
       stage_full.expose_as(prefix, "stage_full");
@@ -148,7 +154,8 @@ class DiskCacheMetric {
     bvar::Status<int64_t> capacity;
     bvar::Status<double> free_space_ratio;
     bvar::Status<std::string> load_status;
-    bvar::Status<std::string> cache_status;
+    bvar::Status<std::string> running_status;
+    bvar::Status<std::string> healthy_status;
     bvar::Adder<int64_t> stage_skips;  // stage
     bvar::Adder<int64_t> stage_blocks;
     bvar::Status<bool> stage_full;

@@ -19,6 +19,7 @@
 
 #include "curvefs/src/base/time/time.h"
 #include "curvefs/src/base/timer/timer_impl.h"
+#include "curvefs/src/client/blockcache/disk_state_machine.h"
 #include "curvefs/src/client/common/dynamic_config.h"
 #include "glog/logging.h"
 
@@ -59,12 +60,19 @@ void UnstableDiskState::Tick() {
   io_succ_count_.store(0);
 }
 
+DiskStateMachineImpl::DiskStateMachineImpl(
+    std::shared_ptr<DiskCacheMetric> metric)
+    : state_(std::make_unique<BaseDiskState>(this)), metric_(metric) {}
+
 bool DiskStateMachineImpl::Start() {
   curve::common::WriteLockGuard lk(rw_lock_);
 
   if (running_) {
     return true;
   }
+
+  state_ = std::make_unique<NormalDiskState>(this);
+  metric_->SetHealthyStatus(DiskStateToString(state_->GetDiskState()));
 
   bthread::ExecutionQueueOptions options;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
@@ -111,6 +119,8 @@ bool DiskStateMachineImpl::Stop() {
 
   timer_->Stop();
 
+  metric_->SetHealthyStatus(DiskStateToString(kDiskStateUnknown));
+
   return true;
 }
 
@@ -150,7 +160,7 @@ int DiskStateMachineImpl::EventThread(
 void DiskStateMachineImpl::ProcessEvent(DiskStateEvent event) {
   curve::common::WriteLockGuard lk(rw_lock_);
 
-  LOG(INFO) << "ProcessEvent event:" << DiskStateEventToString(event)
+  LOG(INFO) << "ProcessEvent event: " << DiskStateEventToString(event)
             << " in state:" << DiskStateToString(state_->GetDiskState());
 
   switch (state_->GetDiskState()) {
@@ -172,6 +182,10 @@ void DiskStateMachineImpl::ProcessEvent(DiskStateEvent event) {
     default:
       LOG(FATAL) << "Unknown disk state " << state_->GetDiskState();
   }
+
+  metric_->SetHealthyStatus(DiskStateToString(state_->GetDiskState()));
+  LOG(INFO) << "After process, current disk state is "
+            << DiskStateToString(state_->GetDiskState());
 }
 
 }  // namespace blockcache

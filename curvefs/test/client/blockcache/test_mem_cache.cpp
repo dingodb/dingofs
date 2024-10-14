@@ -47,7 +47,8 @@ TEST_F(MemCacheTest, Basic) {
   ASSERT_EQ(store->Shutdown(), BCACHE_ERROR::OK);
   ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::CTO_FLUSH)),
             BCACHE_ERROR::NOT_SUPPORTED);
-  ASSERT_EQ(store->RemoveStage(key), BCACHE_ERROR::NOT_SUPPORTED);
+  ASSERT_EQ(store->RemoveStage(key, BlockContext(BlockFrom::CTO_FLUSH)),
+            BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_EQ(store->Cache(key, block), BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_EQ(store->Load(key, reader), BCACHE_ERROR::NOT_SUPPORTED);
   ASSERT_FALSE(store->IsCached(key));

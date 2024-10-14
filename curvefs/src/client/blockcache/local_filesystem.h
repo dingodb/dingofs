@@ -47,7 +47,7 @@ class PosixFileSystem {
  public:
   PosixFileSystem(std::shared_ptr<DiskStateMachine> disk_state_machine);
 
-  ~PosixFileSystem();
+  ~PosixFileSystem() = default;
 
   BCACHE_ERROR Stat(const std::string& path, struct stat* stat);
 

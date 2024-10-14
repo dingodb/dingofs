@@ -108,7 +108,7 @@ TEST_F(DiskCacheTest, RemoveStage) {
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
   ASSERT_TRUE(fs->FileExists(stage_path));
 
-  rc = disk_cache->RemoveStage(key);
+  rc = disk_cache->RemoveStage(key, ctx);
   ASSERT_EQ(rc, BCACHE_ERROR::OK);
   ASSERT_FALSE(fs->FileExists(stage_path));
 }

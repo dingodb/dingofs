@@ -78,7 +78,7 @@ DiskCache::DiskCache(DiskCacheOption option)
     : option_(option), running_(false), use_direct_write_(false) {
   metric_ = std::make_shared<DiskCacheMetric>(option);
   layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
-  disk_state_machine_ = std::make_shared<DiskStateMachineImpl>();
+  disk_state_machine_ = std::make_shared<DiskStateMachineImpl>(metric_);
   disk_state_health_checker_ =
       std::make_unique<DiskStateHealthChecker>(layout_, disk_state_machine_);
   fs_ = std::make_shared<LocalFileSystem>(disk_state_machine_);
@@ -109,7 +109,7 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
   manager_->Start();                    // manage disk capacity, cache expire
   loader_->Start(uuid_, uploader);      // load stage and cache block
   metric_->SetUuid(uuid_);
-  metric_->SetCacheStatus(kCacheUp);
+  metric_->SetRunningStatus(kCacheUp);
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is up.";
   return BCACHE_ERROR::OK;
@@ -125,7 +125,8 @@ BCACHE_ERROR DiskCache::Shutdown() {
   loader_->Stop();
   manager_->Stop();
   disk_state_health_checker_->Stop();
-  metric_->SetCacheStatus(kCacheDown);
+  disk_state_machine_->Stop();
+  metric_->SetRunningStatus(kCacheDown);
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
   return BCACHE_ERROR::OK;

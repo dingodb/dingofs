@@ -55,17 +55,7 @@ using ::curvefs::base::string::StrFormat;
 // posix filesystem
 PosixFileSystem::PosixFileSystem(
     std::shared_ptr<DiskStateMachine> disk_state_machine)
-    : disk_state_machine_(disk_state_machine) {
-  if (disk_state_machine_ != nullptr) {
-    disk_state_machine_->Start();
-  }
-}
-
-PosixFileSystem::~PosixFileSystem() {
-  if (disk_state_machine_ != nullptr) {
-    disk_state_machine_->Stop();
-  }
-}
+    : disk_state_machine_(disk_state_machine) {}
 
 template <typename... Args>
 BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,

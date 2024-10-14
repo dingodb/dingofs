@@ -19,6 +19,7 @@
 
 #include "bthread/execution_queue.h"
 #include "curvefs/src/base/timer/timer_impl.h"
+#include "curvefs/src/client/blockcache/disk_cache_metric.h"
 #include "curvefs/src/client/blockcache/disk_state_machine.h"
 #include "src/common/concurrent/rw_lock.h"
 
@@ -114,7 +115,7 @@ class DownDiskState final : public BaseDiskState {
 
 class DiskStateMachineImpl final : public DiskStateMachine {
  public:
-  DiskStateMachineImpl() : state_(std::make_unique<NormalDiskState>(this)) {}
+  explicit DiskStateMachineImpl(std::shared_ptr<DiskCacheMetric> metric);
 
   ~DiskStateMachineImpl() override = default;
 
@@ -153,6 +154,7 @@ class DiskStateMachineImpl final : public DiskStateMachine {
 
   bthread::ExecutionQueueId<DiskStateEvent> disk_event_queue_id_;
   std::unique_ptr<TimerImpl> timer_;
+  std::shared_ptr<DiskCacheMetric> metric_;
 };
 
 }  // namespace blockcache

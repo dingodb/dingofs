@@ -36,7 +36,7 @@ class DiskStateMachineTest : public ::testing::Test {
 };
 
 TEST_F(DiskStateMachineTest, Init) {
-  DiskStateMachineImpl disk_state_machine;
+  DiskStateMachineImpl disk_state_machine(nullptr);
 
   EXPECT_EQ(disk_state_machine.GetDiskState(), DiskState::kDiskStateNormal);
 
@@ -46,7 +46,7 @@ TEST_F(DiskStateMachineTest, Init) {
 }
 
 TEST_F(DiskStateMachineTest, Normal2Unstable) {
-  DiskStateMachineImpl disk_state_machine;
+  DiskStateMachineImpl disk_state_machine(nullptr);
 
   EXPECT_TRUE(disk_state_machine.Start());
 
@@ -61,7 +61,7 @@ TEST_F(DiskStateMachineTest, Normal2Unstable) {
 }
 
 TEST_F(DiskStateMachineTest, Unstable2Down) {
-  DiskStateMachineImpl disk_state_machine;
+  DiskStateMachineImpl disk_state_machine(nullptr);
 
   // NOTE: must set before start
   FLAGS_disk_state_tick_duration_second = 5;
@@ -84,7 +84,7 @@ TEST_F(DiskStateMachineTest, Unstable2Down) {
 }
 
 TEST_F(DiskStateMachineTest, Unstable2Normal) {
-  DiskStateMachineImpl disk_state_machine;
+  DiskStateMachineImpl disk_state_machine(nullptr);
 
   EXPECT_TRUE(disk_state_machine.Start());
 
