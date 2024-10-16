@@ -25,16 +25,12 @@
 
 #include <cstdint>
 #include <list>
-#include <map>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <utility>
 
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "src/common/concurrent/concurrent.h"
-#include "src/common/concurrent/name_lock.h"
+#include "src/common/concurrent/generic_name_lock.h"
 
 using ::curvefs::metaserver::Dentry;
 
@@ -98,6 +94,7 @@ class DentryCacheManagerImpl : public DentryCacheManager {
 
  private:
   std::shared_ptr<MetaServerClient> metaClient_;
+
   curve::common::GenericNameLock<Mutex> nameLock_;
 };
 

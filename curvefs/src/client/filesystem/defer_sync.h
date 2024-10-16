@@ -25,6 +25,7 @@
 
 #include <atomic>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "curvefs/src/client/common/config.h"
@@ -38,10 +39,23 @@ namespace filesystem {
 using ::curvefs::client::common::DeferSyncOption;
 
 using ::curve::common::InterruptibleSleeper;
-using ::curve::common::LockGuard;
 using ::curve::common::Mutex;
 
-class DeferSync {
+class DeferSync;
+class SyncInodeClosure : public MetaServerClientDone {
+ public:
+  explicit SyncInodeClosure(Ino inode_id,
+                            std::shared_ptr<DeferSync> defer_sync);
+  ~SyncInodeClosure() override = default;
+
+  void Run() override;
+
+ private:
+  Ino inode_id_;
+  std::weak_ptr<DeferSync> weak_defer_sync_;
+};
+
+class DeferSync : public std::enable_shared_from_this<DeferSync> {
  public:
   explicit DeferSync(DeferSyncOption option);
 
@@ -51,16 +65,23 @@ class DeferSync {
 
   void Push(const std::shared_ptr<InodeWrapper>& inode);
 
- private:
-  void SyncTask();
+  bool Get(const Ino& inode_id, std::shared_ptr<InodeWrapper>& out);
 
  private:
+  friend class SyncInodeClosure;
+
+  void SyncTask();
+
+  void Synced(Ino inode_id);
+  void Retry(Ino inode_id);
+
   DeferSyncOption option_;
   Mutex mutex_;
   std::atomic<bool> running_;
   std::thread thread_;
   InterruptibleSleeper sleeper_;
-  std::vector<std::shared_ptr<InodeWrapper>> inodes_;
+  std::vector<Ino> pending_sync_inodes_;
+  std::unordered_map<Ino, std::shared_ptr<InodeWrapper>> inodes_;
 };
 
 }  // namespace filesystem

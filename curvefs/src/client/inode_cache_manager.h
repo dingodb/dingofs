@@ -39,16 +39,6 @@
 #include "curvefs/src/client/rpcclient/task_excutor.h"
 #include "src/common/concurrent/concurrent.h"
 #include "src/common/concurrent/generic_name_lock.h"
-#include "src/common/interruptible_sleeper.h"
-#include "src/common/lru_cache.h"
-
-using ::curve::common::Atomic;
-using ::curve::common::CacheMetrics;
-using ::curve::common::InterruptibleSleeper;
-using ::curve::common::LRUCache;
-using ::curve::common::Thread;
-using ::curvefs::metaserver::InodeAttr;
-using ::curvefs::metaserver::XAttr;
 
 namespace curvefs {
 namespace client {
@@ -57,38 +47,39 @@ using common::RefreshDataOption;
 using curve::common::CountDownEvent;
 using ::curvefs::client::filesystem::DeferSync;
 using ::curvefs::client::filesystem::OpenFiles;
+using ::curvefs::metaserver::InodeAttr;
+using ::curvefs::metaserver::XAttr;
 using metric::S3ChunkInfoMetric;
 using rpcclient::BatchGetInodeAttrDone;
 using rpcclient::InodeParam;
 using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientDone;
 using rpcclient::MetaServerClientImpl;
 
 class InodeCacheManager {
  public:
-  InodeCacheManager() : fsId_(0) {}
-  virtual ~InodeCacheManager() {}
+  InodeCacheManager() : m_fs_id(0) {}
+  virtual ~InodeCacheManager() = default;
 
-  void SetFsId(uint32_t fsId) { fsId_ = fsId; }
+  void SetFsId(uint32_t fs_id) { m_fs_id = fs_id; }
 
   virtual CURVEFS_ERROR Init(RefreshDataOption option,
-                             std::shared_ptr<OpenFiles> openFiles,
-                             std::shared_ptr<DeferSync> deferSync) = 0;
+                             std::shared_ptr<OpenFiles> open_files,
+                             std::shared_ptr<DeferSync> defer_sync) = 0;
 
   virtual CURVEFS_ERROR GetInode(
-      uint64_t inodeId,
+      uint64_t inode_id,
       std::shared_ptr<InodeWrapper>& out) = 0;  // NOLINT
 
-  virtual CURVEFS_ERROR GetInodeAttr(uint64_t inodeId, InodeAttr* out) = 0;
+  virtual CURVEFS_ERROR GetInodeAttr(uint64_t inode_id, InodeAttr* out) = 0;
 
-  virtual CURVEFS_ERROR BatchGetInodeAttr(std::set<uint64_t>* inodeIds,
+  virtual CURVEFS_ERROR BatchGetInodeAttr(std::set<uint64_t>* inode_ids,
                                           std::list<InodeAttr>* attrs) = 0;
 
   virtual CURVEFS_ERROR BatchGetInodeAttrAsync(
-      uint64_t parentId, std::set<uint64_t>* inodeIds,
+      uint64_t parent_id, std::set<uint64_t>* inode_ids,
       std::map<uint64_t, InodeAttr>* attrs) = 0;
 
-  virtual CURVEFS_ERROR BatchGetXAttr(std::set<uint64_t>* inodeIds,
+  virtual CURVEFS_ERROR BatchGetXAttr(std::set<uint64_t>* inode_ids,
                                       std::list<XAttr>* xattrs) = 0;
 
   virtual CURVEFS_ERROR CreateInode(
@@ -99,13 +90,13 @@ class InodeCacheManager {
       const InodeParam& param,
       std::shared_ptr<InodeWrapper>& out) = 0;  // NOLINT
 
-  virtual CURVEFS_ERROR DeleteInode(uint64_t inodeId) = 0;
+  virtual CURVEFS_ERROR DeleteInode(uint64_t inode_id) = 0;
 
   virtual void ShipToFlush(
-      const std::shared_ptr<InodeWrapper>& inodeWrapper) = 0;
+      const std::shared_ptr<InodeWrapper>& inode_wrapper) = 0;
 
  protected:
-  uint32_t fsId_;
+  uint32_t m_fs_id;
 };
 
 class InodeCacheManagerImpl
@@ -116,32 +107,32 @@ class InodeCacheManagerImpl
       : metaClient_(std::make_shared<MetaServerClientImpl>()) {}
 
   explicit InodeCacheManagerImpl(
-      const std::shared_ptr<MetaServerClient>& metaClient)
-      : metaClient_(metaClient) {}
+      const std::shared_ptr<MetaServerClient>& meta_client)
+      : metaClient_(meta_client) {}
 
   CURVEFS_ERROR Init(RefreshDataOption option,
-                     std::shared_ptr<OpenFiles> openFiles,
-                     std::shared_ptr<DeferSync> deferSync) override {
+                     std::shared_ptr<OpenFiles> open_files,
+                     std::shared_ptr<DeferSync> defer_sync) override {
     option_ = option;
     s3ChunkInfoMetric_ = std::make_shared<S3ChunkInfoMetric>();
-    openFiles_ = openFiles;
-    deferSync_ = deferSync;
+    openFiles_ = open_files;
+    deferSync_ = defer_sync;
     return CURVEFS_ERROR::OK;
   }
 
-  CURVEFS_ERROR GetInode(uint64_t inodeId,
+  CURVEFS_ERROR GetInode(uint64_t inode_id,
                          std::shared_ptr<InodeWrapper>& out) override;
 
-  CURVEFS_ERROR GetInodeAttr(uint64_t inodeId, InodeAttr* out) override;
+  CURVEFS_ERROR GetInodeAttr(uint64_t inode_id, InodeAttr* out) override;
 
-  CURVEFS_ERROR BatchGetInodeAttr(std::set<uint64_t>* inodeIds,
+  CURVEFS_ERROR BatchGetInodeAttr(std::set<uint64_t>* inode_ids,
                                   std::list<InodeAttr>* attrs) override;
 
   CURVEFS_ERROR BatchGetInodeAttrAsync(
-      uint64_t parentId, std::set<uint64_t>* inodeIds,
+      uint64_t parent_id, std::set<uint64_t>* inode_ids,
       std::map<uint64_t, InodeAttr>* attrs = nullptr) override;
 
-  CURVEFS_ERROR BatchGetXAttr(std::set<uint64_t>* inodeIds,
+  CURVEFS_ERROR BatchGetXAttr(std::set<uint64_t>* inode_ids,
                               std::list<XAttr>* xattrs) override;
 
   CURVEFS_ERROR CreateInode(const InodeParam& param,
@@ -150,15 +141,20 @@ class InodeCacheManagerImpl
   CURVEFS_ERROR CreateManageInode(const InodeParam& param,
                                   std::shared_ptr<InodeWrapper>& out) override;
 
-  CURVEFS_ERROR DeleteInode(uint64_t inodeId) override;
+  CURVEFS_ERROR DeleteInode(uint64_t inode_id) override;
 
-  void ShipToFlush(const std::shared_ptr<InodeWrapper>& inodeWrapper) override;
-
- private:
-  CURVEFS_ERROR RefreshData(std::shared_ptr<InodeWrapper>& inode,  // NOLINT
-                            bool streaming = true);
+  void ShipToFlush(const std::shared_ptr<InodeWrapper>& inode_wrapper) override;
 
  private:
+  CURVEFS_ERROR GetInodeFromCached(uint64_t inode_id,
+                                   std::shared_ptr<InodeWrapper>& out);
+
+  CURVEFS_ERROR GetInodeFromCachedUnlocked(uint64_t inode_id,
+                                           std::shared_ptr<InodeWrapper>& out);
+
+  static CURVEFS_ERROR RefreshData(std::shared_ptr<InodeWrapper>& inode,
+                                   bool streaming = true);
+
   std::shared_ptr<MetaServerClient> metaClient_;
   std::shared_ptr<S3ChunkInfoMetric> s3ChunkInfoMetric_;
 
@@ -178,9 +174,9 @@ class BatchGetInodeAttrAsyncDone : public BatchGetInodeAttrDone {
   BatchGetInodeAttrAsyncDone(std::map<uint64_t, InodeAttr>* attrs,
                              ::curve::common::Mutex* mutex,
                              std::shared_ptr<CountDownEvent> cond)
-      : attrs_(attrs), mutex_(mutex), cond_(cond) {}
+      : mutex_(mutex), attrs_(attrs), cond_(cond) {}
 
-  ~BatchGetInodeAttrAsyncDone() {}
+  ~BatchGetInodeAttrAsyncDone() override = default;
 
   void Run() override {
     std::unique_ptr<BatchGetInodeAttrAsyncDone> self_guard(this);
@@ -190,12 +186,12 @@ class BatchGetInodeAttrAsyncDone : public BatchGetInodeAttrDone {
                  << ", MetaStatusCode: " << ret
                  << ", MetaStatusCode_Name: " << MetaStatusCode_Name(ret);
     } else {
-      auto inodeAttrs = GetInodeAttrs();
+      auto inode_attrs = GetInodeAttrs();
       VLOG(3) << "BatchGetInodeAttrAsyncDone update inodeAttrCache"
-              << " size = " << inodeAttrs.size();
+              << " size = " << inode_attrs.size();
 
       curve::common::LockGuard lk(*mutex_);
-      for (const auto& attr : inodeAttrs) {
+      for (const auto& attr : inode_attrs) {
         attrs_->emplace(attr.inodeid(), attr);
       }
     }
