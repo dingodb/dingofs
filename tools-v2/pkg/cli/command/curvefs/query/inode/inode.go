@@ -58,7 +58,9 @@ func (qiRpc *QueryInodeRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (qiRpc *QueryInodeRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return qiRpc.metaserverClient.GetInode(ctx, qiRpc.Request)
+	response, err := qiRpc.metaserverClient.GetInode(ctx, qiRpc.Request)
+	output.ShowRpcData(qiRpc.Request, response, qiRpc.Info.RpcDataShow)
+	return response, err
 }
 
 type InodeCommand struct {
@@ -162,6 +164,7 @@ func (iCmd *InodeCommand) Prepare() error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	iCmd.QIRpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetInode")
+	iCmd.QIRpc.Info.RpcDataShow = config.GetFlagBool(iCmd.Cmd, "verbose")
 	return nil
 }
 

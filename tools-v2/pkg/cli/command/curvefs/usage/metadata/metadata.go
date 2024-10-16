@@ -26,13 +26,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/dustin/go-humanize"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -59,7 +59,9 @@ func (mRpc *MetadataRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (mRpc *MetadataRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return mRpc.topologyClient.StatMetadataUsage(ctx, mRpc.Request)
+	response, err := mRpc.topologyClient.StatMetadataUsage(ctx, mRpc.Request)
+	output.ShowRpcData(mRpc.Request, response, mRpc.Info.RpcDataShow)
+	return response, err
 }
 
 const (
@@ -96,6 +98,7 @@ func (mCmd *MetadataCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	mCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "StatMetadataUsage")
+	mCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(mCmd.Cmd, "verbose")
 
 	header := []string{cobrautil.ROW_METASERVER_ADDR, cobrautil.ROW_TOTAL, cobrautil.ROW_USED, cobrautil.ROW_LEFT}
 	mCmd.SetHeader(header)

@@ -64,7 +64,9 @@ func (qfRp *QueryFsRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (qfRp *QueryFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return qfRp.mdsClient.GetFsInfo(ctx, qfRp.Request)
+	response, err := qfRp.mdsClient.GetFsInfo(ctx, qfRp.Request)
+	output.ShowRpcData(qfRp.Request, response, qfRp.Info.RpcDataShow)
+	return response, err
 }
 
 func NewFsCommand() *cobra.Command {
@@ -128,6 +130,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 			Request: request,
 		}
 		rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetFsInfo")
+		rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 		fCmd.Rpc = append(fCmd.Rpc, rpc)
 		row := make(map[string]string)
 		row[cobrautil.ROW_NAME] = fsNames[i]

@@ -65,7 +65,9 @@ func (qmRpc *QueryMetaserverRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (qmRpc *QueryMetaserverRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return qmRpc.topologyClient.GetMetaServer(ctx, qmRpc.Request)
+	response, err := qmRpc.topologyClient.GetMetaServer(ctx, qmRpc.Request)
+	output.ShowRpcData(qmRpc.Request, response, qmRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewMetaserverCommand() *cobra.Command {
@@ -133,6 +135,7 @@ func (mCmd *MetaserverCommand) Init(cmd *cobra.Command, args []string) error {
 			Request: request,
 		}
 		rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetMetaServerInfo")
+		rpc.Info.RpcDataShow = config.GetFlagBool(mCmd.Cmd, "verbose")
 		mCmd.Rpc = append(mCmd.Rpc, rpc)
 		row := make(map[string]string)
 		row[cobrautil.ROW_ID] = cobrautil.ROW_VALUE_DNE
@@ -156,6 +159,7 @@ func (mCmd *MetaserverCommand) Init(cmd *cobra.Command, args []string) error {
 			Request: request,
 		}
 		rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetMetaServerInfo")
+		rpc.Info.RpcDataShow = config.GetFlagBool(mCmd.Cmd, "verbose")
 		mCmd.Rpc = append(mCmd.Rpc, rpc)
 		row := make(map[string]string)
 		row[cobrautil.ROW_ID] = metaserverIds[i]

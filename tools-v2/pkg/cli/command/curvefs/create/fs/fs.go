@@ -25,8 +25,6 @@ package fs
 import (
 	"context"
 	"fmt"
-
-	"github.com/dustin/go-humanize"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -34,6 +32,7 @@ import (
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/common"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/mds"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
@@ -62,7 +61,9 @@ func (cfRpc *CreateFsRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (cfRpc *CreateFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return cfRpc.mdsClient.CreateFs(ctx, cfRpc.Request)
+	response, err := cfRpc.mdsClient.CreateFs(ctx, cfRpc.Request)
+	output.ShowRpcData(cfRpc.Request, response, cfRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*CreateFsRpc)(nil) // check interface
@@ -186,6 +187,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	fCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "CreateFs")
+	fCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 
 	return nil
 }

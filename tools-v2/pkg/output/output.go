@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -99,4 +100,22 @@ func MarshalProtoJson(message proto.Message) (interface{}, error) {
 
 func SetFinalCmdNoOutput(finalCmd *basecmd.FinalCurveCmd) {
 	finalCmd.Cmd.SetArgs([]string{"--format", config.FORMAT_NOOUT})
+}
+
+func ProtoMessageToJson(message proto.Message) (string, error) {
+	m := protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "  ",
+	}
+	value, err := m.Marshal(message)
+	return string(value), err
+}
+
+func ShowRpcData(request proto.Message, response proto.Message, isShow bool) {
+	if isShow {
+		data, _ := ProtoMessageToJson(request)
+		log.Printf("rpc request info: %s\n", data)
+		data, _ = ProtoMessageToJson(response)
+		log.Printf("rpc response info: %s\n", data)
+	}
 }

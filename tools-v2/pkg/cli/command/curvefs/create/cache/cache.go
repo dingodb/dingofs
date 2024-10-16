@@ -61,7 +61,9 @@ func (cRpc *CreateCacheRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (cRpc *CreateCacheRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return cRpc.topologyClient.RegistMemcacheCluster(ctx, cRpc.Request)
+	response, err := cRpc.topologyClient.RegistMemcacheCluster(ctx, cRpc.Request)
+	output.ShowRpcData(cRpc.Request, response, cRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewCacheCommand() *cobra.Command {
@@ -114,6 +116,7 @@ func (cCmd *CacheCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	cCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "ResistMemcacheCluster")
+	cCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(cCmd.Cmd, "verbose")
 
 	header := []string{cobrautil.ROW_ID, cobrautil.ROW_RESULT}
 	cCmd.SetHeader(header)

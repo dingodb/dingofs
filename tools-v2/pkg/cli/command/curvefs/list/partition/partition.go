@@ -67,7 +67,9 @@ func (lpRp *ListPartitionRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (lpRp *ListPartitionRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return lpRp.topologyClient.ListPartition(ctx, lpRp.Request)
+	response, err := lpRp.topologyClient.ListPartition(ctx, lpRp.Request)
+	output.ShowRpcData(lpRp.Request, response, lpRp.Info.RpcDataShow)
+	return response, err
 }
 
 func NewPartitionCommand() *cobra.Command {
@@ -129,6 +131,7 @@ func (pCmd *PartitionCommand) Init(cmd *cobra.Command, args []string) error {
 			Request: request,
 		}
 		rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "ListPartition")
+		rpc.Info.RpcDataShow = config.GetFlagBool(pCmd.Cmd, "verbose")
 		pCmd.Rpc = append(pCmd.Rpc, rpc)
 		pCmd.fsId2Rows[id32] = make([]map[string]string, 1)
 		pCmd.fsId2Rows[id32][0] = make(map[string]string)

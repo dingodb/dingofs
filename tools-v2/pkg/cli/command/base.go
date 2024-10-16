@@ -264,14 +264,17 @@ type Rpc struct {
 	RpcTimeout    time.Duration
 	RpcRetryTimes int32
 	RpcFuncName   string
+	RpcDataShow   bool
 }
 
+// TODO field RpcDataShow may be pass by parameter
 func NewRpc(addrs []string, timeout time.Duration, retryTimes int32, funcName string) *Rpc {
 	return &Rpc{
 		Addrs:         addrs,
 		RpcTimeout:    timeout,
 		RpcRetryTimes: retryTimes,
 		RpcFuncName:   funcName,
+		RpcDataShow:   false,
 	}
 }
 

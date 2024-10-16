@@ -65,7 +65,9 @@ func (cRpc *ListCopysetRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (cRpc *ListCopysetRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return cRpc.topologyClient.ListCopysetInfo(ctx, cRpc.Request)
+	response, err := cRpc.topologyClient.ListCopysetInfo(ctx, cRpc.Request)
+	output.ShowRpcData(cRpc.Request, response, cRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewCopysetCommand() *cobra.Command {
@@ -101,6 +103,7 @@ func (cCmd *CopysetCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	cCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "ListCopysetInfo")
+	cCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(cCmd.Cmd, "verbose")
 
 	header := []string{cobrautil.ROW_KEY, cobrautil.ROW_COPYSET_ID, cobrautil.ROW_POOL_ID, cobrautil.ROW_EPOCH, cobrautil.ROW_LEADER_PEER, cobrautil.ROW_PEER_NUMBER}
 	cCmd.SetHeader(header)

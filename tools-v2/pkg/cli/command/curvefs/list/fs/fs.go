@@ -64,7 +64,9 @@ func (fRpc *ListFsRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (fRpc *ListFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return fRpc.mdsClient.ListClusterFsInfo(ctx, fRpc.Request)
+	response, err := fRpc.mdsClient.ListClusterFsInfo(ctx, fRpc.Request)
+	output.ShowRpcData(fRpc.Request, response, fRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewFsCommand() *cobra.Command {
@@ -101,6 +103,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	fCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "ListClusterFsInfo")
+	fCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 
 	header := []string{cobrautil.ROW_ID, cobrautil.ROW_NAME, cobrautil.ROW_STATUS, cobrautil.ROW_CAPACITY, cobrautil.ROW_BLOCKSIZE, cobrautil.ROW_FS_TYPE, cobrautil.ROW_SUM_IN_DIR, cobrautil.ROW_OWNER, cobrautil.ROW_MOUNT_NUM}
 	fCmd.SetHeader(header)

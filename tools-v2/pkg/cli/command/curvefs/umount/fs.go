@@ -61,7 +61,9 @@ func (ufRp *UmountFsRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (ufRp *UmountFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return ufRp.mdsClient.UmountFs(ctx, ufRp.Request)
+	response, err := ufRp.mdsClient.UmountFs(ctx, ufRp.Request)
+	output.ShowRpcData(ufRp.Request, response, ufRp.Info.RpcDataShow)
+	return response, err
 }
 
 const (
@@ -117,6 +119,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	fCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "UmountFs")
+	fCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 
 	header := []string{cobrautil.ROW_FS_NAME, cobrautil.ROW_MOUNTPOINT, cobrautil.ROW_RESULT}
 	fCmd.SetHeader(header)

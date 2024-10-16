@@ -61,7 +61,9 @@ func (dfRpc *DeleteFsRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (dfRpc *DeleteFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return dfRpc.mdsClient.DeleteFs(ctx, dfRpc.Request)
+	response, err := dfRpc.mdsClient.DeleteFs(ctx, dfRpc.Request)
+	output.ShowRpcData(dfRpc.Request, response, dfRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewFsCommand() *cobra.Command {
@@ -105,6 +107,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	fCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "DeleteFs")
+	fCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 
 	return nil
 }

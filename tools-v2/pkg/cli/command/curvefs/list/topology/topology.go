@@ -66,7 +66,9 @@ func (lRpc *ListTopologyRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (lRpc *ListTopologyRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return lRpc.topologyClient.ListTopology(ctx, lRpc.Request)
+	response, err := lRpc.topologyClient.ListTopology(ctx, lRpc.Request)
+	output.ShowRpcData(lRpc.Request, response, lRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewTopologyCommand() *cobra.Command {
@@ -129,6 +131,7 @@ func (tCmd *TopologyCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	tCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "ListTopology")
+	tCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 
 	// header := []string{cobrautil.ROW_ID, cobrautil.ROW_TYPE, cobrautil.ROW_NAME, cobrautil.ROW_CHILD_TYPE, cobrautil.ROW_CHILD_LIST}
 	header := []string{cobrautil.ROW_POOL, cobrautil.ROW_ZONE, cobrautil.ROW_SERVER, cobrautil.ROW_METASERVER}

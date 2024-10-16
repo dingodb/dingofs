@@ -62,7 +62,9 @@ func (qpRpc *QueryPartitionRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (qpRpc *QueryPartitionRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return qpRpc.topologyClient.GetCopysetOfPartition(ctx, qpRpc.Request)
+	response, err := qpRpc.topologyClient.GetCopysetOfPartition(ctx, qpRpc.Request)
+	output.ShowRpcData(qpRpc.Request, response, qpRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewPartitionCommand() *cobra.Command {
@@ -96,8 +98,8 @@ func (pCmd *PartitionCommand) Init(cmd *cobra.Command, args []string) error {
 	pCmd.SetHeader(header)
 	pCmd.TableNew.SetAutoMergeCellsByColumnIndex(cobrautil.GetIndexSlice(
 		pCmd.Header, []string{
-			cobrautil.ROW_POOL_ID,cobrautil.ROW_COPYSET_ID, cobrautil.ROW_ID,
-	}))
+			cobrautil.ROW_POOL_ID, cobrautil.ROW_COPYSET_ID, cobrautil.ROW_ID,
+		}))
 
 	partitionIds := viper.GetStringSlice(config.VIPER_CURVEFS_PARTITIONID)
 
@@ -119,6 +121,7 @@ func (pCmd *PartitionCommand) Init(cmd *cobra.Command, args []string) error {
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
 	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
 	pCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetCopysetOfPartition")
+	pCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(pCmd.Cmd, "verbose")
 
 	return nil
 }

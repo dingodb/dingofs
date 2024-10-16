@@ -25,6 +25,8 @@ package topology
 import (
 	"context"
 	"fmt"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
@@ -55,7 +57,9 @@ func (dsRpc *DeleteServerRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (dsRpc *DeleteServerRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return dsRpc.topologyClient.DeleteServer(ctx, dsRpc.Request)
+	response, err := dsRpc.topologyClient.DeleteServer(ctx, dsRpc.Request)
+	output.ShowRpcData(dsRpc.Request, response, dsRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*DeleteServerRpc)(nil) // check interface
@@ -71,7 +75,9 @@ func (csRpc *CreateServerRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (csRpc *CreateServerRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return csRpc.topologyClient.RegistServer(ctx, csRpc.Request)
+	response, err := csRpc.topologyClient.RegistServer(ctx, csRpc.Request)
+	output.ShowRpcData(csRpc.Request, response, csRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*CreateServerRpc)(nil) // check interface
@@ -87,7 +93,9 @@ func (lzsRpc *ListZoneServerRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (lzsRpc *ListZoneServerRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return lzsRpc.topologyClient.ListZoneServer(ctx, lzsRpc.Request)
+	response, err := lzsRpc.topologyClient.ListZoneServer(ctx, lzsRpc.Request)
+	output.ShowRpcData(lzsRpc.Request, response, lzsRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*ListZoneServerRpc)(nil) // check interface
@@ -100,6 +108,7 @@ func (tCmd *TopologyCommand) listZoneServer(zoneId uint32) (*topology.ListZoneSe
 		Request: request,
 	}
 	tCmd.listZoneServerRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "ListPoolZone")
+	tCmd.listZoneServerRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	result, err := basecmd.GetRpcResponse(tCmd.listZoneServerRpc.Info, tCmd.listZoneServerRpc)
 	if err.TypeCode() != cmderror.CODE_SUCCESS {
 		return nil, err
@@ -176,6 +185,7 @@ func (tCmd *TopologyCommand) scanServers() *cmderror.CmdError {
 func (tCmd *TopologyCommand) removeServers() *cmderror.CmdError {
 	tCmd.deleteServerRpc = &DeleteServerRpc{}
 	tCmd.deleteServerRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "DeleteServer")
+	tCmd.deleteServerRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	for _, delReuest := range tCmd.deleteServer {
 		tCmd.deleteServerRpc.Request = delReuest
 		result, err := basecmd.GetRpcResponse(tCmd.deleteServerRpc.Info, tCmd.deleteServerRpc)
@@ -193,6 +203,7 @@ func (tCmd *TopologyCommand) removeServers() *cmderror.CmdError {
 func (tCmd *TopologyCommand) createServers() *cmderror.CmdError {
 	tCmd.createServerRpc = &CreateServerRpc{}
 	tCmd.createServerRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "RegisterServer")
+	tCmd.createServerRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	for _, crtReuest := range tCmd.createServer {
 		tCmd.createServerRpc.Request = crtReuest
 		result, err := basecmd.GetRpcResponse(tCmd.createServerRpc.Info, tCmd.createServerRpc)

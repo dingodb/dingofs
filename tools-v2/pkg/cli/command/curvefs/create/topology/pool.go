@@ -26,6 +26,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dingodb/dingofs/tools-v2/pkg/config"
+	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
@@ -62,7 +64,9 @@ func (dpRpc *DeletePoolRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (dpRpc *DeletePoolRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return dpRpc.topologyClient.DeletePool(ctx, dpRpc.Request)
+	response, err := dpRpc.topologyClient.DeletePool(ctx, dpRpc.Request)
+	output.ShowRpcData(dpRpc.Request, response, dpRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*DeletePoolRpc)(nil) // check interface
@@ -78,7 +82,9 @@ func (cpRpc *CreatePoolRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (cpRpc *CreatePoolRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return cpRpc.topologyClient.CreatePool(ctx, cpRpc.Request)
+	response, err := cpRpc.topologyClient.CreatePool(ctx, cpRpc.Request)
+	output.ShowRpcData(cpRpc.Request, response, cpRpc.Info.RpcDataShow)
+	return response, err
 }
 
 var _ basecmd.RpcFunc = (*CreatePoolRpc)(nil) // check interface
@@ -94,13 +100,16 @@ func (lpRpc *ListPoolRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (lpRpc *ListPoolRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return lpRpc.topologyClient.ListPool(ctx, lpRpc.Request)
+	response, err := lpRpc.topologyClient.ListPool(ctx, lpRpc.Request)
+	output.ShowRpcData(lpRpc.Request, response, lpRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func (tCmd *TopologyCommand) listPool() (*topology.ListPoolResponse, *cmderror.CmdError) {
 	tCmd.listPoolRpc = &ListPoolRpc{}
 	tCmd.listPoolRpc.Request = &topology.ListPoolRequest{}
 	tCmd.listPoolRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "ListPool")
+	tCmd.listPoolRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	result, err := basecmd.GetRpcResponse(tCmd.listPoolRpc.Info, tCmd.listPoolRpc)
 	if err.TypeCode() != cmderror.CODE_SUCCESS {
 		return nil, err
@@ -176,6 +185,7 @@ func (tCmd *TopologyCommand) scanPools() *cmderror.CmdError {
 func (tCmd *TopologyCommand) removePools() *cmderror.CmdError {
 	tCmd.deletePoolRpc = &DeletePoolRpc{}
 	tCmd.deletePoolRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "DeleteServer")
+	tCmd.deletePoolRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	for _, delReuest := range tCmd.deletePool {
 		tCmd.deletePoolRpc.Request = delReuest
 		result, err := basecmd.GetRpcResponse(tCmd.deletePoolRpc.Info, tCmd.deletePoolRpc)
@@ -193,6 +203,7 @@ func (tCmd *TopologyCommand) removePools() *cmderror.CmdError {
 func (tCmd *TopologyCommand) createPools() *cmderror.CmdError {
 	tCmd.createPoolRpc = &CreatePoolRpc{}
 	tCmd.createPoolRpc.Info = basecmd.NewRpc(tCmd.addrs, tCmd.timeout, tCmd.retryTimes, "CreatePool")
+	tCmd.createPoolRpc.Info.RpcDataShow = config.GetFlagBool(tCmd.Cmd, "verbose")
 	for _, crtReuest := range tCmd.createPool {
 		tCmd.createPoolRpc.Request = crtReuest
 		result, err := basecmd.GetRpcResponse(tCmd.createPoolRpc.Info, tCmd.createPoolRpc)

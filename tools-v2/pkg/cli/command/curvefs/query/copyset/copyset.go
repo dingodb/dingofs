@@ -68,7 +68,9 @@ func (qcRpc *QueryCopysetRpc) NewRpcClient(cc grpc.ClientConnInterface) {
 }
 
 func (qcRpc *QueryCopysetRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	return qcRpc.topologyClient.GetCopysetsInfo(ctx, qcRpc.Request)
+	response, err := qcRpc.topologyClient.GetCopysetsInfo(ctx, qcRpc.Request)
+	output.ShowRpcData(qcRpc.Request, response, qcRpc.Info.RpcDataShow)
+	return response, err
 }
 
 func NewCopysetCommand() *cobra.Command {
@@ -156,6 +158,7 @@ func (cCmd *CopysetCommand) Init(cmd *cobra.Command, args []string) error {
 		Request: getRequest,
 	}
 	cCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetCopysetsInfo")
+	cCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(cCmd.Cmd, "verbose")
 
 	return nil
 }
