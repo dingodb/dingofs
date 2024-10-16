@@ -1122,14 +1122,14 @@ CURVEFS_ERROR FileCacheManager::Flush(bool force, bool toS3) {
         }
 
         if (pendingReq.fetch_sub(1, std::memory_order_seq_cst) == 1) {
-          VLOG(9) << "pendingReq is over";
+          VLOG(9) << "Finish flush pendingReq, inodeId=" << inode_;
           cond.Signal();
         }
       };
 
   std::vector<std::shared_ptr<FlushChunkCacheContext>> flush_tasks;
   auto iter = tmp.begin();
-  VLOG(6) << "flush size is: " << tmp.size() << ", inodeId=" << inode_;
+  VLOG(6) << "flush chunk cache num: " << tmp.size() << ", inodeId=" << inode_;
 
   for (; iter != tmp.end(); iter++) {
     auto context = std::make_shared<FlushChunkCacheContext>();
@@ -1142,14 +1142,14 @@ CURVEFS_ERROR FileCacheManager::Flush(bool force, bool toS3) {
 
   pendingReq.fetch_add(flush_tasks.size(), std::memory_order_seq_cst);
   if (pendingReq.load(std::memory_order_seq_cst)) {
-    VLOG(6) << "wait for pendingReq";
+    VLOG(6) << "wait for pendingReq, inodeId=" << inode_;
     for (auto& flush_task : flush_tasks) {
       s3ClientAdaptor_->Enqueue(flush_task);
     }
     cond.Wait();
   }
 
-  VLOG(6) << "file cache flush over, inodeId=" << inode_;
+  VLOG(6) << "Finish file cache flush, inodeId=" << inode_;
   return ret;
 }
 
@@ -1743,7 +1743,8 @@ CURVEFS_ERROR ChunkCacheManager::Flush(uint64_t inodeId, bool force,
         flushingDataCache_ = nullptr;
       }
     } else {
-      VLOG(9) << "can not find flush datacache";
+      VLOG(9) << "can not find flush datacache, inodeId=" << inodeId
+              << ", chunkIndex:" << index_;
       break;
     }
   }

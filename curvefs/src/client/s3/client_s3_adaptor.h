@@ -28,8 +28,6 @@
 #include <string>
 #include <vector>
 
-#include "curvefs/proto/common.pb.h"
-#include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
@@ -145,7 +143,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   int Read(uint64_t inodeId, uint64_t offset, uint64_t length, char* buf);
   CURVEFS_ERROR Truncate(InodeWrapper* inodeWrapper, uint64_t size);
   void ReleaseCache(uint64_t inodeId);
-  CURVEFS_ERROR Flush(uint64_t inodeId);
+  CURVEFS_ERROR Flush(uint64_t inode_id);
   CURVEFS_ERROR FlushAllCache(uint64_t inodeId);
   CURVEFS_ERROR FsSync();
   int Stop();

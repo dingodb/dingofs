@@ -24,19 +24,8 @@
 #include <cstdint>
 #include <list>
 #include <string>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 using ::curvefs::metaserver::MetaStatusCode_Name;
-
-namespace curvefs {
-namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-}  // namespace common
-}  // namespace client
-}  // namespace curvefs
 
 namespace curvefs {
 namespace client {

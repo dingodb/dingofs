@@ -38,78 +38,98 @@ using ::curvefs::metaserver::MetaStatusCode_Name;
 
 namespace curvefs {
 namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-}  // namespace common
-}  // namespace client
-}  // namespace curvefs
-
-namespace curvefs {
-namespace client {
 
 using ::curvefs::client::filesystem::ToFSError;
 
 using NameLockGuard = ::curve::common::GenericNameLockGuard<Mutex>;
-using curvefs::client::common::FLAGS_enableCto;
 
-#define GET_INODE_REMOTE(FSID, INODEID, OUT, STREAMING)                      \
-  MetaStatusCode ret = metaClient_->GetInode(FSID, INODEID, OUT, STREAMING); \
-  if (ret != MetaStatusCode::OK) {                                           \
-    LOG_IF(ERROR, ret != MetaStatusCode::NOT_FOUND)                          \
-        << "metaClient_ GetInode failed, MetaStatusCode = " << ret           \
-        << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)            \
-        << ", inodeId=" << (INODEID);                                        \
-    return ToFSError(ret);                                                   \
-  }
+CURVEFS_ERROR InodeCacheManagerImpl::GetInodeFromCached(
+    uint64_t inode_id, std::shared_ptr<InodeWrapper>& out) {
+  NameLockGuard lock(nameLock_, std::to_string(inode_id));
+  return GetInodeFromCachedUnlocked(inode_id, out);
+}
 
-#define REFRESH_DATA_REMOTE(OUT, STREAMING)       \
-  CURVEFS_ERROR rc = RefreshData(OUT, STREAMING); \
-  if (rc != CURVEFS_ERROR::OK) {                  \
-    return rc;                                    \
-  }
-
-CURVEFS_ERROR
-InodeCacheManagerImpl::GetInode(uint64_t inodeId,
-                                std::shared_ptr<InodeWrapper>& out) {
-  NameLockGuard lock(nameLock_, std::to_string(inodeId));
-  bool yes = openFiles_->IsOpened(inodeId, &out);
+CURVEFS_ERROR InodeCacheManagerImpl::GetInodeFromCachedUnlocked(
+    uint64_t inode_id, std::shared_ptr<InodeWrapper>& out) {
+  bool yes = openFiles_->IsOpened(inode_id, &out);
   if (yes) {
-    VLOG(3) << "GetInode from openFiles, inodeId=" << inodeId;
+    VLOG(6) << "GetInode from openFiles, inodeId=" << inode_id;
     return CURVEFS_ERROR::OK;
+  }
+
+  yes = deferSync_->Get(inode_id, out);
+  if (yes) {
+    VLOG(6) << "GetInode from deferSync, inodeId=" << inode_id;
+    return CURVEFS_ERROR::OK;
+  }
+
+  return CURVEFS_ERROR::NOTEXIST;
+}
+
+CURVEFS_ERROR InodeCacheManagerImpl::GetInode(
+    uint64_t inode_id, std::shared_ptr<InodeWrapper>& out) {
+  NameLockGuard lock(nameLock_, std::to_string(inode_id));
+
+  CURVEFS_ERROR rc = GetInodeFromCachedUnlocked(inode_id, out);
+  if (rc == CURVEFS_ERROR::OK) {
+    return rc;
   }
 
   // get inode from metaserver
   Inode inode;
   bool streaming = false;
-  GET_INODE_REMOTE(fsId_, inodeId, &inode, &streaming);
+
+  MetaStatusCode ret =
+      metaClient_->GetInode(m_fs_id, inode_id, &inode, &streaming);
+  if (ret != MetaStatusCode::OK) {
+    LOG_IF(ERROR, ret != MetaStatusCode::NOT_FOUND)
+        << "metaClient_ GetInode failed, MetaStatusCode = " << ret
+        << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+        << ", inodeId=" << inode_id;
+    return ToFSError(ret);
+  }
+
+  VLOG(3) << "GetInode from metaserver, inodeId=" << inode_id;
+
   out = std::make_shared<InodeWrapper>(std::move(inode), metaClient_,
                                        s3ChunkInfoMetric_, option_.maxDataSize,
                                        option_.refreshDataIntervalSec);
 
   // refresh data
-  REFRESH_DATA_REMOTE(out, streaming);
-  VLOG(3) << "GetInode from metaserver, inodeId=" << inodeId;
+  rc = RefreshData(out, streaming);
+  if (rc != CURVEFS_ERROR::OK) {
+    return rc;
+  }
 
   return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR InodeCacheManagerImpl::GetInodeAttr(uint64_t inodeId,
+CURVEFS_ERROR InodeCacheManagerImpl::GetInodeAttr(uint64_t inode_id,
                                                   InodeAttr* out) {
-  NameLockGuard lock(nameLock_, std::to_string(inodeId));
-  std::set<uint64_t> inodeIds;
+  NameLockGuard lock(nameLock_, std::to_string(inode_id));
+
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  CURVEFS_ERROR rc = GetInodeFromCachedUnlocked(inode_id, inode_wrapper);
+  if (rc == CURVEFS_ERROR::OK) {
+    inode_wrapper->GetInodeAttr(out);
+    return rc;
+  }
+
+  std::set<uint64_t> inode_ids;
   std::list<InodeAttr> attrs;
-  inodeIds.emplace(inodeId);
-  MetaStatusCode ret = metaClient_->BatchGetInodeAttr(fsId_, inodeIds, &attrs);
+  inode_ids.emplace(inode_id);
+  MetaStatusCode ret =
+      metaClient_->BatchGetInodeAttr(m_fs_id, inode_ids, &attrs);
   if (MetaStatusCode::OK != ret) {
     LOG(ERROR) << "metaClient BatchGetInodeAttr failed"
-               << ", inodeId=" << inodeId << ", MetaStatusCode = " << ret
+               << ", inodeId=" << inode_id << ", MetaStatusCode = " << ret
                << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret);
     return ToFSError(ret);
   }
 
   if (attrs.size() != 1) {
     LOG(ERROR) << "metaClient BatchGetInodeAttr error,"
-               << " getSize is 1, inodeId=" << inodeId
+               << " getSize is 1, inodeId=" << inode_id
                << "but real size = " << attrs.size();
     return CURVEFS_ERROR::INTERNAL;
   }
@@ -118,42 +138,47 @@ CURVEFS_ERROR InodeCacheManagerImpl::GetInodeAttr(uint64_t inodeId,
   return CURVEFS_ERROR::OK;
 }
 
+// TODO: remove this function when enable sum dir is refacted
 CURVEFS_ERROR InodeCacheManagerImpl::BatchGetInodeAttr(
-    std::set<uint64_t>* inodeIds, std::list<InodeAttr>* attrs) {
-  if (inodeIds->empty()) {
+    std::set<uint64_t>* inode_ids, std::list<InodeAttr>* attrs) {
+  if (inode_ids->empty()) {
+    VLOG(1) << "BatchGetInodeAttr: inode_ids is empty";
     return CURVEFS_ERROR::OK;
   }
 
-  MetaStatusCode ret = metaClient_->BatchGetInodeAttr(fsId_, *inodeIds, attrs);
+  MetaStatusCode ret =
+      metaClient_->BatchGetInodeAttr(m_fs_id, *inode_ids, attrs);
   if (MetaStatusCode::OK != ret) {
     LOG(ERROR) << "metaClient BatchGetInodeAttr failed, MetaStatusCode = "
                << ret << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret);
   }
+
   return ToFSError(ret);
 }
 
+// TODO: no need find inode by cache, this is call by read dir
 CURVEFS_ERROR InodeCacheManagerImpl::BatchGetInodeAttrAsync(
-    uint64_t parentId, std::set<uint64_t>* inodeIds,
+    uint64_t parent_id, std::set<uint64_t>* inode_ids,
     std::map<uint64_t, InodeAttr>* attrs) {
-  NameLockGuard lg(asyncNameLock_, std::to_string(parentId));
+  NameLockGuard lg(asyncNameLock_, std::to_string(parent_id));
 
-  if (inodeIds->empty()) {
+  if (inode_ids->empty()) {
     return CURVEFS_ERROR::OK;
   }
 
   // split inodeIds by partitionId and batch limit
-  std::vector<std::vector<uint64_t>> inodeGroups;
-  if (!metaClient_->SplitRequestInodes(fsId_, *inodeIds, &inodeGroups)) {
+  std::vector<std::vector<uint64_t>> inode_groups;
+  if (!metaClient_->SplitRequestInodes(m_fs_id, *inode_ids, &inode_groups)) {
     return CURVEFS_ERROR::NOTEXIST;
   }
 
   ::curve::common::Mutex mutex;
   std::shared_ptr<CountDownEvent> cond =
-      std::make_shared<CountDownEvent>(inodeGroups.size());
-  for (const auto& it : inodeGroups) {
+      std::make_shared<CountDownEvent>(inode_groups.size());
+  for (const auto& it : inode_groups) {
     VLOG(3) << "BatchGetInodeAttrAsync Send " << it.size();
     auto* done = new BatchGetInodeAttrAsyncDone(attrs, &mutex, cond);
-    MetaStatusCode ret = metaClient_->BatchGetInodeAttrAsync(fsId_, it, done);
+    MetaStatusCode ret = metaClient_->BatchGetInodeAttrAsync(m_fs_id, it, done);
     if (MetaStatusCode::OK != ret) {
       LOG(ERROR) << "metaClient BatchGetInodeAsync failed,"
                  << " MetaStatusCode = " << ret
@@ -166,13 +191,13 @@ CURVEFS_ERROR InodeCacheManagerImpl::BatchGetInodeAttrAsync(
   return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR InodeCacheManagerImpl::BatchGetXAttr(std::set<uint64_t>* inodeIds,
-                                                   std::list<XAttr>* xattr) {
-  if (inodeIds->empty()) {
+CURVEFS_ERROR InodeCacheManagerImpl::BatchGetXAttr(
+    std::set<uint64_t>* inode_ids, std::list<XAttr>* xattr) {
+  if (inode_ids->empty()) {
     return CURVEFS_ERROR::OK;
   }
 
-  MetaStatusCode ret = metaClient_->BatchGetXAttr(fsId_, *inodeIds, xattr);
+  MetaStatusCode ret = metaClient_->BatchGetXAttr(m_fs_id, *inode_ids, xattr);
   if (MetaStatusCode::OK != ret) {
     LOG(ERROR) << "metaClient BatchGetXAttr failed, MetaStatusCode = " << ret
                << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret);
@@ -210,13 +235,13 @@ CURVEFS_ERROR InodeCacheManagerImpl::CreateManageInode(
   return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR InodeCacheManagerImpl::DeleteInode(uint64_t inodeId) {
-  NameLockGuard lock(nameLock_, std::to_string(inodeId));
-  MetaStatusCode ret = metaClient_->DeleteInode(fsId_, inodeId);
+CURVEFS_ERROR InodeCacheManagerImpl::DeleteInode(uint64_t inode_id) {
+  NameLockGuard lock(nameLock_, std::to_string(inode_id));
+  MetaStatusCode ret = metaClient_->DeleteInode(m_fs_id, inode_id);
   if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
     LOG(ERROR) << "metaClient_ DeleteInode failed, MetaStatusCode = " << ret
                << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
-               << ", inodeId=" << inodeId;
+               << ", inodeId=" << inode_id;
     return ToFSError(ret);
   }
   return CURVEFS_ERROR::OK;
@@ -227,9 +252,8 @@ void InodeCacheManagerImpl::ShipToFlush(
   deferSync_->Push(inode);
 }
 
-CURVEFS_ERROR
-InodeCacheManagerImpl::RefreshData(std::shared_ptr<InodeWrapper>& inode,
-                                   bool streaming) {
+CURVEFS_ERROR InodeCacheManagerImpl::RefreshData(
+    std::shared_ptr<InodeWrapper>& inode, bool streaming) {
   auto type = inode->GetType();
   CURVEFS_ERROR rc = CURVEFS_ERROR::OK;
 

@@ -25,17 +25,11 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 
-#include <algorithm>
-#include <chrono>
-#include <list>
 #include <utility>
 
-#include "absl/memory/memory.h"
 #include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/datastream/data_stream.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
-#include "curvefs/src/common/metric_utils.h"
-#include "curvefs/src/common/s3util.h"
 
 namespace curvefs {
 
@@ -124,8 +118,6 @@ int S3ClientAdaptorImpl::Write(uint64_t inodeId, uint64_t offset,
                                uint64_t length, const char* buf) {
   VLOG(6) << "write start offset:" << offset << ", len:" << length
           << ", fsId:" << fsId_ << ", inodeId=" << inodeId;
-  uint64_t start = butil::cpuwide_time_us();
-
   {
     std::lock_guard<std::mutex> lock_guard(ioMtx_);
     // TODO: maybe no need add then dec
@@ -240,17 +232,16 @@ void S3ClientAdaptorImpl::ReleaseCache(uint64_t inodeId) {
   VLOG(9) << "ReleaseCache inode:" << inodeId;
   fileCacheManager->ReleaseCache();
   fsCacheManager_->ReleaseFileCacheManager(inodeId);
-  return;
 }
 
-CURVEFS_ERROR S3ClientAdaptorImpl::Flush(uint64_t inodeId) {
-  FileCacheManagerPtr fileCacheManager =
-      fsCacheManager_->FindFileCacheManager(inodeId);
-  if (!fileCacheManager) {
+CURVEFS_ERROR S3ClientAdaptorImpl::Flush(uint64_t inode_id) {
+  FileCacheManagerPtr file_cache_manager =
+      fsCacheManager_->FindFileCacheManager(inode_id);
+  if (!file_cache_manager) {
     return CURVEFS_ERROR::OK;
   }
-  VLOG(6) << "Flush data of inodeId=" << inodeId;
-  return fileCacheManager->Flush(true, false);
+  VLOG(6) << "Flush data of inodeId=" << inode_id;
+  return file_cache_manager->Flush(true, false);
 }
 
 CURVEFS_ERROR S3ClientAdaptorImpl::FsSync() {
@@ -285,7 +276,6 @@ void S3ClientAdaptorImpl::BackGroundFlush() {
       VLOG(6) << "background fssync end";
     }
   }
-  return;
 }
 
 int S3ClientAdaptorImpl::Stop() {
@@ -362,14 +352,15 @@ void S3ClientAdaptorImpl::Enqueue(
 
 int S3ClientAdaptorImpl::FlushChunkClosure(
     std::shared_ptr<FlushChunkCacheContext> context) {
-  VLOG(9) << "FlushChunkCacheClosure start: " << context->inode;
+  VLOG(9) << "FlushChunkCacheClosure start: inodeId=" << context->inode;
   CURVEFS_ERROR ret =
       context->chunkCacheManptr->Flush(context->inode, context->force);
   // set the returned value
   // it is need in FlushChunkCacheCallBack
   context->retCode = ret;
   context->cb(context);
-  VLOG(9) << "FlushChunkCacheClosure end: " << context->inode;
+  VLOG(9) << "FlushChunkCacheClosure end: inodeId=" << context->inode
+          << ", ret:" << ret;
   return 0;
 }
 

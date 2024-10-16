@@ -59,7 +59,6 @@ class AttrWatcher {
  private:
   friend class AttrWatcherGuard;
 
- private:
   RWLock rwlock_;
   std::shared_ptr<LRUType> modifiedAt_;
   std::shared_ptr<OpenFiles> openFiles_;

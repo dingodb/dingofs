@@ -166,12 +166,12 @@ MetaStatusCode MetaServerClientImpl::GetDentry(uint32_t fsId, uint64_t inodeid,
       LOG(WARNING) << "GetDentry: fsId = " << fsId << ", inodeId=" << inodeid
                    << ", name = " << name
                    << " ok, but dentry or applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "GetDentry done, request: " << request.DebugString()
-             << "response: " << response.ShortDebugString();
+    VLOG(12) << "GetDentry done, request: " << request.ShortDebugString()
+             << ", response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -238,12 +238,12 @@ MetaStatusCode MetaServerClientImpl::ListDentry(uint32_t fsId, uint64_t inodeid,
                    << ", last = " << last << ", count = " << count
                    << ", onlyDir = " << onlyDir
                    << " ok, but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "ListDentry done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "ListDentry done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -300,23 +300,23 @@ MetaStatusCode MetaServerClientImpl::CreateDentry(const Dentry& dentry) {
 
     MetaStatusCode ret = response.statuscode();
     if (ret != MetaStatusCode::OK) {
-      LOG(WARNING) << "CreateDentry:  dentry = " << dentry.DebugString()
+      LOG(WARNING) << "CreateDentry:  dentry = " << dentry.ShortDebugString()
                    << ", errcode = " << ret
                    << ", errmsg = " << MetaStatusCode_Name(ret);
     } else if (response.has_appliedindex()) {
       metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
                                    response.appliedindex());
     } else {
-      LOG(WARNING) << "CreateDentry:  dentry = " << dentry.DebugString()
+      LOG(WARNING) << "CreateDentry:  dentry = " << dentry.ShortDebugString()
                    << " ok, but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
     VLOG(12) << "CreateDentry "
              << (ret == MetaStatusCode::OK ? "success" : "failure")
-             << ", request: " << request.DebugString()
-             << "response: " << response.DebugString();
+             << ", request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -381,12 +381,12 @@ MetaStatusCode MetaServerClientImpl::DeleteDentry(uint32_t fsId,
       LOG(WARNING) << "DeleteDentry:  fsid = " << fsId
                    << ", inodeId=" << inodeid << ", name = " << name
                    << " ok, but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "DeleteDentry done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "DeleteDentry done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -443,12 +443,12 @@ MetaStatusCode MetaServerClientImpl::PrepareRenameTx(
     } else {
       LOG(WARNING) << "PrepareRenameTx OK"
                    << ", but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "PrepareRenameTx done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "PrepareRenameTx done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return rc;
   };
 
@@ -507,7 +507,7 @@ MetaStatusCode MetaServerClientImpl::GetInode(uint32_t fsId, uint64_t inodeid,
     } else {
       LOG(WARNING) << "inodeId=" << inodeid
                    << " ok, but applyIndex or inode not set in response: "
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
@@ -516,7 +516,7 @@ MetaStatusCode MetaServerClientImpl::GetInode(uint32_t fsId, uint64_t inodeid,
     for (auto& item : s3chunkinfoMap) {
       VLOG(12) << "inodeInfo, inodeId=" << inodeid
                << ", s3chunkinfo item key:" << item.first
-               << ", value:" << item.second.DebugString();
+               << ", value:" << item.second.ShortDebugString();
     }
     return ret;
   };
@@ -614,13 +614,13 @@ void BatchGetInodeAttrRpcDone::Run() {
   } else {
     LOG(WARNING) << "batchGetInodeAttr ok,"
                  << " but applyIndex not set in response:"
-                 << response.DebugString();
+                 << response.ShortDebugString();
     done_->SetRetCode(-1);
     return;
   }
 
   VLOG(12) << "batchGetInodeAttr done, "
-           << "response: " << response.DebugString();
+           << "response: " << response.ShortDebugString();
   done_->SetRetCode(ret);
   dynamic_cast<BatchGetInodeAttrTaskExecutorDone*>(done_)->SetInodeAttrs(
       response.attr());
@@ -687,7 +687,7 @@ MetaStatusCode MetaServerClientImpl::BatchGetInodeAttr(
       } else {
         LOG(WARNING) << "BatchGetInodeAttr ok, but"
                      << " applyIndex or attr not set in response: "
-                     << response.DebugString();
+                     << response.ShortDebugString();
         return -1;
       }
       return ret;
@@ -800,7 +800,7 @@ MetaStatusCode MetaServerClientImpl::BatchGetXAttr(
       } else {
         LOG(WARNING) << "BatchGetXAttr ok, but"
                      << " applyIndex or attr not set in response: "
-                     << response.DebugString();
+                     << response.ShortDebugString();
         return -1;
       }
       return ret;
@@ -854,7 +854,7 @@ MetaStatusCode MetaServerClientImpl::UpdateInode(
     MetaStatusCode ret = response.statuscode();
     if (ret != MetaStatusCode::OK) {
       LOG(WARNING) << "inodeId=" << request.inodeid()
-                   << " UpdateInode:  request: " << request.DebugString()
+                   << " UpdateInode:  request: " << request.ShortDebugString()
                    << ", errcode = " << ret
                    << ", errmsg = " << MetaStatusCode_Name(ret);
     } else if (response.has_appliedindex()) {
@@ -862,14 +862,14 @@ MetaStatusCode MetaServerClientImpl::UpdateInode(
                                    response.appliedindex());
     } else {
       LOG(WARNING) << "inodeId=" << request.inodeid()
-                   << " UpdateInode:  request: " << request.DebugString()
+                   << " UpdateInode:  request: " << request.ShortDebugString()
                    << "ok, but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "UpdateInode done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "UpdateInode done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -1002,13 +1002,13 @@ void UpdateInodeRpcDone::Run() {
   } else {
     LOG(WARNING) << "inodeId=" << task_ctx->inodeID
                  << "UpdateInode ok, but applyIndex not set in response:"
-                 << response.DebugString();
+                 << response.ShortDebugString();
     done_->SetRetCode(-1);
     return;
   }
 
   VLOG(12) << "inodeId=" << task_ctx->inodeID << " UpdateInode done, "
-           << "response: " << response.DebugString();
+           << "response: " << response.ShortDebugString();
   done_->SetRetCode(ret);
 }
 
@@ -1174,11 +1174,12 @@ MetaStatusCode MetaServerClientImpl::GetOrModifyS3ChunkInfo(
       LOG(WARNING) << "inodeId=" << inodeId
                    << " GetOrModifyS3ChunkInfo fsId: " << fsId
                    << " ok, but applyIndex or inode not set in response: "
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
-    VLOG(6) << "GetOrModifyS3ChunkInfo done, request: " << request.DebugString()
-            << "response: " << response.DebugString();
+    VLOG(6) << "GetOrModifyS3ChunkInfo done, request: "
+            << request.ShortDebugString()
+            << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -1242,13 +1243,13 @@ void GetOrModifyS3ChunkInfoRpcDone::Run() {
     LOG(WARNING) << "GetOrModifyS3ChunkInfo,  inodeId=" << taskCtx->inodeID
                  << ", fsId: " << taskCtx->fsID
                  << "ok, but applyIndex or inode not set in response: "
-                 << response.DebugString();
+                 << response.ShortDebugString();
     done_->SetRetCode(-1);
     return;
   }
 
   VLOG(12) << "GetOrModifyS3ChunkInfo done, response: "
-           << response.DebugString();
+           << response.ShortDebugString();
   done_->SetRetCode(ret);
 }
 
@@ -1348,12 +1349,12 @@ MetaStatusCode MetaServerClientImpl::CreateInode(const InodeParam& param,
     } else {
       LOG(WARNING) << "CreateInode= param = " << param
                    << " ok, but applyIndex or inode not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "CreateInode done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "CreateInode done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -1420,12 +1421,13 @@ MetaStatusCode MetaServerClientImpl::CreateManageInode(const InodeParam& param,
     } else {
       LOG(WARNING) << "CreateManageInode= param = " << param
                    << " ok, but applyIndex or inode not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "CreateManageInode done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "CreateManageInode done, request: "
+             << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 
@@ -1480,12 +1482,12 @@ MetaStatusCode MetaServerClientImpl::DeleteInode(uint32_t fsId,
     } else {
       LOG(WARNING) << "DeleteInode= fsid = " << fsId << ", inodeId=" << inodeid
                    << " ok, but applyIndex not set in response:"
-                   << response.DebugString();
+                   << response.ShortDebugString();
       return -1;
     }
 
-    VLOG(12) << "DeleteInode done, request: " << request.DebugString()
-             << "response: " << response.DebugString();
+    VLOG(12) << "DeleteInode done, request: " << request.ShortDebugString()
+             << "response: " << response.ShortDebugString();
     return ret;
   };
 

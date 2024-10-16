@@ -28,66 +28,66 @@
 #include "curvefs/src/client/curve_fuse_op.h"
 #include "curvefs/src/client/fuse_common.h"
 
-static const struct fuse_lowlevel_ops curve_ll_oper = {
-  init : FuseOpInit,
-  destroy : FuseOpDestroy,
-  lookup : FuseOpLookup,
-  forget : 0,
-  getattr : FuseOpGetAttr,
-  setattr : FuseOpSetAttr,
-  readlink : FuseOpReadLink,
-  mknod : FuseOpMkNod,
-  mkdir : FuseOpMkDir,
-  unlink : FuseOpUnlink,
-  rmdir : FuseOpRmDir,
-  symlink : FuseOpSymlink,
-  rename : FuseOpRename,
-  link : FuseOpLink,
-  open : FuseOpOpen,
-  read : FuseOpRead,
-  write : FuseOpWrite,
-  flush : FuseOpFlush,
-  release : FuseOpRelease,
-  fsync : FuseOpFsync,
-  opendir : FuseOpOpenDir,
+static const struct fuse_lowlevel_ops fuse_op = {
+    .init = FuseOpInit,
+    .destroy = FuseOpDestroy,
+    .lookup = FuseOpLookup,
+    .forget = nullptr,
+    .getattr = FuseOpGetAttr,
+    .setattr = FuseOpSetAttr,
+    .readlink = FuseOpReadLink,
+    .mknod = FuseOpMkNod,
+    .mkdir = FuseOpMkDir,
+    .unlink = FuseOpUnlink,
+    .rmdir = FuseOpRmDir,
+    .symlink = FuseOpSymlink,
+    .rename = FuseOpRename,
+    .link = FuseOpLink,
+    .open = FuseOpOpen,
+    .read = FuseOpRead,
+    .write = FuseOpWrite,
+    .flush = FuseOpFlush,
+    .release = FuseOpRelease,
+    .fsync = FuseOpFsync,
+    .opendir = FuseOpOpenDir,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
-  readdir : 0,
+    .readdir = nullptr,
 #else
-  readdir : FuseOpReadDir,
+    .readdir = FuseOpReadDir,
 #endif
-  releasedir : FuseOpReleaseDir,
-  fsyncdir : 0,
-  statfs : FuseOpStatFs,
-  setxattr : FuseOpSetXattr,
-  getxattr : FuseOpGetXattr,
-  listxattr : FuseOpListXattr,
-  removexattr : 0,
-  access : 0,
-  create : FuseOpCreate,
-  getlk : 0,
-  setlk : 0,
-  bmap : FuseOpBmap,
+    .releasedir = FuseOpReleaseDir,
+    .fsyncdir = nullptr,
+    .statfs = FuseOpStatFs,
+    .setxattr = FuseOpSetXattr,
+    .getxattr = FuseOpGetXattr,
+    .listxattr = FuseOpListXattr,
+    .removexattr = nullptr,
+    .access = nullptr,
+    .create = FuseOpCreate,
+    .getlk = nullptr,
+    .setlk = nullptr,
+    .bmap = FuseOpBmap,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
-  ioctl : 0,
-  poll : 0,
+    .ioctl = nullptr,
+    .poll = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 9)
-  write_buf : 0,
-  retrieve_reply : 0,
-  forget_multi : 0,
-  flock : 0,
-  fallocate : 0,
+    .write_buf = nullptr,
+    .retrieve_reply = nullptr,
+    .forget_multi = nullptr,
+    .flock = nullptr,
+    .fallocate = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
-  readdirplus : FuseOpReadDirPlus,
+    .readdirplus = FuseOpReadDirPlus,
 #else
-  readdirplus : 0,
+    .readdirplus = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 4)
-  copy_file_range : 0,
+    .copy_file_range = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 8)
-  lseek : 0
+    .lseek = 0
 #endif
 };
 
@@ -204,7 +204,7 @@ int main(int argc, char* argv[]) {
 
   printf("Begin to mount fs %s to %s\n", mOpts.fsName, mOpts.mountPoint);
 
-  se = fuse_session_new(&args, &curve_ll_oper, sizeof(curve_ll_oper), &mOpts);
+  se = fuse_session_new(&args, &fuse_op, sizeof(fuse_op), &mOpts);
   if (se == NULL) goto err_out1;
 
   if (fuse_set_signal_handlers(se) != 0) goto err_out2;

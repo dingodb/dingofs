@@ -226,9 +226,9 @@ struct CURVE_CACHELINE_ALIGNMENT CopysetInfo {
     *peerid = csinfos_[leaderindex_].peerID;
     *ep = csinfos_[leaderindex_].externalAddr.addr_;
 
-    VLOG(6) << "GetLeaderInfo pool " << lpid_ << ", copyset " << cpid_
-            << " leader id " << *peerid << ", end point "
-            << butil::endpoint2str(*ep).c_str();
+    VLOG(12) << "GetLeaderInfo pool " << lpid_ << ", copyset " << cpid_
+             << " leader id " << *peerid << ", end point "
+             << butil::endpoint2str(*ep).c_str();
 
     return 0;
   }
