@@ -24,19 +24,18 @@
 #define CURVEFS_SRC_CLIENT_FILESYSTEM_OPENFILE_H_
 
 #include <memory>
+#include <unordered_map>
 
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/metric.h"
 #include "curvefs/src/client/inode_wrapper.h"
-#include "src/common/lru_cache.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
-using ::curve::common::LRUCache;
 using ::curve::common::ReadLockGuard;
 using ::curve::common::WriteLockGuard;
 using ::curvefs::client::InodeWrapper;
@@ -52,11 +51,10 @@ struct OpenFile {
 
 class OpenFiles {
  public:
-  using LRUType = LRUCache<Ino, std::shared_ptr<OpenFile>>;
-
- public:
+  // option not used, but keeped here, we can turn on/off openfiles cache in the
+  // future like juicefs
   explicit OpenFiles(OpenFilesOption option,
-                     std::shared_ptr<DeferSync> deferSync);
+                     std::shared_ptr<DeferSync> defer_sync);
 
   void Open(Ino ino, std::shared_ptr<InodeWrapper> inode);
 
@@ -66,18 +64,13 @@ class OpenFiles {
 
   void CloseAll();
 
-  bool GetFileAttr(Ino ino, InodeAttr* inode);
-
- private:
-  void Delete(Ino ino, const std::shared_ptr<OpenFile>& file, bool flush);
-
-  void Evit(size_t size);
+  bool GetFileAttr(Ino ino, InodeAttr* attr);
 
  private:
   RWLock rwlock_;
   OpenFilesOption option_;
   std::shared_ptr<DeferSync> deferSync_;
-  std::shared_ptr<LRUType> files_;
+  std::unordered_map<Ino, std::unique_ptr<OpenFile>> files_;
   std::shared_ptr<OpenfilesMetric> metric_;
 };
 

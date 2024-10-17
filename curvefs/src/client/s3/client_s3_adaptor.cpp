@@ -123,8 +123,6 @@ int S3ClientAdaptorImpl::Write(uint64_t inodeId, uint64_t offset,
                                uint64_t length, const char* buf) {
   VLOG(6) << "write start offset:" << offset << ", len:" << length
           << ", fsId:" << fsId_ << ", inodeId=" << inodeId;
-  uint64_t start = butil::cpuwide_time_us();
-
   {
     std::lock_guard<std::mutex> lock_guard(ioMtx_);
     // TODO: maybe no need add then dec

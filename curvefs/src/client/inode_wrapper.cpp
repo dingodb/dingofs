@@ -452,6 +452,8 @@ CURVEFS_ERROR InodeWrapper::Sync(bool internal) {
 }
 
 void InodeWrapper::Async(MetaServerClientDone* done, bool internal) {
+  curve::common::UniqueLock lg(mtx_);
+
   switch (inode_.type()) {
     case FsFileType::TYPE_S3:
       return AsyncS3(done, internal);
