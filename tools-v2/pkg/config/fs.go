@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gookit/color"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
+	"github.com/gookit/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -98,6 +98,9 @@ const (
 	CURVEFS_STATS_SCHEMA         = "schema"
 	VIPER_CURVEFS_STATS_SCHEMA   = "curvefs.schema"
 	CURVEFS_STATS_DEFAULT_SCHEMA = "ufmbo"
+	CURVEFS_STATS_COUNT          = "count"
+	VIPER_CURVEFS_STATS_COUNT    = "curvefs.count"
+	CURVEFS_STATS_DEFAULT_COUNT  = uint32(0)
 
 	// S3
 	CURVEFS_S3_AK                 = "s3.ak"
@@ -176,6 +179,7 @@ var (
 		CURVEFS_DAEMON:         VIPER_CURVEFS_DAEMON,
 		CURVEFS_STORAGE:        VIPER_CURVEFS_STORAGE,
 		CURVEFS_STATS_SCHEMA:   VIPER_CURVEFS_STATS_SCHEMA,
+		CURVEFS_STATS_COUNT:    VIPER_CURVEFS_STATS_COUNT,
 
 		// S3
 		CURVEFS_S3_AK:         VIPER_CURVEFS_S3_AK,
@@ -207,6 +211,7 @@ var (
 		CURVEFS_DAEMON:       CURVEFS_DEFAULT_DAEMON,
 		CURVEFS_STORAGE:      CURVEFS_DEFAULT_STORAGE,
 		CURVEFS_STATS_SCHEMA: CURVEFS_STATS_DEFAULT_SCHEMA,
+		CURVEFS_STATS_COUNT:  CURVEFS_STATS_DEFAULT_COUNT,
 
 		// S3
 		CURVEFS_S3_AK:         CURVEFS_DEFAULT_S3_AK,
@@ -776,6 +781,24 @@ func GetStorageFlag(cmd *cobra.Command) string {
 	return GetFlagString(cmd, CURVEFS_STORAGE)
 }
 
+// stats schema [option]
+func AddFsSchemaOptionalFlag(cmd *cobra.Command) {
+	AddStringOptionFlag(cmd, CURVEFS_STATS_SCHEMA, `schema string that controls the output sections (u: usage, f: fuse, m: metaserver,s: mds, b: blockcache, o: object)`)
+}
+
+func GetStatsSchemaFlagOptionFlag(cmd *cobra.Command) string {
+	return GetFlagString(cmd, CURVEFS_STATS_SCHEMA)
+}
+
+// stats count [optional]
+func AddFsCountOptionalFlag(cmd *cobra.Command) {
+	AddUint32OptionFlag(cmd, CURVEFS_STATS_COUNT, `the max number of outout (Default is 0, no restriction)`)
+}
+
+func GetStatsCountFlagOptionFlag(cmd *cobra.Command) uint32 {
+	return GetFlagUint32(cmd, CURVEFS_STATS_COUNT)
+}
+
 /* required */
 
 // copysetid [required]
@@ -811,11 +834,4 @@ func AddMountpointRequiredFlag(cmd *cobra.Command) {
 // servers [required]
 func AddFsServersRequiredFlag(cmd *cobra.Command) {
 	AddStringRequiredFlag(cmd, CURVEFS_SERVERS, "curvefs memcache servers")
-}
-
-func AddFsSchemaOptionalFlag(cmd *cobra.Command) {
-	AddStringOptionFlag(cmd, CURVEFS_STATS_SCHEMA, `schema string that controls the output sections (u: usage, f: fuse, m: metaserver,s: mds, b: blockcache, o: object)`)
-}
-func GetStatsSchemaFlagOptionFlag(cmd *cobra.Command) string {
-	return GetFlagString(cmd, CURVEFS_STATS_SCHEMA)
 }

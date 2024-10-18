@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -87,6 +88,7 @@ type statsWatcher struct {
 	header     string
 	sections   []*section
 	cpuUsage   float64
+	count      uint32
 }
 
 var _ basecmd.FinalCurveCmdFunc = (*StatsCommand)(nil) // check interface
@@ -116,7 +118,8 @@ curve fs stats /mnt/dingofs --schema o
 # More metrics
 curve fs stats /mnt/dingofs --verbose
 
-warning: --format、--conf、--showerror is ignored for stats command`,
+# Show 3 times
+curve fs stats /mnt/dingofs --count 3`,
 		},
 	}
 	return basecmd.NewFinalCurveCli(&statsCmd.FinalCurveCmd, statsCmd)
@@ -126,7 +129,7 @@ warning: --format、--conf、--showerror is ignored for stats command`,
 func (statsCmd *StatsCommand) AddFlags() {
 	config.AddIntervalOptionFlag(statsCmd.Cmd)
 	config.AddFsSchemaOptionalFlag(statsCmd.Cmd)
-
+	config.AddFsCountOptionalFlag(statsCmd.Cmd)
 }
 
 func (statsCmd *StatsCommand) Init(cmd *cobra.Command, args []string) error {
@@ -144,10 +147,11 @@ func (statsCmd *StatsCommand) RunCommand(cmd *cobra.Command, args []string) erro
 	schemaValue := config.GetStatsSchemaFlagOptionFlag(cmd)
 	verbose := config.GetFlagBool(cmd, "verbose")
 	duration := config.GetIntervalFlag(cmd)
+	count := config.GetStatsCountFlagOptionFlag(cmd)
 	if duration < 1*time.Second {
 		duration = 1 * time.Second
 	}
-	realTimeStats(mountPoint, schemaValue, verbose, duration)
+	realTimeStats(mountPoint, schemaValue, verbose, duration, count)
 	return nil
 }
 func (statsCmd *StatsCommand) Print(cmd *cobra.Command, args []string) error {
@@ -425,7 +429,7 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 }
 
 // real time read metric data and show in client
-func realTimeStats(mountPoint string, schema string, verbose bool, duration time.Duration) {
+func realTimeStats(mountPoint string, schema string, verbose bool, duration time.Duration, count uint32) {
 	inode, err := GetFileInode(mountPoint)
 	if err != nil {
 		log.Fatalf("run stats failed, %s", err)
@@ -439,6 +443,7 @@ func realTimeStats(mountPoint string, schema string, verbose bool, duration time
 		mountPoint: mountPoint,
 		interval:   int64(duration) / 1000000000,
 		cpuUsage:   0.0,
+		count:      count,
 	}
 	watcher.buildSchema(schema, verbose)
 	watcher.formatHeader()
@@ -464,6 +469,10 @@ func realTimeStats(mountPoint string, schema string, verbose bool, duration time
 		tick++
 		<-ticker.C
 		current = readStats(watcher.mountPoint)
+		//for interval > 1s,don't print the middle result for last time
+		if uint(math.Ceil(float64(tick)/float64(watcher.interval))) == uint(watcher.count) { //exit
+			break
+		}
 	}
 
 }
