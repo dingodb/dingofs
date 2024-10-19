@@ -687,8 +687,8 @@ void WarmupManagerS3Impl::PutObjectToCache(
       BlockKey key;
       Block block(context->buf, context->len);
       auto items = PathSplit(context->key);
-      assert(items.size() > 0);
-      assert(key.ParseFilename(items.back()));
+      CHECK_GT(items.size(), 0);
+      CHECK(key.ParseFilename(items.back()));
       auto block_cache = s3Adaptor_->GetBlockCache();
       auto rc = block_cache->Cache(key, block);
       if (rc != BCACHE_ERROR::OK) {
