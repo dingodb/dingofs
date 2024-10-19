@@ -337,8 +337,15 @@ void InitDataStreamOption(Configuration* c, DataStreamOption* option) {
     }
 
     o->total_size = o->total_size * kMiB;
-    if (o->total_size < 8 * kMiB) {
-      CHECK(false) << "Page total size must greater than 8MiB.";
+    if (o->total_size < 64 * kMiB) {
+      CHECK(false) << "Page total size must greater than 64MiB.";
+    }
+
+    double trigger_force_flush_memory_ratio =
+        option->background_flush_option.trigger_force_memory_ratio;
+    if (o->total_size * (1.0 - trigger_force_flush_memory_ratio) < 32 * kMiB) {
+      CHECK(false) << "Please gurantee the free memory size greater than 32MiB "
+                      "before force flush.";
     }
   }
 }

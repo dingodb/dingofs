@@ -26,6 +26,7 @@
 #include <brpc/controller.h>
 
 #include <algorithm>
+#include <chrono>
 #include <list>
 #include <utility>
 
@@ -129,6 +130,11 @@ int S3ClientAdaptorImpl::Write(uint64_t inodeId, uint64_t offset,
     std::lock_guard<std::mutex> lock_guard(ioMtx_);
     // TODO: maybe no need add then dec
     fsCacheManager_->DataCacheByteInc(length);
+
+    // Write stall for memory near full
+    while (DataStream::GetInstance().MemoryNearFull()) {
+      std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
   }
 
   FileCacheManagerPtr file_cache_manager =
