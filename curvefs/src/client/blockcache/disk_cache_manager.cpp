@@ -72,6 +72,7 @@ void DiskCacheManager::Start() {
     return;  // already running
   }
 
+  used_bytes_ = 0;  // For restart
   mq_->Start();
   task_pool_->Start(2);
   task_pool_->Enqueue(&DiskCacheManager::CheckFreeSpace, this);

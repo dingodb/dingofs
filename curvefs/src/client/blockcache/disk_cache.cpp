@@ -95,9 +95,9 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
   auto rc = CreateDirs();
   if (rc == BCACHE_ERROR::OK) {
     rc = LoadLockFile();
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
-    }
+  }
+  if (rc != BCACHE_ERROR::OK) {
+    return rc;
   }
 
   uploader_ = uploader;
