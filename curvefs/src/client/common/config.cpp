@@ -280,10 +280,6 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
     auto o = &option->dirCacheOption;
     c->GetValueFatalIfFail("fs.dirCache.lruSize", &o->lruSize);
   }
-  {  // open file option
-    auto o = &option->openFilesOption;
-    c->GetValueFatalIfFail("fs.openFile.lruSize", &o->lruSize);
-  }
   {  // attr watcher option
     auto o = &option->attrWatcherOption;
     c->GetValueFatalIfFail("fs.attrWatcher.lruSize", &o->lruSize);
