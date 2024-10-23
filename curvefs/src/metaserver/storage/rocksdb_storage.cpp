@@ -391,9 +391,10 @@ bool DuplicateRocksdbCheckpoint(const std::string& from,
 
   std::vector<rocksdb::ColumnFamilyHandle*> cfHandles;
 
-  auto status = rocksdb::DB::OpenForReadOnly(
-      dbOptions, from, columnFamilies, &cfHandles, &db,
-      /* error_if_wal_file_exists */ true);
+  // if set error_if_wal_file_exists true, restart maybe fail
+  // https://github.com/facebook/rocksdb/pull/10083
+  auto status = rocksdb::DB::OpenForReadOnly(dbOptions, from, columnFamilies,
+                                             &cfHandles, &db);
 
   if (!status.ok()) {
     LOG(ERROR) << "Failed to open checkpoint, error: " << status.ToString();
