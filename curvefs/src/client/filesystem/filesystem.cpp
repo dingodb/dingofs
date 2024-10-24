@@ -336,6 +336,7 @@ CURVEFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
 CURVEFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
   if (ino == STATSINODEID) {
     ReleaseHandler(fi->fh);
+    return CURVEFS_ERROR::OK;
   }
   openFiles_->Close(ino);
   return CURVEFS_ERROR::OK;
