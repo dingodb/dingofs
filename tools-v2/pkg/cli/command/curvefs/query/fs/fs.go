@@ -106,7 +106,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 		// fsname is set, but fsid is not set
 		fsNames, _ = fCmd.Cmd.Flags().GetStringSlice(config.CURVEFS_FSNAME)
 	} else {
-		fsIds = viper.GetStringSlice(config.VIPER_CURVEFS_FSID)
+		fsIds, _ = fCmd.Cmd.Flags().GetStringSlice(config.CURVEFS_FSID)
 	}
 
 	if len(fsIds) == 0 && len(fsNames) == 0 {
