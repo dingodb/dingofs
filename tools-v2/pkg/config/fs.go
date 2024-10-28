@@ -158,6 +158,13 @@ const (
 	CURVEFS_VOLUME_SLICESIZE              = "volume.slicesize"
 	VIPER_CURVEFS_VOLUME_SLICESIZE        = "curvefs.volume.slicesize"
 	CURVEFS_DEFAULT_VOLUME_SLICESIZE      = "1 GiB"
+	// gateway
+	GATEWAY_LISTEN_ADDRESS          = "address"
+	VIPER_GATEWAY_LISTEN_ADDRESS    = "gateway.address"
+	GATEWAY_DEFAULT_LISTEN_ADDRESS  = ":19000"
+	GATEWAY_CONSOLE_ADDRESS         = "console-address"
+	VIPER_GATEWAY_CONSOLE_ADDRESS   = "gateway.console-address"
+	GATEWAY_DEFAULT_CONSOLE_ADDRESS = ":19001"
 )
 
 var (
@@ -214,6 +221,10 @@ var (
 		CURVEFS_VOLUME_PASSWORD:       VIPER_CURVEFS_VOLUME_PASSWORD,
 		CURVEFS_VOLUME_BITMAPLOCATION: VIPER_CURVEFS_VOLUME_BITMAPLOCATION,
 		CURVEFS_VOLUME_SLICESIZE:      VIPER_CURVEFS_VOLUME_SLICESIZE,
+
+		// gateway
+		GATEWAY_LISTEN_ADDRESS:  VIPER_GATEWAY_LISTEN_ADDRESS,
+		GATEWAY_CONSOLE_ADDRESS: VIPER_GATEWAY_CONSOLE_ADDRESS,
 	}
 	FLAG2DEFAULT = map[string]interface{}{
 		RPCTIMEOUT:           DEFAULT_RPCTIMEOUT,
@@ -250,6 +261,10 @@ var (
 		CURVEFS_VOLUME_PASSWORD:       CURVEFS_DEFAULT_VOLUME_PASSWORD,
 		CURVEFS_VOLUME_BITMAPLOCATION: CURVEFS_DEFAULT_VOLUME_BITMAPLOCATION,
 		CURVEFS_VOLUME_SLICESIZE:      CURVEFS_DEFAULT_VOLUME_SLICESIZE,
+
+		// gateway
+		GATEWAY_LISTEN_ADDRESS:  GATEWAY_DEFAULT_LISTEN_ADDRESS,
+		GATEWAY_CONSOLE_ADDRESS: GATEWAY_DEFAULT_CONSOLE_ADDRESS,
 	}
 )
 
@@ -875,6 +890,16 @@ func AddInodeIdRequiredFlag(cmd *cobra.Command) {
 // fsid [required]
 func AddFsIdRequiredFlag(cmd *cobra.Command) {
 	AddUint32RequiredFlag(cmd, CURVEFS_FSID, "fsid")
+}
+
+// listen address [required]
+func AddListenAddressRequiredFlag(cmd *cobra.Command) {
+	AddStringRequiredFlag(cmd, GATEWAY_LISTEN_ADDRESS, "gateway listen address")
+}
+
+// console address [required]
+func AddConsoleAddressOptionalFlag(cmd *cobra.Command) {
+	AddStringOptionFlag(cmd, GATEWAY_CONSOLE_ADDRESS, "gateway console address")
 }
 
 // cluserMap [required]

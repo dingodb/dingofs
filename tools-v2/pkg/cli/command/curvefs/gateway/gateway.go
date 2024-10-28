@@ -33,6 +33,7 @@ import (
 	mnas "github.com/minio/minio/cmd/gateway/nas"
 	"github.com/spf13/cobra"
 	"os"
+	"strings"
 )
 
 var logger = utils.GetLogger("dingofs gateway")
@@ -62,6 +63,8 @@ func NewGatewayCommand() *cobra.Command {
 func (gCmd *GatewayCommand) AddFlags() {
 	config.AddFsMdsAddrFlag(gCmd.Cmd)
 	config.AddFsIdRequiredFlag(gCmd.Cmd)
+	config.AddListenAddressRequiredFlag(gCmd.Cmd)
+	config.AddConsoleAddressOptionalFlag(gCmd.Cmd)
 }
 
 func (gCmd *GatewayCommand) Init(cmd *cobra.Command, args []string) error {
@@ -107,21 +110,27 @@ func gateway(cmd *cobra.Command) error {
 	fsId := config.GetFlagUint32(cmd, config.CURVEFS_FSID)
 
 	// locate mount point path
-	mountPoint, err := getMountPoint(addrs[0], fsId, "")
+	mountPoint, err := getMountPoint(strings.Join(addrs, ","), fsId, "")
 	if err != nil {
 		return err
 	}
-	listenAddr := "127.0.0.1" + ":" + "19000"
+	listenAddr := config.GetFlagString(cmd, config.GATEWAY_LISTEN_ADDRESS)
+	consoleAddr := config.GetFlagString(cmd, config.GATEWAY_CONSOLE_ADDRESS)
 
-	args := []string{"gateway", "--address", listenAddr, "--anonymous", mountPoint}
+	args := []string{"gateway", "--address", listenAddr, "--console-address", consoleAddr, "--anonymous", mountPoint}
 
 	app := &mcli.App{
 		Action: gateway2,
 		Flags: []mcli.Flag{
 			mcli.StringFlag{
 				Name:  "address",
-				Value: ":9000",
+				Value: ":19000",
 				Usage: "bind to a specific ADDRESS:PORT, ADDRESS can be an IP or hostname",
+			},
+			mcli.StringFlag{
+				Name:  "console-address",
+				Value: ":19001",
+				Usage: "bind to a specific CONSOLE_ADDRESS:PORT, CONSOLE_ADDRESS can be an IP or hostname",
 			},
 			mcli.BoolFlag{
 				Name:  "anonymous",
@@ -171,7 +180,8 @@ func getMountPoint(mdsaddr string, fsId uint32, fsName string) (string, error) {
 		if fs.GetFsId() == fsId || fs.GetFsName() == fsName {
 			mountPoints := fs.GetMountpoints()
 			if len(mountPoints) > 0 {
-				return mountPoints[0].GetPath(), nil
+				prefix := "/curvefs/client/mnt"
+				return strings.TrimPrefix(mountPoints[0].GetPath(), prefix), nil
 			}
 		}
 	}
