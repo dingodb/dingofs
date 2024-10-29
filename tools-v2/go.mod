@@ -270,4 +270,4 @@ require (
 )
 
 // replace github.com/minio/minio v0.0.0-20210206053228-97fe57bba92c => github.com/dingodb/minio v0.0.0-20240912134328-6a47725331ab
-replace github.com/minio/minio v0.0.0-20220430222353-c3f689a7d9d1 => github.com/jackblack369/minio v0.0.0-20241024041343-82e2754cc067
+replace github.com/minio/minio v0.0.0-20220430222353-c3f689a7d9d1 => github.com/jackblack369/minio v0.0.0-20241028111122-43ede3c300e5

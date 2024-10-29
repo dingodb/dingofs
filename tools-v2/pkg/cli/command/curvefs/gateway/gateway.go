@@ -45,7 +45,7 @@ type GatewayCommand struct {
 var _ basecmd.FinalCurveCmdFunc = (*GatewayCommand)(nil) // check interface
 
 const (
-	gatewayExample = `$ curve gateway {mount_point} {gateway_addr}`
+	gatewayExample = `$ curve fs gateway --mdsaddr={mdsaddr} --fsid {fsid} --listen-address {listenAddr} --console-address {consoleAddr} --mountpoint {mountPoint}`
 )
 
 func NewGatewayCommand() *cobra.Command {
@@ -61,10 +61,11 @@ func NewGatewayCommand() *cobra.Command {
 }
 
 func (gCmd *GatewayCommand) AddFlags() {
-	config.AddFsMdsAddrFlag(gCmd.Cmd)
 	config.AddFsIdRequiredFlag(gCmd.Cmd)
 	config.AddListenAddressRequiredFlag(gCmd.Cmd)
 	config.AddConsoleAddressOptionalFlag(gCmd.Cmd)
+	config.AddFsIdOptionalFlag(gCmd.Cmd)
+	config.AddGatewayMountpointOptionalFlag(gCmd.Cmd)
 }
 
 func (gCmd *GatewayCommand) Init(cmd *cobra.Command, args []string) error {
@@ -107,13 +108,12 @@ func gateway(cmd *cobra.Command) error {
 	if addrErr.TypeCode() != cmderror.CODE_SUCCESS {
 		return fmt.Errorf(addrErr.Message)
 	}
-	fsId := config.GetFlagUint32(cmd, config.CURVEFS_FSID)
 
-	// locate mount point path
-	mountPoint, err := getMountPoint(strings.Join(addrs, ","), fsId, "")
+	mountPoint, err := getMountPointFromCmd(cmd, addrs)
 	if err != nil {
 		return err
 	}
+
 	listenAddr := config.GetFlagString(cmd, config.GATEWAY_LISTEN_ADDRESS)
 	consoleAddr := config.GetFlagString(cmd, config.GATEWAY_CONSOLE_ADDRESS)
 
@@ -154,6 +154,16 @@ func gateway2(ctx *mcli.Context) error {
 	// minio.StartGateway(ctx, &mnas.NAS{ctx.Args().First()})
 	mnas.NasGatewayMain(ctx)
 	return nil
+}
+
+func getMountPointFromCmd(cmd *cobra.Command, addrs []string) (string, error) {
+	flagMountpoint := cmd.Flag(config.CURVEFS_MOUNTPOINT)
+	if flagMountpoint.Changed {
+		return flagMountpoint.Value.String(), nil
+	}
+
+	fsId := config.GetFlagUint32(cmd, config.CURVEFS_FSID)
+	return getMountPoint(strings.Join(addrs, ","), fsId, "")
 }
 
 func getMountPoint(mdsaddr string, fsId uint32, fsName string) (string, error) {

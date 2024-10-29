@@ -159,8 +159,8 @@ const (
 	VIPER_CURVEFS_VOLUME_SLICESIZE        = "curvefs.volume.slicesize"
 	CURVEFS_DEFAULT_VOLUME_SLICESIZE      = "1 GiB"
 	// gateway
-	GATEWAY_LISTEN_ADDRESS          = "address"
-	VIPER_GATEWAY_LISTEN_ADDRESS    = "gateway.address"
+	GATEWAY_LISTEN_ADDRESS          = "listen-address"
+	VIPER_GATEWAY_LISTEN_ADDRESS    = "gateway.listen-address"
 	GATEWAY_DEFAULT_LISTEN_ADDRESS  = ":19000"
 	GATEWAY_CONSOLE_ADDRESS         = "console-address"
 	VIPER_GATEWAY_CONSOLE_ADDRESS   = "gateway.console-address"
@@ -892,14 +892,33 @@ func AddFsIdRequiredFlag(cmd *cobra.Command) {
 	AddUint32RequiredFlag(cmd, CURVEFS_FSID, "fsid")
 }
 
-// listen address [required]
+// fsid [optional]
+func AddFsIdOptionalFlag(cmd *cobra.Command) {
+	cmd.Flags().String(CURVEFS_FSID, "", "file system id")
+	err := viper.BindPFlag(VIPER_CURVEFS_FSID, cmd.Flags().Lookup("fsid"))
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+
+}
+
+// gateway listen address [required]
 func AddListenAddressRequiredFlag(cmd *cobra.Command) {
 	AddStringRequiredFlag(cmd, GATEWAY_LISTEN_ADDRESS, "gateway listen address")
 }
 
-// console address [required]
+// gateway console address [optional]
 func AddConsoleAddressOptionalFlag(cmd *cobra.Command) {
 	AddStringOptionFlag(cmd, GATEWAY_CONSOLE_ADDRESS, "gateway console address")
+}
+
+// gateway mountpoint path [optional]
+func AddGatewayMountpointOptionalFlag(cmd *cobra.Command) {
+	cmd.Flags().String(CURVEFS_MOUNTPOINT, "", "fs gateway mountpoint")
+	err := viper.BindPFlag(VIPER_CURVEFS_MOUNTPOINT, cmd.Flags().Lookup("mountpoint"))
+	if err != nil {
+		cobra.CheckErr(err)
+	}
 }
 
 // cluserMap [required]
