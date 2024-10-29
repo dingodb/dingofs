@@ -367,11 +367,12 @@ BCACHE_ERROR LocalFileSystem::ReadFile(const std::string& path,
   *length = size;
   buffer = std::shared_ptr<char>(new char[size], std::default_delete<char[]>());
   rc = posix_->Read(fd, buffer.get(), size);
-  posix_->Close(fd);
 
   if (rc == BCACHE_ERROR::OK && drop_page_cache) {
     posix_->FAdvise(fd, POSIX_FADV_DONTNEED);
   }
+  posix_->Close(fd);
+
   return rc;
 }
 

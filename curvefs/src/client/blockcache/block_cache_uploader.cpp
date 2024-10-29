@@ -153,9 +153,8 @@ void BlockCacheUploader::UploadStageBlock(const StageBlock& stage_block) {
     UploadBlock(stage_block, buffer, length, timer);
   } else if (rc == BCACHE_ERROR::NOT_FOUND) {  // already deleted
     Uploaded(stage_block, false);
-  } else {  // retry
-    timer.NextPhase(Phase::ENQUEUE_UPLOAD);
-    uploading_queue_->Push(stage_block);
+  } else {  // throw error
+    Uploaded(stage_block, false);
   }
 }
 
