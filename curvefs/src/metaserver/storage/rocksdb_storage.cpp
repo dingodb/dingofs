@@ -26,22 +26,17 @@
 
 #include <iostream>
 #include <ostream>
-#include <unordered_map>
 
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/rocksdb_options.h"
 #include "curvefs/src/metaserver/storage/rocksdb_perf.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/src/metaserver/storage/utils.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "src/common/timeutility.h"
 #include "src/fs/local_filesystem.h"
 
 namespace curvefs {
 namespace metaserver {
 namespace storage {
-
-using ::curve::common::TimeUtility;
 
 const std::string RocksDBStorage::kDelimiter_ = ":";  // NOLINT
 

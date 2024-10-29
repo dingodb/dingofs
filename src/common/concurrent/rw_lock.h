@@ -66,18 +66,18 @@ class PthreadRWLockBase : public RWLockBase {
 
  protected:
   PthreadRWLockBase() = default;
-  virtual ~PthreadRWLockBase() = default;
+  virtual ~PthreadRWLockBase() override = default;
 
   pthread_rwlock_t rwlock_;
   pthread_rwlockattr_t rwlockAttr_;
 };
 
-class RWLock : public PthreadRWLockBase {
+class PthreadRWLock : public PthreadRWLockBase {
  public:
-  RWLock() { pthread_rwlock_init(&rwlock_, nullptr); }
+  PthreadRWLock() { pthread_rwlock_init(&rwlock_, nullptr); }
 
-  ~RWLock() { pthread_rwlock_destroy(&rwlock_); }
-};  // RWLock class
+  ~PthreadRWLock() override { pthread_rwlock_destroy(&rwlock_); }
+};
 
 class WritePreferedRWLock : public PthreadRWLockBase {
  public:
@@ -89,7 +89,7 @@ class WritePreferedRWLock : public PthreadRWLockBase {
     pthread_rwlock_init(&rwlock_, &rwlockAttr_);
   }
 
-  ~WritePreferedRWLock() {
+  ~WritePreferedRWLock() override {
     pthread_rwlockattr_destroy(&rwlockAttr_);
     pthread_rwlock_destroy(&rwlock_);
   }
@@ -99,27 +99,21 @@ class BthreadRWLock : public RWLockBase {
  public:
   BthreadRWLock() { bthread_rwlock_init(&rwlock_, nullptr); }
 
-  ~BthreadRWLock() { bthread_rwlock_destroy(&rwlock_); }
+  ~BthreadRWLock() override { bthread_rwlock_destroy(&rwlock_); }
 
   void WRLock() override {
     int ret = bthread_rwlock_wrlock(&rwlock_);
     CHECK(0 == ret) << "wlock failed: " << ret << ", " << strerror(ret);
   }
 
-  int TryWRLock() override {
-    // not support yet
-    return EINVAL;
-  }
+  int TryWRLock() override { return bthread_rwlock_trywrlock(&rwlock_); }
 
   void RDLock() override {
     int ret = bthread_rwlock_rdlock(&rwlock_);
     CHECK(0 == ret) << "rlock failed: " << ret << ", " << strerror(ret);
   }
 
-  int TryRDLock() override {
-    // not support yet
-    return EINVAL;
-  }
+  int TryRDLock() override { return bthread_rwlock_tryrdlock(&rwlock_); }
 
   void Unlock() override { bthread_rwlock_unlock(&rwlock_); }
 

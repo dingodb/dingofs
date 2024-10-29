@@ -23,18 +23,12 @@
 #ifndef CURVEFS_SRC_METASERVER_STORAGE_UTILS_H_
 #define CURVEFS_SRC_METASERVER_STORAGE_UTILS_H_
 
-#include <memory>
+#include <cstdint>
 #include <string>
-#include <unordered_map>
-
-#include "absl/container/btree_set.h"
-#include "src/common/concurrent/rw_lock.h"
 
 namespace curvefs {
 namespace metaserver {
 namespace storage {
-
-using ::curve::common::RWLock;
 
 bool GetFileSystemSpaces(const std::string& path, uint64_t* capacity,
                          uint64_t* available);

@@ -35,10 +35,12 @@
 #include "curvefs/src/client/volume/extent.h"
 #include "curvefs/src/client/volume/extent_slice.h"
 #include "curvefs/src/volume/common.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace client {
+
+using ::curve::common::RWLock;
 
 using ::curvefs::metaserver::VolumeExtentList;
 using ::curvefs::metaserver::VolumeExtentSlice;
@@ -87,8 +89,7 @@ class ExtentCache {
                                              const char* data,
                                              std::vector<AllocPart>* needAlloc);
 
- private:
-  mutable curve::common::RWLock lock_;
+  mutable RWLock lock_;
 
   // key is offset
   std::unordered_map<uint64_t, ExtentSlice> slices_;
@@ -96,7 +97,6 @@ class ExtentCache {
   // dirty slices
   std::unordered_set<ExtentSlice*> dirties_;
 
- private:
   friend class ExtentSlice;
 
   static ExtentCacheOption option_;

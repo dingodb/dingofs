@@ -47,7 +47,7 @@ using UniqueLock = std::unique_lock<Mutex>;
 using ConditionVariable = std::condition_variable;
 
 // curve内部定义的锁组件
-using RWLock = RWLock;
+using RWLock = BthreadRWLock;
 using SpinLock = SpinLock;
 using ReadLockGuard = ReadLockGuard;
 using WriteLockGuard = WriteLockGuard;

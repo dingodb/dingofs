@@ -25,25 +25,20 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "curvefs/src/metaserver/storage/rocksdb_perf.h"
-#include "curvefs/src/metaserver/storage/rocksdb_storage.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/src/metaserver/storage/utils.h"
 #include "rocksdb/db.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/slice_transform.h"
 #include "rocksdb/table.h"
-#include "rocksdb/table_properties.h"
-#include "rocksdb/utilities/table_properties_collectors.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace metaserver {

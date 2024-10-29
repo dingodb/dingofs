@@ -27,8 +27,6 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/metaserver/storage/utils.h"
-
 namespace curvefs {
 namespace metaserver {
 namespace storage {

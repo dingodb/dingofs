@@ -24,14 +24,15 @@
 #define CURVEFS_SRC_METASERVER_TRANSACTION_H_
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 #include "curvefs/src/metaserver/dentry_storage.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace metaserver {
+
+using ::curve::common::RWLock;
 
 class RenameTx {
  public:

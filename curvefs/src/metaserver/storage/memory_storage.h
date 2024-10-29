@@ -26,7 +26,6 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "absl/container/btree_map.h"
@@ -35,7 +34,7 @@
 #include "curvefs/src/metaserver/storage/iterator.h"
 #include "curvefs/src/metaserver/storage/storage.h"
 #include "curvefs/src/metaserver/storage/value_wrapper.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 #include "src/common/string_util.h"
 
 namespace curvefs {

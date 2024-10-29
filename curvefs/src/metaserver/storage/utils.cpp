@@ -27,12 +27,11 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
-#include <functional>
 
+#include "src/common/concurrent/concurrent.h"
 #include "src/common/string_util.h"
 #include "src/fs/ext4_filesystem_impl.h"
 #include "src/fs/fs_common.h"
-#include "src/fs/local_filesystem.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -42,7 +41,6 @@ using ::curve::common::ReadLockGuard;
 using ::curve::common::StringToUll;
 using ::curve::common::WriteLockGuard;
 using ::curve::fs::Ext4FileSystemImpl;
-using ::curve::fs::LocalFileSystem;
 
 bool GetFileSystemSpaces(const std::string& path, uint64_t* total,
                          uint64_t* available) {

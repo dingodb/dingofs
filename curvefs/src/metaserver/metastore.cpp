@@ -87,7 +87,6 @@ MetaStoreImpl::MetaStoreImpl(copyset::CopysetNode* node,
       storageOptions_(storageOptions) {}
 
 bool MetaStoreImpl::Load(const std::string& pathname) {
-  // Load from raft snap file to memory
   WriteLockGuard writeLockGuard(rwLock_);
   MetaStoreFStream fstream(&partitionMap_, kvStorage_,
                            copysetNode_->GetPoolId(),
@@ -316,7 +315,8 @@ bool MetaStoreImpl::GetPartitionInfoList(
     return true;
   } else {
     LOG(WARNING) << "metastore GetPartitionInfoList fail, it fail to get"
-                    " the rwLock_";
+                    " the rwLock_, ret:"
+                 << ret;
     return false;
   }
 }

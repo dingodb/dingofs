@@ -27,17 +27,17 @@
 #include <memory>
 #include <vector>
 
-#include "curvefs/proto/common.pb.h"
 #include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/volume/allocator.h"
 #include "curvefs/src/volume/block_device_client.h"
 #include "curvefs/src/volume/block_group_manager.h"
 #include "curvefs/src/volume/common.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace volume {
 
+using ::curve::common::RWLock;
 using ::curvefs::client::rpcclient::MdsClient;
 
 class SpaceManager {
@@ -91,10 +91,10 @@ class SpaceManagerImpl final : public SpaceManager {
   bool AcquireBlockGroup(uint64_t blockGroupOffset);
 
  private:
-  curve::common::RWLock allocatorsLock_;
+  RWLock allocatorsLock_;
   std::map<uint64_t, std::unique_ptr<Allocator>> allocators_;
 
-  curve::common::RWLock updatersLock_;
+  RWLock updatersLock_;
   std::map<uint64_t, std::unique_ptr<BlockGroupBitmapUpdater>> bitmapUpdaters_;
 
   std::atomic<uint64_t> totalBytes_;

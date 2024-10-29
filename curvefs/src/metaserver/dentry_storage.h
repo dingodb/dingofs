@@ -23,8 +23,6 @@
 #ifndef CURVEFS_SRC_METASERVER_DENTRY_STORAGE_H_
 #define CURVEFS_SRC_METASERVER_DENTRY_STORAGE_H_
 
-#include <functional>
-#include <list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,7 +31,7 @@
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace metaserver {

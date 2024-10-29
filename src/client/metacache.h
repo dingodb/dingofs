@@ -27,13 +27,11 @@
 #include <unordered_map>
 
 #include "src/client/client_common.h"
-#include "src/client/client_config.h"
 #include "src/client/client_metric.h"
 #include "src/client/mds_client.h"
 #include "src/client/metacache_struct.h"
-#include "src/client/service_helper.h"
 #include "src/client/unstable_helper.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curve {
 namespace client {

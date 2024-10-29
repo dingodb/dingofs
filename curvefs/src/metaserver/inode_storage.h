@@ -23,21 +23,14 @@
 #ifndef CURVEFS_SRC_METASERVER_INODE_STORAGE_H_
 #define CURVEFS_SRC_METASERVER_INODE_STORAGE_H_
 
-#include <functional>
 #include <list>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
 
-#include "absl/container/btree_map.h"
-#include "absl/container/btree_set.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/src/metaserver/storage/utils.h"
-#include "src/common/concurrent/rw_lock.h"
+#include "src/common/concurrent/concurrent.h"
 
 namespace curvefs {
 namespace metaserver {

@@ -23,14 +23,12 @@
 #ifndef CURVEFS_SRC_METASERVER_INODE_MANAGER_H_
 #define CURVEFS_SRC_METASERVER_INODE_MANAGER_H_
 
-#include <time.h>
-
-#include <atomic>
 #include <list>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "absl/types/optional.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/inode_storage.h"
 #include "curvefs/src/metaserver/trash.h"

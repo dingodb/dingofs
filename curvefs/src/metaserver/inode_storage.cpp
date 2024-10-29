@@ -22,7 +22,6 @@
 
 #include "curvefs/src/metaserver/inode_storage.h"
 
-#include <algorithm>
 #include <limits>
 #include <memory>
 #include <string>
@@ -31,7 +30,6 @@
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/status.h"
-#include "src/common/concurrent/rw_lock.h"
 #include "src/common/string_util.h"
 
 namespace curvefs {
@@ -537,7 +535,7 @@ MetaStatusCode InodeStorage::GetVolumeExtentByOffset(uint32_t fsId,
                                                      uint64_t inodeId,
                                                      uint64_t offset,
                                                      VolumeExtentSlice* slice) {
-  ReadLockGuard guard(RWLock);
+  ReadLockGuard guard(rwLock_);
   auto key =
       conv_.SerializeToString(Key4VolumeExtentSlice{fsId, inodeId, offset});
 
