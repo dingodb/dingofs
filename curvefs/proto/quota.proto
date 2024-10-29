@@ -65,6 +65,7 @@ message FlushFsUsageRequest {
 
 message FlushFsUsageResponse {
     required QUOTA_OP_STATUS status = 1;
+    required Quota quota = 2;
 };
 
 message SetDirQuotaRequest {

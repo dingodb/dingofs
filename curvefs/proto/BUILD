@@ -137,3 +137,14 @@ proto_library(
     name = "curvefs_client_h2_proto",
     srcs = ["client_h2.proto"],
 )
+
+cc_proto_library(
+    name = "curvefs_quota_cc_proto",
+    visibility = ["//visibility:public"],
+    deps = [":curvefs_quota_proto"],
+)
+
+proto_library(
+    name = "curvefs_quota_proto",
+    srcs = ["quota.proto"],
+)
