@@ -125,12 +125,16 @@ class DiskStateMachineImpl final : public DiskStateMachine {
 
   void IOSucc() override {
     curve::common::WriteLockGuard lk(rw_lock_);
-    state_->IOSucc();
+    if (running_) {
+      state_->IOSucc();
+    }
   }
 
   void IOErr() override {
     curve::common::WriteLockGuard lk(rw_lock_);
-    state_->IOErr();
+    if (running_) {
+      state_->IOErr();
+    }
   }
 
   DiskState GetDiskState() const override {
