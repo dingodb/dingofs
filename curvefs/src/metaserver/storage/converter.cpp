@@ -25,6 +25,7 @@
 #include <glog/logging.h>
 #include <inttypes.h>
 
+#include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -322,6 +323,46 @@ bool Key4InodeAuxInfo::ParseFromString(const std::string& value) {
   SplitString(value, kDelimiter, &items);
   return items.size() == 3 && CompareType(items[0], keyType_) &&
          StringToUl(items[1], &fsId) && StringToUll(items[2], &inodeId);
+}
+
+Key4FsQuota::Key4FsQuota(uint32_t fs_id) : fs_id(fs_id) {}
+
+std::string Key4FsQuota::SerializeToString() const {
+  return absl::StrCat(kKeyType, kDelimiter, fs_id);
+}
+
+bool Key4FsQuota::ParseFromString(const std::string& value) {
+  std::vector<std::string> items;
+  SplitString(value, kDelimiter, &items);
+  return items.size() == 2 && CompareType(items[0], kKeyType) &&
+         StringToUl(items[1], &fs_id);
+}
+
+Key4DirQuota::Key4DirQuota(uint32_t fs_id, uint64_t dir_inode_id)
+    : fs_id(fs_id), dir_inode_id(dir_inode_id) {}
+
+std::string Key4DirQuota::SerializeToString() const {
+  return absl::StrCat(kKeyType, kDelimiter, fs_id, kDelimiter, dir_inode_id);
+}
+
+bool Key4DirQuota::ParseFromString(const std::string& value) {
+  std::vector<std::string> items;
+  SplitString(value, kDelimiter, &items);
+  return items.size() == 3 && CompareType(items[0], kKeyType) &&
+         StringToUl(items[1], &fs_id) && StringToUll(items[2], &dir_inode_id);
+}
+
+Prefix4DirQuotas::Prefix4DirQuotas(uint32_t fs_id) : fs_id(fs_id) {}
+
+std::string Prefix4DirQuotas::SerializeToString() const {
+  return absl::StrCat(kKeyType, kDelimiter, fs_id, kDelimiter);
+}
+
+bool Prefix4DirQuotas::ParseFromString(const std::string& value) {
+  std::vector<std::string> items;
+  SplitString(value, kDelimiter, &items);
+  return items.size() == 2 && CompareType(items[0], kKeyType) &&
+         StringToUl(items[1], &fs_id);
 }
 
 std::string Converter::SerializeToString(const StorageKey& key) {

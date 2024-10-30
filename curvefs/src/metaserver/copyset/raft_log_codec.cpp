@@ -108,6 +108,30 @@ std::unique_ptr<MetaOperator> RaftLogCodec::Decode(CopysetNode* node,
   OperatorType type = static_cast<OperatorType>(logtype);
 
   switch (type) {
+    case OperatorType::SetFsQuota:
+      return ParseFromRaftLog<SetFsQuotaOperator, SetFsQuotaRequest>(node, type,
+                                                                     meta);
+    case OperatorType::GetFsQuota:
+      return ParseFromRaftLog<GetFsQuotaOperator, GetFsQuotaRequest>(node, type,
+                                                                     meta);
+    case OperatorType::FlushFsUsage:
+      return ParseFromRaftLog<FlushFsUsageOperator, FlushFsUsageRequest>(
+          node, type, meta);
+    case OperatorType::SetDirQuota:
+      return ParseFromRaftLog<SetDirQuotaOperator, SetDirQuotaRequest>(
+          node, type, meta);
+    case OperatorType::GetDirQuota:
+      return ParseFromRaftLog<GetDirQuotaOperator, GetDirQuotaRequest>(
+          node, type, meta);
+    case OperatorType::DeleteDirQuota:
+      return ParseFromRaftLog<DeleteDirQuotaOperator, DeleteDirQuotaRequest>(
+          node, type, meta);
+    case OperatorType::LoadDirQuotas:
+      return ParseFromRaftLog<LoadDirQuotasOperator, LoadDirQuotasRequest>(
+          node, type, meta);
+    case OperatorType::FlushDirUsages:
+      return ParseFromRaftLog<FlushDirUsagesOperator, FlushDirUsagesRequest>(
+          node, type, meta);
     case OperatorType::GetDentry:
       return ParseFromRaftLog<GetDentryOperator, GetDentryRequest>(node, type,
                                                                    meta);

@@ -28,6 +28,7 @@
 #include "curvefs/src/common/process.h"
 #include "curvefs/src/common/threading.h"
 #include "curvefs/src/metaserver/metaserver.h"
+#include "curvefs/src/metaserver/superpartition/access_log.h"
 #include "src/common/configuration.h"
 
 DEFINE_string(confPath, "curvefs/conf/metaserver.conf", "metaserver confPath");
@@ -128,6 +129,9 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   conf->PrintConfig();
+
+  // init access logging
+  ::curvefs::metaserver::superpartition::InitAccessLog(FLAGS_log_dir);
 
   curvefs::metaserver::Metaserver metaserver;
 
