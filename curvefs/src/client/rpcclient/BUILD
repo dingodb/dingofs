@@ -36,6 +36,7 @@ cc_library(
         "@brpc//:brpc",
         "@gflags//:gflags",
         "@glog//:glog",
+        "@fmt//:fmt",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/types:optional",
     ],

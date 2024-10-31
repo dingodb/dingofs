@@ -30,6 +30,7 @@
 #include <memory>
 
 #include "absl/types/optional.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/common/define.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/rocksdb_storage.h"
@@ -38,22 +39,17 @@
 #include "curvefs/test/metaserver/test_helper.h"
 #include "src/fs/ext4_filesystem_impl.h"
 
-using ::google::protobuf::util::MessageDifferencer;
-using ::testing::_;
-using ::testing::AtLeast;
-using ::testing::DoAll;
-using ::testing::Return;
-using ::testing::ReturnArg;
-using ::testing::SaveArg;
-using ::testing::SetArgPointee;
-using ::testing::StrEq;
-
 using ::curvefs::metaserver::storage::Key4S3ChunkInfoList;
 using ::curvefs::metaserver::storage::KVStorage;
 using ::curvefs::metaserver::storage::NameGenerator;
 using ::curvefs::metaserver::storage::RandomStoragePath;
 using ::curvefs::metaserver::storage::RocksDBStorage;
 using ::curvefs::metaserver::storage::StorageOptions;
+
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 
 namespace curvefs {
 namespace metaserver {

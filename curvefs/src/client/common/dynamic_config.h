@@ -58,6 +58,13 @@ DECLARE_int32(disk_state_unstable2down_second);
 // disk state health checker
 DECLARE_int32(disk_check_duration_millsecond);
 
+// ----- related stat or quota config -----
+// thread num or bthread num
+DECLARE_uint32(stat_timer_thread_num);
+DECLARE_uint32(fs_usage_flush_interval_second);
+DECLARE_uint32(flush_quota_interval_second);
+DECLARE_uint32(load_quota_interval_second);
+
 }  // namespace common
 }  // namespace client
 }  // namespace curvefs

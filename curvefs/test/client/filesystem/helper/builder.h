@@ -26,11 +26,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <memory>
-#include <string>
 
 #include "curvefs/src/client/filesystem/filesystem.h"
-#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
@@ -40,6 +39,10 @@ namespace client {
 namespace filesystem {
 
 using ::curvefs::client::common::KernelCacheOption;
+
+using rpcclient::MockMetaServerClient;
+
+const uint32_t kMockFsId = 100;
 
 class DeferSyncBuilder {
  public:
@@ -144,11 +147,11 @@ class RPCClientBuilder {
     return RPCOption{listDentryLimit : 65535};
   }
 
- public:
   RPCClientBuilder()
       : option_(DefaultOption()),
         dentryManager_(std::make_shared<MockDentryCacheManager>()),
-        inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
+        inodeManager_(std::make_shared<MockInodeCacheManager>()),
+        meta_client_(std::make_shared<MockMetaServerClient>()) {}
 
   RPCClientBuilder SetOption(Callback callback) {
     callback(&option_);
@@ -156,7 +159,7 @@ class RPCClientBuilder {
   }
 
   std::shared_ptr<RPCClient> Build() {
-    ExternalMember member(dentryManager_, inodeManager_);
+    ExternalMember member(dentryManager_, inodeManager_, meta_client_);
     return std::make_shared<RPCClient>(option_, member);
   }
 
@@ -172,6 +175,7 @@ class RPCClientBuilder {
   RPCOption option_;
   std::shared_ptr<MockDentryCacheManager> dentryManager_;
   std::shared_ptr<MockInodeCacheManager> inodeManager_;
+  std::shared_ptr<MockMetaServerClient> meta_client_;
 };
 
 // build filesystem which you want
@@ -209,11 +213,11 @@ class FileSystemBuilder {
     return option;
   }
 
- public:
   FileSystemBuilder()
       : option_(DefaultOption()),
         dentryManager_(std::make_shared<MockDentryCacheManager>()),
-        inodeManager_(std::make_shared<MockInodeCacheManager>()) {}
+        inodeManager_(std::make_shared<MockInodeCacheManager>()),
+        meta_client_(std::make_shared<MockMetaServerClient>()) {}
 
   FileSystemBuilder SetOption(Callback callback) {
     callback(&option_);
@@ -221,8 +225,8 @@ class FileSystemBuilder {
   }
 
   std::shared_ptr<FileSystem> Build() {
-    auto member = ExternalMember(dentryManager_, inodeManager_);
-    return std::make_shared<FileSystem>(option_, member);
+    auto member = ExternalMember(dentryManager_, inodeManager_, meta_client_);
+    return std::make_shared<FileSystem>(kMockFsId, option_, member);
   }
 
   std::shared_ptr<MockDentryCacheManager> GetDentryManager() {
@@ -237,6 +241,7 @@ class FileSystemBuilder {
   FileSystemOption option_;
   std::shared_ptr<MockDentryCacheManager> dentryManager_;
   std::shared_ptr<MockInodeCacheManager> inodeManager_;
+  std::shared_ptr<MockMetaServerClient> meta_client_;
 };
 
 }  // namespace filesystem

@@ -31,19 +31,13 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include <thread>
-
-#include "absl/cleanup/cleanup.h"
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/client/common/common.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/rpcclient/channel_manager.h"
 #include "curvefs/src/client/rpcclient/metacache.h"
-#include "curvefs/src/common/define.h"
-#include "curvefs/src/common/process.h"
 #include "curvefs/test/client/rpcclient/mock_metacache.h"
 #include "curvefs/test/client/rpcclient/mock_metaserver_service.h"
 #include "curvefs/test/client/utils.h"
-#include "src/client/mds_client.h"
 
 namespace curvefs {
 namespace client {
@@ -56,7 +50,6 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 
 using ::curvefs::common::StreamConnection;
-using ::curvefs::common::StreamOptions;
 using ::curvefs::common::StreamServer;
 using ::curvefs::metaserver::BatchGetInodeAttrRequest;
 using ::curvefs::metaserver::BatchGetInodeAttrResponse;
@@ -66,6 +59,11 @@ using ::curvefs::metaserver::Dentry;
 using ::curvefs::metaserver::MetaStatusCode;
 using ::curvefs::metaserver::S3ChunkInfo;
 using S3ChunkInofMap = google::protobuf::Map<uint64_t, S3ChunkInfoList>;
+
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 
 template <typename RpcRequestType, typename RpcResponseType,
           bool RpcFailed = false>

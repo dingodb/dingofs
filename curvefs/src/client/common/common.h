@@ -55,6 +55,10 @@ enum class MetaServerOpType {
   GetVolumeExtent,
   UpdateVolumeExtent,
   CreateManageInode,
+  GetFsQuota,
+  FlushFsUsage,
+  LoadDirQutoas,
+  FlushDirUsages,
 };
 
 std::ostream& operator<<(std::ostream& os, MetaServerOpType optype);

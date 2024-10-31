@@ -25,6 +25,7 @@
 #include <glog/logging.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <ctime>
 #include <memory>
 #include <mutex>
@@ -145,7 +146,7 @@ class GetOrModifyS3ChunkInfoAsyncDone : public MetaServerClientDone {
   std::shared_ptr<InodeWrapper> inodeWrapper_;
 };
 
-CURVEFS_ERROR InodeWrapper::GetInodeAttrLocked(InodeAttr* attr) {
+CURVEFS_ERROR InodeWrapper::GetInodeAttrUnLocked(InodeAttr* attr) {
   attr->set_inodeid(inode_.inodeid());
   attr->set_fsid(inode_.fsid());
   attr->set_length(inode_.length());
@@ -178,7 +179,7 @@ CURVEFS_ERROR InodeWrapper::GetInodeAttrLocked(InodeAttr* attr) {
 
 void InodeWrapper::GetInodeAttr(InodeAttr* attr) {
   curve::common::UniqueLock lg(mtx_);
-  GetInodeAttrLocked(attr);
+  GetInodeAttrUnLocked(attr);
 }
 
 CURVEFS_ERROR InodeWrapper::SyncAttr(bool internal) {
@@ -333,6 +334,12 @@ CURVEFS_ERROR InodeWrapper::Link(uint64_t parent) {
 }
 
 CURVEFS_ERROR InodeWrapper::UnLink(uint64_t parent) {
+  uint32_t nlink = UINT32_MAX;
+  return UnLinkWithReturn(parent, nlink);
+}
+
+CURVEFS_ERROR InodeWrapper::UnLinkWithReturn(uint64_t parent,
+                                             uint32_t& out_nlink) {
   curve::common::UniqueLock lg(mtx_);
   REFRESH_NLINK;
   uint32_t old = inode_.nlink();
@@ -351,7 +358,7 @@ CURVEFS_ERROR InodeWrapper::UnLink(uint64_t parent) {
     // parent = 0; is useless
     if (newnlink != 0 && inode_.type() != FsFileType::TYPE_DIRECTORY &&
         parent != 0) {
-      auto parents = inode_.mutable_parent();
+      auto* parents = inode_.mutable_parent();
       for (auto iter = parents->begin(); iter != parents->end(); iter++) {
         if (*iter == parent) {
           parents->erase(iter);
@@ -395,8 +402,11 @@ CURVEFS_ERROR InodeWrapper::UnLink(uint64_t parent) {
     }
     dirty_ = false;
     dirtyAttr_.Clear();
+
+    out_nlink = inode_.nlink();
     return CURVEFS_ERROR::OK;
   }
+
   LOG(ERROR) << "Unlink find nlink <= 0, nlink = " << old
              << ", inodeId=" << inode_.inodeid();
   return CURVEFS_ERROR::INTERNAL;

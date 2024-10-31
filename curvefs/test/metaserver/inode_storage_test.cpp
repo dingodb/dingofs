@@ -33,7 +33,7 @@
 #include <string>
 
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/common/define.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/metaserver/storage/config.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/memory_storage.h"
@@ -44,20 +44,22 @@
 #include "curvefs/test/metaserver/storage/utils.h"
 #include "src/fs/ext4_filesystem_impl.h"
 
-using ::testing::_;
-using ::testing::AtLeast;
-using ::testing::DoAll;
 using ::testing::Return;
-using ::testing::ReturnArg;
-using ::testing::SaveArg;
-using ::testing::SetArgPointee;
-using ::testing::StrEq;
 
 using ::curvefs::metaserver::storage::Key4S3ChunkInfoList;
 using ::curvefs::metaserver::storage::KVStorage;
 using ::curvefs::metaserver::storage::RandomStoragePath;
 using ::curvefs::metaserver::storage::RocksDBStorage;
 using ::curvefs::metaserver::storage::StorageOptions;
+
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
+using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 
 namespace curvefs {
 namespace metaserver {
@@ -736,7 +738,7 @@ TEST_F(InodeStorageTest, TestUpdateVolumeExtentSlice) {
     const std::string expectTableName =
         nameGenerator_->GetVolumeExtentTableName();
     const std::string expectKey = "4:1:1:" + std::to_string(slice.offset());
-    EXPECT_CALL(*kvStorage, SSet(expectTableName, expectKey, _))
+    EXPECT_CALL(*kvStorage, SSet(expectTableName, expectKey, testing::_))
         .WillOnce(Return(test.second));
 
     ASSERT_EQ(test.first,

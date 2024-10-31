@@ -47,7 +47,7 @@ TEST_F(TimerImplTest, BGThreadNum) {
   EXPECT_EQ(timer->GetBgBthreadNum(), bg_num);
 
   timer = std::make_unique<TimerImpl>();
-  EXPECT_EQ(timer->GetBgBthreadNum(), FLAGS_timer_bg_bthread_num);
+  EXPECT_EQ(timer->GetBgBthreadNum(), FLAGS_timer_bg_bthread_default_num);
 }
 
 TEST_F(TimerImplTest, Add) {

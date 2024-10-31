@@ -36,17 +36,23 @@ namespace client {
 
 using rpcclient::MdsClient;
 
+// resolve cyclic dependency
+namespace filesystem {
+class FileSystem;
+}
+
 class RenameOperator {
  public:
-  RenameOperator(uint32_t fsId, const std::string& fsName, uint64_t parentId,
-                 std::string name, uint64_t newParentId, std::string newname,
-                 std::shared_ptr<DentryCacheManager> dentryManager,
-                 std::shared_ptr<InodeCacheManager> inodeManager,
-                 std::shared_ptr<MetaServerClient> metaClient,
-                 std::shared_ptr<MdsClient> mdsClient, bool enableParallel);
+  RenameOperator(uint32_t fs_id, const std::string& fs_name, uint64_t parent_id,
+                 std::string name, uint64_t new_parent_id, std::string newname,
+                 std::shared_ptr<DentryCacheManager> dentry_manager,
+                 std::shared_ptr<InodeCacheManager> inode_manager,
+                 std::shared_ptr<MetaServerClient> meta_client,
+                 std::shared_ptr<MdsClient> mds_client, bool enable_parallel);
 
   CURVEFS_ERROR GetTxId();
   CURVEFS_ERROR Precheck();
+  CURVEFS_ERROR RecordSrcInodeInfo();
   CURVEFS_ERROR RecordOldInodeInfo();
   CURVEFS_ERROR LinkDestParentInode();
   CURVEFS_ERROR PrepareTx();
@@ -57,12 +63,10 @@ class RenameOperator {
   CURVEFS_ERROR UpdateInodeCtime();
   void UpdateCache();
 
-  void GetOldInode(uint64_t* oldInodeId, int64_t* oldInodeSize,
-                   FsFileType* oldInodeType) {
-    *oldInodeId = oldInodeId_;
-    *oldInodeSize = oldInodeSize_;
-    *oldInodeType = oldInodeType_;
-  }
+  void GetOldInode(uint64_t* old_inode_id, int64_t* old_inode_size,
+                   FsFileType* old_inode_type);
+
+  void UpdateUsage(std::shared_ptr<filesystem::FileSystem>& fs);
 
   std::string DebugString();
 
@@ -71,20 +75,25 @@ class RenameOperator {
 
   CURVEFS_ERROR GetLatestTxIdWithLock();
 
-  CURVEFS_ERROR GetTxId(uint32_t fsId, uint64_t inodeId, uint32_t* partitionId,
-                        uint64_t* txId);
+  CURVEFS_ERROR GetTxId(uint32_t fs_id, uint64_t inode_id,
+                        uint32_t* partition_id, uint64_t* tx_id);
 
-  void SetTxId(uint32_t partitionId, uint64_t txId);
+  void SetTxId(uint32_t partition_id, uint64_t tx_id);
 
   CURVEFS_ERROR PrepareRenameTx(const std::vector<Dentry>& dentrys);
 
-  CURVEFS_ERROR LinkInode(uint64_t inodeId, uint64_t parent = 0);
+  CURVEFS_ERROR LinkInode(uint64_t inode_id, uint64_t parent = 0);
 
-  CURVEFS_ERROR UnLinkInode(uint64_t inodeId, uint64_t parent = 0);
+  CURVEFS_ERROR UnLinkInode(uint64_t inode_id, uint64_t parent = 0);
 
-  CURVEFS_ERROR UpdateMCTime(uint64_t inodeId);
+  CURVEFS_ERROR UpdateMCTime(uint64_t inode_id);
 
- private:
+  // related to quota and stat
+  void UpdateSrcDir(std::shared_ptr<filesystem::FileSystem>& fs);
+  void UpdateDstDir(std::shared_ptr<filesystem::FileSystem>& fs);
+  void UPdateFsStat(std::shared_ptr<filesystem::FileSystem>& fs);
+  void GetReduceStat(int64_t& reduce_space, int64_t& reduce_inode);
+
   uint32_t fsId_;
   std::string fsName_;
   uint64_t parentId_;
@@ -98,12 +107,14 @@ class RenameOperator {
   uint64_t dstTxId_;
   uint64_t oldInodeId_;
   // if dest exist, record the size and type of file or empty dir
-  int64_t oldInodeSize_;
+  int64_t oldInodeSize_{0};
   FsFileType oldInodeType_;
   Dentry srcDentry_;
   Dentry dstDentry_;
   Dentry dentry_;
   Dentry newDentry_;
+
+  InodeAttr src_inode_attr_;
 
   std::shared_ptr<DentryCacheManager> dentryManager_;
   std::shared_ptr<InodeCacheManager> inodeManager_;

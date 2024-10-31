@@ -176,7 +176,7 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
   void MergeXAttrLocked(
       const google::protobuf::Map<std::string, std::string>& xattrs);
 
-  CURVEFS_ERROR GetInodeAttrLocked(InodeAttr* attr);
+  CURVEFS_ERROR GetInodeAttrUnLocked(InodeAttr* attr);
 
   void GetInodeAttr(InodeAttr* attr);
 
@@ -208,7 +208,8 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
   // dir will not update parent
   CURVEFS_ERROR Link(uint64_t parent = 0);
 
-  CURVEFS_ERROR UnLink(uint64_t parent = 0);
+  CURVEFS_ERROR UnLinkWithReturn(uint64_t parent, uint32_t& out_nlink);
+  CURVEFS_ERROR UnLink(uint64_t parent);
 
   CURVEFS_ERROR RefreshNlink();
 

@@ -23,7 +23,7 @@
 #include "curvefs/src/base/timer/timer.h"
 #include "gflags/gflags_declare.h"
 
-DECLARE_int32(timer_bg_bthread_num);
+DECLARE_int32(timer_bg_bthread_default_num);
 
 namespace curvefs {
 namespace base {

@@ -23,7 +23,8 @@
 #include "bthread/types.h"
 #include "glog/logging.h"
 
-DEFINE_int32(timer_bg_bthread_num, 4, "background bthread number for timer");
+DEFINE_int32(timer_bg_bthread_default_num, 4,
+             "background bthread number for timer");
 
 namespace curvefs {
 namespace base {
@@ -146,7 +147,7 @@ class TimerImpl::BThreadPool {
   std::queue<std::function<void()>> tasks_;
 };
 
-TimerImpl::TimerImpl() : TimerImpl(FLAGS_timer_bg_bthread_num) {}
+TimerImpl::TimerImpl() : TimerImpl(FLAGS_timer_bg_bthread_default_num) {}
 
 TimerImpl::TimerImpl(int bg_bthread_num)
     : thread_(nullptr), running_(false), bg_bthread_num_(bg_bthread_num) {
@@ -200,13 +201,18 @@ bool TimerImpl::IsStopped() {
 }
 
 bool TimerImpl::Add(std::function<void()> func, int delay_ms) {
-  CHECK(running_);
   auto now = steady_clock::now().time_since_epoch();
   uint64_t next =
       duration_cast<microseconds>(now + milliseconds(delay_ms)).count();
 
   FunctionInfo fn_info(std::move(func), next);
   std::lock_guard<std::mutex> lk(mutex_);
+  if (!running_) {
+    LOG(WARNING) << "Fail add func, delay_ms:" << delay_ms
+                 << ", timer is not running";
+    return false;
+  }
+
   heap_.push(std::move(fn_info));
   cv_.notify_all();
   return true;

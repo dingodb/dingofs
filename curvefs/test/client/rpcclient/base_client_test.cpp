@@ -28,18 +28,16 @@
 
 #include "curvefs/test/client/rpcclient/mock_mds_service.h"
 #include "curvefs/test/client/rpcclient/mock_metaserver_service.h"
-#include "curvefs/test/client/rpcclient/mock_space_service.h"
 #include "curvefs/test/client/rpcclient/mock_topology_service.h"
 
 namespace curvefs {
 namespace client {
 namespace rpcclient {
-using ::curvefs::mds::space::MockSpaceService;
+
 using mds::Mountpoint;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Invoke;
-using ::testing::Return;
 using ::testing::SetArgPointee;
 
 template <typename RpcRequestType, typename RpcResponseType,

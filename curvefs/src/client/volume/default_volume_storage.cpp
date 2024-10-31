@@ -115,7 +115,7 @@ CURVEFS_ERROR DefaultVolumeStorage::Write(uint64_t ino, off_t offset,
     }
 
     inodeWrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
-    inodeWrapper->GetInodeAttrLocked(&fileOut->attr);
+    inodeWrapper->GetInodeAttrUnLocked(&fileOut->attr);
   }
 
   inodeCacheManager_->ShipToFlush(inodeWrapper);

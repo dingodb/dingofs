@@ -24,17 +24,15 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <chrono>
 #include <cstdint>
-#include <thread>
 
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
 #include "curvefs/src/client/filesystem/openfile.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/inode_cache_manager.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "curvefs/src/common/define.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
 
 namespace curvefs {
@@ -50,23 +48,21 @@ namespace client {
 
 using ::testing::_;
 using ::testing::AnyOf;
-using ::testing::Contains;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
 
-using rpcclient::DataIndices;
-using rpcclient::MetaServerClientDone;
 using rpcclient::MockMetaServerClient;
 
 using ::curvefs::client::common::DeferSyncOption;
-using ::curvefs::client::common::DirCacheOption;
 using ::curvefs::client::common::OpenFilesOption;
 using ::curvefs::client::filesystem::DeferSync;
-using ::curvefs::client::filesystem::DirCache;
 using ::curvefs::client::filesystem::OpenFiles;
+
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 
 class TestInodeCacheManager : public ::testing::Test {
  protected:

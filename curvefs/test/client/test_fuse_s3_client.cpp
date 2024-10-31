@@ -24,18 +24,16 @@
 #include <gtest/gtest.h>
 
 #include <memory>
-#include <unordered_map>
 
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/filesystem/meta.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_s3_client.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
-#include "curvefs/src/common/define.h"
-#include "curvefs/test/client/mock_client_s3.h"
 #include "curvefs/test/client/mock_client_s3_adaptor.h"
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
@@ -66,27 +64,28 @@ DECLARE_uint64(fuseClientBurstReadBytesSecs);
 namespace curvefs {
 namespace client {
 
-using ::curve::common::Configuration;
-using ::curvefs::mds::topology::PartitionTxId;
 using ::testing::_;
 using ::testing::AtLeast;
-using ::testing::Contains;
 using ::testing::DoAll;
-using ::testing::Invoke;
-using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::SetArrayArgument;
 
-using curvefs::client::common::FileHandle;
-using rpcclient::MetaServerClientDone;
 using rpcclient::MockMdsClient;
 using rpcclient::MockMetaServerClient;
 
 using ::curvefs::client::common::FileSystemOption;
-using ::curvefs::client::common::OpenFilesOption;
 using ::curvefs::client::filesystem::EntryOut;
 using ::curvefs::client::filesystem::FileOut;
+
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
+using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 
 #define EQUAL(a) (lhs.a() == rhs.a())
 
@@ -928,7 +927,6 @@ TEST_F(TestFuseS3Client, FuseOpWriteSmallSize) {
   off_t off = 0;
   struct fuse_file_info fi;
   fi.flags = O_WRONLY;
-  size_t wSize = 0;
 
   Inode inode;
   inode.set_inodeid(ino);
@@ -958,7 +956,6 @@ TEST_F(TestFuseS3Client, FuseOpWriteFailed) {
   off_t off = 0;
   struct fuse_file_info fi;
   fi.flags = O_WRONLY;
-  size_t wSize = 0;
 
   Inode inode;
   inode.set_inodeid(ino);
@@ -1546,7 +1543,6 @@ TEST_F(TestFuseS3Client, FuseOpWrite_EnableSummary) {
   off_t off = 0;
   struct fuse_file_info fi;
   fi.flags = O_WRONLY;
-  size_t wSize = 0;
 
   Inode inode;
   inode.set_inodeid(ino);

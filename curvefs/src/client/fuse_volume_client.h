@@ -78,7 +78,7 @@ class FuseVolumeClient : public FuseClient {
                             EntryOut* entryOut) override;
 
   CURVEFS_ERROR FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
-                           const char* newname, EntryOut* entryOut) override;
+                           const char* newname, EntryOut* entry_out) override;
 
   CURVEFS_ERROR FuseOpUnlink(fuse_req_t req, fuse_ino_t parent,
                              const char* name) override;

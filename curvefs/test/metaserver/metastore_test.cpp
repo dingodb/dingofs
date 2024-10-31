@@ -29,7 +29,7 @@
 #include <condition_variable>  // NOLINT
 
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/common/define.h"
+#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/common/process.h"
 #include "curvefs/src/common/rpc_stream.h"
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
@@ -39,15 +39,6 @@
 #include "curvefs/test/metaserver/storage/utils.h"
 #include "src/common/uuid.h"
 #include "src/fs/ext4_filesystem_impl.h"
-
-using ::testing::_;
-using ::testing::AtLeast;
-using ::testing::DoAll;
-using ::testing::Return;
-using ::testing::ReturnArg;
-using ::testing::SaveArg;
-using ::testing::SetArgPointee;
-using ::testing::StrEq;
 
 namespace curvefs {
 namespace metaserver {
@@ -59,6 +50,10 @@ using ::curvefs::metaserver::storage::RandomStoragePath;
 using ::curvefs::metaserver::storage::RocksDBStorage;
 using ::curvefs::metaserver::storage::StorageOptions;
 
+using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::client::filesystem::XATTR_DIR_FILES;
+using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
 namespace {
 
 class MockSnapshotWriter : public braft::SnapshotWriter {

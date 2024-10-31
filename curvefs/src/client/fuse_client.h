@@ -136,7 +136,7 @@ class FuseClient {
   virtual CURVEFS_ERROR FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
                                     const char* buf, size_t size, off_t off,
                                     struct fuse_file_info* fi,
-                                    FileOut* fileOut) = 0;
+                                    FileOut* file_out) = 0;
 
   virtual CURVEFS_ERROR FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size,
                                    off_t off, struct fuse_file_info* fi,
@@ -190,7 +190,7 @@ class FuseClient {
   virtual CURVEFS_ERROR FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino,
                                       struct stat* attr, int to_set,
                                       struct fuse_file_info* fi,
-                                      struct AttrOut* out);
+                                      struct AttrOut* attr_out);
 
   virtual CURVEFS_ERROR FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino,
                                        const char* name, std::string* value,
@@ -206,7 +206,7 @@ class FuseClient {
 
   virtual CURVEFS_ERROR FuseOpSymlink(fuse_req_t req, const char* link,
                                       fuse_ino_t parent, const char* name,
-                                      EntryOut* entryOut);
+                                      EntryOut* entry_out);
 
   virtual CURVEFS_ERROR FuseOpLink(fuse_req_t req, fuse_ino_t ino,
                                    fuse_ino_t newparent, const char* newname,
@@ -299,13 +299,17 @@ class FuseClient {
   void InitQosParam();
 
  protected:
-  CURVEFS_ERROR
-  MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name, mode_t mode,
-           FsFileType type, dev_t rdev, bool internal,
-           std::shared_ptr<InodeWrapper>& InodeWrapper);  // NOLINT
+  CURVEFS_ERROR MakeNode(fuse_req_t req, fuse_ino_t parent, const char* name,
+                         mode_t mode, FsFileType type, dev_t rdev,
+                         bool internal,
+                         std::shared_ptr<InodeWrapper>& inode_wrapper);
 
-  CURVEFS_ERROR RemoveNode(fuse_req_t req, fuse_ino_t parent, const char* name,
-                           FsFileType type);
+  CURVEFS_ERROR OpUnlink(fuse_req_t req, fuse_ino_t parent, const char* name,
+                         FsFileType type);
+
+  CURVEFS_ERROR OpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
+                       const char* newname, FsFileType type,
+                       EntryOut* entry_out);
 
   CURVEFS_ERROR CreateManageNode(fuse_req_t req, uint64_t parent,
                                  const char* name, mode_t mode,
@@ -314,17 +318,10 @@ class FuseClient {
 
   CURVEFS_ERROR GetOrCreateRecycleDir(fuse_req_t req, Dentry* out);
 
-  CURVEFS_ERROR DeleteNode(fuse_ino_t ino, fuse_ino_t parent, const char* name,
-                           FsFileType type);
-
   CURVEFS_ERROR MoveToRecycle(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
                               const char* name, FsFileType type);
 
   bool ShouldMoveToRecycle(fuse_ino_t parent);
-
-  CURVEFS_ERROR FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
-                           const char* newname, FsFileType type,
-                           EntryOut* entryOut);
 
   CURVEFS_ERROR HandleOpenFlags(fuse_req_t req, fuse_ino_t ino,
                                 struct fuse_file_info* fi, FileOut* fileOut);

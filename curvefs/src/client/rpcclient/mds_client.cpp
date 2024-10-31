@@ -599,7 +599,7 @@ FSStatusCode MdsClientImpl::GetLatestTxId(const GetLatestTxIdRequest& request,
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
-    VLOG(12) << "GetLatestTxId [request]: " << request.DebugString();
+    VLOG(12) << "GetLatestTxId [request]: " << request.ShortDebugString();
     // GetLatestTxId metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
@@ -629,7 +629,7 @@ FSStatusCode MdsClientImpl::GetLatestTxId(const GetLatestTxIdRequest& request,
                    << ", errmsg = " << FSStatusCode_Name(rc);
     }
 
-    VLOG(12) << "GetLatestTxId [response]: " << response->DebugString();
+    VLOG(12) << "GetLatestTxId [response]: " << response->ShortDebugString();
     return rc;
   };
 
@@ -641,7 +641,7 @@ FSStatusCode MdsClientImpl::CommitTx(const CommitTxRequest& request) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
-    VLOG(3) << "CommitTx [request]: " << request.DebugString();
+    VLOG(12) << "CommitTx [request]: " << request.DebugString();
     // CommitTx metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
@@ -671,7 +671,7 @@ FSStatusCode MdsClientImpl::CommitTx(const CommitTxRequest& request) {
       LOG(WARNING) << "CommitTx: retCode = " << rc
                    << ", message = " << FSStatusCode_Name(rc);
     }
-    VLOG(3) << "CommitTx [response]: " << response.DebugString();
+    VLOG(12) << "CommitTx [response]: " << response.DebugString();
     return rc;
   };
   // for rpc error or get lock failed/timeout, we will retry until success

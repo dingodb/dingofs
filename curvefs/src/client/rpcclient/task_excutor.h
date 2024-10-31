@@ -83,7 +83,6 @@ class TaskContext {
     return oss.str();
   }
 
- public:
   uint64_t rpcTimeoutMs;
   MetaServerOpType optype;
   RpcFunc rpctask = nullptr;

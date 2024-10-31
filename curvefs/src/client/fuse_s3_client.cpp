@@ -51,7 +51,6 @@ using ::curvefs::client::blockcache::S3ClientImpl;
 using curvefs::client::common::FLAGS_enableCto;
 using curvefs::client::common::FLAGS_supportKVcache;
 using ::curvefs::client::datastream::DataStream;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
 using curvefs::mds::topology::MemcacheClusterInfo;
 
 CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
@@ -159,77 +158,79 @@ CURVEFS_ERROR FuseS3Client::FuseOpInit(void* userdata,
 CURVEFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
                                         const char* buf, size_t size, off_t off,
                                         struct fuse_file_info* fi,
-                                        FileOut* fileOut) {
-  size_t* wSize = &fileOut->nwritten;
+                                        FileOut* file_out) {
+  size_t* w_size = &file_out->nwritten;
   // check align
   if (fi->flags & O_DIRECT) {
     if (!(is_aligned(off, DirectIOAlignment) &&
           is_aligned(size, DirectIOAlignment)))
       return CURVEFS_ERROR::INVALIDPARAM;
   }
+
+  if (!fs_->CheckQuota(ino, size, 0)) {
+    return CURVEFS_ERROR::NO_SPACE;
+  }
+
   uint64_t start = butil::cpuwide_time_us();
-  int wRet = s3Adaptor_->Write(ino, off, size, buf);
-  if (wRet < 0) {
-    LOG(ERROR) << "s3Adaptor_ write failed, ret = " << wRet;
+  int w_ret = s3Adaptor_->Write(ino, off, size, buf);
+  if (w_ret < 0) {
+    LOG(ERROR) << "s3Adaptor_ write failed, ret = " << w_ret;
     return CURVEFS_ERROR::INTERNAL;
   }
 
-  if (fsMetric_.get() != nullptr) {
-    fsMetric_->userWrite.bps.count << wRet;
+  if (fsMetric_ != nullptr) {
+    fsMetric_->userWrite.bps.count << w_ret;
     fsMetric_->userWrite.qps.count << 1;
     uint64_t duration = butil::cpuwide_time_us() - start;
     fsMetric_->userWrite.latency << duration;
-    fsMetric_->userWriteIoSize.set_value(wRet);
+    fsMetric_->userWriteIoSize.set_value(w_ret);
   }
 
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
+  // TODO:  maybe we should check ret is ok
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                << ", inodeId=" << ino;
     return ret;
   }
 
-  ::curve::common::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
+  size_t change_size = 0;
 
-  *wSize = wRet;
-  size_t changeSize = 0;
-  // update file len
-  if (inodeWrapper->GetLengthLocked() < off + *wSize) {
-    changeSize = off + *wSize - inodeWrapper->GetLengthLocked();
-    inodeWrapper->SetLengthLocked(off + *wSize);
-  }
+  {
+    ::curve::common::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
 
-  inodeWrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
-
-  inodeManager_->ShipToFlush(inodeWrapper);
-
-  if (fi->flags & O_DIRECT || fi->flags & O_SYNC || fi->flags & O_DSYNC) {
-    // Todo: do some cache flush later
-  }
-
-  if (enableSumInDir_ && changeSize != 0) {
-    const Inode* inode = inodeWrapper->GetInodeLocked();
-    XAttr xattr;
-    xattr.mutable_xattrinfos()->insert(
-        {XATTR_DIR_FBYTES, std::to_string(changeSize)});
-    for (const auto& it : inode->parent()) {
-      auto tret = xattrManager_->UpdateParentInodeXattr(it, xattr, true);
-      if (tret != CURVEFS_ERROR::OK) {
-        LOG(ERROR) << "UpdateParentInodeXattr failed," << " inodeId=" << it
-                   << ", xattr = " << xattr.DebugString();
-      }
+    *w_size = w_ret;
+    // update file len
+    if (inode_wrapper->GetLengthLocked() < off + *w_size) {
+      change_size = off + *w_size - inode_wrapper->GetLengthLocked();
+      inode_wrapper->SetLengthLocked(off + *w_size);
     }
+
+    inode_wrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
+
+    inodeManager_->ShipToFlush(inode_wrapper);
+
+    if (fi->flags & O_DIRECT || fi->flags & O_SYNC || fi->flags & O_DSYNC) {
+      // Todo: do some cache flush later
+    }
+
+    inode_wrapper->GetInodeAttrUnLocked(&file_out->attr);
   }
 
-  inodeWrapper->GetInodeAttrLocked(&fileOut->attr);
+  for (int i = 0; i < file_out->attr.parent_size(); i++) {
+    auto parent = file_out->attr.parent(i);
+    fs_->UpdateDirQuotaUsage(parent, change_size, 0);
+  }
+  fs_->UpdateFsQuotaUsage(change_size, 0);
+
   return ret;
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
                                        size_t size, off_t off,
                                        struct fuse_file_info* fi, char* buffer,
-                                       size_t* rSize) {
+                                       size_t* r_size) {
   (void)req;
   auto GetReadSize = [](size_t& size, off_t& off, size_t& fileSize) -> size_t {
     if (static_cast<int64_t>(fileSize) <= off) {
@@ -247,7 +248,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
 
     size_t fileSize = dataBuf->size;
     size_t len = GetReadSize(size, off, fileSize);
-    *rSize = len;
+    *r_size = len;
     if (len > 0) {
       memcpy(buffer, dataBuf->p + off, len);
     }
@@ -283,7 +284,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
 
   size_t len = GetReadSize(size, off, fileSize);
   if (len == 0) {
-    *rSize = 0;
+    *r_size = 0;
     return CURVEFS_ERROR::OK;
   }
 
@@ -293,7 +294,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
     LOG(ERROR) << "s3Adaptor_ read failed, ret = " << rRet;
     return CURVEFS_ERROR::INTERNAL;
   }
-  *rSize = rRet;
+  *r_size = rRet;
 
   if (fsMetric_.get() != nullptr) {
     fsMetric_->userRead.bps.count << rRet;
@@ -307,14 +308,14 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
   inodeWrapper->UpdateTimestampLocked(kAccessTime);
   inodeManager_->ShipToFlush(inodeWrapper);
 
-  VLOG(9) << "read end, read size = " << *rSize;
+  VLOG(9) << "read end, read size = " << *r_size;
   return ret;
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
                                          const char* name, mode_t mode,
                                          struct fuse_file_info* fi,
-                                         EntryOut* entryOut) {
+                                         EntryOut* entry_out) {
   VLOG(1) << "FuseOpCreate, parent: " << parent << ", name: " << name
           << ", mode: " << mode;
 
@@ -328,17 +329,17 @@ CURVEFS_ERROR FuseS3Client::FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
   auto openFiles = fs_->BorrowMember().openFiles;
   openFiles->Open(inode->GetInodeId(), inode);
 
-  inode->GetInodeAttr(&entryOut->attr);
+  inode->GetInodeAttr(&entry_out->attr);
 
   auto entry_watcher = fs_->BorrowMember().entry_watcher;
-  entry_watcher->Remeber(entryOut->attr, name);
+  entry_watcher->Remeber(entry_out->attr, name);
 
   return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpMkNod(fuse_req_t req, fuse_ino_t parent,
                                         const char* name, mode_t mode,
-                                        dev_t rdev, EntryOut* entryOut) {
+                                        dev_t rdev, EntryOut* entry_out) {
   VLOG(1) << "FuseOpMkNod, parent: " << parent << ", name: " << name
           << ", mode: " << mode << ", rdev: " << rdev;
 
@@ -351,7 +352,7 @@ CURVEFS_ERROR FuseS3Client::FuseOpMkNod(fuse_req_t req, fuse_ino_t parent,
 
   InodeAttr attr;
   inode->GetInodeAttr(&attr);
-  *entryOut = EntryOut(attr);
+  *entry_out = EntryOut(attr);
 
   auto entry_watcher = fs_->BorrowMember().entry_watcher;
   entry_watcher->Remeber(attr, name);
@@ -362,17 +363,17 @@ CURVEFS_ERROR FuseS3Client::FuseOpMkNod(fuse_req_t req, fuse_ino_t parent,
 CURVEFS_ERROR FuseS3Client::FuseOpLink(fuse_req_t req, fuse_ino_t ino,
                                        fuse_ino_t newparent,
                                        const char* newname,
-                                       EntryOut* entryOut) {
+                                       EntryOut* entry_out) {
   VLOG(1) << "FuseOpLink, inodeId=" << ino << ", newparent: " << newparent
           << ", newname: " << newname;
-  return FuseClient::FuseOpLink(req, ino, newparent, newname,
-                                FsFileType::TYPE_S3, entryOut);
+  return FuseClient::OpLink(req, ino, newparent, newname, FsFileType::TYPE_S3,
+                            entry_out);
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpUnlink(fuse_req_t req, fuse_ino_t parent,
                                          const char* name) {
   VLOG(1) << "FuseOpUnlink, parent: " << parent << ", name: " << name;
-  return RemoveNode(req, parent, name, FsFileType::TYPE_S3);
+  return FuseClient::OpUnlink(req, parent, name, FsFileType::TYPE_S3);
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpFsync(fuse_req_t req, fuse_ino_t ino,
@@ -402,8 +403,37 @@ CURVEFS_ERROR FuseS3Client::FuseOpFsync(fuse_req_t req, fuse_ino_t ino,
   return inodeWrapper->Sync();
 }
 
+// NOTE: inode lock should be acqurire before calling this function
 CURVEFS_ERROR FuseS3Client::Truncate(InodeWrapper* inode, uint64_t length) {
-  return s3Adaptor_->Truncate(inode, length);
+  InodeAttr attr;
+  inode->GetInodeAttrUnLocked(&attr);
+  int64_t change_size = length - static_cast<int64_t>(attr.length());
+
+  if (change_size > 0) {
+    if (fs_->CheckFsQuota(change_size, 0)) {
+      return CURVEFS_ERROR::NO_SPACE;
+    }
+
+    for (int i = 0; i < attr.parent_size(); i++) {
+      auto parent = attr.parent(i);
+      if (fs_->CheckDirQuota(parent, change_size, 0)) {
+        return CURVEFS_ERROR::NO_SPACE;
+      }
+    }
+  }
+
+  CURVEFS_ERROR rc = s3Adaptor_->Truncate(inode, length);
+
+  if (rc == CURVEFS_ERROR::OK) {
+    for (int i = 0; i < attr.parent_size(); i++) {
+      auto parent = attr.parent(i);
+      fs_->UpdateDirQuotaUsage(parent, change_size, 0);
+    }
+
+    fs_->UpdateFsQuotaUsage(change_size, 0);
+  }
+
+  return rc;
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,

@@ -24,8 +24,6 @@
 #define CURVEFS_SRC_COMMON_DEFINE_H_
 #include <cstdint>
 
-#include "curvefs/src/client/filesystem/xattr.h"
-
 namespace curvefs {
 const uint64_t ROOTINODEID = 1;
 const uint64_t RECYCLEINODEID = 2;
@@ -40,17 +38,6 @@ inline bool IsInternalNode(uint64_t ino) {
 inline bool IsInternalName(const std::string& name) {
   return name == STATSNAME || name == RECYCLENAME;
 }
-
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_PREFIX;
-using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
-using ::curvefs::client::filesystem::XATTR_WARMUP_OP;
 
 }  // namespace curvefs
 #endif  // CURVEFS_SRC_COMMON_DEFINE_H_

@@ -72,6 +72,18 @@ std::ostream& operator<<(std::ostream& os, MetaServerOpType optype) {
     case MetaServerOpType::UpdateVolumeExtent:
       os << "UpdateVolumeExtent";
       break;
+    case MetaServerOpType::GetFsQuota:
+      os << "GetFsQuota";
+      break;
+    case MetaServerOpType::FlushFsUsage:
+      os << "FlushFsUsage";
+      break;
+    case MetaServerOpType::LoadDirQutoas:
+      os << "LoadDirQutoas";
+      break;
+    case MetaServerOpType::FlushDirUsages:
+      os << "FlushDirUsages";
+      break;
     default:
       os << "Unknow opType";
   }

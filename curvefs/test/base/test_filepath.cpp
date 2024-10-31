@@ -21,7 +21,6 @@
  */
 
 #include "curvefs/src/base/filepath/filepath.h"
-#include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace curvefs {
@@ -41,12 +40,8 @@ TEST_F(FilepathTest, ParentDir) {
   };
 
   std::vector<TestCase> tests{
-      {"/a/b/c", "/a/b"},
-      {"/abc", "/"},
-      {"/a/b/c/", "/a/b/c"},
-      {"/", "/"},
-      {"abc", "/"},
-      {"", "/"},
+      {"/a/b/c", "/a/b"}, {"/abc", "/"}, {"/a/b/c/", "/a/b/c"},
+      {"/", "/"},         {"abc", "/"},  {"", "/"},
   };
   for (const auto& t : tests) {
     auto parent = ParentDir(t.path);
@@ -61,11 +56,8 @@ TEST_F(FilepathTest, Filename) {
   };
 
   std::vector<TestCase> tests{
-      {"/abc/def", "def"},
-      {"/abc", "abc"},
-      {"/a/b/c", "c"},
-      {"/a/b/c/", ""},
-      {"/", ""},
+      {"/abc/def", "def"}, {"/abc", "abc"}, {"/a/b/c", "c"},
+      {"/a/b/c/", ""},     {"/", ""},
   };
   for (const auto& t : tests) {
     auto filename = Filename(t.path);
@@ -81,12 +73,9 @@ TEST_F(FilepathTest, HasSuffix) {
   };
 
   std::vector<TestCase> tests{
-      {"abcde", "cde", true},
-      {"file.ckpt", ".ckpt", true},
-      {"file.pt", ".pt", true},
-      {"abcde", "", true},
-      {"abcde", "1abcde", false},
-      {"file.ckpt", ".mp4", false},
+      {"abcde", "cde", true},       {"file.ckpt", ".ckpt", true},
+      {"file.pt", ".pt", true},     {"abcde", "", true},
+      {"abcde", "1abcde", false},   {"file.ckpt", ".mp4", false},
       {"file.pt", "filept", false},
   };
   for (const auto& t : tests) {

@@ -22,34 +22,39 @@
 
 #include "curvefs/src/client/client_operator.h"
 
+#include <cstdint>
 #include <list>
 
+#include "curvefs/src/client/async_request_closure.h"
 #include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/filesystem/filesystem.h"
 #include "src/common/uuid.h"
+
 namespace curvefs {
 namespace client {
 
 using ::curve::common::UUIDGenerator;
+using ::curvefs::client::filesystem::FileSystem;
 using ::curvefs::client::filesystem::ToFSError;
 using ::curvefs::mds::topology::PartitionTxId;
 using ::curvefs::metaserver::DentryFlag;
 
-#define LOG_ERROR(action, rc)                         \
-  LOG(ERROR) << action << " failed, retCode = " << rc \
+#define LOG_ERROR(action, rc)                             \
+  LOG(ERROR) << (action) << " failed, retCode = " << (rc) \
              << ", DebugString = " << DebugString();
 
 RenameOperator::RenameOperator(
-    uint32_t fsId, const std::string& fsName, uint64_t parentId,
-    std::string name, uint64_t newParentId, std::string newname,
-    std::shared_ptr<DentryCacheManager> dentryManager,  // NOLINT
-    std::shared_ptr<InodeCacheManager> inodeManager,
-    std::shared_ptr<MetaServerClient> metaClient,
-    std::shared_ptr<MdsClient> mdsClient, bool enableParallel)
-    : fsId_(fsId),
-      fsName_(fsName),
-      parentId_(parentId),
+    uint32_t fs_id, const std::string& fs_name, uint64_t parent_id,
+    std::string name, uint64_t new_parent_id, std::string newname,
+    std::shared_ptr<DentryCacheManager> dentry_manager,
+    std::shared_ptr<InodeCacheManager> inode_manager,
+    std::shared_ptr<MetaServerClient> meta_client,
+    std::shared_ptr<MdsClient> mds_client, bool enable_parallel)
+    : fsId_(fs_id),
+      fsName_(fs_name),
+      parentId_(parent_id),
       name_(name),
-      newParentId_(newParentId),
+      newParentId_(new_parent_id),
       newname_(newname),
       srcPartitionId_(0),
       dstPartitionId_(0),
@@ -57,12 +62,11 @@ RenameOperator::RenameOperator(
       dstTxId_(0),
       oldInodeId_(0),
       oldInodeSize_(-1),
-      dentryManager_(dentryManager),
-      inodeManager_(inodeManager),
-      metaClient_(metaClient),
-      mdsClient_(mdsClient),
-      enableParallel_(enableParallel),
-      uuid_(),
+      dentryManager_(dentry_manager),
+      inodeManager_(inode_manager),
+      metaClient_(meta_client),
+      mdsClient_(mds_client),
+      enableParallel_(enable_parallel),
       sequence_(0) {}
 
 std::string RenameOperator::DebugString() {
@@ -82,9 +86,9 @@ std::string RenameOperator::DebugString() {
   return os.str();
 }
 
-CURVEFS_ERROR RenameOperator::GetTxId(uint32_t fsId, uint64_t inodeId,
-                                      uint32_t* partitionId, uint64_t* txId) {
-  auto rc = metaClient_->GetTxId(fsId, inodeId, partitionId, txId);
+CURVEFS_ERROR RenameOperator::GetTxId(uint32_t fs_id, uint64_t inode_id,
+                                      uint32_t* partition_id, uint64_t* tx_id) {
+  auto rc = metaClient_->GetTxId(fs_id, inode_id, partition_id, tx_id);
   if (rc != MetaStatusCode::OK) {
     LOG_ERROR("GetTxId", rc);
   }
@@ -92,15 +96,15 @@ CURVEFS_ERROR RenameOperator::GetTxId(uint32_t fsId, uint64_t inodeId,
 }
 
 CURVEFS_ERROR RenameOperator::GetLatestTxIdWithLock() {
-  std::vector<PartitionTxId> txIds;
+  std::vector<PartitionTxId> tx_ids;
   uuid_ = UUIDGenerator().GenerateUUID();
-  auto rc = mdsClient_->GetLatestTxIdWithLock(fsId_, fsName_, uuid_, &txIds,
+  auto rc = mdsClient_->GetLatestTxIdWithLock(fsId_, fsName_, uuid_, &tx_ids,
                                               &sequence_);
   if (rc != FSStatusCode::OK) {
     return CURVEFS_ERROR::INTERNAL;
   }
 
-  for (const auto& item : txIds) {
+  for (const auto& item : tx_ids) {
     SetTxId(item.partitionid(), item.txid());
   }
   return CURVEFS_ERROR::OK;
@@ -130,8 +134,8 @@ CURVEFS_ERROR RenameOperator::GetTxId() {
   return rc;
 }
 
-void RenameOperator::SetTxId(uint32_t partitionId, uint64_t txId) {
-  metaClient_->SetTxId(partitionId, txId);
+void RenameOperator::SetTxId(uint32_t partition_id, uint64_t tx_id) {
+  metaClient_->SetTxId(partition_id, tx_id);
 }
 
 // TODO(Wine93): we should improve the check for whether a directory is empty
@@ -143,8 +147,8 @@ CURVEFS_ERROR RenameOperator::CheckOverwrite() {
   std::list<Dentry> dentrys;
   auto rc = dentryManager_->ListDentry(dstDentry_.inodeid(), &dentrys, 1);
   if (rc == CURVEFS_ERROR::OK && !dentrys.empty()) {
-    LOG(ERROR) << "The directory is not empty"
-               << ", dentry = (" << dstDentry_.ShortDebugString() << ")";
+    LOG(ERROR) << "The directory is not empty" << ", dentry = ("
+               << dstDentry_.ShortDebugString() << ")";
     rc = CURVEFS_ERROR::NOTEMPTY;
   }
 
@@ -171,6 +175,17 @@ CURVEFS_ERROR RenameOperator::Precheck() {
 
   LOG_ERROR("GetDentry", rc);
   return rc;
+}
+
+CURVEFS_ERROR RenameOperator::RecordSrcInodeInfo() {
+  CURVEFS_ERROR rc =
+      inodeManager_->GetInodeAttr(srcDentry_.inodeid(), &src_inode_attr_);
+  if (rc == CURVEFS_ERROR::OK) {
+    return CURVEFS_ERROR::OK;
+  } else {
+    LOG_ERROR("GetInode", rc);
+    return CURVEFS_ERROR::NOTEXIST;
+  }
 }
 
 // record old inode info if overwrite
@@ -236,25 +251,26 @@ CURVEFS_ERROR RenameOperator::PrepareTx() {
 }
 
 CURVEFS_ERROR RenameOperator::CommitTx() {
-  PartitionTxId partitionTxId;
-  std::vector<PartitionTxId> txIds;
+  PartitionTxId partition_tx_id;
+  std::vector<PartitionTxId> tx_ids;
 
-  partitionTxId.set_partitionid(srcPartitionId_);
-  partitionTxId.set_txid(srcTxId_ + 1);
-  txIds.push_back(partitionTxId);
+  partition_tx_id.set_partitionid(srcPartitionId_);
+  partition_tx_id.set_txid(srcTxId_ + 1);
+  tx_ids.push_back(partition_tx_id);
 
   if (srcPartitionId_ != dstPartitionId_) {
-    partitionTxId.set_partitionid(dstPartitionId_);
-    partitionTxId.set_txid(dstTxId_ + 1);
-    txIds.push_back(partitionTxId);
+    partition_tx_id.set_partitionid(dstPartitionId_);
+    partition_tx_id.set_txid(dstTxId_ + 1);
+    tx_ids.push_back(partition_tx_id);
   }
 
   FSStatusCode rc;
   if (enableParallel_) {
-    rc = mdsClient_->CommitTxWithLock(txIds, fsName_, uuid_, sequence_);
+    rc = mdsClient_->CommitTxWithLock(tx_ids, fsName_, uuid_, sequence_);
   } else {
-    rc = mdsClient_->CommitTx(txIds);
+    rc = mdsClient_->CommitTx(tx_ids);
   }
+
   if (rc != FSStatusCode::OK) {
     LOG_ERROR("CommitTx", rc);
     return CURVEFS_ERROR::INTERNAL;
@@ -262,15 +278,15 @@ CURVEFS_ERROR RenameOperator::CommitTx() {
   return CURVEFS_ERROR::OK;
 }
 
-CURVEFS_ERROR RenameOperator::LinkInode(uint64_t inodeId, uint64_t parent) {
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  auto rc = inodeManager_->GetInode(inodeId, inodeWrapper);
+CURVEFS_ERROR RenameOperator::LinkInode(uint64_t inode_id, uint64_t parent) {
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  auto rc = inodeManager_->GetInode(inode_id, inode_wrapper);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("GetInode", rc);
     return rc;
   }
 
-  rc = inodeWrapper->Link(parent);
+  rc = inode_wrapper->Link(parent);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("Link", rc);
     return rc;
@@ -280,15 +296,15 @@ CURVEFS_ERROR RenameOperator::LinkInode(uint64_t inodeId, uint64_t parent) {
   return rc;
 }
 
-CURVEFS_ERROR RenameOperator::UnLinkInode(uint64_t inodeId, uint64_t parent) {
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  auto rc = inodeManager_->GetInode(inodeId, inodeWrapper);
+CURVEFS_ERROR RenameOperator::UnLinkInode(uint64_t inode_id, uint64_t parent) {
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  auto rc = inodeManager_->GetInode(inode_id, inode_wrapper);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("GetInode", rc);
     return rc;
   }
 
-  rc = inodeWrapper->UnLink(parent);
+  rc = inode_wrapper->UnLink(parent);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("UnLink", rc);
     return rc;
@@ -298,18 +314,18 @@ CURVEFS_ERROR RenameOperator::UnLinkInode(uint64_t inodeId, uint64_t parent) {
   return rc;
 }
 
-CURVEFS_ERROR RenameOperator::UpdateMCTime(uint64_t inodeId) {
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  auto rc = inodeManager_->GetInode(inodeId, inodeWrapper);
+CURVEFS_ERROR RenameOperator::UpdateMCTime(uint64_t inode_id) {
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  auto rc = inodeManager_->GetInode(inode_id, inode_wrapper);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("GetInode", rc);
     return rc;
   }
 
-  curve::common::UniqueLock lk = inodeWrapper->GetUniqueLock();
-  inodeWrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
+  curve::common::UniqueLock lk = inode_wrapper->GetUniqueLock();
+  inode_wrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
 
-  rc = inodeWrapper->SyncAttr();
+  rc = inode_wrapper->SyncAttr();
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("SyncAttr", rc);
     return rc;
@@ -369,14 +385,14 @@ void RenameOperator::UnlinkOldInode() {
 }
 
 CURVEFS_ERROR RenameOperator::UpdateInodeParent() {
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inode_wrapper);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("GetInode", rc);
     return rc;
   }
 
-  rc = inodeWrapper->UpdateParent(parentId_, newParentId_);
+  rc = inode_wrapper->UpdateParent(parentId_, newParentId_);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("UpdateInodeParent", rc);
     return rc;
@@ -388,17 +404,17 @@ CURVEFS_ERROR RenameOperator::UpdateInodeParent() {
 }
 
 CURVEFS_ERROR RenameOperator::UpdateInodeCtime() {
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inode_wrapper);
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("GetInode", rc);
     return rc;
   }
 
-  curve::common::UniqueLock lk = inodeWrapper->GetUniqueLock();
-  inodeWrapper->UpdateTimestampLocked(kChangeTime);
+  curve::common::UniqueLock lk = inode_wrapper->GetUniqueLock();
+  inode_wrapper->UpdateTimestampLocked(kChangeTime);
 
-  rc = inodeWrapper->SyncAttr();
+  rc = inode_wrapper->SyncAttr();
   if (rc != CURVEFS_ERROR::OK) {
     LOG_ERROR("UpdateInodeCtime", rc);
     return rc;
@@ -411,6 +427,87 @@ CURVEFS_ERROR RenameOperator::UpdateInodeCtime() {
 void RenameOperator::UpdateCache() {
   SetTxId(srcPartitionId_, srcTxId_ + 1);
   SetTxId(dstPartitionId_, dstTxId_ + 1);
+}
+
+void RenameOperator::GetOldInode(uint64_t* old_inode_id,
+                                 int64_t* old_inode_size,
+                                 FsFileType* old_inode_type) {
+  *old_inode_id = oldInodeId_;
+  *old_inode_size = oldInodeSize_;
+  *old_inode_type = oldInodeType_;
+}
+
+void RenameOperator::UpdateUsage(std::shared_ptr<FileSystem>& fs) {
+  UpdateSrcDir(fs);
+  UpdateDstDir(fs);
+  UPdateFsStat(fs);
+}
+
+void RenameOperator::UpdateSrcDir(std::shared_ptr<FileSystem>& fs) {
+  if (parentId_ != newParentId_) {
+    int64_t update_space = 0;
+    int64_t update_inode = 0;
+
+    if (src_inode_attr_.type() == FsFileType::TYPE_DIRECTORY) {
+      update_space = 0;
+      update_inode = -1;
+    } else {
+      update_space = -src_inode_attr_.length();
+      update_inode = -1;
+    }
+
+    fs->UpdateDirQuotaUsage(parentId_, update_space, update_inode);
+  }
+}
+
+void RenameOperator::UpdateDstDir(std::shared_ptr<FileSystem>& fs) {
+  int64_t update_space = 0;
+  int64_t update_inode = 0;
+
+  if (parentId_ != newParentId_) {
+    if (src_inode_attr_.type() == FsFileType::TYPE_DIRECTORY) {
+      update_space += 0;
+      update_inode += 1;
+    } else {
+      update_space += src_inode_attr_.length();
+      update_inode += 1;
+    }
+  }
+
+  int64_t reduce_space = 0;
+  int64_t reduce_inode = 0;
+  GetReduceStat(reduce_space, reduce_inode);
+
+  update_space -= reduce_space;
+  update_inode -= reduce_inode;
+
+  fs->UpdateDirQuotaUsage(newParentId_, update_space, update_inode);
+}
+
+void RenameOperator::UPdateFsStat(std::shared_ptr<FileSystem>& fs) {
+  int64_t reduce_space = 0;
+  int64_t reduce_inode = 0;
+  GetReduceStat(reduce_space, reduce_inode);
+
+  fs->UpdateFsQuotaUsage(-reduce_space, -reduce_inode);
+}
+
+void RenameOperator::GetReduceStat(int64_t& reduce_space,
+                                   int64_t& reduce_inode) {
+  if (oldInodeId_ == 0) {
+    // not exist same name
+    reduce_space = 0;
+    reduce_inode = 0;
+  } else {
+    // exist same name
+    if (oldInodeType_ == FsFileType::TYPE_DIRECTORY) {
+      reduce_space = 0;
+      reduce_inode = 1;
+    } else {
+      reduce_space = oldInodeSize_;
+      reduce_inode = 1;
+    }
+  }
 }
 
 }  // namespace client

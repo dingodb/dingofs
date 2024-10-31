@@ -35,7 +35,6 @@ namespace rpcclient {
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Invoke;
-using ::testing::Return;
 using ::testing::SetArgPointee;
 
 using ::curvefs::common::Peer;

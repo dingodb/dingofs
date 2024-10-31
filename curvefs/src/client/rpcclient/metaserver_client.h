@@ -23,19 +23,17 @@
 #ifndef CURVEFS_SRC_CLIENT_RPCCLIENT_METASERVER_CLIENT_H_
 #define CURVEFS_SRC_CLIENT_RPCCLIENT_METASERVER_CLIENT_H_
 
+#include <cstdint>
 #include <list>
 #include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "absl/types/optional.h"
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/proto/space.pb.h"
-#include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/metric/client_metric.h"
 #include "curvefs/src/client/rpcclient/base_client.h"
 #include "curvefs/src/client/rpcclient/task_excutor.h"
@@ -53,6 +51,9 @@ using ::curvefs::metaserver::S3ChunkInfoList;
 using ::curvefs::metaserver::XAttr;
 using S3ChunkInfoMap = google::protobuf::Map<uint64_t, S3ChunkInfoList>;
 using ::curvefs::metaserver::Time;
+
+using ::curvefs::metaserver::Quota;
+using ::curvefs::metaserver::Usage;
 
 namespace curvefs {
 namespace client {
@@ -157,6 +158,15 @@ class MetaServerClient {
   virtual MetaStatusCode GetVolumeExtent(uint32_t fsId, uint64_t inodeId,
                                          bool streaming,
                                          VolumeExtentList* extents) = 0;
+
+  virtual MetaStatusCode GetFsQuota(uint32_t fs_id, Quota& quota) = 0;
+  virtual MetaStatusCode FlushFsUsage(uint32_t fs_id, const Usage& usage,
+                                      Quota& new_quota) = 0;
+
+  virtual MetaStatusCode LoadDirQuotas(
+      uint32_t fs_id, std::unordered_map<uint64_t, Quota>& dir_quotas) = 0;
+  virtual MetaStatusCode FlushDirUsages(
+      uint32_t fs_id, std::unordered_map<uint64_t, Usage>& dir_usages) = 0;
 };
 
 class MetaServerClientImpl : public MetaServerClient {
@@ -250,6 +260,15 @@ class MetaServerClientImpl : public MetaServerClient {
                                  bool streaming,
                                  VolumeExtentList* extents) override;
 
+  MetaStatusCode GetFsQuota(uint32_t fs_id, Quota& quota) override;
+  MetaStatusCode FlushFsUsage(uint32_t fs_id, const Usage& usage,
+                              Quota& new_quota) override;
+
+  MetaStatusCode LoadDirQuotas(
+      uint32_t fs_id, std::unordered_map<uint64_t, Quota>& dir_quotas) override;
+  MetaStatusCode FlushDirUsages(
+      uint32_t fs_id, std::unordered_map<uint64_t, Usage>& dir_usages) override;
+
  private:
   MetaStatusCode UpdateInode(const UpdateInodeRequest& request,
                              bool internal = false);
@@ -262,7 +281,6 @@ class MetaServerClientImpl : public MetaServerClient {
 
   bool HandleS3MetaStreamBuffer(butil::IOBuf* buffer, S3ChunkInfoMap* out);
 
- private:
   ExcutorOpt opt_;
   ExcutorOpt optInternal_;
 

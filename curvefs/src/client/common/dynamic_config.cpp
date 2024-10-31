@@ -81,6 +81,15 @@ DEFINE_int32(disk_check_duration_millsecond, 1 * 1000,
 
 DEFINE_validator(disk_check_duration_millsecond, &PassInt32);
 
+// thread num or bthread num
+DEFINE_uint32(stat_timer_thread_num, 8, "stat timer thread num");
+
+DEFINE_uint32(fs_usage_flush_interval_second, 20,
+              "fs usage flush interval in second");
+DEFINE_uint32(flush_quota_interval_second, 30,
+              "flush quota interval in second");
+DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
+
 }  // namespace common
 }  // namespace client
 }  // namespace curvefs

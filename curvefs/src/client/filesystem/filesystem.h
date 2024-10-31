@@ -25,15 +25,21 @@
 
 #include <gtest/gtest_prod.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "curvefs/src/base/timer/timer.h"
+#include "curvefs/src/base/timer/timer_impl.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/filesystem/attr_watcher.h"
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
+#include "curvefs/src/client/filesystem/dir_parent_watcher.h"
+#include "curvefs/src/client/filesystem/dir_quota_manager.h"
 #include "curvefs/src/client/filesystem/entry_watcher.h"
 #include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/filesystem/fs_stat_manager.h"
 #include "curvefs/src/client/filesystem/lookup_cache.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/openfile.h"
@@ -44,6 +50,8 @@ namespace curvefs {
 namespace client {
 namespace filesystem {
 
+using ::curvefs::base::timer::Timer;
+using ::curvefs::base::timer::TimerImpl;
 using ::curvefs::client::common::FileSystemOption;
 
 struct FileSystemMember {
@@ -64,7 +72,7 @@ struct FileSystemMember {
 
 class FileSystem {
  public:
-  FileSystem(struct FileSystemOption option, ExternalMember member);
+  FileSystem(uint32_t fs_id, FileSystemOption option, ExternalMember member);
 
   void Run();
 
@@ -72,9 +80,9 @@ class FileSystem {
 
   // fuse request
   CURVEFS_ERROR Lookup(Request req, Ino parent, const std::string& name,
-                       EntryOut* entryOut);
+                       EntryOut* entry_out);
 
-  CURVEFS_ERROR GetAttr(Request req, Ino ino, AttrOut* attrOut);
+  CURVEFS_ERROR GetAttr(Request req, Ino ino, AttrOut* attr_out);
 
   CURVEFS_ERROR OpenDir(Request req, Ino ino, FileInfo* fi);
 
@@ -90,20 +98,20 @@ class FileSystem {
   // fuse reply: we control all replies to vfs layer in same entrance.
   void ReplyError(Request req, CURVEFS_ERROR code);
 
-  void ReplyEntry(Request req, EntryOut* entryOut);
+  void ReplyEntry(Request req, EntryOut* entry_out);
 
-  void ReplyAttr(Request req, AttrOut* attrOut);
+  void ReplyAttr(Request req, AttrOut* attr_out);
 
   void ReplyReadlink(Request req, const std::string& link);
 
   void ReplyOpen(Request req, FileInfo* fi);
 
-  void ReplyOpen(Request req, FileOut* fileOut);
+  void ReplyOpen(Request req, FileOut* file_out);
 
   void ReplyData(Request req, struct fuse_bufvec* bufv,
                  enum fuse_buf_copy_flags flags);
 
-  void ReplyWrite(Request req, FileOut* fileOut);
+  void ReplyWrite(Request req, FileOut* file_out);
 
   void ReplyBuffer(Request req, const char* buf, size_t size);
 
@@ -111,11 +119,11 @@ class FileSystem {
 
   void ReplyXattr(Request req, size_t size);
 
-  void ReplyCreate(Request req, EntryOut* entryOut, FileInfo* fi);
+  void ReplyCreate(Request req, EntryOut* entry_out, FileInfo* fi);
 
-  void AddDirEntry(Request req, DirBufferHead* buffer, DirEntry* dirEntry);
+  void AddDirEntry(Request req, DirBufferHead* buffer, DirEntry* dir_entry);
 
-  void AddDirEntryPlus(Request req, DirBufferHead* buffer, DirEntry* dirEntry);
+  void AddDirEntryPlus(Request req, DirBufferHead* buffer, DirEntry* dir_entry);
 
   // utility: file handler
   std::shared_ptr<FileHandler> NewHandler();
@@ -126,6 +134,19 @@ class FileSystem {
 
   // utility: others
   FileSystemMember BorrowMember();
+
+  // dispatch request
+  void UpdateFsQuotaUsage(int64_t add_space, int64_t add_inode);
+  void UpdateDirQuotaUsage(Ino ino, int64_t add_space, int64_t add_inode);
+
+  bool CheckFsQuota(int64_t add_space, int64_t add_inode);
+  // This only check dir quota
+  bool CheckDirQuota(Ino ino, int64_t add_space, int64_t add_inode);
+  // This will first check fs stat, then check dir quota
+  bool CheckQuota(Ino ino, int64_t add_space, int64_t add_inode);
+
+  // This will check ino and its parent has dir quota or not
+  bool HasDirQuota(Ino ino);
 
  private:
   FRIEND_TEST(FileSystemTest, Attr2Stat);
@@ -144,6 +165,7 @@ class FileSystem {
   void SetAttrTimeout(AttrOut* attrOut);
 
  private:
+  uint32_t fs_id_;
   FileSystemOption option_;
   ExternalMember member;
   std::shared_ptr<DeferSync> deferSync_;
@@ -154,6 +176,13 @@ class FileSystem {
   std::shared_ptr<EntryWatcher> entry_watcher_;
   std::shared_ptr<HandlerManager> handlerManager_;
   std::shared_ptr<RPCClient> rpc_;
+
+  std::shared_ptr<DirParentWatcher> dir_parent_watcher_;
+  // NOTE: filesytem own this timer, when destroy or stop, first stop
+  // stat_timer_, then stop fs_stat_manager_  and dir_quota_manager_
+  std::shared_ptr<Timer> stat_timer_;
+  std::shared_ptr<FsStatManager> fs_stat_manager_;
+  std::shared_ptr<DirQuotaManager> dir_quota_manager_;
 };
 
 }  // namespace filesystem

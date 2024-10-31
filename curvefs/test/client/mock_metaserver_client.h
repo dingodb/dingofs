@@ -30,6 +30,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -41,60 +42,69 @@ namespace rpcclient {
 
 class MockMetaServerClient : public MetaServerClient {
  public:
-  MOCK_METHOD4(Init,
-               MetaStatusCode(const ExcutorOpt& excutorOpt,
-                              const ExcutorOpt& excutorInternalOpt,
-                              std::shared_ptr<MetaCache> metaCache,
-                              std::shared_ptr<ChannelManager<MetaserverID>>
-                                  channelManager));
+  MOCK_METHOD(MetaStatusCode, Init,
+              (const ExcutorOpt& excutorOpt,
+               const ExcutorOpt& excutorInternalOpt,
+               std::shared_ptr<MetaCache> metaCache,
+               std::shared_ptr<ChannelManager<MetaserverID>> channelManager),
+              (override));
 
-  MOCK_METHOD4(GetTxId, MetaStatusCode(uint32_t fsId, uint64_t inodeId,
-                                       uint32_t* partitionId, uint64_t* txId));
+  MOCK_METHOD(MetaStatusCode, GetTxId,
+              (uint32_t fsId, uint64_t inodeId, uint32_t* partitionId,
+               uint64_t* txId),
+              (override));
 
-  MOCK_METHOD2(SetTxId, void(uint32_t partitionId, uint64_t txId));
+  MOCK_METHOD(void, SetTxId, (uint32_t partitionId, uint64_t txId), (override));
 
-  MOCK_METHOD4(GetDentry, MetaStatusCode(uint32_t fsId, uint64_t inodeid,
-                                         const std::string& name, Dentry* out));
+  MOCK_METHOD(MetaStatusCode, GetDentry,
+              (uint32_t fsId, uint64_t inodeid, const std::string& name,
+               Dentry* out),
+              (override));
 
-  MOCK_METHOD6(ListDentry,
-               MetaStatusCode(uint32_t fsId, uint64_t inodeid,
-                              const std::string& last, uint32_t count,
-                              bool onlyDir, std::list<Dentry>* dentryList));
+  MOCK_METHOD(MetaStatusCode, ListDentry,
+              (uint32_t fsId, uint64_t inodeid, const std::string& last,
+               uint32_t count, bool onlyDir, std::list<Dentry>* dentryList),
+              (override));
 
-  MOCK_METHOD1(CreateDentry, MetaStatusCode(const Dentry& dentry));
+  MOCK_METHOD(MetaStatusCode, CreateDentry, (const Dentry& dentry), (override));
 
-  MOCK_METHOD4(DeleteDentry,
-               MetaStatusCode(uint32_t fsId, uint64_t inodeid,
-                              const std::string& name, FsFileType type));
+  MOCK_METHOD(MetaStatusCode, DeleteDentry,
+              (uint32_t fsId, uint64_t inodeid, const std::string& name,
+               FsFileType type),
+              (override));
 
-  MOCK_METHOD1(PrepareRenameTx,
-               MetaStatusCode(const std::vector<Dentry>& dentrys));
+  MOCK_METHOD(MetaStatusCode, PrepareRenameTx,
+              (const std::vector<Dentry>& dentrys), (override));
 
-  MOCK_METHOD4(GetInode, MetaStatusCode(uint32_t fsId, uint64_t inodeid,
-                                        Inode* out, bool* streaming));
+  MOCK_METHOD(MetaStatusCode, GetInode,
+              (uint32_t fsId, uint64_t inodeid, Inode* out, bool* streaming),
+              (override));
 
-  MOCK_METHOD3(GetInodeAttr, MetaStatusCode(uint32_t fsId, uint64_t inodeid,
-                                            InodeAttr* attr));
+  MOCK_METHOD(MetaStatusCode, GetInodeAttr,
+              (uint32_t fsId, uint64_t inodeid, InodeAttr* attr), (override));
 
-  MOCK_METHOD3(BatchGetInodeAttr,
-               MetaStatusCode(uint32_t fsId, const std::set<uint64_t>& inodeIds,
-                              std::list<InodeAttr>* attr));
+  MOCK_METHOD(MetaStatusCode, BatchGetInodeAttr,
+              (uint32_t fsId, const std::set<uint64_t>& inodeIds,
+               std::list<InodeAttr>* attr),
+              (override));
 
-  MOCK_METHOD3(BatchGetInodeAttrAsync,
-               MetaStatusCode(uint32_t fsId,
-                              const std::vector<uint64_t>& inodeIds,
-                              MetaServerClientDone* done));
+  MOCK_METHOD(MetaStatusCode, BatchGetInodeAttrAsync,
+              (uint32_t fsId, const std::vector<uint64_t>& inodeIds,
+               MetaServerClientDone* done),
+              (override));
 
-  MOCK_METHOD3(BatchGetXAttr,
-               MetaStatusCode(uint32_t fsId, const std::set<uint64_t>& inodeIds,
-                              std::list<XAttr>* xattr));
+  MOCK_METHOD(MetaStatusCode, BatchGetXAttr,
+              (uint32_t fsId, const std::set<uint64_t>& inodeIds,
+               std::list<XAttr>* xattr),
+              (override));
 
-  MOCK_METHOD3(UpdateInodeAttr,
-               MetaStatusCode(uint32_t, uint64_t, const InodeAttr&));
+  MOCK_METHOD(MetaStatusCode, UpdateInodeAttr,
+              (uint32_t, uint64_t, const InodeAttr&), (override));
 
-  MOCK_METHOD5(UpdateInodeAttrWithOutNlink,
-               MetaStatusCode(uint32_t, uint64_t, const InodeAttr&,
-                              S3ChunkInfoMap* s3ChunkInfoAdd, bool internal));
+  MOCK_METHOD(MetaStatusCode, UpdateInodeAttrWithOutNlink,
+              (uint32_t, uint64_t, const InodeAttr&,
+               S3ChunkInfoMap* s3ChunkInfoAdd, bool internal),
+              (override));
 
   // Workaround for rvalue parameters
   // https://stackoverflow.com/questions/12088537/workaround-for-gmock-to-support-rvalue-reference
@@ -106,46 +116,62 @@ class MockMetaServerClient : public MetaServerClient {
                                             std::move(indices));
   }
 
-  MOCK_METHOD5(UpdateInodeWithOutNlinkAsync_rvr,
-               void(uint32_t, uint64_t, const InodeAttr&,
-                    MetaServerClientDone* done, DataIndices));
+  MOCK_METHOD(void, UpdateInodeWithOutNlinkAsync_rvr,
+              (uint32_t, uint64_t, const InodeAttr&, MetaServerClientDone* done,
+               DataIndices));
 
-  MOCK_METHOD2(UpdateXattrAsync,
-               void(const Inode& inode, MetaServerClientDone* done));
+  MOCK_METHOD(
+      MetaStatusCode, GetOrModifyS3ChunkInfo,
+      (uint32_t fsId, uint64_t inodeId,
+       (const google::protobuf::Map<uint64_t, S3ChunkInfoList>& s3ChunkInfos),
+       bool returnS3ChunkInfoMap,
+       (google::protobuf::Map<uint64_t, S3ChunkInfoList> * out), bool internal),
+      (override));
 
-  MOCK_METHOD6(
-      GetOrModifyS3ChunkInfo,
-      MetaStatusCode(
-          uint32_t fsId, uint64_t inodeId,
-          const google::protobuf::Map<uint64_t, S3ChunkInfoList>& s3ChunkInfos,
-          bool returnS3ChunkInfoMap,
-          google::protobuf::Map<uint64_t, S3ChunkInfoList>* out,
-          bool internal));
+  MOCK_METHOD(
+      void, GetOrModifyS3ChunkInfoAsync,
+      (uint32_t fsId, uint64_t inodeId,
+       (const google::protobuf::Map<uint64_t, S3ChunkInfoList>& s3ChunkInfos),
+       MetaServerClientDone* done),
+      (override));
 
-  MOCK_METHOD4(
-      GetOrModifyS3ChunkInfoAsync,
-      void(uint32_t fsId, uint64_t inodeId,
-           const google::protobuf::Map<uint64_t, S3ChunkInfoList>& s3ChunkInfos,
-           MetaServerClientDone* done));
+  MOCK_METHOD(MetaStatusCode, CreateInode,
+              (const InodeParam& param, Inode* out), (override));
 
-  MOCK_METHOD2(CreateInode,
-               MetaStatusCode(const InodeParam& param, Inode* out));
+  MOCK_METHOD(MetaStatusCode, CreateManageInode,
+              (const InodeParam& param, Inode* out), (override));
 
-  MOCK_METHOD2(CreateManageInode,
-               MetaStatusCode(const InodeParam& param, Inode* out));
+  MOCK_METHOD(MetaStatusCode, DeleteInode, (uint32_t fsId, uint64_t inodeid),
+              (override));
 
-  MOCK_METHOD2(DeleteInode, MetaStatusCode(uint32_t fsId, uint64_t inodeid));
+  MOCK_METHOD(bool, SplitRequestInodes,
+              (uint32_t fsId, const std::set<uint64_t>& inodeIds,
+               std::vector<std::vector<uint64_t>>* inodeGroups),
+              (override));
 
-  MOCK_METHOD3(SplitRequestInodes,
-               bool(uint32_t fsId, const std::set<uint64_t>& inodeIds,
-                    std::vector<std::vector<uint64_t>>* inodeGroups));
+  MOCK_METHOD(void, AsyncUpdateVolumeExtent,
+              (uint32_t, uint64_t, const VolumeExtentList&,
+               MetaServerClientDone*),
+              (override));
 
-  MOCK_METHOD4(AsyncUpdateVolumeExtent,
-               void(uint32_t, uint64_t, const VolumeExtentList&,
-                    MetaServerClientDone*));
+  MOCK_METHOD(MetaStatusCode, GetVolumeExtent,
+              (uint32_t, uint64_t, bool, VolumeExtentList*), (override));
+  MOCK_METHOD(MetaStatusCode, GetFsQuota, (uint32_t fs_id, Quota& quota),
+              (override));
 
-  MOCK_METHOD4(GetVolumeExtent,
-               MetaStatusCode(uint32_t, uint64_t, bool, VolumeExtentList*));
+  MOCK_METHOD(MetaStatusCode, FlushFsUsage,
+              (uint32_t fs_id, const Usage& usage, Quota& new_quota),
+              (override));
+
+  MOCK_METHOD(MetaStatusCode, LoadDirQuotas,
+              (uint32_t fs_id,
+               (std::unordered_map<uint64_t, Quota> & dir_quotas)),
+              (override));
+
+  MOCK_METHOD(MetaStatusCode, FlushDirUsages,
+              (uint32_t fs_id,
+               (std::unordered_map<uint64_t, Usage> & dir_usages)),
+              (override));
 };
 
 }  // namespace rpcclient

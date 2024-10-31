@@ -22,16 +22,27 @@
 
 #include "curvefs/src/client/filesystem/filesystem.h"
 
-#include <map>
+#include <cstdint>
+#include <memory>
 
+#include "curvefs/src/base/timer/timer_impl.h"
+#include "curvefs/src/client/common/dynamic_config.h"
+#include "curvefs/src/client/filesystem/dir_cache.h"
+#include "curvefs/src/client/filesystem/dir_parent_watcher.h"
+#include "curvefs/src/client/filesystem/fs_stat_manager.h"
 #include "curvefs/src/client/filesystem/utils.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
-FileSystem::FileSystem(FileSystemOption option, ExternalMember member)
-    : option_(option), member(member) {
+using base::timer::TimerImpl;
+
+USING_FLAG(stat_timer_thread_num);
+
+FileSystem::FileSystem(uint32_t fs_id, FileSystemOption option,
+                       ExternalMember member)
+    : fs_id_(fs_id), option_(option), member(member) {
   deferSync_ = std::make_shared<DeferSync>(option.deferSyncOption);
   negative_ = std::make_shared<LookupCache>(option.lookupCacheOption);
   dirCache_ = std::make_shared<DirCache>(option.dirCacheOption);
@@ -46,12 +57,32 @@ FileSystem::FileSystem(FileSystemOption option, ExternalMember member)
 void FileSystem::Run() {
   deferSync_->Start();
   dirCache_->Start();
+
+  dir_parent_watcher_ =
+      std::make_shared<DirParentWatcherImpl>(member.inodeManager);
+
+  stat_timer_ =
+      std::make_shared<base::timer::TimerImpl>(FLAGS_stat_timer_thread_num);
+  fs_stat_manager_ =
+      std::make_shared<FsStatManager>(fs_id_, member.meta_client, stat_timer_);
+  dir_quota_manager_ = std::make_shared<DirQuotaManager>(
+      fs_id_, member.meta_client, dir_parent_watcher_, stat_timer_);
+
+  // must start before fs_stat_manager_ and dir_quota_manager_
+  stat_timer_->Start();
+
+  fs_stat_manager_->Start();
+  dir_quota_manager_->Start();
 }
 
 void FileSystem::Destory() {
   openFiles_->CloseAll();
   deferSync_->Stop();
   dirCache_->Stop();
+
+  stat_timer_->Stop();
+  fs_stat_manager_->Stop();
+  dir_quota_manager_->Stop();
 }
 
 void FileSystem::Attr2Stat(InodeAttr* attr, struct stat* stat) {
@@ -76,32 +107,32 @@ void FileSystem::Attr2Stat(InodeAttr* attr, struct stat* stat) {
   }
 }
 
-void FileSystem::Entry2Param(EntryOut* entryOut, fuse_entry_param* e) {
+void FileSystem::Entry2Param(EntryOut* entry_out, fuse_entry_param* e) {
   std::memset(e, 0, sizeof(fuse_entry_param));
-  e->ino = entryOut->attr.inodeid();
+  e->ino = entry_out->attr.inodeid();
   e->generation = 0;
-  Attr2Stat(&entryOut->attr, &e->attr);
-  e->entry_timeout = entryOut->entryTimeout;
-  e->attr_timeout = entryOut->attrTimeout;
+  Attr2Stat(&entry_out->attr, &e->attr);
+  e->entry_timeout = entry_out->entryTimeout;
+  e->attr_timeout = entry_out->attrTimeout;
 }
 
-void FileSystem::SetEntryTimeout(EntryOut* entryOut) {
+void FileSystem::SetEntryTimeout(EntryOut* entry_out) {
   auto option = option_.kernelCacheOption;
-  if (IsDir(entryOut->attr)) {
-    entryOut->entryTimeout = option.dirEntryTimeoutSec;
-    entryOut->attrTimeout = option.dirAttrTimeoutSec;
+  if (IsDir(entry_out->attr)) {
+    entry_out->entryTimeout = option.dirEntryTimeoutSec;
+    entry_out->attrTimeout = option.dirAttrTimeoutSec;
   } else {
-    entryOut->entryTimeout = option.entryTimeoutSec;
-    entryOut->attrTimeout = option.attrTimeoutSec;
+    entry_out->entryTimeout = option.entryTimeoutSec;
+    entry_out->attrTimeout = option.attrTimeoutSec;
   }
 }
 
-void FileSystem::SetAttrTimeout(AttrOut* attrOut) {
+void FileSystem::SetAttrTimeout(AttrOut* attr_out) {
   auto option = option_.kernelCacheOption;
-  if (IsDir(attrOut->attr)) {
-    attrOut->attrTimeout = option.dirAttrTimeoutSec;
+  if (IsDir(attr_out->attr)) {
+    attr_out->attrTimeout = option.dirAttrTimeoutSec;
   } else {
-    attrOut->attrTimeout = option.attrTimeoutSec;
+    attr_out->attrTimeout = option.attrTimeoutSec;
   }
 }
 
@@ -110,21 +141,24 @@ void FileSystem::ReplyError(Request req, CURVEFS_ERROR code) {
   fuse_reply_err(req, SysErr(code));
 }
 
-void FileSystem::ReplyEntry(Request req, EntryOut* entryOut) {
-  AttrWatcherGuard watcher(attrWatcher_, &entryOut->attr, ReplyType::ATTR,
+void FileSystem::ReplyEntry(Request req, EntryOut* entry_out) {
+  AttrWatcherGuard watcher(attrWatcher_, &entry_out->attr, ReplyType::ATTR,
                            true);
+  DirParentWatcherGuard parent_watcher(dir_parent_watcher_, entry_out->attr);
+
   fuse_entry_param e;
-  SetEntryTimeout(entryOut);
-  Entry2Param(entryOut, &e);
+  SetEntryTimeout(entry_out);
+  Entry2Param(entry_out, &e);
   fuse_reply_entry(req, &e);
 }
 
-void FileSystem::ReplyAttr(Request req, AttrOut* attrOut) {
-  AttrWatcherGuard watcher(attrWatcher_, &attrOut->attr, ReplyType::ATTR, true);
+void FileSystem::ReplyAttr(Request req, AttrOut* attr_out) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr_out->attr, ReplyType::ATTR,
+                           true);
   struct stat stat;
-  SetAttrTimeout(attrOut);
-  Attr2Stat(&attrOut->attr, &stat);
-  fuse_reply_attr(req, &stat, attrOut->attrTimeout);
+  SetAttrTimeout(attr_out);
+  Attr2Stat(&attr_out->attr, &stat);
+  fuse_reply_attr(req, &stat, attr_out->attrTimeout);
 }
 
 void FileSystem::ReplyReadlink(Request req, const std::string& link) {
@@ -135,10 +169,10 @@ void FileSystem::ReplyOpen(Request req, FileInfo* fi) {
   fuse_reply_open(req, fi);
 }
 
-void FileSystem::ReplyOpen(Request req, FileOut* fileOut) {
-  AttrWatcherGuard watcher(attrWatcher_, &fileOut->attr, ReplyType::ONLY_LENGTH,
-                           true);
-  fuse_reply_open(req, fileOut->fi);
+void FileSystem::ReplyOpen(Request req, FileOut* file_out) {
+  AttrWatcherGuard watcher(attrWatcher_, &file_out->attr,
+                           ReplyType::ONLY_LENGTH, true);
+  fuse_reply_open(req, file_out->fi);
 }
 
 void FileSystem::ReplyData(Request req, struct fuse_bufvec* bufv,
@@ -146,10 +180,10 @@ void FileSystem::ReplyData(Request req, struct fuse_bufvec* bufv,
   fuse_reply_data(req, bufv, flags);
 }
 
-void FileSystem::ReplyWrite(Request req, FileOut* fileOut) {
-  AttrWatcherGuard watcher(attrWatcher_, &fileOut->attr, ReplyType::ONLY_LENGTH,
-                           true);
-  fuse_reply_write(req, fileOut->nwritten);
+void FileSystem::ReplyWrite(Request req, FileOut* file_out) {
+  AttrWatcherGuard watcher(attrWatcher_, &file_out->attr,
+                           ReplyType::ONLY_LENGTH, true);
+  fuse_reply_write(req, file_out->nwritten);
 }
 
 void FileSystem::ReplyBuffer(Request req, const char* buf, size_t size) {
@@ -164,24 +198,24 @@ void FileSystem::ReplyXattr(Request req, size_t size) {
   fuse_reply_xattr(req, size);
 }
 
-void FileSystem::ReplyCreate(Request req, EntryOut* entryOut, FileInfo* fi) {
-  AttrWatcherGuard watcher(attrWatcher_, &entryOut->attr, ReplyType::ATTR,
+void FileSystem::ReplyCreate(Request req, EntryOut* entry_out, FileInfo* fi) {
+  AttrWatcherGuard watcher(attrWatcher_, &entry_out->attr, ReplyType::ATTR,
                            true);
   fuse_entry_param e;
-  SetEntryTimeout(entryOut);
-  Entry2Param(entryOut, &e);
+  SetEntryTimeout(entry_out);
+  Entry2Param(entry_out, &e);
   fuse_reply_create(req, &e, fi);
 }
 
 void FileSystem::AddDirEntry(Request req, DirBufferHead* buffer,
-                             DirEntry* dirEntry) {
+                             DirEntry* dir_entry) {
   struct stat stat;
   std::memset(&stat, 0, sizeof(stat));
-  stat.st_ino = dirEntry->ino;
+  stat.st_ino = dir_entry->ino;
 
   // add a directory entry to the buffer
   size_t oldsize = buffer->size;
-  const char* name = dirEntry->name.c_str();
+  const char* name = dir_entry->name.c_str();
   buffer->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
   buffer->p = static_cast<char*>(realloc(buffer->p, buffer->size));
   fuse_add_direntry(req,
@@ -191,17 +225,17 @@ void FileSystem::AddDirEntry(Request req, DirBufferHead* buffer,
 }
 
 void FileSystem::AddDirEntryPlus(Request req, DirBufferHead* buffer,
-                                 DirEntry* dirEntry) {
-  AttrWatcherGuard watcher(attrWatcher_, &dirEntry->attr, ReplyType::ATTR,
+                                 DirEntry* dir_entry) {
+  AttrWatcherGuard watcher(attrWatcher_, &dir_entry->attr, ReplyType::ATTR,
                            false);
   struct fuse_entry_param e;
-  EntryOut entryOut(dirEntry->attr);
+  EntryOut entryOut(dir_entry->attr);
   SetEntryTimeout(&entryOut);
   Entry2Param(&entryOut, &e);
 
   // add a directory entry to the buffer with the attributes
   size_t oldsize = buffer->size;
-  const char* name = dirEntry->name.c_str();
+  const char* name = dir_entry->name.c_str();
   buffer->size += fuse_add_direntry_plus(req, NULL, 0, name, NULL, 0);
   buffer->p = static_cast<char*>(realloc(buffer->p, buffer->size));
   fuse_add_direntry_plus(req,
@@ -229,7 +263,7 @@ FileSystemMember FileSystem::BorrowMember() {
 
 // fuse request*
 CURVEFS_ERROR FileSystem::Lookup(Request req, Ino parent,
-                                 const std::string& name, EntryOut* entryOut) {
+                                 const std::string& name, EntryOut* entry_out) {
   if (name.size() > option_.maxNameLength) {
     return CURVEFS_ERROR::NAMETOOLONG;
   }
@@ -239,7 +273,7 @@ CURVEFS_ERROR FileSystem::Lookup(Request req, Ino parent,
     return CURVEFS_ERROR::NOTEXIST;
   }
 
-  auto rc = rpc_->Lookup(parent, name, entryOut);
+  auto rc = rpc_->Lookup(parent, name, entry_out);
   if (rc == CURVEFS_ERROR::OK) {
     negative_->Delete(parent, name);
   } else if (rc == CURVEFS_ERROR::NOTEXIST) {
@@ -248,11 +282,11 @@ CURVEFS_ERROR FileSystem::Lookup(Request req, Ino parent,
   return rc;
 }
 
-CURVEFS_ERROR FileSystem::GetAttr(Request req, Ino ino, AttrOut* attrOut) {
+CURVEFS_ERROR FileSystem::GetAttr(Request req, Ino ino, AttrOut* attr_out) {
   InodeAttr attr;
   auto rc = rpc_->GetAttr(ino, &attr);
   if (rc == CURVEFS_ERROR::OK) {
-    *attrOut = AttrOut(attr);
+    *attr_out = AttrOut(attr);
   }
   return rc;
 }
@@ -323,9 +357,8 @@ CURVEFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
                  << ": attribute not found in wacther";
     return CURVEFS_ERROR::STALE;
   } else if (mtime != InodeMtime(inode)) {
-    LOG(WARNING) << "open(" << ino << "): stale file handler"
-                 << ", cache(" << mtime << ") vs remote(" << InodeMtime(inode)
-                 << ")";
+    LOG(WARNING) << "open(" << ino << "): stale file handler" << ", cache("
+                 << mtime << ") vs remote(" << InodeMtime(inode) << ")";
     return CURVEFS_ERROR::STALE;
   }
 
@@ -340,6 +373,35 @@ CURVEFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
   }
   openFiles_->Close(ino);
   return CURVEFS_ERROR::OK;
+}
+
+void FileSystem::UpdateFsQuotaUsage(int64_t add_space, int64_t add_inode) {
+  fs_stat_manager_->UpdateQuotaUsage(add_space, add_inode);
+}
+
+void FileSystem::UpdateDirQuotaUsage(Ino ino, int64_t add_space,
+                                     int64_t add_inode) {
+  dir_quota_manager_->UpdateDirQuotaUsage(ino, add_space, add_inode);
+}
+
+bool FileSystem::CheckFsQuota(int64_t add_space, int64_t add_inode) {
+  return fs_stat_manager_->CheckQuota(add_space, add_inode);
+}
+
+bool FileSystem::CheckDirQuota(Ino ino, int64_t add_space, int64_t add_inode) {
+  return dir_quota_manager_->CheckDirQuota(ino, add_space, add_inode);
+}
+
+bool FileSystem::CheckQuota(Ino ino, int64_t add_space, int64_t add_inode) {
+  if (!fs_stat_manager_->CheckQuota(add_space, add_inode)) {
+    return false;
+  }
+
+  return dir_quota_manager_->CheckDirQuota(ino, add_space, add_inode);
+}
+
+bool FileSystem::HasDirQuota(Ino ino) {
+  return dir_quota_manager_->HasDirQuota(ino);
 }
 
 }  // namespace filesystem

@@ -34,18 +34,13 @@
 #include "curvefs/test/client/rpcclient/mock_mds_base_client.h"
 #include "curvefs/test/client/rpcclient/mock_mds_service.h"
 #include "curvefs/test/utils/protobuf_message_utils.h"
-#include "src/client/mds_client.h"
 
 namespace curvefs {
 namespace client {
 namespace rpcclient {
-using curvefs::mds::topology::TopoStatusCode;
 using ::testing::_;
-using ::testing::DoAll;
 using ::testing::Invoke;
-using ::testing::Return;
 using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
 
 using ::curvefs::mds::topology::TopoStatusCode;
 

@@ -28,16 +28,24 @@
 #include <time.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "butil/time.h"
 #include "curvefs/proto/metaserver.pb.h"
+#include "curvefs/src/client/metric/client_metric.h"
 #include "curvefs/src/client/rpcclient/metacache.h"
 #include "curvefs/src/client/rpcclient/task_excutor.h"
+#include "curvefs/src/common/define.h"
 #include "curvefs/src/common/rpc_stream.h"
+#include "fmt/core.h"
 #include "src/common/string_util.h"
+
+namespace curvefs {
+namespace client {
+namespace rpcclient {
 
 using ::curve::common::StringToUll;
 using curvefs::client::metric::MetricListGuard;
@@ -48,9 +56,17 @@ using curvefs::metaserver::BatchGetXAttrResponse;
 using curvefs::metaserver::GetOrModifyS3ChunkInfoRequest;
 using curvefs::metaserver::GetOrModifyS3ChunkInfoResponse;
 
-namespace curvefs {
-namespace client {
-namespace rpcclient {
+using curvefs::metaserver::FlushDirUsagesRequest;
+using curvefs::metaserver::FlushDirUsagesResponse;
+using curvefs::metaserver::FlushFsUsageRequest;
+using curvefs::metaserver::FlushFsUsageResponse;
+using curvefs::metaserver::GetFsQuotaRequest;
+using curvefs::metaserver::GetFsQuotaResponse;
+using curvefs::metaserver::LoadDirQuotasRequest;
+using curvefs::metaserver::LoadDirQuotasResponse;
+
+using curvefs::metaserver::MetaServerService_Stub;
+
 using CreateDentryExcutor = TaskExecutor;
 using GetDentryExcutor = TaskExecutor;
 using ListDentryExcutor = TaskExecutor;
@@ -579,6 +595,8 @@ class BatchGetInodeAttrRpcDone : public MetaServerClientRpcDoneBase {
   using MetaServerClientRpcDoneBase::MetaServerClientRpcDoneBase;
 
   void Run() override;
+
+  BatchGetInodeAttrRequest request;
   BatchGetInodeAttrResponse response;
 };
 
@@ -586,19 +604,19 @@ void BatchGetInodeAttrRpcDone::Run() {
   // update metaserver operation metrics stats
   auto start = butil::cpuwide_time_us();
   bool is_ok = true;
-  MetricListGuard metaGuard(
+  MetricListGuard meta_guard(
       &is_ok, {&(metric_->batchGetInodeAttr), &(metric_->getAllOperation)},
       start);
 
   std::unique_ptr<BatchGetInodeAttrRpcDone> self_guard(this);
   brpc::ClosureGuard done_guard(done_);
-  auto taskCtx = done_->GetTaskExcutor()->GetTaskCxt();
-  auto& cntl = taskCtx->cntl_;
-  auto metaCache = done_->GetTaskExcutor()->GetMetaCache();
+  auto task_ctx = done_->GetTaskExcutor()->GetTaskCxt();
+  auto& cntl = task_ctx->cntl_;
   if (cntl.Failed()) {
     LOG(WARNING) << "batchGetInodeAttr Failed, errorcode = " << cntl.ErrorCode()
                  << ", error content: " << cntl.ErrorText()
-                 << ", log id: " << cntl.log_id();
+                 << ", log id: " << cntl.log_id()
+                 << ", request: " << request.ShortDebugString();
     is_ok = false;
     done_->SetRetCode(-cntl.ErrorCode());
     return;
@@ -609,8 +627,9 @@ void BatchGetInodeAttrRpcDone::Run() {
     LOG(WARNING) << "batchGetInodeAttr failed" << ", errcode = " << ret
                  << ", errmsg = " << MetaStatusCode_Name(ret);
   } else if (response.has_appliedindex()) {
-    metaCache->UpdateApplyIndex(taskCtx->target.groupID,
-                                response.appliedindex());
+    auto meta_cache = done_->GetTaskExcutor()->GetMetaCache();
+    meta_cache->UpdateApplyIndex(task_ctx->target.groupID,
+                                 response.appliedindex());
   } else {
     LOG(WARNING) << "batchGetInodeAttr ok,"
                  << " but applyIndex not set in response:"
@@ -716,26 +735,27 @@ MetaStatusCode MetaServerClientImpl::BatchGetInodeAttrAsync(
   auto task = AsyncRPCTask {
     (void)txId;
 
-    BatchGetInodeAttrRequest request;
-    BatchGetInodeAttrResponse response;
+    auto* rpc_done = new BatchGetInodeAttrRpcDone(taskExecutorDone, &metric_);
+    BatchGetInodeAttrRequest& request = rpc_done->request;
     request.set_poolid(poolID);
     request.set_copysetid(copysetID);
     request.set_partitionid(partitionID);
     request.set_fsid(fsId);
     request.set_appliedindex(applyIndex);
     *request.mutable_inodeid() = {inodeIds.begin(), inodeIds.end()};
-    auto* rpcDone = new BatchGetInodeAttrRpcDone(taskExecutorDone, &metric_);
+
     curvefs::metaserver::MetaServerService_Stub stub(channel);
-    stub.BatchGetInodeAttr(cntl, &request, &rpcDone->response, rpcDone);
+    stub.BatchGetInodeAttr(cntl, &request, &rpc_done->response, rpc_done);
     return MetaStatusCode::OK;
   };
-  auto taskCtx = std::make_shared<TaskContext>(
+
+  auto task_ctx = std::make_shared<TaskContext>(
       MetaServerOpType::BatchGetInodeAttr, task, fsId, *inodeIds.begin());
   auto excutor = std::make_shared<BatchGetInodeAttrExcutor>(
-      opt_, metaCache_, channelManager_, std::move(taskCtx));
-  TaskExecutorDone* taskDone =
+      opt_, metaCache_, channelManager_, std::move(task_ctx));
+  TaskExecutorDone* task_done =
       new BatchGetInodeAttrTaskExecutorDone(excutor, done);
-  excutor->DoAsyncRPCTask(taskDone);
+  excutor->DoAsyncRPCTask(task_done);
   return MetaStatusCode::OK;
 }
 
@@ -1712,6 +1732,285 @@ MetaStatusCode MetaServerClientImpl::GetInodeAttr(uint32_t fsId,
 
   *attr = attrs.front();
   return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaServerClientImpl::GetFsQuota(uint32_t fs_id, Quota& quota) {
+  auto task = RPCTask {
+    auto start = butil::cpuwide_time_us();
+    bool is_ok = true;
+    MetricListGuard metric_guard(
+        &is_ok, {&metric_.get_fs_quota, &metric_.getAllOperation}, start);
+
+    GetFsQuotaRequest request;
+    request.set_poolid(poolID);
+    request.set_copysetid(copysetID);
+    request.set_fsid(fs_id);
+
+    GetFsQuotaResponse response;
+    MetaServerService_Stub stub(channel);
+    stub.GetFsQuota(cntl, &request, &response, nullptr);
+
+    std::string log_prefix =
+        fmt::format("GetFsQuota remote side: {}",
+                    butil::endpoint2str(cntl->remote_side()).c_str());
+
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errorcode = " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
+      is_ok = false;
+      return -cntl->ErrorCode();
+    }
+
+    VLOG(12) << log_prefix << ", request: " << request.ShortDebugString()
+             << ", response: " << response.ShortDebugString();
+
+    MetaStatusCode ret = response.statuscode();
+    if (ret == MetaStatusCode::OK) {
+      CHECK(response.has_appliedindex())
+          << "applied index not set in response:" << response.ShortDebugString()
+          << ", requst:" << request.ShortDebugString();
+      quota = response.quota();
+      metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
+                                   response.appliedindex());
+    } else {
+      if (ret != MetaStatusCode::NOT_FOUND) {
+        LOG(WARNING) << "Failed " << log_prefix
+                     << ", errmsg = " << MetaStatusCode_Name(ret)
+                     << ", request: " << request.ShortDebugString()
+                     << ", response: " << response.ShortDebugString();
+      }
+    }
+
+    return ret;
+  };
+
+  auto task_context = std::make_shared<TaskContext>(
+      MetaServerOpType::GetFsQuota, task, fs_id, ROOTINODEID);
+
+  TaskExecutor excutor(opt_, metaCache_, channelManager_,
+                       std::move(task_context));
+
+  return ConvertToMetaStatusCode(excutor.DoRPCTask());
+}
+
+MetaStatusCode MetaServerClientImpl::FlushFsUsage(uint32_t fs_id,
+                                                  const Usage& usage,
+                                                  Quota& new_quota) {
+  auto task = RPCTask {
+    auto start = butil::cpuwide_time_us();
+    bool is_ok = true;
+    MetricListGuard metric_guard(
+        &is_ok, {&metric_.flush_fs_usage, &metric_.getAllOperation}, start);
+
+    FlushFsUsageRequest request;
+    request.set_poolid(poolID);
+    request.set_copysetid(copysetID);
+    request.set_fsid(fs_id);
+    request.mutable_usage()->CopyFrom(usage);
+
+    FlushFsUsageResponse response;
+    MetaServerService_Stub stub(channel);
+    stub.FlushFsUsage(cntl, &request, &response, nullptr);
+
+    std::string log_prefix =
+        fmt::format("FlushFsUsage remote side: {}",
+                    butil::endpoint2str(cntl->remote_side()).c_str());
+
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errorcode = " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
+      is_ok = false;
+      return -cntl->ErrorCode();
+    }
+
+    VLOG(12) << log_prefix << ", request: " << request.ShortDebugString()
+             << ", response: " << response.ShortDebugString();
+
+    MetaStatusCode ret = response.statuscode();
+    if (ret == MetaStatusCode::OK) {
+      CHECK(response.has_appliedindex())
+          << "applied index not set in response:" << response.ShortDebugString()
+          << ", requst:" << request.ShortDebugString();
+
+      new_quota = response.quota();
+      metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
+                                   response.appliedindex());
+    } else if (ret == MetaStatusCode::NOT_FOUND) {
+      LOG(INFO) << "Failed " << log_prefix
+                << ", errmsg = " << MetaStatusCode_Name(ret)
+                << ", request: " << request.ShortDebugString();
+    } else {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errmsg = " << MetaStatusCode_Name(ret)
+                   << ", request: " << request.ShortDebugString()
+                   << ", response: " << response.ShortDebugString();
+    }
+
+    return ret;
+  };
+
+  auto task_context = std::make_shared<TaskContext>(
+      MetaServerOpType::FlushFsUsage, task, fs_id, ROOTINODEID);
+
+  TaskExecutor excutor(opt_, metaCache_, channelManager_,
+                       std::move(task_context));
+
+  return ConvertToMetaStatusCode(excutor.DoRPCTask());
+}
+
+MetaStatusCode MetaServerClientImpl::LoadDirQuotas(
+    uint32_t fs_id, std::unordered_map<uint64_t, Quota>& dir_quotas) {
+  auto task = RPCTask {
+    auto start = butil::cpuwide_time_us();
+    bool is_ok = true;
+    MetricListGuard metric_guard(
+        &is_ok, {&metric_.load_dir_quotas, &metric_.getAllOperation}, start);
+
+    LoadDirQuotasRequest request;
+    request.set_poolid(poolID);
+    request.set_copysetid(copysetID);
+    request.set_appliedindex(applyIndex);
+    request.set_fsid(fs_id);
+
+    LoadDirQuotasResponse response;
+    MetaServerService_Stub stub(channel);
+    stub.LoadDirQuotas(cntl, &request, &response, nullptr);
+
+    std::string log_prefix =
+        fmt::format("LoadDirQuotas remote side: {}",
+                    butil::endpoint2str(cntl->remote_side()).c_str());
+
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errorcode = " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id()
+                   << ", request: " << request.ShortDebugString();
+      is_ok = false;
+      return -cntl->ErrorCode();
+    }
+
+    VLOG(12) << log_prefix << ", request: " << request.ShortDebugString()
+             << ", response quota size: " << response.quotas_size();
+
+    MetaStatusCode ret = response.statuscode();
+    if (ret != MetaStatusCode::OK) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errmsg = " << MetaStatusCode_Name(ret)
+                   << ", request: " << request.ShortDebugString()
+                   << ", response: " << response.ShortDebugString();
+    } else {
+      CHECK(response.has_appliedindex())
+          << "applied index not set in response" << response.ShortDebugString()
+          << ", requst:" << request.ShortDebugString();
+
+      for (const auto& dir_quota_iter : response.quotas()) {
+        VLOG(12) << log_prefix << " response, inodeId=" << dir_quota_iter.first
+                 << ", quota: " << dir_quota_iter.second.ShortDebugString();
+
+        uint64_t ino = dir_quota_iter.first;
+        const auto& dir_quota = dir_quota_iter.second;
+        if (dir_quota.maxbytes() == 0 && dir_quota.maxinodes() == 0) {
+          LOG(INFO) << log_prefix << " invalid quota, inodeId=" << ino
+                    << ", quota: " << dir_quota.ShortDebugString();
+        } else {
+          dir_quotas[ino] = dir_quota;
+        }
+      }
+
+      metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
+                                   response.appliedindex());
+    }
+
+    return ret;
+  };
+
+  auto task_context = std::make_shared<TaskContext>(
+      MetaServerOpType::FlushFsUsage, task, fs_id, ROOTINODEID);
+
+  TaskExecutor excutor(opt_, metaCache_, channelManager_,
+                       std::move(task_context));
+
+  return ConvertToMetaStatusCode(excutor.DoRPCTask());
+}
+
+MetaStatusCode MetaServerClientImpl::FlushDirUsages(
+    uint32_t fs_id, std::unordered_map<uint64_t, Usage>& dir_usages) {
+  CHECK_GT(dir_usages.size(), 0);
+
+  auto task = RPCTask {
+    auto start = butil::cpuwide_time_us();
+    bool is_ok = true;
+    MetricListGuard metric_guard(
+        &is_ok, {&metric_.flush_dir_usages, &metric_.getAllOperation}, start);
+
+    FlushDirUsagesRequest request;
+    request.set_poolid(poolID);
+    request.set_copysetid(copysetID);
+    request.set_fsid(fs_id);
+    auto* mutable_usages = request.mutable_usages();
+    for (const auto& dir_usage_iter : dir_usages) {
+      VLOG(12) << "FlushDirUsages inodeId=" << dir_usage_iter.first
+               << ", usage: " << dir_usage_iter.second.ShortDebugString();
+      CHECK(mutable_usages->emplace(dir_usage_iter.first, dir_usage_iter.second)
+                .second)
+          << "duplicate quota inodeId=" << dir_usage_iter.first;
+    }
+
+    CHECK_GT(request.usages_size(), 0);
+
+    FlushDirUsagesResponse response;
+    MetaServerService_Stub stub(channel);
+    stub.FlushDirUsages(cntl, &request, &response, nullptr);
+
+    std::string log_prefix =
+        fmt::format("FlushDirUsages remote side: {}",
+                    butil::endpoint2str(cntl->remote_side()).c_str());
+
+    if (cntl->Failed()) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errorcode = " << cntl->ErrorCode()
+                   << ", error content: " << cntl->ErrorText()
+                   << ", log id = " << cntl->log_id()
+                   << ", request usage size: " << request.usages_size();
+      is_ok = false;
+      return -cntl->ErrorCode();
+    }
+
+    VLOG(12) << log_prefix << ", request usage size:" << request.usages_size()
+             << ", response: " << response.ShortDebugString();
+
+    MetaStatusCode ret = response.statuscode();
+    if (ret != MetaStatusCode::OK) {
+      LOG(WARNING) << "Failed " << log_prefix
+                   << ", errmsg = " << MetaStatusCode_Name(ret)
+                   << ", request usage size: " << request.usages_size()
+                   << ", response: " << response.ShortDebugString();
+    } else {
+      CHECK(response.has_appliedindex())
+          << "applied index not set in response" << response.ShortDebugString()
+          << ", request usage size: " << request.usages_size();
+
+      metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
+                                   response.appliedindex());
+    }
+
+    return ret;
+  };
+
+  auto task_context = std::make_shared<TaskContext>(
+      MetaServerOpType::FlushFsUsage, task, fs_id, ROOTINODEID);
+
+  TaskExecutor excutor(opt_, metaCache_, channelManager_,
+                       std::move(task_context));
+
+  return ConvertToMetaStatusCode(excutor.DoRPCTask());
 }
 
 }  // namespace rpcclient

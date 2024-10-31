@@ -46,15 +46,15 @@ class WarmupManagerS3Impl;
 
 class FuseS3Client : public FuseClient {
  public:
-  FuseS3Client()
-      : FuseClient(), s3Adaptor_(std::make_shared<S3ClientAdaptorImpl>()) {
-    auto readFunc = [this](fuse_req_t req, fuse_ino_t ino, size_t size,
-                           off_t off, struct fuse_file_info* fi, char* buffer,
-                           size_t* rSize) {
-      return FuseOpRead(req, ino, size, off, fi, buffer, rSize);
+  FuseS3Client() : s3Adaptor_(std::make_shared<S3ClientAdaptorImpl>()) {
+    auto read_func = [this](fuse_req_t req, fuse_ino_t ino, size_t size,
+                            off_t off, struct fuse_file_info* fi, char* buffer,
+                            size_t* r_size) {
+      return FuseOpRead(req, ino, size, off, fi, buffer, r_size);
     };
+
     warmupManager_ = std::make_shared<warmup::WarmupManagerS3Impl>(
-        metaClient_, inodeManager_, dentryManager_, fsInfo_, readFunc,
+        metaClient_, inodeManager_, dentryManager_, fsInfo_, read_func,
         s3Adaptor_, nullptr);
   }
 
@@ -77,23 +77,23 @@ class FuseS3Client : public FuseClient {
 
   CURVEFS_ERROR FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf,
                             size_t size, off_t off, struct fuse_file_info* fi,
-                            FileOut* fileOut) override;
+                            FileOut* file_out) override;
 
   CURVEFS_ERROR FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size,
                            off_t off, struct fuse_file_info* fi, char* buffer,
-                           size_t* rSize) override;
+                           size_t* r_size) override;
 
   CURVEFS_ERROR FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
                              const char* name, mode_t mode,
                              struct fuse_file_info* fi,
-                             EntryOut* entryOut) override;
+                             EntryOut* entry_out) override;
 
   CURVEFS_ERROR FuseOpMkNod(fuse_req_t req, fuse_ino_t parent, const char* name,
                             mode_t mode, dev_t rdev,
-                            EntryOut* entryOut) override;
+                            EntryOut* entry_out) override;
 
   CURVEFS_ERROR FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
-                           const char* newname, EntryOut* entryOut) override;
+                           const char* newname, EntryOut* entry_out) override;
 
   CURVEFS_ERROR FuseOpUnlink(fuse_req_t req, fuse_ino_t parent,
                              const char* name) override;

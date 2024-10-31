@@ -123,6 +123,13 @@ struct MetaServerClientMetric {
 
   // write operation
   InterfaceMetric getTxnOperation;
+
+  // qutoa related
+  InterfaceMetric get_fs_quota;
+  InterfaceMetric flush_fs_usage;
+  InterfaceMetric load_dir_quotas;
+  InterfaceMetric flush_dir_usages;
+
   // all
   InterfaceMetric getAllOperation;
 
@@ -142,6 +149,10 @@ struct MetaServerClientMetric {
         updateVolumeExtent(prefix, "updateVolumeExtent"),
         getVolumeExtent(prefix, "getVolumeExtent"),
         getTxnOperation(prefix, "getTxnopt"),
+        get_fs_quota(prefix, "getFsQuota"),
+        flush_fs_usage(prefix, "flushFsUsage"),
+        load_dir_quotas(prefix, "loadDirQuotas"),
+        flush_dir_usages(prefix, "flushDirUsages"),
         getAllOperation(prefix, "getAllopt") {}
 };
 

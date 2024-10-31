@@ -27,7 +27,6 @@
 
 #include "curvefs/src/client/dentry_cache_manager.h"
 #include "curvefs/src/client/inode_cache_manager.h"
-#include "curvefs/src/client/xattr_manager.h"
 
 namespace curvefs {
 namespace client {
@@ -35,12 +34,16 @@ namespace filesystem {
 
 struct ExternalMember {  // external member depended by FileSystem
   ExternalMember() = delete;
-  ExternalMember(std::shared_ptr<DentryCacheManager> dentryManager,
-                 std::shared_ptr<InodeCacheManager> inodeManager)
-      : dentryManager(dentryManager), inodeManager(inodeManager) {}
+  ExternalMember(std::shared_ptr<DentryCacheManager> p_dentry_manager,
+                 std::shared_ptr<InodeCacheManager> p_inode_manager,
+                 std::shared_ptr<MetaServerClient> p_meta_client)
+      : dentryManager(std::move(p_dentry_manager)),
+        inodeManager(std::move(p_inode_manager)),
+        meta_client(std::move(p_meta_client)) {}
 
   std::shared_ptr<DentryCacheManager> dentryManager;
   std::shared_ptr<InodeCacheManager> inodeManager;
+  std::shared_ptr<MetaServerClient> meta_client;
 };
 
 }  // namespace filesystem

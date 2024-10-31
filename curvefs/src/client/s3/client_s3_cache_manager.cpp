@@ -498,7 +498,7 @@ int FileCacheManager::Read(uint64_t inodeId, uint64_t offset, uint64_t length,
                 << " from s3 failed, ret = " << static_cast<int>(ret);
       return static_cast<int>(ret);
     }
-  } while (1);
+  } while (true);
 
   return actual_read_len;
 }
