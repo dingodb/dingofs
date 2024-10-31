@@ -481,7 +481,137 @@ message UpdateVolumeExtentResponse {
     optional uint64 appliedIndex = 2;
 }
 
+// Quota
+message Quota {
+    optional uint64 maxBytes = 1;
+    optional uint64 maxInodes = 2;
+    optional uint64 usedBytes = 3;
+    optional uint64 usedInodes = 4;
+};
+
+message Usage {
+    required int64 bytes = 1;
+    required int64 inodes = 2;
+};
+
+message SetFsQuotaRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint32 fsId = 3;
+    required Quota quota = 4;
+};
+
+message SetFsQuotaResponse {
+    required MetaStatusCode statusCode = 1;
+    optional uint64 appliedIndex = 2;
+};
+
+message GetFsQuotaRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint64 appliedIndex = 3;
+    required uint32 fsId = 4;
+};
+
+message GetFsQuotaResponse {
+    required MetaStatusCode statusCode = 1;
+    required Quota quota = 2;
+    optional uint64 appliedIndex = 3;
+};
+
+message FlushFsUsageRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint32 fsId = 3;
+    required Usage usage = 4;
+};
+
+message FlushFsUsageResponse {
+    required MetaStatusCode statusCode = 1;
+    required Usage usage = 2;
+    optional uint64 appliedIndex = 3;
+};
+
+message SetDirQuotaRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint32 fsId = 3;
+    required uint64 dirInodeId = 4;
+    required Quota quota = 5;
+};
+
+message SetDirQuotaResponse {
+    required MetaStatusCode statusCode = 1;
+    optional uint64 appliedIndex = 2;
+};
+
+message GetDirQuotaRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint64 appliedIndex = 3;
+    required uint32 fsId = 4;
+    required uint64 dirInodeId = 5;
+};
+
+message GetDirQuotaResponse {
+    required MetaStatusCode statusCode = 1;
+    required Quota quota = 2;
+    optional uint64 appliedIndex = 3;
+};
+
+message DeleteDirQuotaRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint32 fsId = 3;
+    required uint64 dirInodeId = 4;
+};
+
+message DeleteDirQuotaResponse {
+    required MetaStatusCode statusCode = 1;
+    optional uint64 appliedIndex = 2;
+};
+
+message LoadDirQuotasRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    required uint64 appliedIndex = 3;
+    required uint32 fsId = 4;
+};
+
+message LoadDirQuotasResponse {
+    required MetaStatusCode statusCode = 1;
+    map<uint64, Quota> quotas = 2;
+    optional uint64 appliedIndex = 3;
+};
+
+message FlushDirUsagesRequest {
+    required uint32 poolId = 1;
+    required uint32 copysetId = 2;
+    map<uint64, Usage> usages = 3;
+    required uint32 fsId = 4;
+    required uint64 dirInodeId = 5;
+};
+
+message FlushDirUsagesResponse {
+    required MetaStatusCode statusCode = 1;
+    optional uint64 appliedIndex = 2;
+};
+
 service MetaServerService {
+    // super partition
+    rpc SetFsQuota(SetFsQuotaRequest) returns (SetFsQuotaResponse);
+    rpc GetFsQuota(GetFsQuotaRequest) returns (GetFsQuotaResponse);
+    rpc FlushFsUsage(FlushFsUsageRequest) returns (FlushFsUsageResponse);
+    rpc SetDirQuota(SetDirQuotaRequest) returns (SetDirQuotaResponse);
+    rpc GetDirQuota(GetDirQuotaRequest) returns (GetDirQuotaResponse);
+    rpc DeleteDirQuota(DeleteDirQuotaRequest) returns (DeleteDirQuotaResponse);
+    rpc LoadDirQuotas(LoadDirQuotasRequest) returns (LoadDirQuotasResponse);
+    rpc FlushDirUsages(FlushDirUsagesRequest) returns (FlushDirUsagesResponse);
+
+    // partition interface
+    rpc CreatePartition(CreatePartitionRequest) returns (CreatePartitionResponse);
+    rpc DeletePartition(DeletePartitionRequest) returns (DeletePartitionResponse);
+
     // dentry interface
     rpc GetDentry(GetDentryRequest) returns (GetDentryResponse);
     rpc ListDentry(ListDentryRequest) returns (ListDentryResponse);
@@ -500,10 +630,6 @@ service MetaServerService {
     rpc GetOrModifyS3ChunkInfo(GetOrModifyS3ChunkInfoRequest) returns (GetOrModifyS3ChunkInfoResponse);
     rpc BatchGetInodeAttr(BatchGetInodeAttrRequest) returns (BatchGetInodeAttrResponse);
     rpc BatchGetXAttr(BatchGetXAttrRequest) returns (BatchGetXAttrResponse);
-
-    // partition interface
-    rpc CreatePartition(CreatePartitionRequest) returns (CreatePartitionResponse);
-    rpc DeletePartition(DeletePartitionRequest) returns (DeletePartitionResponse);
 
     // volume extent interface
     rpc GetVolumeExtent(GetVolumeExtentRequest) returns (GetVolumeExtentResponse);
