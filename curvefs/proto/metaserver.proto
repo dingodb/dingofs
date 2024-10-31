@@ -485,8 +485,8 @@ message UpdateVolumeExtentResponse {
 message Quota {
     optional uint64 maxBytes = 1;
     optional uint64 maxInodes = 2;
-    optional uint64 usedBytes = 3;
-    optional uint64 usedInodes = 4;
+    optional int64 usedBytes = 3;
+    optional int64 usedInodes = 4;
 };
 
 message Usage {
@@ -509,7 +509,7 @@ message SetFsQuotaResponse {
 message GetFsQuotaRequest {
     required uint32 poolId = 1;
     required uint32 copysetId = 2;
-    required uint64 appliedIndex = 3;
+    optional uint64 appliedIndex = 3;
     required uint32 fsId = 4;
 };
 
@@ -528,7 +528,7 @@ message FlushFsUsageRequest {
 
 message FlushFsUsageResponse {
     required MetaStatusCode statusCode = 1;
-    required Usage usage = 2;
+    required Quota quota = 2;
     optional uint64 appliedIndex = 3;
 };
 
@@ -548,7 +548,7 @@ message SetDirQuotaResponse {
 message GetDirQuotaRequest {
     required uint32 poolId = 1;
     required uint32 copysetId = 2;
-    required uint64 appliedIndex = 3;
+    optional uint64 appliedIndex = 3;
     required uint32 fsId = 4;
     required uint64 dirInodeId = 5;
 };
@@ -574,7 +574,7 @@ message DeleteDirQuotaResponse {
 message LoadDirQuotasRequest {
     required uint32 poolId = 1;
     required uint32 copysetId = 2;
-    required uint64 appliedIndex = 3;
+    optional uint64 appliedIndex = 3;
     required uint32 fsId = 4;
 };
 
@@ -589,7 +589,6 @@ message FlushDirUsagesRequest {
     required uint32 copysetId = 2;
     map<uint64, Usage> usages = 3;
     required uint32 fsId = 4;
-    required uint64 dirInodeId = 5;
 };
 
 message FlushDirUsagesResponse {
