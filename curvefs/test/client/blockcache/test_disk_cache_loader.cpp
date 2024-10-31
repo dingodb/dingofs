@@ -26,7 +26,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/log.h"
-#include "curvefs/test/client/blockcache/helper/builder.h"
+#include "curvefs/test/client/blockcache/builder/builder.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

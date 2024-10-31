@@ -24,7 +24,7 @@
 #include "curvefs/src/base/filepath/filepath.h"
 #include "curvefs/src/client/blockcache/cache_store.h"
 #include "curvefs/src/client/blockcache/local_filesystem.h"
-#include "curvefs/test/client/blockcache/helper/builder.h"
+#include "curvefs/test/client/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace curvefs {

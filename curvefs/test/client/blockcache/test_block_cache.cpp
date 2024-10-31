@@ -22,7 +22,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "curvefs/src/client/blockcache/block_cache.h"
-#include "curvefs/test/client/blockcache/helper/builder.h"
+#include "curvefs/test/client/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace curvefs {

@@ -84,9 +84,11 @@ MetaStoreImpl::MetaStoreImpl(copyset::CopysetNode* node,
                              const StorageOptions& storageOptions)
     : copysetNode_(node),
       streamServer_(std::make_shared<StreamServer>()),
-      storageOptions_(storageOptions) {}
+      storageOptions_(storageOptions),
+      super_partition_(std::make_unique<SuperPartition>(kvStorage_)) {}
 
 bool MetaStoreImpl::Load(const std::string& pathname) {
+  // Load from raft snap file to memory
   WriteLockGuard writeLockGuard(rwLock_);
   MetaStoreFStream fstream(&partitionMap_, kvStorage_,
                            copysetNode_->GetPoolId(),
@@ -234,6 +236,79 @@ bool MetaStoreImpl::Destroy() {
 
   kvStorage_.reset();
   return true;
+}
+
+MetaStatusCode MetaStoreImpl::SetFsQuota(const SetFsQuotaRequest* request,
+                                         SetFsQuotaResponse* response) {
+  // if (request->has_maxbytes()) {
+  // }
+
+  // uint32_t fs_id = request->fsid();
+  // auto rc = super_partition_->SetFsQuota(fsid, );
+  // response->set_status(rc);
+  // return rc;
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::GetFsQuota(const GetFsQuotaRequest* request,
+                                         GetFsQuotaResponse* response) {
+  // uint32_t fs_id = request->fsid();
+  // auto rc = super_partition_->GetFsQuota(fs_id, response->mutable_quota());
+  // response->set_status(rc);
+  // return rc;
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::FlushFsUsage(const FlushFsUsageRequest* request,
+                                           FlushFsUsageResponse* response) {
+  // uint32_t fs_id = request->fsid();
+  // auto usage = request->usage();
+  // auto rc = super_partition_->FlushFsUsage(fs_id, usage);
+  // response->set_status(rc);
+  // return rc;
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::SetDirQuota(const SetDirQuotaRequest* request,
+                                          SetDirQuotaResponse* response) {
+  // uint32_t fs_id = request->fsid();
+  // uint64_t dir_inode_id = request->dirinodeid();
+  // auto quota = request->quota();
+  // auto rc = super_partition_->SetDirQuota(fs_id, dir_inode_id, quota);
+  // response->set_status(rc);
+  // return rc;
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::GetDirQuota(const GetDirQuotaRequest* request,
+                                          GetDirQuotaResponse* response) {
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::DeleteDirQuota(
+    const DeleteDirQuotaRequest* request, DeleteDirQuotaResponse* response) {
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::LoadDirQuotas(const LoadDirQuotasRequest* request,
+                                            LoadDirQuotasResponse* response) {
+  // uint32_t fs_id = request->fsid();
+  // uint32_t dir_inode_id = request->dir_inode_id();
+  // auto rc = super_partition_->LoadDirQuotas(fs_id, dir_inode_id,
+  //                                           response->mutable_quotas());
+  // response->set_status(rc);
+  // return rc;
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::FlushDirUsages(
+    const FlushDirUsagesRequest* request, FlushDirUsagesResponse* response) {
+  // uint32_t fs_id = request->fsid();
+  // uint32_t dir_inode_id = request->dir_inode_id();
+  // auto usage = request->usage();
+  // auto rc = super_partition_->FlushDirUsages(fs_id, dir_inode_id, usage);
+  // response->set_status(rc);
+  return MetaStatusCode::OK;
 }
 
 MetaStatusCode MetaStoreImpl::CreatePartition(

@@ -36,6 +36,7 @@
 #include "curvefs/src/metaserver/metastore_fstream.h"
 #include "curvefs/src/metaserver/partition.h"
 #include "curvefs/src/metaserver/storage/iterator.h"
+#include "curvefs/src/metaserver/superpartition/super_partition.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -43,6 +44,26 @@ namespace metaserver {
 namespace copyset {
 class CopysetNode;
 }  // namespace copyset
+
+using ::curvefs::metaserver::superpartition::SuperPartition;
+
+// super partition
+using ::curvefs::metaserver::DeleteDirQuotaRequest;
+using ::curvefs::metaserver::DeleteDirQuotaResponse;
+using ::curvefs::metaserver::FlushDirUsagesRequest;
+using ::curvefs::metaserver::FlushDirUsagesResponse;
+using ::curvefs::metaserver::FlushFsUsageRequest;
+using ::curvefs::metaserver::FlushFsUsageResponse;
+using ::curvefs::metaserver::GetDirQuotaRequest;
+using ::curvefs::metaserver::GetDirQuotaResponse;
+using ::curvefs::metaserver::GetFsQuotaRequest;
+using ::curvefs::metaserver::GetFsQuotaResponse;
+using ::curvefs::metaserver::LoadDirQuotasRequest;
+using ::curvefs::metaserver::LoadDirQuotasResponse;
+using ::curvefs::metaserver::SetDirQuotaRequest;
+using ::curvefs::metaserver::SetDirQuotaResponse;
+using ::curvefs::metaserver::SetFsQuotaRequest;
+using ::curvefs::metaserver::SetFsQuotaResponse;
 
 // dentry
 using curvefs::metaserver::CreateDentryRequest;
@@ -96,6 +117,33 @@ class MetaStore {
                     OnSnapshotSaveDoneClosure* done) = 0;
   virtual bool Clear() = 0;
   virtual bool Destroy() = 0;
+
+  // super partition
+  virtual MetaStatusCode SetFsQuota(const SetFsQuotaRequest* request,
+                                    SetFsQuotaResponse* response) = 0;
+
+  virtual MetaStatusCode GetFsQuota(const GetFsQuotaRequest* request,
+                                    GetFsQuotaResponse* response) = 0;
+
+  virtual MetaStatusCode FlushFsUsage(const FlushFsUsageRequest* request,
+                                      FlushFsUsageResponse* response) = 0;
+
+  virtual MetaStatusCode SetDirQuota(const SetDirQuotaRequest* request,
+                                     SetDirQuotaResponse* response) = 0;
+
+  virtual MetaStatusCode GetDirQuota(const GetDirQuotaRequest* request,
+                                     GetDirQuotaResponse* response) = 0;
+
+  virtual MetaStatusCode DeleteDirQuota(const DeleteDirQuotaRequest* request,
+                                        DeleteDirQuotaResponse* response) = 0;
+
+  virtual MetaStatusCode LoadDirQuotas(const LoadDirQuotasRequest* request,
+                                       LoadDirQuotasResponse* response) = 0;
+
+  virtual MetaStatusCode FlushDirUsages(const FlushDirUsagesRequest* request,
+                                        FlushDirUsagesResponse* response) = 0;
+
+  // partition
   virtual MetaStatusCode CreatePartition(const CreatePartitionRequest* request,
                                          CreatePartitionResponse* response) = 0;
 
@@ -178,6 +226,32 @@ class MetaStoreImpl : public MetaStore {
   bool Clear() override;
   bool Destroy() override;
 
+  // super partition
+  MetaStatusCode SetFsQuota(const SetFsQuotaRequest* request,
+                            SetFsQuotaResponse* response) override;
+
+  MetaStatusCode GetFsQuota(const GetFsQuotaRequest* request,
+                            GetFsQuotaResponse* response) override;
+
+  MetaStatusCode FlushFsUsage(const FlushFsUsageRequest* request,
+                              FlushFsUsageResponse* response) override;
+
+  MetaStatusCode SetDirQuota(const SetDirQuotaRequest* request,
+                             SetDirQuotaResponse* response) override;
+
+  MetaStatusCode GetDirQuota(const GetDirQuotaRequest* request,
+                             GetDirQuotaResponse* response) override;
+
+  MetaStatusCode DeleteDirQuota(const DeleteDirQuotaRequest* request,
+                                DeleteDirQuotaResponse* response) override;
+
+  MetaStatusCode LoadDirQuotas(const LoadDirQuotasRequest* request,
+                               LoadDirQuotasResponse* response) override;
+
+  MetaStatusCode FlushDirUsages(const FlushDirUsagesRequest* request,
+                                FlushDirUsagesResponse* response) override;
+
+  // partition
   MetaStatusCode CreatePartition(const CreatePartitionRequest* request,
                                  CreatePartitionResponse* response) override;
 
@@ -283,6 +357,7 @@ class MetaStoreImpl : public MetaStore {
  private:
   RWLock rwLock_;  // protect partitionMap_
   std::shared_ptr<KVStorage> kvStorage_;
+  std::unique_ptr<SuperPartition> super_partition_;
   std::map<uint32_t, std::shared_ptr<Partition>> partitionMap_;
   std::list<uint32_t> partitionIds_;
 

@@ -43,6 +43,8 @@ enum KEY_TYPE : unsigned char {
   kTypeDentry = 3,
   kTypeVolumeExtent = 4,
   kTypeInodeAuxInfo = 5,
+  kTypeFsQuota = 6,
+  kTypeDirQuota = 7,
 };
 
 // NOTE: you must generate all table name by NameGenerator class for
@@ -62,6 +64,10 @@ class NameGenerator {
 
   std::string GetInodeAuxInfoTableName() const;
 
+  std::string GetFsQuotaTableName() const;
+
+  std::string GetDirQuotaTableName() const;
+
   static size_t GetFixedLength();
 
  private:
@@ -73,6 +79,8 @@ class NameGenerator {
   std::string tableName4Dentry_;
   std::string tableName4VolumeExtent_;
   std::string tableName4InodeAuxInfo_;
+  std::string tableName4FsQuota_;
+  std::string tableName4DirQuota_;
 };
 
 class StorageKey {
@@ -99,6 +107,9 @@ class StorageKey {
  *   Prefix4InodeVolumeExtent         : kTypeExtent:fsId:InodeId:
  *   Prefix4AllVolumeExtent           : kTypeExtent:
  *   Key4InodeAuxInfo                 : kTypeInodeAuxInfo:fsId:inodeId
+ *   Key4FsQuota                      : kTypeFsQuota:fsId
+ *   Key4DirQuota                     : kTypeDirQuota:fsId:inodeId
+ *   Prefix4DirQuota                  : kTypeDirQuota:fsId:
  */
 
 class Key4Inode : public StorageKey {
@@ -316,6 +327,56 @@ class Key4InodeAuxInfo : public StorageKey {
 
  private:
   static constexpr KEY_TYPE keyType_ = kTypeInodeAuxInfo;
+};
+
+class Key4FsQuota : public StorageKey {
+ public:
+  Key4FsQuota() = default;
+
+  Key4FsQuota(uint32_t fs_id);
+
+  std::string SerializeToString() const override;
+
+  bool ParseFromString(const std::string& value) override;
+
+ public:
+  uint32_t fs_id;
+
+ private:
+  static constexpr KEY_TYPE kKeyType = kTypeFsQuota;
+};
+
+class Key4DirQuota : public StorageKey {
+ public:
+  Key4DirQuota() = default;
+
+  Key4DirQuota(uint32_t fs_id, uint64_t dir_inode_id);
+
+  std::string SerializeToString() const override;
+
+  bool ParseFromString(const std::string& value) override;
+
+ public:
+  uint32_t fs_id;
+  uint64_t dir_inode_id;
+
+ private:
+  static constexpr KEY_TYPE kKeyType = kTypeDirQuota;
+};
+
+class Prefix4DirQuotas : public StorageKey {
+ public:
+  explicit Prefix4DirQuotas(uint32_t fs_id);
+
+  std::string SerializeToString() const override;
+
+  bool ParseFromString(const std::string& value) override;
+
+ public:
+  uint32_t fs_id;
+
+ private:
+  static constexpr KEY_TYPE kKeyType = kTypeDirQuota;
 };
 
 // converter

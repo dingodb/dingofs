@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef CURVEFS_TEST_CLIENT_BLOCKCACHE_HELPER_BUILDER_H_
-#define CURVEFS_TEST_CLIENT_BLOCKCACHE_HELPER_BUILDER_H_
+#ifndef CURVEFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
+#define CURVEFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -160,4 +160,4 @@ class BlockCacheBuilder {
 }  // namespace client
 }  // namespace curvefs
 
-#endif  // CURVEFS_TEST_CLIENT_BLOCKCACHE_HELPER_BUILDER_H_
+#endif  // CURVEFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
