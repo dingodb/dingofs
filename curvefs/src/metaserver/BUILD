@@ -28,6 +28,8 @@ cc_library(
     ) + glob(
         ["storage/*.cpp"],
     ) + glob(
+        ["superpartition/*.cpp"],
+    ) + glob(
         ["streaming/*.cpp"],
     ),
     hdrs = glob(
@@ -36,6 +38,8 @@ cc_library(
         ["copyset/*.h"],
     ) + glob(
         ["storage/*.h"],
+    ) + glob(
+        ["superpartition/*.h"],
     ) + glob(
         ["streaming/*.h"],
     ),

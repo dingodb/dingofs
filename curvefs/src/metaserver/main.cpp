@@ -28,6 +28,7 @@
 #include "curvefs/src/common/process.h"
 #include "curvefs/src/common/threading.h"
 #include "curvefs/src/metaserver/metaserver.h"
+#include "curvefs/src/metaserver/superpartition/access_log.h"
 #include "src/common/configuration.h"
 
 DEFINE_string(confPath, "curvefs/conf/metaserver.conf", "metaserver confPath");
@@ -46,6 +47,7 @@ DECLARE_int32(v);
 
 using ::curve::common::Configuration;
 using ::curvefs::common::FLAGS_vlog_level;
+using ::curvefs::metaserver::superpartition::InitAccessLog;
 
 namespace bthread {
 extern void (*g_worker_startfn)();
@@ -128,6 +130,10 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
 
   conf->PrintConfig();
+
+  // init access logging
+  LOG_IF(FATAL, !InitAccessLog(FLAGS_log_dir))
+      << "Init access log failed, log dir = " << FLAGS_log_dir;
 
   curvefs::metaserver::Metaserver metaserver;
 

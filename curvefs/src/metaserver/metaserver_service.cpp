@@ -42,14 +42,22 @@ using ::curvefs::metaserver::copyset::CreateManageInodeOperator;
 using ::curvefs::metaserver::copyset::CreatePartitionOperator;
 using ::curvefs::metaserver::copyset::CreateRootInodeOperator;
 using ::curvefs::metaserver::copyset::DeleteDentryOperator;
+using ::curvefs::metaserver::copyset::DeleteDirQuotaOperator;
 using ::curvefs::metaserver::copyset::DeleteInodeOperator;
 using ::curvefs::metaserver::copyset::DeletePartitionOperator;
+using ::curvefs::metaserver::copyset::FlushDirUsagesOperator;
+using ::curvefs::metaserver::copyset::FlushFsUsageOperator;
 using ::curvefs::metaserver::copyset::GetDentryOperator;
+using ::curvefs::metaserver::copyset::GetDirQuotaOperator;
+using ::curvefs::metaserver::copyset::GetFsQuotaOperator;
 using ::curvefs::metaserver::copyset::GetInodeOperator;
 using ::curvefs::metaserver::copyset::GetOrModifyS3ChunkInfoOperator;
 using ::curvefs::metaserver::copyset::GetVolumeExtentOperator;
 using ::curvefs::metaserver::copyset::ListDentryOperator;
+using ::curvefs::metaserver::copyset::LoadDirQuotasOperator;
 using ::curvefs::metaserver::copyset::PrepareRenameTxOperator;
+using ::curvefs::metaserver::copyset::SetDirQuotaOperator;
+using ::curvefs::metaserver::copyset::SetFsQuotaOperator;
 using ::curvefs::metaserver::copyset::UpdateInodeOperator;
 using ::curvefs::metaserver::copyset::UpdateInodeS3VersionOperator;
 using ::curvefs::metaserver::copyset::UpdateVolumeExtentOperator;
@@ -99,6 +107,27 @@ struct OperatorHelper {
 };
 
 }  // namespace
+
+#define DEFINE_RPC_METHOD(method)                                            \
+  void MetaServerServiceImpl::method(                                        \
+      ::google::protobuf::RpcController* controller,                         \
+      const ::curvefs::metaserver::method##Request* request,                 \
+      ::curvefs::metaserver::method##Response* response,                     \
+      ::google::protobuf::Closure* done) {                                   \
+    OperatorHelper helper(copysetNodeManager_, inflightThrottle_);           \
+    helper.operator()<method##Operator>(controller, request, response, done, \
+                                        request->poolid(),                   \
+                                        request->copysetid());               \
+  }
+
+DEFINE_RPC_METHOD(SetFsQuota);
+DEFINE_RPC_METHOD(GetFsQuota);
+DEFINE_RPC_METHOD(FlushFsUsage);
+DEFINE_RPC_METHOD(SetDirQuota);
+DEFINE_RPC_METHOD(GetDirQuota);
+DEFINE_RPC_METHOD(DeleteDirQuota);
+DEFINE_RPC_METHOD(LoadDirQuotas);
+DEFINE_RPC_METHOD(FlushDirUsages);
 
 void MetaServerServiceImpl::GetDentry(
     ::google::protobuf::RpcController* controller,

@@ -17,7 +17,7 @@ load("//:copts.bzl", "CURVE_TEST_COPTS")
 BLOCKCACHE_TEST_DEPS = [
     "//curvefs/src/client:fuse_client_lib",
     "//curvefs/src/client/blockcache:blockcache_lib",
-    "//curvefs/test/client/blockcache/helper:blockcache_helper_lib",
+    "//curvefs/test/client/blockcache/builder:blockcache_builder_lib",
     "//curvefs/test/client/blockcache/mock:blockcache_mock_lib",
     "@gtest//:gtest",
 ]

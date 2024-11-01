@@ -17,13 +17,13 @@
 load("//:copts.bzl", "CURVE_TEST_COPTS")
 
 cc_library(
-    name = "blockcache_helper_lib",
+    name = "superpartition_builder_lib",
     srcs = glob([ "*.h" ]),
     copts = CURVE_TEST_COPTS,
     defines = ["UNIT_TEST"],
     visibility = ["//visibility:public"],
     deps = [
         "@gtest//:gtest",
-         "//curvefs/src/client/blockcache:blockcache_lib",
+         "//curvefs/src/metaserver:curvefs_metaserver",
     ],
 )

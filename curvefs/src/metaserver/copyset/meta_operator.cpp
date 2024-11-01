@@ -111,6 +111,26 @@ void MetaOperator::FastApplyTask() {
   g_concurrent_fast_apply_wait_latency << timer.u_elapsed();
 }
 
+#define OPERATOR_CAN_BYPASS_PROPOSE(TYPE) \
+  bool TYPE##Operator::CanBypassPropose() const { return false; }
+
+#define READONLY_OPERATOR_CAN_BYPASS_PROPOSE(TYPE)           \
+  bool TYPE##Operator::CanBypassPropose() const {            \
+    auto* req = static_cast<const TYPE##Request*>(request_); \
+    return req->has_appliedindex() &&                        \
+           node_->GetAppliedIndex() >= req->appliedindex();  \
+  }
+
+OPERATOR_CAN_BYPASS_PROPOSE(SetFsQuota);
+OPERATOR_CAN_BYPASS_PROPOSE(FlushFsUsage);
+OPERATOR_CAN_BYPASS_PROPOSE(SetDirQuota);
+OPERATOR_CAN_BYPASS_PROPOSE(DeleteDirQuota);
+OPERATOR_CAN_BYPASS_PROPOSE(FlushDirUsages);
+
+READONLY_OPERATOR_CAN_BYPASS_PROPOSE(GetFsQuota);
+READONLY_OPERATOR_CAN_BYPASS_PROPOSE(GetDirQuota);
+READONLY_OPERATOR_CAN_BYPASS_PROPOSE(LoadDirQuotas);
+
 bool GetInodeOperator::CanBypassPropose() const {
   auto* req = static_cast<const GetInodeRequest*>(request_);
   return req->has_appliedindex() &&
@@ -173,6 +193,14 @@ bool GetVolumeExtentOperator::CanBypassPropose() const {
     }                                                                          \
   }
 
+OPERATOR_ON_APPLY(SetFsQuota);
+OPERATOR_ON_APPLY(GetFsQuota);
+OPERATOR_ON_APPLY(FlushFsUsage);
+OPERATOR_ON_APPLY(SetDirQuota);
+OPERATOR_ON_APPLY(GetDirQuota);
+OPERATOR_ON_APPLY(DeleteDirQuota);
+OPERATOR_ON_APPLY(LoadDirQuotas);
+OPERATOR_ON_APPLY(FlushDirUsages);
 OPERATOR_ON_APPLY(GetDentry);
 OPERATOR_ON_APPLY(ListDentry);
 OPERATOR_ON_APPLY(CreateDentry);
@@ -303,6 +331,11 @@ void GetVolumeExtentOperator::OnApply(int64_t index,
         status == MetaStatusCode::OK);                                   \
   }
 
+OPERATOR_ON_APPLY_FROM_LOG(SetFsQuota);
+OPERATOR_ON_APPLY_FROM_LOG(FlushFsUsage);
+OPERATOR_ON_APPLY_FROM_LOG(SetDirQuota);
+OPERATOR_ON_APPLY_FROM_LOG(DeleteDirQuota);
+OPERATOR_ON_APPLY_FROM_LOG(FlushDirUsages);
 OPERATOR_ON_APPLY_FROM_LOG(CreateDentry);
 OPERATOR_ON_APPLY_FROM_LOG(DeleteDentry);
 OPERATOR_ON_APPLY_FROM_LOG(CreateInode);
@@ -339,6 +372,9 @@ void GetOrModifyS3ChunkInfoOperator::OnApplyFromLog(uint64_t startTimeUs) {
   }
 
 // below operator are readonly, so on apply from log do nothing
+READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetFsQuota);
+READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetDirQuota);
+READONLY_OPERATOR_ON_APPLY_FROM_LOG(LoadDirQuotas);
 READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetDentry);
 READONLY_OPERATOR_ON_APPLY_FROM_LOG(ListDentry);
 READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetInode);
@@ -354,6 +390,14 @@ READONLY_OPERATOR_ON_APPLY_FROM_LOG(GetVolumeExtent);
         MetaStatusCode::REDIRECTED);                         \
   }
 
+OPERATOR_REDIRECT(SetFsQuota);
+OPERATOR_REDIRECT(GetFsQuota);
+OPERATOR_REDIRECT(FlushFsUsage);
+OPERATOR_REDIRECT(SetDirQuota);
+OPERATOR_REDIRECT(GetDirQuota);
+OPERATOR_REDIRECT(DeleteDirQuota);
+OPERATOR_REDIRECT(LoadDirQuotas);
+OPERATOR_REDIRECT(FlushDirUsages);
 OPERATOR_REDIRECT(GetDentry);
 OPERATOR_REDIRECT(ListDentry);
 OPERATOR_REDIRECT(CreateDentry);
@@ -380,6 +424,14 @@ OPERATOR_REDIRECT(UpdateVolumeExtent);
     static_cast<TYPE##Response*>(response_)->set_statuscode(code); \
   }
 
+OPERATOR_ON_FAILED(SetFsQuota);
+OPERATOR_ON_FAILED(GetFsQuota);
+OPERATOR_ON_FAILED(FlushFsUsage);
+OPERATOR_ON_FAILED(SetDirQuota);
+OPERATOR_ON_FAILED(GetDirQuota);
+OPERATOR_ON_FAILED(DeleteDirQuota);
+OPERATOR_ON_FAILED(LoadDirQuotas);
+OPERATOR_ON_FAILED(FlushDirUsages);
 OPERATOR_ON_FAILED(GetDentry);
 OPERATOR_ON_FAILED(ListDentry);
 OPERATOR_ON_FAILED(CreateDentry);
@@ -426,6 +478,22 @@ OPERATOR_HASH_CODE(UpdateVolumeExtent);
 
 #undef OPERATOR_HASH_CODE
 
+#define SUPER_PARTITION_OPERATOR_HASH_CODE(TYPE)                \
+  uint64_t TYPE##Operator::HashCode() const {                   \
+    return static_cast<const TYPE##Request*>(request_)->fsid(); \
+  }
+
+SUPER_PARTITION_OPERATOR_HASH_CODE(SetFsQuota);
+SUPER_PARTITION_OPERATOR_HASH_CODE(GetFsQuota);
+SUPER_PARTITION_OPERATOR_HASH_CODE(FlushFsUsage);
+SUPER_PARTITION_OPERATOR_HASH_CODE(SetDirQuota);
+SUPER_PARTITION_OPERATOR_HASH_CODE(GetDirQuota);
+SUPER_PARTITION_OPERATOR_HASH_CODE(DeleteDirQuota);
+SUPER_PARTITION_OPERATOR_HASH_CODE(LoadDirQuotas);
+SUPER_PARTITION_OPERATOR_HASH_CODE(FlushDirUsages);
+
+#undef SUPER_PARTITION_OPERATOR_HASH_CODE
+
 #define PARTITION_OPERATOR_HASH_CODE(TYPE)             \
   uint64_t TYPE##Operator::HashCode() const {          \
     return static_cast<const TYPE##Request*>(request_) \
@@ -442,6 +510,14 @@ PARTITION_OPERATOR_HASH_CODE(CreatePartition);
     return OperatorType::TYPE;                           \
   }
 
+OPERATOR_TYPE(SetFsQuota);
+OPERATOR_TYPE(GetFsQuota);
+OPERATOR_TYPE(FlushFsUsage);
+OPERATOR_TYPE(SetDirQuota);
+OPERATOR_TYPE(GetDirQuota);
+OPERATOR_TYPE(DeleteDirQuota);
+OPERATOR_TYPE(LoadDirQuotas);
+OPERATOR_TYPE(FlushDirUsages);
 OPERATOR_TYPE(GetDentry);
 OPERATOR_TYPE(ListDentry);
 OPERATOR_TYPE(CreateDentry);

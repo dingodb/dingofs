@@ -37,12 +37,27 @@ namespace metaserver {
 
 using ::curvefs::metaserver::copyset::CopysetNodeManager;
 
+#define DECLARE_RPC_METHOD(method)                                   \
+  void method(::google::protobuf::RpcController* controller,         \
+              const ::curvefs::metaserver::method##Request* request, \
+              ::curvefs::metaserver::method##Response* response,     \
+              ::google::protobuf::Closure* done) override
+
 class MetaServerServiceImpl : public MetaServerService {
  public:
   MetaServerServiceImpl(CopysetNodeManager* copysetNodeManager,
                         InflightThrottle* inflightThrottle)
       : copysetNodeManager_(copysetNodeManager),
         inflightThrottle_(inflightThrottle) {}
+
+  DECLARE_RPC_METHOD(SetFsQuota);
+  DECLARE_RPC_METHOD(GetFsQuota);
+  DECLARE_RPC_METHOD(FlushFsUsage);
+  DECLARE_RPC_METHOD(SetDirQuota);
+  DECLARE_RPC_METHOD(GetDirQuota);
+  DECLARE_RPC_METHOD(DeleteDirQuota);
+  DECLARE_RPC_METHOD(LoadDirQuotas);
+  DECLARE_RPC_METHOD(FlushDirUsages);
 
   void GetDentry(::google::protobuf::RpcController* controller,
                  const ::curvefs::metaserver::GetDentryRequest* request,

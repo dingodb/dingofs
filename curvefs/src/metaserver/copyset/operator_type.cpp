@@ -30,6 +30,22 @@ namespace copyset {
 
 const char* OperatorTypeName(OperatorType type) {
   switch (type) {
+    case OperatorType::SetFsQuota:
+      return "SetFsQuota";
+    case OperatorType::GetFsQuota:
+      return "GetFsQuota";
+    case OperatorType::FlushFsUsage:
+      return "FlushFsUsage";
+    case OperatorType::SetDirQuota:
+      return "SetDirQuota";
+    case OperatorType::GetDirQuota:
+      return "GetDirQuota";
+    case OperatorType::DeleteDirQuota:
+      return "DeleteDirQuota";
+    case OperatorType::LoadDirQuotas:
+      return "LoadDirQuotas";
+    case OperatorType::FlushDirUsages:
+      return "FlushDirUsages";
     case OperatorType::GetDentry:
       return "GetDentry";
     case OperatorType::ListDentry:

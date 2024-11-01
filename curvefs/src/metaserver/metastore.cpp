@@ -236,6 +236,69 @@ bool MetaStoreImpl::Destroy() {
   return true;
 }
 
+MetaStatusCode MetaStoreImpl::SetFsQuota(const SetFsQuotaRequest* request,
+                                         SetFsQuotaResponse* response) {
+  auto rc = super_partition_->SetFsQuota(request->fsid(), request->quota());
+  response->set_statuscode(rc);
+  return rc;
+}
+
+MetaStatusCode MetaStoreImpl::GetFsQuota(const GetFsQuotaRequest* request,
+                                         GetFsQuotaResponse* response) {
+  auto rc =
+      super_partition_->GetFsQuota(request->fsid(), response->mutable_quota());
+  response->set_statuscode(rc);
+  return rc;
+}
+
+MetaStatusCode MetaStoreImpl::FlushFsUsage(const FlushFsUsageRequest* request,
+                                           FlushFsUsageResponse* response) {
+  auto rc = super_partition_->FlushFsUsage(request->fsid(), request->usage(),
+                                           response->mutable_quota());
+  response->set_statuscode(rc);
+  return rc;
+}
+
+MetaStatusCode MetaStoreImpl::SetDirQuota(const SetDirQuotaRequest* request,
+                                          SetDirQuotaResponse* response) {
+  auto rc = super_partition_->SetDirQuota(
+      request->fsid(), request->dirinodeid(), request->quota());
+  response->set_statuscode(rc);
+  return rc;
+}
+
+MetaStatusCode MetaStoreImpl::GetDirQuota(const GetDirQuotaRequest* request,
+                                          GetDirQuotaResponse* response) {
+  auto rc = super_partition_->GetDirQuota(
+      request->fsid(), request->dirinodeid(), response->mutable_quota());
+  response->set_statuscode(rc);
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::DeleteDirQuota(
+    const DeleteDirQuotaRequest* request, DeleteDirQuotaResponse* response) {
+  auto rc =
+      super_partition_->DeleteDirQuota(request->fsid(), request->dirinodeid());
+  response->set_statuscode(rc);
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::LoadDirQuotas(const LoadDirQuotasRequest* request,
+                                            LoadDirQuotasResponse* response) {
+  auto rc = super_partition_->LoadDirQuotas(request->fsid(),
+                                            response->mutable_quotas());
+  response->set_statuscode(rc);
+  return MetaStatusCode::OK;
+}
+
+MetaStatusCode MetaStoreImpl::FlushDirUsages(
+    const FlushDirUsagesRequest* request, FlushDirUsagesResponse* response) {
+  auto rc =
+      super_partition_->FlushDirUsages(request->fsid(), request->usages());
+  response->set_statuscode(rc);
+  return MetaStatusCode::OK;
+}
+
 MetaStatusCode MetaStoreImpl::CreatePartition(
     const CreatePartitionRequest* request, CreatePartitionResponse* response) {
   WriteLockGuard writeLockGuard(rwLock_);
@@ -834,6 +897,7 @@ bool MetaStoreImpl::InitStorage() {
     return false;
   }
 
+  super_partition_ = std::make_unique<SuperPartition>(kvStorage_);
   return kvStorage_->Open();
 }
 

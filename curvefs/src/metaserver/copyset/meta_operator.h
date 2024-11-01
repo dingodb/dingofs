@@ -156,6 +156,37 @@ class MetaOperator {
   butil::Timer timerPropose;
 };
 
+#define DECLARE_OPERATOR_CLASS(TYPE)                             \
+  class TYPE##Operator : public MetaOperator {                   \
+   public:                                                       \
+    using MetaOperator::MetaOperator;                            \
+                                                                 \
+    void OnApply(int64_t index, google::protobuf::Closure* done, \
+                 uint64_t startTimeUs) override;                 \
+                                                                 \
+    void OnApplyFromLog(uint64_t startTimeUs) override;          \
+                                                                 \
+    uint64_t HashCode() const override;                          \
+                                                                 \
+    OperatorType GetOperatorType() const override;               \
+                                                                 \
+   private:                                                      \
+    void Redirect() override;                                    \
+                                                                 \
+    void OnFailed(MetaStatusCode code) override;                 \
+                                                                 \
+    bool CanBypassPropose() const override;                      \
+  }
+
+DECLARE_OPERATOR_CLASS(SetFsQuota);
+DECLARE_OPERATOR_CLASS(GetFsQuota);
+DECLARE_OPERATOR_CLASS(FlushFsUsage);
+DECLARE_OPERATOR_CLASS(SetDirQuota);
+DECLARE_OPERATOR_CLASS(GetDirQuota);
+DECLARE_OPERATOR_CLASS(DeleteDirQuota);
+DECLARE_OPERATOR_CLASS(LoadDirQuotas);
+DECLARE_OPERATOR_CLASS(FlushDirUsages);
+
 class GetDentryOperator : public MetaOperator {
  public:
   using MetaOperator::MetaOperator;

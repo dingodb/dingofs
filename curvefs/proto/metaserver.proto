@@ -587,8 +587,8 @@ message LoadDirQuotasResponse {
 message FlushDirUsagesRequest {
     required uint32 poolId = 1;
     required uint32 copysetId = 2;
-    map<uint64, Usage> usages = 3;
-    required uint32 fsId = 4;
+    required uint32 fsId = 3;
+    map<uint64, Usage> usages = 4;
 };
 
 message FlushDirUsagesResponse {

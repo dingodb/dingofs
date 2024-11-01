@@ -33,6 +33,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "curvefs/src/metaserver/common/dynamic_config.h"
 #include "curvefs/src/metaserver/copyset/copyset_service.h"
 #include "curvefs/src/metaserver/metaserver_service.h"
 #include "curvefs/src/metaserver/register.h"
@@ -76,6 +77,8 @@ using ::curvefs::client::rpcclient::MetaCache;
 using ::curvefs::client::rpcclient::MetaServerClientImpl;
 using ::curvefs::metaserver::copyset::ApplyQueueOption;
 
+USING_FLAG(superpartition_access_logging);
+
 void Metaserver::InitOptions(std::shared_ptr<Configuration> conf) {
   conf_ = conf;
   conf_->GetValueFatalIfFail("global.ip", &options_.ip);
@@ -84,6 +87,8 @@ void Metaserver::InitOptions(std::shared_ptr<Configuration> conf) {
   conf_->GetValueFatalIfFail("global.external_port", &options_.externalPort);
   conf_->GetBoolValue("global.enable_external_server",
                       &options_.enableExternalServer);
+  conf_->GetBoolValue("global.superpartition_access_logging",
+                      &FLAGS_superpartition_access_logging);
 
   LOG(INFO) << "Init metaserver option, options_.ip = " << options_.ip
             << ", options_.port = " << options_.port

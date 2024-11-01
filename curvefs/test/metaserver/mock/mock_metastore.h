@@ -42,6 +42,23 @@ class MockMetaStore : public curvefs::metaserver::MetaStore {
   MOCK_METHOD0(Clear, bool());
   MOCK_METHOD0(Destroy, bool());
 
+  MOCK_METHOD2(SetFsQuota,
+               MetaStatusCode(const SetFsQuotaRequest*, SetFsQuotaResponse*));
+  MOCK_METHOD2(GetFsQuota,
+               MetaStatusCode(const GetFsQuotaRequest*, GetFsQuotaResponse*));
+  MOCK_METHOD2(FlushFsUsage, MetaStatusCode(const FlushFsUsageRequest*,
+                                            FlushFsUsageResponse*));
+  MOCK_METHOD2(SetDirQuota,
+               MetaStatusCode(const SetDirQuotaRequest*, SetDirQuotaResponse*));
+  MOCK_METHOD2(GetDirQuota,
+               MetaStatusCode(const GetDirQuotaRequest*, GetDirQuotaResponse*));
+  MOCK_METHOD2(DeleteDirQuota, MetaStatusCode(const DeleteDirQuotaRequest*,
+                                              DeleteDirQuotaResponse*));
+  MOCK_METHOD2(LoadDirQuotas, MetaStatusCode(const LoadDirQuotasRequest*,
+                                             LoadDirQuotasResponse*));
+  MOCK_METHOD2(FlushDirUsages, MetaStatusCode(const FlushDirUsagesRequest*,
+                                              FlushDirUsagesResponse*));
+
   MOCK_METHOD2(CreatePartition, MetaStatusCode(const CreatePartitionRequest*,
                                                CreatePartitionResponse*));
   MOCK_METHOD2(DeletePartition, MetaStatusCode(const DeletePartitionRequest*,
