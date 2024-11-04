@@ -25,10 +25,12 @@ package curvefs
 import (
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/check"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/create"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/delete"
 	list "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/query"
+	quota "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/quota"
 	stats "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/stats"
 	status "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/status"
 	umount "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/umount"
@@ -55,6 +57,8 @@ func (fsCmd *CurveFsCommand) AddSubCommands() {
 		check.NewCheckCommand(),
 		warmup.NewWarmupCommand(),
 		stats.NewStatsCommand(),
+		quota.NewQuotaCommand(),
+		config.NewConfigCommand(),
 	)
 }
 

@@ -113,7 +113,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("fsname or fsid is required")
 	}
 
-	header := []string{cobrautil.ROW_ID, cobrautil.ROW_NAME, cobrautil.ROW_STATUS, cobrautil.ROW_CAPACITY, cobrautil.ROW_BLOCKSIZE, cobrautil.ROW_FS_TYPE, cobrautil.ROW_SUM_IN_DIR, cobrautil.ROW_OWNER, cobrautil.ROW_MOUNT_NUM}
+	header := []string{cobrautil.ROW_ID, cobrautil.ROW_NAME, cobrautil.ROW_STATUS, cobrautil.ROW_BLOCKSIZE, cobrautil.ROW_FS_TYPE, cobrautil.ROW_SUM_IN_DIR, cobrautil.ROW_OWNER, cobrautil.ROW_MOUNT_NUM}
 	fCmd.SetHeader(header)
 	fCmd.TableNew.SetAutoMergeCellsByColumnIndex(
 		cobrautil.GetIndexSlice(header, []string{cobrautil.ROW_FS_TYPE}),
@@ -136,7 +136,6 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 		row[cobrautil.ROW_NAME] = fsNames[i]
 		row[cobrautil.ROW_ID] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_STATUS] = cobrautil.ROW_VALUE_DNE
-		row[cobrautil.ROW_CAPACITY] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_BLOCKSIZE] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_FS_TYPE] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_SUM_IN_DIR] = cobrautil.ROW_VALUE_DNE
@@ -163,7 +162,6 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 		row[cobrautil.ROW_ID] = fsIds[i]
 		row[cobrautil.ROW_NAME] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_STATUS] = cobrautil.ROW_VALUE_DNE
-		row[cobrautil.ROW_CAPACITY] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_BLOCKSIZE] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_FS_TYPE] = cobrautil.ROW_VALUE_DNE
 		row[cobrautil.ROW_SUM_IN_DIR] = cobrautil.ROW_VALUE_DNE
@@ -219,7 +217,6 @@ func (fCmd *FsCommand) RunCommand(cmd *cobra.Command, args []string) error {
 				row[cobrautil.ROW_ID] = id
 				row[cobrautil.ROW_NAME] = fsInfo.GetFsName()
 				row[cobrautil.ROW_STATUS] = fsInfo.GetStatus().String()
-				row[cobrautil.ROW_CAPACITY] = fmt.Sprintf("%d", fsInfo.GetCapacity())
 				row[cobrautil.ROW_BLOCKSIZE] = fmt.Sprintf("%d", fsInfo.GetBlockSize())
 				row[cobrautil.ROW_FS_TYPE] = fsInfo.GetFsType().String()
 				row[cobrautil.ROW_SUM_IN_DIR] = fmt.Sprintf("%t", fsInfo.GetEnableSumInDir())
@@ -241,4 +238,36 @@ func (fCmd *FsCommand) RunCommand(cmd *cobra.Command, args []string) error {
 
 func (fCmd *FsCommand) ResultPlainOutput() error {
 	return output.FinalCmdOutputPlain(&fCmd.FinalCurveCmd)
+}
+
+func NewFsInfoCommand() *FsCommand {
+	fsCmd := &FsCommand{
+		FinalCurveCmd: basecmd.FinalCurveCmd{
+			Use:   "metaserver",
+			Short: "get metaserver status of curvefs",
+		},
+	}
+	basecmd.NewFinalCurveCli(&fsCmd.FinalCurveCmd, fsCmd)
+	return fsCmd
+}
+
+func GetFsInfo(caller *cobra.Command) (map[string]interface{}, error) {
+	fsCmd := NewFsInfoCommand()
+	fsCmd.Cmd.SetArgs([]string{
+		fmt.Sprintf("--%s", config.FORMAT), config.FORMAT_NOOUT,
+	})
+	config.AlignFlagsValue(caller, fsCmd.Cmd, []string{
+		config.RPCRETRYTIMES, config.RPCTIMEOUT, config.CURVEFS_MDSADDR, config.CURVEFS_FSNAME, config.CURVEFS_FSID,
+	})
+	fsCmd.Cmd.SilenceErrors = true
+	fsCmd.Cmd.Execute()
+	//check the value
+	result := fsCmd.Result.([]interface{})
+	if len(result) == 1 {
+		tempMap := result[0].(map[string]interface{})
+		if statusCode := tempMap["statusCode"].(string); statusCode == "OK" {
+			return tempMap["fsInfo"].(map[string]interface{}), nil
+		}
+	}
+	return nil, fmt.Errorf("get fsinfo failed")
 }

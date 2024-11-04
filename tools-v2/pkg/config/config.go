@@ -58,6 +58,12 @@ const (
 	DEFAULT_MAX_CHANNEL_SIZE       = int32(4)
 )
 
+const (
+	STATUS_SUBURI  = "/vars/curvefs_mds_status"
+	VERSION_SUBURI = "/vars/curve_version"
+	ROOTINODEID    = uint64(1)
+)
+
 var (
 	FLAFG_GLOBAL = []string{
 		SHOWERROR, HTTPTIMEOUT, RPCTIMEOUT, RPCRETRYTIMES, VERBOSE,

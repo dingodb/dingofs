@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
@@ -39,6 +40,7 @@ import (
 	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -225,6 +227,42 @@ func GetKeyValueFromJsonMetric(metricRet string, key string) (string, *cmderror.
 	return data[key].(string), cmderror.ErrSuccess()
 }
 
+// get mds leader server
+func GetMdsLeader(mdsAddrs []string) (string, bool) {
+	timeout := viper.GetDuration(config.VIPER_GLOBALE_HTTPTIMEOUT)
+	for _, addr := range mdsAddrs {
+		addrs := []string{addr}
+		statusMetric := NewMetric(addrs, config.STATUS_SUBURI, timeout)
+		result, err := QueryMetric(statusMetric)
+		if err.TypeCode() == cmderror.CODE_SUCCESS {
+			value, err := GetMetricValue(result)
+			if err.TypeCode() == cmderror.CODE_SUCCESS && value == "leader" {
+				return addr, true
+			}
+		}
+	}
+	return "", false
+}
+
+// get request hosts
+func GetResuestHosts(reqAddrs []string) []string {
+	var result []string
+	if size := len(reqAddrs); size > 1 {
+		// mutible host,  get leader
+		leaderAddr, ok := GetMdsLeader(reqAddrs)
+		if ok {
+			result = append(result, leaderAddr)
+		} else {
+			// fail,remain origin host list
+			result = reqAddrs
+		}
+	} else {
+		// only one host
+		result = reqAddrs
+	}
+	return result
+}
+
 func httpGet(url string, timeout time.Duration, response chan string, errs chan *cmderror.CmdError) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -290,70 +328,51 @@ type Result struct {
 }
 
 func GetRpcResponse(rpc *Rpc, rpcFunc RpcFunc) (interface{}, *cmderror.CmdError) {
-	size := len(rpc.Addrs)
-	if size > config.MaxChannelSize() {
-		size = config.MaxChannelSize()
-	}
-	results := make(chan Result, size)
-	for _, addr := range rpc.Addrs {
-		go func(address string) {
-			log.Printf("%s: start to dial", address)
-			ctx, cancel := context.WithTimeout(context.Background(), rpc.RpcTimeout)
-			defer cancel()
-			conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+
+	reqAddrs := GetResuestHosts(rpc.Addrs)
+	// start rpc request
+	results := make([]Result, 0)
+	for _, address := range reqAddrs {
+		log.Printf("%s: start to dial", address)
+		ctx, cancel := context.WithTimeout(context.Background(), rpc.RpcTimeout)
+		defer cancel()
+		conn, err := grpc.DialContext(ctx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+		if err != nil {
+			errDial := cmderror.ErrRpcDial()
+			errDial.Format(address, err.Error())
+			results = append(results, Result{address, errDial, nil})
+			log.Printf("%s: fail to dial", address)
+		} else {
+			rpcFunc.NewRpcClient(conn)
+			log.Printf("%s: start to rpc [%s]", address, rpc.RpcFuncName)
+			res, err := rpcFunc.Stub_Func(ctx)
 			if err != nil {
-				errDial := cmderror.ErrRpcDial()
-				errDial.Format(address, err.Error())
-				results <- Result{
-					addr:   address,
-					err:    errDial,
-					result: nil,
-				}
-				log.Printf("%s: fail to dial", address)
+				errRpc := cmderror.ErrRpcCall()
+				errRpc.Format(rpc.RpcFuncName, err.Error())
+				results = append(results, Result{address, errRpc, nil})
+				log.Printf("%s: fail to get rpc [%s] response", address, rpc.RpcFuncName)
 			} else {
-				rpcFunc.NewRpcClient(conn)
-				log.Printf("%s: start to rpc [%s]", address, rpc.RpcFuncName)
-				res, err := rpcFunc.Stub_Func(ctx)
-				if err != nil {
-					errRpc := cmderror.ErrRpcCall()
-					errRpc.Format(rpc.RpcFuncName, err.Error())
-					results <- Result{
-						addr:   address,
-						err:    errRpc,
-						result: nil,
-					}
-					log.Printf("%s: fail to get rpc [%s] response", address, rpc.RpcFuncName)
-				} else {
-					results <- Result{
-						addr:   address,
-						err:    cmderror.ErrSuccess(),
-						result: res,
-					}
-					log.Printf("%s: get rpc [%s] response successfully", address, rpc.RpcFuncName)
-				}
+				results = append(results, Result{address, cmderror.ErrSuccess(), res})
+				log.Printf("%s: get rpc [%s] response successfully", address, rpc.RpcFuncName)
 			}
-		}(addr)
+		}
 	}
+	// get the rpc response result
 	var ret interface{}
 	var vecErrs []*cmderror.CmdError
-	count := 0
-	for res := range results {
+	for _, res := range results {
 		if res.err.TypeCode() != cmderror.CODE_SUCCESS {
 			vecErrs = append(vecErrs, res.err)
 		} else {
 			ret = res.result
 			break
 		}
-		count++
-		if count >= len(rpc.Addrs) {
-			// all host failed
-			break
-		}
 	}
-	if len(vecErrs) >= len(rpc.Addrs) {
+	if len(vecErrs) >= len(reqAddrs) {
 		retErr := cmderror.MergeCmdError(vecErrs)
 		return ret, retErr
 	}
+
 	return ret, cmderror.ErrSuccess()
 }
 
@@ -364,37 +383,36 @@ type RpcResult struct {
 }
 
 func GetRpcListResponse(rpcList []*Rpc, rpcFunc []RpcFunc) ([]interface{}, []*cmderror.CmdError) {
-	chanSize := len(rpcList)
-	if chanSize > config.MaxChannelSize() {
-		chanSize = config.MaxChannelSize()
-	}
-	results := make(chan RpcResult, chanSize)
-	size := 0
+	results := make([]RpcResult, 0)
 	for i := range rpcList {
-		size++
-		go func(position int, rpc *Rpc, rpcFunc RpcFunc) {
-			res, err := GetRpcResponse(rpc, rpcFunc)
-			results <- RpcResult{position, res, err}
-		}(i, rpcList[i], rpcFunc[i])
+		res, err := GetRpcResponse(rpcList[i], rpcFunc[i])
+		results = append(results, RpcResult{i, res, err})
 	}
 
-	count := 0
-	retRes := make([]interface{}, len(rpcList))
+	retRes := make([]interface{}, 0)
 	var vecErrs []*cmderror.CmdError
-	for res := range results {
+	for i := 0; i < len(results); i++ {
+		res := results[i]
 		if res.Error.TypeCode() != cmderror.CODE_SUCCESS {
 			// get fail
 			vecErrs = append(vecErrs, res.Error)
 		} else {
-			retRes[res.position] = res.Response
-		}
-
-		count++
-		if count >= size {
-			// get all rpc response
-			break
+			// success
+			retRes = append(retRes, res.Response)
 		}
 	}
 
 	return retRes, vecErrs
+}
+
+// get mountPoint inode
+func GetFileInode(path string) (uint64, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return sst.Ino, nil
+	}
+	return 0, nil
 }

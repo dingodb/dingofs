@@ -141,6 +141,15 @@ const (
 	ROW_VALUE_RECOVERING_OUT = "recovering from out"
 	ROW_VALUE_SUCCESS        = "success"
 	ROW_VALUE_UNKNOWN        = "unknown"
+
+	// quota
+	ROW_PATH              = "path"
+	ROW_USED_PERCNET      = "use%"
+	ROW_REAL_USED         = "realused"
+	ROW_INODES            = "inodes"
+	ROW_INODES_IUSED      = "iused"
+	ROW_INODES_PERCENT    = "iuse%"
+	ROW_INODES_REAL_IUSED = "realiused"
 )
 
 // topology type

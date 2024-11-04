@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	process "github.com/dingodb/dingofs/tools-v2/internal/utils/process"
@@ -431,7 +430,7 @@ func (w *statsWatcher) printDiff(left, right map[string]float64, dark bool) {
 
 // real time read metric data and show in client
 func realTimeStats(mountPoint string, schema string, verbose bool, duration time.Duration, count uint32) {
-	inode, err := GetFileInode(mountPoint)
+	inode, err := basecmd.GetFileInode(mountPoint)
 	if err != nil {
 		log.Fatalf("run stats failed, %s", err)
 	}
@@ -476,16 +475,4 @@ func realTimeStats(mountPoint string, schema string, verbose bool, duration time
 		}
 	}
 
-}
-
-// get mountPoint inode
-func GetFileInode(path string) (uint64, error) {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return 0, err
-	}
-	if sst, ok := fi.Sys().(*syscall.Stat_t); ok {
-		return sst.Ino, nil
-	}
-	return 0, nil
 }

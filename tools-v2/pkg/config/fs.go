@@ -101,6 +101,18 @@ const (
 	CURVEFS_STATS_COUNT          = "count"
 	VIPER_CURVEFS_STATS_COUNT    = "curvefs.count"
 	CURVEFS_STATS_DEFAULT_COUNT  = uint32(0)
+	CURVEFS_QUOTA_PATH           = "path"
+	VIPER_CURVEFS_QUOTA_PATH     = "curvefs.quota.path"
+	CURVEFS_QUOTA_DEFAULT_PATH   = ""
+	CURVEFS_QUOTA_CAPACITY       = "capacity"
+	VIPER_CURVEFS_QUOTA_CAPACITY = "curvefs.quota.capacity"
+	CURVEFS_QUOTA_DEF_CAPACITY   = uint64(0)
+	CURVEFS_QUOTA_INODES         = "inodes"
+	VIPER_CURVEFS_QUOTA_INODES   = "curvefs.quota.inodes"
+	CURVEFS_QUOTA_DEFAULT_INODES = uint64(0)
+	CURVEFS_QUOTA_REPAIR         = "repair"
+	VIPER_CURVEFS_QUOTA_REPAIR   = "curvefs.quota.repair"
+	CURVEFS_QUOTA_DEFAULT_REPAIR = false
 
 	// S3
 	CURVEFS_S3_AK                 = "s3.ak"
@@ -152,6 +164,7 @@ var (
 	FLAG2VIPER = map[string]string{
 		RPCTIMEOUT:             VIPER_GLOBALE_RPCTIMEOUT,
 		RPCRETRYTIMES:          VIPER_GLOBALE_RPCRETRYTIMES,
+		VERBOSE:                VIPER_GLOBALE_VERBOSE,
 		CURVEFS_MDSADDR:        VIPER_CURVEFS_MDSADDR,
 		CURVEFS_MDSDUMMYADDR:   VIPER_CURVEFS_MDSDUMMYADDR,
 		CURVEFS_ETCDADDR:       VIPER_CURVEFS_ETCDADDR,
@@ -180,6 +193,9 @@ var (
 		CURVEFS_STORAGE:        VIPER_CURVEFS_STORAGE,
 		CURVEFS_STATS_SCHEMA:   VIPER_CURVEFS_STATS_SCHEMA,
 		CURVEFS_STATS_COUNT:    VIPER_CURVEFS_STATS_COUNT,
+		CURVEFS_QUOTA_PATH:     VIPER_CURVEFS_QUOTA_PATH,
+		CURVEFS_QUOTA_INODES:   VIPER_CURVEFS_QUOTA_INODES,
+		CURVEFS_QUOTA_REPAIR:   VIPER_CURVEFS_QUOTA_REPAIR,
 
 		// S3
 		CURVEFS_S3_AK:         VIPER_CURVEFS_S3_AK,
@@ -202,6 +218,7 @@ var (
 	FLAG2DEFAULT = map[string]interface{}{
 		RPCTIMEOUT:           DEFAULT_RPCTIMEOUT,
 		RPCRETRYTIMES:        DEFAULT_RPCRETRYTIMES,
+		VERBOSE:              DEFAULT_VERBOSE,
 		CURVEFS_SUMINDIR:     CURVEFS_DEFAULT_SUMINDIR,
 		CURVEFS_DETAIL:       CURVEFS_DEFAULT_DETAIL,
 		CURVEFS_CLUSTERMAP:   CURVEFS_DEFAULT_CLUSTERMAP,
@@ -212,6 +229,9 @@ var (
 		CURVEFS_STORAGE:      CURVEFS_DEFAULT_STORAGE,
 		CURVEFS_STATS_SCHEMA: CURVEFS_STATS_DEFAULT_SCHEMA,
 		CURVEFS_STATS_COUNT:  CURVEFS_STATS_DEFAULT_COUNT,
+		CURVEFS_QUOTA_PATH:   CURVEFS_QUOTA_DEFAULT_PATH,
+		CURVEFS_QUOTA_INODES: CURVEFS_QUOTA_DEFAULT_INODES,
+		CURVEFS_QUOTA_REPAIR: CURVEFS_QUOTA_DEFAULT_REPAIR,
 
 		// S3
 		CURVEFS_S3_AK:         CURVEFS_DEFAULT_S3_AK,
@@ -553,6 +573,15 @@ func AddFsIdSliceOptionFlag(cmd *cobra.Command) {
 	}
 }
 
+// fs id
+func AddFsIdUint32OptionFlag(cmd *cobra.Command) {
+	cmd.Flags().Uint32(CURVEFS_FSID, 0, "fileSystem Id")
+	err := viper.BindPFlag(VIPER_CURVEFS_FSID, cmd.Flags().Lookup(CURVEFS_FSID))
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+}
+
 // partition id [required]
 func AddPartitionIdRequiredFlag(cmd *cobra.Command) {
 	cmd.Flags().StringSlice(CURVEFS_PARTITIONID, nil, "partition Id, should be like 1,2,3"+color.Red.Sprint("[required]"))
@@ -576,6 +605,15 @@ func AddFsNameRequiredFlag(cmd *cobra.Command) {
 // fs name
 func AddFsNameSliceOptionFlag(cmd *cobra.Command) {
 	cmd.Flags().StringSlice(CURVEFS_FSNAME, nil, "fs name")
+	err := viper.BindPFlag(VIPER_CURVEFS_FSNAME, cmd.Flags().Lookup(CURVEFS_FSNAME))
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+}
+
+// fs name
+func AddFsNameStringOptionFlag(cmd *cobra.Command) {
+	cmd.Flags().String(CURVEFS_FSNAME, "", "fsname=[fileSystem name]")
 	err := viper.BindPFlag(VIPER_CURVEFS_FSNAME, cmd.Flags().Lookup(CURVEFS_FSNAME))
 	if err != nil {
 		cobra.CheckErr(err)
@@ -799,6 +837,20 @@ func GetStatsCountFlagOptionFlag(cmd *cobra.Command) uint32 {
 	return GetFlagUint32(cmd, CURVEFS_STATS_COUNT)
 }
 
+// capacity [option]
+func AddFsCapacityOptionalFlag(cmd *cobra.Command) {
+	cmd.Flags().Uint64(CURVEFS_QUOTA_CAPACITY, CURVEFS_QUOTA_DEF_CAPACITY, `hard quota for usage space in GiB`)
+	err := viper.BindPFlag(VIPER_CURVEFS_QUOTA_CAPACITY, cmd.Flags().Lookup(CURVEFS_QUOTA_CAPACITY))
+	if err != nil {
+		cobra.CheckErr(err)
+	}
+}
+
+// inodes [option]
+func AddFsInodesOptionalFlag(cmd *cobra.Command) {
+	AddUint64OptionFlag(cmd, CURVEFS_QUOTA_INODES, `hard quota for inodes (default: 0)`)
+}
+
 /* required */
 
 // copysetid [required]
@@ -834,4 +886,9 @@ func AddMountpointRequiredFlag(cmd *cobra.Command) {
 // servers [required]
 func AddFsServersRequiredFlag(cmd *cobra.Command) {
 	AddStringRequiredFlag(cmd, CURVEFS_SERVERS, "curvefs memcache servers")
+}
+
+// path [required]
+func AddFsPathRequiredFlag(cmd *cobra.Command) {
+	AddStringRequiredFlag(cmd, CURVEFS_QUOTA_PATH, "full path of the directory within the volume")
 }

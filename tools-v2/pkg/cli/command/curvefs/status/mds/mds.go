@@ -25,12 +25,12 @@ package mds
 import (
 	"fmt"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
@@ -46,11 +46,6 @@ type MdsCommand struct {
 	rows    []map[string]string
 	health  cobrautil.ClUSTER_HEALTH_STATUS
 }
-
-const (
-	STATUS_SUBURI  = "/vars/curvefs_mds_status"
-	VERSION_SUBURI = "/vars/curve_version"
-)
 
 var _ basecmd.FinalCurveCmdFunc = (*MdsCommand)(nil) // check interface
 
@@ -91,9 +86,9 @@ func (mCmd *MdsCommand) Init(cmd *cobra.Command, args []string) error {
 		timeout := viper.GetDuration(config.VIPER_GLOBALE_HTTPTIMEOUT)
 
 		addrs := []string{addr}
-		statusMetric := basecmd.NewMetric(addrs, STATUS_SUBURI, timeout)
+		statusMetric := basecmd.NewMetric(addrs, config.STATUS_SUBURI, timeout)
 		mCmd.metrics = append(mCmd.metrics, statusMetric)
-		versionMetric := basecmd.NewMetric(addrs, VERSION_SUBURI, timeout)
+		versionMetric := basecmd.NewMetric(addrs, config.VERSION_SUBURI, timeout)
 		mCmd.metrics = append(mCmd.metrics, versionMetric)
 	}
 
@@ -121,7 +116,7 @@ func (mCmd *MdsCommand) RunCommand(cmd *cobra.Command, args []string) error {
 		go func(m *basecmd.Metric) {
 			result, err := basecmd.QueryMetric(m)
 			var key string
-			if m.SubUri == STATUS_SUBURI {
+			if m.SubUri == config.STATUS_SUBURI {
 				key = "status"
 			} else {
 				key = "version"

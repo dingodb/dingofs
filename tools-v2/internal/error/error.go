@@ -24,9 +24,9 @@ package cmderror
 
 import (
 	"fmt"
-
 	fscopyset "github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/copyset"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/mds"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/metaserver"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 	"github.com/dingodb/dingofs/tools-v2/proto/proto/copyset"
 	"github.com/dingodb/dingofs/tools-v2/proto/proto/nameserver2"
@@ -830,5 +830,16 @@ var (
 			message = fmt.Sprintf("Rpc[QueryChunkserverRecoverStatus] fail, err: %s", statusCode.String())
 		}
 		return NewRpcReultCmdError(code, message)
+	}
+	ErrQuota = func(statusCode int) *CmdError {
+		var message string
+		code := metaserver.MetaStatusCode(statusCode)
+		switch code {
+		case metaserver.MetaStatusCode_OK:
+			message = "success"
+		default:
+			message = fmt.Sprintf("unknown error, error is %s", code.String())
+		}
+		return NewRpcReultCmdError(statusCode, message)
 	}
 )
