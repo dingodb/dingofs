@@ -28,6 +28,7 @@ import (
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/create"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/delete"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/gateway"
 	list "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/list"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/query"
 	quota "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/curvefs/quota"
@@ -59,6 +60,7 @@ func (fsCmd *CurveFsCommand) AddSubCommands() {
 		stats.NewStatsCommand(),
 		quota.NewQuotaCommand(),
 		config.NewConfigCommand(),
+		gateway.NewGatewayCommand(),
 	)
 }
 
