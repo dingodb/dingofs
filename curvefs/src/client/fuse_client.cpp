@@ -22,6 +22,8 @@
 
 #include "curvefs/src/client/fuse_client.h"
 
+#include <unistd.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -41,6 +43,8 @@
 #include "src/common/net_common.h"
 
 using ::curvefs::mds::FSStatusCode_Name;
+
+using ::curvefs::metaserver::Quota;
 
 using ::curvefs::client::filesystem::DirEntry;
 using ::curvefs::client::filesystem::DirEntryList;
@@ -1149,17 +1153,17 @@ CURVEFS_ERROR FuseClient::FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino,
     return CURVEFS_ERROR::OUT_OF_RANGE;
   }
 
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                << ", inodeId=" << ino;
     return ret;
   }
 
-  ::curve::common::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
-  inodeWrapper->SetXattrLocked(strname, strvalue);
-  ret = inodeWrapper->SyncAttr();
+  ::curve::common::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
+  inode_wrapper->SetXattrLocked(strname, strvalue);
+  ret = inode_wrapper->SyncAttr();
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "set xattr fail, ret = " << ret << ", inodeId=" << ino
                << ", name = " << strname << ", value = " << strvalue;
@@ -1237,6 +1241,11 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
     return CURVEFS_ERROR::NOPERMITTED;
   }
 
+  // no need to cal length
+  if (!fs_->CheckQuota(parent, 0, 1)) {
+    return CURVEFS_ERROR::NO_SPACE;
+  }
+
   const struct fuse_ctx* ctx = fuse_req_ctx(req);
   InodeParam param;
   param.fsId = fsInfo_->fsid();
@@ -1248,30 +1257,32 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
   param.symlink = link;
   param.parent = parent;
 
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  CURVEFS_ERROR ret = inodeManager_->CreateInode(param, inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  CURVEFS_ERROR ret = inodeManager_->CreateInode(param, inode_wrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager CreateInode fail, ret = " << ret
                << ", parent = " << parent << ", name = " << name
                << ", mode = " << param.mode;
     return ret;
   }
+
   Dentry dentry;
   dentry.set_fsid(fsInfo_->fsid());
-  dentry.set_inodeid(inodeWrapper->GetInodeId());
+  dentry.set_inodeid(inode_wrapper->GetInodeId());
   dentry.set_parentinodeid(parent);
   dentry.set_name(name);
-  dentry.set_type(inodeWrapper->GetType());
+  dentry.set_type(inode_wrapper->GetType());
   ret = dentryManager_->CreateDentry(dentry);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "dentryManager_ CreateDentry fail, ret = " << ret
                << ", parent = " << parent << ", name = " << name
                << ", mode = " << param.mode;
 
-    CURVEFS_ERROR ret2 = inodeManager_->DeleteInode(inodeWrapper->GetInodeId());
+    CURVEFS_ERROR ret2 =
+        inodeManager_->DeleteInode(inode_wrapper->GetInodeId());
     if (ret2 != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "Also delete inode failed, ret = " << ret2
-                 << ", inodeId=" << inodeWrapper->GetInodeId();
+                 << ", inodeId=" << inode_wrapper->GetInodeId();
     }
     return ret;
   }
@@ -1285,8 +1296,69 @@ CURVEFS_ERROR FuseClient::FuseOpSymlink(fuse_req_t req, const char* link,
     return ret;
   }
 
-  inodeWrapper->GetInodeAttr(&entry_out->attr);
+  fs_->UpdateFsQuotaUsage(0, 1);
+  fs_->UpdateDirQuotaUsage(parent, 0, 1);
+
+  inode_wrapper->GetInodeAttr(&entry_out->attr);
   return ret;
+}
+
+CURVEFS_ERROR FuseClient::FuseOpStatFs(fuse_req_t req, fuse_ino_t ino,
+                                       struct statvfs* stbuf) {
+  (void)req;
+  (void)ino;
+  Quota quota = fs_->GetFsQuota();
+
+  uint64_t block_size = 4096;
+
+  uint64_t total_bytes = UINT64_MAX;
+  if (quota.maxbytes() > 0) {
+    total_bytes = quota.maxbytes();
+  }
+
+  uint64_t total_blocks =
+      ((total_bytes % block_size == 0) ? total_bytes / block_size
+                                       : total_bytes / block_size + 1);
+  uint64_t free_blocks = 0;
+  if (total_bytes - quota.usedbytes() <= 0) {
+    free_blocks = 0;
+  } else {
+    if (quota.usedbytes() > 0) {
+      uint64_t used_blocks = (quota.usedbytes() % block_size == 0)
+                                 ? quota.usedbytes() / block_size
+                                 : quota.usedbytes() / block_size + 1;
+      free_blocks = total_blocks - used_blocks;
+    } else {
+      free_blocks = total_blocks;
+    }
+  }
+
+  uint64_t total_inodes = UINT64_MAX;
+  if (quota.maxinodes() > 0) {
+    total_inodes = quota.maxinodes();
+  }
+
+  uint64_t free_inodes = 0;
+  if (total_inodes - quota.usedinodes() <= 0) {
+    free_inodes = 0;
+  } else {
+    if (quota.usedinodes() > 0) {
+      free_inodes = total_inodes - quota.usedinodes();
+    } else {
+      free_inodes = total_inodes;
+    }
+  }
+
+  stbuf->f_frsize = stbuf->f_bsize = block_size;
+  stbuf->f_blocks = total_blocks;
+  stbuf->f_bfree = stbuf->f_bavail = free_blocks;
+  stbuf->f_files = total_inodes;
+  stbuf->f_ffree = stbuf->f_favail = free_inodes;
+  stbuf->f_fsid = fsInfo_->fsid();
+  stbuf->f_flag = 0;
+  stbuf->f_namemax = option_.fileSystemOption.maxNameLength;
+
+  return CURVEFS_ERROR::OK;
 }
 
 CURVEFS_ERROR FuseClient::OpLink(fuse_req_t req, fuse_ino_t ino,

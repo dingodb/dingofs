@@ -1776,7 +1776,11 @@ MetaStatusCode MetaServerClientImpl::GetFsQuota(uint32_t fs_id, Quota& quota) {
       metaCache_->UpdateApplyIndex(CopysetGroupID(poolID, copysetID),
                                    response.appliedindex());
     } else {
-      if (ret != MetaStatusCode::NOT_FOUND) {
+      if (ret == MetaStatusCode::NOT_FOUND) {
+        LOG(FATAL) << "Failed " << log_prefix
+                   << ", request: " << request.ShortDebugString()
+                   << ", response: " << response.ShortDebugString();
+      } else {
         LOG(WARNING) << "Failed " << log_prefix
                      << ", errmsg = " << MetaStatusCode_Name(ret)
                      << ", request: " << request.ShortDebugString()

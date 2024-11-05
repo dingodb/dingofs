@@ -135,7 +135,7 @@ class FileSystem {
   // utility: others
   FileSystemMember BorrowMember();
 
-  // dispatch request
+  // ----------- dispatch request  -----------
   void UpdateFsQuotaUsage(int64_t add_space, int64_t add_inode);
   void UpdateDirQuotaUsage(Ino ino, int64_t add_space, int64_t add_inode);
 
@@ -147,6 +147,8 @@ class FileSystem {
 
   // This will check ino and its parent has dir quota or not
   bool HasDirQuota(Ino ino);
+
+  Quota GetFsQuota();
 
  private:
   FRIEND_TEST(FileSystemTest, Attr2Stat);

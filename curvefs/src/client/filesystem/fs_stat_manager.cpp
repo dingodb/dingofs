@@ -87,9 +87,8 @@ CURVEFS_ERROR FsStatManager::LoadFsQuota() {
     return CURVEFS_ERROR::OK;
   }
 
-  if (rc == MetaStatusCode::NOT_FOUND) {
-    return CURVEFS_ERROR::OK;
-  }
+  CHECK(rc != MetaStatusCode::NOT_FOUND)
+      << "fs quota must be set before mount, fs_id: " << fs_id_;
 
   return CURVEFS_ERROR::INTERNAL;
 }
@@ -121,6 +120,17 @@ void FsStatManager::DoFlushFsUsage() {
   } else {
     LOG(WARNING) << "FlushFsUsage failed, fs_id: " << fs_id_ << ", rc: " << rc;
   }
+}
+
+Quota FsStatManager::GetQuota() {
+  CHECK(running_.load());
+  Quota quota = fs_quota_->GetQuota();
+  Usage usage = fs_quota_->GetUsage();
+  quota.set_usedbytes(quota.usedbytes() + usage.bytes());
+  quota.set_usedinodes(quota.usedinodes() + usage.inodes());
+
+  VLOG(6) << "GetQuota, quota: " << quota.ShortDebugString();
+  return quota;
 }
 
 }  // namespace filesystem

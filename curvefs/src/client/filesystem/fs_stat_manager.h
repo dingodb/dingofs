@@ -46,6 +46,8 @@ class FsStatManager {
 
   bool CheckQuota(int64_t new_space, int64_t new_inodes);
 
+  Quota GetQuota();
+
  private:
   void InitQuota();
   CURVEFS_ERROR LoadFsQuota();

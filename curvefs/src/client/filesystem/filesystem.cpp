@@ -404,6 +404,8 @@ bool FileSystem::HasDirQuota(Ino ino) {
   return dir_quota_manager_->HasDirQuota(ino);
 }
 
+Quota FileSystem::GetFsQuota() { return fs_stat_manager_->GetQuota(); }
+
 }  // namespace filesystem
 }  // namespace client
 }  // namespace curvefs
