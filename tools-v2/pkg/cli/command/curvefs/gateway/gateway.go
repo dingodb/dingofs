@@ -61,7 +61,6 @@ func NewGatewayCommand() *cobra.Command {
 }
 
 func (gCmd *GatewayCommand) AddFlags() {
-	config.AddFsIdRequiredFlag(gCmd.Cmd)
 	config.AddListenAddressRequiredFlag(gCmd.Cmd)
 	config.AddConsoleAddressOptionalFlag(gCmd.Cmd)
 	config.AddFsIdOptionalFlag(gCmd.Cmd)
