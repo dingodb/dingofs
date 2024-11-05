@@ -32,7 +32,7 @@ namespace curve {
 namespace common {
 
 TEST(RWLockTest, basic_test) {
-  RWLock rwlock;
+  PthreadRWLock rwlock;
   {
     ReadLockGuard readLockGuard(rwlock);
     ASSERT_TRUE(true);
