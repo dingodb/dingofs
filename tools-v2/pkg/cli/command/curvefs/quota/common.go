@@ -500,17 +500,18 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 	}
 	for _, entry := range entries {
 		summary.Inodes++
+		if entry.GetType() == metaserver.FsFileType_TYPE_S3 || entry.GetType() == metaserver.FsFileType_TYPE_FILE {
+			inodeAttr, err := GetInode(cmd, fsId, entry.GetInodeId())
+			if err != nil {
+				return err
+			}
+			summary.Length += inodeAttr.GetLength()
+		}
 		if entry.GetType() == metaserver.FsFileType_TYPE_DIRECTORY {
 			sumErr := GetDirSummarySize(cmd, fsId, entry.GetInodeId(), summary)
 			if sumErr != nil {
 				return sumErr
 			}
-		} else {
-			inodeAttr, err := GetInode(cmd, fsId, entry.GetInodeId())
-			if err != nil {
-				return err
-			}
-			summary.Length += uint64(align512(inodeAttr.GetLength()))
 		}
 	}
 	return nil
