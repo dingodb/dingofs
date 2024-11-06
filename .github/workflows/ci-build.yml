@@ -2,11 +2,11 @@ name: CI Build
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
     tags:
       - '*'
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 env:
   BUILD_TYPE: Release
@@ -57,14 +57,14 @@ jobs:
         git submodule update --init --recursive 
 
     - name: Build dependencies
-      run: make dep stor=fs
+      run: make dep
  
     - name: Build dingofs
-      run: make build stor=fs only=//curvefs/src/* release=1
+      run: make build only=//curvefs/src/* release=1
 
     - name: Install dingofs
       run: |
-        make install_and_config stor=fs tag=dingodatabase/dingofs:latest
+        make install_and_config tag=dingodatabase/dingofs:latest
 
     - name: Archive the dingofs directory
       run: |
