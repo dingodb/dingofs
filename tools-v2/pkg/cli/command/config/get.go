@@ -16,6 +16,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/metaserver"
 	"strconv"
 
@@ -78,6 +79,11 @@ func (fsQuotaCmd *GetFsQuotaCommand) AddFlags() {
 }
 
 func (fsQuotaCmd *GetFsQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(fsQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		fsQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	fsId, fsErr := quota.GetFsId(fsQuotaCmd.Cmd)
 	if fsErr != nil {
 		return fsErr

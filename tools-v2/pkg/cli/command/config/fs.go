@@ -16,6 +16,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -79,6 +80,11 @@ func (fsQuotaCmd *ConfigFsQuotaCommand) AddFlags() {
 }
 
 func (fsQuotaCmd *ConfigFsQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(fsQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		fsQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	// check flags values
 	capacity, inodes, quotaErr := quota.CheckAndGetQuotaValue(fsQuotaCmd.Cmd)
 	if quotaErr != nil {

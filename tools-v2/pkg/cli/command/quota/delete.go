@@ -76,6 +76,11 @@ func (deleteQuotaCmd *DeleteQuotaCommand) AddFlags() {
 }
 
 func (deleteQuotaCmd *DeleteQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(deleteQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		deleteQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	//check flags values
 	fsId, fsErr := GetFsId(cmd)
 	if fsErr != nil {

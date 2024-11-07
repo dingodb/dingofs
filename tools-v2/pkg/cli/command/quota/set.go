@@ -78,6 +78,11 @@ func (setQuotaCmd *SetQuotaCommand) AddFlags() {
 }
 
 func (setQuotaCmd *SetQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(setQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		setQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	//check flags values
 	capacity, inodes, quotaErr := CheckAndGetQuotaValue(setQuotaCmd.Cmd)
 	if quotaErr != nil {

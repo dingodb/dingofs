@@ -16,6 +16,7 @@ package quota
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
@@ -77,6 +78,11 @@ func (checkQuotaCmd *CheckQuotaCommand) AddFlags() {
 }
 
 func (checkQuotaCmd *CheckQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(checkQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		checkQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	return nil
 }
 

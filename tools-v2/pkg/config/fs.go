@@ -421,7 +421,7 @@ func GetAddrSlice(cmd *cobra.Command, addrType string) ([]string, *cmderror.CmdE
 	for _, addr := range addrslice {
 		if !IsValidAddr(addr) {
 			err := cmderror.ErrGetAddr()
-			err.Format(addrType, addr)
+			err.Format(addrType, "["+addr+"]")
 			return addrslice, err
 		}
 	}

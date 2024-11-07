@@ -83,6 +83,11 @@ func (getQuotaCmd *GetQuotaCommand) AddFlags() {
 }
 
 func (getQuotaCmd *GetQuotaCommand) Init(cmd *cobra.Command, args []string) error {
+	_, getAddrErr := config.GetFsMdsAddrSlice(getQuotaCmd.Cmd)
+	if getAddrErr.TypeCode() != cmderror.CODE_SUCCESS {
+		getQuotaCmd.Error = getAddrErr
+		return fmt.Errorf(getAddrErr.Message)
+	}
 	//check flags values
 	fsId, fsErr := GetFsId(getQuotaCmd.Cmd)
 	if fsErr != nil {
