@@ -37,8 +37,8 @@
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/service/metrics_dumper.h"
-#include "curvefs/src/others/client_common.h"
 #include "curvefs/src/common/define.h"
+#include "curvefs/src/others/client_common.h"
 #include "curvefs/src/utils/net_common.h"
 #include "glog/logging.h"
 
@@ -950,9 +950,8 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
     if (attr.type() == FsFileType::TYPE_DIRECTORY) {
       // TODO : remove this restrict when we support rename dir in dirfferent
       // quota  dir
-      if (fs_->HasDirQuota(parent) && fs_->HasDirQuota(newparent)) {
-        LOG(WARNING)
-            << "FuseOpRename not support rename dir in different quota dir";
+      if (fs_->HasDirQuota(parent) || fs_->HasDirQuota(newparent)) {
+        LOG(WARNING) << "FuseOpRename not support rename dir between quota dir";
         return CURVEFS_ERROR::NOTSUPPORT;
       }
 

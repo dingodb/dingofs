@@ -21,8 +21,8 @@
 #include "curvefs/src/client/common/dynamic_config.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/common/define.h"
-#include "glog/logging.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
+#include "glog/logging.h"
 
 namespace curvefs {
 namespace client {
@@ -97,8 +97,8 @@ void DirQuotaManager::UpdateDirQuotaUsage(Ino ino, int64_t new_space,
 bool DirQuotaManager::CheckDirQuota(Ino ino, int64_t space, int64_t inodes) {
   Ino inode = ino;
 
-  while (inode != ROOTINODEID) {
-    // NOTE: now we should not enable recyble
+  while (true) {
+    // NOTE: now we should not enable recycle
     if (inode == RECYCLEINODEID) {
       LOG(ERROR) << "CheckDirQuota failed, inodeId=" << ino
                  << ", inodeId=" << inode << " is RECYCLEINODEID";
@@ -114,6 +114,10 @@ bool DirQuotaManager::CheckDirQuota(Ino ino, int64_t space, int64_t inodes) {
                      << ", check fail becase quota inodeId=" << inode;
         return false;
       }
+    }
+
+    if (inode == ROOTINODEID) {
+      break;
     }
 
     // if inode no quota or quota is enough, check its parent
