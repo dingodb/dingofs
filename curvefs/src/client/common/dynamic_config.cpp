@@ -33,6 +33,7 @@ namespace {
 bool PassDouble(const char*, double) { return true; }
 bool PassUint64(const char*, uint64_t) { return true; }
 bool PassInt32(const char*, int32_t) { return true; }
+bool PassUint32(const char*, uint32_t) { return true; }
 bool PassBool(const char*, bool) { return true; }
 };  // namespace
 
@@ -78,17 +79,22 @@ DEFINE_validator(disk_state_unstable2down_second, &PassInt32);
 // disk state health checker
 DEFINE_int32(disk_check_duration_millsecond, 1 * 1000,
              "disk health check duration in millsecond");
-
 DEFINE_validator(disk_check_duration_millsecond, &PassInt32);
 
 // thread num or bthread num
 DEFINE_uint32(stat_timer_thread_num, 8, "stat timer thread num");
+DEFINE_validator(stat_timer_thread_num, &PassUint32);
 
 DEFINE_uint32(fs_usage_flush_interval_second, 20,
               "fs usage flush interval in second");
+DEFINE_validator(fs_usage_flush_interval_second, &PassUint32);
+
 DEFINE_uint32(flush_quota_interval_second, 30,
               "flush quota interval in second");
+DEFINE_validator(flush_quota_interval_second, &PassUint32);
+
 DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
+DEFINE_validator(load_quota_interval_second, &PassUint32);
 
 }  // namespace common
 }  // namespace client
