@@ -53,5 +53,8 @@ func init() {
 func SetShow(show bool) {
 	if show {
 		log.SetOutput(os.Stdout)
+	} else {
+		C = &Cache{}
+		log.SetOutput(C)
 	}
 }
