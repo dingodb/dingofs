@@ -62,6 +62,10 @@ MetaStatusCode SuperPartitionStorageImpl::GetFsQuota(uint32_t fs_id,
   return DoGetFsQuota(fs_id, quota);
 }
 
+MetaStatusCode SuperPartitionStorageImpl::DeleteFsQuota(uint32_t fs_id) {
+  return DoDeleteFsQuota(fs_id);
+}
+
 MetaStatusCode SuperPartitionStorageImpl::FlushFsUsage(uint32_t fs_id,
                                                        const Usage& usage,
                                                        Quota* quota) {
@@ -188,6 +192,10 @@ MetaStatusCode SuperPartitionStorageImpl::DoSetFsQuota(uint32_t fs_id,
 MetaStatusCode SuperPartitionStorageImpl::DoGetFsQuota(uint32_t fs_id,
                                                        Quota* quota) {
   return QuotaError(kv_->SGet(fs_quota_table_, GetFsQuotaKey(fs_id), quota));
+}
+
+MetaStatusCode SuperPartitionStorageImpl::DoDeleteFsQuota(uint32_t fs_id) {
+  return QuotaError(kv_->SDel(fs_quota_table_, GetFsQuotaKey(fs_id)));
 }
 
 MetaStatusCode SuperPartitionStorageImpl::DoSetDirQuota(uint32_t fs_id,

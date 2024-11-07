@@ -53,6 +53,8 @@ class SuperPartitionStorage {
 
   virtual MetaStatusCode GetFsQuota(uint32_t fs_id, Quota* quota) = 0;
 
+  virtual MetaStatusCode DeleteFsQuota(uint32_t fs_id) = 0;
+
   virtual MetaStatusCode FlushFsUsage(uint32_t fs_id, const Usage& usage,
                                       Quota* quota) = 0;
 
@@ -79,6 +81,8 @@ class SuperPartitionStorageImpl : public SuperPartitionStorage {
   MetaStatusCode SetFsQuota(uint32_t fs_id, const Quota& quota) override;
 
   MetaStatusCode GetFsQuota(uint32_t fs_id, Quota* quota) override;
+
+  MetaStatusCode DeleteFsQuota(uint32_t fs_id) override;
 
   MetaStatusCode FlushFsUsage(uint32_t fs_id, const Usage& usage,
                               Quota* quota) override;
@@ -108,6 +112,8 @@ class SuperPartitionStorageImpl : public SuperPartitionStorage {
   MetaStatusCode DoSetFsQuota(uint32_t fs_id, const Quota& quota);
 
   MetaStatusCode DoGetFsQuota(uint32_t fs_id, Quota* quota);
+
+  MetaStatusCode DoDeleteFsQuota(uint32_t fs_id);
 
   MetaStatusCode DoSetDirQuota(uint32_t fs_id, uint64_t dir_inode_id,
                                const Quota& quota);

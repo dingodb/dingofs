@@ -42,6 +42,8 @@ class SuperPartition {
 
   MetaStatusCode GetFsQuota(uint32_t fs_id, Quota* quota);
 
+  MetaStatusCode DeleteFsQuota(uint32_t fs_id);
+
   MetaStatusCode FlushFsUsage(uint32_t fs_id, const Usage& usage, Quota* quota);
 
   MetaStatusCode SetDirQuota(uint32_t fs_id, uint64_t dir_inode_id,
@@ -62,8 +64,6 @@ class SuperPartition {
   std::string StrQuota(const Quota& quota);
 
   std::string StrUsage(const Usage& usage);
-
-  MetaStatusCode CheckQuota(Quota quota);
 
  private:
   std::unique_ptr<SuperPartitionStorageImpl> store_;

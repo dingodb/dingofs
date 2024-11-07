@@ -67,7 +67,7 @@ TEST_F(SuperPartitionTest, SetFsQuota_Basic) {
     ASSERT_EQ(rc, MetaStatusCode::OK);
   }
 
-  // CASE 3: GetFsQuota(100) => { 100 GiB, 1000, 0, 0 }
+  // CASE 2: GetFsQuota(100) => { 100 GiB, 1000, 0, 0 }
   {
     Quota quota;
     auto rc = super_partition->GetFsQuota(100, &quota);
@@ -78,39 +78,6 @@ TEST_F(SuperPartitionTest, SetFsQuota_Basic) {
     ASSERT_EQ(quota.usedbytes(), 0);
     ASSERT_TRUE(quota.has_usedinodes());
     ASSERT_EQ(quota.usedinodes(), 0);
-  }
-}
-
-TEST_F(SuperPartitionTest, SetFsQuota_InvalidParam) {
-  auto builder = SuperPartitionBuilder();
-  auto super_partition = builder.Build();
-
-  // CASE 1: SetFsQuota(100, { _, _, _, _ }) => PARAM_ERROR
-  //         both |maxbytes| and |maxinodes| are not setted
-  {
-    Quota quota;
-    auto rc = super_partition->SetFsQuota(100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
-  }
-
-  // CASE 2: SetFsQuota(100, { 100 Gib, _, 0, _ }) => PARAM_ERROR
-  //         |usedbytes| setted
-  {
-    Quota quota;
-    quota.set_maxbytes(100 * kGiB);
-    quota.set_usedbytes(0);
-    auto rc = super_partition->SetFsQuota(100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
-  }
-
-  // CASE 3: SetFsQuota(100, { 100 Gib, _, _, 0 }) => PARAM_ERROR
-  //         |usedinodes| setted
-  {
-    Quota quota;
-    quota.set_maxbytes(100 * kGiB);
-    quota.set_usedinodes(0);
-    auto rc = super_partition->SetFsQuota(100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
   }
 }
 
@@ -301,6 +268,46 @@ TEST_F(SuperPartitionTest, GetFsQuota_Basic) {
     ASSERT_EQ(quota.usedbytes(), 0);
     ASSERT_TRUE(quota.has_usedinodes());
     ASSERT_EQ(quota.usedinodes(), 0);
+  }
+}
+
+TEST_F(SuperPartitionTest, DeleteFsQuota_Basic) {
+  auto builder = SuperPartitionBuilder();
+  auto super_partition = builder.Build();
+
+  // CASE 1: SetFsQuota(100, { 100 GiB, 1000, _, _ })
+  {
+    Quota quota;
+    quota.set_maxbytes(100 * kGiB);
+    quota.set_maxinodes(1000);
+    auto rc = super_partition->SetFsQuota(100, quota);
+    ASSERT_EQ(rc, MetaStatusCode::OK);
+  }
+
+  // CASE 2: GetFsQuota(100) => { 100 GiB, 1000, 0, 0 }
+  {
+    Quota quota;
+    auto rc = super_partition->GetFsQuota(100, &quota);
+    ASSERT_EQ(rc, MetaStatusCode::OK);
+    ASSERT_EQ(quota.maxbytes(), 100 * kGiB);
+    ASSERT_EQ(quota.maxinodes(), 1000);
+    ASSERT_TRUE(quota.has_usedbytes());
+    ASSERT_EQ(quota.usedbytes(), 0);
+    ASSERT_TRUE(quota.has_usedinodes());
+    ASSERT_EQ(quota.usedinodes(), 0);
+  }
+
+  // CASE 3: DeleteFsQuota(100)
+  {
+    auto rc = super_partition->DeleteFsQuota(100);
+    ASSERT_EQ(rc, MetaStatusCode::OK);
+  }
+
+  // CASE 4: GetFsQuota(100) => MetaStatusCode::NOT_FOUND
+  {
+    Quota quota;
+    auto rc = super_partition->GetFsQuota(100, &quota);
+    ASSERT_EQ(rc, MetaStatusCode::NOT_FOUND);
   }
 }
 
@@ -688,36 +695,6 @@ TEST_F(SuperPartitionTest, SetDirQuota_Basic) {
     ASSERT_EQ(quota.usedbytes(), 0);
     ASSERT_TRUE(quota.has_usedinodes());
     ASSERT_EQ(quota.usedinodes(), 0);
-  }
-}
-
-TEST_F(SuperPartitionTest, SetDirQuota_InvalidParam) {
-  auto builder = SuperPartitionBuilder();
-  auto super_partition = builder.Build();
-
-  // CASE 1: |maxbytes| and |maxinodes| are not setted
-  {
-    Quota quota;
-    auto rc = super_partition->SetDirQuota(1, 100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
-  }
-
-  // CASE 2: |usedbytes| setted
-  {
-    Quota quota;
-    quota.set_maxbytes(10 * kGiB);
-    quota.set_usedbytes(0);
-    auto rc = super_partition->SetDirQuota(1, 100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
-  }
-
-  // CASE 3: |usedinodes| setted
-  {
-    Quota quota;
-    quota.set_maxbytes(10 * kGiB);
-    quota.set_usedinodes(0);
-    auto rc = super_partition->SetDirQuota(1, 100, quota);
-    ASSERT_EQ(rc, MetaStatusCode::PARAM_ERROR);
   }
 }
 

@@ -35,6 +35,8 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/types/optional.h"
 #include "curvefs/proto/metaserver.pb.h"
+#include "curvefs/src/common/define.h"
+#include "curvefs/src/fs/ext4_filesystem_impl.h"
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
 #include "curvefs/src/metaserver/partition_clean_manager.h"
 #include "curvefs/src/metaserver/recycle_cleaner.h"
@@ -45,10 +47,9 @@
 #include "curvefs/src/metaserver/storage/memory_storage.h"
 #include "curvefs/src/metaserver/storage/rocksdb_storage.h"
 #include "curvefs/src/metaserver/storage/storage.h"
+#include "curvefs/src/utils/concurrent/rw_lock.h"
 #include "rocksdb/utilities/checkpoint.h"
 #include "rocksdb/utilities/options_util.h"
-#include "curvefs/src/utils/concurrent/rw_lock.h"
-#include "curvefs/src/fs/ext4_filesystem_impl.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -330,6 +331,18 @@ MetaStatusCode MetaStoreImpl::DeletePartition(
     return MetaStatusCode::PARTITION_NOT_FOUND;
   }
 
+  {
+    auto partition = it->second;
+    auto fs_id = partition->GetFsId();
+    if (partition->IsInodeBelongs(fs_id, ROOTINODEID)) {
+      auto rc = super_partition_->DeleteFsQuota(fs_id);
+      if (rc != MetaStatusCode::OK) {
+        LOG(WARNING) << "Delete fs quota failed, fs_id = " << fs_id
+                     << ", rc = " << rc;
+      }
+    }
+  }
+
   if (it->second->IsDeletable()) {
     LOG(INFO) << "DeletePartition, partition is deletable, delete it"
               << ", partitionId = " << partitionId;
@@ -588,13 +601,21 @@ MetaStatusCode MetaStoreImpl::CreateRootInode(
 
   MetaStatusCode status = partition->CreateRootInode(param);
   response->set_statuscode(status);
-  if (status != MetaStatusCode::OK) {
+  if (status != MetaStatusCode::OK && status != MetaStatusCode::INODE_EXIST) {
     LOG(ERROR) << "CreateRootInode fail, fsId = " << param.fsId
                << ", uid = " << param.uid << ", gid = " << param.gid
                << ", mode = " << param.mode
                << ", retCode = " << MetaStatusCode_Name(status);
+    return status;
   }
-  return status;
+
+  // MetaStatusCode::OK || MetaStatusCode::INODE_EXIST
+  Quota quota;
+  quota.set_maxbytes(0);
+  quota.set_maxinodes(0);
+  quota.set_usedbytes(0);
+  quota.set_usedinodes(0);
+  return super_partition_->SetFsQuota(request->fsid(), quota);
 }
 
 MetaStatusCode MetaStoreImpl::CreateManageInode(

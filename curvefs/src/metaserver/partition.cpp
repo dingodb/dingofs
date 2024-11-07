@@ -29,6 +29,7 @@
 #include <utility>
 
 #include "curvefs/proto/metaserver.pb.h"
+#include "curvefs/src/common/define.h"
 #include "curvefs/src/metaserver/s3compact.h"
 #include "curvefs/src/metaserver/s3compact_manager.h"
 #include "curvefs/src/metaserver/storage/converter.h"
