@@ -410,13 +410,13 @@ CURVEFS_ERROR FuseS3Client::Truncate(InodeWrapper* inode, uint64_t length) {
   int64_t change_size = length - static_cast<int64_t>(attr.length());
 
   if (change_size > 0) {
-    if (fs_->CheckFsQuota(change_size, 0)) {
+    if (!fs_->CheckFsQuota(change_size, 0)) {
       return CURVEFS_ERROR::NO_SPACE;
     }
 
     for (int i = 0; i < attr.parent_size(); i++) {
       auto parent = attr.parent(i);
-      if (fs_->CheckDirQuota(parent, change_size, 0)) {
+      if (!fs_->CheckDirQuota(parent, change_size, 0)) {
         return CURVEFS_ERROR::NO_SPACE;
       }
     }

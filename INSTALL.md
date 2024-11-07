@@ -58,11 +58,9 @@ cmake --build build -j 16
 bash build_thirdparties.sh
 ```
 
-### Build CurveBS and CurveFS
+### Build 
 ```sh
 export BAZEL_JOBS=16
-
-bash build.sh
 
 bash buildfs.sh
 ```
