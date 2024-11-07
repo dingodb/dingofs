@@ -1066,10 +1066,10 @@ CURVEFS_ERROR FuseClient::FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino,
   }
 
   if (to_set & FUSE_SET_ATTR_SIZE) {
-    CURVEFS_ERROR t_ret = Truncate(inode_wrapper.get(), attr->st_size);
-    if (t_ret != CURVEFS_ERROR::OK) {
+    ret = Truncate(inode_wrapper.get(), attr->st_size);
+    if (ret != CURVEFS_ERROR::OK) {
       LOG(ERROR) << "truncate file fail, ret = " << ret << ", inodeId=" << ino;
-      return t_ret;
+      return ret;
     }
 
     inode_wrapper->SetLengthLocked(attr->st_size);
