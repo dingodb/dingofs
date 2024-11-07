@@ -72,7 +72,13 @@ void InodeObjectsService::default_method(
           }
         }
 
-        os << flat_file.FormatStringWithHeader();
+        const std::string* delimiter =
+            cntl->http_request().uri().GetQuery("delimiter");
+        if (delimiter != nullptr) {
+          os << flat_file.FormatStringWithHeader(true);
+        } else {
+          os << flat_file.FormatStringWithHeader();
+        }
       }
     } else {
       LOG(INFO) << "Invalid inodeId=" << path;

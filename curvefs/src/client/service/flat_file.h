@@ -229,11 +229,17 @@ class FlatFile {
     return os.str();
   }
 
-  std::string FormatStringWithHeader() const {
+  std::string FormatStringWithHeader(bool use_delimiter = false) const {
     std::ostringstream os;
-    os << std::left << std::setw(20) << "file_offset" << std::setw(20) << "len"
-       << std::setw(20) << "block_offset" << std::setw(40) << "block_name"
-       << std::setw(20) << "block_len" << std::setw(4) << "zero" << "\n";
+    if (use_delimiter) {
+      os << std::left << "file_offset" << "|" << "len" << "|" << "block_offset"
+         << "|" << "block_name" << "|" << "block_len" << "|" << "zero" << "\n";
+    } else {
+      os << std::left << std::setw(20) << "file_offset" << std::setw(15)
+         << "len" << std::setw(15) << "block_offset" << std::setw(100)
+         << "block_name" << std::setw(15) << "block_len" << std::setw(10)
+         << "zero" << "\n";
+    }
 
     for (const auto& flat_file_chunk_iter : chunk_index_flat_file_chunk_) {
       const FlatFileChunk& flat_file_chunk = flat_file_chunk_iter.second;
@@ -259,11 +265,18 @@ class FlatFile {
           uint64_t block_offset =
               obj_slice.file_offset - obj_slice.obj.file_offset;
 
-          os << std::left << std::setw(20) << obj_slice.file_offset
-             << std::setw(20) << obj_slice.len << std::setw(20) << block_offset
-             << std::setw(40) << key.StoreKey() << std::setw(20)
-             << obj_slice.obj.obj_len << std::setw(20)
-             << (obj_slice.obj.zero ? "true" : "false") << "\n";
+          if (use_delimiter) {
+            os << std::left << obj_slice.file_offset << "|" << obj_slice.len
+               << "|" << block_offset << "|" << key.StoreKey() << "|"
+               << obj_slice.obj.obj_len << "|"
+               << (obj_slice.obj.zero ? "true" : "false") << "\n";
+          } else {
+            os << std::left << std::setw(20) << obj_slice.file_offset
+               << std::setw(15) << obj_slice.len << std::setw(15)
+               << block_offset << std::setw(100) << key.StoreKey()
+               << std::setw(15) << obj_slice.obj.obj_len << std::setw(10)
+               << (obj_slice.obj.zero ? "true" : "false") << "\n";
+          }
         }
       }
     }
