@@ -56,25 +56,20 @@ A tool for CurveFS
 
 install curve tool
 
+For obtaining binary package, please refer to:
+[curve tool binary compilation guide](https://github.com/dingodb/dingofs/blob/main/INSTALL.md)
+
 ```bash
-wget https://curve-tool.nos-eastchina1.126.net/release/curve-latest
-chmod +x curve-latest
-mv curve-latest /usr/bin/curve
+chmod +x curve
+mv curve /usr/bin/curve
 ```
 
 set configure file
 
 ```bash
-wget https://raw.githubusercontent.com/opencurve/curve/master/tools-v2/pkg/config/curve.yaml
+wget https://github.com/dingodb/dingofs/blob/main/tools-v2/pkg/config/curve.yaml
 ```
-
-or
-
-```
-wget https://curve-tool.nos-eastchina1.126.net/config/curve.yaml
-```
-
-Please modify the `mdsAddr, mdsDummyAddr, etcdAddr` under `curvefs/bs` in the template.yaml file as required
+Please modify the `mdsAddr, mdsDummyAddr, etcdAddr` under `curvefs` in the template.yaml file as required
 
 configure file priority
 environment variables(CONF=/opt/curve.yaml) > default (~/.curve/curve.yaml)
