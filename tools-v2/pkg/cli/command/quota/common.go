@@ -518,11 +518,7 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 }
 
 // get directory size and inodes by path name
-func GetDirectorySizeAndInodes(cmd *cobra.Command, fsId uint32, path string) (int64, int64, error) {
-	dirInode, dirErr := GetDirPathInodeId(cmd, fsId, path)
-	if dirErr != nil {
-		return 0, 0, dirErr
-	}
+func GetDirectorySizeAndInodes(cmd *cobra.Command, fsId uint32, dirInode uint64) (int64, int64, error) {
 	summary := &Summary{0, 0}
 	sumErr := GetDirSummarySize(cmd, fsId, dirInode, summary)
 	if sumErr != nil {

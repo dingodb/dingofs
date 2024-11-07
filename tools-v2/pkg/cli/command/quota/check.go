@@ -93,8 +93,13 @@ func (checkQuotaCmd *CheckQuotaCommand) RunCommand(cmd *cobra.Command, args []st
 	}
 	fsId := dirQuotaRequest.GetFsId()
 	dirQuota := dirQuotaResponse.GetQuota()
-	//get real used space
-	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, path)
+	// get inode by path
+	dirInode, dirErr := GetDirPathInodeId(cmd, fsId, path)
+	if dirErr != nil {
+		return dirErr
+	}
+	// get real used space
+	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, dirInode)
 	if getErr != nil {
 		return getErr
 	}
