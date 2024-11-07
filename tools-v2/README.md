@@ -8,40 +8,48 @@ A tool for CurveFS
     - [Introduction](#introduction)
   - [Command](#command)
     - [version](#version)
-    - [fs](#fs)
-      - [check](#check)
-        - [check copyset](#check-copyset)
-      - [create](#create)
-        - [create fs](#create-fs)
-        - [create topology](#create-topology)
-      - [delete](#delete)
-        - [delete fs](#delete-fs)
-      - [list](#list)
-        - [list copyset](#list-copyset)
-        - [list fs](#list-fs)
-        - [list mountpoint](#list-mountpoint)
-        - [list partition](#list-partition)
-        - [list topology](#list-topology)
-      - [query](#query)
-        - [query copyset](#query-copyset)
-        - [query fs](#query-fs)
-        - [query inode](#query-inode)
-        - [query metaserver](#query-metaserver)
-        - [query partition](#query-partition)
-      - [status](#status)
-        - [status mds](#status-mds)
-        - [status metaserver](#status-metaserver)
-        - [status etcd](#status-etcd)
-        - [status copyset](#status-copyset)
-        - [status cluster](#status-cluster)
-      - [umount](#umount)
-        - [umount fs](#umount-fs)
-      - [usage](#usage)
-        - [usage inode](#usage-inode)
-        - [usage metadata](#usage-metadata)
-      - [warmup](#warmup)
+    - [check](#check)
+      - [check copyset](#check-copyset)
+    - [create](#create)
+      - [create fs](#create-fs)
+      - [create topology](#create-topology)
+    - [delete](#delete)
+      - [delete fs](#delete-fs)
+    - [list](#list)
+      - [list copyset](#list-copyset)
+      - [list fs](#list-fs)
+      - [list mountpoint](#list-mountpoint)
+      - [list partition](#list-partition)
+      - [list topology](#list-topology)
+    - [query](#query)
+      - [query copyset](#query-copyset)
+      - [query fs](#query-fs)
+      - [query inode](#query-inode)
+      - [query metaserver](#query-metaserver)
+      - [query partition](#query-partition)
+    - [status](#status)
+      - [status mds](#status-mds)
+      - [status metaserver](#status-metaserver)
+      - [status etcd](#status-etcd)
+      - [status copyset](#status-copyset)
+      - [status cluster](#status-cluster)
+    - [umount](#umount)
+      - [umount fs](#umount-fs)
+    - [usage](#usage)
+      - [usage inode](#usage-inode)
+      - [usage metadata](#usage-metadata)
+    - [warmup](#warmup)
       - [warmup add](#warmup-add)
-
+    - [config](#config)
+      - [config fs](#config-fs)
+      - [config get](#config-get)
+    - [quota](#quota)
+      - [quota set](#quota-set)
+      - [quota get](#quota-get)
+      - [quota list](#quota-list)
+      - [quota delete](#quota-delete)
+      - [quota check](#quota-check)
+      
 ## How to use curve tool
 
 ### Install
@@ -93,8 +101,8 @@ curve COMMAND --help
 For example:
 
 ```bash
-curve fs status mds --help
-Usage:  curve fs status mds [flags]
+curve status mds --help
+Usage:  curve status mds [flags]
 
 get the inode usage of curvefs
 
@@ -108,7 +116,7 @@ Flags:
       --showerror              display all errors in command
 
 Examples:
-$ curve fs status mds
+$ curve status mds
 ```
 
 In addition, this tool reads the configuration from `$HOME/.curve/curve.yaml` or `/etc/curve/curve.yaml` by default,
@@ -143,7 +151,7 @@ check copysets health in curvefs
 Usage:
 
 ```shell
-curve fs check copyset --copysetid 1 --poolid 1
+curve check copyset --copysetid 1 --poolid 1
 ```
 
 Output:
@@ -165,7 +173,7 @@ create a fs in curvefs
 Usage:
 
 ```shell
-curve fs create fs --fsname test3
+curve create fs --fsname test3
 ```
 
 Output:
@@ -185,7 +193,7 @@ create curvefs topology
 Usage:
 
 ```shell
-curve fs create topology --clustermap topology.json
+curve create topology --clustermap topology.json
 ```
 
 Output:
@@ -211,7 +219,7 @@ delete a fs from curvefs
 Usage:
 
 ```shell
-curve fs delete fs --fsname test1
+curve delete fs --fsname test1
 WARNING:Are you sure to delete fs test1?
 please input [test1] to confirm: test1
 ```
@@ -235,7 +243,7 @@ list all copyset info of the curvefs
 Usage:
 
 ```shell
-curve fs list copyset
+curve list copyset
 ```
 
 Output:
@@ -289,7 +297,7 @@ list all fs info in the curvefs
 Usage:
 
 ```shell
-curve fs list fs
+curve list fs
 ```
 
 Output:
@@ -311,7 +319,7 @@ list all mountpoint of the curvefs
 Usage:
 
 ```shell
-curve fs list mountpoint
+curve list mountpoint
 ```
 
 Output:
@@ -333,7 +341,7 @@ list partition in curvefs by fsid
 Usage:
 
 ```shell
-curve fs list partition
+curve list partition
 ```
 
 Output:
@@ -399,7 +407,7 @@ list the topology of the curvefs
 Usage:
 
 ```shell
-curve fs list topology
+curve list topology
 ```
 
 Output:
@@ -439,7 +447,7 @@ query copysets in curvefs
 Usage:
 
 ```shell
-curve fs query copyset --copysetid 1 --poolid 1
+curve query copyset --copysetid 1 --poolid 1
 ```
 
 Output:
@@ -459,7 +467,7 @@ query fs in curvefs by fsname or fsid
 Usage:
 
 ```shell
-curve fs query fs --fsname test1
+curve query fs --fsname test1
 ```
 
 Output:
@@ -479,7 +487,7 @@ query the inode of fs
 Usage:
 
 ```shell
-curve fs query inode --fsid 2 --inodeid 5243380
+curve query inode --fsid 2 --inodeid 5243380
 ```
 
 Output:
@@ -499,7 +507,7 @@ query metaserver in curvefs by metaserverid or metaserveraddr
 Usage:
 
 ```shell
-curve fs query metaserver --metaserveraddr **.***.***.**:6801,**.***.***.**:6802
+curve query metaserver --metaserveraddr **.***.***.**:6801,**.***.***.**:6802
 ```
 
 Output:
@@ -520,7 +528,7 @@ query the copyset of partition
 Usage:
 
 ```shell
-curve fs query partition --partitionid 14
+curve query partition --partitionid 14
 ```
 
 Output:
@@ -544,7 +552,7 @@ get status of mds
 Usage:
 
 ```shell
-curve fs status mds
+curve status mds
 ```
 
 Output:
@@ -566,7 +574,7 @@ get status of metaserver
 Usage:
 
 ```shell
-curve fs status metaserver
+curve status metaserver
 ```
 
 Output:
@@ -588,7 +596,7 @@ get status of etcd
 Usage:
 
 ```shell
-curve fs status etcd
+curve status etcd
 ```
 
 Output:
@@ -610,7 +618,7 @@ get status of copyset
 Usage:
 
 ```shell
-curve fs status copyset
+curve status copyset
 ```
 
 Output:
@@ -641,7 +649,7 @@ get status of cluster
 Usage:
 
 ```shell
-curve fs status cluster
+curve status cluster
 ```
 
 Output:
@@ -704,7 +712,7 @@ umount fs from the curvefs cluster
 Usage:
 
 ```shell
-curve fs umount fs --fsname test1 --mountpoint siku-QiTianM420-N000:9002:/curvefs/client/mnt/home/siku/temp/mnt1
+curve umount fs --fsname test1 --mountpoint siku-QiTianM420-N000:9002:/curvefs/client/mnt/home/siku/temp/mnt1
 ```
 
 Output:
@@ -726,7 +734,7 @@ get the inode usage of curvefs
 Usage:
 
 ```shell
-curve fs usage inode
+curve usage inode
 ```
 
 Output:
@@ -755,7 +763,7 @@ get the usage of metadata in curvefs
 Usage:
 
 ```shell
-curve fs usage metadata
+curve usage metadata
 ```
 
 Output:
@@ -779,12 +787,134 @@ warmup a file(directory), or given a list file contains a list of files(director
 Usage:
 
 ```shell
-curve fs warmup add /mnt/curvefs/warmup
-curve fs warmup add --filelist /mnt/curvefs/warmup.list
+curve warmup add /mnt/curvefs/warmup
+curve warmup add --filelist /mnt/curvefs/warmup.list
 ```
 
-> `curve fs warmup add /mnt/curvefs/warmup` will warmup a file(directory).
+> `curve warmup add /mnt/curvefs/warmup` will warmup a file(directory).
 > /mnt/curvefs/warmup.list
+
+#### config
+#### config fs
+
+config fs quota for curvefs
+
+Usage:
+
+```shell
+curve config fs --fsid 1 --capacity 100
+curve config fs --fsname dingofs --capacity 10 --inodes 1000000000
+```
+#### config get
+
+get fs quota for curvefs
+
+Usage:
+
+```shell
+curve config get --fsid 1
+curve config get --fsname dingofs
+```
+Output:
+
+```shell
++------+---------+----------+------+------+---------------+-------+-------+
+| FSID | FSNAME  | CAPACITY | USED | USE% |    INODES     | IUSED | IUSE% |
++------+---------+----------+------+------+---------------+-------+-------+
+| 2    | dingofs | 10 GiB   | 0 B  | 0    | 1,000,000,000 | 0     | 0     |
++------+---------+----------+------+------+---------------+-------+-------+
+```
+
+#### quota
+#### quota set
+
+set quota to a directory
+
+Usage:
+
+```shell
+curve quota set --fsid 1 --path /quotadir --capacity 10 --inodes 100000
+```
+#### quota get
+
+get fs quota for curvefs
+
+Usage:
+
+```shell
+curve quota get --fsid 1 --path /quotadir
+curve quota get --fsname dingofs --path /quotadir
+```
+Output:
+
+```shell
++----------+------------+----------+------+------+------------+-------+-------+
+|    ID    |    PATH    | CAPACITY | USED | USE% |   INODES   | IUSED | IUSE% |
++----------+------------+----------+------+------+------------+-------+-------+
+| 10485760 | /quotadir1 | 10 GiB   | 6 B  | 0    | 20,000,000 | 1     | 0     |
++----------+------------+----------+------+------+------------+-------+-------+
+```
+#### quota list
+
+list all directory quotas of fs
+
+Usage:
+
+```shell
+curve quota list --fsid 1
+curve quota list --fsname dingofs
+```
+
+Output:
+
+```shell
++----------+------------+----------+------+------+------------+-------+-------+
+|    ID    |    PATH    | CAPACITY | USED | USE% |   INODES   | IUSED | IUSE% |
++----------+------------+----------+------+------+------------+-------+-------+
+| 10485760 | /quotadir1 | 10 GiB   | 6 B  | 0    | 20,000,000 | 1     | 0     |
++----------+------------+----------+------+------+------------+-------+-------+
+| 2097152  | /quotadir2 | 100 GiB  | 0 B  | 0    | unlimited  | 0     |       |
++----------+------------+----------+------+------+------------+-------+-------+
+```
+
+#### quota delete
+
+delete quota of a directory
+
+Usage:
+
+```shell
+curve quota delete --fsid 1 --path /quotadir
+```
+#### quota check
+
+check quota of a directory
+
+Usage:
+
+```shell
+curve quota check --fsid 1 --path /quotadir
+curve quota check --fsid 1 --path /quotadir --repair
+```
+
+
+Output:
+
+```shell
++----------+------------+----------------+------+----------+------------+-------+-----------+---------+
+|    ID    |    NAME    |    CAPACITY    | USED | REALUSED |   INODES   | IUSED | REALIUSED | STATUS  |
++----------+------------+----------------+------+----------+------------+-------+-----------+---------+
+| 10485760 | /quotadir | 10,737,418,240 | 22   | 22       | 20,000,000 | 2     | 22        | success |
++----------+------------+----------------+------+----------+------------+-------+-----------+---------+
+
+or
+
++----------+------------+----------------+------+----------+------------+-------+-----------+--------+
+|    ID    |    NAME    |    CAPACITY    | USED | REALUSED |   INODES   | IUSED | REALIUSED | STATUS |
++----------+------------+----------------+------+----------+------------+-------+-----------+--------+
+| 10485760 | /quotadir | 10,737,418,240 | 22   | 33       | 20,000,000 | 2     | 3         | failed |
++----------+------------+----------------+------+----------+------------+-------+-----------+--------+
+```
 
 ## Comparison of old and new commands
 
@@ -792,24 +922,24 @@ curve fs warmup add --filelist /mnt/curvefs/warmup.list
 
 | old                            | new                        |
 | ------------------------------ | -------------------------- |
-| curvefs_tool check-copyset     | curve fs check copyset     |
-| curvefs_tool create-fs         | curve fs create fs         |
-| curvefs_tool create-topology   | curve fs create topology   |
-| curvefs_tool delete-fs         | curve fs delete fs         |
-| curvefs_tool list-copyset      | curve fs list copyset      |
-| curvefs_tool list-fs           | curve fs list fs           |
-| curvefs_tool list-fs           | curve fs list mountpoint   |
-| curvefs_tool list-partition    | curve fs list partition    |
-| curvefs_tool query-copyset     | curve fs query copyset     |
-| curvefs_tool query-fs          | curve fs query fs          |
-| curvefs_tool query-inode       | curve fs query inode       |
-| curvefs_tool query-metaserver  | curve fs query metaserver  |
-| curvefs_tool query-partition   | curve fs query partition   |
-| curvefs_tool status-mds        | curve fs status mds        |
-| curvefs_tool status-metaserver | curve fs status metaserver |
-| curvefs_tool status-etcd       | curve fs status etcd       |
-| curvefs_tool status-copyset    | curve fs status copyset    |
-| curvefs_tool status-cluster    | curve fs status cluster    |
-| curvefs_tool umount-fs         | curve fs umount fs         |
-| curvefs_tool usage-inode       | curve fs usage inode       |
-| curvefs_tool usage-metadata    | curve fs usage metadata    |
+| curvefs_tool check-copyset     | curve check copyset     |
+| curvefs_tool create-fs         | curve create fs         |
+| curvefs_tool create-topology   | curve create topology   |
+| curvefs_tool delete-fs         | curve delete fs         |
+| curvefs_tool list-copyset      | curve list copyset      |
+| curvefs_tool list-fs           | curve list fs           |
+| curvefs_tool list-fs           | curve list mountpoint   |
+| curvefs_tool list-partition    | curve list partition    |
+| curvefs_tool query-copyset     | curve query copyset     |
+| curvefs_tool query-fs          | curve query fs          |
+| curvefs_tool query-inode       | curve query inode       |
+| curvefs_tool query-metaserver  | curve query metaserver  |
+| curvefs_tool query-partition   | curve query partition   |
+| curvefs_tool status-mds        | curve status mds        |
+| curvefs_tool status-metaserver | curve status metaserver |
+| curvefs_tool status-etcd       | curve status etcd       |
+| curvefs_tool status-copyset    | curve status copyset    |
+| curvefs_tool status-cluster    | curve status cluster    |
+| curvefs_tool umount-fs         | curve umount fs         |
+| curvefs_tool usage-inode       | curve usage inode       |
+| curvefs_tool usage-metadata    | curve usage metadata    |
