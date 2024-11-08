@@ -103,11 +103,32 @@ TEST_F(DirQuotaManagerTest, HasDirQuota) {
   dir_quota_manager->Start();
   EXPECT_TRUE(dir_quota_manager->IsRunning());
 
-  EXPECT_TRUE(dir_quota_manager->HasDirQuota(1000));
-  EXPECT_TRUE(dir_quota_manager->HasDirQuota(100));
-  EXPECT_TRUE(dir_quota_manager->HasDirQuota(10));
+  {
+    Ino quota_ino = 0;
+    bool has = dir_quota_manager->NearestDirQuota(1000, quota_ino);
+    EXPECT_TRUE(has);
+    EXPECT_EQ(quota_ino, 1000);
+  }
 
-  EXPECT_FALSE(dir_quota_manager->HasDirQuota(20));
+  {
+    Ino quota_ino = 0;
+    bool has = dir_quota_manager->NearestDirQuota(100, quota_ino);
+    EXPECT_TRUE(has);
+    EXPECT_EQ(quota_ino, 10);
+  }
+
+  {
+    Ino quota_ino = 0;
+    bool has = dir_quota_manager->NearestDirQuota(10, quota_ino);
+    EXPECT_TRUE(has);
+    EXPECT_EQ(quota_ino, 10);
+  }
+
+  {
+    Ino quota_ino = 0;
+    bool has = dir_quota_manager->NearestDirQuota(20, quota_ino);
+    EXPECT_FALSE(has);
+  }
 }
 
 TEST_F(DirQuotaManagerTest, CheckDirQuota) {

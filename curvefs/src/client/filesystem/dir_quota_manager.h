@@ -57,7 +57,7 @@ class DirQuotaManager {
 
   bool CheckDirQuota(Ino ino, int64_t new_space, int64_t new_inodes);
 
-  bool HasDirQuota(Ino ino);
+  bool NearestDirQuota(Ino ino, Ino& out_quota_ino);
 
  private:
   CURVEFS_ERROR GetDirQuota(Ino ino, std::shared_ptr<DirQuota>& dir_quota);

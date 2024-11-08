@@ -66,7 +66,7 @@ void DirQuotaManager::Stop() {
 void DirQuotaManager::UpdateDirQuotaUsage(Ino ino, int64_t new_space,
                                           int64_t new_inodes) {
   Ino inode = ino;
-  while (inode != ROOTINODEID) {
+  while (true) {
     // NOTE: now we should not enable recyble
     if (inode == RECYCLEINODEID) {
       LOG(ERROR) << "UpdateDirUsage failed, ino = " << inode
@@ -79,6 +79,10 @@ void DirQuotaManager::UpdateDirQuotaUsage(Ino ino, int64_t new_space,
 
     if (rc == CURVEFS_ERROR::OK) {
       dir_quota->UpdateUsage(new_space, new_inodes);
+    }
+
+    if (inode == ROOTINODEID) {
+      break;
     }
 
     // recursively update its parent
@@ -141,7 +145,7 @@ CURVEFS_ERROR DirQuotaManager::GetDirQuota(
   ReadLockGuard lk(rwock_);
   auto iter = quotas_.find(ino);
   if (iter == quotas_.end()) {
-    LOG(INFO) << "GetDirQuota failed, ino = " << ino << " not found in quotas_";
+    VLOG(3) << "GetDirQuota failed, ino = " << ino << " not found in quotas_";
     return CURVEFS_ERROR::NOTEXIST;
   }
 
@@ -186,7 +190,7 @@ void DirQuotaManager::DoFlushQuotas() {
   auto rc = meta_client_->FlushDirUsages(fs_id_, dir_usages);
 
   if (rc == MetaStatusCode::OK) {
-    VLOG(6) << "FlushDirUsages success, fs_id: " << fs_id_;
+    VLOG(6) << "DoFlushQuotas success, fs_id: " << fs_id_;
     ReadLockGuard lk(rwock_);
     for (const auto& [ino, usage] : dir_usages) {
       auto iter = quotas_.find(ino);
@@ -221,6 +225,7 @@ CURVEFS_ERROR DirQuotaManager::DoLoadQuotas() {
     LOG(ERROR) << "LoadDirQuotas failed, fs_id: " << fs_id_ << ", rc: " << rc;
     return CURVEFS_ERROR::INTERNAL;
   } else {
+    VLOG(6) << "DoLoadQuotas success, fs_id: " << fs_id_;
     WriteLockGuard lk(rwock_);
     // Remove quotas that are not in loaded_dir_quotas
     for (auto iter = quotas_.begin(); iter != quotas_.end();) {
@@ -245,9 +250,9 @@ CURVEFS_ERROR DirQuotaManager::DoLoadQuotas() {
   }
 }
 
-bool DirQuotaManager::HasDirQuota(Ino ino) {
+bool DirQuotaManager::NearestDirQuota(Ino ino, Ino& out_quota_ino) {
   Ino inode = ino;
-  while (inode != ROOTINODEID) {
+  while (true) {
     // NOTE: now we should not enable recyble
     if (inode == RECYCLEINODEID) {
       LOG(ERROR) << "HasDirQuota failed, ino = " << inode
@@ -259,7 +264,12 @@ bool DirQuotaManager::HasDirQuota(Ino ino) {
     auto rc = GetDirQuota(inode, dir_quota);
 
     if (rc == CURVEFS_ERROR::OK) {
+      out_quota_ino = inode;
       return true;
+    }
+
+    if (inode == ROOTINODEID) {
+      break;
     }
 
     Ino parent;

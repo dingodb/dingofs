@@ -33,6 +33,7 @@
 
 #include "brpc/server.h"
 #include "curvefs/src/client/filesystem/error.h"
+#include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_wrapper.h"
@@ -50,6 +51,7 @@ using ::curvefs::client::filesystem::DirEntry;
 using ::curvefs::client::filesystem::DirEntryList;
 using ::curvefs::client::filesystem::ExternalMember;
 using ::curvefs::client::filesystem::FileOut;
+using ::curvefs::client::filesystem::Ino;
 using ::curvefs::client::filesystem::IsSpecialXAttr;
 using ::curvefs::client::filesystem::MAX_XATTR_NAME_LENGTH;
 using ::curvefs::client::filesystem::MAX_XATTR_VALUE_LENGTH;
@@ -950,8 +952,28 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
     if (attr.type() == FsFileType::TYPE_DIRECTORY) {
       // TODO : remove this restrict when we support rename dir in dirfferent
       // quota  dir
-      if (fs_->HasDirQuota(parent) || fs_->HasDirQuota(newparent)) {
-        LOG(WARNING) << "FuseOpRename not support rename dir between quota dir";
+      Ino parent_nearest_quota_ino = 0;
+      bool parent_has = fs_->NearestDirQuota(parent, parent_nearest_quota_ino);
+
+      Ino newparent_nearest_quota_ino = 0;
+      bool newparent_has =
+          fs_->NearestDirQuota(newparent, newparent_nearest_quota_ino);
+
+      bool can_rename =
+          (!parent_has && !newparent_has) ||
+          (newparent_has && parent_has &&
+           parent_nearest_quota_ino == newparent_nearest_quota_ino);
+
+      if (!can_rename) {
+        LOG(WARNING) << "FuseOpRename not support rename dir between quota dir "
+                     << ", name: " << name << ", parent: " << parent
+                     << ", parent_has: " << (parent_has ? "true" : "false")
+                     << ", parent_nearest_quota_ino: "
+                     << parent_nearest_quota_ino << ", newparent: " << newparent
+                     << ", newparent_has: "
+                     << (newparent_has ? "true" : "false")
+                     << ", newparent_nearest_quota_ino: "
+                     << newparent_nearest_quota_ino;
         return CURVEFS_ERROR::NOTSUPPORT;
       }
 

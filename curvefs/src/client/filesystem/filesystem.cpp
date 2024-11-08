@@ -400,8 +400,8 @@ bool FileSystem::CheckQuota(Ino ino, int64_t add_space, int64_t add_inode) {
   return dir_quota_manager_->CheckDirQuota(ino, add_space, add_inode);
 }
 
-bool FileSystem::HasDirQuota(Ino ino) {
-  return dir_quota_manager_->HasDirQuota(ino);
+bool FileSystem::NearestDirQuota(Ino ino, Ino& out_quota_ino) {
+  return dir_quota_manager_->NearestDirQuota(ino, out_quota_ino);
 }
 
 Quota FileSystem::GetFsQuota() { return fs_stat_manager_->GetQuota(); }

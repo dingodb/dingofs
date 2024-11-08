@@ -146,7 +146,8 @@ class FileSystem {
   bool CheckQuota(Ino ino, int64_t add_space, int64_t add_inode);
 
   // This will check ino and its parent has dir quota or not
-  bool HasDirQuota(Ino ino);
+  // if find, then return the nearest dir quota ino
+  bool NearestDirQuota(Ino ino, Ino& out_quota_ino);
 
   Quota GetFsQuota();
 
