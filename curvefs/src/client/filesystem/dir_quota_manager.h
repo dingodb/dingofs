@@ -23,7 +23,6 @@
 
 #include "curvefs/src/base/timer/timer.h"
 #include "curvefs/src/client/filesystem/dir_parent_watcher.h"
-#include "curvefs/src/client/filesystem/dir_quota.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
@@ -33,8 +32,37 @@ namespace client {
 namespace filesystem {
 
 using base::timer::Timer;
-using ::curvefs::utils::RWLock;
+using curvefs::metaserver::Quota;
+using curvefs::metaserver::Usage;
+using curvefs::utils::RWLock;
 using rpcclient::MetaServerClient;
+
+class DirQuota {
+ public:
+  DirQuota(Ino ino, Quota quota) : ino_(ino), quota_(std::move(quota)) {}
+
+  Ino GetIno() const { return ino_; }
+
+  void UpdateUsage(int64_t new_space, int64_t new_inodes);
+
+  bool CheckQuota(int64_t new_space, int64_t new_inodes);
+
+  void Refresh(Quota quota);
+
+  Usage GetUsage();
+
+  Quota GetQuota();
+
+  std::string ToString();
+
+ private:
+  const Ino ino_;
+  std::atomic<int64_t> new_space_{0};
+  std::atomic<int64_t> new_inodes_{0};
+
+  RWLock rwlock_;
+  Quota quota_;
+};
 
 class DirQuotaManager {
  public:

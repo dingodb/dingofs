@@ -17,7 +17,6 @@
 #include <memory>
 
 #include "curvefs/src/client/common/dynamic_config.h"
-#include "curvefs/src/client/filesystem/dir_quota.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/common/define.h"
 #include "glog/logging.h"
@@ -27,6 +26,80 @@ namespace client {
 namespace filesystem {
 
 USING_FLAG(fs_usage_flush_interval_second)
+
+using curvefs::utils::ReadLockGuard;
+using curvefs::utils::WriteLockGuard;
+
+void FsQuota::UpdateUsage(int64_t new_space, int64_t new_inodes) {
+  VLOG(6) << "UpdateFsUsage new_space:" << new_space
+          << ", new_inodes:" << new_inodes;
+
+  if (new_space != 0) {
+    new_space_.fetch_add(new_space, std::memory_order_relaxed);
+  }
+
+  if (new_inodes != 0) {
+    new_inodes_.fetch_add(new_inodes, std::memory_order_relaxed);
+  }
+}
+
+bool FsQuota::CheckQuota(int64_t new_space, int64_t new_inodes) {
+  Quota quota = GetQuota();
+
+  VLOG(6) << "CheckFsQuota  new_space:" << new_space
+          << ", new_inodes:" << new_inodes << ", fs_quota:" << ToString();
+
+  if (quota.maxbytes() > 0 &&
+      (new_space + new_space_.load(std::memory_order_relaxed) +
+       quota.usedbytes()) > (int64_t)quota.maxbytes()) {
+    LOG(INFO) << "CheckFsQuota check space failed, new_space:" << new_space
+              << ", fs_quota:" << ToString();
+    return false;
+  }
+
+  if (quota.maxinodes() > 0 &&
+      (new_inodes + new_inodes_.load(std::memory_order_relaxed) +
+       quota.usedinodes()) > (int64_t)quota.maxinodes()) {
+    LOG(INFO) << "CheckFsQuota check inodes failed, new_inodes:" << new_inodes
+              << ", quota:" << ToString();
+    return false;
+  }
+
+  return true;
+}
+
+void FsQuota::Refresh(Quota quota) {
+  VLOG(6) << "RefreshFsQuota  old fs_quota: " << ToString()
+          << ", new quota: " << quota.ShortDebugString();
+  WriteLockGuard lk(rwlock_);
+  quota_ = quota;
+}
+
+Usage FsQuota::GetUsage() {
+  Usage usage;
+  usage.set_bytes(new_space_.load(std::memory_order_relaxed));
+  usage.set_inodes(new_inodes_.load(std::memory_order_relaxed));
+  VLOG(6) << "GetFsUsage usage: " << usage.ShortDebugString();
+  return usage;
+}
+
+Quota FsQuota::GetQuota() {
+  ReadLockGuard lk(rwlock_);
+  return quota_;
+}
+
+std::string FsQuota::ToString() {
+  std::ostringstream oss;
+  oss << "FsQuota{ino=" << ino_;
+  {
+    ReadLockGuard lk(rwlock_);
+    oss << ", quota=" << quota_.ShortDebugString();
+  }
+  oss << ", new_space_=" << new_space_.load(std::memory_order_relaxed)
+      << ", new_inodes_=" << new_inodes_.load(std::memory_order_relaxed) << "}";
+
+  return oss.str();
+}
 
 void FsStatManager::Start() {
   if (running_.load()) {
@@ -50,7 +123,7 @@ void FsStatManager::Start() {
 
 void FsStatManager::InitQuota() {
   Quota quota;
-  fs_quota_ = std::make_unique<DirQuota>(ROOTINODEID, quota);
+  fs_quota_ = std::make_unique<FsQuota>(ROOTINODEID, quota);
 }
 
 void FsStatManager::Stop() {
@@ -63,12 +136,15 @@ void FsStatManager::Stop() {
   running_.store(false);
 }
 
-void FsStatManager::UpdateQuotaUsage(int64_t new_space, int64_t new_inodes) {
+void FsStatManager::UpdateFsQuotaUsage(int64_t new_space, int64_t new_inodes) {
   CHECK_NOTNULL(fs_quota_);
+  VLOG(3) << "UpdateFsQuotaUsage, new_space: " << new_space
+          << ", new_inodes: " << new_inodes
+          << ", cur fs_quota: " << fs_quota_->ToString();
   fs_quota_->UpdateUsage(new_space, new_inodes);
 }
 
-bool FsStatManager::CheckQuota(int64_t new_space, int64_t new_inodes) {
+bool FsStatManager::CheckFsQuota(int64_t new_space, int64_t new_inodes) {
   CHECK_NOTNULL(fs_quota_);
   bool check = fs_quota_->CheckQuota(new_space, new_inodes);
   if (!check) {
@@ -110,11 +186,11 @@ void FsStatManager::DoFlushFsUsage() {
   Quota new_quota;
   MetaStatusCode rc = meta_client_->FlushFsUsage(fs_id_, usage, new_quota);
   if (rc == MetaStatusCode::OK) {
-    fs_quota_->UpdateUsage(-usage.bytes(), -usage.inodes());
-    fs_quota_->Refresh(new_quota);
     LOG(INFO) << "FlushFsUsage success, usage: " << usage.ShortDebugString()
               << ", new_quota: " << new_quota.ShortDebugString()
-              << ", fs_quota: " << fs_quota_->ToString();
+              << ", cur fs_quota: " << fs_quota_->ToString();
+    UpdateFsQuotaUsage(-usage.bytes(), -usage.inodes());
+    fs_quota_->Refresh(new_quota);
   } else if (rc == MetaStatusCode::NOT_FOUND) {
     VLOG(3) << "FlushFsUsage fs quot not fount, fs_id: " << fs_id_;
     InitQuota();
@@ -123,7 +199,7 @@ void FsStatManager::DoFlushFsUsage() {
   }
 }
 
-Quota FsStatManager::GetQuota() {
+Quota FsStatManager::GetFsQuota() {
   CHECK(running_.load());
   Quota quota = fs_quota_->GetQuota();
   Usage usage = fs_quota_->GetUsage();

@@ -376,7 +376,7 @@ CURVEFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
 }
 
 void FileSystem::UpdateFsQuotaUsage(int64_t add_space, int64_t add_inode) {
-  fs_stat_manager_->UpdateQuotaUsage(add_space, add_inode);
+  fs_stat_manager_->UpdateFsQuotaUsage(add_space, add_inode);
 }
 
 void FileSystem::UpdateDirQuotaUsage(Ino ino, int64_t add_space,
@@ -385,7 +385,7 @@ void FileSystem::UpdateDirQuotaUsage(Ino ino, int64_t add_space,
 }
 
 bool FileSystem::CheckFsQuota(int64_t add_space, int64_t add_inode) {
-  return fs_stat_manager_->CheckQuota(add_space, add_inode);
+  return fs_stat_manager_->CheckFsQuota(add_space, add_inode);
 }
 
 bool FileSystem::CheckDirQuota(Ino ino, int64_t add_space, int64_t add_inode) {
@@ -393,7 +393,7 @@ bool FileSystem::CheckDirQuota(Ino ino, int64_t add_space, int64_t add_inode) {
 }
 
 bool FileSystem::CheckQuota(Ino ino, int64_t add_space, int64_t add_inode) {
-  if (!fs_stat_manager_->CheckQuota(add_space, add_inode)) {
+  if (!fs_stat_manager_->CheckFsQuota(add_space, add_inode)) {
     return false;
   }
 
@@ -404,7 +404,7 @@ bool FileSystem::NearestDirQuota(Ino ino, Ino& out_quota_ino) {
   return dir_quota_manager_->NearestDirQuota(ino, out_quota_ino);
 }
 
-Quota FileSystem::GetFsQuota() { return fs_stat_manager_->GetQuota(); }
+Quota FileSystem::GetFsQuota() { return fs_stat_manager_->GetFsQuota(); }
 
 }  // namespace filesystem
 }  // namespace client

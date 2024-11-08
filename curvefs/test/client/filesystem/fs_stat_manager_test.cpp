@@ -119,7 +119,7 @@ TEST_F(FsStatManagerTest, CheckQuota) {
     uint64_t new_space = 100;
     uint64_t new_inodes = 10;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_TRUE(result);
   }
 
@@ -127,7 +127,7 @@ TEST_F(FsStatManagerTest, CheckQuota) {
     uint64_t new_space = 1000;
     uint64_t new_inodes = 100;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_FALSE(result);
   }
 
@@ -135,7 +135,7 @@ TEST_F(FsStatManagerTest, CheckQuota) {
     uint64_t new_space = 100;
     uint64_t new_inodes = 100;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_FALSE(result);
   }
 }
@@ -164,7 +164,7 @@ TEST_F(FsStatManagerTest, UpdateQuotaUsage) {
     uint64_t new_space = 100;
     uint64_t new_inodes = 10;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_TRUE(result);
   }
 
@@ -172,18 +172,18 @@ TEST_F(FsStatManagerTest, UpdateQuotaUsage) {
     uint64_t new_space = 400;
     uint64_t new_inodes = 10;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_TRUE(result);
 
     // update quota usage
-    fs_stat_manager->UpdateQuotaUsage(new_space, new_inodes);
+    fs_stat_manager->UpdateFsQuotaUsage(new_space, new_inodes);
   }
 
   {
     uint64_t new_space = 200;
     uint64_t new_inodes = 10;
 
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_FALSE(result);
   }
 }
@@ -214,11 +214,11 @@ TEST_F(FsStatManagerTest, DoFlushFsUsage) {
   uint64_t new_inodes = 10;
 
   {
-    bool result = fs_stat_manager->CheckQuota(new_space, new_inodes);
+    bool result = fs_stat_manager->CheckFsQuota(new_space, new_inodes);
     EXPECT_TRUE(result);
 
     // update quota usage
-    fs_stat_manager->UpdateQuotaUsage(new_space, new_inodes);
+    fs_stat_manager->UpdateFsQuotaUsage(new_space, new_inodes);
   }
 
   {

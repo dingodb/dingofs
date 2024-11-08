@@ -19,14 +19,47 @@
 #include <memory>
 
 #include "curvefs/src/base/timer/timer.h"
-#include "curvefs/src/client/filesystem/dir_quota.h"
+#include "curvefs/src/client/filesystem/meta.h"
+#include "curvefs/src/client/rpcclient/metaserver_client.h"
 
 namespace curvefs {
 namespace client {
 namespace filesystem {
 
+using curvefs::metaserver::Quota;
+using curvefs::metaserver::Usage;
+
 using base::timer::Timer;
+using curvefs::utils::RWLock;
+using filesystem::Ino;
 using rpcclient::MetaServerClient;
+
+class FsQuota {
+ public:
+  FsQuota(Ino ino, Quota quota) : ino_(ino), quota_(std::move(quota)) {}
+
+  Ino GetIno() const { return ino_; }
+
+  void UpdateUsage(int64_t new_space, int64_t new_inodes);
+
+  bool CheckQuota(int64_t new_space, int64_t new_inodes);
+
+  void Refresh(Quota quota);
+
+  Usage GetUsage();
+
+  Quota GetQuota();
+
+  std::string ToString();
+
+ private:
+  const Ino ino_;
+  std::atomic<int64_t> new_space_{0};
+  std::atomic<int64_t> new_inodes_{0};
+
+  RWLock rwlock_;
+  Quota quota_;
+};
 
 class FsStatManager {
  public:
@@ -42,11 +75,11 @@ class FsStatManager {
 
   bool IsRunning() const { return running_.load(); }
 
-  void UpdateQuotaUsage(int64_t new_space, int64_t new_inodes);
+  void UpdateFsQuotaUsage(int64_t new_space, int64_t new_inodes);
 
-  bool CheckQuota(int64_t new_space, int64_t new_inodes);
+  bool CheckFsQuota(int64_t new_space, int64_t new_inodes);
 
-  Quota GetQuota();
+  Quota GetFsQuota();
 
  private:
   void InitQuota();
@@ -61,7 +94,7 @@ class FsStatManager {
 
   std::atomic<bool> running_{false};
 
-  std::unique_ptr<DirQuota> fs_quota_;
+  std::unique_ptr<FsQuota> fs_quota_;
 };
 
 }  // namespace filesystem
