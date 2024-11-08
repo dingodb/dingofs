@@ -190,7 +190,7 @@ void DirQuotaManager::DoFlushQuotas() {
   auto rc = meta_client_->FlushDirUsages(fs_id_, dir_usages);
 
   if (rc == MetaStatusCode::OK) {
-    VLOG(6) << "DoFlushQuotas success, fs_id: " << fs_id_;
+    LOG(INFO) << "DoFlushQuotas success, fs_id: " << fs_id_;
     ReadLockGuard lk(rwock_);
     for (const auto& [ino, usage] : dir_usages) {
       auto iter = quotas_.find(ino);
@@ -225,7 +225,7 @@ CURVEFS_ERROR DirQuotaManager::DoLoadQuotas() {
     LOG(ERROR) << "LoadDirQuotas failed, fs_id: " << fs_id_ << ", rc: " << rc;
     return CURVEFS_ERROR::INTERNAL;
   } else {
-    VLOG(6) << "DoLoadQuotas success, fs_id: " << fs_id_;
+    LOG(INFO) << "DoLoadQuotas success, fs_id: " << fs_id_;
     WriteLockGuard lk(rwock_);
     // Remove quotas that are not in loaded_dir_quotas
     for (auto iter = quotas_.begin(); iter != quotas_.end();) {
