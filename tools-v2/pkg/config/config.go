@@ -43,7 +43,7 @@ const (
 	VIPER_GLOBALE_SHOWERROR        = "global.showError"
 	HTTPTIMEOUT                    = "httptimeout"
 	VIPER_GLOBALE_HTTPTIMEOUT      = "global.httpTimeout"
-	DEFAULT_HTTPTIMEOUT            = 500 * time.Millisecond
+	DEFAULT_HTTPTIMEOUT            = 100 * time.Millisecond
 	RPCTIMEOUT                     = "rpctimeout"
 	VIPER_GLOBALE_RPCTIMEOUT       = "global.rpcTimeout"
 	DEFAULT_RPCTIMEOUT             = 10000 * time.Millisecond
@@ -112,8 +112,8 @@ func AddFormatFlag(cmd *cobra.Command) {
 
 // http timeout
 func AddHttpTimeoutFlag(cmd *cobra.Command) {
-	cmd.Flags().Duration("httptimeout", 500*time.Millisecond, "http timeout")
-	err := viper.BindPFlag("global.httpTimeout", cmd.Flags().Lookup("httptimeout"))
+	cmd.Flags().Duration(HTTPTIMEOUT, DEFAULT_HTTPTIMEOUT, "http timeout")
+	err := viper.BindPFlag(VIPER_GLOBALE_HTTPTIMEOUT, cmd.Flags().Lookup(HTTPTIMEOUT))
 	if err != nil {
 		cobra.CheckErr(err)
 	}

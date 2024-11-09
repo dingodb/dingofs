@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -47,6 +48,15 @@ import (
 
 const (
 	CURL_VERSION = "curl/7.54.0"
+)
+
+type LeaderMetaCache struct {
+	mutex      sync.RWMutex
+	leaderAddr string
+}
+
+var (
+	leaderMetaCache *LeaderMetaCache = &LeaderMetaCache{}
 )
 
 // FinalCurveCmd is the final executable command,
@@ -229,6 +239,11 @@ func GetKeyValueFromJsonMetric(metricRet string, key string) (string, *cmderror.
 
 // get mds leader server
 func GetMdsLeader(mdsAddrs []string) (string, bool) {
+	leaderMetaCache.mutex.RLock()
+	if leaderMetaCache.leaderAddr != "" {
+		return leaderMetaCache.leaderAddr, true
+	}
+	leaderMetaCache.mutex.RUnlock()
 	timeout := viper.GetDuration(config.VIPER_GLOBALE_HTTPTIMEOUT)
 	for _, addr := range mdsAddrs {
 		addrs := []string{addr}
@@ -237,6 +252,9 @@ func GetMdsLeader(mdsAddrs []string) (string, bool) {
 		if err.TypeCode() == cmderror.CODE_SUCCESS {
 			value, err := GetMetricValue(result)
 			if err.TypeCode() == cmderror.CODE_SUCCESS && value == "leader" {
+				leaderMetaCache.mutex.Lock()
+				leaderMetaCache.leaderAddr = addr
+				leaderMetaCache.mutex.Unlock()
 				return addr, true
 			}
 		}
