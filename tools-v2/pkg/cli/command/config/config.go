@@ -29,6 +29,7 @@ func (configCmd *ConfigCommand) AddSubCommands() {
 	configCmd.Cmd.AddCommand(
 		NewConfigFsQuotaCommand(),
 		NewGetFsQuotaCommand(),
+		NewCheckQuotaCommand(),
 	)
 }
 

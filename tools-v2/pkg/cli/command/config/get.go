@@ -15,8 +15,8 @@
 package config
 
 import (
-	"context"
 	"fmt"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/common"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/metaserver"
 	"strconv"
 
@@ -28,33 +28,14 @@ import (
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
-
-type GetFsQuotaRpc struct {
-	Info             *basecmd.Rpc
-	Request          *metaserver.GetFsQuotaRequest
-	metaServerClient metaserver.MetaServerServiceClient
-}
-
-var _ basecmd.RpcFunc = (*GetFsQuotaRpc)(nil) // check interface
 
 type GetFsQuotaCommand struct {
 	basecmd.FinalCurveCmd
-	Rpc *GetFsQuotaRpc
+	Rpc *common.GetFsQuotaRpc
 }
 
 var _ basecmd.FinalCurveCmdFunc = (*GetFsQuotaCommand)(nil) // check interface
-
-func (getFsQuotaRpc *GetFsQuotaRpc) NewRpcClient(cc grpc.ClientConnInterface) {
-	getFsQuotaRpc.metaServerClient = metaserver.NewMetaServerServiceClient(cc)
-}
-
-func (getFsQuotaRpc *GetFsQuotaRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	response, err := getFsQuotaRpc.metaServerClient.GetFsQuota(ctx, getFsQuotaRpc.Request)
-	output.ShowRpcData(getFsQuotaRpc.Request, response, getFsQuotaRpc.Info.RpcDataShow)
-	return response, err
-}
 
 func NewGetFsQuotaCommand() *cobra.Command {
 	fsQuotaCmd := &GetFsQuotaCommand{
@@ -84,33 +65,6 @@ func (fsQuotaCmd *GetFsQuotaCommand) Init(cmd *cobra.Command, args []string) err
 		fsQuotaCmd.Error = getAddrErr
 		return fmt.Errorf(getAddrErr.Message)
 	}
-	fsId, fsErr := quota.GetFsId(fsQuotaCmd.Cmd)
-	if fsErr != nil {
-		return fsErr
-	}
-	// get poolid copysetid
-	partitionInfo, partErr := quota.GetPartitionInfo(fsQuotaCmd.Cmd, fsId, config.ROOTINODEID)
-	if partErr != nil {
-		return partErr
-	}
-	poolId := partitionInfo.GetPoolId()
-	copyetId := partitionInfo.GetCopysetId()
-	request := &metaserver.GetFsQuotaRequest{
-		PoolId:    &poolId,
-		CopysetId: &copyetId,
-		FsId:      &fsId,
-	}
-	fsQuotaCmd.Rpc = &GetFsQuotaRpc{
-		Request: request,
-	}
-	addrs, addrErr := quota.GetLeaderPeerAddr(fsQuotaCmd.Cmd, uint32(fsId), config.ROOTINODEID)
-	if addrErr != nil {
-		return addrErr
-	}
-	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
-	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
-	fsQuotaCmd.Rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "getFsQuota")
-	fsQuotaCmd.Rpc.Info.RpcDataShow = config.GetFlagBool(fsQuotaCmd.Cmd, "verbose")
 	header := []string{cobrautil.ROW_FS_ID, cobrautil.ROW_FS_NAME, cobrautil.ROW_CAPACITY, cobrautil.ROW_USED, cobrautil.ROW_USED_PERCNET,
 		cobrautil.ROW_INODES, cobrautil.ROW_INODES_IUSED, cobrautil.ROW_INODES_PERCENT}
 	fsQuotaCmd.SetHeader(header)
@@ -123,13 +77,13 @@ func (fsQuotaCmd *GetFsQuotaCommand) Print(cmd *cobra.Command, args []string) er
 
 func (fsQuotaCmd *GetFsQuotaCommand) RunCommand(cmd *cobra.Command, args []string) error {
 
-	result, err := basecmd.GetRpcResponse(fsQuotaCmd.Rpc.Info, fsQuotaCmd.Rpc)
-	if err.TypeCode() != cmderror.CODE_SUCCESS {
-		return err.ToError()
+	fsId, fsErr := quota.GetFsId(fsQuotaCmd.Cmd)
+	if fsErr != nil {
+		return fsErr
 	}
-	response := result.(*metaserver.GetFsQuotaResponse)
-	if statusCode := response.GetStatusCode(); statusCode != metaserver.MetaStatusCode_OK {
-		return cmderror.ErrQuota(int(statusCode)).ToError()
+	request, response, err := GetFsQuotaData(fsQuotaCmd.Cmd, fsId)
+	if err != nil {
+		return err
 	}
 	fsQuota := response.GetQuota()
 	quotaValueSlice := quota.ConvertQuotaToHumanizeValue(fsQuota.GetMaxBytes(), fsQuota.GetUsedBytes(), fsQuota.GetMaxInodes(), fsQuota.GetUsedInodes())
@@ -139,7 +93,7 @@ func (fsQuotaCmd *GetFsQuotaCommand) RunCommand(cmd *cobra.Command, args []strin
 		return fsErr
 	}
 	row := map[string]string{
-		cobrautil.ROW_FS_ID:          strconv.FormatUint(uint64(fsQuotaCmd.Rpc.Request.GetFsId()), 10),
+		cobrautil.ROW_FS_ID:          strconv.FormatUint(uint64(request.GetFsId()), 10),
 		cobrautil.ROW_FS_NAME:        fsName,
 		cobrautil.ROW_CAPACITY:       quotaValueSlice[0],
 		cobrautil.ROW_USED:           quotaValueSlice[1],
@@ -162,4 +116,40 @@ func (fsQuotaCmd *GetFsQuotaCommand) RunCommand(cmd *cobra.Command, args []strin
 
 func (fsQuotaCmd *GetFsQuotaCommand) ResultPlainOutput() error {
 	return output.FinalCmdOutputPlain(&fsQuotaCmd.FinalCurveCmd)
+}
+
+func GetFsQuotaData(cmd *cobra.Command, fsId uint32) (*metaserver.GetFsQuotaRequest, *metaserver.GetFsQuotaResponse, error) {
+	// get poolid copysetid
+	partitionInfo, partErr := quota.GetPartitionInfo(cmd, fsId, config.ROOTINODEID)
+	if partErr != nil {
+		return nil, nil, partErr
+	}
+	poolId := partitionInfo.GetPoolId()
+	copyetId := partitionInfo.GetCopysetId()
+	request := &metaserver.GetFsQuotaRequest{
+		PoolId:    &poolId,
+		CopysetId: &copyetId,
+		FsId:      &fsId,
+	}
+	requestRpc := &common.GetFsQuotaRpc{
+		Request: request,
+	}
+	addrs, addrErr := quota.GetLeaderPeerAddr(cmd, uint32(fsId), config.ROOTINODEID)
+	if addrErr != nil {
+		return nil, nil, addrErr
+	}
+	timeout := viper.GetDuration(config.VIPER_GLOBALE_RPCTIMEOUT)
+	retrytimes := viper.GetInt32(config.VIPER_GLOBALE_RPCRETRYTIMES)
+	requestRpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "getFsQuota")
+	requestRpc.Info.RpcDataShow = config.GetFlagBool(cmd, "verbose")
+
+	result, err := basecmd.GetRpcResponse(requestRpc.Info, requestRpc)
+	if err.TypeCode() != cmderror.CODE_SUCCESS {
+		return nil, nil, err.ToError()
+	}
+	response := result.(*metaserver.GetFsQuotaResponse)
+	if statusCode := response.GetStatusCode(); statusCode != metaserver.MetaStatusCode_OK {
+		return request, response, cmderror.ErrQuota(int(statusCode)).ToError()
+	}
+	return request, response, nil
 }

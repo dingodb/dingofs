@@ -15,44 +15,25 @@
 package config
 
 import (
-	"context"
 	"fmt"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
+	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/common"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/quota"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/metaserver"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"google.golang.org/grpc"
 )
-
-type SetFsQuotaRpc struct {
-	Info             *basecmd.Rpc
-	Request          *metaserver.SetFsQuotaRequest
-	metaServerClient metaserver.MetaServerServiceClient
-}
-
-var _ basecmd.RpcFunc = (*SetFsQuotaRpc)(nil) // check interface
 
 type ConfigFsQuotaCommand struct {
 	basecmd.FinalCurveCmd
-	Rpc *SetFsQuotaRpc
+	Rpc *common.SetFsQuotaRpc
 }
 
 var _ basecmd.FinalCurveCmdFunc = (*ConfigFsQuotaCommand)(nil) // check interface
-
-func (setFsQuotaRpc *SetFsQuotaRpc) NewRpcClient(cc grpc.ClientConnInterface) {
-	setFsQuotaRpc.metaServerClient = metaserver.NewMetaServerServiceClient(cc)
-}
-
-func (setFsQuotaRpc *SetFsQuotaRpc) Stub_Func(ctx context.Context) (interface{}, error) {
-	response, err := setFsQuotaRpc.metaServerClient.SetFsQuota(ctx, setFsQuotaRpc.Request)
-	output.ShowRpcData(setFsQuotaRpc.Request, response, setFsQuotaRpc.Info.RpcDataShow)
-	return response, err
-}
 
 func NewConfigFsQuotaCommand() *cobra.Command {
 	fsQuotaCmd := &ConfigFsQuotaCommand{
@@ -109,7 +90,7 @@ func (fsQuotaCmd *ConfigFsQuotaCommand) Init(cmd *cobra.Command, args []string) 
 		CopysetId: &copyetId,
 		Quota:     &metaserver.Quota{MaxBytes: &capacity, MaxInodes: &inodes},
 	}
-	fsQuotaCmd.Rpc = &SetFsQuotaRpc{
+	fsQuotaCmd.Rpc = &common.SetFsQuotaRpc{
 		Request: request,
 	}
 	// get leader
