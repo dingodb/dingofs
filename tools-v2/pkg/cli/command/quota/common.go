@@ -127,9 +127,6 @@ func CheckAndGetQuotaValue(cmd *cobra.Command) (uint64, uint64, error) {
 	if cmd.Flag(config.CURVEFS_QUOTA_INODES).Changed {
 		inodes = config.GetFlagUint64(cmd, config.CURVEFS_QUOTA_INODES)
 	}
-	if capacity == 0 && inodes == 0 {
-		return 0, 0, fmt.Errorf("capacity or inodes is invalid")
-	}
 	return capacity * 1024 * 1024 * 1024, inodes, nil
 }
 
