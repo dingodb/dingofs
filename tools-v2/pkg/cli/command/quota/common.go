@@ -245,19 +245,13 @@ func CheckQuota(capacity uint64, usedBytes int64, maxInodes uint64, usedInodes i
 
 	if capacity == 0 {
 		capacityStr = "unlimited"
-		usedStr = ""
-		realUsedStr = ""
 	} else { //quota is set
 		capacityStr = humanize.Comma(int64(capacity))
-		usedStr = humanize.Comma(usedBytes)
-		if usedBytes != realUsedBytes {
-			checkResult = false
-			//color realUsedBytes
-			realUsedStr = color.Red.Sprint(humanize.Comma(realUsedBytes))
-		} else {
-			realUsedStr = humanize.Comma(realUsedBytes)
-		}
-
+	}
+	usedStr = humanize.Comma(usedBytes)
+	realUsedStr = humanize.Comma(realUsedBytes)
+	if usedBytes != realUsedBytes {
+		checkResult = false
 	}
 	result = append(result, capacityStr)
 	result = append(result, usedStr)
@@ -265,22 +259,18 @@ func CheckQuota(capacity uint64, usedBytes int64, maxInodes uint64, usedInodes i
 
 	if maxInodes == 0 {
 		maxInodesStr = "unlimited"
-		inodeUsedStr = ""
-		realUsedInodesStr = ""
 	} else { //inode quota is set
 		maxInodesStr = humanize.Comma(int64(maxInodes))
-		inodeUsedStr = humanize.Comma(usedInodes)
-		if usedInodes != realUsedInodes {
-			checkResult = false
-			//color realUsedInodes
-			realUsedInodesStr = color.Red.Sprint(humanize.Comma(realUsedInodes))
-		} else {
-			realUsedInodesStr = humanize.Comma(int64(realUsedBytes))
-		}
+	}
+	inodeUsedStr = humanize.Comma(usedInodes)
+	realUsedInodesStr = humanize.Comma(int64(realUsedInodes))
+	if usedInodes != realUsedInodes {
+		checkResult = false
 	}
 	result = append(result, maxInodesStr)
 	result = append(result, inodeUsedStr)
 	result = append(result, realUsedInodesStr)
+
 	if checkResult {
 		result = append(result, "success")
 	} else {
