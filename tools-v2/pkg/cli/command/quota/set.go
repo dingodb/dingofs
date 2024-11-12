@@ -106,13 +106,6 @@ func (setQuotaCmd *SetQuotaCommand) Init(cmd *cobra.Command, args []string) erro
 	if getErr != nil {
 		return getErr
 	}
-	// check if the directory usage exceeds quota value
-	if capacity > 0 && uint64(realUsedBytes) > capacity {
-		return fmt.Errorf("%s used bytes exceeds, capacity: %d, used: %d", path, capacity, realUsedBytes)
-	}
-	if inodes > 0 && uint64(realUsedInodes) > inodes {
-		return fmt.Errorf("%s used inodes exceeds, maxInodes: %d, used: %d", path, inodes, realUsedInodes)
-	}
 	// get poolid copysetid
 	partitionInfo, partErr := GetPartitionInfo(setQuotaCmd.Cmd, fsId, config.ROOTINODEID)
 	if partErr != nil {
