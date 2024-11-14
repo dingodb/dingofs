@@ -24,6 +24,9 @@ package gateway
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	utils "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -32,8 +35,6 @@ import (
 	mcli "github.com/minio/cli"
 	mnas "github.com/minio/minio/cmd/gateway/nas"
 	"github.com/spf13/cobra"
-	"os"
-	"strings"
 )
 
 var logger = utils.GetLogger("dingofs gateway")
@@ -61,6 +62,7 @@ func NewGatewayCommand() *cobra.Command {
 }
 
 func (gCmd *GatewayCommand) AddFlags() {
+	config.AddFsMdsAddrFlag(gCmd.Cmd)
 	config.AddListenAddressRequiredFlag(gCmd.Cmd)
 	config.AddConsoleAddressOptionalFlag(gCmd.Cmd)
 	config.AddFsIdOptionalFlag(gCmd.Cmd)
