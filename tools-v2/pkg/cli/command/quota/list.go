@@ -139,6 +139,9 @@ func (listQuotaCmd *ListQuotaCommand) RunCommand(cmd *cobra.Command, args []stri
 		if dirErr != nil {
 			return dirErr
 		}
+		if dirPath == "" { // directory may be deleted,not show
+			continue
+		}
 		row[cobrautil.ROW_ID] = fmt.Sprintf("%d", dirInode)
 		row[cobrautil.ROW_PATH] = dirPath
 		row[cobrautil.ROW_CAPACITY] = quotaValueSlice[0]
