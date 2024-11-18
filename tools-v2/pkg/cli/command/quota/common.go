@@ -3,13 +3,14 @@ package quota
 import (
 	"context"
 	"fmt"
-	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/heartbeat"
-	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 	"log"
 	"math"
 	"path"
 	"strings"
 	"syscall"
+
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/heartbeat"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
@@ -377,6 +378,9 @@ func GetInodeAttr(cmd *cobra.Command, fsId uint32, inodeId uint64) (*metaserver.
 	}
 	getInodeResponse := inodeResult.(*metaserver.BatchGetInodeAttrResponse)
 	if getInodeResponse.GetStatusCode() != metaserver.MetaStatusCode_OK {
+		if getInodeResponse.GetStatusCode() == metaserver.MetaStatusCode_NOT_FOUND {
+			return nil, syscall.ENOENT
+		}
 		return nil, fmt.Errorf("get inode failed: %s", getInodeResponse.GetStatusCode().String())
 	}
 	inodesAttrs := getInodeResponse.GetAttr()

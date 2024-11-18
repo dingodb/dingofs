@@ -17,6 +17,8 @@ package quota
 import (
 	"context"
 	"fmt"
+	"syscall"
+
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -136,6 +138,9 @@ func (listQuotaCmd *ListQuotaCommand) RunCommand(cmd *cobra.Command, args []stri
 		row := make(map[string]string)
 		quotaValueSlice := ConvertQuotaToHumanizeValue(quota.GetMaxBytes(), quota.GetUsedBytes(), quota.GetMaxInodes(), quota.GetUsedInodes())
 		dirPath, dirErr := GetInodePath(listQuotaCmd.Cmd, listQuotaCmd.Rpc.Request.GetFsId(), dirInode)
+		if dirErr == syscall.ENOENT {
+			continue
+		}
 		if dirErr != nil {
 			return dirErr
 		}
