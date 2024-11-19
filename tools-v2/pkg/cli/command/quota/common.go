@@ -7,10 +7,9 @@ import (
 	"math"
 	"path"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
-
-	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/heartbeat"
-	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
@@ -20,7 +19,9 @@ import (
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/common"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/heartbeat"
 	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/metaserver"
+	"github.com/dingodb/dingofs/tools-v2/proto/curvefs/proto/topology"
 	"github.com/dustin/go-humanize"
 	"github.com/gookit/color"
 	"github.com/spf13/cobra"
@@ -29,11 +30,26 @@ import (
 	"google.golang.org/grpc"
 )
 
+type LeaderInfoMeta struct {
+	LeaderInfoMap map[uint32][]string // partitionid ->leader address
+	mux           sync.RWMutex
+}
+
+type PartitionListMeta struct {
+	PartitionListMap map[uint32][]*common.PartitionInfo // fsid -> partitionListinfo
+	mux              sync.RWMutex
+}
+
+type CopysetInfoMeta struct {
+	CopysetInfoMap map[uint64]*heartbeat.CopySetInfo // copysetkey -> CopySetInfo
+	mux            sync.RWMutex
+}
+
 var (
 	// metadata cache
-	LeaderInfoMap    map[uint32][]string                = make(map[uint32][]string)                // partitionid ->leader address
-	partitionListMap map[uint32][]*common.PartitionInfo = make(map[uint32][]*common.PartitionInfo) // fsid -> partitionListinfo
-	copysetInfoMap   map[uint64]*heartbeat.CopySetInfo  = make(map[uint64]*heartbeat.CopySetInfo)  // copysetkey -> CopySetInfo
+	leaderInfoMeta    *LeaderInfoMeta    = &LeaderInfoMeta{make(map[uint32][]string), sync.RWMutex{}}
+	partitionListMeta *PartitionListMeta = &PartitionListMeta{make(map[uint32][]*common.PartitionInfo), sync.RWMutex{}}
+	copysetInfoMeta   *CopysetInfoMeta   = &CopysetInfoMeta{make(map[uint64]*heartbeat.CopySetInfo), sync.RWMutex{}}
 )
 
 // Summary represents the total length and inodes of directory
@@ -167,7 +183,10 @@ func ConvertQuotaToHumanizeValue(capacity uint64, usedBytes int64, maxInodes uin
 
 // get partitionList by fsid
 func GetPartitionList(cmd *cobra.Command, fsId uint32) ([]*common.PartitionInfo, error) {
-	if partitionList, ok := partitionListMap[fsId]; ok { // find in cache
+	partitionListMeta.mux.RLock()
+	partitionList, ok := partitionListMeta.PartitionListMap[fsId]
+	partitionListMeta.mux.RUnlock()
+	if ok {
 		return partitionList, nil
 	}
 	addrs, addrErr := config.GetFsMdsAddrSlice(cmd)
@@ -192,15 +211,17 @@ func GetPartitionList(cmd *cobra.Command, fsId uint32) ([]*common.PartitionInfo,
 	if response.GetStatusCode() != topology.TopoStatusCode_TOPO_OK {
 		return nil, fmt.Errorf("get partition failed in fs[%d], error[%s]", fsId, response.GetStatusCode().String())
 	}
-	partitionList := response.GetPartitionInfoList()
+	partitionList = response.GetPartitionInfoList()
 	if partitionList == nil {
 		return nil, fmt.Errorf("partition not found in fs[%d]", fsId)
 	}
-	partitionListMap[fsId] = partitionList
+	partitionListMeta.mux.Lock()
+	partitionListMeta.PartitionListMap[fsId] = partitionList
+	partitionListMeta.mux.Unlock()
 	return partitionList, nil
 }
 
-// get  partition by inodeid
+// get partition by inodeid
 func GetPartitionInfo(cmd *cobra.Command, fsId uint32, inodeId uint64) (*common.PartitionInfo, error) {
 	partitionList, err := GetPartitionList(cmd, fsId)
 	if err != nil {
@@ -219,7 +240,10 @@ func GetPartitionInfo(cmd *cobra.Command, fsId uint32, inodeId uint64) (*common.
 
 func GetCopysetInfo(cmd *cobra.Command, poolId uint32, copyetId uint32) (*heartbeat.CopySetInfo, error) {
 	copysetKeyId := cobrautil.GetCopysetKey(uint64(poolId), uint64(copyetId))
-	if copysetInfo, ok := copysetInfoMap[copysetKeyId]; ok { // find in cache
+	copysetInfoMeta.mux.RLock()
+	copysetInfo, ok := copysetInfoMeta.CopysetInfoMap[copysetKeyId]
+	copysetInfoMeta.mux.RUnlock()
+	if ok {
 		return copysetInfo, nil
 	}
 	addrs, addrErr := config.GetFsMdsAddrSlice(cmd)
@@ -252,7 +276,9 @@ func GetCopysetInfo(cmd *cobra.Command, poolId uint32, copyetId uint32) (*heartb
 	copysetValue := copysetValues[0] //only one copyset
 	if copysetValue.GetStatusCode() == topology.TopoStatusCode_TOPO_OK {
 		copysetInfo := copysetValue.GetCopysetInfo()
-		copysetInfoMap[copysetKeyId] = copysetInfo
+		copysetInfoMeta.mux.Lock()
+		copysetInfoMeta.CopysetInfoMap[copysetKeyId] = copysetInfo
+		copysetInfoMeta.mux.Unlock()
 		return copysetInfo, nil
 	} else {
 		err := cmderror.ErrGetCopysetsInfo(int(copysetValue.GetStatusCode()))
@@ -268,7 +294,10 @@ func GetLeaderPeerAddr(cmd *cobra.Command, fsId uint32, inodeId uint64) ([]strin
 		return nil, partErr
 	}
 	partitionId := partitionInfo.GetPartitionId()
-	if leadInfo, ok := LeaderInfoMap[partitionId]; ok { // find in cache
+	leaderInfoMeta.mux.RLock()
+	leadInfo, ok := leaderInfoMeta.LeaderInfoMap[partitionId]
+	leaderInfoMeta.mux.RUnlock()
+	if ok {
 		return leadInfo, nil
 	}
 	poolId := partitionInfo.GetPoolId()
@@ -283,7 +312,9 @@ func GetLeaderPeerAddr(cmd *cobra.Command, fsId uint32, inodeId uint64) ([]strin
 		return nil, fmt.Errorf("pares leader peer[%s] failed: %s", leader, peerErr.Message)
 	}
 	addrs := []string{addr}
-	LeaderInfoMap[partitionId] = addrs
+	leaderInfoMeta.mux.Lock()
+	leaderInfoMeta.LeaderInfoMap[partitionId] = addrs
+	leaderInfoMeta.mux.Unlock()
 	return addrs, nil
 }
 
@@ -543,35 +574,67 @@ func GetDirPathInodeId(cmd *cobra.Command, fsId uint32, path string) (uint64, er
 }
 
 // get directory size and inodes by inode
-func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *Summary) error {
+func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *Summary, concurrent chan struct{}, ctx context.Context, cancel context.CancelFunc) error {
+	var err error
 	entries, entErr := ListDentry(cmd, fsId, inode)
 	if entErr != nil {
 		return entErr
 	}
+	var wg sync.WaitGroup
+	var errCh = make(chan error, 1)
 	for _, entry := range entries {
-		summary.Inodes++
+		atomic.AddUint64(&summary.Inodes, 1)
 		if entry.GetType() == metaserver.FsFileType_TYPE_S3 || entry.GetType() == metaserver.FsFileType_TYPE_FILE {
 			inodeAttr, err := GetInodeAttr(cmd, fsId, entry.GetInodeId())
 			if err != nil {
 				return err
 			}
-			summary.Length += inodeAttr.GetLength()
+			atomic.AddUint64(&summary.Length, inodeAttr.GetLength())
 		}
-		if entry.GetType() == metaserver.FsFileType_TYPE_DIRECTORY {
-			sumErr := GetDirSummarySize(cmd, fsId, entry.GetInodeId(), summary)
-			if sumErr != nil {
+		if entry.GetType() != metaserver.FsFileType_TYPE_DIRECTORY {
+			continue
+		}
+		select {
+		case err := <-errCh:
+			cancel()
+			return err
+		case <-ctx.Done():
+			return fmt.Errorf("cancel scan directory for other goroutine error")
+		case concurrent <- struct{}{}:
+			wg.Add(1)
+			go func(e *metaserver.Dentry) {
+				defer wg.Done()
+				sumErr := GetDirSummarySize(cmd, fsId, e.GetInodeId(), summary, concurrent, ctx, cancel)
+				<-concurrent
+				if sumErr != nil {
+					select {
+					case errCh <- sumErr:
+					default:
+					}
+				}
+			}(entry)
+		default:
+			if sumErr := GetDirSummarySize(cmd, fsId, entry.GetInodeId(), summary, concurrent, ctx, cancel); sumErr != nil {
 				return sumErr
 			}
 		}
 	}
-	return nil
+	wg.Wait()
+	select {
+	case err = <-errCh:
+	default:
+	}
+	return err
 }
 
 // get directory size and inodes by path name
 func GetDirectorySizeAndInodes(cmd *cobra.Command, fsId uint32, dirInode uint64) (int64, int64, error) {
 	log.Printf("start to summary directory statistics, inode[%d]", dirInode)
 	summary := &Summary{0, 0}
-	sumErr := GetDirSummarySize(cmd, fsId, dirInode, summary)
+	concurrent := make(chan struct{}, 50)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sumErr := GetDirSummarySize(cmd, fsId, dirInode, summary, concurrent, ctx, cancel)
 	log.Printf("end summary directory statistics, inode[%d],inodes[%d],size[%d]", dirInode, summary.Inodes, summary.Length)
 	if sumErr != nil {
 		return 0, 0, sumErr

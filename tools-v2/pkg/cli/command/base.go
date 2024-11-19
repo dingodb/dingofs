@@ -370,6 +370,7 @@ func GetRpcResponse(rpc *Rpc, rpcFunc RpcFunc) (interface{}, *cmderror.CmdError)
 				results = append(results, Result{address, cmderror.ErrSuccess(), res})
 				log.Printf("%s: get rpc [%s] response successfully", address, rpc.RpcFuncName)
 			}
+			pool.PutConnection(address, conn)
 		}
 	}
 	// get the rpc response result
