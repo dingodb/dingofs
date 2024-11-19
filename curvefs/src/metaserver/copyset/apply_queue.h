@@ -23,6 +23,9 @@
 #ifndef CURVEFS_SRC_METASERVER_COPYSET_APPLY_QUEUE_H_
 #define CURVEFS_SRC_METASERVER_COPYSET_APPLY_QUEUE_H_
 
+#include <bthread/condition_variable.h>
+#include <bthread/mutex.h>
+
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -48,6 +51,10 @@ struct ApplyQueueOption {
 };
 
 class CURVE_CACHELINE_ALIGNMENT ApplyQueue {
+  using TaskQueue =
+      ::curvefs::utils::GenericTaskQueue<::bthread::Mutex,
+                                         ::bthread::ConditionVariable>;
+
  public:
   ApplyQueue() : option_(), running_(false), workers_() {}
 
@@ -81,7 +88,7 @@ class CURVE_CACHELINE_ALIGNMENT ApplyQueue {
 
     std::atomic<bool> running;
     std::thread worker;
-    curvefs::utils::TaskQueue tasks;
+    TaskQueue tasks;
     std::string workerName_;
   };
 
