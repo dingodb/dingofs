@@ -31,6 +31,7 @@
 #include "curvefs/src/client/rpcclient/base_client.h"
 #include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/fs/local_filesystem.h"
 #include "curvefs/src/metaserver/copyset/apply_queue.h"
 #include "curvefs/src/metaserver/copyset/config.h"
 #include "curvefs/src/metaserver/copyset/copyset_node_manager.h"
@@ -45,12 +46,10 @@
 #include "curvefs/src/metaserver/resource_statistic.h"
 #include "curvefs/src/metaserver/storage/storage.h"
 #include "curvefs/src/utils/configuration.h"
-#include "curvefs/src/fs/local_filesystem.h"
 
 namespace curvefs {
 namespace metaserver {
 
-using ::curvefs::utils::Configuration;
 using ::curvefs::client::common::MdsOption;
 using ::curvefs::client::rpcclient::MDSBaseClient;
 using ::curvefs::client::rpcclient::MdsClient;
@@ -62,6 +61,7 @@ using ::curvefs::metaserver::copyset::CopysetNodeOptions;
 using ::curvefs::metaserver::copyset::CopysetServiceImpl;
 using ::curvefs::metaserver::copyset::RaftCliService2;
 using ::curvefs::metaserver::storage::StorageOptions;
+using ::curvefs::utils::Configuration;
 
 struct MetaserverOptions {
   std::string ip;
@@ -113,7 +113,6 @@ class Metaserver {
   // running as the main MDS or not
   bool running_ = false;
 
-  std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
   std::shared_ptr<MdsClient> mdsClient_;
   std::shared_ptr<MetaServerClient> metaClient_;
   MDSBaseClient* mdsBase_;

@@ -33,6 +33,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "curvefs/src/fs/ext4_filesystem_impl.h"
 #include "curvefs/src/metaserver/common/dynamic_config.h"
 #include "curvefs/src/metaserver/copyset/copyset_service.h"
 #include "curvefs/src/metaserver/metaserver_service.h"
@@ -48,7 +49,6 @@
 #include "curvefs/src/utils/s3_adapter.h"
 #include "curvefs/src/utils/string_util.h"
 #include "curvefs/src/utils/uri_parser.h"
-#include "curvefs/src/fs/ext4_filesystem_impl.h"
 
 namespace braft {
 
@@ -101,7 +101,8 @@ void Metaserver::InitOptions(std::shared_ptr<Configuration> conf) {
   conf_->GetValueFatalIfFail("bthread.worker_count", &value);
   if (value == "auto") {
     options_.bthreadWorkerCount = -1;
-  } else if (!curvefs::utils::StringToInt(value, &options_.bthreadWorkerCount)) {
+  } else if (!curvefs::utils::StringToInt(value,
+                                          &options_.bthreadWorkerCount)) {
     LOG(WARNING) << "Parse bthread.worker_count to int failed, string value: "
                  << value;
   }
@@ -201,6 +202,23 @@ void InitMetaCacheOption(const std::shared_ptr<Configuration>& conf,
                             &opts->metacacheGetLeaderRPCTimeOutMS);
 }
 
+namespace {
+
+std::shared_ptr<S3ClientAdaptorImpl> CreateS3Adaptor(
+    const S3AdapterOption& o1, const S3ClientAdaptorOption& o2) {
+  // s3_client
+  auto* s3_client = new S3ClientImpl;
+  s3_client->SetAdaptor(std::make_shared<curvefs::utils::S3Adapter>());
+  s3_client->Init(o1);
+
+  // s3_adaptor: s3_client will be freed when s3_adaptor destruct
+  auto s3_adaptor = std::make_shared<S3ClientAdaptorImpl>();
+  s3_adaptor->Init(o2, s3_client);
+  return s3_adaptor;
+}
+
+};  // namespace
+
 void Metaserver::Init() {
   TrashOption trashOption;
   trashOption.InitTrashOptionFromConf(conf_);
@@ -214,19 +232,14 @@ void Metaserver::Init() {
   // init metaserver client for recycle
   InitMetaClient();
 
-  s3Adaptor_ = std::make_shared<S3ClientAdaptorImpl>();
-
-  S3ClientAdaptorOption s3ClientAdaptorOption;
-  InitS3Option(conf_, &s3ClientAdaptorOption);
-  curvefs::utils::S3AdapterOption s3AdaptorOption;
+  S3ClientAdaptorOption s3_client_adaptor_option;
+  InitS3Option(conf_, &s3_client_adaptor_option);
+  curvefs::utils::S3AdapterOption s3_adapter_option;
   ::curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
-                                                         &s3AdaptorOption);
-  auto s3Client_ = new S3ClientImpl;
-  s3Client_->SetAdaptor(std::make_shared<curvefs::utils::S3Adapter>());
-  s3Client_->Init(s3AdaptorOption);
-  // s3Adaptor_ own the s3Client_, and will delete it when destruct.
-  s3Adaptor_->Init(s3ClientAdaptorOption, s3Client_);
-  trashOption.s3Adaptor = s3Adaptor_;
+                                                          &s3_adapter_option);
+
+  trashOption.s3Adaptor =
+      CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option);
   trashOption.mdsClient = mdsClient_;
   TrashManager::GetInstance().Init(trashOption);
 
@@ -249,7 +262,9 @@ void Metaserver::Init() {
   S3CompactManager::GetInstance().Init(conf_);
 
   PartitionCleanOption partitionCleanOption;
-  InitPartitionOption(s3Adaptor_, mdsClient_, &partitionCleanOption);
+  InitPartitionOption(
+      CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option), mdsClient_,
+      &partitionCleanOption);
   PartitionCleanManager::GetInstance().Init(partitionCleanOption);
 
   conf_->ExposeMetric("curvefs_metaserver_config");
@@ -526,7 +541,6 @@ void Metaserver::Stop() {
   LOG_IF(ERROR, !copysetNodeManager_->Stop())
       << "Failed to stop copyset node manager";
 
-  s3Adaptor_ = nullptr;
   S3CompactManager::GetInstance().Stop();
   LOG(INFO) << "MetaServer stopped success";
 }
