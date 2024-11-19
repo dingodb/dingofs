@@ -216,7 +216,7 @@ CURVEFS_ERROR DirQuotaManager::GetDirQuota(
   ReadLockGuard lk(rwock_);
   auto iter = quotas_.find(ino);
   if (iter == quotas_.end()) {
-    VLOG(3) << "GetDirQuota failed, ino = " << ino << " not found in quotas_";
+    VLOG(11) << "GetDirQuota failed, ino = " << ino << " not found in quotas_";
     return CURVEFS_ERROR::NOTEXIST;
   }
 
@@ -313,7 +313,9 @@ CURVEFS_ERROR DirQuotaManager::DoLoadQuotas() {
       if (iter != quotas_.end()) {
         iter->second->Refresh(quota);
       } else {
-        quotas_[ino] = std::make_shared<DirQuota>(ino, quota);
+        auto dir_quota = std::make_shared<DirQuota>(ino, quota);
+        quotas_[ino] = dir_quota;
+        VLOG(6) << "Add dir quota, new dir_quota: " << dir_quota->ToString();
       }
     }
 

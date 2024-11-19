@@ -26,37 +26,28 @@
 #include <sys/types.h>
 
 #include <memory>
-#include <thread>  // NOLINT
-#include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "absl/cleanup/cleanup.h"
 #include "absl/types/optional.h"
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/common/define.h"
-#include "curvefs/src/fs/ext4_filesystem_impl.h"
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
 #include "curvefs/src/metaserver/partition_clean_manager.h"
 #include "curvefs/src/metaserver/recycle_cleaner.h"
 #include "curvefs/src/metaserver/recycle_manager.h"
-#include "curvefs/src/metaserver/resource_statistic.h"
 #include "curvefs/src/metaserver/storage/config.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/memory_storage.h"
 #include "curvefs/src/metaserver/storage/rocksdb_storage.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/src/utils/concurrent/rw_lock.h"
-#include "rocksdb/utilities/checkpoint.h"
-#include "rocksdb/utilities/options_util.h"
 
 namespace curvefs {
 namespace metaserver {
 
+using ::curvefs::metaserver::storage::DumpFileClosure;
 using ::curvefs::utils::ReadLockGuard;
 using ::curvefs::utils::WriteLockGuard;
-using ::curvefs::metaserver::storage::DumpFileClosure;
 using KVStorage = ::curvefs::metaserver::storage::KVStorage;
 using Key4S3ChunkInfoList = ::curvefs::metaserver::storage::Key4S3ChunkInfoList;
 
@@ -689,21 +680,28 @@ MetaStatusCode MetaStoreImpl::GetInode(const GetInodeRequest* request,
   // (1): for RPC requests which unsupport streaming
   // (2): inode's s3chunkinfo is small enough
   if (rc == MetaStatusCode::OK) {
-    uint64_t limit = 0;
-    if (request->supportstreaming()) {
-      limit = kvStorage_->GetStorageOptions().s3MetaLimitSizeInsideInode;
-    }
-    rc = partition->PaddingInodeS3ChunkInfo(
-        fsId, inodeId, inode->mutable_s3chunkinfomap(), limit);
-    if (rc == MetaStatusCode::INODE_S3_META_TOO_LARGE) {
-      response->set_streaming(true);
-      rc = MetaStatusCode::OK;
+    if (inode->nlink() > 0) {
+      uint64_t limit = 0;
+      if (request->supportstreaming()) {
+        limit = kvStorage_->GetStorageOptions().s3MetaLimitSizeInsideInode;
+      }
+      rc = partition->PaddingInodeS3ChunkInfo(
+          fsId, inodeId, inode->mutable_s3chunkinfomap(), limit);
+      if (rc == MetaStatusCode::INODE_S3_META_TOO_LARGE) {
+        response->set_streaming(true);
+        rc = MetaStatusCode::OK;
+      }
+    } else {
+      LOG(INFO) << "GetInode, inode nlink is 0, fsId = " << fsId
+                << ", inodeId=" << inodeId;
+      rc = MetaStatusCode::NOT_FOUND;
     }
   }
 
   if (rc != MetaStatusCode::OK) {
     response->clear_inode();
   }
+
   response->set_statuscode(rc);
   return rc;
 }
@@ -722,14 +720,25 @@ MetaStatusCode MetaStoreImpl::BatchGetInodeAttr(
   uint32_t fsId = request->fsid();
   MetaStatusCode status = MetaStatusCode::OK;
   for (int i = 0; i < request->inodeid_size(); i++) {
-    status = partition->GetInodeAttr(fsId, request->inodeid(i),
-                                     response->add_attr());
+    InodeAttr* attr = response->add_attr();
+    status = partition->GetInodeAttr(fsId, request->inodeid(i), attr);
+
     if (status != MetaStatusCode::OK) {
       response->clear_attr();
       response->set_statuscode(status);
       return status;
+    } else {
+      if (attr->nlink() <= 0) {
+        LOG(INFO) << "BatchGetInodeAttr, inode nlink is 0, fsId = " << fsId
+                  << ", inodeId=" << request->inodeid(i);
+        status = MetaStatusCode::NOT_FOUND;
+        response->clear_attr();
+        response->set_statuscode(status);
+        return status;
+      }
     }
   }
+
   response->set_statuscode(status);
   return status;
 }
