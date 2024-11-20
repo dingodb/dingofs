@@ -26,11 +26,15 @@
 
 #include <ctime>
 
+#include "curvefs/proto/cli2.pb.h"
+#include "curvefs/proto/copyset.pb.h"
 #include "curvefs/src/mds/topology/deal_peerid.h"
 
 namespace curvefs {
 namespace mds {
 
+using curvefs::common::PartitionInfo;
+using curvefs::common::PartitionStatus;
 using curvefs::mds::topology::BuildPeerIdWithAddr;
 using curvefs::mds::topology::SplitPeerId;
 using curvefs::metaserver::CreateDentryRequest;
@@ -44,11 +48,19 @@ using curvefs::metaserver::DeleteDentryResponse;
 using curvefs::metaserver::DeleteInodeRequest;
 using curvefs::metaserver::DeleteInodeResponse;
 using curvefs::metaserver::Dentry;
+using curvefs::metaserver::FsFileType;
+using curvefs::metaserver::ManageInodeType;
 using curvefs::metaserver::MetaServerService_Stub;
 using curvefs::metaserver::MetaStatusCode;
 using curvefs::metaserver::Time;
+
+using curvefs::metaserver::copyset::CliService2_Stub;
 using curvefs::metaserver::copyset::COPYSET_OP_STATUS;
 using curvefs::metaserver::copyset::CopysetService_Stub;
+using curvefs::metaserver::copyset::CreateCopysetRequest;
+using curvefs::metaserver::copyset::CreateCopysetResponse;
+using curvefs::metaserver::copyset::GetLeaderRequest2;
+using curvefs::metaserver::copyset::GetLeaderResponse2;
 
 template <typename T, typename Request, typename Response>
 FSStatusCode MetaserverClient::SendRpc2MetaServer(
@@ -62,6 +74,8 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
   auto pool_id = ctx.poolId;
   auto copyset_id = ctx.copysetId;
   brpc::Controller cntl;
+
+  brpc::Channel channel;
   do {
     if (refresh_leader) {
       auto ret = GetLeader(ctx, &leader);
@@ -70,7 +84,8 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
                    << ", copysetId = " << copyset_id;
         return ret;
       }
-      if (channel_.Init(leader.c_str(), nullptr) != 0) {
+
+      if (channel.Init(leader.c_str(), nullptr) != 0) {
         LOG(ERROR) << "Init channel to metaserver: " << leader << " failed!";
         return FSStatusCode::RPC_ERROR;
       }
@@ -78,7 +93,7 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
 
     cntl.Reset();
     cntl.set_timeout_ms(options_.rpcTimeoutMs);
-    MetaServerService_Stub stub(&channel_);
+    MetaServerService_Stub stub(&channel);
     (stub.*func)(&cntl, request, response, nullptr);
     if (cntl.Failed()) {
       LOG(WARNING) << "rpc error: " << cntl.ErrorText();
@@ -115,15 +130,17 @@ FSStatusCode MetaserverClient::GetLeader(const LeaderCtx& ctx,
   request.set_copysetid(ctx.copysetId);
 
   for (const std::string& item : ctx.addrs) {
+    brpc::Channel channel;
+
     LOG(INFO) << "GetLeader from " << item;
-    if (channel_.Init(item.c_str(), nullptr) != 0) {
+    if (channel.Init(item.c_str(), nullptr) != 0) {
       LOG(ERROR) << "Init channel to metaserver: " << item << " failed!";
       continue;
     }
 
     brpc::Controller cntl;
     cntl.set_timeout_ms(options_.rpcTimeoutMs);
-    CliService2_Stub stub(&channel_);
+    CliService2_Stub stub(&channel);
     stub.GetLeader(&cntl, &request, &response, nullptr);
 
     uint32_t max_retry = options_.rpcRetryTimes;
@@ -348,12 +365,13 @@ FSStatusCode MetaserverClient::DeleteInode(uint32_t fs_id, uint64_t inode_id) {
   brpc::Controller cntl;
   cntl.set_timeout_ms(options_.rpcTimeoutMs);
 
-  if (channel_.Init(options_.metaserverAddr.c_str(), nullptr) != 0) {
+  brpc::Channel channel;
+  if (channel.Init(options_.metaserverAddr.c_str(), nullptr) != 0) {
     LOG(ERROR) << "Init channel to metaserver: " << options_.metaserverAddr
                << " failed!";
     return FSStatusCode::RPC_ERROR;
   }
-  MetaServerService_Stub stub(&channel_);
+  MetaServerService_Stub stub(&channel);
   // TODO(cw123): add partiton
   request.set_poolid(0);
   request.set_copysetid(0);
@@ -487,14 +505,16 @@ FSStatusCode MetaserverClient::CreateCopySet(
   }
 
   for (const std::string& item : addrs) {
-    if (channel_.Init(item.c_str(), nullptr) != 0) {
+    brpc::Channel channel;
+
+    if (channel.Init(item.c_str(), nullptr) != 0) {
       LOG(ERROR) << "Init channel to metaserver: " << item << " failed!";
       return FSStatusCode::RPC_ERROR;
     }
 
     brpc::Controller cntl;
     cntl.set_timeout_ms(options_.rpcTimeoutMs);
-    CopysetService_Stub stub(&channel_);
+    CopysetService_Stub stub(&channel);
     stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
     uint32_t max_retry = options_.rpcRetryTimes;
@@ -536,14 +556,15 @@ FSStatusCode MetaserverClient::CreateCopySetOnOneMetaserver(
   copyset->set_poolid(pool_id);
   copyset->set_copysetid(copyset_id);
 
-  if (channel_.Init(addr.c_str(), nullptr) != 0) {
+  brpc::Channel channel;
+  if (channel.Init(addr.c_str(), nullptr) != 0) {
     LOG(ERROR) << "Init channel to metaserver: " << addr << " failed!";
     return FSStatusCode::RPC_ERROR;
   }
 
   brpc::Controller cntl;
   cntl.set_timeout_ms(options_.rpcTimeoutMs);
-  CopysetService_Stub stub(&channel_);
+  CopysetService_Stub stub(&channel);
   stub.CreateCopysetNode(&cntl, &request, &response, nullptr);
 
   uint32_t max_retry = options_.rpcRetryTimes;

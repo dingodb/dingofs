@@ -35,6 +35,10 @@
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/topology/deal_peerid.h"
 #include "curvefs/src/mds/topology/topology_item.h"
+#include "curvefs/src/utils/timeutility.h"
+
+using curvefs::utils::NameLockGuard;
+using curvefs::utils::TimeUtility;
 
 namespace curvefs {
 namespace mds {

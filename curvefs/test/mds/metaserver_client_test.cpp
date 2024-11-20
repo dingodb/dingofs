@@ -38,7 +38,6 @@ using curvefs::metaserver::CreateRootInodeRequest;
 using curvefs::metaserver::CreateRootInodeResponse;
 using curvefs::metaserver::DeleteInodeRequest;
 using curvefs::metaserver::DeleteInodeResponse;
-using curvefs::metaserver::DeletePartitionRequest;
 using curvefs::metaserver::DeletePartitionResponse;
 using curvefs::metaserver::MetaStatusCode;
 using ::curvefs::metaserver::MockMetaserverService;

@@ -29,24 +29,20 @@
 #include <string>
 #include <vector>
 
-#include "curvefs/proto/copyset.pb.h"
-#include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/topology.pb.h"
 #include "curvefs/src/mds/metaserverclient/metaserver_client.h"
 #include "curvefs/src/mds/topology/topology.h"
-#include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/concurrent/name_lock.h"
-#include "curvefs/src/utils/timeutility.h"
 
 namespace curvefs {
 namespace mds {
 namespace topology {
 
-using curvefs::utils::NameLock;
-using curvefs::utils::NameLockGuard;
-using curvefs::utils::TimeUtility;
 using curvefs::mds::MetaserverClient;
+using curvefs::utils::NameLock;
 using std::string;
+
+using curvefs::common::PartitionInfo;
 
 class TopologyManager {
  public:

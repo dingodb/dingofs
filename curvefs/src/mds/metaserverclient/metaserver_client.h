@@ -28,20 +28,10 @@
 #include <set>
 #include <string>
 
-#include "curvefs/proto/cli2.pb.h"
-#include "curvefs/proto/copyset.pb.h"
 #include "curvefs/proto/mds.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
 
-using curvefs::common::PartitionInfo;
-using curvefs::common::PartitionStatus;
-using curvefs::metaserver::FsFileType;
 using curvefs::metaserver::ManageInodeType;
-using curvefs::metaserver::copyset::CliService2_Stub;
-using curvefs::metaserver::copyset::CreateCopysetRequest;
-using curvefs::metaserver::copyset::CreateCopysetResponse;
-using curvefs::metaserver::copyset::GetLeaderRequest2;
-using curvefs::metaserver::copyset::GetLeaderResponse2;
 
 namespace curvefs {
 namespace mds {
@@ -120,7 +110,6 @@ class MetaserverClient {
                       Response*, google::protobuf::Closure*));
 
   MetaserverOptions options_;
-  brpc::Channel channel_;
 };
 }  // namespace mds
 }  // namespace curvefs

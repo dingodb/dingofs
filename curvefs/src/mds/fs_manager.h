@@ -45,6 +45,9 @@
 namespace curvefs {
 namespace mds {
 
+using ::curvefs::mds::Mountpoint;
+using ::curvefs::mds::dlock::DLock;
+using ::curvefs::mds::topology::PartitionTxId;
 using ::curvefs::mds::topology::Topology;
 using ::curvefs::mds::topology::TopologyManager;
 
@@ -52,12 +55,8 @@ using ::curvefs::utils::Atomic;
 using ::curvefs::utils::InterruptibleSleeper;
 using ::curvefs::utils::S3Adapter;
 using ::curvefs::utils::Thread;
-using ::curvefs::mds::topology::PartitionTxId;
-using ::curvefs::mds::topology::Topology;
-using ::curvefs::mds::topology::TopologyManager;
 
-using ::curvefs::mds::Mountpoint;
-using ::curvefs::mds::dlock::DLock;
+using curvefs::common::PartitionInfo;
 
 struct FsManagerOption {
   uint32_t backEndThreadRunInterSec;

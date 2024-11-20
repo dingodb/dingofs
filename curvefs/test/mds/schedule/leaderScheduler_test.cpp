@@ -22,14 +22,12 @@
 
 #include <glog/logging.h>
 
-#include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/schedule/operatorController.h"
 #include "curvefs/src/mds/schedule/scheduleMetrics.h"
 #include "curvefs/src/mds/schedule/scheduler.h"
-#include "curvefs/src/mds/topology/topology_id_generator.h"
+#include "curvefs/src/utils/timeutility.h"
 #include "curvefs/test/mds/mock/mock_topoAdapter.h"
 #include "curvefs/test/mds/mock/mock_topology.h"
-#include "curvefs/test/mds/schedule/common.h"
 
 using ::curvefs::mds::topology::MockIdGenerator;
 using ::curvefs::mds::topology::MockStorage;

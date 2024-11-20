@@ -24,6 +24,7 @@
 #define CURVEFS_TEST_MDS_MOCK_MOCK_METASERVER_H_
 #include <gmock/gmock.h>
 
+#include "curvefs/proto/copyset.pb.h"
 #include "curvefs/proto/metaserver.pb.h"
 
 namespace curvefs {
