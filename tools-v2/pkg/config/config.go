@@ -46,10 +46,10 @@ const (
 	DEFAULT_HTTPTIMEOUT            = 100 * time.Millisecond
 	RPCTIMEOUT                     = "rpctimeout"
 	VIPER_GLOBALE_RPCTIMEOUT       = "global.rpcTimeout"
-	DEFAULT_RPCTIMEOUT             = 10000 * time.Millisecond
+	DEFAULT_RPCTIMEOUT             = 30000 * time.Millisecond
 	RPCRETRYTIMES                  = "rpcretrytimes"
 	VIPER_GLOBALE_RPCRETRYTIMES    = "global.rpcRetryTimes"
-	DEFAULT_RPCRETRYTIMES          = int32(1)
+	DEFAULT_RPCRETRYTIMES          = int32(5)
 	VERBOSE                        = "verbose"
 	VIPER_GLOBALE_VERBOSE          = "global.verbose"
 	DEFAULT_VERBOSE                = false

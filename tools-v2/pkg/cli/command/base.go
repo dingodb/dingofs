@@ -357,18 +357,28 @@ func GetRpcResponse(rpc *Rpc, rpcFunc RpcFunc) (interface{}, *cmderror.CmdError)
 			results = append(results, Result{address, errDial, nil})
 		} else {
 			rpcFunc.NewRpcClient(conn)
-			log.Printf("%s: start to rpc [%s]", address, rpc.RpcFuncName)
-			ctx, cancel := context.WithTimeout(context.Background(), rpc.RpcTimeout)
-			defer cancel()
-			res, err := rpcFunc.Stub_Func(ctx)
-			if err != nil {
-				errRpc := cmderror.ErrRpcCall()
-				errRpc.Format(rpc.RpcFuncName, err.Error())
-				results = append(results, Result{address, errRpc, nil})
-				log.Printf("%s: fail to get rpc [%s] response", address, rpc.RpcFuncName)
-			} else {
-				results = append(results, Result{address, cmderror.ErrSuccess(), res})
-				log.Printf("%s: get rpc [%s] response successfully", address, rpc.RpcFuncName)
+			retryTimes := rpc.RpcRetryTimes
+			for {
+				log.Printf("%s: start to rpc [%s],timeout[%v],retrytimes[%d]", address, rpc.RpcFuncName, rpc.RpcTimeout, retryTimes)
+				ctx, _ := context.WithTimeout(context.Background(), rpc.RpcTimeout)
+				res, err := rpcFunc.Stub_Func(ctx)
+				retryTimes = retryTimes - 1
+				if err != nil {
+					if retryTimes > 0 {
+						log.Printf("%s: fail to get rpc [%s] response,retrying...", address, rpc.RpcFuncName)
+						continue
+					} else {
+						errRpc := cmderror.ErrRpcCall()
+						errRpc.Format(rpc.RpcFuncName, err.Error())
+						results = append(results, Result{address, errRpc, nil})
+						log.Printf("%s: fail to get rpc [%s] response", address, rpc.RpcFuncName)
+						break
+					}
+				} else {
+					results = append(results, Result{address, cmderror.ErrSuccess(), res})
+					log.Printf("%s: get rpc [%s] response successfully", address, rpc.RpcFuncName)
+					break
+				}
 			}
 			pool.PutConnection(address, conn)
 		}
