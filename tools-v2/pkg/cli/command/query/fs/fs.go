@@ -157,6 +157,7 @@ func (fCmd *FsCommand) Init(cmd *cobra.Command, args []string) error {
 			Request: request,
 		}
 		rpc.Info = basecmd.NewRpc(addrs, timeout, retrytimes, "GetFsInfo")
+		rpc.Info.RpcDataShow = config.GetFlagBool(fCmd.Cmd, "verbose")
 		fCmd.Rpc = append(fCmd.Rpc, rpc)
 		row := make(map[string]string)
 		row[cobrautil.ROW_ID] = fsIds[i]
