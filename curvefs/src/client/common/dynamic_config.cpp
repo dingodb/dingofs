@@ -53,12 +53,17 @@ DEFINE_bool(drop_page_cache, true, "drop page cache for disk cache");
 
 DEFINE_validator(drop_page_cache, &PassBool);
 
+// disk_cache_cleanup_expire_interval_millsecond
+
 // disk cache manager
 DEFINE_uint64(disk_cache_expire_second, 0,
               "cache expire time, 0 means never expired");
+DEFINE_uint64(disk_cache_cleanup_expire_interval_millsecond, 1000,
+              "cleanup expire blocks interval in millsecond");
 DEFINE_double(disk_cache_free_space_ratio, 0.1, "disk free space ratio");
 
 DEFINE_validator(disk_cache_expire_second, &PassUint64);
+DEFINE_validator(disk_cache_cleanup_expire_interval_millsecond, &PassUint64);
 DEFINE_validator(disk_cache_free_space_ratio, &PassDouble);
 
 // disk state machine

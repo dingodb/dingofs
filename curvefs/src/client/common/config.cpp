@@ -200,7 +200,7 @@ void InitS3Option(Configuration* conf, S3Option* s3Opt) {
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
                             &s3Opt->s3ClientAdaptorOpt.readRetryIntervalMs);
   ::curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption(conf,
-                                                         &s3Opt->s3AdaptrOpt);
+                                                          &s3Opt->s3AdaptrOpt);
 }
 
 void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt) {
@@ -397,6 +397,9 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
                            &FLAGS_disk_cache_free_space_ratio);
     c->GetValueFatalIfFail("disk_cache.cache_expire_second",
                            &FLAGS_disk_cache_expire_second);
+    c->GetValueFatalIfFail(
+        "disk_cache.cleanup_expire_interval_millsecond",
+        &FLAGS_disk_cache_cleanup_expire_interval_millsecond);
     c->GetValueFatalIfFail("disk_cache.drop_page_cache",
                            &FLAGS_drop_page_cache);
     if (option->cache_store == "disk") {

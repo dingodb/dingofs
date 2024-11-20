@@ -47,6 +47,7 @@ DECLARE_bool(drop_page_cache);
 
 // disk cache manager
 DECLARE_uint64(disk_cache_expire_second);
+DECLARE_uint64(disk_cache_cleanup_expire_interval_millsecond);
 DECLARE_double(disk_cache_free_space_ratio);
 
 // disk state machine

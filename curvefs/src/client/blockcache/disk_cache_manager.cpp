@@ -24,6 +24,7 @@
 
 #include <butil/time.h>
 
+#include <chrono>
 #include <memory>
 
 #include "curvefs/src/base/math/math.h"
@@ -39,13 +40,14 @@ namespace client {
 namespace blockcache {
 
 USING_FLAG(disk_cache_expire_second);
+USING_FLAG(disk_cache_cleanup_expire_interval_millsecond);
 USING_FLAG(disk_cache_free_space_ratio);
 
 using ::butil::Timer;
-using ::curvefs::utils::LockGuard;
 using ::curvefs::base::math::kMiB;
 using ::curvefs::base::string::StrFormat;
 using ::curvefs::base::time::TimeNow;
+using ::curvefs::utils::LockGuard;
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    std::shared_ptr<DiskCacheLayout> layout,
@@ -212,7 +214,8 @@ void DiskCacheManager::CleanupExpire() {
     if (to_del.size() > 0) {
       mq_->Publish({to_del, DeleteFrom::CACHE_EXPIRED});
     }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(
+        FLAGS_disk_cache_cleanup_expire_interval_millsecond));
   }
 }
 
