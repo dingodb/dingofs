@@ -176,13 +176,14 @@ CURVEFS_ERROR InodeCacheManagerImpl::BatchGetInodeAttrAsync(
   std::shared_ptr<CountDownEvent> cond =
       std::make_shared<CountDownEvent>(inode_groups.size());
   for (const auto& it : inode_groups) {
-    VLOG(3) << "BatchGetInodeAttrAsync Send " << it.size();
+    VLOG(3) << "BatchGetInodeAttrAsync Send size: " << it.size()
+            << ", parent inodeId=" << parent_id;
     auto* done = new BatchGetInodeAttrAsyncDone(attrs, &mutex, cond);
     MetaStatusCode ret = metaClient_->BatchGetInodeAttrAsync(m_fs_id, it, done);
     if (MetaStatusCode::OK != ret) {
-      LOG(ERROR) << "metaClient BatchGetInodeAsync failed,"
-                 << " MetaStatusCode = " << ret
-                 << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret);
+      LOG(ERROR) << "Failed BatchGetInodeAsync" << " MetaStatusCode = " << ret
+                 << ", MetaStatusCode_Name = " << MetaStatusCode_Name(ret)
+                 << " size:" << it.size() << ", parent inodeId=" << parent_id;
     }
   }
 

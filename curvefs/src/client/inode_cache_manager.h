@@ -44,11 +44,11 @@ namespace curvefs {
 namespace client {
 
 using common::RefreshDataOption;
-using curvefs::utils::CountDownEvent;
 using ::curvefs::client::filesystem::DeferSync;
 using ::curvefs::client::filesystem::OpenFiles;
 using ::curvefs::metaserver::InodeAttr;
 using ::curvefs::metaserver::XAttr;
+using curvefs::utils::CountDownEvent;
 using metric::S3ChunkInfoMetric;
 using rpcclient::BatchGetInodeAttrDone;
 using rpcclient::InodeParam;
@@ -184,11 +184,12 @@ class BatchGetInodeAttrAsyncDone : public BatchGetInodeAttrDone {
     if (ret != MetaStatusCode::OK) {
       LOG(ERROR) << "BatchGetInodeAttrAsync failed, "
                  << ", MetaStatusCode: " << ret
-                 << ", MetaStatusCode_Name: " << MetaStatusCode_Name(ret);
+                 << ", MetaStatusCode_Name: " << MetaStatusCode_Name(ret)
+                 << ", size: " << GetInodeAttrs().size();
     } else {
       auto inode_attrs = GetInodeAttrs();
       VLOG(3) << "BatchGetInodeAttrAsyncDone update inodeAttrCache"
-              << " size = " << inode_attrs.size();
+              << " size: " << inode_attrs.size();
 
       curvefs::utils::LockGuard lk(*mutex_);
       for (const auto& attr : inode_attrs) {

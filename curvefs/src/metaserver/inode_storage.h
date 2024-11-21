@@ -30,12 +30,11 @@
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/metaserver/storage/converter.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/src/utils/concurrent/concurrent.h"
+#include "curvefs/src/utils/concurrent/rw_lock.h"
 
 namespace curvefs {
 namespace metaserver {
 
-using ::curvefs::utils::RWLock;
 using ::curvefs::metaserver::storage::Converter;
 using ::curvefs::metaserver::storage::Iterator;
 using ::curvefs::metaserver::storage::Key4Inode;
@@ -44,6 +43,7 @@ using ::curvefs::metaserver::storage::NameGenerator;
 using ::curvefs::metaserver::storage::StorageTransaction;
 using S3ChunkInfoMap = google::protobuf::Map<uint64_t, S3ChunkInfoList>;
 using Transaction = std::shared_ptr<StorageTransaction>;
+
 class InodeStorage {
  public:
   InodeStorage(std::shared_ptr<KVStorage> kvStorage,
@@ -151,11 +151,10 @@ class InodeStorage {
                                     uint64_t chunkIndex,
                                     const S3ChunkInfoList* list2del);
 
- private:
   // FIXME: please remove this lock, because we has locked each inode
   // in inode manager, this lock only for proetct storage, but now we
   // use rocksdb storage, it support write in parallel.
-  RWLock rwLock_;
+  utils::PthreadRWLock rwLock_;
   std::shared_ptr<KVStorage> kvStorage_;
   std::string table4Inode_;
   std::string table4S3ChunkInfo_;
