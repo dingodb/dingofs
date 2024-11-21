@@ -66,7 +66,11 @@ class RenameOperator {
   void GetOldInode(uint64_t* old_inode_id, int64_t* old_inode_size,
                    FsFileType* old_inode_type);
 
-  void UpdateUsage(std::shared_ptr<filesystem::FileSystem>& fs);
+  // related to quota and stat
+  void UpdateSrcDirUsage(std::shared_ptr<filesystem::FileSystem>& fs);
+  void RollbackUpdateSrcDirUsage(std::shared_ptr<filesystem::FileSystem>& fs);
+  bool CheckNewParentQuota(std::shared_ptr<filesystem::FileSystem>& fs);
+  void FinishUpdateUsage(std::shared_ptr<filesystem::FileSystem>& fs);
 
   std::string DebugString();
 
@@ -89,8 +93,8 @@ class RenameOperator {
   CURVEFS_ERROR UpdateMCTime(uint64_t inode_id);
 
   // related to quota and stat
-  void UpdateSrcDir(std::shared_ptr<filesystem::FileSystem>& fs);
-  void UpdateDstDir(std::shared_ptr<filesystem::FileSystem>& fs);
+  void CalSrcUsage(int64_t& space, int64_t& inode);
+  void UpdateDstDirUsage(std::shared_ptr<filesystem::FileSystem>& fs);
   void UPdateFsStat(std::shared_ptr<filesystem::FileSystem>& fs);
   void GetReduceStat(int64_t& reduce_space, int64_t& reduce_inode);
 

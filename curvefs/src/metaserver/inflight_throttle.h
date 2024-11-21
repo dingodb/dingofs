@@ -44,12 +44,8 @@ class InflightThrottle {
    * @return true，过载，false没有过载
    */
   bool IsOverLoad() {
-    if (maxInflightRequest_ >=
-        inflightRequestCount_.load(std::memory_order_relaxed)) {
-      return false;
-    } else {
-      return true;
-    }
+    return maxInflightRequest_ <
+           inflightRequestCount_.load(std::memory_order_relaxed);
   }
 
   /**

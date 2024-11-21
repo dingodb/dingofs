@@ -956,7 +956,6 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
       return rc;
     }
 
-    uint64_t lenth = attr.length();
     if (attr.type() == FsFileType::TYPE_DIRECTORY) {
       // TODO : remove this restrict when we support rename dir in dirfferent
       // quota  dir
@@ -984,13 +983,6 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
                      << newparent_nearest_quota_ino;
         return CURVEFS_ERROR::NOTSUPPORT;
       }
-
-      lenth = 0;
-    }
-
-    // no need to check fs quota
-    if (!fs_->CheckDirQuota(newparent, lenth, 1)) {
-      return CURVEFS_ERROR::NO_SPACE;
     }
   }
 
@@ -1002,10 +994,18 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
   curvefs::utils::LockGuard lg(renameMutex_);
   CURVEFS_ERROR rc = CURVEFS_ERROR::OK;
   VLOG(3) << "FuseOpRename [start]: " << renameOp.DebugString();
-  RETURN_IF_UNSUCCESS(GetTxId);
+
   RETURN_IF_UNSUCCESS(Precheck);
-  RETURN_IF_UNSUCCESS(RecordOldInodeInfo);
   RETURN_IF_UNSUCCESS(RecordSrcInodeInfo);
+  renameOp.UpdateSrcDirUsage(fs_);
+  if (!renameOp.CheckNewParentQuota(fs_)) {
+    renameOp.RollbackUpdateSrcDirUsage(fs_);
+    return CURVEFS_ERROR::NO_SPACE;
+  }
+
+  RETURN_IF_UNSUCCESS(GetTxId);
+  RETURN_IF_UNSUCCESS(RecordOldInodeInfo);
+
   // Do not move LinkDestParentInode behind CommitTx.
   // If so, the nlink will be lost when the machine goes down
   RETURN_IF_UNSUCCESS(LinkDestParentInode);
@@ -1021,7 +1021,7 @@ CURVEFS_ERROR FuseClient::FuseOpRename(fuse_req_t req, fuse_ino_t parent,
   renameOp.UpdateInodeCtime();
   renameOp.UpdateCache();
 
-  renameOp.UpdateUsage(fs_);
+  renameOp.FinishUpdateUsage(fs_);
 
   return rc;
 }

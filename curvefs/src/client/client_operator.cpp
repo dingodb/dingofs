@@ -32,11 +32,11 @@
 namespace curvefs {
 namespace client {
 
-using ::curvefs::utils::UUIDGenerator;
 using ::curvefs::client::filesystem::FileSystem;
 using ::curvefs::client::filesystem::ToFSError;
 using ::curvefs::mds::topology::PartitionTxId;
 using ::curvefs::metaserver::DentryFlag;
+using ::curvefs::utils::UUIDGenerator;
 
 #define LOG_ERROR(action, rc)                             \
   LOG(ERROR) << (action) << " failed, retCode = " << (rc) \
@@ -436,41 +436,60 @@ void RenameOperator::GetOldInode(uint64_t* old_inode_id,
   *old_inode_type = oldInodeType_;
 }
 
-void RenameOperator::UpdateUsage(std::shared_ptr<FileSystem>& fs) {
-  UpdateSrcDir(fs);
-  UpdateDstDir(fs);
-  UPdateFsStat(fs);
+// TODO: refact dir space when support dir rename
+void RenameOperator::CalSrcUsage(int64_t& space, int64_t& inode) {
+  if (src_inode_attr_.type() == FsFileType::TYPE_DIRECTORY) {
+    space = 0;
+    inode = 1;
+  } else {
+    space = src_inode_attr_.length();
+    inode = 1;
+  }
 }
 
-void RenameOperator::UpdateSrcDir(std::shared_ptr<FileSystem>& fs) {
+void RenameOperator::UpdateSrcDirUsage(
+    std::shared_ptr<filesystem::FileSystem>& fs) {
   if (parentId_ != newParentId_) {
     int64_t update_space = 0;
     int64_t update_inode = 0;
+    CalSrcUsage(update_space, update_inode);
+    fs->UpdateDirQuotaUsage(parentId_, -update_space, -update_inode);
+  }
+}
 
-    if (src_inode_attr_.type() == FsFileType::TYPE_DIRECTORY) {
-      update_space = 0;
-      update_inode = -1;
-    } else {
-      update_space = -src_inode_attr_.length();
-      update_inode = -1;
-    }
-
+void RenameOperator::RollbackUpdateSrcDirUsage(
+    std::shared_ptr<filesystem::FileSystem>& fs) {
+  if (parentId_ != newParentId_) {
+    int64_t update_space = 0;
+    int64_t update_inode = 0;
+    CalSrcUsage(update_space, update_inode);
     fs->UpdateDirQuotaUsage(parentId_, update_space, update_inode);
   }
 }
 
-void RenameOperator::UpdateDstDir(std::shared_ptr<FileSystem>& fs) {
+bool RenameOperator::CheckNewParentQuota(
+    std::shared_ptr<filesystem::FileSystem>& fs) {
+  if (parentId_ != newParentId_) {
+    int64_t space = 0;
+    int64_t inode = 0;
+    CalSrcUsage(space, inode);
+    return fs->CheckDirQuota(newParentId_, space, inode);
+  } else {
+    return true;
+  }
+}
+
+void RenameOperator::FinishUpdateUsage(std::shared_ptr<FileSystem>& fs) {
+  UpdateDstDirUsage(fs);
+  UPdateFsStat(fs);
+}
+
+void RenameOperator::UpdateDstDirUsage(std::shared_ptr<FileSystem>& fs) {
   int64_t update_space = 0;
   int64_t update_inode = 0;
 
   if (parentId_ != newParentId_) {
-    if (src_inode_attr_.type() == FsFileType::TYPE_DIRECTORY) {
-      update_space += 0;
-      update_inode += 1;
-    } else {
-      update_space += src_inode_attr_.length();
-      update_inode += 1;
-    }
+    CalSrcUsage(update_space, update_inode);
   }
 
   int64_t reduce_space = 0;
