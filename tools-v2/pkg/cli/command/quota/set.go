@@ -102,7 +102,7 @@ func (setQuotaCmd *SetQuotaCommand) Init(cmd *cobra.Command, args []string) erro
 		return inodeErr
 	}
 	// get directory real used
-	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(setQuotaCmd.Cmd, fsId, dirInodeId)
+	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(setQuotaCmd.Cmd, fsId, dirInodeId, false)
 	if getErr != nil {
 		return getErr
 	}

@@ -82,7 +82,7 @@ func (checkQuotaCmd *CheckQuotaCommand) RunCommand(cmd *cobra.Command, args []st
 	}
 	fsQuota := fsResponse.GetQuota()
 	// get root director real used space
-	realUsedBytes, realUsedInodes, getErr := quota.GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, config.ROOTINODEID)
+	realUsedBytes, realUsedInodes, getErr := quota.GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, config.ROOTINODEID, true)
 	if getErr != nil {
 		return getErr
 	}

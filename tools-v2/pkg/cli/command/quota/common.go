@@ -574,7 +574,8 @@ func GetDirPathInodeId(cmd *cobra.Command, fsId uint32, path string) (uint64, er
 }
 
 // get directory size and inodes by inode
-func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *Summary, concurrent chan struct{}, ctx context.Context, cancel context.CancelFunc) error {
+func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *Summary, concurrent chan struct{},
+	ctx context.Context, cancel context.CancelFunc, isFsCheck bool, inodeMap *sync.Map) error {
 	var err error
 	entries, entErr := ListDentry(cmd, fsId, inode)
 	if entErr != nil {
@@ -583,14 +584,20 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 	var wg sync.WaitGroup
 	var errCh = make(chan error, 1)
 	for _, entry := range entries {
-		atomic.AddUint64(&summary.Inodes, 1)
 		if entry.GetType() == metaserver.FsFileType_TYPE_S3 || entry.GetType() == metaserver.FsFileType_TYPE_FILE {
 			inodeAttr, err := GetInodeAttr(cmd, fsId, entry.GetInodeId())
 			if err != nil {
 				return err
 			}
+			if isFsCheck && inodeAttr.GetNlink() >= 2 { //filesystem check, hardlink is ignored
+				_, ok := inodeMap.LoadOrStore(inodeAttr.GetInodeId(), struct{}{})
+				if ok {
+					continue
+				}
+			}
 			atomic.AddUint64(&summary.Length, inodeAttr.GetLength())
 		}
+		atomic.AddUint64(&summary.Inodes, 1)
 		if entry.GetType() != metaserver.FsFileType_TYPE_DIRECTORY {
 			continue
 		}
@@ -604,7 +611,7 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 			wg.Add(1)
 			go func(e *metaserver.Dentry) {
 				defer wg.Done()
-				sumErr := GetDirSummarySize(cmd, fsId, e.GetInodeId(), summary, concurrent, ctx, cancel)
+				sumErr := GetDirSummarySize(cmd, fsId, e.GetInodeId(), summary, concurrent, ctx, cancel, isFsCheck, inodeMap)
 				<-concurrent
 				if sumErr != nil {
 					select {
@@ -614,7 +621,7 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 				}
 			}(entry)
 		default:
-			if sumErr := GetDirSummarySize(cmd, fsId, entry.GetInodeId(), summary, concurrent, ctx, cancel); sumErr != nil {
+			if sumErr := GetDirSummarySize(cmd, fsId, entry.GetInodeId(), summary, concurrent, ctx, cancel, isFsCheck, inodeMap); sumErr != nil {
 				return sumErr
 			}
 		}
@@ -628,13 +635,14 @@ func GetDirSummarySize(cmd *cobra.Command, fsId uint32, inode uint64, summary *S
 }
 
 // get directory size and inodes by path name
-func GetDirectorySizeAndInodes(cmd *cobra.Command, fsId uint32, dirInode uint64) (int64, int64, error) {
+func GetDirectorySizeAndInodes(cmd *cobra.Command, fsId uint32, dirInode uint64, isFsCheck bool) (int64, int64, error) {
 	log.Printf("start to summary directory statistics, inode[%d]", dirInode)
 	summary := &Summary{0, 0}
 	concurrent := make(chan struct{}, 50)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	sumErr := GetDirSummarySize(cmd, fsId, dirInode, summary, concurrent, ctx, cancel)
+	var inodeMap *sync.Map = &sync.Map{}
+	sumErr := GetDirSummarySize(cmd, fsId, dirInode, summary, concurrent, ctx, cancel, isFsCheck, inodeMap)
 	log.Printf("end summary directory statistics, inode[%d],inodes[%d],size[%d]", dirInode, summary.Inodes, summary.Length)
 	if sumErr != nil {
 		return 0, 0, sumErr

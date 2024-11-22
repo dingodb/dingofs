@@ -105,7 +105,7 @@ func (checkQuotaCmd *CheckQuotaCommand) RunCommand(cmd *cobra.Command, args []st
 		return dirErr
 	}
 	// get real used space
-	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, dirInode)
+	realUsedBytes, realUsedInodes, getErr := GetDirectorySizeAndInodes(checkQuotaCmd.Cmd, fsId, dirInode, false)
 	if getErr != nil {
 		return getErr
 	}
