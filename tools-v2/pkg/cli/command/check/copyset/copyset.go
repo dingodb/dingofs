@@ -29,18 +29,18 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/query/copyset"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
 const (
-	copysetExample = `$ curve check copyset --copysetid 1 --poolid 1`
+	copysetExample = `$ dingo check copyset --copysetid 1 --poolid 1`
 )
 
 type CopysetCommand struct {
@@ -62,7 +62,7 @@ func NewCheckCopysetCommand() *CopysetCommand {
 	copysetCmd := &CopysetCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "copyset",
-			Short:   "check copysets health in curvefs",
+			Short:   "check copysets health in dingofs",
 			Example: copysetExample,
 		},
 	}

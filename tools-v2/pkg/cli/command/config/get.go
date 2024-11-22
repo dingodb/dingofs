@@ -41,9 +41,9 @@ func NewGetFsQuotaCommand() *cobra.Command {
 	fsQuotaCmd := &GetFsQuotaCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:   "get",
-			Short: "get fs quota for curvefs",
-			Example: `$ curve config get --fsid 1 
-$ curve config fs --fsname dingofs
+			Short: "get fs quota for dingofs",
+			Example: `$ dingo config get --fsid 1 
+$ dingo config fs --fsname dingofs
 `,
 		},
 	}

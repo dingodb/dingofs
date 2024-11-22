@@ -43,7 +43,7 @@ func NewUmountCommand() *cobra.Command {
 	umountCmd := &UmountCommand{
 		basecmd.MidCurveCmd{
 			Use:   "umount",
-			Short: "umount fs in the curvefs",
+			Short: "umount fs in the dingofs",
 		},
 	}
 	return basecmd.NewMidCurveCli(&umountCmd.MidCurveCmd, umountCmd)

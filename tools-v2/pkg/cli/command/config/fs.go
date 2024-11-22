@@ -39,10 +39,10 @@ func NewConfigFsQuotaCommand() *cobra.Command {
 	fsQuotaCmd := &ConfigFsQuotaCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:   "fs",
-			Short: "config fs quota for curvefs",
-			Example: `$ curve config fs --mdsaddr "10.20.61.2:6700,172.20.61.3:6700,10.20.61.4:6700" --fsid 1 --capacity 10 --inodes 1000
-$ curve config fs --fsid 1 --capacity 10 --inodes 1000
-$ curve config fs --fsname dingofs --capacity 10 --inodes 1000
+			Short: "config fs quota for dingofs",
+			Example: `$ dingo config fs --mdsaddr "10.20.61.2:6700,172.20.61.3:6700,10.20.61.4:6700" --fsid 1 --capacity 10 --inodes 1000
+$ dingo config fs --fsid 1 --capacity 10 --inodes 1000
+$ dingo config fs --fsname dingofs --capacity 10 --inodes 1000
 `,
 		},
 	}

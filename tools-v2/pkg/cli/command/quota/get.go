@@ -62,7 +62,7 @@ func NewGetQuotaDataCommand() *GetQuotaCommand {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "get",
 			Short:   "get quota of a directory",
-			Example: `$ curve quota get --fsid 1 --path /quotadir`,
+			Example: `$ dingo quota get --fsid 1 --path /quotadir`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&getQuotaCmd.FinalCurveCmd, getQuotaCmd)

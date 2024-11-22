@@ -25,7 +25,6 @@ package cluster
 import (
 	"fmt"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -35,6 +34,7 @@ import (
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/status/metaserver"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
@@ -56,14 +56,14 @@ type ClusterCommand struct {
 var _ basecmd.FinalCurveCmdFunc = (*ClusterCommand)(nil) // check interface
 
 const (
-	clusterExample = `$ curve status cluster`
+	clusterExample = `$ dingo status cluster`
 )
 
 func NewClusterCommand() *cobra.Command {
 	cCmd := &ClusterCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "cluster",
-			Short:   "get status of the curvefs",
+			Short:   "get status of the dingofs",
 			Example: clusterExample,
 		},
 	}

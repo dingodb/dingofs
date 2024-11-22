@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	cacheExample = `$ curve create cacheCluster`
+	cacheExample = `$ dingo create cacheCluster`
 )
 
 type CreateCacheRpc struct {
@@ -74,7 +74,7 @@ func NewCreateCacheCommand() *CacheCommand {
 	cacheCmd := &CacheCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "cachecluster",
-			Short:   "register a memcache cluster in the curvefs",
+			Short:   "register a memcache cluster in the dingofs",
 			Example: cacheExample,
 		},
 	}

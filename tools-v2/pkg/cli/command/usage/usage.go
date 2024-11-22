@@ -46,7 +46,7 @@ func NewUsageCommand() *cobra.Command {
 	usageCmd := &UsageCommand{
 		basecmd.MidCurveCmd{
 			Use:   "usage",
-			Short: "get the usage info of curvefs",
+			Short: "get the usage info of dingofs",
 		},
 	}
 	return basecmd.NewMidCurveCli(&usageCmd.MidCurveCmd, usageCmd)

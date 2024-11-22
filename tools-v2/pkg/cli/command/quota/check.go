@@ -60,7 +60,7 @@ func NewCheckQuotaCommand() *cobra.Command {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "check",
 			Short:   "check quota of a directory",
-			Example: `$ curve quota check --fsid 1 --path /quotadir`,
+			Example: `$ dingo quota check --fsid 1 --path /quotadir`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&checkQuotaCmd.FinalCurveCmd, checkQuotaCmd)

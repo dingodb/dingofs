@@ -59,7 +59,7 @@ func NewDeleteQuotaCommand() *cobra.Command {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "delete",
 			Short:   "delete quota of a directory",
-			Example: `$ curve quota delete --fsid 1 --path /quotadir`,
+			Example: `$ dingo quota delete --fsid 1 --path /quotadir`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&deleteQuotaCmd.FinalCurveCmd, deleteQuotaCmd)

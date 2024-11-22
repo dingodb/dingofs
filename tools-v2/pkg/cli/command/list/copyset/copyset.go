@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	copysetExample = `$ curve list copyset`
+	copysetExample = `$ dingo list copyset`
 )
 
 const ()
@@ -78,7 +78,7 @@ func NewListCopysetCommand() *CopysetCommand {
 	copysetCmd := &CopysetCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "copyset",
-			Short:   "list all copyset info of the curvefs",
+			Short:   "list all copyset info of the dingofs",
 			Example: copysetExample,
 		},
 	}

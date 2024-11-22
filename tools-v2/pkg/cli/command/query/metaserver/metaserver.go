@@ -40,8 +40,8 @@ import (
 )
 
 const (
-	metaserverExample = `$ curve query metaserver --metaserverid=1,2,3
-$ curve query metaserver --metaserveraddr=127.0.0.1:9700,127.0.0.1:9701,127.0.0.1:9702`
+	metaserverExample = `$ dingo query metaserver --metaserverid=1,2,3
+$ dingo query metaserver --metaserveraddr=127.0.0.1:9700,127.0.0.1:9701,127.0.0.1:9702`
 )
 
 type QueryMetaserverRpc struct {
@@ -74,7 +74,7 @@ func NewMetaserverCommand() *cobra.Command {
 	metaserverCmd := &MetaserverCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "metaserver",
-			Short:   "query metaserver in curvefs by metaserverid or metaserveraddr",
+			Short:   "query metaserver in dingofs by metaserverid or metaserveraddr",
 			Long:    "when both metaserverid and metaserveraddr exist, query only by metaserverid",
 			Example: metaserverExample,
 		},

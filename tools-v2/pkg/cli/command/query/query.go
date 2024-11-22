@@ -52,7 +52,7 @@ func NewQueryCommand() *cobra.Command {
 	queryCmd := &QueryCommand{
 		basecmd.MidCurveCmd{
 			Use:   "query",
-			Short: "query resources in the curvefs",
+			Short: "query resources in the dingofs",
 		},
 	}
 	return basecmd.NewMidCurveCli(&queryCmd.MidCurveCmd, queryCmd)

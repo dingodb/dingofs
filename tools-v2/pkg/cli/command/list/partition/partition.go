@@ -41,8 +41,8 @@ import (
 )
 
 const (
-	partitionExample = `$ curve list partition
-$ curve list partition --fsid=1,2,3`
+	partitionExample = `$ dingo list partition
+$ dingo list partition --fsid=1,2,3`
 )
 
 type ListPartitionRpc struct {
@@ -76,7 +76,7 @@ func NewPartitionCommand() *cobra.Command {
 	pCmd := &PartitionCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "partition",
-			Short:   "list partition in curvefs by fsid",
+			Short:   "list partition in dingofs by fsid",
 			Example: partitionExample,
 		},
 	}
@@ -238,7 +238,7 @@ func NewListPartitionCommand() *PartitionCommand {
 	pCmd := &PartitionCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:   "partition",
-			Short: "list partition in curvefs by fsid",
+			Short: "list partition in dingofs by fsid",
 		},
 	}
 	basecmd.NewFinalCurveCli(&pCmd.FinalCurveCmd, pCmd)

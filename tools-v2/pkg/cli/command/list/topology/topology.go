@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	topologyExample = `$ curve list topology`
+	topologyExample = `$ dingo list topology`
 )
 
 type ListTopologyRpc struct {
@@ -107,7 +107,7 @@ func NewListTopologyCommand() *TopologyCommand {
 	topologyCmd := &TopologyCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "topology",
-			Short:   "list the topology of the curvefs",
+			Short:   "list the topology of the dingofs",
 			Example: topologyExample,
 		},
 	}

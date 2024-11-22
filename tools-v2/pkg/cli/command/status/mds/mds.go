@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	mdsExample = `$ curve status mds`
+	mdsExample = `$ dingo status mds`
 )
 
 type MdsCommand struct {

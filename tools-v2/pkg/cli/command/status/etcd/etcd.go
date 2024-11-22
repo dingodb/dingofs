@@ -25,12 +25,12 @@ package etcd
 import (
 	"fmt"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
@@ -60,7 +60,7 @@ var (
 var _ basecmd.FinalCurveCmdFunc = (*EtcdCommand)(nil) // check interface
 
 const (
-	etcdExample = `$ curve status etcd`
+	etcdExample = `$ dingo status etcd`
 )
 
 func NewEtcdCommand() *cobra.Command {
@@ -193,7 +193,7 @@ func NewStatusEtcdCommand() *EtcdCommand {
 	etcdCmd := &EtcdCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "etcd",
-			Short:   "get the etcd status of curvefs",
+			Short:   "get the etcd status of dingofs",
 			Example: etcdExample,
 		},
 	}

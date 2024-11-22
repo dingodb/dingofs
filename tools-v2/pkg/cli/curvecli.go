@@ -67,7 +67,7 @@ func addSubCommands(cmd *cobra.Command) {
 }
 
 func setupRootCommand(cmd *cobra.Command) {
-	cmd.SetVersionTemplate("curve {{.Version}}\n")
+	cmd.SetVersionTemplate("dingo {{.Version}}\n")
 	cobratemplate.SetFlagErrorFunc(cmd)
 	cobratemplate.SetHelpTemplate(cmd)
 	cobratemplate.SetUsageTemplate(cmd)
@@ -75,15 +75,15 @@ func setupRootCommand(cmd *cobra.Command) {
 
 func newCurveCommand() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:     "curve COMMAND [ARGS...]",
-		Short:   "curve is a tool for managing curvefs",
+		Use:     "dingo COMMAND [ARGS...]",
+		Short:   "dingo is a tool for managing dingofs",
 		Version: version.Version,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
 				return cobratemplate.ShowHelp(os.Stderr)(cmd, args)
 			}
-			return fmt.Errorf("curve: '%s' is not a curve command.\n"+
-				"See 'curve --help'", args[0])
+			return fmt.Errorf("dingo: '%s' is not a dingo command.\n"+
+				"See 'dingo --help'", args[0])
 		},
 		SilenceUsage: false, // silence usage when an error occurs
 		CompletionOptions: cobra.CompletionOptions{
@@ -91,9 +91,9 @@ func newCurveCommand() *cobra.Command {
 		},
 	}
 
-	rootCmd.Flags().BoolP("version", "v", false, "print curve version")
+	rootCmd.Flags().BoolP("version", "v", false, "print dingo version")
 	rootCmd.PersistentFlags().BoolP("help", "h", false, "print help")
-	rootCmd.PersistentFlags().StringVarP(&config.ConfPath, "conf", "c", "", "config file (default is $HOME/.curve/curve.yaml or /etc/curve/curve.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&config.ConfPath, "conf", "c", "", "config file (default is $HOME/.dingo/dingo.yaml or /etc/dingo/dingo.yaml)")
 	config.AddShowErrorPFlag(rootCmd)
 	rootCmd.PersistentFlags().BoolP("verbose", "", false, "show some extra info")
 	viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))

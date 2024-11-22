@@ -25,13 +25,13 @@ package metaserver
 import (
 	"fmt"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/dingodb/dingofs/tools-v2/pkg/cli/command/list/topology"
 	config "github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -49,7 +49,7 @@ const (
 )
 
 const (
-	metaserverExample = `$ curve status metaserver`
+	metaserverExample = `$ dingo status metaserver`
 )
 
 var _ basecmd.FinalCurveCmdFunc = (*MetaserverCommand)(nil) // check interface
@@ -58,7 +58,7 @@ func NewMetaserverCommand() *cobra.Command {
 	mdsCmd := &MetaserverCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "metaserver",
-			Short:   "get metaserver status of curvefs",
+			Short:   "get metaserver status of dingofs",
 			Example: metaserverExample,
 		},
 	}
@@ -185,7 +185,7 @@ func NewStatusMetaserverCommand() *MetaserverCommand {
 	mdsCmd := &MetaserverCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:   "metaserver",
-			Short: "get metaserver status of curvefs",
+			Short: "get metaserver status of dingofs",
 		},
 	}
 	basecmd.NewFinalCurveCli(&mdsCmd.FinalCurveCmd, mdsCmd)

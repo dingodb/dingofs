@@ -36,7 +36,7 @@ type VersionCommand struct {
 var _ basecmd.FinalCurveCmdFunc = (*VersionCommand)(nil) // check interface
 
 const (
-	versionExample = `$ curve version`
+	versionExample = `$ dingo version`
 )
 
 func NewVersionCommand() *cobra.Command {
@@ -71,7 +71,7 @@ func NewStatusVersionCommand() *VersionCommand {
 	versionCmd := &VersionCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "version",
-			Short:   "Show the curve version information",
+			Short:   "Show the dingo version information",
 			Example: versionExample,
 		},
 	}

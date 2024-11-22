@@ -81,10 +81,10 @@ func InitConfig() {
 		// using home directory and /etc/curve as default configuration file path
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
-		viper.AddConfigPath(home + "/.curve")
-		viper.AddConfigPath("/etc/curve")
+		viper.AddConfigPath(home + "/.dingo")
+		viper.AddConfigPath("/etc/dingo")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName("curve")
+		viper.SetConfigName("dingo")
 	}
 
 	// viper.SetDefault("format", "plain")

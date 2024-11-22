@@ -65,14 +65,14 @@ func (mRpc *MetadataRpc) Stub_Func(ctx context.Context) (interface{}, error) {
 }
 
 const (
-	metadataExample = `$ curvefs fs usage metadata`
+	metadataExample = `$ dingofs fs usage metadata`
 )
 
 func NewMetadataCommand() *cobra.Command {
 	fsCmd := &MetadataCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "metadata",
-			Short:   "get the usage of metadata in curvefs",
+			Short:   "get the usage of metadata in dingofs",
 			Example: metadataExample,
 		},
 	}

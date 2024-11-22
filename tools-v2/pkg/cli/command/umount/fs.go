@@ -67,14 +67,14 @@ func (ufRp *UmountFsRpc) Stub_Func(ctx context.Context) (interface{}, error) {
 }
 
 const (
-	fsExample = `$ curvefs fs umount fs -fsname fsname -mountpoint hostname:port:path`
+	fsExample = `$ dingofs umount fs -fsname fsname -mountpoint hostname:port:path`
 )
 
 func NewFsCommand() *cobra.Command {
 	fsCmd := &FsCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "fs",
-			Short:   "umount fs from the curvefs cluster",
+			Short:   "umount fs from the dingofs cluster",
 			Example: fsExample,
 		},
 	}

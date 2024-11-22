@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	topologyExample = `$ curve create topology --clustermap /path/to/clustermap.json`
+	topologyExample = `$ dingo create topology --clustermap /path/to/clustermap.json`
 )
 
 type Topology struct {
@@ -86,7 +86,7 @@ func NewTopologyCommand() *cobra.Command {
 	topologyCmd := &TopologyCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "topology",
-			Short:   "create curvefs topology",
+			Short:   "create dingofs topology",
 			Example: topologyExample,
 		},
 	}

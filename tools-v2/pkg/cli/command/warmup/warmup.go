@@ -46,7 +46,7 @@ func NewWarmupCommand() *cobra.Command {
 	warmupCmd := &WarmupCommand{
 		basecmd.MidCurveCmd{
 			Use:   "warmup",
-			Short: "add warmup file to local in curvefs",
+			Short: "add warmup file to local in dingofs",
 		},
 	}
 	return basecmd.NewMidCurveCli(&warmupCmd.MidCurveCmd, warmupCmd)

@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	partitionExample = `$ curve query partition --partitionid 1,2,3`
+	partitionExample = `$ dingo query partition --partitionid 1,2,3`
 )
 
 type QueryPartitionRpc struct {

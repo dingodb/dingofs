@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	mountpointExample = `$ curve list mountpoint`
+	mountpointExample = `$ dingo list mountpoint`
 )
 
 type MountpointCommand struct {
@@ -51,7 +51,7 @@ func NewMountpointCommand() *cobra.Command {
 	mpCmd := &MountpointCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "mountpoint",
-			Short:   "list all mountpoint of the curvefs",
+			Short:   "list all mountpoint of the dingofs",
 			Example: mountpointExample,
 		},
 	}
@@ -113,7 +113,7 @@ func (mpCmd *MountpointCommand) updateTable() {
 
 func (mpCmd *MountpointCommand) ResultPlainOutput() error {
 	if mpCmd.number == 0 {
-		fmt.Println("no mountpoint in curvefs")
+		fmt.Println("no mountpoint in dingofs")
 	}
 	return output.FinalCmdOutputPlain(&mpCmd.FinalCurveCmd)
 }

@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	fsExample = `$ curve list fs`
+	fsExample = `$ dingo list fs`
 )
 
 type ListFsRpc struct {
@@ -77,7 +77,7 @@ func NewListFsCommand() *FsCommand {
 	fsCmd := &FsCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "fs",
-			Short:   "list all fs info in the curvefs",
+			Short:   "list all fs info in the dingofs",
 			Example: fsExample,
 		},
 	}

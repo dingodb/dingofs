@@ -37,7 +37,7 @@ func NewConfigCommand() *cobra.Command {
 	configCmd := &ConfigCommand{
 		basecmd.MidCurveCmd{
 			Use:   "config",
-			Short: "config resources in the curvefs",
+			Short: "config resources in the dingofs",
 		},
 	}
 	return basecmd.NewMidCurveCli(&configCmd.MidCurveCmd, configCmd)

@@ -55,15 +55,15 @@ type Result struct {
 var _ basecmd.FinalCurveCmdFunc = (*InodeNumCommand)(nil) // check interface
 
 const (
-	inodeExample = `$ curvefs fs usage inode
-$ curvefs fs usage inode --fsid 1,2,3`
+	inodeExample = `$ dingofs fs usage inode
+$ dingofs fs usage inode --fsid 1,2,3`
 )
 
 func NewInodeNumCommand() *cobra.Command {
 	inodeNumCmd := &InodeNumCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "inode",
-			Short:   "get the inode usage of curvefs",
+			Short:   "get the inode usage of dingofs",
 			Example: inodeExample,
 		},
 	}

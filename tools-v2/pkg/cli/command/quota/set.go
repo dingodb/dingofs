@@ -59,7 +59,7 @@ func NewSetQuotaCommand() *cobra.Command {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "set",
 			Short:   "set quota to a directory",
-			Example: `$ curve quota set --fsid 1 --path /quotadir --capacity 10 --inodes 100000`,
+			Example: `$ dingo quota set --fsid 1 --path /quotadir --capacity 10 --inodes 100000`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&setQuotaCmd.FinalCurveCmd, setQuotaCmd)

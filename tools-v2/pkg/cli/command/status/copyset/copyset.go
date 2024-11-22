@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/olekukonko/tablewriter"
 	cmderror "github.com/dingodb/dingofs/tools-v2/internal/error"
 	cobrautil "github.com/dingodb/dingofs/tools-v2/internal/utils"
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
@@ -34,6 +33,7 @@ import (
 	listCopyset "github.com/dingodb/dingofs/tools-v2/pkg/cli/command/list/copyset"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +45,7 @@ type CopysetCommand struct {
 var _ basecmd.FinalCurveCmdFunc = (*CopysetCommand)(nil) // check interface
 
 const (
-	copysetExample = `$ curve status copyset`
+	copysetExample = `$ dingo status copyset`
 )
 
 func NewCopysetCommand() *cobra.Command {
@@ -106,7 +106,7 @@ func NewStatusCopysetCommand() *CopysetCommand {
 	copysetCmd := &CopysetCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "copyset",
-			Short:   "status all copyset of the curvefs",
+			Short:   "status all copyset of the dingofs",
 			Example: copysetExample,
 		},
 	}

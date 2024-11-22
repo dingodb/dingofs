@@ -60,8 +60,8 @@ func NewListQuotaCommand() *cobra.Command {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:   "list",
 			Short: "list all directory quotas of fileSystem by fsid",
-			Example: `$ curve quota list --fsid 1
-$ curve quota list --fsname dingofs`,
+			Example: `$ dingo quota list --fsid 1
+$ dingo quota list --fsname dingofs`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&listQuotaCmd.FinalCurveCmd, listQuotaCmd)

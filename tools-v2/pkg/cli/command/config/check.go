@@ -42,7 +42,7 @@ func NewCheckQuotaCommand() *cobra.Command {
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "check",
 			Short:   "check quota of fs",
-			Example: `$ curve config check --fsid 1`,
+			Example: `$ dingo config check --fsid 1`,
 		},
 	}
 	basecmd.NewFinalCurveCli(&checkQuotaCmd.FinalCurveCmd, checkQuotaCmd)

@@ -42,8 +42,8 @@ import (
 )
 
 const (
-	addExample = `$ curve warmup add --filelist /mnt/warmup/0809.list # warmup the file(dir) saved in /mnt/warmup/0809.list
-$ curve warmup add /mnt/warmup # warmup all files in /mnt/warmup`
+	addExample = `$ dingo warmup add --filelist /mnt/warmup/0809.list # warmup the file(dir) saved in /mnt/warmup/0809.list
+$ dingo warmup add /mnt/warmup # warmup all files in /mnt/warmup`
 )
 
 const (
@@ -98,7 +98,7 @@ func (aCmd *AddCommand) Init(cmd *cobra.Command, args []string) error {
 		aCmd.Error = err
 		return err.ToError()
 	} else if len(mountpoints) == 0 {
-		return errors.New("no curvefs mountpoint found")
+		return errors.New("no dingofs mountpoint found")
 	}
 
 	// check args
@@ -146,7 +146,7 @@ func (aCmd *AddCommand) Init(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if aCmd.Mountpoint == nil {
-		return fmt.Errorf("[%s] is not saved in curvefs", aCmd.Path)
+		return fmt.Errorf("[%s] is not saved in dingofs", aCmd.Path)
 	}
 
 	// check storage type
@@ -179,7 +179,7 @@ func (aCmd *AddCommand) convertFilelist() *cmderror.CmdError {
 			curvefsAbspath := cobrautil.Path2CurvefsPath(line, aCmd.Mountpoint)
 			validPath += (curvefsAbspath + "\n")
 		} else {
-			convertFail := fmt.Sprintf("[%s] is not saved in curvefs", line)
+			convertFail := fmt.Sprintf("[%s] is not saved in dingofs", line)
 			aCmd.ConvertFails = append(aCmd.ConvertFails, convertFail)
 		}
 	}

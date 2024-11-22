@@ -24,7 +24,7 @@ GOENV += GOOS=$(GOOS) GOARCH=$(GOARCH)
 GO := go
 
 # output
-OUTPUT := sbin/curve
+OUTPUT := sbin/dingo
 DAEMON_OUTPUT := sbin/daemon
 
 # version

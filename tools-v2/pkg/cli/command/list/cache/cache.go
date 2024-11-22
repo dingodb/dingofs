@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	cacheExample = `$ curve list cacheCluster`
+	cacheExample = `$ dingo list cacheCluster`
 )
 
 type ListCacheRpc struct {
@@ -74,7 +74,7 @@ func NewListCacheCommand() *CacheCommand {
 	cacheCmd := &CacheCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "cachecluster",
-			Short:   "list all memcache cluster in the curvefs",
+			Short:   "list all memcache cluster in the dingofs",
 			Example: cacheExample,
 		},
 	}
@@ -145,7 +145,7 @@ func (cCmd *CacheCommand) RunCommand(cmd *cobra.Command, args []string) error {
 
 func (cCmd *CacheCommand) ResultPlainOutput() error {
 	if cCmd.TableNew.NumLines() == 0 {
-		fmt.Println("no memcache Cluster in the curvefs")
+		fmt.Println("no memcache Cluster in the dingofs")
 	}
 	return output.FinalCmdOutputPlain(&cCmd.FinalCurveCmd)
 }

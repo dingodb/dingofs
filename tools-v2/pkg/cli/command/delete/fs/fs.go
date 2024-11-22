@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	fsExample = `$ curve delete fs --fsname test1`
+	fsExample = `$ dingo delete fs --fsname test1`
 )
 
 type DeleteFsRpc struct {
@@ -70,7 +70,7 @@ func NewFsCommand() *cobra.Command {
 	fsCmd := &FsCommand{
 		FinalCurveCmd: basecmd.FinalCurveCmd{
 			Use:     "fs",
-			Short:   "delete a fs from curvefs",
+			Short:   "delete a fs from dingofs",
 			Example: fsExample,
 		},
 	}

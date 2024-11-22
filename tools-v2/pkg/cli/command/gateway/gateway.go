@@ -46,7 +46,7 @@ type GatewayCommand struct {
 var _ basecmd.FinalCurveCmdFunc = (*GatewayCommand)(nil) // check interface
 
 const (
-	gatewayExample = `$ curve gateway --mdsaddr={mdsaddr} --fsid {fsid} --listen-address {listenAddr} --console-address {consoleAddr} --mountpoint {mountPoint}`
+	gatewayExample = `$ dingo gateway --mdsaddr={mdsaddr} --fsid {fsid} --listen-address {listenAddr} --console-address {consoleAddr} --mountpoint {mountPoint}`
 )
 
 func NewGatewayCommand() *cobra.Command {
