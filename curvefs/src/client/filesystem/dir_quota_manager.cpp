@@ -52,7 +52,7 @@ bool DirQuota::CheckQuota(int64_t new_space, int64_t new_inodes) {
   VLOG(6) << "CheckQuota dir inodeId=" << ino_ << " new_space:" << new_space
           << ", new_inodes:" << new_inodes << ", dir_quota:" << ToString();
 
-  if (quota.maxbytes() > 0 &&
+  if (new_space > 0 && quota.maxbytes() > 0 &&
       (new_space + new_space_.load(std::memory_order_relaxed) +
        quota.usedbytes()) > (int64_t)quota.maxbytes()) {
     LOG(INFO) << "CheckQuota check space failed, new_space:" << new_space
@@ -60,7 +60,7 @@ bool DirQuota::CheckQuota(int64_t new_space, int64_t new_inodes) {
     return false;
   }
 
-  if (quota.maxinodes() > 0 &&
+  if (new_inodes > 0 && quota.maxinodes() > 0 &&
       (new_inodes + new_inodes_.load(std::memory_order_relaxed) +
        quota.usedinodes()) > (int64_t)quota.maxinodes()) {
     LOG(INFO) << "CheckQuota check inode failed, new_inodes:" << new_inodes
