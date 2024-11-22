@@ -58,16 +58,16 @@ using FileCacheManagerPtr = std::shared_ptr<FileCacheManager>;
 using ChunkCacheManagerPtr = std::shared_ptr<ChunkCacheManager>;
 using DataCachePtr = std::shared_ptr<DataCache>;
 using WeakDataCachePtr = std::weak_ptr<DataCache>;
-using curvefs::utils::GetObjectAsyncCallBack;
-using curvefs::utils::PutObjectAsyncCallBack;
-using ::curvefs::utils::PutObjectAsyncContext;
-using curvefs::utils::S3Adapter;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::BlockKey;
 using ::curvefs::client::datastream::DataStream;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::S3ChunkInfo;
 using curvefs::metaserver::S3ChunkInfoList;
+using curvefs::utils::GetObjectAsyncCallBack;
+using curvefs::utils::PutObjectAsyncCallBack;
+using ::curvefs::utils::PutObjectAsyncContext;
+using curvefs::utils::S3Adapter;
 
 enum CacheType { Write = 1, Read = 2 };
 
@@ -348,18 +348,18 @@ class FileCacheManager {
 
   virtual int Write(uint64_t offset, uint64_t length, const char* dataBuf);
 
-  virtual int Read(uint64_t inodeId, uint64_t offset, uint64_t length,
-                   char* dataBuf);
+  virtual int Read(uint64_t inode_id, uint64_t offset, uint64_t length,
+                   char* data_buf);
 
   bool IsEmpty() { return chunkCacheMap_.empty(); }
 
   uint64_t GetInodeId() const { return inode_; }
 
   void SetChunkCacheManagerForTest(uint64_t index,
-                                   ChunkCacheManagerPtr chunkCacheManager) {
-    WriteLockGuard writeLockGuard(rwLock_);
+                                   ChunkCacheManagerPtr chunk_cache_manager) {
+    WriteLockGuard lg(rwLock_);
 
-    auto ret = chunkCacheMap_.emplace(index, chunkCacheManager);
+    auto ret = chunkCacheMap_.emplace(index, chunk_cache_manager);
     assert(ret.second);
     (void)ret;
   }
@@ -401,9 +401,9 @@ class FileCacheManager {
 
   // miss read from memory read/write cache, need read from
   // kv(localdisk/remote cache/s3)
-  int GenerateKVRequest(const std::shared_ptr<InodeWrapper>& inodeWrapper,
-                        const std::vector<ReadRequest>& readRequest,
-                        char* dataBuf, std::vector<S3ReadRequest>* kvRequest);
+  int GenerateKVRequest(const std::shared_ptr<InodeWrapper>& inode_wrapper,
+                        const std::vector<ReadRequest>& read_request,
+                        char* data_buf, std::vector<S3ReadRequest>* kv_request);
 
   enum class ReadStatus {
     OK = 0,
@@ -421,15 +421,14 @@ class FileCacheManager {
   }
 
   // read kv request, need
-  ReadStatus ReadKVRequest(const std::vector<S3ReadRequest>& kvRequests,
-                           char* dataBuf, uint64_t fileLen);
+  ReadStatus ReadKVRequest(const std::vector<S3ReadRequest>& kv_requests,
+                           char* data_buf, uint64_t file_len);
 
   // thread function for ReadKVRequest
-  void ProcessKVRequest(const S3ReadRequest& req, char* dataBuf,
-                        uint64_t fileLen,
-                        std::once_flag& cancelFlag,           // NOLINT
-                        std::atomic<bool>& isCanceled,        // NOLINT
-                        std::atomic<BCACHE_ERROR>& retCode);  // NOLINT
+  void ProcessKVRequest(const S3ReadRequest& req, char* data_buf,
+                        uint64_t file_len, std::once_flag& cancel_flag,
+                        std::atomic<bool>& is_canceled,
+                        std::atomic<BCACHE_ERROR>& ret_code);
 
   // read kv request from local disk cache
   bool ReadKVRequestFromLocalCache(const BlockKey& key, char* buffer,
@@ -445,7 +444,7 @@ class FileCacheManager {
 
   // read retry policy when read from s3 occur not exist error
   int HandleReadS3NotExist(uint32_t retry,
-                           const std::shared_ptr<InodeWrapper>& inodeWrapper);
+                           const std::shared_ptr<InodeWrapper>& inode_wrapper);
 
   // prefetch for block
   void PrefetchForBlock(const S3ReadRequest& req, uint64_t fileLen,

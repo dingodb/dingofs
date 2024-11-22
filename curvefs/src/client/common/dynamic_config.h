@@ -66,6 +66,9 @@ DECLARE_uint32(fs_usage_flush_interval_second);
 DECLARE_uint32(flush_quota_interval_second);
 DECLARE_uint32(load_quota_interval_second);
 
+// fuse client
+DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
+
 }  // namespace common
 }  // namespace client
 }  // namespace curvefs

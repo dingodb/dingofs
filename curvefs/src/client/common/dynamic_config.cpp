@@ -101,6 +101,12 @@ DEFINE_validator(flush_quota_interval_second, &PassUint32);
 DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
 DEFINE_validator(load_quota_interval_second, &PassUint32);
 
+// fuse
+// kernal will retry when read fail
+DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,
+              "fuse read max retry when s3 object not exist");
+DEFINE_validator(fuse_read_max_retry_s3_not_exist, &PassUint32);
+
 }  // namespace common
 }  // namespace client
 }  // namespace curvefs

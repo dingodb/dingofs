@@ -44,8 +44,6 @@
 namespace curvefs {
 namespace client {
 
-using ::curvefs::utils::TaskThreadPool;
-using ::curvefs::utils::Thread;
 using ::curvefs::client::blockcache::BlockCache;
 using ::curvefs::client::blockcache::S3Client;
 using ::curvefs::client::blockcache::StoreType;
@@ -57,16 +55,18 @@ using curvefs::client::metric::S3Metric;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::S3ChunkInfo;
 using curvefs::metaserver::S3ChunkInfoList;
+using ::curvefs::utils::TaskThreadPool;
+using ::curvefs::utils::Thread;
 using rpcclient::MdsClient;
 
 class DiskCacheManagerImpl;
-class FlushChunkCacheContext;
 class ChunkCacheManager;
+struct FlushChunkCacheContext;
 
 class S3ClientAdaptor {
  public:
-  S3ClientAdaptor() {}
-  virtual ~S3ClientAdaptor() {}
+  S3ClientAdaptor() = default;
+  virtual ~S3ClientAdaptor() = default;
   /**
    * @brief Initailize s3 client
    * @param[in] options the options for s3 client
@@ -119,8 +119,8 @@ struct FlushChunkCacheContext {
 // client use s3 internal interface
 class S3ClientAdaptorImpl : public S3ClientAdaptor {
  public:
-  S3ClientAdaptorImpl() {}
-  virtual ~S3ClientAdaptorImpl() { LOG(INFO) << "delete S3ClientAdaptorImpl"; }
+  S3ClientAdaptorImpl() = default;
+  ~S3ClientAdaptorImpl() override { LOG(INFO) << "delete S3ClientAdaptorImpl"; }
   /**
    * @brief Initailize s3 client
    * @param[in] options the options for s3 client
@@ -133,32 +133,36 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
        std::shared_ptr<FileSystem> filesystem,
        std::shared_ptr<BlockCache> block_cache,
        std::shared_ptr<KVClientManager> kvClientManager,
-       bool startBackGround = false);
+       bool startBackGround = false) override;
   /**
    * @brief write data to s3
    * @param[in] options the options for s3 client
    */
   int Write(uint64_t inodeId, uint64_t offset, uint64_t length,
-            const char* buf);
-  int Read(uint64_t inodeId, uint64_t offset, uint64_t length, char* buf);
-  CURVEFS_ERROR Truncate(InodeWrapper* inodeWrapper, uint64_t size);
-  void ReleaseCache(uint64_t inodeId);
-  CURVEFS_ERROR Flush(uint64_t inode_id);
-  CURVEFS_ERROR FlushAllCache(uint64_t inodeId);
-  CURVEFS_ERROR FsSync();
-  int Stop();
-  uint64_t GetBlockSize() { return blockSize_; }
-  uint64_t GetChunkSize() { return chunkSize_; }
-  uint32_t GetObjectPrefix() { return objectPrefix_; }
+            const char* buf) override;
+
+  int Read(uint64_t inode_id, uint64_t offset, uint64_t length,
+           char* buf) override;
+
+  CURVEFS_ERROR Truncate(InodeWrapper* inodeWrapper, uint64_t size) override;
+  void ReleaseCache(uint64_t inodeId) override;
+  CURVEFS_ERROR Flush(uint64_t inode_id) override;
+  CURVEFS_ERROR FlushAllCache(uint64_t inodeId) override;
+  CURVEFS_ERROR FsSync() override;
+  int Stop() override;
+
+  uint64_t GetBlockSize() override { return blockSize_; }
+  uint64_t GetChunkSize() override { return chunkSize_; }
+  uint32_t GetObjectPrefix() override { return objectPrefix_; }
 
   std::shared_ptr<FsCacheManager> GetFsCacheManager() {
     return fsCacheManager_;
   }
-  uint32_t GetFlushInterval() { return flushIntervalSec_; }
-  std::shared_ptr<S3Client> GetS3Client() { return client_; }
-  uint32_t GetPrefetchBlocks() { return prefetchBlocks_; }
+  uint32_t GetFlushInterval() const { return flushIntervalSec_; }
+  std::shared_ptr<S3Client> GetS3Client() override { return client_; }
+  uint32_t GetPrefetchBlocks() const { return prefetchBlocks_; }
 
-  bool HasDiskCache() {
+  bool HasDiskCache() override {
     return block_cache_->GetStoreType() == StoreType::DISK;
   }
 
@@ -168,9 +172,11 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
 
   std::shared_ptr<FileSystem> GetFileSystem() { return filesystem_; }
 
-  std::shared_ptr<BlockCache> GetBlockCache() { return block_cache_; }
+  std::shared_ptr<BlockCache> GetBlockCache() override { return block_cache_; }
 
-  FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum, uint64_t* chunkId);
+  FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
+                              uint64_t* chunkId) override;
+
   void FsSyncSignal() {
     std::lock_guard<std::mutex> lk(mtx_);
     VLOG(3) << "fs sync signal";
@@ -184,9 +190,9 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     cond_.notify_one();
   }
 
-  void SetFsId(uint32_t fsId) { fsId_ = fsId; }
-  uint32_t GetFsId() { return fsId_; }
-  uint32_t GetPageSize() { return pageSize_; }
+  void SetFsId(uint32_t fs_id) override { fsId_ = fs_id; }
+  uint32_t GetFsId() const { return fsId_; }
+  uint32_t GetPageSize() const { return pageSize_; }
 
   uint32_t GetMaxReadRetryIntervalMs() const { return maxReadRetryIntervalMs_; }
 

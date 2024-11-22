@@ -232,11 +232,11 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
                                        struct fuse_file_info* fi, char* buffer,
                                        size_t* r_size) {
   (void)req;
-  auto GetReadSize = [](size_t& size, off_t& off, size_t& fileSize) -> size_t {
-    if (static_cast<int64_t>(fileSize) <= off) {
+  auto GetReadSize = [](size_t& size, off_t& off, size_t& file_size) -> size_t {
+    if (static_cast<int64_t>(file_size) <= off) {
       return 0;
-    } else if (fileSize < off + size) {
-      return fileSize - off;
+    } else if (file_size < off + size) {
+      return file_size - off;
     } else {
       return size;
     }
@@ -244,13 +244,13 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
 
   if (ino == STATSINODEID) {
     auto handler = fs_->FindHandler(fi->fh);
-    auto dataBuf = handler->buffer;
+    auto* data_buf = handler->buffer;
 
-    size_t fileSize = dataBuf->size;
-    size_t len = GetReadSize(size, off, fileSize);
+    size_t file_size = data_buf->size;
+    size_t len = GetReadSize(size, off, file_size);
     *r_size = len;
     if (len > 0) {
-      memcpy(buffer, dataBuf->p + off, len);
+      memcpy(buffer, data_buf->p + off, len);
     }
     return CURVEFS_ERROR::OK;
   }
@@ -263,50 +263,40 @@ CURVEFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
   }
 
   uint64_t start = butil::cpuwide_time_us();
-  std::shared_ptr<InodeWrapper> inodeWrapper;
-  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
+  std::shared_ptr<InodeWrapper> inode_wrapper;
+  CURVEFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
   if (ret != CURVEFS_ERROR::OK) {
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                << ", inodeId=" << ino;
     return ret;
   }
-  uint64_t fileSize = inodeWrapper->GetLength();
+  uint64_t file_size = inode_wrapper->GetLength();
 
-  // size_t len = 0;
-  // if (static_cast<int64_t>(fileSize) <= off) {
-  //     *rSize = 0;
-  //     return CURVEFS_ERROR::OK;
-  // } else if (fileSize < off + size) {
-  //     len = fileSize - off;
-  // } else {
-  //     len = size;
-  // }
-
-  size_t len = GetReadSize(size, off, fileSize);
+  size_t len = GetReadSize(size, off, file_size);
   if (len == 0) {
     *r_size = 0;
     return CURVEFS_ERROR::OK;
   }
 
   // Read do not change inode. so we do not get lock here.
-  int rRet = s3Adaptor_->Read(ino, off, len, buffer);
-  if (rRet < 0) {
-    LOG(ERROR) << "s3Adaptor_ read failed, ret = " << rRet;
+  int r_ret = s3Adaptor_->Read(ino, off, len, buffer);
+  if (r_ret < 0) {
+    LOG(ERROR) << "s3Adaptor_ read failed, ret = " << r_ret;
     return CURVEFS_ERROR::INTERNAL;
   }
-  *r_size = rRet;
+  *r_size = r_ret;
 
   if (fsMetric_.get() != nullptr) {
-    fsMetric_->userRead.bps.count << rRet;
+    fsMetric_->userRead.bps.count << r_ret;
     fsMetric_->userRead.qps.count << 1;
     uint64_t duration = butil::cpuwide_time_us() - start;
     fsMetric_->userRead.latency << duration;
-    fsMetric_->userReadIoSize.set_value(rRet);
+    fsMetric_->userReadIoSize.set_value(r_ret);
   }
 
-  ::curvefs::utils::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
-  inodeWrapper->UpdateTimestampLocked(kAccessTime);
-  inodeManager_->ShipToFlush(inodeWrapper);
+  ::curvefs::utils::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
+  inode_wrapper->UpdateTimestampLocked(kAccessTime);
+  inodeManager_->ShipToFlush(inode_wrapper);
 
   VLOG(9) << "read end, read size = " << *r_size;
   return ret;

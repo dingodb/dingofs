@@ -39,8 +39,8 @@ DECLARE_bool(useFakeS3);
 
 class S3Client {
  public:
-  S3Client() {}
-  virtual ~S3Client() {}
+  S3Client() = default;
+  virtual ~S3Client() = default;
   virtual void Init(const curvefs::utils::S3AdapterOption& option) = 0;
   virtual void Deinit() = 0;
   virtual int Upload(const std::string& name, const char* buf,
@@ -54,7 +54,7 @@ class S3Client {
 
 class S3ClientImpl : public S3Client {
  public:
-  S3ClientImpl() : S3Client() {
+  S3ClientImpl() {
     if (curvefs::client::common::FLAGS_useFakeS3) {
       s3Adapter_ = std::make_shared<curvefs::utils::FakeS3Adapter>();
       LOG(INFO) << "use fake S3";
@@ -63,14 +63,19 @@ class S3ClientImpl : public S3Client {
       LOG(INFO) << "use S3";
     }
   }
-  virtual ~S3ClientImpl() {}
-  void Init(const curvefs::utils::S3AdapterOption& option);
-  void Deinit();
-  int Upload(const std::string& name, const char* buf, uint64_t length);
-  void UploadAsync(std::shared_ptr<PutObjectAsyncContext> context);
+  ~S3ClientImpl() override = default;
+
+  void Init(const curvefs::utils::S3AdapterOption& option) override;
+  void Deinit() override;
+
+  int Upload(const std::string& name, const char* buf,
+             uint64_t length) override;
+  void UploadAsync(std::shared_ptr<PutObjectAsyncContext> context) override;
+
   int Download(const std::string& name, char* buf, uint64_t offset,
-               uint64_t length);
-  void DownloadAsync(std::shared_ptr<GetObjectAsyncContext> context);
+               uint64_t length) override;
+  void DownloadAsync(std::shared_ptr<GetObjectAsyncContext> context) override;
+
   void SetAdapter(std::shared_ptr<curvefs::utils::S3Adapter> adapter) {
     s3Adapter_ = adapter;
   }
