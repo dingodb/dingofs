@@ -22,6 +22,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"regexp"
 	"time"
@@ -89,7 +90,8 @@ func InitConfig() {
 
 	// viper.SetDefault("format", "plain")
 	viper.AutomaticEnv()
-	if err := viper.ReadInConfig(); err == nil {
+	if err := viper.ReadInConfig(); err != nil {
+		log.Printf("config file name: %v", viper.ConfigFileUsed())
 		cobra.CheckErr(err)
 	}
 }
