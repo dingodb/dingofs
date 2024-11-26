@@ -29,6 +29,8 @@
 #include <sys/mman.h>
 
 #include <cassert>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 
@@ -57,7 +59,11 @@ bool MemoryPool::CreatePool(size_t size_each_block, uint64_t num_total_blocks) {
     void* addr = reinterpret_cast<void*>(mem_start_);
     rc = madvise(addr, total_size, MADV_HUGEPAGE);
     if (rc == 0) {
-      std::memset(mem_start_, 0, total_size);
+      // NOTE: volatile_mem_start is used to avoid compiler optimization
+      // memset is not advised to use here, because it may be optimized by
+      // compiler
+      volatile char* volatile_mem_start = mem_start_;
+      std::fill(volatile_mem_start, volatile_mem_start + total_size, 0);
     }
   }
   timer.stop();

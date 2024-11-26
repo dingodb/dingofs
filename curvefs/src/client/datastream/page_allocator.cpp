@@ -89,7 +89,6 @@ char* PagePool::Allocate() {
 
 void PagePool::DeAllocate(char* page) {
   std::unique_lock<std::mutex> lk(mutex_);
-  std::memset(page, 0, page_size_);
   mem_pool_->DeAllocate(reinterpret_cast<void*>(page));
   num_free_pages_++;
   can_allocate_.notify_one();
