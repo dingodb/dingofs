@@ -167,7 +167,7 @@ void MDSBaseClient::CommitTx(const CommitTxRequest& request,
 }
 
 // TODO(all): do we really need pass `fsId` all the time?
-//            each curve-fuse process only mount one filesystem
+//            each dingo-fuse process only mount one filesystem
 void MDSBaseClient::AllocateVolumeBlockGroup(
     uint32_t fsId, uint32_t count, const std::string& owner,
     AllocateBlockGroupResponse* response, brpc::Controller* cntl,

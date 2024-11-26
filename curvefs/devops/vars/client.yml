@@ -28,7 +28,7 @@ project_binary_debug_symbol_suffix: "{{ curvefs_debug_symbol_file_suffix }}"
 #     The same thing happened in CentOS 7 and CentOS 8
 project_mount_command: >
   LD_PRELOAD=`find /usr/ -name "libjemalloc.so*" -print -quit 2>/dev/null`
-  {{ project_root_dest }}/sbin/curve-fuse
+  {{ project_root_dest }}/sbin/dingo-fuse
   {{ curvefs_client_mount_args | trim }}
   -o conf={{ project_root_dest }}/conf/client.conf
   {{ curvefs_client_mount_path }}

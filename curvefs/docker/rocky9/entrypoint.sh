@@ -85,7 +85,7 @@ function prepare() {
             g_start_args="--confPath $conf_path"
             ;;
         client)
-            g_binary="$g_prefix/sbin/curve-fuse"
+            g_binary="$g_prefix/sbin/dingo-fuse"
             g_start_args="--confPath $conf_path"
             ;;
         monitor)
