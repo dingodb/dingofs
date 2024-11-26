@@ -80,6 +80,8 @@ void DiskCacheWatcher::CheckLockFile(WatchStore* watch_store) {
   auto store = watch_store->store;
 
   if (!fs->FileExists(lock_path)) {  // cache is down
+    LOG(INFO) << "Lock file (" << lock_path
+              << ") not found, we will shutdown the specified store.";
     Shutdown(watch_store);
   } else if (watch_store->status == CacheStatus::UP) {  // cache already up
     // do nothing
