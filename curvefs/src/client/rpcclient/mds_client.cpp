@@ -22,6 +22,7 @@
 
 #include "curvefs/src/client/rpcclient/mds_client.h"
 
+#include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
@@ -33,10 +34,10 @@ namespace curvefs {
 namespace client {
 namespace rpcclient {
 
-using ::curvefs::utils::TimeUtility;
 using ::curvefs::client::metric::MetricListGuard;
 using ::curvefs::mds::space::SpaceErrCode;
 using ::curvefs::mds::space::SpaceErrCode_Name;
+using ::curvefs::utils::TimeUtility;
 
 // rpc发送和mds地址切换状态机
 int RPCExcutorRetryPolicy::DoRPCTask(RPCFunc rpctask, uint64_t maxRetryTimeMS) {
@@ -390,7 +391,9 @@ bool MdsClientImpl::GetMetaServerInfo(
   curvefs::utils::SplitString(addr.ToString(), ":", &strs);
   const std::string& ip = strs[0];
   uint64_t port;
+  uint32_t idx;
   ::curvefs::utils::StringToUll(strs[1], &port);
+  CHECK(::curvefs::utils::StringToUl(strs[2], &idx));
 
   auto task = RPCTask {
     (void)addrindex;
@@ -405,7 +408,7 @@ bool MdsClientImpl::GetMetaServerInfo(
                              start);
 
     GetMetaServerInfoResponse response;
-    mdsbasecli_->GetMetaServerInfo(port, ip, &response, cntl, channel);
+    mdsbasecli_->GetMetaServerInfo(ip, port, idx, &response, cntl, channel);
     if (cntl->Failed()) {
       LOG(WARNING) << "GetMetaServerInfo Failed, errorcode = "
                    << cntl->ErrorCode()
@@ -481,7 +484,8 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
     }
     TopoStatusCode ret = response.statuscode();
     LOG_IF(WARNING, TopoStatusCode::TOPO_OK != 0)
-        << "GetMetaServerList failed" << ", errocde = " << response.statuscode()
+        << "GetMetaServerList failed"
+        << ", errocde = " << response.statuscode()
         << ", log id = " << cntl->log_id();
     return ret;
   };

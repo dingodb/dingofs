@@ -80,7 +80,8 @@ FSStatusCode MetaserverClient::SendRpc2MetaServer(
     if (refresh_leader) {
       auto ret = GetLeader(ctx, &leader);
       if (ret != FSStatusCode::OK) {
-        LOG(ERROR) << "Get leader fail" << ", poolId = " << pool_id
+        LOG(ERROR) << "Get leader fail"
+                   << ", poolId = " << pool_id
                    << ", copysetId = " << copyset_id;
         return ret;
       }
@@ -146,7 +147,8 @@ FSStatusCode MetaserverClient::GetLeader(const LeaderCtx& ctx,
     uint32_t max_retry = options_.rpcRetryTimes;
     while (cntl.Failed() && (max_retry > 0)) {
       int32_t ret_code = cntl.ErrorCode();
-      LOG(WARNING) << "GetLeader failed" << ", poolid = " << ctx.poolId
+      LOG(WARNING) << "GetLeader failed"
+                   << ", poolid = " << ctx.poolId
                    << ", copysetId = " << ctx.copysetId
                    << ", errorCode = " << ret_code
                    << ", Rpc error = " << cntl.ErrorText();
@@ -386,8 +388,8 @@ FSStatusCode MetaserverClient::DeleteInode(uint32_t fs_id, uint64_t inode_id) {
   stub.DeleteInode(&cntl, &request, &response, nullptr);
 
   if (cntl.Failed()) {
-    LOG(ERROR) << "DeleteInode failed" << ", fsId = " << fs_id
-               << ", inodeId = " << inode_id
+    LOG(ERROR) << "DeleteInode failed"
+               << ", fsId = " << fs_id << ", inodeId = " << inode_id
                << ", Rpc error = " << cntl.ErrorText();
     return FSStatusCode::RPC_ERROR;
   }
@@ -494,14 +496,15 @@ FSStatusCode MetaserverClient::DeletePartition(
 }
 
 FSStatusCode MetaserverClient::CreateCopySet(
-    uint32_t pool_id, uint32_t copyset_id, const std::set<std::string>& addrs) {
+    uint32_t pool_id, uint32_t copyset_id,
+    const std::vector<std::string>& peers, const std::set<std::string>& addrs) {
   CreateCopysetRequest request;
   CreateCopysetResponse response;
   auto* copyset = request.add_copysets();
   copyset->set_poolid(pool_id);
   copyset->set_copysetid(copyset_id);
-  for (const auto& item : addrs) {
-    copyset->add_peers()->set_address(BuildPeerIdWithAddr(item));
+  for (const auto& peer : peers) {
+    copyset->add_peers()->set_address(peer);
   }
 
   for (const std::string& item : addrs) {
@@ -519,9 +522,9 @@ FSStatusCode MetaserverClient::CreateCopySet(
 
     uint32_t max_retry = options_.rpcRetryTimes;
     while (cntl.Failed() && max_retry > 0) {
-      LOG(WARNING) << "Create copyset failed" << " from " << cntl.remote_side()
-                   << " to " << cntl.local_side()
-                   << " errCode = " << cntl.ErrorCode()
+      LOG(WARNING) << "Create copyset failed"
+                   << " from " << cntl.remote_side() << " to "
+                   << cntl.local_side() << " errCode = " << cntl.ErrorCode()
                    << " errorText = " << cntl.ErrorText()
                    << ", then will retry " << max_retry << " times.";
       max_retry--;
@@ -537,8 +540,9 @@ FSStatusCode MetaserverClient::CreateCopySet(
     }
 
     if (response.status() != COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS) {
-      LOG(ERROR) << "Create copyset failed." << " from " << cntl.remote_side()
-                 << " to " << cntl.local_side()
+      LOG(ERROR) << "Create copyset failed."
+                 << " from " << cntl.remote_side() << " to "
+                 << cntl.local_side()
                  << " request = " << request.ShortDebugString()
                  << " error code = " << response.status();
       return FSStatusCode::CREATE_COPYSET_ERROR;
@@ -582,8 +586,8 @@ FSStatusCode MetaserverClient::CreateCopySetOnOneMetaserver(
   }
 
   if (response.status() != COPYSET_OP_STATUS::COPYSET_OP_STATUS_SUCCESS) {
-    LOG(ERROR) << "Create copyset failed." << " from " << cntl.remote_side()
-               << " to " << cntl.local_side()
+    LOG(ERROR) << "Create copyset failed."
+               << " from " << cntl.remote_side() << " to " << cntl.local_side()
                << " request = " << request.ShortDebugString()
                << " error code = " << response.status();
     return FSStatusCode::CREATE_COPYSET_ERROR;

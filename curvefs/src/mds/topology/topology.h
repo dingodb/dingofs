@@ -151,7 +151,7 @@ class Topology {
   virtual bool GetMetaServer(MetaServerIdType metaserver_id,
                              MetaServer* out) const = 0;
   virtual bool GetMetaServer(const std::string& host_ip, uint32_t port,
-                             MetaServer* out) const = 0;
+                             uint32_t index, MetaServer* out) const = 0;
   virtual bool GetCopySet(CopySetKey key, CopySetInfo* out) const = 0;
   virtual bool GetCopysetOfPartition(PartitionIdType id,
                                      CopySetInfo* out) const = 0;
@@ -363,7 +363,7 @@ class TopologyImpl : public Topology {
   bool GetServer(ServerIdType server_id, Server* out) const override;
   bool GetMetaServer(MetaServerIdType metaserver_id,
                      MetaServer* out) const override;
-  bool GetMetaServer(const std::string& host_ip, uint32_t port,
+  bool GetMetaServer(const std::string& host_ip, uint32_t port, uint32_t index,
                      MetaServer* out) const override;
   bool GetCopySet(CopySetKey key, CopySetInfo* out) const override;
   bool GetCopysetOfPartition(PartitionIdType id,

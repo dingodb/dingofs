@@ -32,6 +32,7 @@
 #include <utility>
 #include <vector>
 
+#include "curvefs/src/base/string/string.h"
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/topology/deal_peerid.h"
 #include "curvefs/src/mds/topology/topology_item.h"
@@ -43,6 +44,8 @@ using curvefs::utils::TimeUtility;
 namespace curvefs {
 namespace mds {
 namespace topology {
+
+using ::curvefs::base::string::StrFormat;
 
 void TopologyManager::Init(const TopologyOption& option) { option_ = option; }
 
@@ -177,8 +180,10 @@ void TopologyManager::GetMetaServer(const GetMetaServerInfoRequest* request,
       response->set_statuscode(TopoStatusCode::TOPO_METASERVER_NOT_FOUND);
       return;
     }
-  } else if (request->has_hostip() && request->has_port()) {
-    if (!topology_->GetMetaServer(request->hostip(), request->port(), &ms)) {
+  } else if (request->has_hostip() && request->has_port() &&
+             request->has_idx()) {
+    if (!topology_->GetMetaServer(request->hostip(), request->port(),
+                                  request->idx(), &ms)) {
       response->set_statuscode(TopoStatusCode::TOPO_METASERVER_NOT_FOUND);
       return;
     }
@@ -657,8 +662,9 @@ TopoStatusCode TopologyManager::CreatePartitionOnCopyset(
   FSStatusCode retcode = metaserverClient_->CreatePartition(
       fsId, poolId, copysetId, partitionId, idStart, idEnd, copysetMemberAddr);
   if (FSStatusCode::OK != retcode) {
-    LOG(ERROR) << "CreatePartition failed, " << "fsId = " << fsId
-               << ", poolId = " << poolId << ", copysetId = " << copysetId
+    LOG(ERROR) << "CreatePartition failed, "
+               << "fsId = " << fsId << ", poolId = " << poolId
+               << ", copysetId = " << copysetId
                << ", partitionId = " << partitionId;
     return TopoStatusCode::TOPO_CREATE_PARTITION_FAIL;
   }
@@ -857,11 +863,15 @@ TopoStatusCode TopologyManager::CreateCopyset(
   LOG(INFO) << "Create new copyset: " << copyset.ToString();
   // translate metaserver id to metaserver addr
   std::set<std::string> metaServerAddrs;
+  std::vector<std::string> peers;
   for (const auto& it : copyset.metaServerIds) {
-    MetaServer metaServer;
-    if (topology_->GetMetaServer(it, &metaServer)) {
-      metaServerAddrs.emplace(metaServer.GetInternalIp() + ":" +
-                              std::to_string(metaServer.GetInternalPort()));
+    MetaServer ms;
+    if (topology_->GetMetaServer(it, &ms)) {
+      std::string host = ms.GetInternalIp();
+      uint32_t port = ms.GetInternalPort();
+      std::string address = StrFormat("%s:%d", host, port);
+      metaServerAddrs.emplace(address);
+      peers.emplace_back(BuildPeerIdWithIpPort(host, port, ms.GetId()));
     } else {
       LOG(ERROR) << "get metaserver failed, metaserverId = " << it;
       return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
@@ -876,7 +886,7 @@ TopoStatusCode TopologyManager::CreateCopyset(
 
   // create copyset on metaserver
   FSStatusCode retcode = metaserverClient_->CreateCopySet(
-      copyset.poolId, copyset.copysetId, metaServerAddrs);
+      copyset.poolId, copyset.copysetId, peers, metaServerAddrs);
   if (FSStatusCode::OK != retcode) {
     ClearCopysetCreating(copyset.poolId, copyset.copysetId);
     return TopoStatusCode::TOPO_CREATE_COPYSET_ON_METASERVER_FAIL;
@@ -1057,8 +1067,8 @@ TopoStatusCode TopologyManager::GetCopysetMembers(
       }
     }
   } else {
-    LOG(ERROR) << "Get copyset failed." << " poolId = " << poolId
-               << ", copysetId = " << copysetId;
+    LOG(ERROR) << "Get copyset failed."
+               << " poolId = " << poolId << ", copysetId = " << copysetId;
     return TopoStatusCode::TOPO_COPYSET_NOT_FOUND;
   }
   return TopoStatusCode::TOPO_OK;
@@ -1134,8 +1144,8 @@ void TopologyManager::GetCopysetInfo(const uint32_t& poolId,
 
     copysetValue->set_allocated_copysetinfo(valueCopysetInfo);
   } else {
-    LOG(ERROR) << "Get copyset failed." << " poolId=" << poolId
-               << " copysetId=" << copysetId;
+    LOG(ERROR) << "Get copyset failed."
+               << " poolId=" << poolId << " copysetId=" << copysetId;
     copysetValue->set_statuscode(TopoStatusCode::TOPO_COPYSET_NOT_FOUND);
   }
 }

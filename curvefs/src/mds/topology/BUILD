@@ -33,6 +33,7 @@ cc_library(
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/utils/concurrent:curve_concurrent",
         "//curvefs/src/kvstorageclient:kvstorage_client",
+        "//curvefs/src/base:curvefs_base_lib",
         "@brpc//:brpc",
         "@glog//:glog",
         "@jsoncpp//:jsoncpp",

@@ -23,7 +23,7 @@ option go_package = "curvefs/proto/heartbeat";
 message CopySetInfo {
     required uint32 poolId = 1;
     required uint32 copysetId = 2;
-    // copyset replicas, IP:PORT:ID, e.g. 127.0.0.1:8200:0
+    // copyset replicas, IP:PORT:ID:ROLE, e.g. 127.0.0.1:8200:0:0
     repeated common.Peer peers = 3;
     // Used to mark configuration changes, each time there is a change, the epoch will increase
     required uint64 epoch = 4;

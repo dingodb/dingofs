@@ -142,7 +142,7 @@ bool CopysetNode::Init(const CopysetNodeOptions& options) {
   butil::str2ip(options_.ip.c_str(), &ip);
   butil::EndPoint addr(ip, options_.port);
 
-  peerId_ = braft::PeerId(addr, 0);
+  peerId_ = braft::PeerId(addr, options_.index);
   raftNode_ = absl::make_unique<RaftNode>(groupId_, peerId_);
 
   return true;

@@ -188,6 +188,7 @@ typedef struct FileEpoch {
 struct PeerAddr {
   // 节点的地址信息
   EndPoint addr_;
+  uint32_t idx_;
 
   PeerAddr() = default;
   explicit PeerAddr(butil::EndPoint addr) : addr_(addr) {}
@@ -201,14 +202,15 @@ struct PeerAddr {
   void Reset() {
     addr_.ip = butil::IP_ANY;
     addr_.port = 0;
+    idx_ = 0;
   }
 
   // 从字符串中将地址信息解析出来
   int Parse(const std::string& str) {
-    int idx;
+    idx_ = 0;
     char ip_str[64];
-    if (2 >
-        sscanf(str.c_str(), "%[^:]%*[:]%d%*[:]%d", ip_str, &addr_.port, &idx)) {
+    if (2 > sscanf(str.c_str(), "%[^:]%*[:]%d%*[:]%d", ip_str, &addr_.port,
+                   &idx_)) {
       Reset();
       return -1;
     }
@@ -224,7 +226,8 @@ struct PeerAddr {
   // 在get leader调用中可以将该值直接传入request
   std::string ToString() const {
     char str[128];
-    snprintf(str, sizeof(str), "%s:%d", butil::endpoint2str(addr_).c_str(), 0);
+    snprintf(str, sizeof(str), "%s:%d", butil::endpoint2str(addr_).c_str(),
+             idx_);
     return std::string(str);
   }
 
@@ -338,6 +341,6 @@ inline std::ostream& operator<<(std::ostream& os, const OpenFlags& flags) {
 OpenFlags DefaultReadonlyOpenFlags();
 
 }  // namespace client
-}  // namespace curve
+}  // namespace curvefs
 
 #endif  // SRC_CLIENT_CLIENT_COMMON_H_

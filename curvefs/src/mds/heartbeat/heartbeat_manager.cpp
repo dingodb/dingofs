@@ -268,7 +268,7 @@ MetaServerIdType HeartbeatManager::GetMetaserverIdByPeerStr(
 
   // fetch metaserverId according to ip:port pair
   MetaServer meta_server;
-  if (topology_->GetMetaServer(ip, port, &meta_server)) {
+  if (topology_->GetMetaServer(ip, port, id, &meta_server)) {
     return meta_server.GetId();
   }
 

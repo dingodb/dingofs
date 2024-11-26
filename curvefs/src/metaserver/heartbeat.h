@@ -37,8 +37,8 @@
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/wait_interval.h"
 
-using ::curvefs::utils::Thread;
 using ::curvefs::metaserver::copyset::CopysetNode;
+using ::curvefs::utils::Thread;
 
 namespace curvefs {
 namespace metaserver {
@@ -169,8 +169,7 @@ class Heartbeat {
 // execute tasks from heartbeat response
 class HeartbeatTaskExecutor {
  public:
-  HeartbeatTaskExecutor(CopysetNodeManager* mgr,
-                        const butil::EndPoint& endpoint);
+  HeartbeatTaskExecutor(CopysetNodeManager* mgr, const std::string& peer);
 
   void ExecTasks(const HeartbeatResponse& response);
 
@@ -186,7 +185,7 @@ class HeartbeatTaskExecutor {
   bool NeedPurge(const CopySetConf& conf);
 
   CopysetNodeManager* copysetMgr_;
-  butil::EndPoint ep_;
+  std::string address_;
 };
 
 }  // namespace metaserver
