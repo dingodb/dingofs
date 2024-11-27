@@ -79,7 +79,7 @@ func InitConfig() {
 	} else if ConfPath = os.Getenv("CONF"); ConfPath != "" {
 		viper.SetConfigFile(ConfPath)
 	} else {
-		// using home directory and /etc/curve as default configuration file path
+		// using home directory and /etc/dingo as default configuration file path
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 		viper.AddConfigPath(home + "/.dingo")
@@ -91,8 +91,10 @@ func InitConfig() {
 	// viper.SetDefault("format", "plain")
 	viper.AutomaticEnv()
 	if err := viper.ReadInConfig(); err != nil {
-		log.Printf("config file name: %v", viper.ConfigFileUsed())
-		cobra.CheckErr(err)
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			log.Printf("config file name: %v", viper.ConfigFileUsed())
+			cobra.CheckErr(err)
+		}
 	}
 }
 
