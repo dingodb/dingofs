@@ -45,6 +45,8 @@ class DirQuota {
 
   void UpdateUsage(int64_t new_space, int64_t new_inodes);
 
+  void FlushedUsage(int64_t new_space, int64_t new_inodes);
+
   bool CheckQuota(int64_t new_space, int64_t new_inodes);
 
   void Refresh(Quota quota);

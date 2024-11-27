@@ -46,6 +46,22 @@ void DirQuota::UpdateUsage(int64_t new_space, int64_t new_inodes) {
   }
 }
 
+void DirQuota::FlushedUsage(int64_t new_space, int64_t new_inodes) {
+  VLOG(6) << "FlushedUsage dir inodeId=" << ino_ << " new_space:" << new_space
+          << ", new_inodes:" << new_inodes << ", dir_quota:" << ToString();
+  if (new_space != 0) {
+    new_space_.fetch_sub(new_space, std::memory_order_relaxed);
+  }
+
+  if (new_inodes != 0) {
+    new_inodes_.fetch_sub(new_inodes, std::memory_order_relaxed);
+  }
+
+  WriteLockGuard lk(rwlock_);
+  quota_.set_usedbytes(quota_.usedbytes() + new_space);
+  quota_.set_usedinodes(quota_.usedinodes() + new_inodes);
+}
+
 bool DirQuota::CheckQuota(int64_t new_space, int64_t new_inodes) {
   Quota quota = GetQuota();
 
@@ -258,22 +274,27 @@ void DirQuotaManager::DoFlushQuotas() {
     return;
   }
 
-  auto rc = meta_client_->FlushDirUsages(fs_id_, dir_usages);
-
-  if (rc == MetaStatusCode::OK) {
-    LOG(INFO) << "DoFlushQuotas success, fs_id: " << fs_id_;
+  {
+    // TODO: refact this, let metaserver reponse with new quota
+    // Reader is flush and fuse, Writer is load, so this only influence load
     ReadLockGuard lk(rwock_);
-    for (const auto& [ino, usage] : dir_usages) {
-      auto iter = quotas_.find(ino);
-      if (iter != quotas_.end()) {
-        iter->second->UpdateUsage(-usage.bytes(), -usage.inodes());
-      } else {
-        LOG(INFO) << "FlushDirUsages success, but ino: " << ino
-                  << " quota is removed  from quotas_";
+    auto rc = meta_client_->FlushDirUsages(fs_id_, dir_usages);
+
+    if (rc == MetaStatusCode::OK) {
+      LOG(INFO) << "DoFlushQuotas success, fs_id: " << fs_id_;
+      for (const auto& [ino, usage] : dir_usages) {
+        auto iter = quotas_.find(ino);
+        if (iter != quotas_.end()) {
+          iter->second->FlushedUsage(usage.bytes(), usage.inodes());
+        } else {
+          LOG(INFO) << "FlushDirUsages success, but ino: " << ino
+                    << " quota is removed  from quotas_";
+        }
       }
+    } else {
+      LOG(WARNING) << "FlushFsUsage failed, fs_id: " << fs_id_
+                   << ", rc: " << rc;
     }
-  } else {
-    LOG(WARNING) << "FlushFsUsage failed, fs_id: " << fs_id_ << ", rc: " << rc;
   }
 }
 
