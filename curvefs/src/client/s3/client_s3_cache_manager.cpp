@@ -686,16 +686,6 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
       object_offset = 0;
     }
   }
-
-  // add data to memory read cache
-  if (!curvefs::client::common::FLAGS_enableCto) {
-    auto chunk_cache_manager = FindOrCreateChunkCacheManager(chunk_index);
-    WriteLockGuard lg(chunk_cache_manager->rwLockChunk_);
-    DataCachePtr data_cache = std::make_shared<DataCache>(
-        s3ClientAdaptor_, chunk_cache_manager, chunk_pos, req.len,
-        data_buf + req.readOffset, kvClientManager_);
-    chunk_cache_manager->AddReadDataCache(data_cache);
-  }
 }
 
 void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
@@ -1571,6 +1561,7 @@ void ChunkCacheManager::WriteNewDataCache(S3ClientAdaptorImpl* s3ClientAdaptor,
       data_cache->GetActualLen());
 }
 
+// TODO: remove read cache becase read performance is degraded compare to cto
 void ChunkCacheManager::AddReadDataCache(DataCachePtr dataCache) {
   uint64_t chunkPos = dataCache->GetChunkPos();
   uint64_t len = dataCache->GetLen();
@@ -1753,10 +1744,6 @@ CURVEFS_ERROR ChunkCacheManager::Flush(uint64_t inodeId, bool force,
                 << flushingDataCache_->GetChunkPos()
                 << ", len:" << flushingDataCache_->GetLen()
                 << ", inodeId=" << inodeId << ", chunkIndex:" << index_;
-        if (!curvefs::client::common::FLAGS_enableCto) {
-          WriteLockGuard lockGuard(rwLockChunk_);
-          AddReadDataCache(flushingDataCache_);
-        }
         ReleaseWriteDataCache(flushingDataCache_);
       } while (ret != CURVEFS_ERROR::OK);
       {
