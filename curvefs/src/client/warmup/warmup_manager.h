@@ -59,8 +59,8 @@ namespace client {
 namespace warmup {
 
 using common::FuseClientOption;
-using ::curvefs::utils::GetObjectAsyncContext;
 using ::curvefs::client::blockcache::BlockKey;
+using ::curvefs::utils::GetObjectAsyncContext;
 
 using ThreadPool = curvefs::common::TaskThreadPool2<bthread::Mutex,
                                                     bthread::ConditionVariable>;
@@ -111,11 +111,12 @@ class WarmupProgress {
   explicit WarmupProgress(
       WarmupStorageType type =
           curvefs::client::common::WarmupStorageType::kWarmupStorageTypeUnknown)
-      : total_(0), finished_(0), storageType_(type) {}
+      : total_(0), finished_(0), error_(0), storageType_(type) {}
 
   WarmupProgress(const WarmupProgress& wp)
       : total_(wp.total_),
         finished_(wp.finished_),
+        error_(wp.error_),
         storageType_(wp.storageType_) {}
 
   void AddTotal(uint64_t add) {
@@ -126,6 +127,7 @@ class WarmupProgress {
   WarmupProgress& operator=(const WarmupProgress& wp) {
     total_ = wp.total_;
     finished_ = wp.finished_;
+    error_ = wp.error_;
     return *this;
   }
 
@@ -144,11 +146,22 @@ class WarmupProgress {
     return finished_;
   }
 
+  void ErrorsPlusOne() {
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    ++error_;
+  }
+
+  uint64_t GetErrors() {
+    std::lock_guard<std::mutex> lock(errorMutex_);
+    return error_;
+  }
   std::string ToString() {
     std::lock_guard<std::mutex> lockT(totalMutex_);
     std::lock_guard<std::mutex> lockF(finishedMutex_);
+    std::lock_guard<std::mutex> lockE(errorMutex_);
     return "total:" + std::to_string(total_) +
-           ",finished:" + std::to_string(finished_);
+           ",finished:" + std::to_string(finished_) +
+           ",error:" + std::to_string(error_);
   }
 
   WarmupStorageType GetStorageType() { return storageType_; }
@@ -159,6 +172,8 @@ class WarmupProgress {
   uint64_t finished_;
   std::mutex finishedMutex_;
   WarmupStorageType storageType_;
+  uint64_t error_;  // TODO may be better to use atomic types
+  std::mutex errorMutex_;
 };
 
 class WarmupManager {

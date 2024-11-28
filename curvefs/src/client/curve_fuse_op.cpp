@@ -44,7 +44,6 @@
 #include "curvefs/src/utils/configuration.h"
 #include "curvefs/src/utils/gflags_helper.h"
 
-using ::curvefs::utils::Configuration;
 using ::curvefs::client::CURVEFS_ERROR;
 using ::curvefs::client::FuseClient;
 using ::curvefs::client::FuseS3Client;
@@ -64,6 +63,7 @@ using ::curvefs::client::metric::ClientOpMetric;
 using ::curvefs::client::metric::OpMetric;
 using ::curvefs::client::rpcclient::MDSBaseClient;
 using ::curvefs::client::rpcclient::MdsClientImpl;
+using ::curvefs::utils::Configuration;
 
 using ::curvefs::common::FLAGS_vlog_level;
 
@@ -243,7 +243,8 @@ void QueryWarmupTask(fuse_ino_t key, std::string* data) {
     *data = "finished";
   } else {
     *data = std::to_string(progress.GetFinished()) + "/" +
-            std::to_string(progress.GetTotal());
+            std::to_string(progress.GetTotal()) + "/" +
+            std::to_string(progress.GetErrors());
   }
   VLOG(9) << "Warmup [" << key << "]" << *data;
 }

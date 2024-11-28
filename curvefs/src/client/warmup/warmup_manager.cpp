@@ -48,7 +48,6 @@ namespace curvefs {
 namespace client {
 namespace warmup {
 
-using curvefs::utils::WriteLockGuard;
 using ::curvefs::base::filepath::PathSplit;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::Block;
@@ -56,6 +55,7 @@ using ::curvefs::client::blockcache::CacheStore;
 using ::curvefs::client::blockcache::S3ClientImpl;
 using ::curvefs::client::metric::MetricGuard;
 using ::curvefs::client::metric::S3Metric;
+using curvefs::utils::WriteLockGuard;
 
 #define WARMUP_CHECKINTERVAL_US (1000 * 1000)
 
@@ -692,6 +692,8 @@ void WarmupManagerS3Impl::PutObjectToCache(
       auto block_cache = s3Adaptor_->GetBlockCache();
       auto rc = block_cache->Cache(key, block);
       if (rc != BCACHE_ERROR::OK) {
+        // cache failed,add error count
+        iter->second.ErrorsPlusOne();
         LOG_EVERY_SECOND(INFO) << "Cache block (" << key.Filename() << ")"
                                << " failed: " << StrErr(rc);
       }
