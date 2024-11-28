@@ -208,7 +208,7 @@ func (aCmd *AddCommand) RunCommand(cmd *cobra.Command, args []string) error {
 		setErr.Format(CURVEFS_WARMUP_OP_XATTR, err.Error())
 		return setErr.ToError()
 	}
-	if config.GetDaemonFlag(aCmd.Cmd) {
+	if !config.GetDaemonFlag(aCmd.Cmd) {
 		query.GetWarmupProgress(aCmd.Cmd, aCmd.Path)
 	}
 	return nil

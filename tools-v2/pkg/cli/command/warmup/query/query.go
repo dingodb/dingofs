@@ -34,6 +34,7 @@ import (
 	basecmd "github.com/dingodb/dingofs/tools-v2/pkg/cli/command"
 	"github.com/dingodb/dingofs/tools-v2/pkg/config"
 	"github.com/dingodb/dingofs/tools-v2/pkg/output"
+	"github.com/gookit/color"
 	"github.com/pkg/xattr"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -107,6 +108,7 @@ func (qCmd *QueryCommand) RunCommand(cmd *cobra.Command, args []string) error {
 			BarStart:      "[",
 			BarEnd:        "]",
 		}))
+	var warmErrors uint64 = 0
 	for {
 		time.Sleep(qCmd.interval)
 		result, err := xattr.Get(qCmd.path, CURVEFS_WARMUP_OP_XATTR)
@@ -118,7 +120,7 @@ func (qCmd *QueryCommand) RunCommand(cmd *cobra.Command, args []string) error {
 			break
 		}
 		strs := strings.Split(resultStr, "/")
-		if len(strs) != 2 {
+		if len(strs) != 3 {
 			break
 		}
 		finished, err := strconv.ParseUint(strs[0], 10, 64)
@@ -129,10 +131,18 @@ func (qCmd *QueryCommand) RunCommand(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			break
 		}
+		warmErrors, err = strconv.ParseUint(strs[2], 10, 64)
+		if err != nil || warmErrors > 0 {
+			break
+		}
 		bar.ChangeMax64(int64(total))
 		bar.Set64(int64(finished))
 	}
-	bar.Finish()
+	if warmErrors > 0 { //warmup failed
+		fmt.Println(color.Red.Sprintf("\nwarmup failed,errors:%d\n", warmErrors))
+	} else {
+		bar.Finish()
+	}
 	return nil
 }
 
