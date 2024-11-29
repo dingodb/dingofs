@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# $1: fs $2: tag $3: os
+# $1: fs $2: os
 
 ############################  BASIC FUNCTIONS
 msg() {
@@ -30,6 +30,7 @@ function tmpl() {
             echo "${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
         fi
     done < $src > $dst
+
 }
 
 copy_file() {
@@ -65,9 +66,9 @@ if [[ "$1" != "bs" && "$1" != "fs" ]]; then
 fi
 
 if [ "$1" == "bs" ]; then
-    docker_prefix="$(pwd)/docker/$3"
+    docker_prefix="$(pwd)/docker/$2"
 else
-    docker_prefix="$(pwd)/curvefs/docker/$3"
+    docker_prefix="$(pwd)/curvefs/docker/$2"
 fi
 prefix="$docker_prefix/curve$1"
 mkdir -p $prefix $prefix/conf
@@ -80,7 +81,8 @@ if [ "$1" == "bs" ]; then
 else
     paths=`ls curvefs/conf/*`
 fi
-paths="$paths tools-v2/pkg/config/curve.yaml"
+paths="$paths tools-v2/pkg/config/dingo.yaml"
+echo "paths: $paths"
 for path in $paths;
 do
     dir=`dirname $path`
@@ -88,7 +90,7 @@ do
 
     # delimiter
     dsv="="
-    if [ $file = "etcd.conf" -o $file = "curve.yaml" ]; then
+    if [ $file = "etcd.conf" -o $file = "dingo.yaml" ]; then
         dsv=": "
     fi
 

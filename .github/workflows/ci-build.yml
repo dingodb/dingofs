@@ -64,7 +64,7 @@ jobs:
 
     - name: Install dingofs
       run: |
-        make install_and_config tag=dingodatabase/dingofs:latest
+        make install_and_config 
 
     - name: Archive the dingofs directory
       run: |

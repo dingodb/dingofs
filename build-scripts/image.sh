@@ -86,7 +86,7 @@ if [ "$1" == "bs" ]; then
 else
     paths=`ls curvefs/conf/*`
 fi
-paths="$paths tools-v2/pkg/config/curve.yaml"
+paths="$paths tools-v2/pkg/config/dingo.yaml"
 for path in $paths;
 do
     dir=`dirname $path`
@@ -94,7 +94,7 @@ do
 
     # delimiter
     dsv="="
-    if [ $file = "etcd.conf" -o $file = "curve.yaml" ]; then
+    if [ $file = "etcd.conf" -o $file = "dingo.yaml" ]; then
         dsv=": "
     fi
 
@@ -107,7 +107,6 @@ do
     tmpl $dsv "$dir/$file" "$prefix/conf/$dst"
 done
 
-cp conf/client.conf $prefix/conf/curvebs-client.conf
 cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 
 g_docker="${CURVE_DOCKER:=docker}"

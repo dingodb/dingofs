@@ -60,7 +60,7 @@ install:
 	@bash build-scripts/install.sh --stor=fs --prefix=$(prefix) --only=$(only)
 
 install_and_config:
-	@bash build-scripts/install_and_config.sh fs $(tag) $(os)
+	@bash build-scripts/install_and_config.sh fs $(os)
 
 image:
 	@bash build-scripts/image.sh fs $(tag) $(os)
