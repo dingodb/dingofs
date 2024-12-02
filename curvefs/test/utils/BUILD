@@ -37,24 +37,11 @@ cc_test(
     deps = [
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/utils:curve_auth",
-        "//curvefs/src/utils:curve_s3_adapter",
+        "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/utils/concurrent:curve_concurrent",
         "//curvefs/src/kvstorageclient:kvstorage_client",
         "//curvefs/src/utils/concurrent:curve_dlock",
         "@gtest//:gtest",
     ],
-    copts = CURVE_TEST_COPTS,
-)
-
-cc_library(
-    name = "common_mock",
-    srcs = [
-            "mock_s3_adapter.h",
-            ],
-    deps = [
-            "//curvefs/src/utils:curve_common",
-            "//curvefs/src/utils:curve_s3_adapter",
-            ],
-    visibility = ["//visibility:public"],
     copts = CURVE_TEST_COPTS,
 )

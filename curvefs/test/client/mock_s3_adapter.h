@@ -29,17 +29,20 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
-using curvefs::utils::GetObjectAsyncContext;
 using ::testing::Return;
+
+using curvefs::aws::GetObjectAsyncContext;
+using curvefs::aws::PutObjectAsyncContext;
+
 namespace curvefs {
 namespace client {
 
-class MockS3Adapter : public curvefs::utils::S3Adapter {
+class MockS3Adapter : public curvefs::aws::S3Adapter {
  public:
-  MockS3Adapter() {}
-  ~MockS3Adapter() {}
+  MockS3Adapter() = default;
+  ~MockS3Adapter() override = default;
 
   MOCK_METHOD1(Init, void(const std::string&));
   MOCK_METHOD3(PutObject, int(const Aws::String&, const char* buffer,
@@ -49,6 +52,7 @@ class MockS3Adapter : public curvefs::utils::S3Adapter {
   MOCK_METHOD1(GetObjectAsync, void(std::shared_ptr<GetObjectAsyncContext>));
   MOCK_METHOD1(ObjectExist, bool(const Aws::String& key));
 };
+
 }  // namespace client
 }  // namespace curvefs
 #endif  // CURVEFS_TEST_CLIENT_MOCK_S3_ADAPTER_H_

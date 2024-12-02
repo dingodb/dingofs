@@ -42,8 +42,8 @@ struct S3ClientAdaptorOption {
 
 class S3ClientAdaptor {
  public:
-  S3ClientAdaptor() {}
-  virtual ~S3ClientAdaptor() {}
+  S3ClientAdaptor() = default;
+  virtual ~S3ClientAdaptor() = default;
 
   /**
    * @brief Initialize s3 client
@@ -81,8 +81,8 @@ class S3ClientAdaptor {
 
 class S3ClientAdaptorImpl : public S3ClientAdaptor {
  public:
-  S3ClientAdaptorImpl() {}
-  ~S3ClientAdaptorImpl() {
+  S3ClientAdaptorImpl() = default;
+  ~S3ClientAdaptorImpl() override {
     if (client_ != nullptr) {
       delete client_;
       client_ = nullptr;

@@ -38,9 +38,9 @@
 #include "curvefs/src/metaserver/copyset/meta_operator.h"
 
 using curvefs::utils::Configuration;
-using curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption;
-using curvefs::utils::S3Adapter;
-using curvefs::utils::S3AdapterOption;
+using curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption;
+using curvefs::aws::S3Adapter;
+using curvefs::aws::S3AdapterOption;
 using curvefs::utils::TaskThreadPool;
 using curvefs::metaserver::copyset::GetOrModifyS3ChunkInfoOperator;
 

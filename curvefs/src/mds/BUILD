@@ -70,7 +70,7 @@ cc_library(
         "//curvefs/src/mds/topology:curvefs_topology",
         "//curvefs/src/client:filesystem_xattr",
         "//curvefs/src/utils:curve_common",
-        "//curvefs/src/utils:curve_s3_adapter",
+        "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/utils/concurrent:curve_concurrent",
         "//curvefs/src/idgenerator",
         "//curvefs/src/kvstorageclient:kvstorage_client",

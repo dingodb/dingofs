@@ -81,7 +81,7 @@ cc_library(
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/src/common:curvefs_common",
         "//curvefs/proto:mds_cc_proto",
-        "//curvefs/src/utils:curve_s3_adapter",
+        "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/client/common",
         "//curvefs/src/client/metric:client_metric",
         "//curvefs/src/client/rpcclient",

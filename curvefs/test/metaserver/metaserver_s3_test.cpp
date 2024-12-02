@@ -28,7 +28,7 @@
 
 #include <memory>
 
-#include "curvefs/test/utils/mock_s3_adapter.h"
+#include "curvefs/test/aws/mock_s3_adapter.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -41,20 +41,20 @@ using ::testing::SetArgPointee;
 class ClientS3Test : public testing::Test {
  protected:
   ClientS3Test() {}
-  ~ClientS3Test() {}
-  virtual void SetUp() {
-    s3Adapter_ = std::make_shared<curvefs::utils::MockS3Adapter>();
+  ~ClientS3Test() override = default;
+  void SetUp() override {
+    s3Adapter_ = std::make_shared<curvefs::aws::MockS3Adapter>();
     s3Client_ = new S3ClientImpl();
     s3Client_->SetAdaptor(s3Adapter_);
   }
 
-  virtual void TearDown() {
+  void TearDown() override {
     delete s3Client_;
     s3Client_ = nullptr;
   }
 
  protected:
-  std::shared_ptr<curvefs::utils::MockS3Adapter> s3Adapter_;
+  std::shared_ptr<curvefs::aws::MockS3Adapter> s3Adapter_;
   S3ClientImpl* s3Client_;
 };
 

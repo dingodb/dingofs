@@ -80,7 +80,7 @@ cc_library(
         "//curvefs/src/client/blockcache:blockcache_lib",
         ":filesystem_xattr",
         "//curvefs/src/utils:curve_common",
-        "//curvefs/src/utils:curve_s3_adapter",
+        "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/common:metric_utils",
         "//curvefs/src/common:dynamic_vlog",
         "//curvefs/src/common:threading",

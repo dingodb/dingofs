@@ -29,7 +29,7 @@ cc_test(
             "//curvefs/src/utils:curve_common",
             "//curvefs/proto:space_cc_proto",
             "//curvefs/test/mds/mock:curvefs_mds_mock",
-            "//curvefs/test/utils:common_mock",
+            "//curvefs/test/aws:mock_s3_adapter",
             "@brpc//:brpc",
             "@gtest//:gtest",
     ],

@@ -35,7 +35,7 @@
 #include "curvefs/src/metaserver/s3infocache.h"
 #include "curvefs/src/utils/configuration.h"
 #include "curvefs/src/utils/interruptible_sleeper.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -43,8 +43,8 @@ namespace metaserver {
 using curvefs::utils::Configuration;
 using curvefs::utils::InterruptibleSleeper;
 using curvefs::utils::RWLock;
-using curvefs::utils::S3Adapter;
-using curvefs::utils::S3AdapterOption;
+using curvefs::aws::S3Adapter;
+using curvefs::aws::S3AdapterOption;
 using curvefs::common::S3Info;
 
 class S3AdapterManager {

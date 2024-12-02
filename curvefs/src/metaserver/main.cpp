@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
   // stop server and background threads
   metaserver.Stop();
 
-  curvefs::utils::S3Adapter::Shutdown();
+  curvefs::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

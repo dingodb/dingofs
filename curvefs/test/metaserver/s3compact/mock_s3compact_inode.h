@@ -31,7 +31,7 @@
 
 #include "curvefs/src/metaserver/s3compact_inode.h"
 
-using curvefs::utils::S3Adapter;
+using curvefs::aws::S3Adapter;
 using curvefs::metaserver::copyset::CopysetNode;
 
 namespace curvefs {

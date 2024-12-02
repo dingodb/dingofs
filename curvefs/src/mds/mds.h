@@ -41,10 +41,10 @@
 #include "curvefs/src/mds/topology/topology_service.h"
 #include "curvefs/src/mds/topology/topology_storge_etcd.h"
 #include "curvefs/src/utils/configuration.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 using ::curvefs::utils::Configuration;
-using ::curvefs::utils::S3Adapter;
+using ::curvefs::aws::S3Adapter;
 using ::curvefs::kvstorage::EtcdClientImp;
 using ::curvefs::mds::heartbeat::HeartbeatOption;
 using ::curvefs::mds::heartbeat::HeartbeatServiceImpl;

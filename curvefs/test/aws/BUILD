@@ -1,5 +1,4 @@
-#
-#  Copyright (c) 2021 NetEase Inc.
+#  Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -14,22 +13,17 @@
 #  limitations under the License.
 #
 
-load("//:copts.bzl", "CURVE_DEFAULT_COPTS")
+load("//:copts.bzl", "CURVE_TEST_COPTS")
 
 cc_library(
-    name = "common",
-    srcs = glob(["*.cpp"]),
-    hdrs = glob(["*.h"]),
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
+    name = "mock_s3_adapter",
+    srcs = [
+            "mock_s3_adapter.h",
+            ],
     deps = [
-        "@brpc//:brpc",
-        "@gflags//:gflags",
-        "@glog//:glog",
-        "//curvefs/src/others:curvefs_others",
-        "//curvefs/src/utils:curve_common",
-        "//curvefs/src/aws:aws_s3_adapter",
-        "//curvefs/src/base:curvefs_base_lib",
-        "//curvefs/proto:curvefs_common_cc_proto",
-    ],
+            "//curvefs/src/aws:aws_s3_adapter",
+            "//curvefs/src/utils:curve_common",
+            ],
+    visibility = ["//visibility:public"],
+    copts = CURVE_TEST_COPTS,
 )

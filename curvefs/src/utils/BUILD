@@ -40,7 +40,6 @@ cc_library(
         ],
         exclude = [
             "authenticator.*",
-            "s3_adapter.*",
             "snapshotclone_define.*",
             "macros.h",
         ],
@@ -78,22 +77,6 @@ cc_library(
     ]),
     copts = CURVE_DEFAULT_COPTS,
     visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "curve_s3_adapter",
-    srcs = glob([
-        "s3_adapter.h",
-        "s3_adapter.cpp",
-    ]),
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "//curvefs/src/utils:curve_common",
-        "@glog//:glog",
-        "@brpc//:brpc",
-        "@aws//:aws",
-    ],
 )
 
 cc_library(

@@ -31,11 +31,12 @@
 #include "curvefs/src/metaserver/s3compact_worker.h"
 #include "curvefs/src/utils/string_util.h"
 
+using curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption;
+using curvefs::aws::S3Adapter;
+using curvefs::aws::S3AdapterOption;
+
 using curvefs::utils::Configuration;
-using curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption;
 using curvefs::utils::ReadLockGuard;
-using curvefs::utils::S3Adapter;
-using curvefs::utils::S3AdapterOption;
 using curvefs::utils::TaskThreadPool;
 using curvefs::utils::WriteLockGuard;
 

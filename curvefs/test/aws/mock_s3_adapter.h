@@ -30,16 +30,16 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 using ::testing::Return;
 namespace curvefs {
-namespace utils {
+namespace aws {
 
 class MockS3Adapter : public S3Adapter {
  public:
-  MockS3Adapter() {}
-  ~MockS3Adapter() {}
+  MockS3Adapter() = default;
+  ~MockS3Adapter() override = default;
 
   MOCK_METHOD1(Init, void(const std::string&));
   MOCK_METHOD1(Init, void(const S3AdapterOption&));
@@ -71,6 +71,6 @@ class MockS3Adapter : public S3Adapter {
                    const Aws::Vector<Aws::S3::Model::CompletedPart>&));
   MOCK_METHOD2(AbortMultiUpload, int(const Aws::String&, const Aws::String&));
 };
-}  // namespace utils
+}  // namespace aws
 }  // namespace curvefs
 #endif  // TEST_COMMON_MOCK_S3_ADAPTER_H_

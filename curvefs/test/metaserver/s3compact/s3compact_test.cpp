@@ -111,7 +111,7 @@ class S3CompactTest : public ::testing::Test {
   void TearDown() override {
     ASSERT_TRUE(kvStorage_->Close());
     ASSERT_EQ(0, system(std::string{"rm -rf " + dataDir_}.c_str()));
-    curvefs::utils::S3Adapter::Shutdown();
+    curvefs::aws::S3Adapter::Shutdown();
   }
 
  protected:

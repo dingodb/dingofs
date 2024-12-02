@@ -27,18 +27,19 @@
 #include <string>
 
 #include "curvefs/proto/common.pb.h"
+#include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/others/config_info.h"
 #include "curvefs/src/utils/configuration.h"
-#include "curvefs/src/utils/s3_adapter.h"
 
 namespace curvefs {
 namespace client {
 namespace common {
-using ::curvefs::utils::Configuration;
-using ::curvefs::utils::S3AdapterOption;
-using ::curvefs::utils::S3InfoOption;
+
+using ::curvefs::aws::S3AdapterOption;
+using ::curvefs::aws::S3InfoOption;
 using ::curvefs::client::common::DiskCacheType;
+using ::curvefs::utils::Configuration;
 using MdsOption = ::curvefs::client::MetaServerOption;
 
 struct BlockDeviceClientOptions {

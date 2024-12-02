@@ -199,8 +199,8 @@ void InitS3Option(Configuration* conf, S3Option* s3Opt) {
                             &s3Opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
                             &s3Opt->s3ClientAdaptorOpt.readRetryIntervalMs);
-  ::curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption(conf,
-                                                          &s3Opt->s3AdaptrOpt);
+  curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
+                                                      &s3Opt->s3AdaptrOpt);
 }
 
 void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt) {

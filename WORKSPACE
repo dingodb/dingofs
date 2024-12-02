@@ -188,6 +188,12 @@ new_local_repository(
 )
 
 new_local_repository(
+    name = "opentelemetry",
+    path = "third-party/installed",
+    build_file = "//bazel:opentelemetry.BUILD",
+)
+
+new_local_repository(
     name = "third-party-headers",
     path = "third-party/installed/include",
     build_file = "//bazel:headers.BUILD",

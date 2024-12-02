@@ -31,9 +31,9 @@
 #include <utility>
 
 #include "curvefs/src/metaserver/s3compact_manager.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
-using ::curvefs::utils::S3Adapter;
+using ::curvefs::aws::S3Adapter;
 using ::testing::Return;
 
 namespace curvefs {

@@ -24,7 +24,7 @@
 namespace curvefs {
 namespace client {
 
-void S3ClientImpl::Init(const curvefs::utils::S3AdapterOption& option) {
+void S3ClientImpl::Init(const S3AdapterOption& option) {
   s3Adapter_->Init(option);
 }
 

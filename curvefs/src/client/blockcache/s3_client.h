@@ -26,18 +26,18 @@
 #include <functional>
 #include <string>
 
+#include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/base/time/time.h"
 #include "curvefs/src/client/blockcache/error.h"
-#include "curvefs/src/utils/s3_adapter.h"
 
 namespace curvefs {
 namespace client {
 namespace blockcache {
 
-using ::curvefs::utils::GetObjectAsyncContext;
-using ::curvefs::utils::PutObjectAsyncContext;
-using ::curvefs::utils::S3Adapter;
-using ::curvefs::utils::S3AdapterOption;
+using ::curvefs::aws::GetObjectAsyncContext;
+using ::curvefs::aws::PutObjectAsyncContext;
+using ::curvefs::aws::S3Adapter;
+using ::curvefs::aws::S3AdapterOption;
 using ::curvefs::base::time::TimeNow;
 
 class S3Client {

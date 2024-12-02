@@ -151,7 +151,7 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
          "default value: "
       << fs_manager_option->spaceReloadConcurrency;
 
-  ::curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption(
+  ::curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption(
       conf_.get(), &fs_manager_option->s3AdapterOption);
 }
 

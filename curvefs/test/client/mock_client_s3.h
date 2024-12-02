@@ -38,7 +38,7 @@ using ::testing::Return;
 namespace curvefs {
 namespace client {
 
-using ::curvefs::utils::S3AdapterOption;
+using ::curvefs::aws::S3AdapterOption;
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::GetObjectAsyncContext;
 using ::curvefs::client::blockcache::PutObjectAsyncContext;

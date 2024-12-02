@@ -39,12 +39,12 @@
 #include "curvefs/src/metaserver/s3compact_manager.h"
 #include "curvefs/src/metaserver/s3compact_worker.h"
 #include "curvefs/src/metaserver/storage/converter.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 using curvefs::utils::Configuration;
-using curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption;
-using curvefs::utils::S3Adapter;
-using curvefs::utils::S3AdapterOption;
+using curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption;
+using curvefs::aws::S3Adapter;
+using curvefs::aws::S3AdapterOption;
 using curvefs::utils::TaskThreadPool;
 using curvefs::metaserver::copyset::CopysetNode;
 using curvefs::metaserver::copyset::CopysetNodeManager;

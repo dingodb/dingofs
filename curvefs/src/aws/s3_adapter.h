@@ -20,36 +20,36 @@
     > Created Time: Mon Dec 10 14:30:12 2018
  ************************************************************************/
 
-#ifndef SRC_COMMON_S3_ADAPTER_H_
-#define SRC_COMMON_S3_ADAPTER_H_
+#ifndef SRC_AWS_S3_ADAPTER_H_
+#define SRC_AWS_S3_ADAPTER_H_
 
-#include <aws/core/Aws.h>                                 //NOLINT
-#include <aws/core/auth/AWSCredentialsProvider.h>         //NOLINT
-#include <aws/core/client/ClientConfiguration.h>          //NOLINT
-#include <aws/core/http/HttpRequest.h>                    //NOLINT
-#include <aws/core/http/Scheme.h>                         //NOLINT
-#include <aws/core/utils/memory/AWSMemory.h>              //NOLINT
-#include <aws/core/utils/memory/stl/AWSString.h>          //NOLINT
-#include <aws/core/utils/memory/stl/AWSStringStream.h>    //NOLINT
-#include <aws/core/utils/threading/Executor.h>            //NOLINT
-#include <aws/s3/S3Client.h>                              //NOLINT
-#include <aws/s3/model/AbortMultipartUploadRequest.h>     //NOLINT
-#include <aws/s3/model/BucketLocationConstraint.h>        //NOLINT
-#include <aws/s3/model/CompleteMultipartUploadRequest.h>  //NOLINT
-#include <aws/s3/model/CompletedPart.h>                   //NOLINT
-#include <aws/s3/model/CreateBucketConfiguration.h>       //NOLINT
-#include <aws/s3/model/CreateBucketRequest.h>             //NOLINT
-#include <aws/s3/model/CreateMultipartUploadRequest.h>    //NOLINT
-#include <aws/s3/model/Delete.h>                          //NOLINT
-#include <aws/s3/model/DeleteBucketRequest.h>             //NOLINT
-#include <aws/s3/model/DeleteObjectRequest.h>             //NOLINT
-#include <aws/s3/model/DeleteObjectsRequest.h>            //NOLINT
-#include <aws/s3/model/GetObjectRequest.h>                //NOLINT
-#include <aws/s3/model/HeadBucketRequest.h>               //NOLINT
-#include <aws/s3/model/HeadObjectRequest.h>               //NOLINT
-#include <aws/s3/model/ObjectIdentifier.h>                //NOLINT
-#include <aws/s3/model/PutObjectRequest.h>                //NOLINT
-#include <aws/s3/model/UploadPartRequest.h>               //NOLINT
+#include <aws/core/Aws.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/http/HttpRequest.h>
+#include <aws/core/http/Scheme.h>
+#include <aws/core/utils/memory/AWSMemory.h>
+#include <aws/core/utils/memory/stl/AWSString.h>
+#include <aws/core/utils/memory/stl/AWSStringStream.h>
+#include <aws/core/utils/threading/Executor.h>
+#include <aws/s3/S3Client.h>
+#include <aws/s3/model/AbortMultipartUploadRequest.h>
+#include <aws/s3/model/BucketLocationConstraint.h>
+#include <aws/s3/model/CompleteMultipartUploadRequest.h>
+#include <aws/s3/model/CompletedPart.h>
+#include <aws/s3/model/CreateBucketConfiguration.h>
+#include <aws/s3/model/CreateBucketRequest.h>
+#include <aws/s3/model/CreateMultipartUploadRequest.h>
+#include <aws/s3/model/Delete.h>
+#include <aws/s3/model/DeleteBucketRequest.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
+#include <aws/s3/model/DeleteObjectsRequest.h>
+#include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadBucketRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/s3/model/ObjectIdentifier.h>
+#include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/UploadPartRequest.h>
 
 #include <condition_variable>
 #include <cstdint>
@@ -63,7 +63,10 @@
 #include "curvefs/src/utils/throttle.h"
 
 namespace curvefs {
-namespace utils {
+namespace aws {
+
+using curvefs::utils::Configuration;
+using curvefs::utils::Throttle;
 
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;
@@ -91,6 +94,7 @@ struct S3AdapterOption {
   uint64_t bpsReadMB;
   uint64_t bpsWriteMB;
   bool useVirtualAddressing;
+  bool enableTelemetry;
 };
 
 struct S3InfoOption {
@@ -432,6 +436,6 @@ class FakeS3Adapter final : public S3Adapter {
   }
 };
 
-}  // namespace utils
+}  // namespace aws
 }  // namespace curvefs
-#endif  // SRC_COMMON_S3_ADAPTER_H_
+#endif  // SRC_AWS_S3_ADAPTER_H_

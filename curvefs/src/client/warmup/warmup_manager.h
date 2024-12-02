@@ -52,7 +52,7 @@
 #include "curvefs/src/common/task_thread_pool.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/concurrent/rw_lock.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 namespace curvefs {
 namespace client {
@@ -60,7 +60,7 @@ namespace warmup {
 
 using common::FuseClientOption;
 using ::curvefs::client::blockcache::BlockKey;
-using ::curvefs::utils::GetObjectAsyncContext;
+using ::curvefs::aws::GetObjectAsyncContext;
 
 using ThreadPool = curvefs::common::TaskThreadPool2<bthread::Mutex,
                                                     bthread::ConditionVariable>;

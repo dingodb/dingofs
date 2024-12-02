@@ -40,7 +40,7 @@
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 using curvefs::utils::ReadLockGuard;
 using curvefs::utils::RWLock;
@@ -64,10 +64,10 @@ using ::curvefs::client::datastream::DataStream;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::S3ChunkInfo;
 using curvefs::metaserver::S3ChunkInfoList;
-using curvefs::utils::GetObjectAsyncCallBack;
-using curvefs::utils::PutObjectAsyncCallBack;
-using ::curvefs::utils::PutObjectAsyncContext;
-using curvefs::utils::S3Adapter;
+using curvefs::aws::GetObjectAsyncCallBack;
+using curvefs::aws::PutObjectAsyncCallBack;
+using ::curvefs::aws::PutObjectAsyncContext;
+using curvefs::aws::S3Adapter;
 
 enum CacheType { Write = 1, Read = 2 };
 

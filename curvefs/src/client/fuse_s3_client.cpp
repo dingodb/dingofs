@@ -73,7 +73,7 @@ CURVEFS_ERROR FuseS3Client::Init(const FuseClientOption& option) {
 
   // set fs S3Option
   const auto& s3Info = fsInfo_->detail().s3info();
-  ::curvefs::utils::S3InfoOption fsS3Option;
+  ::curvefs::aws::S3InfoOption fsS3Option;
   ::curvefs::client::common::S3Info2FsS3Option(s3Info, &fsS3Option);
   SetFuseClientS3Option(&opt, fsS3Option);
 
@@ -143,7 +143,7 @@ void FuseS3Client::UnInit() {
   s3Adaptor_->Stop();
   S3ClientImpl::GetInstance()->Destroy();
   DataStream::GetInstance().Shutdown();
-  curvefs::utils::S3Adapter::Shutdown();
+  curvefs::aws::S3Adapter::Shutdown();
 }
 
 CURVEFS_ERROR FuseS3Client::FuseOpInit(void* userdata,

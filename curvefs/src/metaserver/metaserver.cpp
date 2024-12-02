@@ -46,7 +46,7 @@
 #include "curvefs/src/metaserver/trash_manager.h"
 #include "curvefs/src/utils/crc32.h"
 #include "curvefs/src/utils/curve_version.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/utils/string_util.h"
 #include "curvefs/src/utils/uri_parser.h"
 
@@ -208,7 +208,7 @@ std::shared_ptr<S3ClientAdaptorImpl> CreateS3Adaptor(
     const S3AdapterOption& o1, const S3ClientAdaptorOption& o2) {
   // s3_client
   auto* s3_client = new S3ClientImpl;
-  s3_client->SetAdaptor(std::make_shared<curvefs::utils::S3Adapter>());
+  s3_client->SetAdaptor(std::make_shared<curvefs::aws::S3Adapter>());
   s3_client->Init(o1);
 
   // s3_adaptor: s3_client will be freed when s3_adaptor destruct
@@ -234,8 +234,8 @@ void Metaserver::Init() {
 
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
-  curvefs::utils::S3AdapterOption s3_adapter_option;
-  ::curvefs::utils::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
+  curvefs::aws::S3AdapterOption s3_adapter_option;
+  ::curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
                                                           &s3_adapter_option);
 
   trashOption.s3Adaptor =

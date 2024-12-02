@@ -1,4 +1,3 @@
-#
 #  Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,32 +16,13 @@
 load("//:copts.bzl", "BASE_FLAGS", "CURVE_DEFAULT_COPTS")
 
 cc_library(
-    name = "cachestore_lib",
-    hdrs = [
-        "cache_store.h",
-        "error.h"
-    ],
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "blockcache_lib",
+    name = "opentelemetry_lib",
     srcs = glob(["*.cpp"]),
     hdrs = glob(["*.h"]),
     copts = CURVE_DEFAULT_COPTS,
     visibility = ["//visibility:public"],
     deps = [
-        "//curvefs/src/utils:curve_common",
-        "//curvefs/src/aws:aws_s3_adapter",
-        "//curvefs/src/base:curvefs_base_lib",
-        "//curvefs/src/common:curvefs_common",
-        "//curvefs/src/client/common:common",
-        "//curvefs/src/client/metric:client_metric",
-        "@glog//:glog",
-        "@gflags//:gflags",
-        "@brpc//:brpc",
-        "@spdlog//:spdlog",
-        "@com_google_absl//absl/cleanup",
+        "@opentelemetry//:opentelemetry",
+        "@aws//:aws",
     ],
 )

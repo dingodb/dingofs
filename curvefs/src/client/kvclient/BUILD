@@ -30,7 +30,7 @@ cc_library(
         "//curvefs/src/client/common:common",
         "//curvefs/src/client/metric:client_metric",
         "//curvefs/src/utils:curve_common",
-        "//curvefs/src/utils:curve_s3_adapter",
+        "//curvefs/src/aws:aws_s3_adapter",
         "@com_google_absl//absl/strings",
         "@glog//:glog",
         "@brpc//:brpc",

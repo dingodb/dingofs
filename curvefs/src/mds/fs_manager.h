@@ -40,7 +40,7 @@
 #include "curvefs/src/mds/topology/topology_manager.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/interruptible_sleeper.h"
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 namespace curvefs {
 namespace mds {
@@ -53,7 +53,7 @@ using ::curvefs::mds::topology::TopologyManager;
 
 using ::curvefs::utils::Atomic;
 using ::curvefs::utils::InterruptibleSleeper;
-using ::curvefs::utils::S3Adapter;
+using ::curvefs::aws::S3Adapter;
 using ::curvefs::utils::Thread;
 
 using curvefs::common::PartitionInfo;
@@ -62,7 +62,7 @@ struct FsManagerOption {
   uint32_t backEndThreadRunInterSec;
   uint32_t spaceReloadConcurrency = 10;
   uint32_t clientTimeoutSec = 20;
-  curvefs::utils::S3AdapterOption s3AdapterOption;
+  curvefs::aws::S3AdapterOption s3AdapterOption;
 };
 
 class FsManager {

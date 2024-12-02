@@ -33,7 +33,7 @@
 #include "curvefs/test/mds/mock/mock_fs_stroage.h"
 #include "curvefs/test/mds/mock/mock_metaserver.h"
 #include "curvefs/test/mds/mock/mock_topology.h"
-#include "curvefs/test/utils/mock_s3_adapter.h"
+#include "curvefs/test/aws/mock_s3_adapter.h"
 
 using ::curvefs::mds::topology::DefaultIdGenerator;
 using ::curvefs::mds::topology::DefaultTokenGenerator;
@@ -48,7 +48,7 @@ using ::curvefs::mds::topology::TopoStatusCode;
 using ::curvefs::metaserver::copyset::GetLeaderRequest2;
 using ::curvefs::metaserver::copyset::GetLeaderResponse2;
 using ::curvefs::metaserver::copyset::MockCliService2;
-using ::curvefs::utils::MockS3Adapter;
+using ::curvefs::aws::MockS3Adapter;
 
 namespace curvefs {
 namespace mds {

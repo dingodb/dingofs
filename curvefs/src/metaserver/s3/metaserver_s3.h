@@ -26,15 +26,19 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/utils/s3_adapter.h"
+#include "curvefs/src/aws/s3_adapter.h"
 
 namespace curvefs {
 namespace metaserver {
+
+using curvefs::aws::S3Adapter;
+using curvefs::aws::S3AdapterOption;
+
 class S3Client {
  public:
-  S3Client() {}
-  virtual ~S3Client() {}
-  virtual void Init(const curvefs::utils::S3AdapterOption& option) = 0;
+  S3Client() = default;
+  virtual ~S3Client() = default;
+  virtual void Init(const S3AdapterOption& option) = 0;
   virtual int Delete(const std::string& name) = 0;
   virtual int DeleteBatch(const std::list<std::string>& nameList) = 0;
   virtual void Reinit(const std::string& ak, const std::string& sk,
@@ -44,11 +48,11 @@ class S3Client {
 
 class S3ClientImpl : public S3Client {
  public:
-  S3ClientImpl() : S3Client() {}
-  virtual ~S3ClientImpl() {}
+  S3ClientImpl() = default;
+  ~S3ClientImpl() override = default;
 
-  void SetAdaptor(std::shared_ptr<curvefs::utils::S3Adapter> s3Adapter);
-  void Init(const curvefs::utils::S3AdapterOption& option) override;
+  void SetAdaptor(std::shared_ptr<S3Adapter> s3Adapter);
+  void Init(const S3AdapterOption& option) override;
   void Reinit(const std::string& ak, const std::string& sk,
               const std::string& endpoint,
               const std::string& bucketName) override;
@@ -67,8 +71,8 @@ class S3ClientImpl : public S3Client {
   int DeleteBatch(const std::list<std::string>& nameList) override;
 
  private:
-  std::shared_ptr<curvefs::utils::S3Adapter> s3Adapter_;
-  curvefs::utils::S3AdapterOption option_;
+  std::shared_ptr<S3Adapter> s3Adapter_;
+  S3AdapterOption option_;
 };
 }  // namespace metaserver
 }  // namespace curvefs
