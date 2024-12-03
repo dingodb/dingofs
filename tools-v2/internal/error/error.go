@@ -455,7 +455,7 @@ var (
 		case mds.FSStatusCode_FSNAME_INVALID:
 			message = "fsname should match regex: ^([a-z0-9]+\\-?)+$"
 		default:
-			message = fmt.Sprintf("delete fs failed!, error is %s", mds.FSStatusCode_name[int32(code)])
+			message = fmt.Sprintf("create fs failed!, error is %s", mds.FSStatusCode_name[int32(code)])
 		}
 		return NewRpcReultCmdError(statusCode, message)
 	}
