@@ -58,13 +58,6 @@ bool MemoryPool::CreatePool(size_t size_each_block, uint64_t num_total_blocks) {
   if (rc == 0) {
     void* addr = reinterpret_cast<void*>(mem_start_);
     rc = madvise(addr, total_size, MADV_HUGEPAGE);
-    if (rc == 0) {
-      // NOTE: volatile_mem_start is used to avoid compiler optimization
-      // memset is not advised to use here, because it may be optimized by
-      // compiler
-      volatile char* volatile_mem_start = mem_start_;
-      std::fill(volatile_mem_start, volatile_mem_start + total_size, 0);
-    }
   }
   timer.stop();
 
@@ -77,6 +70,8 @@ bool MemoryPool::CreatePool(size_t size_each_block, uint64_t num_total_blocks) {
   num_total_blocks_ = num_total_blocks;
   num_free_blocks_ = num_total_blocks_;
   next_free_index_ = mem_start_;
+
+  AllocateAllBlocksOnce();
 
   LOG(INFO) << "Memory pool init success: preallocate " << num_total_blocks
             << " blocks with " << size_each_block << " bytes each block"
@@ -107,6 +102,24 @@ void MemoryPool::DeAllocate(void* block) {
 };
 
 uint64_t MemoryPool::GetFreeBlocks() const { return num_free_blocks_; }
+
+void MemoryPool::AllocateAllBlocksOnce() {
+  std::vector<void*> blocks;
+  size_t num_total_blocks = num_total_blocks_;
+
+  // Allocate once.
+  for (uint64_t i = 0; i < num_total_blocks; i++) {
+    void* block = Allocate();
+    volatile char* mem_start = reinterpret_cast<char*>(block);
+    std::fill(mem_start, mem_start + size_each_block_, 0);
+    blocks.emplace_back(block);
+  }
+
+  // Then deallocate.
+  for (uint64_t i = 0; i < num_total_blocks; i++) {
+    DeAllocate(blocks[i]);
+  }
+}
 
 void MemoryPool::InitOneBlock() {
   if (num_initialized_blocks_ < num_total_blocks_) {

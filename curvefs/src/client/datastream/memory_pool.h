@@ -50,6 +50,8 @@ class MemoryPool {
   uint64_t GetFreeBlocks() const;
 
  private:
+  void AllocateAllBlocksOnce();
+
   void InitOneBlock();
 
   void AddFront(void* block);
