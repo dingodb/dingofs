@@ -61,7 +61,7 @@ message ClusterInfoData {
     required string clusterId = 1;
     // <fsId, partitionIndex of this fs>
     map<uint32, uint32> partitionIndexs = 2;
-    
+
 }
 
 message PoolData {
@@ -158,6 +158,7 @@ message GetMetaServerInfoRequest {
     optional uint32 metaServerID = 1;
     optional string hostIp = 2;
     optional uint32 port = 3;
+    optional uint32 idx = 4;
 }
 
 message GetMetaServerInfoResponse {

@@ -69,13 +69,15 @@ void MDSBaseClient::GetFsInfo(uint32_t fsId, GetFsInfoResponse* response,
   stub.GetFsInfo(cntl, &request, response, nullptr);
 }
 
-void MDSBaseClient::GetMetaServerInfo(uint32_t port, std::string ip,
+void MDSBaseClient::GetMetaServerInfo(std::string ip, uint32_t port,
+                                      uint32_t idx,
                                       GetMetaServerInfoResponse* response,
                                       brpc::Controller* cntl,
                                       brpc::Channel* channel) {
   GetMetaServerInfoRequest request;
   request.set_hostip(ip);
   request.set_port(port);
+  request.set_idx(idx);
 
   curvefs::mds::topology::TopologyService_Stub stub(channel);
   stub.GetMetaServer(cntl, &request, response, nullptr);

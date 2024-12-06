@@ -457,6 +457,8 @@ ApplyStatus ChangePeerT<IdType, CopySetInfoT, CopySetConfT>::Apply(
 
   // if new_ is contained in origin info, the configuration change succeeded
   if (originInfo.ContainPeer(new_) && !originInfo.ContainPeer(old_)) {
+    LOG(INFO) << originInfo.CopySetInfoStr() << " apply change peer from "
+              << old_ << " to " << new_ << " already success!";
     return ApplyStatus::Finished;
   }
 
@@ -466,7 +468,7 @@ ApplyStatus ChangePeerT<IdType, CopySetInfoT, CopySetConfT>::Apply(
     newConf->id.first = originInfo.id.first;
     newConf->id.second = originInfo.id.second;
     newConf->epoch = originInfo.epoch;
-    newConf->peers = originInfo.peers;
+    newConf->peers = originInfo.peers;  // FIXME(Wine93)
     newConf->type = ConfigChangeType::CHANGE_PEER;
     newConf->configChangeItem = new_;
     newConf->oldOne = old_;

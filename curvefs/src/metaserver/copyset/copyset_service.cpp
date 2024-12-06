@@ -94,8 +94,8 @@ COPYSET_OP_STATUS CopysetServiceImpl::CreateOneCopyset(
 
   braft::Configuration conf;
   for (int i = 0; i < copyset.peers_size(); ++i) {
-    braft::PeerId peerId;
-    int ret = peerId.parse(copyset.peers(i).address());
+    braft::PeerId peer_id;
+    int ret = peer_id.parse(copyset.peers(i).address());
     if (ret != 0) {
       LOG(WARNING) << "Crate copyset "
                    << ToGroupIdString(copyset.poolid(), copyset.copysetid())
@@ -104,7 +104,7 @@ COPYSET_OP_STATUS CopysetServiceImpl::CreateOneCopyset(
       return COPYSET_OP_STATUS_PARSE_PEER_ERROR;
     }
 
-    conf.add_peer(braft::PeerId(copyset.peers(i).address()));
+    conf.add_peer(peer_id);
   }
 
   bool success =

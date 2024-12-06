@@ -63,6 +63,7 @@ struct CopysetNodeOptions {
   // ip and port of this copyset node
   std::string ip;
   uint32_t port;
+  uint32_t index;
 
   // the number of concurrent recovery loads of copyset
   // Default: 1

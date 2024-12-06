@@ -154,10 +154,11 @@ class MDSBaseClient {
   virtual void GetFsInfo(uint32_t fsId, GetFsInfoResponse* response,
                          brpc::Controller* cntl, brpc::Channel* channel);
 
-  virtual void GetMetaServerInfo(uint32_t port, std::string ip,
+  virtual void GetMetaServerInfo(std::string ip, uint32_t port, uint32_t idx,
                                  GetMetaServerInfoResponse* response,
                                  brpc::Controller* cntl,
                                  brpc::Channel* channel);
+
   virtual void GetMetaServerListInCopysets(
       const LogicPoolID& logicalpooid,
       const std::vector<CopysetID>& copysetidvec,

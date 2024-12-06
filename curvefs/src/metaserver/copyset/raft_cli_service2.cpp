@@ -185,9 +185,9 @@ void RaftCliService2::GetLeader(google::protobuf::RpcController* controller,
   }
 
   for (size_t i = 0; i < nodes.size(); ++i) {
-    braft::PeerId leaderId = nodes[i]->leader_id();
-    if (!leaderId.is_empty()) {
-      response->mutable_leader()->set_address(leaderId.to_string());
+    braft::PeerId leader_id = nodes[i]->leader_id();
+    if (!leader_id.is_empty()) {  // leader_id: HOST:PORT:IDX:ROLE
+      response->mutable_leader()->set_address(leader_id.to_string());
       return;
     }
   }

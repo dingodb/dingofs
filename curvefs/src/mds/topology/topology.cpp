@@ -322,7 +322,8 @@ TopoStatusCode TopologyImpl::GetPoolIdByMetaserverId(MetaServerIdType id,
   MetaServer metaserver;
   if (!GetMetaServer(id, &metaserver)) {
     LOG(ERROR) << "TopologyImpl::GetPoolIdByMetaserverId "
-               << "Fail On GetMetaServer, " << "metaserverId = " << id;
+               << "Fail On GetMetaServer, "
+               << "metaserverId = " << id;
     return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
   }
   return GetPoolIdByServerId(metaserver.GetServerId(), pool_id_out);
@@ -333,7 +334,8 @@ TopoStatusCode TopologyImpl::GetPoolIdByServerId(ServerIdType id,
   *pool_id_out = UNINITIALIZE_ID;
   Server server;
   if (!GetServer(id, &server)) {
-    LOG(ERROR) << "TopologyImpl::GetPoolIdByServerId " << "Fail On GetServer, "
+    LOG(ERROR) << "TopologyImpl::GetPoolIdByServerId "
+               << "Fail On GetServer, "
                << "serverId = " << id;
     return TopoStatusCode::TOPO_SERVER_NOT_FOUND;
   }
@@ -525,12 +527,12 @@ bool TopologyImpl::GetMetaServer(MetaServerIdType metaserver_id,
 }
 
 bool TopologyImpl::GetMetaServer(const std::string& host_ip, uint32_t port,
-                                 MetaServer* out) const {
+                                 uint32_t index, MetaServer* out) const {
   ReadLockGuard rlock_meta_server_map(metaServerMutex_);
   for (const auto& it : metaServerMap_) {
     ReadLockGuard rlock_meta_server(it.second.GetRWLockRef());
     if (it.second.GetInternalIp() == host_ip &&
-        it.second.GetInternalPort() == port) {
+        it.second.GetInternalPort() == port && it.second.GetId() == index) {
       *out = it.second;
       return true;
     }
@@ -1334,7 +1336,8 @@ TopoStatusCode TopologyImpl::ChooseNewMetaServerForCopyset(
         return TopoStatusCode::TOPO_SERVER_NOT_FOUND;
       }
     } else {
-      LOG(ERROR) << "get metaserver failed," << " the metaserver id = " << it;
+      LOG(ERROR) << "get metaserver failed,"
+                 << " the metaserver id = " << it;
       return TopoStatusCode::TOPO_METASERVER_NOT_FOUND;
     }
   }

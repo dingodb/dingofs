@@ -234,7 +234,7 @@ bool Coordinator::BuildCopySetConf(
   auto* replica = new curvefs::common::Peer();
   replica->set_id(res.configChangeItem);
   replica->set_address(topology::BuildPeerIdWithIpPort(
-      meta_server.info.ip, meta_server.info.port, 0));
+      meta_server.info.ip, meta_server.info.port, meta_server.info.id));
   out->set_allocated_configchangeitem(replica);
 
   // set old
@@ -248,7 +248,7 @@ bool Coordinator::BuildCopySetConf(
     auto* replica = new curvefs::common::Peer();
     replica->set_id(res.oldOne);
     replica->set_address(topology::BuildPeerIdWithIpPort(
-        meta_server.info.ip, meta_server.info.port, 0));
+        meta_server.info.ip, meta_server.info.port, meta_server.info.id));
     out->set_allocated_oldpeer(replica);
   }
 
@@ -257,7 +257,7 @@ bool Coordinator::BuildCopySetConf(
     auto* replica = out->add_peers();
     replica->set_id(peer.id);
     replica->set_address(
-        topology::BuildPeerIdWithIpPort(peer.ip, peer.port, 0));
+        topology::BuildPeerIdWithIpPort(peer.ip, peer.port, peer.serverId));
   }
 
   return true;

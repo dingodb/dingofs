@@ -25,15 +25,18 @@
 #include <braft/closure_helper.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+#include <butil/endpoint.h>
 #include <sys/statvfs.h>
 #include <sys/time.h>
 #include <unistd.h>
 
 #include <list>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "curvefs/src/base/string/string.h"
 #include "curvefs/src/metaserver/copyset/utils.h"
 #include "curvefs/src/metaserver/resource_statistic.h"
 #include "curvefs/src/utils/string_util.h"
@@ -43,6 +46,7 @@
 namespace curvefs {
 namespace metaserver {
 
+using ::curvefs::base::string::StrFormat;
 using ::curvefs::mds::heartbeat::ConfigChangeInfo;
 using ::curvefs::mds::heartbeat::ConfigChangeType;
 using ::curvefs::metaserver::copyset::ToGroupIdString;
@@ -69,10 +73,9 @@ std::string CopysetName(const CopySetConf& conf) {
   return ToGroupIdString(conf.poolid(), conf.copysetid());
 }
 
-Peer EndPointToPeer(const butil::EndPoint& ep) {
+Peer EndPointToPeer(const std::string& address) {
   Peer peer;
-  peer.set_address(butil::endpoint2str(ep).c_str() + std::string(":0"));
-
+  peer.set_address(address);  // HOST:PORT
   return peer;
 }
 
@@ -130,7 +133,11 @@ int Heartbeat::Init(const HeartbeatOptions& options) {
 
   startUpTime_ = ::curvefs::utils::TimeUtility::GetTimeofDaySec();
 
-  taskExecutor_ = std::make_unique<HeartbeatTaskExecutor>(copysetMan_, msEp_);
+  std::string address = StrFormat(
+      "%s:%d",
+      butil::endpoint2str(butil::EndPoint(msEp_.ip, msEp_.port)).c_str(),
+      options_.metaserverId);
+  taskExecutor_ = std::make_unique<HeartbeatTaskExecutor>(copysetMan_, address);
 
   return 0;
 }
@@ -398,8 +405,8 @@ void Heartbeat::HeartbeatWorker() {
 }
 
 HeartbeatTaskExecutor::HeartbeatTaskExecutor(CopysetNodeManager* mgr,
-                                             const butil::EndPoint& endpoint)
-    : copysetMgr_(mgr), ep_(endpoint) {}
+                                             const std::string& address)
+    : copysetMgr_(mgr), address_(address) {}
 
 void HeartbeatTaskExecutor::ExecTasks(const HeartbeatResponse& response) {
   for (const auto& conf : response.needupdatecopysets()) {
@@ -408,16 +415,19 @@ void HeartbeatTaskExecutor::ExecTasks(const HeartbeatResponse& response) {
 }
 
 void HeartbeatTaskExecutor::ExecOneTask(const CopySetConf& conf) {
+  LOG(INFO) << "Execute one task, copyset = " << CopysetName(conf);
+
   auto* copyset = copysetMgr_->GetCopysetNode(conf.poolid(), conf.copysetid());
   if (!copyset) {
     LOG(WARNING) << "Failed to find copyset: " << CopysetName(conf);
     return;
   }
 
-  if (NeedPurge(conf)) {
-    DoPurgeCopyset(conf.poolid(), conf.copysetid());
-    return;
-  }
+  // FIXME(Wine93)
+  // if (NeedPurge(conf)) {
+  //   DoPurgeCopyset(conf.poolid(), conf.copysetid());
+  //   return;
+  // }
 
   const auto epoch_in_copyset = copyset->GetConfEpoch();
   if (conf.epoch() != epoch_in_copyset) {
@@ -507,7 +517,7 @@ void HeartbeatTaskExecutor::DoPurgeCopyset(PoolId poolid, CopysetId copysetid) {
 }
 
 bool HeartbeatTaskExecutor::NeedPurge(const CopySetConf& conf) {
-  Peer peer = EndPointToPeer(ep_);
+  Peer peer = EndPointToPeer(address_);
 
   if (conf.epoch() == 0 && conf.peers().empty()) {
     LOG(INFO) << "Clean " << peer.address()

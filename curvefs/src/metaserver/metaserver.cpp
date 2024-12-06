@@ -251,10 +251,10 @@ void Metaserver::Init() {
   //       between different modules
   InitLocalFileSystem();
   InitStorage();
+  GetMetaserverDataByLoadOrRegister();  // get metaserver id and token before
+                                        // heartbeat
   InitCopysetNodeManager();
 
-  // get metaserver id and token before heartbeat
-  GetMetaserverDataByLoadOrRegister();
   InitResourceCollector();
   InitHeartbeat();
   InitInflightThrottle();
@@ -628,6 +628,7 @@ void Metaserver::InitCopysetNodeOptions() {
   LOG_IF(FATAL, !conf_->GetStringValue("global.ip", &copysetNodeOptions_.ip));
   LOG_IF(FATAL,
          !conf_->GetUInt32Value("global.port", &copysetNodeOptions_.port));
+  copysetNodeOptions_.index = metadata_.id();
 
   LOG_IF(FATAL,
          copysetNodeOptions_.port <= 0 || copysetNodeOptions_.port >= 65535)
