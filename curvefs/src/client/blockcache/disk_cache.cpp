@@ -208,8 +208,7 @@ BCACHE_ERROR DiskCache::Cache(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::WRITE_FILE);
-  rc = fs_->WriteFile(GetCachePath(key), block.data, block.size,
-                      use_direct_write_);
+  rc = fs_->WriteFile(GetCachePath(key), block.data, block.size);
   if (rc != BCACHE_ERROR::OK) {
     return rc;
   }
