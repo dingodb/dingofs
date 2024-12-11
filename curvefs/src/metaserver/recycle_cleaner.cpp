@@ -25,11 +25,6 @@
 #include <list>
 #include <vector>
 
-using curvefs::client::MetaServerOption;
-using curvefs::utils::StringToUll;
-using curvefs::client::common::AddUllStringToFirst;
-using curvefs::client::rpcclient::MDSBaseClient;
-using curvefs::client::rpcclient::MdsClientImpl;
 using curvefs::mds::FsInfo;
 using curvefs::mds::FSStatusCode;
 using curvefs::mds::topology::PartitionTxId;

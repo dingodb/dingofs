@@ -26,7 +26,7 @@ cc_library(
         "@brpc//:brpc",
         "@gflags//:gflags",
         "@glog//:glog",
-        "//curvefs/src/others:curvefs_others",
+        "//curvefs/src/stub/common:stub_common",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/base:curvefs_base_lib",

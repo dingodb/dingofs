@@ -29,12 +29,12 @@
 
 #include "curvefs/src/client/dentry_cache_manager.h"
 #include "curvefs/src/client/inode_cache_manager.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 
 namespace curvefs {
 namespace client {
 
-using rpcclient::MdsClient;
+using curvefs::stub::rpcclient::MdsClient;
 
 // resolve cyclic dependency
 namespace filesystem {

@@ -24,14 +24,14 @@
 
 #include <ostream>
 
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 
 namespace curvefs {
 namespace client {
 namespace blockcache {
 
-using ::curvefs::client::metric::MetricGuard;
-using ::curvefs::client::metric::S3Metric;
+using ::curvefs::stub::metric::MetricGuard;
+using ::curvefs::stub::metric::S3Metric;
 
 void S3ClientImpl::Init(const S3AdapterOption& option) {
   client_ = std::make_unique<S3Adapter>();

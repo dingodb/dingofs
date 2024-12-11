@@ -30,12 +30,12 @@
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
+#include "curvefs/src/utils/curve_define.h"
 #include "curvefs/test/client/mock_client_s3.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_kvclient.h"
 #include "curvefs/test/client/mock_metaserver_service.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
-#include "curvefs/src/utils/curve_define.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 
 namespace curvefs {
 namespace client {
@@ -58,8 +58,8 @@ using ::testing::SetArgReferee;
 using ::testing::SetArrayArgument;
 using ::testing::WithArg;
 
-using ::curvefs::client::blockcache::BCACHE_ERROR;
-using rpcclient::MockMdsClient;
+using curvefs::client::blockcache::BCACHE_ERROR;
+using curvefs::stub::rpcclient::MockMdsClient;
 
 template <typename RpcRequestType, typename RpcResponseType,
           bool RpcFailed = false>

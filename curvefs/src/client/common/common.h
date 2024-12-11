@@ -23,49 +23,18 @@
 #ifndef CURVEFS_SRC_CLIENT_COMMON_COMMON_H_
 #define CURVEFS_SRC_CLIENT_COMMON_COMMON_H_
 
-#include <bthread/mutex.h>
-
-#include <ostream>
+#include <cstdint>
 #include <string>
 
 namespace curvefs {
 namespace client {
 namespace common {
 
-using MetaserverID = uint32_t;
-using PartitionID = uint32_t;
-
-using Mutex = ::bthread::Mutex;
-
 enum DiskCacheType { Disable = 0, OnlyRead = 1, ReadWrite = 2 };
-
-enum class MetaServerOpType {
-  GetDentry,
-  ListDentry,
-  CreateDentry,
-  DeleteDentry,
-  PrepareRenameTx,
-  GetInode,
-  BatchGetInodeAttr,
-  BatchGetXAttr,
-  UpdateInode,
-  CreateInode,
-  DeleteInode,
-  GetOrModifyS3ChunkInfo,
-  GetVolumeExtent,
-  UpdateVolumeExtent,
-  CreateManageInode,
-  GetFsQuota,
-  FlushFsUsage,
-  LoadDirQutoas,
-  FlushDirUsages,
-};
-
-std::ostream& operator<<(std::ostream& os, MetaServerOpType optype);
 
 constexpr int kWarmupOpNum = 4;
 
-enum class WarmupOpType {
+enum WarmupOpType {
   kWarmupOpUnknown = 0,
   kWarmupOpAdd = 1,
   kWarmupOpQuery = 2,
@@ -81,7 +50,7 @@ enum class WarmupType {
 
 WarmupType GetWarmupType(const std::string& type);
 
-enum class WarmupStorageType {
+enum WarmupStorageType {
   kWarmupStorageTypeUnknown = 0,
   kWarmupStorageTypeDisk = 1,
   kWarmupStorageTypeKvClient = 2,
@@ -89,12 +58,12 @@ enum class WarmupStorageType {
 
 WarmupStorageType GetWarmupStorageType(const std::string& type);
 
-enum class FileHandle : uint64_t {
+enum FileHandle : uint64_t {
   kDefaultValue = 0,
   kKeepCache = 1,
 };
 
-enum class NlinkChange : int32_t {
+enum NlinkChange : int32_t {
   kAddOne = 1,
   kSubOne = -1,
 };

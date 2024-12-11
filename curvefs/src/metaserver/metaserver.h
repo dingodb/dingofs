@@ -28,9 +28,6 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/client/rpcclient/base_client.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/fs/local_filesystem.h"
 #include "curvefs/src/metaserver/copyset/apply_queue.h"
 #include "curvefs/src/metaserver/copyset/config.h"
@@ -45,16 +42,14 @@
 #include "curvefs/src/metaserver/register.h"
 #include "curvefs/src/metaserver/resource_statistic.h"
 #include "curvefs/src/metaserver/storage/storage.h"
+#include "curvefs/src/stub/rpcclient/base_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/configuration.h"
 
 namespace curvefs {
 namespace metaserver {
 
-using ::curvefs::client::common::MdsOption;
-using ::curvefs::client::rpcclient::MDSBaseClient;
-using ::curvefs::client::rpcclient::MdsClient;
-using ::curvefs::client::rpcclient::MdsClientImpl;
-using ::curvefs::client::rpcclient::MetaServerClient;
 using ::curvefs::metaserver::copyset::ApplyQueue;
 using ::curvefs::metaserver::copyset::CopysetNodeManager;
 using ::curvefs::metaserver::copyset::CopysetNodeOptions;
@@ -62,6 +57,12 @@ using ::curvefs::metaserver::copyset::CopysetServiceImpl;
 using ::curvefs::metaserver::copyset::RaftCliService2;
 using ::curvefs::metaserver::storage::StorageOptions;
 using ::curvefs::utils::Configuration;
+
+using ::curvefs::stub::common::MdsOption;
+using ::curvefs::stub::rpcclient::MDSBaseClient;
+using ::curvefs::stub::rpcclient::MdsClient;
+using ::curvefs::stub::rpcclient::MdsClientImpl;
+using ::curvefs::stub::rpcclient::MetaServerClient;
 
 struct MetaserverOptions {
   std::string ip;

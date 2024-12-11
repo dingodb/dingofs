@@ -33,6 +33,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/fs/ext4_filesystem_impl.h"
 #include "curvefs/src/metaserver/common/dynamic_config.h"
 #include "curvefs/src/metaserver/copyset/copyset_service.h"
@@ -46,7 +47,6 @@
 #include "curvefs/src/metaserver/trash_manager.h"
 #include "curvefs/src/utils/crc32.h"
 #include "curvefs/src/utils/curve_version.h"
-#include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/utils/string_util.h"
 #include "curvefs/src/utils/uri_parser.h"
 
@@ -71,11 +71,11 @@ using ::curvefs::fs::FileSystemType;
 using ::curvefs::fs::LocalFileSystemOption;
 using ::curvefs::fs::LocalFsFactory;
 
-using ::curvefs::client::rpcclient::ChannelManager;
-using ::curvefs::client::rpcclient::Cli2ClientImpl;
-using ::curvefs::client::rpcclient::MetaCache;
-using ::curvefs::client::rpcclient::MetaServerClientImpl;
 using ::curvefs::metaserver::copyset::ApplyQueueOption;
+using ::curvefs::stub::rpcclient::ChannelManager;
+using ::curvefs::stub::rpcclient::Cli2ClientImpl;
+using ::curvefs::stub::rpcclient::MetaCache;
+using ::curvefs::stub::rpcclient::MetaServerClientImpl;
 
 USING_FLAG(superpartition_access_logging);
 
@@ -225,7 +225,7 @@ void Metaserver::Init() {
 
   // init mds client
   mdsBase_ = new MDSBaseClient();
-  ::curvefs::client::common::InitMdsOption(conf_.get(), &mdsOptions_);
+  ::curvefs::stub::common::InitMdsOption(conf_.get(), &mdsOptions_);
   mdsClient_ = std::make_shared<MdsClientImpl>();
   mdsClient_->Init(mdsOptions_, mdsBase_);
 
@@ -236,7 +236,7 @@ void Metaserver::Init() {
   InitS3Option(conf_, &s3_client_adaptor_option);
   curvefs::aws::S3AdapterOption s3_adapter_option;
   ::curvefs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
-                                                          &s3_adapter_option);
+                                                        &s3_adapter_option);
 
   trashOption.s3Adaptor =
       CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option);

@@ -29,7 +29,7 @@
 #include "curvefs/proto/common.pb.h"
 #include "curvefs/src/aws/s3_adapter.h"
 #include "curvefs/src/client/common/common.h"
-#include "curvefs/src/others/config_info.h"
+#include "curvefs/src/stub/common/config.h"
 #include "curvefs/src/utils/configuration.h"
 
 namespace curvefs {
@@ -40,32 +40,13 @@ using ::curvefs::aws::S3AdapterOption;
 using ::curvefs::aws::S3InfoOption;
 using ::curvefs::client::common::DiskCacheType;
 using ::curvefs::utils::Configuration;
-using MdsOption = ::curvefs::client::MetaServerOption;
+
+using ::curvefs::stub::common::ExcutorOpt;
+using ::curvefs::stub::common::MdsOption;
+using ::curvefs::stub::common::MetaCacheOpt;
 
 struct BlockDeviceClientOptions {
   std::string configPath;
-};
-
-struct MetaCacheOpt {
-  int metacacheGetLeaderRetry = 3;
-  int metacacheRPCRetryIntervalUS = 500;
-  int metacacheGetLeaderRPCTimeOutMS = 1000;
-
-  uint16_t getPartitionCountOnce = 3;
-  uint16_t createPartitionOnce = 3;
-};
-
-struct ExcutorOpt {
-  uint32_t maxRetry = 3;
-  uint64_t retryIntervalUS = 200;
-  uint64_t rpcTimeoutMS = 1000;
-  uint64_t rpcStreamIdleTimeoutMS = 500;
-  uint64_t maxRPCTimeoutMS = 64000;
-  uint64_t maxRetrySleepIntervalUS = 64ull * 1000 * 1000;
-  uint64_t minRetryTimesForceTimeoutBackoff = 5;
-  uint64_t maxRetryTimesBeforeConsiderSuspend = 20;
-  uint32_t batchInodeAttrLimit = 10000;
-  bool enableRenameParallel = false;
 };
 
 struct LeaseOpt {
@@ -281,8 +262,6 @@ void SetFuseClientS3Option(FuseClientOption* clientOption,
 
 void S3Info2FsS3Option(const curvefs::common::S3Info& s3,
                        S3InfoOption* fsS3Opt);
-
-void InitMdsOption(Configuration* conf, MdsOption* mdsOpt);
 
 void InitLeaseOpt(Configuration* conf, LeaseOpt* leaseOpt);
 

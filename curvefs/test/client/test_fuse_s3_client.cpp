@@ -30,15 +30,15 @@
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/filesystem/meta.h"
-#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_s3_client.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/test/client/mock_client_s3_adaptor.h"
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 
 struct fuse_req {
   struct fuse_ctx* ctx;
@@ -71,21 +71,20 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::SetArrayArgument;
 
-using rpcclient::MockMdsClient;
-using rpcclient::MockMetaServerClient;
-
 using ::curvefs::client::common::FileSystemOption;
 using ::curvefs::client::filesystem::EntryOut;
 using ::curvefs::client::filesystem::FileOut;
 
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
+using curvefs::stub::filesystem::XATTR_DIR_ENTRIES;
+using curvefs::stub::filesystem::XATTR_DIR_FBYTES;
+using curvefs::stub::filesystem::XATTR_DIR_FILES;
+using curvefs::stub::filesystem::XATTR_DIR_RENTRIES;
+using curvefs::stub::filesystem::XATTR_DIR_RFBYTES;
+using curvefs::stub::filesystem::XATTR_DIR_RFILES;
+using curvefs::stub::filesystem::XATTR_DIR_RSUBDIRS;
+using curvefs::stub::filesystem::XATTR_DIR_SUBDIRS;
+using curvefs::stub::rpcclient::MockMdsClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 #define EQUAL(a) (lhs.a() == rhs.a())
 

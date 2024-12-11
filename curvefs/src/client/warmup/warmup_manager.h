@@ -45,8 +45,8 @@
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_cache_manager.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
-#include "curvefs/src/client/metric/client_metric.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/metric/metric.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 #include "curvefs/src/common/task_thread_pool.h"
@@ -451,7 +451,7 @@ class WarmupManagerS3Impl : public WarmupManager {
       inode2FetchS3ObjectsPool_;
   mutable RWLock inode2FetchS3ObjectsPoolMutex_;
 
-  curvefs::client::metric::WarmupManagerS3Metric warmupS3Metric_;
+  curvefs::stub::metric::WarmupManagerS3Metric warmupS3Metric_;
 };
 
 }  // namespace warmup

@@ -40,7 +40,7 @@ namespace blockcache {
 
 using ::curvefs::base::hash::ConNode;
 using ::curvefs::base::hash::KetamaConHash;
-using DiskCacheTotalMetric = ::curvefs::client::metric::DiskCacheMetric;
+using DiskCacheTotalMetric = ::curvefs::stub::metric::DiskCacheMetric;
 
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
     : options_(options),

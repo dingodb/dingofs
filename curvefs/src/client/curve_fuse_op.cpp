@@ -33,14 +33,14 @@
 #include "curvefs/src/client/filesystem/access_log.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/meta.h"
-#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_client.h"
 #include "curvefs/src/client/fuse_s3_client.h"
-#include "curvefs/src/client/metric/client_metric.h"
-#include "curvefs/src/client/rpcclient/base_client.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
 #include "curvefs/src/common/dynamic_vlog.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
+#include "curvefs/src/stub/metric/metric.h"
+#include "curvefs/src/stub/rpcclient/base_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 #include "curvefs/src/utils/configuration.h"
 #include "curvefs/src/utils/gflags_helper.h"
 
@@ -54,16 +54,18 @@ using ::curvefs::client::filesystem::AttrOut;
 using ::curvefs::client::filesystem::EntryOut;
 using ::curvefs::client::filesystem::FileOut;
 using ::curvefs::client::filesystem::InitAccessLog;
-using ::curvefs::client::filesystem::IsWarmupXAttr;
 using ::curvefs::client::filesystem::StrAttr;
 using ::curvefs::client::filesystem::StrEntry;
 using ::curvefs::client::filesystem::StrFormat;
 using ::curvefs::client::filesystem::StrMode;
-using ::curvefs::client::metric::ClientOpMetric;
-using ::curvefs::client::metric::OpMetric;
-using ::curvefs::client::rpcclient::MDSBaseClient;
-using ::curvefs::client::rpcclient::MdsClientImpl;
+using ::curvefs::common::FSType;
 using ::curvefs::utils::Configuration;
+
+using ::curvefs::stub::filesystem::IsWarmupXAttr;
+using ::curvefs::stub::metric::ClientOpMetric;
+using ::curvefs::stub::metric::OpMetric;
+using ::curvefs::stub::rpcclient::MDSBaseClient;
+using ::curvefs::stub::rpcclient::MdsClientImpl;
 
 using ::curvefs::common::FLAGS_vlog_level;
 

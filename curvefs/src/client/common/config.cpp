@@ -109,30 +109,6 @@ DEFINE_uint64(fuseClientBurstReadIopsSecs, 180,
               "the times that Read burst iops can continue");
 DEFINE_validator(fuseClientBurstReadIopsSecs, &pass_uint64);
 
-void InitMdsOption(Configuration* conf, MdsOption* mdsOpt) {
-  conf->GetValueFatalIfFail("mdsOpt.mdsMaxRetryMS", &mdsOpt->mdsMaxRetryMS);
-  conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.maxRPCTimeoutMS",
-                            &mdsOpt->rpcRetryOpt.maxRPCTimeoutMS);
-  conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.rpcTimeoutMs",
-                            &mdsOpt->rpcRetryOpt.rpcTimeoutMs);
-  conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.rpcRetryIntervalUS",
-                            &mdsOpt->rpcRetryOpt.rpcRetryIntervalUS);
-  conf->GetValueFatalIfFail(
-      "mdsOpt.rpcRetryOpt.maxFailedTimesBeforeChangeAddr",
-      &mdsOpt->rpcRetryOpt.maxFailedTimesBeforeChangeAddr);
-  conf->GetValueFatalIfFail(
-      "mdsOpt.rpcRetryOpt.normalRetryTimesBeforeTriggerWait",
-      &mdsOpt->rpcRetryOpt.normalRetryTimesBeforeTriggerWait);
-  conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.waitSleepMs",
-                            &mdsOpt->rpcRetryOpt.waitSleepMs);
-  std::string adds;
-  conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.addrs", &adds);
-
-  std::vector<std::string> mdsAddr;
-  curvefs::utils::SplitString(adds, ",", &mdsAddr);
-  mdsOpt->rpcRetryOpt.addrs.assign(mdsAddr.begin(), mdsAddr.end());
-}
-
 void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
   conf->GetValueFatalIfFail("metaCacheOpt.metacacheGetLeaderRetry",
                             &opts->metacacheGetLeaderRetry);

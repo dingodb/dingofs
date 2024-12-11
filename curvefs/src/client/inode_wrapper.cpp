@@ -34,9 +34,9 @@
 
 #include "curvefs/include/curve_compiler_specific.h"
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "curvefs/src/client/rpcclient/task_excutor.h"
 #include "curvefs/src/client/xattr_manager.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/task_excutor.h"
 
 using ::curvefs::metaserver::MetaStatusCode_Name;
 
@@ -44,9 +44,8 @@ namespace curvefs {
 namespace client {
 
 using ::curvefs::client::filesystem::ToFSError;
-using rpcclient::DataIndices;
-using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientImpl;
+
+using curvefs::stub::rpcclient::DataIndices;
 
 bvar::Adder<int64_t> g_alive_inode_count{"alive_inode_count"};
 
@@ -425,7 +424,8 @@ void InodeWrapper::Async(MetaServerClientDone* done, bool internal) {
 
 CURVEFS_ERROR InodeWrapper::SyncS3(bool internal) {
   curvefs::utils::UniqueLock lock = GetSyncingInodeUniqueLock();
-  curvefs::utils::UniqueLock lockS3chunkInfo = GetSyncingS3ChunkInfoUniqueLock();
+  curvefs::utils::UniqueLock lockS3chunkInfo =
+      GetSyncingS3ChunkInfoUniqueLock();
   if (dirty_ || !s3ChunkInfoAdd_.empty()) {
     MetaStatusCode ret = metaClient_->UpdateInodeAttrWithOutNlink(
         inode_.fsid(), inode_.inodeid(), dirtyAttr_, &s3ChunkInfoAdd_,

@@ -26,13 +26,13 @@
 #include "curvefs/src/metaserver/partition_cleaner.h"
 #include "curvefs/src/metaserver/storage/rocksdb_storage.h"
 #include "curvefs/src/metaserver/storage/storage.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_node.h"
 #include "curvefs/test/metaserver/mock_metaserver_s3_adaptor.h"
 #include "curvefs/test/metaserver/storage/utils.h"
 #include "curvefs/src/fs/ext4_filesystem_impl.h"
 
-using ::curvefs::client::rpcclient::MockMdsClient;
+using ::curvefs::stub::rpcclient::MockMdsClient;
 using ::curvefs::mds::FSStatusCode;
 using ::testing::_;
 using ::testing::Invoke;

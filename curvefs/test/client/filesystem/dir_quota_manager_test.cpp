@@ -28,7 +28,7 @@ namespace filesystem {
 using testing::Return;
 
 using base::timer::MockTimer;
-using rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 class DirQuotaTest : public ::testing::Test {
  protected:

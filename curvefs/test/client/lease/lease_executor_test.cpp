@@ -26,11 +26,11 @@
 #include <gtest/gtest.h>
 
 #include "curvefs/src/client/lease/lease_excutor.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
-#include "curvefs/test/client/rpcclient/mock_metacache.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
+#include "curvefs/test/stub/rpcclient/mock_metacache.h"
 
-using curvefs::client::rpcclient::MockMdsClient;
-using curvefs::client::rpcclient::MockMetaCache;
+using curvefs::stub::rpcclient::MockMdsClient;
+using curvefs::stub::rpcclient::MockMetaCache;
 using curvefs::mds::topology::PartitionTxId;
 
 using ::testing::AtLeast;

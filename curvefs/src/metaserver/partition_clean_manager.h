@@ -25,14 +25,14 @@
 #include <list>
 #include <memory>
 
-#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 #include "curvefs/src/metaserver/partition_cleaner.h"
 
 namespace curvefs {
 namespace metaserver {
 
-using ::curvefs::client::rpcclient::MdsClient;
-using ::curvefs::client::rpcclient::MdsClientImpl;
+using ::curvefs::stub::rpcclient::MdsClient;
+using ::curvefs::stub::rpcclient::MdsClientImpl;
 
 struct PartitionCleanOption {
   uint32_t scanPeriodSec;

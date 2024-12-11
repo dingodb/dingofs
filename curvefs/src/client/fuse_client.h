@@ -42,12 +42,12 @@
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_cache_manager.h"
 #include "curvefs/src/client/lease/lease_excutor.h"
-#include "curvefs/src/client/metric/client_metric.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 #include "curvefs/src/client/warmup/warmup_manager.h"
 #include "curvefs/src/client/xattr_manager.h"
+#include "curvefs/src/stub/metric/metric.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/fast_align.h"
 #include "curvefs/src/utils/throttle.h"
@@ -55,15 +55,6 @@
 #define PORT_LIMIT 65535
 
 #define DirectIOAlignment 512
-
-using ::curvefs::utils::Atomic;
-using ::curvefs::utils::InterruptibleSleeper;
-using ::curvefs::utils::Thread;
-using ::curvefs::utils::Throttle;
-using ::curvefs::client::metric::FSMetric;
-using ::curvefs::common::FSType;
-using ::curvefs::metaserver::DentryFlag;
-using ::curvefs::metaserver::ManageInodeType;
 
 namespace curvefs {
 namespace client {
@@ -77,11 +68,20 @@ using ::curvefs::client::filesystem::AttrOut;
 using ::curvefs::client::filesystem::EntryOut;
 using ::curvefs::client::filesystem::FileOut;
 using ::curvefs::client::filesystem::FileSystem;
-using rpcclient::MDSBaseClient;
-using rpcclient::MdsClient;
-using rpcclient::MdsClientImpl;
-using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientImpl;
+using ::curvefs::common::FSType;
+using ::curvefs::metaserver::DentryFlag;
+using ::curvefs::metaserver::ManageInodeType;
+using ::curvefs::utils::Atomic;
+using ::curvefs::utils::InterruptibleSleeper;
+using ::curvefs::utils::Thread;
+using ::curvefs::utils::Throttle;
+
+using ::curvefs::stub::metric::FSMetric;
+using curvefs::stub::rpcclient::MDSBaseClient;
+using curvefs::stub::rpcclient::MdsClient;
+using curvefs::stub::rpcclient::MdsClientImpl;
+using curvefs::stub::rpcclient::MetaServerClient;
+using curvefs::stub::rpcclient::MetaServerClientImpl;
 
 using curvefs::utils::is_aligned;
 
@@ -319,7 +319,7 @@ class FuseClient {
     }
     out->set_hostname(hostname);
     out->set_port(
-        curvefs::client::ClientDummyServerInfo::GetInstance().GetPort());
+        curvefs::stub::common::ClientDummyServerInfo::GetInstance().GetPort());
     return 0;
   }
 

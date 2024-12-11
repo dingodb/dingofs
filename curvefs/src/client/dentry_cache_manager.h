@@ -29,7 +29,7 @@
 #include <string>
 
 #include "curvefs/src/client/filesystem/error.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/concurrent/generic_name_lock.h"
 
 using ::curvefs::metaserver::Dentry;
@@ -38,8 +38,8 @@ namespace curvefs {
 namespace client {
 
 using ::curvefs::client::filesystem::CURVEFS_ERROR;
-using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientImpl;
+using curvefs::stub::rpcclient::MetaServerClient;
+using curvefs::stub::rpcclient::MetaServerClientImpl;
 
 static const char* kDentryKeyDelimiter = ":";
 

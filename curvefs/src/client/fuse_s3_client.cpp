@@ -27,7 +27,7 @@
 #include "curvefs/src/client/blockcache/block_cache.h"
 #include "curvefs/src/client/blockcache/s3_client.h"
 #include "curvefs/src/client/datastream/data_stream.h"
-#include "curvefs/src/client/filesystem/xattr.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
 #include "curvefs/src/client/kvclient/memcache_client.h"
 #include "curvefs/src/utils/net_common.h"
 
@@ -531,8 +531,8 @@ CURVEFS_ERROR FuseS3Client::InitBrpcServer() {
     return CURVEFS_ERROR::INTERNAL;
   }
 
-  curvefs::client::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
-  curvefs::client::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+  curvefs::stub::common::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
+  curvefs::stub::common::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
 
   return CURVEFS_ERROR::OK;
 }

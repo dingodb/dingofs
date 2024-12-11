@@ -33,16 +33,6 @@ cc_binary(
 )
 
 cc_library(
-    name = "filesystem_xattr",
-    hdrs = ["filesystem/xattr.h"],
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "@brpc//:brpc",
-    ],
-)
-
-cc_library(
     name = "fuse_client_lib",
     srcs = glob(
         [
@@ -72,13 +62,13 @@ cc_library(
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/proto:space_cc_proto",
         "//curvefs/proto:curvefs_client_h2_cc_proto",
-        "//curvefs/src/client/rpcclient",
+        "//curvefs/src/stub/rpcclient",
         "//curvefs/src/common:curvefs_common",
         "//curvefs/src/client/lease:curvefs_lease",
         "//curvefs/src/client/kvclient:memcached_client_lib",
         "//curvefs/src/client/datastream:datastream_lib",
         "//curvefs/src/client/blockcache:blockcache_lib",
-        ":filesystem_xattr",
+        "//curvefs/src/stub/filesystem",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/common:metric_utils",

@@ -29,7 +29,7 @@ namespace filesystem {
 using testing::Return;
 
 using base::timer::MockTimer;
-using curvefs::client::rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 class FsStatManagerTest : public ::testing::Test {
  protected:

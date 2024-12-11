@@ -31,18 +31,18 @@
 #include <utility>
 
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/common/define.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
 #include "curvefs/src/utils/concurrent/name_lock.h"
 #include "curvefs/src/utils/timeutility.h"
 
+using ::curvefs::stub::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_SUBDIRS;
+
 using ::curvefs::utils::NameLockGuard;
 using ::curvefs::utils::TimeUtility;
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
-using ::google::protobuf::util::MessageDifferencer;
 
 namespace curvefs {
 namespace metaserver {

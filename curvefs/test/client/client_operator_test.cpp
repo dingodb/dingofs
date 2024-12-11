@@ -29,13 +29,13 @@
 #include "curvefs/test/client/mock_dentry_cache_mamager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 
 namespace curvefs {
 namespace client {
 
-using rpcclient::MockMdsClient;
-using rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::MockMdsClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 using ::testing::DoAll;
 using ::testing::SetArgPointee;
 

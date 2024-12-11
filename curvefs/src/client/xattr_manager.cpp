@@ -23,7 +23,7 @@
 #include "curvefs/src/client/xattr_manager.h"
 
 #include "curvefs/src/client/common/common.h"
-#include "curvefs/src/client/filesystem/xattr.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
 #include "glog/logging.h"
 #include "curvefs/src/utils/string_util.h"
 
@@ -33,15 +33,15 @@ namespace client {
 using ::curvefs::utils::StringToUll;
 using ::curvefs::utils::Thread;
 using ::curvefs::client::common::AddUllStringToFirst;
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_PREFIX;
-using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
+using ::curvefs::stub::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_PREFIX;
+using ::curvefs::stub::filesystem::XATTR_DIR_RENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RFBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RFILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RSUBDIRS;
+using ::curvefs::stub::filesystem::XATTR_DIR_SUBDIRS;
 
 bool IsSummaryInfo(const char* name) {
   return std::strstr(name, XATTR_DIR_PREFIX);

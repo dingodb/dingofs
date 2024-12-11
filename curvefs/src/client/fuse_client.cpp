@@ -34,12 +34,12 @@
 #include "brpc/server.h"
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/meta.h"
-#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/fuse_common.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/service/metrics_dumper.h"
 #include "curvefs/src/common/define.h"
-#include "curvefs/src/others/client_common.h"
+#include "curvefs/src/stub/common/common.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
 #include "curvefs/src/utils/net_common.h"
 #include "glog/logging.h"
 
@@ -52,13 +52,14 @@ using ::curvefs::client::filesystem::DirEntryList;
 using ::curvefs::client::filesystem::ExternalMember;
 using ::curvefs::client::filesystem::FileOut;
 using ::curvefs::client::filesystem::Ino;
-using ::curvefs::client::filesystem::IsSpecialXAttr;
-using ::curvefs::client::filesystem::MAX_XATTR_NAME_LENGTH;
-using ::curvefs::client::filesystem::MAX_XATTR_VALUE_LENGTH;
-using ::curvefs::client::filesystem::XATTR_DIR_RENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_RFILES;
-using ::curvefs::client::filesystem::XATTR_DIR_RSUBDIRS;
+
+using ::curvefs::stub::filesystem::IsSpecialXAttr;
+using ::curvefs::stub::filesystem::MAX_XATTR_NAME_LENGTH;
+using ::curvefs::stub::filesystem::MAX_XATTR_VALUE_LENGTH;
+using ::curvefs::stub::filesystem::XATTR_DIR_RENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RFBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RFILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_RSUBDIRS;
 
 #define RETURN_IF_UNSUCCESS(action) \
   do {                              \
@@ -94,11 +95,14 @@ DECLARE_uint64(fuseClientBurstReadBytesSecs);
 namespace curvefs {
 namespace client {
 
-using common::FLAGS_enableCto;
-using rpcclient::ChannelManager;
-using rpcclient::Cli2ClientImpl;
-using rpcclient::MetaCache;
+using ::curvefs::utils::ReadWriteThrottleParams;
+using ::curvefs::utils::ThrottleParams;
 
+using curvefs::stub::rpcclient::ChannelManager;
+using curvefs::stub::rpcclient::Cli2ClientImpl;
+using curvefs::stub::rpcclient::MetaCache;
+
+using common::FLAGS_enableCto;
 using common::FLAGS_fuseClientAvgWriteIops;
 using common::FLAGS_fuseClientBurstWriteIops;
 using common::FLAGS_fuseClientBurstWriteIopsSecs;
@@ -114,9 +118,6 @@ using common::FLAGS_fuseClientBurstReadIopsSecs;
 using common::FLAGS_fuseClientAvgReadBytes;
 using common::FLAGS_fuseClientBurstReadBytes;
 using common::FLAGS_fuseClientBurstReadBytesSecs;
-
-using ::curvefs::utils::ReadWriteThrottleParams;
-using ::curvefs::utils::ThrottleParams;
 
 static void on_throttle_timer(void* arg) {
   FuseClient* fuseClient = reinterpret_cast<FuseClient*>(arg);
@@ -1608,8 +1609,9 @@ CURVEFS_ERROR FuseClient::InitBrpcServer() {
     return CURVEFS_ERROR::INTERNAL;
   }
 
-  curvefs::client::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
-  curvefs::client::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+  curvefs::stub::common::ClientDummyServerInfo::GetInstance().SetPort(
+      listen_port);
+  curvefs::stub::common::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
 
   return CURVEFS_ERROR::OK;
 }

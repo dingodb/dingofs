@@ -29,7 +29,7 @@
 #include <condition_variable>  // NOLINT
 
 #include "curvefs/proto/metaserver.pb.h"
-#include "curvefs/src/client/filesystem/xattr.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
 #include "curvefs/src/common/process.h"
 #include "curvefs/src/common/rpc_stream.h"
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
@@ -50,10 +50,10 @@ using ::curvefs::metaserver::storage::RandomStoragePath;
 using ::curvefs::metaserver::storage::RocksDBStorage;
 using ::curvefs::metaserver::storage::StorageOptions;
 
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
+using ::curvefs::stub::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_SUBDIRS;
 namespace {
 
 class MockSnapshotWriter : public braft::SnapshotWriter {

@@ -27,7 +27,7 @@
 #include "curvefs/src/metaserver/storage/rocksdb_storage.h"
 #include "curvefs/src/metaserver/storage/storage.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_node.h"
 #include "curvefs/test/metaserver/storage/utils.h"
 #include "curvefs/src/fs/ext4_filesystem_impl.h"
@@ -40,8 +40,8 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::WithArg;
 
-using ::curvefs::client::rpcclient::MockMdsClient;
-using ::curvefs::client::rpcclient::MockMetaServerClient;
+using ::curvefs::stub::rpcclient::MockMdsClient;
+using ::curvefs::stub::rpcclient::MockMetaServerClient;
 using ::curvefs::metaserver::storage::KVStorage;
 using ::curvefs::metaserver::storage::RandomStoragePath;
 using ::curvefs::metaserver::storage::RocksDBStorage;

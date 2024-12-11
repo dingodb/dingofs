@@ -33,7 +33,7 @@
 #include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/common/dynamic_config.h"
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 
 namespace curvefs {
 namespace client {
@@ -43,7 +43,7 @@ USING_FLAG(disk_cache_free_space_ratio);
 
 using ::curvefs::base::string::StrFormat;
 using ::curvefs::client::common::DiskCacheOption;
-using ::curvefs::client::metric::InterfaceMetric;
+using ::curvefs::stub::metric::InterfaceMetric;
 
 constexpr const char* kLoadStopped = "STOP";  // load status
 constexpr const char* kOnLoading = "LOADING";

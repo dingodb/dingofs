@@ -20,7 +20,7 @@
 
 #include "curvefs/src/base/timer/timer.h"
 #include "curvefs/src/client/filesystem/meta.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 
 namespace curvefs {
 namespace client {
@@ -29,10 +29,11 @@ namespace filesystem {
 using curvefs::metaserver::Quota;
 using curvefs::metaserver::Usage;
 
+using curvefs::stub::rpcclient::MetaServerClient;
+
 using base::timer::Timer;
 using curvefs::utils::RWLock;
 using filesystem::Ino;
-using rpcclient::MetaServerClient;
 
 class FsQuota {
  public:

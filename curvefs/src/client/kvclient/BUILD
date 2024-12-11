@@ -28,7 +28,7 @@ cc_library(
     deps = [
         "//curvefs/proto:curvefs_topology_cc_proto",
         "//curvefs/src/client/common:common",
-        "//curvefs/src/client/metric:client_metric",
+        "//curvefs/src/stub/metric",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/aws:aws_s3_adapter",
         "@com_google_absl//absl/strings",

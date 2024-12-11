@@ -32,13 +32,13 @@
 #include <string>
 
 #include "curvefs/src/client/common/config.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
-#include "curvefs/src/client/rpcclient/metacache.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/metacache.h"
 
 using curvefs::client::common::LeaseOpt;
-using curvefs::client::rpcclient::MdsClient;
-using curvefs::client::rpcclient::MetaCache;
 using curvefs::mds::Mountpoint;
+using curvefs::stub::rpcclient::MdsClient;
+using curvefs::stub::rpcclient::MetaCache;
 
 namespace curvefs {
 namespace client {

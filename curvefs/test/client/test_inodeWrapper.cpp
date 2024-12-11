@@ -32,8 +32,8 @@
 
 #include "curvefs/proto/metaserver.pb.h"
 #include "curvefs/src/client/inode_wrapper.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "curvefs/src/client/rpcclient/task_excutor.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/task_excutor.h"
 #include "curvefs/src/utils/timeutility.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
 
@@ -42,17 +42,15 @@ using ::google::protobuf::util::MessageDifferencer;
 namespace curvefs {
 namespace client {
 
-using ::curvefs::client::rpcclient::MetaServerClientDone;
-using rpcclient::DataIndices;
 using ::testing::_;
-using ::testing::Contains;
 using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
 
-using rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::DataIndices;
+using curvefs::stub::rpcclient::MetaServerClientDone;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 class TestInodeWrapper : public ::testing::Test {
  protected:

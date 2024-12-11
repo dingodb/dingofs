@@ -35,8 +35,8 @@
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/openfile.h"
 #include "curvefs/src/client/inode_wrapper.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "curvefs/src/client/rpcclient/task_excutor.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/task_excutor.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/concurrent/generic_name_lock.h"
 
@@ -49,11 +49,12 @@ using ::curvefs::client::filesystem::OpenFiles;
 using ::curvefs::metaserver::InodeAttr;
 using ::curvefs::metaserver::XAttr;
 using curvefs::utils::CountDownEvent;
-using metric::S3ChunkInfoMetric;
-using rpcclient::BatchGetInodeAttrDone;
-using rpcclient::InodeParam;
-using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientImpl;
+
+using curvefs::stub::metric::S3ChunkInfoMetric;
+using curvefs::stub::rpcclient::BatchGetInodeAttrDone;
+using curvefs::stub::rpcclient::InodeParam;
+using curvefs::stub::rpcclient::MetaServerClient;
+using curvefs::stub::rpcclient::MetaServerClientImpl;
 
 class InodeCacheManager {
  public:

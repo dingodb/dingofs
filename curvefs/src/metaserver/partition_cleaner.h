@@ -27,7 +27,7 @@
 #include <unordered_map>
 
 #include "curvefs/proto/mds.pb.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 #include "curvefs/src/metaserver/copyset/copyset_node_manager.h"
 #include "curvefs/src/metaserver/partition.h"
 #include "curvefs/src/metaserver/s3/metaserver_s3_adaptor.h"
@@ -35,7 +35,7 @@
 namespace curvefs {
 namespace metaserver {
 
-using ::curvefs::client::rpcclient::MdsClient;
+using ::curvefs::stub::rpcclient::MdsClient;
 using ::curvefs::mds::FsInfo;
 
 class PartitionCleaner {

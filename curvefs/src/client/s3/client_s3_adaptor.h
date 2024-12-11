@@ -36,9 +36,9 @@
 #include "curvefs/src/client/filesystem/error.h"
 #include "curvefs/src/client/filesystem/filesystem.h"
 #include "curvefs/src/client/inode_cache_manager.h"
-#include "curvefs/src/client/metric/client_metric.h"
-#include "curvefs/src/client/rpcclient/mds_client.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
+#include "curvefs/src/stub/metric/metric.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 #include "curvefs/src/utils/wait_interval.h"
 
 namespace curvefs {
@@ -50,14 +50,15 @@ using ::curvefs::client::blockcache::StoreType;
 using curvefs::client::common::DiskCacheType;
 using curvefs::client::common::S3ClientAdaptorOption;
 using ::curvefs::client::filesystem::FileSystem;
-using curvefs::client::metric::InterfaceMetric;
-using curvefs::client::metric::S3Metric;
 using curvefs::metaserver::Inode;
 using curvefs::metaserver::S3ChunkInfo;
 using curvefs::metaserver::S3ChunkInfoList;
 using ::curvefs::utils::TaskThreadPool;
 using ::curvefs::utils::Thread;
-using rpcclient::MdsClient;
+
+using curvefs::stub::metric::InterfaceMetric;
+using curvefs::stub::metric::S3Metric;
+using curvefs::stub::rpcclient::MdsClient;
 
 class DiskCacheManagerImpl;
 class ChunkCacheManager;

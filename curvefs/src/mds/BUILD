@@ -68,7 +68,7 @@ cc_library(
         "//curvefs/src/mds/schedule:curvefs_schedule",
         "//curvefs/src/mds/schedule/scheduleService:curvefs_schedule_service",
         "//curvefs/src/mds/topology:curvefs_topology",
-        "//curvefs/src/client:filesystem_xattr",
+        "//curvefs/src/stub/filesystem",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/utils/concurrent:curve_concurrent",

@@ -35,24 +35,19 @@
 #include "curvefs/test/client/mock_client_s3.h"
 #include "curvefs/test/client/mock_client_s3_cache_manager.h"
 #include "curvefs/test/client/mock_inode_cache_manager.h"
-#include "curvefs/test/client/mock_metaserver_service.h"
-#include "curvefs/test/client/rpcclient/mock_mds_client.h"
-#include "curvefs/src/utils/curve_define.h"
+#include "curvefs/test/stub/rpcclient/mock_mds_client.h"
 
 namespace curvefs {
 namespace client {
 using ::testing::_;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
-using ::testing::WithArg;
 
 using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::MockBlockCache;
 using ::curvefs::client::blockcache::StoreType;
-using rpcclient::MockMdsClient;
+using curvefs::stub::rpcclient::MockMdsClient;
 
 // extern KVClientManager *g_kvClientManager;
 

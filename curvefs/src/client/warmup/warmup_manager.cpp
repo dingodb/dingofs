@@ -38,7 +38,7 @@
 #include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/inode_wrapper.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 #include "curvefs/src/client/s3/client_s3_cache_manager.h"
 #include "curvefs/src/common/s3util.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
@@ -53,8 +53,8 @@ using ::curvefs::client::blockcache::BCACHE_ERROR;
 using ::curvefs::client::blockcache::Block;
 using ::curvefs::client::blockcache::CacheStore;
 using ::curvefs::client::blockcache::S3ClientImpl;
-using ::curvefs::client::metric::MetricGuard;
-using ::curvefs::client::metric::S3Metric;
+using ::curvefs::stub::metric::MetricGuard;
+using ::curvefs::stub::metric::S3Metric;
 using curvefs::utils::WriteLockGuard;
 
 #define WARMUP_CHECKINTERVAL_US (1000 * 1000)

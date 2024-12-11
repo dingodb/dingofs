@@ -40,7 +40,7 @@ namespace filesystem {
 
 using ::curvefs::client::common::KernelCacheOption;
 
-using rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 const uint32_t kMockFsId = 100;
 

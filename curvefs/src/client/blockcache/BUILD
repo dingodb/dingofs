@@ -38,7 +38,7 @@ cc_library(
         "//curvefs/src/base:curvefs_base_lib",
         "//curvefs/src/common:curvefs_common",
         "//curvefs/src/client/common:common",
-        "//curvefs/src/client/metric:client_metric",
+        "//curvefs/src/stub/metric:metric",
         "@glog//:glog",
         "@gflags//:gflags",
         "@brpc//:brpc",

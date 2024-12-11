@@ -40,13 +40,11 @@ namespace curvefs {
 namespace client {
 
 using ::testing::_;
-using ::testing::Contains;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using rpcclient::MockMetaServerClient;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 class TestDentryCacheManager : public ::testing::Test {
  protected:

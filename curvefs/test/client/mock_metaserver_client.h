@@ -34,10 +34,10 @@
 #include <utility>
 #include <vector>
 
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 
 namespace curvefs {
-namespace client {
+namespace stub {
 namespace rpcclient {
 
 class MockMetaServerClient : public MetaServerClient {
@@ -175,7 +175,7 @@ class MockMetaServerClient : public MetaServerClient {
 };
 
 }  // namespace rpcclient
-}  // namespace client
+}  // namespace stub
 }  // namespace curvefs
 
 #endif  // CURVEFS_TEST_CLIENT_MOCK_METASERVER_CLIENT_H_

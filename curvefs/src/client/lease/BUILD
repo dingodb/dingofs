@@ -24,7 +24,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//curvefs/proto:mds_cc_proto",
-        "//curvefs/src/client/rpcclient:rpcclient",
+        "//curvefs/src/stub/rpcclient",
         "//curvefs/src/client/common:common",
         "@brpc//:brpc",
         "@gflags//:gflags",

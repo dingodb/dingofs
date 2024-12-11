@@ -73,7 +73,7 @@ cc_test(
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/proto:mds_cc_proto",
         "//curvefs/proto:space_cc_proto",
-        "//curvefs/test/client/rpcclient:rpcclient_test_mock",
+        "//curvefs/test/stub/rpcclient:rpcclient_test_mock",
         "//curvefs/test/client/blockcache/mock:blockcache_mock_lib",
     ],
     linkopts = [
@@ -103,7 +103,7 @@ cc_test(
         "@gtest//:gtest",
         "//curvefs/include/client:include_client",
         "//curvefs/src/client:fuse_client_lib",
-        "//curvefs/test/client/rpcclient:rpcclient_test_mock",
+        "//curvefs/test/stub/rpcclient:rpcclient_test_mock",
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/proto:mds_cc_proto",
         "//curvefs/proto:space_cc_proto",

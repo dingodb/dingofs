@@ -33,11 +33,11 @@
 #include "absl/strings/string_view.h"
 #include "curvefs/src/client/common/config.h"
 #include "curvefs/src/client/kvclient/kvclient.h"
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 #include "curvefs/src/utils/concurrent/task_thread_pool.h"
 #include "curvefs/src/aws/s3_adapter.h"
 
-using curvefs::client::metric::KVClientMetric;
+using curvefs::stub::metric::KVClientMetric;
 
 namespace curvefs {
 namespace client {

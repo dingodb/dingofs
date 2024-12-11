@@ -29,10 +29,10 @@
 #include "curvefs/src/client/filesystem/defer_sync.h"
 #include "curvefs/src/client/filesystem/dir_cache.h"
 #include "curvefs/src/client/filesystem/openfile.h"
-#include "curvefs/src/client/filesystem/xattr.h"
 #include "curvefs/src/client/inode_cache_manager.h"
 #include "curvefs/src/client/inode_wrapper.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/filesystem/xattr.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/test/client/mock_metaserver_client.h"
 
 namespace curvefs {
@@ -52,17 +52,16 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using rpcclient::MockMetaServerClient;
-
 using ::curvefs::client::common::DeferSyncOption;
 using ::curvefs::client::common::OpenFilesOption;
 using ::curvefs::client::filesystem::DeferSync;
 using ::curvefs::client::filesystem::OpenFiles;
 
-using ::curvefs::client::filesystem::XATTR_DIR_ENTRIES;
-using ::curvefs::client::filesystem::XATTR_DIR_FBYTES;
-using ::curvefs::client::filesystem::XATTR_DIR_FILES;
-using ::curvefs::client::filesystem::XATTR_DIR_SUBDIRS;
+using ::curvefs::stub::filesystem::XATTR_DIR_ENTRIES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FBYTES;
+using ::curvefs::stub::filesystem::XATTR_DIR_FILES;
+using ::curvefs::stub::filesystem::XATTR_DIR_SUBDIRS;
+using curvefs::stub::rpcclient::MockMetaServerClient;
 
 class TestInodeCacheManager : public ::testing::Test {
  protected:

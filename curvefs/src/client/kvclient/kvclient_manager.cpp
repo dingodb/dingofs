@@ -22,10 +22,10 @@
 
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
 
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 #include "curvefs/src/utils/concurrent/count_down_event.h"
 
-using curvefs::client::metric::LatencyGuard;
+using curvefs::stub::metric::LatencyGuard;
 
 namespace curvefs {
 namespace client {

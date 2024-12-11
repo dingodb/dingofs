@@ -36,7 +36,7 @@
 #include "curvefs/src/client/blockcache/error.h"
 #include "curvefs/src/client/blockcache/log.h"
 #include "curvefs/src/client/blockcache/phase_timer.h"
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 
 namespace curvefs {
 namespace client {
@@ -46,7 +46,7 @@ using ::curvefs::base::string::GenUuid;
 using ::curvefs::base::string::TrimSpace;
 using ::curvefs::base::time::TimeNow;
 
-using DiskCacheTotalMetric = ::curvefs::client::metric::DiskCacheMetric;
+using DiskCacheTotalMetric = ::curvefs::stub::metric::DiskCacheMetric;
 using DiskCacheMetricGuard =
     ::curvefs::client::blockcache::DiskCacheMetricGuard;
 

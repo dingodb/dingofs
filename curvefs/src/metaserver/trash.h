@@ -28,7 +28,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "curvefs/src/client/rpcclient/mds_client.h"
+#include "curvefs/src/stub/rpcclient/mds_client.h"
 #include "curvefs/src/metaserver/inode_storage.h"
 #include "curvefs/src/metaserver/s3/metaserver_s3_adaptor.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
@@ -44,8 +44,8 @@ using ::curvefs::utils::InterruptibleSleeper;
 using ::curvefs::utils::LockGuard;
 using ::curvefs::utils::Mutex;
 using ::curvefs::utils::Thread;
-using ::curvefs::client::rpcclient::MdsClient;
-using ::curvefs::client::rpcclient::MdsClientImpl;
+using ::curvefs::stub::rpcclient::MdsClient;
+using ::curvefs::stub::rpcclient::MdsClientImpl;
 
 struct TrashItem {
   uint32_t fsId;

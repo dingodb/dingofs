@@ -37,7 +37,7 @@
 #include "curvefs/src/client/datastream/data_stream.h"
 #include "curvefs/src/client/filesystem/meta.h"
 #include "curvefs/src/client/kvclient/kvclient_manager.h"
-#include "curvefs/src/client/metric/client_metric.h"
+#include "curvefs/src/stub/metric/metric.h"
 #include "curvefs/src/client/s3/client_s3_adaptor.h"
 
 namespace curvefs {
@@ -48,7 +48,7 @@ DECLARE_bool(enableCto);
 }  // namespace client
 }  // namespace curvefs
 
-using ::curvefs::client::metric::S3MultiManagerMetric;
+using ::curvefs::stub::metric::S3MultiManagerMetric;
 static S3MultiManagerMetric* g_s3MultiManagerMetric =
     new S3MultiManagerMetric();
 
@@ -63,8 +63,8 @@ using ::curvefs::client::blockcache::GetObjectAsyncContext;
 using ::curvefs::client::blockcache::StrErr;
 using ::curvefs::client::datastream::DataStream;
 using ::curvefs::client::filesystem::Ino;
-using ::curvefs::client::metric::MetricGuard;
-using ::curvefs::client::metric::S3Metric;
+using ::curvefs::stub::metric::MetricGuard;
+using ::curvefs::stub::metric::S3Metric;
 
 using ::curvefs::client::common::FLAGS_fuse_read_max_retry_s3_not_exist;
 

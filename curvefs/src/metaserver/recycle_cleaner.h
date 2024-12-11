@@ -25,13 +25,13 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/metaserver/copyset/copyset_node_manager.h"
 #include "curvefs/src/metaserver/partition.h"
 
 namespace curvefs {
 namespace metaserver {
-using curvefs::client::rpcclient::MetaServerClient;
+using curvefs::stub::rpcclient::MetaServerClient;
 class RecycleCleaner {
  public:
   explicit RecycleCleaner(const std::shared_ptr<Partition>& partition)

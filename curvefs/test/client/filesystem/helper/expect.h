@@ -35,7 +35,7 @@ namespace filesystem {
 
 using ::curvefs::client::MockDentryCacheManager;
 using ::curvefs::client::MockInodeCacheManager;
-using ::curvefs::client::rpcclient::MockMetaServerClient;
+using ::curvefs::stub::rpcclient::MockMetaServerClient;
 using ::testing::_;
 using ::testing::Invoke;
 using ::testing::Return;

@@ -24,7 +24,7 @@
 #include "curvefs/src/base/timer/timer.h"
 #include "curvefs/src/client/filesystem/dir_parent_watcher.h"
 #include "curvefs/src/client/filesystem/meta.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 
 namespace curvefs {
@@ -35,7 +35,8 @@ using base::timer::Timer;
 using curvefs::metaserver::Quota;
 using curvefs::metaserver::Usage;
 using curvefs::utils::RWLock;
-using rpcclient::MetaServerClient;
+
+using curvefs::stub::rpcclient::MetaServerClient;
 
 class DirQuota {
  public:

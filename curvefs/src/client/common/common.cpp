@@ -28,68 +28,6 @@ namespace curvefs {
 namespace client {
 namespace common {
 
-std::ostream& operator<<(std::ostream& os, MetaServerOpType optype) {
-  switch (optype) {
-    case MetaServerOpType::GetDentry:
-      os << "GetDentry";
-      break;
-    case MetaServerOpType::ListDentry:
-      os << "ListDentry";
-      break;
-    case MetaServerOpType::CreateDentry:
-      os << "CreateDentry";
-      break;
-    case MetaServerOpType::DeleteDentry:
-      os << "DeleteDentry";
-      break;
-    case MetaServerOpType::PrepareRenameTx:
-      os << "PrepareRenameTx";
-      break;
-    case MetaServerOpType::GetInode:
-      os << "GetInode";
-      break;
-    case MetaServerOpType::BatchGetInodeAttr:
-      os << "BatchGetInodeAttr";
-      break;
-    case MetaServerOpType::BatchGetXAttr:
-      os << "BatchGetXAttr";
-      break;
-    case MetaServerOpType::UpdateInode:
-      os << "UpdateInode";
-      break;
-    case MetaServerOpType::CreateInode:
-      os << "CreateInode";
-      break;
-    case MetaServerOpType::DeleteInode:
-      os << "DeleteInode";
-      break;
-    case MetaServerOpType::GetOrModifyS3ChunkInfo:
-      os << "GetOrModifyS3ChunkInfo";
-      break;
-    case MetaServerOpType::GetVolumeExtent:
-      os << "GetVolumeExtent";
-      break;
-    case MetaServerOpType::UpdateVolumeExtent:
-      os << "UpdateVolumeExtent";
-      break;
-    case MetaServerOpType::GetFsQuota:
-      os << "GetFsQuota";
-      break;
-    case MetaServerOpType::FlushFsUsage:
-      os << "FlushFsUsage";
-      break;
-    case MetaServerOpType::LoadDirQutoas:
-      os << "LoadDirQutoas";
-      break;
-    case MetaServerOpType::FlushDirUsages:
-      os << "FlushDirUsages";
-      break;
-    default:
-      os << "Unknow opType";
-  }
-  return os;
-}
-
 const char kCurveFsWarmupOpAdd[] = "add";
 const char kCurveFsWarmupOpQuery[] = "query";
 const char kCurveFsWarmupTypeList[] = "list";

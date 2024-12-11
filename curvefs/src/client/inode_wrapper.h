@@ -33,10 +33,10 @@
 #include <utility>
 
 #include "curvefs/proto/metaserver.pb.h"
+#include "curvefs/src/client/common/common.h"
 #include "curvefs/src/client/filesystem/error.h"
-#include "curvefs/src/client/metric/client_metric.h"
-#include "curvefs/src/client/rpcclient/metaserver_client.h"
-#include "curvefs/src/common/define.h"
+#include "curvefs/src/stub/metric/metric.h"
+#include "curvefs/src/stub/rpcclient/metaserver_client.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 #include "curvefs/src/utils/timeutility.h"
 
@@ -51,20 +51,20 @@ constexpr int kAccessTime = 1 << 0;
 constexpr int kChangeTime = 1 << 1;
 constexpr int kModifyTime = 1 << 2;
 
-using ::curvefs::client::filesystem::CURVEFS_ERROR;
-using ::curvefs::metaserver::VolumeExtentList;
+using common::NlinkChange;
+using filesystem::CURVEFS_ERROR;
+
+using curvefs::utils::TimeUtility;
+
+using curvefs::stub::metric::S3ChunkInfoMetric;
+using curvefs::stub::rpcclient::MetaServerClient;
+using curvefs::stub::rpcclient::MetaServerClientDone;
+using curvefs::stub::rpcclient::MetaServerClientImpl;
 
 enum class InodeStatus {
   kNormal = 0,
   kError = -1,
 };
-
-using common::NlinkChange;
-using curvefs::utils::TimeUtility;
-using metric::S3ChunkInfoMetric;
-using rpcclient::MetaServerClient;
-using rpcclient::MetaServerClientDone;
-using rpcclient::MetaServerClientImpl;
 
 std::ostream& operator<<(std::ostream& os, const struct stat& attr);
 void AppendS3ChunkInfoToMap(
