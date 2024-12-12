@@ -20,7 +20,7 @@
  * Author: lixiaocui1
  */
 
-#include "curvefs/src/leader_election/leader_election.h"
+#include "curvefs/src/mds/leader_election/leader_election.h"
 
 #include <fiu.h>
 
@@ -89,4 +89,4 @@ int LeaderElection::ObserveLeader() {
   return -1;
 }
 }  // namespace election
-}  // namespace curve
+}  // namespace curvefs

@@ -47,17 +47,3 @@ cc_library(
         "@brpc//:brpc",
     ],
 )
-
-cc_library(
-    name = "curve_dlock",
-    srcs = glob([
-        "dlock.h",
-        "dlock.cpp",
-    ]),
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "//curvefs/src/kvstorageclient:kvstorage_client",
-        "@glog//:glog",
-    ],
-)

@@ -40,7 +40,7 @@
 
 #include "curvefs/proto/copyset.pb.h"
 #include "curvefs/proto/topology.pb.h"
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/mds/common/mds_define.h"
 #include "curvefs/src/mds/topology/topology_id_generator.h"
 #include "curvefs/src/mds/topology/topology_manager.h"

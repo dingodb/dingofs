@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/mds/topology/topology_storage_codec.h"
 #include "curvefs/src/mds/topology/topology_storge.h"
 

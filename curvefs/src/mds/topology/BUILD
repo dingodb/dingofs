@@ -32,7 +32,7 @@ cc_library(
         "//curvefs/src/mds/topology:curvefs_deal_peerid",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/utils/concurrent:curve_concurrent",
-        "//curvefs/src/kvstorageclient:kvstorage_client",
+        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
         "@brpc//:brpc",
         "@glog//:glog",
         "@jsoncpp//:jsoncpp",

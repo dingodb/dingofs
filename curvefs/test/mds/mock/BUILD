@@ -24,7 +24,7 @@ cc_library(
     copts = CURVE_TEST_COPTS,
     visibility = ["//visibility:public"],
     deps = [
-        "//curvefs/src/idgenerator:idgenerator",
+        "//curvefs/src/mds/idgenerator:fs_mds_idgenerator",
         "//curvefs/proto:metaserver_cc_proto",
         "//curvefs/proto:space_cc_proto",
         "//curvefs/src/mds/topology:curvefs_topology",

@@ -18,11 +18,12 @@ load("//:copts.bzl", "CURVE_DEFAULT_COPTS")
 
 cc_library(
     name = "fs_mds_idgenerator",
-    hdrs = ["fs_id_generator.h"],
+    srcs = glob(["*.cpp"]),
+    hdrs = glob(["*.h"]),
     copts = CURVE_DEFAULT_COPTS,
     visibility = ["//visibility:public"],
     deps = [
         "//curvefs/src/mds/common:fs_mds_common",
-        "//curvefs/src/idgenerator",
+        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
     ],
 )

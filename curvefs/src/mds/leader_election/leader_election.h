@@ -28,14 +28,14 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/utils/namespace_define.h"
 
 namespace curvefs {
 namespace election {
 
-using ::curvefs::utils::LEADERCAMPAIGNNPFX;
 using ::curvefs::kvstorage::EtcdClientImp;
+using ::curvefs::utils::LEADERCAMPAIGNNPFX;
 
 struct LeaderElectionOptions {
   // etcd客户端
@@ -101,6 +101,6 @@ class LeaderElection {
   uint64_t leaderOid_;
 };
 }  // namespace election
-}  // namespace curve
+}  // namespace curvefs
 
 #endif  // SRC_LEADER_ELECTION_LEADER_ELECTION_H_

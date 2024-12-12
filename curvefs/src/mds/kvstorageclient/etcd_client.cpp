@@ -20,7 +20,7 @@
  * Author: lixiaocui1
  */
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 
 #include <glog/logging.h>
 
@@ -349,4 +349,4 @@ bool EtcdClientImp::NeedRetry(int errCode) {
 }
 
 }  // namespace kvstorage
-}  // namespace curve
+}  // namespace curvefs

@@ -36,8 +36,7 @@ cc_library(
         "//curvefs/src/mds/idgenerator:fs_mds_idgenerator",
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/utils/concurrent:curve_concurrent",
-        "//curvefs/src/idgenerator",
-        "//curvefs/src/kvstorageclient:kvstorage_client",
+        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
     ],
 )
 
@@ -72,9 +71,8 @@ cc_library(
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/utils/concurrent:curve_concurrent",
-        "//curvefs/src/idgenerator",
-        "//curvefs/src/kvstorageclient:kvstorage_client",
-        "//curvefs/src/leader_election",
+        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
+        "//curvefs/src/mds/leader_election:fs_mds_leader_election",
         "@brpc//:brpc",
         "@gflags//:gflags",
         "@glog//:glog",

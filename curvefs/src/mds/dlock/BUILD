@@ -25,7 +25,7 @@ cc_library(
     deps = [
         "//curvefs/src/utils:curve_common",
         "//curvefs/src/utils/concurrent:curve_concurrent",
-        "//curvefs/src/kvstorageclient:kvstorage_client",
+        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
         "//curvefs/proto:mds_cc_proto",
         "//curvefs/src/mds/common:fs_mds_common",
         "@protobuf//:protobuf",

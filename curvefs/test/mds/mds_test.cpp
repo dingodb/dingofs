@@ -33,7 +33,7 @@
 #include <vector>
 
 #include "curvefs/proto/mds.pb.h"
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/utils/timeutility.h"
 
 using ::std::vector;

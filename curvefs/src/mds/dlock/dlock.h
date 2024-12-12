@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/utils/concurrent/name_lock.h"
 #include "curvefs/src/utils/encode.h"
 #include "curvefs/src/utils/uncopyable.h"
@@ -35,9 +35,9 @@ namespace curvefs {
 namespace mds {
 namespace dlock {
 
+using ::curvefs::kvstorage::EtcdClientImp;
 using ::curvefs::utils::NameLock;
 using ::curvefs::utils::Uncopyable;
-using ::curvefs::kvstorage::EtcdClientImp;
 
 struct DLockOptions {
   uint64_t ttlMs = 5000;

@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
 #include "curvefs/src/utils/concurrent/concurrent.h"
 
 namespace curvefs {

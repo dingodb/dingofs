@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "curvefs/src/idgenerator/etcd_id_generator.h"
+#include "curvefs/src/mds/idgenerator/etcd_id_generator.h"
 
 #include <glog/logging.h>
 

@@ -28,8 +28,8 @@
 #include <memory>
 #include <string>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
-#include "curvefs/src/leader_election/leader_election.h"
+#include "curvefs/src/mds/kvstorageclient/etcd_client.h"
+#include "curvefs/src/mds/leader_election/leader_election.h"
 #include "curvefs/src/mds/chunkid_allocator.h"
 #include "curvefs/src/mds/dlock/dlock.h"
 #include "curvefs/src/mds/fs_manager.h"

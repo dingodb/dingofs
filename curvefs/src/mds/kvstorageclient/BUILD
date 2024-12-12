@@ -14,34 +14,18 @@
 #  limitations under the License.
 #
 
-load("//:copts.bzl", "CURVE_DEFAULT_COPTS", "CURVE_TEST_COPTS")
+load("//:copts.bzl", "CURVE_DEFAULT_COPTS")
 
 cc_library(
-    name = "leader_election",
-    srcs = ["leader_election.cpp"],
-    hdrs = ["leader_election.h"],
+    name = "fs_mds_kvstorage_client",
+    srcs = glob(["*.cpp"]),
+    hdrs = glob(["*.h"]),
     copts = CURVE_DEFAULT_COPTS,
     visibility = ["//visibility:public"],
     deps = [
-        "//curvefs/src/kvstorageclient:kvstorage_client",
-        "@gflags//:gflags",
-        "@glog//:glog",
-        "@libfiu//:libfiu",
-    ],
-)
-
-cc_library(
-    name = "leader_election_for_test",
-    srcs = ["leader_election.cpp"],
-    hdrs = ["leader_election.h"],
-    copts = CURVE_TEST_COPTS,
-    defines = ["FIU_ENABLE"],
-    visibility = ["//visibility:public"],
-    deps = [
         "//curvefs/src/utils:curve_common",
-        "//curvefs/src/kvstorageclient:kvstorage_client",
+        "@etcdclient",
         "@gflags//:gflags",
         "@glog//:glog",
-        "@libfiu//:libfiu",
     ],
 )
