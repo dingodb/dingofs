@@ -605,7 +605,7 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
   FileOut file_out;
   auto* client = Client();
   auto fs = client->GetFileSystem();
-  METRIC_GUARD(Read);
+  METRIC_GUARD(Write);
   AccessLogGuard log([&]() {
     return StrFormat("write (%d,%d,%d,%d): %s (%d)", ino, size, off, fi->fh,
                      StrErr(rc), file_out.nwritten);
