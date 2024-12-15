@@ -282,7 +282,7 @@ void MdsServiceImpl::CommitTx(::google::protobuf::RpcController* controller,
   brpc::ClosureGuard guard(done);
   VLOG(3) << "CommitTx [request]: " << request->DebugString();
   fsManager_->CommitTx(request, response);
-  VLOG(3) << "CommitTx [response]: " << request->DebugString();
+  VLOG(3) << "CommitTx [response]: " << response->DebugString();
 }
 
 }  // namespace mds
