@@ -23,17 +23,14 @@
 #ifndef SRC_COMMON_CONCURRENT_DLOCK_H_
 #define SRC_COMMON_CONCURRENT_DLOCK_H_
 
-#include <memory>
 #include <string>
 
-#include "curvefs/src/kvstorageclient/etcd_client.h"
 #include "curvefs/src/utils/uncopyable.h"
 
 namespace curvefs {
 namespace utils {
 
 using curvefs::utils::Uncopyable;
-using curvefs::kvstorage::KVStorageClient;
 
 struct DLockOpts {
   std::string pfx;

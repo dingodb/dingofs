@@ -33,7 +33,6 @@
 #include "curvefs/src/mds/schedule/scheduleMetrics.h"
 #include "curvefs/src/mds/schedule/scheduler.h"
 #include "curvefs/src/mds/topology/topology_manager.h"
-#include "curvefs/test/mds/mock/mock_metaserver.h"
 #include "curvefs/test/mds/mock/mock_metaserver_client.h"
 #include "curvefs/test/mds/mock/mock_topology.h"
 
@@ -41,12 +40,8 @@ namespace curvefs {
 namespace mds {
 
 using ::testing::_;
-using ::testing::AnyOf;
-using ::testing::Invoke;
 using ::testing::Return;
-using ::testing::SetArgPointee;
 
-using curvefs::mds::MetaserverClient;
 using curvefs::mds::topology::CopySetIdType;
 using curvefs::mds::topology::CopySetInfo;
 using curvefs::mds::topology::CopySetKey;
@@ -66,21 +61,17 @@ using curvefs::mds::topology::Pool;
 using curvefs::mds::topology::PoolIdType;
 using curvefs::mds::topology::Server;
 using curvefs::mds::topology::ServerIdType;
-using curvefs::mds::topology::Topology;
 using curvefs::mds::topology::TopologyImpl;
 using curvefs::mds::topology::TopologyManager;
 using curvefs::mds::topology::TopologyOption;
 using curvefs::mds::topology::TopoStatusCode;
 using curvefs::mds::topology::Zone;
 using curvefs::mds::topology::ZoneIdType;
-using curvefs::metaserver::MockMetaserverService;
-using google::protobuf::util::MessageDifferencer;
 
 using curvefs::mds::schedule::AddPeer;
 using curvefs::mds::schedule::ChangePeer;
 using curvefs::mds::schedule::CopySetConf;
 using curvefs::mds::schedule::CopySetScheduler;
-using curvefs::mds::schedule::LeaderScheduler;
 using curvefs::mds::schedule::Operator;
 using curvefs::mds::schedule::OperatorController;
 using curvefs::mds::schedule::RecoverScheduler;

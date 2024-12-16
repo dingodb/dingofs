@@ -18,7 +18,6 @@ load("//:copts.bzl", "CURVE_TEST_COPTS")
 
 cc_library(
     name = "curvefs_test_utils",
-    srcs = ["protobuf_message_utils.cpp"],
     hdrs = ["protobuf_message_utils.h"],
     copts = CURVE_TEST_COPTS + ["-DUNIT_TEST"],
     visibility = ["//visibility:public"],
@@ -39,7 +38,6 @@ cc_test(
         "//curvefs/src/utils:curve_auth",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/utils/concurrent:curve_concurrent",
-        "//curvefs/src/mds/kvstorageclient:fs_mds_kvstorage_client",
         "@gtest//:gtest",
     ],
     copts = CURVE_TEST_COPTS,

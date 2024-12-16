@@ -109,7 +109,6 @@ cc_test(
     defines = ["UNIT_TEST"],
     visibility = ["//visibility:public"],
     deps = [
-        "//curvefs/include/client:include_client",
         "//curvefs/src/aws:aws_s3_adapter",
         "//curvefs/src/client:fuse_client_lib",
         "//curvefs/src/metaserver:metaserver_s3_lib",

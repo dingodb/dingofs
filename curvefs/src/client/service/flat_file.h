@@ -235,13 +235,24 @@ class FlatFile {
   std::string FormatStringWithHeader(bool use_delimiter = false) const {
     std::ostringstream os;
     if (use_delimiter) {
-      os << std::left << "file_offset" << "|" << "len" << "|" << "block_offset"
-         << "|" << "block_name" << "|" << "block_len" << "|" << "zero" << "\n";
+      os << std::left << "file_offset"
+         << "|"
+         << "len"
+         << "|"
+         << "block_offset"
+         << "|"
+         << "block_name"
+         << "|"
+         << "block_len"
+         << "|"
+         << "zero"
+         << "\n";
     } else {
       os << std::left << std::setw(20) << "file_offset" << std::setw(15)
          << "len" << std::setw(15) << "block_offset" << std::setw(100)
          << "block_name" << std::setw(15) << "block_len" << std::setw(10)
-         << "zero" << "\n";
+         << "zero"
+         << "\n";
     }
 
     for (const auto& flat_file_chunk_iter : chunk_index_flat_file_chunk_) {

@@ -30,10 +30,10 @@
 #include <chrono>
 #include <thread>
 
+#include "curvefs/test/fs/mock_local_filesystem.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_service.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_raft_node.h"
-#include "curvefs/test/fs/mock_local_filesystem.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -302,7 +302,7 @@ TEST_F(CopysetNodeTest, FetchLeaderStatusTest_LeaderIdIsEmpty) {
 
   EXPECT_TRUE(node.Init(options));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.reset();
@@ -323,7 +323,7 @@ TEST_F(CopysetNodeTest, FetchLeaderStatusTest_CurrentNodeIsLeader) {
 
   EXPECT_TRUE(node.Init(options));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:29940:0");
@@ -344,7 +344,7 @@ TEST_F(CopysetNodeTest,
 
   EXPECT_TRUE(node.Init(options_));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:299400:0");
@@ -363,7 +363,7 @@ TEST_F(CopysetNodeTest,
 
   EXPECT_TRUE(node.Init(options_));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:29941:0");  // leader don't start service
@@ -382,7 +382,7 @@ TEST_F(CopysetNodeTest,
 
   EXPECT_TRUE(node.Init(options_));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:29941:0");
@@ -415,7 +415,7 @@ TEST_F(
 
   EXPECT_TRUE(node.Init(options_));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:29941:0");
@@ -446,7 +446,7 @@ TEST_F(CopysetNodeTest,
 
   EXPECT_TRUE(node.Init(options_));
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   braft::NodeStatus status;
   status.leader_id.parse("127.0.0.1:29941:0");
@@ -521,7 +521,7 @@ TEST_F(CopysetNodeTest, ProposeAfterStopWontFatal) {
   EXPECT_TRUE(node.Init(options_));
 
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   EXPECT_CALL(*mockRaftNode, init(_)).WillOnce(Return(0));
 

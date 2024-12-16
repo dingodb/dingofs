@@ -23,15 +23,31 @@
 #ifndef CURVEFS_TEST_METASERVER_STORAGE_UTILS_H_
 #define CURVEFS_TEST_METASERVER_STORAGE_UTILS_H_
 
-#include <string>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <random>
+#include <sstream>
 
 namespace curvefs {
 namespace metaserver {
 namespace storage {
 
-std::string RandomString();
+static inline std::string RandomString() {
+  uint64_t maxUint64 = std::numeric_limits<uint64_t>::max();
+  std::random_device dev;
+  std::mt19937 rng(dev());
+  std::uniform_int_distribution<std::mt19937::result_type> dist(0, maxUint64);
 
-std::string RandomStoragePath(std::string basedir = "./storage");
+  std::ostringstream oss;
+  oss << std::setw(std::to_string(maxUint64).size()) << std::setfill('0')
+      << dist(rng);
+  return oss.str();
+}
+
+static inline std::string RandomStoragePath(std::string basedir = "./storage") {
+  return basedir + "_" + RandomString();
+}
 
 }  // namespace storage
 }  // namespace metaserver

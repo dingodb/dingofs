@@ -65,6 +65,14 @@ export BAZEL_JOBS=16
 bash buildfs.sh
 ```
 
+### Build With Cmake
+```sh
+mkdir builld
+cd build
+cmake ..
+make -j 32
+```
+
 ### Generate compile_commands.json
 ```sh
 bazel run @hedron_compile_commands//:refresh_all

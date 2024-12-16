@@ -64,3 +64,9 @@
 [submodule "third-party/opentelemetry-cpp"]
 	path = third-party/opentelemetry-cpp
 	url = https://github.com/open-telemetry/opentelemetry-cpp.git
+[submodule "third-party/abseil-cpp"]
+	path = third-party/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git
+[submodule "third-party/nlohmann-json"]
+	path = third-party/nlohmann-json
+	url = https://github.com/nlohmann/json.git

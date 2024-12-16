@@ -38,9 +38,6 @@ cc_library(
 
 cc_library(
     name = "client_test_utils",
-    srcs = [
-        "utils.cpp",
-    ],
     hdrs = [
         "utils.h",
     ],
@@ -101,7 +98,6 @@ cc_test(
    copts = CURVE_TEST_COPTS + ["-I/usr/local/include/fuse3"],
    deps = [
         "@gtest//:gtest",
-        "//curvefs/include/client:include_client",
         "//curvefs/src/client:fuse_client_lib",
         "//curvefs/test/stub/rpcclient:rpcclient_test_mock",
         "//curvefs/proto:metaserver_cc_proto",

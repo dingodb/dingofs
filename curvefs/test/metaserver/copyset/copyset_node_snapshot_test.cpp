@@ -27,16 +27,16 @@
 
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
 #include "curvefs/src/metaserver/copyset/copyset_node_manager.h"
-#include "curvefs/test/metaserver/mock/mock_metastore.h"
 #include "curvefs/src/utils/uuid.h"
 #include "curvefs/test/fs/mock_local_filesystem.h"
+#include "curvefs/test/metaserver/mock/mock_metastore.h"
 
 namespace curvefs {
 namespace metaserver {
 namespace copyset {
 
-using ::curvefs::utils::UUIDGenerator;
 using ::curvefs::fs::MockLocalFileSystem;
+using ::curvefs::utils::UUIDGenerator;
 using ::testing::_;
 using ::testing::DoAll;
 using ::testing::Invoke;
@@ -207,7 +207,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotSaveTest_MetaStoreSaveFailed) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotWriter writer;
   FakeSnapshotSaveClosure done;
@@ -243,7 +243,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotSaveTest_Success) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotWriter writer;
   FakeSnapshotSaveClosure done;
@@ -296,7 +296,7 @@ TEST_F(CopysetNodeRaftSnapshotTest,
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotReader reader;
   EXPECT_CALL(reader, get_path()).WillRepeatedly(Return(dataPath_));
@@ -334,7 +334,7 @@ TEST_F(CopysetNodeRaftSnapshotTest,
   node->ListPeers(&peers);
   EXPECT_EQ(1, peers.size());
   EXPECT_EQ(epochBefore, node->GetConfEpoch());
-  node->SetMetaStore(nullptr);
+  node->TEST_SetMetaStore(nullptr);
 }
 
 TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadFailed) {
@@ -344,7 +344,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadFailed) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotReader reader;
   EXPECT_CALL(reader, get_path()).WillRepeatedly(Return(dataPath_));
@@ -358,7 +358,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadFailed) {
   EXPECT_NE(0, node->on_snapshot_load(&reader));
   ASSERT_FALSE(node->IsLoading());
 
-  node->SetMetaStore(nullptr);
+  node->TEST_SetMetaStore(nullptr);
 }
 
 void RunOnSnapshotLoad(CopysetNode* node, MockSnapshotReader* reader,
@@ -384,7 +384,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess1) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotReader reader;
   EXPECT_CALL(reader, get_path()).WillRepeatedly(Return(dataPath_));
@@ -403,7 +403,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess1) {
   thread1.join();
   thread2.join();
 
-  node->SetMetaStore(nullptr);
+  node->TEST_SetMetaStore(nullptr);
 }
 
 // get partition list after copyset is loading
@@ -414,7 +414,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess2) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotReader reader;
   EXPECT_CALL(reader, get_path()).WillRepeatedly(Return(dataPath_));
@@ -434,7 +434,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess2) {
   thread1.join();
   thread2.join();
 
-  node->SetMetaStore(nullptr);
+  node->TEST_SetMetaStore(nullptr);
 }
 
 // get partition list before copyset is loading
@@ -445,7 +445,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess3) {
   ASSERT_NE(nullptr, node);
 
   auto mockMetaStore = mockMetaStore_.get();
-  node->SetMetaStore(mockMetaStore_.release());
+  node->TEST_SetMetaStore(mockMetaStore_.release());
 
   MockSnapshotReader reader;
   EXPECT_CALL(reader, get_path()).WillRepeatedly(Return(dataPath_));
@@ -465,7 +465,7 @@ TEST_F(CopysetNodeRaftSnapshotTest, SnapshotLoadTest_MetaStoreLoadSuccess3) {
   thread1.join();
   thread2.join();
 
-  node->SetMetaStore(nullptr);
+  node->TEST_SetMetaStore(nullptr);
 }
 }  // namespace copyset
 }  // namespace metaserver

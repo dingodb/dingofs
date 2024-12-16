@@ -39,7 +39,6 @@ cc_test(
 cc_library(
     name = "metaserver_storage_test_utils",
     hdrs = ["utils.h"],
-    srcs = ["utils.cpp"],
     copts = CURVE_TEST_COPTS + ["-DUNIT_TEST"],
     visibility = ["//visibility:public"],
 )

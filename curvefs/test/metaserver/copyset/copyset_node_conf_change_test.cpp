@@ -25,11 +25,11 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
+#include "curvefs/src/fs/ext4_filesystem_impl.h"
 #include "curvefs/src/metaserver/copyset/copyset_node.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_service.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_raft_node.h"
-#include "curvefs/src/fs/ext4_filesystem_impl.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -160,7 +160,7 @@ TEST_F(CopysetNodeConfChangeTest, TestTransferLeader) {
     EXPECT_TRUE(node.Init(options_));
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
     node.on_leader_start(100);
 
     Peer peer;
@@ -181,7 +181,7 @@ TEST_F(CopysetNodeConfChangeTest, TestTransferLeader) {
     EXPECT_TRUE(node.Init(options_));
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
     node.on_leader_start(100);
 
     Peer peer;
@@ -204,7 +204,7 @@ TEST_F(CopysetNodeConfChangeTest, TestTransferLeader) {
     EXPECT_TRUE(node.Init(options_));
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
     node.on_leader_start(100);
 
     Peer peer;
@@ -304,7 +304,7 @@ TEST_F(CopysetNodeConfChangeTest, TestAddPeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     peer.set_address("127.0.0.1:29963:0");
@@ -329,7 +329,7 @@ TEST_F(CopysetNodeConfChangeTest, TestAddPeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     peer.set_address("127.0.0.1:29963:0");
@@ -409,7 +409,7 @@ TEST_F(CopysetNodeConfChangeTest, TestRemovePeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     peer.set_address("127.0.0.1:29962:0");
@@ -435,7 +435,7 @@ TEST_F(CopysetNodeConfChangeTest, TestRemovePeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     peer.set_address("127.0.0.1:29962:0");
@@ -513,7 +513,7 @@ TEST_F(CopysetNodeConfChangeTest, TestChangePeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     std::vector<Peer> newPeers;
@@ -546,7 +546,7 @@ TEST_F(CopysetNodeConfChangeTest, TestChangePeer) {
     node.on_leader_start(100);
 
     auto* raftNode = new MockRaftNode();
-    node.SetRaftNode(raftNode);
+    node.TEST_SetRaftNode(raftNode);
 
     Peer peer;
     std::vector<Peer> newPeers;
@@ -586,7 +586,7 @@ TEST_F(CopysetNodeConfChangeTest, RejectConfChangeIfPreviousNotComplete) {
   node.on_leader_start(100);
 
   auto* raftNode = new MockRaftNode();
-  node.SetRaftNode(raftNode);
+  node.TEST_SetRaftNode(raftNode);
 
   // issue add peer
   Peer peerToAdd;
@@ -624,7 +624,7 @@ TEST_F(CopysetNodeConfChangeTest, UpdateTransferLeaderStateWhenGetConfChange) {
   EXPECT_TRUE(node.Init(options_));
 
   auto* raftNode = new MockRaftNode();
-  node.SetRaftNode(raftNode);
+  node.TEST_SetRaftNode(raftNode);
   node.on_leader_start(100);
 
   Peer peer;

@@ -30,12 +30,12 @@
 #include <regex>
 
 #include "absl/memory/memory.h"
+#include "curvefs/src/utils/timeutility.h"
+#include "curvefs/test/fs/mock_local_filesystem.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
 #include "curvefs/test/metaserver/copyset/mock/mock_raft_node.h"
 #include "curvefs/test/metaserver/mock/mock_metastore.h"
 #include "curvefs/test/utils/protobuf_message_utils.h"
-#include "curvefs/src/utils/timeutility.h"
-#include "curvefs/test/fs/mock_local_filesystem.h"
 
 namespace curvefs {
 namespace metaserver {
@@ -155,7 +155,7 @@ TEST_F(MetaOperatorTest, OnApplyErrorTest) {
 
   CopysetNode node(poolId, copysetId, conf, &mockNodeManager_);
   mock::MockMetaStore* mockMetaStore = new mock::MockMetaStore();
-  node.SetMetaStore(mockMetaStore);
+  node.TEST_SetMetaStore(mockMetaStore);
 
   ON_CALL(*mockMetaStore, Clear()).WillByDefault(Return(true));
 
@@ -281,7 +281,7 @@ TEST_F(MetaOperatorTest, OnApplyFromLogErrorTest) {
 
   CopysetNode node(poolId, copysetId, conf, &mockNodeManager_);
   mock::MockMetaStore* mockMetaStore = new mock::MockMetaStore();
-  node.SetMetaStore(mockMetaStore);
+  node.TEST_SetMetaStore(mockMetaStore);
 
   ON_CALL(*mockMetaStore, Clear()).WillByDefault(Return(true));
 
@@ -423,9 +423,9 @@ TEST_F(MetaOperatorTest, PropostTest_RequestCanBypassProcess) {
 
   EXPECT_TRUE(node.Init(options));
   auto* mockMetaStore = new mock::MockMetaStore();
-  node.SetMetaStore(mockMetaStore);
+  node.TEST_SetMetaStore(mockMetaStore);
   auto* mockRaftNode = new MockRaftNode();
-  node.SetRaftNode(mockRaftNode);
+  node.TEST_SetRaftNode(mockRaftNode);
 
   ON_CALL(*mockMetaStore, Clear()).WillByDefault(Return(true));
   EXPECT_CALL(*mockRaftNode, apply(_)).Times(0);
@@ -445,7 +445,7 @@ TEST_F(MetaOperatorTest, PropostTest_RequestCanBypassProcess) {
   op->Propose();
   op.release();
 
-  node.FlushApplyQueue();
+  node.TEST_FlushApplyQueue();
 
   EXPECT_TRUE(response.has_appliedindex());
   EXPECT_EQ(101, response.appliedindex());

@@ -122,13 +122,11 @@ class CopysetNode : public braft::StateMachine {
 
   int SaveConfEpoch(const std::string& file);
 
-#ifdef UNIT_TEST
-  void SetMetaStore(MetaStore* metastore) { metaStore_.reset(metastore); }
+  void TEST_SetMetaStore(MetaStore* metastore) { metaStore_.reset(metastore); }
 
-  void FlushApplyQueue() { applyQueue_->Flush(); }
+  void TEST_FlushApplyQueue() { applyQueue_->Flush(); }
 
-  void SetRaftNode(RaftNode* raftNode) { raftNode_.reset(raftNode); }
-#endif  // UNIT_TEST
+  void TEST_SetRaftNode(RaftNode* raftNode) { raftNode_.reset(raftNode); }
 
  public:
   /** configuration change interfaces **/

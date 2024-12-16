@@ -80,18 +80,6 @@ cc_library(
 )
 
 cc_library(
-    name = "curve_snapshotclone",
-    srcs = glob([
-        "snapshotclone_define.*",
-    ]),
-    copts = CURVE_DEFAULT_COPTS,
-    visibility = ["//visibility:public"],
-    deps = [
-        "@jsoncpp//:jsoncpp",
-    ],
-)
-
-cc_library(
     name = "macros",
     hdrs = ["macros.h"],
     srcs = [],
