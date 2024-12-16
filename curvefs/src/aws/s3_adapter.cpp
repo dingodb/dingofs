@@ -119,8 +119,10 @@ void InitS3AdaptorOptionExceptS3InfoOption(Configuration* conf,
     LOG(WARNING) << "Not found s3.maxAsyncRequestInflightBytes in conf";
     s3_opt->maxAsyncRequestInflightBytes = 0;
   }
-  LOG_IF(FATAL,
-         !conf->GetBoolValue("s3.enableTelemetry", &s3_opt->enableTelemetry));
+  if (!conf->GetBoolValue("s3.enableTelemetry", &s3_opt->enableTelemetry)) {
+    LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";
+    s3_opt->enableTelemetry = false;
+  }
 }
 
 void S3Adapter::Init(const std::string& path) {
