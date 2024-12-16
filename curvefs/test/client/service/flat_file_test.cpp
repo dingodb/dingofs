@@ -185,6 +185,38 @@ TEST_F(S3ChunkHolerTest, Init) {
     EXPECT_EQ(it->second.chunk_id, 1);
     EXPECT_EQ(it->second.block_index, 1);
   }
+
+  {
+    S3ChunkInfo chunk_info;
+    chunk_info.set_chunkid(1);
+    chunk_info.set_offset(5);
+    chunk_info.set_len(5);
+    chunk_info.set_zero(false);
+    chunk_info.set_compaction(0);
+
+    uint64_t block_size = 4;
+    S3ChunkHoler holer(chunk_info, block_size);
+
+    LOG(INFO) << holer.ToString();
+
+    const auto& offset_to_block = holer.GetOffsetToBlock();
+
+    ASSERT_EQ(offset_to_block.size(), 2);
+
+    auto it = offset_to_block.find(5);
+    ASSERT_NE(it, offset_to_block.end());
+    EXPECT_EQ(it->second.file_offset, 5);
+    EXPECT_EQ(it->second.obj_len, 3);
+    EXPECT_EQ(it->second.chunk_id, 1);
+    EXPECT_EQ(it->second.block_index, 0);
+
+    it = offset_to_block.find(8);
+    ASSERT_NE(it, offset_to_block.end());
+    EXPECT_EQ(it->second.file_offset, 8);
+    EXPECT_EQ(it->second.obj_len, 2);
+    EXPECT_EQ(it->second.chunk_id, 1);
+    EXPECT_EQ(it->second.block_index, 1);
+  }
 }
 
 TEST_F(S3ChunkHolerTest, GetBlockObjOne) {

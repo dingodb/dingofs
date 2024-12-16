@@ -169,24 +169,27 @@ class S3ChunkHoler {
 
  private:
   void Init() {
-    uint64_t block_index = chunk_info_.offset() / block_size_;
+    uint64_t block_id = chunk_info_.offset() / block_size_;
     uint64_t chunk_end = chunk_info_.len() + chunk_info_.offset();
     uint64_t offset = chunk_info_.offset();
 
-    uint64_t chunk_id = chunk_info_.chunkid();
-
+    uint64_t start_block_id = block_id;
     while (offset < chunk_end) {
-      uint64_t block_boundary = (block_index + 1) * block_size_;
+      uint64_t block_boundary = (block_id + 1) * block_size_;
       uint64_t obj_len = std::min(block_boundary, chunk_end) - offset;
 
       BlockObj block_obj = {
-          offset,   obj_len,     chunk_info_.zero(), chunk_info_.compaction(),
-          chunk_id, block_index,
+          offset,
+          obj_len,
+          chunk_info_.zero(),
+          chunk_info_.compaction(),
+          chunk_info_.chunkid(),
+          (block_id - start_block_id)  //  block index start from 0 in chunk
       };
 
       CHECK(offset_to_block_.insert({offset, block_obj}).second);
 
-      block_index++;
+      block_id++;
       offset += obj_len;
     }
   }
