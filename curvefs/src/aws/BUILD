@@ -26,7 +26,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//curvefs/src/utils:curve_common",
-        "//curvefs/src/aws/opentelemetry:opentelemetry_lib",
         "@glog//:glog",
         "@brpc//:brpc",
         "@aws//:aws",
