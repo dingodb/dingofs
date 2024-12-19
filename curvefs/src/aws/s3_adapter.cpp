@@ -30,12 +30,12 @@
 #include <string>
 #include <utility>
 
-#include "curvefs/src/aws/opentelemetry/OtelTelemetryProvider.h"
 #include "curvefs/src/utils/curve_define.h"
 #include "curvefs/src/utils/macros.h"
 #include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h"
+#include "smithy/tracing/impl/opentelemetry/OtelTelemetryProvider.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)
 
@@ -189,7 +189,7 @@ void S3Adapter::Init(const S3AdapterOption& option) {
             exporter_options);
 
     clientCfg_->telemetryProvider =
-        curvefs::aws::opentelemetry::OtelTelemetryProvider::CreateOtelProvider(
+        smithy::components::tracing::OtelTelemetryProvider::CreateOtelProvider(
             std::move(span_exporter), std::move(push_exporter));
   }
 

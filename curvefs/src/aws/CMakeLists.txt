@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(opentelemetry)
-
 add_library(aws_s3_adapter
     s3_adapter.h
     s3_adapter.cpp
 )
 target_link_libraries(aws_s3_adapter
-    opentelemetry_lib
     curvefs_utils
     glog
     brpc
