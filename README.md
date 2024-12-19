@@ -1,4 +1,4 @@
-# DINGO SDK
+# DINGOFS
 
 ## What's dingofs
 
