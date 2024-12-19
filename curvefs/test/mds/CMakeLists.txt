@@ -57,7 +57,7 @@ target_link_libraries(test_mds
     PROTO_OBJS
     mds_lib
     curvefs_utils
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
     ${TEST_DEPS}
 )
 set_target_properties(test_mds PROPERTIES

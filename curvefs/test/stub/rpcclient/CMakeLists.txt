@@ -18,7 +18,7 @@ file(GLOB RPCCLIENT_TEST_SRCS
 add_executable(test_rpcclient ${RPCCLIENT_TEST_SRCS})
 target_link_libraries(test_rpcclient
     rpcclient
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
     ${TEST_DEPS}
 )
 set_target_properties(test_rpcclient PROPERTIES

@@ -42,8 +42,8 @@ target_link_libraries(metaserver_lib
     curvefs_base_lib
     braft
     brpc
-    ${Protobuf_LIBRARIES}
     rocksdb
+    absl::log_internal_message
     absl::cleanup
     absl::btree
     absl::memory

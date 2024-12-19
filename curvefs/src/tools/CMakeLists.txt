@@ -35,9 +35,11 @@ target_link_libraries(tools_lib
     curvefs_common
     curvefs_utils
     jsoncpp
+    brpc
+    protobuf::libprotobuf
     absl::cleanup
     absl::strings
-    brpc
+    dl
 )
 
 add_executable(dingo-tool 

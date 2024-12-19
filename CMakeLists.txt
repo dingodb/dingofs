@@ -35,7 +35,7 @@ set(TEST_EXECUTABLE_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH}/test)
 
 # third-party install path
 if(NOT THIRD_PARTY_INSTALL_PATH)
-  set(THIRD_PARTY_INSTALL_PATH ${PROJECT_SOURCE_DIR}/third-party/installed)
+  set(THIRD_PARTY_INSTALL_PATH "$ENV{HOME}/.local/dingo-eureka")
 endif()
 message("THIRD_PARTY_INSTALL_PATH:${THIRD_PARTY_INSTALL_PATH}")
 
@@ -100,8 +100,7 @@ message("Using GTest ${GTest_VERSION}")
 
 set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
-message("Using protobuf ${Protobuf_VERSION}, include_dir:${Protobuf_INCLUDE_DIRS}" )
-include_directories(${Protobuf_INCLUDE_DIRS})
+message("Using protobuf ${Protobuf_VERSION}" )
 
 find_program(PROTOC protoc REQUIRED)
 message("Using protoc ${PROTOC}")
@@ -123,15 +122,16 @@ message("Using jsoncpp ${jsoncpp_VERSION}")
 
 # NOTE: order is important, please not use this directly, use brpc
 set(BRPC_DEPS_LIBS
-    ${Protobuf_LIBRARIES}
     ${OPENSSL_LIBRARIES}
     leveldb
+    gflags
     Snappy::snappy
     ZLIB::ZLIB
     fmt::fmt
-    gflags
     glog::glog
+    protobuf::libprotobuf
 ) 
+message("BRPC_DEPS_LIBS: ${BRPC_DEPS_LIBS}")
 find_library(BRPC_LIBRARY NAMES brpc)
 add_library(brpc STATIC IMPORTED)
 set_target_properties(brpc PROPERTIES

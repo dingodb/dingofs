@@ -18,5 +18,5 @@ add_library(mds_codec
 
 target_link_libraries(mds_codec
     curvefs_utils
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
 )

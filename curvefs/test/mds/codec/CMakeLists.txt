@@ -17,7 +17,7 @@ add_executable(test_mds_codec
 target_link_libraries(test_mds_codec
     PROTO_OBJS
     mds_codec
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
     ${TEST_DEPS}
 )
 set_target_properties(test_mds_codec PROPERTIES

@@ -21,5 +21,5 @@ target_link_libraries(mds_dlock
     curvefs_utils
     curvefs_concurrent
     PROTO_OBJS
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
 )

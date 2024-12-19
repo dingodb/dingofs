@@ -21,7 +21,7 @@ target_link_libraries(test_uitls
     curvefs_utils
     curvefs_auth
     aws_s3_adapter
-    ${Protobuf_LIBRARIES}
+    protobuf::libprotobuf
     ${TEST_DEPS}
 )
 set_target_properties(test_uitls PROPERTIES
