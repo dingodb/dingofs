@@ -18,6 +18,7 @@
 
 #include "butil/strings/string_split.h"
 #include "curvefs/src/mdsv2/common/logging.h"
+#include "fmt/core.h"
 
 namespace dingofs {
 
@@ -83,8 +84,6 @@ bool Helper::IsEqualIgnoreCase(const std::string& str1, const std::string& str2)
   return std::equal(str1.begin(), str1.end(), str2.begin(),
                     [](const char c1, const char c2) { return std::tolower(c1) == std::tolower(c2); });
 }
-
-bool Helper::IsExistPath(const std::string& path) { return std::filesystem::exists(path); }
 
 bool Helper::StringToBool(const std::string& str) { return !(str == "0" || str == "false"); }
 int32_t Helper::StringToInt32(const std::string& str) { return std::strtol(str.c_str(), nullptr, 10); }
@@ -165,6 +164,162 @@ bool Helper::ParseAddr(const std::string& addr, std::string& host, int& port) {
   }
 
   return true;
+}
+
+std::string Helper::ConcatPath(const std::string& path1, const std::string& path2) {
+  std::filesystem::path path_a(path1);
+  std::filesystem::path path_b(path2);
+  return (path_a / path_b).string();
+}
+
+std::vector<std::string> Helper::TraverseDirectory(const std::string& path, bool ignore_dir, bool ignore_file) {
+  return TraverseDirectory(path, "", ignore_dir, ignore_file);
+}
+
+std::vector<std::string> Helper::TraverseDirectory(const std::string& path, const std::string& prefix, bool ignore_dir,
+                                                   bool ignore_file) {
+  std::vector<std::string> filenames;
+  try {
+    if (std::filesystem::exists(path)) {
+      for (const auto& fe : std::filesystem::directory_iterator(path)) {
+        if (ignore_dir && fe.is_directory()) {
+          continue;
+        }
+
+        if (ignore_file && fe.is_regular_file()) {
+          continue;
+        }
+
+        if (prefix.empty()) {
+          filenames.push_back(fe.path().filename().string());
+        } else {
+          // check if the filename start with prefix
+          auto filename = fe.path().filename().string();
+          if (filename.find(prefix) == 0L) {
+            filenames.push_back(filename);
+          }
+        }
+      }
+    }
+  } catch (std::filesystem::filesystem_error const& ex) {
+    DINGO_LOG(ERROR) << fmt::format("directory_iterator failed, path: {} error: {}", path, ex.what());
+  }
+
+  return filenames;
+}
+
+std::string Helper::FindFileInDirectory(const std::string& dirpath, const std::string& prefix) {
+  try {
+    if (std::filesystem::exists(dirpath)) {
+      for (const auto& fe : std::filesystem::directory_iterator(dirpath)) {
+        auto filename = fe.path().filename().string();
+        if (filename.find(prefix) != std::string::npos) {
+          return filename;
+        }
+      }
+    }
+  } catch (std::filesystem::filesystem_error const& ex) {
+    DINGO_LOG(ERROR) << fmt::format("directory_iterator failed, path: {} prefix: {} error: {}", dirpath, prefix,
+                                    ex.what());
+  }
+
+  return "";
+}
+
+bool Helper::CreateDirectory(const std::string& path) {
+  std::error_code ec;
+  if (!std::filesystem::create_directories(path, ec)) {
+    DINGO_LOG(ERROR) << fmt::format("Create directory failed, error: {} {}", ec.value(), ec.message());
+    return false;
+  }
+
+  return true;
+}
+
+bool Helper::CreateDirectories(const std::string& path) {
+  std::error_code ec;
+  if (std::filesystem::exists(path)) {
+    DINGO_LOG(INFO) << fmt::format("Directory already exists, path: {}", path);
+    return true;
+  }
+
+  if (!std::filesystem::create_directories(path, ec)) {
+    DINGO_LOG(ERROR) << fmt::format("Create directory {} failed, error: {} {}", path, ec.value(), ec.message());
+    return false;
+  }
+
+  return true;
+}
+
+bool Helper::RemoveFileOrDirectory(const std::string& path) {
+  std::error_code ec;
+  if (!std::filesystem::remove(path, ec)) {
+    DINGO_LOG(ERROR) << fmt::format("Remove directory failed, path: {} error: {} {}", path, ec.value(), ec.message());
+    return false;
+  }
+
+  return true;
+}
+
+bool Helper::RemoveAllFileOrDirectory(const std::string& path) {
+  std::error_code ec;
+  DINGO_LOG(INFO) << fmt::format("Remove all file or directory, path: {}", path);
+  auto num = std::filesystem::remove_all(path, ec);
+  if (num == static_cast<std::uintmax_t>(-1)) {
+    DINGO_LOG(ERROR) << fmt::format("Remove all directory failed, path: {} error: {} {}", path, ec.value(),
+                                    ec.message());
+    return false;
+  }
+
+  return true;
+}
+
+bool Helper::Rename(const std::string& src_path, const std::string& dst_path, bool is_force) {
+  std::filesystem::path source_path = src_path;
+  std::filesystem::path destination_path = dst_path;
+
+  // Check if the destination path already exists
+  if (std::filesystem::exists(destination_path)) {
+    if (!is_force) {
+      // If is_force is false, return error
+      DINGO_LOG(ERROR) << fmt::format("Destination {} already exists, is_force = false, so cannot rename from {}",
+                                      dst_path, src_path);
+      return false;
+    }
+
+    // Remove the existing destination
+    RemoveAllFileOrDirectory(dst_path);
+
+    // Check if the removal was successful
+    if (std::filesystem::exists(destination_path)) {
+      DINGO_LOG(ERROR) << fmt::format("Failed to remove the existing destination {} ", dst_path);
+      return false;
+    }
+  }
+
+  // Perform the rename operation
+  try {
+    std::filesystem::rename(source_path, destination_path);
+  } catch (const std::exception& ex) {
+    DINGO_LOG(ERROR) << fmt::format("Rename operation failed, src_path: {}, dst_path: {}, error: {}", src_path,
+                                    dst_path, ex.what());
+    return false;
+  }
+
+  return true;
+}
+
+bool Helper::IsExistPath(const std::string& path) { return std::filesystem::exists(path); }
+
+int64_t Helper::GetFileSize(const std::string& path) {
+  try {
+    std::uintmax_t size = std::filesystem::file_size(path);
+    DINGO_LOG(INFO) << fmt::format("File size: {} bytes", size);
+    return size;
+  } catch (const std::filesystem::filesystem_error& ex) {
+    DINGO_LOG(ERROR) << fmt::format("Get file size failed, path: {}, error: {}", path, ex.what());
+    return -1;
+  }
 }
 
 }  // namespace mdsv2

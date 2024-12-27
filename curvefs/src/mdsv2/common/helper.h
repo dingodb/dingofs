@@ -44,7 +44,6 @@ class Helper {
   static std::string GetNowFormatMsTime();
 
   static bool IsEqualIgnoreCase(const std::string& str1, const std::string& str2);
-  static bool IsExistPath(const std::string& path);
 
   // string type cast
   static bool StringToBool(const std::string& str);
@@ -61,6 +60,21 @@ class Helper {
   static std::string HexToString(const std::string& hex_str);
 
   static bool ParseAddr(const std::string& addr, std::string& host, int& port);
+
+  // local file system operation
+  static std::string ConcatPath(const std::string& path1, const std::string& path2);
+  static std::vector<std::string> TraverseDirectory(const std::string& path, bool ignore_dir = false,
+                                                    bool ignore_file = false);
+  static std::vector<std::string> TraverseDirectory(const std::string& path, const std::string& prefix,
+                                                    bool ignore_dir = false, bool ignore_file = false);
+  static std::string FindFileInDirectory(const std::string& dirpath, const std::string& prefix);
+  static bool CreateDirectory(const std::string& path);
+  static bool CreateDirectories(const std::string& path);
+  static bool RemoveFileOrDirectory(const std::string& path);
+  static bool RemoveAllFileOrDirectory(const std::string& path);
+  static bool Rename(const std::string& src_path, const std::string& dst_path, bool is_force = true);
+  static bool IsExistPath(const std::string& path);
+  static int64_t GetFileSize(const std::string& path);
 };
 
 }  // namespace mdsv2
