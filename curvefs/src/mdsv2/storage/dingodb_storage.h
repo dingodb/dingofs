@@ -15,9 +15,11 @@
 #ifndef DINGOFS_MDV2_DINGODB_STORAGE_H_
 #define DINGOFS_MDV2_DINGODB_STORAGE_H_
 
+#include <memory>
+
+#include "curvefs/src/mdsv2/common/status.h"
 #include "curvefs/src/mdsv2/storage/storage.h"
-// #include "sdk/client.h"
-// #include "sdk/client_stub.h"
+#include "dingosdk/client.h"
 
 namespace dingofs {
 
@@ -29,15 +31,27 @@ class DingodbStorage : public KVStorage {
 
   ~DingodbStorage() override = default;
 
-  Status Put(const std::string& key, const std::string& value) override;
+  bool Init(const std::string& addr) override;
+  bool Destroy() override;
+
+  Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) override;
+  Status DropTable(int64_t table_id) override;
+  Status IsExistTable(const std::string& start_key, const std::string& end_key) override;
+
+  Status Put(WriteOption option, const std::string& key, const std::string& value) override;
+  Status Put(WriteOption option, KeyValue& kv) override;
+  Status Put(WriteOption option, const std::vector<KeyValue>& kvs) override;
 
   Status Get(const std::string& key, std::string& value) override;
 
   Status Delete(const std::string& key) override;
 
-  //  private:
-  //   std::shared_ptr<dingodb::sdk::ClientStub> client_stub_;
-  //   std::shared_ptr<dingodb::sdk::Client> client_;
+ private:
+  using TxnPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+
+  TxnPtr NewTxn();
+
+  dingodb::sdk::Client* client_{nullptr};
 };
 
 }  // namespace mdsv2
