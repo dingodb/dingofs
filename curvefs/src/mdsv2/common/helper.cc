@@ -147,5 +147,25 @@ std::string Helper::HexToString(const std::string& hex_str) {
   return result;
 }
 
+bool Helper::ParseAddr(const std::string& addr, std::string& host, int& port) {
+  std::vector<std::string> vec;
+  SplitString(addr, ':', vec);
+  if (vec.size() != 2) {
+    DINGO_LOG(ERROR) << "parse addr error, addr: " << addr;
+    return false;
+  }
+
+  try {
+    host = vec[0];
+    port = std::stoi(vec[1]);
+
+  } catch (const std::exception& e) {
+    DINGO_LOG(ERROR) << "stoi exception: " << e.what();
+    return false;
+  }
+
+  return true;
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

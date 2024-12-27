@@ -59,6 +59,8 @@ class Helper {
   static std::string StringToHex(const std::string& str);
   static std::string StringToHex(const std::string_view& str);
   static std::string HexToString(const std::string& hex_str);
+
+  static bool ParseAddr(const std::string& addr, std::string& host, int& port);
 };
 
 }  // namespace mdsv2
