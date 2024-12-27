@@ -18,7 +18,8 @@
 #include "fmt/core.h"
 #include "glog/logging.h"
 
-DEFINE_string(conf_path, "curvefs/conf/mdsv2.conf", "mdsv2 config path");
+DEFINE_string(conf, "./conf/mdsv2.conf", "mdsv2 config path");
+DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
 
 int main(int argc, char* argv[]) {
   if (dingofs::mdsv2::Helper::IsExistPath("conf/gflags.conf")) {
@@ -41,8 +42,15 @@ int main(int argc, char* argv[]) {
 
   dingofs::mdsv2::Server& server = dingofs::mdsv2::Server::GetInstance();
 
-  CHECK(server.InitConfig(FLAGS_conf_path)) << fmt::format("init config({}) error.", FLAGS_conf_path);
+  CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(server.InitLog()) << "init log error.";
+  CHECK(server.InitMDSMeta()) << "init mds meta error.";
+  CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
+  CHECK(server.InitFsIdGenerator()) << "init fs id generator error.";
+  CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";
+  CHECK(server.InitFileSystem()) << "init file system error.";
+  CHECK(server.InitWorkerSet()) << "init worker set error.";
+  CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
 
   server.Run();

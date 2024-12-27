@@ -24,3 +24,5 @@ add_subdirectory(mds)
 add_subdirectory(metaserver)
 add_subdirectory(client)
 add_subdirectory(tools)
+
+add_subdirectory(mdsv2)
