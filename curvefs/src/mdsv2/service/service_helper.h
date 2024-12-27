@@ -21,6 +21,7 @@
 #include "curvefs/proto/error.pb.h"
 #include "curvefs/src/mdsv2/common/helper.h"
 #include "curvefs/src/mdsv2/common/logging.h"
+#include "curvefs/src/mdsv2/common/runnable.h"
 #include "fmt/core.h"
 
 namespace dingofs {
@@ -32,6 +33,22 @@ DECLARE_int32(log_print_max_length);
 
 class ServiceHelper {
  public:
+  static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
+};
+
+// Handle service request in execute queue.
+class ServiceTask : public TaskRunnable {
+ public:
+  using Handler = std::function<void(void)>;
+  ServiceTask(Handler handle) : handle_(handle) {}
+  ~ServiceTask() override = default;
+
+  std::string Type() override { return "SERVICE_TASK"; }
+
+  void Run() override { handle_(); }
+
+ private:
+  Handler handle_;
 };
 
 // Wrapper brpc service closure for log.

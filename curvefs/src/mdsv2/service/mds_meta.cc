@@ -12,24 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "curvefs/src/mdsv2/service/service_helper.h"
+#include "curvefs/src/mdsv2/service/mds_meta.h"
 
-#include "brpc/reloadable_flags.h"
-#include "gflags/gflags.h"
+#include "fmt/core.h"
 
 namespace dingofs {
 
 namespace mdsv2 {
 
-DEFINE_int64(service_log_threshold_time_ns, 1000000000L, "service log threshold time ns");
-BRPC_VALIDATE_GFLAG(service_log_threshold_time_ns, brpc::PositiveInteger);
-
-DEFINE_int32(log_print_max_length, 512, "log print max length");
-BRPC_VALIDATE_GFLAG(log_print_max_length, brpc::PositiveInteger);
-
-void ServiceHelper::SetError(pb::error::Error* error, int errcode, const std::string& errmsg) {
-  error->set_errcode(static_cast<pb::error::Errno>(errcode));
-  error->set_errmsg(errmsg);
+std::string MDSMeta::ToString() const {
+  return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, register_time_ms={}, last_online_time_ms={}]", id_,
+                     host_, port_, static_cast<int>(state_), register_time_ms_, last_online_time_ms_);
 }
 
 }  // namespace mdsv2

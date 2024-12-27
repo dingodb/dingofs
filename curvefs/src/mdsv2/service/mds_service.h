@@ -15,7 +15,11 @@
 #ifndef DINGOFS_MDSV2_SERVICE_H_
 #define DINGOFS_MDSV2_SERVICE_H_
 
+#include <cstdint>
+
 #include "curvefs/proto/mdsv2.pb.h"
+#include "curvefs/src/mdsv2/common/runnable.h"
+#include "curvefs/src/mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
 
@@ -23,7 +27,8 @@ namespace mdsv2 {
 
 class MDSServiceImpl : public pb::mds::MDSService {
  public:
-  MDSServiceImpl();
+  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemPtr file_system,
+                 IdGeneratorPtr id_generator);
 
   // fs interface
   void CreateFs(google::protobuf::RpcController* controller, const pb::mds::CreateFsRequest* request,
@@ -106,6 +111,27 @@ class MDSServiceImpl : public pb::mds::MDSService {
                      pb::mds::LoadDirQuotasResponse* response, google::protobuf::Closure* done) override;
   void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mds::FlushDirUsagesRequest* request,
                       pb::mds::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
+
+ private:
+  Status GenFsId(int64_t& fs_id);
+
+  void DoCreateFs(google::protobuf::RpcController* controller, const pb::mds::CreateFsRequest* request,
+                  pb::mds::CreateFsResponse* response, google::protobuf::Closure* done);
+  void DoMountFs(google::protobuf::RpcController* controller, const pb::mds::MountFsRequest* request,
+                 pb::mds::MountFsResponse* response, google::protobuf::Closure* done);
+  void DoUmountFs(google::protobuf::RpcController* controller, const pb::mds::UmountFsRequest* request,
+                  pb::mds::UmountFsResponse* response, google::protobuf::Closure* done);
+  void DoDeleteFs(google::protobuf::RpcController* controller, const pb::mds::DeleteFsRequest* request,
+                  pb::mds::DeleteFsResponse* response, google::protobuf::Closure* done);
+  void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mds::GetFsInfoRequest* request,
+                   pb::mds::GetFsInfoResponse* response, google::protobuf::Closure* done);
+
+  IdGeneratorPtr id_generator_;
+  FileSystemPtr file_system_;
+
+  // Run service request.
+  WorkerSetPtr read_worker_set_;
+  WorkerSetPtr write_worker_set_;
 };
 
 }  // namespace mdsv2

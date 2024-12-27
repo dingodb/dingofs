@@ -15,16 +15,48 @@
 #ifndef DINGOFS_MDSV2_SERVICE_HEARTBEAT_H_
 #define DINGOFS_MDSV2_SERVICE_HEARTBEAT_H_
 
+#include "curvefs/src/mdsv2/common/runnable.h"
+#include "curvefs/src/mdsv2/coordinator/coordinator_client.h"
+
 namespace dingofs {
 
 namespace mdsv2 {
+
+class HeartbeatTask : public TaskRunnable {
+ public:
+  HeartbeatTask(CoordinatorClient& coordinator_client) : coordinator_client_(coordinator_client) {}
+
+  ~HeartbeatTask() override = default;
+
+  std::string Type() override { return "HEARTBEAT"; }
+
+  void Run() override;
+
+  static void SendHeartbeat(CoordinatorClient& coordinator_client);
+  static void HandleHeartbeatResponse();
+
+  static std::atomic<uint64_t> heartbeat_counter;
+
+ private:
+  bool is_update_epoch_version_;
+  std::vector<int64_t> region_ids_;
+  CoordinatorClient& coordinator_client_;
+};
 
 class Heartbeat {
  public:
   Heartbeat() = default;
   ~Heartbeat() = default;
 
+  bool Init();
+  bool Destroy();
+
   static void TriggerHeartbeat();
+
+ private:
+  bool Execute(TaskRunnablePtr task);
+
+  WorkerPtr worker_;
 };
 
 }  // namespace mdsv2
