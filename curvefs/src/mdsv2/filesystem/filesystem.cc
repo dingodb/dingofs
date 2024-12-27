@@ -14,6 +14,7 @@
 
 #include "curvefs/src/mdsv2/filesystem/filesystem.h"
 
+#include <gflags/gflags.h>
 #include <sys/stat.h>
 
 #include <cstdint>
@@ -24,14 +25,54 @@
 #include "curvefs/src/mdsv2/common/status.h"
 #include "curvefs/src/mdsv2/filesystem/codec.h"
 #include "fmt/core.h"
-#include "third-party/installed/include/fmt/format.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
-const uint64_t kRootInodeId = 1;
+static const uint64_t kRootInodeId = 1;
 
+static const std::string kFsTableName = "dingofs";
+
+bool FileSystem::Init() {
+  if (IsExistFsTable()) {
+    return true;
+  }
+
+  auto status = CreateFsTable();
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << "create fs table fail, error: " << status.error_str();
+    return false;
+  }
+
+  return true;
+}
+
+Status FileSystem::CreateFsTable() {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetFsTableRange(option.start_key, option.end_key);
+  DINGO_LOG(INFO) << fmt::format("Create fs table, start_key({}), end_key({}).", Helper::StringToHex(option.start_key),
+                                 Helper::StringToHex(option.end_key));
+  return kv_storage_->CreateTable(kFsTableName, option, table_id);
+}
+
+bool FileSystem::IsExistFsTable() {
+  std::string start_key, end_key;
+  MetaDataCodec::GetFsTableRange(start_key, end_key);
+  DINGO_LOG(INFO) << fmt::format("Check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
+                                 Helper::StringToHex(end_key));
+  auto status = kv_storage_->IsExistTable(start_key, end_key);
+  if (!status.ok()) {
+    if (status.error_code() != pb::error::ENOT_FOUND) {
+      DINGO_LOG(ERROR) << "check fs table exist fail, error: " << status.error_str();
+    }
+    return false;
+  }
+
+  return true;
+}
+
+// todo: create fs/dentry/inode table
 Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_info.fs_name());
   // check fs exist
@@ -44,7 +85,8 @@ Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
   }
 
   // create fs
-  Status status = kv_storage_->Put(fs_key, fs_info.SerializeAsString());
+  KVStorage::WriteOption option;
+  Status status = kv_storage_->Put(option, fs_key, fs_info.SerializeAsString());
   if (!status.ok()) {
     return Status(pb::error::EINTERNAL, "Put fs info fail");
   }
@@ -70,7 +112,7 @@ Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
 
     std::string key = MetaDataCodec::EncodeDirInodeKey(inode.fs_id(), inode.inode_id());
     std::string value = inode.SerializeAsString();
-    Status status = kv_storage_->Put(key, value);
+    Status status = kv_storage_->Put(option, key, value);
     if (!status.ok()) {
       kv_storage_->Delete(fs_key);
       return Status(pb::error::EINTERNAL, "Put root inode info fail");
@@ -102,11 +144,12 @@ Status FileSystem::MountFs(const std::string& fs_name, const pb::mds::MountPoint
   CHECK(fs_info.ParseFromString(value)) << "Parse fs info fail.";
 
   if (IsExistMountPoint(fs_info, mount_point)) {
-    return Status(pb::error::EEXIST, "MountPoint already exist.");
+    return Status(pb::error::EEXISTED, "MountPoint already exist.");
   }
 
   fs_info.add_mount_points()->CopyFrom(mount_point);
-  status = kv_storage_->Put(fs_key, fs_info.SerializeAsString());
+  KVStorage::WriteOption option;
+  status = kv_storage_->Put(option, fs_key, fs_info.SerializeAsString());
   if (!status.ok()) {
     return Status(pb::error::EINTERNAL, "Put root inode info fail");
   }
@@ -138,7 +181,8 @@ Status FileSystem::UmountFs(const std::string& fs_name, const pb::mds::MountPoin
 
   RemoveMountPoint(fs_info, mount_point);
 
-  status = kv_storage_->Put(fs_key, fs_info.SerializeAsString());
+  KVStorage::WriteOption option;
+  status = kv_storage_->Put(option, fs_key, fs_info.SerializeAsString());
   if (!status.ok()) {
     return Status(pb::error::EINTERNAL, "Put fs fail");
   }
@@ -160,7 +204,7 @@ Status FileSystem::DeleteFs(const std::string& fs_name) {
   CHECK(fs_info.ParseFromString(value)) << "Parse fs info fail.";
 
   if (fs_info.mount_points_size() > 0) {
-    return Status(pb::error::EEXIST, "Fs exist mount point.");
+    return Status(pb::error::EEXISTED, "Fs exist mount point.");
   }
 
   status = kv_storage_->Delete(fs_key);
@@ -168,8 +212,9 @@ Status FileSystem::DeleteFs(const std::string& fs_name) {
     return Status(pb::error::EINTERNAL, "Delete fs fail");
   }
 
+  KVStorage::WriteOption option;
   std::string delete_fs_name = fmt::format("{}_deleting", fs_name);
-  status = kv_storage_->Put(MetaDataCodec::EncodeFSKey(delete_fs_name), fs_info.SerializeAsString());
+  status = kv_storage_->Put(option, MetaDataCodec::EncodeFSKey(delete_fs_name), fs_info.SerializeAsString());
   if (!status.ok()) {
     return Status(pb::error::EINTERNAL, "Put fs fail");
   }

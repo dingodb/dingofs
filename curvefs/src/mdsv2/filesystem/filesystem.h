@@ -15,18 +15,28 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_H_
 #define DINGOFS_MDV2_FILESYSTEM_H_
 
+#include <memory>
+
 #include "curvefs/proto/mdsv2.pb.h"
 #include "curvefs/src/mdsv2/common/status.h"
+#include "curvefs/src/mdsv2/filesystem/id_generator.h"
 #include "curvefs/src/mdsv2/storage/storage.h"
 
 namespace dingofs {
 
 namespace mdsv2 {
 
+class FileSystem;
+using FileSystemPtr = std::shared_ptr<FileSystem>;
+
 class FileSystem {
  public:
-  FileSystem() = default;
+  FileSystem(KVStorage* kv_storage) : kv_storage_(kv_storage){};
   ~FileSystem() = default;
+
+  static FileSystemPtr New(KVStorage* kv_storage) { return std::make_shared<FileSystem>(kv_storage); }
+
+  bool Init();
 
   Status CreateFs(const pb::mds::FsInfo& fs_info);
   Status MountFs(const std::string& fs_name, const pb::mds::MountPoint& mount_point);
@@ -35,7 +45,11 @@ class FileSystem {
   Status GetFsInfo(const std::string& fs_name, pb::mds::FsInfo& fs_info);
 
  private:
-  KVStoragePtr kv_storage_;
+  Status CreateFsTable();
+  bool IsExistFsTable();
+
+  // here not free
+  KVStorage* kv_storage_{nullptr};
 };
 
 }  // namespace mdsv2

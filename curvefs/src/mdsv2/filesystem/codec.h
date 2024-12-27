@@ -18,11 +18,17 @@
 #include <cstdint>
 #include <string>
 
+#include "curvefs/src/fs/local_filesystem.h"
+
 namespace dingofs {
 namespace mdsv2 {
 
 class MetaDataCodec {
  public:
+  static void GetFsTableRange(std::string& start_key, std::string& end_key);
+  static void GetDentryTableRange(std::string& start_key, std::string& end_key);
+  static void GetFileInodeTableRange(std::string& start_key, std::string& end_key);
+
   static std::string EncodeFSKey(const std::string& name);
   static void DecodeFSKey(const std::string& key, std::string& name);
 
