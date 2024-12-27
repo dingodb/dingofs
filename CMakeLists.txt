@@ -49,6 +49,7 @@ message("THIRD_PARTY_INSTALL_PATH:${THIRD_PARTY_INSTALL_PATH}")
 set(CMAKE_PREFIX_PATH
   ${THIRD_PARTY_INSTALL_PATH}
   ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient
+  /home/dengzihui/.local/dingo-sdk
   ${CMAKE_PREFIX_PATH}
   )
 message("CMAKE_PREFIX_PATH:${CMAKE_PREFIX_PATH}")
@@ -60,6 +61,7 @@ link_directories(BEFORE ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 # include dir
 include_directories(${THIRD_PARTY_INSTALL_PATH}/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
+include_directories(/home/dengzihui/.local/dingo-sdk/include)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 add_definitions(-DUSE_BTHREAD_MUTEX)
@@ -186,6 +188,9 @@ find_package(brpc REQUIRED)
 find_package(braft REQUIRED)
 find_package(RocksDB REQUIRED)
 
+find_package(dingosdk REQUIRED)
+message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
+
 # ------------------------ related to source code ------------------------ 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
@@ -261,3 +266,6 @@ if(BUILD_UNIT_TESTS)
   message(STATUS "Build unit test")
   add_subdirectory(test)
 endif()
+
+
+
