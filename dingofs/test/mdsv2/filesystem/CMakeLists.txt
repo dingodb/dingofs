@@ -12,34 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
-set(TEST_DEPS
-    GTest::gtest 
-    GTest::gmock
-    GTest::gtest_main
-    glog::glog
-    gflags::gflags
-    brpc::brpc
-    dl
+file(GLOB TEST_DINGOFS_MDSV2_FILESYSTEM_SRCS
+    "*.cc"
 )
 
-set(TEST_NOT_MAIN_DEPS
-    GTest::gtest 
-    GTest::gmock
-    glog
-    gflags
-    brpc
+add_library(test_mdsv2_filesystem
+    ${TEST_DINGOFS_MDSV2_FILESYSTEM_SRCS}
 )
 
-
-add_subdirectory(base)
-add_subdirectory(common)
-add_subdirectory(fs)
-add_subdirectory(stub)
-add_subdirectory(utils)
-
-add_subdirectory(tools)
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(client)
+target_link_libraries(test_mdsv2_filesystem
+    PROTO_OBJS
+    mdsv2_system
+    protobuf::libprotobuf
+    ${TEST_NOT_MAIN_DEPS}
+)

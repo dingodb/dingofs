@@ -12,34 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-set(TEST_DEPS
-    GTest::gtest 
-    GTest::gmock
-    GTest::gtest_main
-    glog::glog
-    gflags::gflags
-    brpc::brpc
-    dl
-)
-
-set(TEST_NOT_MAIN_DEPS
-    GTest::gtest 
-    GTest::gmock
-    glog
-    gflags
-    brpc
-)
-
-
-add_subdirectory(base)
 add_subdirectory(common)
-add_subdirectory(fs)
-add_subdirectory(stub)
-add_subdirectory(utils)
+add_subdirectory(filesystem)
+add_subdirectory(service)
 
-add_subdirectory(tools)
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(client)
+
+add_executable(test_mdsv2
+  main.cc
+)
+
+target_link_libraries(test_mdsv2
+  PROTO_OBJS
+
+  mdsv2_common
+  mdsv2_filesystem
+  mdsv2_service
+
+  curvefs_utils
+
+  absl::log_internal_message
+  absl::cleanup
+  absl::btree
+  absl::memory
+  absl::utility
+  absl::strings
+
+  dingo::sdk
+
+  protobuf::libprotobuf
+  ${TEST_NOT_MAIN_DEPS}
+)
+
+set_target_properties(test_mdsv2 PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+)
