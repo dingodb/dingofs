@@ -45,14 +45,14 @@ void MetaDataCodec::GetFsTableRange(std::string& start_key, std::string& end_key
   end_key = kPrefix + std::to_string(kTypeFS + 1);
 }
 
-void MetaDataCodec::GetDentryTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix + std::to_string(kTypeDentry);
-  end_key = kPrefix + std::to_string(kTypeDentry + 1);
+void MetaDataCodec::GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix + std::to_string(kTypeDentry) + kDelimiter + std::to_string(fs_id);
+  end_key = kPrefix + std::to_string(kTypeDentry) + kDelimiter + std::to_string(fs_id + 1);
 }
 
-void MetaDataCodec::GetFileInodeTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix + std::to_string(kTypeFileInode);
-  end_key = kPrefix + std::to_string(kTypeFileInode + 1);
+void MetaDataCodec::GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix + std::to_string(kTypeFileInode) + kDelimiter + std::to_string(fs_id);
+  end_key = kPrefix + std::to_string(kTypeFileInode) + kDelimiter + std::to_string(fs_id + 1);
 }
 
 // format: [$prefix, $type, $kDelimiter, $name]

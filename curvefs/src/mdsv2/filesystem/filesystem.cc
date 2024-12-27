@@ -14,7 +14,9 @@
 
 #include "curvefs/src/mdsv2/filesystem/filesystem.h"
 
+#include <fmt/format.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <sys/stat.h>
 
 #include <cstdint>
@@ -74,6 +76,36 @@ bool FileSystem::IsExistFsTable() {
 
 // todo: create fs/dentry/inode table
 Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
+  CHECK(fs_info.fs_id() > 0) << "Invalid fs_id.";
+
+  // when create fs fail, clean up
+  auto cleanup = [&](int64_t dentry_table_id, int64_t file_inode_table_id, const std::string& fs_key) {
+    // clean dentry table
+    if (dentry_table_id > 0) {
+      auto status = kv_storage_->DropTable(dentry_table_id);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("Clean dentry table({}) fail, error: {}", dentry_table_id, status.error_str());
+      }
+    }
+
+    // clean file inode table
+    if (file_inode_table_id > 0) {
+      auto status = kv_storage_->DropTable(file_inode_table_id);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("Clean file inode table({}) fail, error: {}", file_inode_table_id,
+                                  status.error_str());
+      }
+    }
+
+    // clean fs info
+    if (!fs_key.empty()) {
+      auto status = kv_storage_->Delete(fs_key);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("Clean fs info fail, error: {}", status.error_str());
+      }
+    }
+  };
+
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_info.fs_name());
   // check fs exist
   {
@@ -84,10 +116,34 @@ Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
     }
   }
 
+  // create dentry/inode table
+  int64_t dentry_table_id = 0;
+  {
+    KVStorage::TableOption option;
+    MetaDataCodec::GetDentryTableRange(fs_info.fs_id(), option.start_key, option.end_key);
+    Status status = kv_storage_->CreateTable(fs_info.fs_name(), option, dentry_table_id);
+    if (!status.ok()) {
+      return Status(pb::error::EINTERNAL, "Create dentry table fail");
+    }
+  }
+
+  // create file inode talbe
+  int64_t file_inode_table_id = 0;
+  {
+    KVStorage::TableOption option;
+    MetaDataCodec::GetFileInodeTableRange(fs_info.fs_id(), option.start_key, option.end_key);
+    Status status = kv_storage_->CreateTable(fs_info.fs_name(), option, file_inode_table_id);
+    if (!status.ok()) {
+      cleanup(dentry_table_id, 0, "");
+      return Status(pb::error::EINTERNAL, "Create file inode table fail");
+    }
+  }
+
   // create fs
   KVStorage::WriteOption option;
   Status status = kv_storage_->Put(option, fs_key, fs_info.SerializeAsString());
   if (!status.ok()) {
+    cleanup(dentry_table_id, file_inode_table_id, "");
     return Status(pb::error::EINTERNAL, "Put fs info fail");
   }
 
@@ -114,7 +170,7 @@ Status FileSystem::CreateFs(const pb::mds::FsInfo& fs_info) {
     std::string value = inode.SerializeAsString();
     Status status = kv_storage_->Put(option, key, value);
     if (!status.ok()) {
-      kv_storage_->Delete(fs_key);
+      cleanup(dentry_table_id, file_inode_table_id, fs_key);
       return Status(pb::error::EINTERNAL, "Put root inode info fail");
     }
   }
@@ -133,6 +189,8 @@ bool IsExistMountPoint(const pb::mds::FsInfo& fs_info, const pb::mds::MountPoint
 }
 
 Status FileSystem::MountFs(const std::string& fs_name, const pb::mds::MountPoint& mount_point) {
+  CHECK(!fs_name.empty()) << "Fs name is empty.";
+
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
   std::string value;
   Status status = kv_storage_->Get(fs_key, value);
