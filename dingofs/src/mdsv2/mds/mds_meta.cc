@@ -12,13 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/mdsv2/service/mds_meta.h"
+#include "dingofs/src/mdsv2/mds/mds_meta.h"
 
 #include "fmt/core.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
+
+MDSMeta::MDSMeta(const MDSMeta& mds_meta) {
+  id_ = mds_meta.id_;
+  host_ = mds_meta.host_;
+  port_ = mds_meta.port_;
+  state_ = mds_meta.state_;
+  register_time_ms_ = mds_meta.register_time_ms_;
+  last_online_time_ms_ = mds_meta.last_online_time_ms_;
+}
 
 std::string MDSMeta::ToString() const {
   return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, register_time_ms={}, last_online_time_ms={}]", id_,
@@ -26,5 +34,4 @@ std::string MDSMeta::ToString() const {
 }
 
 }  // namespace mdsv2
-
 }  // namespace dingofs

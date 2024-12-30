@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_SERVICE_MDS_META_H_
-#define DINGOFS_MDSV2_SERVICE_MDS_META_H_
+#ifndef DINGOFS_MDSV2_MDS_MDS_META_H_
+#define DINGOFS_MDSV2_MDS_MDS_META_H_
 
 #include <cstdint>
 #include <string>
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class MDSMeta {
  public:
   MDSMeta() = default;
   ~MDSMeta() = default;
+
+  MDSMeta(const MDSMeta& mds_meta);
+  MDSMeta& operator=(const MDSMeta& mds_meta) = default;
 
   enum State {
     kInit = 0,
@@ -67,4 +69,4 @@ class MDSMeta {
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_SERVICE_MDS_META_H_
+#endif  // DINGOFS_MDSV2_MDS_MDS_META_H_

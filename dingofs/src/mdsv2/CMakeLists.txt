@@ -16,6 +16,7 @@ add_subdirectory(common)
 add_subdirectory(cache)
 add_subdirectory(coordinator)
 add_subdirectory(filesystem)
+add_subdirectory(mds)
 add_subdirectory(service)
 add_subdirectory(storage)
 add_subdirectory(client)
@@ -34,7 +35,7 @@ target_link_libraries(mdsv2_lib
   mdsv2_storage
   mdsv2_service
 
-  curvefs_utils
+  dingofs_utils
 
   absl::log_internal_message
   absl::cleanup

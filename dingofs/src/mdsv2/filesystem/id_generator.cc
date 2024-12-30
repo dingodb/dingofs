@@ -25,7 +25,7 @@ namespace dingofs {
 
 namespace mdsv2 {
 
-AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClient& client, int64_t table_id, int64_t start_id,
+AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientPtr client, int64_t table_id, int64_t start_id,
                                                    int batch_size)
     : client_(client), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
   bthread_mutex_init(&mutex_, nullptr);
@@ -71,15 +71,15 @@ bool AutoIncrementIdGenerator::GenID(int64_t& id) {
 
 Status AutoIncrementIdGenerator::IsExistAutoIncrement() {
   int64_t start_id = -1;
-  return client_.GetAutoIncrement(table_id_, start_id);
+  return client_->GetAutoIncrement(table_id_, start_id);
 }
 
-Status AutoIncrementIdGenerator::CreateAutoIncrement() { return client_.CreateAutoIncrement(table_id_, start_id_); }
+Status AutoIncrementIdGenerator::CreateAutoIncrement() { return client_->CreateAutoIncrement(table_id_, start_id_); }
 
 Status AutoIncrementIdGenerator::TakeBundleIdFromCoordinator() {
   int64_t bundle = 0;
   int64_t bundle_end = 0;
-  auto status = client_.GenerateAutoIncrement(table_id_, batch_size_, bundle, bundle_end);
+  auto status = client_->GenerateAutoIncrement(table_id_, batch_size_, bundle, bundle_end);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << "Take bundle id fail, error: " << status.error_str();
     return status;

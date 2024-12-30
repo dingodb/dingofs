@@ -12,26 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDV2_DINGODB_STORAGE_H_
-#define DINGOFS_MDV2_DINGODB_STORAGE_H_
+#ifndef DINGOFS_MDV2_DUMMY_STORAGE_H_
+#define DINGOFS_MDV2_DUMMY_STORAGE_H_
 
-#include <memory>
+#include <cstdint>
+#include <map>
+#include <string>
 
-#include "dingofs/src/mdsv2/common/status.h"
+#include "bthread/types.h"
 #include "dingofs/src/mdsv2/storage/storage.h"
-#include "dingosdk/client.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
-class DingodbStorage : public KVStorage {
+class DummyStorage : public KVStorage {
  public:
-  DingodbStorage() = default;
+  DummyStorage();
+  ~DummyStorage() override;
 
-  ~DingodbStorage() override = default;
-
-  static KVStoragePtr New() { return std::make_shared<DingodbStorage>(); }
+  static KVStoragePtr New() { return std::make_shared<DummyStorage>(); }
 
   bool Init(const std::string& addr) override;
   bool Destroy() override;
@@ -43,21 +42,25 @@ class DingodbStorage : public KVStorage {
   Status Put(WriteOption option, const std::string& key, const std::string& value) override;
   Status Put(WriteOption option, KeyValue& kv) override;
   Status Put(WriteOption option, const std::vector<KeyValue>& kvs) override;
-
   Status Get(const std::string& key, std::string& value) override;
-
   Status Delete(const std::string& key) override;
 
  private:
-  using TxnPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+  struct Table {
+    std::string name;
+    std::string start_key;
+    std::string end_key;
+  };
 
-  TxnPtr NewTxn();
+  bthread_mutex_t mutex_;
 
-  dingodb::sdk::Client* client_{nullptr};
+  int64_t next_table_id_{0};
+  std::map<int64_t, Table> tables_;
+
+  std::map<std::string, std::string> data_;
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDV2_DINGODB_STORAGE_H_
+#endif  // DINGOFS_MDV2_DUMMY_STORAGE_H_

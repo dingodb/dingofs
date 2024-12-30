@@ -15,37 +15,41 @@
 #ifndef DINGOFS_MDSV2_COORDINATOR_CLIENT_H_
 #define DINGOFS_MDSV2_COORDINATOR_CLIENT_H_
 
+#include <memory>
+
 #include "dingofs/src/mdsv2/common/status.h"
-#include "dingosdk/client.h"
+#include "dingofs/src/mdsv2/mds/mds_meta.h"
 #include "dingosdk/coordinator.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class CoordinatorClient {
  public:
+  struct AutoIncrement {
+    int64_t table_id{0};
+    int64_t start_id{0};
+    int64_t alloc_id{0};
+  };
+
   CoordinatorClient() = default;
-  ~CoordinatorClient() = default;
+  virtual ~CoordinatorClient() = default;
 
-  bool Init(const std::string& addr);
-  bool Destroy();
+  virtual bool Init(const std::string& addr) = 0;
+  virtual bool Destroy() = 0;
 
-  Status MDSHeartbeat(const dingodb::sdk::MDS& mds);
-  Status GetMDSList(std::vector<dingodb::sdk::MDS>& mdses);
+  virtual Status MDSHeartbeat(const MDSMeta& mds) = 0;
+  virtual Status GetMDSList(std::vector<MDSMeta>& mdses) = 0;
 
-  Status CreateAutoIncrement(int64_t table_id, int64_t start_id);
-  Status DeleteAutoIncrement(int64_t table_id);
-  Status UpdateAutoIncrement(int64_t table_id, int64_t start_id);
-  Status GenerateAutoIncrement(int64_t table_id, int64_t count, int64_t& start_id, int64_t& end_id);
-  Status GetAutoIncrement(int64_t table_id, int64_t& start_id);
-  Status GetAutoIncrements(std::vector<dingodb::sdk::TableIncrement>& table_increments);
-
- private:
-  std::string coordinator_addr_;
-  dingodb::sdk::Client* client_{nullptr};
-  dingodb::sdk::Coordinator* coordinator_{nullptr};
+  virtual Status CreateAutoIncrement(int64_t table_id, int64_t start_id) = 0;
+  virtual Status DeleteAutoIncrement(int64_t table_id) = 0;
+  virtual Status UpdateAutoIncrement(int64_t table_id, int64_t start_id) = 0;
+  virtual Status GenerateAutoIncrement(int64_t table_id, int64_t count, int64_t& start_id, int64_t& end_id) = 0;
+  virtual Status GetAutoIncrement(int64_t table_id, int64_t& start_id) = 0;
+  virtual Status GetAutoIncrements(std::vector<AutoIncrement>& auto_increments) = 0;
 };
+
+using CoordinatorClientPtr = std::shared_ptr<CoordinatorClient>;
 
 }  // namespace mdsv2
 

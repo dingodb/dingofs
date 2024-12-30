@@ -19,9 +19,11 @@
 
 #include "brpc/closure_guard.h"
 #include "dingofs/proto/error.pb.h"
+#include "dingofs/proto/mdsv2.pb.h"
 #include "dingofs/src/mdsv2/common/helper.h"
 #include "dingofs/src/mdsv2/common/logging.h"
 #include "dingofs/src/mdsv2/common/runnable.h"
+#include "dingofs/src/mdsv2/filesystem/inode.h"
 #include "fmt/core.h"
 
 namespace dingofs {
@@ -34,6 +36,81 @@ DECLARE_int32(log_print_max_length);
 class ServiceHelper {
  public:
   static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
+
+  static void Inode2PBInode(InodePtr inode, pb::mdsv2::Inode* pb_inode);
+
+  // protobuf transform
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
+    std::vector<T> vec;
+    vec.reserve(data.size());
+    for (auto& item : data) {
+      vec.emplace_back(std::move(item));
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.emplace_back(std::move(item));
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedField<T>& data) {
+    std::vector<T> vec;
+    vec.reserve(data.size());
+    for (auto& item : data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedField<T>* data) {
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedPtrField<T>* out) {
+    for (auto& item : vec) {
+      *(out->Add()) = item;
+    }
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedField<T>* out) {
+    for (auto& item : vec) {
+      out->Add(item);
+    }
+  }
+
+  static void PbMapToMap(const google::protobuf::Map<std::string, std::string>& pb_map,
+                         std::map<std::string, std::string>& out) {
+    for (const auto& item : pb_map) {
+      out[item.first] = item.second;
+    }
+  }
+
+  static void MapToPbMap(const std::map<std::string, std::string>& map,
+                         google::protobuf::Map<std::string, std::string>* out) {
+    for (const auto& item : map) {
+      (*out)[item.first] = item.second;
+    }
+  }
 };
 
 // Handle service request in execute queue.

@@ -33,17 +33,17 @@ namespace client {
 // }
 
 void MDSClient::CreateFs(Interaction& interaction) {
-  pb::mds::CreateFsRequest request;
-  pb::mds::CreateFsResponse response;
+  pb::mdsv2::CreateFsRequest request;
+  pb::mdsv2::CreateFsResponse response;
 
   request.set_fs_name("dengzh");
   request.set_block_size(4 * 1024 * 1024);
-  request.set_fs_type(pb::mds::FsType::S3);
+  request.set_fs_type(pb::mdsv2::FsType::S3);
   request.set_owner("deng");
   request.set_capacity(1024 * 1024 * 1024);
   request.set_recycle_time_hour(24);
 
-  pb::mds::S3Info s3_info;
+  pb::mdsv2::S3Info s3_info;
   s3_info.set_ak("1111111111111111111111111");
   s3_info.set_sk("2222222222222222222222222");
   s3_info.set_endpoint("http://s3.dingodb.com");

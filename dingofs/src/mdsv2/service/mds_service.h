@@ -25,109 +25,161 @@ namespace dingofs {
 
 namespace mdsv2 {
 
-class MDSServiceImpl : public pb::mds::MDSService {
+class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
-  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemPtr file_system,
-                 IdGeneratorPtr id_generator);
+  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system);
 
   // fs interface
-  void CreateFs(google::protobuf::RpcController* controller, const pb::mds::CreateFsRequest* request,
-                pb::mds::CreateFsResponse* response, google::protobuf::Closure* done) override;
-  void MountFs(google::protobuf::RpcController* controller, const pb::mds::MountFsRequest* request,
-               pb::mds::MountFsResponse* response, google::protobuf::Closure* done) override;
-  void UmountFs(google::protobuf::RpcController* controller, const pb::mds::UmountFsRequest* request,
-                pb::mds::UmountFsResponse* response, google::protobuf::Closure* done) override;
-  void DeleteFs(google::protobuf::RpcController* controller, const pb::mds::DeleteFsRequest* request,
-                pb::mds::DeleteFsResponse* response, google::protobuf::Closure* done) override;
-  void GetFsInfo(google::protobuf::RpcController* controller, const pb::mds::GetFsInfoRequest* request,
-                 pb::mds::GetFsInfoResponse* response, google::protobuf::Closure* done) override;
+  void CreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
+                pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done) override;
+  void MountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
+               pb::mdsv2::MountFsResponse* response, google::protobuf::Closure* done) override;
+  void UmountFs(google::protobuf::RpcController* controller, const pb::mdsv2::UmountFsRequest* request,
+                pb::mdsv2::UmountFsResponse* response, google::protobuf::Closure* done) override;
+  void DeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
+                pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done) override;
+  void GetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
+                 pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done) override;
 
   // dentry interface
-  void CreateDentry(google::protobuf::RpcController* controller, const pb::mds::CreateDentryRequest* request,
-                    pb::mds::CreateDentryResponse* response, google::protobuf::Closure* done) override;
-  void DeleteDentry(google::protobuf::RpcController* controller, const pb::mds::DeleteDentryRequest* request,
-                    pb::mds::DeleteDentryResponse* response, google::protobuf::Closure* done) override;
-  void GetDentry(google::protobuf::RpcController* controller, const pb::mds::GetDentryRequest* request,
-                 pb::mds::GetDentryResponse* response, google::protobuf::Closure* done) override;
-  void ListDentry(google::protobuf::RpcController* controller, const pb::mds::ListDentryRequest* request,
-                  pb::mds::ListDentryResponse* response, google::protobuf::Closure* done) override;
+  void CreateDentry(google::protobuf::RpcController* controller, const pb::mdsv2::CreateDentryRequest* request,
+                    pb::mdsv2::CreateDentryResponse* response, google::protobuf::Closure* done) override;
+  void DeleteDentry(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteDentryRequest* request,
+                    pb::mdsv2::DeleteDentryResponse* response, google::protobuf::Closure* done) override;
+  void GetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
+                 pb::mdsv2::GetDentryResponse* response, google::protobuf::Closure* done) override;
+  void ListDentry(google::protobuf::RpcController* controller, const pb::mdsv2::ListDentryRequest* request,
+                  pb::mdsv2::ListDentryResponse* response, google::protobuf::Closure* done) override;
 
   // inode interface
-  void CreateInode(google::protobuf::RpcController* controller, const pb::mds::CreateInodeRequest* request,
-                   pb::mds::CreateInodeResponse* response, google::protobuf::Closure* done) override;
+  void CreateInode(google::protobuf::RpcController* controller, const pb::mdsv2::CreateInodeRequest* request,
+                   pb::mdsv2::CreateInodeResponse* response, google::protobuf::Closure* done) override;
 
-  void CreateRootInode(google::protobuf::RpcController* controller, const pb::mds::CreateRootInodeRequest* request,
-                       pb::mds::CreateRootInodeResponse* response, google::protobuf::Closure* done) override;
-  void DeleteInode(google::protobuf::RpcController* controller, const pb::mds::DeleteInodeRequest* request,
-                   pb::mds::DeleteInodeResponse* response, google::protobuf::Closure* done) override;
-  void UpdateInode(google::protobuf::RpcController* controller, const pb::mds::UpdateInodeRequest* request,
-                   pb::mds::UpdateInodeResponse* response, google::protobuf::Closure* done) override;
-  void UpdateS3Chunk(google::protobuf::RpcController* controller, const pb::mds::UpdateS3ChunkRequest* request,
-                     pb::mds::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) override;
-  void GetInode(google::protobuf::RpcController* controller, const pb::mds::GetInodeRequest* request,
-                pb::mds::GetInodeResponse* response, google::protobuf::Closure* done) override;
-  void BatchGetXAttr(google::protobuf::RpcController* controller, const pb::mds::BatchGetXAttrRequest* request,
-                     pb::mds::BatchGetXAttrResponse* response, google::protobuf::Closure* done) override;
+  void DeleteInode(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteInodeRequest* request,
+                   pb::mdsv2::DeleteInodeResponse* response, google::protobuf::Closure* done) override;
+  void UpdateInode(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateInodeRequest* request,
+                   pb::mdsv2::UpdateInodeResponse* response, google::protobuf::Closure* done) override;
+  void UpdateS3Chunk(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateS3ChunkRequest* request,
+                     pb::mdsv2::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) override;
+  void GetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
+                pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done) override;
+  void BatchGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetXAttrRequest* request,
+                     pb::mdsv2::BatchGetXAttrResponse* response, google::protobuf::Closure* done) override;
 
   // high level interface
-  void MkNod(google::protobuf::RpcController* controller, const pb::mds::MkNodRequest* request,
-             pb::mds::MkNodResponse* response, google::protobuf::Closure* done) override;
+  void Lookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
+              pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done) override;
 
-  void MkDir(google::protobuf::RpcController* controller, const pb::mds::MkDirRequest* request,
-             pb::mds::MkDirResponse* response, google::protobuf::Closure* done) override;
-  void RmDir(google::protobuf::RpcController* controller, const pb::mds::RmDirRequest* request,
-             pb::mds::RmDirResponse* response, google::protobuf::Closure* done) override;
+  void MkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
+             pb::mdsv2::MkNodResponse* response, google::protobuf::Closure* done) override;
 
-  void Link(google::protobuf::RpcController* controller, const pb::mds::LinkRequest* request,
-            pb::mds::LinkResponse* response, google::protobuf::Closure* done) override;
-  void UnLink(google::protobuf::RpcController* controller, const pb::mds::UnLinkRequest* request,
-              pb::mds::UnLinkResponse* response, google::protobuf::Closure* done) override;
+  void MkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
+             pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done) override;
+  void RmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
+             pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done) override;
 
-  void Symlink(google::protobuf::RpcController* controller, const pb::mds::SymlinkRequest* request,
-               pb::mds::SymlinkResponse* response, google::protobuf::Closure* done) override;
-  void ReadLink(google::protobuf::RpcController* controller, const pb::mds::ReadLinkRequest* request,
-                pb::mds::ReadLinkResponse* response, google::protobuf::Closure* done) override;
-  void Rename(google::protobuf::RpcController* controller, const pb::mds::RenameRequest* request,
-              pb::mds::RenameResponse* response, google::protobuf::Closure* done) override;
+  void Link(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
+            pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done) override;
+  void UnLink(google::protobuf::RpcController* controller, const pb::mdsv2::UnLinkRequest* request,
+              pb::mdsv2::UnLinkResponse* response, google::protobuf::Closure* done) override;
+
+  void Symlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
+               pb::mdsv2::SymlinkResponse* response, google::protobuf::Closure* done) override;
+  void ReadLink(google::protobuf::RpcController* controller, const pb::mdsv2::ReadLinkRequest* request,
+                pb::mdsv2::ReadLinkResponse* response, google::protobuf::Closure* done) override;
+
+  void GetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
+               pb::mdsv2::GetAttrResponse* response, google::protobuf::Closure* done) override;
+
+  void SetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
+               pb::mdsv2::SetAttrResponse* response, google::protobuf::Closure* done) override;
+
+  void GetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
+                pb::mdsv2::GetXAttrResponse* response, google::protobuf::Closure* done) override;
+
+  void SetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
+                pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done) override;
+
+  void ListXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::ListXAttrRequest* request,
+                 pb::mdsv2::ListXAttrResponse* response, google::protobuf::Closure* done) override;
+
+  void Rename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
+              pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done) override;
 
   // quota interface
-  void SetFsQuota(google::protobuf::RpcController* controller, const pb::mds::SetFsQuotaRequest* request,
-                  pb::mds::SetFsQuotaResponse* response, google::protobuf::Closure* done) override;
+  void SetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,
+                  pb::mdsv2::SetFsQuotaResponse* response, google::protobuf::Closure* done) override;
 
-  void GetFsQuota(google::protobuf::RpcController* controller, const pb::mds::GetFsQuotaRequest* request,
-                  pb::mds::GetFsQuotaResponse* response, google::protobuf::Closure* done) override;
-  void FlushFsUsage(google::protobuf::RpcController* controller, const pb::mds::FlushFsUsageRequest* request,
-                    pb::mds::FlushFsUsageResponse* response, google::protobuf::Closure* done) override;
+  void GetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsQuotaRequest* request,
+                  pb::mdsv2::GetFsQuotaResponse* response, google::protobuf::Closure* done) override;
+  void FlushFsUsage(google::protobuf::RpcController* controller, const pb::mdsv2::FlushFsUsageRequest* request,
+                    pb::mdsv2::FlushFsUsageResponse* response, google::protobuf::Closure* done) override;
 
-  void SetDirQuota(google::protobuf::RpcController* controller, const pb::mds::SetDirQuotaRequest* request,
-                   pb::mds::SetDirQuotaResponse* response, google::protobuf::Closure* done) override;
+  void SetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetDirQuotaRequest* request,
+                   pb::mdsv2::SetDirQuotaResponse* response, google::protobuf::Closure* done) override;
 
-  void GetDirQuota(google::protobuf::RpcController* controller, const pb::mds::GetDirQuotaRequest* request,
-                   pb::mds::GetDirQuotaResponse* response, google::protobuf::Closure* done) override;
-  void DeleteDirQuota(google::protobuf::RpcController* controller, const pb::mds::DeleteDirQuotaRequest* request,
-                      pb::mds::DeleteDirQuotaResponse* response, google::protobuf::Closure* done) override;
+  void GetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetDirQuotaRequest* request,
+                   pb::mdsv2::GetDirQuotaResponse* response, google::protobuf::Closure* done) override;
+  void DeleteDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteDirQuotaRequest* request,
+                      pb::mdsv2::DeleteDirQuotaResponse* response, google::protobuf::Closure* done) override;
 
-  void LoadDirQuotas(google::protobuf::RpcController* controller, const pb::mds::LoadDirQuotasRequest* request,
-                     pb::mds::LoadDirQuotasResponse* response, google::protobuf::Closure* done) override;
-  void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mds::FlushDirUsagesRequest* request,
-                      pb::mds::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
+  void LoadDirQuotas(google::protobuf::RpcController* controller, const pb::mdsv2::LoadDirQuotasRequest* request,
+                     pb::mdsv2::LoadDirQuotasResponse* response, google::protobuf::Closure* done) override;
+  void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
+                      pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
 
  private:
   Status GenFsId(int64_t& fs_id);
+  inline FileSystemPtr GetFileSystem(uint32_t fs_id);
 
-  void DoCreateFs(google::protobuf::RpcController* controller, const pb::mds::CreateFsRequest* request,
-                  pb::mds::CreateFsResponse* response, google::protobuf::Closure* done);
-  void DoMountFs(google::protobuf::RpcController* controller, const pb::mds::MountFsRequest* request,
-                 pb::mds::MountFsResponse* response, google::protobuf::Closure* done);
-  void DoUmountFs(google::protobuf::RpcController* controller, const pb::mds::UmountFsRequest* request,
-                  pb::mds::UmountFsResponse* response, google::protobuf::Closure* done);
-  void DoDeleteFs(google::protobuf::RpcController* controller, const pb::mds::DeleteFsRequest* request,
-                  pb::mds::DeleteFsResponse* response, google::protobuf::Closure* done);
-  void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mds::GetFsInfoRequest* request,
-                   pb::mds::GetFsInfoResponse* response, google::protobuf::Closure* done);
+  void DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
+                  pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done);
+  void DoMountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
+                 pb::mdsv2::MountFsResponse* response, google::protobuf::Closure* done);
+  void DoUmountFs(google::protobuf::RpcController* controller, const pb::mdsv2::UmountFsRequest* request,
+                  pb::mdsv2::UmountFsResponse* response, google::protobuf::Closure* done);
+  void DoDeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
+                  pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done);
+  void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
+                   pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done);
 
-  IdGeneratorPtr id_generator_;
-  FileSystemPtr file_system_;
+  void DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
+                pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done);
+  void DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
+               pb::mdsv2::MkNodResponse* response, google::protobuf::Closure* done);
+  void DoMkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
+               pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done);
+  void DoRmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
+               pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done);
+
+  void DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
+              pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done);
+  void DoUnLink(google::protobuf::RpcController* controller, const pb::mdsv2::UnLinkRequest* request,
+                pb::mdsv2::UnLinkResponse* response, google::protobuf::Closure* done);
+  void DoSymlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
+                 pb::mdsv2::SymlinkResponse* response, google::protobuf::Closure* done);
+  void DoReadLink(google::protobuf::RpcController* controller, const pb::mdsv2::ReadLinkRequest* request,
+                  pb::mdsv2::ReadLinkResponse* response, google::protobuf::Closure* done);
+
+  void DoGetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
+                 pb::mdsv2::GetAttrResponse* response, google::protobuf::Closure* done);
+
+  void DoSetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
+                 pb::mdsv2::SetAttrResponse* response, google::protobuf::Closure* done);
+
+  void DoGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
+                  pb::mdsv2::GetXAttrResponse* response, google::protobuf::Closure* done);
+
+  void DoSetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
+                  pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done);
+
+  void DoListXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::ListXAttrRequest* request,
+                   pb::mdsv2::ListXAttrResponse* response, google::protobuf::Closure* done);
+
+  void DoRename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
+                pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done);
+
+  FileSystemSetPtr file_system_set_;
 
   // Run service request.
   WorkerSetPtr read_worker_set_;

@@ -22,10 +22,15 @@
 #include "dingofs/src/mdsv2/common/status.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 struct KeyValue {
+  enum class OpType {
+    kPut = 0,
+    kDelete = 1,
+  };
+
+  OpType opt_type{OpType::kPut};
   std::string key;
   std::string value;
 };
@@ -58,6 +63,7 @@ class KVStorage {
 
   virtual Status Delete(const std::string& key) = 0;
 };
+using KVStoragePtr = std::shared_ptr<KVStorage>;
 
 }  // namespace mdsv2
 }  // namespace dingofs

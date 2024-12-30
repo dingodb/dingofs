@@ -52,7 +52,7 @@ butil::Status Interaction::SendRequest(const std::string& service_name, const st
   const google::protobuf::MethodDescriptor* method = nullptr;
 
   if (service_name == "MDSService") {
-    method = dingofs::pb::mds::MDSService::descriptor()->FindMethodByName(api_name);
+    method = dingofs::pb::mdsv2::MDSService::descriptor()->FindMethodByName(api_name);
   } else {
     DINGO_LOG(FATAL) << "Unknown service name: " << service_name;
   }

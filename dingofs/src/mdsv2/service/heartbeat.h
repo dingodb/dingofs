@@ -24,7 +24,7 @@ namespace mdsv2 {
 
 class HeartbeatTask : public TaskRunnable {
  public:
-  HeartbeatTask(CoordinatorClient& coordinator_client) : coordinator_client_(coordinator_client) {}
+  HeartbeatTask(CoordinatorClientPtr coordinator_client) : coordinator_client_(coordinator_client) {}
 
   ~HeartbeatTask() override = default;
 
@@ -32,7 +32,7 @@ class HeartbeatTask : public TaskRunnable {
 
   void Run() override;
 
-  static void SendHeartbeat(CoordinatorClient& coordinator_client);
+  static void SendHeartbeat(CoordinatorClientPtr coordinator_client);
   static void HandleHeartbeatResponse();
 
   static std::atomic<uint64_t> heartbeat_counter;
@@ -40,7 +40,7 @@ class HeartbeatTask : public TaskRunnable {
  private:
   bool is_update_epoch_version_;
   std::vector<int64_t> region_ids_;
-  CoordinatorClient& coordinator_client_;
+  CoordinatorClientPtr coordinator_client_;
 };
 
 class Heartbeat {

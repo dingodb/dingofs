@@ -117,10 +117,6 @@ DingodbStorage::TxnPtr DingodbStorage::NewTxn() {
 }
 
 Status DingodbStorage::Put(WriteOption option, const std::string& key, const std::string& value) {
-  // for test
-  DINGO_LOG(INFO) << fmt::format("Put key({}), value({}).", Helper::StringToHex(key), Helper::StringToHex(value));
-  return Status::OK();
-
   auto txn = NewTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -149,12 +145,19 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
 
-  auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value) : txn->Put(kv.key, kv.value);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  if (kv.opt_type == KeyValue::OpType::kPut) {
+    auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value) : txn->Put(kv.key, kv.value);
+    if (!status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, status.ToString());
+    }
+  } else if (kv.opt_type == KeyValue::OpType::kDelete) {
+    auto status = txn->Delete(kv.key);
+    if (!status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, status.ToString());
+    }
   }
 
-  status = txn->PreCommit();
+  auto status = txn->PreCommit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -172,12 +175,21 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
 
-  auto status = option.is_if_absent ? txn->BatchPutIfAbsent(ToKVPairs(kvs)) : txn->BatchPut(ToKVPairs(kvs));
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  for (const auto& kv : kvs) {
+    if (kv.opt_type == KeyValue::OpType::kPut) {
+      auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value) : txn->Put(kv.key, kv.value);
+      if (!status.ok()) {
+        return Status(pb::error::EBACKEND_STORE, status.ToString());
+      }
+    } else if (kv.opt_type == KeyValue::OpType::kDelete) {
+      auto status = txn->Delete(kv.key);
+      if (!status.ok()) {
+        return Status(pb::error::EBACKEND_STORE, status.ToString());
+      }
+    }
   }
 
-  status = txn->PreCommit();
+  auto status = txn->PreCommit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -190,10 +202,6 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
 }
 
 Status DingodbStorage::Get(const std::string& key, std::string& value) {
-  // for test
-  DINGO_LOG(INFO) << fmt::format("Get key({}).", Helper::StringToHex(key));
-  return Status::OK();
-
   auto txn = NewTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");

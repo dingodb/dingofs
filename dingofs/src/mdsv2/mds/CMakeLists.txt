@@ -13,22 +13,16 @@
 # limitations under the License.
 
 
-
-add_executable(dingo-mdsv2-client
-  main.cc
-  mds.cc
-  interaction.cc
+file(GLOB DINGOFS_MDSV2_MDS_SRCS
+    "*.cc"
 )
 
-target_link_libraries(dingo-mdsv2-client
-  PROTO_OBJS
+add_library(mdsv2_mds
+    ${DINGOFS_MDSV2_MDS_SRCS}
+)
 
-  mdsv2_common
-
-  brpc
-  leveldb
-  fmt
-  gflags
-  glog
-  OpenSSL::SSL
+target_link_libraries(mdsv2_mds
+    mdsv2_common
+    PROTO_OBJS
+    protobuf::libprotobuf
 )

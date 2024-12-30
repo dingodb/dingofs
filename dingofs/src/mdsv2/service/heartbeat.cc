@@ -16,50 +16,21 @@
 
 #include "dingofs/src/mdsv2/common/logging.h"
 #include "dingofs/src/mdsv2/coordinator/coordinator_client.h"
+#include "dingofs/src/mdsv2/mds/mds_meta.h"
 #include "dingofs/src/mdsv2/server.h"
-#include "dingofs/src/mdsv2/service/mds_meta.h"
 #include "fmt/core.h"
 
 namespace dingofs {
 
 namespace mdsv2 {
 
-static dingodb::sdk::MDS::State MDSMetaStateToSdkState(MDSMeta::State state) {
-  switch (state) {
-    case MDSMeta::State::kInit:
-      return dingodb::sdk::MDS::State::kInit;
-    case MDSMeta::State::kNormal:
-      return dingodb::sdk::MDS::State::kNormal;
-    case MDSMeta::State::kAbnormal:
-      return dingodb::sdk::MDS::State::kAbnormal;
-    default:
-      DINGO_LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
-      break;
-  }
-
-  return dingodb::sdk::MDS::State::kInit;
-}
-
-static dingodb::sdk::MDS MDSMeta2SdkMDS(const MDSMeta& mds_meta) {
-  dingodb::sdk::MDS mds;
-  mds.id = mds_meta.ID();
-  mds.location.host = mds_meta.Host();
-  mds.location.port = mds_meta.Port();
-  mds.state = MDSMetaStateToSdkState(mds_meta.GetState());
-  mds.register_time_ms = mds_meta.RegisterTimeMs();
-  mds.last_online_time_ms = mds_meta.LastOnlineTimeMs();
-
-  return mds;
-}
-
 void HeartbeatTask::Run() { SendHeartbeat(coordinator_client_); }
 
-void HeartbeatTask::SendHeartbeat(CoordinatorClient& coordinator_client) {
+void HeartbeatTask::SendHeartbeat(CoordinatorClientPtr coordinator_client) {
   auto& mds_meta = Server::GetInstance().GetMDSMeta();
   DINGO_LOG(INFO) << fmt::format("send heartbeat {}.", mds_meta.ToString());
 
-  auto mds = MDSMeta2SdkMDS(mds_meta);
-  auto status = coordinator_client.MDSHeartbeat(mds);
+  auto status = coordinator_client->MDSHeartbeat(mds_meta);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << "send heartbeat fail,  error: " << status.error_str();
   }

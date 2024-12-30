@@ -26,6 +26,7 @@
 #include "dingofs/src/mdsv2/common/helper.h"
 #include "dingofs/src/mdsv2/common/logging.h"
 #include "dingofs/src/mdsv2/common/version.h"
+#include "dingofs/src/mdsv2/coordinator/dingo_coordinator_client.h"
 #include "dingofs/src/mdsv2/service/heartbeat.h"
 #include "dingofs/src/mdsv2/service/mds_service.h"
 #include "dingofs/src/mdsv2/storage/dingodb_storage.h"
@@ -53,7 +54,7 @@ static const int64_t kFsTableId = 1000;
 static const int64_t kFsIdBatchSize = 8;
 static const int64_t kFsIdStartId = 20000;
 
-Server::~Server() { delete kv_storage_; }
+Server::~Server() {}
 
 Server& Server::GetInstance() {
   static Server instance;
@@ -184,7 +185,10 @@ bool Server::InitCoordinatorClient(const std::string& coor_url) {
     return false;
   }
 
-  return coordinator_client_.Init(coor_addrs);
+  coordinator_client_ = DingoCoordinatorClient::New();
+  CHECK(coordinator_client_ != nullptr) << "new DingoCoordinatorClient fail.";
+
+  return coordinator_client_->Init(coor_addrs);
 }
 
 bool Server::InitFsIdGenerator() {
@@ -196,7 +200,7 @@ bool Server::InitFsIdGenerator() {
 bool Server::InitStorage(const std::string& store_url) {
   DINGO_LOG(INFO) << fmt::format("init storage, url({}).", store_url);
 
-  kv_storage_ = new DingodbStorage();
+  kv_storage_ = DingodbStorage::New();
   CHECK(kv_storage_ != nullptr) << "new DingodbStorage fail.";
 
   std::string store_addrs = ParseCoorAddr(store_url);
@@ -209,10 +213,10 @@ bool Server::InitStorage(const std::string& store_url) {
 
 bool Server::InitFileSystem() {
   DINGO_LOG(INFO) << "init filesystem.";
-  file_system_ = FileSystem::New(kv_storage_);
-  CHECK(file_system_ != nullptr) << "new FileSystem fail.";
+  file_system_set_ = FileSystemSet::New(fs_id_generator_, kv_storage_);
+  CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
-  return file_system_->Init();
+  return file_system_set_->Init();
 }
 
 bool Server::InitHeartbeat() {
@@ -266,7 +270,7 @@ MDSMeta& Server::GetMDSMeta() { return mds_meta_; }
 void Server::Run() {
   brpc::Server brpc_server;
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_, fs_id_generator_);
+  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_);
 
   CHECK(brpc_server.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
