@@ -173,6 +173,15 @@ class FsManager {
   void CommitTx(const pb::mds::CommitTxRequest* request,
                 pb::mds::CommitTxResponse* response);
 
+  void SetFsStats(const pb::mds::SetFsStatsRequest* request,
+                  pb::mds::SetFsStatsResponse* response);
+
+  void GetFsStats(const pb::mds::GetFsStatsRequest* request,
+                  pb::mds::GetFsStatsResponse* response);
+
+  void GetFsPerSecondStats(const pb::mds::GetFsPerSecondStatsRequest* request,
+                           pb::mds::GetFsPerSecondStatsResponse* response);
+
   // periodically check if the mount point is alive
   void BackEndCheckMountPoint();
   void CheckMountPoint();

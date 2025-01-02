@@ -24,6 +24,8 @@
 
 #include <vector>
 
+#include "dingofs/src/mds/metric/metric.h"
+
 namespace dingofs {
 namespace mds {
 
@@ -284,6 +286,40 @@ void MdsServiceImpl::CommitTx(::google::protobuf::RpcController* controller,
   VLOG(3) << "CommitTx [request]: " << request->DebugString();
   fsManager_->CommitTx(request, response);
   VLOG(3) << "CommitTx [response]: " << response->DebugString();
+}
+
+void MdsServiceImpl::SetFsStats(::google::protobuf::RpcController* controller,
+                                const pb::mds::SetFsStatsRequest* request,
+                                pb::mds::SetFsStatsResponse* response,
+                                ::google::protobuf::Closure* done) {
+  (void)controller;
+  brpc::ClosureGuard guard(done);
+  VLOG(9) << "SetFsStats [request]: " << request->DebugString();
+  fsManager_->SetFsStats(request, response);
+  VLOG(9) << "SetFsStats [response]: " << response->DebugString();
+}
+
+void MdsServiceImpl::GetFsStats(::google::protobuf::RpcController* controller,
+                                const pb::mds::GetFsStatsRequest* request,
+                                pb::mds::GetFsStatsResponse* response,
+                                ::google::protobuf::Closure* done) {
+  (void)controller;
+  brpc::ClosureGuard guard(done);
+  VLOG(9) << "GetFsStats [request]: " << request->DebugString();
+  fsManager_->GetFsStats(request, response);
+  VLOG(9) << "GetFsStats [response]: " << response->DebugString();
+}
+
+void MdsServiceImpl::GetFsPerSecondStats(
+    ::google::protobuf::RpcController* controller,
+    const pb::mds::GetFsPerSecondStatsRequest* request,
+    pb::mds::GetFsPerSecondStatsResponse* response,
+    ::google::protobuf::Closure* done) {
+  (void)controller;
+  brpc::ClosureGuard guard(done);
+  VLOG(9) << "GetFsStats [request]: " << request->DebugString();
+  fsManager_->GetFsPerSecondStats(request, response);
+  VLOG(9) << "GetFsStats [response]: " << response->DebugString();
 }
 
 }  // namespace mds

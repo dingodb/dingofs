@@ -405,7 +405,8 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
         child_status = fsStorage_->Delete(fs_name);
         if (child_status != FSStatusCode::OK) {
           LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
-                     << ", then delete fs fail" << ", fsName = " << fs_name
+                     << ", then delete fs fail"
+                     << ", fsName = " << fs_name
                      << ", ret = " << FSStatusCode_Name(child_status);
           return child_status;
         }
@@ -983,6 +984,30 @@ void FsManager::CommitTx(const pb::mds::CommitTxRequest* request,
   // we can ignore the UnLock result for the
   // lock can releaseed automaticlly by timeout
   dlock_->UnLock(fs_name, uuid);
+}
+
+// set fs cluster statistics
+void FsManager::SetFsStats(const pb::mds::SetFsStatsRequest* request,
+                           pb::mds::SetFsStatsResponse* response) {
+  FsMetric::GetInstance().SetFsStats(request->fsname(), request->fsstatsdata());
+  response->set_statuscode(FSStatusCode::OK);
+}
+
+// get fs cluster statistics
+void FsManager::GetFsStats(const pb::mds::GetFsStatsRequest* request,
+                           pb::mds::GetFsStatsResponse* response) {
+  FSStatusCode ret = FsMetric::GetInstance().GetFsStats(
+      request->fsname(), response->mutable_fsstatsdata());
+  response->set_statuscode(ret);
+}
+
+// get fs cluster persecond statistics
+void FsManager::GetFsPerSecondStats(
+    const pb::mds::GetFsPerSecondStatsRequest* request,
+    pb::mds::GetFsPerSecondStatsResponse* response) {
+  FSStatusCode ret = FsMetric::GetInstance().GetFsPerSecondStats(
+      request->fsname(), response->mutable_fsstatsdata());
+  response->set_statuscode(ret);
 }
 
 // after mds restart need rebuild mountpoint ttl recorder
