@@ -14,18 +14,15 @@
 
 
 
-set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos)
+include_directories(${CMAKE_BINARY_DIR}/protos)
+
+set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos/dingofs/proto)
 add_custom_target(create_proto_output_dir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_OUTPUT_DIR}
 )
 message("PROTO_OUTPUT_DIR:${PROTO_OUTPUT_DIR}")
 
-include_directories(${PROTO_OUTPUT_DIR})
-
-set(PROTO_OBJS_SRC "")
-
-
-set(PROTOS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
+set(PROTOS_DIR ${PROJECT_SOURCE_DIR}/proto)
 message("PROTOS_DIR:${PROTOS_DIR}")
 file(GLOB_RECURSE MSG_PROTOS ${PROTOS_DIR}/*.proto)
 
@@ -37,7 +34,7 @@ foreach(msg ${MSG_PROTOS})
 
         message(STATUS "proto file: ${msg}")
 
-        set(FILE_PREFIX_NAME "${PROTO_OUTPUT_DIR}/dingofs/proto/${FIL_WE}")
+        set(FILE_PREFIX_NAME "${PROTO_OUTPUT_DIR}/${FIL_WE}")
         message(STATUS "FILE_PREFIX_NAME: ${FILE_PREFIX_NAME}")
         list(APPEND PROTO_SRCS "${FILE_PREFIX_NAME}.pb.cc")
         list(APPEND PROTO_HDRS "${FILE_PREFIX_NAME}.pb.h")
@@ -47,7 +44,7 @@ foreach(msg ${MSG_PROTOS})
              "${FILE_PREFIX_NAME}.pb.h"
           COMMAND  ${PROTOC}
           ARGS --cpp_out  ${PROTO_OUTPUT_DIR}
-          ARGS --proto_path=${PROJECT_SOURCE_DIR}
+          ARGS --proto_path=${PROTOS_DIR}
             ${msg}
           DEPENDS ${msg}
           COMMENT "Running C++ protocol buffer compiler on ${msg}"
