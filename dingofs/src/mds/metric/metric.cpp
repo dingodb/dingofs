@@ -67,5 +67,44 @@ std::string FsMountMetric::Key(const Mountpoint& mp) {
          std::to_string(mp.port()) + "_" + mp.path();
 }
 
+// set fs cluster statistics, fsStatsData contains delta statistics since last
+// read
+void FSStatsMetric::SetFsStats(const FsStatsData& fs_stats_data) {
+  readBytes_.count << fs_stats_data.readbytes();
+  readQps_.count << fs_stats_data.readqps();
+  writeBytes_.count << fs_stats_data.writebytes();
+  writeQps_.count << fs_stats_data.writeqps();
+  s3ReadBytes_.count << fs_stats_data.s3readbytes();
+  s3ReadQps_.count << fs_stats_data.s3readqps();
+  s3WriteBytes_.count << fs_stats_data.s3writebytes();
+  s3WriteQps_.count << fs_stats_data.s3writeqps();
+}
+
+// get fs cluster statistics, fsStatsData contains the sum of all the client
+// total amount statistics
+void FSStatsMetric::GetFsStats(FsStatsData* fs_stats_data) const {
+  fs_stats_data->set_readbytes(readBytes_.count.get_value());
+  fs_stats_data->set_readqps(readQps_.count.get_value());
+  fs_stats_data->set_writebytes(writeBytes_.count.get_value());
+  fs_stats_data->set_writeqps(writeQps_.count.get_value());
+  fs_stats_data->set_s3readbytes(s3ReadBytes_.count.get_value());
+  fs_stats_data->set_s3readqps(s3ReadQps_.count.get_value());
+  fs_stats_data->set_s3writebytes(s3WriteBytes_.count.get_value());
+  fs_stats_data->set_s3writeqps(s3WriteQps_.count.get_value());
+}
+
+// get fs cluster per second statistics, fsStatsData contains recently
+// statistics for per second
+void FSStatsMetric::GetFsPerSecondStats(FsStatsData* fs_stats_data) const {
+  fs_stats_data->set_readbytes(readBytes_.value.get_value());
+  fs_stats_data->set_readqps(readQps_.value.get_value());
+  fs_stats_data->set_writebytes(writeBytes_.value.get_value());
+  fs_stats_data->set_writeqps(writeQps_.value.get_value());
+  fs_stats_data->set_s3readbytes(s3ReadBytes_.value.get_value());
+  fs_stats_data->set_s3readqps(s3ReadQps_.value.get_value());
+  fs_stats_data->set_s3writebytes(s3WriteBytes_.value.get_value());
+  fs_stats_data->set_s3writeqps(s3WriteQps_.value.get_value());
+}
+
 }  // namespace mds
 }  // namespace dingofs

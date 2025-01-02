@@ -358,5 +358,40 @@ TEST_F(FSManagerTest, GetLatestTxId_ParamFsId) {
   }
 }
 
+TEST_F(FSManagerTest, SetFsStats) {
+  {
+    SetFsStatsRequest request;
+    SetFsStatsResponse response;
+
+    FsStatsData fsstatsdata;
+    fsstatsdata.set_readbytes(8192);
+    fsstatsdata.set_writebytes(16384);
+    fsstatsdata.set_readqps(10);
+    fsstatsdata.set_writeqps(20);
+    fsstatsdata.set_s3readbytes(8192);
+    fsstatsdata.set_s3writebytes(16384);
+    fsstatsdata.set_s3readqps(30);
+    fsstatsdata.set_s3writeqps(40);
+
+    request.set_fsname("dingofs");
+    request.mutable_fsstatsdata()->CopyFrom(fsstatsdata);
+
+    fsManager_->SetFsStats(&request, &response);
+    ASSERT_EQ(response.statuscode(), FSStatusCode::OK);
+  }
+}
+
+TEST_F(FSManagerTest, GetFsStats) {
+  {
+    GetFsStatsRequest request;
+    GetFsStatsResponse response;
+
+    request.set_fsname("dingofs");
+
+    fsManager_->GetFsStats(&request, &response);
+    ASSERT_EQ(response.statuscode(), FSStatusCode::OK);
+  }
+}
+
 }  // namespace mds
 }  // namespace dingofs

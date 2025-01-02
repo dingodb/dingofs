@@ -35,6 +35,7 @@
 namespace dingofs {
 namespace mds {
 
+using dingofs::pb::mds::FsStatsData;
 using dingofs::pb::mds::Mountpoint;
 
 // Metric for a filesystem
@@ -68,6 +69,45 @@ class FsMountMetric {
   Mutex mtx_;
 
   MountPointMetric mps_;
+};
+
+// metric stats per second
+struct PerSecondMetric {
+  bvar::Adder<uint64_t> count;                   // total count
+  bvar::PerSecond<bvar::Adder<uint64_t>> value;  // average count persecond
+  PerSecondMetric(const std::string& prefix, const std::string& name)
+      : count(prefix, name + "_total_count"), value(prefix, name, &count, 1) {}
+};
+
+class FSStatsMetric {
+ public:
+  explicit FSStatsMetric(const std::string& fsname)
+      : fsname_(fsname),
+        readBytes_("fs_", fsname + "_read_bytes"),
+        readQps_("fs_", fsname + "_read_qps"),
+        writeBytes_("fs_", fsname + "_write_bytes"),
+        writeQps_("fs_", fsname + "_write_qps"),
+        s3ReadBytes_("fs_", fsname + "_s3_read_bytes"),
+        s3ReadQps_("fs_", fsname + "_s3_read_qps"),
+        s3WriteBytes_("fs_", fsname + "_s3_write_bytes"),
+        s3WriteQps_("fs_", fsname + "_s3_write_qps") {}
+
+  void SetFsStats(const FsStatsData& fs_stats_data);
+
+  void GetFsStats(FsStatsData* fs_stats_data) const;
+
+  void GetFsPerSecondStats(FsStatsData* fs_stats_data) const;
+
+ private:
+  std::string fsname_;
+  PerSecondMetric readBytes_;
+  PerSecondMetric readQps_;
+  PerSecondMetric writeBytes_;
+  PerSecondMetric writeQps_;
+  PerSecondMetric s3ReadBytes_;
+  PerSecondMetric s3ReadQps_;
+  PerSecondMetric s3WriteBytes_;
+  PerSecondMetric s3WriteQps_;
 };
 
 }  // namespace mds

@@ -95,6 +95,21 @@ class MdsServiceImpl : public pb::mds::MdsService {
                 pb::mds::CommitTxResponse* response,
                 ::google::protobuf::Closure* done) override;
 
+  void SetFsStats(::google::protobuf::RpcController* controller,
+                  const pb::mds::SetFsStatsRequest* request,
+                  pb::mds::SetFsStatsResponse* response,
+                  ::google::protobuf::Closure* done);
+
+  void GetFsStats(::google::protobuf::RpcController* controller,
+                  const pb::mds::GetFsStatsRequest* request,
+                  pb::mds::GetFsStatsResponse* response,
+                  ::google::protobuf::Closure* done);
+
+  void GetFsPerSecondStats(::google::protobuf::RpcController* controller,
+                           const pb::mds::GetFsPerSecondStatsRequest* request,
+                           pb::mds::GetFsPerSecondStatsResponse* response,
+                           ::google::protobuf::Closure* done);
+
  private:
   std::shared_ptr<FsManager> fsManager_;
   std::shared_ptr<ChunkIdAllocator> chunkIdAllocator_;

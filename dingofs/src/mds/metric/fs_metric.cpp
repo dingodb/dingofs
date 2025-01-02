@@ -22,8 +22,14 @@
 
 #include "dingofs/src/mds/metric/fs_metric.h"
 
+#include "dingofs/proto/mds.pb.h"
+#include "dingofs/src/mds/metric/metric.h"
+
 namespace dingofs {
 namespace mds {
+
+using dingofs::pb::mds::FsStatsData;
+using dingofs::pb::mds::FSStatusCode;
 
 void FsMetric::OnMount(const std::string& fsname, const Mountpoint& mp) {
   std::lock_guard<Mutex> lock(mtx_);
@@ -46,6 +52,45 @@ void FsMetric::OnUnMount(const std::string& fsname, const Mountpoint& mp) {
   }
 
   iter->second->OnUnMount(mp);
+}
+
+void FsMetric::SetFsStats(const std::string& fsname,
+                          const FsStatsData& fs_stats_data) {
+  std::lock_guard<Mutex> lock(mtx_);
+
+  auto iter = fsStatsMetrics_.find(fsname);
+  if (iter == fsStatsMetrics_.end()) {
+    auto r = fsStatsMetrics_.emplace(fsname, new FSStatsMetric(fsname));
+    iter = r.first;
+  }
+
+  iter->second->SetFsStats(fs_stats_data);
+}
+
+FSStatusCode FsMetric::GetFsStats(const std::string& fsname,
+                                  FsStatsData* fs_stats_data) {
+  std::lock_guard<Mutex> lock(mtx_);
+
+  auto iter = fsStatsMetrics_.find(fsname);
+  if (iter == fsStatsMetrics_.end()) {
+    return FSStatusCode::UNKNOWN_ERROR;
+  }
+
+  iter->second->GetFsStats(fs_stats_data);
+  return FSStatusCode::OK;
+}
+
+FSStatusCode FsMetric::GetFsPerSecondStats(const std::string& fsname,
+                                           FsStatsData* fs_stats_data) {
+  std::lock_guard<Mutex> lock(mtx_);
+
+  auto iter = fsStatsMetrics_.find(fsname);
+  if (iter == fsStatsMetrics_.end()) {
+    return FSStatusCode::UNKNOWN_ERROR;
+  }
+
+  iter->second->GetFsPerSecondStats(fs_stats_data);
+  return FSStatusCode::OK;
 }
 
 }  // namespace mds
