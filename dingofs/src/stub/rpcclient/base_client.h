@@ -141,6 +141,10 @@ class MDSBaseClient {
       uint32_t fsId,
       pb::mds::topology::AllocOrGetMemcacheClusterResponse* response,
       brpc::Controller* cntl, brpc::Channel* channel);
+
+  virtual void SetFsStats(const pb::mds::SetFsStatsRequest& request,
+                          pb::mds::SetFsStatsResponse* response,
+                          brpc::Controller* cntl, brpc::Channel* channel);
 };
 
 }  // namespace rpcclient

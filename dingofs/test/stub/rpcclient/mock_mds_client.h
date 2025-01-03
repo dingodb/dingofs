@@ -139,6 +139,10 @@ class MockMdsClient : public MdsClient {
 
   MOCK_METHOD2(AllocOrGetMemcacheCluster,
                bool(uint32_t, pb::mds::topology::MemcacheClusterInfo*));
+
+  MOCK_METHOD2(SetFsStats,
+               FSStatusCode(const std::string& fsName,
+                            const pb::mds::FsStatsData& fsStatsData));
 };
 }  // namespace rpcclient
 }  // namespace stub

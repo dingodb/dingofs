@@ -62,6 +62,8 @@ using pb::metaserver::InodeAttr;
 using common::FLAGS_enableCto;
 using common::FLAGS_supportKVcache;
 
+using ::dingofs::stub::metric::FSMetric;
+
 DINGOFS_ERROR FuseS3Client::Init(const common::FuseClientOption& option) {
   common::FuseClientOption opt(option);
 
@@ -180,19 +182,16 @@ DINGOFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
     return DINGOFS_ERROR::NO_SPACE;
   }
 
+  // fuse write metrics
+  bool metric_ret = true;
   uint64_t start = butil::cpuwide_time_us();
+  FsMetricGuard guard(&metric_ret, &FSMetric::GetInstance().user_write, &size,
+                      start);
   int w_ret = s3Adaptor_->Write(ino, off, size, buf);
   if (w_ret < 0) {
+    metric_ret = false;
     LOG(ERROR) << "s3Adaptor_ write failed, ret = " << w_ret;
     return DINGOFS_ERROR::INTERNAL;
-  }
-
-  if (fsMetric_ != nullptr) {
-    fsMetric_->userWrite.bps.count << w_ret;
-    fsMetric_->userWrite.qps.count << 1;
-    uint64_t duration = butil::cpuwide_time_us() - start;
-    fsMetric_->userWrite.latency << duration;
-    fsMetric_->userWriteIoSize.set_value(w_ret);
   }
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
@@ -271,10 +270,15 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
       return DINGOFS_ERROR::INVALIDPARAM;
   }
 
+  // fuse read metrics
+  bool metric_ret = true;
   uint64_t start = butil::cpuwide_time_us();
+  FsMetricGuard guard(&metric_ret, &FSMetric::GetInstance().user_read, r_size,
+                      start);
   std::shared_ptr<InodeWrapper> inode_wrapper;
   DINGOFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
   if (ret != DINGOFS_ERROR::OK) {
+    metric_ret = false;
     LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                << ", inodeId=" << ino;
     return ret;
@@ -290,18 +294,11 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
   // Read do not change inode. so we do not get lock here.
   int r_ret = s3Adaptor_->Read(ino, off, len, buffer);
   if (r_ret < 0) {
+    metric_ret = false;
     LOG(ERROR) << "s3Adaptor_ read failed, ret = " << r_ret;
     return DINGOFS_ERROR::INTERNAL;
   }
   *r_size = r_ret;
-
-  if (fsMetric_.get() != nullptr) {
-    fsMetric_->userRead.bps.count << r_ret;
-    fsMetric_->userRead.qps.count << 1;
-    uint64_t duration = butil::cpuwide_time_us() - start;
-    fsMetric_->userRead.latency << duration;
-    fsMetric_->userReadIoSize.set_value(r_ret);
-  }
 
   utils::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
   inode_wrapper->UpdateTimestampLocked(kAccessTime);

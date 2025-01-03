@@ -164,8 +164,9 @@ DINGOFS_ERROR FuseClient::Init(const FuseClientOption& option) {
 
   {
     CHECK_NOTNULL(fsInfo_);
-    ExternalMember member(dentryManager_, inodeManager_, metaClient_);
-    fs_ = std::make_shared<FileSystem>(fsInfo_->fsid(),
+    ExternalMember member(dentryManager_, inodeManager_, metaClient_,
+                          mdsClient_);
+    fs_ = std::make_shared<FileSystem>(fsInfo_->fsid(), fsInfo_->fsname(),
                                        option_.fileSystemOption, member);
   }
 
@@ -1539,8 +1540,6 @@ FuseClient::SetMountStatus(const struct MountOption* mountOption) {
 
   LOG(INFO) << "Mount " << fsName << " on " << mountpoint_.ShortDebugString()
             << " success! enableSumInDir = " << enableSumInDir_.load();
-
-  fsMetric_ = std::make_shared<FSMetric>(fsName);
 
   // init fsname and mountpoint
   leaseExecutor_->SetFsName(fsName);

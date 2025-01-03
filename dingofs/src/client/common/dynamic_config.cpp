@@ -101,6 +101,10 @@ DEFINE_validator(flush_quota_interval_second, &PassUint32);
 DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
 DEFINE_validator(load_quota_interval_second, &PassUint32);
 
+DEFINE_uint32(push_metric_interval_millsecond, 500,
+              "push client metrics interval in millsecond");
+DEFINE_validator(push_metric_interval_millsecond, &PassUint32);
+
 // fuse
 // kernal will retry when read fail
 DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,

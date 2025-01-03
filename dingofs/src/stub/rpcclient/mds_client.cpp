@@ -42,6 +42,8 @@ using pb::mds::FSStatusCode;
 using pb::mds::GetLatestTxIdRequest;
 using pb::mds::GetLatestTxIdResponse;
 using pb::mds::Mountpoint;
+using pb::mds::SetFsStatsRequest;
+using pb::mds::SetFsStatsResponse;
 using pb::mds::space::SpaceErrCode;
 using pb::mds::space::SpaceErrCode_Name;
 using pb::mds::topology::Copyset;
@@ -500,7 +502,8 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
     }
     TopoStatusCode ret = response.statuscode();
     LOG_IF(WARNING, TopoStatusCode::TOPO_OK != 0)
-        << "GetMetaServerList failed" << ", errocde = " << response.statuscode()
+        << "GetMetaServerList failed"
+        << ", errocde = " << response.statuscode()
         << ", log id = " << cntl->log_id();
     return ret;
   };
@@ -1021,6 +1024,31 @@ SpaceErrCode MdsClientImpl::ReleaseVolumeBlockGroup(
 }
 
 #undef CHECK_RPC_AND_RETRY_IF_ERROR
+
+FSStatusCode MdsClientImpl::SetFsStats(
+    const std::string& fsname, const pb::mds::FsStatsData& fs_stat_data) {
+  SetFsStatsRequest request;
+  request.set_fsname(fsname);
+  request.mutable_fsstatsdata()->CopyFrom(fs_stat_data);
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    VLOG(9) << "SetFsStats [request]: " << request.ShortDebugString();
+    SetFsStatsResponse response;
+    mdsbasecli_->SetFsStats(request, &response, cntl, channel);
+    if (cntl->Failed()) {
+      LOG(WARNING) << "SetFsStats fail, errCode = " << cntl->ErrorCode()
+                   << ", errorText = " << cntl->ErrorText()
+                   << ", logId = " << cntl->log_id();
+      return FSStatusCode::UPDATE_FS_FAIL;
+    }
+    FSStatusCode rc = response.statuscode();
+    VLOG(9) << "SetFsStats [response]: " << response.ShortDebugString();
+    return FSStatusCode::OK;
+  };
+  // for rpc error or get lock failed/timeout, we will retry until success
+  return ReturnError(rpcexcutor_.DoRPCTask(task, 0));
+}
 
 }  // namespace rpcclient
 }  // namespace stub

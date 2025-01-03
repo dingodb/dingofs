@@ -235,6 +235,10 @@ class MdsClient {
   virtual pb::mds::space::SpaceErrCode ReleaseVolumeBlockGroup(
       uint32_t fsId, const std::string& owner,
       const std::vector<pb::mds::space::BlockGroup>& blockGroups) = 0;
+
+  // set filesystem runtime statistics
+  virtual pb::mds::FSStatusCode SetFsStats(
+      const std::string& fsName, const pb::mds::FsStatsData& fsStatsData) = 0;
 };
 
 class MdsClientImpl : public MdsClient {
@@ -322,6 +326,11 @@ class MdsClientImpl : public MdsClient {
   pb::mds::space::SpaceErrCode ReleaseVolumeBlockGroup(
       uint32_t fsId, const std::string& owner,
       const std::vector<pb::mds::space::BlockGroup>& blockGroups) override;
+
+  // set filesystem runtime statistics
+  pb::mds::FSStatusCode SetFsStats(
+      const std::string& fsname,
+      const pb::mds::FsStatsData& fs_stat_data) override;
 
  private:
   pb::mds::FSStatusCode ReturnError(int retcode);

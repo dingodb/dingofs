@@ -41,6 +41,8 @@ using pb::mds::MountFsResponse;
 using pb::mds::Mountpoint;
 using pb::mds::RefreshSessionRequest;
 using pb::mds::RefreshSessionResponse;
+using pb::mds::SetFsStatsRequest;
+using pb::mds::SetFsStatsResponse;
 using pb::mds::UmountFsRequest;
 using pb::mds::UmountFsResponse;
 using pb::mds::space::AcquireBlockGroupRequest;
@@ -258,6 +260,13 @@ void MDSBaseClient::AllocOrGetMemcacheCluster(
 
   dingofs::pb::mds::topology::TopologyService_Stub stub(channel);
   stub.AllocOrGetMemcacheCluster(cntl, &request, response, nullptr);
+}
+
+void MDSBaseClient::SetFsStats(const SetFsStatsRequest& request,
+                               SetFsStatsResponse* response,
+                               brpc::Controller* cntl, brpc::Channel* channel) {
+  dingofs::pb::mds::MdsService_Stub stub(channel);
+  stub.SetFsStats(cntl, &request, response, nullptr);
 }
 
 }  // namespace rpcclient

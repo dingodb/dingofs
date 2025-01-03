@@ -252,19 +252,19 @@ struct S3MultiManagerMetric {
 struct FSMetric {
   static const std::string prefix;
 
-  std::string fsName;
+  InterfaceMetric user_write;
+  InterfaceMetric user_read;
+  explicit FSMetric()
+      : user_write(prefix, "_user_write"), user_read(prefix, "_user_read") {}
 
-  InterfaceMetric userWrite;
-  InterfaceMetric userRead;
-  bvar::Status<uint32_t> userWriteIoSize;  // last write io size
-  bvar::Status<uint32_t> userReadIoSize;   // last read io size
+ public:
+  FSMetric(const FSMetric&) = delete;
 
-  explicit FSMetric(const std::string& name = "")
-      : userWrite(prefix, "_userWrite"),
-        userRead(prefix, "_userRead"),
-        userWriteIoSize(prefix, "_userWriteIoSizeLast", 0),
-        userReadIoSize(prefix, "_userReadIoSizeLast", 0) {
-    (void)name;
+  FSMetric& operator=(const FSMetric&) = delete;
+
+  static FSMetric& GetInstance() {
+    static FSMetric instance;
+    return instance;
   }
 };
 
@@ -277,13 +277,15 @@ struct S3Metric {
  private:
   explicit S3Metric()
       : write_s3(prefix, "_write_s3"), read_s3(prefix, "_read_s3") {}
+
   S3Metric(const S3Metric&) = delete;
+
   S3Metric& operator=(const S3Metric&) = delete;
 
  public:
   static S3Metric& GetInstance() {
-    static S3Metric instance_;
-    return instance_;
+    static S3Metric instance;
+    return instance;
   }
 };
 
@@ -296,13 +298,15 @@ struct DiskCacheMetric {
  private:
   explicit DiskCacheMetric()
       : write_disk(prefix, "_write_disk"), read_disk(prefix, "_read_disk") {}
+
   DiskCacheMetric(const DiskCacheMetric&) = delete;
+
   DiskCacheMetric& operator=(const DiskCacheMetric&) = delete;
 
  public:
   static DiskCacheMetric& GetInstance() {
-    static DiskCacheMetric instance_;
-    return instance_;
+    static DiskCacheMetric instance;
+    return instance;
   }
 };
 

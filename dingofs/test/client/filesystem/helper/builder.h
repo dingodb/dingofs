@@ -46,9 +46,11 @@ using dingofs::client::common::KernelCacheOption;
 using dingofs::client::common::LookupCacheOption;
 using dingofs::client::common::OpenFilesOption;
 using dingofs::client::common::RPCOption;
+using dingofs::stub::rpcclient::MockMdsClient;
 using dingofs::stub::rpcclient::MockMetaServerClient;
 
 const uint32_t kMockFsId = 100;
+const char* kMockFsName = "dingofs";
 
 class DeferSyncBuilder {
  public:
@@ -165,7 +167,8 @@ class RPCClientBuilder {
   }
 
   std::shared_ptr<RPCClient> Build() {
-    ExternalMember member(dentryManager_, inodeManager_, meta_client_);
+    ExternalMember member(dentryManager_, inodeManager_, meta_client_,
+                          mds_client_);
     return std::make_shared<RPCClient>(option_, member);
   }
 
@@ -182,6 +185,7 @@ class RPCClientBuilder {
   std::shared_ptr<MockDentryCacheManager> dentryManager_;
   std::shared_ptr<MockInodeCacheManager> inodeManager_;
   std::shared_ptr<MockMetaServerClient> meta_client_;
+  std::shared_ptr<MockMdsClient> mds_client_;
 };
 
 // build filesystem which you want
@@ -231,8 +235,10 @@ class FileSystemBuilder {
   }
 
   std::shared_ptr<FileSystem> Build() {
-    auto member = ExternalMember(dentryManager_, inodeManager_, meta_client_);
-    return std::make_shared<FileSystem>(kMockFsId, option_, member);
+    auto member = ExternalMember(dentryManager_, inodeManager_, meta_client_,
+                                 mds_client_);
+    return std::make_shared<FileSystem>(kMockFsId, kMockFsName, option_,
+                                        member);
   }
 
   std::shared_ptr<MockDentryCacheManager> GetDentryManager() {

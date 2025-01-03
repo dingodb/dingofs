@@ -47,9 +47,9 @@ using pb::metaserver::Quota;
 
 USING_FLAG(stat_timer_thread_num);
 
-FileSystem::FileSystem(uint32_t fs_id, FileSystemOption option,
-                       ExternalMember member)
-    : fs_id_(fs_id), option_(option), member(member) {
+FileSystem::FileSystem(uint32_t fs_id, std::string fs_name,
+                       FileSystemOption option, ExternalMember member)
+    : fs_id_(fs_id), fs_name_(fs_name), option_(option), member(member) {
   deferSync_ = std::make_shared<DeferSync>(option.deferSyncOption);
   negative_ = std::make_shared<LookupCache>(option.lookupCacheOption);
   dirCache_ = std::make_shared<DirCache>(option.dirCacheOption);
@@ -74,12 +74,16 @@ void FileSystem::Run() {
       std::make_shared<FsStatManager>(fs_id_, member.meta_client, stat_timer_);
   dir_quota_manager_ = std::make_shared<DirQuotaManager>(
       fs_id_, member.meta_client, dir_parent_watcher_, stat_timer_);
+  fs_push_metrics_manager_ = std::make_unique<FsPushMetricManager>(
+      fs_name_, member.mds_client, stat_timer_);
 
-  // must start before fs_stat_manager_ and dir_quota_manager_
+  // must start before fs_stat_manager_ and dir_quota_manager_ and
+  // fs_push_metrics_manager_
   stat_timer_->Start();
 
   fs_stat_manager_->Start();
   dir_quota_manager_->Start();
+  fs_push_metrics_manager_->Start();
 }
 
 void FileSystem::Destory() {
@@ -90,6 +94,7 @@ void FileSystem::Destory() {
   stat_timer_->Stop();
   fs_stat_manager_->Stop();
   dir_quota_manager_->Stop();
+  fs_push_metrics_manager_->Stop();
 }
 
 void FileSystem::Attr2Stat(InodeAttr* attr, struct stat* stat) {
@@ -364,8 +369,9 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
                  << ": attribute not found in wacther";
     return DINGOFS_ERROR::STALE;
   } else if (mtime != InodeMtime(inode)) {
-    LOG(WARNING) << "open(" << ino << "): stale file handler" << ", cache("
-                 << mtime << ") vs remote(" << InodeMtime(inode) << ")";
+    LOG(WARNING) << "open(" << ino << "): stale file handler"
+                 << ", cache(" << mtime << ") vs remote(" << InodeMtime(inode)
+                 << ")";
     return DINGOFS_ERROR::STALE;
   }
 

@@ -373,8 +373,6 @@ class FuseClient {
   // enable record summary info in dir inode xattr
   std::atomic<bool> enableSumInDir_;
 
-  std::shared_ptr<stub::metric::FSMetric> fsMetric_;
-
   pb::mds::Mountpoint mountpoint_;
 
   // warmup manager

@@ -38,6 +38,7 @@
 #include "client/filesystem/dir_quota_manager.h"
 #include "client/filesystem/entry_watcher.h"
 #include "client/filesystem/error.h"
+#include "client/filesystem/fs_push_metric_manager.h"
 #include "client/filesystem/fs_stat_manager.h"
 #include "client/filesystem/lookup_cache.h"
 #include "client/filesystem/meta.h"
@@ -67,8 +68,8 @@ struct FileSystemMember {
 
 class FileSystem {
  public:
-  FileSystem(uint32_t fs_id, common::FileSystemOption option,
-             ExternalMember member);
+  FileSystem(uint32_t fs_id, std::string fs_name,
+             common::FileSystemOption option, ExternalMember member);
 
   void Run();
 
@@ -164,6 +165,7 @@ class FileSystem {
   void SetAttrTimeout(AttrOut* attr_out);
 
   uint32_t fs_id_;
+  std::string fs_name_;
   common::FileSystemOption option_;
   ExternalMember member;
   std::shared_ptr<DeferSync> deferSync_;
@@ -181,6 +183,7 @@ class FileSystem {
   std::shared_ptr<base::timer::Timer> stat_timer_;
   std::shared_ptr<FsStatManager> fs_stat_manager_;
   std::shared_ptr<DirQuotaManager> dir_quota_manager_;
+  std::unique_ptr<FsPushMetricManager> fs_push_metrics_manager_;
 };
 
 }  // namespace filesystem

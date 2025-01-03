@@ -37,14 +37,17 @@ struct ExternalMember {  // external member depended by FileSystem
   ExternalMember(
       std::shared_ptr<DentryCacheManager> p_dentry_manager,
       std::shared_ptr<InodeCacheManager> p_inode_manager,
-      std::shared_ptr<stub::rpcclient::MetaServerClient> p_meta_client)
+      std::shared_ptr<stub::rpcclient::MetaServerClient> p_meta_client,
+      std::shared_ptr<stub::rpcclient::MdsClient> p_mds_client)
       : dentryManager(std::move(p_dentry_manager)),
         inodeManager(std::move(p_inode_manager)),
-        meta_client(std::move(p_meta_client)) {}
+        meta_client(std::move(p_meta_client)),
+        mds_client(std::move(p_mds_client)) {}
 
   std::shared_ptr<DentryCacheManager> dentryManager;
   std::shared_ptr<InodeCacheManager> inodeManager;
   std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client;
 };
 
 }  // namespace filesystem

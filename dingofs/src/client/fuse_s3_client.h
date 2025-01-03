@@ -33,6 +33,8 @@
 namespace dingofs {
 namespace client {
 
+using stub::metric::InterfaceMetric;
+
 class FuseS3Client : public FuseClient {
  public:
   FuseS3Client() : s3Adaptor_(std::make_shared<S3ClientAdaptorImpl>()) {
@@ -110,6 +112,27 @@ class FuseS3Client : public FuseClient {
 
   brpc::Server server_;
   InodeObjectsService inode_object_service_;
+};
+
+struct FsMetricGuard {
+  explicit FsMetricGuard(bool* rc, InterfaceMetric* metric, size_t* count,
+                         uint64_t start)
+      : rc_(rc), metric_(metric), count_(count), start_(start) {}
+  ~FsMetricGuard() {
+    if (*rc_) {
+      metric_->bps.count << *count_;
+      metric_->qps.count << 1;
+      auto duration = butil::cpuwide_time_us() - start_;
+      metric_->latency << duration;
+      metric_->latTotal << duration;
+    } else {
+      metric_->eps.count << 1;
+    }
+  }
+  bool* rc_;
+  InterfaceMetric* metric_;
+  size_t* count_;
+  uint64_t start_;
 };
 
 }  // namespace client
