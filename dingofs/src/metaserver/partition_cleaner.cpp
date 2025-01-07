@@ -41,21 +41,21 @@ bool PartitionCleaner::ScanPartition() {
     return false;
   }
 
-  std::list<uint64_t> InodeIdList;
-  if (!partition_->GetInodeIdList(&InodeIdList)) {
+  std::list<uint64_t> inode_id_list;
+  if (!partition_->GetInodeIdList(&inode_id_list)) {
     return false;
   }
 
-  for (auto inodeId : InodeIdList) {
+  for (auto inode_id : inode_id_list) {
     if (isStop_ || !copysetNode_->IsLeaderTerm()) {
       return false;
     }
     Inode inode;
-    MetaStatusCode ret =
-        partition_->GetInode(partition_->GetFsId(), inodeId, &inode);
+    MetaStatusCode ret = partition_->GetInodeWithChunkInfo(
+        partition_->GetFsId(), inode_id, &inode);
     if (ret != MetaStatusCode::OK) {
       LOG(WARNING) << "ScanPartition get inode fail, fsId = "
-                   << partition_->GetFsId() << ", inodeId = " << inodeId;
+                   << partition_->GetFsId() << ", inodeId = " << inode_id;
       continue;
     }
 
@@ -68,17 +68,17 @@ bool PartitionCleaner::ScanPartition() {
     usleep(inodeDeletePeriodMs_);
   }
 
-  uint32_t partitionId = partition_->GetPartitionId();
+  uint32_t partition_id = partition_->GetPartitionId();
   if (partition_->EmptyInodeStorage()) {
     LOG(INFO) << "Inode num is 0, delete partition from metastore"
-              << ", partitonId = " << partitionId;
+              << ", partitonId = " << partition_id;
     MetaStatusCode ret = DeletePartition();
     if (ret == MetaStatusCode::OK) {
-      VLOG(3) << "DeletePartition success, partitionId = " << partitionId;
+      VLOG(3) << "DeletePartition success, partitionId = " << partition_id;
       return true;
     } else {
       LOG(WARNING) << "delete partition from copyset fail, partitionId = "
-                   << partitionId << ", ret = " << MetaStatusCode_Name(ret);
+                   << partition_id << ", ret = " << MetaStatusCode_Name(ret);
       return false;
     }
   }
@@ -90,9 +90,9 @@ MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
   // TODO(cw123) : consider FsFileType::TYPE_FILE
   if (pb::metaserver::FsFileType::TYPE_S3 == inode.type()) {
     // get s3info from mds
-    FsInfo fsInfo;
+    FsInfo fs_info;
     if (fsInfoMap_.find(inode.fsid()) == fsInfoMap_.end()) {
-      auto ret = mdsClient_->GetFsInfo(inode.fsid(), &fsInfo);
+      auto ret = mdsClient_->GetFsInfo(inode.fsid(), &fs_info);
       if (ret != FSStatusCode::OK) {
         if (FSStatusCode::NOT_FOUND == ret) {
           LOG(ERROR) << "The fsName not exist, fsId = " << inode.fsid();
@@ -104,23 +104,23 @@ MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
           return MetaStatusCode::S3_DELETE_ERR;
         }
       }
-      fsInfoMap_.insert({inode.fsid(), fsInfo});
+      fsInfoMap_.insert({inode.fsid(), fs_info});
     } else {
-      fsInfo = fsInfoMap_.find(inode.fsid())->second;
+      fs_info = fsInfoMap_.find(inode.fsid())->second;
     }
-    const auto& s3Info = fsInfo.detail().s3info();
+    const auto& s3_info = fs_info.detail().s3info();
     // reinit s3 adaptor
-    S3ClientAdaptorOption clientAdaptorOption;
-    s3Adaptor_->GetS3ClientAdaptorOption(&clientAdaptorOption);
-    clientAdaptorOption.blockSize = s3Info.blocksize();
-    clientAdaptorOption.chunkSize = s3Info.chunksize();
-    clientAdaptorOption.objectPrefix = s3Info.objectprefix();
-    s3Adaptor_->Reinit(clientAdaptorOption, s3Info.ak(), s3Info.sk(),
-                       s3Info.endpoint(), s3Info.bucketname());
-    int retVal = s3Adaptor_->Delete(inode);
-    if (retVal != 0) {
+    S3ClientAdaptorOption client_adaptor_option;
+    s3Adaptor_->GetS3ClientAdaptorOption(&client_adaptor_option);
+    client_adaptor_option.blockSize = s3_info.blocksize();
+    client_adaptor_option.chunkSize = s3_info.chunksize();
+    client_adaptor_option.objectPrefix = s3_info.objectprefix();
+    s3Adaptor_->Reinit(client_adaptor_option, s3_info.ak(), s3_info.sk(),
+                       s3_info.endpoint(), s3_info.bucketname());
+    int ret_val = s3Adaptor_->Delete(inode);
+    if (ret_val != 0) {
       LOG(ERROR) << "S3ClientAdaptor delete s3 data failed"
-                 << ", ret = " << retVal << ", fsId = " << inode.fsid()
+                 << ", ret = " << ret_val << ", fsId = " << inode.fsid()
                  << ", inodeId = " << inode.inodeid();
       return MetaStatusCode::S3_DELETE_ERR;
     }
@@ -146,9 +146,9 @@ MetaStatusCode PartitionCleaner::DeleteInode(const Inode& inode) {
   request.set_inodeid(inode.inodeid());
   pb::metaserver::DeleteInodeResponse response;
   PartitionCleanerClosure done;
-  auto deleteInodeOp = new copyset::DeleteInodeOperator(
+  auto* delete_inode_op = new copyset::DeleteInodeOperator(
       copysetNode_, nullptr, &request, &response, &done);
-  deleteInodeOp->Propose();
+  delete_inode_op->Propose();
   done.WaitRunned();
   return response.statuscode();
 }
@@ -160,9 +160,9 @@ MetaStatusCode PartitionCleaner::DeletePartition() {
   request.set_partitionid(partition_->GetPartitionId());
   pb::metaserver::DeletePartitionResponse response;
   PartitionCleanerClosure done;
-  auto deletePartitionOp = new copyset::DeletePartitionOperator(
+  auto* delete_partition_op = new copyset::DeletePartitionOperator(
       copysetNode_, nullptr, &request, &response, &done);
-  deletePartitionOp->Propose();
+  delete_partition_op->Propose();
   done.WaitRunned();
   return response.statuscode();
 }

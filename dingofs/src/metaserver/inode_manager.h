@@ -72,9 +72,9 @@ class InodeManager {
       const InodeParam& param, pb::metaserver::ManageInodeType manageType,
       pb::metaserver::Inode* inode);
 
-  pb::metaserver::MetaStatusCode GetInode(uint32_t fsId, uint64_t inodeId,
+  pb::metaserver::MetaStatusCode GetInode(uint32_t fs_id, uint64_t inode_id,
                                           pb::metaserver::Inode* inode,
-                                          bool paddingS3ChunkInfo = false);
+                                          bool padding_s3_chunk_info = false);
 
   pb::metaserver::MetaStatusCode GetInodeAttr(uint32_t fsId, uint64_t inodeId,
                                               pb::metaserver::InodeAttr* attr);

@@ -191,22 +191,22 @@ void InodeManager::GenerateInodeInternal(uint64_t inodeId,
   } else {
     inode->set_nlink(1);
   }
-  return;
 }
 
-MetaStatusCode InodeManager::GetInode(uint32_t fsId, uint64_t inodeId,
-                                      Inode* inode, bool paddingS3ChunkInfo) {
-  VLOG(6) << "GetInode, fsId = " << fsId << ", inodeId = " << inodeId;
-  NameLockGuard lg(inodeLock_, GetInodeLockName(fsId, inodeId));
-  MetaStatusCode rc = inodeStorage_->Get(Key4Inode(fsId, inodeId), inode);
-  if (rc == MetaStatusCode::OK && paddingS3ChunkInfo) {
-    rc =
-        PaddingInodeS3ChunkInfo(fsId, inodeId, inode->mutable_s3chunkinfomap());
+MetaStatusCode InodeManager::GetInode(uint32_t fs_id, uint64_t inode_id,
+                                      Inode* inode,
+                                      bool padding_s3_chunk_info) {
+  VLOG(6) << "GetInode, fsId = " << fs_id << ", inodeId = " << inode_id;
+  NameLockGuard lg(inodeLock_, GetInodeLockName(fs_id, inode_id));
+  MetaStatusCode rc = inodeStorage_->Get(Key4Inode(fs_id, inode_id), inode);
+  if (rc == MetaStatusCode::OK && padding_s3_chunk_info) {
+    rc = PaddingInodeS3ChunkInfo(fs_id, inode_id,
+                                 inode->mutable_s3chunkinfomap());
   }
 
   if (rc != MetaStatusCode::OK) {
     std::ostringstream oss;
-    oss << "GetInode fail, fsId = " << fsId << ", inodeId = " << inodeId
+    oss << "GetInode fail, fsId = " << fs_id << ", inodeId = " << inode_id
         << ", retCode = " << MetaStatusCode_Name(rc);
 
     if (rc == MetaStatusCode::STORAGE_CLOSED) {
@@ -217,7 +217,7 @@ MetaStatusCode InodeManager::GetInode(uint32_t fsId, uint64_t inodeId,
     return rc;
   }
 
-  VLOG(9) << "GetInode success, fsId = " << fsId << ", inodeId = " << inodeId
+  VLOG(9) << "GetInode success, fsId = " << fs_id << ", inodeId = " << inode_id
           << ", " << inode->ShortDebugString();
   return MetaStatusCode::OK;
 }

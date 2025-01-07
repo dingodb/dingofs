@@ -59,7 +59,7 @@ class S3ClientAdaptor {
   virtual void Reinit(const S3ClientAdaptorOption& option,
                       const std::string& ak, const std::string& sk,
                       const std::string& endpoint,
-                      const std::string& bucketName) = 0;
+                      const std::string& bucket_name) = 0;
 
   /**
    * @brief delete inode from s3
@@ -103,7 +103,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    */
   void Reinit(const S3ClientAdaptorOption& option, const std::string& ak,
               const std::string& sk, const std::string& endpoint,
-              const std::string& bucketName) override;
+              const std::string& bucket_name) override;
 
   /**
    * @brief delete inode from s3
@@ -131,23 +131,23 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    *  -1  : some objects delete fail
    * @param[in] options the options for s3 client
    */
-  int DeleteChunk(uint64_t fsId, uint64_t inodeId, uint64_t chunkId,
-                  uint64_t compaction, uint64_t chunkPos, uint64_t length);
+  int DeleteChunk(uint64_t fs_id, uint64_t inode_id, uint64_t chunk_id,
+                  uint64_t compaction, uint64_t chunk_pos, uint64_t length);
 
   int DeleteInodeByDeleteSingleChunk(const pb::metaserver::Inode& inode);
 
   int DeleteInodeByDeleteBatchChunk(const pb::metaserver::Inode& inode);
 
-  int DeleteS3ChunkInfoList(uint32_t fsId, uint64_t inodeId,
-                            const S3ChunkInfoList& s3ChunkInfolist);
+  int DeleteS3ChunkInfoList(uint32_t fs_id, uint64_t inode_id,
+                            const S3ChunkInfoList& s3_chunk_infolist);
 
-  void GenObjNameListForChunkInfoList(uint32_t fsId, uint64_t inodeId,
-                                      const S3ChunkInfoList& s3ChunkInfolist,
-                                      std::list<std::string>* objList);
+  void GenObjNameListForChunkInfoList(uint32_t fs_id, uint64_t inode_id,
+                                      const S3ChunkInfoList& s3_chunk_infolist,
+                                      std::list<std::string>* obj_list);
 
-  void GenObjNameListForChunkInfo(uint32_t fsId, uint64_t inodeId,
-                                  const S3ChunkInfo& chunkInfo,
-                                  std::list<std::string>* objList);
+  void GenObjNameListForChunkInfo(uint32_t fs_id, uint64_t inode_id,
+                                  const S3ChunkInfo& chunk_info,
+                                  std::list<std::string>* obj_list);
 
   S3Client* client_;
   uint64_t blockSize_;

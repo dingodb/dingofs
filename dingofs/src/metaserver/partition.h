@@ -45,8 +45,8 @@ constexpr uint64_t kMinPartitionStartId = ROOTINODEID + 2;
 class Partition {
  public:
   Partition(pb::common::PartitionInfo partition,
-            std::shared_ptr<storage::KVStorage> kvStorage,
-            bool startCompact = true);
+            std::shared_ptr<storage::KVStorage> kv_storage,
+            bool start_compact = true);
 
   // dentry
   pb::metaserver::MetaStatusCode CreateDentry(
@@ -63,16 +63,17 @@ class Partition {
   pb::metaserver::MetaStatusCode ListDentry(
       const pb::metaserver::Dentry& dentry,
       std::vector<pb::metaserver::Dentry>* dentrys, uint32_t limit,
-      bool onlyDir = false);
+      bool only_dir = false);
 
   void ClearDentry();
 
   pb::metaserver::MetaStatusCode HandleRenameTx(
       const std::vector<pb::metaserver::Dentry>& dentrys);
 
-  bool InsertPendingTx(const pb::metaserver::PrepareRenameTxRequest& pendingTx);
+  bool InsertPendingTx(
+      const pb::metaserver::PrepareRenameTxRequest& pending_tx);
 
-  bool FindPendingTx(pb::metaserver::PrepareRenameTxRequest* pendingTx);
+  bool FindPendingTx(pb::metaserver::PrepareRenameTxRequest* pending_tx);
 
   // inode
   pb::metaserver::MetaStatusCode CreateInode(const InodeParam& param,
@@ -81,58 +82,61 @@ class Partition {
   pb::metaserver::MetaStatusCode CreateRootInode(const InodeParam& param);
 
   pb::metaserver::MetaStatusCode CreateManageInode(
-      const InodeParam& param, pb::metaserver::ManageInodeType manageType,
+      const InodeParam& param, pb::metaserver::ManageInodeType manage_type,
       pb::metaserver::Inode* inode);
 
-  pb::metaserver::MetaStatusCode GetInode(uint32_t fsId, uint64_t inodeId,
+  pb::metaserver::MetaStatusCode GetInode(uint32_t fs_id, uint64_t inode_id,
                                           pb::metaserver::Inode* inode);
 
-  pb::metaserver::MetaStatusCode GetInodeAttr(uint32_t fsId, uint64_t inodeId,
+  pb::metaserver::MetaStatusCode GetInodeWithChunkInfo(
+      uint32_t fs_id, uint64_t inode_id, pb::metaserver::Inode* inode);
+
+  pb::metaserver::MetaStatusCode GetInodeAttr(uint32_t fs_id, uint64_t inode_id,
                                               pb::metaserver::InodeAttr* attr);
 
-  pb::metaserver::MetaStatusCode GetXAttr(uint32_t fsId, uint64_t inodeId,
+  pb::metaserver::MetaStatusCode GetXAttr(uint32_t fs_id, uint64_t inode_id,
                                           pb::metaserver::XAttr* xattr);
 
-  pb::metaserver::MetaStatusCode DeleteInode(uint32_t fsId, uint64_t inodeId);
+  pb::metaserver::MetaStatusCode DeleteInode(uint32_t fs_id, uint64_t inode_id);
 
   pb::metaserver::MetaStatusCode UpdateInode(
       const pb::metaserver::UpdateInodeRequest& request);
 
   pb::metaserver::MetaStatusCode GetOrModifyS3ChunkInfo(
-      uint32_t fsId, uint64_t inodeId, const S3ChunkInfoMap& map2add,
-      const S3ChunkInfoMap& map2del, bool returnS3ChunkInfoMap,
+      uint32_t fs_id, uint64_t inode_id, const S3ChunkInfoMap& map2add,
+      const S3ChunkInfoMap& map2del, bool return_s3_chunk_info_map,
       std::shared_ptr<storage::Iterator>* iterator);
 
-  pb::metaserver::MetaStatusCode PaddingInodeS3ChunkInfo(int32_t fsId,
-                                                         uint64_t inodeId,
+  pb::metaserver::MetaStatusCode PaddingInodeS3ChunkInfo(int32_t fs_id,
+                                                         uint64_t inode_id,
                                                          S3ChunkInfoMap* m,
                                                          uint64_t limit = 0);
 
   pb::metaserver::MetaStatusCode UpdateVolumeExtent(
-      uint32_t fsId, uint64_t inodeId,
+      uint32_t fs_id, uint64_t inode_id,
       const pb::metaserver::VolumeExtentList& extents);
 
   pb::metaserver::MetaStatusCode UpdateVolumeExtentSlice(
-      uint32_t fsId, uint64_t inodeId,
+      uint32_t fs_id, uint64_t inode_id,
       const pb::metaserver::VolumeExtentSlice& slice);
 
   pb::metaserver::MetaStatusCode GetVolumeExtent(
-      uint32_t fsId, uint64_t inodeId, const std::vector<uint64_t>& slices,
+      uint32_t fs_id, uint64_t inode_id, const std::vector<uint64_t>& slices,
       pb::metaserver::VolumeExtentList* extents);
 
   pb::metaserver::MetaStatusCode InsertInode(
       const pb::metaserver::Inode& inode);
 
-  bool GetInodeIdList(std::list<uint64_t>* InodeIdList);
+  bool GetInodeIdList(std::list<uint64_t>* inode_id_list);
 
   // if partition has no inode or no dentry, it is deletable
   bool IsDeletable();
 
   // check if fsid matchs and inode range belongs to this partition
-  bool IsInodeBelongs(uint32_t fsId, uint64_t inodeId);
+  bool IsInodeBelongs(uint32_t fs_id, uint64_t inode_id);
 
   // check if fsid match this partition
-  bool IsInodeBelongs(uint32_t fsId);
+  bool IsInodeBelongs(uint32_t fs_id);
 
   uint32_t GetPartitionId() const;
 
