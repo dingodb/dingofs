@@ -21,7 +21,6 @@
  */
 
 #include <iostream>
-#include <map>
 #include <string>
 
 #include "proto/metaserver.pb.h"
@@ -67,6 +66,9 @@ std::ostream& operator<<(std::ostream& os, DINGOFS_ERROR code);
 DINGOFS_ERROR ToFSError(pb::metaserver::MetaStatusCode code);
 
 }  // namespace filesystem
+
+using ErrNo = filesystem::DINGOFS_ERROR;
+
 }  // namespace client
 }  // namespace dingofs
 
