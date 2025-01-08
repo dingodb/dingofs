@@ -22,22 +22,16 @@
 #ifndef DINGOFS_SRC_CLIENT_DINGO_FUSE_OP_H_
 #define DINGOFS_SRC_CLIENT_DINGO_FUSE_OP_H_
 
-#include <assert.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
-#include "client/fuse_common.h"
+#include "client/fuse/fuse_common.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int InitLog(const char* conf_path, const char* argv0);
-
-int InitFuseClient(const struct MountOption* mount_option);
+int InitFuseClient(const char* argv0, const struct MountOption* mount_option) ;
 
 void UnInitFuseClient();
 

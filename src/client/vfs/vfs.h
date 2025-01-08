@@ -21,7 +21,7 @@
 #include <string>
 
 #include "client/common/status.h"
-#include "client/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -53,8 +53,9 @@ class VFS {
 
   virtual Status ReadLink(Ino ino, std::string* link) = 0;
 
-  virtual Status MkNod(Ino parent, const std::string& name, uint32_t mode,
-                       uint64_t dev, Attr* attr) = 0;
+  virtual Status MkNod(Ino parent, const std::string& name, uint32_t uid,
+                       uint32_t gid, uint32_t mode, uint64_t dev,
+                       Attr* attr) = 0;
 
   virtual Status Unlink(Ino parent, const std::string& name) = 0;
 
@@ -65,8 +66,8 @@ class VFS {
    * @param link the content of the symlink
    * @param attr output
    */
-  virtual Status Symlink(Ino parent, const std::string& name,
-                         const std::string& link, Attr* attr) = 0;
+  virtual Status Symlink(Ino parent, const std::string& name, uint32_t uid,
+                         uint32_t gid, const std::string& link, Attr* attr) = 0;
 
   virtual Status Rename(Ino old_parent, const std::string& old_name,
                         Ino new_parent, const std::string& new_name) = 0;
@@ -77,7 +78,8 @@ class VFS {
   virtual Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr) = 0;
 
   virtual Status Create(Ino parent, const std::string& name, uint32_t mode,
-                        int flags, uint64_t* fh, Attr* attr) = 0;
+                        uint32_t uid, uint32_t gid, int flags, uint64_t* fh,
+                        Attr* attr) = 0;
 
   virtual Status Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
                       uint64_t fh, uint64_t* out_rsize) = 0;
@@ -99,8 +101,8 @@ class VFS {
 
   virtual Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) = 0;
 
-  virtual Status Mkdir(Ino parent, const std::string& name, uint32_t mode,
-                       Attr* attr) = 0;
+  virtual Status Mkdir(Ino parent, const std::string& name, uint32_t uid,
+                       uint32_t gid, uint32_t mode, Attr* attr) = 0;
 
   virtual Status Opendir(Ino ino, uint64_t* fh) = 0;
 
@@ -122,18 +124,6 @@ class VFS {
   virtual double GetEntryTimeout(const FileType& type) = 0;
 
   virtual uint64_t GetMaxNameLength() = 0;
-
-  virtual void AfterReplyEntry(){};
-
-  virtual void AfterReplyAttr(){};
-
-  virtual void AfterReplyOpen(){};
-
-  virtual void AfterReplyWrite(){};
-
-  virtual void AfterReplyCreate(){};
-
-  virtual void AfterReplyAddDirEntryPlus(){};
 };
 
 }  // namespace vfs

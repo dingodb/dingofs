@@ -48,6 +48,12 @@
 
 namespace dingofs {
 namespace client {
+
+// forward declaration
+namespace vfs {
+class VFSOld;
+}
+
 namespace filesystem {
 
 struct FileSystemMember {
@@ -81,46 +87,16 @@ class FileSystem {
 
   DINGOFS_ERROR GetAttr(Request req, Ino ino, AttrOut* attr_out);
 
-  DINGOFS_ERROR OpenDir(Request req, Ino ino, FileInfo* fi);
+  DINGOFS_ERROR OpenDir(Ino ino, uint64_t* fh);
 
-  DINGOFS_ERROR ReadDir(Request req, Ino ino, FileInfo* fi,
+  DINGOFS_ERROR ReadDir(Ino ino, uint64_t fh,
                         std::shared_ptr<DirEntryList>* entries);
 
-  DINGOFS_ERROR ReleaseDir(Request req, Ino ino, FileInfo* fi);
+  DINGOFS_ERROR ReleaseDir(uint64_t fh);
 
-  DINGOFS_ERROR Open(Request req, Ino ino, FileInfo* fi);
+  DINGOFS_ERROR Open(Ino ino);
 
-  DINGOFS_ERROR Release(Request req, Ino ino, FileInfo* fi);
-
-  // fuse reply: we control all replies to vfs layer in same entrance.
-  void ReplyError(Request req, DINGOFS_ERROR code);
-
-  void ReplyEntry(Request req, EntryOut* entry_out);
-
-  void ReplyAttr(Request req, AttrOut* attr_out);
-
-  void ReplyReadlink(Request req, const std::string& link);
-
-  void ReplyOpen(Request req, FileInfo* fi);
-
-  void ReplyOpen(Request req, FileOut* file_out);
-
-  void ReplyData(Request req, struct fuse_bufvec* bufv,
-                 enum fuse_buf_copy_flags flags);
-
-  void ReplyWrite(Request req, FileOut* file_out);
-
-  void ReplyBuffer(Request req, const char* buf, size_t size);
-
-  void ReplyStatfs(Request req, const struct statvfs* stbuf);
-
-  void ReplyXattr(Request req, size_t size);
-
-  void ReplyCreate(Request req, EntryOut* entry_out, FileInfo* fi);
-
-  void AddDirEntry(Request req, DirBufferHead* buffer, DirEntry* dir_entry);
-
-  void AddDirEntryPlus(Request req, DirBufferHead* buffer, DirEntry* dir_entry);
+  DINGOFS_ERROR Release(Ino ino);
 
   // utility: file handler
   std::shared_ptr<FileHandler> NewHandler();
@@ -148,21 +124,25 @@ class FileSystem {
 
   pb::metaserver::Quota GetFsQuota();
 
+  // --------- below is related to reply kernel in fuse ----------
+
+  // NOTE* : all the below function should be called out of lock
+
+  void BeforeReplyEntry(pb::metaserver::InodeAttr& attr);
+
+  void BeforeReplyAttr(pb::metaserver::InodeAttr& attr);
+
+  void BeforeReplyCreate(pb::metaserver::InodeAttr& attr);
+
+  void BeforeReplyOpen(pb::metaserver::InodeAttr& attr);
+
+  void BeforeReplyWrite(pb::metaserver::InodeAttr& attr);
+
+  void BeforeReplyAddDirEntryPlus(pb::metaserver::InodeAttr& attr);
+  // --------- end is related to reply kernel in fuse ----------
+
  private:
-  FRIEND_TEST(FileSystemTest, Attr2Stat);
-  FRIEND_TEST(FileSystemTest, Entry2Param);
-  FRIEND_TEST(FileSystemTest, SetEntryTimeout);
-  FRIEND_TEST(FileSystemTest, SetAttrTimeout);
-
-  // utility: convert to system type.
-  void Attr2Stat(pb::metaserver::InodeAttr* attr, struct stat* stat);
-
-  void Entry2Param(EntryOut* entry_out, fuse_entry_param* e);
-
-  // utility: set entry/attribute timeout
-  void SetEntryTimeout(EntryOut* entry_out);
-
-  void SetAttrTimeout(AttrOut* attr_out);
+  friend class vfs::VFSOld;
 
   uint32_t fs_id_;
   std::string fs_name_;

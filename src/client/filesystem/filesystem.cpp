@@ -25,14 +25,14 @@
 #include <cstdint>
 #include <memory>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/timer/timer_impl.h"
 #include "client/common/dynamic_config.h"
+#include "client/filesystem/attr_watcher.h"
 #include "client/filesystem/dir_cache.h"
 #include "client/filesystem/dir_parent_watcher.h"
 #include "client/filesystem/fs_stat_manager.h"
 #include "client/filesystem/utils.h"
-#include "common/define.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
@@ -97,165 +97,6 @@ void FileSystem::Destory() {
   fs_push_metrics_manager_->Stop();
 }
 
-void FileSystem::Attr2Stat(InodeAttr* attr, struct stat* stat) {
-  std::memset(stat, 0, sizeof(struct stat));
-  stat->st_ino = attr->inodeid();        //  inode number
-  stat->st_mode = attr->mode();          // permission mode
-  stat->st_nlink = attr->nlink();        // number of links
-  stat->st_uid = attr->uid();            // user ID of owner
-  stat->st_gid = attr->gid();            // group ID of owner
-  stat->st_size = attr->length();        // total size, in bytes
-  stat->st_rdev = attr->rdev();          // device ID (if special file)
-  stat->st_atim.tv_sec = attr->atime();  // time of last access
-  stat->st_atim.tv_nsec = attr->atime_ns();
-  stat->st_mtim.tv_sec = attr->mtime();  // time of last modification
-  stat->st_mtim.tv_nsec = attr->mtime_ns();
-  stat->st_ctim.tv_sec = attr->ctime();  // time of last status change
-  stat->st_ctim.tv_nsec = attr->ctime_ns();
-  stat->st_blksize = option_.blockSize;  // blocksize for file system I/O
-  stat->st_blocks = 0;                   // number of 512B blocks allocated
-  if (IsS3File(*attr)) {
-    stat->st_blocks = (attr->length() + 511) / 512;
-  }
-}
-
-void FileSystem::Entry2Param(EntryOut* entry_out, fuse_entry_param* e) {
-  std::memset(e, 0, sizeof(fuse_entry_param));
-  e->ino = entry_out->attr.inodeid();
-  e->generation = 0;
-  Attr2Stat(&entry_out->attr, &e->attr);
-  e->entry_timeout = entry_out->entryTimeout;
-  e->attr_timeout = entry_out->attrTimeout;
-}
-
-void FileSystem::SetEntryTimeout(EntryOut* entry_out) {
-  auto option = option_.kernelCacheOption;
-  if (IsDir(entry_out->attr)) {
-    entry_out->entryTimeout = option.dirEntryTimeoutSec;
-    entry_out->attrTimeout = option.dirAttrTimeoutSec;
-  } else {
-    entry_out->entryTimeout = option.entryTimeoutSec;
-    entry_out->attrTimeout = option.attrTimeoutSec;
-  }
-}
-
-void FileSystem::SetAttrTimeout(AttrOut* attr_out) {
-  auto option = option_.kernelCacheOption;
-  if (IsDir(attr_out->attr)) {
-    attr_out->attrTimeout = option.dirAttrTimeoutSec;
-  } else {
-    attr_out->attrTimeout = option.attrTimeoutSec;
-  }
-}
-
-// fuse reply*
-void FileSystem::ReplyError(Request req, DINGOFS_ERROR code) {
-  fuse_reply_err(req, SysErr(code));
-}
-
-void FileSystem::ReplyEntry(Request req, EntryOut* entry_out) {
-  AttrWatcherGuard watcher(attrWatcher_, &entry_out->attr, ReplyType::ATTR,
-                           true);
-  DirParentWatcherGuard parent_watcher(dir_parent_watcher_, entry_out->attr);
-
-  fuse_entry_param e;
-  SetEntryTimeout(entry_out);
-  Entry2Param(entry_out, &e);
-  fuse_reply_entry(req, &e);
-}
-
-void FileSystem::ReplyAttr(Request req, AttrOut* attr_out) {
-  AttrWatcherGuard watcher(attrWatcher_, &attr_out->attr, ReplyType::ATTR,
-                           true);
-  struct stat stat;
-  SetAttrTimeout(attr_out);
-  Attr2Stat(&attr_out->attr, &stat);
-  fuse_reply_attr(req, &stat, attr_out->attrTimeout);
-}
-
-void FileSystem::ReplyReadlink(Request req, const std::string& link) {
-  fuse_reply_readlink(req, link.c_str());
-}
-
-void FileSystem::ReplyOpen(Request req, FileInfo* fi) {
-  fuse_reply_open(req, fi);
-}
-
-void FileSystem::ReplyOpen(Request req, FileOut* file_out) {
-  AttrWatcherGuard watcher(attrWatcher_, &file_out->attr,
-                           ReplyType::ONLY_LENGTH, true);
-  fuse_reply_open(req, file_out->fi);
-}
-
-void FileSystem::ReplyData(Request req, struct fuse_bufvec* bufv,
-                           enum fuse_buf_copy_flags flags) {
-  fuse_reply_data(req, bufv, flags);
-}
-
-void FileSystem::ReplyWrite(Request req, FileOut* file_out) {
-  AttrWatcherGuard watcher(attrWatcher_, &file_out->attr,
-                           ReplyType::ONLY_LENGTH, true);
-  fuse_reply_write(req, file_out->nwritten);
-}
-
-void FileSystem::ReplyBuffer(Request req, const char* buf, size_t size) {
-  fuse_reply_buf(req, buf, size);
-}
-
-void FileSystem::ReplyStatfs(Request req, const struct statvfs* stbuf) {
-  fuse_reply_statfs(req, stbuf);
-}
-
-void FileSystem::ReplyXattr(Request req, size_t size) {
-  fuse_reply_xattr(req, size);
-}
-
-void FileSystem::ReplyCreate(Request req, EntryOut* entry_out, FileInfo* fi) {
-  AttrWatcherGuard watcher(attrWatcher_, &entry_out->attr, ReplyType::ATTR,
-                           true);
-  fuse_entry_param e;
-  SetEntryTimeout(entry_out);
-  Entry2Param(entry_out, &e);
-  fuse_reply_create(req, &e, fi);
-}
-
-void FileSystem::AddDirEntry(Request req, DirBufferHead* buffer,
-                             DirEntry* dir_entry) {
-  struct stat stat;
-  std::memset(&stat, 0, sizeof(stat));
-  stat.st_ino = dir_entry->ino;
-
-  // add a directory entry to the buffer
-  size_t oldsize = buffer->size;
-  const char* name = dir_entry->name.c_str();
-  buffer->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
-  buffer->p = static_cast<char*>(realloc(buffer->p, buffer->size));
-  fuse_add_direntry(req,
-                    buffer->p + oldsize,     // char* buf
-                    buffer->size - oldsize,  // size_t bufisze
-                    name, &stat, buffer->size);
-}
-
-void FileSystem::AddDirEntryPlus(Request req, DirBufferHead* buffer,
-                                 DirEntry* dir_entry) {
-  AttrWatcherGuard watcher(attrWatcher_, &dir_entry->attr, ReplyType::ATTR,
-                           false);
-  struct fuse_entry_param e;
-  EntryOut entryOut(dir_entry->attr);
-  SetEntryTimeout(&entryOut);
-  Entry2Param(&entryOut, &e);
-
-  // add a directory entry to the buffer with the attributes
-  size_t oldsize = buffer->size;
-  const char* name = dir_entry->name.c_str();
-  buffer->size += fuse_add_direntry_plus(req, NULL, 0, name, NULL, 0);
-  buffer->p = static_cast<char*>(realloc(buffer->p, buffer->size));
-  fuse_add_direntry_plus(req,
-                         buffer->p + oldsize,     // char* buf
-                         buffer->size - oldsize,  // size_t bufisze
-                         name, &e, buffer->size);
-}
-
 // handler*
 std::shared_ptr<FileHandler> FileSystem::NewHandler() {
   return handlerManager_->NewHandler();
@@ -303,7 +144,7 @@ DINGOFS_ERROR FileSystem::GetAttr(Request req, Ino ino, AttrOut* attr_out) {
   return rc;
 }
 
-DINGOFS_ERROR FileSystem::OpenDir(Request req, Ino ino, FileInfo* fi) {
+DINGOFS_ERROR FileSystem::OpenDir(Ino ino, uint64_t* fh) {
   InodeAttr attr;
   DINGOFS_ERROR rc = rpc_->GetAttr(ino, &attr);
   if (rc != DINGOFS_ERROR::OK) {
@@ -321,11 +162,11 @@ DINGOFS_ERROR FileSystem::OpenDir(Request req, Ino ino, FileInfo* fi) {
 
   auto handler = NewHandler();
   handler->mtime = AttrMtime(attr);
-  fi->fh = handler->fh;
+  *fh = handler->fh;
   return DINGOFS_ERROR::OK;
 }
 
-DINGOFS_ERROR FileSystem::ReadDir(Request req, Ino ino, FileInfo* fi,
+DINGOFS_ERROR FileSystem::ReadDir(Ino ino, uint64_t fh,
                                   std::shared_ptr<DirEntryList>* entries) {
   bool yes = dirCache_->Get(ino, entries);
   if (yes) {
@@ -337,17 +178,17 @@ DINGOFS_ERROR FileSystem::ReadDir(Request req, Ino ino, FileInfo* fi,
     return rc;
   }
 
-  (*entries)->SetMtime(FindHandler(fi->fh)->mtime);
+  (*entries)->SetMtime(FindHandler(fh)->mtime);
   dirCache_->Put(ino, *entries);
   return DINGOFS_ERROR::OK;
 }
 
-DINGOFS_ERROR FileSystem::ReleaseDir(Request req, Ino ino, FileInfo* fi) {
-  ReleaseHandler(fi->fh);
+DINGOFS_ERROR FileSystem::ReleaseDir(uint64_t fh) {
+  ReleaseHandler(fh);
   return DINGOFS_ERROR::OK;
 }
 
-DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
+DINGOFS_ERROR FileSystem::Open(Ino ino) {
   std::shared_ptr<InodeWrapper> inode;
   bool yes = openFiles_->IsOpened(ino, &inode);
   if (yes) {
@@ -379,11 +220,7 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
   return DINGOFS_ERROR::OK;
 }
 
-DINGOFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
-  if (ino == STATSINODEID) {
-    ReleaseHandler(fi->fh);
-    return DINGOFS_ERROR::OK;
-  }
+DINGOFS_ERROR FileSystem::Release(Ino ino) {
   openFiles_->Close(ino);
   return DINGOFS_ERROR::OK;
 }
@@ -418,6 +255,31 @@ bool FileSystem::NearestDirQuota(Ino ino, Ino& out_quota_ino) {
 }
 
 Quota FileSystem::GetFsQuota() { return fs_stat_manager_->GetFsQuota(); }
+
+void FileSystem::BeforeReplyEntry(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ATTR, true);
+  DirParentWatcherGuard parent_watcher(dir_parent_watcher_, attr);
+}
+
+void FileSystem::BeforeReplyAttr(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ATTR, true);
+}
+
+void FileSystem::BeforeReplyCreate(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ATTR, true);
+}
+
+void FileSystem::BeforeReplyOpen(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ONLY_LENGTH, true);
+}
+
+void FileSystem::BeforeReplyWrite(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ONLY_LENGTH, true);
+}
+
+void FileSystem::BeforeReplyAddDirEntryPlus(pb::metaserver::InodeAttr& attr) {
+  AttrWatcherGuard watcher(attrWatcher_, &attr, ReplyType::ONLY_LENGTH, true);
+}
 
 }  // namespace filesystem
 }  // namespace client

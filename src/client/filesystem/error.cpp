@@ -26,6 +26,8 @@
 #include <ostream>
 #include <utility>
 
+#include "client/common/status.h"
+
 namespace dingofs {
 namespace client {
 namespace filesystem {
@@ -103,6 +105,48 @@ DINGOFS_ERROR ToFSError(MetaStatusCode code) {
     return it->second;
   }
   return DINGOFS_ERROR::UNKNOWN;
+}
+
+Status DingofsErrorToStatus(DINGOFS_ERROR code) {
+  int err_num = SysErr(code);
+  switch (err_num) {
+    case 0:
+      return Status::OK();
+    case -1:
+      return Status::IoError(StrErr(code));
+    case EEXIST:
+      return Status::Exist(StrErr(code));
+    case ENOENT:
+      return Status::NotExist(StrErr(code));
+    case ENOSPC:
+      return Status::NoSpace(StrErr(code));
+    case EBADF:
+      return Status::BadFd(StrErr(code));
+    case EINVAL:
+      return Status::InvalidParam(StrErr(code));
+    case EACCES:
+      return Status::NoPermission(StrErr(code));
+    case ENOTEMPTY:
+      return Status::NotEmpty(StrErr(code));
+    case EOPNOTSUPP:
+      return Status::NotSupport(StrErr(code));
+    case ENAMETOOLONG:
+      return Status::NameTooLong(StrErr(code));
+    case ERANGE:
+      return Status::OutOfRange(StrErr(code));
+    case ENODATA:
+      return Status::NoData(StrErr(code));
+    case EIO:
+      return Status::IoError(StrErr(code));
+    case ESTALE:
+      return Status::Stale(StrErr(code));
+    case ENOSYS:
+      return Status::NoSys(StrErr(code));
+    case EPERM:
+      return Status::NoPermitted(StrErr(code));
+    default:
+      return Status::Unknown(StrErr(code));
+  }
 }
 
 }  // namespace filesystem

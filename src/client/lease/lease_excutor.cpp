@@ -30,12 +30,7 @@
 namespace dingofs {
 namespace client {
 
-using pb::mds::Mountpoint;
 using pb::mds::topology::PartitionTxId;
-
-using common::LeaseOpt;
-using stub::rpcclient::MdsClient;
-using stub::rpcclient::MetaCache;
 
 LeaseExecutor::~LeaseExecutor() {
   if (task_) {

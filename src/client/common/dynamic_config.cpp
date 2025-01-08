@@ -37,6 +37,10 @@ bool PassUint32(const char*, uint32_t) { return true; }
 bool PassBool(const char*, bool) { return true; }
 };  // namespace
 
+// access log
+DEFINE_bool(access_logging, true, "enable access log");
+DEFINE_validator(access_logging, &PassBool);
+
 // block cache
 DEFINE_bool(block_cache_logging, true, "enable block cache logging");
 DEFINE_bool(block_cache_stage_bandwidth_throttle_enable, false,
@@ -110,6 +114,54 @@ DEFINE_validator(push_metric_interval_millsecond, &PassUint32);
 DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,
               "fuse read max retry when s3 object not exist");
 DEFINE_validator(fuse_read_max_retry_s3_not_exist, &PassUint32);
+
+// from config.h and config.cpp
+DEFINE_bool(enableCto, true, "acheieve cto consistency");
+DEFINE_bool(useFakeS3, false,
+            "Use fake s3 to inject more metadata for testing metaserver");
+DEFINE_bool(supportKVcache, false, "use kvcache to speed up sharing");
+
+/**
+ * use curl -L fuseclient:port/flags/fuseClientAvgWriteBytes?setvalue=true
+ * for dynamic parameter configuration
+ */
+DEFINE_uint64(fuseClientAvgWriteBytes, 0,
+              "the write throttle bps of fuse client");
+DEFINE_validator(fuseClientAvgWriteBytes, &PassUint64);
+DEFINE_uint64(fuseClientBurstWriteBytes, 0,
+              "the write burst bps of fuse client");
+DEFINE_validator(fuseClientBurstWriteBytes, &PassUint64);
+DEFINE_uint64(fuseClientBurstWriteBytesSecs, 180,
+              "the times that write burst bps can continue");
+DEFINE_validator(fuseClientBurstWriteBytesSecs, &PassUint64);
+
+DEFINE_uint64(fuseClientAvgWriteIops, 0,
+              "the write throttle iops of fuse client");
+DEFINE_validator(fuseClientAvgWriteIops, &PassUint64);
+DEFINE_uint64(fuseClientBurstWriteIops, 0,
+              "the write burst iops of fuse client");
+DEFINE_validator(fuseClientBurstWriteIops, &PassUint64);
+DEFINE_uint64(fuseClientBurstWriteIopsSecs, 180,
+              "the times that write burst iops can continue");
+DEFINE_validator(fuseClientBurstWriteIopsSecs, &PassUint64);
+
+DEFINE_uint64(fuseClientAvgReadBytes, 0,
+              "the Read throttle bps of fuse client");
+DEFINE_validator(fuseClientAvgReadBytes, &PassUint64);
+DEFINE_uint64(fuseClientBurstReadBytes, 0, "the Read burst bps of fuse client");
+DEFINE_validator(fuseClientBurstReadBytes, &PassUint64);
+DEFINE_uint64(fuseClientBurstReadBytesSecs, 180,
+              "the times that Read burst bps can continue");
+DEFINE_validator(fuseClientBurstReadBytesSecs, &PassUint64);
+
+DEFINE_uint64(fuseClientAvgReadIops, 0,
+              "the Read throttle iops of fuse client");
+DEFINE_validator(fuseClientAvgReadIops, &PassUint64);
+DEFINE_uint64(fuseClientBurstReadIops, 0, "the Read burst iops of fuse client");
+DEFINE_validator(fuseClientBurstReadIops, &PassUint64);
+DEFINE_uint64(fuseClientBurstReadIopsSecs, 180,
+              "the times that Read burst iops can continue");
+DEFINE_validator(fuseClientBurstReadIopsSecs, &PassUint64);
 
 }  // namespace common
 }  // namespace client

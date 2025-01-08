@@ -32,10 +32,8 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::queue::MessageQueue;
 using base::time::TimeSpec;
 using common::DirCacheOption;
-using utils::LRUCache;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::WriteLockGuard;
@@ -147,9 +145,8 @@ void DirCache::Delete(Ino parent, std::shared_ptr<DirEntryList> entries,
   mq_->Publish(entries);  // clear entries in background
   lru_->Remove(parent);
 
-  VLOG(1) << "Delete directory cache (evit=" << evit
-          << "): " << "parent = " << parent
-          << ", mtime = " << entries->GetMtime()
+  VLOG(1) << "Delete directory cache (evit=" << evit << "): "
+          << "parent = " << parent << ", mtime = " << entries->GetMtime()
           << ", delete size = " << ndelete << ", nentries = " << nentries_;
 }
 

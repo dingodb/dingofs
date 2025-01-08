@@ -20,47 +20,37 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include <absl/strings/str_format.h>
 #include <butil/time.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
-#include <memory>
 #include <string>
 
-#include "absl/strings/str_format.h"
-#include "dingofs/metaserver.pb.h"
-#include "client/common/config.h"
+#include "client/common/dynamic_config.h"
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_ACCESS_LOG_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEM_ACCESS_LOG_H_
+#ifndef DINGOFS_CLIENT_ACCESS_LOG_H_
+#define DINGOFS_CLIENT_ACCESS_LOG_H_
 
 namespace dingofs {
 namespace client {
-namespace common {
 
-DECLARE_bool(access_logging);
+static std::shared_ptr<spdlog::logger> logger;
 
-}
-namespace filesystem {
-
-using ::absl::StrFormat;
-using ::dingofs::client::common::FLAGS_access_logging;
-using MessageHandler = std::function<std::string()>;
-
-static std::shared_ptr<spdlog::logger> Logger;
-
-bool InitAccessLog(const std::string& prefix) {
-  std::string filename = StrFormat("%s/access_%d.log", prefix, getpid());
-  Logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
+static bool InitAccessLog(const std::string& prefix) {
+  std::string filename = absl::StrFormat("%s/access_%d.log", prefix, getpid());
+  logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;
 }
 
 struct AccessLogGuard {
+  using MessageHandler = std::function<std::string()>;
+
   explicit AccessLogGuard(MessageHandler handler)
-      : enable(FLAGS_access_logging), handler(handler) {
+      : enable(common::FLAGS_access_logging), handler(handler) {
     if (!enable) {
       return;
     }
@@ -74,7 +64,7 @@ struct AccessLogGuard {
     }
 
     timer.stop();
-    Logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+    logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
   }
 
   bool enable;
@@ -82,8 +72,7 @@ struct AccessLogGuard {
   butil::Timer timer;
 };
 
-}  // namespace filesystem
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEM_ACCESS_LOG_H_
+#endif  // DINGOFS_CLIENT_ACCESS_LOG_H_

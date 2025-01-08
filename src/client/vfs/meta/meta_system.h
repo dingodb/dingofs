@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "client/common/status.h"
-#include "client/vfs_meta.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

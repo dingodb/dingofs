@@ -37,135 +37,6 @@ class FileSystemTest : public ::testing::Test {
   void TearDown() override {}
 };
 
-TEST_F(FileSystemTest, Attr2Stat) {
-  InodeAttr attr = MkAttr(100, AttrOption()
-                                   .type(FsFileType::TYPE_S3)
-                                   .mode(33216)
-                                   .nlink(2)
-                                   .uid(1000)
-                                   .gid(1001)
-                                   .length(4096)
-                                   .rdev(2048)
-                                   .atime(100, 101)
-                                   .mtime(200, 201)
-                                   .ctime(300, 301));
-
-  // CASE 1: check stat field one by one
-  struct stat stat;
-  auto fs = FileSystemBuilder().Build();
-  fs->Attr2Stat(&attr, &stat);
-  ASSERT_EQ(stat.st_ino, 100);
-  ASSERT_EQ(stat.st_mode, 33216);
-  ASSERT_EQ(stat.st_nlink, 2);
-  ASSERT_EQ(stat.st_uid, 1000);
-  ASSERT_EQ(stat.st_gid, 1001);
-  ASSERT_EQ(stat.st_size, 4096);
-  ASSERT_EQ(stat.st_rdev, 2048);
-  ASSERT_EQ(stat.st_atim.tv_sec, 100);
-  ASSERT_EQ(stat.st_atim.tv_nsec, 101);
-  ASSERT_EQ(stat.st_mtim.tv_sec, 200);
-  ASSERT_EQ(stat.st_mtim.tv_nsec, 201);
-  ASSERT_EQ(stat.st_ctim.tv_sec, 300);
-  ASSERT_EQ(stat.st_ctim.tv_nsec, 301);
-  ASSERT_EQ(stat.st_blksize, 0x10000u);
-  ASSERT_EQ(stat.st_blocks, 8);
-
-  // CASE 2: convert all kind of file types
-  std::vector<FsFileType> types = {
-      FsFileType::TYPE_DIRECTORY,
-      FsFileType::TYPE_FILE,
-      FsFileType::TYPE_SYM_LINK,
-  };
-  for (const auto& type : types) {
-    attr.set_type(type);
-    fs->Attr2Stat(&attr, &stat);
-    ASSERT_EQ(stat.st_blocks, 0);
-  }
-}
-
-TEST_F(FileSystemTest, Entry2Param) {
-  EntryOut entryOut;
-  entryOut.attr = MkAttr(100, AttrOption().length(4096));
-  entryOut.entryTimeout = 1;
-  entryOut.attrTimeout = 2;
-
-  fuse_entry_param e;
-  auto fs = FileSystemBuilder().Build();
-  fs->Entry2Param(&entryOut, &e);
-  ASSERT_EQ(e.ino, 100);
-  ASSERT_EQ(e.attr.st_size, 4096);
-  ASSERT_EQ(e.generation, 0);
-  ASSERT_EQ(e.entry_timeout, 1);
-  ASSERT_EQ(e.attr_timeout, 2);
-}
-
-TEST_F(FileSystemTest, SetEntryTimeout) {
-  auto builder = FileSystemBuilder();
-  auto fs = builder
-                .SetOption([](FileSystemOption* option) {
-                  option->kernelCacheOption.entryTimeoutSec = 1;
-                  option->kernelCacheOption.attrTimeoutSec = 2;
-                  option->kernelCacheOption.dirEntryTimeoutSec = 3;
-                  option->kernelCacheOption.dirAttrTimeoutSec = 4;
-                })
-                .Build();
-
-  // CASE 1: set kernel cache timeout for regular file or symbol link
-  std::vector<FsFileType> types = {
-      FsFileType::TYPE_S3,
-      FsFileType::TYPE_FILE,
-      FsFileType::TYPE_SYM_LINK,
-  };
-  for (const auto& type : types) {
-    auto attr = MkAttr(100, AttrOption().type(type));
-    auto entryOut = EntryOut(attr);
-    fs->SetEntryTimeout(&entryOut);
-    ASSERT_EQ(entryOut.entryTimeout, 1);
-    ASSERT_EQ(entryOut.attrTimeout, 2);
-  }
-
-  // CASE 2: set kernel cache timeout for directory
-  auto attr = MkAttr(100, AttrOption().type(FsFileType::TYPE_DIRECTORY));
-  auto entryOut = EntryOut(attr);
-  fs->SetEntryTimeout(&entryOut);
-  ASSERT_EQ(entryOut.entryTimeout, 3);
-  ASSERT_EQ(entryOut.attrTimeout, 4);
-}
-
-TEST_F(FileSystemTest, SetAttrTimeout) {
-  auto builder = FileSystemBuilder();
-  auto fs = builder
-                .SetOption([](FileSystemOption* option) {
-                  option->kernelCacheOption.attrTimeoutSec = 1;
-                  option->kernelCacheOption.dirAttrTimeoutSec = 2;
-                })
-                .Build();
-
-  // CASE 1: set kernel attribute cache timeout
-  //         for regular file or symbol link
-  std::vector<FsFileType> types = {
-      FsFileType::TYPE_S3,
-      FsFileType::TYPE_FILE,
-      FsFileType::TYPE_SYM_LINK,
-  };
-  for (const auto& typ : types) {
-    auto attr = MkAttr(100, AttrOption().type(typ));
-    auto attrOut = AttrOut(attr);
-    fs->SetAttrTimeout(&attrOut);
-    ASSERT_EQ(attrOut.attrTimeout, 1);
-  }
-
-  // CASE 2: set kernel attribute cache timeout for directory
-  auto attr = MkAttr(100, AttrOption().type(FsFileType::TYPE_DIRECTORY));
-  auto attrOut = AttrOut(attr);
-  fs->SetAttrTimeout(&attrOut);
-  ASSERT_EQ(attrOut.attrTimeout, 2);
-}
-
-TEST_F(FileSystemTest, Reply) {
-  // TODO(Wine93): make it works
-}
-
 TEST_F(FileSystemTest, Lookup_Basic) {
   auto builder = FileSystemBuilder();
   auto fs = builder.Build();
@@ -243,7 +114,7 @@ TEST_F(FileSystemTest, OpenDir_Basic) {
                                   DINGOFS_ERROR::OK);
 
   auto fi = FileInfo();
-  auto rc = fs->OpenDir(Request(), 1, &fi);
+  auto rc = fs->OpenDir(1, &fi.fh);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -277,7 +148,7 @@ TEST_F(FileSystemTest, ReadDir_Basic) {
 
   DirEntry dirEntry;
   auto entries = std::make_shared<DirEntryList>();
-  auto rc = fs->ReadDir(Request(), 1, &fi, &entries);
+  auto rc = fs->ReadDir(1, fi.fh, &entries);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   ASSERT_EQ(entries->Size(), 1);
   ASSERT_TRUE(entries->Get(1, &dirEntry));
@@ -334,7 +205,7 @@ TEST_F(FileSystemTest, ReadDir_CheckEntries) {
         });
 
     auto entries = std::make_shared<DirEntryList>();
-    auto rc = fs->ReadDir(Request(), ino, &fi, &entries);
+    auto rc = fs->ReadDir(ino, fi.fh, &entries);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
     CHECK_ENTRIES(entries);
   }
@@ -343,7 +214,7 @@ TEST_F(FileSystemTest, ReadDir_CheckEntries) {
   {
     // readdir from cache
     auto entries = std::make_shared<DirEntryList>();
-    auto rc = fs->ReadDir(Request(), ino, &fi, &entries);
+    auto rc = fs->ReadDir(ino, fi.fh, &entries);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
     CHECK_ENTRIES(entries);
   }
@@ -354,7 +225,7 @@ TEST_F(FileSystemTest, ReleaseDir_Basic) {
   auto fs = builder.Build();
 
   auto fi = FileInfo();
-  auto rc = fs->ReleaseDir(Request(), 1, &fi);
+  auto rc = fs->ReleaseDir(fi.fh);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -370,9 +241,7 @@ TEST_F(FileSystemTest, ReleaseDir_CheckHandler) {
   ASSERT_TRUE(fs->FindHandler(fh) != nullptr);
 
   // CASE 2: releasedir will release handler
-  auto fi = FileInfo();
-  fi.fh = fh;
-  auto rc = fs->ReleaseDir(Request(), 1, &fi);
+  auto rc = fs->ReleaseDir(fh);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   ASSERT_TRUE(fs->FindHandler(fh) == nullptr);
 }
@@ -397,14 +266,14 @@ TEST_F(FileSystemTest, Open_Basic) {
         });
 
     auto fi = FileInfo();
-    auto rc = fs->Open(Request(), ino, &fi);
+    auto rc = fs->Open(ino);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   }
 
   // CASE 2: file already opened
   {
     auto fi = FileInfo();
-    auto rc = fs->Open(Request(), ino, &fi);
+    auto rc = fs->Open(ino);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   }
 }
@@ -426,8 +295,7 @@ TEST_F(FileSystemTest, Open_Stale) {
         return DINGOFS_ERROR::OK;
       });
 
-  auto fi = FileInfo();
-  auto rc = fs->Open(Request(), ino, &fi);
+  auto rc = fs->Open(ino);
   ASSERT_EQ(rc, DINGOFS_ERROR::STALE);
 }
 
@@ -443,8 +311,7 @@ TEST_F(FileSystemTest, Open_StaleForAttrNotFound) {
       });
 
   Ino ino(100);
-  auto fi = FileInfo();
-  auto rc = fs->Open(Request(), ino, &fi);
+  auto rc = fs->Open(ino);
   ASSERT_EQ(rc, DINGOFS_ERROR::STALE);
 }
 
@@ -452,7 +319,7 @@ TEST_F(FileSystemTest, Release_Basic) {
   auto builder = FileSystemBuilder();
   auto fs = builder.Build();
   auto fi = FileInfo();
-  auto rc = fs->Release(Request(), 100, &fi);
+  auto rc = fs->Release(100);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -474,7 +341,7 @@ TEST_F(FileSystemTest, Release_CheckOpenStatus) {
 
   // CASE 2: release will close open file
   auto fi = FileInfo();
-  auto rc = fs->Release(Request(), 100, &fi);
+  auto rc = fs->Release(100);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   yes = openfiles->IsOpened(ino, &out);
   ASSERT_FALSE(yes);

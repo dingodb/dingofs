@@ -37,6 +37,9 @@ namespace common {
  * curl -s http://127.0.0.1:9000/flags/block_cache_logging?setvalue=true
  */
 
+// access log
+DECLARE_bool(access_logging);
+
 // block cache logging
 DECLARE_bool(block_cache_logging);
 DECLARE_bool(block_cache_stage_bandwidth_throttle_enable);
@@ -72,8 +75,36 @@ DECLARE_uint32(push_metric_interval_millsecond);
 // fuse client
 DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
 
+
+DECLARE_bool(useFakeS3);
+
+// ----- related fuse client -----
+DECLARE_bool(enableCto);
+DECLARE_bool(supportKVcache);
+
+DECLARE_uint64(fuseClientAvgWriteIops);
+DECLARE_uint64(fuseClientBurstWriteIops);
+DECLARE_uint64(fuseClientBurstWriteIopsSecs);
+
+DECLARE_uint64(fuseClientAvgWriteBytes);
+DECLARE_uint64(fuseClientBurstWriteBytes);
+DECLARE_uint64(fuseClientBurstWriteBytesSecs);
+
+DECLARE_uint64(fuseClientAvgReadIops);
+DECLARE_uint64(fuseClientBurstReadIops);
+DECLARE_uint64(fuseClientBurstReadIopsSecs);
+
+DECLARE_uint64(fuseClientAvgReadBytes);
+DECLARE_uint64(fuseClientBurstReadBytes);
+DECLARE_uint64(fuseClientBurstReadBytesSecs);
+
 }  // namespace common
 }  // namespace client
 }  // namespace dingofs
+
+namespace brpc {
+DECLARE_int32(defer_close_second);
+DECLARE_int32(health_check_interval);
+}  // namespace brpc
 
 #endif  // DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_

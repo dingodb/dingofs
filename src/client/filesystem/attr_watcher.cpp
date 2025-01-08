@@ -30,7 +30,6 @@ namespace client {
 namespace filesystem {
 
 using common::AttrWatcherOption;
-using utils::LRUCache;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::WriteLockGuard;
@@ -64,7 +63,7 @@ void AttrWatcher::UpdateDirEntryAttr(Ino ino, const InodeAttr& attr) {
 
     entries->UpdateAttr(ino, attr);
 
-    VLOG(1) << "Write back attribute to dir entry cache: inodeId=" << ino
+    VLOG(3) << "Write back attribute to dir entry cache: inodeId=" << ino
             << ", attr = " << attr.ShortDebugString();
   }
 }
@@ -79,7 +78,7 @@ void AttrWatcher::UpdateDirEntryLength(Ino ino, const InodeAttr& open) {
 
     entries->UpdateLength(ino, open);
 
-    VLOG(1) << "Write back file length to dir entry cache: inodeId=" << ino
+    VLOG(3) << "Write back file length to dir entry cache: inodeId=" << ino
             << ", attr = " << open.ShortDebugString();
   }
 }

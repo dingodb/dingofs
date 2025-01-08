@@ -24,10 +24,14 @@ file(GLOB FUSE_CLIENT_LIB_SRCS
     "filesystem/*.cpp"
     "warmup/*.cpp"
     "service/*.cpp"
+    "fuse/*.cpp"
+    "vfs_old/*.cpp"
 )
+
 list(REMOVE_ITEM FUSE_CLIENT_LIB_SRCS
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
+
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS

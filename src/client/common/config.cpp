@@ -32,86 +32,20 @@
 #include "base/string/string.h"
 #include "client/common/dynamic_config.h"
 #include "utils/gflags_helper.h"
-#include "utils/string_util.h"
-
-namespace brpc {
-DECLARE_int32(defer_close_second);
-DECLARE_int32(health_check_interval);
-}  // namespace brpc
-
-namespace dingofs {
-namespace client {
-namespace common {
-DECLARE_bool(useFakeS3);
-}  // namespace common
-}  // namespace client
-}  // namespace dingofs
 
 namespace dingofs {
 namespace client {
 namespace common {
 
-using dingofs::aws::S3InfoOption;
+using ::dingofs::aws::S3InfoOption;
 using ::dingofs::base::filepath::PathJoin;
 using ::dingofs::base::math::kMiB;
 using ::dingofs::base::string::Str2Int;
-using dingofs::utils::Configuration;
+using ::dingofs::utils::Configuration;
 
 using ::dingofs::base::string::StrSplit;
-using dingofs::stub::common::ExcutorOpt;
-using dingofs::stub::common::MetaCacheOpt;
-
-static bool pass_bool(const char*, bool) { return true; }
-DEFINE_bool(enableCto, true, "acheieve cto consistency");
-DEFINE_bool(useFakeS3, false,
-            "Use fake s3 to inject more metadata for testing metaserver");
-DEFINE_bool(supportKVcache, false, "use kvcache to speed up sharing");
-DEFINE_bool(access_logging, true, "enable access log");
-DEFINE_validator(access_logging, &pass_bool);
-
-/**
- * use curl -L fuseclient:port/flags/fuseClientAvgWriteBytes?setvalue=true
- * for dynamic parameter configuration
- */
-static bool pass_uint64(const char*, uint64_t) { return true; }
-
-DEFINE_uint64(fuseClientAvgWriteBytes, 0,
-              "the write throttle bps of fuse client");
-DEFINE_validator(fuseClientAvgWriteBytes, &pass_uint64);
-DEFINE_uint64(fuseClientBurstWriteBytes, 0,
-              "the write burst bps of fuse client");
-DEFINE_validator(fuseClientBurstWriteBytes, &pass_uint64);
-DEFINE_uint64(fuseClientBurstWriteBytesSecs, 180,
-              "the times that write burst bps can continue");
-DEFINE_validator(fuseClientBurstWriteBytesSecs, &pass_uint64);
-
-DEFINE_uint64(fuseClientAvgWriteIops, 0,
-              "the write throttle iops of fuse client");
-DEFINE_validator(fuseClientAvgWriteIops, &pass_uint64);
-DEFINE_uint64(fuseClientBurstWriteIops, 0,
-              "the write burst iops of fuse client");
-DEFINE_validator(fuseClientBurstWriteIops, &pass_uint64);
-DEFINE_uint64(fuseClientBurstWriteIopsSecs, 180,
-              "the times that write burst iops can continue");
-DEFINE_validator(fuseClientBurstWriteIopsSecs, &pass_uint64);
-
-DEFINE_uint64(fuseClientAvgReadBytes, 0,
-              "the Read throttle bps of fuse client");
-DEFINE_validator(fuseClientAvgReadBytes, &pass_uint64);
-DEFINE_uint64(fuseClientBurstReadBytes, 0, "the Read burst bps of fuse client");
-DEFINE_validator(fuseClientBurstReadBytes, &pass_uint64);
-DEFINE_uint64(fuseClientBurstReadBytesSecs, 180,
-              "the times that Read burst bps can continue");
-DEFINE_validator(fuseClientBurstReadBytesSecs, &pass_uint64);
-
-DEFINE_uint64(fuseClientAvgReadIops, 0,
-              "the Read throttle iops of fuse client");
-DEFINE_validator(fuseClientAvgReadIops, &pass_uint64);
-DEFINE_uint64(fuseClientBurstReadIops, 0, "the Read burst iops of fuse client");
-DEFINE_validator(fuseClientBurstReadIops, &pass_uint64);
-DEFINE_uint64(fuseClientBurstReadIopsSecs, 180,
-              "the times that Read burst iops can continue");
-DEFINE_validator(fuseClientBurstReadIopsSecs, &pass_uint64);
+using ::dingofs::stub::common::ExcutorOpt;
+using ::dingofs::stub::common::MetaCacheOpt;
 
 void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
   conf->GetValueFatalIfFail("metaCacheOpt.metacacheGetLeaderRetry",

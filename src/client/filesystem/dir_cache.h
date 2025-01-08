@@ -33,6 +33,7 @@
 #include "client/filesystem/meta.h"
 #include "client/filesystem/metric.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/rw_lock.h"
 #include "utils/lru_cache.h"
 
 namespace dingofs {

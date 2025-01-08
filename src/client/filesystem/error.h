@@ -21,10 +21,10 @@
  */
 
 #include <iostream>
-#include <map>
 #include <string>
 
 #include "dingofs/metaserver.pb.h"
+#include "client/common/status.h"
 
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_
@@ -66,7 +66,12 @@ std::ostream& operator<<(std::ostream& os, DINGOFS_ERROR code);
 
 DINGOFS_ERROR ToFSError(pb::metaserver::MetaStatusCode code);
 
+Status DingofsErrorToStatus(DINGOFS_ERROR code);
+
 }  // namespace filesystem
+
+using ErrNo = filesystem::DINGOFS_ERROR;
+
 }  // namespace client
 }  // namespace dingofs
 

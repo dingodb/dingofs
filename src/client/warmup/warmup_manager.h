@@ -38,14 +38,12 @@
 #include <vector>
 
 #include "aws/s3_adapter.h"
-#include "client/blockcache/block_cache.h"
 #include "client/common/common.h"
 #include "client/dentry_cache_manager.h"
-#include "client/fuse_common.h"
 #include "client/inode_cache_manager.h"
 #include "client/kvclient/kvclient_manager.h"
 #include "client/s3/client_s3_adaptor.h"
-#include "client/s3/client_s3_cache_manager.h"
+#include "client/vfs/vfs.h"
 #include "common/task_thread_pool.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
@@ -61,8 +59,8 @@ using ThreadPool = dingofs::common::TaskThreadPool2<bthread::Mutex,
 
 class WarmupFile {
  public:
-  explicit WarmupFile(fuse_ino_t key = 0, uint64_t fileLen = 0)
-      : key_(key), fileLen_(fileLen) {}
+  explicit WarmupFile(fuse_ino_t key = 0, uint64_t file_len = 0)
+      : key_(key), fileLen_(file_len) {}
 
   fuse_ino_t GetKey() const { return key_; }
   uint64_t GetFileLen() const { return fileLen_; }
@@ -92,10 +90,6 @@ class WarmupInodes {
   fuse_ino_t key_;
   std::set<fuse_ino_t> readAheadFiles_;
 };
-
-using FuseOpReadFunctionType =
-    std::function<DINGOFS_ERROR(fuse_req_t, fuse_ino_t, size_t, off_t,
-                                struct fuse_file_info*, char*, size_t*)>;
 
 class WarmupProgress {
  public:
@@ -146,6 +140,7 @@ class WarmupProgress {
     std::lock_guard<std::mutex> lock(errorMutex_);
     return error_;
   }
+
   std::string ToString() {
     std::lock_guard<std::mutex> lockT(totalMutex_);
     std::lock_guard<std::mutex> lockF(finishedMutex_);
@@ -178,18 +173,18 @@ class WarmupManager {
   }
 
   explicit WarmupManager(
-      std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient,
-      std::shared_ptr<InodeCacheManager> inodeManager,
-      std::shared_ptr<DentryCacheManager> dentryManager,
-      std::shared_ptr<pb::mds::FsInfo> fsInfo, FuseOpReadFunctionType readFunc,
-      std::shared_ptr<KVClientManager> kvClientManager)
+      std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client,
+      std::shared_ptr<InodeCacheManager> inode_manager,
+      std::shared_ptr<DentryCacheManager> dentry_manager,
+      std::shared_ptr<pb::mds::FsInfo> fs_info,
+      std::shared_ptr<KVClientManager> kv_client_manager, vfs::VFS* vfs)
       : mounted_(false),
-        metaClient_(std::move(metaClient)),
-        inodeManager_(std::move(inodeManager)),
-        dentryManager_(std::move(dentryManager)),
-        fsInfo_(std::move(fsInfo)),
-        fuseOpRead_(std::move(readFunc)),
-        kvClientManager_(std::move(kvClientManager)) {}
+        metaClient_(std::move(meta_client)),
+        inodeManager_(std::move(inode_manager)),
+        dentryManager_(std::move(dentry_manager)),
+        fsInfo_(std::move(fs_info)),
+        kvClientManager_(std::move(kv_client_manager)),
+        vfs_(vfs) {}
 
   virtual void Init(const common::FuseClientOption& option) {
     option_ = option;
@@ -207,12 +202,6 @@ class WarmupManager {
 
   void SetFsInfo(const std::shared_ptr<pb::mds::FsInfo>& fsinfo) {
     fsInfo_ = fsinfo;
-  }
-
-  void SetFuseOpRead(const FuseOpReadFunctionType& read) { fuseOpRead_ = read; }
-
-  void SetKVClientManager(std::shared_ptr<KVClientManager> kvClientManager) {
-    kvClientManager_ = std::move(kvClientManager);
   }
 
   /**
@@ -283,9 +272,6 @@ class WarmupManager {
   // filesystem info
   std::shared_ptr<pb::mds::FsInfo> fsInfo_;
 
-  // FuseOpRead
-  FuseOpReadFunctionType fuseOpRead_;
-
   // warmup progress
   std::unordered_map<fuse_ino_t, WarmupProgress> inode2Progress_;
   utils::BthreadRWLock inode2ProgressMutex_;
@@ -293,21 +279,23 @@ class WarmupManager {
   std::shared_ptr<KVClientManager> kvClientManager_ = nullptr;
 
   common::FuseClientOption option_;
+
+  vfs::VFS* vfs_;
 };
 
 class WarmupManagerS3Impl : public WarmupManager {
  public:
   explicit WarmupManagerS3Impl(
-      std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient,
-      std::shared_ptr<InodeCacheManager> inodeManager,
-      std::shared_ptr<DentryCacheManager> dentryManager,
-      std::shared_ptr<pb::mds::FsInfo> fsInfo, FuseOpReadFunctionType readFunc,
-      std::shared_ptr<S3ClientAdaptor> s3Adaptor,
-      std::shared_ptr<KVClientManager> kvClientManager)
-      : WarmupManager(std::move(metaClient), std::move(inodeManager),
-                      std::move(dentryManager), std::move(fsInfo),
-                      std::move(readFunc), std::move(kvClientManager)),
-        s3Adaptor_(std::move(s3Adaptor)) {}
+      std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client,
+      std::shared_ptr<InodeCacheManager> inode_manager,
+      std::shared_ptr<DentryCacheManager> dentry_manager,
+      std::shared_ptr<pb::mds::FsInfo> fs_info,
+      std::shared_ptr<S3ClientAdaptor> s3_adaptor,
+      std::shared_ptr<KVClientManager> kv_client_manager, vfs::VFS* vfs)
+      : WarmupManager(std::move(meta_client), std::move(inode_manager),
+                      std::move(dentry_manager), std::move(fs_info),
+                      std::move(kv_client_manager), vfs),
+        s3Adaptor_(std::move(s3_adaptor)) {}
 
   bool AddWarmupFilelist(fuse_ino_t key,
                          common::WarmupStorageType type) override;
@@ -390,18 +378,18 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   // travel all chunks
   void TravelChunks(fuse_ino_t key, fuse_ino_t ino,
-                    const S3ChunkInfoMapType& s3ChunkInfoMap);
+                    const S3ChunkInfoMapType& s3_chunk_info_map);
 
   using ObjectListType = std::list<std::pair<blockcache::BlockKey, uint64_t>>;
   // travel and download all objs belong to the chunk
   void TravelChunk(fuse_ino_t ino,
-                   const pb::metaserver::S3ChunkInfoList& chunkInfo,
-                   ObjectListType* prefetchObjs);
+                   const pb::metaserver::S3ChunkInfoList& chunk_info,
+                   ObjectListType* prefetch_objs);
 
   // warmup all the prefetchObjs
-  void WarmUpAllObjs(
-      fuse_ino_t ino,
-      const std::list<std::pair<blockcache::BlockKey, uint64_t>>& prefetchObjs);
+  void WarmUpAllObjs(fuse_ino_t ino,
+                     const std::list<std::pair<blockcache::BlockKey, uint64_t>>&
+                         prefetch_objs);
 
   /**
    * @brief Whether the warmup task[key] is completed (or terminated)

@@ -33,15 +33,6 @@
 
 namespace dingofs {
 namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-DECLARE_bool(supportKVcache);
-}  // namespace common
-}  // namespace client
-}  // namespace dingofs
-
-namespace dingofs {
-namespace client {
 using dingofs::utils::TaskThreadPool;
 using ::testing::_;
 using ::testing::DoAll;

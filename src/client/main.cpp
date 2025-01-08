@@ -26,11 +26,11 @@
 #include <string>
 #include <unordered_map>
 
-#include "client/dingo_fuse_op.h"
-#include "client/fuse_common.h"
+#include "client/fuse/fuse_op.h"
+#include "client/fuse/fuse_common.h"
 #include "stub/common/version.h"
 
-static const struct fuse_lowlevel_ops fuse_op = {
+static const struct fuse_lowlevel_ops kFuseOp = {
     .init = FuseOpInit,
     .destroy = FuseOpDestroy,
     .lookup = FuseOpLookup,
@@ -68,7 +68,7 @@ static const struct fuse_lowlevel_ops fuse_op = {
     .create = FuseOpCreate,
     .getlk = nullptr,
     .setlk = nullptr,
-    .bmap = FuseOpBmap,
+    .bmap = nullptr,
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
     .ioctl = nullptr,
     .poll = nullptr,
@@ -89,24 +89,24 @@ static const struct fuse_lowlevel_ops fuse_op = {
     .copy_file_range = nullptr,
 #endif
 #if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 8)
-    .lseek = 0
+    .lseek = nullptr
 #endif
 };
 
-void print_option_help(const char* o, const char* msg) {
+void PrintOptionHelp(const char* o, const char* msg) {
   printf("    -o %-20s%s\n", o, msg);
 }
 
-void extra_options_help() {
+void ExtraOptionsHelp() {
   printf("\nExtra options:\n");
-  print_option_help("fsname", "[required] name of filesystem to be mounted");
-  print_option_help("fstype",
-                    "[required] type of filesystem to be mounted (s3/volume)");
-  print_option_help("conf", "[required] path of config file");
+  PrintOptionHelp("fsname", "[required] name of filesystem to be mounted");
+  PrintOptionHelp("fstype",
+                  "[required] type of filesystem to be mounted (s3/volume)");
+  PrintOptionHelp("conf", "[required] path of config file");
   printf("    --mdsAddr              mdsAddr of dingofs cluster\n");
 }
 
-std::string match_any_pattern(
+std::string MatchAnyPattern(
     const std::unordered_map<std::string, char**>& patterns, const char* src) {
   size_t src_len = strlen(src);
   for (const auto& pair : patterns) {
@@ -119,13 +119,13 @@ std::string match_any_pattern(
   return {};
 }
 
-void parse_option(int argc, char** argv, int* parsed_argc_p, char** parsed_argv,
-                  struct MountOption* opts) {
+void ParseOption(int argc, char** argv, int* parsed_argc_p, char** parsed_argv,
+                 struct MountOption* opts) {
   // add support for parsing option value with comma(,)
   std::unordered_map<std::string, char**> patterns = {
       {"--mdsaddr=", &opts->mdsAddr}};
   for (int i = 0, j = 0; j < argc; j++) {
-    std::string p = match_any_pattern(patterns, argv[j]);
+    std::string p = MatchAnyPattern(patterns, argv[j]);
     int p_len = p.length();
     int src_len = strlen(argv[j]);
     if (p_len) {
@@ -147,7 +147,7 @@ void parse_option(int argc, char** argv, int* parsed_argc_p, char** parsed_argv,
   }
 }
 
-void free_parsed_argv(char** parsed_argv, int alloc_size) {
+void FreeParsedArgv(char** parsed_argv, int alloc_size) {
   for (int i = 0; i < alloc_size; i++) {
     free(parsed_argv[i]);
   }
@@ -157,10 +157,10 @@ void free_parsed_argv(char** parsed_argv, int alloc_size) {
 int main(int argc, char* argv[]) {
   dingofs::stub::common::ShowVerion();
 
-  struct MountOption mOpts = {0};
+  struct MountOption m_opts = {nullptr};
   int parsed_argc = argc;
   char** parsed_argv = reinterpret_cast<char**>(malloc(sizeof(char*) * argc));
-  parse_option(argc, argv, &parsed_argc, parsed_argv, &mOpts);
+  ParseOption(argc, argv, &parsed_argc, parsed_argv, &m_opts);
 
   struct fuse_args args = FUSE_ARGS_INIT(parsed_argc, parsed_argv);
   struct fuse_session* se;
@@ -178,7 +178,7 @@ int main(int argc, char* argv[]) {
     printf("Fuse Options:\n");
     fuse_cmdline_help();
     fuse_lowlevel_help();
-    extra_options_help();
+    ExtraOptionsHelp();
     ret = 0;
     goto err_out1;
   } else if (opts.show_version) {
@@ -188,17 +188,18 @@ int main(int argc, char* argv[]) {
     goto err_out1;
   }
 
-  if (opts.mountpoint == NULL) {
+  if (opts.mountpoint == nullptr) {
     printf("required option is missing: mountpoint\n");
     ret = 1;
     goto err_out1;
   }
 
-  if (fuse_opt_parse(&args, &mOpts, mount_opts, NULL) == -1) return 1;
+  if (fuse_opt_parse(&args, &m_opts, mount_opts, nullptr) == -1) return 1;
 
-  mOpts.mountPoint = opts.mountpoint;
+  m_opts.mountPoint = opts.mountpoint;
 
-  if (mOpts.conf == NULL || mOpts.fsName == NULL || mOpts.fsType == NULL) {
+  if (m_opts.conf == nullptr || m_opts.fsName == nullptr ||
+      m_opts.fsType == nullptr) {
     printf(
         "one of required options is missing. conf, fsname, fstype are "
         "required.\n");
@@ -206,10 +207,10 @@ int main(int argc, char* argv[]) {
     goto err_out1;
   }
 
-  printf("Begin to mount fs %s to %s\n", mOpts.fsName, mOpts.mountPoint);
+  printf("Begin to mount fs %s to %s\n", m_opts.fsName, m_opts.mountPoint);
 
-  se = fuse_session_new(&args, &fuse_op, sizeof(fuse_op), &mOpts);
-  if (se == NULL) goto err_out1;
+  se = fuse_session_new(&args, &kFuseOp, sizeof(kFuseOp), &m_opts);
+  if (se == nullptr) goto err_out1;
 
   if (fuse_set_signal_handlers(se) != 0) goto err_out2;
 
@@ -217,13 +218,9 @@ int main(int argc, char* argv[]) {
 
   fuse_daemonize(opts.foreground);
 
-  if (InitLog(mOpts.conf, argv[0]) < 0) {
-    printf("Init log failed, confpath = %s\n", mOpts.conf);
-  }
-
-  ret = InitFuseClient(&mOpts);
-  if (ret < 0) {
-    LOG(ERROR) << "init fuse client fail, conf = " << mOpts.conf;
+  ret = InitFuseClient(argv[0], &m_opts);
+  if (ret != 0) {
+    LOG(ERROR) << "init fuse client fail, conf = " << m_opts.conf;
     goto err_out4;
   }
 
@@ -248,7 +245,7 @@ err_out2:
 err_out1:
   UnInitFuseClient();
   free(opts.mountpoint);
-  free_parsed_argv(parsed_argv, argc);
+  FreeParsedArgv(parsed_argv, argc);
   fuse_opt_free_args(&args);
 
   return ret ? 1 : 0;

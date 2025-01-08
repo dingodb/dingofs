@@ -30,14 +30,15 @@
 #include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/dir_buffer.h"
-#include "client/fuse_common.h"
+#include "client/fuse/fuse_common.h"
+#include "client/vfs/vfs_meta.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using Ino = fuse_ino_t;
+using Ino = vfs::Ino;
 using Request = fuse_req_t;
 using FileInfo = struct fuse_file_info;
 
@@ -90,6 +91,9 @@ struct FileHandler {
   DirBufferHead* buffer;
   base::time::TimeSpec mtime;
   bool padding;  // padding buffer
+  // for read dir
+  std::vector<dingofs::client::vfs::DirEntry> entries;
+  bool entris_pading{false};
 };
 
 class HandlerManager {

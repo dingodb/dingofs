@@ -57,7 +57,6 @@ set(CLIENT_TEST_SRCS
     file_cache_manager_test.cpp
     fs_cache_manager_test.cpp
     test_dentry_cache_manager.cpp
-    test_fuse_s3_client.cpp
     test_inodeWrapper.cpp
     test_inode_cache_manager.cpp
 )

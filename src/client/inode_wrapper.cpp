@@ -276,7 +276,7 @@ DINGOFS_ERROR InodeWrapper::Link(uint64_t parent) {
   VLOG(3) << "LinkLocked, inodeId=" << inode_.inodeid()
           << ", newnlink = " << inode_.nlink();
 
-  UpdateTimestampLocked(kChangeTime | kModifyTime);
+  UpdateTimestampLocked(kChangeTime);
   if (inode_.type() != FsFileType::TYPE_DIRECTORY && parent != 0) {
     inode_.add_parent(parent);
     dirtyAttr_.add_parent(parent);

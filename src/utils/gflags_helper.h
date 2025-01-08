@@ -37,27 +37,27 @@ namespace utils {
 struct GflagsLoadValueFromConfIfCmdNotSet {
   template <typename T>
   bool Load(const std::shared_ptr<Configuration>& conf,
-            const std::string& cmdName, const std::string& confName, T* value,
-            bool fatalIfMissing = true) {
-    return Load(conf.get(), cmdName, confName, value, fatalIfMissing);
+            const std::string& cmd_name, const std::string& conf_name, T* value,
+            bool fatal_if_missing = true) {
+    return Load(conf.get(), cmd_name, conf_name, value, fatal_if_missing);
   }
 
   template <typename ValueT>
-  bool Load(Configuration* conf, const std::string& cmdName,
-            const std::string& confName, ValueT* value,
-            bool fatalIfMissing = true) {
+  bool Load(Configuration* conf, const std::string& cmd_name,
+            const std::string& conf_name, ValueT* value,
+            bool fatal_if_missing = true) {
     using ::google::CommandLineFlagInfo;
     using ::google::GetCommandLineFlagInfo;
 
     CommandLineFlagInfo info;
-    if (GetCommandLineFlagInfo(cmdName.c_str(), &info) && info.is_default) {
-      bool succ = conf->GetValue(confName, value);
+    if (GetCommandLineFlagInfo(cmd_name.c_str(), &info) && info.is_default) {
+      bool succ = conf->GetValue(conf_name, value);
       if (!succ) {
-        if (fatalIfMissing) {
-          CHECK(false) << "Failed to get `" << confName
+        if (fatal_if_missing) {
+          CHECK(false) << "Failed to get `" << conf_name
                        << "` from file: " << conf->GetConfigPath();
         } else {
-          LOG(WARNING) << "Failed to get `" << confName
+          LOG(WARNING) << "Failed to get `" << conf_name
                        << "` from file: " << conf->GetConfigPath()
                        << ", current value: " << *value;
           return false;

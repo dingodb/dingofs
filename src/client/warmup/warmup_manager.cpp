@@ -26,18 +26,19 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cstdint>
 #include <deque>
 #include <list>
 #include <memory>
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/s3_client.h"
 #include "client/common/common.h"
 #include "client/inode_wrapper.h"
 #include "client/kvclient/kvclient_manager.h"
+#include "client/vfs/vfs_meta.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/string_util.h"
@@ -77,14 +78,14 @@ bool WarmupManagerS3Impl::AddWarmupFilelist(fuse_ino_t key,
     WriteLockGuard lock(warmupFilelistDequeMutex_);
     auto iter = FindWarmupFilelistByKeyLocked(key);
     if (iter == warmupFilelistDeque_.end()) {
-      std::shared_ptr<InodeWrapper> inodeWrapper;
-      DINGOFS_ERROR ret = inodeManager_->GetInode(key, inodeWrapper);
+      std::shared_ptr<InodeWrapper> inode_wrapper;
+      DINGOFS_ERROR ret = inodeManager_->GetInode(key, inode_wrapper);
       if (ret != DINGOFS_ERROR::OK) {
         LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                    << ", inodeid = " << key;
         return false;
       }
-      uint64_t len = inodeWrapper->GetLength();
+      uint64_t len = inode_wrapper->GetLength();
       warmupFilelistDeque_.emplace_back(key, len);
     }
   }  // Skip already added
@@ -114,20 +115,29 @@ void WarmupManagerS3Impl::UnInit() {
   for (auto& task : inode2FetchDentryPool_) {
     task.second->Stop();
   }
-  WriteLockGuard lockDentry(inode2FetchDentryPoolMutex_);
-  inode2FetchDentryPool_.clear();
 
-  for (auto& task : inode2FetchS3ObjectsPool_) {
-    task.second->Stop();
+  {
+    WriteLockGuard lock_dentry(inode2FetchDentryPoolMutex_);
+    inode2FetchDentryPool_.clear();
   }
-  WriteLockGuard lockS3Objects(inode2FetchS3ObjectsPoolMutex_);
-  inode2FetchS3ObjectsPool_.clear();
 
-  WriteLockGuard lockInodes(warmupInodesDequeMutex_);
-  warmupInodesDeque_.clear();
+  {
+    WriteLockGuard lock_s3_objects(inode2FetchS3ObjectsPoolMutex_);
+    for (auto& task : inode2FetchS3ObjectsPool_) {
+      task.second->Stop();
+    }
+    inode2FetchS3ObjectsPool_.clear();
+  }
 
-  WriteLockGuard lockFileList(warmupFilelistDequeMutex_);
-  warmupFilelistDeque_.clear();
+  {
+    WriteLockGuard lock_inodes(warmupInodesDequeMutex_);
+    warmupInodesDeque_.clear();
+  }
+
+  {
+    WriteLockGuard lock_file_list(warmupFilelistDequeMutex_);
+    warmupFilelistDeque_.clear();
+  }
 
   WarmupManager::UnInit();
 }
@@ -152,14 +162,41 @@ void WarmupManagerS3Impl::BackGroundFetch() {
 
 void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
                                         std::vector<std::string>* list) {
-  struct fuse_file_info fi {};
-  fi.flags &= ~O_DIRECT;
-  size_t rSize = 0;
+  int flags = 0;
+  flags &= ~O_DIRECT;
+
+  size_t read_size = 0;
   std::unique_ptr<char[]> data(new char[filelist.GetFileLen() + 1]);
   std::memset(data.get(), 0, filelist.GetFileLen());
   data[filelist.GetFileLen()] = '\n';
-  fuseOpRead_(nullptr, filelist.GetKey(), filelist.GetFileLen(), 0, &fi,
-              data.get(), &rSize);
+
+  {
+    uint64_t fh = 0;
+    vfs::Attr attr;
+    Status s = vfs_->Open(filelist.GetKey(), flags, &fh, &attr);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail open warmup list file, status: " << s.ToString()
+                 << ", key = " << filelist.GetKey();
+      return;
+    }
+
+    s = vfs_->Read(filelist.GetKey(), data.get(), filelist.GetFileLen(), 0, fh,
+                   &read_size);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail read warmup list file, status: " << s.ToString()
+                 << ", key = " << filelist.GetKey();
+      vfs_->Release(filelist.GetKey(), fh);
+      return;
+    } else {
+      if (read_size != filelist.GetFileLen()) {
+        LOG(WARNING) << "read warmup list file size mismatch,  key = "
+                     << filelist.GetKey() << ", read_size:" << read_size
+                     << ", expect_size:" << filelist.GetFileLen();
+      }
+      vfs_->Release(filelist.GetKey(), fh);
+    }
+  }
+
   std::string file = data.get();
   VLOG(9) << "file is: " << file;
   // remove enter, newline, blank
@@ -180,7 +217,7 @@ void WarmupManagerS3Impl::FetchDentryEnqueue(fuse_ino_t key,
 
 void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
   VLOG(9) << "LookPath start key: " << key << " file: " << file;
-  std::vector<std::string> splitPath;
+  std::vector<std::string> split_path;
   // remove enter, newline, blank
   std::string blanks("\r\n ");
   file.erase(0, file.find_first_not_of(blanks));
@@ -189,39 +226,41 @@ void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
     VLOG(9) << "empty path";
     return;
   }
-  bool isRoot = false;
+
+  bool is_root = false;
   if (file == "/") {
-    splitPath.push_back(file);
-    isRoot = true;
+    split_path.push_back(file);
+    is_root = true;
   } else {
-    dingofs::utils::AddSplitStringToResult(file, "/", &splitPath);
+    dingofs::utils::AddSplitStringToResult(file, "/", &split_path);
   }
-  VLOG(6) << "splitPath size is: " << splitPath.size();
-  if (splitPath.size() == 1 && isRoot) {
+
+  VLOG(6) << "splitPath size is: " << split_path.size();
+  if (split_path.size() == 1 && is_root) {
     VLOG(9) << "i am root";
     auto task = [this, key]() {
       FetchChildDentry(key, fsInfo_->rootinodeid());
     };
     AddFetchDentryTask(key, task);
     return;
-  } else if (splitPath.size() == 1) {
+  } else if (split_path.size() == 1) {
     VLOG(9) << "parent is root: " << fsInfo_->rootinodeid()
-            << ", path is: " << splitPath[0];
-    auto task = [this, key, splitPath]() {
-      FetchDentry(key, fsInfo_->rootinodeid(), splitPath[0]);
+            << ", path is: " << split_path[0];
+    auto task = [this, key, split_path]() {
+      FetchDentry(key, fsInfo_->rootinodeid(), split_path[0]);
     };
     AddFetchDentryTask(key, task);
     return;
-  } else if (splitPath.size() > 1) {  // travel path
-    VLOG(9) << "traverse path start: " << splitPath.size();
-    std::string lastName = splitPath.back();
-    splitPath.pop_back();
+  } else if (split_path.size() > 1) {  // travel path
+    VLOG(9) << "traverse path start: " << split_path.size();
+    std::string last_name = split_path.back();
+    split_path.pop_back();
     fuse_ino_t ino = fsInfo_->rootinodeid();
-    for (auto iter : splitPath) {
+    for (const auto& iter : split_path) {
       VLOG(9) << "traverse path: " << iter << "ino is: " << ino;
       Dentry dentry;
-      std::string pathName = iter;
-      DINGOFS_ERROR ret = dentryManager_->GetDentry(ino, pathName, &dentry);
+      std::string path_name = iter;
+      DINGOFS_ERROR ret = dentryManager_->GetDentry(ino, path_name, &dentry);
       if (ret != DINGOFS_ERROR::OK) {
         if (ret != DINGOFS_ERROR::NOTEXIST) {
           LOG(WARNING) << "dentryManager_ get dentry fail, ret = " << ret
@@ -232,11 +271,11 @@ void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
       }
       ino = dentry.inodeid();
     }
-    auto task = [this, key, ino, lastName]() {
-      FetchDentry(key, ino, lastName);
+    auto task = [this, key, ino, last_name]() {
+      FetchDentry(key, ino, last_name);
     };
     AddFetchDentryTask(key, task);
-    VLOG(9) << "ino is: " << ino << " lastname is: " << lastName;
+    VLOG(9) << "ino is: " << ino << " lastname is: " << last_name;
     return;
   } else {
     VLOG(3) << "unknown path";
@@ -260,14 +299,15 @@ void WarmupManagerS3Impl::FetchDentry(fuse_ino_t key, fuse_ino_t ino,
     }
     return;
   }
+
   if (FsFileType::TYPE_S3 == dentry.type()) {
     WriteLockGuard lock(warmupInodesDequeMutex_);
-    auto iterDeque = FindWarmupInodesByKeyLocked(key);
-    if (iterDeque == warmupInodesDeque_.end()) {
+    auto iter_deque = FindWarmupInodesByKeyLocked(key);
+    if (iter_deque == warmupInodesDeque_.end()) {
       warmupInodesDeque_.emplace_back(key,
                                       std::set<fuse_ino_t>{dentry.inodeid()});
     } else {
-      iterDeque->AddFileInode(dentry.inodeid());
+      iter_deque->AddFileInode(dentry.inodeid());
     }
     return;
   } else if (FsFileType::TYPE_DIRECTORY == dentry.type()) {
@@ -289,24 +329,25 @@ void WarmupManagerS3Impl::FetchDentry(fuse_ino_t key, fuse_ino_t ino,
 
 void WarmupManagerS3Impl::FetchChildDentry(fuse_ino_t key, fuse_ino_t ino) {
   VLOG(9) << "FetchChildDentry start: key:" << key << " inode: " << ino;
-  std::list<Dentry> dentryList;
+  std::list<Dentry> dentry_list;
   auto limit = option_.listDentryLimit;
-  DINGOFS_ERROR ret = dentryManager_->ListDentry(ino, &dentryList, limit);
+  DINGOFS_ERROR ret = dentryManager_->ListDentry(ino, &dentry_list, limit);
   if (ret != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "dentryManager_ ListDentry fail, ret = " << ret
                << ", parent = " << ino;
     return;
   }
-  for (const auto& dentry : dentryList) {
+
+  for (const auto& dentry : dentry_list) {
     VLOG(9) << "FetchChildDentry: key:" << key << " dentry: " << dentry.name();
     if (FsFileType::TYPE_S3 == dentry.type()) {
       WriteLockGuard lock(warmupInodesDequeMutex_);
-      auto iterDeque = FindWarmupInodesByKeyLocked(key);
-      if (iterDeque == warmupInodesDeque_.end()) {
+      auto iter_deque = FindWarmupInodesByKeyLocked(key);
+      if (iter_deque == warmupInodesDeque_.end()) {
         warmupInodesDeque_.emplace_back(key,
                                         std::set<fuse_ino_t>{dentry.inodeid()});
       } else {
-        iterDeque->AddFileInode(dentry.inodeid());
+        iter_deque->AddFileInode(dentry.inodeid());
       }
       VLOG(9) << "FetchChildDentry: " << dentry.inodeid();
     } else if (FsFileType::TYPE_DIRECTORY == dentry.type()) {
@@ -326,46 +367,49 @@ void WarmupManagerS3Impl::FetchChildDentry(fuse_ino_t key, fuse_ino_t ino) {
 void WarmupManagerS3Impl::FetchDataEnqueue(fuse_ino_t key, fuse_ino_t ino) {
   VLOG(9) << "FetchDataEnqueue start: key:" << key << " inode: " << ino;
   auto task = [key, ino, this]() {
-    std::shared_ptr<InodeWrapper> inodeWrapper;
-    DINGOFS_ERROR ret = inodeManager_->GetInode(ino, inodeWrapper);
+    std::shared_ptr<InodeWrapper> inode_wrapper;
+    DINGOFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
     if (ret != DINGOFS_ERROR::OK) {
       LOG(ERROR) << "inodeManager get inode fail, ret = " << ret
                  << ", inodeid = " << ino;
       return;
     }
-    S3ChunkInfoMapType s3ChunkInfoMap;
+
+    S3ChunkInfoMapType s3_chunk_info_map;
     {
-      ::dingofs::utils::UniqueLock lgGuard = inodeWrapper->GetUniqueLock();
-      s3ChunkInfoMap = *inodeWrapper->GetChunkInfoMap();
+      ::dingofs::utils::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
+      s3_chunk_info_map = *inode_wrapper->GetChunkInfoMap();
     }
-    if (s3ChunkInfoMap.empty()) {
+    if (s3_chunk_info_map.empty()) {
       return;
     }
-    TravelChunks(key, ino, s3ChunkInfoMap);
+    TravelChunks(key, ino, s3_chunk_info_map);
   };
+
   AddFetchS3objectsTask(key, task);
   VLOG(9) << "FetchDataEnqueue end: key:" << key << " inode: " << ino;
 }
 
 void WarmupManagerS3Impl::TravelChunks(
-    fuse_ino_t key, fuse_ino_t ino, const S3ChunkInfoMapType& s3ChunkInfoMap) {
+    fuse_ino_t key, fuse_ino_t ino,
+    const S3ChunkInfoMapType& s3_chunk_info_map) {
   VLOG(9) << "travel chunk start: " << ino
-          << ", size: " << s3ChunkInfoMap.size();
-  for (auto const& infoIter : s3ChunkInfoMap) {
-    VLOG(9) << "travel chunk: " << infoIter.first;
-    std::list<std::pair<BlockKey, uint64_t>> prefetchObjs;
-    TravelChunk(ino, infoIter.second, &prefetchObjs);
+          << ", size: " << s3_chunk_info_map.size();
+  for (auto const& info_iter : s3_chunk_info_map) {
+    VLOG(9) << "travel chunk: " << info_iter.first;
+    std::list<std::pair<BlockKey, uint64_t>> prefetch_objs;
+    TravelChunk(ino, info_iter.second, &prefetch_objs);
     {
       ReadLockGuard lock(inode2ProgressMutex_);
       auto iter = FindWarmupProgressByKeyLocked(key);
       if (iter != inode2Progress_.end()) {
-        iter->second.AddTotal(prefetchObjs.size());
+        iter->second.AddTotal(prefetch_objs.size());
       } else {
         LOG(ERROR) << "no such warmup progress: " << key;
       }
     }
-    auto task = [this, key, prefetchObjs]() {
-      WarmUpAllObjs(key, prefetchObjs);
+    auto task = [this, key, prefetch_objs]() {
+      WarmUpAllObjs(key, prefetch_objs);
     };
     AddFetchS3objectsTask(key, task);
   }
@@ -373,83 +417,85 @@ void WarmupManagerS3Impl::TravelChunks(
 }
 
 void WarmupManagerS3Impl::TravelChunk(
-    fuse_ino_t ino, const pb::metaserver::S3ChunkInfoList& chunkInfo,
-    ObjectListType* prefetchObjs) {
-  uint64_t blockSize = s3Adaptor_->GetBlockSize();
-  uint64_t chunkSize = s3Adaptor_->GetChunkSize();
+    fuse_ino_t ino, const pb::metaserver::S3ChunkInfoList& chunk_info,
+    ObjectListType* prefetch_objs) {
+  uint64_t block_size = s3Adaptor_->GetBlockSize();
+  uint64_t chunk_size = s3Adaptor_->GetChunkSize();
+
   uint64_t offset, len, chunkid, compaction;
-  for (const auto& chunkinfo : chunkInfo.s3chunks()) {
-    auto fsId = fsInfo_->fsid();
+  for (const auto& chunkinfo : chunk_info.s3chunks()) {
+    auto fs_id = fsInfo_->fsid();
     chunkid = chunkinfo.chunkid();
     compaction = chunkinfo.compaction();
     offset = chunkinfo.offset();
     len = chunkinfo.len();
     // the offset in the chunk
-    uint64_t chunkPos = offset % chunkSize;
+    uint64_t chunk_pos = offset % chunk_size;
     // the first blockIndex
-    uint64_t blockIndexBegin = chunkPos / blockSize;
+    uint64_t block_index_begin = chunk_pos / block_size;
 
-    if (len < blockSize) {  // just one block
-      BlockKey key(fsId, ino, chunkid, blockIndexBegin, compaction);
-      prefetchObjs->push_back(std::make_pair(key, len));
+    if (len < block_size) {  // just one block
+      BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
+      prefetch_objs->push_back(std::make_pair(key, len));
     } else {
       // the offset in the block
-      uint64_t blockPos = chunkPos % blockSize;
+      uint64_t block_pos = chunk_pos % block_size;
 
       // firstly, let's get the size in the first block
       // then, subtract the length in the first block
       // to obtain the remaining length
       // lastly, We need to judge the last block is full or not
-      uint64_t firstBlockSize =
-          (blockPos != 0) ? blockSize - blockPos : blockSize;
-      uint64_t leftSize = len - firstBlockSize;
-      uint32_t blockCounts = (leftSize % blockSize == 0)
-                                 ? (leftSize / blockSize + 1)
-                                 : (leftSize / blockSize + 1 + 1);
+      uint64_t first_block_size =
+          (block_pos != 0) ? block_size - block_pos : block_size;
+      uint64_t left_size = len - first_block_size;
+      uint32_t block_counts = (left_size % block_size == 0)
+                                  ? (left_size / block_size + 1)
+                                  : (left_size / block_size + 1 + 1);
       // so we can get the last blockIndex
       // because the bolck Index is cumulative
-      uint64_t blockIndexEnd = blockIndexBegin + blockCounts - 1;
+      uint64_t block_index_end = block_index_begin + block_counts - 1;
 
       // the size of the last block
-      uint64_t lastBlockSize = leftSize % blockSize;
+      uint64_t last_block_size = left_size % block_size;
       // whether the first block or the last block is full or not
-      bool firstBlockFull = (blockPos == 0);
-      bool lastBlockFull = (lastBlockSize == 0);
+      bool first_block_full = (block_pos == 0);
+      bool last_block_full = (last_block_size == 0);
       // the start and end block Index that need travel
-      uint64_t travelStartIndex, travelEndIndex;
+      uint64_t travel_start_index, travel_end_index;
       // if the block is full, the size is needed download
       // of the obj is blockSize. Otherwise, the value is special.
-      if (!firstBlockFull) {
-        travelStartIndex = blockIndexBegin + 1;
-        BlockKey key(fsId, ino, chunkid, blockIndexBegin, compaction);
-        prefetchObjs->push_back(std::make_pair(key, firstBlockSize));
+      if (!first_block_full) {
+        travel_start_index = block_index_begin + 1;
+        BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
+        prefetch_objs->push_back(std::make_pair(key, first_block_size));
       } else {
-        travelStartIndex = blockIndexBegin;
+        travel_start_index = block_index_begin;
       }
-      if (!lastBlockFull) {
+      if (!last_block_full) {
         // block index is greater than or equal to 0
-        travelEndIndex = (blockIndexEnd == blockIndexBegin) ? blockIndexEnd
-                                                            : blockIndexEnd - 1;
-        BlockKey key(fsId, ino, chunkid, blockIndexEnd, compaction);
+        travel_end_index = (block_index_end == block_index_begin)
+                               ? block_index_end
+                               : block_index_end - 1;
+        BlockKey key(fs_id, ino, chunkid, block_index_end, compaction);
         // there is no need to care about the order
         // in which objects are downloaded
-        prefetchObjs->push_back(std::make_pair(key, lastBlockSize));
+        prefetch_objs->push_back(std::make_pair(key, last_block_size));
       } else {
-        travelEndIndex = blockIndexEnd;
+        travel_end_index = block_index_end;
       }
       VLOG(9) << "travel obj, ino: " << ino << ", chunkid: " << chunkid
-              << ", blockCounts: " << blockCounts
-              << ", compaction: " << compaction << ", blockSize: " << blockSize
-              << ", chunkSize: " << chunkSize << ", offset: " << offset
-              << ", blockIndexBegin: " << blockIndexBegin
-              << ", blockIndexEnd: " << blockIndexEnd << ", len: " << len
-              << ", firstBlockSize: " << firstBlockSize
-              << ", lastBlockSize: " << lastBlockSize
-              << ", blockPos: " << blockPos << ", chunkPos: " << chunkPos;
-      for (auto blockIndex = travelStartIndex; blockIndex <= travelEndIndex;
-           blockIndex++) {
-        BlockKey key(fsId, ino, chunkid, blockIndex, compaction);
-        prefetchObjs->push_back(std::make_pair(key, blockSize));
+              << ", blockCounts: " << block_counts
+              << ", compaction: " << compaction << ", blockSize: " << block_size
+              << ", chunkSize: " << chunk_size << ", offset: " << offset
+              << ", blockIndexBegin: " << block_index_begin
+              << ", blockIndexEnd: " << block_index_end << ", len: " << len
+              << ", firstBlockSize: " << first_block_size
+              << ", lastBlockSize: " << last_block_size
+              << ", blockPos: " << block_pos << ", chunkPos: " << chunk_pos;
+      for (auto block_index = travel_start_index;
+           block_index <= travel_end_index; block_index++) {
+        BlockKey key(fs_id, ino, chunkid, block_index, compaction);
+        prefetch_objs->push_back(std::make_pair(key, block_size));
       }
     }
   }
@@ -459,8 +505,8 @@ void WarmupManagerS3Impl::TravelChunk(
 // try to merge it
 void WarmupManagerS3Impl::WarmUpAllObjs(
     fuse_ino_t ino,
-    const std::list<std::pair<BlockKey, uint64_t>>& prefetchObjs) {
-  std::atomic<uint64_t> pendingReq(0);
+    const std::list<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
+  std::atomic<uint64_t> pending_req(0);
   dingofs::utils::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
   // callback function
@@ -481,7 +527,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
           PutObjectToCache(ino, context);
           CollectMetrics(&warmupS3Metric_.warmupS3Cached, context->len, start);
           warmupS3Metric_.warmupS3CacheSize << context->len;
-          if (pendingReq.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+          if (pending_req.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             VLOG(6) << "pendingReq is over";
             cond.Signal();
           }
@@ -489,7 +535,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
         }
         warmupS3Metric_.warmupS3Cached.eps.count << 1;
         if (++context->retry >= option_.downloadMaxRetryTimes) {
-          if (pendingReq.fetch_sub(1, std::memory_order_seq_cst) == 1) {
+          if (pending_req.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             VLOG(6) << "pendingReq is over";
             cond.Signal();
           }
@@ -504,61 +550,63 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
         S3ClientImpl::GetInstance()->AsyncGet(context);
       };
 
-  pendingReq.fetch_add(prefetchObjs.size(), std::memory_order_seq_cst);
-  if (pendingReq.load(std::memory_order_seq_cst)) {
+  pending_req.fetch_add(prefetch_objs.size(), std::memory_order_seq_cst);
+  if (pending_req.load(std::memory_order_seq_cst)) {
     VLOG(9) << "wait for pendingReq";
-    for (auto iter : prefetchObjs) {
+    for (auto iter : prefetch_objs) {
       BlockKey bkey = iter.first;
       std::string name = bkey.StoreKey();
-      uint64_t readLen = iter.second;
+      uint64_t read_len = iter.second;
       VLOG(9) << "download start: " << name;
       {
         ReadLockGuard lock(inode2ProgressMutex_);
-        auto iterProgress = FindWarmupProgressByKeyLocked(ino);
-        if (iterProgress->second.GetStorageType() ==
+        auto iter_progress = FindWarmupProgressByKeyLocked(ino);
+        if (iter_progress->second.GetStorageType() ==
                 dingofs::client::common::WarmupStorageType::
                     kWarmupStorageTypeDisk &&
             s3Adaptor_->GetBlockCache()->IsCached(bkey)) {
           // storage in disk and has cached
-          pendingReq.fetch_sub(1);
+          pending_req.fetch_sub(1);
           continue;
         }
       }
-      char* cacheS3 = new char[readLen];
-      memset(cacheS3, 0, readLen);
+
+      char* cache_s3 = new char[read_len];
+      memset(cache_s3, 0, read_len);
       auto context = std::make_shared<GetObjectAsyncContext>();
       context->key = name;
-      context->buf = cacheS3;
+      context->buf = cache_s3;
       context->offset = 0;
-      context->len = readLen;
+      context->len = read_len;
       context->cb = cb;
       context->retry = 0;
       S3ClientImpl::GetInstance()->AsyncGet(context);
     }
-    if (pendingReq.load()) cond.Wait();
+
+    if (pending_req.load()) cond.Wait();
   }
 }
 
 bool WarmupManagerS3Impl::ProgressDone(fuse_ino_t key) {
   bool ret;
   {
-    ReadLockGuard lockList(warmupFilelistDequeMutex_);
+    ReadLockGuard lock_list(warmupFilelistDequeMutex_);
     ret = FindWarmupFilelistByKeyLocked(key) == warmupFilelistDeque_.end();
   }
 
   {
-    ReadLockGuard lockDentry(inode2FetchDentryPoolMutex_);
+    ReadLockGuard lock_dentry(inode2FetchDentryPoolMutex_);
     ret = ret &&
           (FindFetchDentryPoolByKeyLocked(key) == inode2FetchDentryPool_.end());
   }
 
   {
-    ReadLockGuard lockInodes(warmupInodesDequeMutex_);
+    ReadLockGuard lock_inodes(warmupInodesDequeMutex_);
     ret = ret && (FindWarmupInodesByKeyLocked(key) == warmupInodesDeque_.end());
   }
 
   {
-    ReadLockGuard lockS3Objects(inode2FetchS3ObjectsPoolMutex_);
+    ReadLockGuard lock_s3_objects(inode2FetchS3ObjectsPoolMutex_);
     ret = ret && (FindFetchS3ObjectsPoolByKeyLocked(key) ==
                   inode2FetchS3ObjectsPool_.end());
   }
@@ -570,7 +618,7 @@ void WarmupManagerS3Impl::ScanCleanFetchDentryPool() {
   WriteLockGuard lock(inode2FetchDentryPoolMutex_);
   for (auto iter = inode2FetchDentryPool_.begin();
        iter != inode2FetchDentryPool_.end();) {
-    std::deque<WarmupInodes>::iterator iterInode;
+    std::deque<WarmupInodes>::iterator iter_inode;
     if (iter->second->QueueSize() == 0) {
       VLOG(9) << "remove FetchDentry task: " << iter->first;
       iter->second->Stop();
@@ -627,14 +675,14 @@ void WarmupManagerS3Impl::ScanWarmupFilelist() {
   // Use a write lock to ensure that all parsing tasks are added.
   WriteLockGuard lock(warmupFilelistDequeMutex_);
   if (!warmupFilelistDeque_.empty()) {
-    WarmupFilelist warmupFilelist = warmupFilelistDeque_.front();
-    VLOG(9) << "warmup ino: " << warmupFilelist.GetKey()
-            << " len is: " << warmupFilelist.GetFileLen();
+    WarmupFilelist warmup_filelist = warmupFilelistDeque_.front();
+    VLOG(9) << "warmup ino: " << warmup_filelist.GetKey()
+            << " len is: " << warmup_filelist.GetFileLen();
 
     std::vector<std::string> warmuplist;
-    GetWarmupList(warmupFilelist, &warmuplist);
-    for (auto filePath : warmuplist) {
-      FetchDentryEnqueue(warmupFilelist.GetKey(), filePath);
+    GetWarmupList(warmup_filelist, &warmuplist);
+    for (const auto& file_path : warmuplist) {
+      FetchDentryEnqueue(warmup_filelist.GetKey(), file_path);
     }
     warmupFilelistDeque_.pop_front();
   }
