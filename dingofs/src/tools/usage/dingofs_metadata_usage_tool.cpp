@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/usage/dingofs_metadata_usage_tool.h"
+#include "tools/usage/dingofs_metadata_usage_tool.h"
 
 DECLARE_string(mdsAddr);
 

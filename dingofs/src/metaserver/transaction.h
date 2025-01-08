@@ -26,8 +26,8 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/src/metaserver/dentry_storage.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "metaserver/dentry_storage.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace metaserver {

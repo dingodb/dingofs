@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/recycle_manager.h"
+#include "metaserver/recycle_manager.h"
 
 namespace dingofs {
 namespace metaserver {

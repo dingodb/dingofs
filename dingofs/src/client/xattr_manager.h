@@ -31,10 +31,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/client_operator.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/metaserver.pb.h"
+#include "client/client_operator.h"
+#include "client/filesystem/error.h"
+#include "utils/interruptible_sleeper.h"
 
 #define DirectIOAlignment 512
 

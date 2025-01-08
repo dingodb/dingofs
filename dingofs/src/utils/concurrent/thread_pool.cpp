@@ -20,7 +20,7 @@
  * Author: wudemiao
  */
 
-#include "dingofs/src/utils/concurrent/thread_pool.h"
+#include "utils/concurrent/thread_pool.h"
 
 namespace dingofs {
 namespace utils {

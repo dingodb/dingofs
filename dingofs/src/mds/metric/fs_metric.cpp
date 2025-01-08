@@ -20,10 +20,10 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/mds/metric/fs_metric.h"
+#include "mds/metric/fs_metric.h"
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/metric/metric.h"
+#include "proto/mds.pb.h"
+#include "mds/metric/metric.h"
 
 namespace dingofs {
 namespace mds {

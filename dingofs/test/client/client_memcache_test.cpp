@@ -29,9 +29,9 @@
 #include <thread>
 
 #include "absl/strings/str_cat.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/client/kvclient/memcache_client.h"
-#include "dingofs/src/utils/concurrent/count_down_event.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "client/kvclient/memcache_client.h"
+#include "utils/concurrent/count_down_event.h"
 
 using dingofs::utils::CountDownEvent;
 

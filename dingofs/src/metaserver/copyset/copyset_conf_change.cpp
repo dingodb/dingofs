@@ -20,9 +20,9 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_conf_change.h"
+#include "metaserver/copyset/copyset_conf_change.h"
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/copyset_node.h"
 
 namespace dingofs {
 namespace metaserver {

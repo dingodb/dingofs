@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 #define DINGOFS_SRC_MDS_SCHEDULE_SCHEDULEMETRICS_H_
 
-#include "dingofs/src/mds/schedule/scheduleMetricsTemplate.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "mds/schedule/scheduleMetricsTemplate.h"
+#include "mds/schedule/topoAdapter.h"
 
 namespace dingofs {
 namespace mds {

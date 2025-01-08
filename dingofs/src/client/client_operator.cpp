@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/client_operator.h"
+#include "client/client_operator.h"
 
 #include <cstdint>
 #include <list>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/filesystem/filesystem.h"
-#include "dingofs/src/utils/uuid.h"
+#include "proto/metaserver.pb.h"
+#include "client/filesystem/error.h"
+#include "client/filesystem/filesystem.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace client {

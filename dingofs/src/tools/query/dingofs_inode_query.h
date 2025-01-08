@@ -32,11 +32,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/list/dingofs_partition_list.h"
-#include "dingofs/src/tools/query/dingofs_inode.h"
-#include "dingofs/src/tools/query/dingofs_inode_s3infomap.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/list/dingofs_partition_list.h"
+#include "tools/query/dingofs_inode.h"
+#include "tools/query/dingofs_inode_s3infomap.h"
 
 namespace dingofs {
 namespace tools {

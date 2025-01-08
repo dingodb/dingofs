@@ -19,7 +19,7 @@
  * @Date: 2021-08-30 19:43:26
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/metastore.h"
+#include "metaserver/metastore.h"
 
 #include <braft/storage.h>
 #include <glog/logging.h>
@@ -30,18 +30,18 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/partition_clean_manager.h"
-#include "dingofs/src/metaserver/recycle_cleaner.h"
-#include "dingofs/src/metaserver/recycle_manager.h"
-#include "dingofs/src/metaserver/storage/config.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/memory_storage.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/metaserver/trash_manager.h"
+#include "proto/metaserver.pb.h"
+#include "common/define.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/partition_clean_manager.h"
+#include "metaserver/recycle_cleaner.h"
+#include "metaserver/recycle_manager.h"
+#include "metaserver/storage/config.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/memory_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/trash_manager.h"
 
 namespace dingofs {
 namespace metaserver {

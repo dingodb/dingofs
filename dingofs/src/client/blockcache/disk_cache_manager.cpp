@@ -20,20 +20,20 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/disk_cache_manager.h"
+#include "client/blockcache/disk_cache_manager.h"
 
 #include <butil/time.h>
 
 #include <chrono>
 #include <memory>
 
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/lru_cache.h"
-#include "dingofs/src/client/blockcache/lru_common.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "base/math/math.h"
+#include "base/time/time.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/lru_cache.h"
+#include "client/blockcache/lru_common.h"
+#include "client/common/config.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

@@ -30,13 +30,13 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/metaserver/copyset/snapshot_closure.h"
-#include "dingofs/src/metaserver/metastore_fstream.h"
-#include "dingofs/src/metaserver/partition.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/superpartition/super_partition.h"
+#include "proto/metaserver.pb.h"
+#include "common/rpc_stream.h"
+#include "metaserver/copyset/snapshot_closure.h"
+#include "metaserver/metastore_fstream.h"
+#include "metaserver/partition.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/superpartition/super_partition.h"
 
 namespace dingofs {
 namespace metaserver {

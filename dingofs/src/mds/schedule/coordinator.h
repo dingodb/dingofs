@@ -28,14 +28,14 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/schedule.pb.h"
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
-#include "dingofs/src/mds/schedule/schedule_define.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/schedule.pb.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/schedule/scheduleMetrics.h"
+#include "mds/schedule/schedule_define.h"
+#include "mds/schedule/scheduler.h"
+#include "mds/schedule/topoAdapter.h"
+#include "mds/topology/topology_item.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace mds {

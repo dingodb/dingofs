@@ -24,11 +24,11 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/metaserver/heartbeat.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_service.h"
+#include "proto/heartbeat.pb.h"
+#include "metaserver/heartbeat.h"
+#include "metaserver/copyset/mock/mock_copyset_node.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/copyset/mock/mock_copyset_service.h"
 
 namespace dingofs {
 namespace metaserver {

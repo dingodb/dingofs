@@ -19,7 +19,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/create/dingofs_create_fs.h"
+#include "tools/create/dingofs_create_fs.h"
 
 #include <functional>
 #include <iostream>
@@ -28,10 +28,10 @@
 
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/fast_align.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/common.pb.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/fast_align.h"
+#include "utils/string_util.h"
 
 DECLARE_string(fsName);
 DECLARE_string(confPath);

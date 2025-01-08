@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/delete/dingofs_delete_fs_tool.h"
+#include "tools/delete/dingofs_delete_fs_tool.h"
 
 DECLARE_string(fsName);
 DECLARE_string(mdsAddr);

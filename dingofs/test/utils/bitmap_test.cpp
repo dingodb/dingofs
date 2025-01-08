@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/utils/bitmap.h"
+#include "utils/bitmap.h"
 
 #include <gtest/gtest.h>
 

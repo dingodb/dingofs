@@ -20,15 +20,15 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
+#include "mds/metaserverclient/metaserver_client.h"
 
 #include <brpc/channel.h>
 #include <brpc/server.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/test/mds/mock/mock_cli2.h"
-#include "dingofs/test/mds/mock/mock_metaserver.h"
+#include "mds/mock/mock_cli2.h"
+#include "mds/mock/mock_metaserver.h"
 
 using dingofs::pb::metaserver::CreateDentryRequest;
 using dingofs::pb::metaserver::CreateDentryResponse;

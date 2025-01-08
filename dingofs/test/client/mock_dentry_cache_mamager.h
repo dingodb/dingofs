@@ -29,8 +29,8 @@
 #include <list>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/dentry_cache_manager.h"
+#include "proto/metaserver.pb.h"
+#include "client/dentry_cache_manager.h"
 
 namespace dingofs {
 namespace client {

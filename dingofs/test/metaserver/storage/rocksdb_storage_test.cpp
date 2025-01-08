@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
 
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
@@ -30,11 +30,11 @@
 
 #include <memory>
 
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/metaserver/storage/utils.h"
-#include "dingofs/test/metaserver/storage/storage_test.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/utils.h"
+#include "metaserver/storage/storage_test.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "fs/mock_local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

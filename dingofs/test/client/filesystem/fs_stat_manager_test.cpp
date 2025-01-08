@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/filesystem/fs_stat_manager.h"
+#include "client/filesystem/fs_stat_manager.h"
 
 #include <memory>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/client/mock_timer.h"
+#include "proto/metaserver.pb.h"
+#include "client/mock_metaserver_client.h"
+#include "client/mock_timer.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

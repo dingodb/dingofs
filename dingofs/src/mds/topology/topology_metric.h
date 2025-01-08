@@ -32,10 +32,10 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/metaserver.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace mds {

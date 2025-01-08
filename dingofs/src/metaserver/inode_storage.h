@@ -27,10 +27,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/storage.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace metaserver {

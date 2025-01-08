@@ -26,9 +26,9 @@
 #include <iostream>
 #include <memory>
 
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/dingofs_tool_factory.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/dingofs_tool_factory.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_bool(example);

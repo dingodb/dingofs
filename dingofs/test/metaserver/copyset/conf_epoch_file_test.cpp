@@ -20,12 +20,12 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/conf_epoch_file.h"
+#include "metaserver/copyset/conf_epoch_file.h"
 
 #include <gtest/gtest.h>
 
 #include "absl/memory/memory.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
+#include "fs/mock_local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -23,9 +23,9 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "dingofs/src/common/dynamic_vlog.h"
-#include "dingofs/src/mds/mds.h"
-#include "dingofs/src/utils/configuration.h"
+#include "common/dynamic_vlog.h"
+#include "mds/mds.h"
+#include "utils/configuration.h"
 
 using ::dingofs::common::FLAGS_vlog_level;
 using ::dingofs::utils::Configuration;

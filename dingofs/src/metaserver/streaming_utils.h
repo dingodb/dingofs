@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_METASERVER_STREAMING_UTILS_H_
 #define DINGOFS_SRC_METASERVER_STREAMING_UTILS_H_
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/rpc_stream.h"
+#include "proto/metaserver.pb.h"
+#include "common/rpc_stream.h"
 
 namespace dingofs {
 namespace metaserver {

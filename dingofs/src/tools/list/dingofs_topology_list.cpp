@@ -19,14 +19,14 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/list/dingofs_topology_list.h"
+#include "tools/list/dingofs_topology_list.h"
 
 #include <json/json.h>
 
 #include <fstream>
 #include <memory>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(jsonPath);

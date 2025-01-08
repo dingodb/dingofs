@@ -27,7 +27,7 @@
 #include <random>
 #include <string>
 
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "metaserver/storage/storage.h"
 #include "gflags/gflags.h"
 #include "rocksdb/iostats_context.h"
 #include "rocksdb/perf_context.h"

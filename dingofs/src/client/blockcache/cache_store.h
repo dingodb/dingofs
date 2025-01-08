@@ -28,8 +28,8 @@
 #include <functional>
 #include <string>
 
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/blockcache/error.h"
+#include "base/string/string.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

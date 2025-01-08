@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/query/dingofs_partition_query.h"
+#include "tools/query/dingofs_partition_query.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(partitionId);

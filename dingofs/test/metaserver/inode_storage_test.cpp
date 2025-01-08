@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/inode_storage.h"
+#include "metaserver/inode_storage.h"
 
 #include <gmock/gmock.h>
 #include <google/protobuf/util/message_differencer.h>
@@ -32,17 +32,17 @@
 #include <random>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/config.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/memory_storage.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/status.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/test/metaserver/mock/mock_kv_storage.h"
-#include "dingofs/test/metaserver/storage/utils.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/mock/mock_kv_storage.h"
+#include "metaserver/storage/config.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/memory_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/status.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "proto/metaserver.pb.h"
+#include "stub/filesystem/xattr.h"
 
 using ::testing::Return;
 

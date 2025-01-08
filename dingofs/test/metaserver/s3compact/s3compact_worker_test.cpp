@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/s3compact_worker.h"
+#include "metaserver/s3compact_worker.h"
 
 #include <gtest/gtest.h>
 
@@ -31,16 +31,16 @@
 #include <random>
 #include <thread>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/metaserver/inode_manager.h"
-#include "dingofs/src/metaserver/s3compact.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/status.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
-#include "dingofs/test/metaserver/mock/mock_kv_storage.h"
+#include "proto/common.pb.h"
+#include "metaserver/inode_manager.h"
+#include "metaserver/s3compact.h"
+#include "metaserver/s3compact_manager.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/status.h"
+#include "metaserver/copyset/mock/mock_copyset_node.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/mock/mock_kv_storage.h"
 
 namespace dingofs {
 namespace metaserver {

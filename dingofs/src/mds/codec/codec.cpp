@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/mds/codec/codec.h"
+#include "mds/codec/codec.h"
 
 #include <cstdlib>
 #include <cstring>
 
-#include "dingofs/src/mds/common/storage_key.h"
-#include "dingofs/src/utils/encode.h"
+#include "mds/common/storage_key.h"
+#include "utils/encode.h"
 
 namespace dingofs {
 namespace mds {

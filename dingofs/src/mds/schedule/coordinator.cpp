@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/coordinator.h"
+#include "mds/schedule/coordinator.h"
 
 #include <glog/logging.h>
 
@@ -28,10 +28,10 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/schedule/operatorFactory.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/common/mds_define.h"
+#include "mds/schedule/operatorFactory.h"
+#include "mds/topology/deal_peerid.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

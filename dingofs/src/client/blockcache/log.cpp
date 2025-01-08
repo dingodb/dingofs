@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/log.h"
+#include "client/blockcache/log.h"
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "client/blockcache/cache_store.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

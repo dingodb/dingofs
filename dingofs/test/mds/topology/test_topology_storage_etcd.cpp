@@ -27,9 +27,9 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/test/mds/topology/test_topology_helper.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/topology/test_topology_helper.h"
 
 using ::dingofs::kvstorage::MockKVStorageClient;
 

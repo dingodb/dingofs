@@ -20,11 +20,11 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/fs/local_filesystem.h"
+#include "fs/local_filesystem.h"
 
 #include <glog/logging.h>
 
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
+#include "fs/ext4_filesystem_impl.h"
 
 namespace dingofs {
 namespace fs {

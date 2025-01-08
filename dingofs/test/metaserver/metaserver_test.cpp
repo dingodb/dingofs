@@ -19,7 +19,7 @@
  * @Date: 2021-06-10 10:46:50
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/metaserver.h"
+#include "metaserver/metaserver.h"
 
 #include <butil/at_exit.h>
 #include <gmock/gmock.h>
@@ -27,9 +27,9 @@
 
 #include <thread>  // NOLINT
 
-#include "dingofs/test/metaserver/mock_heartbeat_service.h"
-#include "dingofs/test/metaserver/mock_topology_service.h"
-#include "dingofs/test/metaserver/storage/utils.h"
+#include "metaserver/mock_heartbeat_service.h"
+#include "metaserver/mock_topology_service.h"
+#include "metaserver/storage/test_utils.h"
 
 using ::dingofs::mds::heartbeat::MockHeartbeatService;
 using ::dingofs::mds::topology::MockTopologyService;

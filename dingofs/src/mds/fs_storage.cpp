@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/fs_storage.h"
+#include "mds/fs_storage.h"
 
 #include <glog/logging.h>
 
@@ -28,7 +28,7 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/mds/codec/codec.h"
+#include "mds/codec/codec.h"
 
 namespace dingofs {
 namespace mds {

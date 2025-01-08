@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/common/dynamic_vlog.h"
+#include "common/dynamic_vlog.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>

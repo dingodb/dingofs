@@ -25,13 +25,13 @@
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/utils/uuid.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
-#include "dingofs/test/metaserver/mock/mock_metastore.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "utils/uuid.h"
+#include "fs/mock_local_filesystem.h"
+#include "metaserver/mock/mock_metastore.h"
 
 namespace dingofs {
 namespace metaserver {

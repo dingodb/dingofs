@@ -30,11 +30,11 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_manager.h"
+#include "proto/heartbeat.pb.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_manager.h"
 
 namespace dingofs {
 namespace mds {

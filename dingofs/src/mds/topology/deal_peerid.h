@@ -27,7 +27,7 @@
 
 #include "braft/configuration.h"
 #include "butil/endpoint.h"
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace mds {

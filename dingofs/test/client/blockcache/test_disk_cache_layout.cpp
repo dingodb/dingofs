@@ -22,7 +22,7 @@
 
 #include <memory>
 
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_layout.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

@@ -20,14 +20,14 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/apply_queue.h"
+#include "metaserver/copyset/apply_queue.h"
 
 #include <glog/logging.h>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
-#include "dingofs/src/common/threading.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
+#include "common/threading.h"
+#include "metaserver/copyset/copyset_node.h"
 
 namespace dingofs {
 namespace metaserver {

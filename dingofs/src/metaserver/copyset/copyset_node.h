@@ -31,14 +31,14 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/apply_queue.h"
-#include "dingofs/src/metaserver/copyset/conf_epoch_file.h"
-#include "dingofs/src/metaserver/copyset/config.h"
-#include "dingofs/src/metaserver/copyset/copyset_conf_change.h"
-#include "dingofs/src/metaserver/copyset/metric.h"
-#include "dingofs/src/metaserver/copyset/raft_node.h"
-#include "dingofs/src/metaserver/metastore.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/apply_queue.h"
+#include "metaserver/copyset/conf_epoch_file.h"
+#include "metaserver/copyset/config.h"
+#include "metaserver/copyset/copyset_conf_change.h"
+#include "metaserver/copyset/metric.h"
+#include "metaserver/copyset/raft_node.h"
+#include "metaserver/metastore.h"
 
 namespace dingofs {
 namespace metaserver {

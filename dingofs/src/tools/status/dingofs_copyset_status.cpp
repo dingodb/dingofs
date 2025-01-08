@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/status/dingofs_copyset_status.h"
+#include "tools/status/dingofs_copyset_status.h"
 
 DECLARE_string(mdsAddr);
 

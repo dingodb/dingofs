@@ -20,15 +20,15 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_service.h"
+#include "metaserver/copyset/copyset_service.h"
 
 #include <brpc/channel.h>
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/utils/uuid.h"
+#include "proto/copyset.pb.h"
+#include "fs/local_filesystem.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace metaserver {

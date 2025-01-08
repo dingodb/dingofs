@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/blockcache/disk_state_health_checker.h"
+#include "client/blockcache/disk_state_health_checker.h"
 
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/client/blockcache/disk_state_machine.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "base/filepath/filepath.h"
+#include "base/timer/timer_impl.h"
+#include "client/blockcache/disk_state_machine.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

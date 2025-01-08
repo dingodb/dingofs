@@ -29,12 +29,12 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "dingofs/src/metaserver/storage/common.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/metaserver/storage/value_wrapper.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/string_util.h"
+#include "metaserver/storage/common.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/value_wrapper.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

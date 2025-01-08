@@ -20,11 +20,11 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/metaserver_service.h"
+#include "metaserver/metaserver_service.h"
 
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
-#include "dingofs/src/metaserver/metaservice_closure.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/meta_operator.h"
+#include "metaserver/metaservice_closure.h"
 
 static bvar::LatencyRecorder g_oprequest_in_service_before_propose_latency(
     "oprequest_in_service_before_propose");

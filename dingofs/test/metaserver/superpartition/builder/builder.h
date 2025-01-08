@@ -28,15 +28,15 @@
 
 #include <memory>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/metaserver/storage/config.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/metaserver/superpartition/super_partition.h"
-#include "dingofs/test/metaserver/superpartition/builder/shell.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
+#include "base/filepath/filepath.h"
+#include "base/math/math.h"
+#include "base/string/string.h"
+#include "metaserver/storage/config.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/superpartition/super_partition.h"
+#include "metaserver/superpartition/builder/shell.h"
+#include "fs/ext4_filesystem_impl.h"
 
 namespace dingofs {
 namespace metaserver {

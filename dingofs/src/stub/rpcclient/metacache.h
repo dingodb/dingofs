@@ -33,13 +33,13 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/stub/common/metacache_struct.h"
-#include "dingofs/src/stub/rpcclient/cli2_client.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/common.pb.h"
+#include "stub/common/common.h"
+#include "stub/common/config.h"
+#include "stub/common/metacache_struct.h"
+#include "stub/rpcclient/cli2_client.h"
+#include "stub/rpcclient/mds_client.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace stub {

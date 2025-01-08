@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/metaserver/trash_manager.h"
+#include "metaserver/trash_manager.h"
 
 #include <list>
 

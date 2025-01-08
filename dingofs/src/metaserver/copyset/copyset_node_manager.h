@@ -28,9 +28,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/copyset/types.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/types.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -28,11 +28,11 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/src/metaserver/inode_storage.h"
-#include "dingofs/src/metaserver/s3/metaserver_s3_adaptor.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/configuration.h"
+#include "metaserver/inode_storage.h"
+#include "metaserver/s3/metaserver_s3_adaptor.h"
+#include "stub/rpcclient/mds_client.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace metaserver {

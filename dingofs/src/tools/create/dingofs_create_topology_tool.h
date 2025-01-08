@@ -34,11 +34,11 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/configuration.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace tools {

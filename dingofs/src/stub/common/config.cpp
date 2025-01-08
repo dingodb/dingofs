@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "dingofs/src/stub/common/config.h"
+#include "stub/common/config.h"
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace stub {

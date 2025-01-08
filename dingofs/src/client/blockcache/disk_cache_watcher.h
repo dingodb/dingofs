@@ -27,10 +27,10 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/client/blockcache/disk_cache.h"
-#include "dingofs/src/client/blockcache/disk_cache_loader.h"
-#include "dingofs/src/client/blockcache/disk_state_machine_impl.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "client/blockcache/disk_cache.h"
+#include "client/blockcache/disk_cache_loader.h"
+#include "client/blockcache/disk_state_machine_impl.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

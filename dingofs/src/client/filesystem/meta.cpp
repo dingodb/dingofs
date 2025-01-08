@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/meta.h"
+#include "client/filesystem/meta.h"
 
 #include <sys/stat.h>
 

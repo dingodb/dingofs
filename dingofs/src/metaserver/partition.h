@@ -27,14 +27,14 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/metaserver/dentry_manager.h"
-#include "dingofs/src/metaserver/dentry_storage.h"
-#include "dingofs/src/metaserver/inode_manager.h"
-#include "dingofs/src/metaserver/inode_storage.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "common/define.h"
+#include "metaserver/dentry_manager.h"
+#include "metaserver/dentry_storage.h"
+#include "metaserver/inode_manager.h"
+#include "metaserver/inode_storage.h"
+#include "metaserver/storage/iterator.h"
 
 namespace dingofs {
 namespace metaserver {

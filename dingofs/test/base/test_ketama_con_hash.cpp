@@ -18,8 +18,8 @@
 #include <iomanip>
 #include <string>
 
-#include "dingofs/src/base/hash/con_hash.h"
-#include "dingofs/src/base/hash/ketama_con_hash.h"
+#include "base/hash/con_hash.h"
+#include "base/hash/ketama_con_hash.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

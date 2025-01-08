@@ -18,10 +18,10 @@
 #include <atomic>
 #include <memory>
 
-#include "dingofs/src/base/timer/timer.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
+#include "base/timer/timer.h"
+#include "client/filesystem/meta.h"
+#include "client/inode_wrapper.h"
+#include "stub/rpcclient/metaserver_client.h"
 
 namespace dingofs {
 namespace client {

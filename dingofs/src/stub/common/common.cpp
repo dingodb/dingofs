@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/stub/common/common.h"
+#include "stub/common/common.h"
 
 namespace dingofs {
 namespace stub {

@@ -26,8 +26,8 @@
 #include <cstdint>
 #include <string>
 
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/types.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/types.h"
 
 namespace dingofs {
 namespace metaserver {

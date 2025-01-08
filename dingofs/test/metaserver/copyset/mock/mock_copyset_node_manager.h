@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 namespace dingofs {
 namespace metaserver {

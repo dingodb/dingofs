@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology_service.h"
+#include "mds/topology/topology_service.h"
 
 namespace dingofs {
 namespace mds {

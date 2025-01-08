@@ -20,18 +20,18 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/fuse_s3_client.h"
+#include "client/fuse_s3_client.h"
 
 #include <memory>
 
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/blockcache/s3_client.h"
-#include "dingofs/src/client/datastream/data_stream.h"
-#include "dingofs/src/client/kvclient/memcache_client.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/utils/fast_align.h"
-#include "dingofs/src/utils/net_common.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/s3_client.h"
+#include "client/datastream/data_stream.h"
+#include "client/kvclient/memcache_client.h"
+#include "common/define.h"
+#include "stub/filesystem/xattr.h"
+#include "utils/fast_align.h"
+#include "utils/net_common.h"
 
 namespace dingofs {
 namespace client {

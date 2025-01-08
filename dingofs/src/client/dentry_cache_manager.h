@@ -28,9 +28,9 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/utils/concurrent/generic_name_lock.h"
+#include "client/filesystem/error.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "utils/concurrent/generic_name_lock.h"
 
 namespace dingofs {
 namespace client {

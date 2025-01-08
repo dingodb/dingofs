@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/trash.h"
+#include "metaserver/copyset/trash.h"
 
 #include <fcntl.h>
 
@@ -29,9 +29,9 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "metaserver/copyset/utils.h"
+#include "utils/string_util.h"
+#include "utils/uri_parser.h"
 
 namespace dingofs {
 namespace metaserver {

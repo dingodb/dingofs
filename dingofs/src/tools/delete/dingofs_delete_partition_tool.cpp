@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/tools/delete/dingofs_delete_partition_tool.h"
+#include "tools/delete/dingofs_delete_partition_tool.h"
 
 DECLARE_string(partitionId);
 DECLARE_string(mdsAddr);

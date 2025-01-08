@@ -26,11 +26,11 @@
 
 #include <string>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/tools/copyset/dingofs_copyset_base_tool.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/topology.pb.h"
+#include "tools/copyset/dingofs_copyset_base_tool.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace tools {

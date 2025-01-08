@@ -28,21 +28,21 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/metaserver/copyset/config.h"
-#include "dingofs/src/metaserver/copyset/copyset_service.h"
-#include "dingofs/src/metaserver/copyset/raft_cli_service2.h"
-#include "dingofs/src/metaserver/heartbeat.h"
-#include "dingofs/src/metaserver/inflight_throttle.h"
-#include "dingofs/src/metaserver/metaserver_service.h"
-#include "dingofs/src/metaserver/partition_clean_manager.h"
-#include "dingofs/src/metaserver/recycle_manager.h"
-#include "dingofs/src/metaserver/register.h"
-#include "dingofs/src/metaserver/resource_statistic.h"
-#include "dingofs/src/stub/rpcclient/base_client.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/utils/configuration.h"
+#include "fs/local_filesystem.h"
+#include "metaserver/copyset/config.h"
+#include "metaserver/copyset/copyset_service.h"
+#include "metaserver/copyset/raft_cli_service2.h"
+#include "metaserver/heartbeat.h"
+#include "metaserver/inflight_throttle.h"
+#include "metaserver/metaserver_service.h"
+#include "metaserver/partition_clean_manager.h"
+#include "metaserver/recycle_manager.h"
+#include "metaserver/register.h"
+#include "metaserver/resource_statistic.h"
+#include "stub/rpcclient/base_client.h"
+#include "stub/rpcclient/mds_client.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "dingofs/src/base/timer/timer_impl.h"
+#include "base/timer/timer_impl.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

@@ -28,9 +28,9 @@
 
 #include <utility>
 
-#include "dingofs/src/metaserver/copyset/raft_cli_service2.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/copyset/raft_cli_service2.h"
+#include "metaserver/copyset/mock/mock_copyset_node.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
 
 namespace dingofs {
 namespace metaserver {

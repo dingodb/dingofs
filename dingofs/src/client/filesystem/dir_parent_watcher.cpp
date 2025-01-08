@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/filesystem/dir_parent_watcher.h"
+#include "client/filesystem/dir_parent_watcher.h"
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/metaserver.pb.h"
+#include "client/inode_wrapper.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

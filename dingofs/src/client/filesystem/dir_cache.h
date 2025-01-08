@@ -27,13 +27,13 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "dingofs/src/base/queue/message_queue.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/filesystem/metric.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/lru_cache.h"
+#include "base/queue/message_queue.h"
+#include "base/time/time.h"
+#include "client/common/config.h"
+#include "client/filesystem/meta.h"
+#include "client/filesystem/metric.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/lru_cache.h"
 
 namespace dingofs {
 namespace client {

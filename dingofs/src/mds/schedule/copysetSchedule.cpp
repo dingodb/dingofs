@@ -24,8 +24,8 @@
 
 #include <random>
 
-#include "dingofs/src/mds/schedule/operatorFactory.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
+#include "mds/schedule/operatorFactory.h"
+#include "mds/schedule/scheduler.h"
 
 namespace dingofs {
 namespace mds {

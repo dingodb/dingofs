@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/local_filesystem.h"
+#include "client/blockcache/local_filesystem.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -31,12 +31,12 @@
 #include <sstream>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/base/file/file.h"
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "base/file/file.h"
+#include "base/filepath/filepath.h"
+#include "base/math/math.h"
+#include "base/string/string.h"
+#include "client/blockcache/error.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

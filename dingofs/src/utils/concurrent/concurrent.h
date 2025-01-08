@@ -27,12 +27,12 @@
 #include <condition_variable>  // NOLINT
 #include <thread>              // NOLINT
 
-#include "dingofs/src/utils/concurrent/count_down_event.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
-#include "dingofs/src/utils/concurrent/spinlock.h"
-#include "dingofs/src/utils/concurrent/task_queue.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
-#include "dingofs/src/utils/concurrent/thread_pool.h"
+#include "utils/concurrent/count_down_event.h"
+#include "utils/concurrent/rw_lock.h"
+#include "utils/concurrent/spinlock.h"
+#include "utils/concurrent/task_queue.h"
+#include "utils/concurrent/task_thread_pool.h"
+#include "utils/concurrent/thread_pool.h"
 
 namespace dingofs {
 namespace utils {

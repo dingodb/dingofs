@@ -20,16 +20,16 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/dentry_storage.h"
+#include "metaserver/dentry_storage.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/metaserver/storage/utils.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

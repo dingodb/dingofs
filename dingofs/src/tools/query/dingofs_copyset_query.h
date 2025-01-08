@@ -33,14 +33,14 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
-#include "dingofs/src/tools/copyset/dingofs_copyset_status.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/copyset.pb.h"
+#include "proto/mds.pb.h"
+#include "proto/topology.pb.h"
+#include "mds/topology/deal_peerid.h"
+#include "tools/copyset/dingofs_copyset_status.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace tools {

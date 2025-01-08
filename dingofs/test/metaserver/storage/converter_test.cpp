@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/converter.h"
+#include "metaserver/storage/converter.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>

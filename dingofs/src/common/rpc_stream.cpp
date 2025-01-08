@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/common/rpc_stream.h"
+#include "common/rpc_stream.h"
 
 #include <memory>
 

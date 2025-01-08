@@ -40,10 +40,10 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/dingofs_tool_metric.h"
-#include "dingofs/src/utils/configuration.h"
+#include "common/rpc_stream.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/dingofs_tool_metric.h"
+#include "utils/configuration.h"
 
 DECLARE_string(confPath);
 DECLARE_uint32(rpcTimeoutMs);

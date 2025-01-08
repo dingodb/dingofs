@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/common/process.h"
+#include "common/process.h"
 
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);

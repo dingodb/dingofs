@@ -27,13 +27,13 @@
 #include <memory>
 #include <mutex>
 
-#include "dingofs/src/client/blockcache/block_cache_uploader_cmmon.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/countdown.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/phase_timer.h"
-#include "dingofs/src/client/blockcache/s3_client.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "client/blockcache/block_cache_uploader_cmmon.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/countdown.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/phase_timer.h"
+#include "client/blockcache/s3_client.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/metaserver/copyset/types.h"
+#include "metaserver/copyset/types.h"
 
 namespace dingofs {
 namespace metaserver {

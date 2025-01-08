@@ -30,15 +30,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology_id_generator.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/mds/topology/topology_storge.h"
-#include "dingofs/src/mds/topology/topology_token_generator.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology_id_generator.h"
+#include "mds/topology/topology_item.h"
+#include "mds/topology/topology_storge.h"
+#include "mds/topology/topology_token_generator.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/rw_lock.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace mds {

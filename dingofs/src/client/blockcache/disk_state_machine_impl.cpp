@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/blockcache/disk_state_machine_impl.h"
+#include "client/blockcache/disk_state_machine_impl.h"
 
 #include <functional>
 #include <memory>
 
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/client/blockcache/disk_state_machine.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "base/time/time.h"
+#include "base/timer/timer_impl.h"
+#include "client/blockcache/disk_state_machine.h"
+#include "client/common/dynamic_config.h"
 #include "glog/logging.h"
 
 namespace dingofs {

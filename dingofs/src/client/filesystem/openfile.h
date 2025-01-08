@@ -26,10 +26,10 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/src/client/filesystem/defer_sync.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/filesystem/metric.h"
-#include "dingofs/src/client/inode_wrapper.h"
+#include "client/filesystem/defer_sync.h"
+#include "client/filesystem/meta.h"
+#include "client/filesystem/metric.h"
+#include "client/inode_wrapper.h"
 
 namespace dingofs {
 namespace client {

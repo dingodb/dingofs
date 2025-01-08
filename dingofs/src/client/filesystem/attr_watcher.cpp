@@ -20,10 +20,10 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/attr_watcher.h"
+#include "client/filesystem/attr_watcher.h"
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/filesystem/utils.h"
+#include "proto/metaserver.pb.h"
+#include "client/filesystem/utils.h"
 
 namespace dingofs {
 namespace client {

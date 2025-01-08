@@ -28,8 +28,8 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
-#include "dingofs/src/utils/namespace_define.h"
+#include "mds/kvstorageclient/etcd_client.h"
+#include "utils/namespace_define.h"
 
 namespace dingofs {
 namespace election {

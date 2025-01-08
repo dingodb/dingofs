@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/filesystem/fs_stat_manager.h"
+#include "client/filesystem/fs_stat_manager.h"
 
 #include <memory>
 
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/common/define.h"
+#include "client/common/dynamic_config.h"
+#include "client/inode_wrapper.h"
+#include "common/define.h"
 #include "glog/logging.h"
 
 namespace dingofs {

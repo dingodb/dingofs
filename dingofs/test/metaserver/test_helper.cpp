@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/test/metaserver/test_helper.h"
+#include "metaserver/test_helper.h"
 
 namespace dingofs {
 namespace metaserver {

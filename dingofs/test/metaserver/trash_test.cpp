@@ -23,14 +23,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/metaserver/trash_manager.h"
-#include "dingofs/test/metaserver/mock_metaserver_s3_adaptor.h"
-#include "dingofs/test/metaserver/storage/utils.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_client.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/mock_metaserver_s3_adaptor.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "metaserver/trash_manager.h"
+#include "proto/metaserver.pb.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 using ::testing::_;
 using ::testing::AtLeast;

@@ -29,8 +29,8 @@
 #include <mutex>
 #include <string>
 
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/fs/wrap_posix.h"
+#include "fs/local_filesystem.h"
+#include "fs/wrap_posix.h"
 
 const int MAX_RETYR_TIME = 3;
 

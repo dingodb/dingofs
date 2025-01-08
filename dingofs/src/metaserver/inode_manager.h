@@ -29,10 +29,10 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/inode_storage.h"
-#include "dingofs/src/metaserver/trash.h"
-#include "dingofs/src/utils/concurrent/name_lock.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/inode_storage.h"
+#include "metaserver/trash.h"
+#include "utils/concurrent/name_lock.h"
 
 namespace dingofs {
 namespace metaserver {

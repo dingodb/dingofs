@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology.h"
+#include "mds/topology/topology.h"
 
 #include <glog/logging.h>
 
@@ -29,10 +29,10 @@
 #include <random>
 #include <utility>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/uuid.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology_item.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mds {

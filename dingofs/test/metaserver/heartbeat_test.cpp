@@ -19,14 +19,14 @@
  * @Date: 2021-09-29 11:22:21
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/heartbeat.h"
+#include "metaserver/heartbeat.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/metaserver/resource_statistic.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/metaserver/mock_heartbeat_service.h"
+#include "metaserver/resource_statistic.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/mock_heartbeat_service.h"
 
 using ::dingofs::fs::FileSystemType;
 using ::dingofs::fs::LocalFsFactory;

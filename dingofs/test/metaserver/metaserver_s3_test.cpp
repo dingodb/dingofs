@@ -20,7 +20,7 @@
  * Author: chengyi
  */
 
-#include "dingofs/src/metaserver/s3/metaserver_s3.h"
+#include "metaserver/s3/metaserver_s3.h"
 
 #include <glog/logging.h>
 #include <gmock/gmock.h>
@@ -28,7 +28,7 @@
 
 #include <memory>
 
-#include "dingofs/test/aws/mock_s3_adapter.h"
+#include "aws/mock_s3_adapter.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -21,17 +21,17 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/test/metaserver/storage/storage_test.h"
+#include "metaserver/storage/storage_test.h"
 
 #include <gtest/gtest.h>
 
 #include <unordered_map>
 
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/memory_storage.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/utils/string_util.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/memory_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

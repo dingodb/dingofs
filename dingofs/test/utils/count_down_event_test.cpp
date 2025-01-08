@@ -20,7 +20,7 @@
  * Author: wudemiao
  */
 
-#include "dingofs/src/utils/concurrent/count_down_event.h"
+#include "utils/concurrent/count_down_event.h"
 
 #include <gtest/gtest.h>
 

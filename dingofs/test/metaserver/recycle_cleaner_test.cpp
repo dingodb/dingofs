@@ -19,21 +19,21 @@
  * @Date: 2022-09-14 17:01:42
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/recycle_cleaner.h"
+#include "metaserver/recycle_cleaner.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node.h"
-#include "dingofs/test/metaserver/storage/utils.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_client.h"
+#include "client/mock_metaserver_client.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/copyset/mock/mock_copyset_node.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
+#include "proto/metaserver.pb.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 using ::testing::_;
 using ::testing::DoAll;

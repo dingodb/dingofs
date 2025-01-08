@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/metaserver.h"
+#include "metaserver/metaserver.h"
 
 #include <braft/builtin_service_impl.h>
 #include <brpc/channel.h>
@@ -33,21 +33,21 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/metaserver/common/dynamic_config.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_service.h"
-#include "dingofs/src/metaserver/metaserver_service.h"
-#include "dingofs/src/metaserver/register.h"
-#include "dingofs/src/metaserver/resource_statistic.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
-#include "dingofs/src/metaserver/storage/rocksdb_options.h"
-#include "dingofs/src/metaserver/storage/rocksdb_perf.h"
-#include "dingofs/src/metaserver/trash_manager.h"
-#include "dingofs/src/utils/crc32.h"
-#include "dingofs/src/utils/dingo_version.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "aws/s3_adapter.h"
+#include "metaserver/common/dynamic_config.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_service.h"
+#include "metaserver/metaserver_service.h"
+#include "metaserver/register.h"
+#include "metaserver/resource_statistic.h"
+#include "metaserver/s3compact_manager.h"
+#include "metaserver/storage/rocksdb_options.h"
+#include "metaserver/storage/rocksdb_perf.h"
+#include "metaserver/trash_manager.h"
+#include "utils/crc32.h"
+#include "utils/dingo_version.h"
+#include "utils/string_util.h"
+#include "utils/uri_parser.h"
 
 namespace braft {
 

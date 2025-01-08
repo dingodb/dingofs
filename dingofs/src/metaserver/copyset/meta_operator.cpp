@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "metaserver/copyset/meta_operator.h"
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
@@ -29,13 +29,13 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/metaserver/copyset/meta_operator_closure.h"
-#include "dingofs/src/metaserver/copyset/raft_log_codec.h"
-#include "dingofs/src/metaserver/metastore.h"
-#include "dingofs/src/metaserver/streaming_utils.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/metaserver.pb.h"
+#include "common/rpc_stream.h"
+#include "metaserver/copyset/meta_operator_closure.h"
+#include "metaserver/copyset/raft_log_codec.h"
+#include "metaserver/metastore.h"
+#include "metaserver/streaming_utils.h"
+#include "utils/timeutility.h"
 
 static bvar::LatencyRecorder g_concurrent_fast_apply_wait_latency(
     "concurrent_fast_apply_wait");

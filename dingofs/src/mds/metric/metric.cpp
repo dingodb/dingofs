@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/mds/metric/metric.h"
+#include "mds/metric/metric.h"
 
 #include <glog/logging.h>
 
@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace mds {

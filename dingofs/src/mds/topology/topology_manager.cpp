@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology_manager.h"
+#include "mds/topology/topology_manager.h"
 
 #include <sys/time.h>
 #include <sys/types.h>
@@ -32,12 +32,12 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/utils/concurrent/name_lock.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/deal_peerid.h"
+#include "mds/topology/topology_item.h"
+#include "utils/concurrent/name_lock.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace mds {

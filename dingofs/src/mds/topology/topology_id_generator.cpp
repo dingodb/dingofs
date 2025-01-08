@@ -19,9 +19,9 @@
  * Created Date: 2021-08-24
  * Author: wanghai01
  */
-#include "dingofs/src/mds/topology/topology_id_generator.h"
+#include "mds/topology/topology_id_generator.h"
 
-#include "dingofs/src/mds/common/mds_define.h"
+#include "mds/common/mds_define.h"
 
 namespace dingofs {
 namespace mds {

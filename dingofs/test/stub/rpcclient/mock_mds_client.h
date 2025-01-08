@@ -32,8 +32,8 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
+#include "stub/common/config.h"
+#include "stub/rpcclient/mds_client.h"
 
 using ::testing::_;
 using ::testing::Return;

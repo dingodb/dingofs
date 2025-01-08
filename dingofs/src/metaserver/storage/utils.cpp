@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/utils.h"
+#include "metaserver/storage/utils.h"
 
 #include <glog/logging.h>
 
@@ -28,10 +28,10 @@
 #include <cstring>
 #include <fstream>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/fs/fs_common.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/string_util.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "fs/fs_common.h"
 
 namespace dingofs {
 namespace metaserver {

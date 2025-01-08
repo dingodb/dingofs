@@ -26,9 +26,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/s3compact_inode.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/s3compact_inode.h"
 
 using dingofs::metaserver::copyset::CopysetNode;
 using dingofs::pb::common::PartitionInfo;

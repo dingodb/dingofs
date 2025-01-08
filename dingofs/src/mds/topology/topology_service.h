@@ -31,7 +31,7 @@
 
 #include <memory>
 
-#include "dingofs/src/mds/topology/topology_manager.h"
+#include "mds/topology/topology_manager.h"
 
 namespace dingofs {
 namespace mds {

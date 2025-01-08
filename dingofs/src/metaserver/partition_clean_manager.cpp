@@ -19,9 +19,9 @@
  * @Date: 2021-12-15 10:54:28
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/partition_clean_manager.h"
+#include "metaserver/partition_clean_manager.h"
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace metaserver {

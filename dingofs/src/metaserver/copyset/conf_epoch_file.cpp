@@ -20,7 +20,7 @@
  * Author: wudemiao
  */
 
-#include "dingofs/src/metaserver/copyset/conf_epoch_file.h"
+#include "metaserver/copyset/conf_epoch_file.h"
 
 #include <glog/logging.h>
 #include <json2pb/json_to_pb.h>
@@ -28,7 +28,7 @@
 #include <sys/fcntl.h>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/utils/crc32.h"
+#include "utils/crc32.h"
 
 namespace dingofs {
 namespace metaserver {

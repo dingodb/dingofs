@@ -22,8 +22,8 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/filesystem/utils.h"
-#include "dingofs/test/client/filesystem/helper/helper.h"
+#include "client/filesystem/utils.h"
+#include "client/filesystem/helper/helper.h"
 
 namespace dingofs {
 namespace client {

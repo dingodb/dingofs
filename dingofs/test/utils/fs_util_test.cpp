@@ -20,7 +20,7 @@
  * Author: charisu
  */
 
-#include "dingofs/src/utils/fs_util.h"
+#include "utils/fs_util.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

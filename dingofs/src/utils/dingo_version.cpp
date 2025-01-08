@@ -20,11 +20,11 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/utils/dingo_version.h"
+#include "utils/dingo_version.h"
 
 #include <bvar/bvar.h>
 
-#include "dingofs/src/utils/macros.h"
+#include "utils/macros.h"
 
 namespace dingofs {
 namespace utils {

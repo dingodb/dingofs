@@ -19,7 +19,7 @@
  * Created Date: 21-5-31
  * Author: huyao
  */
-#include "dingofs/src/client/s3/client_s3.h"
+#include "client/s3/client_s3.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/block_cache_uploader.h"
+#include "client/blockcache/block_cache_uploader.h"
 
 #include <chrono>
 #include <memory>
@@ -29,14 +29,14 @@
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/client/blockcache/block_cache_uploader_cmmon.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/client/blockcache/log.h"
-#include "dingofs/src/client/blockcache/phase_timer.h"
-#include "dingofs/src/client/blockcache/segments.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "client/blockcache/block_cache_uploader_cmmon.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/blockcache/log.h"
+#include "client/blockcache/phase_timer.h"
+#include "client/blockcache/segments.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

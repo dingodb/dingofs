@@ -25,9 +25,9 @@
 
 #include <memory>
 
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/utils/leaky_bucket.h"
-#include "dingofs/src/utils/throttle.h"
+#include "base/timer/timer_impl.h"
+#include "utils/leaky_bucket.h"
+#include "utils/throttle.h"
 
 namespace dingofs {
 namespace client {

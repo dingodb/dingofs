@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_reloader.h"
+#include "metaserver/copyset/copyset_reloader.h"
 
 #include <glog/logging.h>
 
@@ -29,13 +29,13 @@
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/metaserver/copyset/types.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/types.h"
+#include "metaserver/copyset/utils.h"
+#include "utils/string_util.h"
+#include "utils/timeutility.h"
+#include "utils/uri_parser.h"
 
 namespace dingofs {
 namespace metaserver {

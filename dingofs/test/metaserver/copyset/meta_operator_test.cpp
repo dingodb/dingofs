@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "metaserver/copyset/meta_operator.h"
 
 #include <brpc/server.h>
 #include <gtest/gtest.h>
@@ -30,12 +30,12 @@
 #include <regex>
 
 #include "absl/memory/memory.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_raft_node.h"
-#include "dingofs/test/metaserver/mock/mock_metastore.h"
+#include "proto/metaserver.pb.h"
+#include "utils/timeutility.h"
+#include "fs/mock_local_filesystem.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/copyset/mock/mock_raft_node.h"
+#include "metaserver/mock/mock_metastore.h"
 
 namespace dingofs {
 namespace metaserver {

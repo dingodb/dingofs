@@ -29,11 +29,11 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/include/dingo_compiler_specific.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/operator_type.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/operator_type.h"
+#include "metaserver/copyset/utils.h"
+#include "utils/dingo_compiler_specific.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace metaserver {

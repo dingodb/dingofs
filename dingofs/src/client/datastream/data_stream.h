@@ -27,10 +27,10 @@
 #include <functional>
 #include <memory>
 
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/datastream/metric.h"
-#include "dingofs/src/client/datastream/page_allocator.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "client/common/config.h"
+#include "client/datastream/metric.h"
+#include "client/datastream/page_allocator.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

@@ -24,9 +24,9 @@
 
 #include <string>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
+#include "proto/mds.pb.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
 
 namespace dingofs {
 namespace tools {

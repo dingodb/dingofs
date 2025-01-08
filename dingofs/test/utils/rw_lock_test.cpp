@@ -20,7 +20,7 @@
  * Author: wudemiao
  */
 
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "utils/concurrent/rw_lock.h"
 
 #include <errno.h>
 #include <gtest/gtest.h>

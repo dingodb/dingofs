@@ -29,18 +29,18 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/mds/common/types.h"
-#include "dingofs/src/mds/dlock/dlock.h"
-#include "dingofs/src/mds/fs_info_wrapper.h"
-#include "dingofs/src/mds/fs_storage.h"
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_manager.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/mds.pb.h"
+#include "proto/topology.pb.h"
+#include "aws/s3_adapter.h"
+#include "mds/common/types.h"
+#include "mds/dlock/dlock.h"
+#include "mds/fs_info_wrapper.h"
+#include "mds/fs_storage.h"
+#include "mds/metaserverclient/metaserver_client.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_manager.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace mds {

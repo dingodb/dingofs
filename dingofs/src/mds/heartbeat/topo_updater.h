@@ -26,8 +26,8 @@
 #include <list>
 #include <memory>
 
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

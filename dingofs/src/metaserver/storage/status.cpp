@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/status.h"
+#include "metaserver/storage/status.h"
 
 namespace dingofs {
 namespace metaserver {

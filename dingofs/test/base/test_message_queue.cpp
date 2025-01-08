@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/base/queue/message_queue.h"
+#include "base/queue/message_queue.h"
 
 namespace dingofs {
 namespace base {

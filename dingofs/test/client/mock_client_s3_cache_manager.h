@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
+#include "client/s3/client_s3_cache_manager.h"
 
 namespace dingofs {
 namespace client {

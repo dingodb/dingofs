@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/defer_sync.h"
+#include "client/filesystem/defer_sync.h"
 
-#include "dingofs/test/client/filesystem/helper/helper.h"
+#include "client/filesystem/helper/helper.h"
 
 namespace dingofs {
 namespace client {

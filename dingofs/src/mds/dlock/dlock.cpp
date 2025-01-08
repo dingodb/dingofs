@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/mds/dlock/dlock.h"
+#include "mds/dlock/dlock.h"
 
 #include <bthread/bthread.h>
 
@@ -29,10 +29,10 @@
 #include <ostream>
 #include <thread>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/common/storage_key.h"
-#include "dingofs/src/utils/encode.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/mds.pb.h"
+#include "mds/common/storage_key.h"
+#include "utils/encode.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace mds {

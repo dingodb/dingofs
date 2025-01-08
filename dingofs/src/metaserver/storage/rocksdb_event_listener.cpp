@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/storage/rocksdb_event_listener.h"
+#include "metaserver/storage/rocksdb_event_listener.h"
 
 #include <butil/time.h>
 

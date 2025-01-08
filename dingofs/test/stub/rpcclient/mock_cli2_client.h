@@ -28,8 +28,8 @@
 
 #include <string>
 
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/rpcclient/cli2_client.h"
+#include "stub/common/common.h"
+#include "stub/rpcclient/cli2_client.h"
 
 using ::testing::_;
 using ::testing::Return;

@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/trash.h"
+#include "metaserver/copyset/trash.h"
 
 #include <gtest/gtest.h>
 
 #include <memory>
 
-#include "dingofs/test/fs/mock_local_filesystem.h"
+#include "fs/mock_local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

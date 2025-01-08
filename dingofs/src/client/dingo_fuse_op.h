@@ -29,7 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "dingofs/src/client/fuse_common.h"
+#include "client/fuse_common.h"
 
 #ifdef __cplusplus
 extern "C" {

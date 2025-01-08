@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/lookup_cache.h"
+#include "client/filesystem/lookup_cache.h"
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/common/config.h"
+#include "client/common/config.h"
 
 namespace dingofs {
 namespace client {

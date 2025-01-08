@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/copyset_node.h"
 
 #include <braft/protobuf_file.h>
 #include <braft/util.h>
@@ -35,15 +35,15 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/memory/memory.h"
 #include "absl/utility/utility.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/metaserver/copyset/meta_operator_closure.h"
-#include "dingofs/src/metaserver/copyset/metric.h"
-#include "dingofs/src/metaserver/copyset/raft_log_codec.h"
-#include "dingofs/src/metaserver/copyset/snapshot_closure.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/meta_operator_closure.h"
+#include "metaserver/copyset/metric.h"
+#include "metaserver/copyset/raft_log_codec.h"
+#include "metaserver/copyset/snapshot_closure.h"
+#include "metaserver/copyset/utils.h"
+#include "metaserver/storage/storage.h"
+#include "utils/timeutility.h"
+#include "utils/uri_parser.h"
 
 static bvar::LatencyRecorder g_oprequest_propose_latency("oprequest_propose");
 static bvar::LatencyRecorder g_concurrent_apply_wait_latency(

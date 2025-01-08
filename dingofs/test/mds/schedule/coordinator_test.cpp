@@ -20,14 +20,14 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/coordinator.h"
+#include "mds/schedule/coordinator.h"
 
 #include <glog/logging.h>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/test/mds/mock/mock_topoAdapter.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/common/mds_define.h"
+#include "mds/mock/mock_topoAdapter.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/schedule/common.h"
 
 using ::dingofs::mds::schedule::ScheduleOption;
 using ::dingofs::mds::topology::MockTopology;

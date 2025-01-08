@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
+#include "stub/rpcclient/metaserver_client.h"
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
@@ -31,14 +31,14 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/stub/rpcclient/channel_manager.h"
-#include "dingofs/src/stub/rpcclient/metacache.h"
-#include "dingofs/test/client/utils.h"
-#include "dingofs/test/stub/rpcclient/mock_metacache.h"
-#include "dingofs/test/stub/rpcclient/mock_metaserver_service.h"
+#include "proto/metaserver.pb.h"
+#include "stub/common/common.h"
+#include "stub/filesystem/xattr.h"
+#include "stub/rpcclient/channel_manager.h"
+#include "stub/rpcclient/metacache.h"
+#include "client/utils.h"
+#include "stub/rpcclient/mock_metacache.h"
+#include "stub/rpcclient/mock_metaserver_service.h"
 
 namespace dingofs {
 namespace stub {

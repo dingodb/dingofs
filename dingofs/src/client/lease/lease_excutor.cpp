@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/client/lease/lease_excutor.h"
+#include "client/lease/lease_excutor.h"
 
 #include <vector>
 

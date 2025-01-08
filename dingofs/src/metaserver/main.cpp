@@ -24,12 +24,12 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "dingofs/src/common/dynamic_vlog.h"
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/common/threading.h"
-#include "dingofs/src/metaserver/metaserver.h"
-#include "dingofs/src/metaserver/superpartition/access_log.h"
-#include "dingofs/src/utils/configuration.h"
+#include "common/dynamic_vlog.h"
+#include "common/process.h"
+#include "common/threading.h"
+#include "metaserver/metaserver.h"
+#include "metaserver/superpartition/access_log.h"
+#include "utils/configuration.h"
 
 DEFINE_string(confPath, "dingofs/conf/metaserver.conf", "metaserver confPath");
 DEFINE_string(ip, "127.0.0.1", "metasetver listen ip");

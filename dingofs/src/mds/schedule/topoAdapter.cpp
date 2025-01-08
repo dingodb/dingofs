@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "mds/schedule/topoAdapter.h"
 
 #include <glog/logging.h>
 
@@ -30,8 +30,8 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
 
 namespace dingofs {
 namespace mds {

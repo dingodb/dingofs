@@ -20,16 +20,16 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/datastream/data_stream.h"
+#include "client/datastream/data_stream.h"
 
 #include <glog/logging.h>
 
 #include <cassert>
 #include <cstring>
 
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/datastream/metric.h"
-#include "dingofs/src/client/datastream/page_allocator.h"
+#include "client/common/config.h"
+#include "client/datastream/metric.h"
+#include "client/datastream/page_allocator.h"
 
 namespace dingofs {
 namespace client {

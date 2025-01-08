@@ -28,9 +28,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/common/metacache_struct.h"
-#include "dingofs/src/stub/rpcclient/metacache.h"
+#include "stub/common/common.h"
+#include "stub/common/metacache_struct.h"
+#include "stub/rpcclient/metacache.h"
 
 namespace dingofs {
 namespace stub {

@@ -29,12 +29,12 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/base_client.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "common/rpc_stream.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/base_client.h"
+#include "stub/rpcclient/task_excutor.h"
 
 namespace dingofs {
 namespace stub {

@@ -28,11 +28,11 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/proto/space.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/stub/common/common.h"
+#include "proto/mds.pb.h"
+#include "proto/metaserver.pb.h"
+#include "proto/space.pb.h"
+#include "proto/topology.pb.h"
+#include "stub/common/common.h"
 
 namespace dingofs {
 namespace stub {

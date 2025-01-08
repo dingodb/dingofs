@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/dentry_storage.h"
+#include "metaserver/dentry_storage.h"
 
 #include <butil/time.h>
 
@@ -28,8 +28,8 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/metaserver.pb.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

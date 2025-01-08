@@ -21,11 +21,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/filesystem.h"
+#include "client/filesystem/filesystem.h"
 
 #include <gtest/gtest.h>
 
-#include "dingofs/test/client/filesystem/helper/helper.h"
+#include "client/filesystem/helper/helper.h"
 
 namespace dingofs {
 namespace client {

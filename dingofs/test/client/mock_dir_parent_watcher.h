@@ -27,7 +27,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/filesystem/dir_parent_watcher.h"
+#include "client/filesystem/dir_parent_watcher.h"
 #include "gmock/gmock.h"
 
 namespace dingofs {

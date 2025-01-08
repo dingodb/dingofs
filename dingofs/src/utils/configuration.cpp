@@ -21,7 +21,7 @@
  *          2018/08/30  Wenyu Zhou   Initial version
  */
 
-#include "dingofs/src/utils/configuration.h"
+#include "utils/configuration.h"
 
 #include <glog/logging.h>
 

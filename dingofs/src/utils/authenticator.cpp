@@ -43,7 +43,7 @@
 #undef OPENSSL_NO_SHA256
 #endif
 
-#include "dingofs/src/utils/authenticator.h"
+#include "utils/authenticator.h"
 
 #include <glog/logging.h>
 #include <openssl/hmac.h>

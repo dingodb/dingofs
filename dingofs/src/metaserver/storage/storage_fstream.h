@@ -30,8 +30,8 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
-#include "dingofs/src/metaserver/storage/dumpfile.h"
-#include "dingofs/src/utils/string_util.h"
+#include "metaserver/storage/dumpfile.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

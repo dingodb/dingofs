@@ -23,8 +23,8 @@
 #include <gtest/gtest.h>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/metaserver/inflight_throttle.h"
-#include "dingofs/src/metaserver/metaserver_service.h"
+#include "metaserver/inflight_throttle.h"
+#include "metaserver/metaserver_service.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
+#include "fs/ext4_filesystem_impl.h"
 
 #include <dirent.h>
 #include <glog/logging.h>
@@ -28,8 +28,8 @@
 #include <sys/utsname.h>
 #include <sys/vfs.h>
 
-#include "dingofs/src/fs/wrap_posix.h"
-#include "dingofs/src/utils/string_util.h"
+#include "fs/wrap_posix.h"
+#include "utils/string_util.h"
 
 #define MIN_KERNEL_VERSION KERNEL_VERSION(3, 15, 0)
 

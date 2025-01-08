@@ -32,13 +32,13 @@
 #include <iostream>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/mds/topology/topology_manager.h"
-#include "dingofs/test/mds/mock/mock_metaserver.h"
-#include "dingofs/test/mds/mock/mock_metaserver_client.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology_item.h"
+#include "mds/topology/topology_manager.h"
+#include "mds/mock/mock_metaserver.h"
+#include "mds/mock/mock_metaserver_client.h"
+#include "mds/mock/mock_topology.h"
 
 namespace dingofs {
 namespace mds {

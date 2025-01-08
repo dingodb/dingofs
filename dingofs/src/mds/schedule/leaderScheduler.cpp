@@ -22,9 +22,9 @@
 
 #include <random>
 
-#include "dingofs/src/mds/schedule/operatorFactory.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "mds/schedule/operatorFactory.h"
+#include "mds/schedule/scheduler.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace mds {

@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/utils/stringstatus.h"
+#include "utils/stringstatus.h"
 
 #include <gtest/gtest.h>
 

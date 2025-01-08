@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "dingofs/src/base/hash/con_hash.h"
+#include "base/hash/con_hash.h"
 
 namespace dingofs {
 namespace base {

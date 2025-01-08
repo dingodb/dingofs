@@ -27,7 +27,7 @@
 #include <memory>
 #include <string_view>
 
-#include "dingofs/src/client/blockcache/lru_common.h"
+#include "client/blockcache/lru_common.h"
 
 namespace dingofs {
 namespace client {

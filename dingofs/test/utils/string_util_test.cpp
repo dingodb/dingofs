@@ -20,7 +20,7 @@
  * Author: hzsunjianliang
  */
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/base/file/file.h"
+#include "base/file/file.h"
 
 #include <unordered_map>
 

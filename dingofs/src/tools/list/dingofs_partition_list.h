@@ -29,10 +29,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
+#include "proto/common.pb.h"
+#include "proto/topology.pb.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
 
 namespace dingofs {
 namespace tools {

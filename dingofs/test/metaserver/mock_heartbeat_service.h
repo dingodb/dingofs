@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "dingofs/proto/heartbeat.pb.h"
+#include "proto/heartbeat.pb.h"
 
 namespace dingofs {
 namespace mds {

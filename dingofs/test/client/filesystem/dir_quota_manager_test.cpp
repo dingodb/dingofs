@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/filesystem/dir_quota_manager.h"
+#include "client/filesystem/dir_quota_manager.h"
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/test/client/mock_dir_parent_watcher.h"
-#include "dingofs/test/client/mock_inode_cache_manager.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/client/mock_timer.h"
+#include "proto/metaserver.pb.h"
+#include "client/mock_dir_parent_watcher.h"
+#include "client/mock_inode_cache_manager.h"
+#include "client/mock_metaserver_client.h"
+#include "client/mock_timer.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 

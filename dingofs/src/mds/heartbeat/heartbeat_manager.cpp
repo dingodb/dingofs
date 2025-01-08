@@ -20,14 +20,14 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/heartbeat_manager.h"
+#include "mds/heartbeat/heartbeat_manager.h"
 
 #include <glog/logging.h>
 
 #include <list>
 #include <set>
 
-#include "dingofs/src/mds/topology/deal_peerid.h"
+#include "mds/topology/deal_peerid.h"
 
 namespace dingofs {
 namespace mds {

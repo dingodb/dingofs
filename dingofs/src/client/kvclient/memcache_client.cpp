@@ -20,7 +20,7 @@
  * Author: YangFan (fansehep)
  */
 
-#include "dingofs/src/client/kvclient/memcache_client.h"
+#include "client/kvclient/memcache_client.h"
 
 namespace dingofs {
 namespace client {

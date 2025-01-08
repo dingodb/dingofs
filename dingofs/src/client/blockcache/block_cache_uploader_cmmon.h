@@ -28,9 +28,9 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/countdown.h"
-#include "dingofs/src/client/blockcache/segments.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/countdown.h"
+#include "client/blockcache/segments.h"
 
 namespace dingofs {
 namespace client {

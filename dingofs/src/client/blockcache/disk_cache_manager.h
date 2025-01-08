@@ -27,16 +27,16 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/base/cache/cache.h"
-#include "dingofs/src/base/queue/message_queue.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/client/blockcache/lru_cache.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "base/cache/cache.h"
+#include "base/queue/message_queue.h"
+#include "base/time/time.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/blockcache/lru_cache.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

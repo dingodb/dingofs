@@ -28,9 +28,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
-#include "dingofs/src/mds/topology/topology_storge.h"
+#include "mds/kvstorageclient/etcd_client.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge.h"
 
 namespace dingofs {
 namespace mds {

@@ -20,8 +20,8 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/operatorFactoryTemplate.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "mds/schedule/operatorFactoryTemplate.h"
+#include "mds/schedule/topoAdapter.h"
 
 #ifndef DINGOFS_SRC_MDS_SCHEDULE_OPERATORFACTORY_H_
 #define DINGOFS_SRC_MDS_SCHEDULE_OPERATORFACTORY_H_

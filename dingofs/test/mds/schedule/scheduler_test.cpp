@@ -20,16 +20,16 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/scheduler.h"
+#include "mds/schedule/scheduler.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
-#include "dingofs/src/mds/topology/topology_id_generator.h"
-#include "dingofs/test/mds/mock/mock_topoAdapter.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/schedule/scheduleMetrics.h"
+#include "mds/topology/topology_id_generator.h"
+#include "mds/mock/mock_topoAdapter.h"
+#include "mds/mock/mock_topology.h"
 
 using ::testing::_;
 using ::testing::DoAll;

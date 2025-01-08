@@ -21,11 +21,11 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/src/base/timer/timer.h"
-#include "dingofs/src/client/filesystem/dir_parent_watcher.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "base/timer/timer.h"
+#include "client/filesystem/dir_parent_watcher.h"
+#include "client/filesystem/meta.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

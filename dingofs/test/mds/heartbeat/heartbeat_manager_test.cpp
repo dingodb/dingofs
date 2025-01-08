@@ -20,16 +20,16 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/heartbeat_manager.h"
+#include "mds/heartbeat/heartbeat_manager.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
-#include "dingofs/src/mds/heartbeat/metaserver_healthy_checker.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/test/mds/mock/mock_coordinator.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/heartbeat/metaserver_healthy_checker.h"
+#include "utils/timeutility.h"
+#include "mds/mock/mock_coordinator.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::mds::topology::MockIdGenerator;
 using ::dingofs::mds::topology::MockStorage;

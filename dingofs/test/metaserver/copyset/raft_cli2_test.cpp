@@ -20,14 +20,14 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/raft_cli2.h"
+#include "metaserver/copyset/raft_cli2.h"
 
 #include <brpc/server.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include "absl/memory/memory.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_raft_cli2_service.h"
+#include "metaserver/copyset/mock/mock_raft_cli2_service.h"
 
 namespace dingofs {
 namespace metaserver {

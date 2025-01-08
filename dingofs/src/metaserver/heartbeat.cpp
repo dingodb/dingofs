@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/heartbeat.h"
+#include "metaserver/heartbeat.h"
 
 #include <braft/closure_helper.h>
 #include <brpc/channel.h>
@@ -31,12 +31,12 @@
 
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/metaserver/resource_statistic.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "proto/common.pb.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/utils.h"
+#include "metaserver/resource_statistic.h"
+#include "utils/timeutility.h"
+#include "utils/uri_parser.h"
 
 namespace dingofs {
 namespace metaserver {

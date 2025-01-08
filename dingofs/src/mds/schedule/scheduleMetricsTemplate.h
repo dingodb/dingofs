@@ -30,9 +30,9 @@
 #include <set>
 #include <string>
 
-#include "dingofs/src/mds/schedule/operatorStepTemplate.h"
-#include "dingofs/src/mds/schedule/operatorTemplate.h"
-#include "dingofs/src/utils/stringstatus.h"
+#include "mds/schedule/operatorStepTemplate.h"
+#include "mds/schedule/operatorTemplate.h"
+#include "utils/stringstatus.h"
 
 namespace dingofs {
 namespace mds {

@@ -31,7 +31,7 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/metaserver/storage/iterator.h"
+#include "metaserver/storage/iterator.h"
 
 namespace dingofs {
 namespace fs {

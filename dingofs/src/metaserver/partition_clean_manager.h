@@ -25,8 +25,8 @@
 #include <list>
 #include <memory>
 
-#include "dingofs/src/metaserver/partition_cleaner.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
+#include "metaserver/partition_cleaner.h"
+#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace metaserver {

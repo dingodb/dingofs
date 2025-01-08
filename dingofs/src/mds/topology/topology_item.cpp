@@ -20,13 +20,13 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/topology/topology_item.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 #include "json/json.h"
 
 namespace dingofs {

@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/mds_service.h"
+#include "mds/mds_service.h"
 
 #include <brpc/channel.h>
 #include <brpc/server.h>
@@ -30,14 +30,14 @@
 
 #include <string>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/test/aws/mock_s3_adapter.h"
-#include "dingofs/test/mds/fake_metaserver.h"
-#include "dingofs/test/mds/mock/mock_cli2.h"
-#include "dingofs/test/mds/mock/mock_kvstorage_client.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "proto/mds.pb.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "aws/mock_s3_adapter.h"
+#include "mds/fake_metaserver.h"
+#include "mds/mock/mock_cli2.h"
+#include "mds/mock/mock_kvstorage_client.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;

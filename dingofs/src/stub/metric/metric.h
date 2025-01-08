@@ -30,8 +30,8 @@
 #include <mutex>
 #include <string>
 
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/string_util.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace stub {

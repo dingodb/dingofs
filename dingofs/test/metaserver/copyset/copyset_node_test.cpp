@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/copyset_node.h"
 
 #include <brpc/server.h>
 #include <gmock/gmock.h>
@@ -30,11 +30,11 @@
 #include <chrono>
 #include <thread>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_service.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_raft_node.h"
+#include "proto/common.pb.h"
+#include "fs/mock_local_filesystem.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/copyset/mock/mock_copyset_service.h"
+#include "metaserver/copyset/mock/mock_raft_node.h"
 
 namespace dingofs {
 namespace metaserver {

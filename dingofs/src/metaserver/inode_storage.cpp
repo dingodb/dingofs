@@ -20,17 +20,17 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/inode_storage.h"
+#include "metaserver/inode_storage.h"
 
 #include <limits>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/status.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/status.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

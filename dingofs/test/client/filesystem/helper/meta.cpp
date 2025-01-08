@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/test/client/filesystem/helper/meta.h"
+#include "client/filesystem/helper/meta.h"
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {

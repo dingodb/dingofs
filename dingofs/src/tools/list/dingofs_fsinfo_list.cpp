@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/list/dingofs_fsinfo_list.h"
+#include "tools/list/dingofs_fsinfo_list.h"
 
 #include <google/protobuf/util/json_util.h>
 

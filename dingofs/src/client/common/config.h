@@ -26,11 +26,11 @@
 #include <cstdint>
 #include <string>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/utils/configuration.h"
+#include "proto/common.pb.h"
+#include "aws/s3_adapter.h"
+#include "client/common/common.h"
+#include "stub/common/config.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/s3compact_worker.h"
+#include "metaserver/s3compact_worker.h"
 
 #include <glog/logging.h>
 
@@ -31,10 +31,10 @@
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/common/threading.h"
-#include "dingofs/src/metaserver/s3compact.h"
-#include "dingofs/src/metaserver/s3compact_inode.h"
-#include "dingofs/src/metaserver/storage/converter.h"
+#include "common/threading.h"
+#include "metaserver/s3compact.h"
+#include "metaserver/s3compact_inode.h"
+#include "metaserver/storage/converter.h"
 
 namespace dingofs {
 namespace metaserver {

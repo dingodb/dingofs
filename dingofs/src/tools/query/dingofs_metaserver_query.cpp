@@ -19,7 +19,7 @@
  * Created Date: 2021-10-19
  * Author: chengyi01
  */
-#include "dingofs/src/tools/query/dingofs_metaserver_query.h"
+#include "tools/query/dingofs_metaserver_query.h"
 
 DECLARE_string(metaserverId);
 DECLARE_string(metaserverAddr);

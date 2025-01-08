@@ -29,10 +29,10 @@
 #include <cstdint>
 #include <memory>
 
-#include "dingofs/src/client/filesystem/filesystem.h"
-#include "dingofs/test/client/mock_dentry_cache_mamager.h"
-#include "dingofs/test/client/mock_inode_cache_manager.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
+#include "client/filesystem/filesystem.h"
+#include "client/mock_dentry_cache_mamager.h"
+#include "client/mock_inode_cache_manager.h"
+#include "client/mock_metaserver_client.h"
 
 namespace dingofs {
 namespace client {

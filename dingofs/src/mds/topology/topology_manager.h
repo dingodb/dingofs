@@ -29,10 +29,10 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/utils/concurrent/name_lock.h"
+#include "proto/topology.pb.h"
+#include "mds/metaserverclient/metaserver_client.h"
+#include "mds/topology/topology.h"
+#include "utils/concurrent/name_lock.h"
 
 namespace dingofs {
 namespace mds {

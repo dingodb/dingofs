@@ -18,9 +18,9 @@
 #include <memory>
 #include <shared_mutex>
 
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_state_machine.h"
+#include "base/timer/timer_impl.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_state_machine.h"
 
 namespace dingofs {
 namespace client {

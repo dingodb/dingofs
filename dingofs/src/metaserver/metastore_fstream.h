@@ -24,12 +24,12 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/partition.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/dumpfile.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "metaserver/common/types.h"
+#include "metaserver/partition.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/dumpfile.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/storage.h"
 
 #ifndef DINGOFS_SRC_METASERVER_METASTORE_FSTREAM_H_
 #define DINGOFS_SRC_METASERVER_METASTORE_FSTREAM_H_

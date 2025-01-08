@@ -29,8 +29,8 @@
 
 #include <string>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/client/kvclient/kvclient.h"
+#include "proto/topology.pb.h"
+#include "client/kvclient/kvclient.h"
 
 namespace dingofs {
 

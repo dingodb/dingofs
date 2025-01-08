@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/countdown.h"
+#include "client/blockcache/countdown.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

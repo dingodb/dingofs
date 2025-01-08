@@ -29,9 +29,9 @@
 
 #include <string>
 
-#include "dingofs/proto/cli2.pb.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "proto/cli2.pb.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 namespace dingofs {
 namespace metaserver {

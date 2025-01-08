@@ -20,9 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/transaction.h"
+#include "metaserver/transaction.h"
 
-#include "dingofs/src/metaserver/dentry_storage.h"
+#include "metaserver/dentry_storage.h"
 
 namespace dingofs {
 namespace metaserver {

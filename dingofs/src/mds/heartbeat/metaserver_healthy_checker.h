@@ -27,10 +27,10 @@
 #include <map>
 #include <memory>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/common/types.h"
-#include "dingofs/src/mds/topology/topology.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/common/types.h"
+#include "mds/topology/topology.h"
 
 namespace dingofs {
 namespace mds {

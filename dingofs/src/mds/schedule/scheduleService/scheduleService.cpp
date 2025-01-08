@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/scheduleService/scheduleService.h"
+#include "mds/schedule/scheduleService/scheduleService.h"
 
 #include <map>
 #include <vector>

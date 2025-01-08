@@ -29,10 +29,10 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/kvclient/kvclient.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "client/common/config.h"
+#include "client/kvclient/kvclient.h"
+#include "stub/metric/metric.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

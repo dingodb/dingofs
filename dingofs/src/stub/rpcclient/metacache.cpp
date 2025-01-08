@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/metacache.h"
+#include "stub/rpcclient/metacache.h"
 
 #include <butil/fast_rand.h>
 

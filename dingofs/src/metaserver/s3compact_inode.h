@@ -32,9 +32,9 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/s3compact_worker.h"
-#include "dingofs/src/metaserver/storage/converter.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/s3compact_worker.h"
+#include "metaserver/storage/converter.h"
 namespace dingofs {
 namespace metaserver {
 

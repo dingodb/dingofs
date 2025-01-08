@@ -37,7 +37,7 @@
 // Author: Ge,Jun (gejun@baidu.com)
 // Date: Thu Jul 30 17:44:54 CST 2015
 
-#include "dingofs/src/metaserver/resource_statistic.h"
+#include "metaserver/resource_statistic.h"
 
 #include <butil/files/scoped_file.h>
 #include <glog/logging.h>

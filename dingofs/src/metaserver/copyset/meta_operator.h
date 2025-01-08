@@ -26,10 +26,10 @@
 #include <brpc/controller.h>
 #include <google/protobuf/message.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/copyset/operator_type.h"
+#include "proto/metaserver.pb.h"
+#include "common/rpc_stream.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/operator_type.h"
 
 namespace dingofs {
 namespace metaserver {

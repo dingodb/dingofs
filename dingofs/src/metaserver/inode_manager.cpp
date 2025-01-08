@@ -20,19 +20,19 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/inode_manager.h"
+#include "metaserver/inode_manager.h"
 
 #include <glog/logging.h>
 #include <google/protobuf/util/message_differencer.h>
 
 #include <ctime>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/utils/concurrent/name_lock.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/metaserver.pb.h"
+#include "common/define.h"
+#include "metaserver/storage/iterator.h"
+#include "stub/filesystem/xattr.h"
+#include "utils/concurrent/name_lock.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace metaserver {

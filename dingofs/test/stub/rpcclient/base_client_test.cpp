@@ -20,17 +20,17 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/base_client.h"
+#include "stub/rpcclient/base_client.h"
 
 #include <brpc/server.h>
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_service.h"
-#include "dingofs/test/stub/rpcclient/mock_metaserver_service.h"
-#include "dingofs/test/stub/rpcclient/mock_topology_service.h"
+#include "proto/mds.pb.h"
+#include "proto/metaserver.pb.h"
+#include "stub/rpcclient/mock_mds_service.h"
+#include "stub/rpcclient/mock_metaserver_service.h"
+#include "stub/rpcclient/mock_topology_service.h"
 
 namespace dingofs {
 namespace stub {

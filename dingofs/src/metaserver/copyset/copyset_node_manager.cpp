@@ -20,17 +20,17 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 #include <brpc/server.h>
 
 #include <string>
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_reloader.h"
-#include "dingofs/src/metaserver/copyset/raft_cli_service2.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
+#include "proto/common.pb.h"
+#include "metaserver/copyset/copyset_reloader.h"
+#include "metaserver/copyset/raft_cli_service2.h"
+#include "metaserver/copyset/utils.h"
 
 namespace dingofs {
 namespace metaserver {

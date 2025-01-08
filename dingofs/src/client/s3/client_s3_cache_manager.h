@@ -33,13 +33,13 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/datastream/data_stream.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/metaserver.pb.h"
+#include "client/blockcache/cache_store.h"
+#include "client/datastream/data_stream.h"
+#include "client/filesystem/error.h"
+#include "client/inode_wrapper.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

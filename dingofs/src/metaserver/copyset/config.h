@@ -46,10 +46,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/metaserver/copyset/apply_queue.h"
-#include "dingofs/src/metaserver/copyset/trash.h"
-#include "dingofs/src/metaserver/storage/config.h"
+#include "fs/local_filesystem.h"
+#include "metaserver/copyset/apply_queue.h"
+#include "metaserver/copyset/trash.h"
+#include "metaserver/storage/config.h"
 
 namespace dingofs {
 namespace metaserver {

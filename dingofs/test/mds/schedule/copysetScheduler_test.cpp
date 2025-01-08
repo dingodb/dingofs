@@ -22,13 +22,13 @@
 
 #include <glog/logging.h>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
-#include "dingofs/test/mds/mock/mock_topoAdapter.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/common/mds_define.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/schedule/scheduleMetrics.h"
+#include "mds/schedule/scheduler.h"
+#include "mds/mock/mock_topoAdapter.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/schedule/common.h"
 
 using ::testing::_;
 using ::testing::AtLeast;

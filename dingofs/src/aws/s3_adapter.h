@@ -59,8 +59,8 @@
 #include <string>
 
 #include "bvar/reducer.h"
-#include "dingofs/src/utils/configuration.h"
-#include "dingofs/src/utils/throttle.h"
+#include "utils/configuration.h"
+#include "utils/throttle.h"
 
 namespace dingofs {
 namespace aws {

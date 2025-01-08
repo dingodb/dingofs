@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/storage_fstream.h"
+#include "metaserver/storage/storage_fstream.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -28,14 +28,14 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/memory_storage.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/metaserver/storage/storage_test.h"
+#include "proto/metaserver.pb.h"
+#include "common/process.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/memory_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/storage_test.h"
 
 namespace dingofs {
 namespace metaserver {

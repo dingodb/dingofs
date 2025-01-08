@@ -29,8 +29,8 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/blockcache/s3_client.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/s3_client.h"
 
 using ::testing::_;
 using ::testing::Return;

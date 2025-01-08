@@ -20,8 +20,8 @@
 #include <chrono>
 #include <memory>
 
-#include "dingofs/src/mds/schedule/operatorStepTemplate.h"
-#include "dingofs/src/mds/schedule/operatorTemplate.h"
+#include "mds/schedule/operatorStepTemplate.h"
+#include "mds/schedule/operatorTemplate.h"
 
 using ::std::chrono::steady_clock;
 namespace dingofs {

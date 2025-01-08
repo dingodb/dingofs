@@ -34,10 +34,10 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
+#include "proto/metaserver.pb.h"
+#include "stub/common/common.h"
+#include "stub/common/config.h"
+#include "stub/rpcclient/metaserver_client.h"
 
 namespace dingofs {
 namespace stub {

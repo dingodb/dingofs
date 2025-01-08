@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/meta_operator_closure.h"
+#include "metaserver/copyset/meta_operator_closure.h"
 
 #include <brpc/closure_guard.h>
 
 #include <memory>
 
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "metaserver/copyset/meta_operator.h"
 
 namespace dingofs {
 namespace metaserver {

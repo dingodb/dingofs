@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/status/dingofs_status_base_tool.h"
+#include "tools/status/dingofs_status_base_tool.h"
 
 namespace dingofs {
 namespace tools {

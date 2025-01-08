@@ -20,7 +20,7 @@
  * @Author: chengyi
  */
 
-#include "dingofs/src/mds/chunkid_allocator.h"
+#include "mds/chunkid_allocator.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/test/mds/mock/mock_etcd_client.h"
+#include "mds/mock/mock_etcd_client.h"
 
 namespace dingofs {
 namespace mds {

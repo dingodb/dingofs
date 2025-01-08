@@ -28,11 +28,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/base/hash/ketama_con_hash.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache.h"
-#include "dingofs/src/client/blockcache/disk_cache_watcher.h"
-#include "dingofs/src/client/common/config.h"
+#include "base/hash/ketama_con_hash.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache.h"
+#include "client/blockcache/disk_cache_watcher.h"
+#include "client/common/config.h"
 
 namespace dingofs {
 namespace client {

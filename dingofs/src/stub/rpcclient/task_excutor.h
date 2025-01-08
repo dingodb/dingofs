@@ -30,9 +30,9 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/rpcclient/channel_manager.h"
-#include "dingofs/src/stub/rpcclient/metacache.h"
+#include "stub/common/common.h"
+#include "stub/rpcclient/channel_manager.h"
+#include "stub/rpcclient/metacache.h"
 
 namespace dingofs {
 namespace stub {

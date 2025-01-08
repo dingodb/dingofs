@@ -23,9 +23,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
-#include "dingofs/test/client/mock_client_s3_cache_manager.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "client/mock_client_s3_cache_manager.h"
 
 namespace dingofs {
 namespace client {

@@ -20,18 +20,18 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/partition.h"
+#include "metaserver/partition.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/test/metaserver/storage/utils.h"
-#include "dingofs/test/metaserver/test_helper.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "metaserver/test_helper.h"
+#include "proto/metaserver.pb.h"
+#include "stub/filesystem/xattr.h"
 
 using ::dingofs::metaserver::storage::KVStorage;
 using ::dingofs::metaserver::storage::RandomStoragePath;

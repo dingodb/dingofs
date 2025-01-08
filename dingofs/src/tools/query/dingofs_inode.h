@@ -29,10 +29,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/query/dingofs_inode_s3infomap.h"
+#include "proto/metaserver.pb.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/query/dingofs_inode_s3infomap.h"
 
 namespace dingofs {
 namespace tools {

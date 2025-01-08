@@ -27,8 +27,8 @@
 
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/heartbeat.pb.h"
+#include "proto/common.pb.h"
+#include "proto/heartbeat.pb.h"
 
 namespace dingofs {
 namespace metaserver {

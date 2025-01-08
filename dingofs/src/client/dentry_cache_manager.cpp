@@ -19,7 +19,7 @@
  * Created Date: Thur May 27 2021
  * Author: xuchaojie
  */
-#include "dingofs/src/client/dentry_cache_manager.h"
+#include "client/dentry_cache_manager.h"
 
 #include <cstdint>
 #include <list>

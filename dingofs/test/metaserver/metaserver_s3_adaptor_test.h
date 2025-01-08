@@ -29,10 +29,10 @@
 #include <set>
 #include <string>
 
-#include "dingofs/src/metaserver/s3/metaserver_s3_adaptor.h"
-#include "dingofs/test/client/mock_client_s3.h"
-#include "dingofs/test/client/mock_metaserver_service.h"
-#include "dingofs/test/metaserver/mock_metaserver_s3.h"
+#include "metaserver/s3/metaserver_s3_adaptor.h"
+#include "client/mock_client_s3.h"
+#include "client/mock_metaserver_service.h"
+#include "metaserver/mock_metaserver_s3.h"
 
 namespace dingofs {
 namespace metaserver {

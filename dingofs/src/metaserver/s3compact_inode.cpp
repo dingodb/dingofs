@@ -20,7 +20,7 @@
  * @Author: majie1
  */
 
-#include "dingofs/src/metaserver/s3compact_inode.h"
+#include "metaserver/s3compact_inode.h"
 
 #include <algorithm>
 #include <list>
@@ -32,11 +32,11 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/s3util.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "common/s3util.h"
+#include "metaserver/copyset/meta_operator.h"
+#include "metaserver/s3compact_manager.h"
 
 namespace dingofs {
 namespace metaserver {

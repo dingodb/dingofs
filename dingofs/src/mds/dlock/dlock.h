@@ -26,10 +26,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
-#include "dingofs/src/utils/concurrent/name_lock.h"
-#include "dingofs/src/utils/encode.h"
-#include "dingofs/src/utils/uncopyable.h"
+#include "mds/kvstorageclient/etcd_client.h"
+#include "utils/concurrent/name_lock.h"
+#include "utils/encode.h"
+#include "utils/uncopyable.h"
 
 namespace dingofs {
 namespace mds {

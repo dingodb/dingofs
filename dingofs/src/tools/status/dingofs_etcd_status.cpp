@@ -19,7 +19,7 @@
  * Created Date: 2021-10-29
  * Author: chengyi01
  */
-#include "dingofs/src/tools/status/dingofs_etcd_status.h"
+#include "tools/status/dingofs_etcd_status.h"
 
 DECLARE_string(etcdAddr);
 

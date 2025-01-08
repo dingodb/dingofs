@@ -27,9 +27,9 @@
 
 #include <memory>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/storage/status.h"
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/storage/status.h"
+#include "metaserver/storage/storage.h"
 
 namespace dingofs {
 namespace metaserver {

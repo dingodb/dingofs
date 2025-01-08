@@ -20,19 +20,19 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/disk_cache_group.h"
+#include "client/blockcache/disk_cache_group.h"
 
 #include <cassert>
 #include <memory>
 #include <numeric>
 
-#include "dingofs/src/base/hash/ketama_con_hash.h"
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/disk_cache_watcher.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
+#include "base/hash/ketama_con_hash.h"
+#include "base/math/math.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/disk_cache_watcher.h"
+#include "client/blockcache/local_filesystem.h"
 
 namespace dingofs {
 namespace client {

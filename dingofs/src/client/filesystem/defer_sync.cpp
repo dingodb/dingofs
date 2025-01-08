@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/defer_sync.h"
+#include "client/filesystem/defer_sync.h"
 
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "client/inode_wrapper.h"
+#include "utils/concurrent/concurrent.h"
 #include "glog/logging.h"
 
 namespace dingofs {

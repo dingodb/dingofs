@@ -26,10 +26,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/mds/schedule/coordinator.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "proto/heartbeat.pb.h"
+#include "mds/schedule/coordinator.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

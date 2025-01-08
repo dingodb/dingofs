@@ -34,9 +34,9 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/include/dingo_compiler_specific.h"
-#include "dingofs/src/utils/concurrent/count_down_event.h"
-#include "dingofs/src/utils/concurrent/task_queue.h"
+#include "utils/concurrent/count_down_event.h"
+#include "utils/concurrent/task_queue.h"
+#include "utils/dingo_compiler_specific.h"
 
 namespace dingofs {
 namespace metaserver {

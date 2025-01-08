@@ -29,11 +29,11 @@
 #include <string>
 #include <type_traits>
 
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/stub/metric/metric.h"
+#include "base/string/string.h"
+#include "client/blockcache/error.h"
+#include "client/common/config.h"
+#include "client/common/dynamic_config.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace client {

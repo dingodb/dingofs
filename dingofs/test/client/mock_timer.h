@@ -14,7 +14,7 @@
 
 #include <gmock/gmock.h>
 
-#include "dingofs/src/base/timer/timer.h"
+#include "base/timer/timer.h"
 
 namespace dingofs {
 namespace base {

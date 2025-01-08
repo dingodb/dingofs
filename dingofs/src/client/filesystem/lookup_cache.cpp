@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/lookup_cache.h"
+#include "client/filesystem/lookup_cache.h"
 
 #include <glog/logging.h>
 
 #include <ctime>
 
 #include "absl/strings/str_format.h"
-#include "dingofs/src/client/filesystem/utils.h"
+#include "client/filesystem/utils.h"
 
 namespace dingofs {
 namespace client {

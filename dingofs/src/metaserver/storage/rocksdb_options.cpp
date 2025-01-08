@@ -20,20 +20,20 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/storage/rocksdb_options.h"
+#include "metaserver/storage/rocksdb_options.h"
 
 #include <gflags/gflags.h>
 
 #include <memory>
 #include <mutex>
 
-#include "dingofs/src/metaserver/storage/rocksdb_event_listener.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/rocksdb_event_listener.h"
+#include "metaserver/storage/rocksdb_storage.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/statistics.h"
 #include "rocksdb/table.h"
 #include "rocksdb/utilities/table_properties_collectors.h"
-#include "dingofs/src/utils/gflags_helper.h"
+#include "utils/gflags_helper.h"
 
 namespace dingofs {
 namespace metaserver {

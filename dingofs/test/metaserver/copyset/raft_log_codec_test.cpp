@@ -20,16 +20,16 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/raft_log_codec.h"
+#include "metaserver/copyset/raft_log_codec.h"
 
 #include <butil/sys_byteorder.h>
 #include <google/protobuf/message.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
-#include "dingofs/src/utils/macros.h"
-#include "dingofs/test/utils/protobuf_message_utils.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/copyset/meta_operator.h"
+#include "utils/macros.h"
+#include "utils/protobuf_message_utils.h"
 
 namespace dingofs {
 namespace metaserver {

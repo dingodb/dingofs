@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/heartbeat_service.h"
+#include "mds/heartbeat/heartbeat_service.h"
 
 #include <memory>
 

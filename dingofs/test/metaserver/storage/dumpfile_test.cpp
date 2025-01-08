@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/dumpfile.h"
+#include "metaserver/storage/dumpfile.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
@@ -30,8 +30,8 @@
 #include <thread>
 #include <unordered_map>
 
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
+#include "common/process.h"
+#include "metaserver/storage/iterator.h"
 
 namespace dingofs {
 namespace metaserver {

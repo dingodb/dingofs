@@ -26,7 +26,7 @@
 #include <mutex>
 #include <utility>
 
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace common {

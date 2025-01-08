@@ -25,8 +25,8 @@
 
 #include <string>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
+#include "base/filepath/filepath.h"
+#include "client/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace client {

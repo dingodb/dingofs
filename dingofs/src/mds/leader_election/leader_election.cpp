@@ -20,7 +20,7 @@
  * Author: lixiaocui1
  */
 
-#include "dingofs/src/mds/leader_election/leader_election.h"
+#include "mds/leader_election/leader_election.h"
 
 #include <fiu.h>
 
@@ -28,7 +28,7 @@
 #include <cstdlib>
 #include <thread>  //NOLINT
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 using ::dingofs::utils::Thread;
 

@@ -25,11 +25,11 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_node_manager.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_copyset_service.h"
-#include "dingofs/test/metaserver/copyset/mock/mock_raft_node.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/mock/mock_copyset_node_manager.h"
+#include "metaserver/copyset/mock/mock_copyset_service.h"
+#include "metaserver/copyset/mock/mock_raft_node.h"
 
 using ::dingofs::pb::common::Peer;
 using ::dingofs::pb::mds::heartbeat::ConfigChangeType;

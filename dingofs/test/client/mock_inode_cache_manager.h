@@ -31,8 +31,8 @@
 #include <memory>
 #include <set>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/inode_cache_manager.h"
+#include "proto/metaserver.pb.h"
+#include "client/inode_cache_manager.h"
 
 namespace dingofs {
 namespace client {

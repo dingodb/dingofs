@@ -27,9 +27,9 @@
 #include <map>
 #include <memory>
 
-#include "dingofs/src/metaserver/trash.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "metaserver/trash.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace metaserver {

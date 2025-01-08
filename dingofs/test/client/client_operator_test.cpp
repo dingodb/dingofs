@@ -20,17 +20,17 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/client_operator.h"
+#include "client/client_operator.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/test/client/mock_dentry_cache_mamager.h"
-#include "dingofs/test/client/mock_inode_cache_manager.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_client.h"
+#include "proto/metaserver.pb.h"
+#include "client/mock_dentry_cache_mamager.h"
+#include "client/mock_inode_cache_manager.h"
+#include "client/mock_metaserver_client.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {
 namespace client {

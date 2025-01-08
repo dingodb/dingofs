@@ -20,12 +20,12 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "utils/interruptible_sleeper.h"
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {

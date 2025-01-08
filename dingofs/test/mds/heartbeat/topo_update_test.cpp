@@ -23,9 +23,9 @@
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
-#include "dingofs/src/mds/heartbeat/topo_updater.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-// #include "dingofs/src/utils/timeutility.h"
+#include "mds/heartbeat/topo_updater.h"
+#include "mds/mock/mock_topology.h"
+// #include "utils/timeutility.h"
 
 using ::dingofs::mds::topology::MockIdGenerator;
 using ::dingofs::mds::topology::MockStorage;

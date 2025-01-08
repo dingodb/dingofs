@@ -28,7 +28,7 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/utils/leaky_bucket.h"
+#include "utils/leaky_bucket.h"
 
 namespace dingofs {
 namespace utils {

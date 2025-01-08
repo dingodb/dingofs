@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology_token_generator.h"
+#include "mds/topology/topology_token_generator.h"
 
 #include <cstdlib>
 #include <ctime>

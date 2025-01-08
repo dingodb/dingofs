@@ -29,12 +29,12 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/status/dingofs_copyset_status.h"
-#include "dingofs/src/tools/status/dingofs_etcd_status.h"
-#include "dingofs/src/tools/status/dingofs_mds_status.h"
-#include "dingofs/src/tools/status/dingofs_metaserver_status.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/status/dingofs_copyset_status.h"
+#include "tools/status/dingofs_etcd_status.h"
+#include "tools/status/dingofs_mds_status.h"
+#include "tools/status/dingofs_metaserver_status.h"
 
 namespace dingofs {
 namespace tools {

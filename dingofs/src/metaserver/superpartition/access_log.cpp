@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/superpartition/access_log.h"
+#include "metaserver/superpartition/access_log.h"
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/metaserver/common/dynamic_config.h"
+#include "base/string/string.h"
+#include "metaserver/common/dynamic_config.h"
 
 namespace dingofs {
 namespace metaserver {

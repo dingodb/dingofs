@@ -27,7 +27,7 @@
 
 #include <string>
 
-#include "dingofs/src/mds/common/storage_key.h"
+#include "mds/common/storage_key.h"
 
 namespace dingofs {
 namespace mds {

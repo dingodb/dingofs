@@ -21,10 +21,10 @@
  */
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/test/client/blockcache/builder/builder.h"
+#include "base/filepath/filepath.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

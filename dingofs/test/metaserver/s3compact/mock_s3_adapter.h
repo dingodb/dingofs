@@ -30,8 +30,8 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
+#include "aws/s3_adapter.h"
+#include "metaserver/s3compact_manager.h"
 
 using ::dingofs::aws::S3Adapter;
 using ::testing::Return;

@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/dir_buffer.h"
+#include "client/dir_buffer.h"
 
 namespace dingofs {
 namespace client {

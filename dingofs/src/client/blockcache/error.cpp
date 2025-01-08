@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/error.h"
+#include "client/blockcache/error.h"
 
 #include <ostream>
 #include <unordered_map>

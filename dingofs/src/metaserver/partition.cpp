@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/partition.h"
+#include "metaserver/partition.h"
 
 #include <assert.h>
 
@@ -28,11 +28,11 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/s3compact.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/trash_manager.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/s3compact.h"
+#include "metaserver/s3compact_manager.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/trash_manager.h"
 
 namespace dingofs {
 namespace metaserver {

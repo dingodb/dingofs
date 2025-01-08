@@ -20,19 +20,19 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/rocksdb_storage.h"
 
 #include <glog/logging.h>
 
 #include <iostream>
 #include <ostream>
 
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/rocksdb_options.h"
-#include "dingofs/src/metaserver/storage/rocksdb_perf.h"
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/rocksdb_options.h"
+#include "metaserver/storage/rocksdb_perf.h"
+#include "metaserver/storage/storage.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "dingofs/src/fs/local_filesystem.h"
+#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -20,7 +20,7 @@
  * Author: hzwuhongsong
  */
 
-#include "dingofs/src/common/utils.h"
+#include "common/utils.h"
 
 #include <glog/logging.h>
 #include <stdio.h>

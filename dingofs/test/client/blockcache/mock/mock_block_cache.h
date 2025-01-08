@@ -26,8 +26,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace client {

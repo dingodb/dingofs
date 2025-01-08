@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/scheduler.h"
+#include "mds/schedule/scheduler.h"
 
 #include <glog/logging.h>
 

@@ -20,13 +20,13 @@
  * Author: lixiaocui1
  */
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
+#include "mds/kvstorageclient/etcd_client.h"
 
 #include <glog/logging.h>
 
 #include <cassert>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace kvstorage {

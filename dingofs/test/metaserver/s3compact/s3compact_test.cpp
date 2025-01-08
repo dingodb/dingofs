@@ -25,17 +25,17 @@
 
 #include <memory>
 
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/s3compact_inode.h"
-#include "dingofs/src/metaserver/s3compact_manager.h"
-#include "dingofs/src/metaserver/s3compact_worker.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/metaserver/mock_metaserver_s3_adaptor.h"
-#include "dingofs/test/metaserver/s3compact/mock_s3_adapter.h"
-#include "dingofs/test/metaserver/s3compact/mock_s3compact_inode.h"
-#include "dingofs/test/metaserver/s3compact/mock_s3infocache.h"
-#include "dingofs/test/metaserver/storage/utils.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/mock_metaserver_s3_adaptor.h"
+#include "metaserver/s3compact/mock_s3_adapter.h"
+#include "metaserver/s3compact/mock_s3compact_inode.h"
+#include "metaserver/s3compact/mock_s3infocache.h"
+#include "metaserver/s3compact_inode.h"
+#include "metaserver/s3compact_manager.h"
+#include "metaserver/s3compact_worker.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
 
 using ::dingofs::metaserver::copyset::CopysetNode;
 using ::dingofs::metaserver::copyset::CopysetNodeManager;

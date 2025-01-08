@@ -20,12 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/entry_watcher.h"
+#include "client/filesystem/entry_watcher.h"
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/filesystem/utils.h"
+#include "proto/metaserver.pb.h"
+#include "base/filepath/filepath.h"
+#include "base/string/string.h"
+#include "client/filesystem/utils.h"
 #include "glog/logging.h"
 
 namespace dingofs {

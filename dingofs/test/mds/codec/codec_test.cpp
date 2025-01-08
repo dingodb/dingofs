@@ -20,12 +20,12 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/mds/codec/codec.h"
+#include "mds/codec/codec.h"
 
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/mds.pb.h"
+#include "proto/mds.pb.h"
 
 namespace dingofs {
 namespace mds {

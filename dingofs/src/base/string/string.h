@@ -31,7 +31,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-#include "dingofs/src/utils/uuid.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace base {

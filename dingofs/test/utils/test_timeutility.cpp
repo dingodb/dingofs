@@ -10,7 +10,7 @@
 #include <chrono>  //NOLINT
 #include <thread>  //NOLINT
 
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {

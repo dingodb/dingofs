@@ -28,10 +28,10 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/storage.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 

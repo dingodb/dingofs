@@ -20,14 +20,14 @@
  * Author: chengyi
  */
 
-#include "dingofs/src/metaserver/s3/metaserver_s3_adaptor.h"
+#include "metaserver/s3/metaserver_s3_adaptor.h"
 
 #include <glog/logging.h>
 
 #include <algorithm>
 #include <list>
 
-#include "dingofs/src/common/s3util.h"
+#include "common/s3util.h"
 
 namespace dingofs {
 namespace metaserver {

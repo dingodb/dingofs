@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/utils/configuration.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace utils {

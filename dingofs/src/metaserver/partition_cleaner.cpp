@@ -19,12 +19,12 @@
  * @Date: 2021-12-15 10:54:37
  * @Author: chenwei
  */
-#include "dingofs/src/metaserver/partition_cleaner.h"
+#include "metaserver/partition_cleaner.h"
 
 #include <list>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/copyset/meta_operator.h"
 
 namespace dingofs {
 namespace metaserver {

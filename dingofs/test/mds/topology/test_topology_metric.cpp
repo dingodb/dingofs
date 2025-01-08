@@ -24,8 +24,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/topology/topology_metric.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/topology/topology_metric.h"
+#include "mds/mock/mock_topology.h"
 
 namespace dingofs {
 namespace mds {

@@ -21,7 +21,7 @@
  *          2018/11/23  Wenyu Zhou   Initial version
  */
 
-#include "dingofs/src/utils/configuration.h"
+#include "utils/configuration.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

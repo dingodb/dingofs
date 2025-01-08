@@ -20,7 +20,7 @@
  * Author: chengyi
  */
 
-#include "dingofs/src/metaserver/s3/metaserver_s3.h"
+#include "metaserver/s3/metaserver_s3.h"
 
 namespace dingofs {
 namespace metaserver {

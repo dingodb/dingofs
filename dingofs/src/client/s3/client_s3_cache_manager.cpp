@@ -20,7 +20,7 @@
  * Author: huyao
  */
 
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
+#include "client/s3/client_s3_cache_manager.h"
 
 #include <bvar/bvar.h>
 #include <malloc.h>
@@ -30,15 +30,15 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/client/datastream/data_stream.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/stub/metric/metric.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/common/dynamic_config.h"
+#include "client/datastream/data_stream.h"
+#include "client/filesystem/meta.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "stub/metric/metric.h"
 
 static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
     new dingofs::stub::metric::S3MultiManagerMetric();

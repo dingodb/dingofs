@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/service/inode_objects_service.h"
+#include "client/service/inode_objects_service.h"
 
 #include <cstdint>
 
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
 #include "brpc/errno.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/service/flat_file.h"
+#include "proto/metaserver.pb.h"
+#include "client/inode_wrapper.h"
+#include "client/service/flat_file.h"
 #include "glog/logging.h"
 
 namespace dingofs {

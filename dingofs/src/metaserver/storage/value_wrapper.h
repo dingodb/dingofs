@@ -27,7 +27,7 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/src/metaserver/storage/common.h"
+#include "metaserver/storage/common.h"
 
 namespace dingofs {
 namespace metaserver {

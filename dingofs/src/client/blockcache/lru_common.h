@@ -25,9 +25,9 @@
 
 #include <vector>
 
-#include "dingofs/src/base/cache/cache.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
+#include "base/cache/cache.h"
+#include "base/time/time.h"
+#include "client/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace client {

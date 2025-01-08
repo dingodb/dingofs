@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/datastream/page_allocator.h"
+#include "client/datastream/page_allocator.h"
 
 #include <cassert>
 #include <cstring>

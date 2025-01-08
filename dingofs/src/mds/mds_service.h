@@ -30,10 +30,10 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/chunkid_allocator.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/fs_manager.h"
+#include "proto/mds.pb.h"
+#include "mds/chunkid_allocator.h"
+#include "mds/common/mds_define.h"
+#include "mds/fs_manager.h"
 
 namespace dingofs {
 namespace mds {

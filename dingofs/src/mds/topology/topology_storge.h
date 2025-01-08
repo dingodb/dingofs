@@ -30,9 +30,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology_config.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology_config.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

@@ -36,11 +36,11 @@
 
 // Authors: Zhangyi Chen(chenzhangyi01@baidu.com)
 
-#include "dingofs/src/metaserver/copyset/raft_cli2.h"
+#include "metaserver/copyset/raft_cli2.h"
 
 #include <string>
 
-#include "dingofs/src/metaserver/copyset/utils.h"
+#include "metaserver/copyset/utils.h"
 
 namespace dingofs {
 namespace metaserver {

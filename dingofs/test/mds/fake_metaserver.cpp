@@ -19,7 +19,7 @@
  * @Date: 2021-06-24 16:55:17
  * @Author: chenwei
  */
-#include "dingofs/test/mds/fake_metaserver.h"
+#include "mds/fake_metaserver.h"
 
 namespace dingofs {
 namespace metaserver {

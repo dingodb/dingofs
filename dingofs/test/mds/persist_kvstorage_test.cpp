@@ -24,11 +24,11 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/codec/codec.h"
-#include "dingofs/src/mds/fs_storage.h"
-#include "dingofs/test/mds/mock/mock_kvstorage_client.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
+#include "mds/codec/codec.h"
+#include "mds/fs_storage.h"
+#include "mds/mock/mock_kvstorage_client.h"
 
 namespace dingofs {
 namespace mds {

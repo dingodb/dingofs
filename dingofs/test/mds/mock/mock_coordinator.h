@@ -28,7 +28,7 @@
 #include <map>
 #include <vector>
 
-#include "dingofs/src/mds/schedule/coordinator.h"
+#include "mds/schedule/coordinator.h"
 
 namespace dingofs {
 namespace mds {

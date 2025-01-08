@@ -28,7 +28,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/src/utils/stringstatus.h"
+#include "utils/stringstatus.h"
 
 #ifndef SRC_COMMON_CONFIGURATION_H_
 #define SRC_COMMON_CONFIGURATION_H_

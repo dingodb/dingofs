@@ -19,7 +19,7 @@
  * Created Date: 2021-08-27
  * Author: wanghai01
  */
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
+#include "mds/topology/topology_storge_etcd.h"
 
 #include <exception>
 #include <map>
@@ -27,9 +27,9 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/common/storage_key.h"
-#include "dingofs/src/utils/string_util.h"
+#include "mds/common/mds_define.h"
+#include "mds/common/storage_key.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace mds {

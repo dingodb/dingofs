@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/operatorFactory.h"
+#include "mds/schedule/operatorFactory.h"
 
 namespace dingofs {
 namespace mds {

@@ -21,8 +21,8 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/src/mds/schedule/operatorTemplate.h"
-#include "dingofs/src/mds/schedule/scheduleMetricsTemplate.h"
+#include "mds/schedule/operatorTemplate.h"
+#include "mds/schedule/scheduleMetricsTemplate.h"
 
 namespace dingofs {
 namespace mds {

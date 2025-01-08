@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/dir_cache.h"
+#include "client/filesystem/dir_cache.h"
 
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/filesystem/utils.h"
+#include "proto/metaserver.pb.h"
+#include "base/time/time.h"
+#include "client/filesystem/utils.h"
 
 namespace dingofs {
 namespace client {

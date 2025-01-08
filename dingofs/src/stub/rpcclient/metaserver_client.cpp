@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
+#include "stub/rpcclient/metaserver_client.h"
 
 #include <brpc/closure_guard.h>
 #include <butil/iobuf.h>
@@ -34,14 +34,14 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "butil/time.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/metacache.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/metaserver.pb.h"
+#include "common/define.h"
+#include "common/rpc_stream.h"
+#include "stub/common/common.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/metacache.h"
+#include "stub/rpcclient/task_excutor.h"
+#include "utils/string_util.h"
 #include "fmt/core.h"
 
 namespace dingofs {

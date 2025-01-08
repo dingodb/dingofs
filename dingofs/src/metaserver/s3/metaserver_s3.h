@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/aws/s3_adapter.h"
+#include "aws/s3_adapter.h"
 
 namespace dingofs {
 namespace metaserver {

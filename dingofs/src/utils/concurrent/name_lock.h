@@ -23,7 +23,7 @@
 #ifndef SRC_COMMON_CONCURRENT_NAME_LOCK_H_
 #define SRC_COMMON_CONCURRENT_NAME_LOCK_H_
 
-#include "dingofs/src/utils/concurrent/generic_name_lock.h"
+#include "utils/concurrent/generic_name_lock.h"
 
 namespace dingofs {
 namespace utils {

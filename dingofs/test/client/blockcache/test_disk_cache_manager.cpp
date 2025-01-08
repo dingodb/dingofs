@@ -24,9 +24,9 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/log.h"
-#include "dingofs/test/client/blockcache/builder/builder.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/log.h"
+#include "client/blockcache/builder/builder.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

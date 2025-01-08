@@ -25,9 +25,9 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/dentry_cache_manager.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
+#include "proto/metaserver.pb.h"
+#include "client/dentry_cache_manager.h"
+#include "client/mock_metaserver_client.h"
 
 namespace dingofs {
 namespace client {

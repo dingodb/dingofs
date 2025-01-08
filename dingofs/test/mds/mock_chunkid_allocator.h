@@ -27,7 +27,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/mds/chunkid_allocator.h"
+#include "mds/chunkid_allocator.h"
 
 namespace dingofs {
 namespace mds {

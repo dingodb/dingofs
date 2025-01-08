@@ -20,14 +20,14 @@
  * Author: xuchaojie,lixiaocui
  */
 
-#include "dingofs/src/utils/lru_cache.h"
+#include "utils/lru_cache.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <cstdint>
 
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {

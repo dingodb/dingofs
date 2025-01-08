@@ -30,7 +30,7 @@
 
 #include <cstdint>
 
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace metaserver {

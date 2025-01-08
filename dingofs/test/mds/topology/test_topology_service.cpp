@@ -28,15 +28,15 @@
 
 #include <memory>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/mds/topology/topology_service.h"
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
-#include "dingofs/src/mds/topology/topology_storge.h"
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/test/mds/mock/mock_metaserver.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/topology/topology_item.h"
+#include "mds/topology/topology_service.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "mds/mock/mock_metaserver.h"
+#include "mds/mock/mock_topology.h"
 
 namespace dingofs {
 namespace mds {

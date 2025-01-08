@@ -20,13 +20,13 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/metaserver_healthy_checker.h"
+#include "mds/heartbeat/metaserver_healthy_checker.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/topology/topology_item.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::mds::topology::MockTopology;
 using ::testing::_;

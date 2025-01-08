@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/fuse_client.h"
+#include "client/fuse_client.h"
 
 #include <unistd.h>
 
@@ -31,15 +31,15 @@
 #include <string>
 
 #include "brpc/server.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/fuse_common.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/service/metrics_dumper.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/utils/net_common.h"
+#include "client/filesystem/error.h"
+#include "client/filesystem/meta.h"
+#include "client/fuse_common.h"
+#include "client/inode_wrapper.h"
+#include "client/service/metrics_dumper.h"
+#include "common/define.h"
+#include "stub/common/common.h"
+#include "stub/filesystem/xattr.h"
+#include "utils/net_common.h"
 #include "glog/logging.h"
 
 #define RETURN_IF_UNSUCCESS(action) \

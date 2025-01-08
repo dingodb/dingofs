@@ -26,9 +26,9 @@
 #include <map>
 #include <vector>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/mds/schedule/operatorStep.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "proto/heartbeat.pb.h"
+#include "mds/schedule/operatorStep.h"
+#include "mds/schedule/topoAdapter.h"
 
 using ::dingofs::mds::schedule::AddPeer;
 using ::dingofs::mds::schedule::CopySetConf;

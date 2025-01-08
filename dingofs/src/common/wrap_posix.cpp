@@ -20,7 +20,7 @@
  * Author: hzwuhongsong
  */
 
-#include "dingofs/src/common/wrap_posix.h"
+#include "common/wrap_posix.h"
 
 #include <glog/logging.h>
 #include <stdio.h>

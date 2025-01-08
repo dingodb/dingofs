@@ -27,11 +27,11 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_cache_manager.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_manager.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/local_filesystem.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {

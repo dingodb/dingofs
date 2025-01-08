@@ -27,11 +27,11 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/dir_buffer.h"
-#include "dingofs/src/client/fuse_common.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/metaserver.pb.h"
+#include "base/time/time.h"
+#include "client/dir_buffer.h"
+#include "client/fuse_common.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

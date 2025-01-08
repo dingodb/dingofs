@@ -27,7 +27,7 @@
 
 #include <string>
 
-#include "dingofs/src/client/kvclient/kvclient.h"
+#include "client/kvclient/kvclient.h"
 
 namespace dingofs {
 namespace client {

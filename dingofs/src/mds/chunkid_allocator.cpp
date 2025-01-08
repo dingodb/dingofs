@@ -19,11 +19,11 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/mds/chunkid_allocator.h"
+#include "mds/chunkid_allocator.h"
 
 #include <utility>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace mds {

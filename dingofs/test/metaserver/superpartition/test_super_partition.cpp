@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/metaserver/superpartition/access_log.h"
-#include "dingofs/src/metaserver/superpartition/super_partition_storage.h"
-#include "dingofs/test/metaserver/superpartition/builder/builder.h"
+#include "proto/metaserver.pb.h"
+#include "base/math/math.h"
+#include "metaserver/superpartition/access_log.h"
+#include "metaserver/superpartition/super_partition_storage.h"
+#include "metaserver/superpartition/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

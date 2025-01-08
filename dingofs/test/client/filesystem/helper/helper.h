@@ -23,9 +23,9 @@
 #ifndef DINGOFS_TEST_CLIENT_FILESYSTEM_HELPER_HELPER_H_
 #define DINGOFS_TEST_CLIENT_FILESYSTEM_HELPER_HELPER_H_
 
-#include "dingofs/test/client/filesystem/helper/builder.h"
-#include "dingofs/test/client/filesystem/helper/expect.h"
-#include "dingofs/test/client/filesystem/helper/meta.h"
+#include "client/filesystem/helper/builder.h"
+#include "client/filesystem/helper/expect.h"
+#include "client/filesystem/helper/meta.h"
 
 namespace dingofs {
 namespace client {

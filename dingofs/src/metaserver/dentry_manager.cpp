@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/dentry_manager.h"
+#include "metaserver/dentry_manager.h"
 
 #include <glog/logging.h>
 

@@ -23,7 +23,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/schedule/common.h"
 
 namespace dingofs {
 namespace mds {

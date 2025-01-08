@@ -20,7 +20,7 @@
 > Created Time: Wed Dec 19 15:19:40 2018
  ************************************************************************/
 
-#include "dingofs/src/aws/s3_adapter.h"
+#include "aws/s3_adapter.h"
 
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
 #include <glog/logging.h>
@@ -30,8 +30,8 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/src/utils/dingo_define.h"
-#include "dingofs/src/utils/macros.h"
+#include "utils/dingo_define.h"
+#include "utils/macros.h"
 #include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h"
 #include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h"

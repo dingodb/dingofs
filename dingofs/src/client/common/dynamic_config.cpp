@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "client/common/dynamic_config.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>

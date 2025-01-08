@@ -22,10 +22,10 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/src/utils/configuration.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_item.h"
+#include "mds/mock/mock_topology.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace mds {

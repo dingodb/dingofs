@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${CMAKE_BINARY_DIR}/protos)
 
-set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos/dingofs/proto)
+set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos/proto)
 add_custom_target(create_proto_output_dir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_OUTPUT_DIR}
 )

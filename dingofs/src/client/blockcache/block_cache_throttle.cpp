@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/block_cache_throttle.h"
+#include "client/blockcache/block_cache_throttle.h"
 
 #include <memory>
 #include <mutex>
 
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/utils/leaky_bucket.h"
+#include "base/math/math.h"
+#include "client/common/dynamic_config.h"
+#include "utils/leaky_bucket.h"
 
 namespace dingofs {
 namespace client {

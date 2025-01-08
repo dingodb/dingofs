@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/metastore_fstream.h"
+#include "metaserver/metastore_fstream.h"
 
 #include <memory>
 #include <string>
@@ -28,11 +28,11 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/storage_fstream.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/copyset/utils.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/storage_fstream.h"
 
 namespace dingofs {
 namespace metaserver {

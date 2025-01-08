@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/base_client.h"
+#include "stub/rpcclient/base_client.h"
 
 #include <cstdint>
 

@@ -27,7 +27,7 @@
 
 #include <memory>
 
-#include "dingofs/src/metaserver/inflight_throttle.h"
+#include "metaserver/inflight_throttle.h"
 
 namespace dingofs {
 namespace metaserver {

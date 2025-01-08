@@ -28,7 +28,7 @@
 #include <string>
 #include <type_traits>
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

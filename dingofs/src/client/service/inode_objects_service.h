@@ -17,9 +17,9 @@
 
 #include <memory>
 
-#include "dingofs/proto/client_h2.pb.h"
-#include "dingofs/src/client/inode_cache_manager.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
+#include "proto/client_h2.pb.h"
+#include "client/inode_cache_manager.h"
+#include "client/s3/client_s3_adaptor.h"
 
 namespace dingofs {
 namespace client {

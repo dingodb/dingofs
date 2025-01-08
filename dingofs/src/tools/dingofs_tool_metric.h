@@ -28,7 +28,7 @@
 #include <iostream>
 #include <string>
 
-#include "dingofs/src/tools/dingofs_tool_define.h"
+#include "tools/dingofs_tool_define.h"
 
 namespace dingofs {
 namespace tools {

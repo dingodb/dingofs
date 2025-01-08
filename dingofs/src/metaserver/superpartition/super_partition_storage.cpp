@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/superpartition/super_partition_storage.h"
+#include "metaserver/superpartition/super_partition_storage.h"
 
 #include <cstdint>
 
-#include "dingofs/src/metaserver/storage/converter.h"
+#include "metaserver/storage/converter.h"
 
 namespace dingofs {
 namespace metaserver {

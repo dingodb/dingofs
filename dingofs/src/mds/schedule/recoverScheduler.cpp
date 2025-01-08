@@ -22,9 +22,9 @@
 
 #include <glog/logging.h>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/schedule/operatorFactory.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
+#include "mds/common/mds_define.h"
+#include "mds/schedule/operatorFactory.h"
+#include "mds/schedule/scheduler.h"
 
 using ::dingofs::mds::topology::UNINITIALIZE_ID;
 

@@ -28,19 +28,19 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/mds/chunkid_allocator.h"
-#include "dingofs/src/mds/dlock/dlock.h"
-#include "dingofs/src/mds/fs_manager.h"
-#include "dingofs/src/mds/heartbeat/copyset_conf_generator.h"
-#include "dingofs/src/mds/heartbeat/heartbeat_manager.h"
-#include "dingofs/src/mds/heartbeat/metaserver_healthy_checker.h"
-#include "dingofs/src/mds/leader_election/leader_election.h"
-#include "dingofs/src/mds/schedule/schedule_define.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/mds/topology/topology_config.h"
-#include "dingofs/src/mds/topology/topology_metric.h"
-#include "dingofs/src/utils/configuration.h"
+#include "aws/s3_adapter.h"
+#include "mds/chunkid_allocator.h"
+#include "mds/dlock/dlock.h"
+#include "mds/fs_manager.h"
+#include "mds/heartbeat/copyset_conf_generator.h"
+#include "mds/heartbeat/heartbeat_manager.h"
+#include "mds/heartbeat/metaserver_healthy_checker.h"
+#include "mds/leader_election/leader_election.h"
+#include "mds/schedule/schedule_define.h"
+#include "mds/topology/topology.h"
+#include "mds/topology/topology_config.h"
+#include "mds/topology/topology_metric.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace mds {

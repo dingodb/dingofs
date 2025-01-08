@@ -20,14 +20,14 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/cli2_client.h"
+#include "stub/rpcclient/cli2_client.h"
 
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/cli2.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/test/stub/rpcclient/mock_cli2_service.h"
+#include "proto/cli2.pb.h"
+#include "stub/common/common.h"
+#include "stub/rpcclient/mock_cli2_service.h"
 
 namespace dingofs {
 namespace stub {

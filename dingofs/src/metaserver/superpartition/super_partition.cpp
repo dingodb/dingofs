@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/superpartition/super_partition.h"
+#include "metaserver/superpartition/super_partition.h"
 
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/metaserver/superpartition/access_log.h"
+#include "base/string/string.h"
+#include "metaserver/superpartition/access_log.h"
 
 namespace dingofs {
 namespace metaserver {

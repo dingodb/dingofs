@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/inode_cache_manager.h"
+#include "client/inode_cache_manager.h"
 
 #include <glog/logging.h>
 
@@ -29,10 +29,10 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/metaserver.pb.h"
+#include "client/filesystem/error.h"
+#include "client/inode_wrapper.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

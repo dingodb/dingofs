@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/client/service/flat_file.h"
+#include "client/service/flat_file.h"
 
 namespace dingofs {
 namespace client {

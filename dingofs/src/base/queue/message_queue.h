@@ -29,8 +29,8 @@
 #include <string>
 #include <thread>
 
-#include "dingofs/src/common/threading.h"
-#include "dingofs/src/utils/concurrent/task_queue.h"
+#include "common/threading.h"
+#include "utils/concurrent/task_queue.h"
 
 namespace dingofs {
 namespace base {

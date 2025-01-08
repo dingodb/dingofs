@@ -30,10 +30,10 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/copyset.pb.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace tools {

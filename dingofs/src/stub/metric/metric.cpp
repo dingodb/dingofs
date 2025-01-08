@@ -21,7 +21,7 @@
  * Author: Xinlong-Chen
  */
 
-#include "dingofs/src/stub/metric/metric.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace stub {

@@ -20,7 +20,7 @@
  * Author: tongguangxun
  */
 
-#include "dingofs/src/utils/net_common.h"
+#include "utils/net_common.h"
 
 #include <glog/logging.h>
 #include <gmock/gmock.h>

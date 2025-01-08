@@ -19,13 +19,13 @@
  * @Date: 2021-06-10 10:04:21
  * @Author: chenwei
  */
-#include "dingofs/src/mds/fs_storage.h"
+#include "mds/fs_storage.h"
 
 #include <gmock/gmock.h>
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
+#include "proto/common.pb.h"
 
 using ::google::protobuf::util::MessageDifferencer;
 

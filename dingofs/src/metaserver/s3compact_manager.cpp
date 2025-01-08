@@ -20,16 +20,16 @@
  * @Author: majie1
  */
 
-#include "dingofs/src/metaserver/s3compact_manager.h"
+#include "metaserver/s3compact_manager.h"
 
 #include <cstdint>
 #include <list>
 #include <mutex>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/metaserver/partition.h"
-#include "dingofs/src/metaserver/s3compact_worker.h"
-#include "dingofs/src/utils/string_util.h"
+#include "metaserver/partition.h"
+#include "metaserver/s3compact_worker.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

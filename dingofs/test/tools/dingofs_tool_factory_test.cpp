@@ -20,7 +20,7 @@
  * @Author: chengyi01
  */
 
-#include "dingofs/src/tools/dingofs_tool_factory.h"
+#include "tools/dingofs_tool_factory.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -28,9 +28,9 @@
 #include <string>
 #include <typeinfo>
 
-#include "dingofs/src/tools/dingofs_tool_abstract_creator.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/version/dingofs_version_tool.h"
+#include "tools/dingofs_tool_abstract_creator.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/version/dingofs_version_tool.h"
 
 namespace dingofs {
 namespace tools {

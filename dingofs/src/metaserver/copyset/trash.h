@@ -28,8 +28,8 @@
 #include <string>
 #include <thread>
 
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "fs/local_filesystem.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace metaserver {

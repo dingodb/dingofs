@@ -23,8 +23,8 @@
 #include <braft/node.h>
 #include <butil/status.h>
 
-#include "dingofs/proto/cli2.pb.h"
-#include "dingofs/src/metaserver/common/types.h"
+#include "proto/cli2.pb.h"
+#include "metaserver/common/types.h"
 
 #ifndef DINGOFS_SRC_METASERVER_COPYSET_RAFT_CLI2_H_
 #define DINGOFS_SRC_METASERVER_COPYSET_RAFT_CLI2_H_

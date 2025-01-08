@@ -20,13 +20,13 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/query/dingofs_inode_s3infomap.h"
+#include "tools/query/dingofs_inode_s3infomap.h"
 
 #include <algorithm>
 #include <iostream>
 #include <memory>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 DECLARE_string(metaserverAddr);
 DECLARE_string(poolId);

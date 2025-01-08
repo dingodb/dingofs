@@ -19,13 +19,13 @@
  * Created Date: 2021-08-25
  * Author: wanghai01
  */
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storage_codec.h"
 
 #include <string>
 #include <utility>
 
-#include "dingofs/src/mds/common/storage_key.h"
-#include "dingofs/src/utils/encode.h"
+#include "mds/common/storage_key.h"
+#include "utils/encode.h"
 
 namespace dingofs {
 namespace mds {

@@ -28,7 +28,7 @@
 #include <deque>
 #include <unordered_map>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

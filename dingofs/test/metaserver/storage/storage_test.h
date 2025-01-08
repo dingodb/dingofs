@@ -28,9 +28,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/dentry_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/dentry_storage.h"
+#include "metaserver/storage/storage.h"
 
 namespace dingofs {
 namespace metaserver {

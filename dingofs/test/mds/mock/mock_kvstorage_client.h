@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
+#include "mds/kvstorageclient/etcd_client.h"
 
 namespace dingofs {
 namespace mds {

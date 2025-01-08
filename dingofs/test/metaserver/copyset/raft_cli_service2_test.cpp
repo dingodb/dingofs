@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/raft_cli_service2.h"
+#include "metaserver/copyset/raft_cli_service2.h"
 
 #include <brpc/server.h>
 #include <butil/endpoint.h>
@@ -32,11 +32,11 @@
 
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/metaserver/copyset/raft_cli2.h"
-#include "dingofs/src/utils/uuid.h"
+#include "proto/common.pb.h"
+#include "fs/local_filesystem.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/raft_cli2.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace metaserver {

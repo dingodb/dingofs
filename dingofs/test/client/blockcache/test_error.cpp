@@ -22,7 +22,7 @@
 
 #include <sstream>
 
-#include "dingofs/src/client/blockcache/error.h"
+#include "client/blockcache/error.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

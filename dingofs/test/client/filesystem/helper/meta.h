@@ -29,9 +29,9 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/filesystem/filesystem.h"
-#include "dingofs/src/client/filesystem/meta.h"
+#include "proto/metaserver.pb.h"
+#include "client/filesystem/filesystem.h"
+#include "client/filesystem/meta.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/utils/fast_align.h"
+#include "utils/fast_align.h"
 
 #include <gtest/gtest.h>
 

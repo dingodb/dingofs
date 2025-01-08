@@ -28,8 +28,8 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/metaserver/storage/rocksdb_perf.h"
-#include "dingofs/src/metaserver/storage/storage.h"
+#include "metaserver/storage/rocksdb_perf.h"
+#include "metaserver/storage/storage.h"
 #include "rocksdb/db.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/options.h"
@@ -38,7 +38,7 @@
 #include "rocksdb/table.h"
 #include "rocksdb/utilities/transaction.h"
 #include "rocksdb/utilities/transaction_db.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace metaserver {

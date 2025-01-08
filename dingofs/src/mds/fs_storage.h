@@ -29,11 +29,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/common/types.h"
-#include "dingofs/src/mds/fs_info_wrapper.h"
-#include "dingofs/src/mds/idgenerator/fs_id_generator.h"
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
+#include "proto/mds.pb.h"
+#include "mds/common/types.h"
+#include "mds/fs_info_wrapper.h"
+#include "mds/idgenerator/fs_id_generator.h"
+#include "mds/kvstorageclient/etcd_client.h"
 
 namespace dingofs {
 namespace mds {

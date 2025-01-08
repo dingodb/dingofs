@@ -29,8 +29,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/common/types.h"
+#include "proto/mds.pb.h"
+#include "mds/common/types.h"
 
 namespace dingofs {
 namespace mds {

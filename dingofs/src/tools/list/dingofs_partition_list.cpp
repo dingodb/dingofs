@@ -19,7 +19,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/list/dingofs_partition_list.h"
+#include "tools/list/dingofs_partition_list.h"
 
 #include <json/json.h>
 
@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/string_util.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/string_util.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(fsId);

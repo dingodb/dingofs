@@ -28,7 +28,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "dingofs/src/client/datastream/memory_pool.h"
+#include "client/datastream/memory_pool.h"
 
 namespace dingofs {
 namespace client {

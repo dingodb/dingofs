@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_NONE_CACHE_H_
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_NONE_CACHE_H_
 
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/error.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

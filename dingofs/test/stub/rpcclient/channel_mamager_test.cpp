@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/stub/rpcclient/channel_manager.h"
+#include "stub/rpcclient/channel_manager.h"
 
 namespace dingofs {
 namespace stub {

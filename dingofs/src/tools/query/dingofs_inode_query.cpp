@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/query/dingofs_inode_query.h"
+#include "tools/query/dingofs_inode_query.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -29,7 +29,7 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(metaserverAddr);

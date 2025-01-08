@@ -20,16 +20,16 @@
  * Author: huyao
  */
 
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
+#include "client/s3/client_s3_adaptor.h"
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 
 #include <utility>
 
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/datastream/data_stream.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
+#include "client/blockcache/error.h"
+#include "client/datastream/data_stream.h"
+#include "client/s3/client_s3_cache_manager.h"
 
 namespace dingofs {
 

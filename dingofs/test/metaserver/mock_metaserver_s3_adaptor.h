@@ -27,8 +27,8 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/s3/metaserver_s3_adaptor.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/s3/metaserver_s3_adaptor.h"
 
 using ::dingofs::pb::metaserver::Inode;
 

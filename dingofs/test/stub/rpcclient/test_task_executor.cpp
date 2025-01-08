@@ -22,11 +22,11 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
-#include "dingofs/test/stub/rpcclient/mock_metacache.h"
+#include "proto/metaserver.pb.h"
+#include "stub/common/common.h"
+#include "stub/common/config.h"
+#include "stub/rpcclient/task_excutor.h"
+#include "stub/rpcclient/mock_metacache.h"
 
 namespace dingofs {
 namespace stub {

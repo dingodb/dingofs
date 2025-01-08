@@ -18,7 +18,7 @@
 
 #include <vector>
 
-#include "dingofs/src/base/cache/cache.h"
+#include "base/cache/cache.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

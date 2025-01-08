@@ -26,11 +26,11 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/partition.h"
-#include "dingofs/src/metaserver/s3/metaserver_s3_adaptor.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
+#include "proto/mds.pb.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/partition.h"
+#include "metaserver/s3/metaserver_s3_adaptor.h"
+#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace metaserver {

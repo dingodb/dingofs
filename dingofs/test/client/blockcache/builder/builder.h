@@ -29,15 +29,15 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache.h"
-#include "dingofs/src/client/blockcache/log.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/test/client/blockcache/mock/mock_s3_client.h"
+#include "base/filepath/filepath.h"
+#include "base/string/string.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache.h"
+#include "client/blockcache/log.h"
+#include "client/common/config.h"
+#include "client/common/dynamic_config.h"
+#include "client/blockcache/mock/mock_s3_client.h"
 
 namespace dingofs {
 namespace client {

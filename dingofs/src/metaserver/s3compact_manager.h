@@ -29,10 +29,10 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/metaserver/s3compact.h"
-#include "dingofs/src/metaserver/s3compact_worker.h"
-#include "dingofs/src/metaserver/s3infocache.h"
-#include "dingofs/src/utils/configuration.h"
+#include "metaserver/s3compact.h"
+#include "metaserver/s3compact_worker.h"
+#include "metaserver/s3infocache.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace metaserver {

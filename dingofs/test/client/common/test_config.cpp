@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/common/config.h"
+#include "client/common/config.h"
 
 namespace dingofs {
 namespace client {

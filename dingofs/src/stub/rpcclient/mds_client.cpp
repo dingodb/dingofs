@@ -20,15 +20,15 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/mds_client.h"
+#include "stub/rpcclient/mds_client.h"
 
 #include <map>
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/space.pb.h"
-#include "dingofs/src/common/metric_utils.h"
-#include "dingofs/src/stub/common/config.h"
+#include "proto/space.pb.h"
+#include "common/metric_utils.h"
+#include "stub/common/config.h"
 
 namespace dingofs {
 namespace stub {

@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/utils/leaky_bucket.h"
+#include "utils/leaky_bucket.h"
 
 #include <gtest/gtest.h>
 

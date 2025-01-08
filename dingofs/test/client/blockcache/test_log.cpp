@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/log.h"
+#include "client/blockcache/log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

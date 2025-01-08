@@ -26,8 +26,8 @@
 #include <functional>
 #include <string>
 
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/client/blockcache/error.h"
+#include "aws/s3_adapter.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

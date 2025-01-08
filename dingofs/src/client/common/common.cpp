@@ -20,9 +20,9 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/client/common/common.h"
+#include "client/common/common.h"
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace client {

@@ -20,12 +20,12 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/metaserver/trash.h"
+#include "metaserver/trash.h"
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/mds.pb.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/storage/converter.h"
+#include "utils/timeutility.h"
 
 using ::dingofs::utils::TimeUtility;
 

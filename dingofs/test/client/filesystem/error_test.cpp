@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/error.h"
+#include "client/filesystem/error.h"
 
 #include <gtest/gtest.h>
 

@@ -29,7 +29,7 @@
 #include <list>
 #include <string>
 
-#include "dingofs/src/metaserver/s3/metaserver_s3.h"
+#include "metaserver/s3/metaserver_s3.h"
 
 using ::testing::_;
 using ::testing::Return;

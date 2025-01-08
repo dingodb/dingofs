@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/common/threading.h"
+#include "common/threading.h"
 
 #include <glog/logging.h>
 #include <sys/prctl.h>

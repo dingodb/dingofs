@@ -20,7 +20,7 @@
  * @Author: chengyi01
  */
 
-#include "dingofs/src/tools/umount/dingofs_umount_fs_tool.h"
+#include "tools/umount/dingofs_umount_fs_tool.h"
 
 #include <brpc/controller.h>
 #include <brpc/server.h>
@@ -30,9 +30,9 @@
 #include <iostream>
 #include <queue>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/test/tools/mock_mds_service.h"
+#include "proto/mds.pb.h"
+#include "mds/common/mds_define.h"
+#include "tools/mock_mds_service.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(mountpoint);

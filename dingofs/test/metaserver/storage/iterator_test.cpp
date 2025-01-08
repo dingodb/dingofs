@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/iterator.h"
+#include "metaserver/storage/iterator.h"
 
 #include <glog/logging.h>
 #include <google/protobuf/util/message_differencer.h>
@@ -29,9 +29,9 @@
 #include <memory>
 #include <unordered_map>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/metaserver/storage/storage_fstream.h"
+#include "proto/metaserver.pb.h"
+#include "common/process.h"
+#include "metaserver/storage/storage_fstream.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storage_codec.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -28,8 +28,8 @@
 #include <set>
 #include <string>
 
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/test/mds/topology/test_topology_helper.h"
+#include "mds/topology/topology_item.h"
+#include "mds/topology/test_topology_helper.h"
 
 using ::testing::_;
 using ::testing::AllOf;

@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/metric.h"
+#include "metaserver/copyset/metric.h"
 
 #include "absl/memory/memory.h"
 

@@ -20,11 +20,11 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/mds_service.h"
+#include "mds/mds_service.h"
 
 #include <vector>
 
-#include "dingofs/src/mds/metric/metric.h"
+#include "mds/metric/metric.h"
 
 namespace dingofs {
 namespace mds {

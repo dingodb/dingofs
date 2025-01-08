@@ -25,10 +25,10 @@
 
 #include <string>
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/common/storage_key.h"
-#include "dingofs/src/mds/topology/topology_item.h"
-#include "dingofs/src/utils/encode.h"
+#include "mds/common/mds_define.h"
+#include "mds/common/storage_key.h"
+#include "mds/topology/topology_item.h"
+#include "utils/encode.h"
 
 namespace dingofs {
 namespace mds {

@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/scheduleService/scheduleService.h"
+#include "mds/schedule/scheduleService/scheduleService.h"
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -28,8 +28,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/schedule.pb.h"
-#include "dingofs/test/mds/mock/mock_coordinator.h"
+#include "proto/schedule.pb.h"
+#include "mds/mock/mock_coordinator.h"
 
 namespace dingofs {
 namespace mds {

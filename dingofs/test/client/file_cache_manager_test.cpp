@@ -23,13 +23,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
-#include "dingofs/test/client/mock_client_s3.h"
-#include "dingofs/test/client/mock_client_s3_cache_manager.h"
-#include "dingofs/test/client/mock_inode_cache_manager.h"
+#include "client/blockcache/error.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "utils/concurrent/task_thread_pool.h"
+#include "client/mock_client_s3.h"
+#include "client/mock_client_s3_cache_manager.h"
+#include "client/mock_inode_cache_manager.h"
 
 namespace dingofs {
 namespace client {

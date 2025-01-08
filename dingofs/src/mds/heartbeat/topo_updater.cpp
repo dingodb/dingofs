@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/topo_updater.h"
+#include "mds/heartbeat/topo_updater.h"
 
 #include <glog/logging.h>
 

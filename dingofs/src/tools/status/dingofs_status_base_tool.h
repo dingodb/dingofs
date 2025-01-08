@@ -26,9 +26,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/dingofs_tool_metric.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/dingofs_tool_metric.h"
 
 namespace dingofs {
 namespace tools {
@@ -37,7 +37,7 @@ namespace status {
 /**
  * @brief
  *
- * @tparam hostType will defined in dingofs/src/tools/dingofs_tool_define.h
+ * @tparam hostType will defined in tools/dingofs_tool_define.h
  * @details
  */
 class StatusBaseTool : public CurvefsToolMetric {

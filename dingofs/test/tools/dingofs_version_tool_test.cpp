@@ -20,7 +20,7 @@
  * @Author: chengyi01
  */
 
-#include "dingofs/src/tools/version/dingofs_version_tool.h"
+#include "tools/version/dingofs_version_tool.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

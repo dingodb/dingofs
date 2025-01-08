@@ -22,8 +22,8 @@
 
 #include <glog/logging.h>
 
-#include "dingofs/src/client/blockcache/block_cache_uploader_cmmon.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "client/blockcache/block_cache_uploader_cmmon.h"
+#include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {

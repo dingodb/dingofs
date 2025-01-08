@@ -20,9 +20,9 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/version/dingofs_version_tool.h"
+#include "tools/version/dingofs_version_tool.h"
 
-#include "dingofs/src/utils/macros.h"
+#include "utils/macros.h"
 
 namespace dingofs {
 namespace tools {

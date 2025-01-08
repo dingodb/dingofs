@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/memory_storage.h"
+#include "metaserver/storage/memory_storage.h"
 
 #include <gtest/gtest.h>
 
 #include <memory>
 
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/test/metaserver/storage/storage_test.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/storage_test.h"
 
 namespace dingofs {
 namespace metaserver {

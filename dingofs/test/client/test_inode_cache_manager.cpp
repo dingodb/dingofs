@@ -26,16 +26,16 @@
 
 #include <cstdint>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/filesystem/defer_sync.h"
-#include "dingofs/src/client/filesystem/dir_cache.h"
-#include "dingofs/src/client/filesystem/openfile.h"
-#include "dingofs/src/client/inode_cache_manager.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/metaserver/mock_metaserver_s3_adaptor.h"
+#include "proto/metaserver.pb.h"
+#include "client/filesystem/defer_sync.h"
+#include "client/filesystem/dir_cache.h"
+#include "client/filesystem/openfile.h"
+#include "client/inode_cache_manager.h"
+#include "client/inode_wrapper.h"
+#include "stub/filesystem/xattr.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "client/mock_metaserver_client.h"
+#include "metaserver/mock_metaserver_s3_adaptor.h"
 
 namespace dingofs {
 namespace client {

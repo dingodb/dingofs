@@ -20,7 +20,7 @@
  * Author: charisu
  */
 
-#include "dingofs/src/utils/channel_pool.h"
+#include "utils/channel_pool.h"
 
 namespace dingofs {
 namespace utils {

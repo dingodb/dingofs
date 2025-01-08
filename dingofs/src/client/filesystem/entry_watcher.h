@@ -26,8 +26,8 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/utils/lru_cache.h"
+#include "client/filesystem/meta.h"
+#include "utils/lru_cache.h"
 
 namespace dingofs {
 namespace client {

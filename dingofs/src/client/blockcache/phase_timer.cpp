@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/phase_timer.h"
+#include "client/blockcache/phase_timer.h"
 
 #include <butil/time.h>
 
-#include "dingofs/src/base/string/string.h"
+#include "base/string/string.h"
 
 namespace dingofs {
 namespace client {

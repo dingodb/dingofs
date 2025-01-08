@@ -20,14 +20,14 @@
  * Author: wudemiao
  */
 
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 #include <gtest/gtest.h>
 
 #include <atomic>
 #include <iostream>
 
-#include "dingofs/src/utils/concurrent/count_down_event.h"
+#include "utils/concurrent/count_down_event.h"
 
 namespace dingofs {
 namespace utils {

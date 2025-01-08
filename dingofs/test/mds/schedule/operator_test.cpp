@@ -20,11 +20,11 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/operator.h"
+#include "mds/schedule/operator.h"
 
 #include <gtest/gtest.h>
 
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/schedule/common.h"
 
 using ::dingofs::mds::topology::EpochType;
 using std::chrono::steady_clock;

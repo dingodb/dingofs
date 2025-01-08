@@ -29,7 +29,7 @@
 #include <set>
 #include <vector>
 
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "mds/schedule/topoAdapter.h"
 
 namespace dingofs {
 namespace mds {

@@ -27,14 +27,14 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
-#include "dingofs/src/mds/schedule/scheduler.h"
-#include "dingofs/src/mds/topology/topology_manager.h"
-#include "dingofs/test/mds/mock/mock_metaserver_client.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/schedule/scheduleMetrics.h"
+#include "mds/schedule/scheduler.h"
+#include "mds/topology/topology_manager.h"
+#include "mds/mock/mock_metaserver_client.h"
+#include "mds/mock/mock_topology.h"
 
 namespace dingofs {
 namespace mds {

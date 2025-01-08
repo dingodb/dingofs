@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/copyset/dingofs_copyset_status.h"
+#include "tools/copyset/dingofs_copyset_status.h"
 
 DECLARE_string(metaserverAddr);
 DECLARE_string(poolId);

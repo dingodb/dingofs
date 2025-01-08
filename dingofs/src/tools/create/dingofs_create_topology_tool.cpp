@@ -22,11 +22,11 @@
 
 // TODO(chengyi): add out put when build sucess
 
-#include "dingofs/src/tools/create/dingofs_create_topology_tool.h"
+#include "tools/create/dingofs_create_topology_tool.h"
 
 #include <fstream>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 DECLARE_string(mds_addr);
 DECLARE_string(cluster_map);

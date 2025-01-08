@@ -20,9 +20,9 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
+#include "client/kvclient/kvclient_manager.h"
 
-#include "dingofs/src/stub/metric/metric.h"
+#include "stub/metric/metric.h"
 
 using dingofs::stub::metric::LatencyGuard;
 

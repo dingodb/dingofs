@@ -29,7 +29,7 @@
 #include <map>
 #include <memory>
 
-#include "dingofs/src/mds/common/mds_define.h"
+#include "mds/common/mds_define.h"
 
 namespace dingofs {
 namespace mds {

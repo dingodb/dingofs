@@ -30,11 +30,11 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/list/dingofs_topology_tree_json.h"
+#include "proto/topology.pb.h"
+#include "mds/common/mds_define.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/list/dingofs_topology_tree_json.h"
 
 namespace dingofs {
 namespace tools {

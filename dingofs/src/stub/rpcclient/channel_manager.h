@@ -31,7 +31,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace stub {

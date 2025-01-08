@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/rpc_client.h"
+#include "client/filesystem/rpc_client.h"
 
 #include <list>
 #include <map>

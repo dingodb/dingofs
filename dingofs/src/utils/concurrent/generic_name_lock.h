@@ -28,7 +28,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace utils {
@@ -118,6 +118,6 @@ class GenericNameLockGuard {
 }  // namespace utils
 }  // namespace dingofs
 
-#include "dingofs/src/utils/concurrent/generic_name_lock-inl.h"
+#include "utils/concurrent/generic_name_lock-inl.h"
 
 #endif  // SRC_COMMON_CONCURRENT_GENERIC_NAME_LOCK_H_

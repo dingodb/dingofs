@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/utils/location_operator.h"
+#include "utils/location_operator.h"
 
 namespace dingofs {
 namespace utils {

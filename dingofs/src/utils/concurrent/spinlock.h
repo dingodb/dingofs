@@ -25,7 +25,7 @@
 
 #include <atomic>
 
-#include "dingofs/include/dingo_compiler_specific.h"
+#include "utils/dingo_compiler_specific.h"
 
 namespace dingofs {
 namespace utils {

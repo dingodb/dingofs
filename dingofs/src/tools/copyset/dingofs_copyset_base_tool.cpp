@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/copyset/dingofs_copyset_base_tool.h"
+#include "tools/copyset/dingofs_copyset_base_tool.h"
 
 DECLARE_string(copysetId);
 DECLARE_string(poolId);

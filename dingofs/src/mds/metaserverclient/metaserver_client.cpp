@@ -20,15 +20,15 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
+#include "mds/metaserverclient/metaserver_client.h"
 
 #include <bthread/bthread.h>
 
 #include <ctime>
 
-#include "dingofs/proto/cli2.pb.h"
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
+#include "proto/cli2.pb.h"
+#include "proto/copyset.pb.h"
+#include "mds/topology/deal_peerid.h"
 
 namespace dingofs {
 namespace mds {

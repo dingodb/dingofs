@@ -26,8 +26,8 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "mds/kvstorageclient/etcd_client.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace idgenerator {

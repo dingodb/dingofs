@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/converter.h"
+#include "metaserver/storage/converter.h"
 
 #include <glog/logging.h>
 #include <inttypes.h>
@@ -36,7 +36,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {

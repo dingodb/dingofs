@@ -36,7 +36,7 @@
 
 // Authors: Zhangyi Chen(chenzhangyi01@baidu.com)
 
-#include "dingofs/src/metaserver/copyset/raft_cli_service2.h"
+#include "metaserver/copyset/raft_cli_service2.h"
 
 #include <braft/closure_helper.h>
 #include <braft/node_manager.h>
@@ -47,8 +47,8 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/metaserver/copyset/types.h"
-#include "dingofs/src/metaserver/copyset/utils.h"
+#include "metaserver/copyset/types.h"
+#include "metaserver/copyset/utils.h"
 
 namespace dingofs {
 namespace metaserver {

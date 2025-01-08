@@ -20,9 +20,9 @@
  * @Author: majie1
  */
 
-#include "dingofs/src/metaserver/s3infocache.h"
+#include "metaserver/s3infocache.h"
 
-#include "dingofs/proto/mds.pb.h"
+#include "proto/mds.pb.h"
 
 namespace dingofs {
 namespace metaserver {

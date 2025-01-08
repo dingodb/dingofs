@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/utils/authenticator.h"
+#include "utils/authenticator.h"
 
 #include <gtest/gtest.h>
 

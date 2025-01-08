@@ -25,9 +25,9 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/partition.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/partition.h"
+#include "stub/rpcclient/metaserver_client.h"
 
 namespace dingofs {
 namespace metaserver {

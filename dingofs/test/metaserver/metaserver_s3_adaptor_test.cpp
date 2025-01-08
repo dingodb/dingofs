@@ -19,7 +19,7 @@
  * Author: chengyi
  */
 
-#include "dingofs/test/metaserver/metaserver_s3_adaptor_test.h"
+#include "metaserver/metaserver_s3_adaptor_test.h"
 
 using ::dingofs::pb::common::PartitionInfo;
 using ::dingofs::pb::metaserver::Dentry;

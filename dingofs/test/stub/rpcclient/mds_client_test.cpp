@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/mds_client.h"
+#include "stub/rpcclient/mds_client.h"
 
 #include <brpc/server.h>
 #include <gmock/gmock-more-actions.h>
@@ -30,11 +30,11 @@
 #include <atomic>
 #include <cstdint>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_base_client.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_service.h"
-#include "dingofs/test/utils/protobuf_message_utils.h"
+#include "proto/topology.pb.h"
+#include "stub/common/config.h"
+#include "stub/rpcclient/mock_mds_base_client.h"
+#include "stub/rpcclient/mock_mds_service.h"
+#include "utils/protobuf_message_utils.h"
 
 namespace dingofs {
 namespace stub {

@@ -20,19 +20,19 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/common/config.h"
+#include "client/common/config.h"
 
 #include <gflags/gflags.h>
 
 #include <string>
 #include <vector>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/base/math/math.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/utils/gflags_helper.h"
-#include "dingofs/src/utils/string_util.h"
+#include "base/filepath/filepath.h"
+#include "base/math/math.h"
+#include "base/string/string.h"
+#include "client/common/dynamic_config.h"
+#include "utils/gflags_helper.h"
+#include "utils/string_util.h"
 
 namespace brpc {
 DECLARE_int32(defer_close_second);

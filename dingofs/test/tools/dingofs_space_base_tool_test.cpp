@@ -20,7 +20,7 @@
  * @Author: chengyi01
  */
 
-#include "dingofs/src/tools/usage/dingofs_space_base_tool.h"
+#include "tools/usage/dingofs_space_base_tool.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

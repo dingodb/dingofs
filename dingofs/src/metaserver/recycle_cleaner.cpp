@@ -20,12 +20,12 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/recycle_cleaner.h"
+#include "metaserver/recycle_cleaner.h"
 
 #include <list>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

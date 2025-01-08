@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "dingofs/proto/mds.pb.h"
+#include "proto/mds.pb.h"
 
 namespace dingofs {
 namespace stub {

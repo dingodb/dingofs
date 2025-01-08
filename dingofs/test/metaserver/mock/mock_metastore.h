@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/metaserver/metastore.h"
+#include "metaserver/metastore.h"
 
 namespace dingofs {
 namespace metaserver {

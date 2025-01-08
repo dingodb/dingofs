@@ -20,12 +20,12 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
+#include "stub/rpcclient/task_excutor.h"
 
 #include <butil/fast_rand.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/utils/math_util.h"
+#include "proto/metaserver.pb.h"
+#include "utils/math_util.h"
 
 namespace dingofs {
 namespace stub {

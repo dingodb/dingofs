@@ -25,8 +25,8 @@
 
 #include <memory>
 
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/copyset/meta_operator.h"
 
 namespace dingofs {
 namespace metaserver {

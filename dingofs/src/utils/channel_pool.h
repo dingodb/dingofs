@@ -30,7 +30,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 using ChannelPtr = std::shared_ptr<brpc::Channel>;
 

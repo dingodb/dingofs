@@ -19,7 +19,7 @@
  * @Date: 2021-06-10 10:04:37
  * @Author: chenwei
  */
-#include "dingofs/src/mds/fs_manager.h"
+#include "mds/fs_manager.h"
 
 #include <brpc/channel.h>
 #include <brpc/server.h>
@@ -28,15 +28,15 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/test/aws/mock_s3_adapter.h"
-#include "dingofs/test/mds/mock/mock_cli2.h"
-#include "dingofs/test/mds/mock/mock_metaserver.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "aws/mock_s3_adapter.h"
+#include "common/define.h"
+#include "mds/mock/mock_cli2.h"
+#include "mds/mock/mock_metaserver.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;
@@ -58,7 +58,12 @@ using ::dingofs::pb::common::S3Info;
 using ::dingofs::pb::common::Volume;
 using ::dingofs::pb::mds::FsDetail;
 using ::dingofs::pb::mds::FsInfo;
+using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FsStatus;
+using ::dingofs::pb::mds::GetFsStatsRequest;
+using ::dingofs::pb::mds::GetFsStatsResponse;
+using ::dingofs::pb::mds::SetFsStatsRequest;
+using ::dingofs::pb::mds::SetFsStatsResponse;
 using ::dingofs::pb::metaserver::CreateRootInodeRequest;
 using ::dingofs::pb::metaserver::CreateRootInodeResponse;
 using ::dingofs::pb::metaserver::MetaStatusCode;

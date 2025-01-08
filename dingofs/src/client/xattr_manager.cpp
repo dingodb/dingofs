@@ -20,12 +20,12 @@
  * Author: wanghai01
  */
 
-#include "dingofs/src/client/xattr_manager.h"
+#include "client/xattr_manager.h"
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/metaserver.pb.h"
+#include "client/common/common.h"
+#include "stub/filesystem/xattr.h"
+#include "utils/string_util.h"
 #include "glog/logging.h"
 
 namespace dingofs {

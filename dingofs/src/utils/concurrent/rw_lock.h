@@ -28,7 +28,7 @@
 #include <glog/logging.h>
 #include <pthread.h>
 
-#include "dingofs/src/utils/uncopyable.h"
+#include "utils/uncopyable.h"
 
 namespace dingofs {
 namespace utils {

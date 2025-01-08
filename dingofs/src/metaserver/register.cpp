@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/metaserver/register.h"
+#include "metaserver/register.h"
 
 #include <brpc/channel.h>
 #include <fcntl.h>
@@ -31,9 +31,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/uri_parser.h"
+#include "proto/topology.pb.h"
+#include "utils/string_util.h"
+#include "utils/uri_parser.h"
 
 namespace dingofs {
 namespace metaserver {

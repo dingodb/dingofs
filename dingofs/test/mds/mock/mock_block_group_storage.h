@@ -27,7 +27,7 @@
 
 #include <vector>
 
-#include "dingofs/src/mds/space/block_group_storage.h"
+#include "mds/space/block_group_storage.h"
 
 namespace dingofs {
 namespace mds {

@@ -14,8 +14,8 @@
 
 #include <unistd.h>
 
-#include "dingofs/src/client/blockcache/disk_state_machine_impl.h"
-#include "dingofs/src/client/common/dynamic_config.h"
+#include "client/blockcache/disk_state_machine_impl.h"
+#include "client/common/dynamic_config.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

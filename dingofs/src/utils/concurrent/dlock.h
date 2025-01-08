@@ -25,7 +25,7 @@
 
 #include <string>
 
-#include "dingofs/src/utils/uncopyable.h"
+#include "utils/uncopyable.h"
 
 namespace dingofs {
 namespace utils {

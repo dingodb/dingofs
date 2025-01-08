@@ -20,11 +20,11 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/s3compact.h"
+#include "metaserver/s3compact.h"
 
 #include <memory>
 
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 namespace dingofs {
 namespace metaserver {

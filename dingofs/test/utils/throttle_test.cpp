@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/utils/throttle.h"
+#include "utils/throttle.h"
 
 #include <glog/logging.h>
 #include <gmock/gmock.h>

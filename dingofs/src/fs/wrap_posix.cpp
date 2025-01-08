@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/fs/wrap_posix.h"
+#include "fs/wrap_posix.h"
 
 #include <glog/logging.h>
 #include <stdio.h>

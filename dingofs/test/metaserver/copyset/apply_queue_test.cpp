@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/apply_queue.h"
+#include "metaserver/copyset/apply_queue.h"
 
 #include <gtest/gtest.h>
 
 #include <ctime>
 
-#include "dingofs/src/utils/concurrent/count_down_event.h"
+#include "utils/concurrent/count_down_event.h"
 
 namespace dingofs {
 namespace metaserver {

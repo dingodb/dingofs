@@ -25,9 +25,9 @@
 
 #include <memory>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/inode_wrapper.h"
+#include "proto/metaserver.pb.h"
+#include "base/time/time.h"
+#include "client/inode_wrapper.h"
 
 namespace dingofs {
 namespace client {

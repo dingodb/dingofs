@@ -22,8 +22,8 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/schedule/common.h"
 
 using ::dingofs::mds::topology::MetaserverClient;
 using ::dingofs::mds::topology::MetaServerSpace;

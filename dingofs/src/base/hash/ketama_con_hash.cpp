@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "dingofs/src/base/hash/ketama_con_hash.h"
+#include "base/hash/ketama_con_hash.h"
 
 #include <fcntl.h>
 

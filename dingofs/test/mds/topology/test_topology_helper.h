@@ -23,7 +23,7 @@
 #ifndef DINGOFS_TEST_MDS_TOPOLOGY_TEST_TOPOLOGY_HELPER_H_
 #define DINGOFS_TEST_MDS_TOPOLOGY_TEST_TOPOLOGY_HELPER_H_
 
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

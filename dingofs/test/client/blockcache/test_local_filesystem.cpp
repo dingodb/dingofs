@@ -22,11 +22,11 @@
 
 #include <cstdlib>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
+#include "base/filepath/filepath.h"
+#include "client/blockcache/local_filesystem.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
-#include "dingofs/src/utils/uuid.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace client {

@@ -27,9 +27,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/dentry_storage.h"
-#include "dingofs/src/metaserver/transaction.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/dentry_storage.h"
+#include "metaserver/transaction.h"
 
 namespace dingofs {
 namespace metaserver {

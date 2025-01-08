@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/metaserver/metastore.h"
+#include "metaserver/metastore.h"
 
 #include <braft/storage.h>
 #include <gmock/gmock.h>
@@ -28,18 +28,18 @@
 
 #include <condition_variable>  // NOLINT
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/common/rpc_stream.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/metaserver/storage/converter.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/rocksdb_storage.h"
-#include "dingofs/src/metaserver/storage/storage.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/utils/uuid.h"
-#include "dingofs/test/metaserver/storage/utils.h"
+#include "common/process.h"
+#include "common/rpc_stream.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "metaserver/storage/converter.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/rocksdb_storage.h"
+#include "metaserver/storage/storage.h"
+#include "metaserver/storage/test_utils.h"
+#include "proto/metaserver.pb.h"
+#include "stub/filesystem/xattr.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace metaserver {

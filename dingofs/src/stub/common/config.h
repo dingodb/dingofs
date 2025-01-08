@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/utils/configuration.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace stub {

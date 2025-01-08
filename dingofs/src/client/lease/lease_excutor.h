@@ -31,9 +31,9 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/stub/rpcclient/metacache.h"
+#include "client/common/config.h"
+#include "stub/rpcclient/mds_client.h"
+#include "stub/rpcclient/metacache.h"
 
 namespace dingofs {
 namespace client {

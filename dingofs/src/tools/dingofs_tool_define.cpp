@@ -19,9 +19,9 @@
  * Created Date: 2021-09-14
  * Author: chengyi01
  */
-#include "dingofs/src/tools/dingofs_tool_define.h"
+#include "tools/dingofs_tool_define.h"
 
-#include "dingofs/src/tools/list/dingofs_topology_list.h"
+#include "tools/list/dingofs_topology_list.h"
 
 DEFINE_string(mdsAddr, "127.0.0.1:16700,127.0.0.1:26700", "mds addr");
 DEFINE_string(mdsDummyAddr, "127.0.0.1:17700,127.0.0.1:27700",

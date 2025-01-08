@@ -25,9 +25,9 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/client/lease/lease_excutor.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_client.h"
-#include "dingofs/test/stub/rpcclient/mock_metacache.h"
+#include "client/lease/lease_excutor.h"
+#include "stub/rpcclient/mock_mds_client.h"
+#include "stub/rpcclient/mock_metacache.h"
 
 using dingofs::pb::mds::topology::PartitionTxId;
 using dingofs::stub::rpcclient::MockMdsClient;

@@ -18,10 +18,10 @@
 #include <memory>
 
 #include "bthread/execution_queue.h"
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/disk_state_machine.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "base/timer/timer_impl.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/disk_state_machine.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace client {

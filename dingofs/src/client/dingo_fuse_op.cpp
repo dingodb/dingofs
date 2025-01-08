@@ -20,29 +20,29 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/dingo_fuse_op.h"
+#include "client/dingo_fuse_op.h"
 
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "dingofs/src/client/blockcache/log.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/filesystem/access_log.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/fuse_client.h"
-#include "dingofs/src/client/fuse_s3_client.h"
-#include "dingofs/src/client/warmup/warmup_manager.h"
-#include "dingofs/src/common/dynamic_vlog.h"
-#include "dingofs/src/stub/filesystem/xattr.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/base_client.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/utils/configuration.h"
-#include "dingofs/src/utils/gflags_helper.h"
+#include "client/blockcache/log.h"
+#include "client/common/common.h"
+#include "client/common/config.h"
+#include "client/filesystem/access_log.h"
+#include "client/filesystem/error.h"
+#include "client/filesystem/meta.h"
+#include "client/fuse_client.h"
+#include "client/fuse_s3_client.h"
+#include "client/warmup/warmup_manager.h"
+#include "common/dynamic_vlog.h"
+#include "stub/filesystem/xattr.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/base_client.h"
+#include "stub/rpcclient/mds_client.h"
+#include "utils/configuration.h"
+#include "utils/gflags_helper.h"
 
 using dingofs::client::DINGOFS_ERROR;
 using dingofs::client::FuseClient;

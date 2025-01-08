@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/mds.h"
+#include "mds/mds.h"
 
 #include <brpc/channel.h>
 #include <brpc/server.h>
@@ -28,11 +28,11 @@
 
 #include <utility>
 
-#include "dingofs/src/mds/heartbeat/heartbeat_service.h"
-#include "dingofs/src/mds/mds_service.h"
-#include "dingofs/src/mds/topology/topology_service.h"
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/src/utils/dingo_version.h"
+#include "mds/heartbeat/heartbeat_service.h"
+#include "mds/mds_service.h"
+#include "mds/topology/topology_service.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "utils/dingo_version.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);

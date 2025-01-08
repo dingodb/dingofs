@@ -20,7 +20,7 @@
  * Author: wanghai01
  */
 
-#include "dingofs/test/mds/topology/test_topology_helper.h"
+#include "mds/topology/test_topology_helper.h"
 
 namespace dingofs {
 namespace mds {

@@ -21,8 +21,8 @@
  */
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/test/client/blockcache/builder/builder.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

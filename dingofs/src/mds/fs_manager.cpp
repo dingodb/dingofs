@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/fs_manager.h"
+#include "mds/fs_manager.h"
 
 #include <glog/logging.h>
 #include <google/protobuf/util/message_differencer.h>
@@ -32,13 +32,13 @@
 #include <unordered_map>
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/common/define.h"
-#include "dingofs/src/mds/common/types.h"
-#include "dingofs/src/mds/metric/fs_metric.h"
-#include "dingofs/src/utils/string_util.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
+#include "common/define.h"
+#include "mds/common/types.h"
+#include "mds/metric/fs_metric.h"
+#include "utils/string_util.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace mds {

@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_METASERVER_COPYSET_COPYSET_SERVICE_H_
 #define DINGOFS_SRC_METASERVER_COPYSET_COPYSET_SERVICE_H_
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "proto/copyset.pb.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 namespace dingofs {
 namespace metaserver {

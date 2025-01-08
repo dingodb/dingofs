@@ -19,7 +19,7 @@
  * Created Date: Sun Sep  6 17:13:58 CST 2020
  */
 
-#include "dingofs/src/utils/math_util.h"
+#include "utils/math_util.h"
 
 #include <gtest/gtest.h>
 

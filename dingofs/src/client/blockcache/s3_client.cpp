@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/s3_client.h"
+#include "client/blockcache/s3_client.h"
 
 #include <ostream>
 
-#include "dingofs/src/stub/metric/metric.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/schedule/common.h"
 
 #include <sys/time.h>
 
@@ -28,8 +28,8 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/topology.pb.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace mds {

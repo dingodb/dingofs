@@ -20,13 +20,13 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/mds/idgenerator/etcd_id_generator.h"
+#include "mds/idgenerator/etcd_id_generator.h"
 
 #include <glog/logging.h>
 
 #include <string>
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace idgenerator {

@@ -20,14 +20,14 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/copyset_conf_generator.h"
+#include "mds/heartbeat/copyset_conf_generator.h"
 
 #include <glog/logging.h>
 
 #include <string>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
+#include "proto/heartbeat.pb.h"
+#include "mds/topology/deal_peerid.h"
 
 namespace dingofs {
 namespace mds {

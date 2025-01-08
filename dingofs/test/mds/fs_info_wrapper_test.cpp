@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/mds/fs_info_wrapper.h"
+#include "mds/fs_info_wrapper.h"
 
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
 
 namespace dingofs {
 namespace mds {

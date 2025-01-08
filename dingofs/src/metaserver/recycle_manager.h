@@ -22,7 +22,7 @@
 #include <list>
 #include <memory>
 
-#include "dingofs/src/metaserver/recycle_cleaner.h"
+#include "metaserver/recycle_cleaner.h"
 
 #ifndef DINGOFS_SRC_METASERVER_RECYCLE_MANAGER_H_
 #define DINGOFS_SRC_METASERVER_RECYCLE_MANAGER_H_

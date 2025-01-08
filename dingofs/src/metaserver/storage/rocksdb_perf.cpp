@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/rocksdb_perf.h"
+#include "metaserver/storage/rocksdb_perf.h"
 
 #include <glog/logging.h>
 
@@ -28,7 +28,7 @@
 #include <ostream>
 
 #include "butil/fast_rand.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/timeutility.h"
 
 static bool pass_uint32(const char*, uint32_t) { return true; }
 static bool pass_uint64(const char*, uint64_t) { return true; }

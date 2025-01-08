@@ -23,7 +23,7 @@
 #include <gtest/gtest.h>
 #include <sys/utsname.h>
 
-#include "dingofs/src/fs/wrap_posix.h"
+#include "fs/wrap_posix.h"
 
 #define DIR_PATH "wraptest"
 #define FILE_PATH1 "wraptest/1"

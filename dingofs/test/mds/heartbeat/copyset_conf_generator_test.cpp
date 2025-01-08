@@ -20,14 +20,14 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/copyset_conf_generator.h"
+#include "mds/heartbeat/copyset_conf_generator.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <sys/time.h>
 
-#include "dingofs/test/mds/mock/mock_coordinator.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/mock/mock_coordinator.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::mds::MockCoordinator;
 using ::dingofs::mds::topology::CopySetIdType;

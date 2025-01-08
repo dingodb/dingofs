@@ -27,9 +27,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/metaserver/storage/config.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/metaserver/storage/status.h"
+#include "metaserver/storage/config.h"
+#include "metaserver/storage/iterator.h"
+#include "metaserver/storage/status.h"
 
 namespace dingofs {
 namespace metaserver {

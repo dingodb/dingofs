@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "dingofs/src/client/inode_wrapper.h"
+#include "client/inode_wrapper.h"
 
 #include <glog/logging.h>
 
@@ -28,10 +28,10 @@
 #include <ctime>
 #include <memory>
 
-#include "dingofs/include/dingo_compiler_specific.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
+#include "proto/metaserver.pb.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "stub/rpcclient/task_excutor.h"
+#include "utils/dingo_compiler_specific.h"
 
 namespace dingofs {
 namespace client {

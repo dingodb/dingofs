@@ -20,11 +20,11 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/openfile.h"
+#include "client/filesystem/openfile.h"
 
 #include <memory>
 
-#include "dingofs/src/client/filesystem/utils.h"
+#include "client/filesystem/utils.h"
 #include "glog/logging.h"
 
 namespace dingofs {

@@ -28,13 +28,13 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/space.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/stub/common/config.h"
-#include "dingofs/src/stub/common/metacache_struct.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/base_client.h"
+#include "proto/mds.pb.h"
+#include "proto/space.pb.h"
+#include "proto/topology.pb.h"
+#include "stub/common/config.h"
+#include "stub/common/metacache_struct.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/base_client.h"
 
 namespace dingofs {
 namespace stub {

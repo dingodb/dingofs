@@ -20,14 +20,14 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
+#include "mds/schedule/scheduleMetrics.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <json2pb/json_to_pb.h>
 
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::mds::topology::CopySetKey;
 using ::dingofs::mds::topology::MockTopology;

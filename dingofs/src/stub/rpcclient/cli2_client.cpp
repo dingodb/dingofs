@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "dingofs/src/stub/rpcclient/cli2_client.h"
+#include "stub/rpcclient/cli2_client.h"
 
 namespace dingofs {
 namespace stub {

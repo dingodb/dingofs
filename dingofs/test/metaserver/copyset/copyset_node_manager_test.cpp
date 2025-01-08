@@ -20,15 +20,15 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/copyset/copyset_node_manager.h"
 
 #include <brpc/server.h>
 #include <butil/fast_rand.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/test/fs/mock_local_filesystem.h"
+#include "fs/local_filesystem.h"
+#include "metaserver/common/types.h"
+#include "fs/mock_local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

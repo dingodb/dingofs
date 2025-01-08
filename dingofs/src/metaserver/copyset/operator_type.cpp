@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/operator_type.h"
+#include "metaserver/copyset/operator_type.h"
 
 #include <glog/logging.h>
 

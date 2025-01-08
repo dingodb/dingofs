@@ -19,13 +19,13 @@
  * Created Date: Thur Jun 22 2021
  * Author: huyao
  */
-#include "dingofs/src/client/s3/client_s3.h"
+#include "client/s3/client_s3.h"
 
 #include <glog/logging.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/test/client/mock_s3_adapter.h"
+#include "client/mock_s3_adapter.h"
 
 namespace dingofs {
 namespace client {

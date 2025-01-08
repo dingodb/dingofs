@@ -23,7 +23,7 @@
 #ifndef SRC_COMMON_WAIT_INTERVAL_H_
 #define SRC_COMMON_WAIT_INTERVAL_H_
 
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace utils {

@@ -22,8 +22,8 @@
 
 #include <sstream>
 
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/mem_cache.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/mem_cache.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

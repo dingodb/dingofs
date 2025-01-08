@@ -20,12 +20,12 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/streaming_utils.h"
+#include "metaserver/streaming_utils.h"
 
 #include <butil/iobuf.h>
 #include <glog/logging.h>
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

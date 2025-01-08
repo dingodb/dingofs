@@ -26,9 +26,9 @@
 #include <memory>
 
 #include "brpc/server.h"
-#include "dingofs/src/client/fuse_client.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
-#include "dingofs/src/client/service/inode_objects_service.h"
+#include "client/fuse_client.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "client/service/inode_objects_service.h"
 
 namespace dingofs {
 namespace client {

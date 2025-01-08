@@ -26,17 +26,17 @@
 
 #include <memory>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/utils/dingo_define.h"
-#include "dingofs/test/client/mock_client_s3.h"
-#include "dingofs/test/client/mock_inode_cache_manager.h"
-#include "dingofs/test/client/mock_kvclient.h"
-#include "dingofs/test/client/mock_metaserver_service.h"
-#include "dingofs/test/stub/rpcclient/mock_mds_client.h"
+#include "proto/metaserver.pb.h"
+#include "client/blockcache/error.h"
+#include "client/inode_wrapper.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "utils/dingo_define.h"
+#include "client/mock_client_s3.h"
+#include "client/mock_inode_cache_manager.h"
+#include "client/mock_kvclient.h"
+#include "client/mock_metaserver_service.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {
 namespace client {

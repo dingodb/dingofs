@@ -19,9 +19,9 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/list/dingofs_topology_tree_json.h"
+#include "tools/list/dingofs_topology_tree_json.h"
 
-#include "dingofs/src/tools/list/dingofs_topology_list.h"
+#include "tools/list/dingofs_topology_list.h"
 
 namespace dingofs {
 namespace tools {

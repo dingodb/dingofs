@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "dingofs/src/utils/wrap_posix.h"
+#include "utils/wrap_posix.h"
 
 namespace dingofs {
 namespace client {

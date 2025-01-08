@@ -28,7 +28,7 @@
 #include <set>
 #include <string>
 
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
+#include "mds/metaserverclient/metaserver_client.h"
 
 namespace dingofs {
 namespace mds {

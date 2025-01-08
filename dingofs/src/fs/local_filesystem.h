@@ -34,7 +34,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/fs/fs_common.h"
+#include "fs/fs_common.h"
 
 using std::map;
 using std::string;

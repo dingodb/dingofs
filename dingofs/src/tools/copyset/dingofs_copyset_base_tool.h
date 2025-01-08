@@ -27,11 +27,11 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/topology/deal_peerid.h"
-#include "dingofs/src/tools/copyset/dingofs_copyset_status.h"
+#include "proto/copyset.pb.h"
+#include "proto/mds.pb.h"
+#include "proto/topology.pb.h"
+#include "mds/topology/deal_peerid.h"
+#include "tools/copyset/dingofs_copyset_status.h"
 
 namespace dingofs {
 namespace tools {

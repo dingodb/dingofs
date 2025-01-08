@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/query/dingofs_inode.h"
+#include "tools/query/dingofs_inode.h"
 
 #include <iostream>
 #include <utility>
@@ -33,7 +33,7 @@ DECLARE_string(partitionId);
 DECLARE_string(fsId);
 DECLARE_string(inodeId);
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace tools {

@@ -37,20 +37,20 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/src/aws/s3_adapter.h"
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/client/dentry_cache_manager.h"
-#include "dingofs/src/client/fuse_common.h"
-#include "dingofs/src/client/inode_cache_manager.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
-#include "dingofs/src/common/task_thread_pool.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "aws/s3_adapter.h"
+#include "client/blockcache/block_cache.h"
+#include "client/common/common.h"
+#include "client/dentry_cache_manager.h"
+#include "client/fuse_common.h"
+#include "client/inode_cache_manager.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "common/task_thread_pool.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace client {

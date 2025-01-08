@@ -28,12 +28,12 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/space.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/usage/dingofs_space_base_tool.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/space.pb.h"
+#include "proto/topology.pb.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/usage/dingofs_space_base_tool.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace tools {

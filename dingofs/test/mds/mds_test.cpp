@@ -20,7 +20,7 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/mds.h"
+#include "mds/mds.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -32,9 +32,9 @@
 #include <thread>
 #include <vector>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/kvstorageclient/etcd_client.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/mds.pb.h"
+#include "mds/kvstorageclient/etcd_client.h"
+#include "utils/timeutility.h"
 
 using ::std::vector;
 

@@ -23,11 +23,11 @@
 #ifndef DINGOFS_SRC_MDS_SCHEDULE_OPERATOR_H_
 #define DINGOFS_SRC_MDS_SCHEDULE_OPERATOR_H_
 
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/schedule/operatorStep.h"
-#include "dingofs/src/mds/schedule/operatorTemplate.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "mds/common/mds_define.h"
+#include "mds/schedule/operatorStep.h"
+#include "mds/schedule/operatorTemplate.h"
+#include "mds/schedule/topoAdapter.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

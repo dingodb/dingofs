@@ -24,7 +24,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/stub/metric/metric.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace stub {

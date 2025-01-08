@@ -31,9 +31,9 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/disk_state_machine_impl.h"
-#include "dingofs/src/client/blockcache/error.h"
+#include "base/time/time.h"
+#include "client/blockcache/disk_state_machine_impl.h"
+#include "client/blockcache/error.h"
 
 #define IO_ALIGNED_BLOCK_SIZE 4096
 

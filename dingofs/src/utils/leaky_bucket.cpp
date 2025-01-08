@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/utils/leaky_bucket.h"
+#include "utils/leaky_bucket.h"
 
 #include <glog/logging.h>
 
@@ -28,7 +28,7 @@
 #include <mutex>  // NOLINT
 #include <utility>
 
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {

@@ -20,7 +20,7 @@
  * Author:
  */
 
-#include "dingofs/src/metaserver/copyset/utils.h"
+#include "metaserver/copyset/utils.h"
 
 #include <sstream>
 

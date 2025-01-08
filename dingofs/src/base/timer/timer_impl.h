@@ -20,7 +20,7 @@
 #include <queue>
 #include <thread>
 
-#include "dingofs/src/base/timer/timer.h"
+#include "base/timer/timer.h"
 #include "gflags/gflags_declare.h"
 
 DECLARE_int32(timer_bg_bthread_default_num);

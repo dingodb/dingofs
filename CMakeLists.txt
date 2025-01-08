@@ -58,7 +58,6 @@ link_directories(BEFORE ${THIRD_PARTY_INSTALL_PATH}/lib)
 link_directories(BEFORE ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 
 # include dir
-include_directories(${PROJECT_SOURCE_DIR})
 include_directories(${THIRD_PARTY_INSTALL_PATH}/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 

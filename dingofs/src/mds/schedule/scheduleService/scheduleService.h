@@ -28,8 +28,8 @@
 
 #include <memory>
 
-#include "dingofs/proto/schedule.pb.h"
-#include "dingofs/src/mds/schedule/coordinator.h"
+#include "proto/schedule.pb.h"
+#include "mds/schedule/coordinator.h"
 
 namespace dingofs {
 namespace mds {

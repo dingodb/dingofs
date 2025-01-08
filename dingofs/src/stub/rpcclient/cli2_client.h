@@ -31,9 +31,9 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/cli2.pb.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/stub/common/metacache_struct.h"
+#include "proto/cli2.pb.h"
+#include "stub/common/common.h"
+#include "stub/common/metacache_struct.h"
 
 namespace dingofs {
 namespace stub {

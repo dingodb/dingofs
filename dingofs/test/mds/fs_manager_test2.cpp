@@ -24,17 +24,17 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/mds/fs_manager.h"
-#include "dingofs/src/mds/metaserverclient/metaserver_client.h"
-#include "dingofs/src/mds/topology/topology_storage_codec.h"
-#include "dingofs/src/mds/topology/topology_storge_etcd.h"
-#include "dingofs/test/aws/mock_s3_adapter.h"
-#include "dingofs/test/mds/mock/mock_cli2.h"
-#include "dingofs/test/mds/mock/mock_fs_stroage.h"
-#include "dingofs/test/mds/mock/mock_metaserver.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
+#include "proto/common.pb.h"
+#include "proto/mds.pb.h"
+#include "mds/fs_manager.h"
+#include "mds/metaserverclient/metaserver_client.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge_etcd.h"
+#include "aws/mock_s3_adapter.h"
+#include "mds/mock/mock_cli2.h"
+#include "mds/mock/mock_fs_stroage.h"
+#include "mds/mock/mock_metaserver.h"
+#include "mds/mock/mock_topology.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;

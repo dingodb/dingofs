@@ -32,11 +32,11 @@
 #include <unordered_map>
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/topology/topology_id_generator.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "proto/common.pb.h"
+#include "proto/metaserver.pb.h"
+#include "proto/topology.pb.h"
+#include "mds/topology/topology_id_generator.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mds {

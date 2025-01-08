@@ -26,7 +26,7 @@
 #include <list>
 #include <memory>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace utils {

@@ -18,10 +18,10 @@
 
 #include <unordered_map>
 
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/inode_cache_manager.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
+#include "client/filesystem/meta.h"
+#include "client/inode_cache_manager.h"
+#include "client/inode_wrapper.h"
+#include "utils/concurrent/concurrent.h"
 #include "glog/logging.h"
 
 namespace dingofs {

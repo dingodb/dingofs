@@ -27,16 +27,16 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_cache_loader.h"
-#include "dingofs/src/client/blockcache/disk_cache_manager.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/disk_state_health_checker.h"
-#include "dingofs/src/client/blockcache/disk_state_machine.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
-#include "dingofs/src/client/common/config.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_loader.h"
+#include "client/blockcache/disk_cache_manager.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/disk_state_health_checker.h"
+#include "client/blockcache/disk_state_machine.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/local_filesystem.h"
+#include "client/common/config.h"
 
 namespace dingofs {
 namespace client {

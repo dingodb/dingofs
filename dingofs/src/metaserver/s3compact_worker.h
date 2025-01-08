@@ -31,8 +31,8 @@
 #include <thread>
 
 #include "absl/types/optional.h"
-#include "dingofs/src/metaserver/s3compact.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "metaserver/s3compact.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace metaserver {

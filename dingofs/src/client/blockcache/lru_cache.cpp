@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/lru_cache.h"
+#include "client/blockcache/lru_cache.h"
 
 #include <glog/logging.h>
 
@@ -28,8 +28,8 @@
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/lru_common.h"
+#include "base/time/time.h"
+#include "client/blockcache/lru_common.h"
 
 namespace dingofs {
 namespace client {

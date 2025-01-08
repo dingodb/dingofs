@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/topology/deal_peerid.h"
+#include "mds/topology/deal_peerid.h"
 
 namespace dingofs {
 namespace mds {

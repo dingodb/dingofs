@@ -29,8 +29,8 @@
 
 #include <memory>
 
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
-#include "dingofs/test/fs/mock_posix_wrapper.h"
+#include "fs/ext4_filesystem_impl.h"
+#include "fs/mock_posix_wrapper.h"
 
 using ::testing::_;
 using ::testing::DoAll;

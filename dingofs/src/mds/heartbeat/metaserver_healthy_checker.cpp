@@ -20,12 +20,12 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/heartbeat/metaserver_healthy_checker.h"
+#include "mds/heartbeat/metaserver_healthy_checker.h"
 
 #include <glog/logging.h>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/mds/topology/topology_item.h"
+#include "proto/topology.pb.h"
+#include "mds/topology/topology_item.h"
 
 namespace dingofs {
 namespace mds {

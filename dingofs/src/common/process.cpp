@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/common/process.h"
+#include "common/process.h"
 
 #include <cstring>
 

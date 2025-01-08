@@ -20,9 +20,9 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/tools/check/dingofs_copyset_check.h"
+#include "tools/check/dingofs_copyset_check.h"
 
-#include "dingofs/src/tools/copyset/dingofs_copyset_base_tool.h"
+#include "tools/copyset/dingofs_copyset_base_tool.h"
 
 DECLARE_string(mdsAddr);
 DECLARE_string(poolId);

@@ -20,7 +20,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/client/warmup/warmup_manager.h"
+#include "client/warmup/warmup_manager.h"
 
 #include <glog/logging.h>
 #include <unistd.h>
@@ -31,16 +31,16 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/s3_client.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/kvclient/kvclient_manager.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/string_util.h"
+#include "proto/metaserver.pb.h"
+#include "base/filepath/filepath.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/s3_client.h"
+#include "client/common/common.h"
+#include "client/inode_wrapper.h"
+#include "client/kvclient/kvclient_manager.h"
+#include "stub/metric/metric.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace client {

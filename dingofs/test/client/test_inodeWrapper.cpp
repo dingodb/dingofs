@@ -30,13 +30,13 @@
 #include <mutex>
 #include <thread>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/test/client/mock_metaserver_client.h"
-#include "dingofs/test/client/utils.h"
+#include "proto/metaserver.pb.h"
+#include "client/inode_wrapper.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "stub/rpcclient/task_excutor.h"
+#include "utils/timeutility.h"
+#include "client/mock_metaserver_client.h"
+#include "client/utils.h"
 
 namespace dingofs {
 namespace client {

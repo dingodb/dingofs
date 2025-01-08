@@ -21,13 +21,13 @@
  * @Author: wuhanqing
  */
 
-#include "dingofs/src/mds/fs_info_wrapper.h"
+#include "mds/fs_info_wrapper.h"
 
 #include <google/protobuf/util/message_differencer.h>
 
 #include <algorithm>
 
-#include "dingofs/src/base/string/string.h"
+#include "base/string/string.h"
 
 namespace dingofs {
 namespace mds {

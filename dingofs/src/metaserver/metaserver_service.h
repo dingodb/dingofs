@@ -26,9 +26,9 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/metaserver/inflight_throttle.h"
+#include "proto/metaserver.pb.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "metaserver/inflight_throttle.h"
 
 namespace dingofs {
 namespace metaserver {

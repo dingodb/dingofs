@@ -24,7 +24,7 @@
 
 #include <random>
 
-#include "dingofs/src/utils/concurrent/name_lock.h"
+#include "utils/concurrent/name_lock.h"
 
 namespace dingofs {
 namespace utils {

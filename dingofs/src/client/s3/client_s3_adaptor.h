@@ -28,15 +28,15 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/blockcache/s3_client.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/filesystem/filesystem.h"
-#include "dingofs/src/client/inode_cache_manager.h"
-#include "dingofs/src/client/s3/client_s3_cache_manager.h"
-#include "dingofs/src/stub/rpcclient/mds_client.h"
-#include "dingofs/src/utils/wait_interval.h"
+#include "client/blockcache/block_cache.h"
+#include "client/blockcache/s3_client.h"
+#include "client/common/config.h"
+#include "client/filesystem/error.h"
+#include "client/filesystem/filesystem.h"
+#include "client/inode_cache_manager.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "stub/rpcclient/mds_client.h"
+#include "utils/wait_interval.h"
 
 namespace dingofs {
 namespace client {

@@ -20,7 +20,7 @@
  * Author: yangyaokai
  */
 
-#include "dingofs/src/utils/crc32.h"
+#include "utils/crc32.h"
 
 #include <gtest/gtest.h>
 

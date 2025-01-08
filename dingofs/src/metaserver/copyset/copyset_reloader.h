@@ -27,10 +27,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_node.h"
-#include "dingofs/src/utils/concurrent/task_thread_pool.h"
-#include "dingofs/src/fs/local_filesystem.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_node.h"
+#include "utils/concurrent/task_thread_pool.h"
+#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {

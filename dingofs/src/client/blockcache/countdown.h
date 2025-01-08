@@ -28,7 +28,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "dingofs/src/client/blockcache/error.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

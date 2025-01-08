@@ -26,11 +26,11 @@
 #include <atomic>
 #include <vector>
 
-#include "dingofs/include/dingo_compiler_specific.h"
-#include "dingofs/src/stub/common/common.h"
-#include "dingofs/src/utils/bitmap.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
-#include "dingofs/src/utils/concurrent/spinlock.h"
+#include "stub/common/common.h"
+#include "utils/bitmap.h"
+#include "utils/concurrent/rw_lock.h"
+#include "utils/concurrent/spinlock.h"
+#include "utils/dingo_compiler_specific.h"
 
 namespace dingofs {
 namespace stub {

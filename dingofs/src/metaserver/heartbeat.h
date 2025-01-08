@@ -31,10 +31,10 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/metaserver/common/types.h"
-#include "dingofs/src/metaserver/copyset/copyset_node_manager.h"
-#include "dingofs/src/utils/wait_interval.h"
+#include "proto/heartbeat.pb.h"
+#include "metaserver/common/types.h"
+#include "metaserver/copyset/copyset_node_manager.h"
+#include "utils/wait_interval.h"
 
 namespace dingofs {
 namespace metaserver {

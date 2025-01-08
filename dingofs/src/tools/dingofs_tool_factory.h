@@ -28,7 +28,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/src/tools/dingofs_tool.h"
+#include "tools/dingofs_tool.h"
 
 namespace dingofs {
 namespace tools {

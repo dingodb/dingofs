@@ -20,15 +20,15 @@
  * @Author: chenwei
  */
 
-#include "dingofs/src/mds/schedule/operatorController.h"
+#include "mds/schedule/operatorController.h"
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/src/mds/schedule/operator.h"
-#include "dingofs/src/mds/schedule/scheduleMetrics.h"
-#include "dingofs/test/mds/mock/mock_topology.h"
-#include "dingofs/test/mds/schedule/common.h"
+#include "mds/schedule/operator.h"
+#include "mds/schedule/scheduleMetrics.h"
+#include "mds/mock/mock_topology.h"
+#include "mds/schedule/common.h"
 
 using ::dingofs::mds::schedule::Operator;
 using ::dingofs::mds::schedule::OperatorController;

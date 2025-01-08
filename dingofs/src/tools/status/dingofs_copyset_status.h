@@ -27,10 +27,10 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/tools/copyset/dingofs_copyset_base_tool.h"
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/tools/list/dingofs_copysetinfo_list.h"
+#include "tools/copyset/dingofs_copyset_base_tool.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "tools/list/dingofs_copysetinfo_list.h"
 
 namespace dingofs {
 namespace tools {

@@ -20,7 +20,7 @@
  * Author: chenwei
  */
 
-#include "dingofs/src/mds/topology/topology_metric.h"
+#include "mds/topology/topology_metric.h"
 
 #include <algorithm>
 #include <list>

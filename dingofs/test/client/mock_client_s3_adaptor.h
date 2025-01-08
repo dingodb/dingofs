@@ -28,12 +28,12 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/mds.pb.h"
-#include "dingofs/src/client/blockcache/block_cache.h"
-#include "dingofs/src/client/filesystem/filesystem.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/client/s3/client_s3_adaptor.h"
-#include "dingofs/src/stub/metric/metric.h"
+#include "proto/mds.pb.h"
+#include "client/blockcache/block_cache.h"
+#include "client/filesystem/filesystem.h"
+#include "client/inode_wrapper.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace client {

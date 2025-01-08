@@ -25,8 +25,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/src/client/dingo_fuse_op.h"
-#include "dingofs/src/client/fuse_common.h"
+#include "client/dingo_fuse_op.h"
+#include "client/fuse_common.h"
 
 static const struct fuse_lowlevel_ops fuse_op = {
     .init = FuseOpInit,

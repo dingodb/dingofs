@@ -19,9 +19,9 @@
  * Created Date: 2021-09-14
  * Author: chengyi01
  */
-#include "dingofs/src/tools/umount/dingofs_umount_fs_tool.h"
+#include "tools/umount/dingofs_umount_fs_tool.h"
 
-#include "dingofs/src/utils/string_util.h"
+#include "utils/string_util.h"
 
 DECLARE_string(fsName);
 DECLARE_string(mountpoint);

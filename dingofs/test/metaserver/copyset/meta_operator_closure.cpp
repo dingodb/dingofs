@@ -20,12 +20,12 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/meta_operator_closure.h"
+#include "metaserver/copyset/meta_operator_closure.h"
 
 #include <gtest/gtest.h>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/metaserver/copyset/meta_operator.h"
+#include "metaserver/copyset/meta_operator.h"
 
 namespace dingofs {
 namespace metaserver {

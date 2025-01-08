@@ -27,7 +27,7 @@
 
 #include <vector>
 
-#include "dingofs/src/metaserver/copyset/raft_node.h"
+#include "metaserver/copyset/raft_node.h"
 
 namespace dingofs {
 namespace metaserver {

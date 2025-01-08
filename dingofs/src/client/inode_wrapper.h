@@ -32,13 +32,13 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/common/common.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/stub/metric/metric.h"
-#include "dingofs/src/stub/rpcclient/metaserver_client.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "proto/metaserver.pb.h"
+#include "client/common/common.h"
+#include "client/filesystem/error.h"
+#include "stub/metric/metric.h"
+#include "stub/rpcclient/metaserver_client.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace client {

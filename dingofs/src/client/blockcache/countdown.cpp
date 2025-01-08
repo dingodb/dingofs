@@ -20,13 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/countdown.h"
+#include "client/blockcache/countdown.h"
 
 #include <glog/logging.h>
 
 #include <cassert>
 
-#include "dingofs/src/client/blockcache/error.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

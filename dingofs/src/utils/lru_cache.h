@@ -32,8 +32,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/timeutility.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/timeutility.h"
 
 namespace dingofs {
 namespace utils {

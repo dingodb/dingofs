@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/disk_cache_watcher.h"
+#include "client/blockcache/disk_cache_watcher.h"
 
 #include <atomic>
 #include <chrono>
@@ -28,11 +28,11 @@
 #include <ostream>
 #include <thread>
 
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/client/blockcache/disk_cache.h"
-#include "dingofs/src/client/blockcache/disk_cache_group.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/local_filesystem.h"
+#include "base/string/string.h"
+#include "client/blockcache/disk_cache.h"
+#include "client/blockcache/disk_cache_group.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/local_filesystem.h"
 
 namespace dingofs {
 namespace client {

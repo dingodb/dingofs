@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/lru_cache.h"
+#include "base/time/time.h"
+#include "client/blockcache/lru_cache.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

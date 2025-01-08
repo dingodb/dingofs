@@ -26,15 +26,15 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/proto/heartbeat.pb.h"
-#include "dingofs/src/mds/common/mds_define.h"
-#include "dingofs/src/mds/heartbeat/copyset_conf_generator.h"
-#include "dingofs/src/mds/heartbeat/metaserver_healthy_checker.h"
-#include "dingofs/src/mds/heartbeat/topo_updater.h"
-#include "dingofs/src/mds/schedule/coordinator.h"
-#include "dingofs/src/mds/topology/topology.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "proto/heartbeat.pb.h"
+#include "mds/common/mds_define.h"
+#include "mds/heartbeat/copyset_conf_generator.h"
+#include "mds/heartbeat/metaserver_healthy_checker.h"
+#include "mds/heartbeat/topo_updater.h"
+#include "mds/schedule/coordinator.h"
+#include "mds/topology/topology.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace mds {

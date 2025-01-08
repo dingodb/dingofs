@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/raft_log_codec.h"
+#include "metaserver/copyset/raft_log_codec.h"
 
 #include <butil/sys_byteorder.h>
 #include <glog/logging.h>
@@ -28,7 +28,7 @@
 #include <memory>
 #include <type_traits>
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -29,21 +29,21 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/base/timer/timer.h"
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/filesystem/attr_watcher.h"
-#include "dingofs/src/client/filesystem/defer_sync.h"
-#include "dingofs/src/client/filesystem/dir_cache.h"
-#include "dingofs/src/client/filesystem/dir_parent_watcher.h"
-#include "dingofs/src/client/filesystem/dir_quota_manager.h"
-#include "dingofs/src/client/filesystem/entry_watcher.h"
-#include "dingofs/src/client/filesystem/error.h"
-#include "dingofs/src/client/filesystem/fs_stat_manager.h"
-#include "dingofs/src/client/filesystem/lookup_cache.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/filesystem/openfile.h"
-#include "dingofs/src/client/filesystem/package.h"
-#include "dingofs/src/client/filesystem/rpc_client.h"
+#include "base/timer/timer.h"
+#include "client/common/config.h"
+#include "client/filesystem/attr_watcher.h"
+#include "client/filesystem/defer_sync.h"
+#include "client/filesystem/dir_cache.h"
+#include "client/filesystem/dir_parent_watcher.h"
+#include "client/filesystem/dir_quota_manager.h"
+#include "client/filesystem/entry_watcher.h"
+#include "client/filesystem/error.h"
+#include "client/filesystem/fs_stat_manager.h"
+#include "client/filesystem/lookup_cache.h"
+#include "client/filesystem/meta.h"
+#include "client/filesystem/openfile.h"
+#include "client/filesystem/package.h"
+#include "client/filesystem/rpc_client.h"
 
 namespace dingofs {
 namespace client {

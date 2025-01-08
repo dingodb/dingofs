@@ -30,8 +30,8 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/client/common/config.h"
+#include "proto/metaserver.pb.h"
+#include "client/common/config.h"
 
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_ACCESS_LOG_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_ACCESS_LOG_H_

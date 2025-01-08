@@ -25,9 +25,9 @@
 
 #include <string>
 
-#include "dingofs/proto/copyset.pb.h"
-#include "dingofs/src/fs/local_filesystem.h"
-#include "dingofs/src/metaserver/common/types.h"
+#include "proto/copyset.pb.h"
+#include "fs/local_filesystem.h"
+#include "metaserver/common/types.h"
 
 namespace dingofs {
 namespace metaserver {

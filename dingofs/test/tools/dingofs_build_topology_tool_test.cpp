@@ -23,9 +23,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "dingofs/proto/topology.pb.h"
-#include "dingofs/src/tools/create/dingofs_create_topology_tool.h"
-#include "dingofs/test/tools/mock_topology_service.h"
+#include "proto/topology.pb.h"
+#include "tools/create/dingofs_create_topology_tool.h"
+#include "tools/mock_topology_service.h"
 
 namespace dingofs {
 namespace mds {

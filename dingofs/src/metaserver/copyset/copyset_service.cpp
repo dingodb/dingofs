@@ -20,13 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "dingofs/src/metaserver/copyset/copyset_service.h"
+#include "metaserver/copyset/copyset_service.h"
 
 #include <braft/node.h>
 #include <brpc/closure_guard.h>
 #include <glog/logging.h>
 
-#include "dingofs/src/metaserver/copyset/utils.h"
+#include "metaserver/copyset/utils.h"
 
 namespace dingofs {
 namespace metaserver {

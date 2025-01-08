@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/base/filepath/filepath.h"
+#include "base/filepath/filepath.h"
 
 #include <algorithm>
 

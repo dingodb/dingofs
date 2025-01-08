@@ -20,16 +20,16 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/disk_cache_loader.h"
+#include "client/blockcache/disk_cache_loader.h"
 
 #include <butil/time.h>
 
 #include <atomic>
 
-#include "dingofs/src/base/filepath/filepath.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/error.h"
+#include "base/filepath/filepath.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/error.h"
 
 namespace dingofs {
 namespace client {

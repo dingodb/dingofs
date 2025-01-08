@@ -20,23 +20,23 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/blockcache/disk_cache.h"
+#include "client/blockcache/disk_cache.h"
 
 #include <glog/logging.h>
 
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
-#include "dingofs/src/base/string/string.h"
-#include "dingofs/src/base/time/time.h"
-#include "dingofs/src/client/blockcache/cache_store.h"
-#include "dingofs/src/client/blockcache/disk_cache_layout.h"
-#include "dingofs/src/client/blockcache/disk_cache_manager.h"
-#include "dingofs/src/client/blockcache/disk_cache_metric.h"
-#include "dingofs/src/client/blockcache/error.h"
-#include "dingofs/src/client/blockcache/log.h"
-#include "dingofs/src/client/blockcache/phase_timer.h"
-#include "dingofs/src/stub/metric/metric.h"
+#include "base/string/string.h"
+#include "base/time/time.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_layout.h"
+#include "client/blockcache/disk_cache_manager.h"
+#include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/error.h"
+#include "client/blockcache/log.h"
+#include "client/blockcache/phase_timer.h"
+#include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace client {

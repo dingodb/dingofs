@@ -26,8 +26,8 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/proto/common.pb.h"
-#include "dingofs/src/metaserver/inode_manager.h"
+#include "proto/common.pb.h"
+#include "metaserver/inode_manager.h"
 
 namespace dingofs {
 namespace metaserver {

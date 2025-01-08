@@ -29,11 +29,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "dingofs/src/client/common/config.h"
-#include "dingofs/src/client/filesystem/meta.h"
-#include "dingofs/src/client/inode_wrapper.h"
-#include "dingofs/src/stub/rpcclient/task_excutor.h"
-#include "dingofs/src/utils/interruptible_sleeper.h"
+#include "client/common/config.h"
+#include "client/filesystem/meta.h"
+#include "client/inode_wrapper.h"
+#include "stub/rpcclient/task_excutor.h"
+#include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace client {

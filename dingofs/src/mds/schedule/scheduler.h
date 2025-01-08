@@ -27,10 +27,10 @@
 #include <memory>
 #include <vector>
 
-#include "dingofs/src/mds/schedule/operator.h"
-#include "dingofs/src/mds/schedule/operatorController.h"
-#include "dingofs/src/mds/schedule/schedule_define.h"
-#include "dingofs/src/mds/schedule/topoAdapter.h"
+#include "mds/schedule/operator.h"
+#include "mds/schedule/operatorController.h"
+#include "mds/schedule/schedule_define.h"
+#include "mds/schedule/topoAdapter.h"
 
 namespace dingofs {
 namespace mds {

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/dumpfile.h"
+#include "metaserver/storage/dumpfile.h"
 
 #include <fcntl.h>
 #include <glog/logging.h>
@@ -34,11 +34,11 @@
 #include <thread>
 #include <vector>
 
-#include "dingofs/src/common/process.h"
-#include "dingofs/src/metaserver/storage/iterator.h"
-#include "dingofs/src/utils/crc32.h"
-#include "dingofs/src/utils/timeutility.h"
-#include "dingofs/src/fs/ext4_filesystem_impl.h"
+#include "common/process.h"
+#include "metaserver/storage/iterator.h"
+#include "utils/crc32.h"
+#include "utils/timeutility.h"
+#include "fs/ext4_filesystem_impl.h"
 
 namespace dingofs {
 namespace metaserver {

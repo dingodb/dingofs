@@ -29,9 +29,9 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/src/tools/dingofs_tool.h"
-#include "dingofs/src/tools/dingofs_tool_define.h"
-#include "dingofs/src/utils/dingo_version.h"
+#include "tools/dingofs_tool.h"
+#include "tools/dingofs_tool_define.h"
+#include "utils/dingo_version.h"
 
 namespace dingofs {
 namespace tools {

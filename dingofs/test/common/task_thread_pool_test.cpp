@@ -19,7 +19,7 @@
  * Author: chengyi01
  */
 
-#include "dingofs/src/common/task_thread_pool.h"
+#include "common/task_thread_pool.h"
 
 #include <bthread/condition_variable.h>
 #include <glog/logging.h>
@@ -31,8 +31,8 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "dingofs/src/utils/concurrent/concurrent.h"
-#include "dingofs/src/utils/concurrent/rw_lock.h"
+#include "utils/concurrent/concurrent.h"
+#include "utils/concurrent/rw_lock.h"
 
 namespace dingofs {
 namespace common {

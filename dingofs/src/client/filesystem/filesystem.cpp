@@ -20,19 +20,19 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/client/filesystem/filesystem.h"
+#include "client/filesystem/filesystem.h"
 
 #include <cstdint>
 #include <memory>
 
-#include "dingofs/proto/metaserver.pb.h"
-#include "dingofs/src/base/timer/timer_impl.h"
-#include "dingofs/src/client/common/dynamic_config.h"
-#include "dingofs/src/client/filesystem/dir_cache.h"
-#include "dingofs/src/client/filesystem/dir_parent_watcher.h"
-#include "dingofs/src/client/filesystem/fs_stat_manager.h"
-#include "dingofs/src/client/filesystem/utils.h"
-#include "dingofs/src/common/define.h"
+#include "proto/metaserver.pb.h"
+#include "base/timer/timer_impl.h"
+#include "client/common/dynamic_config.h"
+#include "client/filesystem/dir_cache.h"
+#include "client/filesystem/dir_parent_watcher.h"
+#include "client/filesystem/fs_stat_manager.h"
+#include "client/filesystem/utils.h"
+#include "common/define.h"
 
 namespace dingofs {
 namespace client {

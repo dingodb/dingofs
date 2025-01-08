@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/src/fs/local_filesystem.h"
+#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace fs {

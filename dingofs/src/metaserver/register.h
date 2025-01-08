@@ -26,7 +26,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/proto/metaserver.pb.h"
+#include "proto/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "dingofs/src/metaserver/storage/memory_storage.h"
+#include "metaserver/storage/memory_storage.h"
 
 #include <glog/logging.h>
 
