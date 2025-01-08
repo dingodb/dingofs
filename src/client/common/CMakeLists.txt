@@ -17,6 +17,8 @@ add_library(client_common
     common.cpp
     config.cpp
     dynamic_config.cpp
+    slice.cc
+    status.cc
 )
 
 target_link_libraries(client_common

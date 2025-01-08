@@ -108,7 +108,6 @@ using utils::ReadWriteThrottleParams;
 using utils::Thread;
 using utils::ThrottleParams;
 
-using filesystem::DirEntry;
 using filesystem::DirEntryList;
 using filesystem::EntryOut;
 using filesystem::ExternalMember;
@@ -879,7 +878,7 @@ DINGOFS_ERROR FuseClient::FuseOpReadDir(fuse_req_t req, fuse_ino_t ino,
     }
 
     if (BAIDU_UNLIKELY(ino == ROOTINODEID)) {  // root dir(add .stats file)
-      DirEntry dir_entry;
+      filesystem::DirEntry dir_entry;
       if (!entries->Get(STATSINODEID,
                         &dir_entry)) {  // dirEntry not in dircache
         dir_entry.ino = STATSINODEID;
@@ -890,7 +889,7 @@ DINGOFS_ERROR FuseClient::FuseOpReadDir(fuse_req_t req, fuse_ino_t ino,
       }
     }
 
-    entries->Iterate([&](DirEntry* dir_entry) {
+    entries->Iterate([&](filesystem::DirEntry* dir_entry) {
       if (plus) {
         fs_->AddDirEntryPlus(req, buffer, dir_entry);
       } else {
