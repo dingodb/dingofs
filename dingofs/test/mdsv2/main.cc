@@ -51,6 +51,7 @@ int main(int argc, char** argv) {
     std::string default_run_case;
     // common
     default_run_case += "MetaDataCodecTest.*";
+    default_run_case += ":FileSystemSetTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }
