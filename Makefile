@@ -50,32 +50,17 @@ help:
 list:
 	@bash build-scripts/build.sh --stor=fs --list
 
-build:
-	@bash build-scripts/build.sh --stor=fs --only=$(only) --dep=$(dep) --release=$(release) --ci=$(ci) --os=$(os)
-
 file_build:
 	@bash build-scripts/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os)
-
-dep:
-	@bash build-scripts/build.sh --stor=fs --only="" --dep=1
 
 file_dep:
 	@bash build-scripts/file-build.sh --only="" --dep=1
 
-install:
-	@bash build-scripts/install.sh --stor=fs --prefix=$(prefix) --only=$(only)
-
 file_install:
 	@bash build-scripts/file-install.sh --prefix=$(prefix) --only=$(only)
 
-install_and_config:
-	@bash build-scripts/install_and_config.sh fs $(os)
-
 file_deploy_config:
 	@bash build-scripts/file-deploy-config.sh $(os) 
-
-image:
-	@bash build-scripts/image.sh $(tag) $(os)
 
 file_image:
 	@bash build-scripts/file-deploy-config.sh $(os) $(tag) ${build-image}

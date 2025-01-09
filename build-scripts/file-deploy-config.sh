@@ -53,14 +53,14 @@ install_pkg() {
 }
 
 ############################  MAIN()
-docker_prefix="$(pwd)/dingofs/docker/$1"
-prefix="$docker_prefix/dingofs" # /path/to/project/dingofs/docker/rocky9/dingofs
+docker_prefix="$(pwd)/docker/$1"
+prefix="$docker_prefix/dingofs" # /path/to/dingofs/docker/rocky9/dingofs
 mkdir -p $prefix $prefix/conf
 install_pkg $prefix
 install_pkg $prefix etcd
 install_pkg $prefix monitor
 
-paths=`ls dingofs/conf/*`
+paths=`ls conf/*`
 # paths="$paths tools-v2/pkg/config/dingo.yaml"
 for path in $paths;
 do

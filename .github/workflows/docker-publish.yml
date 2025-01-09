@@ -72,7 +72,7 @@ jobs:
 
     - name: Extract artifact
       if: steps.check-event.outputs.continue == 'true'
-      run: tar -xzvf dingofs.tar.gz -C dingofs/docker/rocky9
+      run: tar -xzvf dingofs.tar.gz -C docker/rocky9
 
     - name: Set up Docker Buildx
       if: steps.check-event.outputs.continue == 'true'
@@ -100,7 +100,7 @@ jobs:
       if: steps.check-event.outputs.continue == 'true'
       uses: docker/build-push-action@v6
       with:
-        context: ./dingofs/docker/rocky9
-        file: ./dingofs/docker/rocky9/Dockerfile
+        context: ./docker/rocky9
+        file: ./docker/rocky9/Dockerfile
         push: true
         tags: ${{ steps.meta.outputs.tags }}

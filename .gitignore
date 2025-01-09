@@ -80,3 +80,6 @@ test/client/configs/*
 # thirdparties
 thirdparties/etcdclient/tmp/
 thirdparties/etcdclient/*.h
+
+build
+docker/rocky9/dingofs

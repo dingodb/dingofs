@@ -51,7 +51,7 @@ get_options() {
     do
         case "$1" in
             -p|--prefix)
-                g_prefix=$2 # /path/to/project/dingofs/docker/rocky9/dingofs
+                g_prefix=$2 # /path/to/dingofs/docker/rocky9/dingofs
                 shift 2
                 ;;
             -o|--only)
@@ -249,11 +249,7 @@ install_monitor() {
     g_project_name=$project_name
 
     local project_prefix="$g_prefix/monitor"
-    if [ "$g_stor" == "bs" ]; then
-        local dst="monitor"
-    else
-        local dst="dingofs/monitor"
-    fi
+    local dst="monitor"
     copy_file $dst $g_prefix
     success "install $project_name success\n"
 }
@@ -268,7 +264,7 @@ install_tools-v2() {
     wget -O "$project_prefix/sbin/daemon" $tools_v2_daemo_file
     chmod +x "$project_prefix/sbin/dingo"
     chmod +x "$project_prefix/sbin/daemon"
-    copy_file "$project_name/conf/dingo.yaml" "$g_prefix/conf"
+    copy_file "conf/dingo.yaml" "$g_prefix/conf"
 }
 
 main() {

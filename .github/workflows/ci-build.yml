@@ -62,7 +62,7 @@ jobs:
       run: make file_dep
  
     - name: Build dingofs
-      run: make file_build only=//dingofs/src/* release=1
+      run: make file_build only=//src/* release=1
 
     - name: Install dingofs
       run: |
@@ -70,7 +70,7 @@ jobs:
 
     - name: Archive the dingofs directory
       run: |
-        tar -czvf dingofs.tar.gz -C dingofs/docker/rocky9 dingofs
+        tar -czvf dingofs.tar.gz -C docker/rocky9 dingofs
 
     - name: Copy artifactory to another workflow
       uses: actions/upload-artifact@v4

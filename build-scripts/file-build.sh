@@ -130,20 +130,7 @@ build_target() {
     else
         die "build dingofs failed\n"
     fi
-    
-    # build tools-v2
-    # g_toolsv2_root="tools-v2"
-    # if [ $g_release -eq 1 ]
-    # then
-    #     (cd ${g_toolsv2_root} && make build version=${dingofs_version})
-    # else
-    #     (cd ${g_toolsv2_root} && make debug version=${dingofs_version})
-    # fi
-    # if [ $? -eq 0 ]; then
-    #     success "build tools-v2 success\n"
-    # else
-    #     die "build tools-v2 failed\n"
-    # fi
+
 }
 
 
