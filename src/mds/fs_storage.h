@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
 #include "mds/fs_info_wrapper.h"
 #include "mds/idgenerator/fs_id_generator.h"

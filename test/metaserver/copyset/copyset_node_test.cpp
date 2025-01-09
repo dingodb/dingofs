@@ -30,7 +30,7 @@
 #include <chrono>
 #include <thread>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "fs/mock_local_filesystem.h"
 #include "metaserver/copyset/mock/mock_copyset_node_manager.h"
 #include "metaserver/copyset/mock/mock_copyset_service.h"

@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "proto/cli2.pb.h"
+#include "dingofs/cli2.pb.h"
 
 namespace dingofs {
 namespace stub {

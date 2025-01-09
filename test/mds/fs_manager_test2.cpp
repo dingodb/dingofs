@@ -24,8 +24,8 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "proto/common.pb.h"
-#include "proto/mds.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/fs_manager.h"
 #include "mds/metaserverclient/metaserver_client.h"
 #include "mds/topology/topology_storage_codec.h"

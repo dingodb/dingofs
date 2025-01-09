@@ -25,9 +25,9 @@
 
 #include <memory>
 
-#include "proto/common.pb.h"
-#include "proto/mds.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/common/common.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"

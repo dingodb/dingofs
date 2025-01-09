@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/mock_metaserver_client.h"
 #include "client/mock_timer.h"
 #include "gmock/gmock.h"

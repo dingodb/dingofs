@@ -26,7 +26,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/partition.h"
 #include "metaserver/s3/metaserver_s3_adaptor.h"

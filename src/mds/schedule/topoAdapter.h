@@ -30,8 +30,8 @@
 #include <string>
 #include <vector>
 
-#include "proto/heartbeat.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/heartbeat.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/topology/topology.h"
 #include "mds/topology/topology_manager.h"

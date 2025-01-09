@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/topology/deal_peerid.h"
 #include "mds/topology/topology_item.h"

@@ -25,8 +25,8 @@
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/copyset/copyset_node_manager.h"
 #include "utils/uuid.h"

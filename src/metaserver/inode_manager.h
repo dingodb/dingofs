@@ -29,7 +29,7 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/inode_storage.h"
 #include "metaserver/trash.h"
 #include "utils/concurrent/name_lock.h"

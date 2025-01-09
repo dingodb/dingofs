@@ -28,8 +28,8 @@
 #include <string>
 #include <vector>
 
-#include "proto/space.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/space.pb.h"
+#include "dingofs/topology.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 #include "tools/usage/dingofs_space_base_tool.h"

@@ -31,7 +31,7 @@
 #include <random>
 #include <thread>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "metaserver/inode_manager.h"
 #include "metaserver/s3compact.h"
 #include "metaserver/s3compact_manager.h"

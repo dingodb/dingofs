@@ -26,7 +26,7 @@
 #include <brpc/controller.h>
 #include <google/protobuf/message.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/rpc_stream.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/copyset/operator_type.h"

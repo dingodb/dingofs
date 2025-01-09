@@ -32,7 +32,7 @@
 #include <string>
 #include <utility>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/common/common.h"
 #include "client/filesystem/error.h"
 #include "stub/metric/metric.h"

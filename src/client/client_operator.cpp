@@ -25,7 +25,7 @@
 #include <cstdint>
 #include <list>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"
 #include "utils/uuid.h"

@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/heartbeat/copyset_conf_generator.h"
 #include "mds/heartbeat/metaserver_healthy_checker.h"

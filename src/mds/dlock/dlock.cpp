@@ -29,7 +29,7 @@
 #include <ostream>
 #include <thread>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/common/storage_key.h"
 #include "utils/encode.h"
 #include "utils/timeutility.h"

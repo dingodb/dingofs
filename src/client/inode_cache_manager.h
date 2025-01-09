@@ -29,7 +29,7 @@
 #include <memory>
 #include <set>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/common/config.h"
 #include "client/filesystem/defer_sync.h"
 #include "client/filesystem/error.h"

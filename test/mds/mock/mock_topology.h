@@ -38,9 +38,9 @@
 #include <utility>
 #include <vector>
 
-#include "proto/common.pb.h"
-#include "proto/copyset.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/copyset.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/kvstorageclient/etcd_client.h"
 #include "mds/topology/topology_id_generator.h"

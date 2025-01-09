@@ -28,7 +28,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/process.h"
 #include "fs/ext4_filesystem_impl.h"
 #include "metaserver/storage/converter.h"

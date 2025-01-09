@@ -25,7 +25,7 @@
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "proto/cli2.pb.h"
+#include "dingofs/cli2.pb.h"
 #include "stub/common/common.h"
 #include "stub/rpcclient/mock_cli2_service.h"
 

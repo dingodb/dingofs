@@ -28,7 +28,7 @@
 #include <memory>
 #include <utility>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/s3compact.h"
 #include "metaserver/s3compact_manager.h"
 #include "metaserver/storage/converter.h"

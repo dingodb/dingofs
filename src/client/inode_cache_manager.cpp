@@ -29,7 +29,7 @@
 #include <memory>
 #include <utility>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/filesystem/error.h"
 #include "client/inode_wrapper.h"
 #include "utils/concurrent/concurrent.h"

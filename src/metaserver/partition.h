@@ -27,8 +27,8 @@
 #include <string>
 #include <vector>
 
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/define.h"
 #include "metaserver/dentry_manager.h"
 #include "metaserver/dentry_storage.h"

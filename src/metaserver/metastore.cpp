@@ -30,7 +30,7 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/define.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/partition_clean_manager.h"

@@ -30,9 +30,9 @@
 #include <string>
 #include <vector>
 
-#include "proto/copyset.pb.h"
-#include "proto/heartbeat.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/copyset.pb.h"
+#include "dingofs/heartbeat.pb.h"
+#include "dingofs/topology.pb.h"
 #include "utils/configuration.h"
 
 namespace dingofs {

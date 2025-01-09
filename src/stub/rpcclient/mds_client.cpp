@@ -26,7 +26,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/space.pb.h"
+#include "dingofs/space.pb.h"
 #include "common/metric_utils.h"
 #include "stub/common/config.h"
 

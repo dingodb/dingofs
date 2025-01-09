@@ -30,7 +30,7 @@
 #include <string>
 #include <utility>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/chunkid_allocator.h"
 #include "mds/common/mds_define.h"
 #include "mds/fs_manager.h"

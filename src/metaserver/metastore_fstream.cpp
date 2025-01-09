@@ -28,8 +28,8 @@
 #include <utility>
 #include <vector>
 
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/utils.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/storage_fstream.h"

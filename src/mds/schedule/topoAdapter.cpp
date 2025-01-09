@@ -30,7 +30,7 @@
 #include <string>
 #include <utility>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/common/mds_define.h"
 
 namespace dingofs {

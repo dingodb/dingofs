@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/metaserverclient/metaserver_client.h"
 #include "mds/topology/topology.h"
 #include "utils/concurrent/name_lock.h"

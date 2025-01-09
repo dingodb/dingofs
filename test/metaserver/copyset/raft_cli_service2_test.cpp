@@ -32,7 +32,7 @@
 
 #include <utility>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "fs/local_filesystem.h"
 #include "metaserver/copyset/copyset_node_manager.h"
 #include "metaserver/copyset/raft_cli2.h"

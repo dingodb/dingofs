@@ -22,7 +22,7 @@
 
 #include "client/filesystem/helper/meta.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {

@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/common/common.h"
 #include "stub/common/config.h"
 #include "stub/rpcclient/metaserver_client.h"

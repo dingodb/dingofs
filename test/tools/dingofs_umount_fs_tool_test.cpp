@@ -30,7 +30,7 @@
 #include <iostream>
 #include <queue>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/common/mds_define.h"
 #include "tools/mock_mds_service.h"
 

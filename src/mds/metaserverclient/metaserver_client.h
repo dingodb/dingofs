@@ -28,8 +28,8 @@
 #include <set>
 #include <string>
 
-#include "proto/mds.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace mds {

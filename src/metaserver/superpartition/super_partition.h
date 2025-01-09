@@ -27,7 +27,7 @@
 
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/superpartition/super_partition_storage.h"
 
 namespace dingofs {

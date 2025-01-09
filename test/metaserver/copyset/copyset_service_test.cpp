@@ -26,7 +26,7 @@
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 
-#include "proto/copyset.pb.h"
+#include "dingofs/copyset.pb.h"
 #include "fs/local_filesystem.h"
 #include "utils/uuid.h"
 

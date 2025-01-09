@@ -33,7 +33,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "stub/common/common.h"
 #include "stub/common/config.h"
 #include "stub/common/metacache_struct.h"

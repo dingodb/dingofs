@@ -21,7 +21,7 @@
 #include <sstream>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/blockcache/cache_store.h"
 #include "glog/logging.h"
 

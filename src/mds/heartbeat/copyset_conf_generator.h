@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "mds/schedule/coordinator.h"
 #include "mds/topology/topology.h"
 #include "mds/topology/topology_item.h"

@@ -17,7 +17,7 @@
 
 #include <memory>
 
-#include "proto/client_h2.pb.h"
+#include "dingofs/client_h2.pb.h"
 #include "client/inode_cache_manager.h"
 #include "client/s3/client_s3_adaptor.h"
 

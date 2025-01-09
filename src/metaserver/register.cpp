@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "utils/string_util.h"
 #include "utils/uri_parser.h"
 

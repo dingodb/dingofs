@@ -32,8 +32,8 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/s3util.h"
 #include "metaserver/copyset/meta_operator.h"
 #include "metaserver/s3compact_manager.h"

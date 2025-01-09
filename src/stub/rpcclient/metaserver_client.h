@@ -29,8 +29,8 @@
 #include <vector>
 
 #include "absl/types/optional.h"
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/rpc_stream.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/base_client.h"

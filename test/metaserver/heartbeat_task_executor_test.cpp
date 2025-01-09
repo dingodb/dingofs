@@ -24,7 +24,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "metaserver/heartbeat.h"
 #include "metaserver/copyset/mock/mock_copyset_node.h"
 #include "metaserver/copyset/mock/mock_copyset_node_manager.h"

@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/math/math.h"
 #include "metaserver/superpartition/access_log.h"
 #include "metaserver/superpartition/super_partition_storage.h"

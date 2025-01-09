@@ -30,7 +30,7 @@
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
 #include "metaserver/storage/test_utils.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

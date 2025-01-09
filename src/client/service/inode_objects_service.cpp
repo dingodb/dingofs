@@ -19,7 +19,7 @@
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
 #include "brpc/errno.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/inode_wrapper.h"
 #include "client/service/flat_file.h"
 #include "glog/logging.h"

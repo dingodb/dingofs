@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "utils/timeutility.h"
 
 namespace dingofs {

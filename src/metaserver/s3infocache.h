@@ -33,7 +33,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 
 namespace dingofs {
 namespace metaserver {

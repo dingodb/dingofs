@@ -24,7 +24,7 @@
 #include <map>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_

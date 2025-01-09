@@ -26,7 +26,7 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/copyset_node_manager.h"
 #include "metaserver/inflight_throttle.h"
 

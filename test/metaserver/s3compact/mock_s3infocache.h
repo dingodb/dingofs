@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "metaserver/s3infocache.h"
 
 using ::testing::Invoke;

@@ -17,7 +17,7 @@
 #ifndef DINGOFS_TEST_CLIENT_UTILS_H_
 #define DINGOFS_TEST_CLIENT_UTILS_H_
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {

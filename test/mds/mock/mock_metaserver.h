@@ -24,8 +24,8 @@
 #define DINGOFS_TEST_MDS_MOCK_MOCK_METASERVER_H_
 #include <gmock/gmock.h>
 
-#include "proto/copyset.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/copyset.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

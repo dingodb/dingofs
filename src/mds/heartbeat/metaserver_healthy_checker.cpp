@@ -24,7 +24,7 @@
 
 #include <glog/logging.h>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/topology/topology_item.h"
 
 namespace dingofs {

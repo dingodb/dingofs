@@ -25,7 +25,7 @@
 
 #include <google/protobuf/stubs/callback.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace braft {
 class SnapshotWriter;

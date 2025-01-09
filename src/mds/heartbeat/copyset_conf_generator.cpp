@@ -26,7 +26,7 @@
 
 #include <string>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "mds/topology/deal_peerid.h"
 
 namespace dingofs {

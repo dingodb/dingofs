@@ -29,7 +29,7 @@
 
 #include <string>
 
-#include "proto/cli2.pb.h"
+#include "dingofs/cli2.pb.h"
 #include "metaserver/common/types.h"
 #include "metaserver/copyset/copyset_node_manager.h"
 

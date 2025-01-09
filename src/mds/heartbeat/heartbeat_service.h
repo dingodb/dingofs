@@ -27,7 +27,7 @@
 
 #include <memory>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "mds/heartbeat/heartbeat_manager.h"
 
 namespace dingofs {

@@ -30,8 +30,8 @@
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
 #include "metaserver/storage/test_utils.h"
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
 
 using ::testing::_;

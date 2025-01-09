@@ -28,7 +28,7 @@
 #include <ctime>
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/dingo_compiler_specific.h"

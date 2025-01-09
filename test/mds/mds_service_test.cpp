@@ -30,7 +30,7 @@
 
 #include <string>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/topology/topology_storage_codec.h"
 #include "mds/topology/topology_storge_etcd.h"
 #include "aws/mock_s3_adapter.h"

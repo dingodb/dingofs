@@ -30,7 +30,7 @@
 #include <regex>
 
 #include "absl/memory/memory.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/timeutility.h"
 #include "fs/mock_local_filesystem.h"
 #include "metaserver/copyset/mock/mock_copyset_node_manager.h"

@@ -30,7 +30,7 @@
 #include <atomic>
 #include <cstdint>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "stub/common/config.h"
 #include "stub/rpcclient/mock_mds_base_client.h"
 #include "stub/rpcclient/mock_mds_service.h"

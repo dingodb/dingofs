@@ -25,7 +25,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/dentry_cache_manager.h"
 #include "client/mock_metaserver_client.h"
 

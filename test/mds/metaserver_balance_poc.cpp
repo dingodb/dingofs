@@ -27,7 +27,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/schedule/operatorController.h"
 #include "mds/schedule/scheduleMetrics.h"

@@ -33,7 +33,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 

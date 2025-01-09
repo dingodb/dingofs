@@ -28,7 +28,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "proto/schedule.pb.h"
+#include "dingofs/schedule.pb.h"
 #include "mds/mock/mock_coordinator.h"
 
 namespace dingofs {

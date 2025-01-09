@@ -22,7 +22,7 @@
 
 #include "client/filesystem/attr_watcher.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/filesystem/utils.h"
 
 namespace dingofs {

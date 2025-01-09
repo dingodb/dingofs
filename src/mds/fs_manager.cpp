@@ -32,9 +32,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "proto/common.pb.h"
-#include "proto/mds.pb.h"
 #include "common/define.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
 #include "mds/metric/fs_metric.h"
 #include "utils/string_util.h"
@@ -405,8 +405,7 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
         child_status = fsStorage_->Delete(fs_name);
         if (child_status != FSStatusCode::OK) {
           LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
-                     << ", then delete fs fail"
-                     << ", fsName = " << fs_name
+                     << ", then delete fs fail" << ", fsName = " << fs_name
                      << ", ret = " << FSStatusCode_Name(child_status);
           return child_status;
         }

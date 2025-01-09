@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/cli2.pb.h"
+#include "dingofs/cli2.pb.h"
 #include "stub/common/common.h"
 #include "stub/common/metacache_struct.h"
 

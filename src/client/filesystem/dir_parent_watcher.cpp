@@ -14,7 +14,7 @@
 
 #include "client/filesystem/dir_parent_watcher.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/inode_wrapper.h"
 #include "utils/concurrent/concurrent.h"
 

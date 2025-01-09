@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/common/common.h"
 #include "stub/common/config.h"
 #include "stub/rpcclient/task_excutor.h"

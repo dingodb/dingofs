@@ -23,7 +23,7 @@
 
 #include <list>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/meta_operator.h"
 
 namespace dingofs {

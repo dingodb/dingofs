@@ -26,7 +26,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/mock_dentry_cache_mamager.h"
 #include "client/mock_inode_cache_manager.h"
 #include "client/mock_metaserver_client.h"

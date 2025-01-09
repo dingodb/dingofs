@@ -29,7 +29,7 @@
 #include "metaserver/storage/storage.h"
 #include "metaserver/storage/test_utils.h"
 #include "metaserver/trash_manager.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
 
 using ::testing::_;

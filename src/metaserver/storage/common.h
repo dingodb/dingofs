@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_METASERVER_STORAGE_COMMON_H_
 #define DINGOFS_SRC_METASERVER_STORAGE_COMMON_H_
 
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

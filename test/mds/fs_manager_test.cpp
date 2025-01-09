@@ -35,8 +35,8 @@
 #include "mds/mock/mock_topology.h"
 #include "mds/topology/topology_storage_codec.h"
 #include "mds/topology/topology_storge_etcd.h"
-#include "proto/common.pb.h"
-#include "proto/mds.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;

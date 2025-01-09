@@ -23,7 +23,7 @@
 #ifndef DINGOFS_TEST_METASERVER_TEST_HELPER_H_
 #define DINGOFS_TEST_METASERVER_TEST_HELPER_H_
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace metaserver {

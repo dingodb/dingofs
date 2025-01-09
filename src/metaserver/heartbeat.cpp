@@ -31,7 +31,7 @@
 
 #include <utility>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/copyset/utils.h"
 #include "metaserver/resource_statistic.h"

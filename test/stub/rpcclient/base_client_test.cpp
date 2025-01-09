@@ -26,8 +26,8 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/mds.pb.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_service.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
 #include "stub/rpcclient/mock_topology_service.h"

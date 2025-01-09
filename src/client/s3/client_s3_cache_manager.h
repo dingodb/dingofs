@@ -33,7 +33,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/blockcache/cache_store.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/error.h"

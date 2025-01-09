@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/copyset.pb.h"
+#include "dingofs/copyset.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 #include "utils/string_util.h"

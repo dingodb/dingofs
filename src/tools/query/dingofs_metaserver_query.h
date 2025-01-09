@@ -29,7 +29,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/topology/deal_peerid.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"

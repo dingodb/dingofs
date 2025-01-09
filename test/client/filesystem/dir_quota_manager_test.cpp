@@ -14,7 +14,7 @@
 
 #include "client/filesystem/dir_quota_manager.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/mock_dir_parent_watcher.h"
 #include "client/mock_inode_cache_manager.h"
 #include "client/mock_metaserver_client.h"

@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "absl/container/btree_set.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/storage.h"
 #include "utils/concurrent/concurrent.h"

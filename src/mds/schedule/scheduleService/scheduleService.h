@@ -28,7 +28,7 @@
 
 #include <memory>
 
-#include "proto/schedule.pb.h"
+#include "dingofs/schedule.pb.h"
 #include "mds/schedule/coordinator.h"
 
 namespace dingofs {

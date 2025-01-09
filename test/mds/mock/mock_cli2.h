@@ -24,7 +24,7 @@
 #define DINGOFS_TEST_MDS_MOCK_MOCK_CLI2_H_
 #include <gmock/gmock.h>
 
-#include "proto/cli2.pb.h"
+#include "dingofs/cli2.pb.h"
 
 namespace dingofs {
 namespace metaserver {

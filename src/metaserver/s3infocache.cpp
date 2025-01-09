@@ -22,7 +22,7 @@
 
 #include "metaserver/s3infocache.h"
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 namespace metaserver {

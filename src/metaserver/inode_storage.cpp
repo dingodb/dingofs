@@ -27,7 +27,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/status.h"
 #include "utils/string_util.h"

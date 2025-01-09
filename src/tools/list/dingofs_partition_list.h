@@ -29,8 +29,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "proto/common.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/topology.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 

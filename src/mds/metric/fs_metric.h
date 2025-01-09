@@ -27,7 +27,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
 #include "mds/metric/metric.h"
 

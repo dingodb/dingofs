@@ -26,7 +26,7 @@
 
 #include <string>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "tools/copyset/dingofs_copyset_base_tool.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"

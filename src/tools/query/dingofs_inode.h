@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 #include "tools/query/dingofs_inode_s3infomap.h"

@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "metaserver/common/types.h"
 #include "metaserver/copyset/copyset_node_manager.h"
 #include "utils/wait_interval.h"

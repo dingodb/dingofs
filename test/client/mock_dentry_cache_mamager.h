@@ -29,7 +29,7 @@
 #include <list>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/dentry_cache_manager.h"
 
 namespace dingofs {

@@ -31,7 +31,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/client_operator.h"
 #include "client/filesystem/error.h"
 #include "utils/interruptible_sleeper.h"

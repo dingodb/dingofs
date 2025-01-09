@@ -26,7 +26,7 @@
 #include <list>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/s3/metaserver_s3.h"
 
 namespace dingofs {

@@ -26,7 +26,7 @@
 
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/blockcache/error.h"
 #include "client/inode_wrapper.h"
 #include "client/kvclient/kvclient_manager.h"

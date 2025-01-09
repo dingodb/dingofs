@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "proto/space.pb.h"
+#include "dingofs/space.pb.h"
 
 namespace dingofs {
 namespace mds {

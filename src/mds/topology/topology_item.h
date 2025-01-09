@@ -32,9 +32,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "proto/common.pb.h"
-#include "proto/metaserver.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/metaserver.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/topology/topology_id_generator.h"
 #include "utils/concurrent/concurrent.h"
 

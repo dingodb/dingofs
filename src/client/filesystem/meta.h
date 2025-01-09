@@ -27,7 +27,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/dir_buffer.h"
 #include "client/fuse_common.h"

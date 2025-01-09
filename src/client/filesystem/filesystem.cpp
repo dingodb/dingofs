@@ -25,7 +25,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/timer/timer_impl.h"
 #include "client/common/dynamic_config.h"
 #include "client/filesystem/dir_cache.h"

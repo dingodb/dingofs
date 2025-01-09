@@ -27,7 +27,7 @@
 #include <string>
 #include <utility>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "metaserver/copyset/copyset_reloader.h"
 #include "metaserver/copyset/raft_cli_service2.h"
 #include "metaserver/copyset/utils.h"

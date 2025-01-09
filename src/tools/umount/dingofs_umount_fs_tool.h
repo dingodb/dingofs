@@ -36,7 +36,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 #include "utils/string_util.h"

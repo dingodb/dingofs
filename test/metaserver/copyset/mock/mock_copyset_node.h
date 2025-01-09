@@ -27,7 +27,7 @@
 
 #include <vector>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "metaserver/copyset/copyset_node.h"
 
 namespace dingofs {

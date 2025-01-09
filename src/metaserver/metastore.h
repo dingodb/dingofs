@@ -30,7 +30,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/rpc_stream.h"
 #include "metaserver/copyset/snapshot_closure.h"
 #include "metaserver/metastore_fstream.h"

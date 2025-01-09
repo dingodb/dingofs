@@ -31,7 +31,7 @@
 #include <memory>
 #include <utility>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/s3_client.h"

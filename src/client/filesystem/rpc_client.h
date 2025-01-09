@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/common/config.h"
 #include "client/filesystem/dir_cache.h"
 #include "client/filesystem/meta.h"

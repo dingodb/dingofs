@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {

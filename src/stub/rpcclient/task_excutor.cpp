@@ -24,7 +24,7 @@
 
 #include <butil/fast_rand.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/math_util.h"
 
 namespace dingofs {

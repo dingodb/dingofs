@@ -33,9 +33,9 @@
 #include <utility>
 #include <vector>
 
-#include "proto/copyset.pb.h"
-#include "proto/mds.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/copyset.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/topology.pb.h"
 #include "mds/topology/deal_peerid.h"
 #include "tools/copyset/dingofs_copyset_status.h"
 #include "tools/dingofs_tool.h"

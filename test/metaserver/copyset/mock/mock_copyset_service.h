@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "proto/copyset.pb.h"
+#include "dingofs/copyset.pb.h"
 
 namespace dingofs {
 namespace metaserver {

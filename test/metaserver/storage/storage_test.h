@@ -28,7 +28,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/dentry_storage.h"
 #include "metaserver/storage/storage.h"
 

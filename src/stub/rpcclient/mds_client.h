@@ -28,9 +28,9 @@
 #include <string>
 #include <vector>
 
-#include "proto/mds.pb.h"
-#include "proto/space.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/space.pb.h"
+#include "dingofs/topology.pb.h"
 #include "stub/common/config.h"
 #include "stub/common/metacache_struct.h"
 #include "stub/metric/metric.h"

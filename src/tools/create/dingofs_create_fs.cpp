@@ -28,7 +28,7 @@
 
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "tools/dingofs_tool_define.h"
 #include "utils/fast_align.h"
 #include "utils/string_util.h"

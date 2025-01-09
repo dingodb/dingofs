@@ -25,7 +25,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 
 using ::google::protobuf::util::MessageDifferencer;
 

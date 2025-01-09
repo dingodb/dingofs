@@ -29,7 +29,7 @@
 #include <iostream>
 #include <string>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "tools/dingofs_tool.h"
 #include "tools/dingofs_tool_define.h"
 #include "utils/string_util.h"

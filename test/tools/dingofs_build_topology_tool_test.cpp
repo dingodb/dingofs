@@ -23,7 +23,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 #include "tools/create/dingofs_create_topology_tool.h"
 #include "tools/mock_topology_service.h"
 

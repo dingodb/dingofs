@@ -29,7 +29,7 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/filesystem/filesystem.h"
 #include "client/filesystem/meta.h"
 

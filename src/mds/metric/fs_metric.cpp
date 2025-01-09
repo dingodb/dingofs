@@ -22,7 +22,7 @@
 
 #include "mds/metric/fs_metric.h"
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/metric/metric.h"
 
 namespace dingofs {

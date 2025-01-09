@@ -27,7 +27,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/storage.h"
 #include "utils/concurrent/rw_lock.h"

@@ -134,9 +134,11 @@ find_package(RocksDB REQUIRED)
 # ------------------------ related to source code ------------------------ 
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
-include_directories(${CMAKE_BINARY_DIR}/protos)
 
-set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos/proto)
+set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos)
+
+include_directories(${PROTO_OUTPUT_DIR})
+
 add_custom_target(create_proto_output_dir ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_OUTPUT_DIR}
 )
@@ -154,10 +156,15 @@ foreach(msg ${MSG_PROTOS})
 
         message(STATUS "proto file: ${msg}")
 
-        set(FILE_PREFIX_NAME "${PROTO_OUTPUT_DIR}/${FIL_WE}")
-        message(STATUS "FILE_PREFIX_NAME: ${FILE_PREFIX_NAME}")
-        list(APPEND PROTO_SRCS "${FILE_PREFIX_NAME}.pb.cc")
-        list(APPEND PROTO_HDRS "${FILE_PREFIX_NAME}.pb.h")
+        set(FILE_PREFIX_NAME "${PROTO_OUTPUT_DIR}/dingofs/${FIL_WE}")
+
+        set(PROTO_PB_SRC "${FILE_PREFIX_NAME}.pb.cc")
+        message(STATUS "PROTO_PB_SRC: ${PROTO_PB_SRC}")
+        list(APPEND PROTO_SRCS "${PROTO_PB_SRC}")
+
+        set(PROTO_PB_HDR "${FILE_PREFIX_NAME}.pb.h")
+        message(STATUS "PROTO_PB_HDR: ${PROTO_PB_HDR}")
+        list(APPEND PROTO_HDRS "${PROTO_PB_HDR}")
 
         add_custom_command(
           OUTPUT "${FILE_PREFIX_NAME}.pb.cc"

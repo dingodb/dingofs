@@ -26,7 +26,7 @@
 
 #include <cstdint>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/filesystem/defer_sync.h"
 #include "client/filesystem/dir_cache.h"
 #include "client/filesystem/openfile.h"

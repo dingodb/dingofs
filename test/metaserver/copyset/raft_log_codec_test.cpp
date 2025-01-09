@@ -26,7 +26,7 @@
 #include <google/protobuf/message.h>
 #include <gtest/gtest.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/meta_operator.h"
 #include "utils/macros.h"
 #include "utils/protobuf_message_utils.h"

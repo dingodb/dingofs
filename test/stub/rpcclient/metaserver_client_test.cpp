@@ -31,7 +31,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/common/common.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/channel_manager.h"

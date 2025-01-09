@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "proto/common.pb.h"
+#include "dingofs/common.pb.h"
 #include "aws/s3_adapter.h"
 #include "client/common/common.h"
 #include "stub/common/config.h"

@@ -28,7 +28,7 @@
 #include <memory>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/string_util.h"
 
 namespace dingofs {

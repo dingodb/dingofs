@@ -32,7 +32,7 @@
 #include <thread>
 #include <vector>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/kvstorageclient/etcd_client.h"
 #include "utils/timeutility.h"
 

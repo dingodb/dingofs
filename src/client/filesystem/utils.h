@@ -25,7 +25,7 @@
 
 #include <memory>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/inode_wrapper.h"
 

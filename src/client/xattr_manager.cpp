@@ -22,7 +22,7 @@
 
 #include "client/xattr_manager.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/common/common.h"
 #include "stub/filesystem/xattr.h"
 #include "utils/string_util.h"

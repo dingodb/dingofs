@@ -27,7 +27,7 @@
 
 #include <ctime>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/define.h"
 #include "metaserver/storage/iterator.h"
 #include "stub/filesystem/xattr.h"

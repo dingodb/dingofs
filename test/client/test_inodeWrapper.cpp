@@ -30,7 +30,7 @@
 #include <mutex>
 #include <thread>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "client/inode_wrapper.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "stub/rpcclient/task_excutor.h"

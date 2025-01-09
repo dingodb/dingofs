@@ -29,8 +29,8 @@
 #include <utility>
 #include <vector>
 
-#include "proto/mds.pb.h"
-#include "proto/topology.pb.h"
+#include "dingofs/mds.pb.h"
+#include "dingofs/topology.pb.h"
 #include "aws/s3_adapter.h"
 #include "mds/common/types.h"
 #include "mds/dlock/dlock.h"

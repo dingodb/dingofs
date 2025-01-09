@@ -28,7 +28,7 @@
 #include <string>
 #include <vector>
 
-#include "proto/schedule.pb.h"
+#include "dingofs/schedule.pb.h"
 #include "mds/schedule/operatorController.h"
 #include "mds/schedule/scheduleMetrics.h"
 #include "mds/schedule/schedule_define.h"

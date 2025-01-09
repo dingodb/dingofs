@@ -24,8 +24,8 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/common.pb.h"
-#include "proto/mds.pb.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/codec/codec.h"
 #include "mds/fs_storage.h"
 #include "mds/mock/mock_kvstorage_client.h"

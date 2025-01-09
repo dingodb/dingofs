@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "mds/common/mds_define.h"
 #include "mds/topology/topology.h"
 #include "utils/interruptible_sleeper.h"

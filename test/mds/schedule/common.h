@@ -26,7 +26,7 @@
 #include <map>
 #include <vector>
 
-#include "proto/heartbeat.pb.h"
+#include "dingofs/heartbeat.pb.h"
 #include "mds/schedule/operatorStep.h"
 #include "mds/schedule/topoAdapter.h"
 

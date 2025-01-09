@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 namespace mds {

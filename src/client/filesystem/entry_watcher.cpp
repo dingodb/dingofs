@@ -22,7 +22,7 @@
 
 #include "client/filesystem/entry_watcher.h"
 
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "base/filepath/filepath.h"
 #include "base/string/string.h"
 #include "client/filesystem/utils.h"

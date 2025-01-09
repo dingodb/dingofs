@@ -26,8 +26,8 @@
 
 #include <ctime>
 
-#include "proto/cli2.pb.h"
-#include "proto/copyset.pb.h"
+#include "dingofs/cli2.pb.h"
+#include "dingofs/copyset.pb.h"
 #include "mds/topology/deal_peerid.h"
 
 namespace dingofs {

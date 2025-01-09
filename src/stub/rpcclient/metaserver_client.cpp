@@ -34,7 +34,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "butil/time.h"
-#include "proto/metaserver.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "common/define.h"
 #include "common/rpc_stream.h"
 #include "stub/common/common.h"

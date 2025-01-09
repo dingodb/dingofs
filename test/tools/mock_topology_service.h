@@ -25,7 +25,7 @@
 
 #include <gmock/gmock.h>
 
-#include "proto/topology.pb.h"
+#include "dingofs/topology.pb.h"
 
 namespace dingofs {
 namespace mds {

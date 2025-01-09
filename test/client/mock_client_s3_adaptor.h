@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 #include "client/blockcache/block_cache.h"
 #include "client/filesystem/filesystem.h"
 #include "client/inode_wrapper.h"

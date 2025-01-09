@@ -25,7 +25,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "proto/mds.pb.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 namespace mds {
