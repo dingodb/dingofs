@@ -220,6 +220,16 @@ struct BlockCacheOption {
 };
 // }
 
+// { cache group option
+struct CacheGroupOption {
+  std::string group_name;
+  std::string listen_ip;
+  uint32_t listen_port;
+  uint32_t group_weight;
+  bool sharing_cache;
+};
+// }
+
 struct FuseClientOption {
   stub::common::MdsOption mdsOpt;
   stub::common::MetaCacheOpt metaCacheOpt;
@@ -236,6 +246,7 @@ struct FuseClientOption {
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
   BlockCacheOption block_cache_option;
+  CacheGroupOption cache_group_option;
 
   uint32_t listDentryLimit;
   uint32_t listDentryThreads;

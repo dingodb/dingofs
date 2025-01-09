@@ -401,6 +401,14 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 }
 
+void InitCacheGroupOption(Configuration* c, CacheGroupOption* option) {
+  c->GetValueFatalIfFail("cache_group.group_name", &option->group_name);
+  c->GetValueFatalIfFail("cache_group.listen_ip", &option->listen_ip);
+  c->GetValueFatalIfFail("cache_group.listen_port", &option->listen_port);
+  c->GetValueFatalIfFail("cache_group.group_weight", &option->group_weight);
+  c->GetValueFatalIfFail("cache_group.sharing_cache", &option->sharing_cache);
+}
+
 void SetBrpcOpt(Configuration* conf) {
   dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
   dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
@@ -424,6 +432,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitFileSystemOption(conf, &clientOption->fileSystemOption);
   InitDataStreamOption(conf, &clientOption->data_stream_option);
   InitBlockCacheOption(conf, &clientOption->block_cache_option);
+  InitCacheGroupOption(conf, &clientOption->cache_group_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                             &clientOption->listDentryLimit);
