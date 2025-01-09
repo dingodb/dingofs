@@ -81,6 +81,7 @@ test/client/configs/*
 thirdparties/etcdclient/tmp/
 thirdparties/etcdclient/*.h
 
-build
+build/
 docker/rocky9/dingofs
 dist/
+
