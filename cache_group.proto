@@ -1,0 +1,65 @@
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+//
+
+syntax="proto2";
+package dingofs.pb.cache_group;
+option cc_generic_services = true;
+option go_package = "dingofs/proto/cache_group";
+
+enum CACHE_GROUP_STATUS {
+    CACHE_GROUP_OP_STATUS_SUCCESS = 0;
+};
+
+message RegisterCacheGroupMemberRequest {
+    optional string id = 1;
+};
+
+message RegisterCacheGroupMemberResponse {
+    required CACHE_GROUP_STATUS status = 1;
+    optional string id = 2;
+};
+
+message CacheGroupMember {
+    required string id = 1;
+    required string ip = 2;
+    required uint32 port = 3;
+    required uint32 weight = 4;
+};
+
+message AddCacheGroupMemberRequest {
+    required string group_name = 1;
+    required CacheGroupMember group_member = 2;
+};
+
+message AddCacheGroupMemberResponse {
+    required CACHE_GROUP_STATUS status = 1;
+};
+
+message LoadCacheGroupMembersRequest {
+    required string group_name = 1;
+    optional uint64 mtime = 2;
+};
+
+message LoadCacheGroupMembersResponse {
+    required CACHE_GROUP_STATUS status = 1;
+    optional uint64 mtime = 2;
+    repeated CacheGroupMember group_members = 3;
+};
+
+service CacheGroupService {
+    rpc RegisterCacheGroupMember(RegisterCacheGroupMemberRequest) returns (RegisterCacheGroupMemberResponse);
+    rpc AddCacheGroupMember(AddCacheGroupMemberRequest) returns (AddCacheGroupMemberResponse);
+    rpc LoadCacheGroupMembers(LoadCacheGroupMembersRequest) returns (LoadCacheGroupMembersResponse);
+};
