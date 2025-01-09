@@ -18,13 +18,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <list>
 #include <map>
-#include <memory>
-#include <set>
 #include <string>
-#include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "gmock/gmock.h"
@@ -119,19 +114,19 @@ class MockMdsClient : public MdsClient {
               (override));
 
   // allocate block group
-  MOCK_METHOD(SpaceErrCode, AllocateVolumeBlockGroup,
+  MOCK_METHOD(pb::mds::space::SpaceErrCode, AllocateVolumeBlockGroup,
               (uint32_t fsId, uint32_t size, const std::string& owner,
                std::vector<pb::mds::space::BlockGroup>* groups),
               (override));
 
   // acquire block group
-  MOCK_METHOD(SpaceErrCode, AcquireVolumeBlockGroup,
+  MOCK_METHOD(pb::mds::space::SpaceErrCode, AcquireVolumeBlockGroup,
               (uint32_t fsId, uint64_t blockGroupOffset,
                const std::string& owner, pb::mds::space::BlockGroup* groups),
               (override));
 
   // release block group
-  MOCK_METHOD(SpaceErrCode, ReleaseVolumeBlockGroup,
+  MOCK_METHOD(pb::mds::space::SpaceErrCode, ReleaseVolumeBlockGroup,
               (uint32_t fsId, const std::string& owner,
                const std::vector<pb::mds::space::BlockGroup>& blockGroups),
               (override));

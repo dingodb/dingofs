@@ -33,6 +33,7 @@
 #include "client/mock_dentry_cache_mamager.h"
 #include "client/mock_inode_cache_manager.h"
 #include "client/mock_metaserver_client.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {
 namespace client {
@@ -50,7 +51,7 @@ using dingofs::stub::rpcclient::MockMdsClient;
 using dingofs::stub::rpcclient::MockMetaServerClient;
 
 const uint32_t kMockFsId = 100;
-const char* kMockFsName = "dingofs";
+static const char* kMockFsName = "dingofs";
 
 class DeferSyncBuilder {
  public:
@@ -254,6 +255,7 @@ class FileSystemBuilder {
   std::shared_ptr<MockDentryCacheManager> dentryManager_;
   std::shared_ptr<MockInodeCacheManager> inodeManager_;
   std::shared_ptr<MockMetaServerClient> meta_client_;
+  std::shared_ptr<MockMdsClient> mds_client_;
 };
 
 }  // namespace filesystem

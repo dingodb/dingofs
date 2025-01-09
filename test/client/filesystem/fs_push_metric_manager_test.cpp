@@ -17,8 +17,8 @@
 #include <iostream>
 #include <memory>
 
-#include "dingofs/test/client/mock_mds_client.h"
-#include "dingofs/test/client/mock_timer.h"
+#include "client/mock_mds_client.h"
+#include "client/mock_timer.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -31,7 +31,7 @@ using testing::Return;
 
 using base::timer::MockTimer;
 using dingofs::pb::mds::FsStatsData;
-using dingofs::pb::stub::rpcclient::MockMdsClient;
+using dingofs::stub::rpcclient::MockMdsClient;
 
 class FsPushMetricManagerTest : public ::testing::Test {
  protected:
@@ -70,7 +70,7 @@ TEST_F(FsPushMetricManagerTest, Stop) {
       .WillOnce(
           [&](const std::string& fsname, const FsStatsData& new_fs_stats_data) {
             EXPECT_EQ(fsname, std::string("dingofs"));
-            return FSStatusCode::OK;
+            return pb::mds::FSStatusCode::OK;
           });
   fs_push_metrics_manager->Stop();
   EXPECT_FALSE(fs_push_metrics_manager->IsRunning());
@@ -111,11 +111,12 @@ TEST_F(FsPushMetricManagerTest, DoPushClientMetrics) {
             EXPECT_EQ(new_fs_stats_data.readqps(), 10);
             EXPECT_EQ(new_fs_stats_data.s3readbytes(), 8192);
             EXPECT_EQ(new_fs_stats_data.s3readqps(), 20);
-            return FSStatusCode::OK;
+            return pb::mds::FSStatusCode::OK;
           });
   std::string fsname = "dingofs";
-  FSStatusCode ret = mock_mds_client->SetFsStats(fsname, delta_client_metrics);
-  EXPECT_EQ(ret, FSStatusCode::OK);
+  pb::mds::FSStatusCode ret =
+      mock_mds_client->SetFsStats(fsname, delta_client_metrics);
+  EXPECT_EQ(ret, pb::mds::FSStatusCode::OK);
 
   fs_push_metrics_manager->Stop();
   EXPECT_FALSE(fs_push_metrics_manager->IsRunning());

@@ -77,51 +77,6 @@ runlog/
 test/client/configs/*
 !test/client/configs/.gitkeep
 
-projects/*
-docker/base/*
-docker/debian*/*so*
-!docker/base/Dockerfile
-!docker/base/Makefile
-
-# dingofs
-dingofs/devops/projects/
-dingofs/devops/ssh/
-dingofs/devops/inventory
-dingofs/BUILD_MODE
-*.pyc
-.facts/
-*retry
-# monitor
-dingofs/monitor/prometheus/target.json
-
-dingofs/docker/*/dingofs
-dingofs/docker/*/dingofs
-dingofs/docker/dingofs
-dingofs/docker/base/*
-dingofs/docker/debian*/*so*
-!dingofs/docker/base/Dockerfile
-!dingofs/docker/base/Makefile
-
-__not_found__
-
 # thirdparties
 thirdparties/etcdclient/tmp/
 thirdparties/etcdclient/*.h
-
-.test
-.note
-.playground
-.dumpfile
-metastore_test.dat
-GPATH
-GRTAGS
-GTAGS
-core.*
-
-third-party/build
-third-party/installed
-
-include/etcdclient/etcdclient.h
-build
-
-curvefs

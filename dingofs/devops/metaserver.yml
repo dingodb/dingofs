@@ -1,7 +1,0 @@
----
-- hosts: "{{ hosts }}"
-  roles:
-    - { role: common }
-  vars_files:
-    - vars/main.yml
-    - vars/metaserver.yml
