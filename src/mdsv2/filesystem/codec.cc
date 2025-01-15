@@ -79,6 +79,14 @@ void MetaDataCodec::DecodeFSKey(const std::string& key, std::string& name) {
   name = key.substr(kPrefixSize + 2);
 }
 
+std::string MetaDataCodec::EncodeFSValue(const pb::mdsv2::FsInfo& fs_info) { return fs_info.SerializeAsString(); }
+
+pb::mdsv2::FsInfo MetaDataCodec::DecodeFSValue(const std::string& value) {
+  pb::mdsv2::FsInfo fs_info;
+  CHECK(fs_info.ParseFromString(value)) << "Parse fs info fail.";
+  return fs_info;
+}
+
 // format: []$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id, $kDelimiter, $name]
 /// size: >= 1+1+4+1+8+1+1 = 17
 std::string MetaDataCodec::EncodeDentryKey(int fs_id, uint64_t inode_id, const std::string& name) {
@@ -109,6 +117,14 @@ void MetaDataCodec::DecodeDentryKey(const std::string& key, int& fs_id, uint64_t
   name = key.substr(kPrefixSize + 17);
 }
 
+std::string MetaDataCodec::EncodeDentryValue(const pb::mdsv2::Dentry& dentry) { return dentry.SerializeAsString(); }
+
+pb::mdsv2::Dentry MetaDataCodec::DecodeDentryValue(const std::string& value) {
+  pb::mdsv2::Dentry dentry;
+  CHECK(dentry.ParseFromString(value)) << "Parse dentry fail.";
+  return dentry;
+}
+
 // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id]
 // size: 1+1+4+1+8 = 15
 std::string MetaDataCodec::EncodeDirInodeKey(int fs_id, uint64_t inode_id) {
@@ -136,6 +152,14 @@ void MetaDataCodec::DecodeDirInodeKey(const std::string& key, int& fs_id, uint64
   inode_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 8, kPrefixSize + 16));
 }
 
+std::string MetaDataCodec::EncodeDirInodeValue(const pb::mdsv2::Inode& inode) { return inode.SerializeAsString(); }
+
+pb::mdsv2::Inode MetaDataCodec::DecodeDirInodeValue(const std::string& value) {
+  pb::mdsv2::Inode inode;
+  CHECK(inode.ParseFromString(value)) << "Parse inode fail.";
+  return inode;
+}
+
 // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id]
 // size: 1+1+4+1+8 = 15
 std::string MetaDataCodec::EncodeFileInodeKey(int fs_id, uint64_t inode_id) {
@@ -161,6 +185,14 @@ void MetaDataCodec::DecodeFileInodeKey(const std::string& key, int& fs_id, uint6
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
   inode_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 8, kPrefixSize + 16));
+}
+
+std::string MetaDataCodec::EncodeFileInodeValue(const pb::mdsv2::Inode& inode) { return inode.SerializeAsString(); }
+
+pb::mdsv2::Inode MetaDataCodec::DecodeFileInodeValue(const std::string& value) {
+  pb::mdsv2::Inode inode;
+  CHECK(inode.ParseFromString(value)) << "Parse inode fail.";
+  return inode;
 }
 
 }  // namespace mdsv2

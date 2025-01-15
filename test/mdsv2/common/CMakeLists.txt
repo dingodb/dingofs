@@ -14,16 +14,18 @@
 
 
 file(GLOB TEST_DINGOFS_MDSV2_COMMON_SRCS
-    "*.cc"
+  "*.cc"
 )
 
 add_library(test_mdsv2_common
-    ${TEST_DINGOFS_MDSV2_COMMON_SRCS}
+  ${TEST_DINGOFS_MDSV2_COMMON_SRCS}
 )
 
 target_link_libraries(test_mdsv2_common
-    PROTO_OBJS
-    mdsv2_common
-    protobuf::libprotobuf
-    ${TEST_NOT_MAIN_DEPS}
+  PROTO_OBJS
+
+  mdsv2_common
+
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

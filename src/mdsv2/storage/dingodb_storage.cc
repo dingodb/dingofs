@@ -209,7 +209,8 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
 
   auto status = txn->Get(key, value);
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
+                               : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   status = txn->PreCommit();

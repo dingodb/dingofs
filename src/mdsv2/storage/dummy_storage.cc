@@ -20,8 +20,8 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DummyStorage::DummyStorage() { bthread_mutex_init(&mutex_, nullptr); }
-DummyStorage::~DummyStorage() { bthread_mutex_destroy(&mutex_); }
+DummyStorage::DummyStorage() { CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail."; }
+DummyStorage::~DummyStorage() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail."; }
 
 bool DummyStorage::Init(const std::string&) { return true; }
 
@@ -81,7 +81,11 @@ Status DummyStorage::Put(WriteOption option, KeyValue& kv) {
     }
   }
 
-  data_[kv.key] = kv.value;
+  if (kv.opt_type == KeyValue::OpType::kDelete) {
+    data_.erase(kv.key);
+  } else if (kv.opt_type == KeyValue::OpType::kPut) {
+    data_[kv.key] = kv.value;
+  }
 
   return Status::OK();
 }
@@ -99,7 +103,11 @@ Status DummyStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
   }
 
   for (const auto& kv : kvs) {
-    data_[kv.key] = kv.value;
+    if (kv.opt_type == KeyValue::OpType::kPut) {
+      data_[kv.key] = kv.value;
+    } else if (kv.opt_type == KeyValue::OpType::kDelete) {
+      data_.erase(kv.key);
+    }
   }
 
   return Status::OK();
@@ -120,7 +128,9 @@ Status DummyStorage::Get(const std::string& key, std::string& value) {
 
 Status DummyStorage::Delete(const std::string& key) {
   BAIDU_SCOPED_LOCK(mutex_);
+
   data_.erase(key);
+
   return Status::OK();
 }
 

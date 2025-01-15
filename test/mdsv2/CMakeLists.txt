@@ -24,11 +24,17 @@ add_executable(test_mdsv2
 target_link_libraries(test_mdsv2
   PROTO_OBJS
 
+  $<TARGET_OBJECTS:test_mdsv2_common>
+  $<TARGET_OBJECTS:test_mdsv2_filesystem>
+  $<TARGET_OBJECTS:test_mdsv2_service>
+
   mdsv2_common
   mdsv2_filesystem
-  mdsv2_service
-
-  curvefs_utils
+  mdsv2_storage
+  mdsv2_coordinator
+  mdsv2_mds
+  
+  dingofs_utils
 
   absl::log_internal_message
   absl::cleanup
@@ -40,7 +46,7 @@ target_link_libraries(test_mdsv2
   dingo::sdk
 
   protobuf::libprotobuf
-  ${TEST_NOT_MAIN_DEPS}
+  ${TEST_DEPS_WITHOUT_MAIN}
 )
 
 set_target_properties(test_mdsv2 PROPERTIES

@@ -14,14 +14,46 @@
 
 #include "mdsv2/filesystem/inode.h"
 
+#include <glog/logging.h>
+
+#include <utility>
+
 #include "bthread/mutex.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-Inode::Inode(uint32_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) { bthread_mutex_init(&mutex_, nullptr); }
+Inode::Inode(uint32_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+}
+Inode::Inode(const pb::mdsv2::Inode& inode) {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
 
-Inode::~Inode() { bthread_mutex_destroy(&mutex_); }
+  fs_id_ = inode.fs_id();
+  ino_ = inode.inode_id();
+  length_ = inode.length();
+  ctime_ = inode.ctime();
+  mtime_ = inode.mtime();
+  atime_ = inode.atime();
+  uid_ = inode.uid();
+  gid_ = inode.gid();
+  mode_ = inode.mode();
+  nlink_ = inode.nlink();
+  type_ = inode.type();
+  symlink_ = inode.symlink();
+  rdev_ = inode.rdev();
+  dtime_ = inode.dtime();
+  openmpcount_ = inode.openmpcount();
+
+  for (const auto& [index, chunk_list] : inode.s3_chunk_map()) {
+    s3_chunk_map_.insert(std::make_pair(index, chunk_list));
+  }
+  for (const auto& [key, value] : inode.xattr()) {
+    xattr_map_.insert(std::make_pair(key, value));
+  }
+}
+
+Inode::~Inode() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail."; }
 
 Inode::Inode(const Inode& inode) {
   fs_id_ = inode.fs_id_;
@@ -69,7 +101,7 @@ Inode& Inode::operator=(const Inode& inode) {
   return *this;
 }
 
-std::string Inode::SerializeAsString() {
+pb::mdsv2::Inode Inode::GenPBInode() {
   pb::mdsv2::Inode inode;
   inode.set_fs_id(fs_id_);
   inode.set_inode_id(ino_);
@@ -87,7 +119,7 @@ std::string Inode::SerializeAsString() {
   inode.set_dtime(dtime_);
   inode.set_openmpcount(openmpcount_);
 
-  return inode.SerializeAsString();
+  return inode;
 }
 
 std::string Inode::GetXAttr(const std::string& name) {
@@ -102,10 +134,10 @@ InodeMap::InodeMap() { bthread_mutex_init(&mutex_, nullptr); }
 
 InodeMap::~InodeMap() { bthread_mutex_destroy(&mutex_); }
 
-void InodeMap::AddInode(uint64_t ino, InodePtr inode) {
+void InodeMap::AddInode(InodePtr inode) {
   BAIDU_SCOPED_LOCK(mutex_);
 
-  inode_map_[ino] = inode;
+  inode_map_[inode->GetIno()] = inode;
 }
 void InodeMap::DeleteInode(uint64_t ino) {
   BAIDU_SCOPED_LOCK(mutex_);

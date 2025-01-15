@@ -33,12 +33,14 @@ using InodePtr = std::shared_ptr<Inode>;
 class Inode {
  public:
   Inode(uint32_t fs_id, uint64_t ino);
+  Inode(const pb::mdsv2::Inode& inode);
   ~Inode();
 
   Inode(const Inode& inode);
   Inode& operator=(const Inode& inode);
 
   static InodePtr New(uint32_t fs_id, uint64_t ino) { return std::make_shared<Inode>(fs_id, ino); }
+  static InodePtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
   uint32_t GetFsId() const { return fs_id_; }
   uint64_t GetIno() const { return ino_; }
@@ -90,7 +92,7 @@ class Inode {
   XAttrMap GetXAttrMap() const { return xattr_map_; }
   std::string GetXAttr(const std::string& name);
 
-  std::string SerializeAsString();
+  pb::mdsv2::Inode GenPBInode();
 
  private:
   bthread_mutex_t mutex_;
@@ -119,7 +121,7 @@ class InodeMap {
   InodeMap();
   ~InodeMap();
 
-  void AddInode(uint64_t ino, InodePtr inode);
+  void AddInode(InodePtr inode);
   void DeleteInode(uint64_t ino);
 
   InodePtr GetInode(uint64_t ino);

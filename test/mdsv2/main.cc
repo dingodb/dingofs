@@ -31,7 +31,7 @@ void InitLog(const std::string& log_dir) {
   FLAGS_logtostderr = false;
   FLAGS_alsologtostderr = false;
 
-  std::string program_name = "dingodb_unit_test";
+  std::string program_name = "mdsv2_unit_test";
 
   google::InitGoogleLogging(program_name.c_str());
   google::SetLogDestination(google::GLOG_INFO, fmt::format("{}/{}.info.log.", log_dir, program_name).c_str());
@@ -51,7 +51,9 @@ int main(int argc, char** argv) {
     std::string default_run_case;
     // common
     default_run_case += "MetaDataCodecTest.*";
+    default_run_case += ":AutoIncrementIdGeneratorTest.*";
     default_run_case += ":FileSystemSetTest.*";
+    default_run_case += ":FileSystemTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }

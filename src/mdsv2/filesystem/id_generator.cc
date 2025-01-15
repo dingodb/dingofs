@@ -28,10 +28,16 @@ namespace mdsv2 {
 AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientPtr client, int64_t table_id, int64_t start_id,
                                                    int batch_size)
     : client_(client), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
-  bthread_mutex_init(&mutex_, nullptr);
+  next_id_ = start_id;
+  bundle_ = start_id;
+  bundle_end_ = start_id - 1;
+
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
 }
 
-AutoIncrementIdGenerator::~AutoIncrementIdGenerator() { bthread_mutex_destroy(&mutex_); }
+AutoIncrementIdGenerator::~AutoIncrementIdGenerator() {
+  CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail.";
+}
 
 bool AutoIncrementIdGenerator::Init() {
   auto status = IsExistAutoIncrement();
@@ -58,6 +64,8 @@ bool AutoIncrementIdGenerator::Init() {
 bool AutoIncrementIdGenerator::GenID(int64_t& id) {
   BAIDU_SCOPED_LOCK(mutex_);
 
+  DINGO_LOG(INFO) << fmt::format("GenID, next_id({}) bundle[{}, {}).", next_id_, bundle_, bundle_end_);
+
   if (next_id_ >= bundle_end_) {
     auto status = TakeBundleIdFromCoordinator();
     if (!status.ok()) {
@@ -74,7 +82,10 @@ Status AutoIncrementIdGenerator::IsExistAutoIncrement() {
   return client_->GetAutoIncrement(table_id_, start_id);
 }
 
-Status AutoIncrementIdGenerator::CreateAutoIncrement() { return client_->CreateAutoIncrement(table_id_, start_id_); }
+Status AutoIncrementIdGenerator::CreateAutoIncrement() {
+  DINGO_LOG(INFO) << fmt::format("Create auto increment table({}), start_id({}).", table_id_, start_id_);
+  return client_->CreateAutoIncrement(table_id_, start_id_);
+}
 
 Status AutoIncrementIdGenerator::TakeBundleIdFromCoordinator() {
   int64_t bundle = 0;
@@ -89,7 +100,7 @@ Status AutoIncrementIdGenerator::TakeBundleIdFromCoordinator() {
   next_id_ = bundle;
   bundle_end_ = bundle_end;
 
-  DINGO_LOG(INFO) << fmt::format("Take bundle id, bundle: [{}, {}).", bundle_, bundle_end_);
+  DINGO_LOG(INFO) << fmt::format("Take bundle id, bundle[{}, {}).", bundle_, bundle_end_);
 
   return Status::OK();
 }

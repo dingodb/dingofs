@@ -24,8 +24,13 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DummyCoordinatorClient::DummyCoordinatorClient() { bthread_mutex_init(&mutex_, nullptr); }
-DummyCoordinatorClient::~DummyCoordinatorClient() { bthread_mutex_destroy(&mutex_); }
+DummyCoordinatorClient::DummyCoordinatorClient() {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+}
+
+DummyCoordinatorClient::~DummyCoordinatorClient() {
+  CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail.";
+}
 
 bool DummyCoordinatorClient::Init(const std::string&) { return true; }
 bool DummyCoordinatorClient::Destroy() { return true; }
@@ -58,7 +63,7 @@ Status DummyCoordinatorClient::CreateAutoIncrement(int64_t table_id, int64_t sta
     return Status(pb::error::EEXISTED, fmt::format("table({}) auto increament already exist", table_id));
   }
 
-  auto_increments_[table_id] = AutoIncrement{start_id, start_id};
+  auto_increments_[table_id] = AutoIncrement{table_id, start_id, start_id};
 
   return Status::OK();
 }

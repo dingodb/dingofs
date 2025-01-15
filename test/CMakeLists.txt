@@ -24,12 +24,13 @@ set(TEST_DEPS
     dl
 )
 
-set(TEST_NOT_MAIN_DEPS
+set(TEST_DEPS_WITHOUT_MAIN
     GTest::gtest 
     GTest::gmock
     glog
     gflags
     brpc
+    dl
 )
 
 
@@ -43,3 +44,4 @@ add_subdirectory(tools)
 add_subdirectory(mds)
 add_subdirectory(metaserver)
 add_subdirectory(client)
+add_subdirectory(mdsv2)

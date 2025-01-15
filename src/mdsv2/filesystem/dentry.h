@@ -35,22 +35,22 @@ using DentryPtr = std::shared_ptr<Dentry>;
 
 class Dentry {
  public:
-  Dentry(uint32_t fs_id, const std::string& name);
+  Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type);
+  Dentry(const pb::mdsv2::Dentry& dentry);
   ~Dentry();
 
-  static DentryPtr New(uint32_t fs_id, const std::string& name) { return std::make_shared<Dentry>(fs_id, name); }
+  static DentryPtr New(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino,
+                       pb::mdsv2::FileType type) {
+    return std::make_shared<Dentry>(fs_id, name, parent_ino, ino, type);
+  }
+  static DentryPtr New(const pb::mdsv2::Dentry& dentry) { return std::make_shared<Dentry>(dentry); }
 
   const std::string& GetName() const { return name_; }
   uint32_t GetFsId() const { return fs_id_; }
 
   uint64_t GetIno() const { return ino_; }
-  void SetIno(uint64_t ino) { ino_ = ino; }
-
   uint64_t GetParentIno() const { return parent_ino_; }
-  void SetParentIno(uint64_t parent_ino) { parent_ino_ = parent_ino; }
-
   pb::mdsv2::FileType GetType() const { return type_; }
-  void SetType(pb::mdsv2::FileType type) { type_ = type; }
 
   uint32_t GetFlag() const { return flag_; }
   void SetFlag(uint32_t flag) { flag_ = flag; }
@@ -58,26 +58,26 @@ class Dentry {
   InodePtr GetInode() const { return inode_; }
   void SetInode(InodePtr inode) { inode_ = inode; }
 
-  std::string SerializeAsString();
-
-  void CopyTo(pb::mdsv2::Dentry* dentry);
-  void CopyTo(pb::mdsv2::Dentry& dentry);
-
+  bool AddChildDentry(DentryPtr dentry, bool is_force = false);
+  bool DeleteChildDentry(const std::string& name);
   DentryPtr GetChildDentry(const std::string& name);
   std::vector<DentryPtr> GetChildDentries(const std::string& start_name, uint32_t limit, bool is_only_dir);
+
+  pb::mdsv2::Dentry GenPBDentry();
 
  private:
   bthread_mutex_t mutex_;
 
   const std::string name_;
-  uint32_t fs_id_;
-  uint64_t ino_;         // inode id
-  uint64_t parent_ino_;  // parent inode id
-  pb::mdsv2::FileType type_;
+  const uint32_t fs_id_;
+  const uint64_t ino_;         // inode id
+  const uint64_t parent_ino_;  // parent inode id
+  const pb::mdsv2::FileType type_;
   uint32_t flag_;
 
   InodePtr inode_{nullptr};
 
+  // name: dentry
   std::map<std::string, DentryPtr> child_dentries_;
 };
 

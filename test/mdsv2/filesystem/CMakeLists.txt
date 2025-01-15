@@ -14,16 +14,20 @@
 
 
 file(GLOB TEST_DINGOFS_MDSV2_FILESYSTEM_SRCS
-    "*.cc"
+  "*.cc"
 )
 
 add_library(test_mdsv2_filesystem
-    ${TEST_DINGOFS_MDSV2_FILESYSTEM_SRCS}
+  ${TEST_DINGOFS_MDSV2_FILESYSTEM_SRCS}
 )
 
 target_link_libraries(test_mdsv2_filesystem
-    PROTO_OBJS
-    mdsv2_system
-    protobuf::libprotobuf
-    ${TEST_NOT_MAIN_DEPS}
+  PROTO_OBJS
+
+  mdsv2_common
+  mdsv2_filesystem
+  mdsv2_storage
+  
+  protobuf::libprotobuf
+  ${TEST_DEPS_WITHOUT_MAIN}
 )

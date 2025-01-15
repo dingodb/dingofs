@@ -66,8 +66,8 @@ class AutoIncrementIdGenerator : public IdGenerator {
 
   // [bundle, bundle_end)
   int64_t bundle_{0};
-  int64_t next_id_{0};
   int64_t bundle_end_{0};
+  int64_t next_id_{0};
 };
 
 }  // namespace mdsv2

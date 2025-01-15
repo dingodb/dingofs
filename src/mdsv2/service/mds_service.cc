@@ -346,7 +346,18 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->MkNod(request);
+  FileSystem::MkNodParam param;
+  param.parent_ino = request->parent_inode_id();
+  param.name = request->name();
+  param.mode = request->mode();
+  param.uid = request->uid();
+  param.gid = request->gid();
+  param.type = request->type();
+  param.length = request->length();
+  param.rdev = request->rdev();
+
+  uint64_t ino = 0;
+  auto status = file_system->MkNod(param, ino);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -378,7 +389,18 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->MkDir(request);
+  FileSystem::MkDirParam param;
+  param.parent_ino = request->parent_inode_id();
+  param.name = request->name();
+  param.mode = request->mode();
+  param.uid = request->uid();
+  param.gid = request->gid();
+  param.type = request->type();
+  param.length = request->length();
+  param.rdev = request->rdev();
+
+  uint64_t ino = 0;
+  auto status = file_system->MkDir(param, ino);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -410,7 +432,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->RmDir(request);
+  auto status = file_system->RmDir(request->parent_inode_id(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
