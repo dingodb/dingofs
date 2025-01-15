@@ -27,11 +27,12 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
-#include "client/vfs_old/dir_buffer.h"
 #include "client/fuse/fuse_common.h"
 #include "client/vfs/vfs_meta.h"
+#include "client/vfs_old/dir_buffer.h"
+#include "dingofs/mdsv2.pb.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -46,8 +47,10 @@ struct EntryOut {
   EntryOut() = default;
 
   explicit EntryOut(pb::metaserver::InodeAttr attr) : attr(attr) {}
+  explicit EntryOut(pb::mdsv2::Inode inode) : inode(inode) {}
 
   pb::metaserver::InodeAttr attr;
+  pb::mdsv2::Inode inode;
   double entryTimeout;
   double attrTimeout;
 };
@@ -56,8 +59,10 @@ struct AttrOut {
   AttrOut() = default;
 
   explicit AttrOut(pb::metaserver::InodeAttr attr) : attr(attr) {}
+  explicit AttrOut(pb::mdsv2::Inode inode) : inode(inode) {}
 
   pb::metaserver::InodeAttr attr;
+  pb::mdsv2::Inode inode;
   double attrTimeout;
 };
 
