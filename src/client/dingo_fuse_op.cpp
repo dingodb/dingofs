@@ -36,6 +36,7 @@
 #include "client/fuse_client.h"
 #include "client/fuse_s3_client.h"
 #include "client/warmup/warmup_manager.h"
+#include "common/define.h"
 #include "common/dynamic_vlog.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/metric/metric.h"
@@ -625,6 +626,9 @@ void FuseOpFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   DINGOFS_ERROR rc;
   auto* client = Client();
   auto fs = client->GetFileSystem();
+  if (BAIDU_UNLIKELY(ino == dingofs::STATSINODEID)) {  // skip flush .stats file
+    return fs->ReplyError(req, DINGOFS_ERROR::OK);
+  }
   METRIC_GUARD(Flush);
   AccessLogGuard log([&]() {
     return StrFormat("flush (%d,%d): %s", ino, fi->fh, StrErr(rc));
