@@ -218,7 +218,7 @@ static uint64_t ToTimestamp(const struct timespec& ts) {
 static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
                                          pb::mdsv2::FileType type) {
   DummyFileSystem::PBInode inode;
-  inode.set_inode_id(ino);
+  inode.set_ino(ino);
   inode.set_fs_id(fs_id);
   inode.set_length(0);
   inode.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP |
@@ -249,9 +249,9 @@ static DummyFileSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
                                            const std::string& name,
                                            pb::mdsv2::FileType type) {
   DummyFileSystem::PBDentry dentry;
-  dentry.set_inode_id(ino);
+  dentry.set_ino(ino);
   dentry.set_name(name);
-  dentry.set_parent_inode_id(parent_ino);
+  dentry.set_parent_ino(parent_ino);
   dentry.set_fs_id(fs_id);
   dentry.set_type(type);
 
@@ -267,7 +267,7 @@ bool DummyFileSystem::Init() {
       GenInode(fs_info_.fs_id(), kRootIno, pb::mdsv2::FileType::DIRECTORY);
 
   // create root dentry
-  auto pb_dentry = GenDentry(fs_info_.fs_id(), 0, inode.inode_id(), "/",
+  auto pb_dentry = GenDentry(fs_info_.fs_id(), 0, inode.ino(), "/",
                              pb::mdsv2::FileType::DIRECTORY);
 
   Dentry dentry;
@@ -291,7 +291,7 @@ Status DummyFileSystem::Lookup(uint64_t parent_ino, const std::string& name,
   }
 
   PBInode inode;
-  if (!GetInode(dentry.inode_id(), inode)) {
+  if (!GetInode(dentry.ino(), inode)) {
     return Status(pb::error::ENOT_FOUND, "not found inode");
   }
 
@@ -432,7 +432,7 @@ Status DummyFileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
   }
 
   Dentry dentry;
-  if (!GetDentry(pb_dentry.inode_id(), dentry)) {
+  if (!GetDentry(pb_dentry.ino(), dentry)) {
     return Status(pb::error::ENOT_FOUND, "not found dentry");
   }
 
@@ -443,7 +443,7 @@ Status DummyFileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
   DeleteDentry(name);
   DeleteChildDentry(parent_ino, name);
 
-  DeleteInode(pb_dentry.inode_id());
+  DeleteInode(pb_dentry.ino());
 
   return Status::OK();
 }
@@ -474,7 +474,7 @@ Status DummyFileSystem::ReadDir(uint64_t fh, uint64_t ino,
                                     : dentry.children.find(state.last_name);
   for (; it != dentry.children.end(); ++it) {
     auto& pb_dentry = it->second;
-    if (!handler(pb_dentry.name(), pb_dentry.inode_id())) {
+    if (!handler(pb_dentry.name(), pb_dentry.ino())) {
       state.last_name = pb_dentry.name();
       read_dir_state_memo_.UpdateState(fh, state);
       return Status::OK();
@@ -508,7 +508,7 @@ Status DummyFileSystem::ReadDirPlus(uint64_t fh, uint64_t ino,
     auto& pb_dentry = it->second;
 
     PBInode inode;
-    if (!GetInode(pb_dentry.inode_id(), inode)) {
+    if (!GetInode(pb_dentry.ino(), inode)) {
       continue;
     }
 
@@ -553,7 +553,7 @@ Status DummyFileSystem::Link(uint64_t ino, uint64_t new_parent_ino,
                              pb::mdsv2::FileType::FILE);
 
   AddChildDentry(new_parent_ino, pb_dentry);
-  IncInodeNlink(inode.inode_id());
+  IncInodeNlink(inode.ino());
 
   entry_out.inode = inode;
 
@@ -572,7 +572,7 @@ Status DummyFileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
   }
 
   DeleteChildDentry(parent_ino, name);
-  DecOrDeleteInodeNlink(child_dentry.inode_id());
+  DecOrDeleteInodeNlink(child_dentry.ino());
 
   return Status::OK();
 }
@@ -588,7 +588,7 @@ Status DummyFileSystem::Symlink(uint64_t parent_ino, const std::string& name,
 
   auto pb_dentry = GenDentry(fs_info_.fs_id(), parent_ino, GenIno(), name,
                              pb::mdsv2::FileType::SYM_LINK);
-  auto inode = GenInode(fs_info_.fs_id(), pb_dentry.inode_id(),
+  auto inode = GenInode(fs_info_.fs_id(), pb_dentry.ino(),
                         pb::mdsv2::FileType::SYM_LINK);
   inode.set_mode(S_IFLNK | 0777);
   inode.set_uid(uid);
@@ -747,8 +747,8 @@ Status DummyFileSystem::Rename(uint64_t parent_ino, const std::string& name,
 void DummyFileSystem::AddDentry(const Dentry& dentry) {
   BAIDU_SCOPED_LOCK(mutex_);
 
-  name_ino_map_[dentry.dentry.name()] = dentry.dentry.inode_id();
-  dentry_map_[dentry.dentry.inode_id()] = dentry;
+  name_ino_map_[dentry.dentry.name()] = dentry.dentry.ino();
+  dentry_map_[dentry.dentry.ino()] = dentry;
 }
 
 void DummyFileSystem::AddChildDentry(uint64_t parent_ino,
@@ -844,7 +844,7 @@ bool DummyFileSystem::IsEmptyDentry(const Dentry& dentry) {
 void DummyFileSystem::AddInode(const PBInode& inode) {
   BAIDU_SCOPED_LOCK(mutex_);
 
-  inode_map_[inode.inode_id()] = inode;
+  inode_map_[inode.ino()] = inode;
 }
 
 void DummyFileSystem::DeleteInode(uint64_t ino) {
@@ -870,7 +870,7 @@ void DummyFileSystem::UpdateInode(const PBInode& inode,
                                   const std::vector<std::string>& fields) {
   BAIDU_SCOPED_LOCK(mutex_);
 
-  auto it = inode_map_.find(inode.inode_id());
+  auto it = inode_map_.find(inode.ino());
   if (it == inode_map_.end()) {
     return;
   }

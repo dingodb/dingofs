@@ -23,7 +23,6 @@
 #include "mdsv2/coordinator/coordinator_client.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class IdGenerator {
@@ -36,7 +35,7 @@ class IdGenerator {
   virtual bool GenID(int64_t& id) = 0;
 };
 
-using IdGeneratorPtr = std::shared_ptr<IdGenerator>;
+using IdGeneratorPtr = std::unique_ptr<IdGenerator>;
 
 class AutoIncrementIdGenerator : public IdGenerator {
  public:
@@ -44,7 +43,7 @@ class AutoIncrementIdGenerator : public IdGenerator {
   ~AutoIncrementIdGenerator() override;
 
   static IdGeneratorPtr New(CoordinatorClientPtr client, int64_t table_id, int64_t start_id, int batch_size) {
-    return std::make_shared<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+    return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
 
   bool Init() override;
@@ -71,7 +70,6 @@ class AutoIncrementIdGenerator : public IdGenerator {
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDV2_ID_GENERATOR_H_

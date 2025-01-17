@@ -35,6 +35,9 @@ namespace filesystem {
 
 DECLARE_int32(rpc_retry_times);
 
+class RPC;
+using RPCPtr = std::shared_ptr<RPC>;
+
 class EndPoint {
  public:
   EndPoint() = default;
@@ -61,14 +64,20 @@ class RPC {
   RPC();
   ~RPC();
 
+  static RPCPtr New() { return std::make_shared<RPC>(); }
+
   bool Init();
   void Destory();
+
+  bool AddEndpoint(const std::string& ip, int port, bool is_default = false);
+  void DeleteEndpoint(const std::string& ip, int port);
 
   template <typename Request, typename Response>
   Status SendRequest(const std::string& service_name,
                      const std::string& api_name, const Request& request,
                      Response& response) {
-    return SendRequest(EndPoint(), service_name, api_name, request, response);
+    return SendRequest(default_endpoint_, service_name, api_name, request,
+                       response);
   }
 
   template <typename Request, typename Response>
@@ -78,12 +87,14 @@ class RPC {
 
  private:
   using Channel = brpc::Channel;
-  using ChannelPtr = std::unique_ptr<Channel>;
+  using ChannelPtr = std::shared_ptr<Channel>;
 
+  ChannelPtr NewChannel(const EndPoint& endpoint);
   Channel* GetChannel(EndPoint endpoint);
 
   bthread_mutex_t mutex_;
   std::map<EndPoint, ChannelPtr> channels_;
+  EndPoint default_endpoint_;
 };
 
 template <typename Request, typename Response>
@@ -113,26 +124,36 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
 
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
     if (cntl.Failed()) {
-      LOG(ERROR) << fmt::format("{} response failed, {} {} {}", api_name,
-                                cntl.log_id(), cntl.ErrorCode(),
-                                cntl.ErrorText());
+      LOG(ERROR) << fmt::format("RPC api_name({}) fail, {} {} {} request({}).",
+                                api_name, cntl.log_id(), cntl.ErrorCode(),
+                                cntl.ErrorText(), request.ShortDebugString());
       return butil::Status(cntl.ErrorCode(), cntl.ErrorText());
     }
 
     if (response.error().errcode() == pb::error::OK) {
+      LOG(INFO) << fmt::format(
+          "RPC api_name({}) success, request({}) response({}).", api_name,
+          request.ShortDebugString(), response.ShortDebugString());
       return Status();
+    }
+
+    ++retry_count;
+
+    LOG(ERROR) << fmt::format(
+        "RPC api_name({}) fail, request({}) retry_count({}) error({} {}).",
+        api_name, request.ShortDebugString(), retry_count,
+        pb::error::Errno_Name(response.error().errcode()),
+        response.error().errmsg());
+
+    // the errno of need retry
+    if (response.error().errcode() != pb::error::EINTERNAL) {
+      break;
     }
 
   } while (retry_count < FLAGS_rpc_retry_times);
 
-  LOG(ERROR) << fmt::format("{} response failed, error: {} {}", api_name,
-                            pb::error::Errno_Name(response.error().errcode()),
-                            response.error().errmsg());
-
   return butil::Status(response.error().errcode(), response.error().errmsg());
 }
-
-using RPCPtr = std::shared_ptr<RPC>;
 
 }  // namespace filesystem
 }  // namespace client

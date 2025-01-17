@@ -44,8 +44,6 @@ class Server {
 
   bool InitCoordinatorClient(const std::string& coor_url);
 
-  bool InitFsIdGenerator();
-
   bool InitStorage(const std::string& store_url);
 
   bool InitFileSystem();
@@ -60,6 +58,7 @@ class Server {
   MDSMeta& GetMDSMeta();
   Heartbeat& GetHeartbeat() { return heartbeat_; }
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
+  FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
 
   void Run();
 
@@ -81,9 +80,6 @@ class Server {
 
   // coordinator client
   CoordinatorClientPtr coordinator_client_;
-
-  // fs id generator
-  IdGeneratorPtr fs_id_generator_;
 
   // backend kv storage
   KVStoragePtr kv_storage_;

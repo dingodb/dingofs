@@ -53,6 +53,8 @@ int main(int argc, char** argv) {
     default_run_case += "MetaDataCodecTest.*";
     default_run_case += ":AutoIncrementIdGeneratorTest.*";
     default_run_case += ":FileSystemSetTest.*";
+    default_run_case += ":InodeCacheTest.*";
+    default_run_case += ":DentryCacheTest.*";
     default_run_case += ":FileSystemTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;

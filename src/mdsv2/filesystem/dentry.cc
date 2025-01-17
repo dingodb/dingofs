@@ -23,135 +23,128 @@
 namespace dingofs {
 namespace mdsv2 {
 
-Dentry::Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type)
-    : fs_id_(fs_id), name_(name), parent_ino_(parent_ino), ino_(ino), type_(type) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
-}
+Dentry::Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type,
+               uint32_t flag, InodePtr inode)
+    : fs_id_(fs_id), name_(name), parent_ino_(parent_ino), ino_(ino), type_(type), flag_(flag), inode_(inode) {}
 
-Dentry::Dentry(const pb::mdsv2::Dentry& dentry)
+Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodePtr inode)
     : name_(dentry.name()),
       fs_id_(dentry.fs_id()),
-      ino_(dentry.inode_id()),
-      parent_ino_(dentry.parent_inode_id()),
+      ino_(dentry.ino()),
+      parent_ino_(dentry.parent_ino()),
       type_(dentry.type()),
-      flag_(dentry.flag()) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+      flag_(dentry.flag()),
+      inode_(inode) {}
+
+Dentry::Dentry(const Dentry& dentry, InodePtr inode)
+    : name_(dentry.Name()),
+      fs_id_(dentry.FsId()),
+      ino_(dentry.Ino()),
+      parent_ino_(dentry.ParentIno()),
+      type_(dentry.Type()),
+      flag_(dentry.Flag()),
+      inode_(inode) {}
+
+Dentry::~Dentry() {}  // NOLINT
+
+pb::mdsv2::Dentry Dentry::CopyTo() {
+  pb::mdsv2::Dentry dentry;
+
+  dentry.set_fs_id(fs_id_);
+  dentry.set_ino(ino_);
+  dentry.set_parent_ino(parent_ino_);
+  dentry.set_name(name_);
+  dentry.set_type(type_);
+  dentry.set_flag(flag_);
+
+  return std::move(dentry);
 }
 
-Dentry::~Dentry() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail."; }
+InodePtr DentrySet::ParentInode() {
+  CHECK(parent_inode_ != nullptr) << "parent inode is null.";
 
-bool Dentry::AddChildDentry(DentryPtr dentry, bool is_force) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  return parent_inode_;
+}
 
-  auto it = child_dentries_.find(dentry->GetName());
-  if (it != child_dentries_.end()) {
-    if (!is_force) {
-      return false;
-    }
+void DentrySet::PutChild(const Dentry& dentry) {
+  utils::WriteLockGuard lk(lock_);
 
+  auto it = children_.find(dentry.Name());
+  if (it != children_.end()) {
     it->second = dentry;
   } else {
-    child_dentries_[dentry->GetName()] = dentry;
+    children_[dentry.Name()] = dentry;
+  }
+}
+
+void DentrySet::DeleteChild(const std::string& name) {
+  utils::WriteLockGuard lk(lock_);
+
+  children_.erase(name);
+}
+
+bool DentrySet::HasChild() {
+  utils::ReadLockGuard lk(lock_);
+
+  return !children_.empty();
+}
+
+bool DentrySet::GetChild(const std::string& name, Dentry& dentry) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = children_.find(name);
+  if (it == children_.end()) {
+    return false;
   }
 
+  dentry = it->second;
   return true;
 }
 
-bool Dentry::DeleteChildDentry(const std::string& name) {
-  BAIDU_SCOPED_LOCK(mutex_);
+std::vector<Dentry> DentrySet::GetChildren(const std::string& start_name, uint32_t limit, bool is_only_dir) {
+  utils::ReadLockGuard lk(lock_);
 
-  child_dentries_.erase(name);
-
-  return true;
-}
-
-DentryPtr Dentry::GetChildDentry(const std::string& name) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto it = child_dentries_.find(name);
-  return it != child_dentries_.end() ? it->second : nullptr;
-}
-
-std::vector<DentryPtr> Dentry::GetChildDentries(const std::string& start_name, uint32_t limit, bool is_only_dir) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  std::vector<DentryPtr> dentries;
+  std::vector<Dentry> dentries;
   dentries.reserve(limit);
-  for (auto it = child_dentries_.find(start_name); it != child_dentries_.end() && dentries.size() < limit; ++it) {
-    if (is_only_dir && it->second->GetType() != pb::mdsv2::FileType::DIRECTORY) {
+
+  for (auto it = children_.upper_bound(start_name); it != children_.end() && dentries.size() < limit; ++it) {
+    if (is_only_dir && it->second.Type() != pb::mdsv2::FileType::DIRECTORY) {
       continue;
     }
 
     dentries.push_back(it->second);
   }
 
+  return std::move(dentries);
+}
+
+std::vector<Dentry> DentrySet::GetAllChildren() {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<Dentry> dentries;
+  dentries.reserve(children_.size());
+
+  for (const auto& [name, dentry] : children_) {
+    dentries.push_back(dentry);
+  }
+
   return dentries;
 }
 
-pb::mdsv2::Dentry Dentry::GenPBDentry() {
-  pb::mdsv2::Dentry dentry;
+DentryCache::DentryCache() : cache_(0) {}
+DentryCache::~DentryCache() {}  // NOLINT
 
-  dentry.set_fs_id(fs_id_);
-  dentry.set_inode_id(ino_);
-  dentry.set_parent_inode_id(parent_ino_);
-  dentry.set_name(name_);
-  dentry.set_type(type_);
-  dentry.set_flag(flag_);
+void DentryCache::Put(uint64_t ino, DentrySetPtr dentry_set) { cache_.Put(ino, dentry_set); }
 
-  return dentry;
-}
+void DentryCache::Delete(uint64_t ino) { cache_.Remove(ino); }
 
-DentryMap::DentryMap() { CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail."; }
-
-DentryMap::~DentryMap() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail."; }
-
-DentryPtr DentryMap::GetDentry(uint64_t ino) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto iter = dentry_map_.find(ino);
-  if (iter == dentry_map_.end()) {
+DentrySetPtr DentryCache::Get(uint64_t ino) {
+  DentrySetPtr dentry_set;
+  if (!cache_.Get(ino, &dentry_set)) {
     return nullptr;
   }
 
-  return iter->second;
-}
-
-DentryPtr DentryMap::GetDentry(const std::string& name) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto name_it = name_ino_map_.find(name);
-  if (name_it == name_ino_map_.end()) {
-    return nullptr;
-  }
-
-  uint64_t ino = name_it->second;
-
-  auto it = dentry_map_.find(ino);
-  if (it == dentry_map_.end()) {
-    return nullptr;
-  }
-
-  return it->second;
-}
-
-void DentryMap::AddDentry(DentryPtr dentry) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  dentry_map_[dentry->GetIno()] = dentry;
-  name_ino_map_[dentry->GetName()] = dentry->GetIno();
-}
-
-void DentryMap::DeleteDentry(const std::string& name) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto name_it = name_ino_map_.find(name);
-  if (name_it == name_ino_map_.end()) {
-    return;
-  }
-
-  uint64_t ino = name_it->second;
-  dentry_map_.erase(ino);
-  name_ino_map_.erase(name);
+  return dentry_set;
 }
 
 }  // namespace mdsv2

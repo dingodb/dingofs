@@ -14,6 +14,8 @@
 
 #include <gflags/gflags.h>
 
+#include <memory>
+
 #include "brpc/channel.h"
 #include "brpc/controller.h"
 #include "dingofs/error.pb.h"
@@ -31,10 +33,15 @@ DECLARE_bool(log_each_request);
 
 const int kMaxRetry = 3;
 
+class Interaction;
+using InteractionPtr = std::shared_ptr<Interaction>;
+
 class Interaction {
  public:
   Interaction() = default;
   ~Interaction() = default;
+
+  static InteractionPtr New() { return std::make_shared<Interaction>(); }
 
   bool Init(const std::string& addr);
 

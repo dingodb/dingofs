@@ -35,6 +35,12 @@ struct KeyValue {
   std::string value;
 };
 
+// Range is a range of keys, [start_key, end_key)
+struct Range {
+  std::string start_key;
+  std::string end_key;
+};
+
 class KVStorage {
  public:
   struct TableOption {
@@ -61,7 +67,10 @@ class KVStorage {
 
   virtual Status Get(const std::string& key, std::string& value) = 0;
 
+  virtual Status Scan(const Range& range, std::vector<KeyValue>& kvs) = 0;
+
   virtual Status Delete(const std::string& key) = 0;
+  virtual Status Delete(const std::vector<std::string>& keys) = 0;
 };
 using KVStoragePtr = std::shared_ptr<KVStorage>;
 

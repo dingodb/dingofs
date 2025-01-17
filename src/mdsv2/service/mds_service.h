@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_SERVICE_H_
-#define DINGOFS_MDSV2_SERVICE_H_
+#ifndef DINGOFS_MDSV2_SERVICE_MDS_H_
+#define DINGOFS_MDSV2_SERVICE_MDS_H_
 
 #include <cstdint>
 
@@ -22,7 +22,6 @@
 #include "mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class MDSServiceImpl : public pb::mdsv2::MDSService {
@@ -42,23 +41,12 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                  pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done) override;
 
   // dentry interface
-  void CreateDentry(google::protobuf::RpcController* controller, const pb::mdsv2::CreateDentryRequest* request,
-                    pb::mdsv2::CreateDentryResponse* response, google::protobuf::Closure* done) override;
-  void DeleteDentry(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteDentryRequest* request,
-                    pb::mdsv2::DeleteDentryResponse* response, google::protobuf::Closure* done) override;
   void GetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
                  pb::mdsv2::GetDentryResponse* response, google::protobuf::Closure* done) override;
   void ListDentry(google::protobuf::RpcController* controller, const pb::mdsv2::ListDentryRequest* request,
                   pb::mdsv2::ListDentryResponse* response, google::protobuf::Closure* done) override;
 
   // inode interface
-  void CreateInode(google::protobuf::RpcController* controller, const pb::mdsv2::CreateInodeRequest* request,
-                   pb::mdsv2::CreateInodeResponse* response, google::protobuf::Closure* done) override;
-
-  void DeleteInode(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteInodeRequest* request,
-                   pb::mdsv2::DeleteInodeResponse* response, google::protobuf::Closure* done) override;
-  void UpdateInode(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateInodeRequest* request,
-                   pb::mdsv2::UpdateInodeResponse* response, google::protobuf::Closure* done) override;
   void UpdateS3Chunk(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateS3ChunkRequest* request,
                      pb::mdsv2::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) override;
   void GetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
@@ -77,6 +65,14 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
              pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done) override;
   void RmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
              pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done) override;
+  void ReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
+               pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done) override;
+
+  void Open(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
+            pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done) override;
+
+  void Release(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
+               pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done) override;
 
   void Link(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
             pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done) override;
@@ -151,6 +147,13 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done);
   void DoRmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
                pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done);
+  void DoReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
+                 pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done);
+
+  void DoOpen(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
+              pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done);
+  void DoRelease(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
+                 pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done);
 
   void DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
               pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done);
@@ -187,7 +190,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_SERVICE_H_
+#endif  // DINGOFS_MDSV2_SERVICE_MDS_H_

@@ -16,6 +16,8 @@
 #define DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_DISCOVERY_H_
 
 #include <map>
+#include <memory>
+#include <vector>
 
 #include "bthread/types.h"
 #include "mdsv2/common/status.h"
@@ -26,15 +28,23 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
+class MDSDiscovery;
+using MDSDiscoveryPtr = std::shared_ptr<MDSDiscovery>;
+
 class MDSDiscovery {
  public:
   MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client);
   ~MDSDiscovery();
 
+  static MDSDiscoveryPtr New(mdsv2::CoordinatorClientPtr coordinator_client) {
+    return std::make_shared<MDSDiscovery>(coordinator_client);
+  }
+
   bool Init();
   void Destroy();
 
   bool GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta);
+  std::vector<mdsv2::MDSMeta> GetAllMDS();
 
  private:
   bool UpdateMDSList();

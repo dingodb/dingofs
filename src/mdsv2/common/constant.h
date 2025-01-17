@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/client/interaction.h"
+#ifndef DINGOFS_MDSV2_COMMON_CONSTANT_H_
+#define DINGOFS_MDSV2_COMMON_CONSTANT_H_
+
+#include <cstdint>
 
 namespace dingofs {
 namespace mdsv2 {
-namespace client {
 
-DEFINE_int32(timeout_ms, 8000, "Timeout for each request");
-DEFINE_bool(log_each_request, false, "print log each request");
+const uint32_t kSetAttrMode = 1 << 0;
+const uint32_t kSetAttrUid = 1 << 1;
+const uint32_t kSetAttrGid = 1 << 2;
+const uint32_t kSetAttrLength = 1 << 3;
+const uint32_t kSetAttrAtime = 1 << 4;
+const uint32_t kSetAttrMtime = 1 << 5;
+const uint32_t kSetAttrCtime = 1 << 6;
+const uint32_t kSetAttrNlink = 1 << 7;
 
-bool Interaction::Init(const std::string& addr) {
-  if (channel_.Init(addr.c_str(), nullptr) != 0) {
-    DINGO_LOG(ERROR) << fmt::format("Init channel fail, addr({})", addr);
-    return false;
-  }
-  return true;
-}
-
-}  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs
+
+#endif  // DINGOFS_MDSV2_COMMON_CONSTANT_H_

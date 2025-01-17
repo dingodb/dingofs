@@ -126,10 +126,22 @@ Status DummyStorage::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
+Status DummyStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) { return Status::OK(); }
+
 Status DummyStorage::Delete(const std::string& key) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   data_.erase(key);
+
+  return Status::OK();
+}
+
+Status DummyStorage::Delete(const std::vector<std::string>& keys) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  for (const auto& key : keys) {
+    data_.erase(key);
+  }
 
   return Status::OK();
 }

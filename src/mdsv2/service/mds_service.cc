@@ -15,7 +15,6 @@
 #include "mdsv2/service/mds_service.h"
 
 #include <cstdint>
-#include <map>
 #include <string>
 
 #include "brpc/controller.h"
@@ -23,6 +22,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/server.h"
 #include "mdsv2/service/service_helper.h"
 
 namespace dingofs {
@@ -48,7 +48,10 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, con
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
+  auto& mds_meta = Server::GetInstance().GetMDSMeta();
+
   FileSystemSet::CreateFsParam param;
+  param.mds_id = mds_meta.ID();
   param.fs_name = request->fs_name();
   param.block_size = request->block_size();
   param.fs_type = request->fs_type();
@@ -178,7 +181,7 @@ void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController* controller,
   pb::mdsv2::FsInfo fs_info;
   auto status = file_system_set_->GetFsInfo(request->fs_name(), fs_info);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->mutable_fs_info()->Swap(&fs_info);
@@ -201,25 +204,6 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
 }
 
 // dentry interface
-void MDSServiceImpl::CreateDentry(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::CreateDentryRequest* request,
-                                  pb::mdsv2::CreateDentryResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
-
-void MDSServiceImpl::DeleteDentry(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::DeleteDentryRequest* request,
-                                  pb::mdsv2::DeleteDentryResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
 void MDSServiceImpl::GetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
                                pb::mdsv2::GetDentryResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
@@ -240,36 +224,6 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller,
 }
 
 // inode interface
-void MDSServiceImpl::CreateInode(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::CreateInodeRequest* request, pb::mdsv2::CreateInodeResponse* response,
-                                 google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
-
-void MDSServiceImpl::DeleteInode(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::DeleteInodeRequest* request, pb::mdsv2::DeleteInodeResponse* response,
-                                 google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
-
-void MDSServiceImpl::UpdateInode(google::protobuf::RpcController* controller,
-                                 const pb::mdsv2::UpdateInodeRequest* request, pb::mdsv2::UpdateInodeResponse* response,
-                                 google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
-
 void MDSServiceImpl::UpdateS3Chunk(google::protobuf::RpcController* controller,
                                    const pb::mdsv2::UpdateS3ChunkRequest* request,
                                    pb::mdsv2::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) {
@@ -311,13 +265,13 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  InodePtr inode;
-  auto status = file_system->GetInode(request->parent_inode_id(), request->name(), inode);
+  EntryOut entry_out;
+  auto status = file_system->Lookup(request->parent_ino(), request->name(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  ServiceHelper::Inode2PBInode(inode, response->mutable_inode());
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
@@ -347,20 +301,20 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
   }
 
   FileSystem::MkNodParam param;
-  param.parent_ino = request->parent_inode_id();
+  param.parent_ino = request->parent_ino();
   param.name = request->name();
   param.mode = request->mode();
   param.uid = request->uid();
   param.gid = request->gid();
-  param.type = request->type();
-  param.length = request->length();
   param.rdev = request->rdev();
 
-  uint64_t ino = 0;
-  auto status = file_system->MkNod(param, ino);
+  EntryOut entry_out;
+  auto status = file_system->MkNod(param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
@@ -390,20 +344,20 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
   }
 
   FileSystem::MkDirParam param;
-  param.parent_ino = request->parent_inode_id();
+  param.parent_ino = request->parent_ino();
   param.name = request->name();
   param.mode = request->mode();
   param.uid = request->uid();
   param.gid = request->gid();
-  param.type = request->type();
-  param.length = request->length();
   param.rdev = request->rdev();
 
-  uint64_t ino = 0;
-  auto status = file_system->MkDir(param, ino);
+  EntryOut entry_out;
+  auto status = file_system->MkDir(param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
@@ -432,7 +386,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->RmDir(request->parent_inode_id(), request->name());
+  auto status = file_system->RmDir(request->parent_ino(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -454,6 +408,113 @@ void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb
   }
 }
 
+void MDSServiceImpl::DoReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
+                               pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  std::vector<EntryOut> entry_outs;
+  auto status =
+      file_system->ReadDir(request->ino(), request->last_name(), request->limit(), request->with_attr(), entry_outs);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  for (auto& entry_out : entry_outs) {
+    auto* mut_entry = response->add_entries();
+    mut_entry->set_name(entry_out.name);
+    mut_entry->set_ino(entry_out.inode.ino());
+    if (request->with_attr()) {
+      mut_entry->mutable_inode()->Swap(&entry_out.inode);
+    }
+  }
+}
+
+void MDSServiceImpl::ReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
+                             pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoReadDir(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
+                            pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  auto status = file_system->Open(request->ino());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
+                          pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoOpen(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
+                               pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  auto status = file_system->Release(request->ino());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
+                             pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoRelease(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
 void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
                             pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
@@ -464,10 +525,13 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->Link(request->parent_inode_id(), request->name(), request->inode_id());
+  EntryOut entry_out;
+  auto status = file_system->Link(request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
@@ -496,7 +560,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->UnLink(request->parent_inode_id(), request->name());
+  auto status = file_system->UnLink(request->parent_ino(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -528,10 +592,12 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->Symlink(request);
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
+  EntryOut entry_out;
+  auto status = file_system->Symlink(request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
+                                     request->gid(), entry_out);
+  ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
@@ -561,9 +627,9 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController* controller, con
   }
 
   std::string symlink;
-  auto status = file_system->ReadLink(request->inode_id(), symlink);
+  auto status = file_system->ReadLink(request->ino(), symlink);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->set_symlink(symlink);
@@ -595,13 +661,13 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  InodePtr inode;
-  auto status = file_system->GetInode(request->inode_id(), inode);
+  EntryOut entry_out;
+  auto status = file_system->GetAttr(request->ino(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  ServiceHelper::Inode2PBInode(inode, response->mutable_inode());
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
@@ -630,25 +696,26 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  FileSystem::UpdateInodeParam param;
-  param.fs_id = request->fs_id();
-  param.ino = request->inode_id();
-  param.length = request->length();
-  param.ctime = request->ctime();
-  param.mtime = request->mtime();
-  param.atime = request->atime();
-  param.uid = request->uid();
-  param.gid = request->gid();
-  param.mode = request->mode();
-  param.update_fields = ServiceHelper::PbRepeatedToVector(request->update_fields());
+  FileSystem::SetAttrParam param;
+  auto& inode = param.inode;
+  inode.set_fs_id(request->fs_id());
+  inode.set_ino(request->ino());
+  inode.set_length(request->length());
+  inode.set_ctime(request->ctime());
+  inode.set_mtime(request->mtime());
+  inode.set_atime(request->atime());
+  inode.set_uid(request->uid());
+  inode.set_gid(request->gid());
+  inode.set_mode(request->mode());
+  param.to_set = request->to_set();
 
-  InodePtr inode;
-  auto status = file_system->UpdateInode(param, inode);
+  EntryOut entry_out;
+  auto status = file_system->SetAttr(request->ino(), param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  ServiceHelper::Inode2PBInode(inode, response->mutable_inode());
+  response->mutable_inode()->Swap(&entry_out.inode);
 }
 
 void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
@@ -678,9 +745,9 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, con
   }
 
   std::string value;
-  auto status = file_system->GetXAttr(request->inode_id(), request->name(), value);
+  auto status = file_system->GetXAttr(request->ino(), request->name(), value);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->set_value(value);
@@ -716,7 +783,7 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, con
   ServiceHelper::PbMapToMap(request->xattrs(), xattrs);
 
   std::string value;
-  auto status = file_system->SetXAttr(request->inode_id(), xattrs);
+  auto status = file_system->SetXAttr(request->ino(), xattrs);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -750,9 +817,9 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController* controller,
   }
 
   Inode::XAttrMap xattrs;
-  auto status = file_system->GetXAttr(request->inode_id(), xattrs);
+  auto status = file_system->GetXAttr(request->ino(), xattrs);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   ServiceHelper::MapToPbMap(xattrs, response->mutable_xattrs());

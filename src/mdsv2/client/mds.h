@@ -20,10 +20,14 @@ namespace client {
 
 class MDSClient {
  public:
-  MDSClient() = default;
+  MDSClient(InteractionPtr interaction) : interaction_(interaction){};
   ~MDSClient() = default;
 
-  static void CreateFs(Interaction& interaction);
+  void CreateFs(const std::string& fs_name);
+  void DeleteFs(const std::string& fs_name);
+
+ private:
+  InteractionPtr interaction_;
 };
 
 }  // namespace client

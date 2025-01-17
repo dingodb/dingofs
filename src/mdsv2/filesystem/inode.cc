@@ -18,33 +18,32 @@
 
 #include <utility>
 
-#include "bthread/mutex.h"
+#include "fmt/core.h"
+#include "mdsv2/common/constant.h"
+#include "mdsv2/common/logging.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-Inode::Inode(uint32_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
-}
-Inode::Inode(const pb::mdsv2::Inode& inode) {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+Inode::Inode(uint32_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) {}
+Inode::~Inode() {}  // NOLINT
 
-  fs_id_ = inode.fs_id();
-  ino_ = inode.inode_id();
-  length_ = inode.length();
-  ctime_ = inode.ctime();
-  mtime_ = inode.mtime();
-  atime_ = inode.atime();
-  uid_ = inode.uid();
-  gid_ = inode.gid();
-  mode_ = inode.mode();
-  nlink_ = inode.nlink();
-  type_ = inode.type();
-  symlink_ = inode.symlink();
-  rdev_ = inode.rdev();
-  dtime_ = inode.dtime();
-  openmpcount_ = inode.openmpcount();
-
+Inode::Inode(const pb::mdsv2::Inode& inode)
+    : fs_id_(inode.fs_id()),
+      ino_(inode.ino()),
+      length_(inode.length()),
+      ctime_(inode.ctime()),
+      mtime_(inode.mtime()),
+      atime_(inode.atime()),
+      uid_(inode.uid()),
+      gid_(inode.gid()),
+      mode_(inode.mode()),
+      nlink_(inode.nlink()),
+      type_(inode.type()),
+      symlink_(inode.symlink()),
+      rdev_(inode.rdev()),
+      dtime_(inode.dtime()),
+      openmpcount_(inode.openmpcount()) {
   for (const auto& [index, chunk_list] : inode.s3_chunk_map()) {
     s3_chunk_map_.insert(std::make_pair(index, chunk_list));
   }
@@ -52,8 +51,6 @@ Inode::Inode(const pb::mdsv2::Inode& inode) {
     xattr_map_.insert(std::make_pair(key, value));
   }
 }
-
-Inode::~Inode() { CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail."; }
 
 Inode::Inode(const Inode& inode) {
   fs_id_ = inode.fs_id_;
@@ -101,10 +98,235 @@ Inode& Inode::operator=(const Inode& inode) {
   return *this;
 }
 
-pb::mdsv2::Inode Inode::GenPBInode() {
+uint64_t Inode::Length() {
+  utils::ReadLockGuard lk(lock_);
+
+  return length_;
+}
+
+void Inode::SetLength(uint64_t length) {
+  utils::WriteLockGuard lk(lock_);
+
+  length_ = length;
+}
+
+uint64_t Inode::Ctime() {
+  utils::ReadLockGuard lk(lock_);
+
+  return ctime_;
+}
+
+void Inode::SetCtime(uint64_t ctime) {
+  utils::WriteLockGuard lk(lock_);
+
+  ctime_ = ctime;
+}
+
+uint64_t Inode::Mtime() {
+  utils::ReadLockGuard lk(lock_);
+
+  return mtime_;
+}
+
+void Inode::SetMtime(uint64_t mtime) {
+  utils::WriteLockGuard lk(lock_);
+
+  mtime_ = mtime;
+}
+
+uint64_t Inode::Atime() {
+  utils::ReadLockGuard lk(lock_);
+
+  return atime_;
+}
+
+void Inode::SetAtime(uint64_t atime) {
+  utils::WriteLockGuard lk(lock_);
+
+  atime_ = atime;
+}
+
+uint32_t Inode::Uid() {
+  utils::ReadLockGuard lk(lock_);
+
+  return uid_;
+}
+
+void Inode::SetUid(uint32_t uid) {
+  utils::WriteLockGuard lk(lock_);
+
+  uid_ = uid;
+}
+
+uint32_t Inode::Gid() {
+  utils::ReadLockGuard lk(lock_);
+
+  return gid_;
+}
+
+void Inode::SetGid(uint32_t gid) {
+  utils::WriteLockGuard lk(lock_);
+
+  gid_ = gid;
+}
+
+uint32_t Inode::Mode() {
+  utils::ReadLockGuard lk(lock_);
+
+  return mode_;
+}
+
+void Inode::SetMode(uint32_t mode) {
+  utils::WriteLockGuard lk(lock_);
+
+  mode_ = mode;
+}
+
+uint32_t Inode::Nlink() {
+  utils::ReadLockGuard lk(lock_);
+
+  return nlink_;
+}
+
+void Inode::SetNlink(uint32_t nlink) {
+  utils::WriteLockGuard lk(lock_);
+
+  nlink_ = nlink;
+}
+
+void Inode::SetNlink(uint32_t nlink, uint64_t time) {
+  utils::WriteLockGuard lk(lock_);
+
+  nlink_ = nlink;
+  ctime_ = time;
+  mtime_ = time;
+}
+
+pb::mdsv2::FileType Inode::Type() {
+  utils::ReadLockGuard lk(lock_);
+
+  return type_;
+}
+
+void Inode::SetType(pb::mdsv2::FileType type) {
+  utils::WriteLockGuard lk(lock_);
+
+  type_ = type;
+}
+
+const std::string& Inode::Symlink() {
+  utils::ReadLockGuard lk(lock_);
+
+  return symlink_;
+}
+
+void Inode::SetSymlink(const std::string& symlink) {
+  utils::WriteLockGuard lk(lock_);
+
+  symlink_ = symlink;
+}
+
+uint64_t Inode::Rdev() {
+  utils::ReadLockGuard lk(lock_);
+
+  return rdev_;
+}
+
+void Inode::SetRdev(uint64_t rdev) {
+  utils::WriteLockGuard lk(lock_);
+
+  rdev_ = rdev;
+}
+
+uint32_t Inode::Dtime() {
+  utils::ReadLockGuard lk(lock_);
+
+  return dtime_;
+}
+
+void Inode::SetDtime(uint32_t dtime) {
+  utils::WriteLockGuard lk(lock_);
+
+  dtime_ = dtime;
+}
+
+uint32_t Inode::Openmpcount() {
+  utils::ReadLockGuard lk(lock_);
+
+  return openmpcount_;
+}
+
+void Inode::SetOpenmpcount(uint32_t openmpcount) {
+  utils::WriteLockGuard lk(lock_);
+
+  openmpcount_ = openmpcount;
+}
+
+Inode::S3ChunkMap Inode::GetS3ChunkMap() {
+  utils::ReadLockGuard lk(lock_);
+
+  return s3_chunk_map_;
+}
+
+Inode::XAttrMap Inode::GetXAttrMap() {
+  utils::ReadLockGuard lk(lock_);
+
+  return xattr_map_;
+}
+
+std::string Inode::GetXAttr(const std::string& name) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = xattr_map_.find(name);
+
+  return it != xattr_map_.end() ? it->second : "";
+}
+
+void Inode::SetXAttr(const std::string& name, const std::string& value) {
+  utils::WriteLockGuard lk(lock_);
+
+  xattr_map_[name] = value;
+}
+
+void Inode::SetXAttr(const std::map<std::string, std::string>& xattr) {
+  utils::WriteLockGuard lk(lock_);
+
+  for (const auto& [key, value] : xattr) {
+    xattr_map_[key] = value;
+  }
+}
+
+void Inode::SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set) {
+  utils::WriteLockGuard lk(lock_);
+
+  if (to_set & kSetAttrMode) {
+    mode_ = inode.mode();
+  } else if (to_set & kSetAttrUid) {
+    uid_ = inode.uid();
+  } else if (to_set & kSetAttrGid) {
+    gid_ = inode.gid();
+  } else if (to_set & kSetAttrLength) {
+    length_ = inode.length();
+  } else if (to_set & kSetAttrAtime) {
+    atime_ = inode.atime();
+  } else if (to_set & kSetAttrMtime) {
+    mtime_ = inode.mtime();
+  } else if (to_set & kSetAttrCtime) {
+    ctime_ = inode.ctime();
+  } else if (to_set & kSetAttrNlink) {
+    nlink_ = inode.nlink();
+  }
+}
+
+pb::mdsv2::Inode Inode::CopyTo() {
   pb::mdsv2::Inode inode;
+  CopyTo(inode);
+  return std::move(inode);
+}
+
+void Inode::CopyTo(pb::mdsv2::Inode& inode) {
   inode.set_fs_id(fs_id_);
-  inode.set_inode_id(ino_);
+  inode.set_ino(ino_);
   inode.set_length(length_);
   inode.set_ctime(ctime_);
   inode.set_mtime(mtime_);
@@ -119,51 +341,39 @@ pb::mdsv2::Inode Inode::GenPBInode() {
   inode.set_dtime(dtime_);
   inode.set_openmpcount(openmpcount_);
 
-  return inode;
+  for (const auto& [index, chunk_list] : s3_chunk_map_) {
+    inode.mutable_s3_chunk_map()->insert({index, chunk_list});
+  }
+
+  for (const auto& [key, value] : xattr_map_) {
+    inode.mutable_xattr()->insert({key, value});
+  }
 }
 
-std::string Inode::GetXAttr(const std::string& name) {
-  BAIDU_SCOPED_LOCK(mutex_);
+InodeCache::InodeCache() : cache_(0) {}  // NOLINT
 
-  auto it = xattr_map_.find(name);
+InodeCache::~InodeCache() {}  // NOLINT
 
-  return it != xattr_map_.end() ? it->second : "";
-}
+void InodeCache::PutInode(uint64_t ino, InodePtr inode) { cache_.Put(ino, inode); }
 
-InodeMap::InodeMap() { bthread_mutex_init(&mutex_, nullptr); }
+void InodeCache::DeleteInode(uint64_t ino) { cache_.Remove(ino); };
 
-InodeMap::~InodeMap() { bthread_mutex_destroy(&mutex_); }
-
-void InodeMap::AddInode(InodePtr inode) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  inode_map_[inode->GetIno()] = inode;
-}
-void InodeMap::DeleteInode(uint64_t ino) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  inode_map_.erase(ino);
-};
-
-InodePtr InodeMap::GetInode(uint64_t ino) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
-  auto it = inode_map_.find(ino);
-  if (it == inode_map_.end()) {
+InodePtr InodeCache::GetInode(uint64_t ino) {
+  InodePtr inode;
+  if (!cache_.Get(ino, &inode)) {
+    DINGO_LOG(INFO) << fmt::format("inode({}) not found.", ino);
     return nullptr;
   }
 
-  return it->second;
+  return inode;
 }
 
-std::vector<InodePtr> InodeMap::GetInodes(std::vector<uint64_t> ino) {
-  BAIDU_SCOPED_LOCK(mutex_);
-
+std::vector<InodePtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
   std::vector<InodePtr> inodes;
-  for (auto& i : ino) {
-    auto it = inode_map_.find(i);
-    if (it != inode_map_.end()) {
-      inodes.push_back(it->second);
+  for (auto& ino : inoes) {
+    InodePtr inode;
+    if (cache_.Get(ino, &inode)) {
+      inodes.push_back(inode);
     }
   }
 

@@ -18,6 +18,8 @@
 DEFINE_string(addr, "127.0.0.1:7800", "mds address");
 DEFINE_string(cmd, "", "command");
 
+DEFINE_string(fs_name, "", "fs name");
+
 int main(int argc, char* argv[]) {
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logtostdout = true;
@@ -29,11 +31,19 @@ int main(int argc, char* argv[]) {
 
   // dingofs::mdsv2::DingoLogger::InitLogger("./log", "mdsv2_client", dingofs::mdsv2::LogLevel::kINFO);
 
-  dingofs::mdsv2::client::Interaction interaction;
-  interaction.Init(FLAGS_addr);
+  auto interaction = dingofs::mdsv2::client::Interaction::New();
+  if (!interaction->Init(FLAGS_addr)) {
+    std::cout << "init interaction fail." << std::endl;
+    return -1;
+  }
+
+  dingofs::mdsv2::client::MDSClient mds_client(interaction);
 
   if (FLAGS_cmd == "create_fs") {
-    dingofs::mdsv2::client::MDSClient::CreateFs(interaction);
+    mds_client.CreateFs(FLAGS_fs_name);
+
+  } else if (FLAGS_cmd == "delete_fs") {
+    mds_client.DeleteFs(FLAGS_fs_name);
 
   } else {
     std::cout << "Invalid command: " << FLAGS_cmd;

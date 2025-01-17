@@ -41,18 +41,34 @@ enum KeyType : unsigned char {
 };
 
 void MetaDataCodec::GetFsTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix + std::to_string(kTypeFS);
-  end_key = kPrefix + std::to_string(kTypeFS + 1);
+  start_key = kPrefix;
+  start_key.push_back(kTypeFS);
+  end_key = kPrefix;
+  end_key.push_back(kTypeFS + 1);
 }
 
 void MetaDataCodec::GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix + std::to_string(kTypeDentry) + kDelimiter + std::to_string(fs_id);
-  end_key = kPrefix + std::to_string(kTypeDentry) + kDelimiter + std::to_string(fs_id + 1);
+  start_key = kPrefix;
+  start_key.push_back(kTypeDentry);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeDentry);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
 void MetaDataCodec::GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix + std::to_string(kTypeFileInode) + kDelimiter + std::to_string(fs_id);
-  end_key = kPrefix + std::to_string(kTypeFileInode) + kDelimiter + std::to_string(fs_id + 1);
+  start_key = kPrefix;
+  start_key.push_back(kTypeFileInode);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFileInode);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
 // format: [$prefix, $type, $kDelimiter, $name]
@@ -87,9 +103,9 @@ pb::mdsv2::FsInfo MetaDataCodec::DecodeFSValue(const std::string& value) {
   return fs_info;
 }
 
-// format: []$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id, $kDelimiter, $name]
+// format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino, $kDelimiter, $name]
 /// size: >= 1+1+4+1+8+1+1 = 17
-std::string MetaDataCodec::EncodeDentryKey(int fs_id, uint64_t inode_id, const std::string& name) {
+std::string MetaDataCodec::EncodeDentryKey(int fs_id, uint64_t ino, const std::string& name) {
   CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -100,21 +116,21 @@ std::string MetaDataCodec::EncodeDentryKey(int fs_id, uint64_t inode_id, const s
   key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, key);
   key.push_back(kDelimiter);
-  SerialHelper::WriteLong(inode_id, key);
+  SerialHelper::WriteLong(ino, key);
   key.push_back(kDelimiter);
   key.append(name);
 
   return key;
 }
 
-void MetaDataCodec::DecodeDentryKey(const std::string& key, int& fs_id, uint64_t& inode_id, std::string& name) {
+void MetaDataCodec::DecodeDentryKey(const std::string& key, int& fs_id, uint64_t& ino, std::string& name) {
   CHECK(key.size() >= (kPrefixSize + 17)) << fmt::format("Key({}) length is invalid.", Helper::StringToHex(key));
   CHECK(key.at(kPrefixSize) == KeyType::kTypeDentry) << "Key type is invalid.";
   CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
-  inode_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 8, kPrefixSize + 16));
-  name = key.substr(kPrefixSize + 17);
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
+  name = key.substr(kPrefixSize + 16);
 }
 
 std::string MetaDataCodec::EncodeDentryValue(const pb::mdsv2::Dentry& dentry) { return dentry.SerializeAsString(); }
@@ -125,9 +141,32 @@ pb::mdsv2::Dentry MetaDataCodec::DecodeDentryValue(const std::string& value) {
   return dentry;
 }
 
-// format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id]
+void MetaDataCodec::EncodeDentryRange(int fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+  CHECK(ino > 0) << fmt::format("Invalid ino {}.", ino);
+
+  start_key.reserve(kPrefixSize + 16);
+
+  start_key.append(kPrefix);
+  start_key.push_back(KeyType::kTypeDentry);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino, start_key);
+
+  end_key.reserve(kPrefixSize + 16);
+
+  end_key.append(kPrefix);
+  end_key.push_back(KeyType::kTypeDentry);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, end_key);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino + 1, end_key);
+}
+
+// format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
 // size: 1+1+4+1+8 = 15
-std::string MetaDataCodec::EncodeDirInodeKey(int fs_id, uint64_t inode_id) {
+std::string MetaDataCodec::EncodeDirInodeKey(int fs_id, uint64_t ino) {
   CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -138,18 +177,18 @@ std::string MetaDataCodec::EncodeDirInodeKey(int fs_id, uint64_t inode_id) {
   key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, key);
   key.push_back(kDelimiter);
-  SerialHelper::WriteLong(inode_id, key);
+  SerialHelper::WriteLong(ino, key);
 
   return key;
 }
 
-void MetaDataCodec::DecodeDirInodeKey(const std::string& key, int& fs_id, uint64_t& inode_id) {
+void MetaDataCodec::DecodeDirInodeKey(const std::string& key, int& fs_id, uint64_t& ino) {
   CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("Key({}) length is invalid.", Helper::StringToHex(key));
   CHECK(key.at(kPrefixSize) == KeyType::kTypeDentry) << "Key type is invalid.";
   CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
-  inode_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 8, kPrefixSize + 16));
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
 }
 
 std::string MetaDataCodec::EncodeDirInodeValue(const pb::mdsv2::Inode& inode) { return inode.SerializeAsString(); }
@@ -160,9 +199,9 @@ pb::mdsv2::Inode MetaDataCodec::DecodeDirInodeValue(const std::string& value) {
   return inode;
 }
 
-// format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $inode_id]
+// format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
 // size: 1+1+4+1+8 = 15
-std::string MetaDataCodec::EncodeFileInodeKey(int fs_id, uint64_t inode_id) {
+std::string MetaDataCodec::EncodeFileInodeKey(int fs_id, uint64_t ino) {
   CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -173,18 +212,18 @@ std::string MetaDataCodec::EncodeFileInodeKey(int fs_id, uint64_t inode_id) {
   key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, key);
   key.push_back(kDelimiter);
-  SerialHelper::WriteLong(inode_id, key);
+  SerialHelper::WriteLong(ino, key);
 
   return key;
 }
 
-void MetaDataCodec::DecodeFileInodeKey(const std::string& key, int& fs_id, uint64_t& inode_id) {
+void MetaDataCodec::DecodeFileInodeKey(const std::string& key, int& fs_id, uint64_t& ino) {
   CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("Key({}) length is invalid.", Helper::StringToHex(key));
   CHECK(key.at(kPrefixSize) == KeyType::kTypeFileInode) << "Key type is invalid.";
   CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
-  inode_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 8, kPrefixSize + 16));
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
 }
 
 std::string MetaDataCodec::EncodeFileInodeValue(const pb::mdsv2::Inode& inode) { return inode.SerializeAsString(); }

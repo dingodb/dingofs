@@ -46,7 +46,10 @@ class DingodbStorage : public KVStorage {
 
   Status Get(const std::string& key, std::string& value) override;
 
+  Status Scan(const Range& range, std::vector<KeyValue>& kvs) override;
+
   Status Delete(const std::string& key) override;
+  Status Delete(const std::vector<std::string>& keys) override;
 
  private:
   using TxnPtr = std::unique_ptr<dingodb::sdk::Transaction>;

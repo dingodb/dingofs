@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fmt/format.h>
+
 #include <string>
 
 #include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/filesystem/codec.h"
 
 namespace dingofs {
@@ -30,10 +33,41 @@ class MetaDataCodecTest : public testing::Test {
   void TearDown() override {}
 };
 
+TEST_F(MetaDataCodecTest, GetFsTableRange) {
+  {
+    std::string start_key;
+    std::string end_key;
+    MetaDataCodec::GetFsTableRange(start_key, end_key);
+
+    LOG(INFO) << fmt::format("fs table start_key: {} end_key: {}", Helper::StringToHex(start_key),
+                             Helper::StringToHex(end_key));
+  }
+
+  {
+    std::string start_key;
+    std::string end_key;
+    MetaDataCodec::GetDentryTableRange(1, start_key, end_key);
+
+    LOG(INFO) << fmt::format("dentry table start_key: {} end_key: {}", Helper::StringToHex(start_key),
+                             Helper::StringToHex(end_key));
+  }
+
+  {
+    std::string start_key;
+    std::string end_key;
+    MetaDataCodec::GetFileInodeTableRange(1, start_key, end_key);
+
+    LOG(INFO) << fmt::format("file inode table start_key: {} end_key: {}", Helper::StringToHex(start_key),
+                             Helper::StringToHex(end_key));
+  }
+}
+
 TEST_F(MetaDataCodecTest, EncodeFSKey) {
   {
     std::string expected_name = "test";
     std::string key = MetaDataCodec::EncodeFSKey(expected_name);
+
+    LOG(INFO) << fmt::format("key: {}", Helper::StringToHex(key));
 
     std::string actual_name;
     MetaDataCodec::DecodeFSKey(key, actual_name);

@@ -14,6 +14,9 @@
 
 #include "client/filesystemv2/mds_discovery.h"
 
+#include <fmt/format.h>
+#include <glog/logging.h>
+
 #include "bthread/mutex.h"
 #include "fmt/core.h"
 #include "mdsv2/common/status.h"
@@ -46,6 +49,18 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
   return true;
 }
 
+std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  std::vector<mdsv2::MDSMeta> mdses;
+  mdses.reserve(mdses_.size());
+  for (const auto& [_, mds_meta] : mdses_) {
+    mdses.push_back(mds_meta);
+  }
+
+  return mdses;
+}
+
 bool MDSDiscovery::UpdateMDSList() {
   std::vector<mdsv2::MDSMeta> mdses;
   auto status = coordinator_client_->GetMDSList(mdses);
@@ -59,6 +74,7 @@ bool MDSDiscovery::UpdateMDSList() {
     BAIDU_SCOPED_LOCK(mutex_);
 
     for (const auto& mds : mdses) {
+      LOG(INFO) << fmt::format("update mds: {}.", mds.ToString());
       CHECK(mds.ID() != 0) << "mds id is 0.";
       mdses_[mds.ID()] = mds;
     }

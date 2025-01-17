@@ -20,14 +20,17 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/dentry.h"
+#include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/storage/storage.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 
@@ -39,84 +42,84 @@ using FileSystemPtr = std::shared_ptr<FileSystem>;
 class FileSystemSet;
 using FileSystemSetPtr = std::shared_ptr<FileSystemSet>;
 
+struct EntryOut {
+  EntryOut() = default;
+
+  explicit EntryOut(const pb::mdsv2::Inode& inode) : inode(inode) {}
+
+  std::string name;
+  pb::mdsv2::Inode inode;
+};
+
 class FileSystem {
  public:
   FileSystem(const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage)
-      : fs_info_(fs_info), id_generator_(id_generator), kv_storage_(kv_storage){};
+      : fs_info_(fs_info), id_generator_(std::move(id_generator)), kv_storage_(kv_storage){};
   ~FileSystem() = default;
 
   static FileSystemPtr New(const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage) {
-    return std::make_shared<FileSystem>(fs_info, id_generator, kv_storage);
+    return std::make_shared<FileSystem>(fs_info, std::move(id_generator), kv_storage);
   }
 
   uint32_t FsId() const { return fs_info_.fs_id(); }
+  std::string FsName() const { return fs_info_.fs_name(); }
+  pb::mdsv2::FsInfo FsInfo() const { return fs_info_; }
 
-  // create root dentry/inode when create filesystem
+  // create root directory
   Status CreateRoot();
 
-  // dentry/inode
+  // lookup dentry
+  Status Lookup(uint64_t parent_ino, const std::string& name, EntryOut& entry_out);
+
+  // file
   struct MkNodParam {
     std::string name;
     uint32_t flag{0};
-    uint64_t length{0};
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    pb::mdsv2::FileType type{pb::mdsv2::FileType::FILE};
     uint64_t parent_ino{0};
     uint64_t rdev{0};
   };
-  Status MkNod(const MkNodParam& param, uint64_t& out_ino);
+  Status MkNod(const MkNodParam& param, EntryOut& entry_out);
+  Status Open(uint64_t ino);
+  Status Release(uint64_t ino);
 
+  // directory
   struct MkDirParam {
     std::string name;
     uint32_t flag{0};
-    uint64_t length{0};
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    pb::mdsv2::FileType type{pb::mdsv2::FileType::DIRECTORY};
     uint64_t parent_ino{0};
     uint64_t rdev{0};
   };
-  Status MkDir(const MkDirParam& param, uint64_t& out_ino);
+  Status MkDir(const MkDirParam& param, EntryOut& entry_out);
   Status RmDir(uint64_t parent_ino, const std::string& name);
+  Status ReadDir(uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
+                 std::vector<EntryOut>& entry_outs);
 
   // create hard link
-  Status Link(uint64_t parent_ino, const std::string& name, uint64_t ino);
+  Status Link(uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out);
   // delete hard link
   Status UnLink(uint64_t parent_ino, const std::string& name);
   // create symbolic link
-  Status Symlink(const pb::mdsv2::SymlinkRequest* request);
+  Status Symlink(const std::string& symlink, uint64_t new_parent_ino, const std::string& new_name, uint32_t uid,
+                 uint32_t gid, EntryOut& entry_out);
   // read symbolic link
   Status ReadLink(uint64_t ino, std::string& link);
 
-  // get dentry
-  DentryPtr GetDentry(uint64_t ino);
-  DentryPtr GetDentry(const std::string& name);
-  std::vector<DentryPtr> GetDentries(uint64_t ino, const std::string& last_name, uint32_t limit, bool is_only_dir);
-
-  // get inode
-  Status GetInode(uint64_t parent_ino, const std::string& name, InodePtr& out_inode);
-  Status GetInode(uint64_t ino, InodePtr& out_inode);
-  InodePtr GetInodeFromCache(uint64_t parent_ino, const std::string& name);
-  InodePtr GetInodeFromCache(uint64_t ino);
-
-  struct UpdateInodeParam {
-    std::vector<std::string> update_fields;
-    uint64_t ino{0};
-    uint32_t fs_id{0};
-    uint64_t length{0};
-    uint64_t ctime{0};
-    uint64_t mtime{0};
-    uint64_t atime{0};
-    uint32_t uid{0};
-    uint32_t gid{0};
-    uint32_t mode{0};
+  // attr
+  struct SetAttrParam {
+    uint32_t to_set{0};
+    pb::mdsv2::Inode inode;
   };
-  Status UpdateInode(const UpdateInodeParam& param, InodePtr& out_inode);
 
-  // operate xattr
+  Status SetAttr(uint64_t ino, const SetAttrParam& param, EntryOut& entry_out);
+  Status GetAttr(uint64_t ino, EntryOut& entry_out);
+
+  // xattr
   Status GetXAttr(uint64_t ino, Inode::XAttrMap& xattr);
   Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
   Status SetXAttr(uint64_t ino, const std::map<std::string, std::string>& xattr);
@@ -124,35 +127,66 @@ class FileSystem {
   // update file data chunk
   Status UpdateS3Chunk();
 
- private:
-  Status GenIno(int64_t& ino);
+  OpenFiles& GetOpenFiles() { return open_files_; }
+  DentryCache& GetDentryCache() { return dentry_cache_; }
+  InodeCache& GetInodeCache() { return inode_cache_; }
 
+ private:
+  friend class DebugServiceImpl;
+
+  // generate ino
+  Status GenDirIno(int64_t& ino);
+  Status GenFileIno(int64_t& ino);
+
+  // get dentry
+  Status GetDentrySet(uint64_t parent_ino, DentrySetPtr& out_dentry_set);
+  DentrySetPtr GetDentrySetFromCache(uint64_t parent_ino);
+  Status GetDentrySetFromStore(uint64_t parent_ino, DentrySetPtr& out_dentry_set);
+
+  // get inode
+  Status GetInode(uint64_t ino, InodePtr& out_inode);
+  InodePtr GetInodeFromCache(uint64_t ino);
+  Status GetInodeFromStore(uint64_t ino, InodePtr& out_inode);
+
+  Status GetInodeFromDentry(const Dentry& dentry, DentrySetPtr& dentry_set, InodePtr& out_inode);
+
+  // thorough delete inode
+  Status DestoryInode(uint32_t fs_id, uint64_t ino);
+
+  // filesystem info
   pb::mdsv2::FsInfo fs_info_;
 
   // generate inode id
   IdGeneratorPtr id_generator_;
+
   // persistence store dentry/inode
   KVStoragePtr kv_storage_;
 
+  // for open/read/write/close file
+  OpenFiles open_files_;
+
   // organize dentry directory tree
-  DentryMap dentry_map_;
+  DentryCache dentry_cache_;
+
   // organize inode
-  InodeMap inode_map_;
+  InodeCache inode_cache_;
 };
 
 // manage all filesystem
 class FileSystemSet {
  public:
-  FileSystemSet(IdGeneratorPtr id_generator, KVStoragePtr kv_storage);
+  FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage);
   ~FileSystemSet();
 
-  static FileSystemSetPtr New(IdGeneratorPtr id_generator, KVStoragePtr kv_storage) {
-    return std::make_shared<FileSystemSet>(id_generator, kv_storage);
+  static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
+                              KVStoragePtr kv_storage) {
+    return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage);
   }
 
   bool Init();
 
   struct CreateFsParam {
+    int64_t mds_id;
     std::string fs_name;
     uint64_t block_size;
     pb::mdsv2::FsType fs_type;
@@ -170,6 +204,7 @@ class FileSystemSet {
   Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
 
   FileSystemPtr GetFileSystem(uint32_t fs_id);
+  std::vector<FileSystemPtr> GetAllFileSystem();
 
  private:
   Status GenFsId(int64_t& fs_id);
@@ -181,11 +216,17 @@ class FileSystemSet {
   bool AddFileSystem(FileSystemPtr fs);
   void DeleteFileSystem(uint32_t fs_id);
 
+  // load already exist filesystem
+  bool LoadFileSystems();
+
+  CoordinatorClientPtr coordinator_client_;
+
   IdGeneratorPtr id_generator_;
+
   KVStoragePtr kv_storage_;
 
   // protect fs_map_
-  bthread_mutex_t mutex_;
+  utils::RWLock lock_;
   // key: fs_id
   std::map<uint32_t, FileSystemPtr> fs_map_;
 };

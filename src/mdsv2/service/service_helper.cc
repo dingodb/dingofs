@@ -26,35 +26,13 @@ BRPC_VALIDATE_GFLAG(service_log_threshold_time_ns, brpc::PositiveInteger);
 DEFINE_int32(log_print_max_length, 512, "log print max length");
 BRPC_VALIDATE_GFLAG(log_print_max_length, brpc::PositiveInteger);
 
+void ServiceHelper::SetError(pb::error::Error* error, const Status& status) {
+  SetError(error, status.error_code(), status.error_str());
+}
+
 void ServiceHelper::SetError(pb::error::Error* error, int errcode, const std::string& errmsg) {
   error->set_errcode(static_cast<pb::error::Errno>(errcode));
   error->set_errmsg(errmsg);
-}
-
-void ServiceHelper::Inode2PBInode(InodePtr inode, pb::mdsv2::Inode* pb_inode) {
-  pb_inode->set_fs_id(inode->GetFsId());
-  pb_inode->set_inode_id(inode->GetIno());
-  pb_inode->set_length(inode->GetLength());
-  pb_inode->set_ctime(inode->GetCtime());
-  pb_inode->set_mtime(inode->GetMtime());
-  pb_inode->set_atime(inode->GetAtime());
-  pb_inode->set_uid(inode->GetUid());
-  pb_inode->set_gid(inode->GetGid());
-  pb_inode->set_mode(inode->GetMode());
-  pb_inode->set_nlink(inode->GetNlink());
-  pb_inode->set_type(inode->GetType());
-  pb_inode->set_symlink(inode->GetSymlink());
-  pb_inode->set_rdev(inode->GetRdev());
-
-  for (const auto& [key, value] : inode->GetS3ChunkMap()) {
-    pb_inode->mutable_s3_chunk_map()->insert({key, value});
-  }
-
-  pb_inode->set_dtime(inode->GetDtime());
-  pb_inode->set_openmpcount(inode->GetOpenmpcount());
-  for (const auto& [key, value] : inode->GetXAttrMap()) {
-    pb_inode->mutable_xattr()->insert({key, value});
-  }
 }
 
 }  // namespace mdsv2

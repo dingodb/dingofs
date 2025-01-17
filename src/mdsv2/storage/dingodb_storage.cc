@@ -29,9 +29,23 @@ namespace mdsv2 {
 
 DEFINE_int32(dingodb_replica_num, 3, "backend store replicas");
 
+DEFINE_int32(dingodb_scan_batch_size, 1000, "dingodb scan batch size");
+
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
 static dingodb::sdk::KVPair ToKVPair(const KeyValue& kv) { return dingodb::sdk::KVPair{kv.key, kv.value}; }
+
+static void KvPairToKeyValue(const dingodb::sdk::KVPair& kv_pair, KeyValue& kv) {
+  kv.key = kv_pair.key;
+  kv.value = kv_pair.value;
+}
+
+static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs, std::vector<KeyValue>& kvs) {
+  kvs.reserve(kv_pairs.size());
+  for (const auto& kv_pair : kv_pairs) {
+    kvs.emplace_back(KeyValue{KeyValue::OpType::kPut, kv_pair.key, kv_pair.value});
+  }
+}
 
 static std::vector<dingodb::sdk::KVPair> ToKVPairs(const std::vector<KeyValue>& kvs) {
   std::vector<dingodb::sdk::KVPair> kv_pairs;
@@ -225,6 +239,32 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
+Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
+  auto txn = NewTxn();
+  if (txn == nullptr) {
+    return Status(pb::error::EBACKEND_STORE, "new transaction fail");
+  }
+
+  std::vector<dingodb::sdk::KVPair> kv_pairs;
+  auto status = txn->Scan(range.start_key, range.end_key, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  KvPairsToKeyValues(kv_pairs, kvs);
+
+  status = txn->PreCommit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
 Status DingodbStorage::Delete(const std::string& key) {
   auto txn = NewTxn();
   if (txn == nullptr) {
@@ -237,6 +277,31 @@ Status DingodbStorage::Delete(const std::string& key) {
   }
 
   status = txn->PreCommit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
+  auto txn = NewTxn();
+  if (txn == nullptr) {
+    return Status(pb::error::EBACKEND_STORE, "new transaction fail");
+  }
+
+  for (const auto& key : keys) {
+    auto status = txn->Delete(key);
+    if (!status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, status.ToString());
+    }
+  }
+
+  auto status = txn->PreCommit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }

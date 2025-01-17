@@ -32,11 +32,16 @@ namespace client {
 //   uint32 object_prefix = 7;
 // }
 
-void MDSClient::CreateFs(Interaction& interaction) {
+void MDSClient::CreateFs(const std::string& fs_name) {
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+
   pb::mdsv2::CreateFsRequest request;
   pb::mdsv2::CreateFsResponse response;
 
-  request.set_fs_name("dengzh");
+  request.set_fs_name(fs_name);
   request.set_block_size(4 * 1024 * 1024);
   request.set_fs_type(pb::mdsv2::FsType::S3);
   request.set_owner("deng");
@@ -56,9 +61,27 @@ void MDSClient::CreateFs(Interaction& interaction) {
 
   DINGO_LOG(INFO) << "CreateFs request: " << request.ShortDebugString();
 
-  interaction.SendRequest("MDSService", "CreateFs", request, response);
+  interaction_->SendRequest("MDSService", "CreateFs", request, response);
 
   DINGO_LOG(INFO) << "CreateFs response: " << response.ShortDebugString();
+}
+
+void MDSClient::DeleteFs(const std::string& fs_name) {
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+
+  pb::mdsv2::DeleteFsRequest request;
+  pb::mdsv2::DeleteFsResponse response;
+
+  request.set_fs_name(fs_name);
+
+  DINGO_LOG(INFO) << "DeleteFs request: " << request.ShortDebugString();
+
+  interaction_->SendRequest("MDSService", "DeleteFs", request, response);
+
+  DINGO_LOG(INFO) << "DeleteFs response: " << response.ShortDebugString();
 }
 
 }  // namespace client

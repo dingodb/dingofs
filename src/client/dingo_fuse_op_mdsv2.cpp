@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cstring>
-#ifndef DINGOFS_OLD_VERSION
+#include <memory>
+
+#include "client/filesystemv2/rpc.h"
+#include "client/fuse_common.h"
+#define USE_DINGOFS_V2_FILESYSTEM 1
+#ifdef USE_DINGOFS_V2_FILESYSTEM
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -21,20 +25,22 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <vector>
 
 #include "client/common/common.h"
 #include "client/dingo_fuse_op.h"
 #include "client/filesystem/error.h"
+#include "client/filesystem/filesystem.h"
 #include "client/filesystem/meta.h"
-#include "client/filesystemv2/dummy_filesystem.h"
+#include "client/filesystemv2/filesystem.h"
 #include "common/dynamic_vlog.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/coordinator/dingo_coordinator_client.h"
 #include "utils/configuration.h"
-#include "utils/gflags_helper.h"
 
 using EntryOut = dingofs::client::filesystem::EntryOut;
 using AttrOut = dingofs::client::filesystem::AttrOut;
@@ -56,13 +62,13 @@ static void Inode2Stat(const dingofs::pb::mdsv2::Inode& attr,
                        struct stat& stat) {
   std::memset(&stat, 0, sizeof(struct stat));
 
-  stat.st_ino = attr.inode_id();  // inode number
-  stat.st_mode = attr.mode();     // permission mode
-  stat.st_nlink = attr.nlink();   // number of links
-  stat.st_uid = attr.uid();       // user ID of owner
-  stat.st_gid = attr.gid();       // group ID of owner
-  stat.st_size = attr.length();   // total size, in bytes
-  stat.st_rdev = attr.rdev();     // device ID (if special file)
+  stat.st_ino = attr.ino();      // inode number
+  stat.st_mode = attr.mode();    // permission mode
+  stat.st_nlink = attr.nlink();  // number of links
+  stat.st_uid = attr.uid();      // user ID of owner
+  stat.st_gid = attr.gid();      // group ID of owner
+  stat.st_size = attr.length();  // total size, in bytes
+  stat.st_rdev = attr.rdev();    // device ID (if special file)
 
   ToTimeSpec(attr.atime(), &stat.st_atim);
   ToTimeSpec(attr.mtime(), &stat.st_mtim);
@@ -72,10 +78,9 @@ static void Inode2Stat(const dingofs::pb::mdsv2::Inode& attr,
   stat.st_blocks = (attr.length() + 511) / 512;
 }
 
-static dingofs::pb::mdsv2::Inode GenDummyInode(uint32_t fs_id,
-                                               uint64_t inode_id) {
+static dingofs::pb::mdsv2::Inode GenDummyInode(uint32_t fs_id, uint64_t ino) {
   dingofs::pb::mdsv2::Inode inode;
-  inode.set_inode_id(inode_id);
+  inode.set_ino(ino);
   inode.set_fs_id(fs_id);
 
   inode.set_length(0);
@@ -161,7 +166,8 @@ class FuseOperator {
     return instance;
   }
 
-  bool Init();
+  bool Init(const std::string& fs_name, const std::string& coor_addr,
+            const std::string& mountpoint);
   bool Destory();
 
   void StatFs(fuse_req_t req, fuse_ino_t ino);
@@ -229,7 +235,7 @@ class FuseOperator {
     fuse_entry_param fuse_entry;
     std::memset(&fuse_entry, 0, sizeof(fuse_entry_param));
 
-    fuse_entry.ino = entry_out.inode.inode_id();
+    fuse_entry.ino = entry_out.inode.ino();
     fuse_entry.generation = 0;
 
     fuse_entry.entry_timeout = 1;
@@ -278,7 +284,7 @@ class FuseOperator {
     fuse_entry_param fuse_entry;
     std::memset(&fuse_entry, 0, sizeof(fuse_entry_param));
 
-    fuse_entry.ino = entry_out.inode.inode_id();
+    fuse_entry.ino = entry_out.inode.ino();
     fuse_entry.generation = 0;
 
     fuse_entry.entry_timeout = 1;
@@ -330,24 +336,66 @@ class FuseOperator {
     fuse_reply_write(req, w_size);
   }
 
-  dingofs::client::filesystem::DummyFileSystem fs_;
+  std::shared_ptr<dingofs::client::filesystem::MDSV2FileSystem> fs_;
 };
 
-bool FuseOperator::Init() {
+bool FuseOperator::Init(const std::string& fs_name,
+                        const std::string& coor_addr,
+                        const std::string& mountpoint) {
   LOG(INFO) << "FuseOperator init.";
 
-  return fs_.Init();
+  using dingofs::client::filesystem::MDSClient;
+  using dingofs::client::filesystem::MDSClientPtr;
+  using dingofs::client::filesystem::MDSDiscovery;
+  using dingofs::client::filesystem::MDSDiscoveryPtr;
+  using dingofs::client::filesystem::RPC;
+  using dingofs::client::filesystem::RPCPtr;
+
+  auto rpc = RPC::New();
+  if (!rpc->Init()) {
+    LOG(INFO) << "RPC init fail.";
+    return false;
+  }
+
+  auto mds_client = MDSClient::New(rpc);
+  if (!mds_client->Init()) {
+    LOG(INFO) << "MDSClient init fail.";
+    return false;
+  }
+
+  auto coordinator_client = dingofs::mdsv2::DingoCoordinatorClient::New();
+  if (!coordinator_client->Init(coor_addr)) {
+    LOG(INFO) << "CoordinatorClient init fail.";
+    return false;
+  }
+
+  auto mds_discovery = MDSDiscovery::New(coordinator_client);
+  if (!mds_discovery->Init()) {
+    LOG(INFO) << "MDSDiscovery init fail.";
+    return false;
+  }
+
+  fs_ = std::make_shared<dingofs::client::filesystem::MDSV2FileSystem>(
+      fs_name, mountpoint, mds_discovery, mds_client);
+
+  if (!fs_->Init()) {
+    LOG(INFO) << "MDSV2FileSystem init fail.";
+    return false;
+  }
+
+  return true;
 }
 
 bool FuseOperator::Destory() {
-  fs_.UnInit();
+  LOG(INFO) << "FuseOperator Destory.";
+  fs_->UnInit();
   return true;
 }
 
 void FuseOperator::StatFs(fuse_req_t req, fuse_ino_t ino) {
   LOG(INFO) << fmt::format("StatFs ino({}).", ino);
 
-  auto fs_info = fs_.GetFsInfo();
+  auto fs_info = fs_->GetFsInfo();
 
   struct statvfs stbuf;
   stbuf.f_frsize = stbuf.f_bsize = fs_info.block_size();
@@ -378,7 +426,7 @@ void FuseOperator::Lookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
   LOG(INFO) << fmt::format("Lookup parent({}), name({}).", parent, name);
 
   EntryOut entry_out;
-  auto status = fs_.Lookup(parent, std::string(name), entry_out);
+  auto status = fs_->Lookup(parent, std::string(name), entry_out);
   if (!status.ok()) {
     if (status.error_code() == dingofs::pb::error::ENOT_FOUND) {
       LOG(INFO) << fmt::format("Lookup not found, name({}).", name);
@@ -400,7 +448,7 @@ void FuseOperator::GetAttr(fuse_req_t req, fuse_ino_t ino,
   LOG(INFO) << fmt::format("GetAttr ino({}).", ino);
 
   AttrOut attr_out;
-  auto status = fs_.GetAttr(ino, attr_out);
+  auto status = fs_->GetAttr(ino, attr_out);
   if (!status.ok()) {
     LOG(ERROR) << "GetAttr fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -425,7 +473,7 @@ void FuseOperator::SetAttr(fuse_req_t req, fuse_ino_t ino, struct stat* attr,
                            ToString(attr));
 
   AttrOut attr_out;
-  auto status = fs_.SetAttr(ino, attr, to_set, attr_out);
+  auto status = fs_->SetAttr(ino, attr, to_set, attr_out);
   if (!status.ok()) {
     LOG(ERROR) << "SetAttr fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -444,7 +492,7 @@ void FuseOperator::SetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
     return FuseOperator::ReplyError(req, ErrNo::OUT_OF_RANGE);
   }
 
-  auto status = fs_.SetXAttr(ino, std::string(name), std::string(value));
+  auto status = fs_->SetXAttr(ino, std::string(name), std::string(value));
   if (!status.ok()) {
     LOG(ERROR) << "SetXattr fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -459,7 +507,7 @@ void FuseOperator::GetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                            size);
 
   std::string value;
-  auto status = fs_.GetXAttr(ino, std::string(name), value);
+  auto status = fs_->GetXAttr(ino, std::string(name), value);
   if (!status.ok()) {
     LOG(ERROR) << "GetXattr fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -486,7 +534,7 @@ void FuseOperator::ListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
   LOG(INFO) << fmt::format("ListXattr ino({}) size({}).", ino, size);
 
   std::string out_names;
-  auto status = fs_.ListXAttr(ino, size, out_names);
+  auto status = fs_->ListXAttr(ino, size, out_names);
   if (!status.ok()) {
     LOG(ERROR) << "ListXattr fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -512,8 +560,8 @@ void FuseOperator::MkNod(fuse_req_t req, fuse_ino_t parent, const char* name,
   const struct fuse_ctx* ctx = fuse_req_ctx(req);
 
   EntryOut entry_out;
-  auto status = fs_.MkNod(parent, std::string(name), ctx->uid, ctx->gid, mode,
-                          rdev, entry_out);
+  auto status = fs_->MkNod(parent, std::string(name), ctx->uid, ctx->gid, mode,
+                           rdev, entry_out);
   if (!status.ok()) {
     LOG(ERROR) << "MkNod fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -530,15 +578,15 @@ void FuseOperator::Create(fuse_req_t req, fuse_ino_t parent, const char* name,
   const struct fuse_ctx* ctx = fuse_req_ctx(req);
 
   EntryOut entry_out;
-  auto status = fs_.MkNod(parent, std::string(name), ctx->uid, ctx->gid, mode,
-                          0, entry_out);
+  auto status = fs_->MkNod(parent, std::string(name), ctx->uid, ctx->gid, mode,
+                           0, entry_out);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Create file({}) fail, error: {} {}.", name,
                               status.error_code(), status.error_str());
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
   }
 
-  status = fs_.Open(entry_out.inode.inode_id());
+  status = fs_->Open(entry_out.inode.ino());
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Create file({}) open fail, error: {} {}.", name,
                               status.error_code(), status.error_str());
@@ -556,8 +604,8 @@ void FuseOperator::MkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
   const struct fuse_ctx* ctx = fuse_req_ctx(req);
 
   EntryOut entry_out;
-  auto status = fs_.MkDir(parent, std::string(name), ctx->uid, ctx->gid, mode,
-                          0, entry_out);
+  auto status = fs_->MkDir(parent, std::string(name), ctx->uid, ctx->gid, mode,
+                           0, entry_out);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("MkDir {}/{} fail, error: {} {}.", parent, name,
                               status.error_code(), status.error_str());
@@ -570,7 +618,7 @@ void FuseOperator::MkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
 void FuseOperator::RmDir(fuse_req_t req, fuse_ino_t parent, const char* name) {
   LOG(INFO) << fmt::format("RmDir parent({}) name({}).", parent, name);
 
-  auto status = fs_.RmDir(parent, std::string(name));
+  auto status = fs_->RmDir(parent, std::string(name));
   if (!status.ok()) {
     if (status.error_code() == dingofs::pb::error::ENOT_EMPTY) {
       return FuseOperator::ReplyError(req, ErrNo::NOTEMPTY);
@@ -587,7 +635,7 @@ void FuseOperator::OpenDir(fuse_req_t req, fuse_ino_t ino,
                            struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("OpenDir ino({}).", ino);
   uint64_t fh = 0;
-  auto status = fs_.OpenDir(ino, fh);
+  auto status = fs_->OpenDir(ino, fh);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("OpenDir {} fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -632,12 +680,12 @@ void FuseOperator::ReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
                            off_t off, struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("ReadDir ino({}) fh({}) size({}) off({}).", ino,
                            fi->fh, size, off);
-  auto fs_info = fs_.GetFsInfo();
+  auto fs_info = fs_->GetFsInfo();
 
   size_t writed_size = 0;
   std::string buffer(size, '\0');
-  fs_.ReadDir(fi->fh, ino, [&](const std::string& name, uint64_t ino) -> bool {
-    LOG(INFO) << fmt::format("ReadDir name({}) inode_id({}).", name, ino);
+  fs_->ReadDir(fi->fh, ino, [&](const std::string& name, uint64_t ino) -> bool {
+    LOG(INFO) << fmt::format("ReadDir name({}) ino({}).", name, ino);
 
     struct stat stat;
     std::memset(&stat, 0, sizeof(stat));
@@ -679,7 +727,7 @@ std::string GenReadDirPlusBuffer(uint32_t fs_id, fuse_req_t req) {
     struct fuse_entry_param e;
     std::memset(&e, 0, sizeof(fuse_entry_param));
 
-    e.ino = inode.inode_id();
+    e.ino = inode.ino();
     e.generation = 0;
 
     e.entry_timeout = 1;
@@ -710,42 +758,41 @@ void FuseOperator::ReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size,
   LOG(INFO) << fmt::format("ReadDirPlus ino({}) fh({}) size({}) off({}).", ino,
                            fi->fh, size, off);
 
-  auto fs_info = fs_.GetFsInfo();
+  auto fs_info = fs_->GetFsInfo();
 
   size_t writed_size = 0;
   std::string buffer(size, '\0');
-  fs_.ReadDirPlus(fi->fh, ino,
-                  [&](const std::string& name,
-                      const dingofs::pb::mdsv2::Inode& inode) -> bool {
-                    LOG(INFO)
-                        << fmt::format("ReadDirPlus name({}) inode_id({}).",
-                                       name, inode.inode_id());
-                    struct fuse_entry_param entry;
-                    std::memset(&entry, 0, sizeof(fuse_entry_param));
+  fs_->ReadDirPlus(fi->fh, ino,
+                   [&](const std::string& name,
+                       const dingofs::pb::mdsv2::Inode& inode) -> bool {
+                     LOG(INFO) << fmt::format("ReadDirPlus name({}) ino({}).",
+                                              name, inode.ino());
+                     struct fuse_entry_param entry;
+                     std::memset(&entry, 0, sizeof(fuse_entry_param));
 
-                    entry.ino = inode.inode_id();
-                    entry.generation = 0;
-                    entry.entry_timeout = 1;
-                    entry.attr_timeout = 1;
+                     entry.ino = inode.ino();
+                     entry.generation = 0;
+                     entry.entry_timeout = 1;
+                     entry.attr_timeout = 1;
 
-                    Inode2Stat(inode, entry.attr);
+                     Inode2Stat(inode, entry.attr);
 
-                    size_t rest_size = buffer.size() - writed_size;
+                     size_t rest_size = buffer.size() - writed_size;
 
-                    size_t need_size = fuse_add_direntry_plus(
-                        req, buffer.data() + writed_size, rest_size,
-                        name.c_str(), &entry, ++off);
-                    LOG(INFO) << fmt::format(
-                        "ReadDirPlus off({}) need_size({}) rest_size({}).", off,
-                        need_size, rest_size);
-                    if (need_size > rest_size) {
-                      return false;
-                    }
+                     size_t need_size = fuse_add_direntry_plus(
+                         req, buffer.data() + writed_size, rest_size,
+                         name.c_str(), &entry, ++off);
+                     LOG(INFO) << fmt::format(
+                         "ReadDirPlus off({}) need_size({}) rest_size({}).",
+                         off, need_size, rest_size);
+                     if (need_size > rest_size) {
+                       return false;
+                     }
 
-                    writed_size += need_size;
+                     writed_size += need_size;
 
-                    return true;
-                  });
+                     return true;
+                   });
 
   LOG(INFO) << fmt::format("ReadDirPlus buffer size({}) writed_size({})",
                            buffer.size(), writed_size);
@@ -757,7 +804,7 @@ void FuseOperator::ReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size,
 void FuseOperator::ReleaseDir(fuse_req_t req, fuse_ino_t ino,
                               struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("ReleaseDir ino({}) fh({}).", ino, fi->fh);
-  auto status = fs_.ReleaseDir(ino, fi->fh);
+  auto status = fs_->ReleaseDir(ino, fi->fh);
   if (!status.ok()) {
     LOG(ERROR) << "ReleaseDir fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -772,7 +819,7 @@ void FuseOperator::Rename(fuse_req_t req, fuse_ino_t parent, const char* name,
   LOG(INFO) << fmt::format("Rename parent({}) name({}).", parent, name);
 
   auto status =
-      fs_.Rename(parent, std::string(name), newparent, std::string(newname));
+      fs_->Rename(parent, std::string(name), newparent, std::string(newname));
   if (!status.ok()) {
     LOG(ERROR) << "Rename fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -787,7 +834,7 @@ void FuseOperator::Link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
                            newparent, newname);
 
   EntryOut entry_out;
-  auto status = fs_.Link(ino, newparent, std::string(newname), entry_out);
+  auto status = fs_->Link(ino, newparent, std::string(newname), entry_out);
   if (!status.ok()) {
     LOG(ERROR) << "Link fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -799,7 +846,7 @@ void FuseOperator::Link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 void FuseOperator::Unlink(fuse_req_t req, fuse_ino_t parent, const char* name) {
   LOG(INFO) << fmt::format("Unlink parent({}) name({}).", parent, name);
 
-  auto status = fs_.UnLink(parent, std::string(name));
+  auto status = fs_->UnLink(parent, std::string(name));
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Unlink file({}/{}) fail, error: {} {}.", parent,
                               name, status.error_code(), status.error_str());
@@ -817,8 +864,8 @@ void FuseOperator::Symlink(fuse_req_t req, const char* link, fuse_ino_t parent,
   const struct fuse_ctx* ctx = fuse_req_ctx(req);
 
   EntryOut entry_out;
-  auto status = fs_.Symlink(parent, std::string(name), ctx->uid, ctx->gid,
-                            std::string(link), entry_out);
+  auto status = fs_->Symlink(parent, std::string(name), ctx->uid, ctx->gid,
+                             std::string(link), entry_out);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Symlink fail, error: {} {}.",
                               status.error_code(), status.error_str());
@@ -832,7 +879,7 @@ void FuseOperator::ReadLink(fuse_req_t req, fuse_ino_t ino) {
   LOG(INFO) << fmt::format("ReadLink ino({}).", ino);
 
   std::string symlink;
-  auto status = fs_.ReadLink(ino, symlink);
+  auto status = fs_->ReadLink(ino, symlink);
   if (!status.ok()) {
     LOG(ERROR) << "ReadLink fail.";
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -845,7 +892,7 @@ void FuseOperator::Open(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("Open ino({}).", ino);
 
-  auto status = fs_.Open(ino);
+  auto status = fs_->Open(ino);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Open file({}) fail.", ino);
     return FuseOperator::ReplyError(req, ErrNo::INTERNAL);
@@ -860,7 +907,7 @@ void FuseOperator::Read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   size_t r_size = 0;
   std::unique_ptr<char[]> buffer(new char[size]);
-  auto status = fs_.Read(ino, off, size, buffer.get(), r_size);
+  auto status = fs_->Read(ino, off, size, buffer.get(), r_size);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Read file({}) fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -875,7 +922,7 @@ void FuseOperator::Write(fuse_req_t req, fuse_ino_t ino, const char* buf,
   LOG(INFO) << fmt::format("Write ino({}) size({}) off({}).", ino, size, off);
 
   size_t w_size = 0;
-  auto status = fs_.Write(ino, off, buf, size, w_size);
+  auto status = fs_->Write(ino, off, buf, size, w_size);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Write file({}) fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -889,7 +936,7 @@ void FuseOperator::Flush(fuse_req_t req, fuse_ino_t ino,
                          struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("Flush ino({}).", ino);
 
-  auto status = fs_.Flush(ino);
+  auto status = fs_->Flush(ino);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Flush file({}) fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -903,7 +950,7 @@ void FuseOperator::Release(fuse_req_t req, fuse_ino_t ino,
                            struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("Release ino({}).", ino);
 
-  auto status = fs_.Release(ino);
+  auto status = fs_->Release(ino);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Release file({}) fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -917,7 +964,7 @@ void FuseOperator::Fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
                          struct fuse_file_info* fi) {
   LOG(INFO) << fmt::format("Fsync ino({}) datasync({}).", ino, datasync);
 
-  auto status = fs_.Fsync(ino, datasync);
+  auto status = fs_->Fsync(ino, datasync);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Fsync file({}) fail, error: {} {}.", ino,
                               status.error_code(), status.error_str());
@@ -970,17 +1017,18 @@ int InitFuseClient(const struct MountOption* mount_option) {
     conf.SetStringValue("mdsOpt.rpcRetryOpt.addrs", mount_option->mdsAddr);
   }
 
+  std::string coor_addr;
+  conf.GetValueFatalIfFail("coordinator.addr", &coor_addr);
+  LOG(INFO) << fmt::format("coordinator addr: {}.", coor_addr);
+
   conf.PrintConfig();
 
   auto& fuse_operator = FuseOperator::GetInstance();
-  if (!fuse_operator.Init()) {
+  if (!fuse_operator.Init(std::string(mount_option->fsName), coor_addr,
+                          std::string(mount_option->mountPoint))) {
     LOG(ERROR) << "init FuseOperator fail.";
     return -1;
   }
-
-  // get fs info
-
-  // mount fs
 
   return 0;
 }
@@ -1155,4 +1203,4 @@ void FuseOpBmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
   fuse_operator.Bmap(req, ino, blocksize, idx);
 }
 
-#endif  // DINGOFS_OLD_VERSION
+#endif  // USE_DINGOFS_V2_FILESYSTEM

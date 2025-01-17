@@ -31,6 +31,8 @@ namespace unit_test {
 const int64_t kFsTableId = 1234;
 const int64_t kInodeTableId = 2345;
 
+const uint64_t kRootIno = 1;
+
 static pb::mdsv2::S3Info CreateS3Info() {
   pb::mdsv2::S3Info s3_info;
   s3_info.set_ak("ak");
@@ -286,11 +288,35 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   }
 }
 
-TEST_F(FileSystemTest, MkNod) {
+TEST_F(FileSystemTest, CreateRoot) {
   auto fs = Fs();
 
+  auto& dentry_cache = fs->GetDentryCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  auto dentry_set = dentry_cache.Get(kRootIno);
+  ASSERT_TRUE(dentry_set != nullptr);
+
+  auto dentry = dentry_set->GetDentry();
+  ASSERT_EQ(kRootIno, dentry.Ino());
+  ASSERT_EQ("/", dentry.Name());
+  ASSERT_EQ(0, dentry.ParentIno());
+  ASSERT_EQ(pb::mdsv2::FileType::DIRECTORY, dentry.Type());
+  ASSERT_TRUE(dentry.Inode() != nullptr);
+
+  auto inode = inode_cache.GetInode(kRootIno);
+  ASSERT_TRUE(inode != nullptr);
+  ASSERT_EQ(kRootIno, inode->Ino());
+  ASSERT_EQ(pb::mdsv2::FileType::DIRECTORY, inode->Type());
+}
+
+TEST_F(FileSystemTest, MkNod) {
+  auto fs = Fs();
+  auto& dentry_cache = fs->GetDentryCache();
+  auto& inode_cache = fs->GetInodeCache();
+
   FileSystem::MkNodParam param;
-  param.parent_ino = 1;
+  param.parent_ino = kRootIno;
   param.name = "test_mknod";
   param.mode = 0777;
   param.uid = 1;
@@ -303,34 +329,37 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(ino, 0) << "ino is invalid.";
 
-  auto dentry = fs->GetDentry(ino);
-  ASSERT_TRUE(dentry != nullptr) << "get dentry fail.";
-  ASSERT_EQ(param.name, dentry->GetName()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry->GetParentIno()) << "dentry parent ino not equal.";
+  auto dentry_set = dentry_cache.Get(param.parent_ino);
+  ASSERT_TRUE(dentry_set != nullptr) << "get dentry fail.";
 
-  InodePtr inode;
-  status = fs->GetInode(ino, inode);
-  ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
+  Dentry dentry;
+  ASSERT_TRUE(dentry_set->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
+  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+  ASSERT_TRUE(dentry.Inode() != nullptr) << "inode is nullptr.";
+
+  InodePtr inode = inode_cache.GetInode(ino);
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
-  ASSERT_EQ(param.mode, inode->GetMode()) << "inode mode not equal.";
-  ASSERT_EQ(param.uid, inode->GetUid()) << "inode uid not equal.";
-  ASSERT_EQ(param.gid, inode->GetGid()) << "inode gid not equal.";
-  ASSERT_EQ(param.type, inode->GetType()) << "inode type not equal.";
-  ASSERT_EQ(param.length, inode->GetLength()) << "inode length not equal.";
-  ASSERT_EQ(param.rdev, inode->GetRdev()) << "inode rdev not equal.";
+  ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
+  ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
+  ASSERT_EQ(param.gid, inode->Gid()) << "inode gid not equal.";
+  ASSERT_EQ(param.type, inode->Type()) << "inode type not equal.";
+  ASSERT_EQ(0, inode->Length()) << "inode length not equal.";
+  ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
 
 TEST_F(FileSystemTest, MkDir) {
   auto fs = Fs();
+  auto& dentry_cache = fs->GetDentryCache();
+  auto& inode_cache = fs->GetInodeCache();
 
   FileSystem::MkDirParam param;
-  param.parent_ino = 1;
+  param.parent_ino = kRootIno;
   param.name = "test_mkdir";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
-  param.type = pb::mdsv2::FileType::FILE;
-  param.length = 0;
+  param.type = pb::mdsv2::FileType::DIRECTORY;
   param.rdev = 0;
 
   uint64_t ino = 0;
@@ -338,34 +367,37 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(ino, 0) << "ino is invalid.";
 
-  auto dentry = fs->GetDentry(ino);
-  ASSERT_TRUE(dentry != nullptr) << "get dentry fail.";
-  ASSERT_EQ(param.name, dentry->GetName()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry->GetParentIno()) << "dentry parent ino not equal.";
+  auto dentry_set = dentry_cache.Get(param.parent_ino);
+  ASSERT_TRUE(dentry_set != nullptr) << "get dentry fail.";
 
-  InodePtr inode;
-  status = fs->GetInode(ino, inode);
+  Dentry dentry;
+  ASSERT_TRUE(dentry_set->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
+  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+
+  InodePtr inode = inode_cache.GetInode(ino);
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
-  ASSERT_EQ(param.mode, inode->GetMode()) << "inode mode not equal.";
-  ASSERT_EQ(param.uid, inode->GetUid()) << "inode uid not equal.";
-  ASSERT_EQ(param.gid, inode->GetGid()) << "inode gid not equal.";
-  ASSERT_EQ(param.type, inode->GetType()) << "inode type not equal.";
-  ASSERT_EQ(param.length, inode->GetLength()) << "inode length not equal.";
-  ASSERT_EQ(param.rdev, inode->GetRdev()) << "inode rdev not equal.";
+  ASSERT_EQ(param.mode, inode->Mode()) << "inode mode not equal.";
+  ASSERT_EQ(param.uid, inode->Uid()) << "inode uid not equal.";
+  ASSERT_EQ(param.gid, inode->Gid()) << "inode gid not equal.";
+  ASSERT_EQ(param.type, inode->Type()) << "inode type not equal.";
+  ASSERT_EQ(4096, inode->Length()) << "inode length not equal.";
+  ASSERT_EQ(param.rdev, inode->Rdev()) << "inode rdev not equal.";
 }
 
 TEST_F(FileSystemTest, RmDir) {
   auto fs = Fs();
+  auto& dentry_cache = fs->GetDentryCache();
+  auto& inode_cache = fs->GetInodeCache();
 
   FileSystem::MkDirParam param;
-  param.parent_ino = 1;
+  param.parent_ino = kRootIno;
   param.name = "test_mkdir";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
   param.type = pb::mdsv2::FileType::FILE;
-  param.length = 0;
   param.rdev = 0;
 
   uint64_t ino = 0;
@@ -373,13 +405,15 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(ino, 0) << "ino is invalid.";
 
-  auto dentry = fs->GetDentry(ino);
-  ASSERT_TRUE(dentry != nullptr) << "get dentry fail.";
-  ASSERT_EQ(param.name, dentry->GetName()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry->GetParentIno()) << "dentry parent ino not equal.";
+  auto dentry_set = dentry_cache.Get(param.parent_ino);
+  ASSERT_TRUE(dentry_set != nullptr) << "get dentry fail.";
 
-  InodePtr inode;
-  status = fs->GetInode(ino, inode);
+  Dentry dentry;
+  ASSERT_TRUE(dentry_set->GetChild(param.name, dentry)) << "get child fail.";
+  ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
+  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+
+  InodePtr inode = inode_cache.GetInode(ino);
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
@@ -387,12 +421,10 @@ TEST_F(FileSystemTest, RmDir) {
     status = fs->RmDir(param.parent_ino, param.name);
     ASSERT_TRUE(status.ok()) << "remove dir fail, error: " << status.error_str();
 
-    auto dentry = fs->GetDentry(ino);
-    ASSERT_TRUE(dentry == nullptr) << "get dentry fail.";
+    auto dentry_set = dentry_cache.Get(ino);
+    ASSERT_TRUE(dentry_set == nullptr) << "get dentry_set fail.";
 
-    InodePtr inode;
-    status = fs->GetInode(ino, inode);
-    ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
+    InodePtr inode = inode_cache.GetInode(ino);
     ASSERT_TRUE(inode == nullptr) << "get inode fail.";
   }
 }

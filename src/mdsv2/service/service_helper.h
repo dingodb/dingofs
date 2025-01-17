@@ -24,6 +24,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/runnable.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/inode.h"
 
 namespace dingofs {
@@ -35,9 +36,8 @@ DECLARE_int32(log_print_max_length);
 
 class ServiceHelper {
  public:
+  static void SetError(pb::error::Error* error, const Status& status);
   static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
-
-  static void Inode2PBInode(InodePtr inode, pb::mdsv2::Inode* pb_inode);
 
   // protobuf transform
   template <typename T>
@@ -159,24 +159,21 @@ void ServiceClosure<T, U>::Run() {
   uint64_t elapsed_time = Helper::TimestampNs() - start_time_;
 
   if (response_->error().errcode() != 0) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[service.{}][request_id({})][elapsed(ns)({})] Request failed, response: {} request: {}", method_name_,
-        request_->request_info().request_id(), elapsed_time,
-        response_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-        request_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+    LOG(ERROR) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request failed, request({}) response({})",
+                              method_name_, request_->request_info().request_id(), elapsed_time,
+                              request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
+                              response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
   } else {
     if (BAIDU_UNLIKELY(elapsed_time >= FLAGS_service_log_threshold_time_ns)) {
-      DINGO_LOG(INFO) << fmt::format(
-          "[service.{}][request_id({})][elapsed(ns)({})] Request finish, response: {} request: {}", method_name_,
-          request_->request_info().request_id(), elapsed_time,
-          response_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-          request_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+      LOG(INFO) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request finish, request({}) response({})",
+                               method_name_, request_->request_info().request_id(), elapsed_time,
+                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
+                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     } else {
-      DINGO_LOG(DEBUG) << fmt::format(
-          "[service.{}][request_id({})][elapsed(ns)({})] Request finish, response: {} request: {}", method_name_,
-          request_->request_info().request_id(), elapsed_time,
-          response_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
-          request_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
+      LOG(INFO) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request finish, request({}) response({})",
+                               method_name_, request_->request_info().request_id(), elapsed_time,
+                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
+                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     }
   }
 }
