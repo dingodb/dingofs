@@ -2297,6 +2297,7 @@ DINGOFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
   DINGOFS_ERROR ret = PrepareFlushTasks(inodeId, data, &s3Tasks, &kvCacheTasks,
                                         &chunkId, &writeOffset);
   if (DINGOFS_ERROR::OK != ret) {
+    free(data);
     return ret;
   }
 
