@@ -538,8 +538,24 @@ Status MDSClient::ListXAttr(uint64_t ino,
   return Status::OK();
 }
 
-Status MDSClient::Rename() {
+Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
+                         uint64_t new_parent_ino, const std::string& new_name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  pb::mdsv2::RenameRequest request;
+  pb::mdsv2::RenameResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_old_parent_ino(old_parent_ino);
+  request.set_old_name(old_name);
+  request.set_new_parent_ino(new_parent_ino);
+  request.set_new_name(new_name);
+
+  auto status = rpc_->SendRequest("MDSService", "Rename", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
   return Status::OK();
 }
 

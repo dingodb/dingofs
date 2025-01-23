@@ -851,7 +851,11 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  auto status = file_system->Rename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
+                                    request->new_name());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,

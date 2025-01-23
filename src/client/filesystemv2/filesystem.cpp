@@ -519,11 +519,19 @@ Status MDSV2FileSystem::ListXAttr(uint64_t ino, size_t size,
              : Status(pb::error::EOUT_OF_RANGE, "out of range");
 }
 
-Status MDSV2FileSystem::Rename(uint64_t parent_ino,            // NOLINT
-                               const std::string& name,        // NOLINT
-                               uint64_t new_parent_ino,        // NOLINT
-                               const std::string& new_name) {  // NOLINT
-  auto status = mds_client_->Rename();
+Status MDSV2FileSystem::Rename(uint64_t old_parent_ino,
+                               const std::string& old_name,
+                               uint64_t new_parent_ino,
+                               const std::string& new_name) {
+  auto status =
+      mds_client_->Rename(old_parent_ino, old_name, new_parent_ino, new_name);
+  if (!status.ok()) {
+    return Status(
+        pb::error::EINTERNAL,
+        fmt::format("rename fail, {}/{} -> {}/{}, error: {}", old_parent_ino,
+                    old_name, new_parent_ino, new_name, status.error_str()));
+  }
+
   return Status::OK();
 }
 

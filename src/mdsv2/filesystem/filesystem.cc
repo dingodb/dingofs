@@ -20,6 +20,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -410,7 +411,7 @@ Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
 
   auto parent_inode = parent_dentry_set->ParentInode();
   Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlink(parent_inode->Nlink() - 1, now_ns);
+  parent_inode_copy.SetNlinkDelta(-1, now_ns);
 
   KeyValue inode_kv, dentry_kv, parent_inode_kv;
 
@@ -431,7 +432,7 @@ Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
 
   parent_dentry_set->DeleteChild(name);
   dentry_cache_.Delete(dentry.Ino());
-  parent_inode->SetNlink(parent_inode->Nlink() - 1, now_ns);
+  parent_inode->SetNlinkDelta(-1, now_ns);
 
   return Status::OK();
 }
@@ -510,14 +511,14 @@ Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string
 
   // update inode mtime/ctime/nlink
   Inode inode_copy(*inode);
-  inode_copy.SetNlink(inode->Nlink() + 1, now_ns);
+  inode_copy.SetNlinkDelta(1, now_ns);
 
   inode_kv.key = MetaDataCodec::EncodeFileInodeKey(fs_id, ino);
   inode_kv.value = MetaDataCodec::EncodeFileInodeValue(inode_copy.CopyTo());
 
   // update parent inode mtime/ctime/nlink
   Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlink(parent_inode->Nlink() + 1, now_ns);
+  parent_inode_copy.SetNlinkDelta(1, now_ns);
 
   parent_inode_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, ino);
   parent_inode_kv.value = MetaDataCodec::EncodeDirInodeValue(parent_inode_copy.CopyTo());
@@ -535,8 +536,8 @@ Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string
   }
 
   // update cache
-  inode->SetNlink(inode_copy.Nlink(), now_ns);
-  parent_inode->SetNlink(parent_inode_copy.Nlink(), now_ns);
+  inode->SetNlinkDelta(1, now_ns);
+  parent_inode->SetNlinkDelta(1, now_ns);
 
   inode_cache_.PutInode(ino, inode);
   dentry_set->PutChild(dentry);
@@ -578,7 +579,7 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
 
   // update inode mtime/ctime/nlink
   Inode inode_copy(*inode);
-  inode_copy.SetNlink(inode->Nlink() - 1, now_ns);
+  inode_copy.SetNlinkDelta(1, now_ns);
 
   inode_kv.opt_type = KeyValue::OpType::kPut;
   inode_kv.key = MetaDataCodec::EncodeFileInodeKey(fs_id, ino);
@@ -587,7 +588,7 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
   // update parent inode mtime/ctime/nlink
   auto parent_inode = dentry_set->ParentInode();
   Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlink(parent_inode->Nlink() - 1, now_ns);
+  parent_inode_copy.SetNlinkDelta(1, now_ns);
 
   parent_inode_kv.opt_type = KeyValue::OpType::kPut;
   parent_inode_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, ino);
@@ -610,8 +611,8 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
   }
 
   // update cache
-  inode->SetNlink(inode_copy.Nlink(), now_ns);
-  parent_inode->SetNlink(parent_inode_copy.Nlink(), now_ns);
+  inode->SetNlinkDelta(1, now_ns);
+  parent_inode->SetNlinkDelta(1, now_ns);
 
   dentry_set->DeleteChild(name);
 
@@ -945,6 +946,174 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 }
 
 Status FileSystem::UpdateS3Chunk() { return Status::OK(); }  // NOLINT
+
+Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                          const std::string& new_name) {
+  uint32_t fs_id = fs_info_.fs_id();
+  uint64_t now_ns = Helper::TimestampNs();
+
+  // check name is valid
+  if (new_name.size() > FLAGS_filesystem_name_max_size) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "new name is too long.");
+  }
+
+  // check old parent dentry/inode
+  DentrySetPtr old_parent_dentry_set;
+  auto status = GetDentrySet(old_parent_ino, old_parent_dentry_set);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND,
+                  fmt::format("not found old parent dentry set({}), {}", old_parent_ino, status.error_str()));
+  }
+  InodePtr old_parent_inode = old_parent_dentry_set->ParentInode();
+
+  // check new parent dentry/inode
+  DentrySetPtr new_parent_dentry_set;
+  status = GetDentrySet(old_parent_ino, new_parent_dentry_set);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND,
+                  fmt::format("not found new parent dentry set({}), {}", old_parent_ino, status.error_str()));
+  }
+  InodePtr new_parent_inode = new_parent_dentry_set->ParentInode();
+
+  // check old name dentry
+  Dentry old_dentry;
+  if (!old_parent_dentry_set->GetChild(old_name, old_dentry)) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found old dentry({}/{})", old_parent_ino, old_name));
+  }
+
+  InodePtr old_inode;
+  status = GetInodeFromDentry(old_dentry, old_parent_dentry_set, old_inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  std::vector<KeyValue> kvs;
+
+  InodePtr new_inode;
+  bool is_exist_new_dentry = false;
+  // check new name dentry
+  Dentry new_dentry;
+  if (new_parent_dentry_set->GetChild(new_name, new_dentry)) {
+    is_exist_new_dentry = true;
+
+    if (new_dentry.Type() != old_dentry.Type()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, fmt::format("dentry type is different, old({}), new({}).",
+                                                                pb::mdsv2::FileType_Name(old_dentry.Type()),
+                                                                pb::mdsv2::FileType_Name(new_dentry.Type())));
+    }
+
+    if (new_dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
+      // check whether dir is empty
+      DentrySetPtr new_dentry_set;
+      auto status = GetDentrySet(new_dentry.Ino(), new_dentry_set);
+      if (!status.ok()) {
+        return Status(pb::error::ENOT_FOUND,
+                      fmt::format("not found new dentry set({}), {}", new_dentry.Ino(), status.error_str()));
+      }
+
+      if (new_dentry_set->HasChild()) {
+        return Status(pb::error::ENOT_EMPTY, fmt::format("new dentry({}/{}) is not empty.", new_parent_ino, new_name));
+      }
+    }
+
+    // unlink new dentry inode
+    status = GetInodeFromDentry(new_dentry, new_parent_dentry_set, new_inode);
+    if (!status.ok()) {
+      return status;
+    }
+
+    Inode new_inode_copy(*new_inode);
+    new_inode_copy.SetNlinkDelta(-1, now_ns);
+
+    if (new_inode_copy.Nlink() == 0) {
+      // destory inode
+      status = DestoryInode(fs_id, new_dentry.Ino());
+      if (!status.ok()) {
+        return status;
+      }
+    } else {
+      // update new inode nlink
+      KeyValue new_inode_kv;
+      new_inode_kv.opt_type = KeyValue::OpType::kPut;
+      new_inode_kv.key = new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
+                             ? MetaDataCodec::EncodeDirInodeKey(fs_id, new_dentry.Ino())
+                             : MetaDataCodec::EncodeFileInodeKey(fs_id, new_dentry.Ino());
+      new_inode_kv.value = new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
+                               ? MetaDataCodec::EncodeDirInodeValue(new_inode_copy.CopyTo())
+                               : MetaDataCodec::EncodeFileInodeValue(new_inode_copy.CopyTo());
+
+      kvs.push_back(new_inode_kv);
+    }
+  }
+
+  // delete old dentry
+  KeyValue old_dentry_kv;
+  old_dentry_kv.opt_type = KeyValue::OpType::kDelete;
+  old_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
+
+  kvs.push_back(old_dentry_kv);
+
+  // update old parent inode nlink
+  KeyValue old_parent_kv;
+  old_parent_kv.opt_type = KeyValue::OpType::kPut;
+  old_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, old_parent_ino);
+
+  Inode old_parent_inode_copy(*old_parent_inode);
+  old_parent_inode_copy.SetNlinkDelta(-1, now_ns);
+  old_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(old_parent_inode_copy.CopyTo());
+
+  kvs.push_back(old_parent_kv);
+
+  if (!is_exist_new_dentry) {
+    // add new dentry
+    KeyValue new_dentry_kv;
+    new_dentry_kv.opt_type = KeyValue::OpType::kPut;
+    new_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
+    new_dentry_kv.value = MetaDataCodec::EncodeDentryValue(old_dentry.CopyTo());
+
+    kvs.push_back(new_dentry_kv);
+
+    // update new parent inode nlink
+    KeyValue new_parent_kv;
+    new_parent_kv.opt_type = KeyValue::OpType::kPut;
+    new_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, new_parent_ino);
+
+    Inode new_parent_inode_copy(*new_parent_inode);
+    new_parent_inode_copy.SetNlinkDelta(1, now_ns);
+    new_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(new_parent_inode_copy.CopyTo());
+
+    kvs.push_back(new_parent_kv);
+  }
+
+  status = kv_storage_->Put(KVStorage::WriteOption(), kvs);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", status.error_str()));
+  }
+
+  // delete old dentry at cache
+  old_parent_dentry_set->DeleteChild(old_name);
+  // update old parent inode nlink at cache
+  old_parent_inode->SetNlinkDelta(1, now_ns);
+
+  if (is_exist_new_dentry) {
+    // delete new dentry at cache
+    new_parent_dentry_set->DeleteChild(new_name);
+  } else {
+    // update new parent inode nlink at cache
+    new_parent_inode->SetNlinkDelta(1, now_ns);
+  }
+
+  // add new dentry at cache
+  new_parent_dentry_set->PutChild(
+      Dentry(fs_id, new_name, new_parent_ino, old_inode->Ino(), old_inode->Type(), 0, old_inode));
+
+  // delete old dentry set at cache
+  if (new_inode != nullptr && new_inode->Type() == pb::mdsv2::FileType::DIRECTORY) {
+    dentry_cache_.Delete(new_inode->Ino());
+  }
+
+  return Status::OK();
+}
 
 FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
                              KVStoragePtr kv_storage)

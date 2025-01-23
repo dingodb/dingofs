@@ -127,6 +127,10 @@ class FileSystem {
   // update file data chunk
   Status UpdateS3Chunk();
 
+  // rename
+  Status Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                const std::string& new_name);
+
   OpenFiles& GetOpenFiles() { return open_files_; }
   DentryCache& GetDentryCache() { return dentry_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }

@@ -86,7 +86,7 @@ class MDSV2FileSystem {
                   const std::string& value);
   Status ListXAttr(uint64_t ino, size_t size, std::string& out_names);
 
-  Status Rename(uint64_t parent_ino, const std::string& name,
+  Status Rename(uint64_t old_parent_ino, const std::string& old_name,
                 uint64_t new_parent_ino, const std::string& new_name);
 
  private:

@@ -194,10 +194,18 @@ void Inode::SetNlink(uint32_t nlink) {
   nlink_ = nlink;
 }
 
-void Inode::SetNlink(uint32_t nlink, uint64_t time) {
+// void Inode::SetNlink(uint32_t nlink, uint64_t time) {
+//   utils::WriteLockGuard lk(lock_);
+
+//   nlink_ = nlink;
+//   ctime_ = time;
+//   mtime_ = time;
+// }
+
+void Inode::SetNlinkDelta(int32_t delta, uint64_t time) {
   utils::WriteLockGuard lk(lock_);
 
-  nlink_ = nlink;
+  nlink_ += delta;
   ctime_ = time;
   mtime_ = time;
 }

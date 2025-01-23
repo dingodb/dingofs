@@ -87,7 +87,8 @@ class MDSClient {
                   const std::string& value);
   Status ListXAttr(uint64_t ino, std::map<std::string, std::string>& xattrs);
 
-  Status Rename();
+  Status Rename(uint64_t old_parent_ino, const std::string& old_name,
+                uint64_t new_parent_ino, const std::string& new_name);
 
  private:
   uint32_t fs_id_;

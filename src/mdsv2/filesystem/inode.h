@@ -73,7 +73,8 @@ class Inode {
 
   uint32_t Nlink();
   void SetNlink(uint32_t nlink);
-  void SetNlink(uint32_t nlink, uint64_t time);
+  // void SetNlink(uint32_t nlink, uint64_t time);
+  void SetNlinkDelta(int32_t delta, uint64_t time);
 
   pb::mdsv2::FileType Type();
   void SetType(pb::mdsv2::FileType type);
@@ -114,7 +115,7 @@ class Inode {
   uint32_t uid_{0};
   uint32_t gid_{0};
   uint32_t mode_{0};
-  uint32_t nlink_{0};
+  int32_t nlink_{0};
   pb::mdsv2::FileType type_{0};
   std::string symlink_;
   uint64_t rdev_{0};
