@@ -39,12 +39,12 @@ namespace tools {
 namespace delete_ {
 
 class DeletePartitionTool
-    : public CurvefsToolRpc<pb::mds::topology::DeletePartitionRequest,
+    : public DingofsToolRpc<pb::mds::topology::DeletePartitionRequest,
                             pb::mds::topology::DeletePartitionResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit DeletePartitionTool(const std::string& cmd = kPartitionDeleteCmd)
-      : CurvefsToolRpc(cmd) {}
+      : DingofsToolRpc(cmd) {}
 
   void PrintHelp() override;
   int Init() override;

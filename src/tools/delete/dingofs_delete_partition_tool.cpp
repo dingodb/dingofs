@@ -31,7 +31,7 @@ namespace tools {
 namespace delete_ {
 
 void DeletePartitionTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -partitionId=" << FLAGS_partitionId
             << " [-noconfirm=" << FLAGS_noconfirm
             << "] [-mdsAddr=" << FLAGS_mdsAddr << "]";
@@ -39,7 +39,7 @@ void DeletePartitionTool::PrintHelp() {
 }
 
 int DeletePartitionTool::Init() {
-  int ret = CurvefsToolRpc::Init();
+  int ret = DingofsToolRpc::Init();
 
   pb::mds::topology::DeletePartitionRequest request;
   request.set_partitionid(std::stoul(FLAGS_partitionId));
@@ -73,7 +73,7 @@ int DeletePartitionTool::RunCommand() {
       return -1;
     }
   }
-  return CurvefsToolRpc::RunCommand();
+  return DingofsToolRpc::RunCommand();
 }
 
 bool DeletePartitionTool::AfterSendRequestToHost(const std::string& host) {

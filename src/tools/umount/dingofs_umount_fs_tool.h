@@ -46,11 +46,11 @@ namespace tools {
 namespace umount {
 
 class UmountFsTool
-    : public CurvefsToolRpc<pb::mds::UmountFsRequest, pb::mds::UmountFsResponse,
+    : public DingofsToolRpc<pb::mds::UmountFsRequest, pb::mds::UmountFsResponse,
                             pb::mds::MdsService_Stub> {
  public:
   explicit UmountFsTool(const std::string& cmd = kUmountFsCmd)
-      : CurvefsToolRpc(cmd) {}
+      : DingofsToolRpc(cmd) {}
   void PrintHelp() override;
 
   int RunCommand() override;

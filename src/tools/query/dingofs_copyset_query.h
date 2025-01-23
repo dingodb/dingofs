@@ -51,13 +51,13 @@ using StatusType = pb::metaserver::copyset::CopysetStatusResponse;
 using StatusRequestType = pb::metaserver::copyset::CopysetsStatusRequest;
 
 class CopysetQueryTool
-    : public CurvefsToolRpc<pb::mds::topology::GetCopysetsInfoRequest,
+    : public DingofsToolRpc<pb::mds::topology::GetCopysetsInfoRequest,
                             pb::mds::topology::GetCopysetsInfoResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit CopysetQueryTool(const std::string& cmd = kCopysetQueryCmd,
                             bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

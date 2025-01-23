@@ -22,7 +22,7 @@ def loadConf():
     conf.read("target.ini")
     targetPath=conf.get("path", "target_path")
 
-def runCurvefsToolCommand(command):
+def runDingofsToolCommand(command):
     cmd = [DINGOFS_TOOL]+command
     try:
         output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=5)
@@ -34,7 +34,7 @@ def runCurvefsToolCommand(command):
 
 
 def loadServer():
-    ret, _ = runCurvefsToolCommand(["list-topology", "-jsonType=tree", "-jsonPath=%s"%JSON_PATH])
+    ret, _ = runDingofsToolCommand(["list-topology", "-jsonType=tree", "-jsonPath=%s"%JSON_PATH])
     data = None
     if ret == 0:
         with open(JSON_PATH) as load_f:
@@ -49,7 +49,7 @@ def loadServer():
     return metaservers
 
 def loadClient():
-    ret, output = runCurvefsToolCommand(["list-fs"])
+    ret, output = runDingofsToolCommand(["list-fs"])
     clients = []
     label = lablesValue(None, "client")
     if ret == 0 :
@@ -63,7 +63,7 @@ def loadClient():
     return unitValue(label, clients)
 
 def loadType(hostType):
-    ret, output = runCurvefsToolCommand(["status-%s"%hostType])
+    ret, output = runDingofsToolCommand(["status-%s"%hostType])
     targets = []
     if ret == 0:
         targets = re.findall(IP_PORT_REGEX, str(output))

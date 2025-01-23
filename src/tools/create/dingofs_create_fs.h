@@ -33,11 +33,11 @@ namespace tools {
 namespace create {
 
 class CreateFsTool
-    : public CurvefsToolRpc<pb::mds::CreateFsRequest, pb::mds::CreateFsResponse,
+    : public DingofsToolRpc<pb::mds::CreateFsRequest, pb::mds::CreateFsResponse,
                             pb::mds::MdsService_Stub> {
  public:
   explicit CreateFsTool(const std::string& cmd = kCreateFsCmd, bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

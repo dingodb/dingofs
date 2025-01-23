@@ -165,7 +165,7 @@ TEST_F(UmountfsToolTest, test_umount_tool_init) {
   std::shared_ptr<pb::mds::MdsService_Stub> service_stub =
       std::make_shared<pb::mds::MdsService_Stub>(channel.get());
 
-  ut_.CurvefsToolRpc::Init(
+  ut_.DingofsToolRpc::Init(
       channel, controller, requestQueue, response, service_stub,
       std::bind(&pb::mds::MdsService_Stub::UmountFs, service_stub.get(),
                 std::placeholders::_1, std::placeholders::_2,

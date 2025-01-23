@@ -45,12 +45,12 @@ namespace usage {
  * @details
  */
 class MatedataUsageTool
-    : public CurvefsToolRpc<pb::mds::topology::StatMetadataUsageRequest,
+    : public DingofsToolRpc<pb::mds::topology::StatMetadataUsageRequest,
                             pb::mds::topology::StatMetadataUsageResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit MatedataUsageTool(const std::string& cmd = kMetedataUsageCmd)
-      : CurvefsToolRpc(cmd) {}
+      : DingofsToolRpc(cmd) {}
   void PrintHelp() override;
 
  protected:

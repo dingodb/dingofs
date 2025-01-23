@@ -75,13 +75,13 @@ struct PoolPolicy {
 };
 
 class TopologyListTool
-    : public CurvefsToolRpc<pb::mds::topology::ListTopologyRequest,
+    : public DingofsToolRpc<pb::mds::topology::ListTopologyRequest,
                             pb::mds::topology::ListTopologyResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit TopologyListTool(const std::string& cmd = kTopologyListCmd,
                             bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

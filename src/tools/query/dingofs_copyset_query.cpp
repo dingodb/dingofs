@@ -37,7 +37,7 @@ namespace tools {
 namespace query {
 
 void CopysetQueryTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -copysetId=" << FLAGS_copysetId << " -poolId=" << FLAGS_poolId
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
             << " [-detail=" << FLAGS_detail << "]";
@@ -49,7 +49,7 @@ void CopysetQueryTool::AddUpdateFlags() {
 }
 
 int CopysetQueryTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

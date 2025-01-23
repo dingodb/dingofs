@@ -59,14 +59,14 @@ using ::dingofs::common::StreamConnection;
 using ::dingofs::common::StreamOptions;
 using ::dingofs::common::StreamStatus;
 
-class CurvefsTool {
+class DingofsTool {
  public:
-  CurvefsTool() {}
-  CurvefsTool(const std::string& command,
+  DingofsTool() {}
+  DingofsTool(const std::string& command,
               const std::string& programe = kProgrameName, bool show = true)
       : command_(command), programe_(programe), show_(show) {}
 
-  virtual ~CurvefsTool() {}
+  virtual ~DingofsTool() {}
 
   virtual void PrintHelp();
 
@@ -117,11 +117,11 @@ class CurvefsTool {
 template <typename RequestT, typename ResponseT, typename ServiceT,
           typename ChannelT = brpc::Channel,
           typename ControllerT = brpc::Controller>
-class CurvefsToolRpc : public CurvefsTool {
+class DingofsToolRpc : public DingofsTool {
  public:
-  CurvefsToolRpc(const std::string& command,
+  DingofsToolRpc(const std::string& command,
                  const std::string& programe = kProgrameName, bool show = true)
-      : CurvefsTool(command, programe, show) {}
+      : DingofsTool(command, programe, show) {}
 
   int Init(const std::shared_ptr<ChannelT>& channel,
            const std::shared_ptr<ControllerT>& controller,
@@ -327,7 +327,7 @@ class CurvefsToolRpc : public CurvefsTool {
    *
    * @details
    * If necessary, you can override RunCommand in a subclass:
-   *      CurvefsToolRpc::RunCommand();
+   *      DingofsToolRpc::RunCommand();
    *      RemoveFailHostFromHostAddr();
    * Add the fail host in AfterSendRequestToHost:
    *      failHostsAddr_.push_back();
@@ -398,12 +398,12 @@ class CurvefsToolRpc : public CurvefsTool {
   std::shared_ptr<StreamConnection> connection_;
 };
 
-class CurvefsToolMetric : public CurvefsTool {
+class DingofsToolMetric : public DingofsTool {
  public:
-  explicit CurvefsToolMetric(const std::string& command,
+  explicit DingofsToolMetric(const std::string& command,
                              const std::string& programe = kProgrameName,
                              bool show = true)
-      : CurvefsTool(command, programe, show) {
+      : DingofsTool(command, programe, show) {
     metricClient_ = std::make_shared<MetricClient>();
   }
 

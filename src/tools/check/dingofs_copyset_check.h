@@ -38,11 +38,11 @@ namespace dingofs {
 namespace tools {
 namespace check {
 
-class CopysetCheckTool : public CurvefsTool {
+class CopysetCheckTool : public DingofsTool {
  public:
   explicit CopysetCheckTool(const std::string& cmd = kCopysetCheckCmd,
                             bool show = true)
-      : CurvefsTool(cmd) {
+      : DingofsTool(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

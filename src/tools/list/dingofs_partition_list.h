@@ -42,13 +42,13 @@ using PartitionInfoList =
     google::protobuf::RepeatedPtrField<pb::common::PartitionInfo>;
 
 class PartitionListTool
-    : public CurvefsToolRpc<pb::mds::topology::ListPartitionRequest,
+    : public DingofsToolRpc<pb::mds::topology::ListPartitionRequest,
                             pb::mds::topology::ListPartitionResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit PartitionListTool(const std::string& cmd = kPartitionListCmd,
                              bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

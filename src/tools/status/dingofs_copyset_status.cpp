@@ -35,7 +35,7 @@ int CopysetStatusTool::Init() {
 }
 
 void CopysetStatusTool::PrintHelp() {
-  CurvefsTool::PrintHelp();
+  DingofsTool::PrintHelp();
   std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }

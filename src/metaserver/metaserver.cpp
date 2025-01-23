@@ -448,7 +448,7 @@ void Metaserver::Run() {
   LOG_IF(FATAL, heartbeat_.Run() != 0) << "Failed to start heartbeat manager.";
 
   // set metaserver version in metric
-  dingofs::utils::ExposeCurveVersion();
+  dingofs::utils::ExposeDingoVersion();
 
   PartitionCleanManager::GetInstance().Run();
 

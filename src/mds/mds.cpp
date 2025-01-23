@@ -254,7 +254,7 @@ void MDS::Run() {
   }
 
   // set mds version in metric
-  dingofs::utils::ExposeCurveVersion();
+  dingofs::utils::ExposeDingoVersion();
 
   LOG_IF(FATAL, topology_->Run()) << "run topology module fail";
   topologyMetricService_->Run();
@@ -311,7 +311,7 @@ void MDS::StartDummyServer() {
   status_.set_value("follower");
 
   // set mds version in metric
-  dingofs::utils::ExposeCurveVersion();
+  dingofs::utils::ExposeDingoVersion();
 
   LOG_IF(FATAL, 0 != brpc::StartDummyServerAt(options_.dummyPort))
       << "Start dummy server failed";

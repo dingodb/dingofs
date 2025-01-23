@@ -1,4 +1,4 @@
-CurveFS Client Metadata Cache Design
+DingoFS Client Metadata Cache Design
 ===
 
 ```
@@ -9,7 +9,7 @@ CurveFS Client Metadata Cache Design
 (1) |       | (4)
     v       |
 +----------------+
-+  CurveFS Fuse  |
++  DingoFS Fuse  |
 +----------------+
     |       ^
 (2) |       | (3)

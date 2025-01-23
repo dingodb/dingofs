@@ -66,14 +66,14 @@ struct Zone {
   std::string poolName;
 };
 
-class CurvefsBuildTopologyTool : public dingofs::tools::CurvefsTool {
+class DingofsBuildTopologyTool : public dingofs::tools::DingofsTool {
  public:
-  CurvefsBuildTopologyTool()
-      : dingofs::tools::CurvefsTool(
+  DingofsBuildTopologyTool()
+      : dingofs::tools::DingofsTool(
             std::string(dingofs::tools::kCreateTopologyCmd),
             std::string(dingofs::tools::kProgrameName)) {}
 
-  ~CurvefsBuildTopologyTool() override = default;
+  ~DingofsBuildTopologyTool() override = default;
 
   int Init() override;
 
@@ -95,7 +95,7 @@ class CurvefsBuildTopologyTool : public dingofs::tools::CurvefsTool {
 
   int Run() override {
     if (Init() < 0) {
-      LOG(ERROR) << "CurvefsBuildTopologyTool init error.";
+      LOG(ERROR) << "DingofsBuildTopologyTool init error.";
       return mds::topology::kRetCodeCommonErr;
     }
     int ret = InitTopoData();

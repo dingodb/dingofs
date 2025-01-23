@@ -70,7 +70,7 @@ class BuildTopologyToolTest : public ::testing::Test {
   }
 
  protected:
-  tools::topology::CurvefsBuildTopologyTool tool_;
+  tools::topology::DingofsBuildTopologyTool tool_;
 
   MockTopologyService mockTopologyService_;
   std::string addr_ = "127.0.0.1:16800";

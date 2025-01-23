@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# CurveFS Topology Library
+# DingoFS Topology Library
 file(GLOB DINGOFS_TOPOLOGY_SRCS
     "*.cpp"
 )

@@ -42,22 +42,22 @@ class FactoryTest : public testing::Test {
   void SetUp() override {}
   void TearDown() override {}
 
-  CurvefsToolFactory factory_;
+  DingofsToolFactory factory_;
 };
 
 TEST_F(FactoryTest, create_tool_sucess_test) {
-  std::shared_ptr<CurvefsTool> tool = factory_.GenerateCurvefsTool(kVersionCmd);
+  std::shared_ptr<DingofsTool> tool = factory_.GenerateDingofsTool(kVersionCmd);
   ASSERT_EQ(typeid(*tool), typeid(VersionTool));
 }
 
 TEST_F(FactoryTest, create_tool_fail_test) {
-  std::shared_ptr<CurvefsTool> tool = factory_.GenerateCurvefsTool("RTTI");
+  std::shared_ptr<DingofsTool> tool = factory_.GenerateDingofsTool("RTTI");
   ASSERT_EQ(tool, nullptr);
 }
 
 TEST_F(FactoryTest, creator_test) {
-  std::shared_ptr<CurvefsTool> tool =
-      CurvefsToolCreator<VersionTool>().Create();
+  std::shared_ptr<DingofsTool> tool =
+      DingofsToolCreator<VersionTool>().Create();
   ASSERT_EQ(typeid(*tool), typeid(VersionTool));
 }
 

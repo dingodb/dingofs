@@ -37,10 +37,10 @@ namespace dingofs {
 namespace tools {
 namespace version {
 
-class VersionTool : public CurvefsTool {
+class VersionTool : public DingofsTool {
  public:
   explicit VersionTool(const std::string& command = kVersionCmd)
-      : CurvefsTool(command) {}
+      : DingofsTool(command) {}
   void PrintHelp() override;
 
   int RunCommand() override;

@@ -28,17 +28,17 @@ namespace dingofs {
 namespace client {
 namespace common {
 
-const char kCurveFsWarmupOpAdd[] = "add";
-const char kCurveFsWarmupOpQuery[] = "query";
-const char kCurveFsWarmupTypeList[] = "list";
-const char kCurveFsWarmupTypeSingle[] = "single";
+const char kDingoFsWarmupOpAdd[] = "add";
+const char kDingoFsWarmupOpQuery[] = "query";
+const char kDingoFsWarmupTypeList[] = "list";
+const char kDingoFsWarmupTypeSingle[] = "single";
 
 WarmupOpType GetWarmupOpType(const std::string& op) {
   auto ret = WarmupOpType::kWarmupOpUnknown;
-  if (op == kCurveFsWarmupOpAdd) {
+  if (op == kDingoFsWarmupOpAdd) {
     ret = WarmupOpType::kWarmupOpAdd;
   }
-  if (op == kCurveFsWarmupOpQuery) {
+  if (op == kDingoFsWarmupOpQuery) {
     ret = WarmupOpType::kWarmupOpQuery;
   }
   return ret;
@@ -46,22 +46,22 @@ WarmupOpType GetWarmupOpType(const std::string& op) {
 
 WarmupType GetWarmupType(const std::string& type) {
   auto ret = WarmupType::kWarmupTypeUnknown;
-  if (type == kCurveFsWarmupTypeList) {
+  if (type == kDingoFsWarmupTypeList) {
     ret = WarmupType::kWarmupTypeList;
-  } else if (type == kCurveFsWarmupTypeSingle) {
+  } else if (type == kDingoFsWarmupTypeSingle) {
     ret = WarmupType::kWarmupTypeSingle;
   }
   return ret;
 }
 
-const char kCurveFsWarmupStorageDisk[] = "disk";
-const char kCurveFsWarmupStorageKvclient[] = "kvclient";
+const char kDingoFsWarmupStorageDisk[] = "disk";
+const char kDingoFsWarmupStorageKvclient[] = "kvclient";
 
 WarmupStorageType GetWarmupStorageType(const std::string& type) {
   auto ret = WarmupStorageType::kWarmupStorageTypeUnknown;
-  if (type == kCurveFsWarmupStorageDisk) {
+  if (type == kDingoFsWarmupStorageDisk) {
     ret = WarmupStorageType::kWarmupStorageTypeDisk;
-  } else if (type == kCurveFsWarmupStorageKvclient) {
+  } else if (type == kDingoFsWarmupStorageKvclient) {
     ret = WarmupStorageType::kWarmupStorageTypeKvClient;
   }
   return ret;

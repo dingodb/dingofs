@@ -40,7 +40,7 @@ namespace tools {
 namespace list {
 
 void PartitionListTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -fsId=" << FLAGS_fsId << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
             << std::endl;
 }
@@ -50,7 +50,7 @@ void PartitionListTool::AddUpdateFlags() {
 }
 
 int PartitionListTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

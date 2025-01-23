@@ -31,14 +31,14 @@ namespace tools {
 namespace copyset {
 
 void GetCopysetStatusTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -copysetId=" << FLAGS_copysetId << " -poolId=" << FLAGS_poolId
             << " [-metaserverAddr=" << FLAGS_metaserverAddr << "]";
   std::cout << std::endl;
 }
 
 int GetCopysetStatusTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 
@@ -70,7 +70,7 @@ int GetCopysetStatusTool::Init() {
   return 0;
 }
 
-int GetCopysetStatusTool::RunCommand() { return CurvefsToolRpc::RunCommand(); }
+int GetCopysetStatusTool::RunCommand() { return DingofsToolRpc::RunCommand(); }
 
 bool GetCopysetStatusTool::AfterSendRequestToHost(const std::string& host) {
   bool ret = true;

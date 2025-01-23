@@ -1,6 +1,6 @@
 # dingofs_tool
 
-A tool for CurveFS.
+A tool for DingoFS.
 
 Usage:
 

@@ -51,95 +51,95 @@
 namespace dingofs {
 namespace tools {
 
-CurvefsToolFactory::CurvefsToolFactory() {
+DingofsToolFactory::DingofsToolFactory() {
   // version
-  RegisterCurvefsTool(std::string(kVersionCmd),
-                      CurvefsToolCreator<version::VersionTool>::Create);
+  RegisterDingofsTool(std::string(kVersionCmd),
+                      DingofsToolCreator<version::VersionTool>::Create);
 
   // umount-fs
-  RegisterCurvefsTool(std::string(kUmountFsCmd),
-                      CurvefsToolCreator<umount::UmountFsTool>::Create);
+  RegisterDingofsTool(std::string(kUmountFsCmd),
+                      DingofsToolCreator<umount::UmountFsTool>::Create);
 
   // create-topology
-  RegisterCurvefsTool(
+  RegisterDingofsTool(
       std::string(kCreateTopologyCmd),
-      CurvefsToolCreator<topology::CurvefsBuildTopologyTool>::Create);
+      DingofsToolCreator<topology::DingofsBuildTopologyTool>::Create);
 
   // create-fs
-  RegisterCurvefsTool(std::string(kCreateFsCmd),
-                      CurvefsToolCreator<create::CreateFsTool>::Create);
+  RegisterDingofsTool(std::string(kCreateFsCmd),
+                      DingofsToolCreator<create::CreateFsTool>::Create);
 
   // usage-metadata
-  RegisterCurvefsTool(std::string(kMetedataUsageCmd),
-                      CurvefsToolCreator<usage::MatedataUsageTool>::Create);
+  RegisterDingofsTool(std::string(kMetedataUsageCmd),
+                      DingofsToolCreator<usage::MatedataUsageTool>::Create);
   // status
-  RegisterCurvefsTool(std::string(kStatusCmd),
-                      CurvefsToolCreator<status::StatusTool>::Create);
+  RegisterDingofsTool(std::string(kStatusCmd),
+                      DingofsToolCreator<status::StatusTool>::Create);
   // status-mds
-  RegisterCurvefsTool(std::string(kMdsStatusCmd),
-                      CurvefsToolCreator<status::MdsStatusTool>::Create);
+  RegisterDingofsTool(std::string(kMdsStatusCmd),
+                      DingofsToolCreator<status::MdsStatusTool>::Create);
 
   // status-metaserver
-  RegisterCurvefsTool(std::string(kMetaserverStatusCmd),
-                      CurvefsToolCreator<status::MetaserverStatusTool>::Create);
+  RegisterDingofsTool(std::string(kMetaserverStatusCmd),
+                      DingofsToolCreator<status::MetaserverStatusTool>::Create);
 
   // status-etcd
-  RegisterCurvefsTool(std::string(kEtcdStatusCmd),
-                      CurvefsToolCreator<status::EtcdStatusTool>::Create);
+  RegisterDingofsTool(std::string(kEtcdStatusCmd),
+                      DingofsToolCreator<status::EtcdStatusTool>::Create);
 
   // status-copyset
-  RegisterCurvefsTool(std::string(kCopysetStatusCmd),
-                      CurvefsToolCreator<status::CopysetStatusTool>::Create);
+  RegisterDingofsTool(std::string(kCopysetStatusCmd),
+                      DingofsToolCreator<status::CopysetStatusTool>::Create);
 
   // list-fs
-  RegisterCurvefsTool(std::string(kFsInfoListCmd),
-                      CurvefsToolCreator<list::FsInfoListTool>::Create);
+  RegisterDingofsTool(std::string(kFsInfoListCmd),
+                      DingofsToolCreator<list::FsInfoListTool>::Create);
   // list-copysetInfo
-  RegisterCurvefsTool(std::string(kCopysetInfoListCmd),
-                      CurvefsToolCreator<list::CopysetInfoListTool>::Create);
+  RegisterDingofsTool(std::string(kCopysetInfoListCmd),
+                      DingofsToolCreator<list::CopysetInfoListTool>::Create);
 
   // list-topology
-  RegisterCurvefsTool(std::string(kTopologyListCmd),
-                      CurvefsToolCreator<list::TopologyListTool>::Create);
+  RegisterDingofsTool(std::string(kTopologyListCmd),
+                      DingofsToolCreator<list::TopologyListTool>::Create);
 
   // list-partition
-  RegisterCurvefsTool(std::string(kPartitionListCmd),
-                      CurvefsToolCreator<list::PartitionListTool>::Create);
+  RegisterDingofsTool(std::string(kPartitionListCmd),
+                      DingofsToolCreator<list::PartitionListTool>::Create);
 
   // query-copyset
-  RegisterCurvefsTool(std::string(kCopysetQueryCmd),
-                      CurvefsToolCreator<query::CopysetQueryTool>::Create);
+  RegisterDingofsTool(std::string(kCopysetQueryCmd),
+                      DingofsToolCreator<query::CopysetQueryTool>::Create);
 
   // query-partion
-  RegisterCurvefsTool(std::string(kPartitionQueryCmd),
-                      CurvefsToolCreator<query::PartitionQueryTool>::Create);
+  RegisterDingofsTool(std::string(kPartitionQueryCmd),
+                      DingofsToolCreator<query::PartitionQueryTool>::Create);
 
   // query-metaserver
-  RegisterCurvefsTool(std::string(kMetaserverQueryCmd),
-                      CurvefsToolCreator<query::MetaserverQueryTool>::Create);
+  RegisterDingofsTool(std::string(kMetaserverQueryCmd),
+                      DingofsToolCreator<query::MetaserverQueryTool>::Create);
 
   // query-fs
-  RegisterCurvefsTool(std::string(kFsQueryCmd),
-                      CurvefsToolCreator<query::FsQueryTool>::Create);
+  RegisterDingofsTool(std::string(kFsQueryCmd),
+                      DingofsToolCreator<query::FsQueryTool>::Create);
 
   // query-inode
-  RegisterCurvefsTool(std::string(kInodeQueryCmd),
-                      CurvefsToolCreator<query::InodeQueryTool>::Create);
+  RegisterDingofsTool(std::string(kInodeQueryCmd),
+                      DingofsToolCreator<query::InodeQueryTool>::Create);
 
   // delete-fs
-  RegisterCurvefsTool(std::string(kDeleteFsCmd),
-                      CurvefsToolCreator<delete_::DeleteFsTool>::Create);
+  RegisterDingofsTool(std::string(kDeleteFsCmd),
+                      DingofsToolCreator<delete_::DeleteFsTool>::Create);
 
   // delete-partition
-  RegisterCurvefsTool(std::string(kPartitionDeleteCmd),
-                      CurvefsToolCreator<delete_::DeletePartitionTool>::Create);
+  RegisterDingofsTool(std::string(kPartitionDeleteCmd),
+                      DingofsToolCreator<delete_::DeletePartitionTool>::Create);
 
   // check-copyset
-  RegisterCurvefsTool(std::string(kCopysetCheckCmd),
-                      CurvefsToolCreator<check::CopysetCheckTool>::Create);
+  RegisterDingofsTool(std::string(kCopysetCheckCmd),
+                      DingofsToolCreator<check::CopysetCheckTool>::Create);
 }
 
-std::shared_ptr<CurvefsTool> CurvefsToolFactory::GenerateCurvefsTool(
+std::shared_ptr<DingofsTool> DingofsToolFactory::GenerateDingofsTool(
     const std::string& command) {
   auto search = command2creator_.find(command);
   if (search != command2creator_.end()) {
@@ -148,9 +148,9 @@ std::shared_ptr<CurvefsTool> CurvefsToolFactory::GenerateCurvefsTool(
   return nullptr;
 }
 
-void CurvefsToolFactory::RegisterCurvefsTool(
+void DingofsToolFactory::RegisterDingofsTool(
     const std::string& command,
-    const std::function<std::shared_ptr<CurvefsTool>()>& function) {
+    const std::function<std::shared_ptr<DingofsTool>()>& function) {
   command2creator_.insert({command, function});
 }
 

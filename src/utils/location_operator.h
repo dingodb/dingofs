@@ -36,7 +36,7 @@ const char kOriginPathSeprator[] = ":";
 
 enum class OriginType {
   S3Origin = 0,
-  CurveOrigin = 1,
+  DingoOrigin = 1,
   InvalidOrigin = 2,
 };
 
@@ -53,7 +53,7 @@ class LocationOperator {
    * 生成dingo的location
    * location格式:${filename}:${offset}@cs
    */
-  static std::string GenerateCurveLocation(const std::string& fileName,
+  static std::string GenerateDingoLocation(const std::string& fileName,
                                            off_t offset);
   /**
    * 解析数据源的位置信息
@@ -77,7 +77,7 @@ class LocationOperator {
    * @param offset[out]:数据源在文件中的偏移
    * @return: 解析成功返回true，失败返回false
    */
-  static bool ParseCurveChunkPath(const std::string& originPath,
+  static bool ParseDingoChunkPath(const std::string& originPath,
                                   std::string* fileName, off_t* offset);
 };
 

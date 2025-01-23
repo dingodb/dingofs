@@ -36,11 +36,11 @@ namespace dingofs {
 namespace tools {
 namespace status {
 
-class CopysetStatusTool : public CurvefsTool {
+class CopysetStatusTool : public DingofsTool {
  public:
   explicit CopysetStatusTool(const std::string& command = kCopysetStatusCmd,
                              bool show = true)
-      : CurvefsTool(command) {
+      : DingofsTool(command) {
     show_ = show;
   }
   void PrintHelp() override;

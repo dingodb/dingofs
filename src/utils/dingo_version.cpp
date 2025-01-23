@@ -29,7 +29,7 @@
 namespace dingofs {
 namespace utils {
 
-std::string CurveVersion() {
+std::string DingoVersion() {
   static const std::string version =
 #ifdef DINGOVERSION
       std::string(STRINGIFY(DINGOVERSION));
@@ -39,10 +39,10 @@ std::string CurveVersion() {
   return version;
 }
 
-void ExposeCurveVersion() {
+void ExposeDingoVersion() {
   static bvar::Status<std::string> version;
   version.expose_as("dingo", "version");
-  version.set_value(CurveVersion());
+  version.set_value(DingoVersion());
 }
 
 }  // namespace utils

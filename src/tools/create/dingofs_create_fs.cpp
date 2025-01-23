@@ -75,7 +75,7 @@ using pb::common::BitmapLocation;
 using pb::common::BitmapLocation_Parse;
 
 void CreateFsTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -fsName=" << FLAGS_fsName << " [-user=" << FLAGS_user
             << "] [-capacity=" << FLAGS_capacity
             << "] [-blockSize=" << FLAGS_blockSize
@@ -156,7 +156,7 @@ google::protobuf::RepeatedPtrField<::std::string> ParseVolumeCluster(
 }  // namespace
 
 int CreateFsTool::Init() {
-  int ret = CurvefsToolRpc::Init();
+  int ret = DingofsToolRpc::Init();
 
   dingofs::utils::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);
   service_stub_func_ =

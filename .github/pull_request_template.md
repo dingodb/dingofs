@@ -1,4 +1,4 @@
-<!-- Thank you for contributing to curve! -->
+<!-- Thank you for contributing to dingofs! -->
 
 ### What problem does this PR solve?
 

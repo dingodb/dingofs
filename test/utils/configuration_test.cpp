@@ -15,7 +15,7 @@
  */
 
 /*
- * Project: Curve
+ * Project: Dingofs
  *
  * History:
  *          2018/11/23  Wenyu Zhou   Initial version

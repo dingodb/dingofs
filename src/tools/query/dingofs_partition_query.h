@@ -39,13 +39,13 @@ namespace tools {
 namespace query {
 
 class PartitionQueryTool
-    : public CurvefsToolRpc<pb::mds::topology::GetCopysetOfPartitionRequest,
+    : public DingofsToolRpc<pb::mds::topology::GetCopysetOfPartitionRequest,
                             pb::mds::topology::GetCopysetOfPartitionResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit PartitionQueryTool(const std::string& cmd = kPartitionQueryCmd,
                               bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
 

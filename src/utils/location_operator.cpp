@@ -32,7 +32,7 @@ std::string LocationOperator::GenerateS3Location(
   return location;
 }
 
-std::string LocationOperator::GenerateCurveLocation(const std::string& fileName,
+std::string LocationOperator::GenerateDingoLocation(const std::string& fileName,
                                                     off_t offset) {
   std::string location(fileName);
   location.append(kOriginPathSeprator)
@@ -58,7 +58,7 @@ OriginType LocationOperator::ParseLocation(const std::string& location,
 
   OriginType type = OriginType::InvalidOrigin;
   if (typeStr.compare(DINGO_TYPE) == 0) {
-    type = OriginType::CurveOrigin;
+    type = OriginType::DingoOrigin;
   } else if (typeStr.compare(S3_TYPE) == 0) {
     type = OriginType::S3Origin;
   }
@@ -66,7 +66,7 @@ OriginType LocationOperator::ParseLocation(const std::string& location,
   return type;
 }
 
-bool LocationOperator::ParseCurveChunkPath(const std::string& originPath,
+bool LocationOperator::ParseDingoChunkPath(const std::string& originPath,
                                            std::string* fileName,
                                            off_t* offset) {
   std::string::size_type pos = originPath.find_last_of(kOriginPathSeprator);

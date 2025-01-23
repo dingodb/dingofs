@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef CURVEFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_
-#define CURVEFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_
+#ifndef DINGOFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_
+#define DINGOFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -141,4 +141,4 @@ class MockMdsClient : public MdsClient {
 }  // namespace stub
 }  // namespace dingofs
 
-#endif  // CURVEFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_
+#endif  // DINGOFS_TEST_CLIENT_MOCK_MDS_CLIENT_H_

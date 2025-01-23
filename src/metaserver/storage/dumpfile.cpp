@@ -15,7 +15,7 @@
  */
 
 /**
- * Project: Curve
+ * Project: Dingofs
  * Created Date: 2021-07-23
  * Author: Jingli Chen (Wine93)
  */
@@ -66,7 +66,7 @@ namespace storage {
 
 using ::dingofs::utils::CRC32;
 
-const std::string DumpFile::kCurvefs_ = "DINGOFS";  // NOLINT
+const std::string DumpFile::kDingoFs_ = "DINGOFS";  // NOLINT
 const uint32_t DumpFile::kEOF_ = 0;
 const uint8_t DumpFile::kVersion_ = kDumpFileV3;
 
@@ -282,7 +282,7 @@ DUMPFILE_ERROR DumpFile::Save(std::shared_ptr<Iterator> iter) {
   uint32_t checkSum = 0;
 
   // Step1: save magic, version, size (only v1)
-  RETURN_IF_UNSUCCESS(SaveString(kCurvefs_, &offset, &checkSum));
+  RETURN_IF_UNSUCCESS(SaveString(kDingoFs_, &offset, &checkSum));
   RETURN_IF_UNSUCCESS(SaveInt<uint8_t>(version_, &offset, &checkSum));
   if (version_ == kDumpFileV1) {
     RETURN_IF_UNSUCCESS(SaveInt<uint64_t>(iter->Size(), &offset, &checkSum));
@@ -492,7 +492,7 @@ void DumpFileIterator::SeekToFirst() {
 
   // magic
   std::string magic;
-  auto magicStr = dumpfile_->kCurvefs_;
+  auto magicStr = dumpfile_->kDingoFs_;
   auto retCode =
       dumpfile_->LoadString(&magic, &offset_, magicStr.size(), &checkSum_);
   EXIT_LOAD_IF_UNEXPECT(retCode != DUMPFILE_ERROR::OK || magic != magicStr,

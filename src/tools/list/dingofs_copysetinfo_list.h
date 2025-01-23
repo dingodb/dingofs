@@ -37,13 +37,13 @@ namespace tools {
 namespace list {
 
 class CopysetInfoListTool
-    : public CurvefsToolRpc<pb::mds::topology::ListCopysetInfoRequest,
+    : public DingofsToolRpc<pb::mds::topology::ListCopysetInfoRequest,
                             pb::mds::topology::ListCopysetInfoResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit CopysetInfoListTool(const std::string& cmd = kCopysetInfoListCmd,
                                bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

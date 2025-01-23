@@ -31,12 +31,12 @@ namespace version {
 int VersionTool::Init() { return 0; }
 
 void VersionTool::PrintHelp() {
-  CurvefsTool::PrintHelp();
+  DingofsTool::PrintHelp();
   std::cout << std::endl;
 }
 
 int VersionTool::RunCommand() {
-  std::cout << dingofs::utils::CurveVersion() << std::endl;
+  std::cout << dingofs::utils::DingoVersion() << std::endl;
   return 0;
 }
 

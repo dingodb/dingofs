@@ -30,14 +30,14 @@ namespace tools {
 namespace query {
 
 void PartitionQueryTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -partitionId=" << FLAGS_partitionId
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }
 
 int PartitionQueryTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

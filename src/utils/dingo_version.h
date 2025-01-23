@@ -28,8 +28,8 @@
 namespace dingofs {
 namespace utils {
 
-std::string CurveVersion();
-void ExposeCurveVersion();
+std::string DingoVersion();
+void ExposeDingoVersion();
 
 }  // namespace utils
 }  // namespace dingofs

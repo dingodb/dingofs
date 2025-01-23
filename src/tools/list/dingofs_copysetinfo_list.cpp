@@ -29,13 +29,13 @@ namespace tools {
 namespace list {
 
 void CopysetInfoListTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " [-mds=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }
 
 int CopysetInfoListTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
   dingofs::utils::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);

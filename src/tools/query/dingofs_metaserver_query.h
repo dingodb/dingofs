@@ -40,13 +40,13 @@ namespace tools {
 namespace query {
 
 class MetaserverQueryTool
-    : public CurvefsToolRpc<pb::mds::topology::GetMetaServerInfoRequest,
+    : public DingofsToolRpc<pb::mds::topology::GetMetaServerInfoRequest,
                             pb::mds::topology::GetMetaServerInfoResponse,
                             pb::mds::topology::TopologyService_Stub> {
  public:
   explicit MetaserverQueryTool(const std::string& cmd = kMetaserverQueryCmd,
                                bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
 

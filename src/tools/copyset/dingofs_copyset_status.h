@@ -42,13 +42,13 @@ namespace copyset {
 using CopysetStatusType = pb::metaserver::copyset::CopysetStatus;
 
 class GetCopysetStatusTool
-    : public CurvefsToolRpc<pb::metaserver::copyset::CopysetsStatusRequest,
+    : public DingofsToolRpc<pb::metaserver::copyset::CopysetsStatusRequest,
                             pb::metaserver::copyset::CopysetsStatusResponse,
                             pb::metaserver::copyset::CopysetService_Stub> {
  public:
   explicit GetCopysetStatusTool(const std::string& cmd = kNoInvokeCmd,
                                 bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

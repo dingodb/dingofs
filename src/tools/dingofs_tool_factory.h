@@ -33,12 +33,12 @@
 namespace dingofs {
 namespace tools {
 
-class CurvefsToolFactory {
+class DingofsToolFactory {
  public:
-  CurvefsToolFactory();
-  virtual ~CurvefsToolFactory() {}
+  DingofsToolFactory();
+  virtual ~DingofsToolFactory() {}
 
-  std::shared_ptr<CurvefsTool> GenerateCurvefsTool(const std::string& command);
+  std::shared_ptr<DingofsTool> GenerateDingofsTool(const std::string& command);
 
   /**
    * @brief add commands and function to generate objects
@@ -48,13 +48,13 @@ class CurvefsToolFactory {
    * @details
    * The same command will only take effect for the first one registered
    */
-  virtual void RegisterCurvefsTool(
+  virtual void RegisterDingofsTool(
       const std::string& command,
-      const std::function<std::shared_ptr<CurvefsTool>()>& function);
+      const std::function<std::shared_ptr<DingofsTool>()>& function);
 
  private:
   // storage commands and function to generate objects
-  std::unordered_map<std::string, std::function<std::shared_ptr<CurvefsTool>()>>
+  std::unordered_map<std::string, std::function<std::shared_ptr<DingofsTool>()>>
       command2creator_;
 };
 

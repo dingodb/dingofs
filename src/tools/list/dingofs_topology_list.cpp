@@ -37,7 +37,7 @@ namespace tools {
 namespace list {
 
 void TopologyListTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " [-mdsAddr=" << FLAGS_mdsAddr
             << "] [-jsonType=" << FLAGS_jsonType
             << " -jsonPath=" << FLAGS_jsonPath << "]" << std::endl;
@@ -48,7 +48,7 @@ void TopologyListTool::AddUpdateFlags() {
 }
 
 int TopologyListTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

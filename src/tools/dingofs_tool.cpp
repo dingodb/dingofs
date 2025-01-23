@@ -25,12 +25,12 @@
 namespace dingofs {
 namespace tools {
 
-void CurvefsTool::PrintHelp() {
+void DingofsTool::PrintHelp() {
   std::cout << "Example :" << std::endl;
   std::cout << programe_ << " " << command_ << " " << kConfPathHelp;
 }
 
-int CurvefsTool::Run() {
+int DingofsTool::Run() {
   if (Init() < 0) {
     return -1;
   }
@@ -41,7 +41,7 @@ int CurvefsTool::Run() {
   return ret;
 }
 
-void CurvefsTool::PrintError() {
+void DingofsTool::PrintError() {
   if (errorOutput_.tellp() > 0) {
     // only show if errorOutput is not empty
     std::cerr << "[error]" << std::endl;
@@ -49,24 +49,24 @@ void CurvefsTool::PrintError() {
   }
 }
 
-int CurvefsToolMetric::Init(const std::shared_ptr<MetricClient>& metricClient) {
+int DingofsToolMetric::Init(const std::shared_ptr<MetricClient>& metricClient) {
   metricClient_ = metricClient;
   return 0;
 }
 
-void CurvefsToolMetric::PrintHelp() {
-  CurvefsTool::PrintHelp();
+void DingofsToolMetric::PrintHelp() {
+  DingofsTool::PrintHelp();
   std::cout << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]"
             << " [-rpcRetryTimes=" << FLAGS_rpcRetryTimes << "]";
 }
 
-void CurvefsToolMetric::AddUpdateFlagsFunc(
+void DingofsToolMetric::AddUpdateFlagsFunc(
     const std::function<void(dingofs::utils::Configuration*,
                              google::CommandLineFlagInfo*)>& func) {
   updateFlagsFunc_.push_back(func);
 }
 
-int CurvefsToolMetric::RunCommand() {
+int DingofsToolMetric::RunCommand() {
   int ret = 0;
   for (auto const& i : addr2SubUri) {
     std::string value;
@@ -81,13 +81,13 @@ int CurvefsToolMetric::RunCommand() {
   return ret;
 }
 
-void CurvefsToolMetric::AddUpdateFlags() {
+void DingofsToolMetric::AddUpdateFlags() {
   // rpcTimeout and rpcRetrytimes is default
   AddUpdateFlagsFunc(SetRpcTimeoutMs);
   AddUpdateFlagsFunc(SetRpcRetryTimes);
 }
 
-void CurvefsToolMetric::UpdateFlags() {
+void DingofsToolMetric::UpdateFlags() {
   dingofs::utils::Configuration conf;
   conf.SetConfigPath(FLAGS_confPath);
   if (!conf.LoadConfig()) {
@@ -101,12 +101,12 @@ void CurvefsToolMetric::UpdateFlags() {
   }
 }
 
-void CurvefsToolMetric::AddAddr2Suburi(
+void DingofsToolMetric::AddAddr2Suburi(
     const std::pair<std::string, std::string>& addrSubUri) {
   addr2SubUri.push_back(addrSubUri);
 }
 
-int CurvefsToolMetric::Init() {
+int DingofsToolMetric::Init() {
   // add need update flags
   AddUpdateFlags();
   UpdateFlags();

@@ -40,7 +40,7 @@ namespace tools {
 namespace query {
 
 void InodeTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -poolId=" << FLAGS_poolId << " -copysetId=" << FLAGS_copysetId
             << " -partitionId=" << FLAGS_partitionId << " -fsId=" << FLAGS_fsId
             << " -inodeId=" << FLAGS_inodeId
@@ -51,7 +51,7 @@ void InodeTool::PrintHelp() {
 }
 
 int InodeTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

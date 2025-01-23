@@ -35,7 +35,7 @@ using ::google::protobuf::util::JsonPrintOptions;
 using ::google::protobuf::util::MessageToJsonString;
 
 void FsInfoListTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]"
             << " [-rpcTimeoutMs=" << FLAGS_rpcTimeoutMs << "]";
   std::cout << std::endl;
@@ -47,7 +47,7 @@ void FsInfoListTool::AddUpdateFlags() {
 }
 
 int FsInfoListTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

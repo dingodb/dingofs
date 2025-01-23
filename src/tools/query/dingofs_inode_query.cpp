@@ -45,7 +45,7 @@ namespace tools {
 namespace query {
 
 void InodeQueryTool::PrintHelp() {
-  CurvefsTool::PrintHelp();
+  DingofsTool::PrintHelp();
   std::cout << " -fsId=" << FLAGS_fsId << " -inodeId=" << FLAGS_inodeId
             << " [-mds=" << FLAGS_mdsAddr
             << " -metaserverAddr=" << FLAGS_metaserverAddr

@@ -31,14 +31,14 @@ namespace tools {
 namespace query {
 
 void FsQueryTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -fsName=" << FLAGS_fsName << "|-fsId=" << FLAGS_fsId
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }
 
 int FsQueryTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

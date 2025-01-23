@@ -40,13 +40,13 @@ namespace status {
  * @tparam hostType will defined in tools/dingofs_tool_define.h
  * @details
  */
-class StatusBaseTool : public CurvefsToolMetric {
+class StatusBaseTool : public DingofsToolMetric {
  public:
   explicit StatusBaseTool(
       const std::string& cmd, const std::string& hostType,
       const std::string& hostLeaderValue = kHostLeaderValue,
       const std::string& hostFollowerValue = kHostFollowerValue)
-      : CurvefsToolMetric(cmd),
+      : DingofsToolMetric(cmd),
         hostType_(hostType),
         hostLeaderValue_(hostLeaderValue),
         hostStandbyValue_(hostFollowerValue) {}

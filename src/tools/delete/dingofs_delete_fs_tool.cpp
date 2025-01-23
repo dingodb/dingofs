@@ -31,14 +31,14 @@ namespace tools {
 namespace delete_ {
 
 void DeleteFsTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -fsName=" << FLAGS_fsName << " [-noconfirm=" << FLAGS_noconfirm
             << "] [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }
 
 int DeleteFsTool::Init() {
-  int ret = CurvefsToolRpc::Init();
+  int ret = DingofsToolRpc::Init();
 
   dingofs::pb::mds::DeleteFsRequest request;
   request.set_fsname(FLAGS_fsName);
@@ -72,7 +72,7 @@ int DeleteFsTool::RunCommand() {
       return -1;
     }
   }
-  return CurvefsToolRpc::RunCommand();
+  return DingofsToolRpc::RunCommand();
 }
 
 bool DeleteFsTool::AfterSendRequestToHost(const std::string& host) {

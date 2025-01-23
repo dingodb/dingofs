@@ -35,7 +35,7 @@ namespace umount {
 using pb::mds::Mountpoint;
 
 void UmountFsTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -fsName=" << FLAGS_fsName
             << " -mountpoint=" << FLAGS_mountpoint
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
@@ -60,7 +60,7 @@ int UmountFsTool::RunCommand() {
     std::thread sysUmount(std::system, command.c_str());
 
     // umount from cluster
-    ret = CurvefsToolRpc::RunCommand();
+    ret = DingofsToolRpc::RunCommand();
     sysUmount.join();
   } catch (std::exception& e) {
     std::cerr << "system umount " << localPath
@@ -71,7 +71,7 @@ int UmountFsTool::RunCommand() {
 }
 
 int UmountFsTool::Init() {
-  int ret = CurvefsToolRpc::Init();
+  int ret = DingofsToolRpc::Init();
 
   // adjust the unique element of the queue
   pb::mds::UmountFsRequest request;

@@ -29,7 +29,7 @@ namespace tools {
 namespace usage {
 
 void MatedataUsageTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;
 }
@@ -67,7 +67,7 @@ bool MatedataUsageTool::AfterSendRequestToHost(const std::string& host) {
 }
 
 int MatedataUsageTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
   dingofs::utils::SplitString(FLAGS_mdsAddr, ",", &hostsAddr_);

@@ -34,7 +34,7 @@ void EtcdStatusTool::PrintHelp() {
 }
 
 int EtcdStatusTool::Init() {
-  if (CurvefsToolMetric::Init() != 0) {
+  if (DingofsToolMetric::Init() != 0) {
     return -1;
   }
   InitHostsAddr();

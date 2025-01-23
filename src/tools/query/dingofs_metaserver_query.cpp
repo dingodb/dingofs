@@ -30,7 +30,7 @@ namespace tools {
 namespace query {
 
 void MetaserverQueryTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -metaserverId=" << FLAGS_metaserverId
             << "(matter)|-metaserverAddr=" << FLAGS_metaserverAddr
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
@@ -38,7 +38,7 @@ void MetaserverQueryTool::PrintHelp() {
 }
 
 int MetaserverQueryTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

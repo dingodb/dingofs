@@ -15,7 +15,7 @@
  */
 
 /**
- * Project: Curve
+ * Project: Dingofs
  * Created Date: 2021-07-23
  * Author: Jingli Chen (Wine93)
  */
@@ -220,7 +220,7 @@ class DumpFile {
 
   uint8_t version_;
 
-  static const std::string kCurvefs_;
+  static const std::string kDingoFs_;
 
   static const uint8_t kVersion_;
 

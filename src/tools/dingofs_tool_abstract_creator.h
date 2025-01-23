@@ -31,11 +31,11 @@
 namespace dingofs {
 namespace tools {
 
-template <class CurvefsToolT>
-class CurvefsToolCreator {
+template <class DingofsToolT>
+class DingofsToolCreator {
  public:
-  static std::shared_ptr<CurvefsToolT> Create() {
-    return std::make_shared<CurvefsToolT>();
+  static std::shared_ptr<DingofsToolT> Create() {
+    return std::make_shared<DingofsToolT>();
   }
 };
 

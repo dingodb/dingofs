@@ -56,7 +56,7 @@ void UpdateFlagsFromConf(dingofs::utils::Configuration* conf) {
   }
 }
 
-int CurvefsBuildTopologyTool::Init() {
+int DingofsBuildTopologyTool::Init() {
   std::string conf_path = FLAGS_confPath;
   dingofs::utils::Configuration conf;
   conf.SetConfigPath(conf_path);
@@ -78,7 +78,7 @@ int CurvefsBuildTopologyTool::Init() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::TryAnotherMdsAddress() {
+int DingofsBuildTopologyTool::TryAnotherMdsAddress() {
   if (mdsAddressStr_.size() == 0) {
     LOG(ERROR) << "no avaliable mds address.";
     return mds::topology::kRetCodeCommonErr;
@@ -93,7 +93,7 @@ int CurvefsBuildTopologyTool::TryAnotherMdsAddress() {
   return ret;
 }
 
-int CurvefsBuildTopologyTool::DealFailedRet(int ret, std::string operation) {
+int DingofsBuildTopologyTool::DealFailedRet(int ret, std::string operation) {
   if (mds::topology::kRetCodeRedirectMds == ret) {
     LOG(WARNING) << operation
                  << " fail on mds: " << mdsAddressStr_[mdsAddressIndex_];
@@ -103,7 +103,7 @@ int CurvefsBuildTopologyTool::DealFailedRet(int ret, std::string operation) {
   return ret;
 }
 
-int CurvefsBuildTopologyTool::InitTopoData() {
+int DingofsBuildTopologyTool::InitTopoData() {
   int ret = ReadClusterMap();
   if (ret != 0) {
     return DealFailedRet(ret, "read cluster map");
@@ -122,7 +122,7 @@ int CurvefsBuildTopologyTool::InitTopoData() {
   return ret;
 }
 
-int CurvefsBuildTopologyTool::HandleBuildCluster() {
+int DingofsBuildTopologyTool::HandleBuildCluster() {
   int ret = ScanCluster();
   if (ret != 0) {
     return DealFailedRet(ret, "scan cluster");
@@ -161,7 +161,7 @@ int CurvefsBuildTopologyTool::HandleBuildCluster() {
   return ret;
 }
 
-int CurvefsBuildTopologyTool::ReadClusterMap() {
+int DingofsBuildTopologyTool::ReadClusterMap() {
   std::ifstream fin;
   fin.open(FLAGS_cluster_map.c_str(), std::ios::in);
   if (fin.is_open()) {
@@ -181,7 +181,7 @@ int CurvefsBuildTopologyTool::ReadClusterMap() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::InitPoolData() {
+int DingofsBuildTopologyTool::InitPoolData() {
   if (clusterMap_[mds::topology::kPools].isNull()) {
     LOG(ERROR) << "No pools in cluster map";
     return -1;
@@ -214,7 +214,7 @@ int CurvefsBuildTopologyTool::InitPoolData() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::InitServerZoneData() {
+int DingofsBuildTopologyTool::InitServerZoneData() {
   if (clusterMap_[mds::topology::kServers].isNull()) {
     LOG(ERROR) << "No servers in cluster map";
     return -1;
@@ -273,7 +273,7 @@ int CurvefsBuildTopologyTool::InitServerZoneData() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::ScanCluster() {
+int DingofsBuildTopologyTool::ScanCluster() {
   // get pools and compare
   // De-duplication
   std::list<pb::mds::topology::PoolInfo> pool_infos;
@@ -343,7 +343,7 @@ int CurvefsBuildTopologyTool::ScanCluster() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::ListPool(
+int DingofsBuildTopologyTool::ListPool(
     std::list<pb::mds::topology::PoolInfo>* pool_infos) {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   pb::mds::topology::ListPoolRequest request;
@@ -372,7 +372,7 @@ int CurvefsBuildTopologyTool::ListPool(
   return 0;
 }
 
-int CurvefsBuildTopologyTool::GetZonesInPool(
+int DingofsBuildTopologyTool::GetZonesInPool(
     mds::topology::PoolIdType poolid,
     std::list<pb::mds::topology::ZoneInfo>* zone_infos) {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
@@ -406,7 +406,7 @@ int CurvefsBuildTopologyTool::GetZonesInPool(
   return 0;
 }
 
-int CurvefsBuildTopologyTool::GetServersInZone(
+int DingofsBuildTopologyTool::GetServersInZone(
     mds::topology::ZoneIdType zoneid,
     std::list<pb::mds::topology::ServerInfo>* server_infos) {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
@@ -439,7 +439,7 @@ int CurvefsBuildTopologyTool::GetServersInZone(
   return 0;
 }
 
-int CurvefsBuildTopologyTool::RemovePoolsNotInNewTopo() {
+int DingofsBuildTopologyTool::RemovePoolsNotInNewTopo() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : poolToDel_) {
     pb::mds::topology::DeletePoolRequest request;
@@ -475,7 +475,7 @@ int CurvefsBuildTopologyTool::RemovePoolsNotInNewTopo() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::RemoveZonesNotInNewTopo() {
+int DingofsBuildTopologyTool::RemoveZonesNotInNewTopo() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : zoneToDel_) {
     pb::mds::topology::DeleteZoneRequest request;
@@ -509,7 +509,7 @@ int CurvefsBuildTopologyTool::RemoveZonesNotInNewTopo() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::RemoveServersNotInNewTopo() {
+int DingofsBuildTopologyTool::RemoveServersNotInNewTopo() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : serverToDel_) {
     pb::mds::topology::DeleteServerRequest request;
@@ -544,7 +544,7 @@ int CurvefsBuildTopologyTool::RemoveServersNotInNewTopo() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::CreatePool() {
+int DingofsBuildTopologyTool::CreatePool() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : poolDatas_) {
     pb::mds::topology::CreatePoolRequest request;
@@ -587,7 +587,7 @@ int CurvefsBuildTopologyTool::CreatePool() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::CreateZone() {
+int DingofsBuildTopologyTool::CreateZone() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : zoneDatas_) {
     pb::mds::topology::CreateZoneRequest request;
@@ -623,7 +623,7 @@ int CurvefsBuildTopologyTool::CreateZone() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::CreateServer() {
+int DingofsBuildTopologyTool::CreateServer() {
   pb::mds::topology::TopologyService_Stub stub(&channel_);
   for (auto it : serverDatas_) {
     pb::mds::topology::ServerRegistRequest request;
@@ -667,7 +667,7 @@ int CurvefsBuildTopologyTool::CreateServer() {
   return 0;
 }
 
-int CurvefsBuildTopologyTool::RunCommand() {
+int DingofsBuildTopologyTool::RunCommand() {
   int ret = 0;
   int max_try = GetMaxTry();
   int retry = 0;

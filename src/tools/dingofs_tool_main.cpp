@@ -53,9 +53,9 @@ int main(int argc, char** argv) {
   // Turn off the health check,
   // otherwise it does not make sense to try again when Not Connect to
   brpc::FLAGS_health_check_interval = -1;
-  dingofs::tools::CurvefsToolFactory dingoToolFactory;
-  std::shared_ptr<dingofs::tools::CurvefsTool> dingoTool =
-      dingoToolFactory.GenerateCurvefsTool(command);
+  dingofs::tools::DingofsToolFactory dingoToolFactory;
+  std::shared_ptr<dingofs::tools::DingofsTool> dingoTool =
+      dingoToolFactory.GenerateDingofsTool(command);
 
   if (dingoTool == nullptr) {
     std::cout << dingofs::tools::kHelpStr << std::endl;

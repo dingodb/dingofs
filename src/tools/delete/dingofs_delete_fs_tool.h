@@ -38,12 +38,12 @@ namespace dingofs {
 namespace tools {
 namespace delete_ {
 
-class DeleteFsTool : public CurvefsToolRpc<dingofs::pb::mds::DeleteFsRequest,
+class DeleteFsTool : public DingofsToolRpc<dingofs::pb::mds::DeleteFsRequest,
                                            dingofs::pb::mds::DeleteFsResponse,
                                            dingofs::pb::mds::MdsService_Stub> {
  public:
   explicit DeleteFsTool(const std::string& cmd = kDeleteFsCmd)
-      : CurvefsToolRpc(cmd) {}
+      : DingofsToolRpc(cmd) {}
 
   void PrintHelp() override;
   int Init() override;

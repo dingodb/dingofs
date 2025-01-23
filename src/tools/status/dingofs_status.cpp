@@ -27,7 +27,7 @@ namespace tools {
 namespace status {
 
 void StatusTool::PrintHelp() {
-  CurvefsTool::PrintHelp();
+  DingofsTool::PrintHelp();
   std::cout << std::endl;
 }
 

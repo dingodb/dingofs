@@ -34,7 +34,7 @@ namespace tools {
 namespace check {
 
 void CopysetCheckTool::PrintHelp() {
-  CurvefsTool::PrintHelp();
+  DingofsTool::PrintHelp();
   std::cout << " -copysetId=" << FLAGS_copysetId << " -poolId=" << FLAGS_poolId
             << " [-mdsAddr=" << FLAGS_mdsAddr << "]";
   std::cout << std::endl;

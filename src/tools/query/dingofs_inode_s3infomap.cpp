@@ -52,7 +52,7 @@ InodeBase TraslateInodeBase(
 }
 
 void InodeS3InfoMapTool::PrintHelp() {
-  CurvefsToolRpc::PrintHelp();
+  DingofsToolRpc::PrintHelp();
   std::cout << " -poolId=" << FLAGS_poolId << " -copysetId=" << FLAGS_copysetId
             << " -partitionId=" << FLAGS_partitionId << " -fsId=" << FLAGS_fsId
             << " -inodeId=" << FLAGS_inodeId
@@ -68,7 +68,7 @@ void InodeS3InfoMapTool::AddUpdateFlags() {
 }
 
 int InodeS3InfoMapTool::Init() {
-  if (CurvefsToolRpc::Init() != 0) {
+  if (DingofsToolRpc::Init() != 0) {
     return -1;
   }
 

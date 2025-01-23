@@ -40,10 +40,10 @@ namespace dingofs {
 namespace tools {
 namespace status {
 
-class StatusTool : public CurvefsTool {
+class StatusTool : public DingofsTool {
  public:
   explicit StatusTool(const std::string& command = kStatusCmd)
-      : CurvefsTool(command) {}
+      : DingofsTool(command) {}
   void PrintHelp() override;
 
   int RunCommand() override;

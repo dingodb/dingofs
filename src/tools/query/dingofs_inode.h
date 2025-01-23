@@ -41,12 +41,12 @@ namespace query {
 using InodeBaseInfo = pb::metaserver::Inode;
 
 class InodeTool
-    : public CurvefsToolRpc<pb::metaserver::GetInodeRequest,
+    : public DingofsToolRpc<pb::metaserver::GetInodeRequest,
                             pb::metaserver::GetInodeResponse,
                             pb::metaserver::MetaServerService_Stub> {
  public:
   explicit InodeTool(const std::string& cmd = kNoInvokeCmd, bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
 

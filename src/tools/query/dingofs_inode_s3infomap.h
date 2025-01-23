@@ -63,13 +63,13 @@ struct KeyEuqalInodeBase {
 };
 
 class InodeS3InfoMapTool
-    : public CurvefsToolRpc<pb::metaserver::GetOrModifyS3ChunkInfoRequest,
+    : public DingofsToolRpc<pb::metaserver::GetOrModifyS3ChunkInfoRequest,
                             pb::metaserver::GetOrModifyS3ChunkInfoResponse,
                             pb::metaserver::MetaServerService_Stub> {
  public:
   explicit InodeS3InfoMapTool(const std::string& cmd = kNoInvokeCmd,
                               bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
   void PrintHelp() override;

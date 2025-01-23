@@ -47,11 +47,11 @@ using InodeBase = pb::metaserver::GetInodeRequest;
 using PartitionInfoList =
     google::protobuf::RepeatedPtrField<pb::common::PartitionInfo>;
 
-class InodeQueryTool : public CurvefsTool {
+class InodeQueryTool : public DingofsTool {
  public:
   explicit InodeQueryTool(const std::string& cmd = kInodeQueryCmd,
                           bool show = true)
-      : CurvefsTool(cmd),
+      : DingofsTool(cmd),
         partitionListTool_(kNoInvokeCmd, false),
         inodeS3InfoMapTool_(kNoInvokeCmd, false),
         inodeTool_(kNoInvokeCmd, false) {

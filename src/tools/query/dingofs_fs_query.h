@@ -36,12 +36,12 @@ namespace dingofs {
 namespace tools {
 namespace query {
 
-class FsQueryTool : public CurvefsToolRpc<pb::mds::GetFsInfoRequest,
+class FsQueryTool : public DingofsToolRpc<pb::mds::GetFsInfoRequest,
                                           pb::mds::GetFsInfoResponse,
                                           pb::mds::MdsService_Stub> {
  public:
   explicit FsQueryTool(const std::string& cmd = kFsQueryCmd, bool show = true)
-      : CurvefsToolRpc(cmd) {
+      : DingofsToolRpc(cmd) {
     show_ = show;
   }
 

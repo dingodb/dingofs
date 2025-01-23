@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-# CurveFS Tools Library
+# DingoFS Tools Library
 file(GLOB DINGOFS_TOOLS_LIB_SRCS
     "*.cpp"
     "create/*.cpp"
