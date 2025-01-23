@@ -16,6 +16,6 @@ add_library(dingofs_concurrent
     thread_pool.cpp 
 )
 target_link_libraries(dingofs_concurrent
-    glog
+    glog::glog
     brpc::brpc
 )

@@ -21,6 +21,6 @@ target_link_libraries(client_lease
     rpcclient
     client_common
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )

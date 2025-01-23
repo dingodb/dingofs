@@ -18,8 +18,8 @@ set(TEST_DEPS
     GTest::gtest 
     GTest::gmock
     GTest::gtest_main
-    glog
-    gflags
+    glog::glog
+    gflags::gflags
     brpc::brpc
     dl
 )

@@ -26,6 +26,6 @@ target_link_libraries(client_common
     dingofs_utils
     dingofs_base_lib
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )

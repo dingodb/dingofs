@@ -28,7 +28,7 @@ ENDIF ()
 
 FIND_PATH(LIBMEMCACHED_INCLUDE_DIR libmemcached/memcached.h)
 
-FIND_LIBRARY(LIBMEMCACHED_LIBRARY memcached)
+FIND_LIBRARY(LIBMEMCACHED_LIBRARY NAMES memcached memcached-dbg)
 
 # handle the QUIETLY and REQUIRED arguments and set Libmemcached_FOUND to TRUE 
 # if all listed variables are TRUE

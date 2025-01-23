@@ -43,10 +43,10 @@ target_link_libraries(fuse_client_lib
     aws_s3_adapter
     client_common
     dingofs_threading
-    gflags
-    glog
-    fmt
-    spdlog
+    gflags::gflags
+    glog::glog
+    fmt::fmt
+    spdlog::spdlog
     brpc::brpc
     absl::memory
     absl::strings

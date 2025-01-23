@@ -20,6 +20,6 @@ add_library(local_fs
 
 target_link_libraries(local_fs
     dingofs_utils
-    glog
+    glog::glog
     brpc::brpc
 )

@@ -117,12 +117,19 @@ message("Using absl ${absl_VERSION}")
 find_package(nlohmann_json REQUIRED)
 message("Using nlohmann_json ${nlohmann_json_VERSION}")
 
+find_package(spdlog REQUIRED)
+message("Using spdlog ${spdlog_VERSION}")
+
 find_package(opentelemetry-cpp CONFIG REQUIRED)
 message("Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
 
 # depends by rocksdb
-find_package(uring)
+find_package(uring REQUIRED)
 message("Using uring ${uring_VERSION}")
+
+find_package(hashkit REQUIRED)
+message("Using hashkit")
+message("hashkit_LIBRARIES: ${hashkit_LIBRARIES}")
 
 find_package(jsoncpp REQUIRED)
 message("Using jsoncpp ${jsoncpp_VERSION}")
@@ -137,12 +144,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 set(PROTO_OUTPUT_DIR ${CMAKE_BINARY_DIR}/protos)
 
-include_directories(${PROTO_OUTPUT_DIR})
+if(EXISTS ${PROTO_OUTPUT_DIR} AND IS_DIRECTORY ${PROTO_OUTPUT_DIR})
+  message(STATUS "PROTO_OUTPUT_DIR:${PROTO_OUTPUT_DIR}")
+else()
+  file(MAKE_DIRECTORY ${PROTO_OUTPUT_DIR})
+  message(STATUS "Create PROTO_OUTPUT_DIR:${PROTO_OUTPUT_DIR}")
+endif()
 
-add_custom_target(create_proto_output_dir ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory ${PROTO_OUTPUT_DIR}
-)
-message("PROTO_OUTPUT_DIR:${PROTO_OUTPUT_DIR}")
+include_directories(${PROTO_OUTPUT_DIR})
 
 set(PROTOS_DIR ${PROJECT_SOURCE_DIR}/proto)
 message("PROTOS_DIR:${PROTOS_DIR}")

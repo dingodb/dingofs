@@ -25,8 +25,8 @@ target_link_libraries(mds_schedule
     mds_topology
     dingofs_utils
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )
 
 add_subdirectory(scheduleService)

@@ -25,8 +25,8 @@ target_link_libraries(client_memcached_client
     dingofs_utils
     aws_s3_adapter
     absl::strings
-    glog
+    glog::glog
     brpc::brpc
     ${LIBMEMCACHED_LIBRARY}
-    hashkit
+    ${hashkit_LIBRARIES} 
 )

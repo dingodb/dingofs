@@ -19,5 +19,5 @@ target_link_libraries(mds_schedule_service
     mds_schedule
     PROTO_OBJS
     brpc::brpc
-    glog
+    glog::glog
 )

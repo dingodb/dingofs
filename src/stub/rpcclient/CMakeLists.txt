@@ -29,9 +29,9 @@ target_link_libraries(rpcclient
     dingofs_utils
     dingofs_common
     brpc::brpc
-    gflags
-    glog
-    fmt
+    gflags::gflags
+    glog::glog
+    fmt::fmt
     absl::cleanup
     absl::optional
 )

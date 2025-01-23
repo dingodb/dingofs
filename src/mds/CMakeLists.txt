@@ -51,8 +51,8 @@ target_link_libraries(mds_lib
     aws_s3_adapter
     dingofs_concurrent
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )
 
 add_executable(dingo-mds main.cpp)

@@ -44,7 +44,11 @@ target_link_libraries(tools_lib
 
 add_executable(dingo-tool 
     dingofs_tool_main.cpp)
+
+# use target_link_libraries to link the executable with the library
+# the library will be linked to the executable
+# i need to link both debug and release libraries,help me fix this
 target_link_libraries(dingo-tool
     tools_lib
-    gflags
+    gflags::gflags 
 )

@@ -18,6 +18,6 @@ add_library(stub_metric
 
 target_link_libraries(stub_metric
     dingofs_utils
-    gflags
+    gflags::gflags
     brpc::brpc
 )

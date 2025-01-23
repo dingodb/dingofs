@@ -19,5 +19,5 @@ add_library(mds_idgenerator
 target_link_libraries(mds_idgenerator
     dingofs_utils
     mds_kvstorage_client
-    glog
+    glog::glog
 )

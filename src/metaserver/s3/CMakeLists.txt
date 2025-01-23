@@ -22,6 +22,6 @@ target_link_libraries(metaserver_s3
     PROTO_OBJS
     dingofs_common
     aws_s3_adapter
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )

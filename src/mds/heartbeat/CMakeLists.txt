@@ -27,6 +27,6 @@ target_link_libraries(mds_heartbeat
     dingofs_utils
     dingofs_concurrent
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )

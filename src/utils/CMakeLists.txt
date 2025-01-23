@@ -18,7 +18,7 @@ add_library(dingofs_auth
 target_link_libraries(dingofs_auth
     dingofs_concurrent
     brpc::brpc
-    glog
+    glog::glog
 )
 
 add_library(dingofs_utils
@@ -37,5 +37,5 @@ target_link_libraries(dingofs_utils
     dingofs_concurrent
     uuid_static
     brpc::brpc
-    glog
+    glog::glog
 )

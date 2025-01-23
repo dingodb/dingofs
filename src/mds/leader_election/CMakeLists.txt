@@ -18,7 +18,7 @@ add_library(mds_leader_election
 
 target_link_libraries(mds_leader_election
     mds_kvstorage_client
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
     fiu
 )

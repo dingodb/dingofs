@@ -30,8 +30,8 @@ target_link_libraries(dingofs_base_lib
     dingofs_utils
     dingofs_concurrent
     dingofs_threading
-    glog
-    gflags
+    glog::glog
+    gflags::gflags
     brpc::brpc
     absl::strings
     absl::str_format

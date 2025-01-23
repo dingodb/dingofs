@@ -25,9 +25,9 @@ target_link_libraries(client_blockcache
     dingofs_common
     stub_common
     stub_metric
-    glog
-    gflags
+    glog::glog
+    gflags::gflags
     brpc::brpc
-    spdlog
+    spdlog::spdlog
     absl::cleanup
 )

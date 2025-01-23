@@ -19,8 +19,8 @@ add_library(dingofs_common
 )
 target_link_libraries(dingofs_common
     dingofs_utils
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )
 
 add_library(dynamic_vlog
@@ -28,13 +28,13 @@ add_library(dynamic_vlog
 )
 target_link_libraries(dynamic_vlog
     brpc::brpc
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )
 
 add_library(dingofs_threading
     threading.cpp
 )
 target_link_libraries(dingofs_threading
-    glog
+    glog::glog
 )

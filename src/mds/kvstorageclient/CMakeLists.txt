@@ -17,6 +17,6 @@ add_library(mds_kvstorage_client
 target_link_libraries(mds_kvstorage_client
     dingofs_utils
     etcdclient
-    gflags
-    glog
+    gflags::gflags
+    glog::glog
 )
