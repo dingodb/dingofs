@@ -177,11 +177,11 @@ install_dingofs() {
         create_project_dir $project_prefix
         copy_file "$binary" "$project_prefix/sbin"
         strip_debug_info "$project_prefix/sbin/$project_bin_filename"
-        gen_servicectl \
-            $project_name \
-            $project_bin_filename \
-            '--confPath=$g_conf_file' \
-            "$project_prefix/sbin"
+        # gen_servicectl \
+        #     $project_name \
+        #     $project_bin_filename \
+        #     '--confPath=$g_conf_file' \
+        #     "$project_prefix/sbin"
 
         success "install $project_name success\n"
     done
@@ -234,11 +234,11 @@ install_etcd() {
     create_project_dir $project_prefix
     copy_file "$dst/etcd" "$project_prefix/sbin"
     copy_file "$dst/etcdctl" "$project_prefix/sbin"
-    gen_servicectl \
-        $project_name \
-        "etcd" \
-        '--config-file=$g_project_prefix/conf/etcd.conf' \
-        "$project_prefix/sbin"
+    # gen_servicectl \
+    #     $project_name \
+    #     "etcd" \
+    #     '--config-file=$g_project_prefix/conf/etcd.conf' \
+    #     "$project_prefix/sbin"
 
     rm -rf "$dst"
     success "install $project_name success\n"
