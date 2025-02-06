@@ -30,9 +30,9 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/error.h"
-#include "client/blockcache/local_filesystem.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/errno.h"
+#include "cache/common/local_filesystem.h"
 #include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/meta.h"
@@ -51,11 +51,11 @@ using aws::GetObjectAsyncContext;
 using aws::PutObjectAsyncCallBack;
 using aws::PutObjectAsyncContext;
 
-using blockcache::BCACHE_ERROR;
 using blockcache::Block;
 using blockcache::BlockContext;
 using blockcache::BlockFrom;
 using blockcache::BlockKey;
+using blockcache::Errno;
 using blockcache::StrErr;
 
 using datastream::DataStream;
@@ -533,7 +533,7 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
     }
 
     auto rc = block_cache->Range(key, offset, len, buffer, false);
-    if (rc != BCACHE_ERROR::OK) {
+    if (rc != Errno::OK) {
       LOG(WARNING) << "Object " << key.Filename() << " not cached in disk.";
       return false;
     }
@@ -564,10 +564,10 @@ bool FileCacheManager::ReadKVRequestFromRemoteCache(const std::string& name,
 
 bool FileCacheManager::ReadKVRequestFromS3(const std::string& name,
                                            char* databuf, uint64_t offset,
-                                           uint64_t length, BCACHE_ERROR* rc) {
+                                           uint64_t length, Errno* rc) {
   {
     *rc = s3ClientAdaptor_->GetS3Client()->Range(name, offset, length, databuf);
-    if (*rc != BCACHE_ERROR::OK) {
+    if (*rc != Errno::OK) {
       LOG(ERROR) << "Object " << name << " read from s3 failed" << ", rc=" << rc
                  << ", " << StrErr(*rc);
       return false;
@@ -583,8 +583,9 @@ FileCacheManager::ReadStatus FileCacheManager::ReadKVRequest(
   absl::BlockingCounter counter(kv_requests.size());
   std::once_flag cancel_flag;
   std::atomic<bool> is_canceled{false};
-  std::atomic<BCACHE_ERROR> ret_code{BCACHE_ERROR::OK};
+  std::atomic<Errno> ret_code{Errno::OK};
 
+  // 这里可以改成 batch，提前计算好要读的 block
   for (const auto& req : kv_requests) {
     readTaskPool_->Enqueue([&]() {
       auto defer = absl::MakeCleanup([&]() { counter.DecrementCount(); });
@@ -609,7 +610,7 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
                                         char* data_buf, uint64_t file_len,
                                         std::once_flag& cancel_flag,
                                         std::atomic<bool>& is_canceled,
-                                        std::atomic<BCACHE_ERROR>& ret_code) {
+                                        std::atomic<Errno>& ret_code) {
   VLOG(3) << "read inodeId=" << inode_ << " from kv request "
           << req.DebugString();
   uint64_t chunk_index = 0;
@@ -663,7 +664,7 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
         break;
       }
 
-      BCACHE_ERROR rc = BCACHE_ERROR::OK;
+      Errno rc = Errno::OK;
       if (ReadKVRequestFromS3(store_key, current_buf, block_pos - object_offset,
                               current_read_len, &rc)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
@@ -753,7 +754,7 @@ class AsyncPrefetchCallback {
     auto block_cache = s3Client_->GetBlockCache();
     Block block(context->buf, context->actualLen);
     auto rc = block_cache->Cache(key, block);
-    if (rc != BCACHE_ERROR::OK) {
+    if (rc != Errno::OK) {
       LOG_EVERY_SECOND(INFO)
           << "Cache block( " << key.Filename() << ") failed: " << StrErr(rc);
     }
@@ -2404,6 +2405,7 @@ void DataCache::FlushTaskExecute(
   auto entry_watcher = fs->BorrowMember().entry_watcher;
   auto block_cache = s3ClientAdaptor_->GetBlockCache();
   if (s3PendingTaskCal.load()) {
+    // TODO(Wine93)：这里需要做 batch 操作
     for (const auto& fblock : s3Tasks) {
       auto context = fblock.context;
       BlockKey key = fblock.key;
@@ -2416,7 +2418,7 @@ void DataCache::FlushTaskExecute(
           [&, key, block, ctx, callback]() {
             for (;;) {
               auto rc = block_cache->Put(key, block, ctx);
-              if (rc == BCACHE_ERROR::OK) {
+              if (rc == Errno::OK) {
                 callback(context);
                 break;
               }

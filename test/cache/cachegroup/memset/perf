@@ -1,0 +1,5 @@
+sudo perf record -e cpu-clock -g
+sudo perf script -i perf.data &> perf.unfold
+./stackcollapse-perf.pl perf.unfold &> perf.folded
+./flamegraph.pl perf.folded > perf.svg
+

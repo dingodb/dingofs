@@ -1,0 +1,12 @@
+
+{
+  "block_cache.cache_store", [disk, none], "disk", FLAGS_block_cache_cache_store, "cache store type"
+}
+
+block_cache.cache_store=disk
+block_cache.stage=true
+block_cache.stage_bandwidth_throttle_enable=false
+block_cache.stage_bandwidth_throttle_mb=10240
+block_cache.logging=true
+block_cache.upload_stage_workers=10
+block_cache.upload_stage_queue_size=10000

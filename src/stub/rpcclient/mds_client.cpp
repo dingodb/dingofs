@@ -22,12 +22,14 @@
 
 #include "stub/rpcclient/mds_client.h"
 
+#include <cstdint>
 #include <map>
 #include <utility>
 #include <vector>
 
-#include "dingofs/space.pb.h"
 #include "common/metric_utils.h"
+#include "dingofs/cachegroup.pb.h"
+#include "dingofs/space.pb.h"
 #include "stub/common/config.h"
 
 namespace dingofs {
@@ -44,6 +46,8 @@ using pb::mds::GetLatestTxIdResponse;
 using pb::mds::Mountpoint;
 using pb::mds::SetFsStatsRequest;
 using pb::mds::SetFsStatsResponse;
+using pb::mds::cachegroup::CacheGroupErrCode;
+using pb::mds::cachegroup::CacheGroupErrCode_Name;
 using pb::mds::space::SpaceErrCode;
 using pb::mds::space::SpaceErrCode_Name;
 using pb::mds::topology::Copyset;
@@ -931,6 +935,14 @@ static SpaceErrCode ToSpaceErrCode(int err) {
   return static_cast<SpaceErrCode>(err);
 }
 
+static CacheGroupErrCode ToCacheGroupErrCode(int err) {
+  if (err < 0) {
+    return CacheGroupErrCode::CacheGroupErrUnknown;
+  }
+
+  return static_cast<CacheGroupErrCode>(err);
+}
+
 #define CHECK_RPC_AND_RETRY_IF_ERROR(msg)                            \
   do {                                                               \
     if (cntl->Failed()) {                                            \
@@ -1023,8 +1035,6 @@ SpaceErrCode MdsClientImpl::ReleaseVolumeBlockGroup(
   return ToSpaceErrCode(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
 }
 
-#undef CHECK_RPC_AND_RETRY_IF_ERROR
-
 FSStatusCode MdsClientImpl::SetFsStats(
     const std::string& fsname, const pb::mds::FsStatsData& fs_stat_data) {
   SetFsStatsRequest request;
@@ -1049,6 +1059,136 @@ FSStatusCode MdsClientImpl::SetFsStats(
   // for rpc error or get lock failed/timeout, we will retry until success
   return ReturnError(rpcexcutor_.DoRPCTask(task, 0));
 }
+
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::RegisterCacheGroupMember(
+    uint64_t old_id, uint64_t* member_id) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::RegisterMemberResponse response;
+
+    mdsbasecli_->RegisterCacheGroupMember(old_id, &response, cntl, channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("RegisterCacheGroupMember");
+
+    auto status = response.status();
+    if (status != CacheGroupErrCode::CacheGroupOk) {
+      LOG(WARNING) << "Register cache group member failed, err: "
+                   << CacheGroupErrCode_Name(status);
+    } else {
+      VLOG(9) << "RegisterCacheGroupMember, response: "
+              << response.ShortDebugString();
+      *member_id = response.member_id();
+    }
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
+
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::AddCacheGroupMember(
+    const std::string& group_name,
+    const pb::mds::cachegroup::CacheGroupMember& member) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::AddMemberResponse response;
+
+    mdsbasecli_->AddCacheGroupMember(group_name, member, &response, cntl,
+                                     channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("AddCacheGroupMember");
+
+    auto status = response.status();
+    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
+        << "Add cache group member, err: " << CacheGroupErrCode_Name(status);
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
+
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::LoadCacheGroupMembers(
+    const std::string& group_name,
+    std::vector<pb::mds::cachegroup::CacheGroupMember>* members) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::LoadMembersResponse response;
+
+    mdsbasecli_->LoadCacheGroupMembers(group_name, &response, cntl, channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("LoadCacheGroupMembers");
+
+    auto status = response.status();
+    if (status != CacheGroupErrCode::CacheGroupOk) {
+      LOG(WARNING) << "Load cache group members failed, status="
+                   << CacheGroupErrCode_Name(status);
+    } else {
+      VLOG(9) << "LoadCacheGroupMembers, response: "
+              << response.ShortDebugString();
+      members->reserve(response.members_size());
+      std::move(response.mutable_members()->begin(),
+                response.mutable_members()->end(),
+                std::back_inserter(*members));
+    }
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
+
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::ReweightCacheGroupMember(
+    const std::string& group_name, uint64_t member_id, uint32_t weight) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::ReweightMemberResponse response;
+
+    mdsbasecli_->ReweightCacheGroupMember(group_name, member_id, weight,
+                                          &response, cntl, channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("ReweightCacheGroupMember");
+
+    auto status = response.status();
+    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
+        << "Reweight cache group member, err: "
+        << CacheGroupErrCode_Name(status);
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
+
+pb::mds::cachegroup::CacheGroupErrCode MdsClientImpl::SendCacheGroupHeartbeat(
+    const std::string& group_name, uint64_t member_id,
+    const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat) {
+  auto task = RPCTask {
+    (void)addrindex;
+    (void)rpctimeoutMS;
+    pb::mds::cachegroup::HeartbeatResponse response;
+
+    mdsbasecli_->SendCacheGroupHeartbeat(group_name, member_id, stat, &response,
+                                         cntl, channel);
+
+    CHECK_RPC_AND_RETRY_IF_ERROR("SendCacheGroupHeartbeat");
+
+    auto status = response.status();
+    LOG_IF(WARNING, status != CacheGroupErrCode::CacheGroupOk)
+        << "Send cache group heartbeat failed, status="
+        << CacheGroupErrCode_Name(status);
+    return status;
+  };
+
+  auto rc = rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS);
+  return ToCacheGroupErrCode(rc);
+}
+
+#undef CHECK_RPC_AND_RETRY_IF_ERROR
 
 }  // namespace rpcclient
 }  // namespace stub

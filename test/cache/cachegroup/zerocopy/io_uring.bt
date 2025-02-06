@@ -1,0 +1,6 @@
+#!/usr/bin/env bpftrace
+
+kprobe:io_uring_*
+{
+    printf ("%s", kstack());
+}

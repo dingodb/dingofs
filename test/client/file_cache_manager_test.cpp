@@ -23,13 +23,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/blockcache/error.h"
-#include "client/s3/client_s3_adaptor.h"
-#include "client/s3/client_s3_cache_manager.h"
-#include "utils/concurrent/task_thread_pool.h"
+#include "cache/common/errno.h"
 #include "client/mock_client_s3.h"
 #include "client/mock_client_s3_cache_manager.h"
 #include "client/mock_inode_cache_manager.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "client/s3/client_s3_cache_manager.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {
@@ -51,7 +51,7 @@ using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::WithArg;
 
-using ::dingofs::client::blockcache::BCACHE_ERROR;
+using ::dingofs::client::blockcache::Errno;
 
 // extern KVClientManager *g_kvClientManager;
 
@@ -263,9 +263,8 @@ TEST_F(FileCacheManagerTest, test_read_s3) {
       .WillOnce(
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(*mockS3Client_, Range(_, _, _, _))
-      .WillOnce(
-          DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(BCACHE_ERROR::OK)))
-      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
+      .WillOnce(DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(Errno::OK)))
+      .WillOnce(Return(Errno::IO_ERROR));
 
   ASSERT_EQ(len, fileCacheManager_->Read(inodeId, offset, len, buf.data()));
   ASSERT_EQ(-1, fileCacheManager_->Read(inodeId, offset, len, buf.data()));

@@ -28,8 +28,8 @@
 #include <string>
 #include <vector>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/s3_client.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/common/s3_client.h"
 #include "client/common/config.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"

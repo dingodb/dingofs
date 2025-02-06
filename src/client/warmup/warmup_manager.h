@@ -38,7 +38,7 @@
 #include <vector>
 
 #include "aws/s3_adapter.h"
-#include "client/blockcache/block_cache.h"
+#include "cache/blockcache/block_cache.h"
 #include "client/common/common.h"
 #include "client/dentry_cache_manager.h"
 #include "client/fuse_common.h"

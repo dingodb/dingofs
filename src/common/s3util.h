@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace common {

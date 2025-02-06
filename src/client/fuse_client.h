@@ -31,8 +31,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/common.pb.h"
-#include "dingofs/mds.pb.h"
+#include "client/cachegroup/cache_group.h"
 #include "client/client_operator.h"
 #include "client/common/common.h"
 #include "client/common/config.h"
@@ -44,6 +43,8 @@
 #include "client/lease/lease_excutor.h"
 #include "client/warmup/warmup_manager.h"
 #include "client/xattr_manager.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metaserver_client.h"

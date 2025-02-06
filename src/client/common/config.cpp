@@ -401,6 +401,28 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 }
 
+void InitCacheGroupOption(Configuration* c, CacheGroupOption* option) {
+  c->GetValueFatalIfFail("cache_group.group_name", &option->group_name);
+  c->GetValueFatalIfFail("cache_group.sharing_cache", &option->sharing_cache);
+  {  // server option
+    auto* o = &option->server_option;
+    c->GetValueFatalIfFail("cache_group.server.listen_ip", &o->listen_ip);
+    c->GetValueFatalIfFail("cache_group.server.listen_port", &o->listen_port);
+    c->GetValueFatalIfFail("cache_group.server.group_weight", &o->group_weight);
+    c->GetValueFatalIfFail("cache_group.server.max_range_size_kb",
+                           &o->max_range_size_kb);
+    c->GetValueFatalIfFail("cache_group.server.metadata_filepath",
+                           &o->metadata_filepath);
+  }
+
+  {  // client option
+    auto* o = &option->client_option;
+    c->GetValueFatalIfFail(
+        "cache_group.client.load_members_interval_millsecond",
+        &o->load_members_interval_millsecond);
+  }
+}
+
 void SetBrpcOpt(Configuration* conf) {
   dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
   dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
@@ -424,6 +446,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitFileSystemOption(conf, &clientOption->fileSystemOption);
   InitDataStreamOption(conf, &clientOption->data_stream_option);
   InitBlockCacheOption(conf, &clientOption->block_cache_option);
+  InitCacheGroupOption(conf, &clientOption->cache_group_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                             &clientOption->listDentryLimit);
@@ -477,6 +500,7 @@ void SetFuseClientS3Option(FuseClientOption* clientOption,
   clientOption->s3Opt.s3ClientAdaptorOpt.blockSize = fsS3Opt.blockSize;
   clientOption->s3Opt.s3ClientAdaptorOpt.chunkSize = fsS3Opt.chunkSize;
   clientOption->s3Opt.s3ClientAdaptorOpt.objectPrefix = fsS3Opt.objectPrefix;
+
   clientOption->s3Opt.s3AdaptrOpt.s3Address = fsS3Opt.s3Address;
   clientOption->s3Opt.s3AdaptrOpt.ak = fsS3Opt.ak;
   clientOption->s3Opt.s3AdaptrOpt.sk = fsS3Opt.sk;

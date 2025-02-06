@@ -13,11 +13,12 @@
 # limitations under the License.
 
 add_subdirectory(blockcache)
+add_subdirectory(cachegroup)
 add_subdirectory(common)
 add_subdirectory(filesystem)
 
 
-add_executable(test_lease_test 
+add_executable(test_lease_test
     lease/lease_executor_test.cpp
 )
 target_link_libraries(test_lease_test
@@ -28,7 +29,7 @@ set_target_properties(test_lease_test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
 
-add_executable(test_flat_file_test 
+add_executable(test_flat_file_test
     service/flat_file_test.cpp)
 target_link_libraries(test_flat_file_test
     fuse_client_lib
@@ -46,7 +47,7 @@ set(TEST_CLIENT_DEPS
     ${TEST_DEPS}
 )
 
-set(CLIENT_TEST_SRCS 
+set(CLIENT_TEST_SRCS
     chunk_cache_manager_test.cpp
     client_memcache_test.cpp
     client_operator_test.cpp

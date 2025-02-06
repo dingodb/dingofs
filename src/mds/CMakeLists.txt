@@ -21,9 +21,10 @@ add_subdirectory(metaserverclient)
 add_subdirectory(topology)
 add_subdirectory(schedule)
 add_subdirectory(heartbeat)
+add_subdirectory(cachegroup)
 add_subdirectory(metric)
 
-add_library(mds_lib 
+add_library(mds_lib
     chunkid_allocator.cpp
     fs_info_wrapper.cpp
     fs_manager.cpp
@@ -44,6 +45,7 @@ target_link_libraries(mds_lib
     mds_idgenerator
     mds_leader_election
     mds_kvstorage_client
+    mds_cachegroup
     dingofs_base_lib
     dingofs_common
     dynamic_vlog

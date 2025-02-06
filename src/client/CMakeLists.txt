@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockcache)
+#add_subdirectory(cachegroup)
 add_subdirectory(common)
 add_subdirectory(datastream)
 add_subdirectory(kvclient)
@@ -39,6 +39,7 @@ target_link_libraries(fuse_client_lib
     dynamic_vlog
     client_datastream
     client_blockcache
+    #client_cachegroup
     dingofs_utils
     aws_s3_adapter
     client_common

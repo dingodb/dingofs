@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 
+#include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/space.pb.h"
 #include "dingofs/topology.pb.h"
@@ -239,6 +240,24 @@ class MdsClient {
   // set filesystem runtime statistics
   virtual pb::mds::FSStatusCode SetFsStats(
       const std::string& fsName, const pb::mds::FsStatsData& fsStatsData) = 0;
+
+  virtual pb::mds::cachegroup::CacheGroupErrCode RegisterCacheGroupMember(
+      uint64_t old_id, uint64_t* member_id) = 0;
+
+  virtual pb::mds::cachegroup::CacheGroupErrCode AddCacheGroupMember(
+      const std::string& group_name,
+      const pb::mds::cachegroup::CacheGroupMember& member) = 0;
+
+  virtual pb::mds::cachegroup::CacheGroupErrCode LoadCacheGroupMembers(
+      const std::string& group_name,
+      std::vector<pb::mds::cachegroup::CacheGroupMember>* members) = 0;
+
+  virtual pb::mds::cachegroup::CacheGroupErrCode ReweightCacheGroupMember(
+      const std::string& group_name, uint64_t member_id, uint32_t weight) = 0;
+
+  virtual pb::mds::cachegroup::CacheGroupErrCode SendCacheGroupHeartbeat(
+      const std::string& group_name, uint64_t member_id,
+      const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat) = 0;
 };
 
 class MdsClientImpl : public MdsClient {
@@ -331,6 +350,26 @@ class MdsClientImpl : public MdsClient {
   pb::mds::FSStatusCode SetFsStats(
       const std::string& fsname,
       const pb::mds::FsStatsData& fs_stat_data) override;
+
+  // cache group
+  pb::mds::cachegroup::CacheGroupErrCode RegisterCacheGroupMember(
+      uint64_t old_id, uint64_t* member_id) override;
+
+  pb::mds::cachegroup::CacheGroupErrCode AddCacheGroupMember(
+      const std::string& group_name,
+      const pb::mds::cachegroup::CacheGroupMember& member) override;
+
+  pb::mds::cachegroup::CacheGroupErrCode LoadCacheGroupMembers(
+      const std::string& group_name,
+      std::vector<pb::mds::cachegroup::CacheGroupMember>* members) override;
+
+  pb::mds::cachegroup::CacheGroupErrCode ReweightCacheGroupMember(
+      const std::string& group_name, uint64_t member_id,
+      uint32_t weight) override;
+
+  pb::mds::cachegroup::CacheGroupErrCode SendCacheGroupHeartbeat(
+      const std::string& group_name, uint64_t member_id,
+      const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat) override;
 
  private:
   pb::mds::FSStatusCode ReturnError(int retcode);

@@ -15,7 +15,7 @@
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(TEST_DEPS
-    GTest::gtest 
+    GTest::gtest
     GTest::gmock
     GTest::gtest_main
     glog

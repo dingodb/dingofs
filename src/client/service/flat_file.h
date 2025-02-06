@@ -21,8 +21,8 @@
 #include <sstream>
 #include <string>
 
+#include "cache/blockcache/cache_store.h"
 #include "dingofs/metaserver.pb.h"
-#include "client/blockcache/cache_store.h"
 #include "glog/logging.h"
 
 namespace dingofs {

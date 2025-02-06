@@ -26,17 +26,17 @@
 
 #include <memory>
 
-#include "dingofs/metaserver.pb.h"
-#include "client/blockcache/error.h"
+#include "cache/common/errno.h"
 #include "client/inode_wrapper.h"
 #include "client/kvclient/kvclient_manager.h"
-#include "client/s3/client_s3_adaptor.h"
-#include "utils/dingo_define.h"
 #include "client/mock_client_s3.h"
 #include "client/mock_inode_cache_manager.h"
 #include "client/mock_kvclient.h"
 #include "client/mock_metaserver_service.h"
+#include "client/s3/client_s3_adaptor.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
+#include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace client {
@@ -59,7 +59,7 @@ using ::testing::SetArgReferee;
 using ::testing::SetArrayArgument;
 using ::testing::WithArg;
 
-using dingofs::client::blockcache::BCACHE_ERROR;
+using dingofs::client::blockcache::Errno;
 using dingofs::client::common::S3ClientAdaptorOption;
 using dingofs::stub::rpcclient::MockMdsClient;
 
@@ -87,25 +87,24 @@ struct S3Data {
 
 static std::map<std::string, S3Data> gObjectDataMaps;
 
-BCACHE_ERROR S3Upload(const std::string& name, const char* buf, size_t len) {
+Errno S3Upload(const std::string& name, const char* buf, size_t len) {
   S3Data& tmp = gObjectDataMaps[name];
 
   tmp.len = len;
   tmp.buf = new char[len];
   strncpy(tmp.buf, buf, len);
   LOG(INFO) << "S3Upload len:" << len << ",name" << name << "buf:" << buf[0];
-  return BCACHE_ERROR::OK;
+  return Errno::OK;
 }
 
-BCACHE_ERROR S3Download(std::string name, uint64_t offset, uint64_t len,
-                        char* buf) {
+Errno S3Download(std::string name, uint64_t offset, uint64_t len, char* buf) {
   S3Data& tmp = gObjectDataMaps[name];
 
   assert((offset + len) <= tmp.len);
   strncpy(buf, tmp.buf + offset, len);
   LOG(INFO) << "S3Download offset:" << offset << ",len:" << len
             << ",name:" << name << "buf:" << buf[0];
-  return BCACHE_ERROR::OK;
+  return Errno::OK;
 }
 
 namespace {
@@ -384,8 +383,8 @@ TEST_F(ClientS3IntegrationTest, test_read_one_chunk) {
   memset(tmpbuf, 'a', len);
 
   EXPECT_CALL(mockS3Client_, Range(_, _, _, _))
-      .WillOnce(DoAll(SetArgPointee<3>(*tmpbuf), Return(BCACHE_ERROR::OK)))
-      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
+      .WillOnce(DoAll(SetArgPointee<3>(*tmpbuf), Return(Errno::OK)))
+      .WillOnce(Return(Errno::IO_ERROR));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -1329,8 +1328,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_first_write) {
   EXPECT_CALL(mockMdsClient_, AllocS3ChunkId(_, _, _))
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
-  EXPECT_CALL(mockS3Client_, Put(_, _, _))
-      .WillRepeatedly(Return(BCACHE_ERROR::OK));
+  EXPECT_CALL(mockS3Client_, Put(_, _, _)).WillRepeatedly(Return(Errno::OK));
 
   EXPECT_CALL(mockS3Client_, AsyncPut(_))
       .WillRepeatedly(
@@ -1388,8 +1386,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_overlap_write) {
   EXPECT_CALL(mockMdsClient_, AllocS3ChunkId(_, _, _))
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
-  EXPECT_CALL(mockS3Client_, Put(_, _, _))
-      .WillRepeatedly(Return(BCACHE_ERROR::OK));
+  EXPECT_CALL(mockS3Client_, Put(_, _, _)).WillRepeatedly(Return(Errno::OK));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -1501,8 +1498,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_hole_write) {
   EXPECT_CALL(mockMdsClient_, AllocS3ChunkId(_, _, _))
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
-  EXPECT_CALL(mockS3Client_, Put(_, _, _))
-      .WillRepeatedly(Return(BCACHE_ERROR::OK));
+  EXPECT_CALL(mockS3Client_, Put(_, _, _)).WillRepeatedly(Return(Errno::OK));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -1560,8 +1556,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_more_chunk) {
   EXPECT_CALL(mockMdsClient_, AllocS3ChunkId(_, _, _))
       .WillRepeatedly(
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
-  EXPECT_CALL(mockS3Client_, Put(_, _, _))
-      .WillRepeatedly(Return(BCACHE_ERROR::OK));
+  EXPECT_CALL(mockS3Client_, Put(_, _, _)).WillRepeatedly(Return(Errno::OK));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -2768,8 +2763,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_overlap_write) {
 
   EXPECT_CALL(mockMdsClient_, AllocS3ChunkId(_, _, _))
       .WillOnce(DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
-  EXPECT_CALL(mockS3Client_, Put(_, _, _))
-      .WillRepeatedly(Return(BCACHE_ERROR::OK));
+  EXPECT_CALL(mockS3Client_, Put(_, _, _)).WillRepeatedly(Return(Errno::OK));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockS3Client_, AsyncPut(_))
@@ -2886,8 +2880,8 @@ TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
         .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
     EXPECT_CALL(mockKVClient_, Get(_, _, 0, len, _)).WillOnce(Return(false));
     EXPECT_CALL(mockS3Client_, Range(_, _, _, _))
-        .WillOnce(DoAll(SetArrayArgument<3>(buf, buf + len),
-                        Return(BCACHE_ERROR::OK)));
+        .WillOnce(
+            DoAll(SetArrayArgument<3>(buf, buf + len), Return(Errno::OK)));
     int readLen = s3ClientAdaptor_->Read(inodeId, offset_0, len, readBuf);
     EXPECT_EQ(readLen, len);
     ASSERT_EQ(0, memcmp(buf, readBuf, len));

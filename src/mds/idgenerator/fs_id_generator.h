@@ -25,8 +25,8 @@
 
 #include <memory>
 
-#include "mds/idgenerator/etcd_id_generator.h"
 #include "mds/common/storage_key.h"
+#include "mds/idgenerator/etcd_id_generator.h"
 
 namespace dingofs {
 namespace mds {

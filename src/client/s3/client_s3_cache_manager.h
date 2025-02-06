@@ -33,12 +33,12 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/metaserver.pb.h"
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/error.h"
 #include "client/inode_wrapper.h"
 #include "client/kvclient/kvclient_manager.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -395,12 +395,11 @@ class FileCacheManager {
     S3_NOT_EXIST = -2,
   };
 
-  ReadStatus toReadStatus(blockcache::BCACHE_ERROR rc) {
+  ReadStatus toReadStatus(blockcache::Errno rc) {
     ReadStatus st = ReadStatus::OK;
-    if (rc != blockcache::BCACHE_ERROR::OK) {
-      st = (rc == blockcache::BCACHE_ERROR::NOT_FOUND)
-               ? ReadStatus::S3_NOT_EXIST
-               : ReadStatus::S3_READ_FAIL;
+    if (rc != blockcache::Errno::OK) {
+      st = (rc == blockcache::Errno::NOT_FOUND) ? ReadStatus::S3_NOT_EXIST
+                                                : ReadStatus::S3_READ_FAIL;
     }
     return st;
   }
@@ -413,7 +412,7 @@ class FileCacheManager {
   void ProcessKVRequest(const S3ReadRequest& req, char* data_buf,
                         uint64_t file_len, std::once_flag& cancel_flag,
                         std::atomic<bool>& is_canceled,
-                        std::atomic<blockcache::BCACHE_ERROR>& ret_code);
+                        std::atomic<blockcache::Errno>& ret_code);
 
   // read kv request from local disk cache
   bool ReadKVRequestFromLocalCache(const blockcache::BlockKey& key,
@@ -427,7 +426,7 @@ class FileCacheManager {
   // read kv request from s3
   bool ReadKVRequestFromS3(const std::string& name, char* databuf,
                            uint64_t offset, uint64_t length,
-                           blockcache::BCACHE_ERROR* rc);
+                           blockcache::Errno* rc);
 
   // read retry policy when read from s3 occur not exist error
   int HandleReadS3NotExist(uint32_t retry,

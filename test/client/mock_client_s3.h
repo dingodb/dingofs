@@ -29,8 +29,8 @@
 #include <memory>
 #include <string>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/s3_client.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/common/s3_client.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -41,7 +41,7 @@ namespace client {
 using ::dingofs::aws::GetObjectAsyncContext;
 using ::dingofs::aws::PutObjectAsyncContext;
 using ::dingofs::aws::S3AdapterOption;
-using ::dingofs::client::blockcache::BCACHE_ERROR;
+using ::dingofs::client::blockcache::Errno;
 using ::dingofs::client::blockcache::S3Client;
 
 class MockS3Client : public S3Client {
@@ -54,11 +54,11 @@ class MockS3Client : public S3Client {
 
   MOCK_METHOD0(Destroy, void());
 
-  MOCK_METHOD3(Put, BCACHE_ERROR(const std::string& key, const char* buffer,
-                                 size_t length));
+  MOCK_METHOD3(Put, Errno(const std::string& key, const char* buffer,
+                          size_t length));
 
-  MOCK_METHOD4(Range, BCACHE_ERROR(const std::string& key, off_t offset,
-                                   size_t length, char* buffer));
+  MOCK_METHOD4(Range, Errno(const std::string& key, off_t offset, size_t length,
+                            char* buffer));
 
   MOCK_METHOD4(AsyncPut, void(const std::string& key, const char* buffer,
                               size_t length, RetryCallback callback));

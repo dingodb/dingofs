@@ -24,8 +24,8 @@
 
 #include <memory>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/s3_client.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/common/s3_client.h"
 #include "client/datastream/data_stream.h"
 #include "client/kvclient/memcache_client.h"
 #include "common/define.h"
@@ -110,6 +110,14 @@ DINGOFS_ERROR FuseS3Client::Init(const common::FuseClientOption& option) {
   }
   RewriteCacheDir(&block_cache_option, uuid);
   auto block_cache = std::make_shared<BlockCacheImpl>(block_cache_option);
+
+  // cache group
+  auto cache_group_option = option.cache_group_option;
+  auto cache_group = std::make_shared<cachegroup::CacheGroupImpl>(
+      cache_group_option, mdsClient_, block_cache);
+  if (!cache_group->Init()) {
+    return DINGOFS_ERROR::INTERNAL;
+  }
 
   return s3Adaptor_->Init(opt.s3Opt.s3ClientAdaptorOpt,
                           S3ClientImpl::GetInstance(), inodeManager_,
