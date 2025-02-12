@@ -24,10 +24,10 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
-#include "bthread/types.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/status.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
@@ -61,10 +61,12 @@ class EndPoint {
 
 class RPC {
  public:
-  RPC();
-  ~RPC();
+  RPC(const EndPoint& endpoint);
+  ~RPC() = default;
 
-  static RPCPtr New() { return std::make_shared<RPC>(); }
+  static RPCPtr New(const EndPoint& endpoint) {
+    return std::make_shared<RPC>(endpoint);
+  }
 
   bool Init();
   void Destory();
@@ -92,7 +94,7 @@ class RPC {
   ChannelPtr NewChannel(const EndPoint& endpoint);
   Channel* GetChannel(EndPoint endpoint);
 
-  bthread_mutex_t mutex_;
+  utils::RWLock lock_;
   std::map<EndPoint, ChannelPtr> channels_;
   EndPoint default_endpoint_;
 };

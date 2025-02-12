@@ -16,10 +16,18 @@
 #define DINGOFS_MDSV2_MDS_MDS_META_H_
 
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <string>
+#include <vector>
+
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mdsv2 {
+
+class MDSMetaMap;
+using MDSMetaMapPtr = std::shared_ptr<MDSMetaMap>;
 
 class MDSMeta {
  public:
@@ -64,6 +72,27 @@ class MDSMeta {
 
   uint64_t register_time_ms_;
   uint64_t last_online_time_ms_;
+};
+
+class MDSMetaMap {
+ public:
+  MDSMetaMap() = default;
+  ~MDSMetaMap() = default;
+
+  MDSMetaMap(const MDSMetaMap& mds_meta_map) = delete;
+  MDSMetaMap& operator=(const MDSMetaMap& mds_meta_map) = delete;
+
+  static MDSMetaMapPtr New() { return std::make_shared<MDSMetaMap>(); }
+
+  void UpsertMDSMeta(const MDSMeta& mds_meta);
+  void DeleteMDSMeta(int64_t id);
+
+  bool GetMDSMeta(int64_t id, MDSMeta& mds_meta);
+  std::vector<MDSMeta> GetAllMDSMeta();
+
+ private:
+  utils::RWLock lock_;
+  std::map<int64_t, MDSMeta> mds_meta_map_;
 };
 
 }  // namespace mdsv2

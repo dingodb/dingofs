@@ -36,7 +36,7 @@ void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::
 
   } else {
     auto fs = file_system_set_->GetFileSystem(request->fs_id());
-    if (fs) {
+    if (fs != nullptr) {
       *response->add_fses() = fs->FsInfo();
     }
   }

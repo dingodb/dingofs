@@ -14,6 +14,9 @@
 
 #include "mdsv2/mds/mds_meta.h"
 
+#include <cstdint>
+#include <vector>
+
 #include "fmt/core.h"
 
 namespace dingofs {
@@ -31,6 +34,42 @@ MDSMeta::MDSMeta(const MDSMeta& mds_meta) {
 std::string MDSMeta::ToString() const {
   return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, register_time_ms={}, last_online_time_ms={}]", id_,
                      host_, port_, static_cast<int>(state_), register_time_ms_, last_online_time_ms_);
+}
+
+void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {
+  utils::WriteLockGuard lk(lock_);
+
+  mds_meta_map_[mds_meta.ID()] = mds_meta;
+}
+
+void MDSMetaMap::DeleteMDSMeta(int64_t id) {
+  utils::WriteLockGuard lk(lock_);
+
+  mds_meta_map_.erase(id);
+}
+
+bool MDSMetaMap::GetMDSMeta(int64_t id, MDSMeta& mds_meta) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = mds_meta_map_.find(id);
+  if (it == mds_meta_map_.end()) {
+    return false;
+  }
+
+  mds_meta = it->second;
+  return true;
+}
+
+std::vector<MDSMeta> MDSMetaMap::GetAllMDSMeta() {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<MDSMeta> mds_metas;
+  mds_metas.reserve(mds_meta_map_.size());
+  for (const auto& [id, mds_meta] : mds_meta_map_) {
+    mds_metas.push_back(mds_meta);
+  }
+
+  return mds_metas;
 }
 
 }  // namespace mdsv2

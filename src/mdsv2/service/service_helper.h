@@ -159,7 +159,7 @@ void ServiceClosure<T, U>::Run() {
   uint64_t elapsed_time = Helper::TimestampNs() - start_time_;
 
   if (response_->error().errcode() != 0) {
-    LOG(ERROR) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request failed, request({}) response({})",
+    LOG(ERROR) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request fail, request({}) response({})",
                               method_name_, request_->request_info().request_id(), elapsed_time,
                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));

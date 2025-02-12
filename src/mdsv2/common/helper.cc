@@ -15,6 +15,7 @@
 #include "mdsv2/common/helper.h"
 
 #include <filesystem>
+#include <random>
 
 #include "butil/strings/string_split.h"
 #include "fmt/core.h"
@@ -320,6 +321,64 @@ int64_t Helper::GetFileSize(const std::string& path) {
     DINGO_LOG(ERROR) << fmt::format("Get file size failed, path: {}, error: {}", path, ex.what());
     return -1;
   }
+}
+
+std::string Helper::GenerateRandomString(int length) {
+  std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  std::string rand_string;
+
+  unsigned int seed = time(nullptr);  // Get seed value for rand_r()
+
+  for (int i = 0; i < length; i++) {
+    int rand_index = rand_r(&seed) % chars.size();
+    rand_string += chars[rand_index];
+  }
+
+  return rand_string;
+}
+
+int64_t Helper::GenerateRealRandomInteger(int64_t min_value, int64_t max_value) {
+  // Create a random number generator engine
+  std::random_device rd;      // Obtain a random seed from the hardware
+  std::mt19937_64 gen(rd());  // Standard 64-bit mersenne_twister_engine seeded with rd()
+
+  // Create a distribution for the desired range
+  std::uniform_int_distribution<int64_t> dis(min_value, max_value);
+
+  // Generate and print a random int64 number
+  int64_t random_number = dis(gen);
+
+  return random_number;
+}
+
+int64_t Helper::GenerateRandomInteger(int64_t min_value, int64_t max_value) {
+  std::mt19937 rng;
+  std::uniform_real_distribution<> distrib(min_value, max_value);
+
+  return distrib(rng);
+}
+
+float Helper::GenerateRandomFloat(float min_value, float max_value) {
+  std::random_device rd;  // Obtain a random seed from the hardware
+  std::mt19937 rng(rd());
+  std::uniform_real_distribution<> distrib(min_value, max_value);
+
+  return distrib(rng);
+}
+
+std::string Helper::PrefixNext(const std::string& input) {
+  std::string ret(input.size(), 0);
+  int carry = 1;
+  for (int i = input.size() - 1; i >= 0; --i) {
+    if (static_cast<uint8_t>(input[i]) == (uint8_t)0xFF && carry == 1) {
+      ret[i] = 0;
+    } else {
+      ret[i] = (input[i] + carry);
+      carry = 0;
+    }
+  }
+
+  return (carry == 0) ? ret : input;
 }
 
 }  // namespace mdsv2

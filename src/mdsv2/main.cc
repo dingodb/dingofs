@@ -235,6 +235,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitFileSystem()) << "init file system set error.";
   CHECK(server.InitWorkerSet()) << "init worker set error.";
   CHECK(server.InitHeartbeat()) << "init heartbeat error.";
+  CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
 
   server.Run();

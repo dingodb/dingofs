@@ -35,7 +35,7 @@ DummyCoordinatorClient::~DummyCoordinatorClient() {
 bool DummyCoordinatorClient::Init(const std::string&) { return true; }
 bool DummyCoordinatorClient::Destroy() { return true; }
 
-Status DummyCoordinatorClient::MDSHeartbeat(const MDSMeta& mds) {
+Status DummyCoordinatorClient::MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) {
   BAIDU_SCOPED_LOCK(mutex_);
 
   auto it =
@@ -45,6 +45,8 @@ Status DummyCoordinatorClient::MDSHeartbeat(const MDSMeta& mds) {
   } else {
     *it = mds;
   }
+
+  out_mdses = mdses_;
 
   return Status::OK();
 }
@@ -126,6 +128,48 @@ Status DummyCoordinatorClient::GetAutoIncrements(std::vector<AutoIncrement>& aut
   }
 
   return Status::OK();
+}
+
+// version
+Status DummyCoordinatorClient::KvRange(const Options& options, const Range& range, int64_t limit,
+                                       std::vector<KVWithExt>& out_kvs, bool& out_more, int64_t& out_count) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::KvPut(const Options& options, const KVPair& kv, KVWithExt& out_prev_kv) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::KvDeleteRange(const Options& options, const Range& range, int64_t& out_deleted,
+                                             std::vector<KVWithExt>& out_prev_kvs) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::KvCompaction(const Range& range, int64_t revision, int64_t& out_count) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::LeaseGrant(int64_t id, int64_t ttl, int64_t& out_id, int64_t& out_ttl) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::LeaseRevoke(int64_t id) { return Status(pb::error::ENOT_SUPPORT, "not implemented"); }
+
+Status DummyCoordinatorClient::LeaseRenew(int64_t id, int64_t& out_ttl) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::LeaseQuery(int64_t id, bool is_get_key, int64_t& out_ttl, int64_t& out_granted_ttl,
+                                          std::vector<std::string>& out_keys) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::ListLeases(std::vector<int64_t>& out_ids) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
+}
+
+Status DummyCoordinatorClient::Watch(const std::string& key, int64_t start_revision, WatchOut& out) {
+  return Status(pb::error::ENOT_SUPPORT, "not implemented");
 }
 
 }  // namespace mdsv2

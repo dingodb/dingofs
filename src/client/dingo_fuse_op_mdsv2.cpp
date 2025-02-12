@@ -35,11 +35,13 @@
 #include "client/filesystem/filesystem.h"
 #include "client/filesystem/meta.h"
 #include "client/filesystemv2/filesystem.h"
+#include "client/filesystemv2/parent_cache.h"
 #include "common/dynamic_vlog.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/coordinator/dingo_coordinator_client.h"
+#include "mdsv2/mds/mds_meta.h"
 #include "utils/configuration.h"
 
 using EntryOut = dingofs::client::filesystem::EntryOut;
@@ -344,40 +346,87 @@ bool FuseOperator::Init(const std::string& fs_name,
                         const std::string& mountpoint) {
   LOG(INFO) << "FuseOperator init.";
 
+  using dingofs::client::filesystem::EndPoint;
   using dingofs::client::filesystem::MDSClient;
   using dingofs::client::filesystem::MDSClientPtr;
   using dingofs::client::filesystem::MDSDiscovery;
   using dingofs::client::filesystem::MDSDiscoveryPtr;
+  using dingofs::client::filesystem::MDSV2FileSystem;
   using dingofs::client::filesystem::RPC;
   using dingofs::client::filesystem::RPCPtr;
 
-  auto rpc = RPC::New();
-  if (!rpc->Init()) {
-    LOG(INFO) << "RPC init fail.";
-    return false;
-  }
-
-  auto mds_client = MDSClient::New(rpc);
-  if (!mds_client->Init()) {
-    LOG(INFO) << "MDSClient init fail.";
-    return false;
-  }
-
   auto coordinator_client = dingofs::mdsv2::DingoCoordinatorClient::New();
   if (!coordinator_client->Init(coor_addr)) {
-    LOG(INFO) << "CoordinatorClient init fail.";
+    LOG(ERROR) << "CoordinatorClient init fail.";
     return false;
   }
 
   auto mds_discovery = MDSDiscovery::New(coordinator_client);
   if (!mds_discovery->Init()) {
-    LOG(INFO) << "MDSDiscovery init fail.";
+    LOG(ERROR) << "MDSDiscovery init fail.";
     return false;
   }
 
-  fs_ = std::make_shared<dingofs::client::filesystem::MDSV2FileSystem>(
-      fs_name, mountpoint, mds_discovery, mds_client);
+  // use first mds as default, get fs info
+  dingofs::mdsv2::MDSMeta mds_meta;
+  mds_discovery->PickFirstMDS(mds_meta);
 
+  auto rpc = RPC::New(EndPoint(mds_meta.Host(), mds_meta.Port()));
+  if (!rpc->Init()) {
+    LOG(ERROR) << "RPC init fail.";
+    return false;
+  }
+
+  dingofs::pb::mdsv2::FsInfo fs_info;
+  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get fs info fail.";
+    return false;
+  }
+
+  // parent cache
+  auto parent_cache = dingofs::client::filesystem::ParentCache::New();
+
+  // mds router
+  dingofs::client::filesystem::MDSRouterPtr mds_router;
+  if (fs_info.partition_policy().type() ==
+      dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    int64_t mds_id = fs_info.partition_policy().mono().mds_id();
+
+    dingofs::mdsv2::MDSMeta mds_meta;
+    if (!mds_discovery->GetMDS(mds_id, mds_meta)) {
+      LOG(ERROR) << fmt::format("Get mds({}) meta fail.", mds_id);
+      return false;
+    }
+    mds_router = dingofs::client::filesystem::MonoMDSRouter::New(mds_meta);
+
+  } else if (fs_info.partition_policy().type() ==
+             dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    mds_router = dingofs::client::filesystem::ParentHashMDSRouter::New(
+        fs_info.partition_policy().parent_hash(), mds_discovery, parent_cache);
+
+  } else {
+    LOG(ERROR) << fmt::format("Not support partition policy type({}).",
+                              dingofs::pb::mdsv2::PartitionType_Name(
+                                  fs_info.partition_policy().type()));
+    return false;
+  }
+
+  if (!mds_router->Init()) {
+    LOG(ERROR) << "MDSRouter init fail.";
+    return false;
+  }
+
+  // create mds client
+  auto mds_client =
+      MDSClient::New(fs_info.fs_id(), parent_cache, mds_router, rpc);
+  if (!mds_client->Init()) {
+    LOG(INFO) << "MDSClient init fail.";
+    return false;
+  }
+
+  // create filesystem
+  fs_ = MDSV2FileSystem::New(fs_info, mountpoint, mds_discovery, mds_client);
   if (!fs_->Init()) {
     LOG(INFO) << "MDSV2FileSystem init fail.";
     return false;
@@ -503,8 +552,8 @@ void FuseOperator::SetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 
 void FuseOperator::GetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                             size_t size) {
-  LOG(INFO) << fmt::format("GetXattr ino({}) name({}) size({}).", ino, name,
-                           size);
+  // LOG(INFO) << fmt::format("GetXattr ino({}) name({}) size({}).", ino, name,
+  // size);
 
   std::string value;
   auto status = fs_->GetXAttr(ino, std::string(name), value);
@@ -514,7 +563,7 @@ void FuseOperator::GetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
   }
 
   if (value.empty()) {
-    LOG(INFO) << "GetXattr no data.";
+    // LOG(INFO) << "GetXattr no data.";
     return FuseOperator::ReplyError(req, ErrNo::NODATA);
   }
 
@@ -816,7 +865,9 @@ void FuseOperator::ReleaseDir(fuse_req_t req, fuse_ino_t ino,
 void FuseOperator::Rename(fuse_req_t req, fuse_ino_t parent, const char* name,
                           fuse_ino_t newparent, const char* newname,
                           unsigned int flags) {
-  LOG(INFO) << fmt::format("Rename parent({}) name({}).", parent, name);
+  LOG(INFO) << fmt::format(
+      "Rename parent({}) name({}) newparent({}) newname({}).", parent, name,
+      newparent, newname);
 
   auto status =
       fs_->Rename(parent, std::string(name), newparent, std::string(newname));

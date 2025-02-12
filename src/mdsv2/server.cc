@@ -31,6 +31,7 @@
 #include "mdsv2/common/version.h"
 #include "mdsv2/coordinator/dingo_coordinator_client.h"
 #include "mdsv2/service/debug_service.h"
+#include "mdsv2/service/fsinfo_sync.h"
 #include "mdsv2/service/heartbeat.h"
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/storage/dingodb_storage.h"
@@ -40,6 +41,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 DEFINE_int32(heartbeat_interval_s, 10, "heartbeat interval seconds");
+DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
 
 DEFINE_uint32(read_worker_num, 128, "read service worker num");
 DEFINE_uint64(read_worker_max_pending_num, 1024, "read service worker num");
@@ -124,6 +126,11 @@ bool Server::InitMDSMeta() {
   mds_meta_.SetState(MDSMeta::State::kInit);
 
   DINGO_LOG(INFO) << fmt::format("MDS meta {}.", mds_meta_.ToString());
+
+  mds_meta_map_ = MDSMetaMap::New();
+  CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
+
+  mds_meta_map_->UpsertMDSMeta(mds_meta_);
 
   return true;
 }
@@ -211,11 +218,14 @@ bool Server::InitFileSystem() {
   DINGO_LOG(INFO) << "init filesystem.";
 
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
+  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+  CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
 
   auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
   CHECK(fs_id_generator != nullptr) << "new AutoIncrementIdGenerator fail.";
+  CHECK(fs_id_generator->Init()) << "init AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_);
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_map_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -224,6 +234,11 @@ bool Server::InitFileSystem() {
 bool Server::InitHeartbeat() {
   DINGO_LOG(INFO) << "init heartbeat.";
   return heartbeat_.Init();
+}
+
+bool Server::InitFsInfoSync() {
+  DINGO_LOG(INFO) << "init fs info sync.";
+  return fs_info_sync_.Init();
 }
 
 bool Server::InitWorkerSet() {
@@ -256,6 +271,14 @@ bool Server::InitCrontab() {
       [](void*) { Heartbeat::TriggerHeartbeat(); },
   });
 
+  // Add fs info sync crontab
+  crontab_configs_.push_back({
+      "FSINFO_SYNC",
+      FLAGS_fsinfosync_interval_s * 1000,
+      true,
+      [](void*) { FsInfoSync::TriggerFsInfoSync(); },
+  });
+
   crontab_manager_.AddCrontab(crontab_configs_);
 
   return true;
@@ -268,6 +291,11 @@ std::string Server::GetListenAddr() {
 }
 
 MDSMeta& Server::GetMDSMeta() { return mds_meta_; }
+
+MDSMetaMapPtr Server::GetMDSMetaMap() {
+  CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";
+  return mds_meta_map_;
+}
 
 void Server::Run() {
   brpc::Server brpc_server;

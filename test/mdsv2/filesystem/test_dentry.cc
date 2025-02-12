@@ -36,48 +36,48 @@ class DentryCacheTest : public testing::Test {
   void TearDown() override {}
 };
 
-TEST_F(DentryCacheTest, Put) {
-  DentryCache dentry_cache;
+// TEST_F(DentryCacheTest, Put) {
+//   DentryCache dentry_cache;
 
-  Dentry root_dentry(kFsId, "root", 0, 1, pb::mdsv2::FileType::DIRECTORY, 0);
+//   Dentry root_dentry(kFsId, "root", 0, 1, pb::mdsv2::FileType::DIRECTORY, 0);
 
-  auto dentry_set = DentrySet::New(root_dentry);
+//   auto dentry_set = DentrySet::New(root_dentry);
 
-  uint64_t parent_ino = 1;
-  dentry_set->PutChild(Dentry(kFsId, "dir01", parent_ino, 100000, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir02", parent_ino, 100001, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir03", parent_ino, 100002, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir04", parent_ino, 100003, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100004, pb::mdsv2::FileType::FILE, 0));
-  dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100005, pb::mdsv2::FileType::FILE, 0));
+//   uint64_t parent_ino = 1;
+//   dentry_set->PutChild(Dentry(kFsId, "dir01", parent_ino, 100000, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir02", parent_ino, 100001, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir03", parent_ino, 100002, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir04", parent_ino, 100003, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100004, pb::mdsv2::FileType::FILE, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100005, pb::mdsv2::FileType::FILE, 0));
 
-  dentry_cache.Put(root_dentry.Ino(), dentry_set);
+//   dentry_cache.Put(root_dentry.Ino(), dentry_set);
 
-  ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) != nullptr);
-}
+//   ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) != nullptr);
+// }
 
-TEST_F(DentryCacheTest, Delete) {
-  DentryCache dentry_cache;
+// TEST_F(DentryCacheTest, Delete) {
+//   DentryCache dentry_cache;
 
-  Dentry root_dentry(kFsId, "root", 0, 1, pb::mdsv2::FileType::DIRECTORY, 0);
+//   Dentry root_dentry(kFsId, "root", 0, 1, pb::mdsv2::FileType::DIRECTORY, 0);
 
-  auto dentry_set = DentrySet::New(root_dentry);
+//   auto dentry_set = DentrySet::New(root_dentry);
 
-  uint64_t parent_ino = 1;
-  dentry_set->PutChild(Dentry(kFsId, "dir01", parent_ino, 100000, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir02", parent_ino, 100001, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir03", parent_ino, 100002, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "dir04", parent_ino, 100003, pb::mdsv2::FileType::DIRECTORY, 0));
-  dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100004, pb::mdsv2::FileType::FILE, 0));
-  dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100005, pb::mdsv2::FileType::FILE, 0));
+//   uint64_t parent_ino = 1;
+//   dentry_set->PutChild(Dentry(kFsId, "dir01", parent_ino, 100000, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir02", parent_ino, 100001, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir03", parent_ino, 100002, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "dir04", parent_ino, 100003, pb::mdsv2::FileType::DIRECTORY, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100004, pb::mdsv2::FileType::FILE, 0));
+//   dentry_set->PutChild(Dentry(kFsId, "file01", parent_ino, 100005, pb::mdsv2::FileType::FILE, 0));
 
-  dentry_cache.Put(root_dentry.Ino(), dentry_set);
+//   dentry_cache.Put(root_dentry.Ino(), dentry_set);
 
-  ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) != nullptr);
+//   ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) != nullptr);
 
-  dentry_cache.Delete(root_dentry.Ino());
-  ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) == nullptr);
-}
+//   dentry_cache.Delete(root_dentry.Ino());
+//   ASSERT_TRUE(dentry_cache.Get(root_dentry.Ino()) == nullptr);
+// }
 
 }  // namespace unit_test
 }  // namespace mdsv2

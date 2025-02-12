@@ -55,51 +55,33 @@ std::string GetHostName() {
   return std::string(hostname);
 }
 
-MDSV2FileSystem::MDSV2FileSystem(const std::string& name,
+MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
                                  const std::string& mount_path,
                                  MDSDiscoveryPtr mds_discovery,
                                  MDSClientPtr mds_client)
-    : name_(name),
+    : name_(fs_info.fs_name()),
       mount_path_(mount_path),
+      fs_info_(fs_info),
       mds_discovery_(mds_discovery),
       mds_client_(mds_client),
       dir_reader_(kDirReaderInitFhID) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
-bool MDSV2FileSystem::SetRandomEndpoint() {
-  auto mdses = mds_discovery_->GetAllMDS();
-  if (mdses.empty()) {
-    LOG(ERROR) << "not has mds.";
+bool MDSV2FileSystem::Init() {
+  LOG(INFO) << fmt::format("fs_info: {}.", fs_info_.ShortDebugString());
+  // mount fs
+  if (!MountFs()) {
+    LOG(ERROR) << fmt::format("mount fs({}) fail.", name_);
     return false;
-  }
-
-  for (const auto& mds : mdses) {
-    if (mds_client_->SetEndpoint(mds.Host(), mds.Port(), true)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-bool MDSV2FileSystem::SetEndpoints() {
-  if (fs_info_.mds_ids_size() == 0) {
-    LOG(ERROR) << "not has mds id.";
-    return false;
-  }
-
-  for (auto mds_id : fs_info_.mds_ids()) {
-    mdsv2::MDSMeta mds_meta;
-    if (!mds_discovery_->GetMDS(mds_id, mds_meta)) {
-      LOG(ERROR) << fmt::format("get mds({}) info fail.", mds_id);
-      continue;
-    }
-
-    mds_client_->SetEndpoint(mds_meta.Host(), mds_meta.Port(), true);
   }
 
   return true;
+}
+
+void MDSV2FileSystem::UnInit() {
+  // unmount fs
+  UnmountFs();
 }
 
 bool MDSV2FileSystem::MountFs() {
@@ -146,43 +128,6 @@ bool MDSV2FileSystem::UnmountFs() {
   }
 
   return true;
-}
-
-bool MDSV2FileSystem::Init() {
-  if (!SetRandomEndpoint()) {
-    LOG(ERROR) << "set random endpoint fail.";
-    return false;
-  }
-
-  auto status = mds_client_->GetFsInfo(name_, fs_info_);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("get fs({}) info fail, {}.", name_,
-                              status.error_str());
-    return false;
-  }
-
-  LOG(INFO) << fmt::format("fs_info: {}.", fs_info_.ShortDebugString());
-
-  // set mds endpoint
-  if (!SetEndpoints()) {
-    LOG(ERROR) << fmt::format("set mds endpoint fail.");
-    return false;
-  }
-
-  // mount fs
-  if (!MountFs()) {
-    LOG(ERROR) << fmt::format("mount fs({}) fail.", name_);
-    return false;
-  }
-
-  mds_client_->SetFsId(fs_info_.fs_id());
-
-  return true;
-}
-
-void MDSV2FileSystem::UnInit() {
-  // unmount fs
-  UnmountFs();
 }
 
 Status MDSV2FileSystem::Lookup(uint64_t parent_ino, const std::string& name,
@@ -393,7 +338,7 @@ Status MDSV2FileSystem::ReleaseDir(uint64_t ino, uint64_t fh) {
 
 Status MDSV2FileSystem::Link(uint64_t ino, uint64_t new_parent_ino,
                              const std::string& new_name, EntryOut& entry_out) {
-  auto status = mds_client_->Link(new_parent_ino, ino, new_name, entry_out);
+  auto status = mds_client_->Link(ino, new_parent_ino, new_name, entry_out);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Link({}/{}) to ino({}) fail, error: {}.",
                               new_parent_ino, new_name, ino,
@@ -465,7 +410,7 @@ Status MDSV2FileSystem::SetAttr(uint64_t ino, struct stat* attr, int to_set,
 Status MDSV2FileSystem::GetXAttr(uint64_t ino, const std::string& name,
                                  std::string& value) {
   if (kXAttrBlackList.find(name) != kXAttrBlackList.end()) {
-    LOG(WARNING) << fmt::format("xattr({}) is in black list.", name);
+    // LOG(WARNING) << fmt::format("xattr({}) is in black list.", name);
     return Status::OK();
   }
 

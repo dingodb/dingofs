@@ -17,8 +17,6 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
-#include "bthread/mutex.h"
-
 namespace dingofs {
 namespace client {
 namespace filesystem {
@@ -26,20 +24,22 @@ namespace filesystem {
 DEFINE_int32(rpc_retry_times, 3, "rpc retry time");
 BRPC_VALIDATE_GFLAG(rpc_retry_times, brpc::PositiveInteger);
 
-RPC::RPC() {
-  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
-}
+RPC::RPC(const EndPoint& endpoint) : default_endpoint_(endpoint) {}
 
-RPC::~RPC() {
-  CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
-}
+bool RPC::Init() {
+  ChannelPtr channel = NewChannel(default_endpoint_);
+  if (channel == nullptr) {
+    return false;
+  }
+  channels_.insert(std::make_pair(default_endpoint_, channel));
 
-bool RPC::Init() { return true; }
+  return true;
+}
 
 void RPC::Destory() {}
 
 bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lk(lock_);
 
   EndPoint endpoint(ip, port);
   auto it = channels_.find(endpoint);
@@ -62,7 +62,7 @@ bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
 }
 
 void RPC::DeleteEndpoint(const std::string& ip, int port) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::WriteLockGuard lk(lock_);
 
   EndPoint endpoint(ip, port);
   auto it = channels_.find(endpoint);
@@ -71,7 +71,7 @@ void RPC::DeleteEndpoint(const std::string& ip, int port) {
   }
 }
 
-RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {
+RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   CHECK(!endpoint.GetIp().empty()) << "ip is empty.";
   CHECK(endpoint.GetPort() > 0) << "port is invalid.";
 
@@ -88,7 +88,7 @@ RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {
 }
 
 RPC::Channel* RPC::GetChannel(EndPoint endpoint) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::ReadLockGuard lk(lock_);
 
   auto it = channels_.find(endpoint);
   if (it != channels_.end()) {

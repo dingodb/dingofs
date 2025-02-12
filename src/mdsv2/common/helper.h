@@ -19,7 +19,6 @@
 #include <vector>
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class Helper {
@@ -75,6 +74,13 @@ class Helper {
   static bool Rename(const std::string& src_path, const std::string& dst_path, bool is_force = true);
   static bool IsExistPath(const std::string& path);
   static int64_t GetFileSize(const std::string& path);
+
+  static std::string GenerateRandomString(int length);
+  static int64_t GenerateRealRandomInteger(int64_t min_value, int64_t max_value);
+  static int64_t GenerateRandomInteger(int64_t min_value, int64_t max_value);
+  static float GenerateRandomFloat(float min_value, float max_value);
+
+  static std::string PrefixNext(const std::string& input);
 };
 
 }  // namespace mdsv2

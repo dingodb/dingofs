@@ -17,27 +17,21 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
-#include "bthread/mutex.h"
 #include "fmt/core.h"
-#include "mdsv2/common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
 MDSDiscovery::MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client)
-    : coordinator_client_(coordinator_client) {
-  bthread_mutex_init(&mutex_, nullptr);
-}
-
-MDSDiscovery::~MDSDiscovery() { bthread_mutex_destroy(&mutex_); }
+    : coordinator_client_(coordinator_client) {}
 
 bool MDSDiscovery::Init() { return UpdateMDSList(); }
 
 void MDSDiscovery::Destroy() {}
 
 bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::ReadLockGuard lk(lock_);
 
   auto it = mdses_.find(mds_id);
   if (it == mdses_.end()) {
@@ -49,8 +43,20 @@ bool MDSDiscovery::GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta) {
   return true;
 }
 
+bool MDSDiscovery::PickFirstMDS(mdsv2::MDSMeta& mds_meta) {
+  utils::ReadLockGuard lk(lock_);
+
+  if (mdses_.empty()) {
+    return false;
+  }
+
+  mds_meta = mdses_.begin()->second;
+
+  return true;
+}
+
 std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
-  BAIDU_SCOPED_LOCK(mutex_);
+  utils::ReadLockGuard lk(lock_);
 
   std::vector<mdsv2::MDSMeta> mdses;
   mdses.reserve(mdses_.size());
@@ -71,7 +77,7 @@ bool MDSDiscovery::UpdateMDSList() {
   }
 
   {
-    BAIDU_SCOPED_LOCK(mutex_);
+    utils::WriteLockGuard lk(lock_);
 
     for (const auto& mds : mdses) {
       LOG(INFO) << fmt::format("update mds: {}.", mds.ToString());

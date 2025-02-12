@@ -15,10 +15,12 @@
 #include "mdsv2/client/mds.h"
 #include "mdsv2/common/logging.h"
 
-DEFINE_string(addr, "127.0.0.1:7800", "mds address");
+DEFINE_string(addr, "127.0.0.1:7801", "mds address");
 DEFINE_string(cmd, "", "command");
 
 DEFINE_string(fs_name, "", "fs name");
+
+DEFINE_string(fs_partition_type, "mono", "fs partition type");
 
 int main(int argc, char* argv[]) {
   FLAGS_minloglevel = google::GLOG_INFO;
@@ -40,10 +42,13 @@ int main(int argc, char* argv[]) {
   dingofs::mdsv2::client::MDSClient mds_client(interaction);
 
   if (FLAGS_cmd == "create_fs") {
-    mds_client.CreateFs(FLAGS_fs_name);
+    mds_client.CreateFs(FLAGS_fs_name, FLAGS_fs_partition_type);
 
   } else if (FLAGS_cmd == "delete_fs") {
     mds_client.DeleteFs(FLAGS_fs_name);
+
+  } else if (FLAGS_cmd == "get_fs") {
+    mds_client.GetFs(FLAGS_fs_name);
 
   } else {
     std::cout << "Invalid command: " << FLAGS_cmd;

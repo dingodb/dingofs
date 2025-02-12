@@ -57,6 +57,8 @@ int main(int argc, char** argv) {
     default_run_case += ":DentryCacheTest.*";
     default_run_case += ":FileSystemTest.*";
 
+    default_run_case += ":CoorDistributionLockTest.*";
+
     testing::GTEST_FLAG(filter) = default_run_case;
   }
 

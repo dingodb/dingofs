@@ -21,8 +21,8 @@
 #include <memory>
 #include <string>
 
-#include "client/common/dynamic_config.h"
 #include "client/filesystem/meta.h"
+#include "client/filesystemv2/mds_router.h"
 #include "client/filesystemv2/rpc.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
@@ -36,21 +36,26 @@ using MDSClientPtr = std::shared_ptr<MDSClient>;
 
 class MDSClient {
  public:
-  MDSClient(RPCPtr rpc) : rpc_(rpc) {}
+  MDSClient(uint32_t fs_id, ParentCachePtr parent_cache,
+            MDSRouterPtr mds_router, RPCPtr rpc)
+      : fs_id_(fs_id),
+        parent_cache_(parent_cache),
+        mds_router_(mds_router),
+        rpc_(rpc) {}
   virtual ~MDSClient() = default;
 
-  static MDSClientPtr New(RPCPtr rpc) {
-    return std::make_shared<MDSClient>(rpc);
+  static MDSClientPtr New(uint32_t fs_id, ParentCachePtr parent_cache,
+                          MDSRouterPtr mds_router, RPCPtr rpc) {
+    return std::make_shared<MDSClient>(fs_id, parent_cache, mds_router, rpc);
   }
 
   bool Init();
   void Destory();
 
-  void SetFsId(uint32_t fs_id) { fs_id_ = fs_id; }
-
   bool SetEndpoint(const std::string& ip, int port, bool is_default);
 
-  Status GetFsInfo(const std::string& name, pb::mdsv2::FsInfo& fs_info);
+  static Status GetFsInfo(RPCPtr rpc, const std::string& name,
+                          pb::mdsv2::FsInfo& fs_info);
   Status MountFs(const std::string& name,
                  const pb::mdsv2::MountPoint& mount_point);
   Status UmountFs(const std::string& name,
@@ -72,8 +77,8 @@ class MDSClient {
   Status Open(uint64_t ino);
   Status Release(uint64_t ino);
 
-  Status Link(uint64_t parent_ino, uint64_t ino, const std::string& name,
-              EntryOut& entry_out);
+  Status Link(uint64_t ino, uint64_t new_parent_ino,
+              const std::string& new_name, EntryOut& entry_out);
   Status UnLink(uint64_t parent_ino, const std::string& name);
   Status Symlink(uint64_t parent_ino, const std::string& name, uint32_t uid,
                  uint32_t gid, const std::string& symlink, EntryOut& entry_out);
@@ -91,7 +96,14 @@ class MDSClient {
                 uint64_t new_parent_ino, const std::string& new_name);
 
  private:
+  EndPoint GetEndPointByIno(int64_t ino);
+  EndPoint GetEndPointByParentIno(int64_t parent_ino);
+
   uint32_t fs_id_;
+
+  ParentCachePtr parent_cache_;
+
+  MDSRouterPtr mds_router_;
 
   RPCPtr rpc_;
 };

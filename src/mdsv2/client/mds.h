@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstdint>
+
 #include "mdsv2/client/interaction.h"
 
 namespace dingofs {
@@ -23,8 +25,9 @@ class MDSClient {
   MDSClient(InteractionPtr interaction) : interaction_(interaction){};
   ~MDSClient() = default;
 
-  void CreateFs(const std::string& fs_name);
+  void CreateFs(const std::string& fs_name, const std::string& partition_type);
   void DeleteFs(const std::string& fs_name);
+  void GetFs(const std::string& fs_name);
 
  private:
   InteractionPtr interaction_;

@@ -22,17 +22,7 @@ namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
-// message S3Info {
-//   string ak = 1;
-//   string sk = 2;
-//   string endpoint = 3;
-//   string bucketname = 4;
-//   uint64 block_size = 5;
-//   uint64 chunk_size = 6;
-//   uint32 object_prefix = 7;
-// }
-
-void MDSClient::CreateFs(const std::string& fs_name) {
+void MDSClient::CreateFs(const std::string& fs_name, const std::string& partition_type) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
     return;
@@ -48,6 +38,12 @@ void MDSClient::CreateFs(const std::string& fs_name) {
   request.set_capacity(1024 * 1024 * 1024);
   request.set_recycle_time_hour(24);
 
+  if (partition_type == "mono") {
+    request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION);
+  } else if (partition_type == "parent_hash") {
+    request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION);
+  }
+
   pb::mdsv2::S3Info s3_info;
   s3_info.set_ak("1111111111111111111111111");
   s3_info.set_sk("2222222222222222222222222");
@@ -57,7 +53,7 @@ void MDSClient::CreateFs(const std::string& fs_name) {
   s3_info.set_chunk_size(4 * 1024 * 1024);
   s3_info.set_object_prefix(0);
 
-  *request.mutable_fs_detail()->mutable_s3_info() = s3_info;
+  *request.mutable_fs_extra()->mutable_s3_info() = s3_info;
 
   DINGO_LOG(INFO) << "CreateFs request: " << request.ShortDebugString();
 
@@ -84,8 +80,24 @@ void MDSClient::DeleteFs(const std::string& fs_name) {
   DINGO_LOG(INFO) << "DeleteFs response: " << response.ShortDebugString();
 }
 
+void MDSClient::GetFs(const std::string& fs_name) {
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+
+  pb::mdsv2::GetFsInfoRequest request;
+  pb::mdsv2::GetFsInfoResponse response;
+
+  request.set_fs_name(fs_name);
+
+  DINGO_LOG(INFO) << "GetFsInfo request: " << request.ShortDebugString();
+
+  interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
+
+  DINGO_LOG(INFO) << "GetFsInfo response: " << response.ShortDebugString();
+}
+
 }  // namespace client
-
 }  // namespace mdsv2
-
 }  // namespace dingofs

@@ -33,7 +33,9 @@
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/codec.h"
 #include "mdsv2/filesystem/dentry.h"
+#include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -52,6 +54,7 @@ static const std::string kStatsName = ".stats";
 static const std::string kRecyleName = ".recycle";
 
 DEFINE_uint32(filesystem_name_max_size, 1024, "Max size of filesystem name.");
+DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
 bool IsReserveNode(uint64_t ino) { return ino == kRootIno; }
 
@@ -949,6 +952,8 @@ Status FileSystem::UpdateS3Chunk() { return Status::OK(); }  // NOLINT
 
 Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
                           const std::string& new_name) {
+  DINGO_LOG(INFO) << fmt::format("Rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
+
   uint32_t fs_id = fs_info_.fs_id();
   uint64_t now_ns = Helper::TimestampNs();
 
@@ -968,7 +973,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 
   // check new parent dentry/inode
   DentrySetPtr new_parent_dentry_set;
-  status = GetDentrySet(old_parent_ino, new_parent_dentry_set);
+  status = GetDentrySet(new_parent_ino, new_parent_dentry_set);
   if (!status.ok()) {
     return Status(pb::error::ENOT_FOUND,
                   fmt::format("not found new parent dentry set({}), {}", old_parent_ino, status.error_str()));
@@ -1050,7 +1055,6 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   KeyValue old_dentry_kv;
   old_dentry_kv.opt_type = KeyValue::OpType::kDelete;
   old_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
-
   kvs.push_back(old_dentry_kv);
 
   // update old parent inode nlink
@@ -1061,7 +1065,6 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   Inode old_parent_inode_copy(*old_parent_inode);
   old_parent_inode_copy.SetNlinkDelta(-1, now_ns);
   old_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(old_parent_inode_copy.CopyTo());
-
   kvs.push_back(old_parent_kv);
 
   if (!is_exist_new_dentry) {
@@ -1070,7 +1073,6 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
     new_dentry_kv.opt_type = KeyValue::OpType::kPut;
     new_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
     new_dentry_kv.value = MetaDataCodec::EncodeDentryValue(old_dentry.CopyTo());
-
     kvs.push_back(new_dentry_kv);
 
     // update new parent inode nlink
@@ -1081,7 +1083,6 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
     Inode new_parent_inode_copy(*new_parent_inode);
     new_parent_inode_copy.SetNlinkDelta(1, now_ns);
     new_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(new_parent_inode_copy.CopyTo());
-
     kvs.push_back(new_parent_kv);
   }
 
@@ -1116,8 +1117,11 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                             KVStoragePtr kv_storage)
-    : coordinator_client_(coordinator_client), id_generator_(std::move(id_generator)), kv_storage_(kv_storage) {}
+                             KVStoragePtr kv_storage, MDSMetaMapPtr mds_meta_map)
+    : coordinator_client_(coordinator_client),
+      id_generator_(std::move(id_generator)),
+      kv_storage_(kv_storage),
+      mds_meta_map_(mds_meta_map) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
@@ -1143,6 +1147,22 @@ Status FileSystemSet::GenFsId(int64_t& fs_id) {
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate fs id fail");
 }
 
+// gerenate parent hash partition
+std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> GenParentHashDistribution(const std::vector<MDSMeta>& mds_metas,
+                                                                                  uint32_t bucket_num) {
+  std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> mds_bucket_map;
+  for (const auto& mds_meta : mds_metas) {
+    mds_bucket_map[mds_meta.ID()] = pb::mdsv2::HashPartition::BucketSet();
+  }
+
+  for (uint32_t i = 0; i < bucket_num; ++i) {
+    const auto& mds_meta = mds_metas[i % mds_metas.size()];
+    mds_bucket_map[mds_meta.ID()].add_bucket_ids(i);
+  }
+
+  return mds_bucket_map;
+}
+
 pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
   pb::mdsv2::FsInfo fs_info;
   fs_info.set_fs_id(fs_id);
@@ -1154,10 +1174,27 @@ pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& p
   fs_info.set_owner(param.owner);
   fs_info.set_capacity(param.capacity);
   fs_info.set_recycle_time_hour(param.recycle_time_hour);
-  fs_info.mutable_detail()->CopyFrom(param.fs_detail);
+  fs_info.mutable_extra()->CopyFrom(param.fs_extra);
 
-  fs_info.set_epoch(1);
-  fs_info.add_mds_ids(param.mds_id);
+  auto mds_metas = mds_meta_map_->GetAllMDSMeta();
+  auto* partition_policy = fs_info.mutable_partition_policy();
+  partition_policy->set_type(param.partition_type);
+  if (param.partition_type == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    auto* mono = partition_policy->mutable_mono();
+    mono->set_epoch(1);
+    int select_offset = Helper::GenerateRealRandomInteger(0, 1000) % mds_metas.size();
+    mono->set_mds_id(mds_metas.at(select_offset).ID());
+
+  } else if (param.partition_type == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    auto* parent_hash = partition_policy->mutable_parent_hash();
+    parent_hash->set_epoch(1);
+    parent_hash->set_bucket_num(FLAGS_filesystem_hash_bucket_num);
+
+    auto mds_bucket_map = GenParentHashDistribution(mds_metas, FLAGS_filesystem_hash_bucket_num);
+    for (const auto& [mds_id, bucket_set] : mds_bucket_map) {
+      parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
+    }
+  }
 
   return fs_info;
 }
@@ -1276,6 +1313,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, int64_t& fs_id) {
   // create FileSystem instance
   auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
   CHECK(id_generator != nullptr) << "new id generator fail.";
+  CHECK(id_generator->Init()) << "init id generator fail.";
+
   auto fs = FileSystem::New(fs_info, std::move(id_generator), kv_storage_);
   CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
@@ -1405,11 +1444,8 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
 bool FileSystemSet::AddFileSystem(FileSystemPtr fs) {
   utils::WriteLockGuard lk(lock_);
 
-  DINGO_LOG(INFO) << fmt::format("add filesystem {} {}.", fs->FsName(), fs->FsId());
-
   auto it = fs_map_.find(fs->FsId());
   if (it != fs_map_.end()) {
-    DINGO_LOG(ERROR) << fmt::format("fs({}) already exist.", fs->FsId());
     return false;
   }
 
@@ -1460,9 +1496,9 @@ bool FileSystemSet::LoadFileSystems() {
     CHECK(id_generator != nullptr) << "new id generator fail.";
 
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
-    DINGO_LOG(INFO) << fmt::format("load fs info({}).", fs_info.ShortDebugString());
+    DINGO_LOG(INFO) << fmt::format("load fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
     auto fs = FileSystem::New(fs_info, std::move(id_generator), kv_storage_);
-    CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
+    AddFileSystem(fs);
   }
 
   return true;

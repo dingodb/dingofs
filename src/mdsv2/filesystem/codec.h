@@ -19,7 +19,6 @@
 #include <string>
 
 #include "dingofs/mdsv2.pb.h"
-#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace mdsv2 {

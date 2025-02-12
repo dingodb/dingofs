@@ -22,12 +22,12 @@
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/service/fsinfo_sync.h"
 #include "mdsv2/service/heartbeat.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 using ::dingofs::utils::Configuration;
@@ -50,13 +50,17 @@ class Server {
 
   bool InitHeartbeat();
 
+  bool InitFsInfoSync();
+
   bool InitWorkerSet();
 
   bool InitCrontab();
 
   std::string GetListenAddr();
   MDSMeta& GetMDSMeta();
+  MDSMetaMapPtr GetMDSMetaMap();
   Heartbeat& GetHeartbeat() { return heartbeat_; }
+  FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
 
@@ -72,6 +76,8 @@ class Server {
 
   // mds self info
   MDSMeta mds_meta_;
+  // all cluster mds
+  MDSMetaMapPtr mds_meta_map_;
 
   // This is manage crontab, like heartbeat.
   CrontabManager crontab_manager_;
@@ -90,13 +96,15 @@ class Server {
   // heartbeat to coordinator
   Heartbeat heartbeat_;
 
+  // fs info sync
+  FsInfoSync fs_info_sync_;
+
   // worker set for service request
   WorkerSetPtr read_worker_set_;
   WorkerSetPtr write_worker_set_;
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDSV2_SERVER_H_

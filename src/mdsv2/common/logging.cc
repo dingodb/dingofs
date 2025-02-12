@@ -14,6 +14,8 @@
 
 #include "mdsv2/common/logging.h"
 
+#include <glog/logging.h>
+
 #include <cstdint>
 #include <iomanip>
 
@@ -29,6 +31,8 @@ void DingoLogger::InitLogger(const std::string& log_dir, const std::string& role
   FLAGS_stop_logging_if_full_disk = true;
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logbuflevel = google::GLOG_INFO;
+  FLAGS_logtostdout = false;
+  FLAGS_logtostderr = false;
   ChangeGlogLevelUsingDingoLevel(level, kGlobalValueOfDebug);
 
   const std::string program_name = fmt::format("./{}", role);

@@ -102,7 +102,7 @@ class FileSystem {
 
   // create hard link
   Status Link(uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out);
-  // delete hard link
+  // delete link
   Status UnLink(uint64_t parent_ino, const std::string& name);
   // create symbolic link
   Status Symlink(const std::string& symlink, uint64_t new_parent_ino, const std::string& new_name, uint32_t uid,
@@ -179,12 +179,13 @@ class FileSystem {
 // manage all filesystem
 class FileSystemSet {
  public:
-  FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage);
+  FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
+                MDSMetaMapPtr mds_meta_map);
   ~FileSystemSet();
 
   static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                              KVStoragePtr kv_storage) {
-    return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage);
+                              KVStoragePtr kv_storage, MDSMetaMapPtr mds_meta_map) {
+    return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, mds_meta_map);
   }
 
   bool Init();
@@ -194,11 +195,12 @@ class FileSystemSet {
     std::string fs_name;
     uint64_t block_size;
     pb::mdsv2::FsType fs_type;
-    pb::mdsv2::FsDetail fs_detail;
+    pb::mdsv2::FsExtra fs_extra;
     bool enable_sum_in_dir;
     std::string owner;
     uint64_t capacity;
     uint32_t recycle_time_hour;
+    pb::mdsv2::PartitionType partition_type;
   };
 
   Status CreateFs(const CreateFsParam& param, int64_t& fs_id);
@@ -210,9 +212,12 @@ class FileSystemSet {
   FileSystemPtr GetFileSystem(uint32_t fs_id);
   std::vector<FileSystemPtr> GetAllFileSystem();
 
+  // load already exist filesystem
+  bool LoadFileSystems();
+
  private:
   Status GenFsId(int64_t& fs_id);
-  static pb::mdsv2::FsInfo GenFsInfo(int64_t fs_id, const CreateFsParam& param);
+  pb::mdsv2::FsInfo GenFsInfo(int64_t fs_id, const CreateFsParam& param);
 
   Status CreateFsTable();
   bool IsExistFsTable();
@@ -220,14 +225,13 @@ class FileSystemSet {
   bool AddFileSystem(FileSystemPtr fs);
   void DeleteFileSystem(uint32_t fs_id);
 
-  // load already exist filesystem
-  bool LoadFileSystems();
-
   CoordinatorClientPtr coordinator_client_;
 
   IdGeneratorPtr id_generator_;
 
   KVStoragePtr kv_storage_;
+
+  MDSMetaMapPtr mds_meta_map_;
 
   // protect fs_map_
   utils::RWLock lock_;

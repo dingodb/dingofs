@@ -55,11 +55,12 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, con
   param.fs_name = request->fs_name();
   param.block_size = request->block_size();
   param.fs_type = request->fs_type();
-  param.fs_detail = request->fs_detail();
+  param.fs_extra = request->fs_extra();
   param.enable_sum_in_dir = request->enable_sum_in_dir();
   param.owner = request->owner();
   param.capacity = request->capacity();
   param.recycle_time_hour = request->recycle_time_hour();
+  param.partition_type = request->partition_type();
 
   int64_t fs_id = 0;
   auto status = file_system_set_->CreateFs(param, fs_id);

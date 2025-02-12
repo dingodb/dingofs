@@ -34,7 +34,7 @@ using MDSDiscoveryPtr = std::shared_ptr<MDSDiscovery>;
 class MDSDiscovery {
  public:
   MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client);
-  ~MDSDiscovery();
+  ~MDSDiscovery() = default;
 
   static MDSDiscoveryPtr New(mdsv2::CoordinatorClientPtr coordinator_client) {
     return std::make_shared<MDSDiscovery>(coordinator_client);
@@ -44,15 +44,16 @@ class MDSDiscovery {
   void Destroy();
 
   bool GetMDS(int64_t mds_id, mdsv2::MDSMeta& mds_meta);
+  bool PickFirstMDS(mdsv2::MDSMeta& mds_meta);
   std::vector<mdsv2::MDSMeta> GetAllMDS();
 
  private:
   bool UpdateMDSList();
 
-  mdsv2::CoordinatorClientPtr coordinator_client_;
-
-  bthread_mutex_t mutex_;
+  utils::RWLock lock_;
   std::map<int64_t, mdsv2::MDSMeta> mdses_;
+
+  mdsv2::CoordinatorClientPtr coordinator_client_;
 };
 
 }  // namespace filesystem

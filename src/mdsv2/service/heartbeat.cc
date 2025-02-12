@@ -14,6 +14,8 @@
 
 #include "mdsv2/service/heartbeat.h"
 
+#include <vector>
+
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/coordinator/coordinator_client.h"
@@ -27,12 +29,24 @@ namespace mdsv2 {
 void HeartbeatTask::Run() { SendHeartbeat(coordinator_client_); }
 
 void HeartbeatTask::SendHeartbeat(CoordinatorClientPtr coordinator_client) {
-  auto& mds_meta = Server::GetInstance().GetMDSMeta();
-  DINGO_LOG(INFO) << fmt::format("send heartbeat {}.", mds_meta.ToString());
+  auto& self_mds_meta = Server::GetInstance().GetMDSMeta();
+  DINGO_LOG(INFO) << fmt::format("send heartbeat {}.", self_mds_meta.ToString());
 
-  auto status = coordinator_client->MDSHeartbeat(mds_meta);
+  std::vector<MDSMeta> mdses;
+  auto status = coordinator_client->MDSHeartbeat(self_mds_meta, mdses);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << "send heartbeat fail,  error: " << status.error_str();
+  }
+
+  // update other mds meta
+  auto mds_meta_map = Server::GetInstance().GetMDSMetaMap();
+  for (const auto& mds_meta : mdses) {
+    if (mds_meta.ID() == self_mds_meta.ID()) {
+      continue;
+    }
+
+    DINGO_LOG(DEBUG) << "upsert mds meta: " << mds_meta.ToString();
+    mds_meta_map->UpsertMDSMeta(mds_meta);
   }
 }
 

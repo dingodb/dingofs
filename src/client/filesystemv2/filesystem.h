@@ -16,6 +16,7 @@
 #define DINGOFS_SRC_CLIENT_FILESYSTEMV2_FILESYSTEM_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 
 #include "client/filesystem/error.h"
@@ -30,9 +31,12 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
+class MDSV2FileSystem;
+using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
+
 class MDSV2FileSystem {
  public:
-  MDSV2FileSystem(const std::string& name, const std::string& mount_path,
+  MDSV2FileSystem(pb::mdsv2::FsInfo fs_info, const std::string& mount_path,
                   MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
   virtual ~MDSV2FileSystem();
 
@@ -42,6 +46,14 @@ class MDSV2FileSystem {
   using ReadDirHandler = std::function<bool(const std::string&, uint64_t)>;
   using ReadDirPlusHandler =
       std::function<bool(const std::string&, const PBInode&)>;
+
+  static MDSV2FileSystemPtr New(pb::mdsv2::FsInfo fs_info,
+                                const std::string& mount_path,
+                                MDSDiscoveryPtr mds_discovery,
+                                MDSClientPtr mds_client) {
+    return std::make_shared<MDSV2FileSystem>(fs_info, mount_path, mds_discovery,
+                                             mds_client);
+  }
 
   bool Init();
   void UnInit();

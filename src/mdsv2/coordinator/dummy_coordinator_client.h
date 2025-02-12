@@ -35,7 +35,7 @@ class DummyCoordinatorClient : public CoordinatorClient {
   bool Init(const std::string& addr) override;
   bool Destroy() override;
 
-  Status MDSHeartbeat(const MDSMeta& mds) override;
+  Status MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) override;
   Status GetMDSList(std::vector<MDSMeta>& mdses) override;
 
   Status CreateAutoIncrement(int64_t table_id, int64_t start_id) override;
@@ -44,6 +44,23 @@ class DummyCoordinatorClient : public CoordinatorClient {
   Status GenerateAutoIncrement(int64_t table_id, int64_t count, int64_t& start_id, int64_t& end_id) override;
   Status GetAutoIncrement(int64_t table_id, int64_t& start_id) override;
   Status GetAutoIncrements(std::vector<AutoIncrement>& auto_increments) override;
+
+  // version
+  Status KvRange(const Options& options, const Range& range, int64_t limit, std::vector<KVWithExt>& out_kvs,
+                 bool& out_more, int64_t& out_count) override;
+  Status KvPut(const Options& options, const KVPair& kv, KVWithExt& out_prev_kv) override;
+  Status KvDeleteRange(const Options& options, const Range& range, int64_t& out_deleted,
+                       std::vector<KVWithExt>& out_prev_kvs) override;
+
+  Status KvCompaction(const Range& range, int64_t revision, int64_t& out_count) override;
+
+  Status LeaseGrant(int64_t id, int64_t ttl, int64_t& out_id, int64_t& out_ttl) override;
+  Status LeaseRevoke(int64_t id) override;
+  Status LeaseRenew(int64_t id, int64_t& out_ttl) override;
+  Status LeaseQuery(int64_t id, bool is_get_key, int64_t& out_ttl, int64_t& out_granted_ttl,
+                    std::vector<std::string>& out_keys) override;
+  Status ListLeases(std::vector<int64_t>& out_ids) override;
+  Status Watch(const std::string& key, int64_t start_revision, WatchOut& out) override;
 
  private:
   bthread_mutex_t mutex_;
