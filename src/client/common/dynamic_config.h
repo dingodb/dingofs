@@ -37,6 +37,10 @@ namespace common {
  * curl -s http://127.0.0.1:9000/flags/block_cache_logging?setvalue=true
  */
 
+// fuse module
+DECLARE_bool(fuse_file_info_direct_io);
+DECLARE_bool(fuse_file_info_keep_cache);
+
 // block cache logging
 DECLARE_bool(block_cache_logging);
 DECLARE_bool(block_cache_stage_bandwidth_throttle_enable);

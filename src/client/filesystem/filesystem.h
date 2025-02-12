@@ -164,6 +164,8 @@ class FileSystem {
 
   void SetAttrTimeout(AttrOut* attr_out);
 
+  void FillFileInfo(FileInfo* fi);
+
   uint32_t fs_id_;
   std::string fs_name_;
   common::FileSystemOption option_;
