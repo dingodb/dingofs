@@ -37,6 +37,11 @@ bool PassUint32(const char*, uint32_t) { return true; }
 bool PassBool(const char*, bool) { return true; }
 };  // namespace
 
+// fuse module
+DEFINE_bool(fuse_fileinfo_keep_cache, false, "keep page cache for opend file");
+
+DEFINE_validator(fuse_fileinfo_keep_cache, &PassBool);
+
 // block cache
 DEFINE_bool(block_cache_logging, true, "enable block cache logging");
 DEFINE_bool(block_cache_stage_bandwidth_throttle_enable, false,
