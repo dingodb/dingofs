@@ -44,11 +44,11 @@ Inode::Inode(const pb::mdsv2::Inode& inode)
       rdev_(inode.rdev()),
       dtime_(inode.dtime()),
       openmpcount_(inode.openmpcount()) {
-  for (const auto& [index, chunk_list] : inode.s3_chunk_map()) {
-    s3_chunk_map_.insert(std::make_pair(index, chunk_list));
+  for (const auto& [index, slice_list] : inode.chunks()) {
+    chunks_.insert(std::make_pair(index, slice_list));
   }
-  for (const auto& [key, value] : inode.xattr()) {
-    xattr_map_.insert(std::make_pair(key, value));
+  for (const auto& [key, value] : inode.xattrs()) {
+    xattrs_.insert(std::make_pair(key, value));
   }
 }
 
@@ -68,8 +68,8 @@ Inode::Inode(const Inode& inode) {
   rdev_ = inode.rdev_;
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
-  s3_chunk_map_ = inode.s3_chunk_map_;
-  xattr_map_ = inode.xattr_map_;
+  chunks_ = inode.chunks_;
+  xattrs_ = inode.xattrs_;
 }
 
 Inode& Inode::operator=(const Inode& inode) {
@@ -92,8 +92,8 @@ Inode& Inode::operator=(const Inode& inode) {
   rdev_ = inode.rdev_;
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
-  s3_chunk_map_ = inode.s3_chunk_map_;
-  xattr_map_ = inode.xattr_map_;
+  chunks_ = inode.chunks_;
+  xattrs_ = inode.xattrs_;
 
   return *this;
 }
@@ -270,37 +270,59 @@ void Inode::SetOpenmpcount(uint32_t openmpcount) {
   openmpcount_ = openmpcount;
 }
 
-Inode::S3ChunkMap Inode::GetS3ChunkMap() {
+Inode::ChunkMap Inode::GetChunkMap() {
   utils::ReadLockGuard lk(lock_);
 
-  return s3_chunk_map_;
+  return chunks_;
+}
+
+pb::mdsv2::SliceList Inode::GetChunk(uint64_t chunk_index) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = chunks_.find(chunk_index);
+  if (it == chunks_.end()) {
+    return pb::mdsv2::SliceList();
+  }
+
+  return it->second;
+}
+
+void Inode::AppendChunk(uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = chunks_.find(chunk_index);
+  if (it == chunks_.end()) {
+    chunks_.insert({chunk_index, slice_list});
+  } else {
+    it->second.MergeFrom(slice_list);
+  }
 }
 
 Inode::XAttrMap Inode::GetXAttrMap() {
   utils::ReadLockGuard lk(lock_);
 
-  return xattr_map_;
+  return xattrs_;
 }
 
 std::string Inode::GetXAttr(const std::string& name) {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = xattr_map_.find(name);
+  auto it = xattrs_.find(name);
 
-  return it != xattr_map_.end() ? it->second : "";
+  return it != xattrs_.end() ? it->second : "";
 }
 
 void Inode::SetXAttr(const std::string& name, const std::string& value) {
   utils::WriteLockGuard lk(lock_);
 
-  xattr_map_[name] = value;
+  xattrs_[name] = value;
 }
 
 void Inode::SetXAttr(const std::map<std::string, std::string>& xattr) {
   utils::WriteLockGuard lk(lock_);
 
   for (const auto& [key, value] : xattr) {
-    xattr_map_[key] = value;
+    xattrs_[key] = value;
   }
 }
 
@@ -349,12 +371,12 @@ void Inode::CopyTo(pb::mdsv2::Inode& inode) {
   inode.set_dtime(dtime_);
   inode.set_openmpcount(openmpcount_);
 
-  for (const auto& [index, chunk_list] : s3_chunk_map_) {
-    inode.mutable_s3_chunk_map()->insert({index, chunk_list});
+  for (const auto& [index, slice_list] : chunks_) {
+    inode.mutable_chunks()->insert({index, slice_list});
   }
 
-  for (const auto& [key, value] : xattr_map_) {
-    inode.mutable_xattr()->insert({key, value});
+  for (const auto& [key, value] : xattrs_) {
+    inode.mutable_xattrs()->insert({key, value});
   }
 }
 

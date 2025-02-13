@@ -1116,6 +1116,44 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   return Status::OK();
 }
 
+Status FileSystem::WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list) {
+  InodePtr inode;
+  auto status = GetInode(ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  Inode inode_copy(*inode);
+
+  KeyValue kv;
+  kv.opt_type = KeyValue::OpType::kPut;
+  kv.key = MetaDataCodec::EncodeFileInodeKey(fs_info_.fs_id(), ino);
+
+  inode_copy.AppendChunk(chunk_index, slice_list);
+  kv.value = MetaDataCodec::EncodeFileInodeValue(inode_copy.CopyTo());
+
+  status = kv_storage_->Put(KVStorage::WriteOption(), kv);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", status.error_str()));
+  }
+
+  inode->AppendChunk(chunk_index, slice_list);
+
+  return Status::OK();
+}
+
+Status FileSystem::ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list) {
+  InodePtr inode;
+  auto status = GetInode(ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  out_slice_list = inode->GetChunk(chunk_index);
+
+  return Status::OK();
+}
+
 FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
                              KVStoragePtr kv_storage, MDSMetaMapPtr mds_meta_map)
     : coordinator_client_(coordinator_client),
@@ -1437,6 +1475,19 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
   }
 
   fs_info = MetaDataCodec::DecodeFSValue(value);
+
+  return Status::OK();
+}
+
+Status FileSystemSet::AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids) {
+  for (uint32_t i = 0; i < slice_num; ++i) {
+    int64_t slice_id = 0;
+    if (!slice_id_generator_->GenID(slice_id)) {
+      return Status(pb::error::EINTERNAL, "generate slice id fail");
+    }
+
+    slice_ids.push_back(slice_id);
+  }
 
   return Status::OK();
 }

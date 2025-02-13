@@ -47,8 +47,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                   pb::mdsv2::ListDentryResponse* response, google::protobuf::Closure* done) override;
 
   // inode interface
-  void UpdateS3Chunk(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateS3ChunkRequest* request,
-                     pb::mdsv2::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) override;
   void GetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
                 pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done) override;
   void BatchGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetXAttrRequest* request,
@@ -101,6 +99,16 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   void Rename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
               pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done) override;
+
+  // slice
+  void AllocSliceId(google::protobuf::RpcController* controller, const pb::mdsv2::AllocSliceIdRequest* request,
+                    pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done) override;
+
+  void WriteSlice(google::protobuf::RpcController* controller, const pb::mdsv2::WriteSliceRequest* request,
+                  pb::mdsv2::WriteSliceResponse* response, google::protobuf::Closure* done) override;
+
+  void ReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
+                 pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) override;
 
   // quota interface
   void SetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,
@@ -182,6 +190,14 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoRename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
                 pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done);
 
+  void DoAllocSliceId(google::protobuf::RpcController* controller, const pb::mdsv2::AllocSliceIdRequest* request,
+                      pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done);
+  void DoWriteSlice(google::protobuf::RpcController* controller, const pb::mdsv2::WriteSliceRequest* request,
+                    pb::mdsv2::WriteSliceResponse* response, google::protobuf::Closure* done);
+  void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
+                   pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done);
+
+  // file system set
   FileSystemSetPtr file_system_set_;
 
   // Run service request.

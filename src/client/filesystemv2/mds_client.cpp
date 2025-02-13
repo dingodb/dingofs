@@ -69,7 +69,7 @@ static void FillInodeAttr(const pb::mdsv2::Inode& inode, EntryOut& entry_out) {
 
   attr.set_symlink(inode.symlink());
 
-  *(attr.mutable_xattr()) = inode.xattr();
+  *(attr.mutable_xattr()) = inode.xattrs();
 }
 
 static void FillInodeAttr(const pb::mdsv2::Inode& inode, AttrOut& entry_out) {
@@ -97,7 +97,7 @@ static void FillInodeAttr(const pb::mdsv2::Inode& inode, AttrOut& entry_out) {
 
   attr.set_symlink(inode.symlink());
 
-  *(attr.mutable_xattr()) = inode.xattr();
+  *(attr.mutable_xattr()) = inode.xattrs();
 }
 
 bool MDSClient::Init() { return true; }

@@ -131,6 +131,10 @@ class FileSystem {
   Status Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
                 const std::string& new_name);
 
+  // slice
+  Status WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
+  Status ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
+
   OpenFiles& GetOpenFiles() { return open_files_; }
   DentryCache& GetDentryCache() { return dentry_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
@@ -209,6 +213,8 @@ class FileSystemSet {
   Status DeleteFs(const std::string& fs_name);
   Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
 
+  Status AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids);
+
   FileSystemPtr GetFileSystem(uint32_t fs_id);
   std::vector<FileSystemPtr> GetAllFileSystem();
 
@@ -227,7 +233,10 @@ class FileSystemSet {
 
   CoordinatorClientPtr coordinator_client_;
 
+  // for fs id
   IdGeneratorPtr id_generator_;
+  // for slice id
+  IdGeneratorPtr slice_id_generator_;
 
   KVStoragePtr kv_storage_;
 

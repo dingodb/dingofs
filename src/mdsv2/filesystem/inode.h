@@ -44,7 +44,7 @@ class Inode {
   static InodePtr New(uint32_t fs_id, uint64_t ino) { return std::make_shared<Inode>(fs_id, ino); }
   static InodePtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
-  using S3ChunkMap = std::map<uint64_t, pb::mdsv2::S3ChunkList>;
+  using ChunkMap = std::map<uint64_t, pb::mdsv2::SliceList>;
   using XAttrMap = std::map<std::string, std::string>;
 
   uint32_t FsId() const { return fs_id_; }
@@ -91,7 +91,9 @@ class Inode {
   uint32_t Openmpcount();
   void SetOpenmpcount(uint32_t openmpcount);
 
-  S3ChunkMap GetS3ChunkMap();
+  ChunkMap GetChunkMap();
+  pb::mdsv2::SliceList GetChunk(uint64_t chunk_index);
+  void AppendChunk(uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
 
   XAttrMap GetXAttrMap();
   std::string GetXAttr(const std::string& name);
@@ -122,8 +124,8 @@ class Inode {
   uint32_t dtime_{0};
   uint32_t openmpcount_{0};
 
-  S3ChunkMap s3_chunk_map_;
-  XAttrMap xattr_map_;
+  ChunkMap chunks_;
+  XAttrMap xattrs_;
 };
 
 // cache all file/dir inode

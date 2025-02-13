@@ -225,16 +225,6 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller,
 }
 
 // inode interface
-void MDSServiceImpl::UpdateS3Chunk(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::UpdateS3ChunkRequest* request,
-                                   pb::mdsv2::UpdateS3ChunkResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
-}
-
 void MDSServiceImpl::GetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
                               pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
@@ -866,6 +856,100 @@ void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const p
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoRename(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::AllocSliceIdRequest* request,
+                                    pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+}
+
+void MDSServiceImpl::AllocSliceId(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::AllocSliceIdRequest* request,
+                                  pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoAllocSliceId(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::WriteSliceRequest* request, pb::mdsv2::WriteSliceResponse* response,
+                                  google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  auto status = file_system->WriteSlice(request->ino(), request->chunk_index(), request->slice_list());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
+                                const pb::mdsv2::WriteSliceRequest* request, pb::mdsv2::WriteSliceResponse* response,
+                                google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoWriteSlice(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::ReadSliceRequest* request, pb::mdsv2::ReadSliceResponse* response,
+                                 google::protobuf::Closure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  pb::mdsv2::SliceList slice_list;
+  auto status = file_system->ReadSlice(request->ino(), request->chunk_index(), slice_list);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_slice_list()->Swap(&slice_list);
+}
+
+void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
+                               pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoReadSlice(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {

@@ -701,7 +701,7 @@ Status DummyFileSystem::GetXAttr(uint64_t ino, const std::string& name,
     return Status(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  const auto& xattrs = inode.xattr();
+  const auto& xattrs = inode.xattrs();
   auto it = xattrs.find(name);
   if (it != xattrs.end()) {
     value = it->second;
@@ -730,7 +730,7 @@ Status DummyFileSystem::ListXAttr(uint64_t ino, size_t size,
   }
 
   out_names.reserve(4096);
-  for (const auto& [name, value] : inode.xattr()) {
+  for (const auto& [name, value] : inode.xattrs()) {
     out_names.append(name);
     out_names.push_back('\0');
   }
@@ -937,12 +937,12 @@ void DummyFileSystem::UpdateXAttr(uint64_t ino, const std::string& name,
   }
 
   auto& inode = it->second;
-  auto* mut_xattr = inode.mutable_xattr();
+  auto* mut_xattr = inode.mutable_xattrs();
   auto xattr_it = mut_xattr->find(name);
   if (xattr_it != mut_xattr->end()) {
     xattr_it->second = value;
   } else {
-    inode.mutable_xattr()->insert({name, value});
+    inode.mutable_xattrs()->insert({name, value});
   }
 }
 
