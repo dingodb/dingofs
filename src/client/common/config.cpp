@@ -232,6 +232,27 @@ void InitKVClientManagerOpt(Configuration* conf, KVClientManagerOpt* config) {
                             &config->getThreadPooln);
 }
 
+void InitFuseOption(Configuration* c, FuseOption* option) {
+  {  // fuse conn info
+    auto* o = &option->conn_info;
+    c->GetValueFatalIfFail("fuse.conn_info.want_splice_move",
+                           &o->want_splice_move);
+    c->GetValueFatalIfFail("fuse.conn_info.want_splice_read",
+                           &o->want_splice_read);
+    c->GetValueFatalIfFail("fuse.conn_info.want_splice_write",
+                           &o->want_splice_write);
+    c->GetValueFatalIfFail("fuse.conn_info.want_auto_inval_data",
+                           &o->want_auto_inval_data);
+  }
+
+  {  // fuse file info
+    c->GetValueFatalIfFail("fuse.file_info.direct_io",
+                           &FLAGS_fuse_file_info_direct_io);
+    c->GetValueFatalIfFail("fuse.file_info.keep_cache",
+                           &FLAGS_fuse_file_info_keep_cache);
+  }
+}
+
 void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
   c->GetValueFatalIfFail("fs.cto", &option->cto);
   c->GetValueFatalIfFail("fs.cto", &FLAGS_enableCto);
@@ -421,6 +442,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitLeaseOpt(conf, &clientOption->leaseOpt);
   InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
   InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
+  InitFuseOption(conf, &clientOption->fuse_option);
   InitFileSystemOption(conf, &clientOption->fileSystemOption);
   InitDataStreamOption(conf, &clientOption->data_stream_option);
   InitBlockCacheOption(conf, &clientOption->block_cache_option);

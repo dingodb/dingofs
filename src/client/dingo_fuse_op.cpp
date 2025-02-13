@@ -51,6 +51,7 @@ using dingofs::client::FuseClient;
 using dingofs::client::FuseS3Client;
 using dingofs::client::blockcache::InitBlockCacheLog;
 using dingofs::client::common::FuseClientOption;
+using dingofs::client::common::FuseConnInfo;
 using dingofs::client::filesystem::AccessLogGuard;
 using dingofs::client::filesystem::AttrOut;
 using dingofs::client::filesystem::EntryOut;
@@ -78,6 +79,26 @@ static FuseClientOption* g_fuse_client_option = nullptr;
 static ClientOpMetric* g_clientOpMetric = nullptr;
 
 namespace {
+
+void InitFuseConnInfo(struct fuse_conn_info* conn, const FuseConnInfo& option) {
+  if (conn->capable & FUSE_CAP_SPLICE_MOVE && option.want_splice_move) {
+    conn->want |= FUSE_CAP_SPLICE_MOVE;
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_MOVE";
+  }
+  if (conn->capable & FUSE_CAP_SPLICE_READ && option.want_splice_read) {
+    conn->want |= FUSE_CAP_SPLICE_READ;
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_READ";
+  }
+  if (conn->capable & FUSE_CAP_SPLICE_WRITE && option.want_splice_write) {
+    conn->want |= FUSE_CAP_SPLICE_WRITE;
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_WRITE";
+  }
+  if (conn->capable & FUSE_CAP_AUTO_INVAL_DATA &&
+      !option.want_auto_inval_data) {
+    conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+    LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
+  }
+}
 
 void EnableSplice(struct fuse_conn_info* conn) {
   if (!g_fuse_client_option->enableFuseSplice) {
@@ -364,7 +385,7 @@ void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   if (rc != DINGOFS_ERROR::OK) {
     LOG(FATAL) << "FuseOpInit() failed, retCode = " << rc;
   } else {
-    EnableSplice(conn);
+    InitFuseConnInfo(conn, g_fuse_client_option->fuse_option.conn_info);
     LOG(INFO) << "FuseOpInit() success, retCode = " << rc;
   }
 }

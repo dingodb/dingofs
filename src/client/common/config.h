@@ -26,9 +26,9 @@
 #include <cstdint>
 #include <string>
 
-#include "dingofs/common.pb.h"
 #include "aws/s3_adapter.h"
 #include "client/common/common.h"
+#include "dingofs/common.pb.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
 
@@ -109,6 +109,24 @@ struct RefreshDataOption {
   uint64_t maxDataSize = 1024;
   uint32_t refreshDataIntervalSec = 30;
 };
+
+// { fuse module option
+struct FuseConnInfo {
+  bool want_splice_move;
+  bool want_splice_read;
+  bool want_splice_write;
+  bool want_auto_inval_data;
+};
+
+struct FuseFileInfo {
+  bool keep_cache;
+};
+
+struct FuseOption {
+  FuseConnInfo conn_info;
+  FuseFileInfo file_info;
+};
+// }
 
 // { filesystem option
 struct KernelCacheOption {
@@ -233,6 +251,7 @@ struct FuseClientOption {
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
+  FuseOption fuse_option;
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
   BlockCacheOption block_cache_option;

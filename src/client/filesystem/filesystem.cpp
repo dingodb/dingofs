@@ -25,7 +25,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/timer/timer_impl.h"
 #include "client/common/dynamic_config.h"
 #include "client/filesystem/dir_cache.h"
@@ -46,6 +45,8 @@ using pb::metaserver::InodeAttr;
 using pb::metaserver::Quota;
 
 USING_FLAG(stat_timer_thread_num);
+USING_FLAG(fuse_file_info_direct_io);
+USING_FLAG(fuse_file_info_keep_cache);
 
 FileSystem::FileSystem(uint32_t fs_id, std::string fs_name,
                        FileSystemOption option, ExternalMember member)
@@ -146,6 +147,11 @@ void FileSystem::SetAttrTimeout(AttrOut* attr_out) {
   } else {
     attr_out->attrTimeout = option.attrTimeoutSec;
   }
+}
+
+void FileSystem::FillFileInfo(FileInfo* fi) {
+  fi->direct_io = FLAGS_fuse_file_info_direct_io ? 1 : 0;
+  fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
 }
 
 // fuse reply*
@@ -352,7 +358,7 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
   bool yes = openFiles_->IsOpened(ino, &inode);
   if (yes) {
     openFiles_->Open(ino, inode);
-    // fi->keep_cache = 1;
+    FillFileInfo(fi);
     return DINGOFS_ERROR::OK;
   }
 
@@ -376,6 +382,7 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
   }
 
   openFiles_->Open(ino, inode);
+  FillFileInfo(fi);
   return DINGOFS_ERROR::OK;
 }
 
