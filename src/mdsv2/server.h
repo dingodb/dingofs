@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 
+#include "mdsv2/background_task/mds_monitor.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
@@ -54,6 +55,8 @@ class Server {
 
   bool InitWorkerSet();
 
+  bool InitMDSMonitor();
+
   bool InitCrontab();
 
   std::string GetListenAddr();
@@ -63,6 +66,7 @@ class Server {
   FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
+  MDSMonitorPtr GetMDSMonitor() { return mds_monitor_; }
 
   void Run();
 
@@ -98,6 +102,9 @@ class Server {
 
   // fs info sync
   FsInfoSync fs_info_sync_;
+
+  // mds monitor
+  MDSMonitorPtr mds_monitor_;
 
   // worker set for service request
   WorkerSetPtr read_worker_set_;

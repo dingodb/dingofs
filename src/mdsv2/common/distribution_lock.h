@@ -16,6 +16,8 @@
 #define DINGOFS_MDSV2_COMMON_DISTRIBUTION_H_
 
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 
 #include "bthread/bthread.h"

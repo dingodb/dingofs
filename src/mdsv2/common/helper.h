@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 
+#include "butil/endpoint.h"
+
 namespace dingofs {
 namespace mdsv2 {
 
@@ -81,6 +83,8 @@ class Helper {
   static float GenerateRandomFloat(float min_value, float max_value);
 
   static std::string PrefixNext(const std::string& input);
+
+  static std::string EndPointToString(const butil::EndPoint& endpoint);
 };
 
 }  // namespace mdsv2

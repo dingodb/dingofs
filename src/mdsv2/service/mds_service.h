@@ -39,6 +39,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                 pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done) override;
   void GetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
                  pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done) override;
+  void RefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
+                     pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done) override;
 
   // dentry interface
   void GetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
@@ -146,6 +148,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                   pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done);
   void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
                    pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done);
+  void DoRefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
+                       pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done);
 
   void DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
                 pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done);

@@ -135,6 +135,9 @@ class FileSystem {
   Status WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
   Status ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
 
+  Status UpdatePartitionPolicy(uint64_t mds_id);
+  Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
+
   OpenFiles& GetOpenFiles() { return open_files_; }
   DentryCache& GetDentryCache() { return dentry_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
@@ -212,6 +215,7 @@ class FileSystemSet {
   Status UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status DeleteFs(const std::string& fs_name);
   Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
+  Status RefreshFsInfo(const std::string& fs_name);
 
   Status AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids);
 
@@ -228,7 +232,7 @@ class FileSystemSet {
   Status CreateFsTable();
   bool IsExistFsTable();
 
-  bool AddFileSystem(FileSystemPtr fs);
+  bool AddFileSystem(FileSystemPtr fs, bool is_force = false);
   void DeleteFileSystem(uint32_t fs_id);
 
   CoordinatorClientPtr coordinator_client_;

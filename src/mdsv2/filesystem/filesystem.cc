@@ -1154,6 +1154,55 @@ Status FileSystem::ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Slic
   return Status::OK();
 }
 
+Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
+  CHECK(fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION)
+      << "invalid partition polocy type.";
+
+  auto fs_info_copy = fs_info_;
+  auto* mono = fs_info_copy.mutable_partition_policy()->mutable_mono();
+  mono->set_epoch(mono->epoch() + 1);
+  mono->set_mds_id(mds_id);
+
+  std::string key = MetaDataCodec::EncodeFSKey(fs_info_copy.fs_name());
+  std::string value = MetaDataCodec::EncodeFSValue(fs_info_copy);
+
+  KVStorage::WriteOption option;
+  auto status = kv_storage_->Put(option, key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+  }
+
+  *fs_info_.mutable_partition_policy()->mutable_mono() = *mono;
+
+  return Status::OK();
+}
+
+Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions) {
+  CHECK(fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
+      << "invalid partition polocy type.";
+
+  auto fs_info_copy = fs_info_;
+  auto* hash = fs_info_copy.mutable_partition_policy()->mutable_parent_hash();
+  hash->set_epoch(hash->epoch() + 1);
+  hash->mutable_distributions()->clear();
+  for (const auto& [mds_id, bucket_set] : distributions) {
+    hash->mutable_distributions()->insert({mds_id, bucket_set});
+  }
+
+  std::string key = MetaDataCodec::EncodeFSKey(fs_info_copy.fs_name());
+  std::string value = MetaDataCodec::EncodeFSValue(fs_info_copy);
+
+  KVStorage::WriteOption option;
+  auto status = kv_storage_->Put(option, key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+  }
+
+  *fs_info_.mutable_partition_policy()->mutable_parent_hash() = *hash;
+
+  return Status::OK();
+}
+
 FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
                              KVStoragePtr kv_storage, MDSMetaMapPtr mds_meta_map)
     : coordinator_client_(coordinator_client),
@@ -1479,6 +1528,25 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
   return Status::OK();
 }
 
+Status FileSystemSet::RefreshFsInfo(const std::string& fs_name) {
+  std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
+  std::string value;
+  Status status = kv_storage_->Get(fs_key, value);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
+  }
+
+  auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
+  CHECK(id_generator != nullptr) << "new id generator fail.";
+
+  auto fs_info = MetaDataCodec::DecodeFSValue(value);
+  DINGO_LOG(INFO) << fmt::format("refresh fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
+  auto fs = FileSystem::New(fs_info, std::move(id_generator), kv_storage_);
+  AddFileSystem(fs, true);
+
+  return Status::OK();
+}
+
 Status FileSystemSet::AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids) {
   for (uint32_t i = 0; i < slice_num; ++i) {
     int64_t slice_id = 0;
@@ -1492,11 +1560,11 @@ Status FileSystemSet::AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& sl
   return Status::OK();
 }
 
-bool FileSystemSet::AddFileSystem(FileSystemPtr fs) {
+bool FileSystemSet::AddFileSystem(FileSystemPtr fs, bool is_force) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = fs_map_.find(fs->FsId());
-  if (it != fs_map_.end()) {
+  if (it != fs_map_.end() && !is_force) {
     return false;
   }
 

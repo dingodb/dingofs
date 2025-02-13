@@ -22,7 +22,6 @@
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class DingodbStorage : public KVStorage {
@@ -60,7 +59,6 @@ class DingodbStorage : public KVStorage {
 };
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDV2_DINGODB_STORAGE_H_
