@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEMV2_FILESYSTEM_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEMV2_FILESYSTEM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 
 #include <cstdint>
 #include <memory>
@@ -21,9 +21,9 @@
 
 #include "client/filesystem/error.h"
 #include "client/filesystem/meta.h"
-#include "client/filesystemv2/dir_reader.h"
-#include "client/filesystemv2/mds_client.h"
-#include "client/filesystemv2/mds_discovery.h"
+#include "client/vfs/meta/v2/dir_reader.h"
+#include "client/vfs/meta/v2/mds_client.h"
+#include "client/vfs/meta/v2/mds_discovery.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
 
@@ -123,4 +123,4 @@ class MDSV2FileSystem {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEMV2_FILESYSTEM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_

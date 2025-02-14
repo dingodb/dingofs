@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_CLIENT_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_CLIENT_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 
 #include <absl/status/status.h>
 
@@ -22,8 +22,8 @@
 #include <string>
 
 #include "client/filesystem/meta.h"
-#include "client/filesystemv2/mds_router.h"
-#include "client/filesystemv2/rpc.h"
+#include "client/vfs/meta/v2/mds_router.h"
+#include "client/vfs/meta/v2/rpc.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
 
@@ -112,4 +112,4 @@ class MDSClient {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_CLIENT_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_

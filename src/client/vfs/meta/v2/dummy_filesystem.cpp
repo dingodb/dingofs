@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/filesystemv2/dummy_filesystem.h"
+#include "client/vfs/meta/v2/dummy_filesystem.h"
 
 #include <fcntl.h>
 #include <fmt/format.h>

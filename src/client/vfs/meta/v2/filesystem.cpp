@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/filesystemv2/filesystem.h"
+#include "client/vfs/meta/v2/filesystem.h"
 
 #include <fmt/format.h>
 #include <gflags/gflags.h>
@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "client/filesystemv2/dir_reader.h"
+#include "client/vfs/meta/v2/dir_reader.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 

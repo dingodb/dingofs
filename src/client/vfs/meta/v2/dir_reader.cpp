@@ -12,40 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEMV2_PARENT_CACHE_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEMV2_PARENT_CACHE_H_
+#include "client/vfs/meta/v2/dir_reader.h"
 
 #include <cstdint>
-#include <memory>
-
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-class ParentCache;
-using ParentCachePtr = std::shared_ptr<ParentCache>;
+uint64_t DirReader::GenID() { return id_generator_.fetch_add(1); }
 
-class ParentCache {
- public:
-  ParentCache();
-  ~ParentCache() = default;
+uint64_t DirReader::NewState(uint64_t ino) {
+  utils::WriteLockGuard lk(lock_);
 
-  static ParentCachePtr New() { return std::make_shared<ParentCache>(); }
+  uint64_t id = GenID();
 
-  bool Get(int64_t ino, int64_t& parent_ino);
-  void Upsert(int64_t ino, int64_t parent_ino);
-  void Delete(int64_t ino);
+  auto state = std::make_shared<State>();
+  state->ino = ino;
+  state_map_[id] = state;
 
- private:
-  utils::RWLock lock_;
-  // ino -> parent_ino
-  std::unordered_map<int64_t, int64_t> ino_to_parent_map_;
-};
+  return id;
+}
+
+DirReader::StatePtr DirReader::GetState(uint64_t fh) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = state_map_.find(fh);
+  if (it == state_map_.end()) {
+    return nullptr;
+  }
+
+  return it->second;
+}
+
+void DirReader::DeleteState(uint64_t fh) {
+  utils::WriteLockGuard lk(lock_);
+
+  state_map_.erase(fh);
+}
 
 }  // namespace filesystem
 }  // namespace client
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEMV2_PARENT_CACHE_H_

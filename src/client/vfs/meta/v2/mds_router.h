@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_ROUTER_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_ROUTER_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_
 
 #include <cstdint>
 #include <memory>
 #include <unordered_map>
 
-#include "client/filesystemv2/mds_discovery.h"
-#include "client/filesystemv2/parent_cache.h"
+#include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/meta/v2/parent_cache.h"
 #include "dingofs/mdsv2.pb.h"
 #include "glog/logging.h"
 #include "mdsv2/mds/mds_meta.h"
@@ -111,4 +111,4 @@ class ParentHashMDSRouter : public MDSRouter {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEMV2_MDS_ROUTER_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_ROUTER_H_

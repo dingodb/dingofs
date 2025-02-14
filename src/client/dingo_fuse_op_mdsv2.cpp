@@ -14,8 +14,8 @@
 
 #include <memory>
 
-#include "client/filesystemv2/rpc.h"
 #include "client/fuse_common.h"
+#include "client/vfs/meta/v2/rpc.h"
 #define USE_DINGOFS_V2_FILESYSTEM 1
 #ifdef USE_DINGOFS_V2_FILESYSTEM
 
@@ -34,8 +34,8 @@
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"
 #include "client/filesystem/meta.h"
-#include "client/filesystemv2/filesystem.h"
-#include "client/filesystemv2/parent_cache.h"
+#include "client/vfs/meta/v2/filesystem.h"
+#include "client/vfs/meta/v2/parent_cache.h"
 #include "common/dynamic_vlog.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"

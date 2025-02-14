@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/filesystemv2/parent_cache.h"
+#include "client/vfs/meta/v2/parent_cache.h"
 
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"

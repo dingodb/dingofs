@@ -15,8 +15,6 @@
 // #define USE_DINGOFS_DUMMY_FILESYSTEM 1
 #ifdef USE_DINGOFS_DUMMY_FILESYSTEM
 
-#include "client/dingo_fuse_op.h"
-
 #include <fmt/format.h>
 #include <glog/logging.h>
 #include <sys/types.h>
@@ -27,10 +25,11 @@
 #include <string>
 #include <vector>
 
+#include "client/dingo_fuse_op.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"
 #include "client/filesystem/meta.h"
-#include "client/filesystemv2/dummy_filesystem.h"
+#include "client/vfs/meta/v2/dummy_filesystem.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"

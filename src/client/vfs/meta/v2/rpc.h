@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEMV2_RPC_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEMV2_RPC_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 
 #include <gflags/gflags_declare.h>
 #include <json/config.h>
@@ -161,4 +161,4 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEMV2_RPC_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
