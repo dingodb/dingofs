@@ -36,7 +36,7 @@
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/channel_manager.h"
 #include "stub/rpcclient/metacache.h"
-#include "client/utils.h"
+#include "client/vfs_old/utils.h"
 #include "stub/rpcclient/mock_metacache.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
 

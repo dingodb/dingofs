@@ -15,21 +15,17 @@
 add_subdirectory(blockcache)
 add_subdirectory(common)
 add_subdirectory(datastream)
-add_subdirectory(kvclient)
-add_subdirectory(lease)
+add_subdirectory(vfs_old/kvclient)
+add_subdirectory(vfs_old/lease)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS
-    "*.cpp"
-    "s3/*.cpp"
-    "filesystem/*.cpp"
-    "warmup/*.cpp"
-    "service/*.cpp"
+    "vfs_wrapper.cpp"
     "fuse/*.cpp"
+    "vfs_old/s3/*.cpp"
+    "vfs_old/warmup/*.cpp"
+    "vfs_old/service/*.cpp"
+    "vfs_old/filesystem/*.cpp"
     "vfs_old/*.cpp"
-)
-
-list(REMOVE_ITEM FUSE_CLIENT_LIB_SRCS
-    "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})

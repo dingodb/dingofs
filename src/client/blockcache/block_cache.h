@@ -24,10 +24,7 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_H_
 
 #include <atomic>
-#include <functional>
 #include <memory>
-#include <mutex>
-#include <string>
 
 #include "client/blockcache/block_cache_metric.h"
 #include "client/blockcache/block_cache_throttle.h"

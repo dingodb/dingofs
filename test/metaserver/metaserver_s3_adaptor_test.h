@@ -30,8 +30,8 @@
 #include <string>
 
 #include "metaserver/s3/metaserver_s3_adaptor.h"
-#include "client/mock_client_s3.h"
-#include "client/mock_metaserver_service.h"
+#include "client/vfs_old/mock_client_s3.h"
+#include "client/vfs_old/mock_metaserver_service.h"
 #include "metaserver/mock_metaserver_s3.h"
 
 namespace dingofs {
