@@ -119,6 +119,12 @@ std::string MatchAnyPattern(
   return {};
 }
 
+int FuseAddOpts(struct fuse_args* args, const char* arg_value) {
+  if (fuse_opt_add_arg(args, "-o") == -1) return 1;
+  if (fuse_opt_add_arg(args, arg_value) == -1) return 1;
+  return 0;
+}
+
 void ParseOption(int argc, char** argv, int* parsed_argc_p, char** parsed_argv,
                  struct MountOption* opts) {
   // add support for parsing option value with comma(,)
@@ -166,6 +172,7 @@ int main(int argc, char* argv[]) {
   struct fuse_session* se;
   struct fuse_cmdline_opts opts;
   struct fuse_loop_config config;
+  std::string arg_value;
   int ret = -1;
 
   if (fuse_parse_cmdline(&args, &opts) != 0) return 1;
@@ -195,6 +202,13 @@ int main(int argc, char* argv[]) {
   }
 
   if (fuse_opt_parse(&args, &m_opts, mount_opts, nullptr) == -1) return 1;
+  //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
+  //  filesystem name
+  FuseAddOpts(&args, (const char*)"subtype=dingofs");
+  arg_value.append("fsname=DingoFS");
+  arg_value.append(":");
+  arg_value.append(m_opts.fsName);
+  FuseAddOpts(&args, arg_value.c_str());
 
   m_opts.mountPoint = opts.mountpoint;
 
