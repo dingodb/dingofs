@@ -19,33 +19,26 @@
 #include <memory>
 #include <string>
 
-#include "client/filesystem/error.h"
-#include "client/filesystem/meta.h"
+#include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/dir_reader.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
-#include "mdsv2/common/status.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 
-class MDSV2FileSystem {
+class MDSV2FileSystem : public vfs::MetaSystem {
  public:
   MDSV2FileSystem(pb::mdsv2::FsInfo fs_info, const std::string& mount_path,
                   MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
-  virtual ~MDSV2FileSystem();
-
-  using PBInode = pb::mdsv2::Inode;
-  using PBDentry = pb::mdsv2::Dentry;
-
-  using ReadDirHandler = std::function<bool(const std::string&, uint64_t)>;
-  using ReadDirPlusHandler =
-      std::function<bool(const std::string&, const PBInode&)>;
+  ~MDSV2FileSystem() override;
 
   static MDSV2FileSystemPtr New(pb::mdsv2::FsInfo fs_info,
                                 const std::string& mount_path,
@@ -55,51 +48,59 @@ class MDSV2FileSystem {
                                              mds_client);
   }
 
-  bool Init();
-  void UnInit();
+  bool Init() override;
+  void UnInit() override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
 
-  Status Lookup(uint64_t parent_ino, const std::string& name,
-                EntryOut& entry_out);
+  Status StatFs(Ino ino, FsStat* fs_stat) override { return Status::OK(); };
 
-  Status MkNod(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
-  Status Open(uint64_t ino);
-  Status Release(uint64_t ino);
-  Status Read(uint64_t ino, off_t off, size_t size, char* buf, size_t& rsize);
-  Status Write(uint64_t ino, off_t off, const char* buf, size_t size,
-               size_t& wsize);
-  // just sync data
-  Status Flush(uint64_t ino);
-  // sync data and metadata, if data_sync=1 then just sync data
-  Status Fsync(uint64_t ino, int data_sync);
+  Status Lookup(Ino parent_ino, const std::string& name,
+                Attr* out_attr) override;
 
-  Status MkDir(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
-  Status RmDir(uint64_t parent_ino, const std::string& name);
-  Status OpenDir(uint64_t ino, uint64_t& fh);
-  Status ReadDir(uint64_t fh, uint64_t ino, ReadDirHandler handler);
-  Status ReadDirPlus(uint64_t fh, uint64_t ino, ReadDirPlusHandler handler);
-  Status ReleaseDir(uint64_t ino, uint64_t fh);
+  Status MkNod(Ino parent_ino, const std::string& name, uint32_t gid,
+               uint32_t uid, uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Link(uint64_t ino, uint64_t new_parent_ino,
-              const std::string& new_name, EntryOut& entry_out);
-  Status UnLink(uint64_t parent_ino, const std::string& name);
-  Status Symlink(uint64_t parent_ino, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& symlink, EntryOut& entry_out);
-  Status ReadLink(uint64_t ino, std::string& symlink);
+  Status Open(Ino ino, int flags, Attr* attr) override;
+  Status Close(Ino ino) override;
 
-  Status GetAttr(uint64_t ino, AttrOut& entry_out);
-  Status SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                 AttrOut& attr_out);
-  Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(uint64_t ino, const std::string& name,
-                  const std::string& value);
-  Status ListXAttr(uint64_t ino, size_t size, std::string& out_names);
+  // Status Read(uint64_t ino, off_t off, size_t size, char* buf, size_t&
+  // rsize); Status Write(uint64_t ino, off_t off, const char* buf, size_t size,
+  //              size_t& wsize);
 
-  Status Rename(uint64_t old_parent_ino, const std::string& old_name,
-                uint64_t new_parent_ino, const std::string& new_name);
+  Status ReadSlice(Ino ino, uint64_t index,
+                   std::vector<Slice>* slices) override;
+  Status NewSliceId(uint64_t* id) override;
+  Status WriteSlice(Ino ino, uint64_t index,
+                    const std::vector<Slice>& slices) override;
+
+  Status MkDir(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+               uint32_t mode, uint64_t rdev, Attr* attr) override;
+  Status RmDir(Ino parent, const std::string& name) override;
+  Status OpenDir(Ino ino, uint64_t& fh) override;
+  Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
+                 bool with_attr, std::vector<DirEntry>* entries) override;
+  Status ReleaseDir(Ino ino, uint64_t fh) override;
+
+  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
+              Attr* attr) override;
+  Status Unlink(Ino parent, const std::string& name) override;
+
+  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
+                 uint32_t gid, const std::string& link, Attr* attr) override;
+  Status ReadLink(Ino ino, std::string* link) override;
+
+  Status GetAttr(Ino ino, Attr* attr) override;
+  Status SetAttr(Ino ino, int set, const Attr& attr, Attr* out_attr) override;
+  Status GetXattr(Ino ino, const std::string& name,
+                  std::string* value) override;
+  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
+                  int flags) override;
+  Status ListXattr(Ino ino,
+                   std::map<std::string, std::string>* xattrs) override;
+
+  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
+                const std::string& new_name) override;
 
  private:
   bool SetRandomEndpoint();
@@ -119,7 +120,8 @@ class MDSV2FileSystem {
   DirReader dir_reader_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

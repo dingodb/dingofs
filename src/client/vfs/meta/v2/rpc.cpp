@@ -19,7 +19,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 DEFINE_int32(rpc_retry_times, 3, "rpc retry time");
 BRPC_VALIDATE_GFLAG(rpc_retry_times, brpc::PositiveInteger);
@@ -104,6 +105,7 @@ RPC::Channel* RPC::GetChannel(EndPoint endpoint) {
   return channels_[endpoint].get();
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

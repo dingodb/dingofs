@@ -23,14 +23,15 @@
 #include <string>
 #include <vector>
 
-#include "client/filesystem/error.h"
-#include "client/filesystem/meta.h"
+#include "bthread/types.h"
+#include "client/vfs/meta/meta_system.h"
+#include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
-#include "mdsv2/common/status.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 // for ReadDir/ReadDirPlus
 class ReadDirStateMemo {
@@ -100,10 +101,34 @@ class DataStorage {
   std::map<uint64_t, DataBufferPtr> data_map_;
 };
 
-class DummyFileSystem {
+class FileChunkMap {
+ public:
+  FileChunkMap();
+  ~FileChunkMap();
+
+  Status NewSliceId(uint64_t* id);
+
+  Status Read(uint64_t ino, uint64_t index, std::vector<Slice>* slices);
+  Status Write(uint64_t ino, uint64_t index, const std::vector<Slice>& slices);
+
+ private:
+  struct Chunk {
+    // chunk index -> slices
+    std::map<uint64_t, std::vector<Slice>> slices;
+  };
+
+  bthread_mutex_t mutex_;
+
+  std::atomic<uint64_t> slice_id_generator_{1000};
+
+  // ino -> chunk
+  std::map<uint64_t, Chunk> chunk_map_;
+};
+
+class DummyFileSystem : public vfs::MetaSystem {
  public:
   DummyFileSystem();
-  ~DummyFileSystem();
+  ~DummyFileSystem() override;
 
   using PBInode = pb::mdsv2::Inode;
   using PBDentry = pb::mdsv2::Dentry;
@@ -122,49 +147,55 @@ class DummyFileSystem {
   using ReadDirPlusHandler =
       std::function<bool(const std::string&, const PBInode&)>;
 
-  bool Init();
-  void UnInit();
+  bool Init() override;
+  void UnInit() override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
 
-  Status Lookup(uint64_t parent_ino, const std::string& name,
-                EntryOut& entry_out);
+  Status Lookup(Ino parent, const std::string& name, Attr* attr) override;
 
-  Status MkNod(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
-  Status Open(uint64_t ino);
-  Status Release(uint64_t ino);
-  Status Read(uint64_t ino, off_t off, size_t size, char* buf, size_t& rsize);
-  Status Write(uint64_t ino, off_t off, const char* buf, size_t size,
-               size_t& wsize);
-  Status Flush(uint64_t ino);
-  Status Fsync(uint64_t ino, int data_sync);
+  Status MkNod(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+               uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status MkDir(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
-  Status RmDir(uint64_t parent_ino, const std::string& name);
-  Status OpenDir(uint64_t ino, uint64_t& fh);
-  Status ReadDir(uint64_t fh, uint64_t ino, ReadDirHandler handler);
-  Status ReadDirPlus(uint64_t fh, uint64_t ino, ReadDirPlusHandler handler);
-  Status ReleaseDir(uint64_t ino, uint64_t fh);
+  Status Open(Ino ino, int flags, Attr* attr) override;
+  Status Close(Ino ino) override;
 
-  Status Link(uint64_t ino, uint64_t new_parent_ino,
-              const std::string& new_name, EntryOut& entry_out);
-  Status UnLink(uint64_t parent_ino, const std::string& name);
-  Status Symlink(uint64_t parent_ino, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& symlink, EntryOut& entry_out);
-  Status ReadLink(uint64_t ino, std::string& symlink);
+  Status ReadSlice(Ino ino, uint64_t index,
+                   std::vector<Slice>* slices) override;
+  Status NewSliceId(uint64_t* id) override;
+  Status WriteSlice(Ino ino, uint64_t index,
+                    const std::vector<Slice>& slices) override;
 
-  Status GetAttr(uint64_t ino, AttrOut& attr_out);
-  Status SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                 AttrOut& attr_out);
-  Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(uint64_t ino, const std::string& name,
-                  const std::string& value);
-  Status ListXAttr(uint64_t ino, size_t size, std::string& out_names);
+  Status MkDir(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+               uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Rename(uint64_t parent_ino, const std::string& name,
-                uint64_t new_parent_ino, const std::string& new_name);
+  Status RmDir(Ino parent, const std::string& name) override;
+  Status OpenDir(Ino ino, uint64_t& fh) override;
+  Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
+                 bool with_attr, std::vector<DirEntry>* entries) override;
+  Status ReleaseDir(Ino ino, uint64_t fh) override;
+
+  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
+              Attr* attr) override;
+  Status Unlink(Ino parent, const std::string& name) override;
+  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
+                 uint32_t gid, const std::string& link, Attr* att) override;
+  Status ReadLink(Ino ino, std::string* link) override;
+
+  Status GetAttr(Ino ino, Attr* attr) override;
+  Status SetAttr(Ino ino, int set, const Attr& in_attr,
+                 Attr* out_attr) override;
+  Status GetXattr(Ino ino, const std::string& name,
+                  std::string* value) override;
+  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
+                  int flags) override;
+  Status ListXattr(Ino ino,
+                   std::map<std::string, std::string>* xattrs) override;
+
+  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
+                const std::string& new_name) override;
+
+  Status StatFs(Ino ino, FsStat* fs_stat) override;
 
  private:
   pb::mdsv2::FsInfo fs_info_;
@@ -213,9 +244,12 @@ class DummyFileSystem {
 
   // for store file data
   DataStorage data_storage_;
+
+  FileChunkMap file_chunk_map_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

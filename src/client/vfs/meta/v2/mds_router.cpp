@@ -21,7 +21,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 bool MonoMDSRouter::Init() { return true; }
 
@@ -85,6 +86,7 @@ mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(int64_t ino) {
   return it->second;
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

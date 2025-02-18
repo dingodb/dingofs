@@ -46,10 +46,20 @@ if(NOT THIRD_PARTY_INSTALL_PATH)
 endif()
 message("THIRD_PARTY_INSTALL_PATH:${THIRD_PARTY_INSTALL_PATH}")
 
+# dingosdk install dir
+if(NOT DINGOSDK_INSTALL_PATH)
+  if(DEFINED ENV{DINGOSDK_INSTALL_PATH})
+    set(DINGOSDK_INSTALL_PATH $ENV{DINGOSDK_INSTALL_PATH})
+  else()
+    set(DINGOSDK_INSTALL_PATH "$ENV{HOME}/.local/dingo-sdk")
+  endif()
+endif()
+message("DINGOSDK_INSTALL_PATH:${DINGOSDK_INSTALL_PATH}")
+
 set(CMAKE_PREFIX_PATH
   ${THIRD_PARTY_INSTALL_PATH}
   ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient
-  /home/dengzihui/.local/dingo-sdk
+  ${DINGOSDK_INSTALL_PATH}
   ${CMAKE_PREFIX_PATH}
   )
 message("CMAKE_PREFIX_PATH:${CMAKE_PREFIX_PATH}")
@@ -57,14 +67,17 @@ message("CMAKE_PREFIX_PATH:${CMAKE_PREFIX_PATH}")
 # link first lookup from THIRD_PARTY_INSTALL_PATH
 link_directories(BEFORE ${THIRD_PARTY_INSTALL_PATH}/lib)
 link_directories(BEFORE ${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
+link_directories(BEFORE ${DINGOSDK_INSTALL_PATH}/lib)
 
 # include dir
 include_directories(${THIRD_PARTY_INSTALL_PATH}/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
-include_directories(/home/dengzihui/.local/dingo-sdk/include)
+include_directories(${DINGOSDK_INSTALL_PATH}/include)
+
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 add_definitions(-DUSE_BTHREAD_MUTEX)
+message("CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
 
 execute_process(
   COMMAND git describe --always --dirty

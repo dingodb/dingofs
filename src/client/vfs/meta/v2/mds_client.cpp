@@ -14,90 +14,67 @@
 
 #include "client/vfs/meta/v2/mds_client.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <string>
-#include <utility>
 
-#include "client/filesystem/meta.h"
+#include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
-static pb::metaserver::FsFileType ToFsFileType(pb::mdsv2::FileType type) {
+static uint64_t ToTimestamp(const struct timespec& ts) {
+  return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {
     case pb::mdsv2::FileType::FILE:
-      return pb::metaserver::FsFileType::TYPE_FILE;
+      return FileType::kFile;
+
     case pb::mdsv2::FileType::DIRECTORY:
-      return pb::metaserver::FsFileType::TYPE_DIRECTORY;
+      return FileType::kDirectory;
+
     case pb::mdsv2::FileType::SYM_LINK:
-      return pb::metaserver::FsFileType::TYPE_SYM_LINK;
+      return FileType::kSymlink;
+
     default:
-      return pb::metaserver::FsFileType::TYPE_FILE;
+      CHECK(false) << "unknown file type: " << type;
   }
 }
 
-static void FillInodeAttr(const pb::mdsv2::Inode& inode, EntryOut& entry_out) {
-  auto& attr = entry_out.attr;
+static Attr ToAttr(const pb::mdsv2::Inode& inode) {
+  Attr out_attr;
 
-  attr.set_inodeid(inode.ino());
-  attr.set_fsid(inode.fs_id());
-  attr.set_length(inode.length());
+  out_attr.ino = inode.ino();
+  out_attr.mode = inode.mode();
+  out_attr.nlink = inode.nlink();
+  out_attr.uid = inode.uid();
+  out_attr.gid = inode.gid();
+  out_attr.length = inode.length();
+  out_attr.rdev = inode.rdev();
+  out_attr.atime = inode.atime();
+  out_attr.mtime = inode.mtime();
+  out_attr.ctime = inode.ctime();
+  out_attr.type = ToFileType(inode.type());
 
-  attr.set_ctime(inode.ctime() / 1000000000);
-  attr.set_ctime_ns(inode.ctime() % 1000000000);
-  attr.set_mtime(inode.mtime() / 1000000000);
-  attr.set_mtime_ns(inode.mtime() % 1000000000);
-  attr.set_atime(inode.atime() / 1000000000);
-  attr.set_atime_ns(inode.atime() % 1000000000);
-
-  attr.set_mode(attr.mode());
-  attr.set_uid(inode.uid());
-  attr.set_gid(inode.gid());
-  attr.set_nlink(inode.nlink());
-
-  attr.set_rdev(inode.rdev());
-  attr.set_dtime(inode.dtime());
-  attr.set_type(ToFsFileType(inode.type()));
-
-  attr.set_symlink(inode.symlink());
-
-  *(attr.mutable_xattr()) = inode.xattrs();
+  return out_attr;
 }
 
-static void FillInodeAttr(const pb::mdsv2::Inode& inode, AttrOut& entry_out) {
-  auto& attr = entry_out.attr;
+static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
+  DirEntry out_entry;
+  out_entry.name = entry.name();
+  out_entry.ino = entry.ino();
+  out_entry.attr = ToAttr(entry.inode());
 
-  attr.set_inodeid(inode.ino());
-  attr.set_fsid(inode.fs_id());
-  attr.set_length(inode.length());
-
-  attr.set_ctime(inode.ctime() / 1000000000);
-  attr.set_ctime_ns(inode.ctime() % 1000000000);
-  attr.set_mtime(inode.mtime() / 1000000000);
-  attr.set_mtime_ns(inode.mtime() % 1000000000);
-  attr.set_atime(inode.atime() / 1000000000);
-  attr.set_atime_ns(inode.atime() % 1000000000);
-
-  attr.set_mode(attr.mode());
-  attr.set_uid(inode.uid());
-  attr.set_gid(inode.gid());
-  attr.set_nlink(inode.nlink());
-
-  attr.set_rdev(inode.rdev());
-  attr.set_dtime(inode.dtime());
-  attr.set_type(ToFsFileType(inode.type()));
-
-  attr.set_symlink(inode.symlink());
-
-  *(attr.mutable_xattr()) = inode.xattrs();
+  return out_entry;
 }
 
 bool MDSClient::Init() { return true; }
@@ -172,7 +149,7 @@ EndPoint MDSClient::GetEndPointByParentIno(int64_t parent_ino) {
 }
 
 Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
-                         EntryOut& entry_out) {
+                         Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByParentIno(parent_ino);
@@ -193,14 +170,14 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
   // save ino to parent mapping
   parent_cache_->Upsert(response.inode().ino(), parent_ino);
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
 
 Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        EntryOut& entry_out) {
+                        Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   auto endpoint = GetEndPointByParentIno(parent_ino);
 
@@ -225,14 +202,14 @@ Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
 
   parent_cache_->Upsert(response.inode().ino(), parent_ino);
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
 
 Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
                         uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        EntryOut& entry_out) {
+                        Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByParentIno(parent_ino);
@@ -258,7 +235,7 @@ Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
 
   parent_cache_->Upsert(response.inode().ino(), parent_ino);
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -284,9 +261,9 @@ Status MDSClient::RmDir(uint64_t parent_ino, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::ReadDir(
-    uint64_t ino, std::string& last_name, uint32_t limit, bool with_attr,
-    std::vector<pb::mdsv2::ReadDirResponse::Entry>& entries) {
+Status MDSClient::ReadDir(uint64_t ino, const std::string& last_name,
+                          uint32_t limit, bool with_attr,
+                          std::vector<DirEntry>& entries) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByIno(ino);
@@ -306,11 +283,10 @@ Status MDSClient::ReadDir(
     return status;
   }
 
-  entries.resize(response.entries_size());
-  for (int i = 0; i < response.entries_size(); ++i) {
-    auto* entry = response.mutable_entries(i);
-    parent_cache_->Upsert(entry->ino(), ino);
-    entries[i].Swap(entry);
+  entries.reserve(response.entries_size());
+  for (const auto& entry : response.entries()) {
+    parent_cache_->Upsert(entry.ino(), ino);
+    entries.push_back(ToDirEntry(entry));
   }
 
   return Status::OK();
@@ -357,7 +333,7 @@ Status MDSClient::Release(uint64_t ino) {
 }
 
 Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
-                       const std::string& new_name, EntryOut& entry_out) {
+                       const std::string& new_name, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByParentIno(new_parent_ino);
@@ -378,7 +354,7 @@ Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
 
   parent_cache_->Upsert(response.inode().ino(), new_parent_ino);
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -405,7 +381,7 @@ Status MDSClient::UnLink(uint64_t parent_ino, const std::string& name) {
 
 Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
                           uint32_t uid, uint32_t gid,
-                          const std::string& symlink, EntryOut& entry_out) {
+                          const std::string& symlink, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByParentIno(parent_ino);
@@ -429,7 +405,7 @@ Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
 
   parent_cache_->Upsert(response.inode().ino(), parent_ino);
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -456,7 +432,7 @@ Status MDSClient::ReadLink(uint64_t ino, std::string& symlink) {
   return Status::OK();
 }
 
-Status MDSClient::GetAttr(uint64_t ino, AttrOut& entry_out) {
+Status MDSClient::GetAttr(uint64_t ino, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByIno(ino);
@@ -473,17 +449,24 @@ Status MDSClient::GetAttr(uint64_t ino, AttrOut& entry_out) {
     return status;
   }
 
-  entry_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
 
-static uint64_t ToTimestamp(const struct timespec& ts) {
+static uint64_t ToTimestampNs(const struct timespec& ts) {
   return ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
-Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                          AttrOut& attr_out) {
+static struct timespec ToTimeSpec(uint64_t ts_ns) {
+  struct timespec out_ts;
+  out_ts.tv_sec = ts_ns / 1000000000;
+  out_ts.tv_nsec = ts_ns % 1000000000;
+  return out_ts;
+}
+
+Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,
+                          Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByIno(ino);
@@ -496,15 +479,15 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
 
   uint32_t temp_to_set = 0;
   if (to_set & FUSE_SET_ATTR_MODE) {
-    request.set_mode(attr->st_mode);
+    request.set_mode(attr.mode);
     temp_to_set |= mdsv2::kSetAttrMode;
   }
   if (to_set & FUSE_SET_ATTR_UID) {
-    request.set_uid(attr->st_uid);
+    request.set_uid(attr.uid);
     temp_to_set |= mdsv2::kSetAttrUid;
   }
   if (to_set & FUSE_SET_ATTR_GID) {
-    request.set_gid(attr->st_gid);
+    request.set_gid(attr.gid);
     temp_to_set |= mdsv2::kSetAttrGid;
   }
 
@@ -512,7 +495,7 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
   clock_gettime(CLOCK_REALTIME, &now);
 
   if (to_set & FUSE_SET_ATTR_ATIME) {
-    request.set_atime(ToTimestamp(attr->st_atim));
+    request.set_atime(attr.atime);
     temp_to_set |= mdsv2::kSetAttrAtime;
 
   } else if (to_set & FUSE_SET_ATTR_ATIME_NOW) {
@@ -521,7 +504,7 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
   }
 
   if (to_set & FUSE_SET_ATTR_MTIME) {
-    request.set_mtime(ToTimestamp(attr->st_mtim));
+    request.set_mtime(attr.mtime);
     temp_to_set |= mdsv2::kSetAttrMtime;
 
   } else if (to_set & FUSE_SET_ATTR_MTIME_NOW) {
@@ -530,7 +513,7 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
   }
 
   if (to_set & FUSE_SET_ATTR_CTIME) {
-    request.set_ctime(ToTimestamp(attr->st_ctim));
+    request.set_ctime(attr.ctime);
     temp_to_set |= mdsv2::kSetAttrCtime;
   } else {
     request.set_ctime(ToTimestamp(now));
@@ -539,7 +522,7 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
 
   if (to_set & FUSE_SET_ATTR_SIZE) {
     // todo: Truncate data
-    request.set_length(attr->st_size);
+    request.set_length(attr.length);
   }
 
   request.set_to_set(temp_to_set);
@@ -550,7 +533,7 @@ Status MDSClient::SetAttr(uint64_t ino, struct stat* attr, int to_set,
     return status;
   }
 
-  attr_out.inode = response.inode();
+  out_attr = ToAttr(response.inode());
 
   return Status::OK();
 }
@@ -650,6 +633,106 @@ Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
   return Status::OK();
 }
 
-}  // namespace filesystem
+static Slice ToSlice(const pb::mdsv2::Slice& slice) {
+  Slice out_slice;
+
+  out_slice.id = slice.id();
+  out_slice.offset = slice.offset();
+  out_slice.length = slice.len();
+  out_slice.compaction = slice.compaction();
+  out_slice.is_zero = slice.zero();
+  out_slice.size = slice.size();
+
+  return out_slice;
+}
+
+static pb::mdsv2::Slice ToSlice(const Slice& slice) {
+  pb::mdsv2::Slice out_slice;
+
+  out_slice.set_id(slice.id);
+  out_slice.set_offset(slice.offset);
+  out_slice.set_len(slice.length);
+  out_slice.set_compaction(slice.compaction);
+  out_slice.set_zero(slice.is_zero);
+  out_slice.set_size(slice.size);
+
+  return out_slice;
+}
+
+Status MDSClient::ReadSlice(Ino ino, uint64_t index,
+                            std::vector<Slice>* slices) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(slices != nullptr) << "slices is nullptr.";
+
+  auto endpoint = GetEndPointByIno(ino);
+
+  pb::mdsv2::ReadSliceRequest request;
+  pb::mdsv2::ReadSliceResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_chunk_index(index);
+
+  auto status =
+      rpc_->SendRequest(endpoint, "MDSService", "ReadSlice", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (const auto& slice : response.slice_list().slices()) {
+    slices->push_back(ToSlice(slice));
+  }
+
+  return Status::OK();
+}
+
+Status MDSClient::NewSliceId(uint64_t* id) {
+  auto endpoint = GetEndPointByParentIno(1);
+
+  pb::mdsv2::AllocSliceIdRequest request;
+  pb::mdsv2::AllocSliceIdResponse response;
+
+  request.set_alloc_num(1);
+
+  auto status = rpc_->SendRequest(endpoint, "MDSService", "AllocSliceId",
+                                  request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (!response.slice_ids().empty()) {
+    *id = response.slice_ids().at(0);
+  }
+
+  return Status::OK();
+}
+
+Status MDSClient::WriteSlice(Ino ino, uint64_t index,
+                             const std::vector<Slice>& slices) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+
+  auto endpoint = GetEndPointByIno(ino);
+
+  pb::mdsv2::WriteSliceRequest request;
+  pb::mdsv2::WriteSliceResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_chunk_index(index);
+
+  for (const auto& slice : slices) {
+    *request.mutable_slice_list()->add_slices() = ToSlice(slice);
+  }
+
+  auto status = rpc_->SendRequest(endpoint, "MDSService", "WriteSlice", request,
+                                  response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  return Status::OK();
+}
+
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

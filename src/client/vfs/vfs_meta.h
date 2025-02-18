@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_CONTEXT_H_
-#define DINGOFS_CLIENT_VFS_CONTEXT_H_
+#ifndef DINGOFS_CLIENT_VFS_META_H_
+#define DINGOFS_CLIENT_VFS_META_H_
 
 #include <cstdint>
 #include <sstream>
@@ -132,4 +132,4 @@ struct Slice {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_CONTEXT_H_
+#endif  // DINGOFS_CLIENT_VFS_META_H_

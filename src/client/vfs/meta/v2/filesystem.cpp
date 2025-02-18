@@ -14,23 +14,21 @@
 
 #include "client/vfs/meta/v2/filesystem.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <string>
 #include <vector>
 
 #include "client/vfs/meta/v2/dir_reader.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "gflags/gflags.h"
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 const uint32_t kMaxHostNameLength = 255;
 
@@ -100,9 +98,9 @@ bool MDSV2FileSystem::MountFs() {
   LOG(INFO) << fmt::format("mount point: {}.", mount_point.ShortDebugString());
 
   auto status = mds_client_->MountFs(name_, mount_point);
-  if (!status.ok() && status.error_code() != pb::error::EEXISTED) {
+  if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format("mount fs({}) info fail, mountpoint({}), {}.",
-                              name_, mount_path_, status.error_cstr());
+                              name_, mount_path_, status.ToString());
     return false;
   }
 
@@ -130,9 +128,9 @@ bool MDSV2FileSystem::UnmountFs() {
   return true;
 }
 
-Status MDSV2FileSystem::Lookup(uint64_t parent_ino, const std::string& name,
-                               EntryOut& entry_out) {
-  auto status = mds_client_->Lookup(parent_ino, name, entry_out);
+Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
+                               Attr* out_attr) {
+  auto status = mds_client_->Lookup(parent_ino, name, *out_attr);
   if (!status.ok()) {
     return status;
   }
@@ -140,11 +138,11 @@ Status MDSV2FileSystem::Lookup(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::MkNod(uint64_t parent_ino, const std::string& name,
-                              uint32_t uid, uint32_t gid, mode_t mode,
-                              dev_t rdev, EntryOut& entry_out) {
+Status MDSV2FileSystem::MkNod(Ino parent_ino, const std::string& name,
+                              uint32_t gid, uint32_t uid, uint32_t mode,
+                              uint64_t rdev, Attr* out_attr) {
   auto status =
-      mds_client_->MkNod(parent_ino, name, uid, gid, mode, rdev, entry_out);
+      mds_client_->MkNod(parent_ino, name, uid, gid, mode, rdev, *out_attr);
   if (!status.ok()) {
     return status;
   }
@@ -152,71 +150,70 @@ Status MDSV2FileSystem::MkNod(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Open(uint64_t ino) {
+Status MDSV2FileSystem::Open(Ino ino, int flags, Attr* attr) {
   LOG(INFO) << fmt::format("Open ino({}).", ino);
 
   auto status = mds_client_->Open(ino);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Open ino({}) fail, error: {}.", ino,
-                              status.error_str());
+                              status.ToString());
     return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Release(uint64_t ino) {
+Status MDSV2FileSystem::Close(Ino ino) {
   LOG(INFO) << fmt::format("Release ino({}).", ino);
   auto status = mds_client_->Release(ino);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Release ino({}) fail, error: {}.", ino,
-                              status.error_str());
+                              status.ToString());
     return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Read(uint64_t ino, off_t off, size_t size, char* buf,
-                             size_t& rsize) {
-  LOG(INFO) << fmt::format("Read ino({}) off({}) size({}).", ino, off, size);
-
-  std::string data(size, 0);
-
-  memcpy(buf, data.data(), data.size());
-  rsize = data.size();
-
-  return Status::OK();
-}
-
-Status MDSV2FileSystem::Write(uint64_t ino, off_t off, const char* buf,
-                              size_t size, size_t& wsize) {
-  LOG(INFO) << fmt::format("Write ino({}) off({}) size({}).", ino, off, size);
-
-  std::string data(size, 0);
-
-  memcpy(const_cast<char*>(data.data()), buf, data.size());
-
-  wsize = data.size();
+Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
+                                  std::vector<Slice>* slices) {
+  auto status = mds_client_->ReadSlice(ino, index, slices);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("ReeadSlice ino({}) fail, error: {}.", ino,
+                              status.ToString());
+    return status;
+  }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Flush(uint64_t ino) {
-  LOG(INFO) << fmt::format("Flush ino({}).", ino);
+Status MDSV2FileSystem::NewSliceId(uint64_t* id) {
+  auto status = mds_client_->NewSliceId(id);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("NewSliceId fail, error: {}.", status.ToString());
+    return status;
+  }
+
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Fsync(uint64_t ino, int data_sync) {
-  LOG(INFO) << fmt::format("Fsync ino({}) data_sync({}).", ino, data_sync);
+Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
+                                   const std::vector<Slice>& slices) {
+  auto status = mds_client_->WriteSlice(ino, index, slices);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("WriteSlice ino({}) fail, error: {}.", ino,
+                              status.ToString());
+    return status;
+  }
+
   return Status::OK();
 }
 
-Status MDSV2FileSystem::MkDir(uint64_t parent_ino, const std::string& name,
-                              uint32_t uid, uint32_t gid, mode_t mode,
-                              dev_t rdev, EntryOut& entry_out) {
+Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t gid,
+                              uint32_t uid, uint32_t mode, uint64_t rdev,
+                              Attr* out_attr) {
   auto status =
-      mds_client_->MkDir(parent_ino, name, uid, gid, mode, rdev, entry_out);
+      mds_client_->MkDir(parent, name, uid, gid, mode, rdev, *out_attr);
   if (!status.ok()) {
     return status;
   }
@@ -224,15 +221,15 @@ Status MDSV2FileSystem::MkDir(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
-  auto status = mds_client_->RmDir(parent_ino, name);
+Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
+  auto status = mds_client_->RmDir(parent, name);
   if (!status.ok()) {
     return status;
   }
   return Status::OK();
 }
 
-Status MDSV2FileSystem::OpenDir(uint64_t ino, uint64_t& fh) {
+Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t& fh) {
   LOG(INFO) << fmt::format("OpenDir ino({}) fh({}).", ino, fh);
 
   fh = dir_reader_.NewState(ino);
@@ -240,95 +237,22 @@ Status MDSV2FileSystem::OpenDir(uint64_t ino, uint64_t& fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadDir(uint64_t fh, uint64_t ino,
-                                ReadDirHandler handler) {
-  LOG(INFO) << fmt::format("ReadDir ino({}) fh({}).", ino, fh);
+Status MDSV2FileSystem::ReadDir(Ino ino, const std::string& last_name,
+                                uint32_t size, bool with_attr,
+                                std::vector<DirEntry>* entries) {
+  LOG(INFO) << fmt::format("ReadDir ino({}).", ino);
 
-  auto state = dir_reader_.GetState(fh);
-  if (state == nullptr) {
-    return Status(pb::error::ENO_DATA, "no data");
-  }
-
-  for (;;) {
-    for (; state->offset < state->entries.size(); ++state->offset) {
-      const auto& entry = state->entries[state->offset];
-      if (!handler(entry.name(), entry.ino())) {
-        return Status::OK();
-      }
-    }
-
-    if (state->is_end) {
-      LOG(INFO) << fmt::format("ReadDir({}/{}) end.", ino, fh);
-      return Status::OK();
-    }
-
-    std::vector<DirReader::Entry> entries;
-    auto status = mds_client_->ReadDir(
-        ino, state->last_name, FLAGS_read_dir_batch_size, false, entries);
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("ReadDir({}/{}) fail, error: {}.", ino, fh,
-                                status.error_str());
-      return status;
-    }
-
-    if (entries.size() == FLAGS_read_dir_batch_size) {
-      state->last_name = entries.back().name();
-    } else {
-      state->is_end = true;
-    }
-
-    state->entries.swap(entries);
-    state->offset = 0;
+  auto status = mds_client_->ReadDir(ino, last_name, size, with_attr, *entries);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("ReadDir({}) fail, error: {}.", ino,
+                              status.ToString());
+    return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadDirPlus(uint64_t fh, uint64_t ino,
-                                    ReadDirPlusHandler handler) {
-  LOG(INFO) << fmt::format("ReadDirPlus ino({}) fh({}).", ino, fh);
-
-  auto state = dir_reader_.GetState(fh);
-  if (state == nullptr) {
-    return Status(pb::error::ENO_DATA, "no data");
-  }
-
-  for (;;) {
-    for (; state->offset < state->entries.size(); ++state->offset) {
-      const auto& entry = state->entries[state->offset];
-      if (!handler(entry.name(), entry.inode())) {
-        return Status::OK();
-      }
-    }
-
-    if (state->is_end) {
-      LOG(INFO) << fmt::format("ReadDir({}/{}) end.", ino, fh);
-      return Status::OK();
-    }
-
-    std::vector<DirReader::Entry> entries;
-    auto status = mds_client_->ReadDir(
-        ino, state->last_name, FLAGS_read_dir_batch_size, true, entries);
-    if (!status.ok()) {
-      LOG(ERROR) << fmt::format("ReadDir({}/{}) fail, error: {}.", ino, fh,
-                                status.error_str());
-      return status;
-    }
-
-    if (entries.size() == FLAGS_read_dir_batch_size) {
-      state->last_name = entries.back().name();
-    } else {
-      state->is_end = true;
-    }
-
-    state->entries.swap(entries);
-    state->offset = 0;
-  }
-
-  return Status::OK();
-}
-
-Status MDSV2FileSystem::ReleaseDir(uint64_t ino, uint64_t fh) {
+Status MDSV2FileSystem::ReleaseDir(Ino ino, uint64_t fh) {
   LOG(INFO) << fmt::format("ReleaseDir ino({}) fh({}).", ino, fh);
 
   dir_reader_.DeleteState(fh);
@@ -336,150 +260,132 @@ Status MDSV2FileSystem::ReleaseDir(uint64_t ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Link(uint64_t ino, uint64_t new_parent_ino,
-                             const std::string& new_name, EntryOut& entry_out) {
-  auto status = mds_client_->Link(ino, new_parent_ino, new_name, entry_out);
+Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
+                             const std::string& new_name, Attr* attr) {
+  auto status = mds_client_->Link(ino, new_parent, new_name, *attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Link({}/{}) to ino({}) fail, error: {}.",
-                              new_parent_ino, new_name, ino,
-                              status.error_str());
+                              new_parent, new_name, ino, status.ToString());
     return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
-  auto status = mds_client_->UnLink(parent_ino, name);
+Status MDSV2FileSystem::Unlink(Ino parent, const std::string& name) {
+  auto status = mds_client_->UnLink(parent, name);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("UnLink({}/{}) fail, error: {}.", parent_ino,
-                              name, status.error_str());
+    LOG(ERROR) << fmt::format("UnLink({}/{}) fail, error: {}.", parent, name,
+                              status.ToString());
     return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Symlink(uint64_t parent_ino, const std::string& name,
+Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
                                 uint32_t uid, uint32_t gid,
-                                const std::string& symlink,
-                                EntryOut& entry_out) {
-  auto status =
-      mds_client_->Symlink(parent_ino, name, uid, gid, symlink, entry_out);
+                                const std::string& link, Attr* out_attr) {
+  auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Symlink({}/{}) fail, symlink({}) error: {}.",
-                              parent_ino, name, symlink, status.error_str());
+                              parent, name, symlink, status.ToString());
     return status;
   }
+
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ReadLink(uint64_t ino, std::string& symlink) {
-  auto status = mds_client_->ReadLink(ino, symlink);
+Status MDSV2FileSystem::ReadLink(Ino ino, std::string* link) {
+  auto status = mds_client_->ReadLink(ino, *link);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("ReadLink {} fail, error: {}.", ino,
-                              status.error_str());
+                              status.ToString());
     return status;
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::GetAttr(uint64_t ino, AttrOut& entry_out) {
-  auto status = mds_client_->GetAttr(ino, entry_out);
+Status MDSV2FileSystem::GetAttr(Ino ino, Attr* out_attr) {
+  auto status = mds_client_->GetAttr(ino, *out_attr);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL, fmt::format("get attr fail, error: {}",
-                                                    ino, status.error_str()));
+    return Status::Internal(
+        fmt::format("get attr fail, error: {}", ino, status.ToString()));
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                                AttrOut& attr_out) {
-  auto status = mds_client_->SetAttr(ino, attr, to_set, attr_out);
+Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
+                                Attr* out_attr) {
+  auto status = mds_client_->SetAttr(ino, attr, set, *out_attr);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL,
-                  fmt::format("set attr fail, ino({}) error: {}", ino,
-                              status.error_str()));
+    return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
+                                        status.ToString()));
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::GetXAttr(uint64_t ino, const std::string& name,
-                                 std::string& value) {
+Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
+                                 std::string* value) {
   if (kXAttrBlackList.find(name) != kXAttrBlackList.end()) {
     // LOG(WARNING) << fmt::format("xattr({}) is in black list.", name);
     return Status::OK();
   }
 
-  auto status = mds_client_->GetXAttr(ino, name, value);
+  auto status = mds_client_->GetXAttr(ino, name, *value);
 
-  if (value.empty()) {
-    return Status(pb::error::ENO_DATA, "no data");
-  }
+  // if (value.empty()) {
+  //   return Status(pb::error::ENO_DATA, "no data");
+  // }
 
-  if (value.size() > kMaxXAttrValueLength) {
-    return Status(pb::error::EOUT_OF_RANGE, "out of range");
-  }
+  // if (value.size() > kMaxXAttrValueLength) {
+  //   return Status(pb::error::EOUT_OF_RANGE, "out of range");
+  // }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::SetXAttr(uint64_t ino, const std::string& name,
-                                 const std::string& value) {
+Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
+                                 const std::string& value, int flags) {
   auto status = mds_client_->SetXAttr(ino, name, value);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL,
-                  fmt::format("set xattr({}/{}) fail, ino({}) error: {}", name,
-                              value, ino, status.error_str()));
+    return Status::Internal(
+        fmt::format("set xattr({}/{}) fail, ino({}) error: {}", name, value,
+                    ino, status.ToString()));
   }
 
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ListXAttr(uint64_t ino, size_t size,
-                                  std::string& out_names) {
-  if (size == 0) {
-    return Status::OK();
-  }
+Status MDSV2FileSystem::ListXattr(Ino ino,
+                                  std::map<std::string, std::string>* xattrs) {
+  CHECK(xattrs != nullptr) << "xattrs is null.";
 
-  std::map<std::string, std::string> xattrs;
-  auto status = mds_client_->ListXAttr(ino, xattrs);
+  auto status = mds_client_->ListXAttr(ino, *xattrs);
   if (!status.ok()) {
-    return Status(pb::error::EINTERNAL,
-                  fmt::format("list xattr fail, ino({}) error: {}", ino,
-                              status.error_str()));
-  }
-
-  out_names.reserve(4096);
-  for (const auto& [name, value] : xattrs) {
-    out_names.append(name);
-    out_names.push_back('\0');
-  }
-
-  return out_names.size() <= size
-             ? Status::OK()
-             : Status(pb::error::EOUT_OF_RANGE, "out of range");
-}
-
-Status MDSV2FileSystem::Rename(uint64_t old_parent_ino,
-                               const std::string& old_name,
-                               uint64_t new_parent_ino,
-                               const std::string& new_name) {
-  auto status =
-      mds_client_->Rename(old_parent_ino, old_name, new_parent_ino, new_name);
-  if (!status.ok()) {
-    return Status(
-        pb::error::EINTERNAL,
-        fmt::format("rename fail, {}/{} -> {}/{}, error: {}", old_parent_ino,
-                    old_name, new_parent_ino, new_name, status.error_str()));
+    return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
+                                        ino, status.ToString()));
   }
 
   return Status::OK();
 }
 
-}  // namespace filesystem
+Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
+                               Ino new_parent, const std::string& new_name) {
+  auto status = mds_client_->Rename(old_parent, old_name, new_parent, new_name);
+  if (!status.ok()) {
+    return Status::Internal(
+        fmt::format("rename fail, {}/{} -> {}/{}, error: {}", old_parent,
+                    old_name, new_parent, new_name, status.ToString()));
+  }
+
+  return Status::OK();
+}
+
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

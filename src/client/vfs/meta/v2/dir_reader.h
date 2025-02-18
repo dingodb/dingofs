@@ -21,13 +21,14 @@
 #include <string>
 #include <vector>
 
-#include "client/filesystem/meta.h"
+#include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class DirReader {
  public:
@@ -58,7 +59,8 @@ class DirReader {
   std::map<uint64_t, StatePtr> state_map_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

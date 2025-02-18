@@ -12,27 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/vfs/meta/v2/dummy_filesystem.h"
+#include "client/vfs/meta/dummy/dummy_filesystem.h"
 
 #include <fcntl.h>
-#include <fmt/format.h>
-#include <glog/logging.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
-#include <vector>
 
+#include "bthread/mutex.h"
+#include "client/fuse/fuse_common.h"
 #include "dingofs/error.pb.h"
-#include "mdsv2/common/status.h"
+#include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 
 static const uint32_t kFsID = 10000;
 static const uint64_t kRootIno = 1;
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 ReadDirStateMemo::ReadDirStateMemo() {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
@@ -154,7 +157,7 @@ Status DataStorage::Read(uint64_t ino, off_t off, size_t size, char* buf,
   DataBufferPtr buffer = GetDataBuffer(ino);
 
   if (off >= buffer->data.size()) {
-    return Status(pb::error::EOUT_OF_RANGE, "offset is out of range");
+    return Status::Internal(pb::error::EOUT_OF_RANGE, "offset is out of range");
   }
 
   rsize = std::min(size, buffer->data.size() - off);
@@ -187,6 +190,49 @@ bool DataStorage::GetLength(uint64_t ino, size_t& length) {
   length = it->second->data.size();
 
   return true;
+}
+
+FileChunkMap::FileChunkMap() {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+}
+
+FileChunkMap::~FileChunkMap() {
+  CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
+}
+
+Status FileChunkMap::NewSliceId(uint64_t* id) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  *id = slice_id_generator_.fetch_add(1);
+
+  return Status::OK();
+}
+
+Status FileChunkMap::Read(uint64_t ino, uint64_t index,
+                          std::vector<Slice>* slices) {
+  auto it = chunk_map_.find(ino);
+  if (it == chunk_map_.end()) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found chunk");
+  }
+
+  *slices = it->second.slices[index];
+
+  return Status::OK();
+}
+
+Status FileChunkMap::Write(uint64_t ino, uint64_t index,
+                           const std::vector<Slice>& slices) {
+  auto it = chunk_map_.find(ino);
+  if (it == chunk_map_.end()) {
+    Chunk chunk;
+    chunk.slices[index] = slices;
+    chunk_map_[ino] = chunk;
+  } else {
+    auto& mut_slices = it->second.slices[index];
+    mut_slices.insert(mut_slices.end(), slices.begin(), slices.end());
+  }
+
+  return Status::OK();
 }
 
 DummyFileSystem::DummyFileSystem() {
@@ -283,31 +329,86 @@ bool DummyFileSystem::Init() {
 
 void DummyFileSystem::UnInit() {}
 
-Status DummyFileSystem::Lookup(uint64_t parent_ino, const std::string& name,
-                               EntryOut& entry_out) {
+// message Inode {
+//   uint32 fs_id = 1;
+//   uint64 ino = 2;
+//   uint64 length = 3;
+//   uint64 ctime = 4;
+//   uint64 mtime = 5;
+//   uint64 atime = 6;
+//   uint32 uid = 10;
+//   uint32 gid = 11;
+//   uint32 mode = 12;
+//   uint32 nlink = 13;
+//   FileType type = 14;
+//   string symlink = 15;
+//   uint64 rdev = 16;
+//   uint32 dtime = 17;
+//   uint32 openmpcount = 18;
+//   repeated uint64 parent_inos = 19;
+//   // chunk index -> slice list
+//   map<uint64, SliceList> chunks = 20;
+//   map<string, bytes> xattrs = 21;
+// }
+
+static FileType ToFileType(pb::mdsv2::FileType type) {
+  switch (type) {
+    case pb::mdsv2::FileType::FILE:
+      return FileType::kFile;
+
+    case pb::mdsv2::FileType::DIRECTORY:
+      return FileType::kDirectory;
+
+    case pb::mdsv2::FileType::SYM_LINK:
+      return FileType::kSymlink;
+
+    default:
+      CHECK(false) << "unknown file type: " << type;
+  }
+}
+
+static Attr ToAttr(const pb::mdsv2::Inode& inode) {
+  Attr attr;
+  attr.ino = inode.ino();
+  attr.length = inode.length();
+  attr.atime = inode.atime();
+  attr.mtime = inode.mtime();
+  attr.ctime = inode.ctime();
+  attr.uid = inode.uid();
+  attr.gid = inode.gid();
+  attr.mode = inode.mode();
+  attr.nlink = inode.nlink();
+  attr.type = ToFileType(inode.type());
+  attr.rdev = inode.rdev();
+
+  return attr;
+}
+
+Status DummyFileSystem::Lookup(Ino parent, const std::string& name,
+                               Attr* attr) {
   PBDentry dentry;
-  if (!GetChildDentry(parent_ino, name, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found dentry");
+  if (!GetChildDentry(parent, name, dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found dentry");
   }
 
   PBInode inode;
   if (!GetInode(dentry.ino(), inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  entry_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::MkNod(uint64_t parent_ino, const std::string& name,
-                              uint32_t uid, uint32_t gid, mode_t mode,
-                              dev_t rdev, EntryOut& entry_out) {
+Status DummyFileSystem::MkNod(Ino parent, const std::string& name, uint32_t gid,
+                              uint32_t uid, uint32_t mode, uint64_t rdev,
+                              Attr* attr) {
   uint32_t fs_id = fs_info_.fs_id();
 
   Dentry dentry;
-  if (!GetDentry(parent_ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(parent, dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
   uint64_t ino = GenIno();
@@ -318,17 +419,17 @@ Status DummyFileSystem::MkNod(uint64_t parent_ino, const std::string& name,
   inode.set_rdev(rdev);
 
   auto pb_dentry =
-      GenDentry(fs_id, parent_ino, ino, name, pb::mdsv2::FileType::FILE);
+      GenDentry(fs_id, parent, ino, name, pb::mdsv2::FileType::FILE);
 
-  AddChildDentry(parent_ino, pb_dentry);
+  AddChildDentry(parent, pb_dentry);
   AddInode(inode);
 
-  entry_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::Open(uint64_t ino) {
+Status DummyFileSystem::Open(Ino ino, int flags, Attr* attr) {
   if (open_file_memo_.IsOpened(ino)) {
     open_file_memo_.Open(ino);
     return Status::OK();
@@ -339,7 +440,7 @@ Status DummyFileSystem::Open(uint64_t ino) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Release(uint64_t ino) {
+Status DummyFileSystem::Close(Ino ino) {
   if (!open_file_memo_.IsOpened(ino)) {
     return Status::OK();
   }
@@ -349,53 +450,28 @@ Status DummyFileSystem::Release(uint64_t ino) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Read(uint64_t ino, off_t off, size_t size, char* buf,
-                             size_t& rsize) {
-  auto status = data_storage_.Read(ino, off, size, buf, rsize);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("read fail, error: {} {}.", status.error_code(),
-                              status.error_str());
-  }
-  return status;
+Status DummyFileSystem::ReadSlice(Ino ino, uint64_t index,
+                                  std::vector<Slice>* slices) {
+  return file_chunk_map_.Read(ino, index, slices);
 }
 
-Status DummyFileSystem::Write(uint64_t ino, off_t off, const char* buf,
-                              size_t size, size_t& wsize) {
-  auto status = data_storage_.Write(ino, off, buf, size);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("write fail, error: {} {}.", status.error_code(),
-                              status.error_str());
-    return status;
-  }
-
-  wsize = size;
-
-  size_t length = 0;
-  if (data_storage_.GetLength(ino, length)) {
-    UpdateInodeLength(ino, length);
-  }
-
-  return Status::OK();
+Status DummyFileSystem::NewSliceId(uint64_t* id) {
+  return file_chunk_map_.NewSliceId(id);
 }
 
-Status DummyFileSystem::Flush(uint64_t ino) {
-  LOG(INFO) << fmt::format("Flush ino({}).", ino);
-  return Status::OK();
+Status DummyFileSystem::WriteSlice(Ino ino, uint64_t index,
+                                   const std::vector<Slice>& slices) {
+  return file_chunk_map_.Write(ino, index, slices);
 }
 
-Status DummyFileSystem::Fsync(uint64_t ino, int data_sync) {
-  LOG(INFO) << fmt::format("Fsync ino({}) data_sync({}).", ino, data_sync);
-  return Status::OK();
-}
-
-Status DummyFileSystem::MkDir(uint64_t parent_ino, const std::string& name,
-                              uint32_t uid, uint32_t gid, mode_t mode,
-                              dev_t rdev, EntryOut& entry_out) {
+Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t gid,
+                              uint32_t uid, uint32_t mode, uint64_t rdev,
+                              Attr* attr) {
   uint32_t fs_id = fs_info_.fs_id();
 
   Dentry parent_dentry;
-  if (!GetDentry(parent_ino, parent_dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(parent, parent_dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
   uint64_t ino = GenIno();
@@ -406,42 +482,43 @@ Status DummyFileSystem::MkDir(uint64_t parent_ino, const std::string& name,
   inode.set_rdev(rdev);
 
   auto pb_dentry =
-      GenDentry(fs_id, parent_ino, ino, name, pb::mdsv2::FileType::DIRECTORY);
+      GenDentry(fs_id, parent, ino, name, pb::mdsv2::FileType::DIRECTORY);
 
   Dentry dentry;
   dentry.dentry = pb_dentry;
 
-  AddChildDentry(parent_ino, pb_dentry);
+  AddChildDentry(parent, pb_dentry);
   AddDentry(dentry);
   AddInode(inode);
 
-  entry_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
+Status DummyFileSystem::RmDir(Ino parent, const std::string& name) {
   Dentry parent_dentry;
-  if (!GetDentry(parent_ino, parent_dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(parent, parent_dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
   PBDentry pb_dentry;
-  if (!GetChildDentry(parent_ino, name, pb_dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found dentry at parent");
+  if (!GetChildDentry(parent, name, pb_dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND,
+                            "not found dentry at parent");
   }
 
   Dentry dentry;
   if (!GetDentry(pb_dentry.ino(), dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found dentry");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found dentry");
   }
 
   if (!IsEmptyDentry(dentry)) {
-    return Status(pb::error::ENOT_EMPTY, "not empty dentry");
+    return Status::Internal(pb::error::ENOT_EMPTY, "not empty dentry");
   }
 
   DeleteDentry(name);
-  DeleteChildDentry(parent_ino, name);
+  DeleteChildDentry(parent, name);
 
   DeleteInode(pb_dentry.ino());
 
@@ -455,77 +532,49 @@ Status DummyFileSystem::OpenDir(uint64_t ino, uint64_t& fh) {
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadDir(uint64_t fh, uint64_t ino,
-                                ReadDirHandler handler) {
-  ReadDirStateMemo::State state;
-  if (!read_dir_state_memo_.GetState(fh, state)) {
-    return Status(pb::error::ENOT_FOUND, "not found fh");
-  }
-  if (state.is_end) {
-    return Status::OK();
-  }
+Status DummyFileSystem::ReadDir(Ino ino, const std::string& last_name,
+                                uint32_t size, bool with_attr,
+                                std::vector<DirEntry>* entries) {
+  // ReadDirStateMemo::State state;
+  // if (!read_dir_state_memo_.GetState(fh, state)) {
+  //   return Status::Internal(pb::error::ENOT_FOUND, "not found fh");
+  // }
+  // if (state.is_end) {
+  //   return Status::OK();
+  // }
 
   Dentry dentry;
   if (!GetDentry(ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
-  auto it = state.last_name.empty() ? dentry.children.begin()
-                                    : dentry.children.find(state.last_name);
+  auto it = last_name.empty() ? dentry.children.begin()
+                              : dentry.children.find(last_name);
   for (; it != dentry.children.end(); ++it) {
     auto& pb_dentry = it->second;
-    if (!handler(pb_dentry.name(), pb_dentry.ino())) {
-      state.last_name = pb_dentry.name();
-      read_dir_state_memo_.UpdateState(fh, state);
-      return Status::OK();
+
+    DirEntry entry;
+    entry.name = pb_dentry.name();
+    entry.ino = pb_dentry.ino();
+    if (with_attr) {
+      PBInode inode;
+      if (!GetInode(pb_dentry.ino(), inode)) {
+        continue;
+      }
+
+      entry.attr = ToAttr(inode);
+    }
+
+    entries->push_back(entry);
+    if (entries->size() < size) {
+      break;
     }
   }
-
-  state.is_end = true;
-  read_dir_state_memo_.UpdateState(fh, state);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadDirPlus(uint64_t fh, uint64_t ino,
-                                    ReadDirPlusHandler handler) {
-  ReadDirStateMemo::State state;
-  if (!read_dir_state_memo_.GetState(fh, state)) {
-    return Status(pb::error::ENOT_FOUND, "not found fh");
-  }
-  if (state.is_end) {
-    return Status::OK();
-  }
-
-  Dentry dentry;
-  if (!GetDentry(ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
-  }
-
-  auto it = state.last_name.empty() ? dentry.children.begin()
-                                    : dentry.children.find(state.last_name);
-  for (; it != dentry.children.end(); ++it) {
-    auto& pb_dentry = it->second;
-
-    PBInode inode;
-    if (!GetInode(pb_dentry.ino(), inode)) {
-      continue;
-    }
-
-    if (!handler(pb_dentry.name(), inode)) {
-      state.last_name = pb_dentry.name();
-      read_dir_state_memo_.UpdateState(fh, state);
-      return Status::OK();
-    }
-  }
-
-  state.is_end = true;
-  read_dir_state_memo_.UpdateState(fh, state);
-
-  return Status::OK();
-}
-
-Status DummyFileSystem::ReleaseDir(uint64_t ino, uint64_t fh) {
+Status DummyFileSystem::ReleaseDir(Ino ino, uint64_t fh) {
   read_dir_state_memo_.DeleteState(fh);
 
   DecOrDeleteInodeNlink(ino);
@@ -533,188 +582,187 @@ Status DummyFileSystem::ReleaseDir(uint64_t ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status DummyFileSystem::Link(uint64_t ino, uint64_t new_parent_ino,
-                             const std::string& new_name, EntryOut& entry_out) {
+Status DummyFileSystem::Link(Ino ino, Ino new_parent,
+                             const std::string& new_name, Attr* attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   if (inode.type() != pb::mdsv2::FileType::FILE) {
-    return Status(pb::error::ENOT_FILE, "not file type");
+    return Status::Internal(pb::error::ENOT_FILE, "not file type");
   }
 
   Dentry dentry;
-  if (!GetDentry(new_parent_ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(new_parent, dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
-  auto pb_dentry = GenDentry(fs_info_.fs_id(), new_parent_ino, ino, new_name,
+  auto pb_dentry = GenDentry(fs_info_.fs_id(), new_parent, ino, new_name,
                              pb::mdsv2::FileType::FILE);
 
-  AddChildDentry(new_parent_ino, pb_dentry);
+  AddChildDentry(new_parent, pb_dentry);
   IncInodeNlink(inode.ino());
 
-  entry_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
+Status DummyFileSystem::Unlink(Ino parent, const std::string& name) {
   Dentry dentry;
-  if (!GetDentry(parent_ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(parent, dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
   PBDentry child_dentry;
-  if (!GetChildDentry(parent_ino, name, child_dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found child dentry");
+  if (!GetChildDentry(parent, name, child_dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found child dentry");
   }
 
-  DeleteChildDentry(parent_ino, name);
+  DeleteChildDentry(parent, name);
   DecOrDeleteInodeNlink(child_dentry.ino());
 
   return Status::OK();
 }
 
-Status DummyFileSystem::Symlink(uint64_t parent_ino, const std::string& name,
+Status DummyFileSystem::Symlink(Ino parent, const std::string& name,
                                 uint32_t uid, uint32_t gid,
-                                const std::string& symlink,
-                                EntryOut& entry_out) {
+                                const std::string& link, Attr* attr) {
   Dentry dentry;
-  if (!GetDentry(parent_ino, dentry)) {
-    return Status(pb::error::ENOT_FOUND, "not found parent dentry");
+  if (!GetDentry(parent, dentry)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
   }
 
-  auto pb_dentry = GenDentry(fs_info_.fs_id(), parent_ino, GenIno(), name,
+  auto pb_dentry = GenDentry(fs_info_.fs_id(), parent, GenIno(), name,
                              pb::mdsv2::FileType::SYM_LINK);
   auto inode = GenInode(fs_info_.fs_id(), pb_dentry.ino(),
                         pb::mdsv2::FileType::SYM_LINK);
   inode.set_mode(S_IFLNK | 0777);
   inode.set_uid(uid);
   inode.set_gid(gid);
-  inode.set_symlink(symlink);
+  inode.set_symlink(link);
 
   AddInode(inode);
-  AddChildDentry(parent_ino, pb_dentry);
+  AddChildDentry(parent, pb_dentry);
 
-  entry_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::ReadLink(uint64_t ino, std::string& symlink) {
+Status DummyFileSystem::ReadLink(Ino ino, std::string* link) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   if (inode.type() != pb::mdsv2::FileType::SYM_LINK) {
-    return Status(pb::error::ENOT_SYMLINK, "not symlink type");
+    return Status::Internal(pb::error::ENOT_SYMLINK, "not symlink type");
   }
 
-  symlink = inode.symlink();
+  *link = inode.symlink();
 
   return Status::OK();
 }
 
-Status DummyFileSystem::GetAttr(uint64_t ino, AttrOut& attr_out) {
+Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   LOG(INFO) << fmt::format("inode: {}", inode.ShortDebugString());
 
-  attr_out.inode = inode;
+  *attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                                AttrOut& attr_out) {
+Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
+                                Attr* out_attr) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   std::vector<std::string> update_fields;
 
-  if (to_set & FUSE_SET_ATTR_MODE) {
-    inode.set_mode(attr->st_mode);
+  if (set & FUSE_SET_ATTR_MODE) {
+    inode.set_mode(attr.mode);
     update_fields.push_back("mode");
   }
-  if (to_set & FUSE_SET_ATTR_UID) {
-    inode.set_uid(attr->st_uid);
+  if (set & FUSE_SET_ATTR_UID) {
+    inode.set_uid(attr.uid);
     update_fields.push_back("uid");
   }
-  if (to_set & FUSE_SET_ATTR_GID) {
-    inode.set_gid(attr->st_gid);
+  if (set & FUSE_SET_ATTR_GID) {
+    inode.set_gid(attr.gid);
     update_fields.push_back("gid");
   }
 
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
 
-  if (to_set & FUSE_SET_ATTR_ATIME) {
-    inode.set_atime(ToTimestamp(attr->st_atim));
+  if (set & FUSE_SET_ATTR_ATIME) {
+    inode.set_atime(attr.atime);
     update_fields.push_back("atime");
 
-  } else if (to_set & FUSE_SET_ATTR_ATIME_NOW) {
+  } else if (set & FUSE_SET_ATTR_ATIME_NOW) {
     inode.set_atime(ToTimestamp(now));
     update_fields.push_back("atime");
   }
 
-  if (to_set & FUSE_SET_ATTR_MTIME) {
-    inode.set_mtime(ToTimestamp(attr->st_mtim));
+  if (set & FUSE_SET_ATTR_MTIME) {
+    inode.set_mtime(attr.mtime);
     update_fields.push_back("mtime");
 
-  } else if (to_set & FUSE_SET_ATTR_MTIME_NOW) {
+  } else if (set & FUSE_SET_ATTR_MTIME_NOW) {
     inode.set_mtime(ToTimestamp(now));
     update_fields.push_back("mtime");
   }
 
-  if (to_set & FUSE_SET_ATTR_CTIME) {
-    inode.set_ctime(ToTimestamp(attr->st_ctim));
+  if (set & FUSE_SET_ATTR_CTIME) {
+    inode.set_ctime(attr.ctime);
     update_fields.push_back("ctime");
   } else {
     inode.set_ctime(ToTimestamp(now));
     update_fields.push_back("ctime");
   }
 
-  if (to_set & FUSE_SET_ATTR_SIZE) {
+  if (set & FUSE_SET_ATTR_SIZE) {
     // todo: Truncate data
-    inode.set_length(attr->st_size);
+    inode.set_length(attr.length);
   }
 
   UpdateInode(inode, update_fields);
 
-  attr_out.inode = inode;
+  *out_attr = ToAttr(inode);
 
   return Status::OK();
 }
 
-Status DummyFileSystem::GetXAttr(uint64_t ino, const std::string& name,
-                                 std::string& value) {
+Status DummyFileSystem::GetXattr(Ino ino, const std::string& name,
+                                 std::string* value) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   const auto& xattrs = inode.xattrs();
   auto it = xattrs.find(name);
   if (it != xattrs.end()) {
-    value = it->second;
+    *value = it->second;
   }
 
   return Status::OK();
 }
 
-Status DummyFileSystem::SetXAttr(uint64_t ino, const std::string& name,
-                                 const std::string& value) {
+Status DummyFileSystem::SetXattr(Ino ino, const std::string& name,
+                                 const std::string& value, int flags) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   UpdateXAttr(ino, name, value);
@@ -722,26 +770,32 @@ Status DummyFileSystem::SetXAttr(uint64_t ino, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::ListXAttr(uint64_t ino, size_t size,
-                                  std::string& out_names) {
+Status DummyFileSystem::ListXattr(Ino ino,
+                                  std::map<std::string, std::string>* xattrs) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status(pb::error::ENOT_FOUND, "not found inode");
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  out_names.reserve(4096);
   for (const auto& [name, value] : inode.xattrs()) {
-    out_names.append(name);
-    out_names.push_back('\0');
+    xattrs->insert({name, value});
   }
 
   return Status::OK();
 }
 
-Status DummyFileSystem::Rename(uint64_t parent_ino, const std::string& name,
-                               uint64_t new_parent_ino,
-                               const std::string& new_name) {
-  return Status(pb::error::ENOT_SUPPORT, "not support");
+Status DummyFileSystem::Rename(Ino old_parent, const std::string& old_name,
+                               Ino new_parent, const std::string& new_name) {
+  return Status::Internal(pb::error::ENOT_SUPPORT, "not support");
+}
+
+Status DummyFileSystem::StatFs(Ino ino, FsStat* fs_stat) {
+  fs_stat->max_bytes = 500 * 1000 * 1000 * 1000ul;
+  fs_stat->used_bytes = 20 * 1000 * 1000 * 1000ul;
+  fs_stat->used_inodes = 100;
+  fs_stat->max_inodes = 10000;
+
+  return Status::OK();
 }
 
 void DummyFileSystem::AddDentry(const Dentry& dentry) {
@@ -960,6 +1014,7 @@ void DummyFileSystem::UpdateInodeLength(uint64_t ino, size_t length) {
   }
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

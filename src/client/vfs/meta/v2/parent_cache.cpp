@@ -19,7 +19,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 ParentCache::ParentCache() {
   // root ino is its own parent
@@ -53,6 +54,7 @@ void ParentCache::Delete(int64_t ino) {
   ino_to_parent_map_.erase(ino);
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

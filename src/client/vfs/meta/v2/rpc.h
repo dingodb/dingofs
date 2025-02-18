@@ -24,14 +24,15 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
+#include "client/common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
-#include "mdsv2/common/status.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 DECLARE_int32(rpc_retry_times);
 
@@ -129,7 +130,7 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
       LOG(ERROR) << fmt::format("RPC api_name({}) fail, {} {} {} request({}).",
                                 api_name, cntl.log_id(), cntl.ErrorCode(),
                                 cntl.ErrorText(), request.ShortDebugString());
-      return butil::Status(cntl.ErrorCode(), cntl.ErrorText());
+      return Status::Internal(cntl.ErrorCode(), cntl.ErrorText());
     }
 
     if (response.error().errcode() == pb::error::OK) {
@@ -154,10 +155,12 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
 
   } while (retry_count < FLAGS_rpc_retry_times);
 
-  return butil::Status(response.error().errcode(), response.error().errmsg());
+  return Status::Internal(response.error().errcode(),
+                          response.error().errmsg());
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

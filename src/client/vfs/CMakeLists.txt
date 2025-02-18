@@ -12,26 +12,40 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(blockcache)
-add_subdirectory(common)
-add_subdirectory(datastream)
-add_subdirectory(vfs_old)
-add_subdirectory(vfs)
+add_subdirectory(meta/dummy)
+add_subdirectory(meta/v1)
+add_subdirectory(meta/v2)
 
-file(GLOB FUSE_CLIENT_LIB_SRCS
-    "vfs_wrapper/*.cpp"
-    "fuse/*.cpp"
+
+file(GLOB VFS_SRC_LIB
+    "*.cpp"
 )
 
-add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
-target_link_libraries(fuse_client_lib
+add_library(vfs_lib ${VFS_SRC_LIB})
+
+target_link_libraries(vfs_lib
     PROTO_OBJS
-    vfs_old_lib
-    vfs_lib
+    vfs_meta_dummy_lib
+    vfs_meta_v1_lib
+    vfs_meta_v2_lib
+    dingofs_base_lib
+    rpcclient
+    dingofs_common
+    dynamic_vlog
+    dingofs_utils
+    dingofs_threading
+    stub_common
+    gflags::gflags
+    glog::glog
+    fmt::fmt
+    spdlog::spdlog
+    brpc::brpc
+    absl::memory
+    absl::strings
+    absl::synchronization
+    absl::str_format
+    absl::type_traits
+    absl::optional
+    absl::btree
     ${FUSE3_LIBRARY}
-)
-
-add_executable(dingo-fuse main.cpp)
-target_link_libraries(dingo-fuse
-    fuse_client_lib
 )

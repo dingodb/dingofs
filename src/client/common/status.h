@@ -25,10 +25,10 @@
 #include "client/common/slice.h"
 
 /// @brief Return the given status if it is not @c OK.
-#define DINGOFS_RETURN_NOT_OK(s)              \
-  do {                                      \
+#define DINGOFS_RETURN_NOT_OK(s)               \
+  do {                                         \
     const ::dingofs::client::Status& _s = (s); \
-    if (!_s.IsOK()) return _s;              \
+    if (!_s.IsOK()) return _s;                 \
   } while (0)
 
 #define DECLARE_ERROR_STATUS(NAME, CODE)                              \
@@ -42,13 +42,39 @@
   bool Is##NAME() const { return code_ == (CODE); }
 
 static const int32_t kNone = 0;
+
 namespace dingofs {
 namespace client {
 
 class Status {
+ private:
+  enum Code : uint8_t {
+    kOk = 0,
+    kInternal = 1,
+    kUnknown = 2,
+    kExist = 3,
+    kNotExist = 4,
+    kNoSpace = 5,
+    kBadFd = 6,
+    kInvaildParam = 7,
+    kNoPermission = 8,
+    kNotEmpty = 9,
+    kNoFlush = 10,
+    kNotSupport = 11,
+    kNameTooLong = 12,
+    kMountMountExist = 13,
+    kMountFailed = 14,
+    kOutOfRange = 15,
+    kNoData = 16,
+    kIoError = 17,
+    kStale = 18,
+    kNoSys = 19,
+    kNoPermitted = 20,
+  };
+
  public:
   // Create a success status.
-  Status() noexcept : code_(kOk), errno_(kNone), state_(nullptr) {}
+  Status() noexcept : code_(kOk), state_(nullptr) {}
   ~Status() = default;
 
   Status(const Status& rhs);
@@ -135,34 +161,9 @@ class Status {
       default:
         return EIO;
     }
-
   }
 
  private:
-  enum Code : uint8_t {
-    kOk = 0,
-    kInternal = 1,
-    kUnknown = 2,
-    kExist = 3,
-    kNotExist = 4,
-    kNoSpace = 5,
-    kBadFd = 6,
-    kInvaildParam = 7,
-    kNoPermission = 8,
-    kNotEmpty = 9,
-    kNoFlush = 10,
-    kNotSupport = 11,
-    kNameTooLong = 12,
-    kMountMountExist = 13,
-    kMountFailed = 14,
-    kOutOfRange = 15,
-    kNoData = 16,
-    kIoError = 17,
-    kStale = 18,
-    kNoSys = 19,
-    kNoPermitted = 20,
-  };
-
   Status(Code code, int32_t p_errno, const Slice& msg, const Slice& msg2);
 
   static std::unique_ptr<const char[]> CopyState(const char* s);

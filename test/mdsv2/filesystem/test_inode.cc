@@ -16,9 +16,6 @@
 
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
-#include "fmt/format.h"
-#include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/filesystem/inode.h"

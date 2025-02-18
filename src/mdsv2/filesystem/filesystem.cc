@@ -69,12 +69,9 @@ static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
 FileSystem::FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
                        KVStoragePtr kv_storage)
-    : self_mds_id_(self_mds_id),
-      fs_info_(fs_info),
-      id_generator_(std::move(id_generator)),
-      kv_storage_(kv_storage){
-
-      };
+    : self_mds_id_(self_mds_id), fs_info_(fs_info), id_generator_(std::move(id_generator)), kv_storage_(kv_storage) {
+  can_serve_ = CanServe(self_mds_id);
+};
 
 FileSystemPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
 

@@ -21,7 +21,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 MDSDiscovery::MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client)
     : coordinator_client_(coordinator_client) {}
@@ -89,6 +90,7 @@ bool MDSDiscovery::UpdateMDSList() {
   return true;
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

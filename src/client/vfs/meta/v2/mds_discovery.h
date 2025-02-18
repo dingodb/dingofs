@@ -26,7 +26,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class MDSDiscovery;
 using MDSDiscoveryPtr = std::shared_ptr<MDSDiscovery>;
@@ -56,7 +57,8 @@ class MDSDiscovery {
   mdsv2::CoordinatorClientPtr coordinator_client_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

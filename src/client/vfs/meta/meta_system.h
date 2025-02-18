@@ -32,16 +32,15 @@ class MetaSystem {
 
   virtual ~MetaSystem() = default;
 
+  virtual bool Init() = 0;
+  virtual void UnInit() = 0;
+
   virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
 
   // create a regular file in parent directory
-  virtual Status Mknod(Ino parent, const std::string& name, uint32_t mode,
-                       uint64_t rdev, Attr* attr) = 0;
-
-  // TODO: remove
-  // create and open a regular file
-  virtual Status Create(Ino parent, const std::string& name, uint32_t mode,
-                        Attr* attr) = 0;
+  virtual Status MkNod(Ino parent, const std::string& name, uint32_t gid,
+                       uint32_t uid, uint32_t mode, uint64_t rdev,
+                       Attr* attr) = 0;
 
   virtual Status Open(Ino ino, int flags, Attr* attr) = 0;
 
@@ -67,11 +66,6 @@ class MetaSystem {
   virtual Status WriteSlice(Ino ino, uint64_t index,
                             const std::vector<Slice>& slices) = 0;
 
-  virtual Status Unlink(Ino parent, const std::string& name) = 0;
-
-  virtual Status Rename(Ino old_parent, const std::string& old_name,
-                        Ino new_parent, const std::string& new_name) = 0;
-
   /**
    * Hard link a file to a new parent directory
    * @param ino the file to be linked
@@ -82,6 +76,8 @@ class MetaSystem {
   virtual Status Link(Ino ino, Ino new_parent, const std::string& new_name,
                       Attr* attr) = 0;
 
+  virtual Status Unlink(Ino parent, const std::string& name) = 0;
+
   /**
    * Create a symlink in parent directory
    * @param parent
@@ -89,15 +85,16 @@ class MetaSystem {
    * @param link the content of the symlink
    * @param attr output
    */
-  virtual Status Symlink(Ino parent, const std::string& name,
-                         const std::string& link, Attr* attr) = 0;
+  virtual Status Symlink(Ino parent, const std::string& name, uint32_t uid,
+                         uint32_t gid, const std::string& link, Attr* attr) = 0;
 
   virtual Status ReadLink(Ino ino, std::string* link) = 0;
 
   virtual Status GetAttr(Ino ino, Attr* attr) = 0;
 
   // attr is input and output
-  virtual Status SetAttr(Ino ino, int set, Attr* attr) = 0;
+  virtual Status SetAttr(Ino ino, int set, const Attr& in_attr,
+                         Attr* out_attr) = 0;
 
   virtual Status SetXattr(Ino ino, const std::string& name,
                           const std::string& value, int flags) = 0;
@@ -109,17 +106,24 @@ class MetaSystem {
                            std::map<std::string, std::string>* xattrs) = 0;
 
   // create a directory in parent directory
-  virtual Status Mkdir(Ino parent, const std::string& name, uint32_t mode) = 0;
+  virtual Status MkDir(Ino parent, const std::string& name, uint32_t gid,
+                       uint32_t uid, uint32_t mode, uint64_t rdev,
+                       Attr* attr) = 0;
 
-  virtual Status Rmdir(Ino parent, const std::string& name) = 0;
+  virtual Status RmDir(Ino parent, const std::string& name) = 0;
 
   // used for v1 meta to manage cache
-  virtual Status Opendir(Ino ino) = 0;
+  virtual Status OpenDir(Ino ino, uint64_t& fh) = 0;
 
-  virtual Status Readdir(Ino ino, bool with_attr,
-                         std::vector<DirEntry>* entries) = 0;
+  virtual Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
+                         bool with_attr, std::vector<DirEntry>* entries) = 0;
+
+  virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
+
+  virtual Status Rename(Ino old_parent, const std::string& old_name,
+                        Ino new_parent, const std::string& new_name) = 0;
 };
 
 }  // namespace vfs

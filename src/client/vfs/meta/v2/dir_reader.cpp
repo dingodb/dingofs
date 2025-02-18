@@ -18,7 +18,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 uint64_t DirReader::GenID() { return id_generator_.fetch_add(1); }
 
@@ -51,6 +52,7 @@ void DirReader::DeleteState(uint64_t fh) {
   state_map_.erase(fh);
 }
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

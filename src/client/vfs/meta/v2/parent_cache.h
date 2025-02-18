@@ -22,7 +22,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class ParentCache;
 using ParentCachePtr = std::shared_ptr<ParentCache>;
@@ -44,7 +45,8 @@ class ParentCache {
   std::unordered_map<int64_t, int64_t> ino_to_parent_map_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

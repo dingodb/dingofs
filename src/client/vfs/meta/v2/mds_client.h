@@ -21,15 +21,16 @@
 #include <memory>
 #include <string>
 
-#include "client/filesystem/meta.h"
+#include "client/fuse/fuse_common.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
+#include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
-#include "mdsv2/common/status.h"
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
@@ -61,32 +62,29 @@ class MDSClient {
   Status UmountFs(const std::string& name,
                   const pb::mdsv2::MountPoint& mount_point);
 
-  Status Lookup(uint64_t parent_ino, const std::string& name,
-                EntryOut& entry_out);
+  Status Lookup(uint64_t parent_ino, const std::string& name, Attr& out_attr);
 
   Status MkNod(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
+               uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
   Status MkDir(uint64_t parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, EntryOut& entry_out);
+               uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
   Status RmDir(uint64_t parent_ino, const std::string& name);
 
-  Status ReadDir(uint64_t ino, std::string& last_name, uint32_t limit,
-                 bool with_attr,
-                 std::vector<pb::mdsv2::ReadDirResponse::Entry>& entries);
+  Status ReadDir(uint64_t ino, const std::string& last_name, uint32_t limit,
+                 bool with_attr, std::vector<DirEntry>& entries);
 
   Status Open(uint64_t ino);
   Status Release(uint64_t ino);
 
   Status Link(uint64_t ino, uint64_t new_parent_ino,
-              const std::string& new_name, EntryOut& entry_out);
+              const std::string& new_name, Attr& out_attr);
   Status UnLink(uint64_t parent_ino, const std::string& name);
   Status Symlink(uint64_t parent_ino, const std::string& name, uint32_t uid,
-                 uint32_t gid, const std::string& symlink, EntryOut& entry_out);
+                 uint32_t gid, const std::string& symlink, Attr& out_attr);
   Status ReadLink(uint64_t ino, std::string& symlink);
 
-  Status GetAttr(uint64_t ino, AttrOut& entry_out);
-  Status SetAttr(uint64_t ino, struct stat* attr, int to_set,
-                 AttrOut& attr_out);
+  Status GetAttr(uint64_t ino, Attr& out_attr);
+  Status SetAttr(uint64_t ino, const Attr& attr, int to_set, Attr& out_attr);
   Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
   Status SetXAttr(uint64_t ino, const std::string& name,
                   const std::string& value);
@@ -94,6 +92,10 @@ class MDSClient {
 
   Status Rename(uint64_t old_parent_ino, const std::string& old_name,
                 uint64_t new_parent_ino, const std::string& new_name);
+
+  Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
+  Status NewSliceId(uint64_t* id);
+  Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
 
  private:
   EndPoint GetEndPointByIno(int64_t ino);
@@ -108,7 +110,8 @@ class MDSClient {
   RPCPtr rpc_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 

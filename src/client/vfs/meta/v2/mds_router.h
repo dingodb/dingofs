@@ -27,7 +27,8 @@
 
 namespace dingofs {
 namespace client {
-namespace filesystem {
+namespace vfs {
+namespace v2 {
 
 class MDSRouter {
  public:
@@ -107,7 +108,8 @@ class ParentHashMDSRouter : public MDSRouter {
   std::unordered_map<int64_t, mdsv2::MDSMeta> mdses_;
 };
 
-}  // namespace filesystem
+}  // namespace v2
+}  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
