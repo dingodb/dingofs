@@ -26,7 +26,7 @@
 #include <memory>
 
 #include "base/timer/timer_impl.h"
-#include "client/common/dynamic_config.h"
+#include "client/vfs_old/common/dynamic_config.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/dir_parent_watcher.h"

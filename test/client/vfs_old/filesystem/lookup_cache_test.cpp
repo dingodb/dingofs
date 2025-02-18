@@ -24,7 +24,7 @@
 
 #include <gtest/gtest.h>
 
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 
 namespace dingofs {
 namespace client {

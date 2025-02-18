@@ -30,7 +30,7 @@
 #include <set>
 
 #include "dingofs/metaserver.pb.h"
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 #include "client/vfs_old/filesystem/defer_sync.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/filesystem/openfile.h"

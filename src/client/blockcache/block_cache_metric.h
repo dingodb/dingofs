@@ -30,7 +30,6 @@
 
 #include "client/blockcache/block_cache_throttle.h"
 #include "client/blockcache/block_cache_uploader.h"
-#include "client/blockcache/cache_store.h"
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
 #include "utils/concurrent/task_thread_pool.h"

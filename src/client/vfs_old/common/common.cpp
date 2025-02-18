@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "client/common/common.h"
+#include "client/vfs_old/common/common.h"
 
 #include "utils/string_util.h"
 

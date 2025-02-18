@@ -20,7 +20,7 @@ add_library(client_memcached_client
 
 target_link_libraries(client_memcached_client
     PROTO_OBJS
-    client_common
+    vfs_old_common
     stub_metric
     dingofs_utils
     aws_s3_adapter

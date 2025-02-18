@@ -30,7 +30,7 @@
 #include <string>
 
 #include "base/timer/timer.h"
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/defer_sync.h"
 #include "client/vfs_old/filesystem/dir_cache.h"

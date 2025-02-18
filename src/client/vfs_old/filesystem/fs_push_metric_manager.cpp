@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "client/common/dynamic_config.h"
+#include "client/vfs_old/common/dynamic_config.h"
 #include "common/define.h"
 #include "glog/logging.h"
 #include "stub/metric/metric.h"

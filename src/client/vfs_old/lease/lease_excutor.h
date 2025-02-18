@@ -31,7 +31,7 @@
 #include <memory>
 #include <string>
 
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metacache.h"
 

@@ -26,7 +26,7 @@
 
 #include "client/common/status.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/vfs_wrapper.h"
+#include "client/vfs_wrapper/vfs_wrapper.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;

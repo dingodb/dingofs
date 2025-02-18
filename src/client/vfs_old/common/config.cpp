@@ -20,17 +20,18 @@
  * Author: xuchaojie
  */
 
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 
 #include <gflags/gflags.h>
 
 #include <string>
-#include <vector>
 
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
+#include "client/common/config.h"
 #include "client/common/dynamic_config.h"
+#include "client/vfs_old/common/dynamic_config.h"
 #include "utils/gflags_helper.h"
 
 namespace dingofs {

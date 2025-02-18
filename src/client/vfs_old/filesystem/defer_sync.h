@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "stub/rpcclient/task_excutor.h"

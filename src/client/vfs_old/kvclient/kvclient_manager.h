@@ -29,7 +29,7 @@
 #include <string>
 #include <utility>
 
-#include "client/common/config.h"
+#include "client/vfs_old/common/config.h"
 #include "client/vfs_old/kvclient/kvclient.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/task_thread_pool.h"

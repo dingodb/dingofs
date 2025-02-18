@@ -14,20 +14,13 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 add_library(client_common
-    common.cpp
-    config.cpp
     dynamic_config.cpp
-    slice.cc
-    status.cc
+    slice.cpp
+    status.cpp
 )
 
 target_link_libraries(client_common
-    PROTO_OBJS
-    stub_common
-    aws_s3_adapter
-    dingofs_utils
-    dingofs_base_lib
-    brpc::brpc
-    gflags::gflags
+    fmt::fmt
     glog::glog
+    gflags::gflags
 )

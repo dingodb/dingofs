@@ -38,7 +38,7 @@
 #include <vector>
 
 #include "aws/s3_adapter.h"
-#include "client/common/common.h"
+#include "client/vfs_old/common/common.h"
 #include "client/vfs_old/dentry_cache_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs/vfs.h"

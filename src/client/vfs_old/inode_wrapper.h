@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "dingofs/metaserver.pb.h"
-#include "client/common/common.h"
+#include "client/vfs_old/common/common.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"

@@ -24,8 +24,8 @@
 #include <memory>
 #include <string>
 
-#include "client/common/common.h"
-#include "client/common/config.h"
+#include "client/vfs_old/common/common.h"
+#include "client/vfs_old/common/config.h"
 #include "client/common/status.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/lease/lease_excutor.h"

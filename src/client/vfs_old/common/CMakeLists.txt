@@ -11,25 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_subdirectory(blockcache)
-add_subdirectory(common)
-add_subdirectory(datastream)
-add_subdirectory(vfs_old)
-
-file(GLOB FUSE_CLIENT_LIB_SRCS
-    "vfs_wrapper/*.cpp"
-    "fuse/*.cpp"
+add_library(vfs_old_common
+    common.cpp
+    config.cpp
+    dynamic_config.cpp
 )
 
-add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
-target_link_libraries(fuse_client_lib
+target_link_libraries(vfs_old_common
     PROTO_OBJS
-    vfs_old_lib
-    ${FUSE3_LIBRARY}
-)
-
-add_executable(dingo-fuse main.cpp)
-target_link_libraries(dingo-fuse
-    fuse_client_lib
+    stub_common
+    aws_s3_adapter
+    dingofs_utils
+    dingofs_base_lib
+    client_common
+    brpc::brpc
+    gflags::gflags
+    glog::glog
 )

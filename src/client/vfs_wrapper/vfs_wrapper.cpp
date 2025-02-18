@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs_wrapper.h"
+#include "client/vfs_wrapper/vfs_wrapper.h"
 
 #include <glog/logging.h>
 

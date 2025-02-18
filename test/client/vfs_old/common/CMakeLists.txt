@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(test_dingofs_client_common 
+add_executable(test_dingofs_vfs_old_common 
     test_add_ull_string.cpp
-    test_config.cpp
 )
-target_link_libraries(test_dingofs_client_common
-    client_common
+target_link_libraries(test_dingofs_vfs_old_common
+    vfs_old_common
     ${TEST_DEPS}
 )
-set_target_properties(test_dingofs_client_common PROPERTIES
+set_target_properties(test_dingofs_vfs_old_common PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )

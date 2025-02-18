@@ -35,7 +35,7 @@
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/s3_client.h"
-#include "client/common/common.h"
+#include "client/vfs_old/common/common.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs/vfs_meta.h"

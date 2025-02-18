@@ -19,6 +19,6 @@ add_library(client_datastream
     page_allocator.cpp
 )
 target_link_libraries(client_datastream
-    client_common
+    vfs_old_common
     dingofs_utils
 )
