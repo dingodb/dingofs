@@ -24,6 +24,7 @@
 #include "client/vfs_old/filesystem/filesystem.h"
 
 #include <gtest/gtest.h>
+#include <cstdint>
 
 #include "client/vfs_old/filesystem/helper/helper.h"
 
@@ -46,7 +47,7 @@ TEST_F(FileSystemTest, Lookup_Basic) {
                                   DINGOFS_ERROR::OK);
 
   EntryOut entryOut;
-  auto rc = fs->Lookup(Request(), 1, "f1", &entryOut);
+  auto rc = fs->Lookup(1, "f1", &entryOut);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -59,7 +60,7 @@ TEST_F(FileSystemTest, Lookup_NameTooLong) {
                 .Build();
 
   EntryOut entryOut;
-  auto rc = fs->Lookup(Request(), 1, std::string(256, 'x'), &entryOut);
+  auto rc = fs->Lookup(1, std::string(256, 'x'), &entryOut);
   ASSERT_EQ(rc, DINGOFS_ERROR::NAMETOOLONG);
 }
 
@@ -76,10 +77,10 @@ TEST_F(FileSystemTest, Lookup_NegativeCache) {
                                DINGOFS_ERROR::NOTEXIST);
 
   EntryOut entryOut;
-  auto rc = fs->Lookup(Request(), 1, "f1", &entryOut);
+  auto rc = fs->Lookup(1, "f1", &entryOut);
   ASSERT_EQ(rc, DINGOFS_ERROR::NOTEXIST);
 
-  rc = fs->Lookup(Request(), 1, "f1", &entryOut);
+  rc = fs->Lookup(1, "f1", &entryOut);
   ASSERT_EQ(rc, DINGOFS_ERROR::NOTEXIST);
 }
 
@@ -98,7 +99,7 @@ TEST_F(FileSystemTest, GetAttr_Basic) {
       });
 
   AttrOut attrOut;
-  auto rc = fs->GetAttr(Request(), 100, &attrOut);
+  auto rc = fs->GetAttr(100, &attrOut);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   ASSERT_EQ(attrOut.attr.inodeid(), 100);
   ASSERT_EQ(attrOut.attr.length(), 4096);
@@ -113,8 +114,8 @@ TEST_F(FileSystemTest, OpenDir_Basic) {
   EXPECT_CALL_RETURN_GetInodeAttr(*builder.GetInodeManager(),
                                   DINGOFS_ERROR::OK);
 
-  auto fi = FileInfo();
-  auto rc = fs->OpenDir(1, &fi.fh);
+  uint64_t fh = 0;
+  auto rc = fs->OpenDir(1, &fh);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -124,8 +125,7 @@ TEST_F(FileSystemTest, ReadDir_Basic) {
 
   // mock what opendir() does:
   auto handler = fs->NewHandler();
-  auto fi = FileInfo();
-  fi.fh = handler->fh;
+  uint64_t fh = handler->fh;
 
   // CASE 1: readdir success
   EXPECT_CALL_INVOKE_ListDentry(
@@ -148,7 +148,7 @@ TEST_F(FileSystemTest, ReadDir_Basic) {
 
   DirEntry dirEntry;
   auto entries = std::make_shared<DirEntryList>();
-  auto rc = fs->ReadDir(1, fi.fh, &entries);
+  auto rc = fs->ReadDir(1, fh, &entries);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   ASSERT_EQ(entries->Size(), 1);
   ASSERT_TRUE(entries->Get(1, &dirEntry));
@@ -163,8 +163,7 @@ TEST_F(FileSystemTest, ReadDir_CheckEntries) {
 
   // mock what opendir() does:
   auto handler = fs->NewHandler();
-  auto fi = FileInfo();
-  fi.fh = handler->fh;
+  uint64_t fh = handler->fh;
 
   auto CHECK_ENTRIES = [&](const std::shared_ptr<DirEntryList>& entries) {
     std::vector<DirEntry> out;
@@ -205,7 +204,7 @@ TEST_F(FileSystemTest, ReadDir_CheckEntries) {
         });
 
     auto entries = std::make_shared<DirEntryList>();
-    auto rc = fs->ReadDir(ino, fi.fh, &entries);
+    auto rc = fs->ReadDir(ino, fh, &entries);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
     CHECK_ENTRIES(entries);
   }
@@ -214,7 +213,7 @@ TEST_F(FileSystemTest, ReadDir_CheckEntries) {
   {
     // readdir from cache
     auto entries = std::make_shared<DirEntryList>();
-    auto rc = fs->ReadDir(ino, fi.fh, &entries);
+    auto rc = fs->ReadDir(ino, fh, &entries);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
     CHECK_ENTRIES(entries);
   }
@@ -224,8 +223,8 @@ TEST_F(FileSystemTest, ReleaseDir_Basic) {
   auto builder = FileSystemBuilder();
   auto fs = builder.Build();
 
-  auto fi = FileInfo();
-  auto rc = fs->ReleaseDir(fi.fh);
+  uint64_t fh = 0;
+  auto rc = fs->ReleaseDir(fh);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
 
@@ -265,14 +264,12 @@ TEST_F(FileSystemTest, Open_Basic) {
           return DINGOFS_ERROR::OK;
         });
 
-    auto fi = FileInfo();
     auto rc = fs->Open(ino);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   }
 
   // CASE 2: file already opened
   {
-    auto fi = FileInfo();
     auto rc = fs->Open(ino);
     ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   }
@@ -318,7 +315,6 @@ TEST_F(FileSystemTest, Open_StaleForAttrNotFound) {
 TEST_F(FileSystemTest, Release_Basic) {
   auto builder = FileSystemBuilder();
   auto fs = builder.Build();
-  auto fi = FileInfo();
   auto rc = fs->Release(100);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
 }
@@ -340,7 +336,6 @@ TEST_F(FileSystemTest, Release_CheckOpenStatus) {
   ASSERT_EQ(inode->GetInodeId(), ino);
 
   // CASE 2: release will close open file
-  auto fi = FileInfo();
   auto rc = fs->Release(100);
   ASSERT_EQ(rc, DINGOFS_ERROR::OK);
   yes = openfiles->IsOpened(ino, &out);

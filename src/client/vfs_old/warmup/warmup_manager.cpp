@@ -22,6 +22,7 @@
 
 #include "client/vfs_old/warmup/warmup_manager.h"
 
+#include <fcntl.h>
 #include <glog/logging.h>
 #include <unistd.h>
 
@@ -35,10 +36,9 @@
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/s3_client.h"
+#include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/common/common.h"
 #include "client/vfs_old/inode_wrapper.h"
-#include "client/vfs_old/kvclient/kvclient_manager.h"
-#include "client/vfs/vfs_meta.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/string_util.h"
@@ -66,8 +66,7 @@ using pb::metaserver::FsFileType;
 
 #define WARMUP_CHECKINTERVAL_US (1000 * 1000)
 
-bool WarmupManagerS3Impl::AddWarmupFilelist(fuse_ino_t key,
-                                            WarmupStorageType type) {
+bool WarmupManagerS3Impl::AddWarmupFilelist(Ino key, WarmupStorageType type) {
   if (!mounted_.load(std::memory_order_acquire)) {
     LOG(ERROR) << "not mounted";
     return false;
@@ -92,7 +91,7 @@ bool WarmupManagerS3Impl::AddWarmupFilelist(fuse_ino_t key,
   return true;
 }
 
-bool WarmupManagerS3Impl::AddWarmupFile(fuse_ino_t key, const std::string& path,
+bool WarmupManagerS3Impl::AddWarmupFile(Ino key, const std::string& path,
                                         WarmupStorageType type) {
   if (!mounted_.load(std::memory_order_acquire)) {
     LOG(ERROR) << "not mounted";
@@ -207,15 +206,14 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
   dingofs::utils::AddSplitStringToResult(file, "\n", list);
 }
 
-void WarmupManagerS3Impl::FetchDentryEnqueue(fuse_ino_t key,
-                                             const std::string& file) {
+void WarmupManagerS3Impl::FetchDentryEnqueue(Ino key, const std::string& file) {
   VLOG(9) << "FetchDentryEnqueue start: " << key << " file: " << file;
   auto task = [this, key, file]() { LookPath(key, file); };
   AddFetchDentryTask(key, task);
   VLOG(9) << "FetchDentryEnqueue end: " << key << " file: " << file;
 }
 
-void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
+void WarmupManagerS3Impl::LookPath(Ino key, std::string file) {
   VLOG(9) << "LookPath start key: " << key << " file: " << file;
   std::vector<std::string> split_path;
   // remove enter, newline, blank
@@ -255,7 +253,7 @@ void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
     VLOG(9) << "traverse path start: " << split_path.size();
     std::string last_name = split_path.back();
     split_path.pop_back();
-    fuse_ino_t ino = fsInfo_->rootinodeid();
+    Ino ino = fsInfo_->rootinodeid();
     for (const auto& iter : split_path) {
       VLOG(9) << "traverse path: " << iter << "ino is: " << ino;
       Dentry dentry;
@@ -283,7 +281,7 @@ void WarmupManagerS3Impl::LookPath(fuse_ino_t key, std::string file) {
   VLOG(9) << "LookPath start end: " << key << " file: " << file;
 }
 
-void WarmupManagerS3Impl::FetchDentry(fuse_ino_t key, fuse_ino_t ino,
+void WarmupManagerS3Impl::FetchDentry(Ino key, Ino ino,
                                       const std::string& file) {
   VLOG(9) << "FetchDentry start: " << file << ", ino: " << ino
           << " key: " << key;
@@ -304,8 +302,7 @@ void WarmupManagerS3Impl::FetchDentry(fuse_ino_t key, fuse_ino_t ino,
     WriteLockGuard lock(warmupInodesDequeMutex_);
     auto iter_deque = FindWarmupInodesByKeyLocked(key);
     if (iter_deque == warmupInodesDeque_.end()) {
-      warmupInodesDeque_.emplace_back(key,
-                                      std::set<fuse_ino_t>{dentry.inodeid()});
+      warmupInodesDeque_.emplace_back(key, std::set<Ino>{dentry.inodeid()});
     } else {
       iter_deque->AddFileInode(dentry.inodeid());
     }
@@ -327,7 +324,7 @@ void WarmupManagerS3Impl::FetchDentry(fuse_ino_t key, fuse_ino_t ino,
   VLOG(9) << "FetchDentry end: " << file << ", ino: " << ino;
 }
 
-void WarmupManagerS3Impl::FetchChildDentry(fuse_ino_t key, fuse_ino_t ino) {
+void WarmupManagerS3Impl::FetchChildDentry(Ino key, Ino ino) {
   VLOG(9) << "FetchChildDentry start: key:" << key << " inode: " << ino;
   std::list<Dentry> dentry_list;
   auto limit = option_.listDentryLimit;
@@ -344,8 +341,7 @@ void WarmupManagerS3Impl::FetchChildDentry(fuse_ino_t key, fuse_ino_t ino) {
       WriteLockGuard lock(warmupInodesDequeMutex_);
       auto iter_deque = FindWarmupInodesByKeyLocked(key);
       if (iter_deque == warmupInodesDeque_.end()) {
-        warmupInodesDeque_.emplace_back(key,
-                                        std::set<fuse_ino_t>{dentry.inodeid()});
+        warmupInodesDeque_.emplace_back(key, std::set<Ino>{dentry.inodeid()});
       } else {
         iter_deque->AddFileInode(dentry.inodeid());
       }
@@ -364,7 +360,7 @@ void WarmupManagerS3Impl::FetchChildDentry(fuse_ino_t key, fuse_ino_t ino) {
   VLOG(9) << "FetchChildDentry end: key:" << key << " inode: " << ino;
 }
 
-void WarmupManagerS3Impl::FetchDataEnqueue(fuse_ino_t key, fuse_ino_t ino) {
+void WarmupManagerS3Impl::FetchDataEnqueue(Ino key, Ino ino) {
   VLOG(9) << "FetchDataEnqueue start: key:" << key << " inode: " << ino;
   auto task = [key, ino, this]() {
     std::shared_ptr<InodeWrapper> inode_wrapper;
@@ -391,8 +387,7 @@ void WarmupManagerS3Impl::FetchDataEnqueue(fuse_ino_t key, fuse_ino_t ino) {
 }
 
 void WarmupManagerS3Impl::TravelChunks(
-    fuse_ino_t key, fuse_ino_t ino,
-    const S3ChunkInfoMapType& s3_chunk_info_map) {
+    Ino key, Ino ino, const S3ChunkInfoMapType& s3_chunk_info_map) {
   VLOG(9) << "travel chunk start: " << ino
           << ", size: " << s3_chunk_info_map.size();
   for (auto const& info_iter : s3_chunk_info_map) {
@@ -417,7 +412,7 @@ void WarmupManagerS3Impl::TravelChunks(
 }
 
 void WarmupManagerS3Impl::TravelChunk(
-    fuse_ino_t ino, const pb::metaserver::S3ChunkInfoList& chunk_info,
+    Ino ino, const pb::metaserver::S3ChunkInfoList& chunk_info,
     ObjectListType* prefetch_objs) {
   uint64_t block_size = s3Adaptor_->GetBlockSize();
   uint64_t chunk_size = s3Adaptor_->GetChunkSize();
@@ -504,8 +499,7 @@ void WarmupManagerS3Impl::TravelChunk(
 // TODO(hzwuhongsong): These logics are very similar to other place,
 // try to merge it
 void WarmupManagerS3Impl::WarmUpAllObjs(
-    fuse_ino_t ino,
-    const std::list<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
+    Ino ino, const std::list<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
   std::atomic<uint64_t> pending_req(0);
   dingofs::utils::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
@@ -587,7 +581,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   }
 }
 
-bool WarmupManagerS3Impl::ProgressDone(fuse_ino_t key) {
+bool WarmupManagerS3Impl::ProgressDone(Ino key) {
   bool ret;
   {
     ReadLockGuard lock_list(warmupFilelistDequeMutex_);
@@ -688,7 +682,7 @@ void WarmupManagerS3Impl::ScanWarmupFilelist() {
   }
 }
 
-void WarmupManagerS3Impl::AddFetchDentryTask(fuse_ino_t key,
+void WarmupManagerS3Impl::AddFetchDentryTask(Ino key,
                                              std::function<void()> task) {
   VLOG(9) << "add fetchDentry task: " << key;
   if (!bgFetchStop_.load(std::memory_order_acquire)) {
@@ -707,7 +701,7 @@ void WarmupManagerS3Impl::AddFetchDentryTask(fuse_ino_t key,
   }
 }
 
-void WarmupManagerS3Impl::AddFetchS3objectsTask(fuse_ino_t key,
+void WarmupManagerS3Impl::AddFetchS3objectsTask(Ino key,
                                                 std::function<void()> task) {
   VLOG(9) << "add fetchS3Objects task: " << key;
   if (!bgFetchStop_.load(std::memory_order_acquire)) {
@@ -727,7 +721,7 @@ void WarmupManagerS3Impl::AddFetchS3objectsTask(fuse_ino_t key,
 }
 
 void WarmupManagerS3Impl::PutObjectToCache(
-    fuse_ino_t ino, const std::shared_ptr<GetObjectAsyncContext>& context) {
+    Ino ino, const std::shared_ptr<GetObjectAsyncContext>& context) {
   ReadLockGuard lock(inode2ProgressMutex_);
   auto iter = FindWarmupProgressByKeyLocked(ino);
   if (iter == inode2Progress_.end()) {

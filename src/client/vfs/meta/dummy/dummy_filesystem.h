@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "bthread/types.h"
+#include "client/vfs/dir_handler.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
@@ -125,6 +126,35 @@ class FileChunkMap {
   std::map<uint64_t, Chunk> chunk_map_;
 };
 
+class DummyFileSystem;
+
+class DummyFileSystemDirHandler : public DirHandler {
+ public:
+  DummyFileSystemDirHandler(DummyFileSystem* system, Ino dir_ino)
+      : dumy_system_(system), dir_ino_(dir_ino) {}
+
+  ~DummyFileSystemDirHandler() override;
+
+  Status Init(bool with_attr) override;
+
+  uint64_t Offset() override;
+
+  Status Seek(uint64_t offset) override;
+
+  bool HasNext() override;
+
+  Status Next(DirEntry* dir_entry) override;
+
+  void SetDirEntries(std::vector<DirEntry> dir_entries);
+
+ private:
+  DummyFileSystem* dumy_system_;
+  Ino dir_ino_{0};
+  bool with_attr_{false};
+  uint64_t offset_{0};
+  std::vector<DirEntry> dir_entries_;
+};
+
 class DummyFileSystem : public vfs::MetaSystem {
  public:
   DummyFileSystem();
@@ -147,14 +177,14 @@ class DummyFileSystem : public vfs::MetaSystem {
   using ReadDirPlusHandler =
       std::function<bool(const std::string&, const PBInode&)>;
 
-  bool Init() override;
+  Status Init() override;
   void UnInit() override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
 
   Status Lookup(Ino parent, const std::string& name, Attr* attr) override;
 
-  Status MkNod(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
   Status Open(Ino ino, int flags, Attr* attr) override;
@@ -166,14 +196,15 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status WriteSlice(Ino ino, uint64_t index,
                     const std::vector<Slice>& slices) override;
 
-  Status MkDir(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
   Status RmDir(Ino parent, const std::string& name) override;
-  Status OpenDir(Ino ino, uint64_t& fh) override;
-  Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
-                 bool with_attr, std::vector<DirEntry>* entries) override;
-  Status ReleaseDir(Ino ino, uint64_t fh) override;
+
+  Status OpenDir(Ino ino) override;
+
+  // NOTE: caller own dir and the DirHandler should be deleted by caller
+  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -198,6 +229,8 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
  private:
+  friend class DummyFileSystemDirHandler;
+
   pb::mdsv2::FsInfo fs_info_;
 
   std::atomic<uint64_t> ino_generator_{1000};

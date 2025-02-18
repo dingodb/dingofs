@@ -23,12 +23,14 @@
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_META_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_META_H_
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
 
 #include "base/time/time.h"
-#include "client/fuse/fuse_common.h"
+#include "client/common/status.h"
+#include "client/vfs/dir_handler.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/dir_buffer.h"
 #include "dingofs/mdsv2.pb.h"
@@ -40,8 +42,6 @@ namespace client {
 namespace filesystem {
 
 using Ino = vfs::Ino;
-using Request = fuse_req_t;
-using FileInfo = struct fuse_file_info;
 
 struct EntryOut {
   EntryOut() = default;
@@ -77,18 +77,28 @@ struct DirEntry {
   pb::metaserver::InodeAttr attr;
 };
 
-struct FileOut {
-  FileOut() = default;
+struct FileHandler;
 
-  FileOut(FileInfo* fi, pb::metaserver::InodeAttr attr)
-      : fi(fi), attr(attr), nwritten(0) {}
+class FsDirHandler : public vfs::DirHandler {
+ public:
+  FsDirHandler() = default;
 
-  FileOut(pb::metaserver::InodeAttr attr, size_t nwritten)
-      : fi(nullptr), attr(attr), nwritten(nwritten) {}
+  ~FsDirHandler() override = default;
 
-  FileInfo* fi;
-  pb::metaserver::InodeAttr attr;
-  size_t nwritten;
+  Status Init(bool with_attr) override;
+
+  uint64_t Offset() override;
+
+  Status Seek(uint64_t offset) override;
+
+  bool HasNext() override;
+
+  Status Next(vfs::DirEntry* dir_entry) override;
+
+  std::vector<vfs::DirEntry> entries;
+ private:
+  bool with_attr_{false};
+  uint64_t offset_{0};
 };
 
 struct FileHandler {
@@ -97,8 +107,8 @@ struct FileHandler {
   base::time::TimeSpec mtime;
   bool padding;  // padding buffer
   // for read dir
-  std::vector<dingofs::client::vfs::DirEntry> entries;
-  bool entris_pading{false};
+  bool dir_handler_init{false};
+  std::unique_ptr<FsDirHandler> dir_handler;
 };
 
 class HandlerManager {
@@ -118,12 +128,6 @@ class HandlerManager {
   std::shared_ptr<DirBuffer> dirBuffer_;
   std::map<uint64_t, std::shared_ptr<FileHandler>> handlers_;
 };
-
-std::string StrMode(uint16_t mode);
-
-std::string StrEntry(EntryOut entryOut);
-
-std::string StrAttr(AttrOut attrOut);
 
 }  // namespace filesystem
 }  // namespace client

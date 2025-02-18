@@ -18,6 +18,7 @@
 #define DINGOFS_CLIENT_VFS_H_
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 #include "client/common/status.h"
@@ -31,7 +32,11 @@ struct VFSConfig {
   std::string mount_point;
   std::string fs_name;
   std::string config_path;
+  std::string fs_type;
 };
+
+using ReadDirHandler =
+    std::function<bool(const DirEntry& dir_entry, uint64_t next_offset)>;
 
 // NOT: all return value should sys error code in <errno.h>
 class VFS {
@@ -77,8 +82,8 @@ class VFS {
 
   virtual Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr) = 0;
 
-  virtual Status Create(Ino parent, const std::string& name, uint32_t mode,
-                        uint32_t uid, uint32_t gid, int flags, uint64_t* fh,
+  virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
+                        uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
                         Attr* attr) = 0;
 
   virtual Status Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
@@ -101,17 +106,17 @@ class VFS {
 
   virtual Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) = 0;
 
-  virtual Status Mkdir(Ino parent, const std::string& name, uint32_t uid,
+  virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
                        uint32_t gid, uint32_t mode, Attr* attr) = 0;
 
-  virtual Status Opendir(Ino ino, uint64_t* fh) = 0;
+  virtual Status OpenDir(Ino ino, uint64_t* fh) = 0;
 
-  virtual Status Readdir(Ino ino, uint64_t fh, bool plus,
-                         std::vector<DirEntry>* entries) = 0;
+  virtual Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                         ReadDirHandler handler) = 0;
 
   virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
 
-  virtual Status Rmdir(Ino parent, const std::string& name) = 0;
+  virtual Status RmDir(Ino parent, const std::string& name) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
 

@@ -24,13 +24,11 @@
 
 #include <sys/stat.h>
 
-#include "absl/strings/str_format.h"
+#include <cstdint>
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
-
-using pb::metaserver::InodeAttr;
 
 using utils::Mutex;
 using utils::ReadLockGuard;
@@ -98,25 +96,37 @@ std::string StrMode(uint16_t mode) {
   return s;
 }
 
-namespace {
-
-std::string Attr2Str(const InodeAttr& attr) {
-  if (!attr.IsInitialized()) {
-    return "";
-  }
-
-  std::string smode;
-  return absl::StrFormat(
-      " (%d,[%s:0%06o,%d,%d,%d,%d,%d,%d,%d])", attr.inodeid(),
-      StrMode(attr.mode()).c_str(), attr.mode(), attr.nlink(), attr.uid(),
-      attr.gid(), attr.atime(), attr.mtime(), attr.ctime(), attr.length());
+Status FsDirHandler::Init(bool with_attr) {
+  with_attr_ = with_attr;
+  return Status::OK();
 }
 
-}  // namespace
+uint64_t FsDirHandler::Offset() { return offset_; }
 
-std::string StrEntry(EntryOut entryOut) { return Attr2Str(entryOut.attr); }
+Status FsDirHandler::Seek(uint64_t offset) {
+  if (offset >= entries.size()) {
+    return Status::OutOfRange("offset out of range");
+  }
+  offset_ = offset;
+  return Status::OK();
+}
 
-std::string StrAttr(AttrOut attrOut) { return Attr2Str(attrOut.attr); }
+bool FsDirHandler::HasNext() { return offset_ < entries.size(); }
+
+Status FsDirHandler::Next(vfs::DirEntry* dir_entry) {
+  CHECK(offset_ < entries.size());
+
+  auto& entry = entries[offset_];
+  dir_entry->ino = entry.ino;
+  dir_entry->name = entry.name;
+  if (with_attr_) {
+    dir_entry->attr = entry.attr;
+  }
+
+  offset_++;
+
+  return Status::OK();
+}
 
 }  // namespace filesystem
 }  // namespace client

@@ -38,10 +38,11 @@
 #include <vector>
 
 #include "aws/s3_adapter.h"
+#include "client/vfs/vfs.h"
+#include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/common/common.h"
 #include "client/vfs_old/dentry_cache_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
-#include "client/vfs/vfs.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/task_thread_pool.h"
@@ -54,20 +55,22 @@ namespace dingofs {
 namespace client {
 namespace warmup {
 
+using dingofs::client::vfs::Ino;
+
 using ThreadPool = dingofs::common::TaskThreadPool2<bthread::Mutex,
                                                     bthread::ConditionVariable>;
 
 class WarmupFile {
  public:
-  explicit WarmupFile(fuse_ino_t key = 0, uint64_t file_len = 0)
+  explicit WarmupFile(Ino key = 0, uint64_t file_len = 0)
       : key_(key), fileLen_(file_len) {}
 
-  fuse_ino_t GetKey() const { return key_; }
+  Ino GetKey() const { return key_; }
   uint64_t GetFileLen() const { return fileLen_; }
   bool operator==(const WarmupFile& other) const { return key_ == other.key_; }
 
  private:
-  fuse_ino_t key_;
+  Ino key_;
   uint64_t fileLen_;
 };
 
@@ -75,20 +78,17 @@ using WarmupFilelist = WarmupFile;
 
 class WarmupInodes {
  public:
-  explicit WarmupInodes(fuse_ino_t key = 0,
-                        std::set<fuse_ino_t> list = std::set<fuse_ino_t>())
+  explicit WarmupInodes(Ino key = 0, std::set<Ino> list = std::set<Ino>())
       : key_(key), readAheadFiles_(std::move(list)) {}
 
-  fuse_ino_t GetKey() const { return key_; }
-  const std::set<fuse_ino_t>& GetReadAheadFiles() const {
-    return readAheadFiles_;
-  }
+  Ino GetKey() const { return key_; }
+  const std::set<Ino>& GetReadAheadFiles() const { return readAheadFiles_; }
 
-  void AddFileInode(fuse_ino_t file) { readAheadFiles_.emplace(file); }
+  void AddFileInode(Ino file) { readAheadFiles_.emplace(file); }
 
  private:
-  fuse_ino_t key_;
-  std::set<fuse_ino_t> readAheadFiles_;
+  Ino key_;
+  std::set<Ino> readAheadFiles_;
 };
 
 class WarmupProgress {
@@ -191,9 +191,8 @@ class WarmupManager {
   }
   virtual void UnInit() { ClearWarmupProcess(); }
 
-  virtual bool AddWarmupFilelist(fuse_ino_t key,
-                                 common::WarmupStorageType type) = 0;
-  virtual bool AddWarmupFile(fuse_ino_t key, const std::string& path,
+  virtual bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) = 0;
+  virtual bool AddWarmupFile(Ino key, const std::string& path,
                              common::WarmupStorageType type) = 0;
 
   void SetMounted(bool mounted) {
@@ -212,7 +211,7 @@ class WarmupManager {
    * @return true
    * @return false no this warmup task or finished
    */
-  bool QueryWarmupProgress(fuse_ino_t key, WarmupProgress* progress) {
+  bool QueryWarmupProgress(Ino key, WarmupProgress* progress) {
     bool ret = true;
     utils::ReadLockGuard lock(inode2ProgressMutex_);
     auto iter = FindWarmupProgressByKeyLocked(key);
@@ -234,8 +233,7 @@ class WarmupManager {
    * @return true
    * @return false warmupProcess has been added
    */
-  virtual bool AddWarmupProcess(fuse_ino_t key,
-                                common::WarmupStorageType type) {
+  virtual bool AddWarmupProcess(Ino key, common::WarmupStorageType type) {
     utils::WriteLockGuard lock(inode2ProgressMutex_);
     auto ret = inode2Progress_.emplace(key, WarmupProgress(type));
     return ret.second;
@@ -245,10 +243,10 @@ class WarmupManager {
    * @brief
    * Please use it with the lock inode2ProgressMutex_
    * @param key
-   * @return std::unordered_map<fuse_ino_t, WarmupProgress>::iterator
+   * @return std::unordered_map<Ino, WarmupProgress>::iterator
    */
-  std::unordered_map<fuse_ino_t, WarmupProgress>::iterator
-  FindWarmupProgressByKeyLocked(fuse_ino_t key) {
+  std::unordered_map<Ino, WarmupProgress>::iterator
+  FindWarmupProgressByKeyLocked(Ino key) {
     return inode2Progress_.find(key);
   }
 
@@ -273,7 +271,7 @@ class WarmupManager {
   std::shared_ptr<pb::mds::FsInfo> fsInfo_;
 
   // warmup progress
-  std::unordered_map<fuse_ino_t, WarmupProgress> inode2Progress_;
+  std::unordered_map<Ino, WarmupProgress> inode2Progress_;
   utils::BthreadRWLock inode2ProgressMutex_;
 
   std::shared_ptr<KVClientManager> kvClientManager_ = nullptr;
@@ -297,9 +295,8 @@ class WarmupManagerS3Impl : public WarmupManager {
                       std::move(kv_client_manager), vfs),
         s3Adaptor_(std::move(s3_adaptor)) {}
 
-  bool AddWarmupFilelist(fuse_ino_t key,
-                         common::WarmupStorageType type) override;
-  bool AddWarmupFile(fuse_ino_t key, const std::string& path,
+  bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) override;
+  bool AddWarmupFile(Ino key, const std::string& path,
                      common::WarmupStorageType type) override;
 
   void Init(const common::FuseClientOption& option) override;
@@ -311,13 +308,13 @@ class WarmupManagerS3Impl : public WarmupManager {
   void GetWarmupList(const WarmupFilelist& filelist,
                      std::vector<std::string>* list);
 
-  void FetchDentryEnqueue(fuse_ino_t key, const std::string& file);
+  void FetchDentryEnqueue(Ino key, const std::string& file);
 
-  void LookPath(fuse_ino_t key, std::string file);
+  void LookPath(Ino key, std::string file);
 
-  void FetchDentry(fuse_ino_t key, fuse_ino_t ino, const std::string& file);
+  void FetchDentry(Ino key, Ino ino, const std::string& file);
 
-  void FetchChildDentry(fuse_ino_t key, fuse_ino_t ino);
+  void FetchChildDentry(Ino key, Ino ino);
 
   /**
    * @brief
@@ -325,8 +322,7 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @param key
    * @return std::deque<WarmupInodes>::iterator
    */
-  std::deque<WarmupInodes>::iterator FindWarmupInodesByKeyLocked(
-      fuse_ino_t key) {
+  std::deque<WarmupInodes>::iterator FindWarmupInodesByKeyLocked(Ino key) {
     return std::find_if(
         warmupInodesDeque_.begin(), warmupInodesDeque_.end(),
         [key](const WarmupInodes& inodes) { return key == inodes.GetKey(); });
@@ -338,8 +334,7 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @param key
    * @return std::deque<WarmupFilelist>::iterator
    */
-  std::deque<WarmupFilelist>::iterator FindWarmupFilelistByKeyLocked(
-      fuse_ino_t key) {
+  std::deque<WarmupFilelist>::iterator FindWarmupFilelistByKeyLocked(Ino key) {
     return std::find_if(warmupFilelistDeque_.begin(),
                         warmupFilelistDeque_.end(),
                         [key](const WarmupFilelist& filelist_) {
@@ -351,11 +346,11 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @brief
    * Please use it with the lock inode2FetchDentryPoolMutex_
    * @param key
-   * @return std::unordered_map<fuse_ino_t,
+   * @return std::unordered_map<Ino,
    * std::unique_ptr<ThreadPool>>::iterator
    */
-  std::unordered_map<fuse_ino_t, std::unique_ptr<ThreadPool>>::iterator
-  FindFetchDentryPoolByKeyLocked(fuse_ino_t key) {
+  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>::iterator
+  FindFetchDentryPoolByKeyLocked(Ino key) {
     return inode2FetchDentryPool_.find(key);
   }
 
@@ -363,31 +358,30 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @brief
    * Please use it with the lock inode2FetchS3ObjectsPoolMutex_
    * @param key
-   * @return std::unordered_map<fuse_ino_t,
+   * @return std::unordered_map<Ino,
    * std::unique_ptr<ThreadPool>>::iterator
    */
-  std::unordered_map<fuse_ino_t, std::unique_ptr<ThreadPool>>::iterator
-  FindFetchS3ObjectsPoolByKeyLocked(fuse_ino_t key) {
+  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>::iterator
+  FindFetchS3ObjectsPoolByKeyLocked(Ino key) {
     return inode2FetchS3ObjectsPool_.find(key);
   }
 
-  void FetchDataEnqueue(fuse_ino_t key, fuse_ino_t ino);
+  void FetchDataEnqueue(Ino key, Ino ino);
 
   using S3ChunkInfoMapType =
       google::protobuf::Map<uint64_t, pb::metaserver::S3ChunkInfoList>;
 
   // travel all chunks
-  void TravelChunks(fuse_ino_t key, fuse_ino_t ino,
+  void TravelChunks(Ino key, Ino ino,
                     const S3ChunkInfoMapType& s3_chunk_info_map);
 
   using ObjectListType = std::list<std::pair<blockcache::BlockKey, uint64_t>>;
   // travel and download all objs belong to the chunk
-  void TravelChunk(fuse_ino_t ino,
-                   const pb::metaserver::S3ChunkInfoList& chunk_info,
+  void TravelChunk(Ino ino, const pb::metaserver::S3ChunkInfoList& chunk_info,
                    ObjectListType* prefetch_objs);
 
   // warmup all the prefetchObjs
-  void WarmUpAllObjs(fuse_ino_t ino,
+  void WarmUpAllObjs(Ino ino,
                      const std::list<std::pair<blockcache::BlockKey, uint64_t>>&
                          prefetch_objs);
 
@@ -397,7 +391,7 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @return true
    * @return false
    */
-  bool ProgressDone(fuse_ino_t key);
+  bool ProgressDone(Ino key);
 
   void ScanCleanFetchDentryPool();
 
@@ -409,13 +403,12 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   void ScanWarmupFilelist();
 
-  void AddFetchDentryTask(fuse_ino_t key, std::function<void()> task);
+  void AddFetchDentryTask(Ino key, std::function<void()> task);
 
-  void AddFetchS3objectsTask(fuse_ino_t key, std::function<void()> task);
+  void AddFetchS3objectsTask(Ino key, std::function<void()> task);
 
   void PutObjectToCache(
-      fuse_ino_t ino,
-      const std::shared_ptr<aws::GetObjectAsyncContext>& context);
+      Ino ino, const std::shared_ptr<aws::GetObjectAsyncContext>& context);
 
  protected:
   std::deque<WarmupFilelist> warmupFilelistDeque_;
@@ -426,8 +419,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   std::atomic<bool> bgFetchStop_;
 
   // TODO(chengyi01): limit thread nums
-  std::unordered_map<fuse_ino_t, std::unique_ptr<ThreadPool>>
-      inode2FetchDentryPool_;
+  std::unordered_map<Ino, std::unique_ptr<ThreadPool>> inode2FetchDentryPool_;
   mutable utils::RWLock inode2FetchDentryPoolMutex_;
 
   std::deque<WarmupInodes> warmupInodesDeque_;
@@ -437,7 +429,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
 
   // TODO(chengyi01): limit thread nums
-  std::unordered_map<fuse_ino_t, std::unique_ptr<ThreadPool>>
+  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>
       inode2FetchS3ObjectsPool_;
   mutable utils::RWLock inode2FetchS3ObjectsPoolMutex_;
 

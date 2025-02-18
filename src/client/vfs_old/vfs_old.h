@@ -24,14 +24,14 @@
 #include <memory>
 #include <string>
 
+#include "client/common/status.h"
+#include "client/vfs/vfs.h"
+#include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/common/common.h"
 #include "client/vfs_old/common/config.h"
-#include "client/common/status.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/lease/lease_excutor.h"
 #include "client/vfs_old/service/inode_objects_service.h"
-#include "client/vfs/vfs.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/warmup/warmup_manager.h"
 #include "dingofs/mds.pb.h"
 #include "stub/rpcclient/mds_client.h"
@@ -105,17 +105,17 @@ class VFSOld : public VFS {
 
   Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) override;
 
-  Status Mkdir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr) override;
 
-  Status Opendir(Ino ino, uint64_t* fh) override;
+  Status OpenDir(Ino ino, uint64_t* fh) override;
 
-  Status Readdir(Ino ino, uint64_t fh, bool plus,
-                 std::vector<DirEntry>* entries) override;
+  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                 ReadDirHandler handler) override;
 
   Status ReleaseDir(Ino ino, uint64_t fh) override;
 
-  Status Rmdir(Ino parent, const std::string& name) override;
+  Status RmDir(Ino parent, const std::string& name) override;
 
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
@@ -151,6 +151,8 @@ class VFSOld : public VFS {
                        common::WarmupStorageType storage_type);
   Status Warmup(Ino key, const std::string& name, const std::string& value);
   void QueryWarmupTask(Ino key, std::string* result);
+
+  Status InitDirHandle(Ino ino, uint64_t fh, bool with_attr);
 
   std::atomic<bool> started_{false};
 

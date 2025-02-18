@@ -115,8 +115,8 @@ FileSystemMember FileSystem::BorrowMember() {
 }
 
 // fuse request*
-DINGOFS_ERROR FileSystem::Lookup(Request req, Ino parent,
-                                 const std::string& name, EntryOut* entry_out) {
+DINGOFS_ERROR FileSystem::Lookup(Ino parent, const std::string& name,
+                                 EntryOut* entry_out) {
   if (name.size() > option_.maxNameLength) {
     return DINGOFS_ERROR::NAMETOOLONG;
   }
@@ -135,7 +135,7 @@ DINGOFS_ERROR FileSystem::Lookup(Request req, Ino parent,
   return rc;
 }
 
-DINGOFS_ERROR FileSystem::GetAttr(Request req, Ino ino, AttrOut* attr_out) {
+DINGOFS_ERROR FileSystem::GetAttr(Ino ino, AttrOut* attr_out) {
   InodeAttr attr;
   auto rc = rpc_->GetAttr(ino, &attr);
   if (rc == DINGOFS_ERROR::OK) {

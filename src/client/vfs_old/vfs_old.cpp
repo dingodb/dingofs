@@ -29,18 +29,17 @@
 #include "client/blockcache/s3_client.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
+#include "client/fuse/fuse_common.h"  // TODO: fuse related code should be abstracted
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/client_operator.h"
 #include "client/vfs_old/common/dynamic_config.h"
 #include "client/vfs_old/dentry_cache_manager.h"
-#include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/package.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/inode_wrapper.h"
-#include "client/vfs_old/lease/lease_excutor.h"
 #include "client/vfs_old/service/metrics_dumper.h"
 #include "client/vfs_old/tools.h"
 #include "common/define.h"
@@ -69,9 +68,6 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-using filesystem::AttrWatcherGuard;
-using filesystem::DirParentWatcherGuard;
 
 static void OnThrottleTimer(void* arg) {
   VFSOld* vfs = reinterpret_cast<VFSOld*>(arg);
@@ -498,13 +494,13 @@ Status VFSOld::Lookup(Ino parent, const std::string& name, Attr* attr) {
 
   filesystem::EntryOut entry_out;
 
-  auto defer = ::absl::MakeCleanup([&]() {
+  auto defer = absl::MakeCleanup([&]() {
     if (rc == DINGOFS_ERROR::OK) {
       fs_->BeforeReplyEntry(entry_out.attr);
     }
   });
 
-  rc = fs_->Lookup(nullptr, parent, name, &entry_out);
+  rc = fs_->Lookup(parent, name, &entry_out);
   if (rc == DINGOFS_ERROR::OK) {
     *attr = InodeAttrPBToAttr(entry_out.attr);
     auto entry_watcher = fs_->BorrowMember().entry_watcher;
@@ -528,7 +524,7 @@ Status VFSOld::GetAttr(Ino ino, Attr* attr) {
   }
 
   filesystem::AttrOut attr_out;
-  DINGOFS_ERROR rc = fs_->GetAttr(nullptr, ino, &attr_out);
+  DINGOFS_ERROR rc = fs_->GetAttr(ino, &attr_out);
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "getattr() fail, retCode = " << rc << ", inodeId=" << ino;
   } else {
@@ -1824,7 +1820,7 @@ Status VFSOld::ListXAttr(Ino ino, std::vector<std::string>* xattrs) {
   return Status::OK();
 }
 
-Status VFSOld::Mkdir(Ino parent, const std::string& name, uint32_t uid,
+Status VFSOld::MkDir(Ino parent, const std::string& name, uint32_t uid,
                      uint32_t gid, uint32_t mode, Attr* attr) {
   VLOG(1) << "Mkdir parent inodeId=" << parent << ", name: " << name
           << ", uid: " << uid << ", gid: " << gid << ", mode: " << mode;
@@ -1848,8 +1844,8 @@ Status VFSOld::Mkdir(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status VFSOld::Opendir(Ino ino, uint64_t* fh) {
-  VLOG(1) << "Opendir inodeId=" << ino;
+Status VFSOld::OpenDir(Ino ino, uint64_t* fh) {
+  VLOG(1) << "OpenDir inodeId=" << ino;
 
   DINGOFS_ERROR rc = fs_->OpenDir(ino, fh);
   if (rc != DINGOFS_ERROR::OK) {
@@ -1860,60 +1856,111 @@ Status VFSOld::Opendir(Ino ino, uint64_t* fh) {
   }
 }
 
-Status VFSOld::Readdir(Ino ino, uint64_t fh, bool plus,
-                       std::vector<DirEntry>* entries) {
-  VLOG(1) << "Readdir inodeId=" << ino << ", fh: " << fh;
+Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
+  VLOG(1) << "InitDirHandle inodeId=" << ino << ", fh: " << fh;
 
-  auto handler = fs_->FindHandler(fh);
+  auto file_handler = fs_->FindHandler(fh);
+  if (file_handler->dir_handler_init) {
+    return Status::OK();
+  }
 
-  if (!handler->entris_pading) {
-    auto entry_list = std::make_shared<filesystem::DirEntryList>();
-    DINGOFS_ERROR rc = fs_->ReadDir(ino, fh, &entry_list);
-    if (rc != DINGOFS_ERROR::OK) {
-      LOG(ERROR) << "Fail readdir() rc: " << rc << ", inodeId=" << ino
-                 << ", fh = " << fh;
-      return filesystem::DingofsErrorToStatus(rc);
+  auto entry_list = std::make_shared<filesystem::DirEntryList>();
+  DINGOFS_ERROR rc = fs_->ReadDir(ino, fh, &entry_list);
+  if (rc != DINGOFS_ERROR::OK) {
+    LOG(ERROR) << "Fail readdir() rc: " << rc << ", inodeId=" << ino
+               << ", fh = " << fh;
+    return filesystem::DingofsErrorToStatus(rc);
+  }
+
+  file_handler->dir_handler = std::make_unique<filesystem::FsDirHandler>();
+  Status s = file_handler->dir_handler->Init(with_attr);
+  if (!s.ok()) {
+    return s;
+  }
+
+  bool has_stats = false;
+
+  std::vector<pb::metaserver::InodeAttr> inode_attrs;
+
+  entry_list->Iterate([&](filesystem::DirEntry* dir_entry) {
+    if (dir_entry->ino == STATSINODEID) {
+      has_stats = true;
     }
-
-    bool has_stats = false;
-
-    std::vector<pb::metaserver::InodeAttr> inode_attrs;
-
-    entry_list->Iterate([&](filesystem::DirEntry* dir_entry) {
-      if (dir_entry->ino == STATSINODEID) {
-        has_stats = true;
-      }
-      DirEntry entry;
-      entry.ino = dir_entry->ino;
-      entry.name = dir_entry->name;
+    DirEntry entry;
+    entry.ino = dir_entry->ino;
+    entry.name = dir_entry->name;
+    if (with_attr) {
+      inode_attrs.push_back(dir_entry->attr);
       entry.attr = InodeAttrPBToAttr(dir_entry->attr);
-      handler->entries.push_back(entry);
-      if (plus) {
-        inode_attrs.push_back(dir_entry->attr);
-      }
-    });
-
-    // out of iterate
-    for (auto& inode_attr : inode_attrs) {
-      fs_->BeforeReplyEntry(inode_attr);
     }
+    file_handler->dir_handler->entries.push_back(entry);
+  });
 
-    // root dir(add .stats file)
-    if (!has_stats && ino == ROOTINODEID) {
-      DirEntry entry;
-      entry.ino = STATSINODEID;
-      entry.name = STATSNAME;
-      entry.attr = GenerateVirtualInodeAttr(STATSINODEID);
-      handler->entries.push_back(entry);
-    }
-
-    handler->entris_pading = true;
+  // out of iterate
+  for (auto& inode_attr : inode_attrs) {
+    fs_->BeforeReplyEntry(inode_attr);
   }
 
-  for (auto& entry : handler->entries) {
-    entries->push_back(entry);
+  // root dir(add .stats file)
+  if (!has_stats && ino == ROOTINODEID) {
+    DirEntry entry;
+    entry.ino = STATSINODEID;
+    entry.name = STATSNAME;
+    entry.attr = GenerateVirtualInodeAttr(STATSINODEID);
+    file_handler->dir_handler->entries.push_back(entry);
   }
 
+  file_handler->dir_handler_init = true;
+
+  return Status::OK();
+}
+
+Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                       ReadDirHandler handler) {
+  VLOG(1) << "ReadDir inodeId=" << ino << ", fh: " << fh
+          << ", offset: " << offset
+          << ", with_attr: " << (with_attr ? "true" : "false");
+  Status s = InitDirHandle(ino, fh, with_attr);
+  if (!s.ok()) {
+    LOG(WARNING) << "Fail InitDirHandle in ReadDir, inodeId=" << ino
+                 << ", fh: " << fh << ", status: " << s.ToString();
+    return s;
+  }
+
+  auto file_handler = fs_->FindHandler(fh);
+  CHECK(file_handler->dir_handler_init);
+  CHECK_NOTNULL(file_handler->dir_handler);
+
+  auto* dir_handler = file_handler->dir_handler.get();
+
+  if (dir_handler->Offset() != offset) {
+    Status s = dir_handler->Seek(offset);
+    if (!s.ok()) {
+      LOG(WARNING) << "Fail Seek in ReadDir, inodeId=" << ino << ", fh: " << fh
+                   << ", offset: " << offset << ", status: " << s.ToString();
+      return s;
+    }
+  }
+
+  while (dir_handler->HasNext()) {
+    DirEntry entry;
+    Status s = dir_handler->Next(&entry);
+    if (!s.ok()) {
+      LOG(WARNING) << "Fail Next in ReadDir, inodeId=" << ino << ", fh: " << fh
+                   << ", offset: " << offset << ", status: " << s.ToString();
+      return s;
+    }
+
+    uint64_t next_offset = dir_handler->Offset();
+    if (!handler(entry, next_offset)) {
+      LOG(INFO) << "ReadDir break by handler next_offset: " << next_offset;
+      break;
+    }
+  }
+
+  LOG(INFO) << "ReadDir inodeId=" << ino << ", fh: " << fh
+            << ", offset: " << offset
+            << " success, next_offset: " << dir_handler->Offset();
   return Status::OK();
 }
 
@@ -1929,7 +1976,7 @@ Status VFSOld::ReleaseDir(Ino ino, uint64_t fh) {
   return Status::OK();
 }
 
-Status VFSOld::Rmdir(Ino parent, const std::string& name) {
+Status VFSOld::RmDir(Ino parent, const std::string& name) {
   VLOG(1) << "Rmdir parent inodeId=" << parent << ", name: " << name;
 
   // check if node is recycle or recycle time dir or .stats node

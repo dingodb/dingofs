@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,40 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(meta/dummy)
-add_subdirectory(meta/v1)
-add_subdirectory(meta/v2)
+add_subdirectory(common)
+add_subdirectory(meta)
 
-
-file(GLOB VFS_SRC_LIB
-    "*.cpp"
+add_library(vfs_lib 
+    handle_manager.cpp
+    vfs_impl.cpp
 )
-
-add_library(vfs_lib ${VFS_SRC_LIB})
 
 target_link_libraries(vfs_lib
-    PROTO_OBJS
-    vfs_meta_dummy_lib
-    vfs_meta_v1_lib
-    vfs_meta_v2_lib
-    dingofs_base_lib
-    rpcclient
-    dingofs_common
-    dynamic_vlog
-    dingofs_utils
-    dingofs_threading
-    stub_common
-    gflags::gflags
+    client_common
+    vfs_meta_lib
     glog::glog
+    gflags::gflags
     fmt::fmt
-    spdlog::spdlog
-    brpc::brpc
-    absl::memory
-    absl::strings
-    absl::synchronization
     absl::str_format
-    absl::type_traits
-    absl::optional
-    absl::btree
-    ${FUSE3_LIBRARY}
 )
+
+

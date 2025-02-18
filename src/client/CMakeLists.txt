@@ -21,6 +21,7 @@ add_subdirectory(vfs)
 file(GLOB FUSE_CLIENT_LIB_SRCS
     "vfs_wrapper/*.cpp"
     "fuse/*.cpp"
+    "*.cpp"
 )
 
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})

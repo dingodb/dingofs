@@ -23,6 +23,9 @@
 
 #include "client/access_log.h"
 #include "client/blockcache/log.h"
+#include "client/vfs/common/helper.h"
+#include "client/vfs/meta/meta_log.h"
+#include "client/vfs/vfs_impl.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/vfs_old.h"
 #include "common/dynamic_vlog.h"
@@ -38,47 +41,6 @@ namespace vfs {
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
       &rc, {&client_op_metric_->op##REQUEST, &client_op_metric_->opAll});
-
-namespace {
-
-std::string StrMode(uint16_t mode) {
-  static std::map<uint16_t, char> type2char = {
-      {S_IFSOCK, 's'}, {S_IFLNK, 'l'}, {S_IFREG, '-'}, {S_IFBLK, 'b'},
-      {S_IFDIR, 'd'},  {S_IFCHR, 'c'}, {S_IFIFO, 'f'}, {0, '?'},
-  };
-
-  std::string s("?rwxrwxrwx");
-  s[0] = type2char[mode & (S_IFMT & 0xffff)];
-  if (mode & S_ISUID) {
-    s[3] = 's';
-  }
-  if (mode & S_ISGID) {
-    s[6] = 's';
-  }
-  if (mode & S_ISVTX) {
-    s[9] = 't';
-  }
-
-  for (auto i = 0; i < 9; i++) {
-    if ((mode & (1 << i)) == 0) {
-      if ((s[9 - i] == 's') || (s[9 - i] == 't')) {
-        s[9 - i] &= 0xDF;
-      } else {
-        s[9 - i] = '-';
-      }
-    }
-  }
-  return s;
-}
-
-std::string StrAttr(Attr* attr) {
-  std::string smode;
-  return absl::StrFormat(" (%d,[%s:0%06o,%d,%d,%d,%d,%d,%d,%d])", attr->ino,
-                         StrMode(attr->mode).c_str(), attr->mode, attr->nlink,
-                         attr->uid, attr->gid, attr->atime, attr->mtime,
-                         attr->ctime, attr->length);
-}
-}  // namespace
 
 Status InitLog(const char* argv0, std::string conf_path) {
   dingofs::utils::Configuration conf;
@@ -104,7 +66,8 @@ Status InitLog(const char* argv0, std::string conf_path) {
   google::InitGoogleLogging(argv0);
 
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir);
+              dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir)
+              && dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();
 }
@@ -119,7 +82,12 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_con) {
   s = InitLog(argv0, vfs_con.config_path);
   if (s.ok()) {
     client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
-    vfs_ = std::make_unique<vfs::VFSOld>();
+    if (vfs_con.fs_type == "vfs") {
+      vfs_ = std::make_unique<vfs::VFSImpl>();
+    } else {
+      vfs_ = std::make_unique<vfs::VFSOld>();
+      LOG(INFO) << "VFSWrapper::Start vfs type: vfs_old";
+    }
     s = vfs_->Start(vfs_con);
   }
   return s;
@@ -284,7 +252,16 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
   VLOG(1) << "VFSSymlink parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " link: " << link;
 
-  Status s = vfs_->Symlink(parent, name, uid, gid, link, attr);
+  Status s;
+  AccessLogGuard log([&]() {
+    return absl::StrFormat("symlink (%d,%s,%s): %s %s", parent, name, link,
+                           s.ToString(), Attr2Str(*attr));
+  });
+
+  ClientOpMetricGuard op_metric(
+      {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
+
+  s = vfs_->Symlink(parent, name, uid, gid, link, attr);
   VLOG(1) << "VFSSymlink end parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " link: " << link
           << " status: " << s.ToString();
@@ -536,9 +513,9 @@ Status VFSWrapper::ListXAttr(Ino ino, std::vector<std::string>* xattrs) {
   return s;
 }
 
-Status VFSWrapper::Mkdir(Ino parent, const std::string& name, uint32_t uid,
+Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
                          uint32_t gid, uint32_t mode, Attr* attr) {
-  VLOG(1) << "VFSMkdir parent inodeId=" << parent << " name: " << name
+  VLOG(1) << "VFSMkDir parent inodeId=" << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " mode: " << mode;
   Status s;
   AccessLogGuard log([&]() {
@@ -549,7 +526,7 @@ Status VFSWrapper::Mkdir(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opMkDir, &client_op_metric_->opAll});
 
-  s = vfs_->Mkdir(parent, name, uid, gid, S_IFDIR | mode, attr);
+  s = vfs_->MkDir(parent, name, uid, gid, S_IFDIR | mode, attr);
   VLOG(1) << "VFSMkdir end parent inodeId=" << parent << " name: " << name
           << " status: " << s.ToString() << " attr: " << Attr2Str(*attr);
   if (!s.ok()) {
@@ -558,7 +535,7 @@ Status VFSWrapper::Mkdir(Ino parent, const std::string& name, uint32_t uid,
   return s;
 }
 
-Status VFSWrapper::Opendir(Ino ino, uint64_t* fh) {
+Status VFSWrapper::OpenDir(Ino ino, uint64_t* fh) {
   VLOG(1) << "VFSOpendir inodeId=" << ino;
   Status s;
   AccessLogGuard log([&]() {
@@ -568,7 +545,7 @@ Status VFSWrapper::Opendir(Ino ino, uint64_t* fh) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpenDir, &client_op_metric_->opAll});
 
-  s = vfs_->Opendir(ino, fh);
+  s = vfs_->OpenDir(ino, fh);
   VLOG(1) << "VFSOpendir end inodeId=" << ino << " fh: " << *fh;
   if (!s.ok()) {
     op_metric.FailOp();
@@ -576,22 +553,23 @@ Status VFSWrapper::Opendir(Ino ino, uint64_t* fh) {
   return s;
 }
 
-Status VFSWrapper::Readdir(Ino ino, uint64_t fh, bool plus,
-                           std::vector<DirEntry>* entries) {
+Status VFSWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
+                           bool with_attr, ReadDirHandler handler) {
   VLOG(1) << "VFSReaddir inodeId=" << ino << " fh: " << fh
-          << " plus: " << (plus ? "true" : "false");
+          << " offset: " << offset
+          << " with_attr: " << (with_attr ? "true" : "false");
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("readdir (%d,%d): %s (%d)", ino, fh, s.ToString(),
-                           entries->size());
+                           offset);
   });
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opReadDir, &client_op_metric_->opAll});
 
-  s = vfs_->Readdir(ino, fh, plus, entries);
+  s = vfs_->ReadDir(ino, fh, offset, with_attr, handler);
   VLOG(1) << "VFSReaddir end inodeId=" << ino << " fh: " << fh
-          << " status: " << s.ToString() << " entries: " << entries->size();
+          << " status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
   }
@@ -617,7 +595,7 @@ Status VFSWrapper::ReleaseDir(Ino ino, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::Rmdir(Ino parent, const std::string& name) {
+Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
   VLOG(1) << "VFSRmdir parent: " << parent << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
@@ -627,7 +605,7 @@ Status VFSWrapper::Rmdir(Ino parent, const std::string& name) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRmDir, &client_op_metric_->opAll});
 
-  s = vfs_->Rmdir(parent, name);
+  s = vfs_->RmDir(parent, name);
   VLOG(1) << "VFSRmdir end parent: " << parent << " name: " << name
           << " status: " << s.ToString();
   if (!s.ok()) {

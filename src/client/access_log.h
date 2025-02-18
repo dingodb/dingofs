@@ -20,6 +20,9 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#ifndef DINGOFS_CLIENT_ACCESS_LOG_H_
+#define DINGOFS_CLIENT_ACCESS_LOG_H_
+
 #include <absl/strings/str_format.h>
 #include <butil/time.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -31,20 +34,12 @@
 
 #include "client/common/dynamic_config.h"
 
-#ifndef DINGOFS_CLIENT_ACCESS_LOG_H_
-#define DINGOFS_CLIENT_ACCESS_LOG_H_
-
 namespace dingofs {
 namespace client {
 
-static std::shared_ptr<spdlog::logger> logger;
+extern std::shared_ptr<spdlog::logger> logger;
 
-static bool InitAccessLog(const std::string& prefix) {
-  std::string filename = absl::StrFormat("%s/access_%d.log", prefix, getpid());
-  logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
-  spdlog::flush_every(std::chrono::seconds(1));
-  return true;
-}
+bool InitAccessLog(const std::string& prefix);
 
 struct AccessLogGuard {
   using MessageHandler = std::function<std::string()>;

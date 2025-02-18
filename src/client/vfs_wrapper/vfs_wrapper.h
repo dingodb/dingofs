@@ -101,17 +101,17 @@ class VFSWrapper {
 
   Status ListXAttr(Ino ino, std::vector<std::string>* xattrs);
 
-  Status Mkdir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr);
 
-  Status Opendir(Ino ino, uint64_t* fh);
+  Status OpenDir(Ino ino, uint64_t* fh);
 
-  Status Readdir(Ino ino, uint64_t fh, bool plus,
-                 std::vector<DirEntry>* entries);
+  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                 ReadDirHandler handler);
 
   Status ReleaseDir(Ino ino, uint64_t fh);
 
-  Status Rmdir(Ino parent, const std::string& name);
+  Status RmDir(Ino parent, const std::string& name);
 
   Status StatFs(Ino ino, FsStat* fs_stat);
 

@@ -207,9 +207,11 @@ int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
       .mount_point = mount_option->mountPoint,
       .fs_name = mount_option->fsName,
       .config_path = mount_option->conf,
+      .fs_type = mount_option->fsType,
   };
 
   g_vfs = new dingofs::client::vfs::VFSWrapper();
+
   Status s = g_vfs->Start(argv0, config);
   if (!s.ok()) {
     LOG(ERROR) << "Start VFS failed, status: " << s.ToString();
@@ -316,7 +318,7 @@ void FuseOpMkDir(fuse_req_t req, fuse_ino_t parent, const char* name,
           << " uid: " << uid << ", gid: " << gid << ", mode: " << mode;
 
   Attr attr;
-  Status s = g_vfs->Mkdir(parent, name, uid, gid, mode, &attr);
+  Status s = g_vfs->MkDir(parent, name, uid, gid, mode, &attr);
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
@@ -332,7 +334,7 @@ void FuseOpUnlink(fuse_req_t req, fuse_ino_t parent, const char* name) {
 
 void FuseOpRmDir(fuse_req_t req, fuse_ino_t parent, const char* name) {
   VLOG(1) << "FuseOpRmDir parent: " << parent << ", name: " << name;
-  Status s = g_vfs->Rmdir(parent, name);
+  Status s = g_vfs->RmDir(parent, name);
   ReplyError(req, s);
 }
 
@@ -447,7 +449,7 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
   uint64_t fh = 0;
   Attr attr;
-  Status s = g_vfs->Opendir(ino, &fh);
+  Status s = g_vfs->OpenDir(ino, &fh);
 
   if (!s.ok()) {
     ReplyError(req, s);
@@ -461,53 +463,50 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                    struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpReadDir inodeId=" << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
-  std::vector<dingofs::client::vfs::DirEntry> entris;
-  Status s = g_vfs->Readdir(ino, fi->fh, false, &entris);
+
+  CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
+
+  std::unique_ptr<char[]> buffer(new char[size]);
+  char* p = buffer.get();
+  auto rem = size;
+
+  int ret_count = 0;
+
+  Status s = g_vfs->ReadDir(
+      ino, fi->fh, off, false,
+      [&](const dingofs::client::vfs::DirEntry& dir_entry,
+          uint64_t next_offset) -> bool {
+        struct stat stat;
+        std::memset(&stat, 0, sizeof(stat));
+        stat.st_ino = dir_entry.ino;
+
+        auto entsize = fuse_add_direntry(req, p, rem, dir_entry.name.c_str(),
+                                         &stat, next_offset);
+        if (entsize > rem) {
+          VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
+                  << ", from offset: " << off << " next_offset: " << next_offset
+                  << " fi->fh: " << fi->fh << " entsize: " << entsize
+                  << " rem: " << rem;
+          return false;
+        }
+
+        p += entsize;
+        rem -= entsize;
+
+        ret_count++;
+        return true;
+      });
 
   if (!s.ok()) {
+    LOG(WARNING) << "Failed FuseOpReadDir  inodeId=" << ino
+                 << ", size: " << size << ", offset: " << off
+                 << ", fi->fh: " << fi->fh << " status: " << s.ToString();
     ReplyError(req, s);
   } else {
-    CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
-    if (off >= entris.size()) {
-      LOG(WARNING) << "offset is illegal,  offset: " << off
-                   << ", entris.size: " << entris.size();
-      ReplyError(req, Status::InvalidParam(""));
-      return;
-    }
-
-    int ret_count = 0;
-
-    std::unique_ptr<char[]> buffer(new char[size]);
-
-    char* p = buffer.get();
-    auto rem = size;
-
-    while (off < entris.size()) {
-      dingofs::client::vfs::DirEntry dir_entry = entris[off];
-
-      struct stat stat;
-      std::memset(&stat, 0, sizeof(stat));
-      stat.st_ino = dir_entry.ino;
-
-      auto entsize = fuse_add_direntry(req, p, rem, dir_entry.name.c_str(),
-                                       &stat, (off + 1));
-      if (entsize > rem) {
-        VLOG(1) << "read buffer is full, inodeId=" << ino << ", size: " << size
-                << ", offset: " << off << ", fi->fh: " << fi->fh
-                << ", entsize: " << entsize << ", rem: " << rem;
-        break;
-      }
-
-      p += entsize;
-      rem -= entsize;
-      off++;
-
-      ret_count++;
-    }
-
     VLOG(1) << "FuseOpReadDir return entry count: " << ret_count
-            << ", inodeId=" << ino << ", size: " << size << ", offset: " << off
-            << ", rem: " << rem << ", fi->fh: " << fi->fh;
+            << ", inodeId=" << ino << ", size: " << size
+            << ", from offset: " << off << ", rem: " << rem
+            << ", fi->fh: " << fi->fh;
 
     ReplyBuf(req, buffer.get(), size - rem);
   }
@@ -517,52 +516,49 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                        struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpReadDirPlus inodeId=" << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
-  std::vector<dingofs::client::vfs::DirEntry> entris;
-  Status s = g_vfs->Readdir(ino, fi->fh, true, &entris);
+
+  CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
+
+  std::unique_ptr<char[]> buffer(new char[size]);
+  char* p = buffer.get();
+  auto rem = size;
+
+  int ret_count = 0;
+
+  Status s = g_vfs->ReadDir(
+      ino, fi->fh, off, true,
+      [&](const dingofs::client::vfs::DirEntry& dir_entry,
+          uint64_t next_offset) -> bool {
+        struct fuse_entry_param fuse_entry;
+        memset(&fuse_entry, 0, sizeof(fuse_entry));
+        Attr2FuseEntry(dir_entry.attr, &fuse_entry);
+
+        auto entsize = fuse_add_direntry_plus(
+            req, p, rem, dir_entry.name.c_str(), &fuse_entry, next_offset);
+        if (entsize > rem) {
+          VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
+                  << ", from offset: " << off << " next_offset: " << next_offset
+                  << " fi->fh: " << fi->fh << " entsize: " << entsize
+                  << " rem: " << rem;
+          return false;
+        }
+
+        p += entsize;
+        rem -= entsize;
+
+        ret_count++;
+        return true;
+      });
 
   if (!s.ok()) {
+    LOG(WARNING) << "Failed FuseOpReadDirPlus  inodeId=" << ino
+                 << ", size: " << size << ", offset: " << off
+                 << ", fi->fh: " << fi->fh << " status: " << s.ToString();
     ReplyError(req, s);
   } else {
-    CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
-    if (off > entris.size()) {
-      LOG(WARNING) << "offset is illegal,  offset: " << off
-                   << ", entris.size: " << entris.size();
-      ReplyError(req, Status::InvalidParam(""));
-      return;
-    }
-
-    int ret_count = 0;
-
-    std::unique_ptr<char[]> buffer(new char[size]);
-
-    char* p = buffer.get();
-    auto rem = size;
-
-    while (off < entris.size()) {
-      dingofs::client::vfs::DirEntry dir_entry = entris[off];
-
-      struct fuse_entry_param fuse_entry;
-      memset(&fuse_entry, 0, sizeof(fuse_entry));
-      Attr2FuseEntry(dir_entry.attr, &fuse_entry);
-
-      auto entsize = fuse_add_direntry_plus(req, p, rem, dir_entry.name.c_str(),
-                                            &fuse_entry, (off + 1));
-      if (entsize > rem) {
-        VLOG(1) << "read buffer is full, inodeId=" << ino << ", size: " << size
-                << ", offset: " << off << ", fi->fh: " << fi->fh
-                << ", entsize: " << entsize << ", rem: " << rem;
-        break;
-      }
-
-      p += entsize;
-      rem -= entsize;
-      off++;
-
-      ret_count++;
-    }
-
     VLOG(1) << "FuseOpReadDirPlus return entry count: " << ret_count
-            << ", inodeId=" << ino << ", size: " << size << ", offset: " << off
+            << ", inodeId=" << ino << ", size: " << size
+            << ", from offset: " << off << ", rem: " << rem
             << ", fi->fh: " << fi->fh;
 
     ReplyBuf(req, buffer.get(), size - rem);

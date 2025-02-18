@@ -66,15 +66,15 @@ MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
-bool MDSV2FileSystem::Init() {
+Status MDSV2FileSystem::Init() {
   LOG(INFO) << fmt::format("fs_info: {}.", fs_info_.ShortDebugString());
   // mount fs
   if (!MountFs()) {
     LOG(ERROR) << fmt::format("mount fs({}) fail.", name_);
-    return false;
+    return Status::MountFailed("mount fs fail");
   }
 
-  return true;
+  return Status::OK();
 }
 
 void MDSV2FileSystem::UnInit() {
@@ -139,7 +139,7 @@ Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
 }
 
 Status MDSV2FileSystem::MkNod(Ino parent_ino, const std::string& name,
-                              uint32_t gid, uint32_t uid, uint32_t mode,
+                              uint32_t uid, uint32_t gid, uint32_t mode,
                               uint64_t rdev, Attr* out_attr) {
   auto status =
       mds_client_->MkNod(parent_ino, name, uid, gid, mode, rdev, *out_attr);
@@ -209,8 +209,8 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t gid,
-                              uint32_t uid, uint32_t mode, uint64_t rdev,
+Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
+                              uint32_t gid, uint32_t mode, uint64_t rdev,
                               Attr* out_attr) {
   auto status =
       mds_client_->MkDir(parent, name, uid, gid, mode, rdev, *out_attr);
@@ -229,35 +229,18 @@ Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t& fh) {
-  LOG(INFO) << fmt::format("OpenDir ino({}) fh({}).", ino, fh);
+// TODO: implement
+Status MDSV2FileSystem::OpenDir(Ino ino) {
+  LOG(INFO) << fmt::format("OpenDir ino({})", ino);
 
-  fh = dir_reader_.NewState(ino);
+  // fh = dir_reader_.NewState(ino);
 
-  return Status::OK();
+  return Status::NotSupport("to be implemented");
 }
 
-Status MDSV2FileSystem::ReadDir(Ino ino, const std::string& last_name,
-                                uint32_t size, bool with_attr,
-                                std::vector<DirEntry>* entries) {
-  LOG(INFO) << fmt::format("ReadDir ino({}).", ino);
-
-  auto status = mds_client_->ReadDir(ino, last_name, size, with_attr, *entries);
-  if (!status.ok()) {
-    LOG(ERROR) << fmt::format("ReadDir({}) fail, error: {}.", ino,
-                              status.ToString());
-    return status;
-  }
-
-  return Status::OK();
-}
-
-Status MDSV2FileSystem::ReleaseDir(Ino ino, uint64_t fh) {
-  LOG(INFO) << fmt::format("ReleaseDir ino({}) fh({}).", ino, fh);
-
-  dir_reader_.DeleteState(fh);
-
-  return Status::OK();
+Status MDSV2FileSystem::NewDirHandler(Ino ino, bool with_attr,
+                                      DirHandler** handler) {
+  return Status::NotSupport("to be implemented");
 }
 
 Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,

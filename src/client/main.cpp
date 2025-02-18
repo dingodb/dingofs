@@ -26,8 +26,8 @@
 #include <string>
 #include <unordered_map>
 
-#include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_common.h"
+#include "client/fuse/fuse_op.h"
 #include "stub/common/version.h"
 
 static const struct fuse_lowlevel_ops kFuseOp = {
@@ -161,8 +161,6 @@ void FreeParsedArgv(char** parsed_argv, int alloc_size) {
 }
 
 int main(int argc, char* argv[]) {
-  dingofs::stub::common::ShowVerion();
-
   struct MountOption m_opts = {nullptr};
   int parsed_argc = argc;
   char** parsed_argv = reinterpret_cast<char**>(malloc(sizeof(char*) * argc));
@@ -189,6 +187,8 @@ int main(int argc, char* argv[]) {
     ret = 0;
     goto err_out1;
   } else if (opts.show_version) {
+    dingofs::stub::common::ShowVerion();
+
     printf("FUSE library version %s\n", fuse_pkgversion());
     fuse_lowlevel_version();
     ret = 0;
@@ -201,7 +201,10 @@ int main(int argc, char* argv[]) {
     goto err_out1;
   }
 
-  if (fuse_opt_parse(&args, &m_opts, mount_opts, nullptr) == -1) return 1;
+  if (fuse_opt_parse(&args, &m_opts, mount_opts, nullptr) == -1) {
+    return 1;
+  }
+
   //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
   //  filesystem name
   FuseAddOpts(&args, (const char*)"subtype=dingofs");

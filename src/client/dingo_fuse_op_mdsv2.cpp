@@ -14,7 +14,7 @@
 
 #include <memory>
 
-#include "client/fuse_common.h"
+#include "client/fuse/fuse_common.h"
 #include "client/vfs/meta/v2/rpc.h"
 // #define USE_DINGOFS_V2_FILESYSTEM 1
 #ifdef USE_DINGOFS_V2_FILESYSTEM

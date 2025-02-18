@@ -82,10 +82,10 @@ class FileSystem {
   void Destory();
 
   // fuse request
-  DINGOFS_ERROR Lookup(Request req, Ino parent, const std::string& name,
+  DINGOFS_ERROR Lookup(Ino parent, const std::string& name,
                        EntryOut* entry_out);
 
-  DINGOFS_ERROR GetAttr(Request req, Ino ino, AttrOut* attr_out);
+  DINGOFS_ERROR GetAttr(Ino ino, AttrOut* attr_out);
 
   DINGOFS_ERROR OpenDir(Ino ino, uint64_t* fh);
 

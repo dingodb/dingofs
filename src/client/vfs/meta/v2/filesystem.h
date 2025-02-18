@@ -48,7 +48,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
                                              mds_client);
   }
 
-  bool Init() override;
+  Status Init() override;
+
   void UnInit() override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
@@ -58,8 +59,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Lookup(Ino parent_ino, const std::string& name,
                 Attr* out_attr) override;
 
-  Status MkNod(Ino parent_ino, const std::string& name, uint32_t gid,
-               uint32_t uid, uint32_t mode, uint64_t rdev, Attr* attr) override;
+  Status MkNod(Ino parent_ino, const std::string& name, uint32_t uid,
+               uint32_t gid, uint32_t mode, uint64_t rdev, Attr* attr) override;
 
   Status Open(Ino ino, int flags, Attr* attr) override;
   Status Close(Ino ino) override;
@@ -74,13 +75,14 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status WriteSlice(Ino ino, uint64_t index,
                     const std::vector<Slice>& slices) override;
 
-  Status MkDir(Ino parent, const std::string& name, uint32_t gid, uint32_t uid,
+  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
   Status RmDir(Ino parent, const std::string& name) override;
-  Status OpenDir(Ino ino, uint64_t& fh) override;
-  Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
-                 bool with_attr, std::vector<DirEntry>* entries) override;
-  Status ReleaseDir(Ino ino, uint64_t fh) override;
+
+  Status OpenDir(Ino ino) override;
+
+  // NOTE: caller own dir and the DirHandler should be deleted by caller
+  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;

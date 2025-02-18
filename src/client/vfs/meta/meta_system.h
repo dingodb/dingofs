@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef DINGODB_CLIENT_VFS_META_META_SYSTEM_H
+#define DINGODB_CLIENT_VFS_META_META_SYSTEM_H
+
 #include <cstdint>
 #include <map>
 #include <string>
@@ -21,6 +24,7 @@
 
 #include "client/common/status.h"
 #include "client/vfs/vfs_meta.h"
+#include "client/vfs/dir_handler.h"
 
 namespace dingofs {
 namespace client {
@@ -32,14 +36,15 @@ class MetaSystem {
 
   virtual ~MetaSystem() = default;
 
-  virtual bool Init() = 0;
+  virtual Status Init() = 0;
+
   virtual void UnInit() = 0;
 
   virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
 
   // create a regular file in parent directory
-  virtual Status MkNod(Ino parent, const std::string& name, uint32_t gid,
-                       uint32_t uid, uint32_t mode, uint64_t rdev,
+  virtual Status MkNod(Ino parent, const std::string& name, uint32_t uid,
+                       uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
   virtual Status Open(Ino ino, int flags, Attr* attr) = 0;
@@ -92,7 +97,6 @@ class MetaSystem {
 
   virtual Status GetAttr(Ino ino, Attr* attr) = 0;
 
-  // attr is input and output
   virtual Status SetAttr(Ino ino, int set, const Attr& in_attr,
                          Attr* out_attr) = 0;
 
@@ -106,19 +110,16 @@ class MetaSystem {
                            std::map<std::string, std::string>* xattrs) = 0;
 
   // create a directory in parent directory
-  virtual Status MkDir(Ino parent, const std::string& name, uint32_t gid,
-                       uint32_t uid, uint32_t mode, uint64_t rdev,
+  virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
+                       uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
   virtual Status RmDir(Ino parent, const std::string& name) = 0;
 
-  // used for v1 meta to manage cache
-  virtual Status OpenDir(Ino ino, uint64_t& fh) = 0;
+  virtual Status OpenDir(Ino ino) = 0;
 
-  virtual Status ReadDir(Ino ino, const std::string& last_name, uint32_t size,
-                         bool with_attr, std::vector<DirEntry>* entries) = 0;
-
-  virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
+  // NOTE: caller own dir and the DirHandler should be deleted by caller
+  virtual Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
 
@@ -129,3 +130,5 @@ class MetaSystem {
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
+
+#endif  // DINGODB_CLIENT_VFS_META_META_SYSTEM_H
