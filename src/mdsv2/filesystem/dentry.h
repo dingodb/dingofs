@@ -70,48 +70,6 @@ class Dentry {
   InodePtr inode_;
 };
 
-// compose parent inode and its children dentry
-// consider locality
-class DentrySet {
- public:
-  DentrySet(InodePtr parent_inode) : parent_inode_(parent_inode){};
-  ~DentrySet() = default;
-
-  static DentrySetPtr New(InodePtr parent_inode) { return std::make_shared<DentrySet>(parent_inode); }
-
-  InodePtr ParentInode();
-
-  void PutChild(const Dentry& dentry);
-  void DeleteChild(const std::string& name);
-
-  bool HasChild();
-  bool GetChild(const std::string& name, Dentry& dentry);
-  std::vector<Dentry> GetChildren(const std::string& start_name, uint32_t limit, bool is_only_dir);
-  std::vector<Dentry> GetAllChildren();
-
- private:
-  InodePtr parent_inode_;
-
-  utils::RWLock lock_;
-
-  std::map<std::string, Dentry> children_;
-};
-
-// use lru cache to store dentry set
-class DentryCache {
- public:
-  DentryCache();
-  ~DentryCache();
-
-  void Put(uint64_t ino, DentrySetPtr dentry_set);
-  void Delete(uint64_t ino);
-
-  DentrySetPtr Get(uint64_t ino);
-
- private:
-  utils::LRUCache<uint64_t, DentrySetPtr> cache_;
-};
-
 }  // namespace mdsv2
 }  // namespace dingofs
 

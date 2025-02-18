@@ -20,6 +20,7 @@
 #include "brpc/controller.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/server.h"
@@ -871,9 +872,16 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->Rename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
-                                    request->new_name());
+  done_guard.release();
+  auto status = file_system->AsyncRename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
+                                         request->new_name(), [&](Status status) {
+                                           brpc::ClosureGuard done_guard(done);
+                                           return ServiceHelper::SetError(response->mutable_error(),
+                                                                          status.error_code(), status.error_str());
+                                         });
+
   if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(done);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }

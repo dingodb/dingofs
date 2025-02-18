@@ -228,7 +228,8 @@ bool Server::InitFileSystem() {
   CHECK(fs_id_generator != nullptr) << "new AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_map_);
+  file_system_set_ =
+      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_, mds_meta_map_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();

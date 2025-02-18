@@ -16,6 +16,7 @@
 
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/partition.h"
 #include "mdsv2/service/service_helper.h"
 
 namespace dingofs {
@@ -52,15 +53,15 @@ void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::deb
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  DentrySetPtr dentry_set;
-  auto status = fs->GetDentrySet(request->parent_ino(), dentry_set);
+  PartitionPtr partition;
+  auto status = fs->GetPartition(request->parent_ino(), partition);
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status);
   }
 
-  *response->mutable_parent_inode() = dentry_set->ParentInode()->CopyTo();
+  *response->mutable_parent_inode() = partition->ParentInode()->CopyTo();
 
-  auto child_dentries = dentry_set->GetAllChildren();
+  auto child_dentries = partition->GetAllChildren();
   for (auto& dentry : child_dentries) {
     auto* entry = response->add_child_entries();
     *entry->mutable_dentry() = dentry.CopyTo();

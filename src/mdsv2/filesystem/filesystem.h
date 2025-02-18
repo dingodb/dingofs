@@ -29,6 +29,8 @@
 #include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/partition.h"
+#include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -51,19 +53,24 @@ struct EntryOut {
   pb::mdsv2::Inode inode;
 };
 
-class FileSystem {
+class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage)
-      : fs_info_(fs_info), id_generator_(std::move(id_generator)), kv_storage_(kv_storage){};
+  FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
+             KVStoragePtr kv_storage);
   ~FileSystem() = default;
 
-  static FileSystemPtr New(const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage) {
-    return std::make_shared<FileSystem>(fs_info, std::move(id_generator), kv_storage);
+  static FileSystemPtr New(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
+                           KVStoragePtr kv_storage) {
+    return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(id_generator), kv_storage);
   }
+
+  FileSystemPtr GetSelfPtr();
 
   uint32_t FsId() const { return fs_info_.fs_id(); }
   std::string FsName() const { return fs_info_.fs_name(); }
   pb::mdsv2::FsInfo FsInfo() const { return fs_info_; }
+
+  bool CanServe() const { return can_serve_; };
 
   // create root directory
   Status CreateRoot();
@@ -124,12 +131,11 @@ class FileSystem {
   Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
   Status SetXAttr(uint64_t ino, const std::map<std::string, std::string>& xattr);
 
-  // update file data chunk
-  Status UpdateS3Chunk();
-
   // rename
   Status Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
                 const std::string& new_name);
+  Status AsyncRename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                     const std::string& new_name, RenameCbFunc cb);
 
   // slice
   Status WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
@@ -139,7 +145,7 @@ class FileSystem {
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
 
   OpenFiles& GetOpenFiles() { return open_files_; }
-  DentryCache& GetDentryCache() { return dentry_cache_; }
+  PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
  private:
@@ -148,24 +154,29 @@ class FileSystem {
   // generate ino
   Status GenDirIno(int64_t& ino);
   Status GenFileIno(int64_t& ino);
+  bool CanServe(int64_t self_mds_id);
 
   // get dentry
-  Status GetDentrySet(uint64_t parent_ino, DentrySetPtr& out_dentry_set);
-  DentrySetPtr GetDentrySetFromCache(uint64_t parent_ino);
-  Status GetDentrySetFromStore(uint64_t parent_ino, DentrySetPtr& out_dentry_set);
+  Status GetPartition(uint64_t parent_ino, PartitionPtr& out_partition);
+  PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
+  Status GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition);
 
   // get inode
   Status GetInode(uint64_t ino, InodePtr& out_inode);
   InodePtr GetInodeFromCache(uint64_t ino);
   Status GetInodeFromStore(uint64_t ino, InodePtr& out_inode);
 
-  Status GetInodeFromDentry(const Dentry& dentry, DentrySetPtr& dentry_set, InodePtr& out_inode);
+  Status GetInodeFromDentry(const Dentry& dentry, PartitionPtr& partition, InodePtr& out_inode);
 
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, uint64_t ino);
 
+  uint64_t self_mds_id_;
+
   // filesystem info
   pb::mdsv2::FsInfo fs_info_;
+
+  bool can_serve_{false};
 
   // generate inode id
   IdGeneratorPtr id_generator_;
@@ -177,22 +188,25 @@ class FileSystem {
   OpenFiles open_files_;
 
   // organize dentry directory tree
-  DentryCache dentry_cache_;
+  PartitionCache partition_cache_;
 
   // organize inode
   InodeCache inode_cache_;
+
+  RenamerPtr renamer_;
 };
 
 // manage all filesystem
 class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-                MDSMetaMapPtr mds_meta_map);
+                MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map);
   ~FileSystemSet();
 
   static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                              KVStoragePtr kv_storage, MDSMetaMapPtr mds_meta_map) {
-    return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, mds_meta_map);
+                              KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map) {
+    return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, self_mds_meta,
+                                           mds_meta_map);
   }
 
   bool Init();
@@ -244,6 +258,7 @@ class FileSystemSet {
 
   KVStoragePtr kv_storage_;
 
+  MDSMeta self_mds_meta_;
   MDSMetaMapPtr mds_meta_map_;
 
   // protect fs_map_
