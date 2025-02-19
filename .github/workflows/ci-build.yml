@@ -38,7 +38,7 @@ jobs:
         git submodule sync --recursive
         git submodule update --init --recursive
         mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk ..
-        make -j $(nproc) 
+        make -j $(nproc) && make install 
 
     - name: Record event type
       run: |
