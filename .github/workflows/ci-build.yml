@@ -19,9 +19,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Config env
+      run: |
+        echo "DINGOSDK_INSTALL_PATH=/root/.local/dingo-sdk" >> $GITHUB_ENV
+
     - name: Check environment
       run: |
         echo "THIRD_PARTY_INSTALL_PATH: $THIRD_PARTY_INSTALL_PATH"
+        echo "DINGOSDK_INSTALL_PATH: $DINGOSDK_INSTALL_PATH"
     
     - name: Checkout dingo-sdk
       run: |
