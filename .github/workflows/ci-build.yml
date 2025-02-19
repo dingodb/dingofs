@@ -22,6 +22,18 @@ jobs:
     - name: Check environment
       run: |
         echo "THIRD_PARTY_INSTALL_PATH: $THIRD_PARTY_INSTALL_PATH"
+    
+    - name: Checkout dingo-sdk
+      run: |
+        git clone https://github.com/dingodb/dingo-sdk.git /tmp/dingo-sdk
+  
+    - name: Build dingo-sdk
+      run: |
+        cd /tmp/dingo-sdk
+        git submodule sync --recursive
+        git submodule update --init --recursive
+        mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk ..
+        make -j $(nproc) 
 
     - name: Record event type
       run: |
