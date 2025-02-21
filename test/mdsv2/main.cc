@@ -58,6 +58,7 @@ int main(int argc, char** argv) {
     default_run_case += ":FileSystemTest.*";
 
     default_run_case += ":CoorDistributionLockTest.*";
+    default_run_case += ":MutationMergerTest.*";
 
     testing::GTEST_FLAG(filter) = default_run_case;
   }

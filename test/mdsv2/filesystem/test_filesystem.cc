@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -23,6 +25,8 @@
 #include "gtest/gtest.h"
 #include "mdsv2/coordinator/dummy_coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/filesystem/mutation_merger.h"
+#include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/storage/dummy_storage.h"
 
 namespace dingofs {
@@ -62,6 +66,12 @@ class FileSystemSetTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
+    auto renamer = Renamer::New();
+    ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
+
+    auto mutation_merger = MutationMerger::New(kv_storage);
+    ASSERT_TRUE(mutation_merger->Init()) << "init mutation merger fail.";
+
     MDSMeta mds_meta;
     mds_meta.SetID(kMdsId);
     mds_meta.SetHost("127.0.0.1");
@@ -69,7 +79,8 @@ class FileSystemSetTest : public testing::Test {
     mds_meta.SetState(MDSMeta::State::kInit);
 
     auto mds_meta_map = MDSMetaMap::New();
-    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), kv_storage, mds_meta, mds_meta_map);
+    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), kv_storage, mds_meta, mds_meta_map,
+                                renamer, mutation_merger);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -99,6 +110,12 @@ class FileSystemTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
+    auto renamer = Renamer::New();
+    ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
+
+    auto mutation_merger = MutationMerger::New(kv_storage);
+    ASSERT_TRUE(mutation_merger->Init()) << "init mutation merger fail.";
+
     pb::mdsv2::FsInfo fs_info;
     fs_info.set_fs_id(1);
     fs_info.set_fs_name("test_fs");
@@ -111,7 +128,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, fs_info, std::move(fs_id_generator), kv_storage);
+    fs = FileSystem::New(kMdsId, fs_info, std::move(fs_id_generator), kv_storage, renamer, mutation_merger);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
   }
@@ -318,7 +335,7 @@ TEST_F(FileSystemTest, MkNod) {
 
   FileSystem::MkNodParam param;
   param.parent_ino = kRootIno;
-  param.name = "test_mknod";
+  param.name = "mkdir_file";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
@@ -355,7 +372,7 @@ TEST_F(FileSystemTest, MkDir) {
 
   FileSystem::MkDirParam param;
   param.parent_ino = kRootIno;
-  param.name = "test_mkdir";
+  param.name = "mkdir_dir";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
@@ -392,7 +409,7 @@ TEST_F(FileSystemTest, RmDir) {
 
   FileSystem::MkDirParam param;
   param.parent_ino = kRootIno;
-  param.name = "test_mkdir";
+  param.name = "rmdir_dir";
   param.mode = 0777;
   param.uid = 1;
   param.gid = 3;
@@ -428,23 +445,387 @@ TEST_F(FileSystemTest, RmDir) {
   }
 }
 
-TEST_F(FileSystemTest, Link) {}
+TEST_F(FileSystemTest, Link) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
 
-TEST_F(FileSystemTest, UnLink) {}
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "link_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
 
-TEST_F(FileSystemTest, Symlink) {}
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
 
-TEST_F(FileSystemTest, ReadLink) {}
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
-TEST_F(FileSystemTest, GetDentry) {}
+  {
+    EntryOut entry_out;
+    auto status = fs->Link(inode->Ino(), kRootIno, "link_file", entry_out);
+    ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
+    ASSERT_EQ(inode->Ino(), entry_out.inode.ino()) << "ino is invalid.";
+    ASSERT_EQ(2, inode->Nlink()) << "nlink not equal.";
+  }
+}
 
-TEST_F(FileSystemTest, GetInode) {}
+TEST_F(FileSystemTest, UnLink) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
 
-TEST_F(FileSystemTest, UpdateInode) {}
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "unlink_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
 
-TEST_F(FileSystemTest, GetXAttr) {}
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
 
-TEST_F(FileSystemTest, SetXAttr) {}
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  {
+    EntryOut entry_out;
+    auto status = fs->Link(inode->Ino(), kRootIno, "link_file", entry_out);
+    ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
+    ASSERT_EQ(inode->Ino(), entry_out.inode.ino()) << "ino is invalid.";
+    ASSERT_EQ(2, inode->Nlink()) << "nlink not equal.";
+
+    status = fs->UnLink(kRootIno, "link_file");
+    ASSERT_TRUE(status.ok()) << "link fail, error: " << status.error_str();
+    ASSERT_EQ(1, inode->Nlink()) << "nlink not equal.";
+  }
+}
+
+TEST_F(FileSystemTest, SymlinkWithFile) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "symlink_with_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
+
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  {
+    std::string symlink = fmt::format("/{}", param.name);
+    std::string name = "symlinkwithfile";
+    EntryOut entry_out;
+    auto status = fs->Symlink(symlink, kRootIno, name, 1, 3, entry_out);
+    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
+
+    InodePtr sym_inode = inode_cache.GetInode(entry_out.inode.ino());
+    ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
+    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type()) << "inode type not equal.";
+    ASSERT_EQ(symlink, sym_inode->Symlink());
+  }
+}
+
+TEST_F(FileSystemTest, SymlinkWithDir) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  FileSystem::MkDirParam param;
+  param.parent_ino = kRootIno;
+  param.name = "symlink_with_dir";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
+
+  EntryOut entry_out;
+  auto status = fs->MkDir(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  {
+    std::string symlink = fmt::format("/{}", param.name);
+    std::string name = "symlinkwithdir";
+    EntryOut entry_out;
+    auto status = fs->Symlink(symlink, kRootIno, name, 1, 3, entry_out);
+    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
+
+    InodePtr sym_inode = inode_cache.GetInode(entry_out.inode.ino());
+    ASSERT_TRUE(sym_inode != nullptr) << "get inode fail.";
+    ASSERT_EQ(pb::mdsv2::FileType::SYM_LINK, sym_inode->Type()) << "inode type not equal.";
+    ASSERT_EQ(symlink, sym_inode->Symlink());
+  }
+}
+
+TEST_F(FileSystemTest, ReadLink) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "readlink_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
+
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  {
+    std::string symlink = fmt::format("/{}", param.name);
+    std::string name = "symlinkwithfile";
+    EntryOut entry_out;
+    auto status = fs->Symlink(symlink, kRootIno, name, 1, 3, entry_out);
+    ASSERT_TRUE(status.ok()) << "create symlink fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+    ASSERT_EQ(name, entry_out.name) << "ino is invalid.";
+
+    std::string actual_link;
+    status = fs->ReadLink(entry_out.inode.ino(), actual_link);
+    ASSERT_TRUE(status.ok()) << "read symlink fail, error: " << status.error_str();
+    ASSERT_EQ(symlink, actual_link) << "symlink is eq.";
+  }
+}
+
+TEST_F(FileSystemTest, SetXAttr) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "set_xattr_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
+
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  std::map<std::string, std::string> xattr = {{"key1", "value1"}, {"key2", "value2"}};
+  status = fs->SetXAttr(inode->Ino(), xattr);
+  ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
+}
+
+TEST_F(FileSystemTest, GetXAttr) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  FileSystem::MkNodParam param;
+  param.parent_ino = kRootIno;
+  param.name = "get_xattr_file";
+  param.mode = 0777;
+  param.uid = 1;
+  param.gid = 3;
+  param.rdev = 1;
+
+  EntryOut entry_out;
+  auto status = fs->MkNod(param, entry_out);
+  ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+  ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+  InodePtr inode = inode_cache.GetInode(entry_out.inode.ino());
+  ASSERT_TRUE(inode != nullptr) << "get inode fail.";
+
+  std::map<std::string, std::string> xattr = {{"key1", "value1"}, {"key2", "value2"}};
+  status = fs->SetXAttr(inode->Ino(), xattr);
+  ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
+
+  std::map<std::string, std::string> actual_xattr;
+  status = fs->GetXAttr(inode->Ino(), actual_xattr);
+  ASSERT_TRUE(status.ok()) << "get xattr fail, error: " << status.error_str();
+  ASSERT_EQ(xattr, actual_xattr) << "xattr not equal.";
+
+  std::string value;
+  status = fs->GetXAttr(inode->Ino(), "key1", value);
+  ASSERT_TRUE(status.ok()) << "get xattr fail, error: " << status.error_str();
+  ASSERT_EQ("value1", value) << "xattr value not equal.";
+}
+
+// /
+// |--dir1
+// |  |--file1
+// ======= after =====
+// /
+// |--dir1
+// |  |--file2
+// rename dir1/file1 to dir1/file2
+TEST_F(FileSystemTest, RenameWithSameDir) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  uint64_t old_parent_ino;
+  std::string old_name = "rename1_file1";
+  {
+    FileSystem::MkDirParam param;
+    param.parent_ino = kRootIno;
+    param.name = "rename1_dir1";
+    param.mode = 0777;
+    param.uid = 1;
+    param.gid = 3;
+    param.rdev = 1;
+
+    EntryOut entry_out;
+    auto status = fs->MkDir(param, entry_out);
+    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+    old_parent_ino = entry_out.inode.ino();
+  }
+
+  {
+    FileSystem::MkNodParam param;
+    param.parent_ino = old_parent_ino;
+    param.name = old_name;
+    param.mode = 0777;
+    param.uid = 1;
+    param.gid = 3;
+    param.rdev = 1;
+
+    EntryOut entry_out;
+    auto status = fs->MkNod(param, entry_out);
+    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+  }
+
+  std::string new_name = "rename1_file2";
+  auto status = fs->Rename(old_parent_ino, old_name, old_parent_ino, new_name);
+  ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
+
+  auto partition = partition_cache.Get(old_parent_ino);
+  Dentry dentry;
+  ASSERT_FALSE(partition->GetChild(old_name, dentry));
+  ASSERT_TRUE(partition->GetChild(new_name, dentry));
+  ASSERT_EQ(new_name, dentry.Name());
+  ASSERT_EQ(old_parent_ino, dentry.ParentIno());
+}
+
+// /
+// |--dir1
+// |  |--file1
+// |--dir2
+// ======= after =====
+// /
+// |--dir1
+// |--dir2
+// |  |--file1
+// rename dir1/file1 to dir2/file1
+TEST_F(FileSystemTest, RenameWithDiffDir) {
+  auto fs = Fs();
+  auto& partition_cache = fs->GetPartitionCache();
+  auto& inode_cache = fs->GetInodeCache();
+
+  uint64_t old_parent_ino;
+  std::string old_name = "rename2_file01";
+  {
+    FileSystem::MkDirParam param;
+    param.parent_ino = kRootIno;
+    param.name = "rename2_dir1";
+    param.mode = 0777;
+    param.uid = 1;
+    param.gid = 3;
+    param.rdev = 1;
+
+    EntryOut entry_out;
+    auto status = fs->MkDir(param, entry_out);
+    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+    old_parent_ino = entry_out.inode.ino();
+  }
+
+  {
+    FileSystem::MkNodParam param;
+    param.parent_ino = old_parent_ino;
+    param.name = old_name;
+    param.mode = 0777;
+    param.uid = 1;
+    param.gid = 3;
+    param.rdev = 1;
+
+    EntryOut entry_out;
+    auto status = fs->MkNod(param, entry_out);
+    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+  }
+
+  uint64_t new_parent_ino;
+  {
+    FileSystem::MkDirParam param;
+    param.parent_ino = kRootIno;
+    param.name = "rename2_dir2";
+    param.mode = 0777;
+    param.uid = 1;
+    param.gid = 3;
+    param.rdev = 1;
+
+    EntryOut entry_out;
+    auto status = fs->MkDir(param, entry_out);
+    ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
+    ASSERT_GT(entry_out.inode.ino(), 0) << "ino is invalid.";
+
+    new_parent_ino = entry_out.inode.ino();
+  }
+
+  const std::string& new_name = old_name;
+  auto status = fs->Rename(old_parent_ino, old_name, new_parent_ino, new_name);
+  ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
+
+  {
+    auto partition = partition_cache.Get(old_parent_ino);
+    Dentry dentry;
+    ASSERT_FALSE(partition->GetChild(old_name, dentry));
+  }
+
+  {
+    auto partition = partition_cache.Get(new_parent_ino);
+    Dentry dentry;
+    ASSERT_TRUE(partition->GetChild(new_name, dentry));
+    ASSERT_EQ(new_name, dentry.Name());
+    ASSERT_EQ(new_parent_ino, dentry.ParentIno());
+  }
+}
 
 }  // namespace unit_test
 }  // namespace mdsv2
