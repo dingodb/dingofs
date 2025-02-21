@@ -27,6 +27,7 @@
 #include "client/common/status.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
+#include "common/define.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
@@ -390,6 +391,9 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
+    if (dingofs::IsInternalNode(ino)) {
+      fi->direct_io = 1;
+    }
     ReplyOpen(req, fi);
   }
 }
