@@ -384,7 +384,7 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   VLOG(1) << "FuseOpOpen inodeId=" << ino;
   uint64_t fh = 0;
   Attr attr;
-  Status s = g_vfs->Open(ino, fi->flags, &fh, &attr);
+  Status s = g_vfs->Open(ino, fi->flags, &fh);
 
   if (!s.ok()) {
     ReplyError(req, s);
@@ -579,7 +579,7 @@ void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 
   std::string strname(name);
   std::string strvalue(value, size);
-  Status s = g_vfs->SetXAttr(ino, strname, strvalue, flags);
+  Status s = g_vfs->SetXattr(ino, strname, strvalue, flags);
   ReplyError(req, s);
 }
 
@@ -589,7 +589,7 @@ void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
           << ", size: " << size;
 
   std::string value;
-  Status s = g_vfs->GetXAttr(ino, name, &value);
+  Status s = g_vfs->GetXattr(ino, name, &value);
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
@@ -602,7 +602,7 @@ void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
   CHECK_GE(size, 0) << "size is illegal, size: " << size;
 
   std::vector<std::string> names;
-  Status s = g_vfs->ListXAttr(ino, &names);
+  Status s = g_vfs->ListXattr(ino, &names);
 
   if (!s.ok()) {
     ReplyError(req, s);

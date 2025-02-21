@@ -187,7 +187,11 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Open(Ino ino, int flags, Attr* attr) override;
+  Status Open(Ino ino, int flags) override;
+
+  Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+                uint32_t mode, int flags, Attr* attr) override;
+
   Status Close(Ino ino) override;
 
   Status ReadSlice(Ino ino, uint64_t index,
@@ -197,7 +201,7 @@ class DummyFileSystem : public vfs::MetaSystem {
                     const std::vector<Slice>& slices) override;
 
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-               uint32_t mode, uint64_t rdev, Attr* attr) override;
+               uint32_t mode, Attr* attr) override;
 
   Status RmDir(Ino parent, const std::string& name) override;
 
@@ -220,8 +224,7 @@ class DummyFileSystem : public vfs::MetaSystem {
                   std::string* value) override;
   Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags) override;
-  Status ListXattr(Ino ino,
-                   std::map<std::string, std::string>* xattrs) override;
+  Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
                 const std::string& new_name) override;

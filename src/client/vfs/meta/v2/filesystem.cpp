@@ -138,6 +138,12 @@ Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
   return Status::OK();
 }
 
+Status MDSV2FileSystem::Create(Ino parent, const std::string& name,
+                               uint32_t uid, uint32_t gid, uint32_t mode,
+                               int flags, Attr* attr) {
+  return Status::NotSupport("to be implemented");
+}
+
 Status MDSV2FileSystem::MkNod(Ino parent_ino, const std::string& name,
                               uint32_t uid, uint32_t gid, uint32_t mode,
                               uint64_t rdev, Attr* out_attr) {
@@ -150,7 +156,7 @@ Status MDSV2FileSystem::MkNod(Ino parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Open(Ino ino, int flags, Attr* attr) {
+Status MDSV2FileSystem::Open(Ino ino, int flags) {
   LOG(INFO) << fmt::format("Open ino({}).", ino);
 
   auto status = mds_client_->Open(ino);
@@ -210,13 +216,12 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
 }
 
 Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                              uint32_t gid, uint32_t mode, uint64_t rdev,
-                              Attr* out_attr) {
-  auto status =
-      mds_client_->MkDir(parent, name, uid, gid, mode, rdev, *out_attr);
-  if (!status.ok()) {
-    return status;
-  }
+                              uint32_t gid, uint32_t mode, Attr* out_attr) {
+  // auto status =
+  //     mds_client_->MkDir(parent, name, uid, gid, mode, rdev, *out_attr);
+  // if (!status.ok()) {
+  //   return status;
+  // }
 
   return Status::OK();
 }
@@ -343,15 +348,14 @@ Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::ListXattr(Ino ino,
-                                  std::map<std::string, std::string>* xattrs) {
+Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
-  auto status = mds_client_->ListXAttr(ino, *xattrs);
-  if (!status.ok()) {
-    return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
-                                        ino, status.ToString()));
-  }
+  // auto status = mds_client_->ListXAttr(ino, *xattrs);
+  // if (!status.ok()) {
+  //   return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
+  //                                       ino, status.ToString()));
+  // }
 
   return Status::OK();
 }

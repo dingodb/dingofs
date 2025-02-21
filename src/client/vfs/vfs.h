@@ -80,7 +80,7 @@ class VFS {
   virtual Status Link(Ino ino, Ino new_parent, const std::string& new_name,
                       Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr) = 0;
+  virtual Status Open(Ino ino, int flags, uint64_t* fh) = 0;
 
   virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
                         uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
@@ -98,13 +98,13 @@ class VFS {
 
   virtual Status Fsync(Ino ino, int datasync, uint64_t fh) = 0;
 
-  virtual Status SetXAttr(Ino ino, const std::string& name,
+  virtual Status SetXattr(Ino ino, const std::string& name,
                           const std::string& value, int flags) = 0;
 
-  virtual Status GetXAttr(Ino ino, const std::string& name,
+  virtual Status GetXattr(Ino ino, const std::string& name,
                           std::string* value) = 0;
 
-  virtual Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) = 0;
+  virtual Status ListXattr(Ino ino, std::vector<std::string>* xattrs) = 0;
 
   virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
                        uint32_t gid, uint32_t mode, Attr* attr) = 0;

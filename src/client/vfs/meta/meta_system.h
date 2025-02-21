@@ -23,8 +23,8 @@
 #include <vector>
 
 #include "client/common/status.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs/dir_handler.h"
+#include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -47,7 +47,10 @@ class MetaSystem {
                        uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags, Attr* attr) = 0;
+  virtual Status Open(Ino ino, int flags) = 0;
+
+  virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
+                        uint32_t gid, uint32_t mode, int flags, Attr* attr) = 0;
 
   virtual Status Close(Ino ino) = 0;
 
@@ -106,20 +109,19 @@ class MetaSystem {
   virtual Status GetXattr(Ino ino, const std::string& name,
                           std::string* value) = 0;
 
-  virtual Status ListXattr(Ino ino,
-                           std::map<std::string, std::string>* xattrs) = 0;
+  virtual Status ListXattr(Ino ino, std::vector<std::string>* xattrs) = 0;
 
   // create a directory in parent directory
   virtual Status MkDir(Ino parent, const std::string& name, uint32_t uid,
-                       uint32_t gid, uint32_t mode, uint64_t rdev,
-                       Attr* attr) = 0;
+                       uint32_t gid, uint32_t mode, Attr* attr) = 0;
 
   virtual Status RmDir(Ino parent, const std::string& name) = 0;
 
   virtual Status OpenDir(Ino ino) = 0;
 
   // NOTE: caller own dir and the DirHandler should be deleted by caller
-  virtual Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) = 0;
+  virtual Status NewDirHandler(Ino ino, bool with_attr,
+                               DirHandler** handler) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
 

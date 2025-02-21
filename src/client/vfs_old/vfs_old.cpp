@@ -1248,7 +1248,7 @@ Status VFSOld::Link(Ino ino, Ino new_parent, const std::string& new_name,
   return Status::OK();
 }
 
-Status VFSOld::HandleOpenFlags(Ino ino, int flags, Attr* attr) {
+Status VFSOld::HandleOpenFlags(Ino ino, int flags) {
   std::shared_ptr<InodeWrapper> inode_wrapper;
   // alredy opened
   DINGOFS_ERROR ret = inode_cache_manager_->GetInode(ino, inode_wrapper);
@@ -1292,11 +1292,10 @@ Status VFSOld::HandleOpenFlags(Ino ino, int flags, Attr* attr) {
   }
 
   fs_->BeforeReplyOpen(inode_attr);
-  *attr = InodeAttrPBToAttr(inode_attr);
   return Status::OK();
 }
 
-Status VFSOld::Open(Ino ino, int flags, uint64_t* fh, Attr* attr) {
+Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
   VLOG(1) << "Open inodeId=" << ino << ", flags: " << flags;
 
   // check if ino is .stats inode,if true ,get metric data and generate
@@ -1319,8 +1318,6 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh, Attr* attr) {
     handler->buffer->p = static_cast<char*>(malloc(len));
     memcpy(handler->buffer->p, contents.c_str(), len);
 
-    *attr = GenerateVirtualInodeAttr(STATSINODEID);
-
     return Status::OK();
   }
 
@@ -1330,7 +1327,7 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh, Attr* attr) {
     return filesystem::DingofsErrorToStatus(rc);
   }
 
-  Status s = HandleOpenFlags(ino, flags, attr);
+  Status s = HandleOpenFlags(ino, flags);
   if (!s.ok()) {
     LOG(ERROR) << "Fail HandleOpenFlags, inodeId=" << ino
                << ", flags: " << flags << ", status: " << s.ToString();
@@ -1692,9 +1689,9 @@ Status VFSOld::Warmup(Ino key, const std::string& name,
 }
 
 // TODO: how to process the flags
-Status VFSOld::SetXAttr(Ino ino, const std::string& name,
+Status VFSOld::SetXattr(Ino ino, const std::string& name,
                         const std::string& value, int flags) {
-  VLOG(1) << "SetXAttr inodeId=" << ino << ", name: " << name
+  VLOG(1) << "SetXattr inodeId=" << ino << ", name: " << name
           << ", value: " << value << ", flags: " << flags;
 
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
@@ -1742,7 +1739,7 @@ Status VFSOld::SetXAttr(Ino ino, const std::string& name,
       return filesystem::DingofsErrorToStatus(ret);
     }
 
-    VLOG(1) << "Success SetXAttr inodeId=" << ino << ", name: " << name
+    VLOG(1) << "Success SetXattr inodeId=" << ino << ", name: " << name
             << ", value: " << value;
   }
 
@@ -1763,8 +1760,8 @@ void VFSOld::QueryWarmupTask(Ino key, std::string* result) {
   VLOG(6) << "Warmup [" << key << "]" << *result;
 }
 
-Status VFSOld::GetXAttr(Ino ino, const std::string& name, std::string* value) {
-  VLOG(1) << "GetXAttr inodeId=" << ino << ", name: " << name;
+Status VFSOld::GetXattr(Ino ino, const std::string& name, std::string* value) {
+  VLOG(1) << "GetXattr inodeId=" << ino << ", name: " << name;
 
   if BAIDU_UNLIKELY ((ino == STATSINODEID)) {
     // NOTE: why return nodata?
@@ -1797,14 +1794,14 @@ Status VFSOld::GetXAttr(Ino ino, const std::string& name, std::string* value) {
     *value = it->second;
   }
 
-  VLOG(1) << "Success GetXAttr inodeId=" << ino << ", name: " << name
+  VLOG(1) << "Success GetXattr inodeId=" << ino << ", name: " << name
           << ", value length: " << value->length() << ", value: " << *value;
 
   return Status::OK();
 }
 
-Status VFSOld::ListXAttr(Ino ino, std::vector<std::string>* xattrs) {
-  VLOG(1) << "ListXAttr inodeId=" << ino;
+Status VFSOld::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+  VLOG(1) << "ListXattr inodeId=" << ino;
 
   pb::metaserver::InodeAttr inode_attr;
   DINGOFS_ERROR ret = inode_cache_manager_->GetInodeAttr(ino, &inode_attr);

@@ -18,8 +18,6 @@
 #define DINGOFS_CLIENT_VFS_META_LOG_H_
 
 #include <butil/time.h>
-#include <glog/logging.h>
-#include <spdlog/fmt/bundled/format.h>
 #include <spdlog/logger.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
@@ -54,7 +52,6 @@ class MetaLogGuard {
 
     timer_.stop();
 
-    CHECK_NOTNULL(meta_logger);
     meta_logger->info("{0} <{1:.6f}>", handler_(), timer_.u_elapsed() / 1e6);
   }
 

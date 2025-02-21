@@ -18,7 +18,6 @@ add_subdirectory(v2)
 
 add_library(vfs_meta_lib 
     meta_log.cpp
-    meta_system_wrapper.cpp
 )
 
 target_link_libraries(vfs_meta_lib

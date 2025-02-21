@@ -171,8 +171,7 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
 
   {
     uint64_t fh = 0;
-    vfs::Attr attr;
-    Status s = vfs_->Open(filelist.GetKey(), flags, &fh, &attr);
+    Status s = vfs_->Open(filelist.GetKey(), flags, &fh);
     if (!s.ok()) {
       LOG(ERROR) << "Fail open warmup list file, status: " << s.ToString()
                  << ", key = " << filelist.GetKey();

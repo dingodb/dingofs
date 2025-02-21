@@ -66,8 +66,8 @@ Status InitLog(const char* argv0, std::string conf_path) {
   google::InitGoogleLogging(argv0);
 
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir)
-              && dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
+              dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
+              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();
 }
@@ -311,7 +311,7 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
   return s;
 }
 
-Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh, Attr* attr) {
+Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh) {
   VLOG(1) << "VFSOpen inodeId=" << ino << " flags: " << flags;
   Status s;
   AccessLogGuard log([&]() {
@@ -321,7 +321,7 @@ Status VFSWrapper::Open(Ino ino, int flags, uint64_t* fh, Attr* attr) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opOpen, &client_op_metric_->opAll});
 
-  s = vfs_->Open(ino, flags, fh, attr);
+  s = vfs_->Open(ino, flags, fh);
   VLOG(1) << "VFSOpen end inodeId=" << ino << " flags: " << flags
           << " status: " << s.ToString() << " fh: " << *fh;
   if (!s.ok()) {
@@ -458,24 +458,24 @@ Status VFSWrapper::Fsync(Ino ino, int datasync, uint64_t fh) {
   return s;
 }
 
-Status VFSWrapper::SetXAttr(Ino ino, const std::string& name,
+Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
                             const std::string& value, int flags) {
-  VLOG(1) << "VFSSetXAttr inodeId=" << ino << " name: " << name;
+  VLOG(1) << "VFSSetXattr inodeId=" << ino << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
 
   // NOTE: rc is used by log guard
-  s = vfs_->SetXAttr(ino, name, value, flags);
-  LOG(INFO) << "VFSSetXAttr end inodeId=" << ino << " name: " << name
+  s = vfs_->SetXattr(ino, name, value, flags);
+  LOG(INFO) << "VFSSetXattr end inodeId=" << ino << " name: " << name
             << " value: " << value << " status: " << s.ToString();
   return s;
 }
 
-Status VFSWrapper::GetXAttr(Ino ino, const std::string& name,
+Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
                             std::string* value) {
-  VLOG(1) << "VFSGetXAttr inodeId=" << ino << " name: " << name;
+  VLOG(1) << "VFSGetXattr inodeId=" << ino << " name: " << name;
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("getxattr (%d,%s): %s", ino, name, s.ToString());
@@ -484,8 +484,8 @@ Status VFSWrapper::GetXAttr(Ino ino, const std::string& name,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetXattr, &client_op_metric_->opAll});
 
-  s = vfs_->GetXAttr(ino, name, value);
-  VLOG(1) << "VFSGetXAttr end inodeId=" << ino << " name: " << name
+  s = vfs_->GetXattr(ino, name, value);
+  VLOG(1) << "VFSGetXattr end inodeId=" << ino << " name: " << name
           << " value: " << *value << " status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
@@ -493,8 +493,8 @@ Status VFSWrapper::GetXAttr(Ino ino, const std::string& name,
   return s;
 }
 
-Status VFSWrapper::ListXAttr(Ino ino, std::vector<std::string>* xattrs) {
-  VLOG(1) << "VFSListXAttr inodeId=" << ino;
+Status VFSWrapper::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+  VLOG(1) << "VFSListXattr inodeId=" << ino;
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("listxattr (%d): %s %d", ino, s.ToString(),
@@ -504,8 +504,8 @@ Status VFSWrapper::ListXAttr(Ino ino, std::vector<std::string>* xattrs) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opListXattr, &client_op_metric_->opAll});
 
-  s = vfs_->ListXAttr(ino, xattrs);
-  VLOG(1) << "VFSListXAttr end inodeId=" << ino << " status: " << s.ToString()
+  s = vfs_->ListXattr(ino, xattrs);
+  VLOG(1) << "VFSListXattr end inodeId=" << ino << " status: " << s.ToString()
           << " xattrs: " << xattrs->size();
   if (!s.ok()) {
     op_metric.FailOp();

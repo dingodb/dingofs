@@ -434,7 +434,7 @@ Status DummyFileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status DummyFileSystem::Open(Ino ino, int flags, Attr* attr) {
+Status DummyFileSystem::Open(Ino ino, int flags) {
   if (open_file_memo_.IsOpened(ino)) {
     open_file_memo_.Open(ino);
     return Status::OK();
@@ -443,6 +443,13 @@ Status DummyFileSystem::Open(Ino ino, int flags, Attr* attr) {
   open_file_memo_.Open(ino);
 
   return Status::OK();
+}
+
+Status DummyFileSystem::Create(Ino parent, const std::string& name,
+                               uint32_t uid, uint32_t gid, uint32_t mode,
+                               int flags, Attr* attr) {
+  DINGOFS_RETURN_NOT_OK(MkNod(parent, name, uid, gid, mode, 0, attr));
+  return Open(attr->ino, flags);
 }
 
 Status DummyFileSystem::Close(Ino ino) {
@@ -470,8 +477,7 @@ Status DummyFileSystem::WriteSlice(Ino ino, uint64_t index,
 }
 
 Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
-                              uint32_t gid, uint32_t mode, uint64_t rdev,
-                              Attr* attr) {
+                              uint32_t gid, uint32_t mode, Attr* attr) {
   uint32_t fs_id = fs_info_.fs_id();
 
   Dentry parent_dentry;
@@ -484,7 +490,6 @@ Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
   inode.set_mode(S_IFDIR | mode);
   inode.set_uid(uid);
   inode.set_gid(gid);
-  inode.set_rdev(rdev);
 
   auto pb_dentry =
       GenDentry(fs_id, parent, ino, name, pb::mdsv2::FileType::DIRECTORY);
@@ -756,15 +761,14 @@ Status DummyFileSystem::SetXattr(Ino ino, const std::string& name,
   return Status::OK();
 }
 
-Status DummyFileSystem::ListXattr(Ino ino,
-                                  std::map<std::string, std::string>* xattrs) {
+Status DummyFileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
   for (const auto& [name, value] : inode.xattrs()) {
-    xattrs->insert({name, value});
+    xattrs->push_back(name);
   }
 
   return Status::OK();

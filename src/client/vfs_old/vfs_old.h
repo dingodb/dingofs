@@ -80,7 +80,7 @@ class VFSOld : public VFS {
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
 
-  Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr) override;
+  Status Open(Ino ino, int flags, uint64_t* fh) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr) override;
@@ -97,13 +97,13 @@ class VFSOld : public VFS {
 
   Status Fsync(Ino ino, int datasync, uint64_t fh) override;
 
-  Status SetXAttr(Ino ino, const std::string& name, const std::string& value,
+  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags) override;
 
-  Status GetXAttr(Ino ino, const std::string& name,
+  Status GetXattr(Ino ino, const std::string& name,
                   std::string* value) override;
 
-  Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) override;
+  Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr) override;
@@ -144,7 +144,7 @@ class VFSOld : public VFS {
   DINGOFS_ERROR UpdateParentMCTimeAndNlink(Ino parent,
                                            common::NlinkChange nlink);
 
-  Status HandleOpenFlags(Ino ino, int flags, Attr* attr);
+  Status HandleOpenFlags(Ino ino, int flags);
 
   Status AddWarmupTask(common::WarmupType type, Ino key,
                        const std::string& path,

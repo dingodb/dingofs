@@ -77,7 +77,7 @@ class VFSWrapper {
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name, Attr* attr);
 
-  Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr);
+  Status Open(Ino ino, int flags, uint64_t* fh);
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr);
@@ -94,12 +94,12 @@ class VFSWrapper {
 
   Status Fsync(Ino ino, int datasync, uint64_t fh);
 
-  Status SetXAttr(Ino ino, const std::string& name, const std::string& value,
+  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags);
 
-  Status GetXAttr(Ino ino, const std::string& name, std::string* value);
+  Status GetXattr(Ino ino, const std::string& name, std::string* value);
 
-  Status ListXAttr(Ino ino, std::vector<std::string>* xattrs);
+  Status ListXattr(Ino ino, std::vector<std::string>* xattrs);
 
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr);

@@ -21,7 +21,7 @@
 #include <memory>
 
 #include "client/vfs/handle_manager.h"
-#include "client/vfs/meta/meta_system_wrapper.h"
+#include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
 
 namespace dingofs {
@@ -67,7 +67,7 @@ class VFSImpl : public VFS {
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
 
-  Status Open(Ino ino, int flags, uint64_t* fh, Attr* attr) override;
+  Status Open(Ino ino, int flags, uint64_t* fh) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                 uint32_t mode, int flags, uint64_t* fh, Attr* attr) override;
@@ -84,13 +84,13 @@ class VFSImpl : public VFS {
 
   Status Fsync(Ino ino, int datasync, uint64_t fh) override;
 
-  Status SetXAttr(Ino ino, const std::string& name, const std::string& value,
+  Status SetXattr(Ino ino, const std::string& name, const std::string& value,
                   int flags) override;
 
-  Status GetXAttr(Ino ino, const std::string& name,
+  Status GetXattr(Ino ino, const std::string& name,
                   std::string* value) override;
 
-  Status ListXAttr(Ino ino, std::vector<std::string>* xattrs) override;
+  Status ListXattr(Ino ino, std::vector<std::string>* xattrs) override;
 
   Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, Attr* attr) override;
@@ -111,8 +111,10 @@ class VFSImpl : public VFS {
   uint64_t GetMaxNameLength() override;
 
  private:
+  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler);
+
   std::atomic_bool started_{false};
-  std::unique_ptr<MetaSystemWrapper> meta_system_wrapper_;
+  std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
 };
 

@@ -25,7 +25,6 @@ std::shared_ptr<spdlog::logger> meta_logger;
 bool InitMetaLog(const std::string& log_dir) {
   std::string filename = fmt::format("{}/meta_{}.log", log_dir, getpid());
   meta_logger = spdlog::daily_logger_mt("vfs_meta_system", filename, 0, 0);
-  CHECK_NOTNULL(meta_logger);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;
 }

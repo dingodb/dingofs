@@ -76,8 +76,10 @@ include_directories(${DINGOSDK_INSTALL_PATH}/include)
 
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
-add_definitions(-DUSE_BTHREAD_MUTEX)
 message("CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")
+
+add_definitions(-DUSE_BTHREAD_MUTEX)
+add_definitions(-DSPDLOG_FMT_EXTERNAL)
 
 execute_process(
   COMMAND git describe --always --dirty
