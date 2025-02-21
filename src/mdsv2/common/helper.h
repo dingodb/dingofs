@@ -85,6 +85,8 @@ class Helper {
   static std::string PrefixNext(const std::string& input);
 
   static std::string EndPointToString(const butil::EndPoint& endpoint);
+
+  static std::string ParseCoorAddr(const std::string& coor_url);
 };
 
 }  // namespace mdsv2

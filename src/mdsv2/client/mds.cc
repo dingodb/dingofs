@@ -22,6 +22,11 @@ namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
+bool MDSClient::Init(const std::string& mds_addr) {
+  interaction_ = dingofs::mdsv2::client::Interaction::New();
+  return interaction_->Init(mds_addr);
+}
+
 void MDSClient::CreateFs(const std::string& fs_name, const std::string& partition_type) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";

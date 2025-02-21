@@ -45,12 +45,14 @@ class MetaDataCodec {
   static void EncodeDentryRange(int fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
 
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
+  static uint32_t DirInodeKeyLength() { return 15; }
   static std::string EncodeDirInodeKey(int fs_id, uint64_t ino);
   static void DecodeDirInodeKey(const std::string& key, int& fs_id, uint64_t& ino);
   static std::string EncodeDirInodeValue(const pb::mdsv2::Inode& inode);
   static pb::mdsv2::Inode DecodeDirInodeValue(const std::string& value);
 
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
+  static uint32_t FileInodeKeyLength() { return 15; }
   static std::string EncodeFileInodeKey(int fs_id, uint64_t ino);
   static void DecodeFileInodeKey(const std::string& key, int& fs_id, uint64_t& ino);
   static std::string EncodeFileInodeValue(const pb::mdsv2::Inode& inode);

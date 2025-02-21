@@ -12,28 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <cstdint>
 #include <string>
 
-#include "mdsv2/client/interaction.h"
+#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
-class MDSClient {
+class StoreClient {
  public:
-  MDSClient() = default;
-  ~MDSClient() = default;
+  StoreClient() = default;
+  ~StoreClient() = default;
 
-  bool Init(const std::string& mds_addr);
+  bool Init(const std::string& coor_addr);
 
-  void CreateFs(const std::string& fs_name, const std::string& partition_type);
-  void DeleteFs(const std::string& fs_name);
-  void GetFs(const std::string& fs_name);
+  // print fs dentry tree
+  void PrintDentryTree(uint32_t fs_id, bool is_details);
 
  private:
-  InteractionPtr interaction_;
+  void TraverseDentryTree(uint32_t fs_id);
+
+  KVStoragePtr kv_storage_;
 };
 
 }  // namespace client

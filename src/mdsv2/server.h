@@ -22,6 +22,7 @@
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/service/fsinfo_sync.h"
 #include "mdsv2/service/heartbeat.h"
@@ -47,6 +48,10 @@ class Server {
 
   bool InitStorage(const std::string& store_url);
 
+  bool InitRenamer();
+
+  bool InitMutationMerger();
+
   bool InitFileSystem();
 
   bool InitHeartbeat();
@@ -67,6 +72,7 @@ class Server {
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorPtr GetMDSMonitor() { return mds_monitor_; }
+  MutationMergerPtr GetMutationMerger() { return mutation_merger_; }
 
   void Run();
 
@@ -93,6 +99,12 @@ class Server {
 
   // backend kv storage
   KVStoragePtr kv_storage_;
+
+  // renamer
+  RenamerPtr renamer_;
+
+  // mutation merger
+  MutationMergerPtr mutation_merger_;
 
   // filesystem
   FileSystemSetPtr file_system_set_;

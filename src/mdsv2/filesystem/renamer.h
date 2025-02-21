@@ -55,6 +55,9 @@ class RenameTask : public TaskRunnable {
   FileSystemPtr fs_;
 };
 
+class Renamer;
+using RenamerPtr = std::shared_ptr<Renamer>;
+
 class Renamer {
  public:
   Renamer() = default;
@@ -62,6 +65,8 @@ class Renamer {
 
   Renamer(const Renamer&) = delete;
   Renamer& operator=(const Renamer&) = delete;
+
+  static RenamerPtr New() { return std::make_shared<Renamer>(); }
 
   bool Init();
   bool Destroy();
@@ -74,7 +79,6 @@ class Renamer {
 
   WorkerPtr worker_;
 };
-using RenamerPtr = std::shared_ptr<Renamer>;
 
 }  // namespace mdsv2
 }  // namespace dingofs

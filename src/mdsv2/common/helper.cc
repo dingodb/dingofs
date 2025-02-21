@@ -15,6 +15,7 @@
 #include "mdsv2/common/helper.h"
 
 #include <filesystem>
+#include <fstream>
 #include <random>
 
 #include "butil/strings/string_split.h"
@@ -383,6 +384,57 @@ std::string Helper::PrefixNext(const std::string& input) {
 
 std::string Helper::EndPointToString(const butil::EndPoint& endpoint) {
   return std::string(butil::endpoint2str(endpoint).c_str());
+}
+
+static bool IsValidFileAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "file://"; }
+static bool IsValidListAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "list://"; }
+
+static std::string ParseFileUrl(const std::string& coor_url) {
+  CHECK(coor_url.substr(0, 7) == "file://") << "Invalid coor_url: " << coor_url;
+
+  std::string file_path = coor_url.substr(7);
+
+  std::ifstream file(file_path);
+  if (!file.is_open()) {
+    DINGO_LOG(ERROR) << fmt::format("Open file({}) failed, maybe not exist!", file_path);
+    return {};
+  }
+
+  std::string addrs;
+  std::string line;
+  while (std::getline(file, line)) {
+    if (line.empty()) {
+      continue;
+    }
+    if (line.find('#') == 0) {
+      continue;
+    }
+
+    addrs += line + ",";
+  }
+
+  return addrs.empty() ? "" : addrs.substr(0, addrs.size() - 1);
+}
+
+static std::string ParseListUrl(const std::string& coor_url) {
+  CHECK(coor_url.substr(0, 7) == "list://") << "Invalid coor_url: " << coor_url;
+
+  return coor_url.substr(7);
+}
+
+std::string Helper::ParseCoorAddr(const std::string& coor_url) {
+  std::string coor_addrs;
+  if (IsValidFileAddr(coor_url)) {
+    coor_addrs = ParseFileUrl(coor_url);
+
+  } else if (IsValidListAddr(coor_url)) {
+    coor_addrs = ParseListUrl(coor_url);
+
+  } else {
+    DINGO_LOG(ERROR) << "Invalid coor_url: " << coor_url;
+  }
+
+  return coor_addrs;
 }
 
 }  // namespace mdsv2

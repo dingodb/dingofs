@@ -14,11 +14,17 @@
 
 #include "mdsv2/filesystem/mutation_merger.h"
 
+#include <fmt/format.h>
+#include <gflags/gflags.h>
+
 #include <atomic>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "bthread/bthread.h"
+#include "dingofs/error.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
@@ -26,6 +32,55 @@
 
 namespace dingofs {
 namespace mdsv2 {
+
+DEFINE_uint32(process_mutation_batch_size, 64, "process mutation batch size.");
+
+static std::string MutationTypeName(Mutation::Type type) {
+  switch (type) {
+    case Mutation::Type::kFileInode:
+      return "FileInode";
+    case Mutation::Type::kParentWithDentry:
+      return "ParentWithDentry";
+    default:
+      return "Unknown";
+  }
+
+  return "Unknown";
+}
+
+static std::string MutationOpTypeName(Mutation::OpType op_type) {
+  switch (op_type) {
+    case Mutation::OpType::kPut:
+      return "Put";
+    case Mutation::OpType::kDelete:
+      return "Delete";
+    default:
+      return "Unknown";
+  }
+
+  return "Unknown";
+}
+
+std::string MergeMutation::ToString() const {
+  std::string dentry_op_str;
+  for (const auto& dentry_op : dentry_ops) {
+    dentry_op_str += fmt::format("{}/{}:", MutationOpTypeName(dentry_op.op_type), dentry_op.dentry.ShortDebugString());
+  }
+
+  return fmt::format("{} {} inode_op({}/{}), dentry_ops({}), notifications({})", MutationTypeName(type), fs_id,
+                     MutationOpTypeName(inode_op.op_type), inode_op.inode.ShortDebugString(), dentry_op_str,
+                     notifications.size());
+}
+
+MutationMerger::MutationMerger(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {
+  bthread_mutex_init(&mutex_, nullptr);
+  bthread_cond_init(&cond_, nullptr);
+}
+
+MutationMerger::~MutationMerger() {
+  bthread_cond_destroy(&cond_);
+  bthread_mutex_destroy(&mutex_);
+}
 
 bool MutationMerger::Init() {
   struct Param {
@@ -39,6 +94,7 @@ bool MutationMerger::Init() {
           &tid_, &attr,
           [](void* arg) -> void* {
             Param* param = reinterpret_cast<Param*>(arg);
+
             param->self->ProcessMutation();
 
             delete param;
@@ -47,6 +103,7 @@ bool MutationMerger::Init() {
           param) != 0) {
     delete param;
     DINGO_LOG(FATAL) << "[mutationmerge] start background thread fail.";
+    return false;
   }
 
   return true;
@@ -67,32 +124,28 @@ bool MutationMerger::Destroy() {
 }
 
 void MutationMerger::ProcessMutation() {
+  std::vector<Mutation> mutations;
+  mutations.reserve(FLAGS_process_mutation_batch_size);
+
   while (true) {
+    mutations.clear();
+
     bthread_mutex_lock(&mutex_);
     bthread_cond_wait(&cond_, &mutex_);
+    bthread_mutex_unlock(&mutex_);
 
-    std::vector<Mutation> mutations;
-    mutations.reserve(32);
-    for (;;) {
-      Mutation mutation;
-      if (!mutations_.Dequeue(mutation)) {
-        break;
-      }
-
+    Mutation mutation;
+    while (mutations_.Dequeue(mutation)) {
       mutations.push_back(mutation);
     }
 
     if (is_stop_.load(std::memory_order_relaxed) && mutations.empty()) {
-      bthread_mutex_unlock(&mutex_);
       break;
     }
 
-    bthread_mutex_unlock(&mutex_);
-
-    // todo: process mutations
-    std::map<uint64_t, MergeMutation> out_merge_mutations;
-    Merge(mutations, out_merge_mutations);
-    for (auto& [ino, merge_mutation] : out_merge_mutations) {
+    std::map<Key, MergeMutation> merge_mutations;
+    Merge(mutations, merge_mutations);
+    for (auto& [_, merge_mutation] : merge_mutations) {
       LaunchExecuteMutation(merge_mutation);
     }
   }
@@ -104,6 +157,8 @@ bool MutationMerger::CommitMutation(Mutation& mutation) {
   }
 
   mutations_.Enqueue(mutation);
+
+  bthread_cond_signal(&cond_);
 
   return true;
 }
@@ -117,72 +172,79 @@ bool MutationMerger::CommitMutation(std::vector<Mutation>& mutations) {
     mutations_.Enqueue(mutation);
   }
 
+  bthread_cond_signal(&cond_);
+
   return true;
 }
 
-void MergeDirInode(const Mutation& mutation, MergeMutation& merge_mutation) {
-  const auto& inode = mutation.inode;
-  auto& merge_inode = merge_mutation.inode;
+void MergeInode(const Mutation& mutation, MergeMutation& merge_mutation) {
+  const auto& inode = mutation.inode_op.inode;
+  auto& merge_inode = merge_mutation.inode_op.inode;
 
   if (inode.atime() > merge_inode.atime()) {
     merge_inode.set_atime(inode.atime());
-  }
-
-  if (inode.mtime() > merge_inode.mtime()) {
     merge_inode.set_mtime(inode.mtime());
-  }
-
-  if (inode.ctime() > merge_inode.ctime()) {
     merge_inode.set_ctime(inode.ctime());
+
+    merge_inode.set_uid(inode.uid());
+    merge_inode.set_gid(inode.gid());
+
+    merge_inode.set_nlink(inode.nlink());
+
+    merge_inode.set_length(inode.length());
+    merge_inode.set_mode(inode.mode());
+    merge_inode.set_symlink(inode.symlink());
+    merge_inode.set_rdev(inode.rdev());
+    merge_inode.set_dtime(inode.dtime());
+    merge_inode.set_openmpcount(inode.openmpcount());
+
+    *merge_inode.mutable_parent_inos() = inode.parent_inos();
+
+    *merge_inode.mutable_chunks() = inode.chunks();
+    *merge_inode.mutable_xattrs() = inode.xattrs();
   }
 }
 
-void MergeFileInode(const Mutation& mutation, MergeMutation& merge_mutation) {
-  const auto& inode = mutation.inode;
-  auto& merge_inode = merge_mutation.inode;
-
-  if (inode.atime() > merge_inode.atime()) {
-    merge_inode.set_atime(inode.atime());
-  }
-
-  if (inode.mtime() > merge_inode.mtime()) {
-    merge_inode.set_mtime(inode.mtime());
-  }
-
-  if (inode.ctime() > merge_inode.ctime()) {
-    merge_inode.set_ctime(inode.ctime());
-  }
-
-  merge_inode.set_length(inode.length());
-  merge_inode.set_mode(inode.mode());
-  *merge_inode.mutable_chunks() = inode.chunks();
-  *merge_inode.mutable_xattrs() = inode.xattrs();
-}
-
-void MutationMerger::Merge(std::vector<Mutation>& mutations, std::map<uint64_t, MergeMutation>& out_merge_mutations) {
+void MutationMerger::Merge(std::vector<Mutation>& mutations, std::map<Key, MergeMutation>& merge_mutations) {
   for (auto& mutation : mutations) {
-    auto it = out_merge_mutations.find(mutation.inode.ino());
-    if (it == out_merge_mutations.end()) {
-      MergeMutation merge_mutation = {mutation.type, mutation.fs_id, mutation.inode};
-      merge_mutation.dentries.push_back(mutation.dentry);
+    const auto& inode_op = mutation.inode_op;
+    Key key = {mutation.fs_id, inode_op.inode.ino()};
+
+    auto it = merge_mutations.find(key);
+    if (it == merge_mutations.end()) {
+      MergeMutation merge_mutation = {mutation.type, mutation.fs_id, inode_op};
+      if (mutation.type == Mutation::Type::kParentWithDentry) {
+        merge_mutation.dentry_ops.push_back(mutation.dentry_op);
+      }
+
       merge_mutation.notifications.push_back(mutation.notification);
 
-      out_merge_mutations.insert({mutation.inode.ino(), merge_mutation});
-    } else {
-      MergeMutation& merge_mutation = it->second;
+      merge_mutations.insert({key, std::move(merge_mutation)});
+      continue;
+    }
+
+    MergeMutation& merge_mutation = it->second;
+
+    // if delete, ignore subsequent operations
+    if (merge_mutation.inode_op.op_type == Mutation::OpType::kDelete) {
+      *mutation.notification.status = Status(pb::error::EINODE_DELETED, "inode deleted.");
       merge_mutation.notifications.push_back(mutation.notification);
+      continue;
+    }
+
+    merge_mutation.notifications.push_back(mutation.notification);
+
+    merge_mutation.inode_op.op_type = inode_op.op_type;
+
+    if (inode_op.op_type == Mutation::OpType::kPut) {
       switch (mutation.type) {
         case Mutation::Type::kFileInode:
-          MergeFileInode(mutation, merge_mutation);
+          MergeInode(mutation, merge_mutation);
           break;
 
-        case Mutation::Type::kDirInode:
-          MergeDirInode(mutation, merge_mutation);
-          break;
-
-        case Mutation::Type::kParentInodeWithDentry:
-          MergeDirInode(mutation, merge_mutation);
-          merge_mutation.dentries.push_back(mutation.dentry);
+        case Mutation::Type::kParentWithDentry:
+          MergeInode(mutation, merge_mutation);
+          merge_mutation.dentry_ops.push_back(mutation.dentry_op);
           break;
 
         default:
@@ -207,8 +269,8 @@ void MutationMerger::LaunchExecuteMutation(const MergeMutation& merge_mutation) 
           &tid, &attr,
           [](void* arg) -> void* {
             Params* params = reinterpret_cast<Params*>(arg);
-            MutationMerger* self = params->self;
-            self->ExecuteMutation(params->merge_mutation);
+
+            params->self->ExecuteMutation(params->merge_mutation);
 
             delete params;
 
@@ -221,12 +283,15 @@ void MutationMerger::LaunchExecuteMutation(const MergeMutation& merge_mutation) 
 }
 
 void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
+  DINGO_LOG(INFO) << merge_mutation.ToString();
+
   Status status;
   switch (merge_mutation.type) {
     case Mutation::Type::kFileInode: {
-      const auto& inode = merge_mutation.inode;
+      const auto& inode = merge_mutation.inode_op.inode;
 
       KeyValue kv;
+      kv.opt_type = merge_mutation.inode_op.op_type;
       kv.key = MetaDataCodec::EncodeFileInodeKey(merge_mutation.fs_id, inode.ino());
       kv.value = MetaDataCodec::EncodeFileInodeValue(inode);
 
@@ -237,23 +302,25 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
       }
     } break;
 
-    case Mutation::Type::kParentInodeWithDentry: {
-      const auto& parent_inode = merge_mutation.inode;
+    case Mutation::Type::kParentWithDentry: {
+      const auto& parent_inode = merge_mutation.inode_op.inode;
 
       std::vector<KeyValue> kvs;
-      kvs.reserve(merge_mutation.dentries.size() + 1);
+      kvs.reserve(merge_mutation.dentry_ops.size() + 1);
 
       KeyValue kv;
+      kv.opt_type = merge_mutation.inode_op.op_type;
       kv.key = MetaDataCodec::EncodeFileInodeKey(merge_mutation.fs_id, parent_inode.ino());
       kv.value = MetaDataCodec::EncodeFileInodeValue(parent_inode);
       kvs.push_back(kv);
 
-      for (const auto& dentry : merge_mutation.dentries) {
+      for (const auto& dentry_op : merge_mutation.dentry_ops) {
         KeyValue kv;
-        kv.key = MetaDataCodec::EncodeDentryKey(merge_mutation.fs_id, parent_inode.ino(), dentry.name());
-        kv.value = MetaDataCodec::EncodeDentryValue(dentry);
+        kv.opt_type = dentry_op.op_type;
+        kv.key = MetaDataCodec::EncodeDentryKey(merge_mutation.fs_id, parent_inode.ino(), dentry_op.dentry.name());
+        kv.value = MetaDataCodec::EncodeDentryValue(dentry_op.dentry);
 
-        kvs.push_back(kv);
+        kvs.push_back(std::move(kv));
       }
 
       KVStorage::WriteOption option;

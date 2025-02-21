@@ -29,6 +29,7 @@
 #include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/mutation_merger.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/storage/storage.h"
@@ -56,12 +57,13 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-             KVStoragePtr kv_storage);
+             KVStoragePtr kv_storage, RenamerPtr renamer, MutationMergerPtr mutation_merger);
   ~FileSystem() = default;
 
   static FileSystemPtr New(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-                           KVStoragePtr kv_storage) {
-    return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(id_generator), kv_storage);
+                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationMergerPtr mutation_merger) {
+    return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(id_generator), kv_storage, renamer,
+                                        mutation_merger);
   }
 
   FileSystemPtr GetSelfPtr();
@@ -194,19 +196,24 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   InodeCache inode_cache_;
 
   RenamerPtr renamer_;
+
+  // muation merger
+  MutationMergerPtr const mutation_merger_;
 };
 
 // manage all filesystem
 class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-                MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map);
+                MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map, RenamerPtr renamer,
+                MutationMergerPtr mutation_merger);
   ~FileSystemSet();
 
   static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                              KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map) {
+                              KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map,
+                              RenamerPtr renamer, MutationMergerPtr mutation_merger) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, self_mds_meta,
-                                           mds_meta_map);
+                                           mds_meta_map, renamer, mutation_merger);
   }
 
   bool Init();
@@ -257,6 +264,10 @@ class FileSystemSet {
   IdGeneratorPtr slice_id_generator_;
 
   KVStoragePtr kv_storage_;
+
+  RenamerPtr renamer_;
+
+  MutationMergerPtr mutation_merger_;
 
   MDSMeta self_mds_meta_;
   MDSMetaMapPtr mds_meta_map_;

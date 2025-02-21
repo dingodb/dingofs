@@ -138,61 +138,10 @@ bool Server::InitMDSMeta() {
   return true;
 }
 
-static bool IsValidFileAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "file://"; }
-static bool IsValidListAddr(const std::string& coor_url) { return coor_url.substr(0, 7) == "list://"; }
-
-static std::string ParseFileUrl(const std::string& coor_url) {
-  CHECK(coor_url.substr(0, 7) == "file://") << "Invalid coor_url: " << coor_url;
-
-  std::string file_path = coor_url.substr(7);
-
-  std::ifstream file(file_path);
-  if (!file.is_open()) {
-    DINGO_LOG(ERROR) << fmt::format("Open file({}) failed, maybe not exist!", file_path);
-    return {};
-  }
-
-  std::string addrs;
-  std::string line;
-  while (std::getline(file, line)) {
-    if (line.empty()) {
-      continue;
-    }
-    if (line.find('#') == 0) {
-      continue;
-    }
-
-    addrs += line + ",";
-  }
-
-  return addrs.empty() ? "" : addrs.substr(0, addrs.size() - 1);
-}
-
-static std::string ParseListUrl(const std::string& coor_url) {
-  CHECK(coor_url.substr(0, 7) == "list://") << "Invalid coor_url: " << coor_url;
-
-  return coor_url.substr(7);
-}
-
-std::string ParseCoorAddr(const std::string& coor_url) {
-  std::string coor_addrs;
-  if (IsValidFileAddr(coor_url)) {
-    coor_addrs = ParseFileUrl(coor_url);
-
-  } else if (IsValidListAddr(coor_url)) {
-    coor_addrs = ParseListUrl(coor_url);
-
-  } else {
-    DINGO_LOG(ERROR) << "Invalid coor_url: " << coor_url;
-  }
-
-  return coor_addrs;
-}
-
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
   DINGO_LOG(INFO) << fmt::format("init coordinator client, url({}).", coor_url);
 
-  std::string coor_addrs = ParseCoorAddr(coor_url);
+  std::string coor_addrs = Helper::ParseCoorAddr(coor_url);
   if (coor_addrs.empty()) {
     return false;
   }
@@ -205,16 +154,33 @@ bool Server::InitCoordinatorClient(const std::string& coor_url) {
 
 bool Server::InitStorage(const std::string& store_url) {
   DINGO_LOG(INFO) << fmt::format("init storage, url({}).", store_url);
+  CHECK(!store_url.empty()) << "store url is empty.";
 
   kv_storage_ = DingodbStorage::New();
   CHECK(kv_storage_ != nullptr) << "new DingodbStorage fail.";
 
-  std::string store_addrs = ParseCoorAddr(store_url);
+  std::string store_addrs = Helper::ParseCoorAddr(store_url);
   if (store_addrs.empty()) {
     return false;
   }
 
   return kv_storage_->Init(store_addrs);
+}
+
+bool Server::InitRenamer() {
+  renamer_ = Renamer::New();
+  CHECK(renamer_ != nullptr) << "new Renamer fail.";
+
+  return renamer_->Init();
+}
+
+bool Server::InitMutationMerger() {
+  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+
+  mutation_merger_ = MutationMerger::New(kv_storage_);
+  CHECK(mutation_merger_ != nullptr) << "new MutationMerger fail.";
+
+  return mutation_merger_->Init();
 }
 
 bool Server::InitFileSystem() {
@@ -228,8 +194,8 @@ bool Server::InitFileSystem() {
   CHECK(fs_id_generator != nullptr) << "new AutoIncrementIdGenerator fail.";
   CHECK(fs_id_generator->Init()) << "init AutoIncrementIdGenerator fail.";
 
-  file_system_set_ =
-      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_, mds_meta_map_);
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_,
+                                        mds_meta_map_, renamer_, mutation_merger_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -341,6 +307,9 @@ void Server::Run() {
 }
 
 void Server::Stop() {
+  renamer_->Destroy();
+  mutation_merger_->Destroy();
+
   heartbeat_.Destroy();
   crontab_manager_.Destroy();
 }

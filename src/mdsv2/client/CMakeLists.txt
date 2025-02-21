@@ -17,6 +17,7 @@
 add_executable(dingo-mdsv2-client
   main.cc
   mds.cc
+  store.cc
   interaction.cc
 )
 
@@ -24,6 +25,10 @@ target_link_libraries(dingo-mdsv2-client
   PROTO_OBJS
 
   mdsv2_common
+  mdsv2_storage
+  mdsv2_filesystem
+
+  dingo::sdk
 
   brpc
   leveldb
