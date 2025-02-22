@@ -15,10 +15,11 @@
  */
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <unordered_map>
 
-#include "client/vfs/dir_handler.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
@@ -28,25 +29,26 @@ namespace vfs {
 struct Handle {
   Ino ino;
   uint64_t fh;
-  // for dir
-  std::unique_ptr<DirHandler> dir_handler;
+  DirIteratorUPtr dir_iterator;
 };
+
+using HandlePtr = std::shared_ptr<Handle>;
 
 class HandleManager {
  public:
   HandleManager() = default;
   ~HandleManager() = default;
 
-  Handle* NewHandle(Ino ino);
+  HandlePtr NewHandle(Ino ino, DirIteratorUPtr dir_iterator);
 
-  Handle* FindHandler(uint64_t fh);
+  HandlePtr FindHandler(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
 
  private:
   std::mutex mutex_;
   uint64_t next_fh_{1};
-  std::unordered_map<uint64_t, std::unique_ptr<Handle>> handles_;
+  std::unordered_map<uint64_t, HandlePtr> handles_;
 };
 
 }  // namespace vfs

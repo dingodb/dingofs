@@ -59,19 +59,19 @@ inline std::string FileType2Str(const FileType& file_type) {
 }
 
 struct Attr {
-  Ino ino;
-  uint32_t mode;
-  uint32_t nlink;
-  uint32_t uid;
-  uint32_t gid;
-  uint64_t length;
-  uint64_t rdev;
-  uint64_t atime;
-  uint64_t mtime;
-  uint64_t ctime;
-  uint32_t mtime_ns;
-  uint32_t atime_ns;
-  uint32_t ctime_ns;
+  Ino ino{0};
+  uint32_t mode{0};
+  uint32_t nlink{0};
+  uint32_t uid{0};
+  uint32_t gid{0};
+  uint64_t length{0};
+  uint64_t rdev{0};
+  uint64_t atime{0};
+  uint64_t mtime{0};
+  uint64_t ctime{0};
+  uint32_t mtime_ns{0};
+  uint32_t atime_ns{0};
+  uint32_t ctime_ns{0};
   FileType type;
   // TODO: refact, maybe use separate key for hardlink
   std::vector<Ino> parents;

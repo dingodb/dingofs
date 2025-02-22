@@ -16,34 +16,63 @@
 
 #include "client/vfs/vfs_impl.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <memory>
+#include <utility>
 
 #include "client/common/status.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/dir_handler.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/meta_log.h"
+#include "client/vfs/meta/v2/filesystem.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
+#include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-Status VFSImpl::Start(const VFSConfig& vfs_conf) {
+Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
   if (started_.load()) {
     return Status::OK();
   }
 
-  {
-    meta_system_ = std::make_unique<v2::DummyFileSystem>();
+  Status s;
+  MetaLogGuard log_guard(
+      [&]() { return absl::StrFormat("init %s", s.ToString()); });
 
-    Status s;
-    MetaLogGuard log_guard(
-        [&]() { return absl::StrFormat("init %s", s.ToString()); });
+  utils::Configuration conf;
+  conf.SetConfigPath(vfs_conf.config_path);
+  if (!conf.LoadConfig()) {
+    LOG(ERROR) << "load config fail, confPath = " << vfs_conf.config_path;
+    return Status::Internal("load config fail");
+  }
 
-    s = meta_system_->Init();
+  if (vfs_conf.fs_type == "vfs_dummy") {
+    LOG(INFO) << "use dummy file system.";
+    meta_system_ = std::make_unique<dummy::DummyFileSystem>();
+
+  } else if (vfs_conf.fs_type == "vfs_v2") {
+    LOG(INFO) << "use mdsv2 file system.";
+    std::string coor_addr;
+    conf.GetValueFatalIfFail("coordinator.addr", &coor_addr);
+    LOG(INFO) << fmt::format("coordinator addr: {}.", coor_addr);
+
+    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, coor_addr,
+                                              vfs_conf.mount_point);
+  } else {
+    LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
+    return Status::Internal("not unknown file system");
+  }
+
+  if (meta_system_ == nullptr) {
+    return Status::Internal("build meta system fail");
+  }
+
+  s = meta_system_->Init();
+  if (!s.ok()) {
+    return s;
   }
 
   handle_manager_ = std::make_unique<HandleManager>();
@@ -69,14 +98,14 @@ Status VFSImpl::Stop() {
 
 bool VFSImpl::EnableSplice() { return true; }
 
-double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }
+double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
 
-double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }
+double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT
 
 Status VFSImpl::Lookup(Ino parent, const std::string& name, Attr* attr) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("lookup (%d,%s): %s %s", parent, name, s.ToString(),
+    return absl::StrFormat("lookup (%d/%s): %s %s", parent, name, s.ToString(),
                            StrAttr(attr));
   });
 
@@ -174,7 +203,7 @@ Status VFSImpl::Link(Ino ino, Ino new_parent, const std::string& new_name,
   return s;
 }
 
-Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {
+Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
@@ -272,39 +301,20 @@ Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
   }
 
   if (s.ok()) {
-    auto* handle = handle_manager_->NewHandle(ino);
+    DirIteratorUPtr dir_iterator(meta_system_->NewDirIterator(ino));
+    auto handle = handle_manager_->NewHandle(ino, std::move(dir_iterator));
     *fh = handle->fh;
   }
 
   return s;
 }
 
-Status VFSImpl::NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) {
-  Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("new_dir_handler (%d,%d): %s", ino, with_attr,
-                           s.ToString());
-  });
-
-  s = meta_system_->NewDirHandler(ino, with_attr, handler);
-  return s;
-}
-
 Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
                         ReadDirHandler handler) {
-  auto* handle = handle_manager_->FindHandler(fh);
+  auto handle = handle_manager_->FindHandler(fh);
   if (handle == nullptr) {
     return Status::BadFd(fmt::format("bad  fh:{}", fh));
   }
-
-  if (handle->dir_handler == nullptr) {
-    // Init dir handler
-    DirHandler* dir_handler;
-    DINGOFS_RETURN_NOT_OK(NewDirHandler(ino, with_attr, &dir_handler));
-    handle->dir_handler.reset(dir_handler);
-  }
-
-  CHECK_NOTNULL(handle->dir_handler);
 
   Status s;
   MetaLogGuard log_guard([&]() {
@@ -312,40 +322,30 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
                            offset);
   });
 
-  auto* dir_handler = handle->dir_handler.get();
+  auto& dir_iterator = handle->dir_iterator;
+  CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
-  if (dir_handler->Offset() != offset) {
-    s = dir_handler->Seek(offset);
-    if (!s.ok()) {
-      LOG(WARNING) << "Fail Seek in ReadDir, inodeId=" << ino << ", fh: " << fh
-                   << ", offset: " << offset << ", status: " << s.ToString();
-      return s;
-    }
-  }
-
-  while (dir_handler->HasNext()) {
+  while (dir_iterator->HasNext()) {
     DirEntry entry;
-    s = dir_handler->Next(&entry);
+    s = dir_iterator->Next(with_attr, &entry);
     if (!s.ok()) {
-      LOG(WARNING) << "Fail Next in ReadDir, inodeId=" << ino << ", fh: " << fh
+      LOG(WARNING) << "read dir fail, ino=" << ino << ", fh: " << fh
                    << ", offset: " << offset << ", status: " << s.ToString();
       return s;
     }
 
-    uint64_t next_offset = dir_handler->Offset();
-    if (!handler(entry, next_offset)) {
-      LOG(INFO) << "ReadDir break by handler next_offset: " << next_offset;
+    if (!handler(entry)) {
+      LOG(INFO) << "read dir break by handler next_offset: " << offset;
       break;
     }
   }
 
-  LOG(INFO) << "ReadDir inodeId=" << ino << ", fh: " << fh
-            << ", offset: " << offset
-            << " success, next_offset: " << dir_handler->Offset();
+  LOG(INFO) << fmt::format("read dir ino({}) fh({}) offset({})", ino, fh,
+                           offset);
   return s;
 }
 
-Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {
+Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {  // NOLINT
   handle_manager_->ReleaseHandler(fh);
   return Status::OK();
 }

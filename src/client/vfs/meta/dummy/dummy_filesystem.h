@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "bthread/types.h"
-#include "client/vfs/dir_handler.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
@@ -32,7 +32,7 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace dummy {
 
 // for ReadDir/ReadDirPlus
 class ReadDirStateMemo {
@@ -128,31 +128,25 @@ class FileChunkMap {
 
 class DummyFileSystem;
 
-class DummyFileSystemDirHandler : public DirHandler {
+class DummyDirIterator : public vfs::DirIterator {
  public:
-  DummyFileSystemDirHandler(DummyFileSystem* system, Ino dir_ino)
-      : dumy_system_(system), dir_ino_(dir_ino) {}
+  DummyDirIterator(DummyFileSystem* system, Ino ino)
+      : dumy_system_(system), ino_(ino) {}
 
-  ~DummyFileSystemDirHandler() override;
-
-  Status Init(bool with_attr) override;
-
-  uint64_t Offset() override;
-
-  Status Seek(uint64_t offset) override;
+  ~DummyDirIterator() override;
 
   bool HasNext() override;
 
-  Status Next(DirEntry* dir_entry) override;
+  Status Next(bool with_attr, DirEntry* dir_entry) override;
 
-  void SetDirEntries(std::vector<DirEntry> dir_entries);
+  void SetDirEntries(std::vector<DirEntry>&& dir_entries);
 
  private:
-  DummyFileSystem* dumy_system_;
-  Ino dir_ino_{0};
-  bool with_attr_{false};
+  Ino ino_{0};
   uint64_t offset_{0};
+
   std::vector<DirEntry> dir_entries_;
+  DummyFileSystem* dumy_system_{nullptr};
 };
 
 class DummyFileSystem : public vfs::MetaSystem {
@@ -172,10 +166,6 @@ class DummyFileSystem : public vfs::MetaSystem {
     PBDentry dentry;
     PBInode inode;
   };
-
-  using ReadDirHandler = std::function<bool(const std::string&, uint64_t)>;
-  using ReadDirPlusHandler =
-      std::function<bool(const std::string&, const PBInode&)>;
 
   Status Init() override;
   void UnInit() override;
@@ -208,7 +198,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status OpenDir(Ino ino) override;
 
   // NOTE: caller own dir and the DirHandler should be deleted by caller
-  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) override;
+  DirIterator* NewDirIterator(Ino ino) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -232,7 +222,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
  private:
-  friend class DummyFileSystemDirHandler;
+  friend class DummyDirIterator;
 
   pb::mdsv2::FsInfo fs_info_;
 
@@ -249,6 +239,8 @@ class DummyFileSystem : public vfs::MetaSystem {
   bool GetDentry(uint64_t parent_ino, Dentry& dentry);
   bool GetChildDentry(uint64_t parent_ino, const std::string& name,
                       PBDentry& dentry);
+  bool GetAllChildDentry(uint64_t parent_ino,
+                         std::vector<DirEntry>& dir_entries);
 
   bool IsEmptyDentry(const Dentry& dentry);
 
@@ -284,7 +276,7 @@ class DummyFileSystem : public vfs::MetaSystem {
   FileChunkMap file_chunk_map_;
 };
 
-}  // namespace v2
+}  // namespace dummy
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

@@ -32,11 +32,10 @@ struct VFSConfig {
   std::string mount_point;
   std::string fs_name;
   std::string config_path;
-  std::string fs_type;
+  std::string fs_type;  // vfs_old/vfs_v1/vfs_v2/vfs_dummy
 };
 
-using ReadDirHandler =
-    std::function<bool(const DirEntry& dir_entry, uint64_t next_offset)>;
+using ReadDirHandler = std::function<bool(const DirEntry& dir_entry)>;
 
 // NOT: all return value should sys error code in <errno.h>
 class VFS {

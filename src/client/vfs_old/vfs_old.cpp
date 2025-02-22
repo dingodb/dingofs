@@ -1848,9 +1848,9 @@ Status VFSOld::OpenDir(Ino ino, uint64_t* fh) {
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail open dir inodeId=" << ino << ", rc: " << rc;
     return filesystem::DingofsErrorToStatus(rc);
-  } else {
-    return Status::OK();
   }
+
+  return Status::OK();
 }
 
 Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
@@ -1869,11 +1869,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
     return filesystem::DingofsErrorToStatus(rc);
   }
 
-  file_handler->dir_handler = std::make_unique<filesystem::FsDirHandler>();
-  Status s = file_handler->dir_handler->Init(with_attr);
-  if (!s.ok()) {
-    return s;
-  }
+  file_handler->dir_iterator = std::make_unique<filesystem::FsDirIterator>();
 
   bool has_stats = false;
 
@@ -1890,7 +1886,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
       inode_attrs.push_back(dir_entry->attr);
       entry.attr = InodeAttrPBToAttr(dir_entry->attr);
     }
-    file_handler->dir_handler->entries.push_back(entry);
+    file_handler->dir_iterator->entries.push_back(entry);
   });
 
   // out of iterate
@@ -1904,7 +1900,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
     entry.ino = STATSINODEID;
     entry.name = STATSNAME;
     entry.attr = GenerateVirtualInodeAttr(STATSINODEID);
-    file_handler->dir_handler->entries.push_back(entry);
+    file_handler->dir_iterator->entries.push_back(entry);
   }
 
   file_handler->dir_handler_init = true;
@@ -1926,38 +1922,27 @@ Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
 
   auto file_handler = fs_->FindHandler(fh);
   CHECK(file_handler->dir_handler_init);
-  CHECK_NOTNULL(file_handler->dir_handler);
+  CHECK_NOTNULL(file_handler->dir_iterator);
 
-  auto* dir_handler = file_handler->dir_handler.get();
+  auto& dir_iterator = file_handler->dir_iterator;
 
-  if (dir_handler->Offset() != offset) {
-    Status s = dir_handler->Seek(offset);
-    if (!s.ok()) {
-      LOG(WARNING) << "Fail Seek in ReadDir, inodeId=" << ino << ", fh: " << fh
-                   << ", offset: " << offset << ", status: " << s.ToString();
-      return s;
-    }
-  }
-
-  while (dir_handler->HasNext()) {
+  while (dir_iterator->HasNext()) {
     DirEntry entry;
-    Status s = dir_handler->Next(&entry);
+    Status s = dir_iterator->Next(with_attr, &entry);
     if (!s.ok()) {
       LOG(WARNING) << "Fail Next in ReadDir, inodeId=" << ino << ", fh: " << fh
                    << ", offset: " << offset << ", status: " << s.ToString();
       return s;
     }
 
-    uint64_t next_offset = dir_handler->Offset();
-    if (!handler(entry, next_offset)) {
-      LOG(INFO) << "ReadDir break by handler next_offset: " << next_offset;
+    if (!handler(entry)) {
+      LOG(INFO) << "ReadDir break by handler next_offset: " << offset;
       break;
     }
   }
 
   LOG(INFO) << "ReadDir inodeId=" << ino << ", fh: " << fh
-            << ", offset: " << offset
-            << " success, next_offset: " << dir_handler->Offset();
+            << ", offset: " << offset << " success";
   return Status::OK();
 }
 

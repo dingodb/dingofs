@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/access_log.h"
+#include "client/vfs_wrapper/access_log.h"
 
 namespace dingofs {
 namespace client {

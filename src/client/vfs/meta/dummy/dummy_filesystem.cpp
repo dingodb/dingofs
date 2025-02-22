@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include "bthread/mutex.h"
 #include "client/common/status.h"
@@ -36,7 +37,7 @@ static const uint64_t kRootIno = 1;
 namespace dingofs {
 namespace client {
 namespace vfs {
-namespace v2 {
+namespace dummy {
 
 ReadDirStateMemo::ReadDirStateMemo() {
   CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
@@ -539,37 +540,14 @@ Status DummyFileSystem::OpenDir(Ino ino) {
   return Status::OK();
 }
 
-// NOTE: caller own dir and the DirHandler should be deleted by caller
-Status DummyFileSystem::NewDirHandler(Ino ino, bool with_attr,
-                                      DirHandler** handler) {
-  Dentry dentry;
-  if (!GetDentry(ino, dentry)) {
-    return Status::Internal(pb::error::ENOT_FOUND, "not found parent dentry");
-  }
-
+DirIterator* DummyFileSystem::NewDirIterator(Ino ino) {
   std::vector<DirEntry> entries;
-  for (const auto& [name, pb_dentry] : dentry.children) {
-    DirEntry entry;
-    entry.name = pb_dentry.name();
-    entry.ino = pb_dentry.ino();
-    if (with_attr) {
-      PBInode inode;
-      if (!GetInode(pb_dentry.ino(), inode)) {
-        continue;
-      }
+  GetAllChildDentry(ino, entries);
 
-      entry.attr = ToAttr(inode);
-    }
-    entries.push_back(entry);
-  }
+  auto* dir_iterator = new DummyDirIterator(this, ino);
+  dir_iterator->SetDirEntries(std::move(entries));
 
-  auto* dir_handler = new DummyFileSystemDirHandler(this, ino);
-  dir_handler->SetDirEntries(std::move(entries));
-  dir_handler->Init(with_attr);
-
-  *handler = dir_handler;
-
-  return Status::OK();
+  return dir_iterator;
 }
 
 Status DummyFileSystem::Link(Ino ino, Ino new_parent,
@@ -669,8 +647,21 @@ Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
   return Status::OK();
 }
 
+static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
+  return tv_sec * 1000000000 + tv_nsec;
+}
+
 Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
                                 Attr* out_attr) {
+  out_attr->atime = ToTimestamp(out_attr->atime, out_attr->atime_ns);
+  out_attr->atime_ns = 0;
+
+  out_attr->mtime = ToTimestamp(out_attr->mtime, out_attr->mtime_ns);
+  out_attr->mtime_ns = 0;
+
+  out_attr->ctime = ToTimestamp(out_attr->ctime, out_attr->ctime_ns);
+  out_attr->ctime_ns = 0;
+
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -878,6 +869,26 @@ bool DummyFileSystem::GetChildDentry(uint64_t parent_ino,
   return true;
 }
 
+bool DummyFileSystem::GetAllChildDentry(uint64_t parent_ino,
+                                        std::vector<DirEntry>& dir_entries) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  auto it = dentry_map_.find(parent_ino);
+  if (it == dentry_map_.end()) {
+    return false;
+  }
+
+  for (auto& [name, pb_dentry] : it->second.children) {
+    DirEntry entry;
+    entry.name = name;
+    entry.ino = pb_dentry.ino();
+
+    dir_entries.push_back(entry);
+  }
+
+  return true;
+}
+
 bool DummyFileSystem::IsEmptyDentry(const Dentry& dentry) {
   BAIDU_SCOPED_LOCK(mutex_);
 
@@ -1003,49 +1014,37 @@ void DummyFileSystem::UpdateInodeLength(uint64_t ino, size_t length) {
   }
 }
 
-DummyFileSystemDirHandler::~DummyFileSystemDirHandler() {
+DummyDirIterator::~DummyDirIterator() {
   if (dumy_system_ != nullptr) {
-    dumy_system_->DecOrDeleteInodeNlink(dir_ino_);
+    dumy_system_->DecOrDeleteInodeNlink(ino_);
   }
 }
 
-Status DummyFileSystemDirHandler::Init(bool with_attr) {
-  with_attr_ = with_attr;
-  return Status::OK();
-}
+bool DummyDirIterator::HasNext() { return offset_ < dir_entries_.size(); }
 
-uint64_t DummyFileSystemDirHandler::Offset() { return offset_; }
-
-Status DummyFileSystemDirHandler::Seek(uint64_t offset) {
-  if (offset >= dir_entries_.size()) {
-    return Status::OutOfRange("offset out of range");
-  }
-  offset_ = offset;
-  return Status::OK();
-}
-
-bool DummyFileSystemDirHandler::HasNext() {
-  return offset_ < dir_entries_.size();
-}
-
-Status DummyFileSystemDirHandler::Next(DirEntry* dir_entry) {
+Status DummyDirIterator::Next(bool with_attr, DirEntry* dir_entry) {
   CHECK(offset_ < dir_entries_.size()) << "offset out of range";
+
   auto& entry = dir_entries_[offset_];
   dir_entry->name = entry.name;
   dir_entry->ino = entry.ino;
-  if (with_attr_) {
-    dir_entry->attr = entry.attr;
+  if (with_attr) {
+    DummyFileSystem::PBInode inode;
+    if (dumy_system_->GetInode(entry.ino, inode)) {
+      dir_entry->attr = ToAttr(inode);
+    }
   }
-  offset_++;
+
+  ++offset_;
+
   return Status::OK();
 }
 
-void DummyFileSystemDirHandler::SetDirEntries(
-    std::vector<DirEntry> dir_entries) {
+void DummyDirIterator::SetDirEntries(std::vector<DirEntry>&& dir_entries) {
   dir_entries_ = std::move(dir_entries);
 }
 
-}  // namespace v2
+}  // namespace dummy
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

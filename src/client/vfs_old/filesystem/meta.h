@@ -30,7 +30,7 @@
 
 #include "base/time/time.h"
 #include "client/common/status.h"
-#include "client/vfs/dir_handler.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/dir_buffer.h"
 #include "dingofs/mdsv2.pb.h"
@@ -79,25 +79,18 @@ struct DirEntry {
 
 struct FileHandler;
 
-class FsDirHandler : public vfs::DirHandler {
+class FsDirIterator : public vfs::DirIterator {
  public:
-  FsDirHandler() = default;
-
-  ~FsDirHandler() override = default;
-
-  Status Init(bool with_attr) override;
-
-  uint64_t Offset() override;
-
-  Status Seek(uint64_t offset) override;
+  FsDirIterator() = default;
+  ~FsDirIterator() override = default;
 
   bool HasNext() override;
 
-  Status Next(vfs::DirEntry* dir_entry) override;
+  Status Next(bool with_attr, vfs::DirEntry* dir_entry) override;
 
   std::vector<vfs::DirEntry> entries;
+
  private:
-  bool with_attr_{false};
   uint64_t offset_{0};
 };
 
@@ -108,7 +101,7 @@ struct FileHandler {
   bool padding;  // padding buffer
   // for read dir
   bool dir_handler_init{false};
-  std::unique_ptr<FsDirHandler> dir_handler;
+  std::unique_ptr<FsDirIterator> dir_iterator;
 };
 
 class HandlerManager {

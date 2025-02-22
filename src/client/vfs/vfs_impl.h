@@ -111,8 +111,6 @@ class VFSImpl : public VFS {
   uint64_t GetMaxNameLength() override;
 
  private:
-  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler);
-
   std::atomic_bool started_{false};
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;

@@ -96,30 +96,15 @@ std::string StrMode(uint16_t mode) {
   return s;
 }
 
-Status FsDirHandler::Init(bool with_attr) {
-  with_attr_ = with_attr;
-  return Status::OK();
-}
+bool FsDirIterator::HasNext() { return offset_ < entries.size(); }
 
-uint64_t FsDirHandler::Offset() { return offset_; }
-
-Status FsDirHandler::Seek(uint64_t offset) {
-  if (offset >= entries.size()) {
-    return Status::OutOfRange("offset out of range");
-  }
-  offset_ = offset;
-  return Status::OK();
-}
-
-bool FsDirHandler::HasNext() { return offset_ < entries.size(); }
-
-Status FsDirHandler::Next(vfs::DirEntry* dir_entry) {
+Status FsDirIterator::Next(bool with_attr, vfs::DirEntry* dir_entry) {
   CHECK(offset_ < entries.size());
 
   auto& entry = entries[offset_];
   dir_entry->ino = entry.ino;
   dir_entry->name = entry.name;
-  if (with_attr_) {
+  if (with_attr) {
     dir_entry->attr = entry.attr;
   }
 

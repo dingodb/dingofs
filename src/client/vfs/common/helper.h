@@ -67,6 +67,7 @@ static std::string StrAttr(Attr* attr) {
                          attr->uid, attr->gid, attr->atime, attr->mtime,
                          attr->ctime, attr->length);
 }
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

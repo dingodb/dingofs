@@ -16,42 +16,36 @@
 
 #include "client/vfs/handle_manager.h"
 
-#include <glog/logging.h>
+#include <memory>
+
+#include "glog/logging.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-Handle* HandleManager::NewHandle(Ino ino) {
-  auto handle = std::make_unique<Handle>();
+HandlePtr HandleManager::NewHandle(Ino ino, DirIteratorUPtr dir_iterator) {
+  auto handle = std::make_shared<Handle>();
   handle->ino = ino;
+  handle->dir_iterator = std::move(dir_iterator);
 
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = next_fh_;
-  auto* ptr = handle.get();
-  handles_[handle->fh] = std::move(handle);
+  handle->fh = next_fh_++;
+  handles_[handle->fh] = handle;
 
-  next_fh_++;
-  return ptr;
+  return handle;
 }
 
-Handle* HandleManager::FindHandler(uint64_t fh) {
+HandlePtr HandleManager::FindHandler(uint64_t fh) {
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = handles_.find(fh);
-  if (it == handles_.end()) {
-    return nullptr;
-  }
-  return it->second.get();
+  return (it == handles_.end()) ? nullptr : it->second;
 }
 
 void HandleManager::ReleaseHandler(uint64_t fh) {
   std::lock_guard<std::mutex> lock(mutex_);
-  auto it = handles_.find(fh);
-  if (it == handles_.end()) {
-    LOG(WARNING) << "Fail find handle in ReleaseHandler for fh: " << fh;
-    return;
-  }
-  handles_.erase(it);
+
+  handles_.erase(fh);
 }
 
 }  // namespace vfs

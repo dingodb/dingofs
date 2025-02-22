@@ -18,12 +18,11 @@
 #define DINGODB_CLIENT_VFS_META_META_SYSTEM_H
 
 #include <cstdint>
-#include <map>
 #include <string>
 #include <vector>
 
 #include "client/common/status.h"
-#include "client/vfs/dir_handler.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
@@ -119,9 +118,7 @@ class MetaSystem {
 
   virtual Status OpenDir(Ino ino) = 0;
 
-  // NOTE: caller own dir and the DirHandler should be deleted by caller
-  virtual Status NewDirHandler(Ino ino, bool with_attr,
-                               DirHandler** handler) = 0;
+  virtual DirIterator* NewDirIterator(Ino ino) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
 

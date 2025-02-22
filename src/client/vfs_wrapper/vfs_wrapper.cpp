@@ -21,13 +21,13 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/access_log.h"
 #include "client/blockcache/log.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/vfs_old.h"
+#include "client/vfs_wrapper/access_log.h"
 #include "common/dynamic_vlog.h"
 #include "common/rpc_stream.h"
 #include "stub/metric/metric.h"
@@ -62,6 +62,7 @@ Status InitLog(const char* argv0, std::string conf_path) {
   dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
   dingofs::common::FLAGS_vlog_level = FLAGS_v;
 
+  FLAGS_logbufsecs = 0;
   // initialize logging module
   google::InitGoogleLogging(argv0);
 
@@ -82,7 +83,8 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_con) {
   s = InitLog(argv0, vfs_con.config_path);
   if (s.ok()) {
     client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
-    if (vfs_con.fs_type == "vfs") {
+    if (vfs_con.fs_type == "vfs" || vfs_con.fs_type == "vfs_v1" ||
+        vfs_con.fs_type == "vfs_v2" || vfs_con.fs_type == "vfs_dummy") {
       vfs_ = std::make_unique<vfs::VFSImpl>();
     } else {
       vfs_ = std::make_unique<vfs::VFSOld>();
@@ -130,7 +132,7 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
 
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("lookup (%d,%s): %s %s", parent, name, s.ToString(),
+    return absl::StrFormat("lookup (%d/%s): %s %s", parent, name, s.ToString(),
                            StrAttr(attr));
   });
 

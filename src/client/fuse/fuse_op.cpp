@@ -17,6 +17,7 @@
 #include "client/fuse/fuse_op.h"
 
 #include <absl/strings/str_format.h>
+#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <cstdint>
@@ -53,20 +54,43 @@ void EnableSplice(struct fuse_conn_info* conn) {
   }
 }
 
+void ToTimeSpec(uint64_t timestamp_ns, struct timespec* ts) {
+  ts->tv_sec = timestamp_ns / 1000000000;
+  ts->tv_nsec = timestamp_ns % 1000000000;
+}
+
+uint64_t ToTimestamp(const struct timespec& ts) {
+  return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
 void Attr2Stat(const Attr& attr, struct stat* stat) {
-  stat->st_ino = attr.ino;            //  inode number
-  stat->st_mode = attr.mode;          // permission mode
-  stat->st_nlink = attr.nlink;        // number of links
-  stat->st_uid = attr.uid;            // user ID of owner
-  stat->st_gid = attr.gid;            // group ID of owner
-  stat->st_size = attr.length;        // total size, in bytes
-  stat->st_rdev = attr.rdev;          // device ID (if special file)
-  stat->st_atim.tv_sec = attr.atime;  // time of last access
-  stat->st_atim.tv_nsec = attr.atime_ns;
-  stat->st_mtim.tv_sec = attr.mtime;  // time of last modification
-  stat->st_mtim.tv_nsec = attr.mtime_ns;
-  stat->st_ctim.tv_sec = attr.ctime;  // time of last status change
-  stat->st_ctim.tv_nsec = attr.ctime_ns;
+  stat->st_ino = attr.ino;      //  inode number
+  stat->st_mode = attr.mode;    // permission mode
+  stat->st_nlink = attr.nlink;  // number of links
+  stat->st_uid = attr.uid;      // user ID of owner
+  stat->st_gid = attr.gid;      // group ID of owner
+  stat->st_size = attr.length;  // total size, in bytes
+  stat->st_rdev = attr.rdev;    // device ID (if special file)
+
+  if (attr.atime_ns > 0) {
+    stat->st_atim.tv_sec = attr.atime;  // time of last access
+    stat->st_atim.tv_nsec = attr.atime_ns;
+  } else {
+    ToTimeSpec(attr.atime, &stat->st_atim);
+  }
+  if (attr.mtime_ns > 0) {
+    stat->st_mtim.tv_sec = attr.mtime;  // time of last modification
+    stat->st_mtim.tv_nsec = attr.mtime_ns;
+  } else {
+    ToTimeSpec(attr.mtime, &stat->st_mtim);
+  }
+  if (attr.ctime_ns > 0) {
+    stat->st_ctim.tv_sec = attr.ctime;  // time of last status change
+    stat->st_ctim.tv_nsec = attr.ctime_ns;
+  } else {
+    ToTimeSpec(attr.ctime, &stat->st_ctim);
+  }
+
   stat->st_blksize = 0x10000u;  // blocksize for file system I/O
   stat->st_blocks =
       (attr.length + 511) / 512;  // number of 512B blocks allocated
@@ -470,34 +494,31 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
-  std::unique_ptr<char[]> buffer(new char[size]);
-  char* p = buffer.get();
-  auto rem = size;
-
-  int ret_count = 0;
-
+  size_t writed_size = 0;
+  std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, false,
-      [&](const dingofs::client::vfs::DirEntry& dir_entry,
-          uint64_t next_offset) -> bool {
+      [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
+        LOG(INFO) << fmt::format("read dir entry({}/{})", dir_entry.name,
+                                 dir_entry.ino);
+
         struct stat stat;
         std::memset(&stat, 0, sizeof(stat));
         stat.st_ino = dir_entry.ino;
 
-        auto entsize = fuse_add_direntry(req, p, rem, dir_entry.name.c_str(),
-                                         &stat, next_offset);
-        if (entsize > rem) {
+        size_t rest_size = buffer.size() - writed_size;
+
+        auto entsize =
+            fuse_add_direntry(req, buffer.data() + writed_size, rest_size,
+                              dir_entry.name.c_str(), &stat, ++off);
+        if (entsize > rest_size) {
           VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
-                  << ", from offset: " << off << " next_offset: " << next_offset
-                  << " fi->fh: " << fi->fh << " entsize: " << entsize
-                  << " rem: " << rem;
+                  << ", from offset: " << off << " fi->fh: " << fi->fh
+                  << " entsize: " << entsize << " rest_size: " << rest_size;
           return false;
         }
 
-        p += entsize;
-        rem -= entsize;
-
-        ret_count++;
+        writed_size += entsize;
         return true;
       });
 
@@ -507,12 +528,13 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                  << ", fi->fh: " << fi->fh << " status: " << s.ToString();
     ReplyError(req, s);
   } else {
-    VLOG(1) << "FuseOpReadDir return entry count: " << ret_count
+    VLOG(1) << "FuseOpReadDir return entry count: "
             << ", inodeId=" << ino << ", size: " << size
-            << ", from offset: " << off << ", rem: " << rem
-            << ", fi->fh: " << fi->fh;
+            << ", from offset: " << off << ", fi->fh: " << fi->fh;
 
-    ReplyBuf(req, buffer.get(), size - rem);
+    buffer.resize(writed_size);
+
+    ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
 
@@ -523,34 +545,32 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
-  std::unique_ptr<char[]> buffer(new char[size]);
-  char* p = buffer.get();
-  auto rem = size;
-
-  int ret_count = 0;
-
+  size_t writed_size = 0;
+  std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, true,
-      [&](const dingofs::client::vfs::DirEntry& dir_entry,
-          uint64_t next_offset) -> bool {
+      [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
+        LOG(INFO) << fmt::format("read dir entry({}/{}) attr({})",
+                                 dir_entry.name, dir_entry.ino,
+                                 Attr2Str(dir_entry.attr));
+
         struct fuse_entry_param fuse_entry;
         memset(&fuse_entry, 0, sizeof(fuse_entry));
         Attr2FuseEntry(dir_entry.attr, &fuse_entry);
 
-        auto entsize = fuse_add_direntry_plus(
-            req, p, rem, dir_entry.name.c_str(), &fuse_entry, next_offset);
-        if (entsize > rem) {
+        size_t rest_size = buffer.size() - writed_size;
+
+        auto entsize =
+            fuse_add_direntry_plus(req, buffer.data() + writed_size, rest_size,
+                                   dir_entry.name.c_str(), &fuse_entry, ++off);
+        if (entsize > rest_size) {
           VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
-                  << ", from offset: " << off << " next_offset: " << next_offset
-                  << " fi->fh: " << fi->fh << " entsize: " << entsize
-                  << " rem: " << rem;
+                  << ", from offset: " << off << " fi->fh: " << fi->fh
+                  << " entsize: " << entsize << " rest_size: " << rest_size;
           return false;
         }
+        writed_size += entsize;
 
-        p += entsize;
-        rem -= entsize;
-
-        ret_count++;
         return true;
       });
 
@@ -560,12 +580,12 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                  << ", fi->fh: " << fi->fh << " status: " << s.ToString();
     ReplyError(req, s);
   } else {
-    VLOG(1) << "FuseOpReadDirPlus return entry count: " << ret_count
+    VLOG(1) << "FuseOpReadDirPlus return entry count: "
             << ", inodeId=" << ino << ", size: " << size
-            << ", from offset: " << off << ", rem: " << rem
-            << ", fi->fh: " << fi->fh;
+            << ", from offset: " << off << ", fi->fh: " << fi->fh;
 
-    ReplyBuf(req, buffer.get(), size - rem);
+    buffer.resize(writed_size);
+    ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
 

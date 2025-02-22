@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_DIR_HANDLER_H_
-#define DINGOFS_CLIENT_VFS_DIR_HANDLER_H_
+#ifndef DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_
+#define DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_
 
 #include <cstdint>
+#include <memory>
 
 #include "client/common/status.h"
 #include "client/vfs/vfs_meta.h"
@@ -26,26 +27,22 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-class DirHandler {
+class DirIterator {
  public:
-  DirHandler() = default;
+  DirIterator() = default;
 
-  virtual ~DirHandler() = default;
-
-  virtual Status Init(bool with_attr) = 0;
-
-  virtual uint64_t Offset() = 0;
-
-  virtual Status Seek(uint64_t offset) = 0;
+  virtual ~DirIterator() = default;
 
   virtual bool HasNext() = 0;
 
   // NOTE: if HasNext() is false, then Next() will undefined behavior
-  virtual Status Next(DirEntry* dir_entry) = 0;
+  virtual Status Next(bool with_attr, DirEntry* dir_entry) = 0;
 };
+
+using DirIteratorUPtr = std::unique_ptr<DirIterator>;
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_DIR_HANDLER_H_
+#endif  // DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_

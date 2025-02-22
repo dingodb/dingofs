@@ -24,6 +24,9 @@
 
 #include "client/common/slice.h"
 
+namespace dingofs {
+namespace client {
+
 /// @brief Return the given status if it is not @c OK.
 #define DINGOFS_RETURN_NOT_OK(s)               \
   do {                                         \
@@ -40,11 +43,6 @@
     return Status(CODE, p_errno, msg, msg2);                          \
   }                                                                   \
   bool Is##NAME() const { return code_ == (CODE); }
-
-static const int32_t kNone = 0;
-
-namespace dingofs {
-namespace client {
 
 class Status {
  private:
@@ -71,6 +69,7 @@ class Status {
     kNoSys = 19,
     kNoPermitted = 20,
   };
+  static const int32_t kNone = 0;
 
  public:
   // Create a success status.

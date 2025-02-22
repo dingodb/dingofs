@@ -16,6 +16,9 @@
 
 #include "client/vfs/meta/meta_log.h"
 
+#include "spdlog/sinks/daily_file_sink.h"
+#include "spdlog/spdlog.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {

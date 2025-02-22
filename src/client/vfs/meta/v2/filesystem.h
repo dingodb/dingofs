@@ -19,8 +19,9 @@
 #include <memory>
 #include <string>
 
+#include "client/common/status.h"
+#include "client/vfs/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs/meta/v2/dir_reader.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/vfs_meta.h"
@@ -33,6 +34,27 @@ namespace v2 {
 
 class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
+using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
+
+class MdsV2DirIterator : public DirIterator {
+ public:
+  MdsV2DirIterator(MDSClientPtr mds_client, Ino ino)
+      : mds_client_(mds_client), ino_(ino) {}
+
+  bool HasNext() override;
+
+  Status Next(bool with_attr, DirEntry* dir_entry) override;
+
+ private:
+  Ino ino_;
+  std::string last_name_;
+
+  uint32_t offset_{0};
+  std::vector<DirEntry> entries_;
+  bool is_end_{false};
+
+  MDSClientPtr mds_client_;
+};
 
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
@@ -40,13 +62,17 @@ class MDSV2FileSystem : public vfs::MetaSystem {
                   MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
   ~MDSV2FileSystem() override;
 
-  static MDSV2FileSystemPtr New(pb::mdsv2::FsInfo fs_info,
-                                const std::string& mount_path,
-                                MDSDiscoveryPtr mds_discovery,
-                                MDSClientPtr mds_client) {
-    return std::make_shared<MDSV2FileSystem>(fs_info, mount_path, mds_discovery,
+  static MDSV2FileSystemUPtr New(pb::mdsv2::FsInfo fs_info,
+                                 const std::string& mount_path,
+                                 MDSDiscoveryPtr mds_discovery,
+                                 MDSClientPtr mds_client) {
+    return std::make_unique<MDSV2FileSystem>(fs_info, mount_path, mds_discovery,
                                              mds_client);
   }
+
+  static MDSV2FileSystemUPtr Build(const std::string& fs_name,
+                                   const std::string& coor_addr,
+                                   const std::string& mountpoint);
 
   Status Init() override;
 
@@ -54,7 +80,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
 
-  Status StatFs(Ino ino, FsStat* fs_stat) override { return Status::OK(); };
+  Status StatFs(Ino ino, FsStat* fs_stat) override;
 
   Status Lookup(Ino parent_ino, const std::string& name,
                 Attr* out_attr) override;
@@ -85,7 +111,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status OpenDir(Ino ino) override;
 
   // NOTE: caller own dir and the DirHandler should be deleted by caller
-  Status NewDirHandler(Ino ino, bool with_attr, DirHandler** handler) override;
+  DirIterator* NewDirIterator(Ino ino) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -120,8 +146,6 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   MDSDiscoveryPtr mds_discovery_;
 
   MDSClientPtr mds_client_;
-
-  DirReader dir_reader_;
 };
 
 }  // namespace v2

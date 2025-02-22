@@ -17,13 +17,11 @@
 #ifndef DINGOFS_CLIENT_VFS_META_LOG_H_
 #define DINGOFS_CLIENT_VFS_META_LOG_H_
 
-#include <butil/time.h>
-#include <spdlog/logger.h>
-#include <spdlog/sinks/daily_file_sink.h>
-#include <spdlog/spdlog.h>
 #include <unistd.h>
 
+#include "butil/time.h"
 #include "client/vfs/common/dynamic_param.h"
+#include "spdlog/logger.h"
 
 namespace dingofs {
 namespace client {
@@ -52,7 +50,7 @@ class MetaLogGuard {
 
     timer_.stop();
 
-    meta_logger->info("{0} <{1:.6f}>", handler_(), timer_.u_elapsed() / 1e6);
+    meta_logger->info("[{:.6f}] {}", timer_.u_elapsed() / 1e6, handler_());
   }
 
  private:

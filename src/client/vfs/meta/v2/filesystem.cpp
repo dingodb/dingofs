@@ -18,12 +18,14 @@
 #include <string>
 #include <vector>
 
-#include "client/vfs/meta/v2/dir_reader.h"
+#include "client/common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
-#include "fmt/format.h"
+#include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "mdsv2/coordinator/dingo_coordinator_client.h"
+#include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -34,8 +36,6 @@ const uint32_t kMaxHostNameLength = 255;
 
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
-
-const uint32_t kDirReaderInitFhID = 10000;
 
 const std::set<std::string> kXAttrBlackList = {
     "system.posix_acl_access", "system.posix_acl_default", "system.nfs4_acl"};
@@ -53,6 +53,41 @@ std::string GetHostName() {
   return std::string(hostname);
 }
 
+bool MdsV2DirIterator::HasNext() { return !is_end_; }
+
+Status MdsV2DirIterator::Next(bool with_attr, DirEntry* dir_entry) {
+  if (is_end_) {
+    return Status::NoData("no more data");
+  }
+
+  if (offset_ == entries_.size()) {
+    std::vector<DirEntry> entries;
+    auto status = mds_client_->ReadDir(
+        ino_, last_name_, FLAGS_read_dir_batch_size, with_attr, entries);
+    if (!status.ok()) {
+      return status;
+    }
+
+    offset_ = 0;
+    entries_ = std::move(entries);
+
+    if (entries.empty()) {
+      is_end_ = true;
+      return Status::NoData("no more data");
+    }
+  }
+
+  *dir_entry = entries_[offset_];
+  ++offset_;
+
+  if (offset_ == entries_.size() &&
+      entries_.size() < FLAGS_read_dir_batch_size) {
+    is_end_ = true;
+  }
+
+  return Status::OK();
+}
+
 MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
                                  const std::string& mount_path,
                                  MDSDiscoveryPtr mds_discovery,
@@ -61,8 +96,7 @@ MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
       mount_path_(mount_path),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
-      mds_client_(mds_client),
-      dir_reader_(kDirReaderInitFhID) {}
+      mds_client_(mds_client) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
@@ -127,6 +161,15 @@ bool MDSV2FileSystem::UnmountFs() {
 
   return true;
 }
+
+Status MDSV2FileSystem::StatFs(Ino ino, FsStat* fs_stat) {  // NOLINT
+  fs_stat->max_bytes = 500 * 1000 * 1000 * 1000ul;
+  fs_stat->used_bytes = 20 * 1000 * 1000 * 1000ul;
+  fs_stat->used_inodes = 100;
+  fs_stat->max_inodes = 10000;
+
+  return Status::OK();
+};
 
 Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
                                Attr* out_attr) {
@@ -217,11 +260,10 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
 
 Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
                               uint32_t gid, uint32_t mode, Attr* out_attr) {
-  // auto status =
-  //     mds_client_->MkDir(parent, name, uid, gid, mode, rdev, *out_attr);
-  // if (!status.ok()) {
-  //   return status;
-  // }
+  auto status = mds_client_->MkDir(parent, name, uid, gid, mode, 0, *out_attr);
+  if (!status.ok()) {
+    return status;
+  }
 
   return Status::OK();
 }
@@ -238,14 +280,11 @@ Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
 Status MDSV2FileSystem::OpenDir(Ino ino) {
   LOG(INFO) << fmt::format("OpenDir ino({})", ino);
 
-  // fh = dir_reader_.NewState(ino);
-
-  return Status::NotSupport("to be implemented");
+  return Status::OK();
 }
 
-Status MDSV2FileSystem::NewDirHandler(Ino ino, bool with_attr,
-                                      DirHandler** handler) {
-  return Status::NotSupport("to be implemented");
+DirIterator* MDSV2FileSystem::NewDirIterator(Ino ino) {
+  return new MdsV2DirIterator(mds_client_, ino);
 }
 
 Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
@@ -305,8 +344,21 @@ Status MDSV2FileSystem::GetAttr(Ino ino, Attr* out_attr) {
   return Status::OK();
 }
 
+static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
+  return tv_sec * 1000000000 + tv_nsec;
+}
+
 Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
                                 Attr* out_attr) {
+  out_attr->atime = ToTimestamp(out_attr->atime, out_attr->atime_ns);
+  out_attr->atime_ns = 0;
+
+  out_attr->mtime = ToTimestamp(out_attr->mtime, out_attr->mtime_ns);
+  out_attr->mtime_ns = 0;
+
+  out_attr->ctime = ToTimestamp(out_attr->ctime, out_attr->ctime_ns);
+  out_attr->ctime_ns = 0;
+
   auto status = mds_client_->SetAttr(ino, attr, set, *out_attr);
   if (!status.ok()) {
     return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
@@ -325,19 +377,11 @@ Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
 
   auto status = mds_client_->GetXAttr(ino, name, *value);
 
-  // if (value.empty()) {
-  //   return Status(pb::error::ENO_DATA, "no data");
-  // }
-
-  // if (value.size() > kMaxXAttrValueLength) {
-  //   return Status(pb::error::EOUT_OF_RANGE, "out of range");
-  // }
-
   return Status::OK();
 }
 
 Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
-                                 const std::string& value, int flags) {
+                                 const std::string& value, int) {
   auto status = mds_client_->SetXAttr(ino, name, value);
   if (!status.ok()) {
     return Status::Internal(
@@ -351,11 +395,16 @@ Status MDSV2FileSystem::SetXattr(Ino ino, const std::string& name,
 Status MDSV2FileSystem::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
   CHECK(xattrs != nullptr) << "xattrs is null.";
 
-  // auto status = mds_client_->ListXAttr(ino, *xattrs);
-  // if (!status.ok()) {
-  //   return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
-  //                                       ino, status.ToString()));
-  // }
+  std::map<std::string, std::string> xattr_map;
+  auto status = mds_client_->ListXAttr(ino, xattr_map);
+  if (!status.ok()) {
+    return Status::Internal(fmt::format("list xattr fail, ino({}) error: {}",
+                                        ino, status.ToString()));
+  }
+
+  for (auto& [key, _] : xattr_map) {
+    xattrs->push_back(key);
+  }
 
   return Status::OK();
 }
@@ -370,6 +419,90 @@ Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
   }
 
   return Status::OK();
+}
+
+MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
+                                           const std::string& coor_addr,
+                                           const std::string& mountpoint) {
+  LOG(INFO) << fmt::format("fs_name: {}, coor_addr: {}, mountpoint: {}.",
+                           fs_name, coor_addr, mountpoint);
+
+  CHECK(!fs_name.empty()) << "fs_name is empty.";
+  CHECK(!coor_addr.empty()) << "coor_addr is empty.";
+  CHECK(!mountpoint.empty()) << "mountpoint is empty.";
+
+  auto coordinator_client = dingofs::mdsv2::DingoCoordinatorClient::New();
+  if (!coordinator_client->Init(coor_addr)) {
+    LOG(ERROR) << "CoordinatorClient init fail.";
+    return nullptr;
+  }
+
+  auto mds_discovery = MDSDiscovery::New(coordinator_client);
+  if (!mds_discovery->Init()) {
+    LOG(ERROR) << "MDSDiscovery init fail.";
+    return nullptr;
+  }
+
+  // use first mds as default, get fs info
+  dingofs::mdsv2::MDSMeta mds_meta;
+  mds_discovery->PickFirstMDS(mds_meta);
+
+  auto rpc = RPC::New(EndPoint(mds_meta.Host(), mds_meta.Port()));
+  if (!rpc->Init()) {
+    LOG(ERROR) << "RPC init fail.";
+    return nullptr;
+  }
+
+  dingofs::pb::mdsv2::FsInfo fs_info;
+  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get fs info fail.";
+    return nullptr;
+  }
+
+  // parent cache
+  auto parent_cache = ParentCache::New();
+
+  // mds router
+  MDSRouterPtr mds_router;
+  if (fs_info.partition_policy().type() ==
+      dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    int64_t mds_id = fs_info.partition_policy().mono().mds_id();
+
+    dingofs::mdsv2::MDSMeta mds_meta;
+    if (!mds_discovery->GetMDS(mds_id, mds_meta)) {
+      LOG(ERROR) << fmt::format("Get mds({}) meta fail.", mds_id);
+      return nullptr;
+    }
+    mds_router = MonoMDSRouter::New(mds_meta);
+
+  } else if (fs_info.partition_policy().type() ==
+             dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    mds_router = ParentHashMDSRouter::New(
+        fs_info.partition_policy().parent_hash(), mds_discovery, parent_cache);
+
+  } else {
+    LOG(ERROR) << fmt::format("Not support partition policy type({}).",
+                              dingofs::pb::mdsv2::PartitionType_Name(
+                                  fs_info.partition_policy().type()));
+    return nullptr;
+  }
+
+  if (!mds_router->Init()) {
+    LOG(ERROR) << "MDSRouter init fail.";
+    return nullptr;
+  }
+
+  // create mds client
+  auto mds_client =
+      MDSClient::New(fs_info.fs_id(), parent_cache, mds_router, rpc);
+  if (!mds_client->Init()) {
+    LOG(INFO) << "MDSClient init fail.";
+    return nullptr;
+  }
+
+  // create filesystem
+  return MDSV2FileSystem::New(fs_info, mountpoint, mds_discovery, mds_client);
 }
 
 }  // namespace v2
