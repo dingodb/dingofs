@@ -1,9 +1,7 @@
 #!/bin/sh
 
-#sh update_dashboard.sh
-#echo "update dashboards success!"
-
-WORKDIR=/etc/dingofs/monitor
+WORKDIR=`pwd`
+echo "monitor work dirctory is: ${WORKDIR}"
 
 if [ ! -d $WORKDIR ]; then
   echo "${WORKDIR} not exists"
@@ -16,18 +14,23 @@ chmod -R 777 grafana
 
 start() {
     echo "==========start==========="
-
     echo "" > monitor.log
-
-    docker-compose up >> monitor.log 2>&1 &
-    echo "start metric system success!"
+    docker-compose up -d >> monitor.log 2>&1 &
+    if [ $? -eq 0 ]; then
+        echo "start monitor system success!"
+    else
+        echo "start monitor system failed,please check monitor.log"
+    fi
 }
 
 stop() {
     echo "===========stop============"
-
-    docker-compose down
-
+    docker-compose down >> monitor.log 2>&1 &
+    if [ $? -eq 0 ]; then
+        echo "stop monitor system success!"
+    else
+        echo "stop monitor system failed,please check monitor.log"
+    fi
     ID=`(ps -ef | grep "target_json.py"| grep -v "grep") | awk '{print $2}'`
     for id in $ID
     do
@@ -49,9 +52,6 @@ case "$1" in
         ;;
     'stop')
         stop
-        ;;
-    'status')
-        status
         ;;
     'restart')
         restart

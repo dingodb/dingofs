@@ -9,8 +9,7 @@ import configparser
 import subprocess
 import re
 
-DINGOFS_TOOL = "dingofs_tool"
-JSON_PATH = "/tmp/topology.json"
+DingoFS_TOOL = "dingo"
 HOSTNAME_PORT_REGEX = r"[^\"\ ]\S*:\d+"
 IP_PORT_REGEX = r"[0-9]+(?:\.[0-9]+){3}:\d+"
 
@@ -23,43 +22,71 @@ def loadConf():
     targetPath=conf.get("path", "target_path")
 
 def runDingofsToolCommand(command):
-    cmd = [DINGOFS_TOOL]+command
+    cmd = [DingoFS_TOOL]+command
+    output = None
     try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT, timeout=5)
+        output = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
     except subprocess.TimeoutExpired as e:
         return -1, output
     except subprocess.CalledProcessError as e:
         return 0, e.output
     return 0, output
 
+def loadMdsServer():
+    ret, output = runDingofsToolCommand(["status","mds","--format=json"])
+    mdsServers = []
+    label = lablesValue(None, "mds")
+    if ret == 0 :
+        data = json.loads(output)
+        for mdsInfo in data["result"]:
+            # hostname:port:path
+            dummyAddr = mdsInfo["dummyAddr"]
+            mdsServers.append(dummyAddr)
+    return unitValue(label, mdsServers)
 
-def loadServer():
-    ret, _ = runDingofsToolCommand(["list-topology", "-jsonType=tree", "-jsonPath=%s"%JSON_PATH])
-    data = None
+def loadMetaServer():
+    ret, data = runDingofsToolCommand(["list", "topology","--format=json"])
     if ret == 0:
-        with open(JSON_PATH) as load_f:
-            data = json.load(load_f)
+       jsonData = json.loads(data)
+       jsonData = jsonData["result"]   
+
     metaservers = []
-    if data is not None:
-        for pool in data["poollist"]:
-            for zone in pool["zonelist"]:
-                for server in zone["serverlist"]:
-                    for metaserver in server["metaserverlist"]:
+    if jsonData is not None:
+        for pool in jsonData["poollist"]:
+            for zone in pool["zoneList"]:
+                for server in zone["serverList"]:
+                    for metaserver in server["metaserverList"]:
                         metaservers.append(metaserver)
-    return metaservers
+    targets = []
+    labels = lablesValue(None, "metaserver")
+    for server in metaservers:
+        targets.append(ipPort2Addr(server["externalIp"], server["externalPort"]))
+    targets = list(set(targets))
+    return unitValue(labels, targets)
+
+def loadEtcdServer():
+    ret, output = runDingofsToolCommand(["status","etcd","--format=json"])
+    etcdServers = []
+    label = lablesValue(None, "etcd")
+    if ret == 0 :
+        data = json.loads(output)
+        for etcdInfo in data["result"]:
+            # hostname:port:path
+            etcdAddr = mdsInfo["addr"]
+            etcdServers.append(etcdAddr)
+    return unitValue(label, etcdServers)
 
 def loadClient():
-    ret, output = runDingofsToolCommand(["list-fs"])
+    ret, output = runDingofsToolCommand(["list","mountpoint","--format=json"])
     clients = []
     label = lablesValue(None, "client")
     if ret == 0 :
-        try:
-            data = json.loads(output.decode())
-        except json.decoder.JSONDecodeError:
-            return unitValue(label, clients)
-        for fsinfo in data["fsInfo"]:
-            for mountpoint in fsinfo["mountpoints"]:
-                clients.append(mountpoint["hostname"] + ":" + str(mountpoint["port"]))
+        data = json.loads(output)
+        for fsinfo in data["result"]:
+            # hostname:port:path
+            mountpoint = str(fsinfo["mountpoint"])
+            muontListData=mountpoint.split(":")
+            clients.append(muontListData[0] + ":" + muontListData[1])
     return unitValue(label, clients)
 
 def loadType(hostType):
@@ -72,14 +99,6 @@ def loadType(hostType):
 
 def ipPort2Addr(ip, port):
     return str(ip) + ":" + str(port)
-
-def server2Target(server):
-    hostname = server["hostname"] + "." + str(server["metaserverid"])
-    labels = lablesValue(hostname, "metaserver")
-    serverAddr = []
-    serverAddr.append(ipPort2Addr(server["externalip"], server["externalport"]))
-    targets = list(set(serverAddr))
-    return unitValue(labels, targets)
 
 def lablesValue(hostname, job):
     labels = {}
@@ -100,16 +119,16 @@ def unitValue(lables, targets):
 
 def refresh():
     targets = []
-    # load metaserver
-    servers = loadServer()
-    for server in servers:
-        targets.append(server2Target(server))
-    # load etcd
-    etcd = loadType("etcd")
-    targets.append(etcd)
+
     # load mds
-    mds = loadType("mds")
-    targets.append(mds)
+    mdsServers = loadMdsServer()
+    targets.append(mdsServers)
+    # load metaserver
+    metaServers = loadMetaServer()
+    targets.append(metaServers)
+    # load etcd
+    etcdServers = loadEtcdServer()
+    targets.append(etcdServers)
     # load client
     client = loadClient()
     targets.append(client)

@@ -1,0 +1,30 @@
+[
+    {
+        "labels": {
+            "job": "mds"
+        },
+        "targets": [
+        ]
+    },
+    {
+        "labels": {
+            "job": "metaserver"
+        },
+        "targets": [
+        ]
+    },
+    {
+        "labels": {
+            "job": "client"
+        },
+        "targets": [
+        ]
+    },
+    {
+        "labels": {
+            "job": "etcd"
+        },
+        "targets": [
+        ]
+    }
+]
