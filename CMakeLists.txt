@@ -130,7 +130,7 @@ add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
 find_package(FUSE3 REQUIRED)
-message("Using FUSE3 ${FUSE3_VERSION}, include_dir:${FUSE3_INCLUDE_DIR}")
+message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")
 include_directories(${FUSE3_INCLUDE_DIR})
 
 find_package(LIBMEMCACHED REQUIRED)
