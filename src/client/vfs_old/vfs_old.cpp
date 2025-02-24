@@ -18,6 +18,7 @@
 
 #include <absl/cleanup/cleanup.h>
 #include <bthread/unstable.h>
+#include <fcntl.h>
 #include <fmt/core.h>
 #include <glog/logging.h>
 
@@ -29,7 +30,6 @@
 #include "client/blockcache/s3_client.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
-#include "client/fuse/fuse_common.h"  // TODO: fuse related code should be abstracted
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/client_operator.h"
 #include "client/vfs_old/common/dynamic_config.h"
@@ -594,44 +594,44 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
   }
 
   utils::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
-  if (set & FUSE_SET_ATTR_MODE) {
+  if (set & kSetAttrMode) {
     inode_wrapper->SetMode(in_attr.mode);
   }
 
-  if (set & FUSE_SET_ATTR_UID) {
+  if (set & kSetAttrUid) {
     inode_wrapper->SetUid(in_attr.uid);
   }
 
-  if (set & FUSE_SET_ATTR_GID) {
+  if (set & kSetAttrGid) {
     inode_wrapper->SetGid(in_attr.gid);
   }
 
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
 
-  if (set & FUSE_SET_ATTR_ATIME) {
+  if (set & kSetAttrAtime) {
     struct timespec a_time;
     a_time.tv_sec = in_attr.atime;
     a_time.tv_nsec = in_attr.atime_ns;
     inode_wrapper->UpdateTimestampLocked(a_time, kAccessTime);
   }
 
-  if (set & FUSE_SET_ATTR_ATIME_NOW) {
+  if (set & kSetAttrAtimeNow) {
     inode_wrapper->UpdateTimestampLocked(now, kAccessTime);
   }
 
-  if (set & FUSE_SET_ATTR_MTIME) {
+  if (set & kSetAttrMtime) {
     struct timespec m_time;
     m_time.tv_sec = in_attr.mtime;
     m_time.tv_nsec = in_attr.mtime_ns;
     inode_wrapper->UpdateTimestampLocked(m_time, kModifyTime);
   }
 
-  if (set & FUSE_SET_ATTR_MTIME_NOW) {
+  if (set & kSetAttrMtimeNow) {
     inode_wrapper->UpdateTimestampLocked(now, kModifyTime);
   }
 
-  if (set & FUSE_SET_ATTR_CTIME) {
+  if (set & kSetAttrCtime) {
     struct timespec c_time;
     c_time.tv_sec = in_attr.ctime;
     c_time.tv_nsec = in_attr.ctime_ns;
@@ -640,7 +640,7 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
     inode_wrapper->UpdateTimestampLocked(now, kChangeTime);
   }
 
-  if (set & FUSE_SET_ATTR_SIZE) {
+  if (set & kSetAttrSize) {
     Status s = Truncate(inode_wrapper.get(), in_attr.length);
     if (!s.ok()) {
       LOG(ERROR) << "truncate file fail, ret = " << ret << ", inodeId=" << ino;

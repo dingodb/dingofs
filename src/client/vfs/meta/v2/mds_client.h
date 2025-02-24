@@ -21,7 +21,6 @@
 #include <memory>
 #include <string>
 
-#include "client/fuse/fuse_common.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "client/vfs/vfs_meta.h"

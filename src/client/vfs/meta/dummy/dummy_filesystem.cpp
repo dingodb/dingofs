@@ -24,7 +24,6 @@
 
 #include "bthread/mutex.h"
 #include "client/common/status.h"
-#include "client/fuse/fuse_common.h"  // TODO: fuse related code should be abstracted
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -679,15 +678,15 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
 
   std::vector<std::string> update_fields;
 
-  if (set & FUSE_SET_ATTR_MODE) {
+  if (set & kSetAttrMode) {
     inode.set_mode(attr.mode);
     update_fields.push_back("mode");
   }
-  if (set & FUSE_SET_ATTR_UID) {
+  if (set & kSetAttrUid) {
     inode.set_uid(attr.uid);
     update_fields.push_back("uid");
   }
-  if (set & FUSE_SET_ATTR_GID) {
+  if (set & kSetAttrGid) {
     inode.set_gid(attr.gid);
     update_fields.push_back("gid");
   }
@@ -695,25 +694,25 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
 
-  if (set & FUSE_SET_ATTR_ATIME) {
+  if (set & kSetAttrAtime) {
     inode.set_atime(attr.atime * 1000000000 + attr.atime_ns);
     update_fields.push_back("atime");
 
-  } else if (set & FUSE_SET_ATTR_ATIME_NOW) {
+  } else if (set & kSetAttrAtimeNow) {
     inode.set_atime(ToTimestamp(now));
     update_fields.push_back("atime");
   }
 
-  if (set & FUSE_SET_ATTR_MTIME) {
+  if (set & kSetAttrMtime) {
     inode.set_mtime(attr.mtime * 1000000000 + attr.mtime_ns);
     update_fields.push_back("mtime");
 
-  } else if (set & FUSE_SET_ATTR_MTIME_NOW) {
+  } else if (set & kSetAttrMtimeNow) {
     inode.set_mtime(ToTimestamp(now));
     update_fields.push_back("mtime");
   }
 
-  if (set & FUSE_SET_ATTR_CTIME) {
+  if (set & kSetAttrCtime) {
     inode.set_ctime(attr.ctime * 1000000000 + attr.ctime_ns);
     update_fields.push_back("ctime");
   } else {
@@ -721,7 +720,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
     update_fields.push_back("ctime");
   }
 
-  if (set & FUSE_SET_ATTR_SIZE) {
+  if (set & kSetAttrSize) {
     // todo: Truncate data
     inode.set_length(attr.length);
   }

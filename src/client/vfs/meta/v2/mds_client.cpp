@@ -478,15 +478,15 @@ Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,
   request.set_ino(ino);
 
   uint32_t temp_to_set = 0;
-  if (to_set & FUSE_SET_ATTR_MODE) {
+  if (to_set & kSetAttrMode) {
     request.set_mode(attr.mode);
     temp_to_set |= mdsv2::kSetAttrMode;
   }
-  if (to_set & FUSE_SET_ATTR_UID) {
+  if (to_set & kSetAttrUid) {
     request.set_uid(attr.uid);
     temp_to_set |= mdsv2::kSetAttrUid;
   }
-  if (to_set & FUSE_SET_ATTR_GID) {
+  if (to_set & kSetAttrGid) {
     request.set_gid(attr.gid);
     temp_to_set |= mdsv2::kSetAttrGid;
   }
@@ -494,25 +494,25 @@ Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
 
-  if (to_set & FUSE_SET_ATTR_ATIME) {
+  if (to_set & kSetAttrAtime) {
     request.set_atime(attr.atime);
     temp_to_set |= mdsv2::kSetAttrAtime;
 
-  } else if (to_set & FUSE_SET_ATTR_ATIME_NOW) {
+  } else if (to_set & kSetAttrAtimeNow) {
     request.set_atime(ToTimestamp(now));
     temp_to_set |= mdsv2::kSetAttrAtime;
   }
 
-  if (to_set & FUSE_SET_ATTR_MTIME) {
+  if (to_set & kSetAttrMtime) {
     request.set_mtime(attr.mtime);
     temp_to_set |= mdsv2::kSetAttrMtime;
 
-  } else if (to_set & FUSE_SET_ATTR_MTIME_NOW) {
+  } else if (to_set & kSetAttrMtimeNow) {
     request.set_mtime(ToTimestamp(now));
     temp_to_set |= mdsv2::kSetAttrMtime;
   }
 
-  if (to_set & FUSE_SET_ATTR_CTIME) {
+  if (to_set & kSetAttrCtime) {
     request.set_ctime(attr.ctime);
     temp_to_set |= mdsv2::kSetAttrCtime;
   } else {
@@ -520,7 +520,7 @@ Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,
     temp_to_set |= mdsv2::kSetAttrCtime;
   }
 
-  if (to_set & FUSE_SET_ATTR_SIZE) {
+  if (to_set & kSetAttrSize) {
     // todo: Truncate data
     request.set_length(attr.length);
   }
