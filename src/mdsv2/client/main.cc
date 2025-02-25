@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gflags/gflags.h>
-
+#include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "mdsv2/client/mds.h"
 #include "mdsv2/client/store.h"
-#include "mdsv2/common/logging.h"
+#include "mdsv2/common/helper.h"
 
-DEFINE_string(coor_addr, "127.0.0.1:7801", "coordinator address");
+DEFINE_string(coor_addr, "", "coordinator address");
 DEFINE_string(addr, "127.0.0.1:7801", "mds address");
 
 DEFINE_string(cmd, "", "command");
@@ -27,7 +27,14 @@ DEFINE_string(fs_name, "", "fs name");
 DEFINE_uint32(fs_id, 0, "fs id");
 DEFINE_string(fs_partition_type, "mono", "fs partition type");
 
-std::set<std::string> g_mds_cmd = {"create_fs", "delete_fs", "get_fs"};
+DEFINE_string(name, "", "name");
+DEFINE_string(prefix, "", "prefix");
+
+DEFINE_uint64(parent, 0, "parent");
+DEFINE_string(parents, "", "parents");
+DEFINE_uint32(num, 1, "num");
+
+std::set<std::string> g_mds_cmd = {"create_fs", "delete_fs", "get_fs", "mkdir", "batch_mkdir", "mknod", "batch_mknod"};
 
 int main(int argc, char* argv[]) {
   FLAGS_minloglevel = google::GLOG_INFO;
@@ -56,13 +63,37 @@ int main(int argc, char* argv[]) {
     } else if (FLAGS_cmd == "get_fs") {
       mds_client.GetFs(FLAGS_fs_name);
 
+    } else if (FLAGS_cmd == "mkdir") {
+      mds_client.MkDir(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+
+    } else if (FLAGS_cmd == "batch_mkdir") {
+      std::vector<int64_t> parents;
+      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
+      mds_client.BatchMkDir(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
+
+    } else if (FLAGS_cmd == "mknod") {
+      mds_client.MkNod(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+
+    } else if (FLAGS_cmd == "batch_mknod") {
+      std::vector<int64_t> parents;
+      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
+      mds_client.BatchMkNod(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
+
     } else {
       std::cout << "Invalid command: " << FLAGS_cmd;
       return -1;
     }
   } else {
+    if (FLAGS_coor_addr.empty()) {
+      std::cout << "coordinator address is empty." << std::endl;
+      return -1;
+    }
+
     dingofs::mdsv2::client::StoreClient store_client;
-    store_client.Init(FLAGS_coor_addr);
+    if (!store_client.Init(FLAGS_coor_addr)) {
+      std::cout << "init store client fail." << std::endl;
+      return -1;
+    }
 
     if (FLAGS_cmd == "tree") {
       store_client.PrintDentryTree(FLAGS_fs_id, true);

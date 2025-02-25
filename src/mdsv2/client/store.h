@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <map>
 #include <string>
 
+#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -31,8 +33,6 @@ class StoreClient {
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 
  private:
-  void TraverseDentryTree(uint32_t fs_id);
-
   KVStoragePtr kv_storage_;
 };
 

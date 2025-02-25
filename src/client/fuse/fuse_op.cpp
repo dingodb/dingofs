@@ -55,8 +55,8 @@ void EnableSplice(struct fuse_conn_info* conn) {
 }
 
 void ToTimeSpec(uint64_t timestamp_ns, struct timespec* ts) {
-  ts->tv_sec = timestamp_ns / 1000000000;
   ts->tv_nsec = timestamp_ns % 1000000000;
+  ts->tv_sec = timestamp_ns / 1000000000;
 }
 
 uint64_t ToTimestamp(const struct timespec& ts) {
@@ -509,7 +509,7 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
         size_t rest_size = buffer.size() - writed_size;
 
-        auto entsize =
+        size_t entsize =
             fuse_add_direntry(req, buffer.data() + writed_size, rest_size,
                               dir_entry.name.c_str(), &stat, ++off);
         if (entsize > rest_size) {
@@ -556,13 +556,13 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                                  dir_entry.name, dir_entry.ino,
                                  Attr2Str(dir_entry.attr));
 
-        struct fuse_entry_param fuse_entry;
-        memset(&fuse_entry, 0, sizeof(fuse_entry));
+        fuse_entry_param fuse_entry;
+        memset(&fuse_entry, 0, sizeof(fuse_entry_param));
         Attr2FuseEntry(dir_entry.attr, &fuse_entry);
 
         size_t rest_size = buffer.size() - writed_size;
 
-        auto entsize =
+        size_t entsize =
             fuse_add_direntry_plus(req, buffer.data() + writed_size, rest_size,
                                    dir_entry.name.c_str(), &fuse_entry, ++off);
         if (entsize > rest_size) {

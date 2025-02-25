@@ -32,6 +32,12 @@ class MDSClient {
   void DeleteFs(const std::string& fs_name);
   void GetFs(const std::string& fs_name);
 
+  void MkDir(uint32_t fs_id, uint64_t parent_ino, const std::string& name);
+  void BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+
+  void MkNod(uint32_t fs_id, uint64_t parent_ino, const std::string& name);
+  void BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+
  private:
   InteractionPtr interaction_;
 };

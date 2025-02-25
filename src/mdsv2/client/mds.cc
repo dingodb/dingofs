@@ -14,8 +14,16 @@
 
 #include "mdsv2/client/mds.h"
 
+#include <fcntl.h>
+
+#include <cstddef>
+#include <string>
+#include <vector>
+
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {
@@ -64,7 +72,11 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
 
   interaction_->SendRequest("MDSService", "CreateFs", request, response);
 
-  DINGO_LOG(INFO) << "CreateFs response: " << response.ShortDebugString();
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "CreateFs success, fs_id: " << response.fs_info().fs_id();
+  } else {
+    DINGO_LOG(ERROR) << "CreateFs fail, error: " << response.ShortDebugString();
+  }
 }
 
 void MDSClient::DeleteFs(const std::string& fs_name) {
@@ -101,6 +113,68 @@ void MDSClient::GetFs(const std::string& fs_name) {
   interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
 
   DINGO_LOG(INFO) << "GetFsInfo response: " << response.ShortDebugString();
+}
+
+void MDSClient::MkDir(uint32_t fs_id, uint64_t parent, const std::string& name) {
+  pb::mdsv2::MkDirRequest request;
+  pb::mdsv2::MkDirResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_parent_ino(parent);
+  request.set_name(name);
+  request.set_length(4096);
+  request.set_uid(0);
+  request.set_gid(0);
+  request.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+  request.set_rdev(0);
+
+  interaction_->SendRequest("MDSService", "MkDir", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "MkDir success, ino: " << response.inode().ino();
+  } else {
+    DINGO_LOG(ERROR) << "MkDir fail, error: " << response.ShortDebugString();
+  }
+}
+
+void MDSClient::BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+  for (size_t i = 0; i < num; i++) {
+    for (auto parent : parents) {
+      std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
+      MkDir(fs_id, parent, name);
+    }
+  }
+}
+
+void MDSClient::MkNod(uint32_t fs_id, uint64_t parent_ino, const std::string& name) {
+  pb::mdsv2::MkNodRequest request;
+  pb::mdsv2::MkNodResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_parent_ino(parent_ino);
+  request.set_name(name);
+  request.set_length(0);
+  request.set_uid(0);
+  request.set_gid(0);
+  request.set_mode(S_IFREG | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+  request.set_rdev(0);
+
+  interaction_->SendRequest("MDSService", "MkNod", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "MkNode success, ino: " << response.inode().ino();
+  } else {
+    DINGO_LOG(ERROR) << "MkNode fail, error: " << response.ShortDebugString();
+  }
+}
+
+void MDSClient::BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+  for (size_t i = 0; i < num; i++) {
+    for (auto parent : parents) {
+      std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
+      MkNod(fs_id, parent, name);
+    }
+  }
 }
 
 }  // namespace client
