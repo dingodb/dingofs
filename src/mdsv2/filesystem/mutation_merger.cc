@@ -14,9 +14,6 @@
 
 #include "mdsv2/filesystem/mutation_merger.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags.h>
-
 #include <atomic>
 #include <cstdint>
 #include <string>
@@ -26,6 +23,9 @@
 #include "bthread/bthread.h"
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
+#include "fmt/format.h"
+#include "gflags/gflags.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/codec.h"
@@ -39,6 +39,8 @@ static std::string MutationTypeName(Mutation::Type type) {
   switch (type) {
     case Mutation::Type::kFileInode:
       return "FileInode";
+    case Mutation::Type::kDirInode:
+      return "DirInode";
     case Mutation::Type::kParentWithDentry:
       return "ParentWithDentry";
     default:
@@ -169,7 +171,7 @@ bool MutationMerger::CommitMutation(std::vector<Mutation>& mutations) {
   }
 
   for (auto& mutation : mutations) {
-    mutations_.Enqueue(mutation);
+    mutations_.Enqueue(std::move(mutation));
   }
 
   bthread_cond_signal(&cond_);
@@ -242,6 +244,10 @@ void MutationMerger::Merge(std::vector<Mutation>& mutations, std::map<Key, Merge
           MergeInode(mutation, merge_mutation);
           break;
 
+        case Mutation::Type::kDirInode:
+          MergeInode(mutation, merge_mutation);
+          break;
+
         case Mutation::Type::kParentWithDentry:
           MergeInode(mutation, merge_mutation);
           merge_mutation.dentry_ops.push_back(mutation.dentry_op);
@@ -283,7 +289,9 @@ void MutationMerger::LaunchExecuteMutation(const MergeMutation& merge_mutation) 
 }
 
 void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
-  DINGO_LOG(INFO) << merge_mutation.ToString();
+  DINGO_LOG(INFO) << "[merge] execute mutation start, " << merge_mutation.ToString();
+
+  uint64_t start_us = Helper::TimestampUs();
 
   Status status;
   switch (merge_mutation.type) {
@@ -302,6 +310,21 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
       }
     } break;
 
+    case Mutation::Type::kDirInode: {
+      const auto& inode = merge_mutation.inode_op.inode;
+
+      KeyValue kv;
+      kv.opt_type = merge_mutation.inode_op.op_type;
+      kv.key = MetaDataCodec::EncodeDirInodeKey(merge_mutation.fs_id, inode.ino());
+      kv.value = MetaDataCodec::EncodeDirInodeValue(inode);
+
+      KVStorage::WriteOption option;
+      auto status = kv_storage_->Put(option, kv);
+      if (!status.ok()) {
+        status = Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
+      }
+    } break;
+
     case Mutation::Type::kParentWithDentry: {
       const auto& parent_inode = merge_mutation.inode_op.inode;
 
@@ -310,8 +333,8 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
 
       KeyValue kv;
       kv.opt_type = merge_mutation.inode_op.op_type;
-      kv.key = MetaDataCodec::EncodeFileInodeKey(merge_mutation.fs_id, parent_inode.ino());
-      kv.value = MetaDataCodec::EncodeFileInodeValue(parent_inode);
+      kv.key = MetaDataCodec::EncodeDirInodeKey(merge_mutation.fs_id, parent_inode.ino());
+      kv.value = MetaDataCodec::EncodeDirInodeValue(parent_inode);
       kvs.push_back(kv);
 
       for (const auto& dentry_op : merge_mutation.dentry_ops) {
@@ -334,6 +357,9 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
       DINGO_LOG(FATAL) << "unknown mutation type.";
       break;
   }
+
+  DINGO_LOG(INFO) << fmt::format("[merge] execute mutation finish, elapsed_time({}) {}.",
+                                 Helper::TimestampUs() - start_us, merge_mutation.ToString());
 
   for (const auto& notification : merge_mutation.notifications) {
     *notification.status = status;

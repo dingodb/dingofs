@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
@@ -74,7 +75,7 @@ static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
   out_entry.ino = entry.ino();
   out_entry.attr = ToAttr(entry.inode());
 
-  return out_entry;
+  return std::move(out_entry);
 }
 
 bool MDSClient::Init() { return true; }

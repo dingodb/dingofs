@@ -34,6 +34,7 @@ struct Mutation {
 
   enum class Type {
     kFileInode,
+    kDirInode,
     kParentWithDentry,
   };
 
@@ -54,7 +55,10 @@ struct Mutation {
 
   Mutation() = default;
   Mutation(uint32_t fs_id, const InodeOperation& inode_op, bthread::CountdownEvent* count_down_event, Status* status)
-      : type(Type::kFileInode), fs_id(fs_id), inode_op(inode_op), notification({count_down_event, status}) {}
+      : type(inode_op.inode.type() == pb::mdsv2::FileType::DIRECTORY ? Type::kDirInode : Type::kFileInode),
+        fs_id(fs_id),
+        inode_op(inode_op),
+        notification({count_down_event, status}) {}
 
   Mutation(uint32_t fs_id, const InodeOperation& inode_op, const DentryOperation& dentry_op,
            bthread::CountdownEvent* count_down_event, Status* status)

@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/filesystem.h"
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -71,7 +73,7 @@ Status MdsV2DirIterator::Next(bool with_attr, DirEntry* dir_entry) {
     offset_ = 0;
     entries_ = std::move(entries);
 
-    if (entries.empty()) {
+    if (entries_.empty()) {
       is_end_ = true;
       return Status::NoData("no more data");
     }
@@ -171,10 +173,13 @@ Status MDSV2FileSystem::StatFs(Ino ino, FsStat* fs_stat) {  // NOLINT
   return Status::OK();
 };
 
-Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
+Status MDSV2FileSystem::Lookup(Ino parent, const std::string& name,
                                Attr* out_attr) {
-  auto status = mds_client_->Lookup(parent_ino, name, *out_attr);
+  auto status = mds_client_->Lookup(parent, name, *out_attr);
   if (!status.ok()) {
+    if (status.Errno() == pb::error::ENOT_FOUND) {
+      return Status::NotExist("not found dentry");
+    }
     return status;
   }
 
@@ -184,14 +189,19 @@ Status MDSV2FileSystem::Lookup(Ino parent_ino, const std::string& name,
 Status MDSV2FileSystem::Create(Ino parent, const std::string& name,
                                uint32_t uid, uint32_t gid, uint32_t mode,
                                int flags, Attr* attr) {
-  return Status::NotSupport("to be implemented");
+  auto status = MkNod(parent, name, uid, gid, mode, 0, attr);
+  if (!status.ok()) {
+    return status;
+  }
+
+  return Open(attr->ino, flags);
 }
 
-Status MDSV2FileSystem::MkNod(Ino parent_ino, const std::string& name,
-                              uint32_t uid, uint32_t gid, uint32_t mode,
-                              uint64_t rdev, Attr* out_attr) {
+Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
+                              uint32_t gid, uint32_t mode, uint64_t rdev,
+                              Attr* out_attr) {
   auto status =
-      mds_client_->MkNod(parent_ino, name, uid, gid, mode, rdev, *out_attr);
+      mds_client_->MkNod(parent, name, uid, gid, mode, rdev, *out_attr);
   if (!status.ok()) {
     return status;
   }

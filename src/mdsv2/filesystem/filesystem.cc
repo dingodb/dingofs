@@ -395,22 +395,30 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
   // update backend store
   bthread::CountdownEvent count_down(2);
 
+  uint64_t start_us = Helper::TimestampUs();
+  DINGO_LOG(INFO) << fmt::format("mknod {} start.", param.name);
+
+  std::vector<Mutation> mutations;
+
   butil::Status rpc_status;
   Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status);
 
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
+  mutations.push_back(std::move(file_mutation));
 
   butil::Status rpc_parent_status;
   Mutation parent_mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
                            {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status);
+  mutations.push_back(std::move(parent_mutation));
 
-  if (!mutation_merger_->CommitMutation(parent_mutation)) {
+  if (!mutation_merger_->CommitMutation(mutations)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("mknod {} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
+                                 param.name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
+                                 rpc_parent_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
@@ -530,22 +538,29 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
   // update backend store
   bthread::CountdownEvent count_down(2);
 
+  uint64_t start_us = Helper::TimestampUs();
+  DINGO_LOG(INFO) << fmt::format("mkdir {} start.", param.name);
+
+  std::vector<Mutation> mutations;
+
   butil::Status rpc_status;
   Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status);
-
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
+  mutations.push_back(std::move(file_mutation));
 
   butil::Status rpc_parent_status;
   Mutation parent_mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
                            {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status);
+  mutations.push_back(std::move(parent_mutation));
 
-  if (!mutation_merger_->CommitMutation(parent_mutation)) {
+  if (!mutation_merger_->CommitMutation(mutations)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("mkdir {} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
+                                 param.name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
+                                 rpc_parent_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
@@ -553,6 +568,8 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
   if (!rpc_parent_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
   }
+
+  DINGO_LOG(INFO) << "here 0005.";
 
   // update cache
   inode_cache_.PutInode(ino, inode);
@@ -729,22 +746,29 @@ Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string
   // update backend store
   bthread::CountdownEvent count_down(2);
 
+  uint64_t start_us = Helper::TimestampUs();
+  DINGO_LOG(INFO) << fmt::format("link {} -> {}/{} start.", ino, new_parent_ino, new_name);
+
+  std::vector<Mutation> mutations;
+
   butil::Status rpc_status;
   Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status);
-
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
+  mutations.push_back(std::move(file_mutation));
 
   butil::Status rpc_parent_status;
   Mutation parent_mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
                            {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status);
+  mutations.push_back(std::move(parent_mutation));
 
-  if (!mutation_merger_->CommitMutation(parent_mutation)) {
+  if (!mutation_merger_->CommitMutation(mutations)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("link {} -> {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
+                                 ino, new_parent_ino, new_name, Helper::TimestampUs() - start_us,
+                                 rpc_status.error_str(), rpc_parent_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
@@ -809,22 +833,30 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
   // update backend store
   bthread::CountdownEvent count_down(2);
 
+  uint64_t start_us = Helper::TimestampUs();
+  DINGO_LOG(INFO) << fmt::format("unlink {}/{} start.", parent_ino, name);
+
+  std::vector<Mutation> mutations;
+
   butil::Status rpc_status;
   Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status);
 
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
+  mutations.push_back(std::move(file_mutation));
 
   butil::Status rpc_parent_status;
   Mutation parent_mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
                            {Mutation::OpType::kDelete, dentry.CopyTo()}, &count_down, &rpc_parent_status);
+  mutations.push_back(std::move(parent_mutation));
 
-  if (!mutation_merger_->CommitMutation(parent_mutation)) {
+  if (!mutation_merger_->CommitMutation(mutations)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("unlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
+                                 parent_ino, name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
+                                 rpc_parent_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
@@ -909,22 +941,30 @@ Status FileSystem::Symlink(const std::string& symlink, uint64_t new_parent_ino, 
   // update backend store
   bthread::CountdownEvent count_down(2);
 
+  uint64_t start_us = Helper::TimestampUs();
+  DINGO_LOG(INFO) << fmt::format("symlink {}/{} start.", new_parent_ino, new_name);
+
+  std::vector<Mutation> mutations;
+
   butil::Status rpc_status;
   Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status);
 
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
-  }
+  mutations.push_back(std::move(file_mutation));
 
   butil::Status rpc_parent_status;
   Mutation parent_mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
                            {Mutation::OpType::kDelete, dentry.CopyTo()}, &count_down, &rpc_parent_status);
+  mutations.push_back(std::move(parent_mutation));
 
-  if (!mutation_merger_->CommitMutation(parent_mutation)) {
+  if (!mutation_merger_->CommitMutation(mutations)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("symlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
+                                 new_parent_ino, new_name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
+                                 rpc_parent_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));

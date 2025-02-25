@@ -22,7 +22,7 @@ namespace mdsv2 {
 
 void FsInfoSyncTask::Run() {
   bool ret = file_system_set_->LoadFileSystems();
-  DINGO_LOG(INFO) << "load file systems: " << (ret ? "success" : "fail");
+  DINGO_LOG(INFO) << "load file systems " << (ret ? "success" : "fail");
 }
 
 bool FsInfoSync::Init() {

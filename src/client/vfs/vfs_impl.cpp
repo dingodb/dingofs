@@ -329,8 +329,13 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
     DirEntry entry;
     s = dir_iterator->Next(with_attr, &entry);
     if (!s.ok()) {
-      LOG(WARNING) << "read dir fail, ino=" << ino << ", fh: " << fh
-                   << ", offset: " << offset << ", status: " << s.ToString();
+      if (s.IsNoData()) {
+        return Status::OK();
+      }
+
+      LOG(WARNING) << fmt::format(
+          "read dir fail, ino({}) fh({}) offset({}) error({})", ino, fh, offset,
+          s.ToString());
       return s;
     }
 

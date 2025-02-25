@@ -82,21 +82,16 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
-  Status Lookup(Ino parent_ino, const std::string& name,
-                Attr* out_attr) override;
+  Status Lookup(Ino parent, const std::string& name, Attr* out_attr) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                 uint32_t mode, int flags, Attr* attr) override;
 
-  Status MkNod(Ino parent_ino, const std::string& name, uint32_t uid,
-               uint32_t gid, uint32_t mode, uint64_t rdev, Attr* attr) override;
+  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+               uint32_t mode, uint64_t rdev, Attr* attr) override;
 
   Status Open(Ino ino, int flags) override;
   Status Close(Ino ino) override;
-
-  // Status Read(uint64_t ino, off_t off, size_t size, char* buf, size_t&
-  // rsize); Status Write(uint64_t ino, off_t off, const char* buf, size_t size,
-  //              size_t& wsize);
 
   Status ReadSlice(Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;

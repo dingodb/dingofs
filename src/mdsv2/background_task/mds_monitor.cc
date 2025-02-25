@@ -101,50 +101,50 @@ void MDSMonitor::Destroy() { dist_lock_->Destroy(); }
 // 4. eliminate dead mds, add new mds
 // 5. notify new mds
 void MDSMonitor::MonitorMDS() {
-  bool running = false;
-  if (!is_running_.compare_exchange_strong(running, true)) {
-    DINGO_LOG(INFO) << "monitor mds already running......";
-    return;
-  }
-  DEFER(is_running_.store(false));
+  // bool running = false;
+  // if (!is_running_.compare_exchange_strong(running, true)) {
+  //   DINGO_LOG(INFO) << "monitor mds already running......";
+  //   return;
+  // }
+  // DEFER(is_running_.store(false));
 
-  if (!dist_lock_->IsLocked()) {
-    DINGO_LOG(INFO) << "monitor mds not own lock......";
-    return;
-  }
+  // if (!dist_lock_->IsLocked()) {
+  //   DINGO_LOG(INFO) << "monitor mds not own lock......";
+  //   return;
+  // }
 
-  DINGO_LOG(INFO) << "monitor mds running......";
+  // DINGO_LOG(INFO) << "monitor mds running......";
 
-  std::vector<MDSMeta> mdses;
-  auto status = coordinator_client_->GetMDSList(mdses);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("get mds list fail, {}", status.error_str());
-    return;
-  }
+  // std::vector<MDSMeta> mdses;
+  // auto status = coordinator_client_->GetMDSList(mdses);
+  // if (!status.ok()) {
+  //   DINGO_LOG(ERROR) << fmt::format("get mds list fail, {}", status.error_str());
+  //   return;
+  // }
 
-  std::vector<MDSMeta> online_mdses, offline_mdses;
-  GetOfflineMDS(mdses, online_mdses, offline_mdses);
-  if (offline_mdses.empty()) {
-    return;
-  }
+  // std::vector<MDSMeta> online_mdses, offline_mdses;
+  // GetOfflineMDS(mdses, online_mdses, offline_mdses);
+  // if (offline_mdses.empty()) {
+  //   return;
+  // }
 
-  auto fs_set = fs_set_->GetAllFileSystem();
-  if (fs_set.empty()) {
-    return;
-  }
+  // auto fs_set = fs_set_->GetAllFileSystem();
+  // if (fs_set.empty()) {
+  //   return;
+  // }
 
-  auto is_offline_func = [offline_mdses](const uint64_t mds_id) -> bool {
-    for (const auto& offline_mds : offline_mdses) {
-      if (mds_id == offline_mds.ID()) {
-        return true;
-      }
-    }
-    return false;
-  };
+  // auto is_offline_func = [offline_mdses](const uint64_t mds_id) -> bool {
+  //   for (const auto& offline_mds : offline_mdses) {
+  //     if (mds_id == offline_mds.ID()) {
+  //       return true;
+  //     }
+  //   }
+  //   return false;
+  // };
 
-  auto pick_mds_func = [online_mdses]() -> MDSMeta {
-    return online_mdses[Helper::GenerateRandomInteger(0, 1000) % online_mdses.size()];
-  };
+  // auto pick_mds_func = [online_mdses]() -> MDSMeta {
+  //   return online_mdses[Helper::GenerateRandomInteger(0, 1000) % online_mdses.size()];
+  // };
 
   // for (const auto& fs : fs_set) {
   //   auto fs_info = fs->FsInfo();

@@ -268,7 +268,6 @@ static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   DummyFileSystem::PBInode inode;
   inode.set_ino(ino);
   inode.set_fs_id(fs_id);
-  inode.set_length(0);
   inode.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP |
                  S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
   inode.set_uid(1008);
@@ -284,8 +283,10 @@ static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   inode.set_ctime(ToTimestamp(now));
 
   if (type == pb::mdsv2::FileType::DIRECTORY) {
+    inode.set_length(4096);
     inode.set_nlink(2);
   } else {
+    inode.set_length(0);
     inode.set_nlink(1);
   }
 
@@ -373,12 +374,9 @@ static Attr ToAttr(const pb::mdsv2::Inode& inode) {
   Attr attr;
   attr.ino = inode.ino();
   attr.length = inode.length();
-  attr.atime = inode.atime() / 1000000000;
-  attr.atime_ns = inode.atime() % 1000000000;
-  attr.mtime = inode.mtime() / 1000000000;
-  attr.mtime_ns = inode.mtime() % 1000000000;
-  attr.ctime = inode.ctime() / 1000000000;
-  attr.ctime_ns = inode.ctime() % 1000000000;
+  attr.atime = inode.atime();
+  attr.mtime = inode.mtime();
+  attr.ctime = inode.ctime();
   attr.uid = inode.uid();
   attr.gid = inode.gid();
   attr.mode = inode.mode();

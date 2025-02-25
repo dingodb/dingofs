@@ -91,7 +91,8 @@ void Attr2Stat(const Attr& attr, struct stat* stat) {
     ToTimeSpec(attr.ctime, &stat->st_ctim);
   }
 
-  stat->st_blksize = 0x10000u;  // blocksize for file system I/O
+  // stat->st_blksize = 0x10000u;  // blocksize for file system I/O
+  stat->st_blksize = 4096;
   stat->st_blocks =
       (attr.length + 511) / 512;  // number of 512B blocks allocated
 }
@@ -489,8 +490,8 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                    struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpReadDir inodeId=" << ino << ", size: " << size
-          << ", offset: " << off << ", fi->fh: " << fi->fh;
+  LOG(INFO) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
+                           fi->fh, off, size);
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
@@ -512,36 +513,37 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
             fuse_add_direntry(req, buffer.data() + writed_size, rest_size,
                               dir_entry.name.c_str(), &stat, ++off);
         if (entsize > rest_size) {
-          VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
-                  << ", from offset: " << off << " fi->fh: " << fi->fh
-                  << " entsize: " << entsize << " rest_size: " << rest_size;
+          LOG(INFO) << fmt::format(
+              "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
+              "entry_size({})",
+              ino, fi->fh, off, buffer.size(), size, entsize);
           return false;
         }
 
         writed_size += entsize;
+
         return true;
       });
 
   if (!s.ok()) {
-    LOG(WARNING) << "Failed FuseOpReadDir  inodeId=" << ino
-                 << ", size: " << size << ", offset: " << off
-                 << ", fi->fh: " << fi->fh << " status: " << s.ToString();
+    LOG(ERROR) << fmt::format(
+        "read dir fail, ino({}) fh({}) off({}) size({}) error({})", ino, fi->fh,
+        off, size, s.ToString());
     ReplyError(req, s);
   } else {
-    VLOG(1) << "FuseOpReadDir return entry count: "
-            << ", inodeId=" << ino << ", size: " << size
-            << ", from offset: " << off << ", fi->fh: " << fi->fh;
-
     buffer.resize(writed_size);
 
+    LOG(INFO) << fmt::format(
+        "read dir success, ino({}) fh({}) off({}) size({}) ", ino, fi->fh, off,
+        buffer.size());
     ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
 
 void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                        struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpReadDirPlus inodeId=" << ino << ", size: " << size
-          << ", offset: " << off << ", fi->fh: " << fi->fh;
+  LOG(INFO) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
+                           fi->fh, off, size);
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
@@ -564,9 +566,10 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
             fuse_add_direntry_plus(req, buffer.data() + writed_size, rest_size,
                                    dir_entry.name.c_str(), &fuse_entry, ++off);
         if (entsize > rest_size) {
-          VLOG(1) << "read buffer is full, inodeId=" << ino << " size: " << size
-                  << ", from offset: " << off << " fi->fh: " << fi->fh
-                  << " entsize: " << entsize << " rest_size: " << rest_size;
+          LOG(INFO) << fmt::format(
+              "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
+              "entry_size({})",
+              ino, fi->fh, off, buffer.size(), size, entsize);
           return false;
         }
         writed_size += entsize;
@@ -575,16 +578,16 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
       });
 
   if (!s.ok()) {
-    LOG(WARNING) << "Failed FuseOpReadDirPlus  inodeId=" << ino
-                 << ", size: " << size << ", offset: " << off
-                 << ", fi->fh: " << fi->fh << " status: " << s.ToString();
+    LOG(ERROR) << fmt::format(
+        "read dir fail, ino({}) fh({}) off({}) size({}) error({})", ino, fi->fh,
+        off, size, s.ToString());
     ReplyError(req, s);
   } else {
-    VLOG(1) << "FuseOpReadDirPlus return entry count: "
-            << ", inodeId=" << ino << ", size: " << size
-            << ", from offset: " << off << ", fi->fh: " << fi->fh;
-
     buffer.resize(writed_size);
+    LOG(INFO) << fmt::format(
+        "read dir success, ino({}) fh({}) off({}) size({}) ", ino, fi->fh, off,
+        buffer.size());
+
     ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
