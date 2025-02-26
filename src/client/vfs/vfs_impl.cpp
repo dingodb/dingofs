@@ -263,6 +263,7 @@ Status VFSImpl::GetXattr(Ino ino, const std::string& name, std::string* value) {
   });
 
   s = meta_system_->GetXattr(ino, name, value);
+
   return s;
 }
 

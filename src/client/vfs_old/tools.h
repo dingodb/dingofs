@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <ctime>
 
+#include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -44,12 +45,9 @@ static Attr GenerateVirtualInodeAttr(Ino ino) {
 
   struct timespec now;
   clock_gettime(CLOCK_REALTIME, &now);
-  attr.atime = now.tv_sec;
-  attr.atime_ns = now.tv_nsec;
-  attr.mtime = now.tv_sec;
-  attr.mtime_ns = now.tv_nsec;
-  attr.ctime = now.tv_sec;
-  attr.ctime_ns = now.tv_nsec;
+  attr.atime = ToTimestamp(now);
+  attr.mtime = ToTimestamp(now);
+  attr.ctime = ToTimestamp(now);
 
   attr.type = FileType::kFile;
 
@@ -79,12 +77,11 @@ static Attr InodeAttrPBToAttr(pb::metaserver::InodeAttr& inode_attr) {
   attr.gid = inode_attr.gid();
   attr.length = inode_attr.length();
   attr.rdev = inode_attr.rdev();
-  attr.atime = inode_attr.atime();
-  attr.atime_ns = inode_attr.atime_ns();
-  attr.mtime = inode_attr.mtime();
-  attr.mtime_ns = inode_attr.mtime_ns();
-  attr.ctime = inode_attr.ctime();
-  attr.ctime_ns = inode_attr.ctime_ns();
+
+  attr.atime = ToTimestamp(inode_attr.atime(), inode_attr.atime_ns());
+  attr.mtime = ToTimestamp(inode_attr.mtime(), inode_attr.mtime_ns());
+  attr.ctime = ToTimestamp(inode_attr.ctime(), inode_attr.ctime_ns());
+
   attr.type = FsFileTypePBToFileType(inode_attr.type());
   for (int i = 0; i < inode_attr.parent_size(); i++) {
     attr.parents.push_back(inode_attr.parent(i));

@@ -26,6 +26,7 @@
 #include <string>
 
 #include "client/common/status.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
@@ -54,15 +55,6 @@ void EnableSplice(struct fuse_conn_info* conn) {
   }
 }
 
-void ToTimeSpec(uint64_t timestamp_ns, struct timespec* ts) {
-  ts->tv_nsec = timestamp_ns % 1000000000;
-  ts->tv_sec = timestamp_ns / 1000000000;
-}
-
-uint64_t ToTimestamp(const struct timespec& ts) {
-  return ts.tv_sec * 1000000000 + ts.tv_nsec;
-}
-
 void Attr2Stat(const Attr& attr, struct stat* stat) {
   stat->st_ino = attr.ino;      //  inode number
   stat->st_mode = attr.mode;    // permission mode
@@ -72,27 +64,11 @@ void Attr2Stat(const Attr& attr, struct stat* stat) {
   stat->st_size = attr.length;  // total size, in bytes
   stat->st_rdev = attr.rdev;    // device ID (if special file)
 
-  if (attr.atime_ns > 0) {
-    stat->st_atim.tv_sec = attr.atime;  // time of last access
-    stat->st_atim.tv_nsec = attr.atime_ns;
-  } else {
-    ToTimeSpec(attr.atime, &stat->st_atim);
-  }
-  if (attr.mtime_ns > 0) {
-    stat->st_mtim.tv_sec = attr.mtime;  // time of last modification
-    stat->st_mtim.tv_nsec = attr.mtime_ns;
-  } else {
-    ToTimeSpec(attr.mtime, &stat->st_mtim);
-  }
-  if (attr.ctime_ns > 0) {
-    stat->st_ctim.tv_sec = attr.ctime;  // time of last status change
-    stat->st_ctim.tv_nsec = attr.ctime_ns;
-  } else {
-    ToTimeSpec(attr.ctime, &stat->st_ctim);
-  }
+  dingofs::client::vfs::ToTimeSpec(attr.atime, &stat->st_atim);
+  dingofs::client::vfs::ToTimeSpec(attr.mtime, &stat->st_mtim);
+  dingofs::client::vfs::ToTimeSpec(attr.ctime, &stat->st_ctim);
 
-  // stat->st_blksize = 0x10000u;  // blocksize for file system I/O
-  stat->st_blksize = 4096;
+  stat->st_blksize = 0x10000u;  // blocksize for file system I/O
   stat->st_blocks =
       (attr.length + 511) / 512;  // number of 512B blocks allocated
 }
@@ -114,12 +90,10 @@ Attr Stat2Attr(struct stat* stat) {
   attr.gid = stat->st_gid;
   attr.length = stat->st_size;
   attr.rdev = stat->st_rdev;
-  attr.atime = stat->st_atim.tv_sec;
-  attr.atime_ns = stat->st_atim.tv_nsec;
-  attr.mtime = stat->st_mtim.tv_sec;
-  attr.mtime_ns = stat->st_mtim.tv_nsec;
-  attr.ctime = stat->st_ctim.tv_sec;
-  attr.ctime_ns = stat->st_ctim.tv_nsec;
+  attr.atime = dingofs::client::vfs::ToTimestamp(stat->st_atim);
+  attr.mtime = dingofs::client::vfs::ToTimestamp(stat->st_mtim);
+  attr.ctime = dingofs::client::vfs::ToTimestamp(stat->st_ctim);
+
   return attr;
 }
 
@@ -286,6 +260,8 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
+    LOG(INFO) << "FuseOpGetAttr inodeId=" << ino << " attr=" << Attr2Str(attr);
+
     ReplyAttr(req, attr);
   }
 }

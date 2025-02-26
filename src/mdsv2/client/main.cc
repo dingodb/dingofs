@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
   if (g_mds_cmd.count(FLAGS_cmd) > 0) {
     dingofs::mdsv2::client::MDSClient mds_client;
     if (!mds_client.Init(FLAGS_addr)) {
-      std::cout << "init interaction fail." << std::endl;
+      std::cout << "init interaction fail." << '\n';
       return -1;
     }
 
@@ -85,13 +85,13 @@ int main(int argc, char* argv[]) {
     }
   } else {
     if (FLAGS_coor_addr.empty()) {
-      std::cout << "coordinator address is empty." << std::endl;
+      std::cout << "coordinator address is empty." << '\n';
       return -1;
     }
 
     dingofs::mdsv2::client::StoreClient store_client;
     if (!store_client.Init(FLAGS_coor_addr)) {
-      std::cout << "init store client fail." << std::endl;
+      std::cout << "init store client fail." << '\n';
       return -1;
     }
 

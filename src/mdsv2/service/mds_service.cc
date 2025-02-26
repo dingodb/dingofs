@@ -63,11 +63,13 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, con
   param.recycle_time_hour = request->recycle_time_hour();
   param.partition_type = request->partition_type();
 
-  int64_t fs_id = 0;
-  auto status = file_system_set_->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = file_system_set_->CreateFs(param, fs_info);
   if (BAIDU_UNLIKELY(!status.ok())) {
-    ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  *response->mutable_fs_info() = fs_info;
 }
 
 // fs interface
@@ -874,10 +876,13 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
 
   done_guard.release();
   auto status = file_system->AsyncRename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
-                                         request->new_name(), [&](Status status) {
+                                         request->new_name(), [&response, done](Status status) {
+                                           LOG(INFO) << "here 1000";
                                            brpc::ClosureGuard done_guard(done);
-                                           return ServiceHelper::SetError(response->mutable_error(),
-                                                                          status.error_code(), status.error_str());
+                                           if (!status.ok()) {
+                                             ServiceHelper::SetError(response->mutable_error(), status.error_code(),
+                                                                     status.error_str());
+                                           }
                                          });
 
   if (BAIDU_UNLIKELY(!status.ok())) {

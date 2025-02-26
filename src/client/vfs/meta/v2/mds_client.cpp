@@ -18,6 +18,7 @@
 #include <string>
 #include <utility>
 
+#include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -30,10 +31,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-static uint64_t ToTimestamp(const struct timespec& ts) {
-  return ts.tv_sec * 1000000000 + ts.tv_nsec;
-}
 
 static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {
@@ -453,17 +450,6 @@ Status MDSClient::GetAttr(uint64_t ino, Attr& out_attr) {
   out_attr = ToAttr(response.inode());
 
   return Status::OK();
-}
-
-static uint64_t ToTimestampNs(const struct timespec& ts) {
-  return ts.tv_sec * 1000000000 + ts.tv_nsec;
-}
-
-static struct timespec ToTimeSpec(uint64_t ts_ns) {
-  struct timespec out_ts;
-  out_ts.tv_sec = ts_ns / 1000000000;
-  out_ts.tv_nsec = ts_ns % 1000000000;
-  return out_ts;
 }
 
 Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,

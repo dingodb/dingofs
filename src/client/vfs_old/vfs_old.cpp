@@ -30,6 +30,7 @@
 #include "client/blockcache/s3_client.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/client_operator.h"
 #include "client/vfs_old/common/dynamic_config.h"
@@ -611,8 +612,8 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
 
   if (set & kSetAttrAtime) {
     struct timespec a_time;
-    a_time.tv_sec = in_attr.atime;
-    a_time.tv_nsec = in_attr.atime_ns;
+    ToTimeSpec(in_attr.atime, &a_time);
+
     inode_wrapper->UpdateTimestampLocked(a_time, kAccessTime);
   }
 
@@ -622,8 +623,8 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
 
   if (set & kSetAttrMtime) {
     struct timespec m_time;
-    m_time.tv_sec = in_attr.mtime;
-    m_time.tv_nsec = in_attr.mtime_ns;
+    ToTimeSpec(in_attr.mtime, &m_time);
+
     inode_wrapper->UpdateTimestampLocked(m_time, kModifyTime);
   }
 
@@ -633,8 +634,7 @@ Status VFSOld::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
 
   if (set & kSetAttrCtime) {
     struct timespec c_time;
-    c_time.tv_sec = in_attr.ctime;
-    c_time.tv_nsec = in_attr.ctime_ns;
+    ToTimeSpec(in_attr.ctime, &c_time);
     inode_wrapper->UpdateTimestampLocked(c_time, kChangeTime);
   } else {
     inode_wrapper->UpdateTimestampLocked(now, kChangeTime);

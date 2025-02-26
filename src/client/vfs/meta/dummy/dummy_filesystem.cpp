@@ -25,6 +25,7 @@
 
 #include "bthread/mutex.h"
 #include "client/common/status.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -258,10 +259,6 @@ static pb::mdsv2::FsInfo GenFsInfo() {
   return fs_info;
 }
 
-static uint64_t ToTimestamp(const struct timespec& ts) {
-  return ts.tv_sec * 1000000000 + ts.tv_nsec;
-}
-
 // root inode mode: S_IFDIR | 01777
 static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
                                          pb::mdsv2::FileType type) {
@@ -331,28 +328,6 @@ Status DummyFileSystem::Init() {
 }
 
 void DummyFileSystem::UnInit() {}
-
-// message Inode {
-//   uint32 fs_id = 1;
-//   uint64 ino = 2;
-//   uint64 length = 3;
-//   uint64 ctime = 4;
-//   uint64 mtime = 5;
-//   uint64 atime = 6;
-//   uint32 uid = 10;
-//   uint32 gid = 11;
-//   uint32 mode = 12;
-//   uint32 nlink = 13;
-//   FileType type = 14;
-//   string symlink = 15;
-//   uint64 rdev = 16;
-//   uint32 dtime = 17;
-//   uint32 openmpcount = 18;
-//   repeated uint64 parent_inos = 19;
-//   // chunk index -> slice list
-//   map<uint64, SliceList> chunks = 20;
-//   map<string, bytes> xattrs = 21;
-// }
 
 static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {
@@ -645,21 +620,8 @@ Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
   return Status::OK();
 }
 
-static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
-  return tv_sec * 1000000000 + tv_nsec;
-}
-
 Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
                                 Attr* out_attr) {
-  out_attr->atime = ToTimestamp(out_attr->atime, out_attr->atime_ns);
-  out_attr->atime_ns = 0;
-
-  out_attr->mtime = ToTimestamp(out_attr->mtime, out_attr->mtime_ns);
-  out_attr->mtime_ns = 0;
-
-  out_attr->ctime = ToTimestamp(out_attr->ctime, out_attr->ctime_ns);
-  out_attr->ctime_ns = 0;
-
   PBInode inode;
   if (!GetInode(ino, inode)) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
@@ -684,7 +646,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   clock_gettime(CLOCK_REALTIME, &now);
 
   if (set & kSetAttrAtime) {
-    inode.set_atime(attr.atime * 1000000000 + attr.atime_ns);
+    inode.set_atime(attr.atime);
     update_fields.push_back("atime");
 
   } else if (set & kSetAttrAtimeNow) {
@@ -693,7 +655,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   }
 
   if (set & kSetAttrMtime) {
-    inode.set_mtime(attr.mtime * 1000000000 + attr.mtime_ns);
+    inode.set_mtime(attr.mtime);
     update_fields.push_back("mtime");
 
   } else if (set & kSetAttrMtimeNow) {
@@ -702,7 +664,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
   }
 
   if (set & kSetAttrCtime) {
-    inode.set_ctime(attr.ctime * 1000000000 + attr.ctime_ns);
+    inode.set_ctime(attr.ctime);
     update_fields.push_back("ctime");
   } else {
     inode.set_ctime(ToTimestamp(now));
@@ -725,7 +687,7 @@ Status DummyFileSystem::GetXattr(Ino ino, const std::string& name,
                                  std::string* value) {
   PBInode inode;
   if (!GetInode(ino, inode)) {
-    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
+    return Status::NoData(pb::error::ENOT_FOUND, "not found inode");
   }
 
   const auto& xattrs = inode.xattrs();

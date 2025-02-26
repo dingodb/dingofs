@@ -231,7 +231,7 @@ class FileSystemSet {
     pb::mdsv2::PartitionType partition_type;
   };
 
-  Status CreateFs(const CreateFsParam& param, int64_t& fs_id);
+  Status CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs_info);
   Status MountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status DeleteFs(const std::string& fs_name);

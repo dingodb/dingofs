@@ -492,6 +492,11 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   if (!s.ok()) {
     op_metric.FailOp();
   }
+
+  if (value->empty()) {
+    return Status::NoData("no data");
+  }
+
   return s;
 }
 

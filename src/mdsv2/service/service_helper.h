@@ -156,21 +156,21 @@ void ServiceClosure<T, U>::Run() {
   std::unique_ptr<ServiceClosure<T, U>> self_guard(this);
   brpc::ClosureGuard done_guard(done_);
 
-  uint64_t elapsed_time = Helper::TimestampNs() - start_time_;
+  uint64_t elapsed_time = (Helper::TimestampNs() - start_time_) / 1000;
 
   if (response_->error().errcode() != 0) {
-    LOG(ERROR) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request fail, request({}) response({})",
-                              method_name_, request_->request_info().request_id(), elapsed_time,
+    LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})", method_name_,
+                              request_->request_info().request_id(), elapsed_time,
                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
   } else {
     if (BAIDU_UNLIKELY(elapsed_time >= FLAGS_service_log_threshold_time_ns)) {
-      LOG(INFO) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request finish, request({}) response({})",
+      LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
                                method_name_, request_->request_info().request_id(), elapsed_time,
                                request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     } else {
-      LOG(INFO) << fmt::format("[service.{}][request_id({})][elapsed(ns)({})] Request finish, request({}) response({})",
+      LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
                                method_name_, request_->request_info().request_id(), elapsed_time,
                                request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));

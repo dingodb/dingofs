@@ -69,9 +69,9 @@ struct Attr {
   uint64_t atime{0};
   uint64_t mtime{0};
   uint64_t ctime{0};
-  uint32_t mtime_ns{0};
-  uint32_t atime_ns{0};
-  uint32_t ctime_ns{0};
+  // uint32_t mtime_ns{0};
+  // uint32_t atime_ns{0};
+  // uint32_t ctime_ns{0};
   FileType type;
   // TODO: refact, maybe use separate key for hardlink
   std::vector<Ino> parents;
@@ -85,8 +85,6 @@ static std::string Attr2Str(const Attr& attr, bool with_parent = false) {
       << ", gid: " << attr.gid << ", length: " << attr.length
       << ", rdev: " << attr.rdev << ", atime: " << attr.atime
       << ", mtime: " << attr.mtime << ", ctime: " << attr.ctime
-      << ", mtime_ns: " << attr.mtime_ns << ", atime_ns: " << attr.atime_ns
-      << ", ctime_ns: " << attr.ctime_ns
       << ", type: " << FileType2Str(attr.type);
 
   if (with_parent) {

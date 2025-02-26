@@ -132,14 +132,16 @@ void MutationMerger::ProcessMutation() {
   while (true) {
     mutations.clear();
 
-    bthread_mutex_lock(&mutex_);
-    bthread_cond_wait(&cond_, &mutex_);
-    bthread_mutex_unlock(&mutex_);
-
     Mutation mutation;
-    while (mutations_.Dequeue(mutation)) {
-      mutations.push_back(mutation);
+    while (!mutations_.Dequeue(mutation)) {
+      bthread_mutex_lock(&mutex_);
+      bthread_cond_wait(&cond_, &mutex_);
+      bthread_mutex_unlock(&mutex_);
     }
+
+    do {
+      mutations.push_back(mutation);
+    } while (mutations_.Dequeue(mutation));
 
     if (is_stop_.load(std::memory_order_relaxed) && mutations.empty()) {
       break;

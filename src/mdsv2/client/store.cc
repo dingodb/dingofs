@@ -159,17 +159,19 @@ void TraverseFunc(TreeNode* item) {
   }
 }
 
-void TraversePrint(TreeNode* item, int level) {
+void TraversePrint(TreeNode* item, bool is_details, int level) {
   for (TreeNode* child : item->children) {
     for (int i = 0; i < level; i++) {
       std::cout << "  ";
     }
 
-    std::cout << fmt::format("{}({}) inode({})", child->dentry.name(), child->dentry.ino(),
-                             child->inode.ShortDebugString())
-              << std::endl;
+    auto& inode = child->inode;
+    std::cout << fmt::format("{}({}) gid({}) uid({}) mode({}) nlink({}) time({}/{}/{})", child->dentry.name(),
+                             child->dentry.ino(), inode.gid(), inode.uid(), inode.mode(), inode.nlink(), inode.ctime(),
+                             inode.mtime(), inode.atime())
+              << '\n';
     if (child->dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
-      TraversePrint(child, level + 1);
+      TraversePrint(child, is_details, level + 1);
     }
   }
 }
@@ -178,7 +180,7 @@ void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
   std::map<uint64_t, TreeNode*> tree_inode_map;
   TreeNode* root = GenDentryTree(kv_storage_, fs_id, tree_inode_map);
 
-  TraversePrint(root, 0);
+  TraversePrint(root, is_details, 0);
 
   // release memory
   for (auto [ino, item] : tree_inode_map) {

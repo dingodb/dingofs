@@ -68,6 +68,19 @@ static std::string StrAttr(Attr* attr) {
                          attr->ctime, attr->length);
 }
 
+static void ToTimeSpec(uint64_t timestamp_ns, struct timespec* ts) {
+  ts->tv_nsec = timestamp_ns % 1000000000;
+  ts->tv_sec = timestamp_ns / 1000000000;
+}
+
+static uint64_t ToTimestamp(const struct timespec& ts) {
+  return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
+  return tv_sec * 1000000000 + tv_nsec;
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

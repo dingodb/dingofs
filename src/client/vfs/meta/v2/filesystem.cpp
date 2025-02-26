@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "client/common/status.h"
+#include "client/vfs/common/helper.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
@@ -354,21 +355,8 @@ Status MDSV2FileSystem::GetAttr(Ino ino, Attr* out_attr) {
   return Status::OK();
 }
 
-static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
-  return tv_sec * 1000000000 + tv_nsec;
-}
-
 Status MDSV2FileSystem::SetAttr(Ino ino, int set, const Attr& attr,
                                 Attr* out_attr) {
-  out_attr->atime = ToTimestamp(out_attr->atime, out_attr->atime_ns);
-  out_attr->atime_ns = 0;
-
-  out_attr->mtime = ToTimestamp(out_attr->mtime, out_attr->mtime_ns);
-  out_attr->mtime_ns = 0;
-
-  out_attr->ctime = ToTimestamp(out_attr->ctime, out_attr->ctime_ns);
-  out_attr->ctime_ns = 0;
-
   auto status = mds_client_->SetAttr(ino, attr, set, *out_attr);
   if (!status.ok()) {
     return Status::Internal(fmt::format("set attr fail, ino({}) error: {}", ino,
@@ -386,6 +374,9 @@ Status MDSV2FileSystem::GetXattr(Ino ino, const std::string& name,
   }
 
   auto status = mds_client_->GetXAttr(ino, name, *value);
+  if (!status.ok()) {
+    return Status::NoData(status.Errno(), status.ToString());
+  }
 
   return Status::OK();
 }
