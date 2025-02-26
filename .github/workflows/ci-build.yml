@@ -48,7 +48,7 @@ jobs:
         elif [ "${{ github.event_name }}" == "push" ]; then
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag" > event.txt
-            tagInfo=echo "${{ github.ref }}" | sed 's/refs\/tags\///'
+            tagInfo=$(echo "${{ github.ref }}" | sed 's/refs\/tags\///')
             echo "$tagInfo" > tag_name.txt
             echo "TAG_NAME=$tagInfo" >> $GITHUB_ENV
           else
@@ -101,7 +101,7 @@ jobs:
       if: ${{ github.event_name == 'push'}}
       with:
         files: dingofs.tar.gz
-        name: dingofs
+        name: ${{ env.TAG_NAME }}
         tag_name: ${{ env.TAG_NAME }}
         token: ${{ secrets.GH_TOKEN }}
 
