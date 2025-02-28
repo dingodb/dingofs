@@ -22,6 +22,7 @@
 
 #include "stub/rpcclient/task_excutor.h"
 
+#include <butil/endpoint.h>
 #include <butil/fast_rand.h>
 
 #include "dingofs/metaserver.pb.h"
@@ -91,6 +92,10 @@ int TaskExecutor::DoRPCTaskInner(TaskExecutorDone* done) {
       channel = channelManager_->GetOrCreateStreamChannel(
           task_->target.metaServerID, task_->target.endPoint);
     }
+
+    VLOG(9) << "task metaServerID: " << task_->target.metaServerID
+            << ", endPoint: "
+            << butil::endpoint2str(task_->target.endPoint).c_str();
 
     if (!channel) {
       LOG(WARNING) << "GetOrCreateChannel fail for " << task_->TaskContextStr()
@@ -255,7 +260,9 @@ void TaskExecutor::RefreshLeader() {
   VLOG(3) << "refresh leader for {inodeid:" << task_->inodeID
           << ", pool:" << task_->target.groupID.poolID
           << ", copyset:" << task_->target.groupID.copysetID << "} "
-          << (ok ? " success" : " failure");
+          << (ok ? " success" : " failure")
+          << ", new leader: " << task_->target.metaServerID
+          << ", old leader: " << oldTarget;
 
   // if leader change, upper layer needs to retry
   task_->retryDirectly = (oldTarget != task_->target.metaServerID);
