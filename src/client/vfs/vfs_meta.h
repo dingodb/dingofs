@@ -132,7 +132,19 @@ struct Slice {
   uint64_t compaction;  // compaction version
   bool is_zero;         // is zero slice
   uint64_t size;        // now same as length, maybe use for future or remove
+
+  uint64_t End() const { return offset + length; }
 };
+
+static std::string Slice2Str(const Slice& slice) {
+  std::ostringstream oss;
+  oss << "{id: " << slice.id << ", range: [" << slice.offset << "-"
+      << slice.End() << "]" << ", compaction: " << slice.compaction
+      << ", is_zero: " << (slice.is_zero ? "true" : "false")
+      << ", size: " << slice.size << " }";
+
+  return oss.str();
+}
 
 enum StoreType : uint8_t {
   kS3 = 1,

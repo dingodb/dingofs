@@ -30,7 +30,7 @@
 
 #include "base/time/time.h"
 #include "client/common/status.h"
-#include "client/vfs/dir_iterator.h"
+#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/dir_buffer.h"
 #include "dingofs/mdsv2.pb.h"

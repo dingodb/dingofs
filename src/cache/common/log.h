@@ -28,6 +28,8 @@
 #include <functional>
 #include <string>
 
+#include "client/common/status.h"
+
 namespace dingofs {
 namespace cache {
 namespace common {

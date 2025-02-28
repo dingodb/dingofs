@@ -14,36 +14,30 @@
  * limitations under the License.
  */
 
-#include "client/vfs/handle_manager.h"
+#include "client/vfs/data/flat/common.h"
 
-#include <memory>
+#include <sstream>
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-HandlePtr HandleManager::NewHandle(Ino ino, DirIteratorUPtr dir_iterator) {
-  auto handle = std::make_shared<Handle>();
-  handle->ino = ino;
-  handle->dir_iterator = std::move(dir_iterator);
 
-  std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = next_fh_++;
-  handles_[handle->fh] = handle;
-
-  return handle;
+std::string SliceRange::ToString() const {
+  std::ostringstream oss;
+  oss << "{file_offset:" << file_offset << ", len:" << len
+      << ", slice_id:" << slice_id << "}";
+  return oss.str();
 }
 
-HandlePtr HandleManager::FindHandler(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = handles_.find(fh);
-  return (it == handles_.end()) ? nullptr : it->second;
-}
 
-void HandleManager::ReleaseHandler(uint64_t fh) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  handles_.erase(fh);
+std::string FileSlice::ToString() const {
+  std::ostringstream oss;
+  oss << "{file_offset: " << file_offset << ", len: " << len
+      << ", block_offset: " << block_offset
+      << ", block_key: " << block_key.Filename() << ", block_len: " << block_len
+      << ", zero: " << zero << "}";
+  return oss.str();
 }
 
 }  // namespace vfs

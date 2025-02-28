@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_COMMON_STATUS_H_
 #define DINGOFS_CLIENT_COMMON_STATUS_H_
 
+#include <cerrno>
 #include <cstdint>
 #include <memory>
 #include <string>

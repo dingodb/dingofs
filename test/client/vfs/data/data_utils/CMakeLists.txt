@@ -12,26 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(common)
-add_subdirectory(data)
-add_subdirectory(handle)
-add_subdirectory(hub)
-add_subdirectory(meta)
-
-add_library(vfs_lib 
-    vfs_impl.cpp
-)
-
-target_link_libraries(vfs_lib
-    client_common
-    vfs_meta_lib
+add_executable(test_process_read_request 
+    test_process_read_request.cpp)
+target_link_libraries(test_process_read_request 
     vfs_data
-    vfs_hub
-    vfs_handle
-    glog::glog
-    gflags::gflags
-    fmt::fmt
-    absl::str_format
+    ${TEST_DEPS}
+)
+set_target_properties(test_process_read_request PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
 
-
+add_executable(test_convert_slice_read_req_to_block_read_req 
+    test_convert_slice_read_req_to_block_read_req.cpp)
+target_link_libraries(test_convert_slice_read_req_to_block_read_req 
+    vfs_data
+    ${TEST_DEPS}
+)
+set_target_properties(test_convert_slice_read_req_to_block_read_req PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+)

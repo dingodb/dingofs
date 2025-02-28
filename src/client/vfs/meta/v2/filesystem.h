@@ -20,7 +20,7 @@
 #include <string>
 
 #include "client/common/status.h"
-#include "client/vfs/dir_iterator.h"
+#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_client.h"

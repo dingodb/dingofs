@@ -34,6 +34,9 @@
 
 static const uint32_t kFsID = 10000;
 static const uint64_t kRootIno = 1;
+static const uint64_t kDefaultBlockSize = 4 * 1024 * 1024;
+static const uint64_t kDefaultChunkSize = 64 * 1024 * 1024;
+static const std::string kDefaultFsName = "dummy_fs";
 
 namespace dingofs {
 namespace client {
@@ -213,6 +216,8 @@ Status FileChunkMap::NewSliceId(uint64_t* id) {
 
 Status FileChunkMap::Read(uint64_t ino, uint64_t index,
                           std::vector<Slice>* slices) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
   auto it = chunk_map_.find(ino);
   if (it == chunk_map_.end()) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found chunk");
@@ -225,6 +230,7 @@ Status FileChunkMap::Read(uint64_t ino, uint64_t index,
 
 Status FileChunkMap::Write(uint64_t ino, uint64_t index,
                            const std::vector<Slice>& slices) {
+  BAIDU_SCOPED_LOCK(mutex_);
   auto it = chunk_map_.find(ino);
   if (it == chunk_map_.end()) {
     Chunk chunk;
@@ -249,13 +255,29 @@ DummyFileSystem::~DummyFileSystem() {
 static pb::mdsv2::FsInfo GenFsInfo() {
   pb::mdsv2::FsInfo fs_info;
   fs_info.set_fs_id(kFsID);
-  fs_info.set_fs_name("dummy_fs");
-  fs_info.set_block_size(4096);
+  fs_info.set_fs_name(kDefaultFsName);
+  fs_info.set_block_size(kDefaultBlockSize);
+  fs_info.set_chunk_size(kDefaultChunkSize);
   fs_info.set_fs_type(pb::mdsv2::FsType::S3);
   fs_info.set_owner("dengzihui");
-  fs_info.set_capacity(1024 * 1024 * 1024);
+  fs_info.set_capacity(INT64_MAX);
   fs_info.set_recycle_time_hour(24);
 
+  auto* s3_info = fs_info.mutable_extra()->mutable_s3_info();
+
+  std::string ak = "1CzODWr3xuiIOTl80CGc";
+  s3_info->set_ak(ak);
+
+  std::string sk = "NR3Tk3hLK6GjehsawFeLPzHRweqwdMAGVMQ8ik1S";
+  s3_info->set_sk(sk);
+
+  std::string endpoint = "https://172.20.61.103:19000";
+  s3_info->set_endpoint(endpoint);
+
+  std::string bucketname = "dummy-fs";
+  s3_info->set_bucketname(bucketname);
+
+  LOG(INFO) << fmt::format("gen fs info: {}", fs_info.ShortDebugString());
   return fs_info;
 }
 
@@ -272,12 +294,11 @@ static DummyFileSystem::PBInode GenInode(uint32_t fs_id, uint64_t ino,
   inode.set_rdev(0);
   inode.set_type(type);
 
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
+  uint64_t now_timestamp = CurrentTimestamp();
 
-  inode.set_atime(ToTimestamp(now));
-  inode.set_mtime(ToTimestamp(now));
-  inode.set_ctime(ToTimestamp(now));
+  inode.set_atime(now_timestamp);
+  inode.set_mtime(now_timestamp);
+  inode.set_ctime(now_timestamp);
 
   if (type == pb::mdsv2::FileType::DIRECTORY) {
     inode.set_length(4096);
@@ -319,7 +340,7 @@ Status DummyFileSystem::Init() {
   Dentry dentry;
   dentry.dentry = pb_dentry;
 
-  LOG(INFO) << fmt::format("root inode: {}", inode.ShortDebugString());
+  LOG(INFO) << fmt::format("root ino: {}", inode.ShortDebugString());
 
   AddInode(inode);
   AddDentry(dentry);
@@ -446,7 +467,33 @@ Status DummyFileSystem::NewSliceId(uint64_t* id) {
 
 Status DummyFileSystem::WriteSlice(Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
-  return file_chunk_map_.Write(ino, index, slices);
+  PBInode inode;
+  if (!GetInode(ino, inode)) {
+    return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
+  }
+
+  DINGOFS_RETURN_NOT_OK(file_chunk_map_.Write(ino, index, slices));
+
+  std::vector<std::string> update_fields;
+
+  uint64_t new_max_length = 0;
+  for (const auto& slice : slices) {
+    new_max_length = std::max(new_max_length, slice.End());
+  }
+
+  if (new_max_length > inode.length()) {
+    inode.set_length(new_max_length);
+    update_fields.push_back("length");
+  }
+
+  uint64_t now_timestamp = CurrentTimestamp();
+
+  inode.set_mtime(now_timestamp);
+  inode.set_ctime(now_timestamp);
+
+  UpdateInode(inode, update_fields);
+
+  return Status::OK();
 }
 
 Status DummyFileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
@@ -613,7 +660,7 @@ Status DummyFileSystem::GetAttr(Ino ino, Attr* attr) {
     return Status::Internal(pb::error::ENOT_FOUND, "not found inode");
   }
 
-  LOG(INFO) << fmt::format("inode: {}", inode.ShortDebugString());
+  LOG(INFO) << fmt::format("ino: {}", inode.ShortDebugString());
 
   *attr = ToAttr(inode);
 
@@ -642,15 +689,14 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
     update_fields.push_back("gid");
   }
 
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
+  uint64_t now_timestamp = CurrentTimestamp();
 
   if (set & kSetAttrAtime) {
     inode.set_atime(attr.atime);
     update_fields.push_back("atime");
 
   } else if (set & kSetAttrAtimeNow) {
-    inode.set_atime(ToTimestamp(now));
+    inode.set_atime(now_timestamp);
     update_fields.push_back("atime");
   }
 
@@ -659,7 +705,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
     update_fields.push_back("mtime");
 
   } else if (set & kSetAttrMtimeNow) {
-    inode.set_mtime(ToTimestamp(now));
+    inode.set_mtime(now_timestamp);
     update_fields.push_back("mtime");
   }
 
@@ -667,7 +713,7 @@ Status DummyFileSystem::SetAttr(Ino ino, int set, const Attr& attr,
     inode.set_ctime(attr.ctime);
     update_fields.push_back("ctime");
   } else {
-    inode.set_ctime(ToTimestamp(now));
+    inode.set_ctime(now_timestamp);
     update_fields.push_back("ctime");
   }
 
@@ -752,7 +798,7 @@ static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
 }
 
 Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
-  fs_info->name = "dummy";
+  fs_info->name = kDefaultFsName;
   fs_info->id = fs_info_.fs_id();
   fs_info->chunk_size = fs_info_.chunk_size();
   fs_info->block_size = fs_info_.block_size();

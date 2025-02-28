@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "bthread/types.h"
-#include "client/vfs/dir_iterator.h"
+#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"

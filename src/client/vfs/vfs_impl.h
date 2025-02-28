@@ -21,7 +21,8 @@
 #include <memory>
 
 #include "client/common/config.h"
-#include "client/vfs/handle_manager.h"
+#include "client/vfs/handle/handle_manager.h"
+#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
 
@@ -115,12 +116,11 @@ class VFSImpl : public VFS {
   }
 
  private:
-  std::atomic_bool started_{false};
-
   common::ClientOption fuse_client_option_;
 
-  std::unique_ptr<MetaSystem> meta_system_;
-  std::unique_ptr<HandleManager> handle_manager_;
+  std::unique_ptr<VFSHub> vfs_hub_;
+  MetaSystem* meta_system_;
+  HandleManager* handle_manager_;
 };
 
 }  // namespace vfs

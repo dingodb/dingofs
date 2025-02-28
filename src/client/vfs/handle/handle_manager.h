@@ -22,7 +22,8 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "client/vfs/dir_iterator.h"
+#include "client/vfs/data/file.h"
+#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
@@ -32,7 +33,12 @@ namespace vfs {
 struct Handle {
   Ino ino;
   uint64_t fh;
-  DirIteratorUPtr dir_iterator;
+  // file ralted
+  int32_t flags;
+  std::unique_ptr<File> file;
+
+  // dir related
+  std::unique_ptr<DirIterator> dir_iterator;
 };
 
 using HandlePtr = std::shared_ptr<Handle>;
@@ -42,7 +48,7 @@ class HandleManager {
   HandleManager() = default;
   ~HandleManager() = default;
 
-  HandlePtr NewHandle(Ino ino, DirIteratorUPtr dir_iterator);
+  HandlePtr NewHandle();
 
   HandlePtr FindHandler(uint64_t fh);
 

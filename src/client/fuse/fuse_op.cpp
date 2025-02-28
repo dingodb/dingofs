@@ -28,6 +28,7 @@
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
 #include "client/common/status.h"
+#include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
@@ -263,13 +264,13 @@ void FuseOpLookup(fuse_req_t req, fuse_ino_t parent, const char* name) {
 }
 
 void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpGetAttr inodeId=" << ino;
+  VLOG(1) << "FuseOpGetAttr ino: " << ino;
   Attr attr;
   Status s = g_vfs->GetAttr(ino, &attr);
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    VLOG(1) << "FuseOpGetAttr inodeId=" << ino << " attr=" << Attr2Str(attr);
+    VLOG(1) << "FuseOpGetAttr ino: " << ino << " attr=" << Attr2Str(attr);
 
     ReplyAttr(req, attr);
   }
@@ -277,7 +278,7 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat* attr,
                    int to_set, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpSetAttr inodeId=" << ino;
+  VLOG(1) << "FuseOpSetAttr ino: " << ino;
   Attr in_attr = Stat2Attr(attr);
   Attr out_attr;
   Status s = g_vfs->SetAttr(ino, to_set, in_attr, &out_attr);
@@ -290,7 +291,7 @@ void FuseOpSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat* attr,
 }
 
 void FuseOpReadLink(fuse_req_t req, fuse_ino_t ino) {
-  VLOG(1) << "FuseOpReadLink inodeId=" << ino;
+  VLOG(1) << "FuseOpReadLink ino: " << ino;
   std::string link;
   Status s = g_vfs->ReadLink(ino, &link);
   if (!s.ok()) {
@@ -380,7 +381,7 @@ void FuseOpRename(fuse_req_t req, fuse_ino_t parent, const char* name,
 
 void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
                 const char* newname) {
-  VLOG(1) << "FuseOpLink inodeId=" << ino << ", newparent: " << newparent
+  VLOG(1) << "FuseOpLink ino: " << ino << ", newparent: " << newparent
           << ", newname: " << newname;
   Attr attr;
   Status s = g_vfs->Link(ino, newparent, newname, &attr);
@@ -392,7 +393,7 @@ void FuseOpLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 }
 
 void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpOpen inodeId=" << ino;
+  VLOG(1) << "FuseOpOpen ino: " << ino;
   uint64_t fh = 0;
   Attr attr;
   Status s = g_vfs->Open(ino, fi->flags, &fh);
@@ -413,26 +414,34 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                 struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpRead inodeId=" << ino << ", size: " << size
+  VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
   std::unique_ptr<char[]> buffer(new char[size]);
   memset(buffer.get(), 0, size);
 
   uint64_t rsize = 0;
   Status s = g_vfs->Read(ino, buffer.get(), size, off, fi->fh, &rsize);
+  VLOG(1) << "FuseOpRead ino: " << ino << ", size: " << size
+          << ", offset: " << off << ", fi->fh: " << fi->fh
+          << ", rsize: " << rsize
+          << ", buf: " << dingofs::client::Char2Addr(buffer.get());
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    ReplyData(req, buffer.get(), rsize);
+    // TODO : if reply buf is FUSE_BUF_SPLICE_MOVE, we need release the buffer
+    ReplyData(req, buffer.release(), rsize);
   }
 }
 
 void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
                  off_t off, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpWrite inodeId=" << ino << ", size: " << size
+  VLOG(1) << "FuseOpWrite ino: " << ino << ", size: " << size
           << ", offset: " << off << ", fi->fh: " << fi->fh;
   uint64_t wsize = 0;
   Status s = g_vfs->Write(ino, buf, size, off, fi->fh, &wsize);
+  VLOG(1) << "FuseOpWrite ino: " << ino << ", size: " << size
+          << ", offset: " << off << ", fi->fh: " << fi->fh
+          << ", wsize: " << wsize;
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
@@ -441,20 +450,20 @@ void FuseOpWrite(fuse_req_t req, fuse_ino_t ino, const char* buf, size_t size,
 }
 
 void FuseOpFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpFlush inodeId=" << ino << ", fi->fh: " << fi->fh;
+  VLOG(1) << "FuseOpFlush ino: " << ino << ", fi->fh: " << fi->fh;
   Status s = g_vfs->Flush(ino, fi->fh);
   ReplyError(req, s);
 }
 
 void FuseOpRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpRelease inodeId=" << ino << ", fi->fh: " << fi->fh;
+  VLOG(1) << "FuseOpRelease ino: " << ino << ", fi->fh: " << fi->fh;
   Status s = g_vfs->Release(ino, fi->fh);
   ReplyError(req, s);
 }
 
 void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
                  struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpFsync inodeId=" << ino << ", datasync: " << datasync
+  VLOG(1) << "FuseOpFsync ino: " << ino << ", datasync: " << datasync
           << ", fi->fh: " << fi->fh;
 
   Status s = g_vfs->Fsync(ino, datasync, fi->fh);
@@ -462,7 +471,7 @@ void FuseOpFsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 }
 
 void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpOpenDir inodeId=" << ino;
+  VLOG(1) << "FuseOpOpenDir ino: " << ino;
 
   uint64_t fh = 0;
   Attr attr;
@@ -488,8 +497,8 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, false,
       [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
-        LOG(INFO) << fmt::format("read dir entry({}/{})", dir_entry.name,
-                                 dir_entry.ino);
+        VLOG(1) << fmt::format("read dir entry({}/{})", dir_entry.name,
+                               dir_entry.ino);
 
         struct stat stat;
         std::memset(&stat, 0, sizeof(stat));
@@ -501,7 +510,7 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
             fuse_add_direntry(req, buffer.data() + writed_size, rest_size,
                               dir_entry.name.c_str(), &stat, ++off);
         if (entsize > rest_size) {
-          LOG(INFO) << fmt::format(
+          VLOG(1) << fmt::format(
               "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
               "entry_size({})",
               ino, fi->fh, off, buffer.size(), size, entsize);
@@ -552,7 +561,7 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
             fuse_add_direntry_plus(req, buffer.data() + writed_size, rest_size,
                                    dir_entry.name.c_str(), &fuse_entry, ++off);
         if (entsize > rest_size) {
-          LOG(INFO) << fmt::format(
+          VLOG(1) << fmt::format(
               "read dir entry is full, ino({}) fh({}) off({}) size({}/{}) "
               "entry_size({})",
               ino, fi->fh, off, buffer.size(), size, entsize);
@@ -579,14 +588,14 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 void FuseOpReleaseDir(fuse_req_t req, fuse_ino_t ino,
                       struct fuse_file_info* fi) {
-  VLOG(1) << "FuseOpReleaseDir inodeId=" << ino << ", fi->fh: " << fi->fh;
+  VLOG(1) << "FuseOpReleaseDir ino: " << ino << ", fi->fh: " << fi->fh;
   Status s = g_vfs->ReleaseDir(ino, fi->fh);
   ReplyError(req, s);
 }
 
 void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                     const char* value, size_t size, int flags) {
-  VLOG(1) << "FuseOpSetXattr inodeId=" << ino << ", name: " << name
+  VLOG(1) << "FuseOpSetXattr ino: " << ino << ", name: " << name
           << ", value: " << value << ", size: " << size << ", flags: " << flags;
 
   std::string strname(name);
@@ -597,7 +606,7 @@ void FuseOpSetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 
 void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
                     size_t size) {
-  VLOG(1) << "FuseOpGetXattr inodeId=" << ino << ", name: " << name
+  VLOG(1) << "FuseOpGetXattr ino: " << ino << ", name: " << name
           << ", size: " << size;
 
   std::string value;
@@ -610,7 +619,7 @@ void FuseOpGetXattr(fuse_req_t req, fuse_ino_t ino, const char* name,
 }
 
 void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
-  VLOG(1) << "FuseOpListXattr inodeId=" << ino << ", size: " << size;
+  VLOG(1) << "FuseOpListXattr ino: " << ino << ", size: " << size;
   CHECK_GE(size, 0) << "size is illegal, size: " << size;
 
   std::vector<std::string> names;
@@ -646,7 +655,7 @@ void FuseOpListXattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
         }
 
         VLOG(1) << "FuseOpListXattr return size: " << ret_size
-                << ", inodeId=" << ino << ", param size: " << size
+                << ", ino: " << ino << ", param size: " << size
                 << ", buf_size: " << buf_size
                 << ", names.size: " << names.size();
         ReplyBuf(req, buf.get(), ret_size);
@@ -677,7 +686,7 @@ void FuseOpCreate(fuse_req_t req, fuse_ino_t parent, const char* name,
 }
 
 void FuseOpStatFs(fuse_req_t req, fuse_ino_t ino) {
-  VLOG(1) << "FuseOpStatFs inodeId=" << ino;
+  VLOG(1) << "FuseOpStatFs ino: " << ino;
   struct statvfs statfs;
 
   dingofs::client::vfs::FsStat vfs_stat;

@@ -14,38 +14,53 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_
-#define DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_
+#ifndef DINGODB_CLIENT_VFS_DATA_FILE_H_
+#define DINGODB_CLIENT_VFS_DATA_FILE_H_
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
+#include <unordered_map>
 
 #include "client/common/status.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs/data/chunk.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-class DirIterator {
+class VFSHub;
+
+class File {
  public:
-  DirIterator() = default;
+  File(VFSHub* hub, uint64_t ino) : vfs_hub_(hub), ino_(ino) {}
 
-  virtual ~DirIterator() = default;
+  ~File() = default;
 
-  virtual Status Seek() = 0;
+  Status Write(const char* buf, uint64_t size, uint64_t offset,
+               uint64_t* out_wsize);
 
-  virtual bool Valid() = 0;
+  Status Read(char* buf, uint64_t size, uint64_t offset,
+              uint64_t* out_rsize);
 
-  virtual DirEntry GetValue(bool with_attr) = 0;
+ private:
+  VFSHub* vfs_hub_;
+  uint64_t ino_;
 
-  virtual void Next() = 0;
+  uint64_t GetChunkSize() const;
+
+  Chunk* GetOrCreateChunk(uint64_t chunk_index);
+
+  // when sync fail, we need set file status to error
+  Status file_status_;
+
+  std::mutex mutex_;
+  // chunk_index -> chunk
+  std::unordered_map<uint64_t, std::unique_ptr<Chunk>> chunks_;
 };
-
-using DirIteratorUPtr = std::unique_ptr<DirIterator>;
 
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_CLIENT_VFS_DIR_ITERATOR_H_
+#endif  // DINGODB_CLIENT_VFS_DATA_FILE_H_

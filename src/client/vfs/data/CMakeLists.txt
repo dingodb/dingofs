@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,5 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(vfs_old)
-add_subdirectory(vfs)
+add_subdirectory(flat)
+
+add_library(vfs_data 
+    common.cpp
+    file.cpp
+    chunk.cpp
+    slice_data.cpp
+)
+
+target_link_libraries(vfs_data
+    vfs_data_flat
+)

@@ -18,15 +18,16 @@
 
 #include <fcntl.h>
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 
 #include "client/common/status.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/dir_iterator.h"
-#include "client/vfs/meta/dummy/dummy_filesystem.h"
+#include "client/vfs/data/file.h"
+#include "client/vfs/handle/dir_iterator.h"
+#include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_log.h"
-#include "client/vfs/meta/v2/filesystem.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "utils/configuration.h"
@@ -36,66 +37,28 @@ namespace client {
 namespace vfs {
 
 Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
-  if (started_.load()) {
-    return Status::OK();
-  }
-
   Status s;
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("init %s", s.ToString()); });
 
-  utils::Configuration conf;
-  conf.SetConfigPath(vfs_conf.config_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "load config fail, confPath = " << vfs_conf.config_path;
-    return Status::Internal("load config fail");
-  }
+  vfs_hub_ = std::make_unique<VFSHubImpl>();
+  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, fuse_client_option_));
 
-  if (vfs_conf.fs_type == "vfs_dummy") {
-    LOG(INFO) << "use dummy file system.";
-    meta_system_ = std::make_unique<dummy::DummyFileSystem>();
+  meta_system_ = vfs_hub_->GetMetaSystem();
+  handle_manager_ = vfs_hub_->GetHandleManager();
 
-  } else if (vfs_conf.fs_type == "vfs_v2") {
-    LOG(INFO) << "use mdsv2 file system.";
-    std::string mds_addr;
-    conf.GetValueFatalIfFail("mds.addr", &mds_addr);
-    LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
-
-    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
-                                              vfs_conf.mount_point);
-  } else {
-    LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
-    return Status::Internal("not unknown file system");
-  }
-
-  if (meta_system_ == nullptr) {
-    return Status::Internal("build meta system fail");
-  }
-
-  s = meta_system_->Init();
-  if (!s.ok()) {
-    return s;
-  }
-
-  handle_manager_ = std::make_unique<HandleManager>();
-
-  started_.store(true);
   return Status::OK();
 }
 
 Status VFSImpl::Stop() {
-  if (!started_.load()) {
-    return Status::OK();
+  Status s;
+  MetaLogGuard log_guard([&]() { return "uninit"; });
+
+  if (vfs_hub_ != nullptr) {
+    s = vfs_hub_->Stop();
   }
 
-  started_.store(true);
-
-  {
-    MetaLogGuard log_guard([&]() { return "uninit"; });
-    meta_system_->UnInit();
-  }
-
-  return Status::OK();
+  return s;
 }
 
 double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
@@ -208,9 +171,17 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
 
-  s = meta_system_->Open(ino, flags, fh);
+  auto handle = handle_manager_->NewHandle();
+
+  s = meta_system_->Open(ino, flags, &handle->fh);
   if (!s.ok()) {
-    return s;
+    handle_manager_->ReleaseHandler(handle->fh);
+  } else {
+    handle->flags = flags;
+    handle->ino = ino;
+    handle->flags = flags;
+    handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
+    *fh = handle->fh;
   }
 
   return s;
@@ -226,18 +197,50 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
                            StrAttr(attr));
   });
 
-  s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr, fh);
+  auto handle = handle_manager_->NewHandle();
+
+  s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr,
+                           &handle->fh);
+  if (!s.ok()) {
+    handle_manager_->ReleaseHandler(handle->fh);
+  } else {
+    CHECK_GT(attr->ino, 0) << "ino in attr is null";
+    Ino ino = attr->ino;
+
+    handle->flags = flags;
+    handle->ino = ino;
+    handle->flags = flags;
+    handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
+    *fh = handle->fh;
+  }
+
   return s;
 }
 
 Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
                      uint64_t fh, uint64_t* out_rsize) {
-  return Status::NotSupport("no implement");
+  auto handle = handle_manager_->FindHandler(fh);
+  CHECK(handle != nullptr) << "handle is null, ino: " << ino << ", fh: " << fh;
+
+  if (handle->file == nullptr) {
+    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+  }
+
+  return handle->file->Read(buf, size, offset, out_rsize);
 }
 
 Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
                       uint64_t fh, uint64_t* out_wsize) {
-  return Status::NotSupport("no implement");
+  auto handle = handle_manager_->FindHandler(fh);
+  CHECK(handle != nullptr) << "handle is null, ino: " << ino << ", fh: " << fh;
+
+  if (handle->file == nullptr) {
+    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+  }
+
+  return handle->file->Write(buf, size, offset, out_wsize);
 }
 
 Status VFSImpl::Flush(Ino ino, uint64_t fh) { return Status::OK(); }
@@ -306,9 +309,13 @@ Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
   }
 
   if (s.ok()) {
+    auto handle = handle_manager_->NewHandle();
+    handle->ino = ino;
+
     DirIteratorUPtr dir_iterator(meta_system_->NewDirIterator(ino));
     dir_iterator->Seek();
-    auto handle = handle_manager_->NewHandle(ino, std::move(dir_iterator));
+    handle->dir_iterator = std::move(dir_iterator);
+
     *fh = handle->fh;
   }
 

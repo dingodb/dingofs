@@ -22,12 +22,17 @@
 #include <vector>
 
 #include "client/common/status.h"
-#include "client/vfs/dir_iterator.h"
+#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+struct Context {
+  uint64_t ctx_id;
+  uint64_t fh;
+};
 
 class MetaSystem {
  public:

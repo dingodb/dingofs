@@ -333,8 +333,8 @@ bool AwsLegacyS3Client::ObjectExist(std::string bucket,
   if (response.IsSuccess()) {
     return true;
   } else {
-    LOG(ERROR) << "HeadObject error bucket: " << bucket << "--" << key << "--"
-               << response.GetError().GetExceptionName()
+    LOG(ERROR) << "HeadObject error bucket: " << bucket << ", key:" << key
+               << ", error: " << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return false;
   }

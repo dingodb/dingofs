@@ -81,6 +81,12 @@ static uint64_t ToTimestamp(uint64_t tv_sec, uint32_t tv_nsec) {
   return tv_sec * 1000000000 + tv_nsec;
 }
 
+static uint64_t CurrentTimestamp() {
+  struct timespec ts;
+  (void)clock_gettime(CLOCK_REALTIME, &ts);
+  return ToTimestamp(ts);
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
