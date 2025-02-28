@@ -83,6 +83,8 @@ typename ChannelManager<T>::ChannelPtr ChannelManager<T>::GetOrCreateChannel(
     return nullptr;
   } else {
     channelPool_.emplace(id, channel);
+    VLOG(3) << "create channel to server id: " << id << ", addr: "
+            << butil::endpoint2str(leaderAddr).c_str();
     return channel;
   }
 }
@@ -118,6 +120,8 @@ ChannelManager<T>::GetOrCreateStreamChannel(const T& id,
     return nullptr;
   } else {
     streamChannelPool_.emplace(id, channel);
+    VLOG(3) << "create stream channel to server id: " << id << ", addr: "
+            << butil::endpoint2str(leaderAddr).c_str();
     return channel;
   }
 }
@@ -138,6 +142,7 @@ void ChannelManager<T>::ResetSenderIfNotHealthInternal(
   }
 
   channelPool->erase(iter);
+  VLOG(3) << "erase channel from channel poo, id: " << id;
 }
 
 template <typename T>
