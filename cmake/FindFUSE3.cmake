@@ -39,21 +39,14 @@ if(FUSE3_INCLUDE_DIR AND FUSE3_LIBRARY)
     set(FUSE_FIND_QUIETLY TRUE)
 endif()
 
-find_package(PkgConfig)
-pkg_check_modules(PC_FUSE3 REQUIRED QUIET fuse3)
-
 find_path(FUSE3_INCLUDE_DIR
           NAMES fuse_lowlevel.h
-          PATHS "${PC_FUSE3_INCLUDE_DIRS}"
           PATH_SUFFIXES fuse3
 )
 
 find_library(FUSE3_LIBRARY
              NAMES fuse3
-             PATHS "${PC_FUSE3_LIBDIR}"
 )
-
-set(FUSE3_VERSION "${PC_FUSE3_VERSION}")
 
 mark_as_advanced(FUSE3_INCLUDE_DIR FUSE3_LIBRARY)
 
