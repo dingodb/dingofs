@@ -230,9 +230,6 @@ void S3Adapter::Deinit() {
     delete throttle_;
     throttle_ = nullptr;
   }
-  if (inflightBytesThrottle_ != nullptr) {
-    auto* ret = inflightBytesThrottle_.release();
-  };
 }
 
 void S3Adapter::Shutdown() {

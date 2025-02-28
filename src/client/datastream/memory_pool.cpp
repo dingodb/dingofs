@@ -80,7 +80,7 @@ bool MemoryPool::CreatePool(size_t size_each_block, uint64_t num_total_blocks) {
 }
 
 void MemoryPool::DestroyPool() {
-  delete[] mem_start_;
+  free(mem_start_);
   mem_start_ = nullptr;
 }
 
