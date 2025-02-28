@@ -123,7 +123,7 @@ get_options() {
 }
 
 build_target() {
-    (rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make -j $(nproc))
+    (rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && make -j $(nproc))
 
     if [ $? -eq 0 ]; then
         success "build dingofs success\n"

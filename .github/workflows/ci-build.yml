@@ -2,11 +2,11 @@ name: CI Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "v3.0" ]
     tags:
       - '*'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "v3.0" ]
 
 env:
   BUILD_TYPE: Release
