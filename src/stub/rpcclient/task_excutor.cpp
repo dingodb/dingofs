@@ -22,6 +22,7 @@
 
 #include "stub/rpcclient/task_excutor.h"
 
+#include <brpc/describable.h>
 #include <butil/endpoint.h>
 #include <butil/fast_rand.h>
 
@@ -103,6 +104,16 @@ int TaskExecutor::DoRPCTaskInner(TaskExecutorDone* done) {
       bthread_usleep(opt_.retryIntervalUS);
       continue;
     }
+
+    brpc::DescribeOptions desc_options;
+    desc_options.verbose = true;
+    std::ostringstream desc;
+    desc.str("");
+    channel->Describe(desc, desc_options);
+    VLOG(9) << "task metaServerID: " << task_->target.metaServerID
+            << ", endPoint: "
+            << butil::endpoint2str(task_->target.endPoint).c_str()
+            << ", channel: " << desc.str();
 
     retCode = ExcuteTask(channel.get(), done);
     needRetry = OnReturn(retCode);
