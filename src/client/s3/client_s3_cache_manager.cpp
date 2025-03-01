@@ -22,6 +22,7 @@
 
 #include "client/s3/client_s3_cache_manager.h"
 
+#include <butil/iobuf.h>
 #include <butil/time.h>
 #include <bvar/bvar.h>
 #include <glog/logging.h>
@@ -36,10 +37,12 @@
 #include "absl/synchronization/blocking_counter.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/error.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/meta.h"
+#include "client/fuse_s3_client.h"
 #include "client/kvclient/kvclient_manager.h"
 #include "client/s3/client_s3_adaptor.h"
 #include "stub/metric/metric.h"
@@ -59,6 +62,8 @@ using blockcache::Block;
 using blockcache::BlockContext;
 using blockcache::BlockFrom;
 using blockcache::BlockKey;
+using blockcache::IOBuffer;
+using blockcache::IOBufferImpl;
 using blockcache::StrErr;
 
 using datastream::DataStream;
@@ -342,11 +347,12 @@ ChunkCacheManagerPtr FileCacheManager::FindOrCreateChunkCacheManager(
   return chunkCacheManager;
 }
 
-void FileCacheManager::GetChunkLoc(uint64_t offset, uint64_t* index,
-                                   uint64_t* chunkPos, uint64_t* chunkSize) {
-  *chunkSize = s3ClientAdaptor_->GetChunkSize();
-  *index = offset / *chunkSize;
-  *chunkPos = offset % *chunkSize;
+void FileCacheManager::GetChunkLoc(uint64_t file_offset, uint64_t* chunk_index,
+                                   uint64_t* chunk_offset,
+                                   uint64_t* chunk_size) {
+  *chunk_size = s3ClientAdaptor_->GetChunkSize();
+  *chunk_index = file_offset / *chunk_size;
+  *chunk_offset = file_offset % *chunk_size;
 }
 
 void FileCacheManager::GetBlockLoc(uint64_t offset, uint64_t* chunkIndex,
@@ -361,10 +367,10 @@ void FileCacheManager::GetBlockLoc(uint64_t offset, uint64_t* chunkIndex,
 }
 
 void FileCacheManager::ReadFromMemCache(
-    uint64_t offset, uint64_t length, char* dataBuf, uint64_t* actualReadLen,
-    std::vector<ReadRequest>* memCacheMissRequest) {
-  uint64_t index = 0, chunk_pos = 0, chunk_size = 0;
-  GetChunkLoc(offset, &index, &chunk_pos, &chunk_size);
+    uint64_t file_offset, uint64_t length, IOBuffer* buffer,
+    uint64_t* actualReadLen, std::vector<ReadRequest>* memCacheMissRequest) {
+  uint64_t chunk_index = 0, chunk_offset = 0, chunk_size = 0;
+  GetChunkLoc(file_offset, &chunk_index, &chunk_offset, &chunk_size);
 
   uint64_t data_buffer_offset = 0;
   while (length > 0) {
@@ -375,23 +381,25 @@ void FileCacheManager::ReadFromMemCache(
     //                   |--------------|
     //                    currentReadLen
     uint64_t current_read_len =
-        chunk_pos + length > chunk_size ? chunk_size - chunk_pos : length;
+        chunk_offset + length > chunk_size ? chunk_size - chunk_offset : length;
 
     // 1. read from local memory cache
     // 2. generate cache miss request
     ChunkCacheManagerPtr chunk_cache_manager =
-        FindOrCreateChunkCacheManager(index);
+        FindOrCreateChunkCacheManager(chunk_index);
     std::vector<ReadRequest> tmp_miss_requests;
-    chunk_cache_manager->ReadChunk(index, chunk_pos, current_read_len, dataBuf,
-                                   data_buffer_offset, &tmp_miss_requests);
+    chunk_cache_manager->ReadChunk(chunk_index, chunk_offset, current_read_len,
+                                   buffer, data_buffer_offset,
+                                   &tmp_miss_requests);
     memCacheMissRequest->insert(memCacheMissRequest->end(),
                                 tmp_miss_requests.begin(),
                                 tmp_miss_requests.end());
 
     length -= current_read_len;              // left length
-    index++;                                 // next index
+    chunk_index++;                           // next chunk index
     data_buffer_offset += current_read_len;  // next data buffer offset
-    chunk_pos = (chunk_pos + current_read_len) % chunk_size;  // next chunkPos
+    chunk_offset =
+        (chunk_offset + current_read_len) % chunk_size;  // next chunkPos
   }
 
   *actualReadLen = data_buffer_offset;
@@ -470,14 +478,14 @@ int FileCacheManager::HandleReadS3NotExist(
   return 0;
 }
 
-int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
-                           char* data_buf) {
-  VLOG(1) << "read inodeId=" << inode_id << ", offset=" << offset
+int FileCacheManager::Read(uint64_t inode_id, uint64_t file_offset,
+                           uint64_t length, IOBuffer* buffer) {
+  VLOG(1) << "read inodeId=" << inode_id << ", offset=" << file_offset
           << ", length=" << length;
   // 1. read from memory cache
   uint64_t actual_read_len = 0;
   std::vector<ReadRequest> mem_cache_miss_request;
-  ReadFromMemCache(offset, length, data_buf, &actual_read_len,
+  ReadFromMemCache(file_offset, length, buffer, &actual_read_len,
                    &mem_cache_miss_request);
   if (mem_cache_miss_request.empty()) {
     return actual_read_len;
@@ -502,14 +510,14 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
   do {
     // generate kv request
     std::vector<S3ReadRequest> kv_requests;
-    GenerateKVRequest(inode_wrapper, mem_cache_miss_request, data_buf,
+    GenerateKVRequest(inode_wrapper, mem_cache_miss_request, buffer,
                       &kv_requests);
 
     // read from kv cluster (localcache -> remote kv cluster -> s3)
     // localcache/remote kv cluster fail will not return error code.
     // Failure to read from s3 will eventually return failure.
     ReadStatus ret =
-        ReadKVRequest(kv_requests, data_buf, inode_wrapper->GetLength());
+        ReadKVRequest(kv_requests, buffer, inode_wrapper->GetLength());
     if (ret == ReadStatus::OK) {
       break;
     }
@@ -531,7 +539,7 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
 }
 
 bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
-                                                   char* buffer,
+                                                   butil::IOBuf* buffer,
                                                    uint64_t offset,
                                                    uint64_t len) {
   {
@@ -549,32 +557,12 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
   return true;
 }
 
-bool FileCacheManager::ReadKVRequestFromRemoteCache(const std::string& name,
-                                                    char* databuf,
-                                                    uint64_t offset,
-                                                    uint64_t length) {
-  if (!kvClientManager_) {
-    return false;
-  }
-
-  auto task = std::make_shared<GetKVCacheTask>(name, databuf, offset, length);
-  CountDownEvent event(1);
-  task->done = [&](const std::shared_ptr<GetKVCacheTask>& task) {
-    (void)task;
-    event.Signal();
-    return;
-  };
-  kvClientManager_->Get(task);
-  event.Wait();
-
-  return task->res;
-}
-
 bool FileCacheManager::ReadKVRequestFromS3(const std::string& name,
-                                           char* databuf, uint64_t offset,
-                                           uint64_t length, BCACHE_ERROR* rc) {
+                                           butil::IOBuf* buffer,
+                                           uint64_t offset, uint64_t length,
+                                           BCACHE_ERROR* rc) {
   {
-    *rc = s3ClientAdaptor_->GetS3Client()->Range(name, offset, length, databuf);
+    *rc = s3ClientAdaptor_->GetS3Client()->Range(name, offset, length, buffer);
     if (*rc != BCACHE_ERROR::OK) {
       LOG(ERROR) << "Object " << name << " read from s3 failed" << ", rc=" << rc
                  << ", " << StrErr(*rc);
@@ -586,7 +574,7 @@ bool FileCacheManager::ReadKVRequestFromS3(const std::string& name,
 }
 
 FileCacheManager::ReadStatus FileCacheManager::ReadKVRequest(
-    const std::vector<S3ReadRequest>& kv_requests, char* data_buf,
+    const std::vector<S3ReadRequest>& kv_requests, IOBuffer* buffer,
     uint64_t file_len) {
   absl::BlockingCounter counter(kv_requests.size());
   std::once_flag cancel_flag;
@@ -600,7 +588,7 @@ FileCacheManager::ReadStatus FileCacheManager::ReadKVRequest(
         LOG(WARNING) << "kv request is canceled " << req.DebugString();
         return;
       }
-      ProcessKVRequest(req, data_buf, file_len, cancel_flag, is_canceled,
+      ProcessKVRequest(req, buffer, file_len, cancel_flag, is_canceled,
                        ret_code);
     });
   }
@@ -614,7 +602,7 @@ FileCacheManager::ReadStatus FileCacheManager::ReadKVRequest(
 }
 
 void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
-                                        char* data_buf, uint64_t file_len,
+                                        IOBuffer* buffer, uint64_t file_len,
                                         std::once_flag& cancel_flag,
                                         std::atomic<bool>& is_canceled,
                                         std::atomic<BCACHE_ERROR>& ret_code) {
@@ -652,32 +640,28 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
     assert(block_pos >= object_offset);
     BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
                  req.compaction);
-    char* current_buf = data_buf + req.readOffset + read_buf_offset;
+    off_t cur_offset = req.readOffset + read_buf_offset;
 
     // read from localcache -> remotecache -> s3
     do {
+      butil::IOBuf data;
       std::string name = key.Filename();
       std::string store_key = key.StoreKey();
-      if (ReadKVRequestFromLocalCache(
-              key, current_buf, block_pos - object_offset, current_read_len)) {
+      if (ReadKVRequestFromLocalCache(key, &data, block_pos - object_offset,
+                                      current_read_len)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
                 << " from local cache ok";
-        break;
-      }
-
-      if (ReadKVRequestFromRemoteCache(
-              name, current_buf, block_pos - object_offset, current_read_len)) {
-        VLOG(9) << "inodeId=" << inode_ << " read " << name
-                << " from remote cache ok";
+        buffer->Append(cur_offset, data);
         break;
       }
 
       BCACHE_ERROR rc = BCACHE_ERROR::OK;
-      if (ReadKVRequestFromS3(store_key, current_buf, block_pos - object_offset,
+      if (ReadKVRequestFromS3(store_key, &data, block_pos - object_offset,
                               current_read_len, &rc)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
                 << " offset: " << (block_pos - object_offset)
                 << " len: " << current_read_len << " from s3 ok";
+        buffer->Append(cur_offset, data);
         break;
       }
 
@@ -1101,8 +1085,8 @@ DINGOFS_ERROR FileCacheManager::Flush(bool force, bool toS3) {
   return ret;
 }
 
-void ChunkCacheManager::ReadChunk(uint64_t index, uint64_t chunkPos,
-                                  uint64_t readLen, char* dataBuf,
+void ChunkCacheManager::ReadChunk(uint64_t chunk_index, uint64_t chunkPos,
+                                  uint64_t readLen, IOBuffer* buffer,
                                   uint64_t dataBufOffset,
                                   std::vector<ReadRequest>* requests) {
   (void)index;
@@ -1111,7 +1095,7 @@ void ChunkCacheManager::ReadChunk(uint64_t index, uint64_t chunkPos,
 
   ReadLockGuard read_lock_guard(rwLockChunk_);
   // read by write cache
-  ReadByWriteCache(chunkPos, readLen, dataBuf, dataBufOffset,
+  ReadByWriteCache(chunkPos, readLen, buffer, dataBufOffset,
                    &cache_miss_write_requests);
 
   // read by flushing data cache
@@ -1120,7 +1104,7 @@ void ChunkCacheManager::ReadChunk(uint64_t index, uint64_t chunkPos,
     // read by flushing data cache
     for (auto request : cache_miss_write_requests) {
       std::vector<ReadRequest> tmp_requests;
-      ReadByFlushData(request.chunkPos, request.len, dataBuf, request.bufOffset,
+      ReadByFlushData(request.chunkPos, request.len, buffer, request.bufOffset,
                       &tmp_requests);
       cache_miss_flush_data_request.insert(cache_miss_flush_data_request.end(),
                                            tmp_requests.begin(),
@@ -1131,7 +1115,7 @@ void ChunkCacheManager::ReadChunk(uint64_t index, uint64_t chunkPos,
     // read by read cache
     for (auto request : cache_miss_flush_data_request) {
       std::vector<ReadRequest> tmp_requests;
-      ReadByReadCache(request.chunkPos, request.len, dataBuf, request.bufOffset,
+      ReadByReadCache(request.chunkPos, request.len, buffer, request.bufOffset,
                       &tmp_requests);
       requests->insert(requests->end(), tmp_requests.begin(),
                        tmp_requests.end());
@@ -1150,7 +1134,8 @@ void ChunkCacheManager::ReadChunk(uint64_t index, uint64_t chunkPos,
 }
 
 void ChunkCacheManager::ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
-                                         char* dataBuf, uint64_t dataBufOffset,
+                                         IOBuffer* buffer,
+                                         uint64_t dataBufOffset,
                                          std::vector<ReadRequest>* requests) {
   ReadLockGuard readLockGuard(rwLockWrite_);
 
@@ -1195,8 +1180,9 @@ void ChunkCacheManager::ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
               ------           DataCache
       */
       if (chunkPos + readLen <= dcChunkPos + dcLen) {
+        buffer->Seek(request.len + dataBufOffset);
         iter->second->CopyDataCacheToBuf(0, chunkPos + readLen - dcChunkPos,
-                                         dataBuf + request.len + dataBufOffset);
+                                         buffer);
         readLen = 0;
         break;
         /*
@@ -1204,8 +1190,8 @@ void ChunkCacheManager::ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
                 ------           DataCache
         */
       } else {
-        iter->second->CopyDataCacheToBuf(0, dcLen,
-                                         dataBuf + request.len + dataBufOffset);
+        buffer->Seek(request.len + dataBufOffset);
+        iter->second->CopyDataCacheToBuf(0, dcLen, buffer);
         readLen = chunkPos + readLen - (dcChunkPos + dcLen);
         dataBufOffset = dcChunkPos + dcLen - chunkPos + dataBufOffset;
         chunkPos = dcChunkPos + dcLen;
@@ -1216,8 +1202,9 @@ void ChunkCacheManager::ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
              ---------           DataCache
       */
       if (chunkPos + readLen <= dcChunkPos + dcLen) {
+        buffer->Seek(dataBufOffset);
         iter->second->CopyDataCacheToBuf(chunkPos - dcChunkPos, readLen,
-                                         dataBuf + dataBufOffset);
+                                         buffer);
         readLen = 0;
         break;
         /*
@@ -1225,9 +1212,9 @@ void ChunkCacheManager::ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
                ---------                DataCache
         */
       } else {
+        buffer->Seek(dataBufOffset);
         iter->second->CopyDataCacheToBuf(chunkPos - dcChunkPos,
-                                         dcChunkPos + dcLen - chunkPos,
-                                         dataBuf + dataBufOffset);
+                                         dcChunkPos + dcLen - chunkPos, buffer);
         readLen = chunkPos + readLen - dcChunkPos - dcLen;
         dataBufOffset = dcChunkPos + dcLen - chunkPos + dataBufOffset;
         chunkPos = dcChunkPos + dcLen;
@@ -1350,7 +1337,8 @@ void ChunkCacheManager::ReadByReadCache(uint64_t chunkPos, uint64_t readLen,
 }
 
 void ChunkCacheManager::ReadByFlushData(uint64_t chunkPos, uint64_t readLen,
-                                        char* dataBuf, uint64_t dataBufOffset,
+                                        IOBuffer* buffer,
+                                        uint64_t dataBufOffset,
                                         std::vector<ReadRequest>* requests) {
   uint64_t dcChunkPos = flushingDataCache_->GetChunkPos();
   uint64_t dcLen = flushingDataCache_->GetLen();
@@ -2161,7 +2149,8 @@ void DataCache::Release() {
   chunkCacheManager_->ReleaseReadDataCache(chunkPos_);
 }
 
-void DataCache::CopyDataCacheToBuf(uint64_t offset, uint64_t len, char* data) {
+void DataCache::CopyDataCacheToBuf(uint64_t offset, uint64_t len,
+                                   IOBuffer* buffer) {
   assert(offset + len <= len_);
   uint64_t blockSize = s3ClientAdaptor_->GetBlockSize();
   uint32_t pageSize = s3ClientAdaptor_->GetPageSize();
@@ -2195,7 +2184,7 @@ void DataCache::CopyDataCacheToBuf(uint64_t offset, uint64_t len, char* data) {
 
       assert(pdMap.count(pageIndex));
       pageData = pdMap[pageIndex];
-      memcpy(data + dataOffset, pageData->data + pagePos, m);
+      buffer->Copy(dataOffset, pageData->data + pagePos, m);
       pageIndex++;
       blockLen -= m;
       dataOffset += m;
@@ -2222,7 +2211,10 @@ DINGOFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
     LOG(ERROR) << "new data failed.";
     return DINGOFS_ERROR::INTERNAL;
   }
-  CopyDataCacheToBuf(0, len_, data);
+
+  IOBufferImpl buffer;
+  CopyDataCacheToBuf(0, len_, &buffer);
+
   uint64_t writeOffset = 0;
   uint64_t chunkId = 0;
   DINGOFS_ERROR ret = PrepareFlushTasks(inodeId, data, &s3Tasks, &kvCacheTasks,

@@ -26,6 +26,8 @@
 #include <memory>
 
 #include "brpc/server.h"
+#include "client/blockcache/cache_store.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/fuse_client.h"
 #include "client/s3/client_s3_cache_manager.h"
 #include "client/service/inode_objects_service.h"
@@ -33,15 +35,16 @@
 namespace dingofs {
 namespace client {
 
+using blockcache::IOBufferImpl;
 using stub::metric::InterfaceMetric;
 
 class FuseS3Client : public FuseClient {
  public:
   FuseS3Client() : s3Adaptor_(std::make_shared<S3ClientAdaptorImpl>()) {
     auto read_func = [this](fuse_req_t req, fuse_ino_t ino, size_t size,
-                            off_t off, struct fuse_file_info* fi, char* buffer,
-                            size_t* r_size) {
-      return FuseOpRead(req, ino, size, off, fi, buffer, r_size);
+                            off_t off, struct fuse_file_info* fi,
+                            IOBuffer* buffer) {
+      return FuseOpRead(req, ino, size, off, fi, buffer);
     };
 
     warmupManager_ = std::make_shared<warmup::WarmupManagerS3Impl>(
@@ -72,8 +75,8 @@ class FuseS3Client : public FuseClient {
                             filesystem::FileOut* file_out) override;
 
   DINGOFS_ERROR FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size,
-                           off_t off, struct fuse_file_info* fi, char* buffer,
-                           size_t* r_size) override;
+                           off_t off, struct fuse_file_info* fi,
+                           IOBuffer* buffer) override;
 
   DINGOFS_ERROR FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
                              const char* name, mode_t mode,

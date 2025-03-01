@@ -23,7 +23,11 @@
 #ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_DISK_CACHE_H_
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_DISK_CACHE_H_
 
+#include <butil/iobuf.h>
+#include <sys/types.h>
+
 #include <atomic>
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -36,6 +40,7 @@
 #include "client/blockcache/disk_state_machine.h"
 #include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
+#include "client/blockcache/page_cache_manager.h"
 #include "client/common/config.h"
 
 namespace dingofs {
@@ -50,7 +55,8 @@ class BlockReaderImpl : public BlockReader {
 
   virtual ~BlockReaderImpl() = default;
 
-  BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) override;
+  BCACHE_ERROR ReadAt(off_t offset, size_t length,
+                      butil::IOBuf* buffer) override;
 
   void Close() override;
 
@@ -67,7 +73,7 @@ class DiskCache : public CacheStore {
   };
 
  public:
-  virtual ~DiskCache() = default;
+  ~DiskCache() override = default;
 
   explicit DiskCache(DiskCacheOption option);
 
@@ -84,6 +90,9 @@ class DiskCache : public CacheStore {
 
   BCACHE_ERROR Load(const BlockKey& key,
                     std::shared_ptr<BlockReader>& reader) override;
+
+  BCACHE_ERROR Load(const BlockKey& key, off_t offset, size_t length,
+                    butil::IOBuf* buffer) override;
 
   bool IsCached(const BlockKey& key) override;
 
@@ -125,6 +134,7 @@ class DiskCache : public CacheStore {
   std::shared_ptr<LocalFileSystem> fs_;
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
+  std::unique_ptr<PageCacheManager> page_cache_manager_;
   bool use_direct_write_;
 };
 

@@ -25,6 +25,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/vfs.h>
 
 #include <functional>
@@ -79,7 +80,12 @@ class PosixFileSystem {
 
   BCACHE_ERROR StatFS(const std::string& path, struct statfs* statfs);
 
-  BCACHE_ERROR FAdvise(int fd, int advise);
+  BCACHE_ERROR FAdvise(int fd, off_t offset, size_t length, int advise);
+
+  BCACHE_ERROR MMap(void* addr, size_t length, int port, int flags, int fd,
+                    off_t offset, void** addr_out);
+
+  BCACHE_ERROR MUnmap(void* addr, size_t length);
 
  private:
   template <typename... Args>

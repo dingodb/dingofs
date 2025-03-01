@@ -22,7 +22,9 @@
 
 #include "client/blockcache/disk_cache.h"
 
+#include <butil/iobuf.h>
 #include <glog/logging.h>
+#include <sys/types.h>
 
 #include <memory>
 
@@ -35,6 +37,7 @@
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/error.h"
 #include "client/blockcache/log.h"
+#include "client/blockcache/page_cache_manager.h"
 #include "client/blockcache/phase_timer.h"
 #include "stub/metric/metric.h"
 
@@ -54,15 +57,20 @@ BlockReaderImpl::BlockReaderImpl(int fd, std::shared_ptr<LocalFileSystem> fs)
     : fd_(fd), fs_(fs) {}
 
 BCACHE_ERROR BlockReaderImpl::ReadAt(off_t offset, size_t length,
-                                     char* buffer) {
+                                     butil::IOBuf* buffer) {
   return fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
     BCACHE_ERROR rc;
     DiskCacheMetricGuard guard(
         &rc, &DiskCacheTotalMetric::GetInstance().read_disk, length);
     rc = posix->LSeek(fd_, offset, SEEK_SET);
-    if (rc == BCACHE_ERROR::OK) {
-      rc = posix->Read(fd_, buffer, length);
+    if (rc != BCACHE_ERROR::OK) {
+      return rc;
     }
+
+    char* data = new char[length];
+    rc = posix->Read(fd_, data, length);
+    buffer->append_user_data(data, length,
+                             [&](void* data) { delete[] (char*)data; });
     return rc;
   });
 }
@@ -85,6 +93,7 @@ DiskCache::DiskCache(DiskCacheOption option)
   manager_ = std::make_shared<DiskCacheManager>(option.cache_size, layout_, fs_,
                                                 metric_);
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
+  page_cache_manager_ = std::make_unique<PageCacheManager>(fs_);
 }
 
 BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
@@ -255,6 +264,31 @@ BCACHE_ERROR DiskCache::Load(const BlockKey& key,
   if (rc == BCACHE_ERROR::NOT_FOUND) {
     manager_->Delete(key);
   }
+  return rc;
+}
+
+BCACHE_ERROR DiskCache::Load(const BlockKey& key, off_t offset, size_t length,
+                             butil::IOBuf* buffer) {
+  int fd;
+  void* data;
+  auto rc = fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
+    auto rc = posix->Open(GetCachePath(key), O_RDONLY, &fd);
+    if (rc == BCACHE_ERROR::OK) {
+      rc = posix->MMap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, offset,
+                       &data);
+    }
+    return rc;
+  });
+
+  auto deleter = [this, fd, offset, length](void* data) {
+    auto rc = fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
+      return posix->MUnmap(data, length);
+    });
+    if (rc == BCACHE_ERROR::OK) {
+      page_cache_manager_->DropPageCache(fd, offset, length);
+    }
+  };
+  buffer->append_user_data(data, length, deleter);
   return rc;
 }
 

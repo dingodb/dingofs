@@ -32,12 +32,13 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-enum class Phase {
+enum class Phase : uint8_t {
   // block cache
   STAGE_BLOCK,
   CACHE_BLOCK,
   LOAD_BLOCK,
   READ_BLOCK,
+  MMAP_BLOCK,
 
   // s3
   S3_PUT,

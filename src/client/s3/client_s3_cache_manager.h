@@ -22,6 +22,8 @@
 #ifndef DINGOFS_SRC_CLIENT_S3_CLIENT_S3_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CLIENT_S3_CLIENT_S3_CACHE_MANAGER_H_
 
+#include <butil/iobuf.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
@@ -35,6 +37,7 @@
 #include <vector>
 
 #include "client/blockcache/cache_store.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/error.h"
 #include "client/inode_wrapper.h"
@@ -54,6 +57,7 @@ using FileCacheManagerPtr = std::shared_ptr<FileCacheManager>;
 using ChunkCacheManagerPtr = std::shared_ptr<ChunkCacheManager>;
 using DataCachePtr = std::shared_ptr<DataCache>;
 using WeakDataCachePtr = std::weak_ptr<DataCache>;
+using blockcache::IOBuffer;
 
 enum CacheType { Write = 1, Read = 2 };
 
@@ -186,7 +190,7 @@ class DataCache : public std::enable_shared_from_this<DataCache> {
   void Lock() { mtx_.lock(); }
 
   void UnLock() { mtx_.unlock(); }
-  void CopyDataCacheToBuf(uint64_t offset, uint64_t len, char* data);
+  void CopyDataCacheToBuf(uint64_t offset, uint64_t len, IOBuffer* buffer);
   void MergeDataCacheToDataCache(DataCachePtr mergeDataCache,
                                  uint64_t dataOffset, uint64_t len);
 
@@ -246,7 +250,7 @@ class ChunkCacheManager
         kvClientManager_(std::move(kvClientManager)) {}
   virtual ~ChunkCacheManager() = default;
   void ReadChunk(uint64_t index, uint64_t chunkPos, uint64_t readLen,
-                 char* dataBuf, uint64_t dataBufOffset,
+                 IOBuffer* buffer, uint64_t dataBufOffset,
                  std::vector<ReadRequest>* requests);
   virtual void WriteNewDataCache(S3ClientAdaptorImpl* s3ClientAdaptor,
                                  uint32_t chunkPos, uint32_t len,
@@ -256,13 +260,13 @@ class ChunkCacheManager
       uint64_t pos, uint64_t len, std::vector<DataCachePtr>* mergeDataCacheVer,
       uint64_t inodeId);
   virtual void ReadByWriteCache(uint64_t chunkPos, uint64_t readLen,
-                                char* dataBuf, uint64_t dataBufOffset,
+                                IOBuffer* buffer, uint64_t dataBufOffset,
                                 std::vector<ReadRequest>* requests);
   virtual void ReadByReadCache(uint64_t chunkPos, uint64_t readLen,
                                char* dataBuf, uint64_t dataBufOffset,
                                std::vector<ReadRequest>* requests);
   virtual void ReadByFlushData(uint64_t chunkPos, uint64_t readLen,
-                               char* dataBuf, uint64_t dataBufOffset,
+                               IOBuffer* buffer, uint64_t dataBufOffset,
                                std::vector<ReadRequest>* requests);
   virtual DINGOFS_ERROR Flush(uint64_t inodeId, bool force, bool toS3 = false);
   uint64_t GetIndex() { return index_; }
@@ -333,7 +337,7 @@ class FileCacheManager {
   virtual int Write(uint64_t offset, uint64_t length, const char* dataBuf);
 
   virtual int Read(uint64_t inode_id, uint64_t offset, uint64_t length,
-                   char* data_buf);
+                   IOBuffer* buffer);
 
   bool IsEmpty() { return chunkCacheMap_.empty(); }
 
@@ -380,7 +384,7 @@ class FileCacheManager {
                    uint64_t* blockIndex, uint64_t* blockPos);
 
   // read data from memory read/write cache
-  void ReadFromMemCache(uint64_t offset, uint64_t length, char* dataBuf,
+  void ReadFromMemCache(uint64_t file_offset, uint64_t length, IOBuffer* buffer,
                         uint64_t* actualReadLen,
                         std::vector<ReadRequest>* memCacheMissRequest);
 
@@ -408,25 +412,21 @@ class FileCacheManager {
 
   // read kv request, need
   ReadStatus ReadKVRequest(const std::vector<S3ReadRequest>& kv_requests,
-                           char* data_buf, uint64_t file_len);
+                           IOBuffer* buffer, uint64_t file_len);
 
   // thread function for ReadKVRequest
-  void ProcessKVRequest(const S3ReadRequest& req, char* data_buf,
+  void ProcessKVRequest(const S3ReadRequest& req, IOBuffer* buffer,
                         uint64_t file_len, std::once_flag& cancel_flag,
                         std::atomic<bool>& is_canceled,
                         std::atomic<blockcache::BCACHE_ERROR>& ret_code);
 
   // read kv request from local disk cache
   bool ReadKVRequestFromLocalCache(const blockcache::BlockKey& key,
-                                   char* buffer, uint64_t offset,
+                                   butil::IOBuf* buffer, uint64_t offset,
                                    uint64_t length);
 
-  // read kv request from remote cache like memcached
-  bool ReadKVRequestFromRemoteCache(const std::string& name, char* databuf,
-                                    uint64_t offset, uint64_t length);
-
   // read kv request from s3
-  bool ReadKVRequestFromS3(const std::string& name, char* databuf,
+  bool ReadKVRequestFromS3(const std::string& name, butil::IOBuf* buffer,
                            uint64_t offset, uint64_t length,
                            blockcache::BCACHE_ERROR* rc);
 

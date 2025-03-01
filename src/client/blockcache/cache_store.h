@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_CACHE_STORE_H_
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_CACHE_STORE_H_
 
+#include <butil/iobuf.h>
 #include <glog/logging.h>
 
 #include <functional>
@@ -74,7 +75,7 @@ struct Block {
   size_t size;
 };
 
-enum class BlockFrom {
+enum class BlockFrom : uint8_t {
   CTO_FLUSH,
   NOCTO_FLUSH,
   RELOAD,
@@ -96,7 +97,8 @@ struct BlockContext {
 
 class BlockReader {
  public:
-  virtual BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) = 0;
+  virtual BCACHE_ERROR ReadAt(off_t offset, size_t length,
+                              butil::IOBuf* buffer) = 0;
 
   virtual void Close() = 0;
 };
@@ -107,6 +109,8 @@ class CacheStore {
       const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
 
  public:
+  virtual ~CacheStore() = default;
+
   virtual BCACHE_ERROR Init(UploadFunc uploader) = 0;
 
   virtual BCACHE_ERROR Shutdown() = 0;
@@ -120,6 +124,9 @@ class CacheStore {
 
   virtual BCACHE_ERROR Load(const BlockKey& key,
                             std::shared_ptr<BlockReader>& reader) = 0;
+
+  virtual BCACHE_ERROR Load(const BlockKey& key, off_t offset, size_t length,
+                            butil::IOBuf* buffer) = 0;
 
   virtual bool IsCached(const BlockKey& key) = 0;
 

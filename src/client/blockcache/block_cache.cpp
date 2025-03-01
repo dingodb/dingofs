@@ -22,10 +22,12 @@
 
 #include "client/blockcache/block_cache.h"
 
+#include <butil/iobuf.h>
 #include <glog/logging.h>
 
 #include <cassert>
 #include <memory>
+#include <new>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/blockcache/block_cache_metric.h"
@@ -38,6 +40,7 @@
 #include "client/blockcache/log.h"
 #include "client/blockcache/mem_cache.h"
 #include "client/blockcache/phase_timer.h"
+#include "client/blockcache/sys_conf.h"
 
 namespace dingofs {
 namespace client {
@@ -77,7 +80,7 @@ BCACHE_ERROR BlockCacheImpl::Init() {
     rc =
         prefetcher_->Init(option_.prefetch_workers, option_.prefetch_queue_size,
                           [this](const BlockKey& key, size_t length) {
-                            return DoPreFetch(key, length);
+                            return DoPrefetch(key, length);
                           });
     if (rc != BCACHE_ERROR::OK) {
       return rc;
@@ -124,14 +127,14 @@ BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block,
     }
   }
 
-  // TODO(@Wine93): Cache the block which put to storage directly
   timer.NextPhase(Phase::S3_PUT);
   rc = s3_->Put(key.StoreKey(), block.data, block.size);
   return rc;
 }
 
 BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
-                                   size_t length, char* buffer, bool retrive) {
+                                   size_t length, butil::IOBuf* buffer,
+                                   bool retrive) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
   LogGuard log([&]() {
@@ -139,30 +142,35 @@ BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
                      StrErr(rc), timer.ToString());
   });
 
-  timer.NextPhase(Phase::LOAD_BLOCK);
-  std::shared_ptr<BlockReader> reader;
-  rc = store_->Load(key, reader);
-  if (rc == BCACHE_ERROR::OK) {
-    timer.NextPhase(Phase::READ_BLOCK);
-    auto defer = ::absl::MakeCleanup([reader]() { reader->Close(); });
-    rc = reader->ReadAt(offset, length, buffer);
+  if (offset % SysConf::GetPageSize() == 0) {
+    timer.NextPhase(Phase::MMAP_BLOCK);
+    rc = store_->Load(key, offset, length, buffer);
+  } else {
+    timer.NextPhase(Phase::LOAD_BLOCK);
+    std::shared_ptr<BlockReader> reader;
+    rc = store_->Load(key, reader);
     if (rc == BCACHE_ERROR::OK) {
-      return rc;
+      timer.NextPhase(Phase::READ_BLOCK);
+      auto defer = ::absl::MakeCleanup([reader]() { reader->Close(); });
+      rc = reader->ReadAt(offset, length, buffer);
     }
   }
 
   timer.NextPhase(Phase::S3_RANGE);
   if (retrive) {
-    rc = s3_->Range(key.StoreKey(), offset, length, buffer);
+    char* data = new (std::nothrow) char[length];
+    rc = s3_->Range(key.StoreKey(), offset, length, data);
+    buffer->append_user_data(data, length,
+                             [](void* data) { delete[] (char*)data; });
   }
   return rc;
 }
 
-BCACHE_ERROR BlockCacheImpl::PreFetch(const BlockKey& key, size_t length) {
+BCACHE_ERROR BlockCacheImpl::Prefetch(const BlockKey& key, size_t length) {
   prefetcher_->Submit(key, length);
 }
 
-BCACHE_ERROR BlockCacheImpl::DoPreFetch(const BlockKey& key, size_t length) {
+BCACHE_ERROR BlockCacheImpl::DoPrefetch(const BlockKey& key, size_t length) {
   BCACHE_ERROR rc;
   PhaseTimer timer;
   LogGuard log([&]() {

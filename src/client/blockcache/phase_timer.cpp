@@ -53,12 +53,13 @@ void PhaseTimer::NextPhase(Phase phase) {
 }
 
 std::string PhaseTimer::StrPhase(Phase phase) {
-  static const std::unordered_map<Phase, std::string> phases = {
+  static const std::unordered_map<Phase, std::string> kPhases = {
       // block cache
       {Phase::STAGE_BLOCK, "stage_block"},
       {Phase::CACHE_BLOCK, "cache_block"},
       {Phase::LOAD_BLOCK, "load_block"},
       {Phase::READ_BLOCK, "read_block"},
+      {Phase::MMAP_BLOCK, "mmap_block"},
       // s3
       {Phase::S3_PUT, "s3_put"},
       {Phase::S3_RANGE, "s3_range"},
@@ -71,8 +72,8 @@ std::string PhaseTimer::StrPhase(Phase phase) {
       {Phase::ENQUEUE_UPLOAD, "enqueue"},
   };
 
-  auto it = phases.find(phase);
-  if (it != phases.end()) {
+  auto it = kPhases.find(phase);
+  if (it != kPhases.end()) {
     return it->second;
   }
   return "unknown";

@@ -25,6 +25,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glog/logging.h>
+#include <sys/mman.h>
 #include <sys/vfs.h>
 
 #include <memory>
@@ -240,9 +241,29 @@ BCACHE_ERROR PosixFileSystem::StatFS(const std::string& path,
   return BCACHE_ERROR::OK;
 }
 
-BCACHE_ERROR PosixFileSystem::FAdvise(int fd, int advise) {
-  if (::posix_fadvise(fd, 0, 0, advise) != 0) {
-    return PosixError(errno, "posix_fadvise(%d, 0, 0, %d)", fd, advise);
+BCACHE_ERROR PosixFileSystem::FAdvise(int fd, off_t offset, size_t length,
+                                      int advise) {
+  if (::posix_fadvise(fd, offset, length, advise) != 0) {
+    return PosixError(errno, "posix_fadvise(%d, %d, %d, %d)", fd, offset,
+                      length, advise);
+  }
+  return BCACHE_ERROR::OK;
+}
+
+BCACHE_ERROR PosixFileSystem::MMap(void* addr, size_t length, int port,
+                                   int flags, int fd, off_t offset,
+                                   void** addr_out) {
+  *addr_out = ::mmap(addr, length, port, flags, fd, offset);
+  if ((*addr_out) == (void*)MAP_FAILED) {
+    return PosixError(errno, "mmap(%p,%d,%d,%d,%d,%d)", addr, length, port,
+                      flags, fd, offset);
+  }
+  return BCACHE_ERROR::OK;
+}
+
+BCACHE_ERROR PosixFileSystem::MUnmap(void* addr, size_t length) {
+  if (::munmap(addr, length) != 0) {
+    return PosixError(errno, "munmap(%p,%d)", addr, length);
   }
   return BCACHE_ERROR::OK;
 }
@@ -325,7 +346,7 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
   }
 
   int fd;
-  std::string tmp = path + ".tmp";
+  std::string tmp = path + ".tmp";  // FIXME(Wine93): replace .tmp to timestamp
   if (use_direct) {
     use_direct = IsAligned(length) &&
                  IsAligned(reinterpret_cast<std::uintptr_t>(buffer));
@@ -369,7 +390,7 @@ BCACHE_ERROR LocalFileSystem::ReadFile(const std::string& path,
   rc = posix_->Read(fd, buffer.get(), size);
 
   if (rc == BCACHE_ERROR::OK && drop_page_cache) {
-    posix_->FAdvise(fd, POSIX_FADV_DONTNEED);
+    posix_->FAdvise(fd, 0, 0, POSIX_FADV_DONTNEED);
   }
   posix_->Close(fd);
 

@@ -62,6 +62,9 @@ class DiskCacheGroup : public CacheStore {
   BCACHE_ERROR Load(const BlockKey& key,
                     std::shared_ptr<BlockReader>& reader) override;
 
+  BCACHE_ERROR Load(const BlockKey& key, off_t offset, size_t length,
+                    butil::IOBuf* buffer) override;
+
   bool IsCached(const BlockKey& key) override;
 
   std::string Id() override;
