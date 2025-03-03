@@ -741,8 +741,9 @@ void WarmupManagerS3Impl::PutObjectToCache(
       if (rc != BCACHE_ERROR::OK) {
         // cache failed,add error count
         iter->second.ErrorsPlusOne();
-        LOG_EVERY_SECOND(INFO) << "Cache block (" << key.Filename() << ")"
-                               << " failed: " << StrErr(rc);
+        LOG_EVERY_SECOND(INFO)
+            << "Cache block (" << key.Filename() << ")"
+            << " store key " << key.StoreKey() << " failed: " << StrErr(rc);
       }
     }
       delete[] context->buf;
