@@ -29,7 +29,7 @@
 #include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
-#include "mdsv2/filesystem/mutation_merger.h"
+#include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/storage/storage.h"
@@ -57,13 +57,13 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-             KVStoragePtr kv_storage, RenamerPtr renamer, MutationMergerPtr mutation_merger);
+             KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor);
   ~FileSystem() = default;
 
   static FileSystemPtr New(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationMergerPtr mutation_merger) {
+                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor) {
     return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(id_generator), kv_storage, renamer,
-                                        mutation_merger);
+                                        mutation_processor);
   }
 
   FileSystemPtr GetSelfPtr();
@@ -71,6 +71,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   uint32_t FsId() const { return fs_info_.fs_id(); }
   std::string FsName() const { return fs_info_.fs_name(); }
   pb::mdsv2::FsInfo FsInfo() const { return fs_info_; }
+  pb::mdsv2::PartitionType PartitionType() const { return fs_info_.partition_policy().type(); }
+  bool IsMonoPartition() const {
+    return fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION;
+  }
+  bool IsParentHashPartition() const {
+    return fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
+  }
 
   bool CanServe() const { return can_serve_; };
 
@@ -173,6 +180,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, uint64_t ino);
 
+  Status CleanUpInode(InodePtr inode);
+  Status CleanUpDentry(Dentry& dentry);
+  Status RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta);
+
   uint64_t self_mds_id_;
 
   // filesystem info
@@ -198,7 +209,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   RenamerPtr renamer_;
 
   // muation merger
-  MutationMergerPtr const mutation_merger_;
+  MutationProcessorPtr mutation_processor_;
 };
 
 // manage all filesystem
@@ -206,14 +217,14 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
                 MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map, RenamerPtr renamer,
-                MutationMergerPtr mutation_merger);
+                MutationProcessorPtr mutation_processor);
   ~FileSystemSet();
 
   static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
                               KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map,
-                              RenamerPtr renamer, MutationMergerPtr mutation_merger) {
+                              RenamerPtr renamer, MutationProcessorPtr mutation_processor) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, self_mds_meta,
-                                           mds_meta_map, renamer, mutation_merger);
+                                           mds_meta_map, renamer, mutation_processor);
   }
 
   bool Init();
@@ -267,7 +278,7 @@ class FileSystemSet {
 
   RenamerPtr renamer_;
 
-  MutationMergerPtr mutation_merger_;
+  MutationProcessorPtr mutation_processor_;
 
   MDSMeta self_mds_meta_;
   MDSMetaMapPtr mds_meta_map_;

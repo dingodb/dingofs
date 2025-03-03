@@ -117,7 +117,7 @@ Status DingodbStorage::IsExistTable(const std::string& start_key, const std::str
   return region_ids.empty() ? Status(pb::error::ENOT_FOUND, "table not exist") : Status::OK();
 }
 
-DingodbStorage::TxnPtr DingodbStorage::NewTxn() {
+DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn() {
   dingodb::sdk::TransactionOptions options;
   options.isolation = dingodb::sdk::TransactionIsolation::kSnapshotIsolation;
   options.kind = dingodb::sdk::kOptimistic;
@@ -127,11 +127,11 @@ DingodbStorage::TxnPtr DingodbStorage::NewTxn() {
   auto status = client_->NewTransaction(options, &txn);
   CHECK(status.ok()) << fmt::format("new transaction fail, error: {}", status.ToString());
 
-  return DingodbStorage::TxnPtr(txn);
+  return DingodbStorage::SdkTxnUPtr(txn);
 }
 
 Status DingodbStorage::Put(WriteOption option, const std::string& key, const std::string& value) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -154,7 +154,7 @@ Status DingodbStorage::Put(WriteOption option, const std::string& key, const std
 }
 
 Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -184,7 +184,7 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
 }
 
 Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -216,7 +216,7 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
 }
 
 Status DingodbStorage::Get(const std::string& key, std::string& value) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -240,7 +240,7 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
 }
 
 Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -266,7 +266,7 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
 }
 
 Status DingodbStorage::Delete(const std::string& key) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -289,7 +289,7 @@ Status DingodbStorage::Delete(const std::string& key) {
 }
 
 Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
-  auto txn = NewTxn();
+  auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
@@ -306,6 +306,71 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
   status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+TxnUPtr DingodbStorage::NewTxn() { return std::make_unique<DingodbTxn>(NewSdkTxn()); }
+
+Status DingodbTxn::Put(const std::string& key, const std::string& value) {
+  auto status = txn_->Put(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+Status DingodbTxn::PutIfAbsent(const std::string& key, const std::string& value) {
+  auto status = txn_->PutIfAbsent(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+Status DingodbTxn::Delete(const std::string& key) {
+  auto status = txn_->Delete(key);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+Status DingodbTxn::Get(const std::string& key, std::string& value) {
+  auto status = txn_->Get(key, value);
+  if (!status.ok()) {
+    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
+                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  return Status::OK();
+}
+
+Status DingodbTxn::Scan(const Range& range, std::vector<KeyValue>& kvs) {
+  std::vector<dingodb::sdk::KVPair> kv_pairs;
+  auto status = txn_->Scan(range.start_key, range.end_key, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  KvPairsToKeyValues(kv_pairs, kvs);
+
+  return Status::OK();
+}
+
+Status DingodbTxn::Commit() {
+  auto status = txn_->PreCommit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  status = txn_->Commit();
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }

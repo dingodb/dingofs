@@ -21,14 +21,14 @@
 #include "bthread/bthread.h"
 #include "butil/compiler_specific.h"
 #include "fmt/core.h"
-#include "gflags/gflags.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/synchronization.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
+
+const int kStopSignalIntervalUs = 1000;
 
 TaskRunnable::TaskRunnable() : id_(GenId()) { create_time_us_ = Helper::TimestampUs(); }
 TaskRunnable::~TaskRunnable() = default;
@@ -292,8 +292,6 @@ SimpleWorkerSet::SimpleWorkerSet(std::string name, uint32_t worker_num, int64_t 
 }
 
 SimpleWorkerSet::~SimpleWorkerSet() {
-  Destroy();
-
   bthread_cond_destroy(&cond_);
   bthread_mutex_destroy(&mutex_);
 }
@@ -365,7 +363,7 @@ void SimpleWorkerSet::Destroy() {
 
   while (stoped_count.load() < WorkerNum()) {
     bthread_cond_signal(&cond_);
-    bthread_usleep(100000);
+    bthread_usleep(kStopSignalIntervalUs);
   }
 
   // join thread/bthread
@@ -503,7 +501,7 @@ void PriorWorkerSet::Destroy() {
 
   while (stoped_count.load() < WorkerNum()) {
     bthread_cond_signal(&cond_);
-    bthread_usleep(100000);
+    bthread_usleep(kStopSignalIntervalUs);
   }
 
   // join thread/bthread

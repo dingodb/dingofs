@@ -25,6 +25,8 @@ namespace mdsv2 {
 
 class Helper {
  public:
+  static int64_t GetPid();
+
   // nanosecond timestamp
   static int64_t TimestampNs();
   // microseconds
@@ -87,6 +89,8 @@ class Helper {
   static std::string EndPointToString(const butil::EndPoint& endpoint);
 
   static std::string ParseCoorAddr(const std::string& coor_url);
+
+  static bool SaveFile(const std::string& filepath, const std::string& data);
 };
 
 }  // namespace mdsv2

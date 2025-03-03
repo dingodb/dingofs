@@ -206,6 +206,18 @@ DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file:
 //   }
 // }
 
+bool GeneratePidFile(const std::string& filepath) {
+  int64_t pid = dingofs::mdsv2::Helper::GetPid();
+  if (pid <= 0) {
+    DINGO_LOG(ERROR) << "get pid fail.";
+    return false;
+  }
+
+  DINGO_LOG(INFO) << "generate pid file: " << filepath;
+
+  return dingofs::mdsv2::Helper::SaveFile(filepath, std::to_string(pid));
+}
+
 int main(int argc, char* argv[]) {
   if (dingofs::mdsv2::Helper::IsExistPath("conf/gflags.conf")) {
     google::SetCommandLineOption("flagfile", "conf/gflags.conf");
@@ -229,6 +241,7 @@ int main(int argc, char* argv[]) {
 
   CHECK(server.InitConfig(FLAGS_conf)) << fmt::format("init config({}) error.", FLAGS_conf);
   CHECK(server.InitLog()) << "init log error.";
+  CHECK(GeneratePidFile(server.GetPidFilePath())) << "generate pid file error.";
   CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
   CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";

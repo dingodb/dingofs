@@ -25,7 +25,7 @@
 #include "gtest/gtest.h"
 #include "mdsv2/coordinator/dummy_coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
-#include "mdsv2/filesystem/mutation_merger.h"
+#include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/storage/dummy_storage.h"
 
@@ -69,8 +69,8 @@ class FileSystemSetTest : public testing::Test {
     auto renamer = Renamer::New();
     ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
 
-    auto mutation_merger = MutationMerger::New(kv_storage);
-    ASSERT_TRUE(mutation_merger->Init()) << "init mutation merger fail.";
+    auto mutation_processor = MutationProcessor::New(kv_storage);
+    ASSERT_TRUE(mutation_processor->Init()) << "init mutation merger fail.";
 
     MDSMeta mds_meta;
     mds_meta.SetID(kMdsId);
@@ -80,7 +80,7 @@ class FileSystemSetTest : public testing::Test {
 
     auto mds_meta_map = MDSMetaMap::New();
     fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), kv_storage, mds_meta, mds_meta_map,
-                                renamer, mutation_merger);
+                                renamer, mutation_processor);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -113,8 +113,8 @@ class FileSystemTest : public testing::Test {
     auto renamer = Renamer::New();
     ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
 
-    auto mutation_merger = MutationMerger::New(kv_storage);
-    ASSERT_TRUE(mutation_merger->Init()) << "init mutation merger fail.";
+    auto mutation_processor = MutationProcessor::New(kv_storage);
+    ASSERT_TRUE(mutation_processor->Init()) << "init mutation merger fail.";
 
     pb::mdsv2::FsInfo fs_info;
     fs_info.set_fs_id(1);
@@ -128,7 +128,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, fs_info, std::move(fs_id_generator), kv_storage, renamer, mutation_merger);
+    fs = FileSystem::New(kMdsId, fs_info, std::move(fs_id_generator), kv_storage, renamer, mutation_processor);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
   }
@@ -159,9 +159,11 @@ TEST_F(FileSystemSetTest, CreateFs) {
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
 
-  int64_t fs_id = 0;
-  auto status = fs_set->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
   ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+
+  int64_t fs_id = fs_info.fs_id();
   ASSERT_GT(fs_id, 0) << "fs id is invalid.";
 
   ASSERT_TRUE(fs_set->GetFileSystem(fs_id) != nullptr) << "get fs fail.";
@@ -180,14 +182,12 @@ TEST_F(FileSystemSetTest, GetFsInfo) {
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
 
-  int64_t fs_id = 0;
-  auto status = fs_set->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
   ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+  int64_t fs_id = fs_info.fs_id();
   ASSERT_GT(fs_id, 0) << "fs id is invalid.";
 
-  pb::mdsv2::FsInfo fs_info;
-  status = fs_set->GetFsInfo(param.fs_name, fs_info);
-  ASSERT_TRUE(status.ok()) << "get fs info fail, error: " << status.error_str();
   ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";
   ASSERT_EQ(fs_info.fs_name(), param.fs_name) << "fs name not equal.";
   ASSERT_EQ(fs_info.fs_type(), param.fs_type) << "fs type not equal.";
@@ -211,9 +211,11 @@ TEST_F(FileSystemSetTest, DeleteFs) {
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
 
-  int64_t fs_id = 0;
-  auto status = fs_set->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
   ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+
+  int64_t fs_id = fs_info.fs_id();
   ASSERT_GT(fs_id, 0) << "fs id is invalid.";
 
   status = fs_set->DeleteFs(param.fs_name);
@@ -221,7 +223,6 @@ TEST_F(FileSystemSetTest, DeleteFs) {
 
   ASSERT_EQ(nullptr, fs_set->GetFileSystem(fs_id));
 
-  pb::mdsv2::FsInfo fs_info;
   status = fs_set->GetFsInfo(param.fs_name, fs_info);
   ASSERT_TRUE(pb::error::ENOT_FOUND == status.error_code()) << "not should found fs, error: " << status.error_str();
 }
@@ -239,9 +240,11 @@ TEST_F(FileSystemSetTest, MountFs) {
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
 
-  int64_t fs_id = 0;
-  auto status = fs_set->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
   ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+
+  int64_t fs_id = fs_info.fs_id();
   ASSERT_GT(fs_id, 0) << "fs id is invalid.";
 
   pb::mdsv2::MountPoint mount_point;
@@ -252,7 +255,6 @@ TEST_F(FileSystemSetTest, MountFs) {
   status = fs_set->MountFs(param.fs_name, mount_point);
   ASSERT_TRUE(status.ok()) << "mount fs fail, error: " << status.error_str();
 
-  pb::mdsv2::FsInfo fs_info;
   status = fs_set->GetFsInfo(param.fs_name, fs_info);
   ASSERT_TRUE(status.ok()) << "get fs info fail, error: " << status.error_str();
   ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";
@@ -277,9 +279,11 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   param.capacity = 1024 * 1024 * 1024;
   param.recycle_time_hour = 24;
 
-  int64_t fs_id = 0;
-  auto status = fs_set->CreateFs(param, fs_id);
+  pb::mdsv2::FsInfo fs_info;
+  auto status = fs_set->CreateFs(param, fs_info);
   ASSERT_TRUE(status.ok()) << "create fs fail, error: " << status.error_str();
+
+  int64_t fs_id = fs_info.fs_id();
   ASSERT_GT(fs_id, 0) << "fs id is invalid.";
 
   pb::mdsv2::MountPoint mount_point;
@@ -290,7 +294,6 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   status = fs_set->MountFs(param.fs_name, mount_point);
   ASSERT_TRUE(status.ok()) << "mount fs fail, error: " << status.error_str();
 
-  pb::mdsv2::FsInfo fs_info;
   status = fs_set->GetFsInfo(param.fs_name, fs_info);
   ASSERT_TRUE(status.ok()) << "get fs info fail, error: " << status.error_str();
   ASSERT_EQ(fs_info.fs_id(), fs_id) << "fs id not equal.";

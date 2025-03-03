@@ -282,8 +282,12 @@ Status MDSV2FileSystem::MkDir(Ino parent, const std::string& name, uint32_t uid,
 Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
   auto status = mds_client_->RmDir(parent, name);
   if (!status.ok()) {
+    if (status.Errno() == pb::error::ENOT_EMPTY) {
+      return Status::NotEmpty("dir not empty");
+    }
     return status;
   }
+
   return Status::OK();
 }
 
@@ -414,6 +418,10 @@ Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
                                Ino new_parent, const std::string& new_name) {
   auto status = mds_client_->Rename(old_parent, old_name, new_parent, new_name);
   if (!status.ok()) {
+    if (status.Errno() == pb::error::ENOT_EMPTY) {
+      return Status::NotEmpty("dist dir not empty");
+    }
+
     return Status::Internal(
         fmt::format("rename fail, {}/{} -> {}/{}, error: {}", old_parent,
                     old_name, new_parent, new_name, status.ToString()));

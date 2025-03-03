@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <ostream>
+#include <string>
 
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
@@ -126,10 +127,17 @@ TreeNode* GenDentryTree(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64
       MetaDataCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
       pb::mdsv2::Dentry dentry = MetaDataCodec::DecodeDentryValue(kv.value);
 
-      TreeNode* item = new TreeNode{.dentry = dentry};
-      tree_inode_map.insert({dentry.ino(), item});
+      TreeNode* item = nullptr;
+      auto it = tree_inode_map.find(dentry.ino());
+      if (it != tree_inode_map.end()) {
+        item = it->second;
+        item->dentry = dentry;
+      } else {
+        item = new TreeNode{.dentry = dentry};
+        tree_inode_map.insert({dentry.ino(), item});
+      }
 
-      if (dentry.type() == pb::mdsv2::FileType::FILE) {
+      if (dentry.type() == pb::mdsv2::FileType::FILE || dentry.type() == pb::mdsv2::FileType::SYM_LINK) {
         auto it = file_inode_map.find(dentry.ino());
         if (it != file_inode_map.end()) {
           item->inode = it->second;
@@ -138,7 +146,7 @@ TreeNode* GenDentryTree(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64
         }
       }
 
-      auto it = tree_inode_map.find(parent_ino);
+      it = tree_inode_map.find(parent_ino);
       if (it != tree_inode_map.end()) {
         it->second->children.push_back(item);
       } else {
@@ -159,6 +167,8 @@ void TraverseFunc(TreeNode* item) {
   }
 }
 
+std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
+
 void TraversePrint(TreeNode* item, bool is_details, int level) {
   for (TreeNode* child : item->children) {
     for (int i = 0; i < level; i++) {
@@ -166,9 +176,11 @@ void TraversePrint(TreeNode* item, bool is_details, int level) {
     }
 
     auto& inode = child->inode;
-    std::cout << fmt::format("{}({}) gid({}) uid({}) mode({}) nlink({}) time({}/{}/{})", child->dentry.name(),
-                             child->dentry.ino(), inode.gid(), inode.uid(), inode.mode(), inode.nlink(), inode.ctime(),
-                             inode.mtime(), inode.atime())
+
+    std::cout << fmt::format("{}({}) type({}) gid({}) uid({}) mode({}) nlink({}) time({}/{}/{})", child->dentry.name(),
+                             child->dentry.ino(), pb::mdsv2::FileType_Name(inode.type()), inode.gid(), inode.uid(),
+                             inode.mode(), inode.nlink(), FormatTime(inode.ctime()), FormatTime(inode.mtime()),
+                             FormatTime(inode.atime()))
               << '\n';
     if (child->dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
       TraversePrint(child, is_details, level + 1);
@@ -179,6 +191,9 @@ void TraversePrint(TreeNode* item, bool is_details, int level) {
 void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
   std::map<uint64_t, TreeNode*> tree_inode_map;
   TreeNode* root = GenDentryTree(kv_storage_, fs_id, tree_inode_map);
+  if (root == nullptr) {
+    return;
+  }
 
   TraversePrint(root, is_details, 0);
 

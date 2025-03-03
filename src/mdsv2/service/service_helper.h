@@ -25,10 +25,8 @@
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/inode.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 DECLARE_int64(service_log_threshold_time_ns);

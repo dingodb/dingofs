@@ -146,5 +146,26 @@ Status DummyStorage::Delete(const std::vector<std::string>& keys) {
   return Status::OK();
 }
 
+TxnUPtr DummyStorage::NewTxn() { return std::make_unique<DummyTxn>(this); }
+
+Status DummyTxn::Put(const std::string& key, const std::string& value) {
+  return storage_->Put(KVStorage::WriteOption{}, key, value);
+}
+
+Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
+  KVStorage::WriteOption option;
+  option.is_if_absent = true;
+
+  return storage_->Put(option, key, value);
+}
+
+Status DummyTxn::Delete(const std::string& key) { return storage_->Delete(key); }
+
+Status DummyTxn::Get(const std::string& key, std::string& value) { return storage_->Get(key, value); }
+
+Status DummyTxn::Scan(const Range& range, std::vector<KeyValue>& kvs) { return storage_->Scan(range, kvs); }
+
+Status DummyTxn::Commit() { return Status::OK(); }
+
 }  // namespace mdsv2
 }  // namespace dingofs

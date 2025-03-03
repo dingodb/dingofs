@@ -33,7 +33,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(process_mutation_batch_size, 64, "process mutation batch size.");
+// DEFINE_uint32(process_mutation_batch_size, 64, "process mutation batch size.");
 
 static std::string MutationTypeName(Mutation::Type type) {
   switch (type) {
@@ -127,7 +127,7 @@ bool MutationMerger::Destroy() {
 
 void MutationMerger::ProcessMutation() {
   std::vector<Mutation> mutations;
-  mutations.reserve(FLAGS_process_mutation_batch_size);
+  mutations.reserve(64);
 
   while (true) {
     mutations.clear();

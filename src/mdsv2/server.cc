@@ -38,7 +38,6 @@
 #include "mdsv2/storage/dingodb_storage.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 DEFINE_int32(heartbeat_interval_s, 10, "heartbeat interval seconds");
@@ -53,6 +52,8 @@ DEFINE_bool(read_worker_set_use_pthread, false, "read worker set use pthread");
 DEFINE_uint32(write_worker_num, 128, "write service worker num");
 DEFINE_uint64(write_worker_max_pending_num, 1024, "write service worker num");
 DEFINE_bool(write_worker_set_use_pthread, false, "write worker set use pthread");
+
+DEFINE_string(pid_file_name, "pid", "pid file name");
 
 const std::string kReadWorkerSetName = "READ_WORKER_SET";
 const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
@@ -177,10 +178,10 @@ bool Server::InitRenamer() {
 bool Server::InitMutationMerger() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
-  mutation_merger_ = MutationMerger::New(kv_storage_);
-  CHECK(mutation_merger_ != nullptr) << "new MutationMerger fail.";
+  mutation_processor_ = MutationProcessor::New(kv_storage_);
+  CHECK(mutation_processor_ != nullptr) << "new MutationProcessor fail.";
 
-  return mutation_merger_->Init();
+  return mutation_processor_->Init();
 }
 
 bool Server::InitFileSystem() {
@@ -195,7 +196,7 @@ bool Server::InitFileSystem() {
   CHECK(fs_id_generator->Init()) << "init AutoIncrementIdGenerator fail.";
 
   file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_,
-                                        mds_meta_map_, renamer_, mutation_merger_);
+                                        mds_meta_map_, renamer_, mutation_processor_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -275,6 +276,13 @@ bool Server::InitCrontab() {
   return true;
 }
 
+std::string Server::GetPidFilePath() {
+  std::string log_path;
+  conf_.GetValueFatalIfFail("log.path", &log_path);
+
+  return log_path + "/" + FLAGS_pid_file_name;
+}
+
 std::string Server::GetListenAddr() {
   std::string addr;
   conf_.GetValueFatalIfFail("listen.addr", &addr);
@@ -301,17 +309,32 @@ void Server::Run() {
   CHECK(brpc_server.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
   brpc_server.RunUntilAskedToQuit();
+  LOG(INFO) << "stop 0000";
 
   brpc_server.Stop(0);
+
   brpc_server.Join();
 }
 
 void Server::Stop() {
+  LOG(INFO) << "stop 0001";
   renamer_->Destroy();
-  mutation_merger_->Destroy();
 
+  LOG(INFO) << "stop 0002";
+  mutation_processor_->Destroy();
+
+  LOG(INFO) << "stop 0003";
   heartbeat_.Destroy();
+
+  LOG(INFO) << "stop 0004";
   crontab_manager_.Destroy();
+
+  LOG(INFO) << "stop 0005";
+  read_worker_set_->Destroy();
+
+  LOG(INFO) << "stop 0006";
+  write_worker_set_->Destroy();
+  LOG(INFO) << "stop 0007";
 }
 
 }  // namespace mdsv2

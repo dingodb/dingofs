@@ -64,6 +64,7 @@ class Server {
 
   bool InitCrontab();
 
+  std::string GetPidFilePath();
   std::string GetListenAddr();
   MDSMeta& GetMDSMeta();
   MDSMetaMapPtr GetMDSMetaMap();
@@ -72,7 +73,7 @@ class Server {
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorPtr GetMDSMonitor() { return mds_monitor_; }
-  MutationMergerPtr GetMutationMerger() { return mutation_merger_; }
+  MutationProcessorPtr GetMutationProcessor() { return mutation_processor_; }
 
   void Run();
 
@@ -104,7 +105,7 @@ class Server {
   RenamerPtr renamer_;
 
   // mutation merger
-  MutationMergerPtr mutation_merger_;
+  MutationProcessorPtr mutation_processor_;
 
   // filesystem
   FileSystemSetPtr file_system_set_;

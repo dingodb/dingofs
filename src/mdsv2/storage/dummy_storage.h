@@ -47,6 +47,8 @@ class DummyStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
+  TxnUPtr NewTxn() override;
+
  private:
   struct Table {
     std::string name;
@@ -60,6 +62,25 @@ class DummyStorage : public KVStorage {
   std::map<int64_t, Table> tables_;
 
   std::map<std::string, std::string> data_;
+};
+
+class DummyTxn : public Txn {
+ public:
+  DummyTxn(DummyStorage* storage) : storage_(storage) {}
+  ~DummyTxn() override = default;
+
+  Status Put(const std::string& key, const std::string& value) override;
+
+  Status PutIfAbsent(const std::string& key, const std::string& value) override;
+  Status Delete(const std::string& key) override;
+
+  Status Get(const std::string& key, std::string& value) override;
+  Status Scan(const Range& range, std::vector<KeyValue>& kvs) override;
+
+  Status Commit() override;
+
+ private:
+  DummyStorage* storage_{nullptr};
 };
 
 }  // namespace mdsv2

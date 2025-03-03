@@ -14,7 +14,6 @@
 
 #include "mdsv2/filesystem/filesystem.h"
 
-#include <butil/status.h>
 #include <sys/stat.h>
 
 #include <cstdint>
@@ -23,12 +22,14 @@
 #include <utility>
 #include <vector>
 
+#include "butil/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
@@ -36,9 +37,8 @@
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
-#include "mdsv2/filesystem/mutation_merger.h"
+#include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "mdsv2/server.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -70,13 +70,13 @@ static inline bool IsDir(uint64_t ino) { return (ino & 1) == 1; }
 static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
 FileSystem::FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-                       KVStoragePtr kv_storage, RenamerPtr renamer, MutationMergerPtr mutation_merger)
+                       KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor)
     : self_mds_id_(self_mds_id),
       fs_info_(fs_info),
       id_generator_(std::move(id_generator)),
       kv_storage_(kv_storage),
       renamer_(renamer),
-      mutation_merger_(mutation_merger) {
+      mutation_processor_(mutation_processor) {
   can_serve_ = CanServe(self_mds_id);
 };
 
@@ -149,9 +149,9 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_
   CHECK(parent_kv.key == range.start_key) << fmt::format(
       "Invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key), Helper::StringToHex(range.start_key));
 
-  // build dentry set
-  auto inode = Inode::New(MetaDataCodec::DecodeDirInodeValue(parent_kv.value));
-  auto partition = Partition::New(inode);
+  // build partition
+  auto parent_inode = Inode::New(MetaDataCodec::DecodeDirInodeValue(parent_kv.value));
+  auto partition = Partition::New(parent_inode);
 
   // add child dentry
   for (size_t i = 1; i < kvs.size(); ++i) {
@@ -252,7 +252,7 @@ Status FileSystem::CreateRoot() {
   inode->SetUid(1008);
   inode->SetGid(1008);
   inode->SetMode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
-  inode->SetNlink(2);
+  inode->SetNlink(kEmptyDirMinLinkNum);
   inode->SetType(pb::mdsv2::FileType::DIRECTORY);
   inode->SetRdev(0);
 
@@ -320,12 +320,88 @@ Status FileSystem::Lookup(uint64_t parent_ino, const std::string& name, EntryOut
   return Status::OK();
 }
 
+Status FileSystem::CleanUpInode(InodePtr inode) {
+  uint32_t fs_id = inode->FsId();
+  uint64_t ino = inode->Ino();
+
+  bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id};
+
+  butil::Status rpc_status;
+  Operation inode_operation(Operation::OpType::kDeleteInode, ino,
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+  inode_operation.SetDeleteInode(ino);
+  mix_mutation.operations.push_back(std::move(inode_operation));
+
+  if (!mutation_processor_->Commit(mix_mutation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
+  }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  if (!rpc_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode fail, {}.", rpc_status.error_str()));
+  }
+
+  return Status::OK();
+}
+
+Status FileSystem::CleanUpDentry(Dentry& dentry) {
+  uint32_t fs_id = dentry.FsId();
+  uint64_t ino = dentry.Ino();
+  uint64_t parent_ino = dentry.ParentIno();
+
+  bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id};
+
+  butil::Status rpc_status;
+  Operation dentry_operation(Operation::OpType::kDeleteDentry, parent_ino,
+                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                             &rpc_status);
+  dentry_operation.SetDeleteDentry(dentry.CopyTo(), 0);
+  mix_mutation.operations.push_back(std::move(dentry_operation));
+
+  if (!mutation_processor_->Commit(mix_mutation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
+  }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  if (!rpc_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}.", rpc_status.error_str()));
+  }
+
+  return Status::OK();
+}
+
+Status FileSystem::RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta) {
+  bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id};
+
+  butil::Status rpc_status;
+  Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino, MetaDataCodec::EncodeFileInodeKey(fs_id, ino),
+                            &count_down, &rpc_status);
+  inode_operation.SetUpdateInodeNlink(ino, delta, 0);
+  mix_mutation.operations.push_back(std::move(inode_operation));
+
+  if (!mutation_processor_->Commit(mix_mutation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
+  }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  if (!rpc_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}.", rpc_status.error_str()));
+  }
+
+  return Status::OK();
+}
+
 // create file, need below steps:
 // 1. create inode
-// 2. create dentry
-// 3. update parent inode, add nlink and update mtime and ctime
+// 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("MkNod parent_ino({}), name({}).", param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("mknod parent_ino({}), name({}).", param.parent_ino, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -333,17 +409,6 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
 
   uint32_t fs_id = fs_info_.fs_id();
   uint64_t parent_ino = param.parent_ino;
-
-  // when fail, clean up
-  auto cleanup = [&](const std::string& inode_key) {
-    // clean inode
-    if (!inode_key.empty()) {
-      auto status = kv_storage_->Delete(inode_key);
-      if (!status.ok()) {
-        LOG(ERROR) << fmt::format("Clean inode kv fail, error: {}", status.error_str());
-      }
-    }
-  };
 
   // check request
   if (param.name.empty()) {
@@ -370,58 +435,65 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
   }
 
   // build inode
-  auto inode = Inode::New(fs_id, ino);
-  inode->SetLength(0);
-
   uint64_t now_time = Helper::TimestampNs();
-  inode->SetCtime(now_time);
-  inode->SetMtime(now_time);
-  inode->SetAtime(now_time);
 
-  inode->SetUid(param.uid);
-  inode->SetGid(param.gid);
-  inode->SetMode(S_IFREG | param.mode);
-  inode->SetNlink(1);
-  inode->SetType(pb::mdsv2::FileType::FILE);
-  inode->SetRdev(param.rdev);
+  pb::mdsv2::Inode pb_inode;
+  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_ino(ino);
+  pb_inode.set_length(0);
+  pb_inode.set_ctime(now_time);
+  pb_inode.set_mtime(now_time);
+  pb_inode.set_atime(now_time);
+  pb_inode.set_uid(param.uid);
+  pb_inode.set_gid(param.gid);
+  pb_inode.set_mode(S_IFREG | param.mode);
+  pb_inode.set_nlink(1);
+  pb_inode.set_type(pb::mdsv2::FileType::FILE);
+  pb_inode.set_rdev(param.rdev);
+  pb_inode.add_parent_inos(parent_ino);
+
+  auto inode = Inode::New(pb_inode);
 
   // build dentry
   Dentry dentry(fs_id, param.name, parent_ino, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
 
-  // update parent inode
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(1, now_time);
-
   // update backend store
   bthread::CountdownEvent count_down(2);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("mknod {} start.", param.name);
-
-  std::vector<Mutation> mutations;
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status));
+  Operation inode_operation(Operation::OpType::kCreateInode, ino,
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+  inode_operation.SetCreateInode(inode->CopyTo());
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status));
+  butil::Status rpc_dentry_status;
+  Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
+                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                             &rpc_dentry_status);
+  dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
+  mix_mutation.operations.push_back(std::move(dentry_operation));
 
-  if (!mutation_merger_->CommitMutation(mutations)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("mknod {} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 param.name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
-                                 rpc_parent_status.error_str());
+  DINGO_LOG(INFO) << fmt::format("mknod {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
+                                 param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
+                                 rpc_dentry_status.error_str());
 
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
-  }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
+  if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
+
+  } else if (!rpc_status.ok() && rpc_dentry_status.ok()) {
+    CleanUpDentry(dentry);
+    return rpc_status;
+
+  } else if (rpc_status.ok() && !rpc_dentry_status.ok()) {
+    CleanUpInode(inode);
+    return rpc_dentry_status;
   }
 
   // update cache
@@ -429,7 +501,7 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
   partition->PutChild(dentry);
   parent_inode->SetNlinkDelta(1, now_time);
 
-  entry_out.inode = inode->CopyTo();
+  entry_out.inode.Swap(&pb_inode);
 
   return Status::OK();
 }
@@ -464,8 +536,11 @@ Status FileSystem::Release(uint64_t ino) {
   return Status::OK();
 }
 
+// create directory, need below steps:
+// 1. create inode
+// 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("MkDir parent_ino({}), name({}).", param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("mkdir parent_ino({}), name({}).", param.parent_ino, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -473,17 +548,6 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
 
   uint32_t fs_id = fs_info_.fs_id();
   uint64_t parent_ino = param.parent_ino;
-
-  // when fail, clean up
-  auto cleanup = [&](const std::string& inode_key) {
-    // clean inode
-    if (!inode_key.empty()) {
-      auto status = kv_storage_->Delete(inode_key);
-      if (!status.ok()) {
-        LOG(ERROR) << fmt::format("clean inode kv fail, error: {}", status.error_str());
-      }
-    }
-  };
 
   // check request
   if (param.name.empty()) {
@@ -510,75 +574,79 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
   }
 
   // build inode
-  auto inode = Inode::New(fs_id, ino);
-  inode->SetLength(4096);
-
   uint64_t now_time = Helper::TimestampNs();
-  inode->SetCtime(now_time);
-  inode->SetMtime(now_time);
-  inode->SetAtime(now_time);
 
-  inode->SetUid(param.uid);
-  inode->SetGid(param.gid);
-  inode->SetMode(S_IFDIR | param.mode);
-  inode->SetNlink(2);
-  inode->SetType(pb::mdsv2::FileType::DIRECTORY);
-  inode->SetRdev(param.rdev);
+  pb::mdsv2::Inode pb_inode;
+  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_ino(ino);
+  pb_inode.set_length(4096);
+  pb_inode.set_ctime(now_time);
+  pb_inode.set_mtime(now_time);
+  pb_inode.set_atime(now_time);
+  pb_inode.set_uid(param.uid);
+  pb_inode.set_gid(param.gid);
+  pb_inode.set_mode(S_IFDIR | param.mode);
+  pb_inode.set_nlink(kEmptyDirMinLinkNum);
+  pb_inode.set_type(pb::mdsv2::FileType::DIRECTORY);
+  pb_inode.set_rdev(param.rdev);
+
+  auto inode = Inode::New(pb_inode);
 
   // build dentry
   Dentry dentry(fs_id, param.name, parent_ino, ino, pb::mdsv2::FileType::DIRECTORY, param.flag, inode);
 
-  // update parent inode
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(1, now_time);
-
   // update backend store
   bthread::CountdownEvent count_down(2);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("mkdir {} start.", param.name);
-
-  std::vector<Mutation> mutations;
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status));
+  Operation inode_operation(Operation::OpType::kCreateInode, ino, MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino()),
+                            &count_down, &rpc_status);
+  inode_operation.SetCreateInode(inode->CopyTo());
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status));
+  butil::Status rpc_dentry_status;
+  Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
+                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                             &rpc_dentry_status);
+  dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
+  mix_mutation.operations.push_back(std::move(dentry_operation));
 
-  if (!mutation_merger_->CommitMutation(mutations)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("mkdir {} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 param.name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
-                                 rpc_parent_status.error_str());
+  DINGO_LOG(INFO) << fmt::format("mkdir {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
+                                 param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
+                                 rpc_dentry_status.error_str());
 
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
-  }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
-  }
+  if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
 
-  DINGO_LOG(INFO) << "here 0005.";
+  } else if (!rpc_status.ok() && rpc_dentry_status.ok()) {
+    CleanUpDentry(dentry);
+    return rpc_status;
+
+  } else if (rpc_status.ok() && !rpc_dentry_status.ok()) {
+    CleanUpInode(inode);
+    return rpc_dentry_status;
+  }
 
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  partition_cache_.Put(ino, Partition::New(inode));
   parent_inode->SetNlinkDelta(1, now_time);
+  partition_cache_.Put(ino, Partition::New(inode));
 
-  entry_out.inode = inode->CopyTo();
+  entry_out.inode.Swap(&pb_inode);
 
   return Status::OK();
 }
 
 Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("RmDir parent_ino({}), name({}).", parent_ino, name);
+  DINGO_LOG(DEBUG) << fmt::format("rmdir parent_ino({}), name({}).", parent_ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -595,73 +663,79 @@ Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
     return Status(pb::error::ENOT_FOUND, fmt::format("child dentry({}) not found.", name));
   }
 
-  PartitionPtr partition;
-  status = GetPartition(dentry.Ino(), partition);
-  if (!status.ok()) {
-    return status;
+  PartitionPtr partition = GetPartitionFromCache(dentry.Ino());
+  if (partition != nullptr) {
+    InodePtr inode = partition->ParentInode();
+    if (inode->Nlink() > kEmptyDirMinLinkNum) {
+      return Status(pb::error::ENOT_EMPTY, fmt::format("dir({}/{}) is not empty.", parent_ino, name));
+    }
   }
 
-  InodePtr inode = partition->ParentInode();
-  CHECK(inode != nullptr) << fmt::format("inode({}) is null.", dentry.Ino());
+  uint32_t fs_id = fs_info_.fs_id();
+  uint64_t now_ns = Helper::TimestampNs();
 
-  DINGO_LOG(INFO) << fmt::format("remove dir {}/{} nlink({}).", parent_ino, name, inode->Nlink());
+  auto txn = kv_storage_->NewTxn();
 
-  // check whether dir is empty
-  if (partition->HasChild() || inode->Nlink() > 2) {
+  std::string key = MetaDataCodec::EncodeDirInodeKey(fs_id, dentry.Ino());
+  std::string value;
+  status = txn->Get(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("get inode fail, {}", status.error_str()));
+  }
+
+  // check dir is empty by nlink
+  pb::mdsv2::Inode pb_inode = MetaDataCodec::DecodeDirInodeValue(value);
+  if (pb_inode.nlink() > kEmptyDirMinLinkNum) {
     return Status(pb::error::ENOT_EMPTY, fmt::format("dir({}/{}) is not empty.", parent_ino, name));
   }
 
-  uint32_t fs_id = inode->FsId();
-  uint64_t now_ns = Helper::TimestampNs();
-
-  // update parent inode
-  auto parent_inode = parent_partition->ParentInode();
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(-1, now_ns);
-
-  // update backend store
-  bthread::CountdownEvent count_down(2);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("rmdir {}/{} start.", parent_ino, name);
-
-  std::vector<Mutation> mutations;
-
-  butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status));
-
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kDelete, dentry.CopyTo()}, &count_down, &rpc_parent_status));
-
-  if (!mutation_merger_->CommitMutation(mutations)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
+  // delete dir inode
+  status = txn->Delete(key);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode fail, {}", status.error_str()));
   }
 
-  CHECK(count_down.wait() == 0) << "count down wait fail.";
-
-  DINGO_LOG(INFO) << fmt::format("rmdir {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 parent_ino, name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
-                                 rpc_parent_status.error_str());
-
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
+  // delete dentry
+  status = txn->Delete(MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, name));
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}", status.error_str()));
   }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
+
+  // update parent inode nlink/ctime/mtime
+  std::string parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, parent_ino);
+  std::string parent_value;
+  status = txn->Get(parent_key, parent_value);
+
+  pb::mdsv2::Inode pb_parent_inode = MetaDataCodec::DecodeDirInodeValue(parent_value);
+  pb_parent_inode.set_nlink(pb_parent_inode.nlink() - 1);
+  pb_parent_inode.set_ctime(now_ns);
+  pb_parent_inode.set_mtime(now_ns);
+
+  status = txn->Put(parent_key, MetaDataCodec::EncodeDirInodeValue(pb_parent_inode));
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent inode fail, {}", status.error_str()));
   }
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("commit txn fail, {}", status.error_str()));
+  }
+
+  DINGO_LOG(INFO) << fmt::format("rmdir dir {}/{} finish, elapsed_time({}us).", parent_ino, name,
+                                 (Helper::TimestampNs() - now_ns) / 1000);
 
   // update cache
   parent_partition->DeleteChild(name);
-  partition_cache_.Delete(dentry.Ino());
+  auto parent_inode = parent_partition->ParentInode();
   parent_inode->SetNlinkDelta(-1, now_ns);
+  partition_cache_.Delete(dentry.Ino());
 
   return Status::OK();
 }
 
 Status FileSystem::ReadDir(uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
                            std::vector<EntryOut>& entry_outs) {
-  DINGO_LOG(DEBUG) << fmt::format("ReadDir ino({}), last_name({}), limit({}), with_attr({}).", ino, last_name, limit,
+  DINGO_LOG(DEBUG) << fmt::format("readdir ino({}), last_name({}), limit({}), with_attr({}).", ino, last_name, limit,
                                   with_attr);
 
   if (!CanServe()) {
@@ -704,11 +778,10 @@ Status FileSystem::ReadDir(uint64_t ino, const std::string& last_name, uint limi
 }
 
 // create hard link for file
-// 1. create dentry
-// 2. update inode mtime/ctime/nlink
-// 3. update parent inode mtime/ctime/nlink
+// 1. create dentry and update parent inode(nlink/mtime/ctime)
+// 2. update inode(mtime/ctime/nlink)
 Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("Link ino({}), new_parent_ino({}), new_name({}).", ino, new_parent_ino, new_name);
+  DINGO_LOG(DEBUG) << fmt::format("link ino({}), new_parent_ino({}), new_name({}).", ino, new_parent_ino, new_name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -733,46 +806,45 @@ Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string
   // build dentry
   Dentry dentry(fs_id, new_name, new_parent_ino, ino, pb::mdsv2::FileType::FILE, 0, inode);
 
+  // update backend store
   uint64_t now_time = Helper::TimestampNs();
 
-  // update inode mtime/ctime/nlink
-  Inode inode_copy(*inode);
-  inode_copy.SetNlinkDelta(1, now_time);
-
-  // update parent inode mtime/ctime/nlink
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(1, now_time);
-
-  // update backend store
   bthread::CountdownEvent count_down(2);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("link {} -> {}/{} start.", ino, new_parent_ino, new_name);
-
-  std::vector<Mutation> mutations;
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode_copy.CopyTo()}, &count_down, &rpc_status));
+  Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino,
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+  inode_operation.SetUpdateInodeNlink(ino, 1, now_time);
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kPut, dentry.CopyTo()}, &count_down, &rpc_parent_status));
+  butil::Status rpc_dentry_status;
+  Operation dentry_operation(Operation::OpType::kCreateDentry, new_parent_ino,
+                             MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, dentry.Name()), &count_down,
+                             &rpc_dentry_status);
+  dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
+  mix_mutation.operations.push_back(std::move(dentry_operation));
 
-  if (!mutation_merger_->CommitMutation(mutations)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
   DINGO_LOG(INFO) << fmt::format("link {} -> {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 ino, new_parent_ino, new_name, Helper::TimestampUs() - start_us,
-                                 rpc_status.error_str(), rpc_parent_status.error_str());
+                                 ino, new_parent_ino, new_name, (Helper::TimestampNs() - now_time) / 1000,
+                                 rpc_status.error_str(), rpc_dentry_status.error_str());
 
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
-  }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
+  if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
+
+  } else if (!rpc_status.ok() && rpc_dentry_status.ok()) {
+    RollbackFileNlink(fs_id, ino, -1);
+    return rpc_status;
+
+  } else if (rpc_status.ok() && !rpc_dentry_status.ok()) {
+    CleanUpDentry(dentry);
+    return rpc_dentry_status;
   }
 
   // update cache
@@ -788,11 +860,10 @@ Status FileSystem::Link(uint64_t ino, uint64_t new_parent_ino, const std::string
 }
 
 // delete hard link for file
-// 1. delete dentry
-// 2. update inode mtime/ctime/nlink
-// 3. update parent inode mtime/ctime/nlink
+// 1. delete dentry and update parent inode(nlink/mtime/ctime)
+// 3. update inode(nlink/mtime/ctime)
 Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("UnLink parent_ino({}), name({}).", parent_ino, name);
+  DINGO_LOG(DEBUG) << fmt::format("unLink parent_ino({}), name({}).", parent_ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -809,67 +880,70 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent_ino, name));
   }
 
-  uint64_t ino = dentry.Ino();
   InodePtr inode;
-  status = GetInodeFromDentry(dentry, partition, inode);
+  status = GetInode(dentry.Ino(), inode);
   if (!status.ok()) {
     return status;
   }
 
-  uint32_t fs_id = inode->FsId();
+  uint32_t fs_id = fs_info_.fs_id();
+
   uint64_t now_time = Helper::TimestampNs();
+  // delete dentry
+  {
+    bthread::CountdownEvent count_down(1);
+    MixMutation mix_mutation = {.fs_id = fs_id};
 
-  // update inode mtime/ctime/nlink
-  Inode inode_copy(*inode);
-  inode_copy.SetNlinkDelta(-1, now_time);
+    butil::Status rpc_dentry_status;
+    Operation dentry_operation(Operation::OpType::kDeleteDentry, parent_ino,
+                               MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                               &rpc_dentry_status);
+    dentry_operation.SetDeleteDentry(dentry.CopyTo(), now_time);
+    mix_mutation.operations.push_back(std::move(dentry_operation));
 
-  // update parent inode mtime/ctime/nlink
-  auto parent_inode = partition->ParentInode();
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(1, now_time);
+    if (!mutation_processor_->Commit(mix_mutation)) {
+      return Status(pb::error::EINTERNAL, "commit mutation fail");
+    }
 
-  // update backend store
-  bthread::CountdownEvent count_down(2);
+    CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("unlink {}/{} start.", parent_ino, name);
+    if (!rpc_dentry_status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}", rpc_dentry_status.error_str()));
+    }
 
-  std::vector<Mutation> mutations;
-
-  butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode_copy.CopyTo()}, &count_down, &rpc_status));
-
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kDelete, dentry.CopyTo()}, &count_down, &rpc_parent_status));
-
-  if (!mutation_merger_->CommitMutation(mutations)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
+    DINGO_LOG(INFO) << fmt::format("unlink {}/{} delete dentry finish, elapsed_time({}us) rpc_dentry_status({}).",
+                                   parent_ino, name, (Helper::TimestampNs() - now_time) / 1000,
+                                   rpc_dentry_status.error_str());
   }
 
-  CHECK(count_down.wait() == 0) << "count down wait fail.";
+  // update file inode nlink
+  {
+    uint64_t start_time = Helper::TimestampNs();
+    bthread::CountdownEvent count_down(1);
+    MixMutation mix_mutation = {.fs_id = fs_id};
 
-  DINGO_LOG(INFO) << fmt::format("unlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 parent_ino, name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
-                                 rpc_parent_status.error_str());
+    butil::Status rpc_status;
+    Operation file_operation(Operation::OpType::kUpdateInodeNlink, dentry.Ino(),
+                             MetaDataCodec::EncodeFileInodeKey(fs_id, dentry.Ino()), &count_down, &rpc_status);
+    file_operation.SetUpdateInodeNlink(dentry.Ino(), -1, now_time);
+    mix_mutation.operations.push_back(std::move(file_operation));
 
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
-  }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
+    if (!mutation_processor_->Commit(mix_mutation)) {
+      return Status(pb::error::EINTERNAL, "commit mutation fail");
+    }
+
+    CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    DINGO_LOG(INFO) << fmt::format("unlink {}/{} update inode finish, elapsed_time({}us) rpc_status({}).", parent_ino,
+                                   name, (Helper::TimestampNs() - start_time) / 1000, rpc_status.error_str());
   }
 
   // update cache
-  inode->SetNlinkDelta(-1, now_time);
-  parent_inode->SetNlinkDelta(1, now_time);
-
   partition->DeleteChild(name);
 
-  // if nlink is 0, delete inode
-  if (inode->Nlink() == 0) {
-    return DestoryInode(fs_id, ino);
-  }
+  inode->SetNlinkDelta(-1, now_time);
+  auto parent_inode = partition->ParentInode();
+  parent_inode->SetNlinkDelta(1, now_time);
 
   return Status::OK();
 }
@@ -910,67 +984,75 @@ Status FileSystem::Symlink(const std::string& symlink, uint64_t new_parent_ino, 
   }
 
   // build inode
-  auto inode = Inode::New(fs_id, ino);
-  inode->SetSymlink(symlink);
-  inode->SetLength(symlink.size());
-  inode->SetUid(uid);
-  inode->SetGid(gid);
-  inode->SetMode(S_IFLNK | 0777);
-  inode->SetNlink(1);
-  inode->SetType(pb::mdsv2::FileType::SYM_LINK);
-  inode->SetRdev(0);
-
   uint64_t now_time = Helper::TimestampNs();
-  inode->SetCtime(now_time);
-  inode->SetMtime(now_time);
-  inode->SetAtime(now_time);
+
+  pb::mdsv2::Inode pb_inode;
+  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_ino(ino);
+  pb_inode.set_symlink(symlink);
+  pb_inode.set_length(symlink.size());
+  pb_inode.set_ctime(now_time);
+  pb_inode.set_mtime(now_time);
+  pb_inode.set_atime(now_time);
+  pb_inode.set_uid(uid);
+  pb_inode.set_gid(gid);
+  pb_inode.set_mode(S_IFLNK | 0777);
+  pb_inode.set_nlink(1);
+  pb_inode.set_type(pb::mdsv2::FileType::SYM_LINK);
+  pb_inode.set_rdev(1);
+  pb_inode.add_parent_inos(new_parent_ino);
+
+  auto inode = Inode::New(pb_inode);
 
   // build dentry
   Dentry dentry(fs_id, new_name, new_parent_ino, ino, pb::mdsv2::FileType::SYM_LINK, 0, inode);
 
-  // update parent inode
-  auto parent_inode = partition->ParentInode();
-  Inode parent_inode_copy(*parent_inode);
-  parent_inode_copy.SetNlinkDelta(1, now_time);
-
   // update backend store
   bthread::CountdownEvent count_down(2);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("symlink {}/{} start.", new_parent_ino, new_name);
-
-  std::vector<Mutation> mutations;
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, inode->CopyTo()}, &count_down, &rpc_status));
+  Operation inode_operation(Operation::OpType::kCreateInode, ino,
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+  inode_operation.SetCreateInode(inode->CopyTo());
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  butil::Status rpc_parent_status;
-  mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, parent_inode_copy.CopyTo()},
-                               {Mutation::OpType::kDelete, dentry.CopyTo()}, &count_down, &rpc_parent_status));
+  butil::Status rpc_dentry_status;
+  Operation dentry_operation(Operation::OpType::kCreateDentry, new_parent_ino,
+                             MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, dentry.Name()), &count_down,
+                             &rpc_dentry_status);
+  dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
+  mix_mutation.operations.push_back(std::move(dentry_operation));
 
-  if (!mutation_merger_->CommitMutation(mutations)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("symlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 new_parent_ino, new_name, Helper::TimestampUs() - start_us, rpc_status.error_str(),
-                                 rpc_parent_status.error_str());
+  DINGO_LOG(INFO) << fmt::format("symlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
+                                 new_parent_ino, new_name, (Helper::TimestampNs() - now_time) / 1000,
+                                 rpc_status.error_str(), rpc_dentry_status.error_str());
 
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
-  }
-  if (!rpc_parent_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put parent fail, {}", rpc_parent_status.error_str()));
+  if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
+
+  } else if (!rpc_status.ok() && rpc_dentry_status.ok()) {
+    CleanUpInode(inode);
+    return rpc_status;
+
+  } else if (rpc_status.ok() && !rpc_dentry_status.ok()) {
+    CleanUpDentry(dentry);
+    return rpc_dentry_status;
   }
 
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
+  auto parent_inode = partition->ParentInode();
   parent_inode->SetNlinkDelta(1, now_time);
 
-  entry_out.inode = inode->CopyTo();
+  entry_out.inode.Swap(&pb_inode);
 
   return Status::OK();
 }
@@ -1026,24 +1108,25 @@ Status FileSystem::SetAttr(uint64_t ino, const SetAttrParam& param, EntryOut& en
     return status;
   }
 
-  // update store inode
-  Inode inode_copy(*inode);
-  inode_copy.SetAttr(param.inode, param.to_set);
-
   // update backend store
   bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode_copy.CopyTo()}, &count_down, &rpc_status);
+  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino())
+                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino());
+  Operation inode_operation(Operation::OpType::kUpdateInodeAttr, ino, key, &count_down, &rpc_status);
+  inode_operation.SetUpdateInodeAttr(param.inode, param.to_set);
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
   if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", rpc_status.error_str()));
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
   }
 
   // update cache
@@ -1103,28 +1186,262 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
     return status;
   }
 
-  // update store inode
-  Inode inode_copy(*inode);
-  inode_copy.SetXAttr(xattr);
-
   // update backend store
   bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id};
 
   butil::Status rpc_status;
-  Mutation file_mutation(fs_id, {Mutation::OpType::kPut, inode_copy.CopyTo()}, &count_down, &rpc_status);
+  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino())
+                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino());
+  Operation inode_operation(Operation::OpType::kUpdateInodeXAttr, ino, key, &count_down, &rpc_status);
+  inode_operation.SetUpdateInodeXAttr(xattr);
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  if (!mutation_merger_->CommitMutation(file_mutation)) {
+  if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
   if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", rpc_status.error_str()));
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
   }
 
   // update cache
   inode->SetXAttr(xattr);
+
+  return Status::OK();
+}
+
+Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                          const std::string& new_name) {
+  DINGO_LOG(INFO) << fmt::format("rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
+
+  uint32_t fs_id = fs_info_.fs_id();
+  uint64_t now_ns = Helper::TimestampNs();
+
+  // check name is valid
+  if (new_name.size() > FLAGS_filesystem_name_max_size) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "new name is too long.");
+  }
+
+  if (old_parent_ino == new_parent_ino && old_name == new_name) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "not allow same name");
+  }
+
+  auto txn = kv_storage_->NewTxn();
+
+  // get old parent inode
+  std::string value;
+  std::string old_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, old_parent_ino);
+  auto status = txn->Get(old_parent_key, value);
+  if (!status.ok()) {
+    return Status(status.error_code(),
+                  fmt::format("not found old parent inode({}), {}", old_parent_ino, status.error_str()));
+  }
+
+  pb::mdsv2::Inode pb_old_parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+
+  // get old dentry
+  std::string old_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
+  value.clear();
+  status = txn->Get(old_dentry_key, value);
+  if (!status.ok()) {
+    return Status(status.error_code(),
+                  fmt::format("not found old dentry({}/{}) {}", old_parent_ino, old_name, status.error_str()));
+  }
+
+  pb::mdsv2::Dentry pb_old_dentry = MetaDataCodec::DecodeDentryValue(value);
+
+  bool is_same_parent = (old_parent_ino == new_parent_ino);
+  // get new parent inode
+  pb::mdsv2::Inode pb_new_parent_inode;
+  std::string new_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, new_parent_ino);
+  if (!is_same_parent) {
+    DINGO_LOG(INFO) << "rename in different parent.";
+    value.clear();
+    status = txn->Get(new_parent_key, value);
+    if (!status.ok()) {
+      return Status(status.error_code(),
+                    fmt::format("not found new parent inode({}), {}", new_parent_ino, status.error_str()));
+    }
+    pb_new_parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+
+  } else {
+    pb_new_parent_inode = pb_old_parent_inode;
+  }
+
+  // get new dentry
+  std::string new_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
+  value.clear();
+  status = txn->Get(new_dentry_key, value);
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+    return Status(status.error_code(), fmt::format("get new dentry fail, {}", status.error_str()));
+  }
+
+  pb::mdsv2::Dentry pb_exist_new_dentry;
+  bool is_exist_new_dentry = !value.empty();
+  if (is_exist_new_dentry) {
+    DINGO_LOG(INFO) << "rename already exist new dentry.";
+    pb_exist_new_dentry = MetaDataCodec::DecodeDentryValue(value);
+
+    // get exist new inode
+    std::string new_inode_key = (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY)
+                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id, pb_exist_new_dentry.ino())
+                                    : MetaDataCodec::EncodeFileInodeKey(fs_id, pb_exist_new_dentry.ino());
+    value.clear();
+    status = txn->Get(new_inode_key, value);
+    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+      return Status(status.error_code(), fmt::format("get new inode fail, {}", status.error_str()));
+    }
+
+    bool is_exist_new_inode = !value.empty();
+    if (is_exist_new_inode) {
+      DINGO_LOG(INFO) << "rename already exist new inode.";
+      if (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY) {
+        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeDirInodeValue(value);
+        // check new dentry is empty
+        if (pb_new_inode.nlink() > kEmptyDirMinLinkNum) {
+          DINGO_LOG(INFO) << "rename already exist new dir not empty.";
+          return Status(pb::error::ENOT_EMPTY,
+                        fmt::format("new dentry({}/{}) is not empty.", new_parent_ino, new_name));
+        }
+
+        // delete exist new inode
+        status = txn->Delete(new_inode_key);
+        if (!status.ok()) {
+          return Status(status.error_code(), fmt::format("delete new inode fail, {}", status.error_str()));
+        }
+
+      } else {
+        // update exist new inode nlink
+        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeFileInodeValue(value);
+        pb_new_inode.set_nlink(pb_new_inode.nlink() - 1);
+        pb_new_inode.set_ctime(std::max(pb_new_inode.ctime(), now_ns));
+        pb_new_inode.set_mtime(std::max(pb_new_inode.mtime(), now_ns));
+
+        status = txn->Put(new_inode_key, MetaDataCodec::EncodeFileInodeValue(pb_new_inode));
+        if (!status.ok()) {
+          return Status(status.error_code(), fmt::format("put new inode fail, {}", status.error_str()));
+        }
+      }
+    }
+  }
+
+  DINGO_LOG(INFO) << "rename here 0001.";
+  // delete old dentry
+  status = txn->Delete(old_dentry_key);
+  if (!status.ok()) {
+    return Status(status.error_code(), fmt::format("delete old dentry fail, {}", status.error_str()));
+  }
+
+  // add new dentry
+  pb::mdsv2::Dentry pb_new_dentry;
+  pb_new_dentry.set_fs_id(fs_id);
+  pb_new_dentry.set_name(new_name);
+  pb_new_dentry.set_ino(pb_old_dentry.ino());
+  pb_new_dentry.set_type(pb_old_dentry.type());
+  pb_new_dentry.set_parent_ino(new_parent_ino);
+
+  status = txn->Put(new_dentry_key, MetaDataCodec::EncodeDentryValue(pb_new_dentry));
+  if (!status.ok()) {
+    return Status(status.error_code(), fmt::format("put new dentry fail, {}", status.error_str()));
+  }
+
+  if (is_same_parent) {
+    DINGO_LOG(INFO) << "rename here 0002.";
+    // update parent inode ctime/mtime
+    pb_old_parent_inode.set_ctime(now_ns);
+    pb_old_parent_inode.set_mtime(now_ns);
+    if (is_exist_new_dentry) {
+      pb_old_parent_inode.set_nlink(pb_old_parent_inode.nlink() - 1);
+    }
+
+    status = txn->Put(old_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_old_parent_inode));
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("put old parent inode fail, {}", status.error_str()));
+    }
+
+  } else {
+    DINGO_LOG(INFO) << "rename here 0003.";
+    // update old parent inode nlink/ctime/mtime
+    pb_old_parent_inode.set_ctime(now_ns);
+    pb_old_parent_inode.set_mtime(now_ns);
+    pb_old_parent_inode.set_nlink(pb_old_parent_inode.nlink() - 1);
+
+    status = txn->Put(old_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_old_parent_inode));
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("put old parent inode fail, {}", status.error_str()));
+    }
+
+    // update new parent inode nlink/ctime/mtime
+    pb_new_parent_inode.set_ctime(now_ns);
+    pb_new_parent_inode.set_mtime(now_ns);
+    if (!is_exist_new_dentry) {
+      DINGO_LOG(INFO) << "rename here 0004.";
+      pb_new_parent_inode.set_nlink(pb_new_parent_inode.nlink() + 1);
+    }
+
+    status = txn->Put(new_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_new_parent_inode));
+    if (!status.ok()) {
+      return Status(status.error_code(), fmt::format("put new parent inode fail, {}", status.error_str()));
+    }
+  }
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(status.error_code(), fmt::format("commit fail, {}", status.error_str()));
+  }
+
+  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, elapsed_time({}us) status({}).", old_parent_ino,
+                                 old_name, new_parent_ino, new_name, (Helper::TimestampNs() - now_ns) / 1000,
+                                 status.error_str());
+
+  if (IsMonoPartition()) {
+    // update cache
+    do {
+      PartitionPtr old_parent_partition;
+      auto status = GetPartition(old_parent_ino, old_parent_partition);
+      if (!status.ok()) {
+        break;
+      }
+      InodePtr old_parent_inode = old_parent_partition->ParentInode();
+
+      // check new parent dentry/inode
+      PartitionPtr new_parent_partition;
+      status = GetPartition(new_parent_ino, new_parent_partition);
+      if (!status.ok()) {
+        break;
+      }
+      InodePtr new_parent_inode = new_parent_partition->ParentInode();
+
+      // delete old dentry at cache
+      old_parent_partition->DeleteChild(old_name);
+      // update old parent inode nlink at cache
+      old_parent_inode->SetNlinkDelta(1, now_ns);
+
+      if (is_exist_new_dentry) {
+        // delete new dentry at cache
+        new_parent_partition->DeleteChild(new_name);
+      } else {
+        // update new parent inode nlink at cache
+        new_parent_inode->SetNlinkDelta(1, now_ns);
+      }
+
+      // add new dentry at cache
+      auto old_inode = inode_cache_.GetInode(pb_old_dentry.ino());
+      Dentry new_dentry(fs_id, new_name, new_parent_ino, pb_old_dentry.ino(), pb_old_dentry.type(), 0, old_inode);
+      new_parent_partition->PutChild(new_dentry);
+
+      // delete exist new partition at cache
+      // need notify mds to delete partition
+      if (is_exist_new_dentry && pb_exist_new_dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
+        partition_cache_.Delete(pb_exist_new_dentry.ino());
+      }
+    } while (false);
+  } else {
+    // Todo: notify mds(old_parent and new_parent) to update cache
+  }
 
   return Status::OK();
 }
@@ -1172,40 +1489,34 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 //   InodePtr old_inode;
 //   status = GetInodeFromDentry(old_dentry, old_parent_partition, old_inode);
 //   if (!status.ok()) {
+//     DINGO_LOG(INFO) << "rename 0001";
 //     return status;
 //   }
 
-//   uint64_t start_us = Helper::TimestampUs();
-//   DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} start.", old_parent_ino, old_name, new_parent_ino, new_name);
-
-//   std::vector<Mutation> mutations;
-
-//   bthread::CountdownEvent count_down(0);
-
-//   butil::Status already_new_inode_rpc_status;
-//   butil::Status rpc_old_parent_status;
-//   butil::Status rpc_new_parent_status;
+//   std::vector<KeyValue> kvs;
 
 //   bool is_exist_new_dentry = false;
-//   InodePtr new_inode;
-//   Dentry new_dentry;
-//   // check new name dentry
-//   if (new_parent_partition->GetChild(new_name, new_dentry)) {
+//   InodePtr exist_new_inode;
+//   Dentry exist_new_dentry;
+//   // check exist new name dentry
+//   if (new_parent_partition->GetChild(new_name, exist_new_dentry)) {
+//     DINGO_LOG(INFO) << "rename 0002";
 //     is_exist_new_dentry = true;
 
-//     if (new_dentry.Type() != old_dentry.Type()) {
+//     if (exist_new_dentry.Type() != old_dentry.Type()) {
 //       return Status(pb::error::EILLEGAL_PARAMTETER, fmt::format("dentry type is different, old({}), new({}).",
 //                                                                 pb::mdsv2::FileType_Name(old_dentry.Type()),
-//                                                                 pb::mdsv2::FileType_Name(new_dentry.Type())));
+//                                                                 pb::mdsv2::FileType_Name(exist_new_dentry.Type())));
 //     }
 
-//     if (new_dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
+//     if (exist_new_dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
+//       DINGO_LOG(INFO) << "rename 0003";
 //       // check whether dir is empty
 //       PartitionPtr new_partition;
-//       auto status = GetPartition(new_dentry.Ino(), new_partition);
+//       auto status = GetPartition(exist_new_dentry.Ino(), new_partition);
 //       if (!status.ok()) {
 //         return Status(pb::error::ENOT_FOUND,
-//                       fmt::format("not found new dentry set({}), {}", new_dentry.Ino(), status.error_str()));
+//                       fmt::format("not found new dentry set({}), {}", exist_new_dentry.Ino(), status.error_str()));
 //       }
 
 //       if (new_partition->HasChild()) {
@@ -1214,78 +1525,91 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 //       }
 //     }
 
-//     // unlink new dentry inode
-//     status = GetInodeFromDentry(new_dentry, new_parent_partition, new_inode);
+//     DINGO_LOG(INFO) << "rename 0004";
+
+//     // unlink exist new dentry inode
+//     status = GetInodeFromDentry(exist_new_dentry, new_parent_partition, exist_new_inode);
 //     if (!status.ok()) {
+//       DINGO_LOG(INFO) << "rename 0005";
 //       return status;
 //     }
 
-//     Inode new_inode_copy(*new_inode);
-//     new_inode_copy.SetNlinkDelta(-1, now_ns);
+//     Inode exist_new_inode_copy(*exist_new_inode);
+//     exist_new_inode_copy.SetNlinkDelta(-1, now_ns);
 
-//     if (new_inode_copy.Nlink() == 0) {
-//       // destory inode
-//       status = DestoryInode(fs_id, new_dentry.Ino());
-//       if (!status.ok()) {
-//         return status;
-//       }
+//     KeyValue exist_new_inode_kv;
+//     if (exist_new_inode_copy.Nlink() == 0) {
+//       DINGO_LOG(INFO) << "rename 0006";
+//       // delete inode
+//       exist_new_inode_kv.opt_type = KeyValue::OpType::kDelete;
+//       exist_new_inode_kv.key = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
+//                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id, exist_new_dentry.Ino())
+//                                    : MetaDataCodec::EncodeFileInodeKey(fs_id, exist_new_dentry.Ino());
+
 //     } else {
-//       // update already new inode nlink
-//       mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, new_inode_copy.CopyTo()}, &count_down,
-//                                    &already_new_inode_rpc_status));
-//       count_down.add_count(1);
+//       DINGO_LOG(INFO) << "rename 0007";
+//       // update exist new inode nlink
+//       exist_new_inode_kv.opt_type = KeyValue::OpType::kPut;
+//       exist_new_inode_kv.key = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
+//                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id, exist_new_dentry.Ino())
+//                                    : MetaDataCodec::EncodeFileInodeKey(fs_id, exist_new_dentry.Ino());
+//       exist_new_inode_kv.value = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
+//                                      ? MetaDataCodec::EncodeDirInodeValue(exist_new_inode_copy.CopyTo())
+//                                      : MetaDataCodec::EncodeFileInodeValue(exist_new_inode_copy.CopyTo());
 //     }
+
+//     kvs.push_back(exist_new_inode_kv);
 //   }
+//   DINGO_LOG(INFO) << "rename 0008";
 
 //   // update old parent inode nlink and delete old dentry
+//   KeyValue old_dentry_kv;
+//   old_dentry_kv.opt_type = KeyValue::OpType::kDelete;
+//   old_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
+//   kvs.push_back(old_dentry_kv);
+
 //   Inode old_parent_inode_copy(*old_parent_inode);
 //   old_parent_inode_copy.SetNlinkDelta(-1, now_ns);
 
-//   mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, old_parent_inode_copy.CopyTo()},
-//                                {Mutation::OpType::kDelete, old_dentry.CopyTo()}, &count_down,
-//                                &rpc_old_parent_status));
-//   count_down.add_count(1);
+//   KeyValue old_parent_kv;
+//   old_parent_kv.opt_type = KeyValue::OpType::kPut;
+//   old_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, old_parent_ino);
+//   old_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(old_parent_inode_copy.CopyTo());
+//   kvs.push_back(old_parent_kv);
 
-//   if (!is_exist_new_dentry) {
-//     new_dentry = Dentry(fs_id, new_name, new_parent_ino, old_dentry.Ino(), old_dentry.Type(), 0, old_inode);
+//   // add or update new dentry
+//   Dentry new_dentry(fs_id, new_name, new_parent_ino, old_dentry.Ino(), old_dentry.Type(), 0, old_inode);
+//   KeyValue new_dentry_kv;
+//   new_dentry_kv.opt_type = KeyValue::OpType::kPut;
+//   new_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
+//   new_dentry_kv.value = MetaDataCodec::EncodeDentryValue(new_dentry.CopyTo());
+//   kvs.push_back(new_dentry_kv);
 
-//     Inode new_parent_inode_copy(*new_parent_inode);
+//   // update new parent inode nlink/ctime/mtime
+//   Inode new_parent_inode_copy(*new_parent_inode);
+//   if (is_exist_new_dentry) {
+//     new_parent_inode_copy.SetNlinkDelta(0, now_ns);
+//   } else {
 //     new_parent_inode_copy.SetNlinkDelta(1, now_ns);
-
-//     // update new parent inode nlink and add new dentry
-//     mutations.push_back(Mutation(fs_id, {Mutation::OpType::kPut, new_parent_inode_copy.CopyTo()},
-//                                  {Mutation::OpType::kPut, new_dentry.CopyTo()}, &count_down,
-//                                  &rpc_new_parent_status));
-//     count_down.add_count(1);
 //   }
 
-//   if (!mutation_merger_->CommitMutation(mutations)) {
-//     return Status(pb::error::EINTERNAL, "commit mutation fail");
+//   KeyValue new_parent_kv;
+//   new_parent_kv.opt_type = KeyValue::OpType::kPut;
+//   new_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, new_parent_ino);
+//   new_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(new_parent_inode_copy.CopyTo());
+//   kvs.push_back(new_parent_kv);
+
+//   uint64_t start_us = Helper::TimestampUs();
+//   DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} start.", old_parent_ino, old_name, new_parent_ino, new_name);
+
+//   status = kv_storage_->Put(KVStorage::WriteOption(), kvs);
+//   if (!status.ok()) {
+//     return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", status.error_str()));
 //   }
 
-//   CHECK(count_down.wait() == 0) << "count down wait fail.";
-
-//   DINGO_LOG(INFO) << fmt::format(
-//       "rename {}/{} -> {}/{} finish, elapsed_time({}us) already_new_inode_rpc_status({}) rpc_old_parent_status({}) "
-//       "rpc_parent_status({}) rpc_new_parent_status({}).",
-//       old_parent_ino, old_name, new_parent_ino, new_name, Helper::TimestampUs() - start_us,
-//       already_new_inode_rpc_status.error_str(), rpc_old_parent_status.error_str(),
-//       rpc_new_parent_status.error_str());
-
-//   if (!already_new_inode_rpc_status.ok()) {
-//     return Status(pb::error::EBACKEND_STORE,
-//                   fmt::format("put already new inode fail, {}", already_new_inode_rpc_status.error_str()));
-//   }
-
-//   if (!rpc_old_parent_status.ok()) {
-//     return Status(pb::error::EBACKEND_STORE,
-//                   fmt::format("put old parent inode fail, {}", rpc_old_parent_status.error_str()));
-//   }
-
-//   if (!rpc_new_parent_status.ok()) {
-//     return Status(pb::error::EBACKEND_STORE,
-//                   fmt::format("put new parent inode fail, {}", rpc_new_parent_status.error_str()));
-//   }
+//   DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, elapsed_time({}us) status({}).", old_parent_ino,
+//                                  old_name, new_parent_ino, new_name, Helper::TimestampUs() - start_us,
+//                                  status.error_str());
 
 //   // delete old dentry at cache
 //   old_parent_partition->DeleteChild(old_name);
@@ -1293,9 +1617,11 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 //   old_parent_inode->SetNlinkDelta(1, now_ns);
 
 //   if (is_exist_new_dentry) {
+//     DINGO_LOG(INFO) << "rename 0010";
 //     // delete new dentry at cache
 //     new_parent_partition->DeleteChild(new_name);
 //   } else {
+//     DINGO_LOG(INFO) << "rename 0011";
 //     // update new parent inode nlink at cache
 //     new_parent_inode->SetNlinkDelta(1, now_ns);
 //   }
@@ -1303,215 +1629,23 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 //   // add new dentry at cache
 //   new_parent_partition->PutChild(new_dentry);
 
-//   // delete old partition at cache
-//   if (new_inode != nullptr && new_inode->Type() == pb::mdsv2::FileType::DIRECTORY) {
-//     partition_cache_.Delete(new_inode->Ino());
+//   // delete exist new partition at cache
+//   // need notify mds to delete partition
+//   if (exist_new_inode != nullptr && exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY) {
+//     DINGO_LOG(INFO) << "rename 0012";
+//     partition_cache_.Delete(exist_new_inode->Ino());
 //   }
+
+//   DINGO_LOG(INFO) << "rename 0013";
 
 //   return Status::OK();
 // }
-
-Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                          const std::string& new_name) {
-  DINGO_LOG(INFO) << fmt::format("Rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
-
-  uint32_t fs_id = fs_info_.fs_id();
-  uint64_t now_ns = Helper::TimestampNs();
-
-  // check name is valid
-  if (new_name.size() > FLAGS_filesystem_name_max_size) {
-    return Status(pb::error::EILLEGAL_PARAMTETER, "new name is too long.");
-  }
-
-  if (old_parent_ino == new_parent_ino && old_name == new_name) {
-    return Status(pb::error::EILLEGAL_PARAMTETER, "not allow same name");
-  }
-
-  // check old parent dentry/inode
-  PartitionPtr old_parent_partition;
-  auto status = GetPartition(old_parent_ino, old_parent_partition);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND,
-                  fmt::format("not found old parent dentry set({}), {}", old_parent_ino, status.error_str()));
-  }
-  InodePtr old_parent_inode = old_parent_partition->ParentInode();
-
-  // check new parent dentry/inode
-  PartitionPtr new_parent_partition;
-  status = GetPartition(new_parent_ino, new_parent_partition);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND,
-                  fmt::format("not found new parent dentry set({}), {}", old_parent_ino, status.error_str()));
-  }
-  InodePtr new_parent_inode = new_parent_partition->ParentInode();
-
-  // check old name dentry
-  Dentry old_dentry;
-  if (!old_parent_partition->GetChild(old_name, old_dentry)) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found old dentry({}/{})", old_parent_ino, old_name));
-  }
-
-  InodePtr old_inode;
-  status = GetInodeFromDentry(old_dentry, old_parent_partition, old_inode);
-  if (!status.ok()) {
-    DINGO_LOG(INFO) << "rename 0001";
-    return status;
-  }
-
-  std::vector<KeyValue> kvs;
-
-  bool is_exist_new_dentry = false;
-  InodePtr exist_new_inode;
-  Dentry exist_new_dentry;
-  // check exist new name dentry
-  if (new_parent_partition->GetChild(new_name, exist_new_dentry)) {
-    DINGO_LOG(INFO) << "rename 0002";
-    is_exist_new_dentry = true;
-
-    if (exist_new_dentry.Type() != old_dentry.Type()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, fmt::format("dentry type is different, old({}), new({}).",
-                                                                pb::mdsv2::FileType_Name(old_dentry.Type()),
-                                                                pb::mdsv2::FileType_Name(exist_new_dentry.Type())));
-    }
-
-    if (exist_new_dentry.Type() == pb::mdsv2::FileType::DIRECTORY) {
-      DINGO_LOG(INFO) << "rename 0003";
-      // check whether dir is empty
-      PartitionPtr new_partition;
-      auto status = GetPartition(exist_new_dentry.Ino(), new_partition);
-      if (!status.ok()) {
-        return Status(pb::error::ENOT_FOUND,
-                      fmt::format("not found new dentry set({}), {}", exist_new_dentry.Ino(), status.error_str()));
-      }
-
-      if (new_partition->HasChild()) {
-        return Status(pb::error::ENOT_EMPTY, fmt::format("new dentry({}/{}) is not empty.", new_parent_ino, new_name));
-      }
-    }
-
-    DINGO_LOG(INFO) << "rename 0004";
-
-    // unlink exist new dentry inode
-    status = GetInodeFromDentry(exist_new_dentry, new_parent_partition, exist_new_inode);
-    if (!status.ok()) {
-      DINGO_LOG(INFO) << "rename 0005";
-      return status;
-    }
-
-    Inode exist_new_inode_copy(*exist_new_inode);
-    exist_new_inode_copy.SetNlinkDelta(-1, now_ns);
-
-    KeyValue exist_new_inode_kv;
-    if (exist_new_inode_copy.Nlink() == 0) {
-      DINGO_LOG(INFO) << "rename 0006";
-      // delete inode
-      exist_new_inode_kv.opt_type = KeyValue::OpType::kDelete;
-      exist_new_inode_kv.key = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
-                                   ? MetaDataCodec::EncodeDirInodeKey(fs_id, exist_new_dentry.Ino())
-                                   : MetaDataCodec::EncodeFileInodeKey(fs_id, exist_new_dentry.Ino());
-
-    } else {
-      DINGO_LOG(INFO) << "rename 0007";
-      // update exist new inode nlink
-      exist_new_inode_kv.opt_type = KeyValue::OpType::kPut;
-      exist_new_inode_kv.key = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
-                                   ? MetaDataCodec::EncodeDirInodeKey(fs_id, exist_new_dentry.Ino())
-                                   : MetaDataCodec::EncodeFileInodeKey(fs_id, exist_new_dentry.Ino());
-      exist_new_inode_kv.value = exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY
-                                     ? MetaDataCodec::EncodeDirInodeValue(exist_new_inode_copy.CopyTo())
-                                     : MetaDataCodec::EncodeFileInodeValue(exist_new_inode_copy.CopyTo());
-    }
-
-    kvs.push_back(exist_new_inode_kv);
-  }
-  DINGO_LOG(INFO) << "rename 0008";
-
-  // update old parent inode nlink and delete old dentry
-  KeyValue old_dentry_kv;
-  old_dentry_kv.opt_type = KeyValue::OpType::kDelete;
-  old_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
-  kvs.push_back(old_dentry_kv);
-
-  Inode old_parent_inode_copy(*old_parent_inode);
-  old_parent_inode_copy.SetNlinkDelta(-1, now_ns);
-
-  KeyValue old_parent_kv;
-  old_parent_kv.opt_type = KeyValue::OpType::kPut;
-  old_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, old_parent_ino);
-  old_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(old_parent_inode_copy.CopyTo());
-  kvs.push_back(old_parent_kv);
-
-  // add or update new dentry
-  Dentry new_dentry(fs_id, new_name, new_parent_ino, old_dentry.Ino(), old_dentry.Type(), 0, old_inode);
-  KeyValue new_dentry_kv;
-  new_dentry_kv.opt_type = KeyValue::OpType::kPut;
-  new_dentry_kv.key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
-  new_dentry_kv.value = MetaDataCodec::EncodeDentryValue(new_dentry.CopyTo());
-  kvs.push_back(new_dentry_kv);
-
-  // update new parent inode nlink/ctime/mtime
-  Inode new_parent_inode_copy(*new_parent_inode);
-  if (is_exist_new_dentry) {
-    new_parent_inode_copy.SetNlinkDelta(0, now_ns);
-  } else {
-    new_parent_inode_copy.SetNlinkDelta(1, now_ns);
-  }
-
-  KeyValue new_parent_kv;
-  new_parent_kv.opt_type = KeyValue::OpType::kPut;
-  new_parent_kv.key = MetaDataCodec::EncodeDirInodeKey(fs_id, new_parent_ino);
-  new_parent_kv.value = MetaDataCodec::EncodeDirInodeValue(new_parent_inode_copy.CopyTo());
-  kvs.push_back(new_parent_kv);
-
-  uint64_t start_us = Helper::TimestampUs();
-  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} start.", old_parent_ino, old_name, new_parent_ino, new_name);
-
-  status = kv_storage_->Put(KVStorage::WriteOption(), kvs);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", status.error_str()));
-  }
-
-  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, elapsed_time({}us) status({}).", old_parent_ino,
-                                 old_name, new_parent_ino, new_name, Helper::TimestampUs() - start_us,
-                                 status.error_str());
-
-  // delete old dentry at cache
-  old_parent_partition->DeleteChild(old_name);
-  // update old parent inode nlink at cache
-  old_parent_inode->SetNlinkDelta(1, now_ns);
-
-  if (is_exist_new_dentry) {
-    DINGO_LOG(INFO) << "rename 0010";
-    // delete new dentry at cache
-    new_parent_partition->DeleteChild(new_name);
-  } else {
-    DINGO_LOG(INFO) << "rename 0011";
-    // update new parent inode nlink at cache
-    new_parent_inode->SetNlinkDelta(1, now_ns);
-  }
-
-  // add new dentry at cache
-  new_parent_partition->PutChild(new_dentry);
-
-  // delete exist new partition at cache
-  // need notify mds to delete partition
-  if (exist_new_inode != nullptr && exist_new_inode->Type() == pb::mdsv2::FileType::DIRECTORY) {
-    DINGO_LOG(INFO) << "rename 0012";
-    partition_cache_.Delete(exist_new_inode->Ino());
-  }
-
-  DINGO_LOG(INFO) << "rename 0013";
-
-  return Status::OK();
-}
 
 Status FileSystem::AsyncRename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
                                const std::string& new_name, RenameCbFunc cb) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
-
-  DINGO_LOG(INFO) << "here 0001";
 
   bool ret = renamer_->Execute(GetSelfPtr(), old_parent_ino, old_name, new_parent_ino, new_name, cb);
 
@@ -1620,14 +1754,14 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
 
 FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
                              KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map,
-                             RenamerPtr renamer, MutationMergerPtr mutation_merger)
+                             RenamerPtr renamer, MutationProcessorPtr mutation_processor)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(id_generator)),
       kv_storage_(kv_storage),
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
       renamer_(renamer),
-      mutation_merger_(mutation_merger) {}
+      mutation_processor_(mutation_processor) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
@@ -1636,7 +1770,7 @@ bool FileSystemSet::Init() {
   CHECK(kv_storage_ != nullptr) << "kv_storage is null.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is null.";
   CHECK(renamer_ != nullptr) << "renamer is null.";
-  CHECK(mutation_merger_ != nullptr) << "mutation_merger is null.";
+  CHECK(mutation_processor_ != nullptr) << "mutation_processor is null.";
 
   if (!IsExistFsTable()) {
     auto status = CreateFsTable();
@@ -1828,8 +1962,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
   CHECK(id_generator != nullptr) << "new id generator fail.";
   CHECK(id_generator->Init()) << "init id generator fail.";
 
-  auto fs =
-      FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_, mutation_merger_);
+  auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
+                            mutation_processor_);
   CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
   // create root inode
@@ -1968,8 +2102,8 @@ Status FileSystemSet::RefreshFsInfo(const std::string& fs_name) {
 
   auto fs_info = MetaDataCodec::DecodeFSValue(value);
   DINGO_LOG(INFO) << fmt::format("refresh fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-  auto fs =
-      FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_, mutation_merger_);
+  auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
+                            mutation_processor_);
   AddFileSystem(fs, true);
 
   return Status::OK();
@@ -2044,8 +2178,8 @@ bool FileSystemSet::LoadFileSystems() {
 
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
     DINGO_LOG(INFO) << fmt::format("load fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-    auto fs =
-        FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_, mutation_merger_);
+    auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
+                              mutation_processor_);
     AddFileSystem(fs);
   }
 

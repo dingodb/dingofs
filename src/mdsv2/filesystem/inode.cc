@@ -26,7 +26,6 @@ namespace dingofs {
 namespace mdsv2 {
 
 Inode::Inode(uint32_t fs_id, uint64_t ino) : fs_id_(fs_id), ino_(ino) {}
-Inode::~Inode() {}  // NOLINT
 
 Inode::Inode(const pb::mdsv2::Inode& inode)
     : fs_id_(inode.fs_id()),
@@ -44,6 +43,10 @@ Inode::Inode(const pb::mdsv2::Inode& inode)
       rdev_(inode.rdev()),
       dtime_(inode.dtime()),
       openmpcount_(inode.openmpcount()) {
+  for (auto parent : inode.parent_inos()) {
+    parents_.push_back(parent);
+  }
+
   for (const auto& [index, slice_list] : inode.chunks()) {
     chunks_.insert(std::make_pair(index, slice_list));
   }
@@ -97,6 +100,8 @@ Inode& Inode::operator=(const Inode& inode) {
 
   return *this;
 }
+
+Inode::~Inode() {}  // NOLINT
 
 uint64_t Inode::Length() {
   utils::ReadLockGuard lk(lock_);
@@ -194,18 +199,39 @@ void Inode::SetNlink(uint32_t nlink) {
   nlink_ = nlink;
 }
 
-// void Inode::SetNlink(uint32_t nlink, uint64_t time) {
-//   utils::WriteLockGuard lk(lock_);
-
-//   nlink_ = nlink;
-//   ctime_ = time;
-//   mtime_ = time;
-// }
-
 void Inode::SetNlinkDelta(int32_t delta, uint64_t time) {
   utils::WriteLockGuard lk(lock_);
 
   nlink_ += delta;
+  ctime_ = time;
+  mtime_ = time;
+}
+
+void Inode::PrepareIncNlink() {
+  utils::WriteLockGuard lk(lock_);
+
+  ++pending_nlink_;
+}
+
+void Inode::CommitIncNlink(uint64_t time) {
+  utils::WriteLockGuard lk(lock_);
+  --pending_nlink_;
+  ++nlink_;
+  ctime_ = time;
+  mtime_ = time;
+}
+
+void Inode::PrepareDecNlink() {
+  utils::WriteLockGuard lk(lock_);
+
+  --pending_nlink_;
+}
+
+void Inode::CommitDecNlink(uint64_t time) {
+  utils::WriteLockGuard lk(lock_);
+
+  ++pending_nlink_;
+  --nlink_;
   ctime_ = time;
   mtime_ = time;
 }
@@ -348,6 +374,12 @@ void Inode::SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set) {
   }
 }
 
+void Inode::AddParent(uint64_t parent_ino) {
+  utils::WriteLockGuard lk(lock_);
+
+  parents_.push_back(parent_ino);
+}
+
 pb::mdsv2::Inode Inode::CopyTo() {
   pb::mdsv2::Inode inode;
   CopyTo(inode);
@@ -370,6 +402,10 @@ void Inode::CopyTo(pb::mdsv2::Inode& inode) {
   inode.set_rdev(rdev_);
   inode.set_dtime(dtime_);
   inode.set_openmpcount(openmpcount_);
+
+  for (auto& parent : parents_) {
+    inode.add_parent_inos(parent);
+  }
 
   for (const auto& [index, slice_list] : chunks_) {
     inode.mutable_chunks()->insert({index, slice_list});

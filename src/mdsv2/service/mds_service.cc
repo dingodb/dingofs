@@ -876,8 +876,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
 
   done_guard.release();
   auto status = file_system->AsyncRename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
-                                         request->new_name(), [&response, done](Status status) {
-                                           LOG(INFO) << "here 1000";
+                                         request->new_name(), [response, done](Status status) {
                                            brpc::ClosureGuard done_guard(done);
                                            if (!status.ok()) {
                                              ServiceHelper::SetError(response->mutable_error(), status.error_code(),

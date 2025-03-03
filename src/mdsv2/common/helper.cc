@@ -23,8 +23,13 @@
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
+
+int64_t Helper::GetPid() {
+  pid_t pid = getpid();
+
+  return static_cast<int64_t>(pid);
+}
 
 int64_t Helper::TimestampNs() {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch())
@@ -435,6 +440,18 @@ std::string Helper::ParseCoorAddr(const std::string& coor_url) {
   }
 
   return coor_addrs;
+}
+
+bool Helper::SaveFile(const std::string& filepath, const std::string& data) {
+  std::ofstream file(filepath);
+  if (!file.is_open()) {
+    return false;
+  }
+
+  file << data;
+  file.close();
+
+  return true;
 }
 
 }  // namespace mdsv2

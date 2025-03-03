@@ -30,6 +30,17 @@ struct KeyValue {
     kDelete = 1,
   };
 
+  static std::string OpTypeName(OpType op_type) {
+    switch (op_type) {
+      case OpType::kPut:
+        return "Put";
+      case OpType::kDelete:
+        return "Delete";
+      default:
+        return "Unknown";
+    }
+  }
+
   OpType opt_type{OpType::kPut};
   std::string key;
   std::string value;
@@ -40,6 +51,10 @@ struct Range {
   std::string start_key;
   std::string end_key;
 };
+
+class Txn;
+using TxnPtr = std::shared_ptr<Txn>;
+using TxnUPtr = std::unique_ptr<Txn>;
 
 class KVStorage {
  public:
@@ -71,8 +86,24 @@ class KVStorage {
 
   virtual Status Delete(const std::string& key) = 0;
   virtual Status Delete(const std::vector<std::string>& keys) = 0;
+
+  virtual TxnUPtr NewTxn() = 0;
 };
 using KVStoragePtr = std::shared_ptr<KVStorage>;
+
+class Txn {
+ public:
+  virtual ~Txn() = default;
+
+  virtual Status Put(const std::string& key, const std::string& value) = 0;
+  virtual Status PutIfAbsent(const std::string& key, const std::string& value) = 0;
+  virtual Status Delete(const std::string& key) = 0;
+
+  virtual Status Get(const std::string& key, std::string& value) = 0;
+  virtual Status Scan(const Range& range, std::vector<KeyValue>& kvs) = 0;
+
+  virtual Status Commit() = 0;
+};
 
 }  // namespace mdsv2
 }  // namespace dingofs

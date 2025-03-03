@@ -27,7 +27,6 @@ namespace mdsv2 {
 class DingodbStorage : public KVStorage {
  public:
   DingodbStorage() = default;
-
   ~DingodbStorage() override = default;
 
   static KVStoragePtr New() { return std::make_shared<DingodbStorage>(); }
@@ -50,12 +49,36 @@ class DingodbStorage : public KVStorage {
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
 
- private:
-  using TxnPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+  TxnUPtr NewTxn() override;
 
-  TxnPtr NewTxn();
+ private:
+  using SdkTxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+
+  SdkTxnUPtr NewSdkTxn();
 
   dingodb::sdk::Client* client_{nullptr};
+};
+
+class DingodbTxn : public Txn {
+ public:
+  using SdkTxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+
+  DingodbTxn(SdkTxnUPtr txn) : txn_(std::move(txn)){};
+  ~DingodbTxn() override = default;
+
+  Status Put(const std::string& key, const std::string& value) override;
+  Status PutIfAbsent(const std::string& key, const std::string& value) override;
+  Status Delete(const std::string& key) override;
+
+  Status Get(const std::string& key, std::string& value) override;
+  Status Scan(const Range& range, std::vector<KeyValue>& kvs) override;
+
+  Status Commit() override;
+
+ private:
+  using TxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
+
+  SdkTxnUPtr txn_;
 };
 
 }  // namespace mdsv2

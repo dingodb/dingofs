@@ -29,6 +29,8 @@ const uint32_t kSetAttrMtime = 1 << 5;
 const uint32_t kSetAttrCtime = 1 << 6;
 const uint32_t kSetAttrNlink = 1 << 7;
 
+const int kEmptyDirMinLinkNum = 2;
+
 }  // namespace mdsv2
 }  // namespace dingofs
 
