@@ -192,13 +192,13 @@ void FsStatManager::DoFlushFsUsage() {
   Quota new_quota;
   MetaStatusCode rc = meta_client_->FlushFsUsage(fs_id_, usage, new_quota);
   if (rc == MetaStatusCode::OK) {
-    LOG(INFO) << "FlushFsUsage success, usage: " << usage.ShortDebugString()
-              << ", new_quota: " << new_quota.ShortDebugString()
-              << ", cur fs_quota: " << fs_quota_->ToString();
+    VLOG(3) << "FlushFsUsage success, usage: " << usage.ShortDebugString()
+            << ", new_quota: " << new_quota.ShortDebugString()
+            << ", cur fs_quota: " << fs_quota_->ToString();
     UpdateFsQuotaUsage(-usage.bytes(), -usage.inodes());
     fs_quota_->Refresh(new_quota);
   } else if (rc == MetaStatusCode::NOT_FOUND) {
-    VLOG(3) << "FlushFsUsage fs quot not fount, fs_id: " << fs_id_;
+    LOG(INFO) << "FlushFsUsage fs quot not fount, fs_id: " << fs_id_;
     InitQuota();
   } else {
     LOG(WARNING) << "FlushFsUsage failed, fs_id: " << fs_id_ << ", rc: " << rc;

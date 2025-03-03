@@ -22,6 +22,7 @@
 
 #include "client/s3/client_s3_cache_manager.h"
 
+#include <butil/time.h>
 #include <bvar/bvar.h>
 #include <malloc.h>
 #include <sys/types.h>
@@ -724,8 +725,8 @@ void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
 class AsyncPrefetchCallback {
  public:
   AsyncPrefetchCallback(BlockKey key, uint64_t inode,
-                        S3ClientAdaptorImpl* s3Client, int64_t startTime)
-      : key(key), inode_(inode), s3Client_(s3Client), startTime_(startTime) {}
+                        S3ClientAdaptorImpl* s3Client)
+      : key(key), inode_(inode), s3Client_(s3Client), startTime_(butil::cpuwide_time_us()) {}
 
   void operator()(const aws::S3Adapter*,
                   const std::shared_ptr<GetObjectAsyncContext>& context) {
@@ -804,8 +805,7 @@ void FileCacheManager::PrefetchS3Objs(
       context->buf = data_cache_s3;
       context->offset = 0;
       context->len = read_len;
-      context->cb = AsyncPrefetchCallback{key, inodeid, s3_client_adaptor,
-                                          butil::cpuwide_time_ms()};
+      context->cb = AsyncPrefetchCallback{key, inodeid, s3_client_adaptor};
       VLOG(9) << "inodeId=" << key.ino << "prefetch start: " << context->key
               << ", len: " << context->len;
       s3_client_adaptor->GetS3Client()->AsyncGet(context);

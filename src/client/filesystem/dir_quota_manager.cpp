@@ -322,7 +322,7 @@ DINGOFS_ERROR DirQuotaManager::DoLoadQuotas() {
     LOG(ERROR) << "LoadDirQuotas failed, fs_id: " << fs_id_ << ", rc: " << rc;
     return DINGOFS_ERROR::INTERNAL;
   } else {
-    LOG(INFO) << "DoLoadQuotas success, fs_id: " << fs_id_;
+    VLOG(3) << "DoLoadQuotas success, fs_id: " << fs_id_;
     WriteLockGuard lk(rwock_);
     // Remove quotas that are not in loaded_dir_quotas
     for (auto iter = quotas_.begin(); iter != quotas_.end();) {
