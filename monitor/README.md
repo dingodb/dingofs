@@ -7,7 +7,7 @@ monitor
 |                           # 修改该文件来配置各组件的配置参数。
 ├── grafana                 # grafana相关目录
 │   ├── dashboards          # grafana所有dashboards的json文件存放目录，grafana将从该目录加载文件来创建dashboards；
-|   |   |                   # 通过update_dashboard.sh脚本来更新最新的dashboards。
+|   |   |                   
 │   │   ├── etcd.json
 │   │   ├── mds.json
 │   │   ├── metaserver.json
@@ -16,18 +16,14 @@ monitor
 │   ├── provisioning        # grafana预配置相关目录，将映射到容器的`/etc/grafana/provisioning`上
 │   │   ├── dashboards
 │   │   │   └── all.yml
-│   │   └── datasources     # grafana的datasources的json文件存放目录，grafana将从该目录加载文件来创建datasources。
-│   │       └── all.yml
-│   └── report              # grafana日报临时目录，将映射到reporter容器的`/tmp/report`目录上
-│       └── README
-├── grafana-report.py
+│   │   └── datasources     # grafana的datasources的json文件存放目录，grafana将从该目录加载文件来创datasources。
+|   |   └── all.yml
 ├── prometheus              # prometheus相关目录
 │   ├── prometheus.yml      # prometheus的配置文件
 │   └── target.json
-├── README.md
+├── README.md               # 安装部署指南
 ├── target.ini              # target_json.py脚本依赖的一些配置
-├── target_json.py          # 用于生成prometheus监控对象的python脚本，每隔一段时间用dingofs_tool拉取监控目标并更新。
-└── update_dashboard.sh     # 从grafana界面配置环境当中拉取最新的dashboard，用于更新该环境上grafana的界面。
+├── target_json.py          # 用于生成prometheus监控对象的python脚本，每隔一段时间用dingo工具拉取监控目标并更新。
 ```
 
 ## 使用说明
@@ -36,7 +32,7 @@ monitor
 
 1.部署监控系统的机器需要安装如下组件：
 
-docker、docker-compose、jq
+docker、docker-compose
 
 * docker安装
 
@@ -48,61 +44,122 @@ $ sudo sh get-docker.sh --mirror Aliyun
 或者直接安装
 
 ```
+ubuntu:
 apt-get install docker-ce
 apt-get install docker-ce-cli
+
+Rockey linux:
+sudo dnf install docker-ce 
+sudo dnf install docker-ce-cli
+
 ```
 
-* docker-compose
+* docker-compose安装
 
 * ```
-  curl -L https://github.com/docker/compose/releases/download/1.18.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
-  chmod +x /usr/local/bin/docker-compose
-  ```
-
-  或者直接安装
-
-  ```
-  apt-get install docker-compose
-  ```
-
-* jq
-
-  update_dashboard.sh脚本需要依赖jq命令，这个一般机器上都没装
-
-  ```
-  apt-get install jq
+  curl -L https://github.com/docker/compose/releases/download/v2.29.1/docker-compose-`uname -s`-`uname -m` -o /usr/bin/docker-compose
+  chmod +x /usr/bin/docker-compose
   ```
 
 ### 部署监控系统
 
-* 修改相关配置
+* 监控系统安装
 
-1.修改target_json.py文件中相应的配置
+git clone https://github.com/dingodb/dingofs.git
 
-2.修改update_dashboard.sh，将 URL 和 LOGIN 改为对应的地址和用户名密码
+sudo cp -r dingofs/monitor /opt/dingofs-monitor
 
-3.修改docker-compose.yml文件，主要是映射的目录路径
+* 监控启动和停止
 
-* 启动docker-compose
+假设/opt/dingofs-monitor 为监控的安装路径，可根据实际情况来进行修改。 
 
-在当前目录下执行如下命令即可
+cd /opt/dingofs-monitor 
 
-```dingo-monitor.sh start ```
+启动监控：
 
-# grafana每日报表
+```sudo sh dingo-monitor.sh start```
 
-每日报表需要设置定时任务，通过 grafana-report.py 来发送邮件。
+停止监控：
 
-请修改 grafana-report.py 文件（13～25行）中的内容（包括发件人，收件人，用户名和密码等）。
+```sudo sh dingo-monitor.sh stop```
 
-此外 grafana-report.py 的运行需要依赖一些第三方库，请参照文件内容安装相关库。
+* 监控目标的新增和删除
 
-```bash
-sudo apt install python-pip
-pip install email
+1.手工修改
+
+你可以手工修改监控目标文件（prometheus/data/targets.json）来新增或者删除目标：
+
+```
+[
+    {
+        "labels": {
+            "job": "mds"
+        },
+        "targets": [
+            "172.20.0.10:7700",
+            "172.20.0.11:7700",
+            "172.20.0.12:7700"
+        ]
+    },
+    {
+        "labels": {
+            "job": "metaserver"
+        },
+        "targets": [
+            "172.20.0.10:6800",
+            "172.20.0.11:6800",
+            "172.20.0.12:6800",
+        ]
+    },
+    {
+        "labels": {
+            "job": "etcd"
+        },
+        "targets": [
+            "172.20.0.10:2379",
+            "172.20.0.11:2379",
+            "172.20.0.12:2379",
+        ]
+    },
+    {
+        "labels": {
+            "job": "client"
+        },
+        "targets": [
+            "172.20.0.10:9002",
+            "172.20.0.11:9002"
+        ]
+    }
+]
 ```
 
-crontab配置定时任务，添加如下任务：
-30 8 ** *python /etc/dingo/monitor/grafana-report.py >> /etc/dingo/monitor/cron.log 2>&1
-如果机器上没有配置其他的定时任务，可直接用下面命令
-echo "30 8 * * * python /etc/dingo/monitor/grafana-report.py >> /etc/dingo/monitor/cron.log 2>&1" >> conf && crontab conf && rm -f conf
+2.自动更新
+
+自动更新需要依赖于dingo工具，确保已经安装好dingo工具和配置文件($HOME/.dingo/dingo.yaml)，并在PATH配置好dingo安装路径。
+
+通过如下方式来验证安装是否成功：
+
+```dingo --version```
+
+然后执行脚本：
+
+```nohup python3 target_json.py &```
+
+target_json.py工具每隔30秒会通过dingo工具拉去集群信息，并更新targets.json文件。
+
+新增挂载点或者卸载挂载点，都将会自动更新。
+
+* 监控系统访问
+
+Prometheus地址：
+
+```
+http://<ip地址>:9090
+```
+Grafana地址：
+
+```
+http://<ip地址>:3000
+用户名：admin
+密码：dingo
+```

@@ -7,6 +7,8 @@ services:
     volumes:
       - ./prometheus/:/etc/prometheus/:rw
       - ./prometheus/data:/prometheus:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -30,11 +32,3 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=dingo
-
-  reporter:
-    image: promoon/reporter:latest
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
-      - ./grafana/report:/tmp/report:rw
-    network_mode: host
