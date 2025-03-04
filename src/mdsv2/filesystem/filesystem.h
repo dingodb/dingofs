@@ -263,6 +263,7 @@ class FileSystemSet {
   Status UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status DeleteFs(const std::string& fs_name);
   Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
+  Status GetAllFsInfo(std::vector<pb::mdsv2::FsInfo>& fs_infoes);
   Status RefreshFsInfo(const std::string& fs_name);
   Status RefreshFsInfo(uint32_t fs_id);
 

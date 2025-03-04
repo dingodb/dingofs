@@ -42,6 +42,9 @@ class Helper {
   static std::string FormatMsTime(int64_t timestamp);
   // format second timestamp
   static std::string FormatTime(int64_t timestamp, const std::string& format);
+  static std::string FormatTime(int64_t timestamp);
+
+  static std::string FormatNsTime(int64_t timestamp);
 
   // format: "2021-01-01T00:00:00.000Z"
   static std::string GetNowFormatMsTime();

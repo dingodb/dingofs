@@ -34,6 +34,7 @@
 #include "mdsv2/common/version.h"
 #include "mdsv2/coordinator/dingo_coordinator_client.h"
 #include "mdsv2/service/debug_service.h"
+#include "mdsv2/service/fsstat_service.h"
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/storage/dingodb_storage.h"
 
@@ -305,6 +306,9 @@ void Server::Run() {
 
   DebugServiceImpl debug_service(file_system_set_);
   CHECK(brpc_server.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
+
+  FsStatServiceImpl fs_stat_service;
+  CHECK(brpc_server.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";
 
   brpc::ServerOptions option;
   CHECK(brpc_server.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";

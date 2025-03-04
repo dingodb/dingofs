@@ -1872,6 +1872,7 @@ pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& p
     }
   }
 
+  fs_info.set_create_time_s(Helper::Timestamp());
   fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
   return fs_info;
@@ -2135,6 +2136,25 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
   }
 
   fs_info = MetaDataCodec::DecodeFSValue(value);
+
+  return Status::OK();
+}
+
+Status FileSystemSet::GetAllFsInfo(std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
+  Range range;
+  MetaDataCodec::GetFsTableRange(range.start_key, range.end_key);
+
+  // scan fs table from kv storage
+  std::vector<KeyValue> kvs;
+  auto status = kv_storage_->Scan(range, kvs);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (const auto& kv : kvs) {
+    auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
+    fs_infoes.push_back(std::move(fs_info));
+  }
 
   return Status::OK();
 }

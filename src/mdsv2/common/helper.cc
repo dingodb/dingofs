@@ -14,9 +14,11 @@
 
 #include "mdsv2/common/helper.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <string>
 
 #include "butil/strings/string_split.h"
 #include "fmt/core.h"
@@ -71,6 +73,16 @@ std::string Helper::FormatTime(int64_t timestamp, const std::string& format) {
   std::stringstream ss;
   ss << std::put_time(std::localtime(&in_time_t), format.c_str());
   return ss.str();
+}
+
+std::string Helper::FormatTime(int64_t timestamp) { return FormatTime(timestamp, "%Y-%m-%d %H:%M:%S"); }
+
+std::string Helper::FormatNsTime(int64_t timestamp) {
+  int64_t sec = timestamp / 1000000000;
+  int64_t ns = timestamp % 1000000000;
+  std::string result = FormatTime(sec);
+
+  return result + "." + std::to_string(ns);
 }
 
 std::string Helper::GetNowFormatMsTime() {
