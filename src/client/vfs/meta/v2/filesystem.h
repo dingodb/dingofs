@@ -58,11 +58,11 @@ class MdsV2DirIterator : public DirIterator {
 
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
-  MDSV2FileSystem(pb::mdsv2::FsInfo fs_info, const std::string& mount_path,
+  MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const std::string& mount_path,
                   MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
   ~MDSV2FileSystem() override;
 
-  static MDSV2FileSystemUPtr New(pb::mdsv2::FsInfo fs_info,
+  static MDSV2FileSystemUPtr New(mdsv2::FsInfoPtr fs_info,
                                  const std::string& mount_path,
                                  MDSDiscoveryPtr mds_discovery,
                                  MDSClientPtr mds_client) {
@@ -78,7 +78,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   void UnInit() override;
 
-  pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
+  pb::mdsv2::FsInfo GetFsInfo() { return fs_info_->Get(); }
 
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
@@ -136,7 +136,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   const std::string name_;
   const std::string mount_path_;
 
-  pb::mdsv2::FsInfo fs_info_;
+  mdsv2::FsInfoPtr fs_info_;
 
   MDSDiscoveryPtr mds_discovery_;
 

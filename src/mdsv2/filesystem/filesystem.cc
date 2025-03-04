@@ -35,6 +35,7 @@
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/codec.h"
 #include "mdsv2/filesystem/dentry.h"
+#include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/mutation_processor.h"
@@ -69,10 +70,11 @@ static inline bool IsDir(uint64_t ino) { return (ino & 1) == 1; }
 
 static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
-FileSystem::FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-                       KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor)
+FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
+                       RenamerPtr renamer, MutationProcessorPtr mutation_processor)
     : self_mds_id_(self_mds_id),
-      fs_info_(fs_info),
+      fs_info_(std::move(fs_info)),
+      fs_id_(fs_info_->GetFsId()),
       id_generator_(std::move(id_generator)),
       kv_storage_(kv_storage),
       renamer_(renamer),
@@ -99,7 +101,7 @@ Status FileSystem::GenFileIno(int64_t& ino) {
 }
 
 bool FileSystem::CanServe(int64_t self_mds_id) {
-  const auto& partition_policy = fs_info_.partition_policy();
+  const auto& partition_policy = fs_info_->GetPartitionPolicy();
   if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
     return partition_policy.mono().mds_id() == self_mds_id;
   } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
@@ -129,11 +131,9 @@ Status FileSystem::GetPartition(uint64_t parent_ino, PartitionPtr& out_partition
 PartitionPtr FileSystem::GetPartitionFromCache(uint64_t parent_ino) { return partition_cache_.Get(parent_ino); }
 
 Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition) {
-  const uint32_t fs_id = fs_info_.fs_id();
-
   // scan dentry from store
   Range range;
-  MetaDataCodec::EncodeDentryRange(fs_id, parent_ino, range.start_key, range.end_key);
+  MetaDataCodec::EncodeDentryRange(fs_id_, parent_ino, range.start_key, range.end_key);
 
   std::vector<KeyValue> kvs;
   auto status = kv_storage_->Scan(range, kvs);
@@ -201,8 +201,8 @@ Status FileSystem::GetInode(uint64_t ino, InodePtr& out_inode) {
 InodePtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetInode(ino); }
 
 Status FileSystem::GetInodeFromStore(uint64_t ino, InodePtr& out_inode) {
-  std::string key = IsDir(ino) ? MetaDataCodec::EncodeDirInodeKey(fs_info_.fs_id(), ino)
-                               : MetaDataCodec::EncodeFileInodeKey(fs_info_.fs_id(), ino);
+  std::string key =
+      IsDir(ino) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, ino) : MetaDataCodec::EncodeFileInodeKey(fs_id_, ino);
   std::string value;
   auto status = kv_storage_->Get(key, value);
   if (!status.ok()) {
@@ -232,8 +232,7 @@ Status FileSystem::DestoryInode(uint32_t fs_id, uint64_t ino) {
 }
 
 Status FileSystem::CreateRoot() {
-  uint32_t fs_id = fs_info_.fs_id();
-  CHECK(fs_id > 0) << "fs_id is invalid.";
+  CHECK(fs_id_ > 0) << "fs_id is invalid.";
 
   // when create root fail, clean up
   auto cleanup = [&](const std::string& inode_key) {
@@ -246,7 +245,7 @@ Status FileSystem::CreateRoot() {
     }
   };
 
-  auto inode = Inode::New(fs_id, kRootIno);
+  auto inode = Inode::New(fs_id_, kRootIno);
   inode->SetLength(0);
 
   inode->SetUid(1008);
@@ -261,7 +260,7 @@ Status FileSystem::CreateRoot() {
   inode->SetMtime(now_ns);
   inode->SetAtime(now_ns);
 
-  std::string inode_key = MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino());
+  std::string inode_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino());
   std::string inode_value = MetaDataCodec::EncodeDirInodeValue(inode->CopyTo());
   KVStorage::WriteOption option;
   auto status = kv_storage_->Put(option, inode_key, inode_value);
@@ -269,9 +268,9 @@ Status FileSystem::CreateRoot() {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put root inode fail, {}", status.error_str()));
   }
 
-  Dentry dentry(fs_id, "/", kRootParentIno, kRootIno, pb::mdsv2::FileType::DIRECTORY, 0, inode);
+  Dentry dentry(fs_id_, "/", kRootParentIno, kRootIno, pb::mdsv2::FileType::DIRECTORY, 0, inode);
 
-  std::string dentry_key = MetaDataCodec::EncodeDentryKey(fs_id, dentry.ParentIno(), dentry.Name());
+  std::string dentry_key = MetaDataCodec::EncodeDentryKey(fs_id_, dentry.ParentIno(), dentry.Name());
   std::string dentry_value = MetaDataCodec::EncodeDentryValue(dentry.CopyTo());
   status = kv_storage_->Put(option, dentry_key, dentry_value);
   if (!status.ok()) {
@@ -282,7 +281,7 @@ Status FileSystem::CreateRoot() {
   inode_cache_.PutInode(inode->Ino(), inode);
   partition_cache_.Put(dentry.Ino(), Partition::New(inode));
 
-  DINGO_LOG(INFO) << fmt::format("create filesystem({}) root success.", fs_id);
+  DINGO_LOG(INFO) << fmt::format("create filesystem({}) root success.", fs_id_);
 
   return Status::OK();
 }
@@ -407,7 +406,6 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
   uint64_t parent_ino = param.parent_ino;
 
   // check request
@@ -438,7 +436,7 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
   uint64_t now_time = Helper::TimestampNs();
 
   pb::mdsv2::Inode pb_inode;
-  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_fs_id(fs_id_);
   pb_inode.set_ino(ino);
   pb_inode.set_length(0);
   pb_inode.set_ctime(now_time);
@@ -455,21 +453,21 @@ Status FileSystem::MkNod(const MkNodParam& param, EntryOut& entry_out) {
   auto inode = Inode::New(pb_inode);
 
   // build dentry
-  Dentry dentry(fs_id, param.name, parent_ino, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent_ino, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
 
   // update backend store
   bthread::CountdownEvent count_down(2);
-  MixMutation mix_mutation = {.fs_id = fs_id};
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
   butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(std::move(inode_operation));
 
   butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
                              &rpc_dentry_status);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
   mix_mutation.operations.push_back(std::move(dentry_operation));
@@ -546,7 +544,6 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
   uint64_t parent_ino = param.parent_ino;
 
   // check request
@@ -577,7 +574,7 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
   uint64_t now_time = Helper::TimestampNs();
 
   pb::mdsv2::Inode pb_inode;
-  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_fs_id(fs_id_);
   pb_inode.set_ino(ino);
   pb_inode.set_length(4096);
   pb_inode.set_ctime(now_time);
@@ -593,21 +590,21 @@ Status FileSystem::MkDir(const MkDirParam& param, EntryOut& entry_out) {
   auto inode = Inode::New(pb_inode);
 
   // build dentry
-  Dentry dentry(fs_id, param.name, parent_ino, ino, pb::mdsv2::FileType::DIRECTORY, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent_ino, ino, pb::mdsv2::FileType::DIRECTORY, param.flag, inode);
 
   // update backend store
   bthread::CountdownEvent count_down(2);
-  MixMutation mix_mutation = {.fs_id = fs_id};
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
   butil::Status rpc_status;
-  Operation inode_operation(Operation::OpType::kCreateInode, ino, MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino()),
-                            &count_down, &rpc_status);
+  Operation inode_operation(Operation::OpType::kCreateInode, ino,
+                            MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(std::move(inode_operation));
 
   butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
                              &rpc_dentry_status);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
   mix_mutation.operations.push_back(std::move(dentry_operation));
@@ -671,12 +668,11 @@ Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
     }
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
   uint64_t now_ns = Helper::TimestampNs();
 
   auto txn = kv_storage_->NewTxn();
 
-  std::string key = MetaDataCodec::EncodeDirInodeKey(fs_id, dentry.Ino());
+  std::string key = MetaDataCodec::EncodeDirInodeKey(fs_id_, dentry.Ino());
   std::string value;
   status = txn->Get(key, value);
   if (!status.ok()) {
@@ -696,13 +692,13 @@ Status FileSystem::RmDir(uint64_t parent_ino, const std::string& name) {
   }
 
   // delete dentry
-  status = txn->Delete(MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, name));
+  status = txn->Delete(MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, name));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}", status.error_str()));
   }
 
   // update parent inode nlink/ctime/mtime
-  std::string parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, parent_ino);
+  std::string parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, parent_ino);
   std::string parent_value;
   status = txn->Get(parent_key, parent_value);
 
@@ -886,17 +882,15 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
     return status;
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
-
   uint64_t now_time = Helper::TimestampNs();
   // delete dentry
   {
     bthread::CountdownEvent count_down(1);
-    MixMutation mix_mutation = {.fs_id = fs_id};
+    MixMutation mix_mutation = {.fs_id = fs_id_};
 
     butil::Status rpc_dentry_status;
     Operation dentry_operation(Operation::OpType::kDeleteDentry, parent_ino,
-                               MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down,
+                               MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
                                &rpc_dentry_status);
     dentry_operation.SetDeleteDentry(dentry.CopyTo(), now_time);
     mix_mutation.operations.push_back(std::move(dentry_operation));
@@ -920,11 +914,11 @@ Status FileSystem::UnLink(uint64_t parent_ino, const std::string& name) {
   {
     uint64_t start_time = Helper::TimestampNs();
     bthread::CountdownEvent count_down(1);
-    MixMutation mix_mutation = {.fs_id = fs_id};
+    MixMutation mix_mutation = {.fs_id = fs_id_};
 
     butil::Status rpc_status;
     Operation file_operation(Operation::OpType::kUpdateInodeNlink, dentry.Ino(),
-                             MetaDataCodec::EncodeFileInodeKey(fs_id, dentry.Ino()), &count_down, &rpc_status);
+                             MetaDataCodec::EncodeFileInodeKey(fs_id_, dentry.Ino()), &count_down, &rpc_status);
     file_operation.SetUpdateInodeNlink(dentry.Ino(), -1, now_time);
     mix_mutation.operations.push_back(std::move(file_operation));
 
@@ -968,8 +962,6 @@ Status FileSystem::Symlink(const std::string& symlink, uint64_t new_parent_ino, 
     return Status(pb::error::EILLEGAL_PARAMTETER, "Invalid name param.");
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
-
   PartitionPtr partition;
   auto status = GetPartition(new_parent_ino, partition);
   if (!status.ok()) {
@@ -987,7 +979,7 @@ Status FileSystem::Symlink(const std::string& symlink, uint64_t new_parent_ino, 
   uint64_t now_time = Helper::TimestampNs();
 
   pb::mdsv2::Inode pb_inode;
-  pb_inode.set_fs_id(fs_id);
+  pb_inode.set_fs_id(fs_id_);
   pb_inode.set_ino(ino);
   pb_inode.set_symlink(symlink);
   pb_inode.set_length(symlink.size());
@@ -1005,21 +997,21 @@ Status FileSystem::Symlink(const std::string& symlink, uint64_t new_parent_ino, 
   auto inode = Inode::New(pb_inode);
 
   // build dentry
-  Dentry dentry(fs_id, new_name, new_parent_ino, ino, pb::mdsv2::FileType::SYM_LINK, 0, inode);
+  Dentry dentry(fs_id_, new_name, new_parent_ino, ino, pb::mdsv2::FileType::SYM_LINK, 0, inode);
 
   // update backend store
   bthread::CountdownEvent count_down(2);
-  MixMutation mix_mutation = {.fs_id = fs_id};
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
   butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(std::move(inode_operation));
 
   butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, new_parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, dentry.Name()), &count_down,
+                             MetaDataCodec::EncodeDentryKey(fs_id_, new_parent_ino, dentry.Name()), &count_down,
                              &rpc_dentry_status);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
   mix_mutation.operations.push_back(std::move(dentry_operation));
@@ -1100,8 +1092,6 @@ Status FileSystem::SetAttr(uint64_t ino, const SetAttrParam& param, EntryOut& en
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
-
   InodePtr inode;
   auto status = GetInode(ino, inode);
   if (!status.ok()) {
@@ -1110,11 +1100,11 @@ Status FileSystem::SetAttr(uint64_t ino, const SetAttrParam& param, EntryOut& en
 
   // update backend store
   bthread::CountdownEvent count_down(1);
-  MixMutation mix_mutation = {.fs_id = fs_id};
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
   butil::Status rpc_status;
-  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino())
-                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino());
+  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
+                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
   Operation inode_operation(Operation::OpType::kUpdateInodeAttr, ino, key, &count_down, &rpc_status);
   inode_operation.SetUpdateInodeAttr(param.inode, param.to_set);
   mix_mutation.operations.push_back(std::move(inode_operation));
@@ -1178,8 +1168,6 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  uint32_t fs_id = fs_info_.fs_id();
-
   InodePtr inode;
   auto status = GetInode(ino, inode);
   if (!status.ok()) {
@@ -1188,11 +1176,11 @@ Status FileSystem::SetXAttr(uint64_t ino, const std::map<std::string, std::strin
 
   // update backend store
   bthread::CountdownEvent count_down(1);
-  MixMutation mix_mutation = {.fs_id = fs_id};
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
   butil::Status rpc_status;
-  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id, inode->Ino())
-                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino());
+  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
+                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
   Operation inode_operation(Operation::OpType::kUpdateInodeXAttr, ino, key, &count_down, &rpc_status);
   inode_operation.SetUpdateInodeXAttr(xattr);
   mix_mutation.operations.push_back(std::move(inode_operation));
@@ -1217,7 +1205,6 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
                           const std::string& new_name) {
   DINGO_LOG(INFO) << fmt::format("rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
 
-  uint32_t fs_id = fs_info_.fs_id();
   uint64_t now_ns = Helper::TimestampNs();
 
   // check name is valid
@@ -1233,7 +1220,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 
   // get old parent inode
   std::string value;
-  std::string old_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, old_parent_ino);
+  std::string old_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, old_parent_ino);
   auto status = txn->Get(old_parent_key, value);
   if (!status.ok()) {
     return Status(status.error_code(),
@@ -1243,7 +1230,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   pb::mdsv2::Inode pb_old_parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
 
   // get old dentry
-  std::string old_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id, old_parent_ino, old_name);
+  std::string old_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id_, old_parent_ino, old_name);
   value.clear();
   status = txn->Get(old_dentry_key, value);
   if (!status.ok()) {
@@ -1256,7 +1243,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   bool is_same_parent = (old_parent_ino == new_parent_ino);
   // get new parent inode
   pb::mdsv2::Inode pb_new_parent_inode;
-  std::string new_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id, new_parent_ino);
+  std::string new_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, new_parent_ino);
   if (!is_same_parent) {
     DINGO_LOG(INFO) << "rename in different parent.";
     value.clear();
@@ -1272,7 +1259,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
   }
 
   // get new dentry
-  std::string new_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, new_name);
+  std::string new_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id_, new_parent_ino, new_name);
   value.clear();
   status = txn->Get(new_dentry_key, value);
   if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
@@ -1287,8 +1274,8 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 
     // get exist new inode
     std::string new_inode_key = (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY)
-                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id, pb_exist_new_dentry.ino())
-                                    : MetaDataCodec::EncodeFileInodeKey(fs_id, pb_exist_new_dentry.ino());
+                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id_, pb_exist_new_dentry.ino())
+                                    : MetaDataCodec::EncodeFileInodeKey(fs_id_, pb_exist_new_dentry.ino());
     value.clear();
     status = txn->Get(new_inode_key, value);
     if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
@@ -1337,7 +1324,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 
   // add new dentry
   pb::mdsv2::Dentry pb_new_dentry;
-  pb_new_dentry.set_fs_id(fs_id);
+  pb_new_dentry.set_fs_id(fs_id_);
   pb_new_dentry.set_name(new_name);
   pb_new_dentry.set_ino(pb_old_dentry.ino());
   pb_new_dentry.set_type(pb_old_dentry.type());
@@ -1430,7 +1417,7 @@ Status FileSystem::Rename(uint64_t old_parent_ino, const std::string& old_name, 
 
       // add new dentry at cache
       auto old_inode = inode_cache_.GetInode(pb_old_dentry.ino());
-      Dentry new_dentry(fs_id, new_name, new_parent_ino, pb_old_dentry.ino(), pb_old_dentry.type(), 0, old_inode);
+      Dentry new_dentry(fs_id_, new_name, new_parent_ino, pb_old_dentry.ino(), pb_old_dentry.type(), 0, old_inode);
       new_parent_partition->PutChild(new_dentry);
 
       // delete exist new partition at cache
@@ -1670,7 +1657,7 @@ Status FileSystem::WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv
 
   KeyValue kv;
   kv.opt_type = KeyValue::OpType::kPut;
-  kv.key = MetaDataCodec::EncodeFileInodeKey(fs_info_.fs_id(), ino);
+  kv.key = MetaDataCodec::EncodeFileInodeKey(fs_id_, ino);
 
   inode_copy.AppendChunk(chunk_index, slice_list);
   kv.value = MetaDataCodec::EncodeFileInodeValue(inode_copy.CopyTo());
@@ -1703,51 +1690,94 @@ Status FileSystem::ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Slic
   return Status::OK();
 }
 
+Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); }
+
+Status FileSystem::RefreshFsInfo(const std::string& name) {
+  std::string value;
+  auto status = kv_storage_->Get(MetaDataCodec::EncodeFSKey(name), value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+  }
+
+  pb::mdsv2::FsInfo fs_info = MetaDataCodec::DecodeFSValue(value);
+  fs_info_->Update(fs_info);
+
+  return Status::OK();
+}
+
+void FileSystem::RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info) { fs_info_->Update(fs_info); }
+
 Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
-  CHECK(fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION)
+  std::string key = MetaDataCodec::EncodeFSKey(fs_info_->GetName());
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+  }
+
+  pb::mdsv2::FsInfo fs_info = MetaDataCodec::DecodeFSValue(value);
+  CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION)
       << "invalid partition polocy type.";
 
-  auto fs_info_copy = fs_info_;
-  auto* mono = fs_info_copy.mutable_partition_policy()->mutable_mono();
+  auto* mono = fs_info.mutable_partition_policy()->mutable_mono();
   mono->set_epoch(mono->epoch() + 1);
   mono->set_mds_id(mds_id);
 
-  std::string key = MetaDataCodec::EncodeFSKey(fs_info_copy.fs_name());
-  std::string value = MetaDataCodec::EncodeFSValue(fs_info_copy);
+  fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
-  KVStorage::WriteOption option;
-  auto status = kv_storage_->Put(option, key, value);
+  status = txn->Put(key, MetaDataCodec::EncodeFSValue(fs_info));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
 
-  *fs_info_.mutable_partition_policy()->mutable_mono() = *mono;
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
+  }
+
+  fs_info_->Update(fs_info);
 
   return Status::OK();
 }
 
 Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions) {
-  CHECK(fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
+  std::string key = MetaDataCodec::EncodeFSKey(fs_info_->GetName());
+
+  auto txn = kv_storage_->NewTxn();
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
+  }
+
+  pb::mdsv2::FsInfo fs_info = MetaDataCodec::DecodeFSValue(value);
+  CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
       << "invalid partition polocy type.";
 
-  auto fs_info_copy = fs_info_;
-  auto* hash = fs_info_copy.mutable_partition_policy()->mutable_parent_hash();
+  auto* hash = fs_info.mutable_partition_policy()->mutable_parent_hash();
   hash->set_epoch(hash->epoch() + 1);
   hash->mutable_distributions()->clear();
   for (const auto& [mds_id, bucket_set] : distributions) {
     hash->mutable_distributions()->insert({mds_id, bucket_set});
   }
 
-  std::string key = MetaDataCodec::EncodeFSKey(fs_info_copy.fs_name());
-  std::string value = MetaDataCodec::EncodeFSValue(fs_info_copy);
+  fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
   KVStorage::WriteOption option;
-  auto status = kv_storage_->Put(option, key, value);
+  status = kv_storage_->Put(option, key, MetaDataCodec::EncodeFSValue(fs_info));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
 
-  *fs_info_.mutable_partition_policy()->mutable_parent_hash() = *hash;
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
+  }
+
+  fs_info_->Update(fs_info);
 
   return Status::OK();
 }
@@ -1841,6 +1871,8 @@ pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& p
       parent_hash->mutable_distributions()->insert({mds_id, bucket_set});
     }
   }
+
+  fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
   return fs_info;
 }
@@ -1962,8 +1994,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
   CHECK(id_generator != nullptr) << "new id generator fail.";
   CHECK(id_generator->Init()) << "init id generator fail.";
 
-  auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
-                            mutation_processor_);
+  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
+                            renamer_, mutation_processor_);
   CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
   // create root inode
@@ -1989,9 +2021,12 @@ bool IsExistMountPoint(const pb::mdsv2::FsInfo& fs_info, const pb::mdsv2::MountP
 Status FileSystemSet::MountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point) {
   CHECK(!fs_name.empty()) << "fs name is empty.";
 
-  std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
+  std::string key = MetaDataCodec::EncodeFSKey(fs_name);
+
+  auto txn = kv_storage_->NewTxn();
+
   std::string value;
-  Status status = kv_storage_->Get(fs_key, value);
+  Status status = txn->Get(key, value);
   if (!status.ok()) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
   }
@@ -2003,10 +2038,16 @@ Status FileSystemSet::MountFs(const std::string& fs_name, const pb::mdsv2::Mount
   }
 
   fs_info.add_mount_points()->CopyFrom(mount_point);
-  KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, fs_key, MetaDataCodec::EncodeFSValue(fs_info));
+  fs_info.set_last_update_time_ns(Helper::TimestampNs());
+
+  status = txn->Put(key, MetaDataCodec::EncodeFSValue(fs_info));
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put fs fail, {}", status.error_str()));
+  }
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
   }
 
   return Status::OK();
@@ -2025,8 +2066,11 @@ void RemoveMountPoint(pb::mdsv2::FsInfo& fs_info, const pb::mdsv2::MountPoint& m
 
 Status FileSystemSet::UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point) {
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
+
+  auto txn = kv_storage_->NewTxn();
+
   std::string value;
-  Status status = kv_storage_->Get(fs_key, value);
+  Status status = txn->Get(fs_key, value);
   if (!status.ok()) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
   }
@@ -2035,10 +2079,16 @@ Status FileSystemSet::UmountFs(const std::string& fs_name, const pb::mdsv2::Moun
 
   RemoveMountPoint(fs_info, mount_point);
 
-  KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, fs_key, MetaDataCodec::EncodeFSValue(fs_info));
+  fs_info.set_last_update_time_ns(Helper::TimestampNs());
+
+  status = txn->Put(fs_key, MetaDataCodec::EncodeFSValue(fs_info));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
+  }
+
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("commit fail, {}", status.error_str()));
   }
 
   return Status::OK();
@@ -2090,23 +2140,21 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
 }
 
 Status FileSystemSet::RefreshFsInfo(const std::string& fs_name) {
-  std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
-  std::string value;
-  Status status = kv_storage_->Get(fs_key, value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
+  auto fs = GetFileSystem(fs_name);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}).", fs_name));
   }
 
-  auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
-  CHECK(id_generator != nullptr) << "new id generator fail.";
+  return fs->RefreshFsInfo();
+}
 
-  auto fs_info = MetaDataCodec::DecodeFSValue(value);
-  DINGO_LOG(INFO) << fmt::format("refresh fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-  auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
-                            mutation_processor_);
-  AddFileSystem(fs, true);
+Status FileSystemSet::RefreshFsInfo(uint32_t fs_id) {
+  auto fs = GetFileSystem(fs_id);
+  if (fs == nullptr) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}).", fs_id));
+  }
 
-  return Status::OK();
+  return fs->RefreshFsInfo();
 }
 
 Status FileSystemSet::AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids) {
@@ -2148,6 +2196,18 @@ FileSystemPtr FileSystemSet::GetFileSystem(uint32_t fs_id) {
   return it != fs_map_.end() ? it->second : nullptr;
 }
 
+FileSystemPtr FileSystemSet::GetFileSystem(const std::string& fs_name) {
+  utils::ReadLockGuard lk(lock_);
+
+  for (auto& [fs_id, fs] : fs_map_) {
+    if (fs->FsName() == fs_name) {
+      return fs;
+    }
+  }
+
+  return nullptr;
+}
+
 std::vector<FileSystemPtr> FileSystemSet::GetAllFileSystem() {
   utils::ReadLockGuard lk(lock_);
 
@@ -2177,10 +2237,16 @@ bool FileSystemSet::LoadFileSystems() {
     CHECK(id_generator != nullptr) << "new id generator fail.";
 
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
-    DINGO_LOG(INFO) << fmt::format("load fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-    auto fs = FileSystem::New(self_mds_meta_.ID(), fs_info, std::move(id_generator), kv_storage_, renamer_,
-                              mutation_processor_);
-    AddFileSystem(fs);
+    auto file_system = GetFileSystem(fs_info.fs_id());
+    if (file_system == nullptr) {
+      DINGO_LOG(INFO) << fmt::format("load fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
+      auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
+                                renamer_, mutation_processor_);
+      AddFileSystem(fs);
+
+    } else {
+      file_system->RefreshFsInfo(fs_info);
+    }
   }
 
   return true;

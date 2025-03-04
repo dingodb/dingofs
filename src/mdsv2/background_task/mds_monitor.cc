@@ -14,21 +14,22 @@
 
 #include "mdsv2/background_task/mds_monitor.h"
 
-#include <butil/endpoint.h>
-
 #include <atomic>
 #include <cstdint>
 #include <vector>
 
+#include "butil/endpoint.h"
+#include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/synchronization.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/service/service_access.h"
 
-DEFINE_uint32(mds_offline_period_time_ms, 60 * 1000, "mds offline period time ms");
+DEFINE_uint32(mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
 
 namespace dingofs {
 namespace mdsv2 {
@@ -38,6 +39,8 @@ void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& onli
   int64_t now_ms = Helper::TimestampMs();
 
   for (const auto& mds : mdses) {
+    // DINGO_LOG(INFO) << fmt::format("[monitor] mds: {}, last online time: {}, now: {}, offline period: {}", mds.ID(),
+    //   mds.LastOnlineTimeMs(), now_ms, FLAGS_mds_offline_period_time_ms);
     if (mds.LastOnlineTimeMs() + FLAGS_mds_offline_period_time_ms < now_ms) {
       offline_mdses.push_back(mds);
     } else {
@@ -95,87 +98,104 @@ bool MDSMonitor::Init() { return dist_lock_->Init(); }
 
 void MDSMonitor::Destroy() { dist_lock_->Destroy(); }
 
+void MDSMonitor::Run() {
+  DINGO_LOG(INFO) << "[monitor] monitor mds start......";
+  auto status = MonitorMDS();
+  DINGO_LOG(INFO) << fmt::format("[monitor] monitor mds finish, {}.", status.error_str());
+}
+
 // 1. get mds list
 // 2. check mds status
 // 3. get fs info
 // 4. eliminate dead mds, add new mds
 // 5. notify new mds
-void MDSMonitor::MonitorMDS() {
-  // bool running = false;
-  // if (!is_running_.compare_exchange_strong(running, true)) {
-  //   DINGO_LOG(INFO) << "monitor mds already running......";
-  //   return;
-  // }
-  // DEFER(is_running_.store(false));
+Status MDSMonitor::MonitorMDS() {
+  bool running = false;
+  if (!is_running_.compare_exchange_strong(running, true)) {
+    DINGO_LOG(INFO) << "[monitor] mds already running......";
+    return Status::OK();
+  }
+  DEFER(is_running_.store(false));
 
-  // if (!dist_lock_->IsLocked()) {
-  //   DINGO_LOG(INFO) << "monitor mds not own lock......";
-  //   return;
-  // }
+  if (!dist_lock_->IsLocked()) {
+    return Status(pb::error::EINTERNAL, "not own lock");
+  }
 
-  // DINGO_LOG(INFO) << "monitor mds running......";
+  auto fs_set = fs_set_->GetAllFileSystem();
+  if (fs_set.empty()) {
+    return Status::OK();
+  }
 
-  // std::vector<MDSMeta> mdses;
-  // auto status = coordinator_client_->GetMDSList(mdses);
-  // if (!status.ok()) {
-  //   DINGO_LOG(ERROR) << fmt::format("get mds list fail, {}", status.error_str());
-  //   return;
-  // }
+  std::vector<MDSMeta> mdses;
+  auto status = coordinator_client_->GetMDSList(mdses);
+  if (!status.ok()) {
+    return Status(status.error_code(), fmt::format("get mds list fail, {}", status.error_str()));
+  }
 
-  // std::vector<MDSMeta> online_mdses, offline_mdses;
-  // GetOfflineMDS(mdses, online_mdses, offline_mdses);
-  // if (offline_mdses.empty()) {
-  //   return;
-  // }
+  if (mdses.empty()) {
+    return Status(pb::error::EINTERNAL, "mds list is empty");
+  }
 
-  // auto fs_set = fs_set_->GetAllFileSystem();
-  // if (fs_set.empty()) {
-  //   return;
-  // }
+  std::vector<MDSMeta> online_mdses, offline_mdses;
+  GetOfflineMDS(mdses, online_mdses, offline_mdses);
 
-  // auto is_offline_func = [offline_mdses](const uint64_t mds_id) -> bool {
-  //   for (const auto& offline_mds : offline_mdses) {
-  //     if (mds_id == offline_mds.ID()) {
-  //       return true;
-  //     }
-  //   }
-  //   return false;
-  // };
+  DINGO_LOG(INFO) << fmt::format("[monitor] online mdses: {}, offline mdses: {}", online_mdses.size(),
+                                 offline_mdses.size());
 
-  // auto pick_mds_func = [online_mdses]() -> MDSMeta {
-  //   return online_mdses[Helper::GenerateRandomInteger(0, 1000) % online_mdses.size()];
-  // };
+  if (offline_mdses.empty()) {
+    return Status(pb::error::EINTERNAL, "not has offline mds");
+  }
+  if (online_mdses.empty()) {
+    return Status(pb::error::EINTERNAL, "not has online mds");
+  }
 
-  // for (const auto& fs : fs_set) {
-  //   auto fs_info = fs->FsInfo();
-  //   const auto& partition_policy = fs_info.partition_policy();
-  //   if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
-  //     if (is_offline_func(partition_policy.mono().mds_id())) {
-  //       auto new_mds = pick_mds_func();
-  //       auto status = fs->UpdatePartitionPolicy(new_mds.ID());
-  //       if (!status.ok()) {
-  //         DINGO_LOG(ERROR) << fmt::format("update partition policy fail, fs: {}, error: {}", fs->FsName(),
-  //                                         status.error_str());
-  //         continue;
-  //       }
+  auto is_offline_func = [&offline_mdses](const uint64_t mds_id) -> bool {
+    for (const auto& offline_mds : offline_mdses) {
+      if (mds_id == offline_mds.ID()) {
+        return true;
+      }
+    }
+    return false;
+  };
 
-  //       butil::EndPoint endpoint;
-  //       butil::str2endpoint(new_mds.Host().c_str(), new_mds.Port(), &endpoint);
-  //       status = ServiceAccess::RefreshFsInfo(endpoint, fs->FsName());
-  //       if (!status.ok()) {
-  //         DINGO_LOG(ERROR) << fmt::format("refresh fs info fail, fs: {}, error: {}", fs->FsName(),
-  //         status.error_str());
-  //       }
-  //     }
+  auto pick_mds_func = [&online_mdses]() -> MDSMeta {
+    return online_mdses[Helper::GenerateRandomInteger(0, 1000) % online_mdses.size()];
+  };
 
-  //   } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-  //     auto new_distributions =
-  //         AdjustParentHashDistribution(GetDistributions(partition_policy.parent_hash()), online_mdses,
-  //         offline_mdses);
+  for (const auto& fs : fs_set) {
+    auto fs_info = fs->FsInfo();
+    const auto& partition_policy = fs_info.partition_policy();
+    if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+      if (is_offline_func(partition_policy.mono().mds_id())) {
+        auto new_mds = pick_mds_func();
+        auto status = fs->UpdatePartitionPolicy(new_mds.ID());
+        if (!status.ok()) {
+          DINGO_LOG(ERROR) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) fail, {}.", fs->FsName(),
+                                          partition_policy.mono().mds_id(), new_mds.ID(), status.error_str());
+          continue;
+        }
 
-  //     fs->UpdatePartitionPolicy(new_distributions);
-  //   }
-  // }
+        DINGO_LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish.", fs->FsName(),
+                                       partition_policy.mono().mds_id(), new_mds.ID());
+
+        butil::EndPoint endpoint;
+        butil::str2endpoint(new_mds.Host().c_str(), new_mds.Port(), &endpoint);
+        status = ServiceAccess::RefreshFsInfo(endpoint, fs->FsName());
+        if (!status.ok()) {
+          DINGO_LOG(ERROR) << fmt::format("[monitor] refresh fs info fail, fs: {}, error: {}", fs->FsName(),
+                                          status.error_str());
+        }
+      }
+
+    } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+      auto new_distributions =
+          AdjustParentHashDistribution(GetDistributions(partition_policy.parent_hash()), online_mdses, offline_mdses);
+
+      fs->UpdatePartitionPolicy(new_distributions);
+    }
+  }
+
+  return Status::OK();
 }
 
 }  // namespace mdsv2

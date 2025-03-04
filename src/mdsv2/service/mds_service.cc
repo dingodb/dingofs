@@ -27,8 +27,19 @@
 #include "mdsv2/service/service_helper.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
+
+template <typename T>
+static Status ValidateRequest(T* request, FileSystemPtr file_system) {
+  if (request->context().epoch() < file_system->Epoch()) {
+    return Status(pb::error::EROUTER_EPOCH_CHANGE, "epoch change");
+
+  } else if (request->context().epoch() > file_system->Epoch()) {
+    return file_system->RefreshFsInfo();
+  }
+
+  return Status::OK();
+}
 
 MDSServiceImpl::MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set,
                                FileSystemSetPtr file_system_set)
@@ -277,7 +288,6 @@ void MDSServiceImpl::BatchGetXAttr(google::protobuf::RpcController* controller,
 }
 
 // high level interface
-
 void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
                               pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
@@ -288,8 +298,13 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   EntryOut entry_out;
-  auto status = file_system->Lookup(request->parent_ino(), request->name(), entry_out);
+  status = file_system->Lookup(request->parent_ino(), request->name(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -323,6 +338,11 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   FileSystem::MkNodParam param;
   param.parent_ino = request->parent_ino();
   param.name = request->name();
@@ -332,7 +352,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
   param.rdev = request->rdev();
 
   EntryOut entry_out;
-  auto status = file_system->MkNod(param, entry_out);
+  status = file_system->MkNod(param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -366,6 +386,11 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   FileSystem::MkDirParam param;
   param.parent_ino = request->parent_ino();
   param.name = request->name();
@@ -375,7 +400,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
   param.rdev = request->rdev();
 
   EntryOut entry_out;
-  auto status = file_system->MkDir(param, entry_out);
+  status = file_system->MkDir(param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -409,7 +434,12 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->RmDir(request->parent_ino(), request->name());
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  status = file_system->RmDir(request->parent_ino(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -441,8 +471,13 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   std::vector<EntryOut> entry_outs;
-  auto status =
+  status =
       file_system->ReadDir(request->ino(), request->last_name(), request->limit(), request->with_attr(), entry_outs);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -484,7 +519,12 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const p
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->Open(request->ino());
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  status = file_system->Open(request->ino());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -516,7 +556,12 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->Release(request->ino());
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  status = file_system->Release(request->ino());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -548,8 +593,13 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   EntryOut entry_out;
-  auto status = file_system->Link(request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
+  status = file_system->Link(request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -583,7 +633,12 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->UnLink(request->parent_ino(), request->name());
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  status = file_system->UnLink(request->parent_ino(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -615,9 +670,14 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   EntryOut entry_out;
-  auto status = file_system->Symlink(request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
-                                     request->gid(), entry_out);
+  status = file_system->Symlink(request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
+                                request->gid(), entry_out);
   ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
 
   response->mutable_inode()->Swap(&entry_out.inode);
@@ -649,8 +709,13 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController* controller, con
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   std::string symlink;
-  auto status = file_system->ReadLink(request->ino(), symlink);
+  status = file_system->ReadLink(request->ino(), symlink);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -684,8 +749,13 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   EntryOut entry_out;
-  auto status = file_system->GetAttr(request->ino(), entry_out);
+  status = file_system->GetAttr(request->ino(), entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -719,6 +789,11 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   FileSystem::SetAttrParam param;
   auto& inode = param.inode;
   inode.set_fs_id(request->fs_id());
@@ -733,7 +808,7 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, cons
   param.to_set = request->to_set();
 
   EntryOut entry_out;
-  auto status = file_system->SetAttr(request->ino(), param, entry_out);
+  status = file_system->SetAttr(request->ino(), param, entry_out);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -767,8 +842,13 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, con
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   std::string value;
-  auto status = file_system->GetXAttr(request->ino(), request->name(), value);
+  status = file_system->GetXAttr(request->ino(), request->name(), value);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -802,11 +882,16 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, con
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   Inode::XAttrMap xattrs;
   ServiceHelper::PbMapToMap(request->xattrs(), xattrs);
 
   std::string value;
-  auto status = file_system->SetXAttr(request->ino(), xattrs);
+  status = file_system->SetXAttr(request->ino(), xattrs);
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -839,8 +924,13 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   Inode::XAttrMap xattrs;
-  auto status = file_system->GetXAttr(request->ino(), xattrs);
+  status = file_system->GetXAttr(request->ino(), xattrs);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -941,7 +1031,12 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = file_system->WriteSlice(request->ino(), request->chunk_index(), request->slice_list());
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  status = file_system->WriteSlice(request->ino(), request->chunk_index(), request->slice_list());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -975,8 +1070,13 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  auto status = ValidateRequest(request, file_system);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   pb::mdsv2::SliceList slice_list;
-  auto status = file_system->ReadSlice(request->ino(), request->chunk_index(), slice_list);
+  status = file_system->ReadSlice(request->ino(), request->chunk_index(), slice_list);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }

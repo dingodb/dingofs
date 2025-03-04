@@ -40,9 +40,9 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_int32(heartbeat_interval_s, 10, "heartbeat interval seconds");
+DEFINE_int32(heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
-DEFINE_int32(mdsmonitor_interval_s, 10, "mds monitor interval seconds");
+DEFINE_int32(mdsmonitor_interval_s, 5, "mds monitor interval seconds");
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
 
 DEFINE_uint32(read_worker_num, 128, "read service worker num");
@@ -235,11 +235,12 @@ bool Server::InitMDSMonitor() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
   CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
 
-  auto dist_lock =
-      std::make_unique<CoorDistributionLock>(coordinator_client_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
+  auto dist_lock = CoorDistributionLock::New(coordinator_client_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
 
-  mds_monitor_ = MDSMonitor::New(std::move(dist_lock));
+  mds_monitor_ = MDSMonitor::New(coordinator_client_, file_system_set_, dist_lock);
   CHECK(mds_monitor_ != nullptr) << "new MDSMonitor fail.";
+
+  CHECK(mds_monitor_->Init()) << "init MDSMonitor fail.";
 
   return true;
 }
@@ -268,7 +269,7 @@ bool Server::InitCrontab() {
       "MDS_MONITOR",
       FLAGS_mdsmonitor_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetMDSMonitor()->MonitorMDS(); },
+      [](void*) { Server::GetInstance().GetMDSMonitor()->Run(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);
@@ -334,7 +335,10 @@ void Server::Stop() {
 
   LOG(INFO) << "stop 0006";
   write_worker_set_->Destroy();
+
   LOG(INFO) << "stop 0007";
+  mds_monitor_->Destroy();
+  LOG(INFO) << "stop 0008";
 }
 
 }  // namespace mdsv2

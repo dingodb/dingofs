@@ -22,7 +22,6 @@
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/meta/v2/parent_cache.h"
 #include "dingofs/mdsv2.pb.h"
-#include "glog/logging.h"
 #include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
@@ -34,14 +33,13 @@ class MDSRouter {
  public:
   virtual ~MDSRouter() = default;
 
-  virtual bool Init() = 0;
+  virtual bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
 
   virtual mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) = 0;
   virtual mdsv2::MDSMeta GetMDSByIno(int64_t ino) = 0;
 
-  virtual void UpdateMDS(const mdsv2::MDSMeta&) {
-    CHECK(false) << "Not implemented.";
-  }
+  virtual bool UpdateRouter(
+      const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
 };
 
 using MDSRouterPtr = std::shared_ptr<MDSRouter>;
@@ -51,24 +49,30 @@ using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
 
 class MonoMDSRouter : public MDSRouter {
  public:
-  MonoMDSRouter(const mdsv2::MDSMeta& mds_meta) : mds_meta_(mds_meta){};
+  MonoMDSRouter(MDSDiscoveryPtr mds_discovery)
+      : mds_discovery_(mds_discovery){};
   ~MonoMDSRouter() override = default;
 
-  static MonoMDSRouterPtr New(const mdsv2::MDSMeta& mds_meta) {
-    return std::make_shared<MonoMDSRouter>(mds_meta);
+  static MonoMDSRouterPtr New(MDSDiscoveryPtr mds_discovery) {
+    return std::make_shared<MonoMDSRouter>(mds_discovery);
   }
 
-  bool Init() override;
+  bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
   mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) override;
 
   mdsv2::MDSMeta GetMDSByIno(int64_t ino) override;
 
-  void UpdateMDS(const mdsv2::MDSMeta&) override;
+  bool UpdateRouter(
+      const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
  private:
+  bool UpdateMds(int64_t mds_id);
+
   utils::RWLock lock_;
   mdsv2::MDSMeta mds_meta_;
+
+  MDSDiscoveryPtr mds_discovery_;
 };
 
 class ParentHashMDSRouter;
@@ -76,34 +80,33 @@ using ParentHashMDSRouterPtr = std::shared_ptr<ParentHashMDSRouter>;
 
 class ParentHashMDSRouter : public MDSRouter {
  public:
-  ParentHashMDSRouter(const pb::mdsv2::HashPartition& hash_partition,
-                      MDSDiscoveryPtr mds_discovery,
+  ParentHashMDSRouter(MDSDiscoveryPtr mds_discovery,
                       ParentCachePtr parent_cache)
-      : hash_partition_(hash_partition),
-        mds_discovery_(mds_discovery),
-        parent_cache_(parent_cache) {}
+      : mds_discovery_(mds_discovery), parent_cache_(parent_cache) {}
   ~ParentHashMDSRouter() override = default;
 
-  static ParentHashMDSRouterPtr New(
-      const pb::mdsv2::HashPartition& hash_partition,
-      MDSDiscoveryPtr mds_discovery, ParentCachePtr parent_cache) {
-    return std::make_shared<ParentHashMDSRouter>(hash_partition, mds_discovery,
-                                                 parent_cache);
+  static ParentHashMDSRouterPtr New(MDSDiscoveryPtr mds_discovery,
+                                    ParentCachePtr parent_cache) {
+    return std::make_shared<ParentHashMDSRouter>(mds_discovery, parent_cache);
   }
 
-  bool Init() override;
+  bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
   mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) override;
 
   mdsv2::MDSMeta GetMDSByIno(int64_t ino) override;
 
- private:
-  pb::mdsv2::HashPartition hash_partition_;
-  MDSDiscoveryPtr mds_discovery_;
+  bool UpdateRouter(
+      const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
+ private:
+  void UpdateMDSes(const pb::mdsv2::HashPartition& hash_partition);
+
+  MDSDiscoveryPtr mds_discovery_;
   ParentCachePtr parent_cache_;
 
   utils::RWLock lock_;
+  pb::mdsv2::HashPartition hash_partition_;
   // bucket_id -> mds_meta
   std::unordered_map<int64_t, mdsv2::MDSMeta> mdses_;
 };

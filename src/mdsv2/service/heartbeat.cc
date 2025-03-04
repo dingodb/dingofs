@@ -23,19 +23,18 @@
 #include "mdsv2/server.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 void HeartbeatTask::Run() { SendHeartbeat(coordinator_client_); }
 
 void HeartbeatTask::SendHeartbeat(CoordinatorClientPtr coordinator_client) {
   auto& self_mds_meta = Server::GetInstance().GetMDSMeta();
-  DINGO_LOG(INFO) << fmt::format("send heartbeat {}.", self_mds_meta.ToString());
+  DINGO_LOG(INFO) << fmt::format("[heartbeat] {}.", self_mds_meta.ToString());
 
   std::vector<MDSMeta> mdses;
   auto status = coordinator_client->MDSHeartbeat(self_mds_meta, mdses);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << "send heartbeat fail,  error: " << status.error_str();
+    DINGO_LOG(ERROR) << "[heartbeat] send fail,  error: " << status.error_str();
   }
 
   // update other mds meta
@@ -45,9 +44,11 @@ void HeartbeatTask::SendHeartbeat(CoordinatorClientPtr coordinator_client) {
       continue;
     }
 
-    DINGO_LOG(DEBUG) << "upsert mds meta: " << mds_meta.ToString();
+    DINGO_LOG(DEBUG) << "[heartbeat] upsert mds meta: " << mds_meta.ToString();
     mds_meta_map->UpsertMDSMeta(mds_meta);
   }
+
+  DINGO_LOG(INFO) << fmt::format("[heartbeat] finish, {}.", self_mds_meta.ToString());
 }
 
 void HeartbeatTask::HandleHeartbeatResponse() {}
@@ -67,7 +68,7 @@ bool Heartbeat::Destroy() {
 
 bool Heartbeat::Execute(TaskRunnablePtr task) {
   if (worker_ == nullptr) {
-    DINGO_LOG(ERROR) << "Heartbeat worker is nullptr.";
+    DINGO_LOG(ERROR) << "[heartbeat] worker is nullptr.";
     return false;
   }
   return worker_->Execute(task);
@@ -79,5 +80,4 @@ void Heartbeat::TriggerHeartbeat() {
 }
 
 }  // namespace mdsv2
-
 }  // namespace dingofs

@@ -160,7 +160,7 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
   request.set_name(name);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Lookup", request, response);
+      SendRequest(endpoint, "MDSService", "Lookup", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -192,8 +192,7 @@ Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
 
   request.set_length(0);
 
-  auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "MkNod", request, response);
+  auto status = SendRequest(endpoint, "MDSService", "MkNod", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -225,8 +224,7 @@ Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
 
   request.set_length(0);
 
-  auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "MkDir", request, response);
+  auto status = SendRequest(endpoint, "MDSService", "MkDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -250,8 +248,7 @@ Status MDSClient::RmDir(uint64_t parent_ino, const std::string& name) {
   request.set_parent_ino(parent_ino);
   request.set_name(name);
 
-  auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "RmDir", request, response);
+  auto status = SendRequest(endpoint, "MDSService", "RmDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -276,7 +273,7 @@ Status MDSClient::ReadDir(uint64_t ino, const std::string& last_name,
   request.set_with_attr(with_attr);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "ReadDir", request, response);
+      SendRequest(endpoint, "MDSService", "ReadDir", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -301,8 +298,7 @@ Status MDSClient::Open(uint64_t ino) {
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
-  auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Open", request, response);
+  auto status = SendRequest(endpoint, "MDSService", "Open", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -322,7 +318,7 @@ Status MDSClient::Release(uint64_t ino) {
   request.set_ino(ino);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Release", request, response);
+      SendRequest(endpoint, "MDSService", "Release", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -344,8 +340,7 @@ Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
   request.set_new_parent_ino(new_parent_ino);
   request.set_new_name(new_name);
 
-  auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Link", request, response);
+  auto status = SendRequest(endpoint, "MDSService", "Link", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -370,7 +365,7 @@ Status MDSClient::UnLink(uint64_t parent_ino, const std::string& name) {
   request.set_name(name);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "UnLink", request, response);
+      SendRequest(endpoint, "MDSService", "UnLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -396,7 +391,7 @@ Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
   request.set_gid(gid);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Symlink", request, response);
+      SendRequest(endpoint, "MDSService", "Symlink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -420,7 +415,7 @@ Status MDSClient::ReadLink(uint64_t ino, std::string& symlink) {
   request.set_ino(ino);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "ReadLink", request, response);
+      SendRequest(endpoint, "MDSService", "ReadLink", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -442,7 +437,7 @@ Status MDSClient::GetAttr(uint64_t ino, Attr& out_attr) {
   request.set_ino(ino);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "GetAttr", request, response);
+      SendRequest(endpoint, "MDSService", "GetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -515,7 +510,7 @@ Status MDSClient::SetAttr(uint64_t ino, const Attr& attr, int to_set,
   request.set_to_set(temp_to_set);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "SetAttr", request, response);
+      SendRequest(endpoint, "MDSService", "SetAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -539,7 +534,7 @@ Status MDSClient::GetXAttr(uint64_t ino, const std::string& name,
   request.set_name(name);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "GetXAttr", request, response);
+      SendRequest(endpoint, "MDSService", "GetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -563,7 +558,7 @@ Status MDSClient::SetXAttr(uint64_t ino, const std::string& name,
   request.mutable_xattrs()->insert({name, value});
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "SetXAttr", request, response);
+      SendRequest(endpoint, "MDSService", "SetXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -584,7 +579,7 @@ Status MDSClient::ListXAttr(uint64_t ino,
   request.set_ino(ino);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "ListXAttr", request, response);
+      SendRequest(endpoint, "MDSService", "ListXAttr", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -612,7 +607,7 @@ Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
   request.set_new_name(new_name);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "Rename", request, response);
+      SendRequest(endpoint, "MDSService", "Rename", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -661,7 +656,7 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   request.set_chunk_index(index);
 
   auto status =
-      rpc_->SendRequest(endpoint, "MDSService", "ReadSlice", request, response);
+      SendRequest(endpoint, "MDSService", "ReadSlice", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -681,8 +676,8 @@ Status MDSClient::NewSliceId(uint64_t* id) {
 
   request.set_alloc_num(1);
 
-  auto status = rpc_->SendRequest(endpoint, "MDSService", "AllocSliceId",
-                                  request, response);
+  auto status =
+      SendRequest(endpoint, "MDSService", "AllocSliceId", request, response);
   if (!status.ok()) {
     return status;
   }
@@ -710,13 +705,36 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
     *request.mutable_slice_list()->add_slices() = ToSlice(slice);
   }
 
-  auto status = rpc_->SendRequest(endpoint, "MDSService", "WriteSlice", request,
-                                  response);
+  auto status =
+      SendRequest(endpoint, "MDSService", "WriteSlice", request, response);
   if (!status.ok()) {
     return status;
   }
 
   return Status::OK();
+}
+
+// process epoch change
+// 1. updatge fs info
+// 2. update mds router
+bool MDSClient::ProcessEpochChange() {
+  pb::mdsv2::FsInfo new_fs_info;
+  auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("get fs info fail, {}.", status.ToString());
+    return false;
+  }
+
+  epoch_ = std::max(new_fs_info.partition_policy().mono().epoch(),
+                    new_fs_info.partition_policy().parent_hash().epoch());
+
+  fs_info_->Update(new_fs_info);
+
+  if (!mds_router_->UpdateRouter(new_fs_info.partition_policy())) {
+    LOG(ERROR) << "update mds router fail.";
+  }
+
+  return true;
 }
 
 }  // namespace v2

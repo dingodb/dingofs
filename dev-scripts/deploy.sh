@@ -7,7 +7,6 @@ if [[ ! -d "$mydir" ]]; then mydir="$PWD"; fi
 DEFINE_string role 'mdsv2' 'server role'
 DEFINE_integer server_num 1 'server number'
 DEFINE_boolean clean_log 1 'clean log'
-DEFINE_boolean clean_all 1 'clean all'
 DEFINE_boolean replace_conf 0 'replace conf'
 DEFINE_string parameters 'deploy_parameters' 'server role'
 
@@ -87,7 +86,7 @@ function deploy_server() {
 
   fi
 
-  if [ "${FLAGS_clean_log}" == "0" ]; then
+  if [ "${FLAGS_clean_log}" != "0" ]; then
     rm -rf $dstpath/log/*
   fi
 }

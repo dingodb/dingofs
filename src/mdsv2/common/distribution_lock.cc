@@ -14,16 +14,15 @@
 
 #include "mdsv2/common/distribution_lock.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
 
 #include "dingofs/error.pb.h"
 #include "fmt/core.h"
+#include "fmt/format.h"
 #include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/coordinator/coordinator_client.h"
@@ -43,14 +42,24 @@ CoorDistributionLockPtr CoorDistributionLock::GetSelfPtr() {
 }
 
 bool CoorDistributionLock::Init() {
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] init dlock.", LockKey());
+
   // create lease
   auto status = CreateLease(lease_id_);
   if (!status.ok()) {
     return false;
   }
 
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] lease id({}).", LockKey(), lease_id_);
+
   // launch renew lease at background
   if (!LaunchRenewLease()) {
+    return false;
+  }
+
+  // delete already exist key
+  status = DeleteLockKey(LockKey());
+  if (!status.ok()) {
     return false;
   }
 
@@ -68,8 +77,17 @@ bool CoorDistributionLock::Init() {
 }
 
 void CoorDistributionLock::Destroy() {
+  bool expect = false;
+  if (!is_stop_.compare_exchange_strong(expect, true)) {
+    return;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] destroy dlock.", LockKey());
+
   StopRenewLease();
   DeleteLease(lease_id_);
+
+  StopCheckLock();
 }
 
 bool CoorDistributionLock::IsLocked() { return is_locked_.load(); }
@@ -110,7 +128,25 @@ Status CoorDistributionLock::DeleteLease(int64_t lease_id) {
   return Status::OK();
 }
 
+Status CoorDistributionLock::DeleteLockKey(const std::string& key) {
+  CoordinatorClient::Options options;
+  CoordinatorClient::Range range;
+  range.start_key = key;
+
+  int64_t deleted_count;
+  std::vector<CoordinatorClient::KVWithExt> prev_kvs;
+  auto status = coordinator_client_->KvDeleteRange(options, range, deleted_count, prev_kvs);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[dlock.{}] delete fail, {}", LockKey(), status.error_str());
+    return Status(pb::error::ECOORDINATOR, status.error_str());
+  }
+
+  return Status::OK();
+}
+
 Status CoorDistributionLock::PutLockKey(const std::string& key, int64_t lease_id) {
+  CHECK(lease_id > 0) << "lease_id is invalid.";
+
   CoordinatorClient::Options options;
   options.lease_id = lease_id;
   options.ignore_lease = false;
@@ -123,7 +159,7 @@ Status CoorDistributionLock::PutLockKey(const std::string& key, int64_t lease_id
   CoordinatorClient::KVWithExt prev_kv;
   auto status = coordinator_client_->KvPut(options, kv, prev_kv);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[dlock.{}] put fail, error: {}", LockKey(), status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[dlock.{}] put fail, lease_id({}) {}", LockKey(), lease_id, status.error_str());
     return Status(pb::error::ECOORDINATOR, status.error_str());
   }
 
@@ -228,6 +264,10 @@ bool CoorDistributionLock::LaunchRenewLease() {
             auto self = param->self;
 
             for (;;) {
+              if (self->is_stop_.load()) {
+                break;
+              }
+
               self->RenewLease(self->lease_id_);
 
               bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
@@ -271,32 +311,8 @@ bool CoorDistributionLock::LaunchCheckLock() {
           &check_lock_th_, nullptr,
           [](void* arg) -> void* {
             Params* param = static_cast<Params*>(arg);
-            auto self = param->self;
 
-            std::string lock_key = self->LockKey();
-
-            for (;;) {
-              std::string watch_key;
-              int64_t watch_revision;
-              auto status = self->CheckLock(watch_key, watch_revision);
-              if (!status.ok()) {
-                LOG(ERROR) << fmt::format("[dlock.{}] check lock fail, {}", lock_key, status.error_str());
-                bthread_usleep(4 * 1000 * 1000);
-                continue;
-              }
-
-              // own lock
-              if (watch_key.empty()) {
-                LOG(INFO) << fmt::format("[dlock.{}] mds({}) own lock.", lock_key, self->mds_id_);
-
-                self->is_locked_.store(true);
-                bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
-
-              } else {
-                // not own lock, watch key
-                self->Watch(watch_key, watch_revision);
-              }
-            }
+            param->self->CheckLock();
 
             delete param;
             return nullptr;
@@ -308,6 +324,42 @@ bool CoorDistributionLock::LaunchCheckLock() {
   }
 
   return true;
+}
+
+void CoorDistributionLock::CheckLock() {
+  std::string lock_key = LockKey();
+
+  for (;;) {
+    if (is_stop_.load()) {
+      break;
+    }
+
+    DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0001.", lock_key);
+    std::string watch_key;
+    int64_t watch_revision;
+    auto status = CheckLock(watch_key, watch_revision);
+    if (!status.ok()) {
+      DINGO_LOG(ERROR) << fmt::format("[dlock.{}] check lock fail, {}", lock_key, status.error_str());
+      bthread_usleep(4 * 1000 * 1000);
+      continue;
+    }
+
+    DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0002.", lock_key);
+
+    // own lock
+    if (watch_key.empty()) {
+      DINGO_LOG(INFO) << fmt::format("[dlock.{}] mds({}) own lock.", lock_key, mds_id_);
+
+      is_locked_.store(true);
+      bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
+
+    } else {
+      DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0003.", lock_key);
+      // not own lock, watch key
+      Watch(watch_key, watch_revision);
+      DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0004.", lock_key);
+    }
+  }
 }
 
 void CoorDistributionLock::StopCheckLock() {

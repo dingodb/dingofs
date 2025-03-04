@@ -91,11 +91,11 @@ Status MdsV2DirIterator::Next(bool with_attr, DirEntry* dir_entry) {
   return Status::OK();
 }
 
-MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
+MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
                                  const std::string& mount_path,
                                  MDSDiscoveryPtr mds_discovery,
                                  MDSClientPtr mds_client)
-    : name_(fs_info.fs_name()),
+    : name_(fs_info->GetName()),
       mount_path_(mount_path),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
@@ -104,7 +104,7 @@ MDSV2FileSystem::MDSV2FileSystem(pb::mdsv2::FsInfo fs_info,
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
 Status MDSV2FileSystem::Init() {
-  LOG(INFO) << fmt::format("fs_info: {}.", fs_info_.ShortDebugString());
+  LOG(INFO) << fmt::format("fs_info: {}.", fs_info_->ToString());
   // mount fs
   if (!MountFs()) {
     LOG(ERROR) << fmt::format("mount fs({}) fail.", name_);
@@ -462,8 +462,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
     return nullptr;
   }
 
-  dingofs::pb::mdsv2::FsInfo fs_info;
-  auto status = MDSClient::GetFsInfo(rpc, fs_name, fs_info);
+  dingofs::pb::mdsv2::FsInfo pb_fs_info;
+  auto status = MDSClient::GetFsInfo(rpc, fs_name, pb_fs_info);
   if (!status.ok()) {
     LOG(ERROR) << "Get fs info fail.";
     return nullptr;
@@ -474,37 +474,30 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   // mds router
   MDSRouterPtr mds_router;
-  if (fs_info.partition_policy().type() ==
+  if (pb_fs_info.partition_policy().type() ==
       dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
-    int64_t mds_id = fs_info.partition_policy().mono().mds_id();
+    mds_router = MonoMDSRouter::New(mds_discovery);
 
-    dingofs::mdsv2::MDSMeta mds_meta;
-    if (!mds_discovery->GetMDS(mds_id, mds_meta)) {
-      LOG(ERROR) << fmt::format("Get mds({}) meta fail.", mds_id);
-      return nullptr;
-    }
-    mds_router = MonoMDSRouter::New(mds_meta);
-
-  } else if (fs_info.partition_policy().type() ==
+  } else if (pb_fs_info.partition_policy().type() ==
              dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-    mds_router = ParentHashMDSRouter::New(
-        fs_info.partition_policy().parent_hash(), mds_discovery, parent_cache);
+    mds_router = ParentHashMDSRouter::New(mds_discovery, parent_cache);
 
   } else {
     LOG(ERROR) << fmt::format("Not support partition policy type({}).",
                               dingofs::pb::mdsv2::PartitionType_Name(
-                                  fs_info.partition_policy().type()));
+                                  pb_fs_info.partition_policy().type()));
     return nullptr;
   }
 
-  if (!mds_router->Init()) {
+  if (!mds_router->Init(pb_fs_info.partition_policy())) {
     LOG(ERROR) << "MDSRouter init fail.";
     return nullptr;
   }
 
+  auto fs_info = mdsv2::FsInfo::New(pb_fs_info);
+
   // create mds client
-  auto mds_client =
-      MDSClient::New(fs_info.fs_id(), parent_cache, mds_router, rpc);
+  auto mds_client = MDSClient::New(fs_info, parent_cache, mds_router, rpc);
   if (!mds_client->Init()) {
     LOG(INFO) << "MDSClient init fail.";
     return nullptr;

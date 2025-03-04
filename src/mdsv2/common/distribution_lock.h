@@ -40,6 +40,8 @@ class DistributionLock : public std::enable_shared_from_this<DistributionLock> {
   virtual bool IsLocked() = 0;
 };
 
+using DistributionLockPtr = std::shared_ptr<DistributionLock>;
+
 class CoorDistributionLock;
 using CoorDistributionLockPtr = std::shared_ptr<CoorDistributionLock>;
 
@@ -66,6 +68,7 @@ class CoorDistributionLock : public DistributionLock {
   Status RenewLease(int64_t lease_id);
   Status DeleteLease(int64_t lease_id);
 
+  Status DeleteLockKey(const std::string& key);
   Status PutLockKey(const std::string& key, int64_t lease_id);
   Status CheckLock(std::string& watch_key, int64_t& watch_revision);
 
@@ -75,7 +78,10 @@ class CoorDistributionLock : public DistributionLock {
   Status Watch(const std::string& watch_key, int64_t watch_revision);
 
   bool LaunchCheckLock();
+  void CheckLock();
   void StopCheckLock();
+
+  std::atomic<bool> is_stop_{false};
 
   std::string addr_;
 

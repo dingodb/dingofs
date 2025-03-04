@@ -19,8 +19,6 @@
 #include <memory>
 #include <vector>
 
-#include "bthread/types.h"
-#include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/mds/mds_meta.h"
 

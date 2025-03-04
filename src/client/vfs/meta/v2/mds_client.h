@@ -15,8 +15,6 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_MDS_CLIENT_H_
 
-#include <absl/status/status.h>
-
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -25,6 +23,7 @@
 #include "client/vfs/meta/v2/rpc.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/filesystem/fs_info.h"
 
 namespace dingofs {
 namespace client {
@@ -36,17 +35,18 @@ using MDSClientPtr = std::shared_ptr<MDSClient>;
 
 class MDSClient {
  public:
-  MDSClient(uint32_t fs_id, ParentCachePtr parent_cache,
+  MDSClient(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
             MDSRouterPtr mds_router, RPCPtr rpc)
-      : fs_id_(fs_id),
+      : fs_info_(fs_info),
+        fs_id_(fs_info->GetFsId()),
         parent_cache_(parent_cache),
         mds_router_(mds_router),
         rpc_(rpc) {}
   virtual ~MDSClient() = default;
 
-  static MDSClientPtr New(uint32_t fs_id, ParentCachePtr parent_cache,
+  static MDSClientPtr New(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
                           MDSRouterPtr mds_router, RPCPtr rpc) {
-    return std::make_shared<MDSClient>(fs_id, parent_cache, mds_router, rpc);
+    return std::make_shared<MDSClient>(fs_info, parent_cache, mds_router, rpc);
   }
 
   bool Init();
@@ -100,7 +100,16 @@ class MDSClient {
   EndPoint GetEndPointByIno(int64_t ino);
   EndPoint GetEndPointByParentIno(int64_t parent_ino);
 
-  uint32_t fs_id_;
+  bool ProcessEpochChange();
+
+  template <typename Request, typename Response>
+  Status SendRequest(EndPoint endpoint, const std::string& service_name,
+                     const std::string& api_name, Request& request,
+                     Response& response);
+
+  uint32_t fs_id_{0};
+  uint64_t epoch_{0};
+  mdsv2::FsInfoPtr fs_info_;
 
   ParentCachePtr parent_cache_;
 
@@ -108,6 +117,28 @@ class MDSClient {
 
   RPCPtr rpc_;
 };
+
+template <typename Request, typename Response>
+Status MDSClient::SendRequest(EndPoint endpoint,
+                              const std::string& service_name,
+                              const std::string& api_name, Request& request,
+                              Response& response) {
+  for (int retry = 0; retry < 2; ++retry) {
+    request.mutable_context()->set_epoch(epoch_);
+    auto status =
+        rpc_->SendRequest(endpoint, service_name, api_name, request, response);
+    if (!status.ok() && status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
+      if (!ProcessEpochChange()) {
+        return Status::Internal("process epoch change fail");
+      }
+      continue;
+    }
+
+    return status;
+  }
+
+  return Status::Internal("send request failed.");
+}
 
 }  // namespace v2
 }  // namespace vfs

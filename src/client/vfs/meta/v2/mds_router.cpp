@@ -16,6 +16,7 @@
 
 #include <cstdint>
 
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
 
@@ -24,7 +25,30 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-bool MonoMDSRouter::Init() { return true; }
+bool MonoMDSRouter::UpdateMds(int64_t mds_id) {
+  CHECK(mds_id > 0) << fmt::format("invalid mds_id({}).", mds_id);
+
+  mdsv2::MDSMeta mds_meta;
+  if (!mds_discovery_->GetMDS(mds_id, mds_meta)) {
+    return false;
+  }
+
+  {
+    utils::WriteLockGuard lk(lock_);
+
+    mds_meta_ = mds_meta;
+  }
+
+  return true;
+}
+
+bool MonoMDSRouter::Init(const pb::mdsv2::PartitionPolicy& partition_policy) {
+  CHECK(partition_policy.type() == pb::mdsv2::MONOLITHIC_PARTITION)
+      << fmt::format("invalid partition type({}).",
+                     pb::mdsv2::PartitionType_Name(partition_policy.type()));
+
+  return UpdateMds(partition_policy.mono().mds_id());
+}
 
 mdsv2::MDSMeta MonoMDSRouter::GetMDSByParentIno(int64_t parent_ino) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
@@ -38,14 +62,20 @@ mdsv2::MDSMeta MonoMDSRouter::GetMDSByIno(int64_t ino) {  // NOLINT
   return mds_meta_;
 }
 
-void MonoMDSRouter::UpdateMDS(const mdsv2::MDSMeta& mds_meta) {
-  utils::WriteLockGuard lk(lock_);
+bool MonoMDSRouter::UpdateRouter(
+    const pb::mdsv2::PartitionPolicy& partition_policy) {
+  CHECK(partition_policy.type() == pb::mdsv2::MONOLITHIC_PARTITION)
+      << fmt::format("invalid partition type({}).",
+                     pb::mdsv2::PartitionType_Name(partition_policy.type()));
 
-  mds_meta_ = mds_meta;
+  return UpdateMds(partition_policy.mono().mds_id());
 }
 
-bool ParentHashMDSRouter::Init() {
-  for (const auto& [mds_id, bucket_set] : hash_partition_.distributions()) {
+void ParentHashMDSRouter::UpdateMDSes(
+    const pb::mdsv2::HashPartition& hash_partition) {
+  utils::WriteLockGuard lk(lock_);
+
+  for (const auto& [mds_id, bucket_set] : hash_partition.distributions()) {
     mdsv2::MDSMeta mds_meta;
     CHECK(mds_discovery_->GetMDS(mds_id, mds_meta))
         << fmt::format("not found mds by mds_id({}).", mds_id);
@@ -54,6 +84,17 @@ bool ParentHashMDSRouter::Init() {
       mdses_[bucket_id] = mds_meta;
     }
   }
+
+  hash_partition_ = hash_partition;
+}
+
+bool ParentHashMDSRouter::Init(
+    const pb::mdsv2::PartitionPolicy& partition_policy) {
+  CHECK(partition_policy.type() == pb::mdsv2::PARENT_ID_HASH_PARTITION)
+      << fmt::format("invalid partition type({}).",
+                     pb::mdsv2::PartitionType_Name(partition_policy.type()));
+
+  UpdateMDSes(partition_policy.parent_hash());
 
   return true;
 }
@@ -84,6 +125,17 @@ mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(int64_t ino) {
       << fmt::format("not found mds by parent_ino({}).", parent_ino);
 
   return it->second;
+}
+
+bool ParentHashMDSRouter::UpdateRouter(
+    const pb::mdsv2::PartitionPolicy& partition_policy) {
+  CHECK(partition_policy.type() == pb::mdsv2::PARENT_ID_HASH_PARTITION)
+      << fmt::format("invalid partition type({}).",
+                     pb::mdsv2::PartitionType_Name(partition_policy.type()));
+
+  UpdateMDSes(partition_policy.parent_hash());
+
+  return true;
 }
 
 }  // namespace v2

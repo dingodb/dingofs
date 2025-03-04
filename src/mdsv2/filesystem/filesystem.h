@@ -27,6 +27,7 @@
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file.h"
+#include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/mutation_processor.h"
@@ -36,7 +37,6 @@
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 class FileSystem;
@@ -56,27 +56,38 @@ struct EntryOut {
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
-             KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor);
+  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
+             RenamerPtr renamer, MutationProcessorPtr mutation_processor);
   ~FileSystem() = default;
 
-  static FileSystemPtr New(int64_t self_mds_id, const pb::mdsv2::FsInfo& fs_info, IdGeneratorPtr id_generator,
+  static FileSystemPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator,
                            KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor) {
-    return std::make_shared<FileSystem>(self_mds_id, fs_info, std::move(id_generator), kv_storage, renamer,
+    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
                                         mutation_processor);
   }
 
   FileSystemPtr GetSelfPtr();
 
-  uint32_t FsId() const { return fs_info_.fs_id(); }
-  std::string FsName() const { return fs_info_.fs_name(); }
-  pb::mdsv2::FsInfo FsInfo() const { return fs_info_; }
-  pb::mdsv2::PartitionType PartitionType() const { return fs_info_.partition_policy().type(); }
+  uint32_t FsId() const { return fs_id_; }
+  std::string FsName() const { return fs_info_->GetName(); }
+  uint64_t Epoch() const {
+    auto partition_policy = fs_info_->GetPartitionPolicy();
+    if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+      return partition_policy.mono().epoch();
+
+    } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+      return partition_policy.parent_hash().epoch();
+    }
+
+    return 0;
+  }
+  pb::mdsv2::FsInfo FsInfo() const { return fs_info_->Get(); }
+  pb::mdsv2::PartitionType PartitionType() const { return fs_info_->GetPartitionType(); }
   bool IsMonoPartition() const {
-    return fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION;
+    return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION;
   }
   bool IsParentHashPartition() const {
-    return fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
+    return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
   }
 
   bool CanServe() const { return can_serve_; };
@@ -150,6 +161,10 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
   Status ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
 
+  Status RefreshFsInfo();
+  Status RefreshFsInfo(const std::string& name);
+  void RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info);
+
   Status UpdatePartitionPolicy(uint64_t mds_id);
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
 
@@ -187,7 +202,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   uint64_t self_mds_id_;
 
   // filesystem info
-  pb::mdsv2::FsInfo fs_info_;
+  FsInfoUPtr fs_info_;
+  const uint32_t fs_id_;
 
   bool can_serve_{false};
 
@@ -248,10 +264,12 @@ class FileSystemSet {
   Status DeleteFs(const std::string& fs_name);
   Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
   Status RefreshFsInfo(const std::string& fs_name);
+  Status RefreshFsInfo(uint32_t fs_id);
 
   Status AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids);
 
   FileSystemPtr GetFileSystem(uint32_t fs_id);
+  FileSystemPtr GetFileSystem(const std::string& fs_name);
   std::vector<FileSystemPtr> GetAllFileSystem();
 
   // load already exist filesystem

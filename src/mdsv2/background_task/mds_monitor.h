@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "mdsv2/common/distribution_lock.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
 
@@ -31,26 +32,30 @@ using MDSMonitorPtr = std::shared_ptr<MDSMonitor>;
 
 class MDSMonitor {
  public:
-  MDSMonitor(std::unique_ptr<DistributionLock> dist_lock) : dist_lock_(std::move(dist_lock)) {}
+  MDSMonitor(CoordinatorClientPtr coordinator_client, FileSystemSetPtr fs_set, DistributionLockPtr dist_lock)
+      : coordinator_client_(coordinator_client), fs_set_(fs_set), dist_lock_(dist_lock) {}
   ~MDSMonitor() = default;
 
-  static MDSMonitorPtr New(std::unique_ptr<DistributionLock> dist_lock) {
-    return std::make_shared<MDSMonitor>(std::move(dist_lock));
+  static MDSMonitorPtr New(CoordinatorClientPtr coordinator_client, FileSystemSetPtr fs_set,
+                           DistributionLockPtr dist_lock) {
+    return std::make_shared<MDSMonitor>(coordinator_client, fs_set, dist_lock);
   }
 
   bool Init();
   void Destroy();
 
-  void MonitorMDS();
+  void Run();
 
  private:
+  Status MonitorMDS();
+
   std::atomic<bool> is_running_{false};
 
   CoordinatorClientPtr coordinator_client_;
 
   FileSystemSetPtr fs_set_;
 
-  std::unique_ptr<DistributionLock> dist_lock_;
+  DistributionLockPtr dist_lock_;
 };
 
 using MDSMonitorPtr = std::shared_ptr<MDSMonitor>;
