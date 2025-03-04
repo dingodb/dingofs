@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/service/fsinfo_sync.h"
+#include "mdsv2/background/fsinfo_sync.h"
 
 #include "fmt/core.h"
 #include "mdsv2/common/logging.h"

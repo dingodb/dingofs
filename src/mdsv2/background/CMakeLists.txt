@@ -13,15 +13,15 @@
 # limitations under the License.
 
 
-file(GLOB DINGOFS_MDSV2_BACKGROUND_TASK_SRCS
+file(GLOB DINGOFS_MDSV2_BACKGROUND_SRCS
     "*.cc"
 )
 
-add_library(mdsv2_background_task
-    ${DINGOFS_MDSV2_BACKGROUND_TASK_SRCS}
+add_library(mdsv2_background
+    ${DINGOFS_MDSV2_BACKGROUND_SRCS}
 )
 
-target_link_libraries(mdsv2_background_task
+target_link_libraries(mdsv2_background
     PROTO_OBJS
     
     mdsv2_service

@@ -12,38 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_SERVICE_FILESYSTEM_SYNC_H_
-#define DINGOFS_MDSV2_SERVICE_FILESYSTEM_SYNC_H_
+#ifndef DINGOFS_MDSV2_HEARTBEAT_H_
+#define DINGOFS_MDSV2_HEARTBEAT_H_
 
 #include "mdsv2/common/runnable.h"
-#include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/coordinator/coordinator_client.h"
 
 namespace dingofs {
+
 namespace mdsv2 {
 
-class FsInfoSyncTask : public TaskRunnable {
+class HeartbeatTask : public TaskRunnable {
  public:
-  FsInfoSyncTask(FileSystemSetPtr file_system_set) : file_system_set_(file_system_set) {}
+  HeartbeatTask(CoordinatorClientPtr coordinator_client) : coordinator_client_(coordinator_client) {}
 
-  ~FsInfoSyncTask() override = default;
+  ~HeartbeatTask() override = default;
 
-  std::string Type() override { return "FSINFO_SYNC"; }
+  std::string Type() override { return "HEARTBEAT"; }
 
   void Run() override;
 
+  static void SendHeartbeat(CoordinatorClientPtr coordinator_client);
+  static void HandleHeartbeatResponse();
+
+  static std::atomic<uint64_t> heartbeat_counter;
+
  private:
-  FileSystemSetPtr file_system_set_;
+  bool is_update_epoch_version_;
+  std::vector<int64_t> region_ids_;
+  CoordinatorClientPtr coordinator_client_;
 };
 
-class FsInfoSync {
+class Heartbeat {
  public:
-  FsInfoSync() = default;
-  ~FsInfoSync() = default;
+  Heartbeat() = default;
+  ~Heartbeat() = default;
 
   bool Init();
   bool Destroy();
 
-  static void TriggerFsInfoSync();
+  static void TriggerHeartbeat();
 
  private:
   bool Execute(TaskRunnablePtr task);
@@ -52,6 +60,7 @@ class FsInfoSync {
 };
 
 }  // namespace mdsv2
+
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_SERVICE_FILESYSTEM_SYNC_H_
+#endif  // DINGOFS_MDSV2_HEARTBEAT_H_

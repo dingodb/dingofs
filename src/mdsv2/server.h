@@ -18,14 +18,14 @@
 #include <memory>
 #include <string>
 
-#include "mdsv2/background_task/mds_monitor.h"
+#include "mdsv2/background/fsinfo_sync.h"
+#include "mdsv2/background/heartbeat.h"
+#include "mdsv2/background/mds_monitor.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "mdsv2/service/fsinfo_sync.h"
-#include "mdsv2/service/heartbeat.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/configuration.h"
 

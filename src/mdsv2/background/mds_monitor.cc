@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/background_task/mds_monitor.h"
+#include "mdsv2/background/mds_monitor.h"
 
 #include <atomic>
 #include <cstdint>
