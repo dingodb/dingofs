@@ -71,8 +71,7 @@ def loadEtcdServer():
     if ret == 0 :
         data = json.loads(output)
         for etcdInfo in data["result"]:
-            # hostname:port:path
-            etcdAddr = mdsInfo["addr"]
+            etcdAddr = etcdInfo["addr"]
             etcdServers.append(etcdAddr)
     return unitValue(label, etcdServers)
 
