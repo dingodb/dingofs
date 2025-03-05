@@ -279,6 +279,12 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
   InitQosParam();
 
+  // init brpc server
+  if (InitBrpcServer() != 0) {
+    LOG(ERROR) << "InitBrpcServer failed";
+    return Status::Internal("InitBrpcServer failed");
+  }
+
   {
     // init mount point
     pb::mds::Mountpoint mount_point;
@@ -326,12 +332,6 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
       LOG(ERROR) << "lease_executor_ start failed";
       return Status::Internal("lease_executor_ start failed");
     }
-  }
-
-  // init brpc server
-  if (InitBrpcServer() != 0) {
-    LOG(ERROR) << "InitBrpcServer failed";
-    return Status::Internal("InitBrpcServer failed");
   }
 
   {
