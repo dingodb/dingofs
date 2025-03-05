@@ -25,7 +25,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 8,
   "links": [],
   "panels": [
     {
@@ -43,6 +42,7 @@
     },
     {
       "datasource": {
+        "default": true,
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
@@ -134,10 +134,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_memory_resident{instance=~\"$instance\"}",
           "interval": "",
-          "legendFormat": "process_memory_resident {{hostname}}",
+          "legendFormat": "process_memory_resident {{instance}}",
+          "range": true,
           "refId": "process_memory_resident"
         },
         {
@@ -145,11 +147,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_memory_virtual{instance=~\"$instance\"}",
           "hide": false,
           "interval": "",
-          "legendFormat": "process_memory_virtual {{hostname}}",
+          "legendFormat": "process_memory_virtual {{instance}}",
+          "range": true,
           "refId": "process_memory_virtual"
         },
         {
@@ -157,11 +161,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_memory_shared{instance=~\"$instance\"}",
           "hide": false,
           "interval": "",
-          "legendFormat": "process_memory_shared {{hostname}}",
+          "legendFormat": "process_memory_shared {{instance}}",
+          "range": true,
           "refId": "A"
         }
       ],
@@ -170,6 +176,7 @@
     },
     {
       "datasource": {
+        "default": true,
         "type": "prometheus",
         "uid": "PBFA97CFB590B2093"
       },
@@ -261,10 +268,12 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_cpu_usage{instance=~\"$instance\"}",
           "interval": "",
-          "legendFormat": "process_cpu_usage {{hostname}}",
+          "legendFormat": "process_cpu_usage {{instance}}",
+          "range": true,
           "refId": "process_cpu_usage"
         },
         {
@@ -272,11 +281,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_cpu_usage_system{instance=~\"$instance\"}",
           "hide": false,
           "interval": "",
-          "legendFormat": "process_cpu_usage_system {{hostname}}",
+          "legendFormat": "process_cpu_usage_system {{instance}}",
+          "range": true,
           "refId": "process_cpu_usage_system"
         },
         {
@@ -284,11 +295,13 @@
             "type": "prometheus",
             "uid": "PBFA97CFB590B2093"
           },
+          "editorMode": "code",
           "exemplar": true,
           "expr": "process_cpu_usage_user{instance=~\"$instance\"}",
           "hide": false,
           "interval": "",
-          "legendFormat": "process_cpu_usage_user {{hostname}}",
+          "legendFormat": "process_cpu_usage_user {{instance}}",
+          "range": true,
           "refId": "process_cpu_usage_user"
         }
       ],
@@ -327,8 +340,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -456,8 +468,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -559,8 +570,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -676,8 +686,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -779,8 +788,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -882,8 +890,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -985,8 +992,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1088,8 +1094,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1191,8 +1196,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1294,8 +1298,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1397,8 +1400,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1500,8 +1502,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1603,8 +1604,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1706,8 +1706,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1809,8 +1808,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -1912,8 +1910,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2015,8 +2012,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2118,8 +2114,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2221,8 +2216,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -2677,8 +2671,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2780,8 +2773,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2883,8 +2875,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2996,8 +2987,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3099,8 +3089,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3202,8 +3191,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3319,8 +3307,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3422,8 +3409,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3525,8 +3511,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3628,8 +3613,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3731,8 +3715,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3834,8 +3817,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -3937,8 +3919,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4054,8 +4035,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4169,8 +4149,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4284,8 +4263,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4387,8 +4365,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "red",
@@ -4732,14 +4709,14 @@
       "type": "row"
     }
   ],
-  "preload": false,
   "refresh": "",
-  "schemaVersion": 40,
+  "schemaVersion": 39,
   "tags": [],
   "templating": {
     "list": [
       {
         "current": {
+          "selected": true,
           "text": [
             "All"
           ],
@@ -4752,6 +4729,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\"bthread_count\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "Addr",
         "multi": true,
@@ -4763,11 +4741,13 @@
         },
         "refresh": 2,
         "regex": "/.*instance=\"([^\"]*).*/",
+        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
         "current": {
+          "selected": true,
           "text": [
             "All"
           ],
@@ -4780,6 +4760,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\"op_apply_pool_.*_copyset.*create_inode_count\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "pool",
         "multi": true,
@@ -4791,11 +4772,13 @@
         },
         "refresh": 2,
         "regex": "/op_apply_pool_(.*)_copyset.*create_inode_count/",
+        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
         "current": {
+          "selected": true,
           "text": [
             "All"
           ],
@@ -4808,6 +4791,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\".*copyset_.*_create_inode_count\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "copyset",
         "multi": true,
@@ -4819,10 +4803,13 @@
         },
         "refresh": 2,
         "regex": "/.*copyset_(.*)_create_inode_count.*/",
+        "skipUrlSync": false,
+        "sort": 0,
         "type": "query"
       },
       {
         "current": {
+          "selected": true,
           "text": [
             "latency"
           ],
@@ -4835,6 +4822,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\".*(latency_[0-9]*|latency)\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "latency_quantile",
         "multi": true,
@@ -4846,10 +4834,13 @@
         },
         "refresh": 2,
         "regex": "/.*(latency_[0-9]*|latency)/",
+        "skipUrlSync": false,
+        "sort": 0,
         "type": "query"
       },
       {
         "current": {
+          "selected": true,
           "text": [
             "All"
           ],
@@ -4862,6 +4853,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\".*dingofs_pb_metaserver_meta_server_service_.*_qps\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "op",
         "multi": true,
@@ -4873,16 +4865,18 @@
         },
         "refresh": 2,
         "regex": "/.*dingofs_pb_metaserver_meta_server_service_(.*)_qps/",
+        "skipUrlSync": false,
         "sort": 1,
         "type": "query"
       },
       {
         "current": {
+          "selected": true,
           "text": [
-            "1"
+            "All"
           ],
           "value": [
-            "1"
+            "$__all"
           ]
         },
         "datasource": {
@@ -4890,6 +4884,7 @@
           "uid": "PBFA97CFB590B2093"
         },
         "definition": "{__name__=~\".*dingofs_pb_metaserver_meta_server_service.*\", job=\"metaserver\"}",
+        "hide": 0,
         "includeAll": true,
         "label": "service_quantile",
         "multi": true,
@@ -4901,6 +4896,8 @@
         },
         "refresh": 2,
         "regex": "/quantile=\"(.*)\"}/",
+        "skipUrlSync": false,
+        "sort": 0,
         "type": "query"
       }
     ]
