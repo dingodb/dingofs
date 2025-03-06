@@ -22,6 +22,7 @@
 
 #include "client/vfs_old/filesystem/meta.h"
 
+#include <glog/logging.h>
 #include <sys/stat.h>
 
 #include <cstdint>
@@ -96,22 +97,25 @@ std::string StrMode(uint16_t mode) {
   return s;
 }
 
-bool FsDirIterator::HasNext() { return offset_ < entries.size(); }
-
-Status FsDirIterator::Next(bool with_attr, vfs::DirEntry* dir_entry) {
-  CHECK(offset_ < entries.size());
-
-  auto& entry = entries[offset_];
-  dir_entry->ino = entry.ino;
-  dir_entry->name = entry.name;
-  if (with_attr) {
-    dir_entry->attr = entry.attr;
-  }
-
-  offset_++;
-
+Status FsDirIterator::Seek() {
+  offset_ = 0;
   return Status::OK();
 }
+
+bool FsDirIterator::Valid() { return offset_ < entries_.size(); }
+
+vfs::DirEntry FsDirIterator::GetValue(bool with_attr) {
+  CHECK(offset_ < entries_.size()) << "offset out of range";
+
+  auto entry = entries_[offset_];
+  if (with_attr) {
+    entry.attr = entry.attr;
+  }
+
+  return entry;
+}
+
+void FsDirIterator::Next() { offset_++; }
 
 }  // namespace filesystem
 }  // namespace client

@@ -33,10 +33,13 @@ class DirIterator {
 
   virtual ~DirIterator() = default;
 
-  virtual bool HasNext() = 0;
+  virtual Status Seek() = 0;
 
-  // NOTE: if HasNext() is false, then Next() will undefined behavior
-  virtual Status Next(bool with_attr, DirEntry* dir_entry) = 0;
+  virtual bool Valid() = 0;
+
+  virtual DirEntry GetValue(bool with_attr) = 0;
+
+  virtual void Next() = 0;
 };
 
 using DirIteratorUPtr = std::unique_ptr<DirIterator>;

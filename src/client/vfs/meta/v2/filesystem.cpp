@@ -56,39 +56,44 @@ std::string GetHostName() {
   return std::string(hostname);
 }
 
-bool MdsV2DirIterator::HasNext() { return !is_end_; }
-
-Status MdsV2DirIterator::Next(bool with_attr, DirEntry* dir_entry) {
-  if (is_end_) {
-    return Status::NoData("no more data");
+Status MdsV2DirIterator::Seek() {
+  std::vector<DirEntry> entries;
+  auto status = mds_client_->ReadDir(ino_, last_name_,
+                                     FLAGS_read_dir_batch_size, true, entries);
+  if (!status.ok()) {
+    return status;
   }
 
-  if (offset_ == entries_.size()) {
-    std::vector<DirEntry> entries;
-    auto status = mds_client_->ReadDir(
-        ino_, last_name_, FLAGS_read_dir_batch_size, with_attr, entries);
-    if (!status.ok()) {
-      return status;
-    }
-
-    offset_ = 0;
-    entries_ = std::move(entries);
-
-    if (entries_.empty()) {
-      is_end_ = true;
-      return Status::NoData("no more data");
-    }
-  }
-
-  *dir_entry = entries_[offset_];
-  ++offset_;
-
-  if (offset_ == entries_.size() &&
-      entries_.size() < FLAGS_read_dir_batch_size) {
-    is_end_ = true;
-  }
+  offset_ = 0;
+  entries_ = std::move(entries);
 
   return Status::OK();
+}
+
+bool MdsV2DirIterator::Valid() { return offset_ < entries_.size(); }
+
+DirEntry MdsV2DirIterator::GetValue(bool with_attr) {
+  CHECK(offset_ < entries_.size()) << "offset out of range";
+
+  with_attr_ = with_attr;
+  return entries_[offset_];
+}
+
+void MdsV2DirIterator::Next() {
+  if (offset_ < entries_.size()) {
+    ++offset_;
+    return;
+  }
+
+  std::vector<DirEntry> entries;
+  auto status = mds_client_->ReadDir(
+      ino_, last_name_, FLAGS_read_dir_batch_size, with_attr_, entries);
+  if (!status.ok()) {
+    return;
+  }
+
+  offset_ = 0;
+  entries_ = std::move(entries);
 }
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,

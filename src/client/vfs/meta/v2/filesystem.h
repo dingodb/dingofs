@@ -41,17 +41,18 @@ class MdsV2DirIterator : public DirIterator {
   MdsV2DirIterator(MDSClientPtr mds_client, Ino ino)
       : mds_client_(mds_client), ino_(ino) {}
 
-  bool HasNext() override;
-
-  Status Next(bool with_attr, DirEntry* dir_entry) override;
+  Status Seek() override;
+  bool Valid() override;
+  DirEntry GetValue(bool with_attr) override;
+  void Next() override;
 
  private:
   Ino ino_;
   std::string last_name_;
+  bool with_attr_{false};
 
   uint32_t offset_{0};
   std::vector<DirEntry> entries_;
-  bool is_end_{false};
 
   MDSClientPtr mds_client_;
 };

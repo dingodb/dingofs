@@ -84,14 +84,17 @@ class FsDirIterator : public vfs::DirIterator {
   FsDirIterator() = default;
   ~FsDirIterator() override = default;
 
-  bool HasNext() override;
+  void Append(vfs::DirEntry& entry) { entries_.push_back(entry); }
 
-  Status Next(bool with_attr, vfs::DirEntry* dir_entry) override;
-
-  std::vector<vfs::DirEntry> entries;
+  Status Seek() override;
+  bool Valid() override;
+  vfs::DirEntry GetValue(bool with_attr) override;
+  void Next() override;
 
  private:
   uint64_t offset_{0};
+
+  std::vector<vfs::DirEntry> entries_;
 };
 
 struct FileHandler {

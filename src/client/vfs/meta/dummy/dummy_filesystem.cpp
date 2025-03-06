@@ -980,24 +980,29 @@ DummyDirIterator::~DummyDirIterator() {
   }
 }
 
-bool DummyDirIterator::HasNext() { return offset_ < dir_entries_.size(); }
+Status DummyDirIterator::Seek() { return Status::OK(); }
 
-Status DummyDirIterator::Next(bool with_attr, DirEntry* dir_entry) {
+bool DummyDirIterator::Valid() { return offset_ < dir_entries_.size(); }
+
+DirEntry DummyDirIterator::GetValue(bool with_attr) {
   CHECK(offset_ < dir_entries_.size()) << "offset out of range";
 
-  auto& entry = dir_entries_[offset_];
-  dir_entry->name = entry.name;
-  dir_entry->ino = entry.ino;
+  auto entry = dir_entries_[offset_];
+
   if (with_attr) {
     DummyFileSystem::PBInode inode;
     if (dumy_system_->GetInode(entry.ino, inode)) {
-      dir_entry->attr = ToAttr(inode);
+      entry.attr = ToAttr(inode);
     }
   }
 
-  ++offset_;
+  return entry;
+}
 
-  return Status::OK();
+void DummyDirIterator::Next() {
+  if (offset_ < dir_entries_.size()) {
+    ++offset_;
+  }
 }
 
 void DummyDirIterator::SetDirEntries(std::vector<DirEntry>&& dir_entries) {

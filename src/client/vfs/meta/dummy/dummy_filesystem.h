@@ -135,9 +135,13 @@ class DummyDirIterator : public vfs::DirIterator {
 
   ~DummyDirIterator() override;
 
-  bool HasNext() override;
+  Status Seek() override;
 
-  Status Next(bool with_attr, DirEntry* dir_entry) override;
+  bool Valid() override;
+
+  DirEntry GetValue(bool with_attr) override;
+
+  void Next() override;
 
   void SetDirEntries(std::vector<DirEntry>&& dir_entries);
 

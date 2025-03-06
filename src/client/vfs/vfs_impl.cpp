@@ -303,6 +303,7 @@ Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
 
   if (s.ok()) {
     DirIteratorUPtr dir_iterator(meta_system_->NewDirIterator(ino));
+    dir_iterator->Seek();
     auto handle = handle_manager_->NewHandle(ino, std::move(dir_iterator));
     *fh = handle->fh;
   }
@@ -326,24 +327,15 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   auto& dir_iterator = handle->dir_iterator;
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
-  while (dir_iterator->HasNext()) {
-    DirEntry entry;
-    s = dir_iterator->Next(with_attr, &entry);
-    if (!s.ok()) {
-      if (s.IsNoData()) {
-        return Status::OK();
-      }
-
-      LOG(WARNING) << fmt::format(
-          "read dir fail, ino({}) fh({}) offset({}) error({})", ino, fh, offset,
-          s.ToString());
-      return s;
-    }
+  while (dir_iterator->Valid()) {
+    DirEntry entry = dir_iterator->GetValue(with_attr);
 
     if (!handler(entry)) {
       LOG(INFO) << "read dir break by handler next_offset: " << offset;
       break;
     }
+
+    dir_iterator->Next();
   }
 
   LOG(INFO) << fmt::format("read dir ino({}) fh({}) offset({})", ino, fh,

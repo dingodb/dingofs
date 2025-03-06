@@ -24,6 +24,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "aws/s3_adapter.h"
 #include "client/blockcache/block_cache.h"
@@ -1875,6 +1876,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
 
   std::vector<pb::metaserver::InodeAttr> inode_attrs;
 
+  std::vector<vfs::DirEntry> entries;
   entry_list->Iterate([&](filesystem::DirEntry* dir_entry) {
     if (dir_entry->ino == STATSINODEID) {
       has_stats = true;
@@ -1886,7 +1888,8 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
       inode_attrs.push_back(dir_entry->attr);
       entry.attr = InodeAttrPBToAttr(dir_entry->attr);
     }
-    file_handler->dir_iterator->entries.push_back(entry);
+
+    file_handler->dir_iterator->Append(entry);
   });
 
   // out of iterate
@@ -1900,7 +1903,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
     entry.ino = STATSINODEID;
     entry.name = STATSNAME;
     entry.attr = GenerateVirtualInodeAttr(STATSINODEID);
-    file_handler->dir_iterator->entries.push_back(entry);
+    file_handler->dir_iterator->Append(entry);
   }
 
   file_handler->dir_handler_init = true;
@@ -1926,23 +1929,19 @@ Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
 
   auto& dir_iterator = file_handler->dir_iterator;
 
-  while (dir_iterator->HasNext()) {
-    DirEntry entry;
-    Status s = dir_iterator->Next(with_attr, &entry);
-    if (!s.ok()) {
-      LOG(WARNING) << "Fail Next in ReadDir, inodeId=" << ino << ", fh: " << fh
-                   << ", offset: " << offset << ", status: " << s.ToString();
-      return s;
-    }
-
+  while (dir_iterator->Valid()) {
+    DirEntry entry = dir_iterator->GetValue(with_attr);
     if (!handler(entry)) {
       LOG(INFO) << "ReadDir break by handler next_offset: " << offset;
       break;
     }
+
+    dir_iterator->Next();
   }
 
   LOG(INFO) << "ReadDir inodeId=" << ino << ", fh: " << fh
             << ", offset: " << offset << " success";
+
   return Status::OK();
 }
 
