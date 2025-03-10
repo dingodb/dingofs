@@ -185,7 +185,6 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
     DINGO_LOG(ERROR) << fmt::format("[dlock.{}] scan range fail, error: {}", LockKey(), status.error_str());
     return Status(pb::error::ECOORDINATOR, status.error_str());
   }
-  DINGO_LOG(INFO) << fmt::format("[dlock.{}] scan range, count({}).", LockKey(), kvs.size());
 
   if (kvs.empty()) {
     return Status(pb::error::ENOT_FOUND, "lock key not found.");
@@ -196,12 +195,16 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
     return a.mod_revision < b.mod_revision;
   });
 
+  // debug log
+  for (auto& kv : kvs) {
+    DINGO_LOG(INFO) << fmt::format("[dlock.{}] key({}) revision({}).", LockKey(), Helper::StringToHex(kv.kv.key),
+                                   kv.mod_revision);
+  }
+
   std::string lock_key = LockKey();
   size_t index = 0;
   for (int i = 0; i < kvs.size(); ++i) {
     auto& kv = kvs[i];
-    DINGO_LOG(INFO) << fmt::format("[dlock.{}] scan, key({}/{}) revision({}).", lock_key, Helper::StringToHex(lock_key),
-                                   Helper::StringToHex(kv.kv.key), kv.mod_revision);
     if (kv.kv.key == lock_key) {
       index = i;
       break;

@@ -29,10 +29,10 @@
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/service/service_access.h"
 
-DEFINE_uint32(mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
-
 namespace dingofs {
 namespace mdsv2 {
+
+DEFINE_uint32(mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
 
 void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                    std::vector<MDSMeta>& offline_mdses) {

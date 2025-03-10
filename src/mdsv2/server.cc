@@ -14,18 +14,12 @@
 
 #include "mdsv2/server.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags.h>
-#include <openssl/asn1.h>
-
 #include <cstdint>
-#include <fstream>
-#include <memory>
 #include <string>
-#include <utility>
 
 #include "brpc/server.h"
 #include "fmt/core.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
@@ -36,7 +30,9 @@
 #include "mdsv2/service/debug_service.h"
 #include "mdsv2/service/fsstat_service.h"
 #include "mdsv2/service/mds_service.h"
+#include "mdsv2/service/mdsstat_service.h"
 #include "mdsv2/storage/dingodb_storage.h"
+#include "openssl/asn1.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -306,6 +302,10 @@ void Server::Run() {
 
   DebugServiceImpl debug_service(file_system_set_);
   CHECK(brpc_server.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
+
+  MdsStatServiceImpl mds_stat_service;
+  CHECK(brpc_server.AddService(&mds_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+      << "add mdsstat service error.";
 
   FsStatServiceImpl fs_stat_service;
   CHECK(brpc_server.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";

@@ -43,6 +43,19 @@ class MDSMeta {
     kAbnormal = 2,
   };
 
+  static std::string StateName(State state) {
+    switch (state) {
+      case State::kInit:
+        return "INIT";
+      case State::kNormal:
+        return "NORMAL";
+      case State::kAbnormal:
+        return "ABNORMAL";
+      default:
+        return "UNKNOWN";
+    }
+  }
+
   int64_t ID() const { return id_; }
   void SetID(int64_t id) { id_ = id; }
 

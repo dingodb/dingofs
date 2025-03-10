@@ -14,18 +14,18 @@
 
 #include "mdsv2/service/fsstat_service.h"
 
-#include <fmt/format.h>
 #include <sys/types.h>
 
 #include <string>
-#include <vector>
 
 #include "brpc/builtin/common.h"
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
 #include "brpc/server.h"
+#include "butil/endpoint.h"
 #include "butil/iobuf.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/server.h"
 
@@ -84,19 +84,22 @@ static std::string RenderPartitionPolicy(pb::mdsv2::PartitionPolicy partition_po
   switch (partition_policy.type()) {
     case pb::mdsv2::PartitionType::MONOLITHIC_PARTITION: {
       const auto& mono = partition_policy.mono();
-      result += fmt::format("mds: {}", mono.mds_id());
-      result += "<br>";
       result += fmt::format("epoch: {}", mono.epoch());
+      result += "<br>";
+      result += fmt::format("mds: {}", mono.mds_id());
     } break;
 
     case pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION: {
       const auto& parent_hash = partition_policy.parent_hash();
-
-      result = fmt::format("{}/{}", parent_hash.bucket_num(), parent_hash.epoch());
+      result += fmt::format("epoch: {}", parent_hash.epoch());
       result += "<br>";
+      result += fmt::format("bucket_num: {}", parent_hash.bucket_num());
+      result += "<br>";
+      result += "mds: ";
       for (const auto& [mds_id, _] : parent_hash.distributions()) {
         result += fmt::format("{},", mds_id);
       }
+      result.resize(result.size() - 1);
     } break;
 
     default:
@@ -189,6 +192,10 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
   file_system_set->GetAllFsInfo(fs_infoes);
+  // sort by fs_id
+  sort(fs_infoes.begin(), fs_infoes.end(),
+       [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
+
   os << RenderFsInfo(fs_infoes);
 
   os << "</body>";
@@ -197,10 +204,10 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);
 }
 
-void FsStatServiceImpl::GetTabInfo(brpc::TabInfoList* info_list) const {
-  brpc::TabInfo* info = info_list->add();
-  info->tab_name = "fsstat";
-  info->path = "/FsStatService";
+void FsStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {
+  brpc::TabInfo* tab = tab_list->add();
+  tab->tab_name = "fs";
+  tab->path = "/FsStatService";
 }
 
 }  // namespace mdsv2

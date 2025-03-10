@@ -40,10 +40,6 @@ void HeartbeatTask::SendHeartbeat(CoordinatorClientPtr coordinator_client) {
   // update other mds meta
   auto mds_meta_map = Server::GetInstance().GetMDSMetaMap();
   for (const auto& mds_meta : mdses) {
-    if (mds_meta.ID() == self_mds_meta.ID()) {
-      continue;
-    }
-
     DINGO_LOG(DEBUG) << "[heartbeat] upsert mds meta: " << mds_meta.ToString();
     mds_meta_map->UpsertMDSMeta(mds_meta);
   }
