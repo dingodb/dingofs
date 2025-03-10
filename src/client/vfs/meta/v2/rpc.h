@@ -55,6 +55,8 @@ class EndPoint {
   int GetPort() const { return port_; }
   void SetPort(int port) { port_ = port; }
 
+  std::string ToString() const { return fmt::format("{}:{}", ip_, port_); }
+
  private:
   std::string ip_;
   int port_;
@@ -127,24 +129,26 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
 
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
     if (cntl.Failed()) {
-      LOG(ERROR) << fmt::format("RPC api_name({}) fail, {} {} {} request({}).",
-                                api_name, cntl.log_id(), cntl.ErrorCode(),
-                                cntl.ErrorText(), request.ShortDebugString());
-      return Status::Internal(cntl.ErrorCode(), cntl.ErrorText());
+      LOG(ERROR) << fmt::format("[rpc][{}][{}] fail, {} {} {} request({}).",
+                                endpoint.ToString(), api_name, cntl.log_id(),
+                                cntl.ErrorCode(), cntl.ErrorText(),
+                                request.ShortDebugString());
+      return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
     }
 
     if (response.error().errcode() == pb::error::OK) {
       LOG(INFO) << fmt::format(
-          "RPC api_name({}) success, request({}) response({}).", api_name,
-          request.ShortDebugString(), response.ShortDebugString());
+          "[rpc][{}][{}] success, request({}) response({}).",
+          endpoint.ToString(), api_name, request.ShortDebugString(),
+          response.ShortDebugString());
       return Status();
     }
 
     ++retry_count;
 
     LOG(ERROR) << fmt::format(
-        "RPC api_name({}) fail, request({}) retry_count({}) error({} {}).",
-        api_name, request.ShortDebugString(), retry_count,
+        "[rpc][{}][{}] fail, request({}) retry_count({}) error({} {}).",
+        endpoint.ToString(), api_name, request.ShortDebugString(), retry_count,
         pb::error::Errno_Name(response.error().errcode()),
         response.error().errmsg());
 

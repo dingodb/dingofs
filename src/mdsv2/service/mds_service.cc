@@ -224,7 +224,18 @@ void MDSServiceImpl::DoRefreshFsInfo(google::protobuf::RpcController* controller
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
-  auto status = file_system_set_->RefreshFsInfo(request->fs_name());
+  Status status;
+  if (!request->fs_name().empty()) {
+    status = file_system_set_->RefreshFsInfo(request->fs_name());
+
+  } else if (request->fs_id() > 0) {
+    status = file_system_set_->RefreshFsInfo(request->fs_id());
+
+  } else {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
+                                   "fs name or fs id is empty");
+  }
+
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -239,7 +250,7 @@ void MDSServiceImpl::RefreshFsInfo(google::protobuf::RpcController* controller,
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoRefreshFsInfo(controller, request, response, svr_done); });
 
-  bool ret = read_worker_set_->Execute(task);
+  bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -320,7 +331,7 @@ void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const p
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoLookup(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -501,7 +512,7 @@ void MDSServiceImpl::ReadDir(google::protobuf::RpcController* controller, const 
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoReadDir(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -538,7 +549,7 @@ void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb:
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoOpen(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -575,7 +586,7 @@ void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const 
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoRelease(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -731,7 +742,7 @@ void MDSServiceImpl::ReadLink(google::protobuf::RpcController* controller, const
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoReadLink(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -771,7 +782,7 @@ void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const 
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetAttr(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -864,7 +875,7 @@ void MDSServiceImpl::GetXAttr(google::protobuf::RpcController* controller, const
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetXAttr(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -946,7 +957,7 @@ void MDSServiceImpl::ListXAttr(google::protobuf::RpcController* controller, cons
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoListXAttr(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
@@ -1001,6 +1012,17 @@ void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController* controller,
                                     pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+
+  if (request->alloc_num() == 0) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
+                                   "param alloc_num is error");
+  }
+
+  std::vector<uint64_t> slice_ids;
+  auto status = file_system_set_->AllocSliceId(request->alloc_num(), slice_ids);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 void MDSServiceImpl::AllocSliceId(google::protobuf::RpcController* controller,
@@ -1092,7 +1114,7 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoReadSlice(controller, request, response, svr_done); });
 
-  bool ret = write_worker_set_->Execute(task);
+  bool ret = read_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
     brpc::ClosureGuard done_guard(svr_done);
     ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,

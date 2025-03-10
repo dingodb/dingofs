@@ -163,7 +163,9 @@ Status DummyTxn::Delete(const std::string& key) { return storage_->Delete(key); 
 
 Status DummyTxn::Get(const std::string& key, std::string& value) { return storage_->Get(key, value); }
 
-Status DummyTxn::Scan(const Range& range, std::vector<KeyValue>& kvs) { return storage_->Scan(range, kvs); }
+Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+  return storage_->Scan(range, kvs);
+}
 
 Status DummyTxn::Commit() { return Status::OK(); }
 

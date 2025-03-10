@@ -128,9 +128,9 @@ bool Server::InitMDSMeta() {
 
   mds_meta_.SetHost(host);
   mds_meta_.SetPort(port);
-  mds_meta_.SetState(MDSMeta::State::kInit);
+  mds_meta_.SetState(MDSMeta::State::kNormal);
 
-  DINGO_LOG(INFO) << fmt::format("MDS meta {}.", mds_meta_.ToString());
+  DINGO_LOG(INFO) << fmt::format("init mds meta, self: {}.", mds_meta_.ToString());
 
   mds_meta_map_ = MDSMetaMap::New();
   CHECK(mds_meta_map_ != nullptr) << "new MDSMetaMap fail.";
@@ -141,7 +141,7 @@ bool Server::InitMDSMeta() {
 }
 
 bool Server::InitCoordinatorClient(const std::string& coor_url) {
-  DINGO_LOG(INFO) << fmt::format("init coordinator client, url({}).", coor_url);
+  DINGO_LOG(INFO) << fmt::format("init coordinator client, addr({}).", coor_url);
 
   std::string coor_addrs = Helper::ParseCoorAddr(coor_url);
   if (coor_addrs.empty()) {

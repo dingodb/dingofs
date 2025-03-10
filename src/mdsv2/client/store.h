@@ -29,6 +29,7 @@ class StoreClient {
 
   bool Init(const std::string& coor_addr);
 
+  bool CreateFsTable(const std::string& name);
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 

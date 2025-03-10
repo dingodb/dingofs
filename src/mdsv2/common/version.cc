@@ -30,25 +30,11 @@ DEFINE_string(major_version, MAJOR_VERSION, "current dingo major version");
 DEFINE_string(minor_version, MINOR_VERSION, "current dingo mino version");
 DEFINE_string(dingo_build_type, DINGO_BUILD_TYPE, "current dingo build type");
 DEFINE_string(dingo_contrib_build_type, DINGO_CONTRIB_BUILD_TYPE, "current dingo contrib build type");
-DEFINE_bool(use_mkl, false, "use mkl");
-DEFINE_bool(use_openblas, false, "use openblas");
 DEFINE_bool(use_tcmalloc, false, "use tcmalloc");
 DEFINE_bool(use_profiler, false, "use profiler");
 DEFINE_bool(use_sanitizer, false, "use sanitizer");
 
 std::string GetBuildFlag() {
-#ifdef USE_MKL
-  FLAGS_use_mkl = true;
-#else
-  FLAGS_use_mkl = false;
-#endif
-
-#ifdef USE_OPENBLAS
-  FLAGS_use_openblas = true;
-#else
-  FLAGS_use_openblas = false;
-#endif
-
 #ifdef LINK_TCMALLOC
   FLAGS_use_tcmalloc = true;
 #else
@@ -68,11 +54,10 @@ std::string GetBuildFlag() {
 #endif
 
   return butil::string_printf(
-      "DINGOFS USE_MKL:[%s] USE_OPENBLAS:[%s] LINK_TCMALLOC:[%s] "
+      "DINGOFS LINK_TCMALLOC:[%s] "
       "BRPC_ENABLE_CPU_PROFILER:[%s] "
       "USE_SANITIZE:[%s]\n",
-      FLAGS_use_mkl ? "ON" : "OFF", FLAGS_use_openblas ? "ON" : "OFF", FLAGS_use_tcmalloc ? "ON" : "OFF",
-      FLAGS_use_profiler ? "ON" : "OFF", FLAGS_use_sanitizer ? "ON" : "OFF");
+      FLAGS_use_tcmalloc ? "ON" : "OFF", FLAGS_use_profiler ? "ON" : "OFF", FLAGS_use_sanitizer ? "ON" : "OFF");
 }
 
 void DingoShowVerion() {

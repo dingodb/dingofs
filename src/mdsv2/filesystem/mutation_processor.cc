@@ -15,9 +15,6 @@
 
 #include "mdsv2/filesystem/mutation_processor.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -25,6 +22,8 @@
 
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/status.h"
@@ -35,6 +34,9 @@ namespace dingofs {
 namespace mdsv2 {
 
 DEFINE_uint32(process_mutation_batch_size, 64, "process mutation batch size.");
+DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
+
+DEFINE_uint32(merge_mutation_delay_us, 0, "merge mutation delay us.");
 
 static void SetError(TargetMutation& target_mutation, Status& status) {
   for (auto& operation : target_mutation.operations) {
@@ -136,6 +138,10 @@ void MutationProcessor::ProcessMutation() {
 
     if (is_stop_.load(std::memory_order_relaxed) && mix_mutation.operations.empty()) {
       break;
+    }
+
+    if (FLAGS_merge_mutation_delay_us > 0) {
+      bthread_usleep(FLAGS_merge_mutation_delay_us);
     }
 
     do {
@@ -290,6 +296,22 @@ void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation>& opera
         }
       } break;
 
+      case Operation::OpType::kUpdateInodeChunk: {
+        if (exist_inode) {
+          auto* param = operation.update_inode_chunk;
+          auto it = inode.mutable_chunks()->find(param->chunk_index);
+          if (it == inode.chunks().end()) {
+            inode.mutable_chunks()->insert({param->chunk_index, param->slice_list});
+          } else {
+            it->second.MergeFrom(param->slice_list);
+          }
+
+        } else {
+          *operation.notification.status = Status(pb::error::ENOT_FOUND, "inode not found");
+        }
+
+      } break;
+
       case Operation::OpType::kDeleteInode: {
         op_type = KeyValue::OpType::kDelete;
         exist_inode = false;
@@ -318,14 +340,24 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
   std::string value = param->inode.type() == pb::mdsv2::DIRECTORY ? MetaDataCodec::EncodeDirInodeValue(param->inode)
                                                                   : MetaDataCodec::EncodeFileInodeValue(param->inode);
 
-  auto txn = kv_storage_->NewTxn();
+  uint32_t retry = 0;
+  Status status;
+  do {
+    auto txn = kv_storage_->NewTxn();
 
-  auto status = txn->Put(operation.key, value);
-  if (!status.ok()) {
-    return status;
-  }
+    status = txn->Put(operation.key, value);
+    CHECK(status.ok()) << fmt::format("put inode fail, key({}), error({} {}).", operation.key, status.error_code(),
+                                      status.error_str());
 
-  return txn->Commit();
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      return status;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  return status;
 }
 
 Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutation) {
@@ -340,14 +372,24 @@ Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutatio
   LOG(INFO) << fmt::format("[mutation] txn({}/{}), delete inode({}).", txn_mutation.fs_id, txn_mutation.txn_id,
                            param->ino);
 
-  auto txn = kv_storage_->NewTxn();
+  uint32_t retry = 0;
+  Status status;
+  do {
+    auto txn = kv_storage_->NewTxn();
 
-  auto status = txn->Delete(operation.key);
-  if (!status.ok()) {
-    return status;
-  }
+    status = txn->Delete(operation.key);
+    CHECK(status.ok()) << fmt::format("delete inode fail, key({}), error({} {}).", operation.key, status.error_code(),
+                                      status.error_str());
 
-  return txn->Commit();
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      return status;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  return status;
 }
 
 Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutation) {
@@ -358,63 +400,82 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
   auto it = target_mutation_map.begin();
   auto& target_mutation = it->second;
 
-  auto txn = kv_storage_->NewTxn();
+  uint32_t retry = 0;
+  Status status;
+  do {
+    auto txn = kv_storage_->NewTxn();
 
-  std::string value;
-  auto status = txn->Get(target_mutation.key, value);
-  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
-    return status;
-  }
+    std::string value;
+    status = txn->Get(target_mutation.key, value);
+    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+      return status;
+    }
 
-  KeyValue::OpType op_type = KeyValue::OpType::kPut;
-  pb::mdsv2::Inode inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeFileInodeValue(value);
-  ProcessFileInodeOperations(target_mutation.operations, inode, op_type);
+    KeyValue::OpType op_type = KeyValue::OpType::kPut;
+    pb::mdsv2::Inode inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeFileInodeValue(value);
+    ProcessFileInodeOperations(target_mutation.operations, inode, op_type);
 
-  LOG(INFO) << fmt::format("[mutation] {} file inode({}).", KeyValue::OpTypeName(op_type), inode.ShortDebugString());
+    LOG(INFO) << fmt::format("[mutation] {} file inode({}).", KeyValue::OpTypeName(op_type), inode.ShortDebugString());
 
-  status = (op_type == KeyValue::OpType::kPut)
-               ? txn->Put(target_mutation.key, MetaDataCodec::EncodeFileInodeValue(inode))
-               : txn->Delete(target_mutation.key);
-  if (!status.ok()) {
-    return status;
-  }
+    status = (op_type == KeyValue::OpType::kPut)
+                 ? txn->Put(target_mutation.key, MetaDataCodec::EncodeFileInodeValue(inode))
+                 : txn->Delete(target_mutation.key);
+    CHECK(status.ok()) << fmt::format("update inode fail, key({}), error({} {}).", target_mutation.key,
+                                      status.error_code(), status.error_str());
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      return status;
+    }
 
-  return txn->Commit();
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  return status;
 }
 
 Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
   auto target_mutation_map = GroupingByTarget(txn_mutation);
   CHECK(!target_mutation_map.empty()) << "dentry target mutation map is empty.";
 
-  auto txn = kv_storage_->NewTxn();
+  uint32_t retry = 0;
+  Status status;
+  do {
+    auto txn = kv_storage_->NewTxn();
 
-  std::string value;
-  std::string parent_key = MetaDataCodec::EncodeDirInodeKey(txn_mutation.fs_id, txn_mutation.txn_id);
-  auto status = txn->Get(parent_key, value);
-  if (!status.ok()) {
-    return status;
-  }
-
-  pb::mdsv2::Inode parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
-
-  bool is_update_parent = false;
-  for (auto& [_, target_mutation] : target_mutation_map) {
-    auto status = ProcessDentryOperations(txn, parent_inode, target_mutation);
-    if (!status.ok()) {
-      SetError(target_mutation, status);
-    } else {
-      is_update_parent = true;
-    }
-  }
-
-  if (is_update_parent) {
-    status = txn->Put(parent_key, MetaDataCodec::EncodeDirInodeValue(parent_inode));
+    std::string value;
+    std::string parent_key = MetaDataCodec::EncodeDirInodeKey(txn_mutation.fs_id, txn_mutation.txn_id);
+    auto status = txn->Get(parent_key, value);
     if (!status.ok()) {
       return status;
     }
-  }
 
-  return txn->Commit();
+    pb::mdsv2::Inode parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+
+    bool is_update_parent = false;
+    for (auto& [_, target_mutation] : target_mutation_map) {
+      auto status = ProcessDentryOperations(txn, parent_inode, target_mutation);
+      if (!status.ok()) {
+        SetError(target_mutation, status);
+      } else {
+        is_update_parent = true;
+      }
+    }
+
+    if (is_update_parent) {
+      status = txn->Put(parent_key, MetaDataCodec::EncodeDirInodeValue(parent_inode));
+      CHECK(status.ok()) << fmt::format("put fail, key({}), error({} {}).", parent_key, status.error_code(),
+                                        status.error_str());
+    }
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      return status;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  return status;
 }
 
 Status MutationProcessor::ProcessDentryOperations(TxnUPtr& txn, pb::mdsv2::Inode& parent_inode,

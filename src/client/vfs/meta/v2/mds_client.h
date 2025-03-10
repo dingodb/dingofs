@@ -22,6 +22,7 @@
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "client/vfs/vfs_meta.h"
+#include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/filesystem/fs_info.h"
 
@@ -30,23 +31,22 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
+DECLARE_uint32(client_send_request_retry);
+
 class MDSClient;
 using MDSClientPtr = std::shared_ptr<MDSClient>;
 
 class MDSClient {
  public:
   MDSClient(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
-            MDSRouterPtr mds_router, RPCPtr rpc)
-      : fs_info_(fs_info),
-        fs_id_(fs_info->GetFsId()),
-        parent_cache_(parent_cache),
-        mds_router_(mds_router),
-        rpc_(rpc) {}
+            MDSDiscoveryPtr mds_discovery, MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
   static MDSClientPtr New(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
+                          MDSDiscoveryPtr mds_discovery,
                           MDSRouterPtr mds_router, RPCPtr rpc) {
-    return std::make_shared<MDSClient>(fs_info, parent_cache, mds_router, rpc);
+    return std::make_shared<MDSClient>(fs_info, parent_cache, mds_discovery,
+                                       mds_router, rpc);
   }
 
   bool Init();
@@ -100,10 +100,14 @@ class MDSClient {
   EndPoint GetEndPointByIno(int64_t ino);
   EndPoint GetEndPointByParentIno(int64_t parent_ino);
 
+  bool UpdateRouter();
+
   bool ProcessEpochChange();
+  bool ProcessNotServe();
+  bool ProcessNetError(EndPoint& endpoint);
 
   template <typename Request, typename Response>
-  Status SendRequest(EndPoint endpoint, const std::string& service_name,
+  Status SendRequest(EndPoint& endpoint, const std::string& service_name,
                      const std::string& api_name, Request& request,
                      Response& response);
 
@@ -115,29 +119,45 @@ class MDSClient {
 
   MDSRouterPtr mds_router_;
 
+  MDSDiscoveryPtr mds_discovery_;
+
   RPCPtr rpc_;
 };
 
 template <typename Request, typename Response>
-Status MDSClient::SendRequest(EndPoint endpoint,
+Status MDSClient::SendRequest(EndPoint& endpoint,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
-  for (int retry = 0; retry < 2; ++retry) {
+  for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
     auto status =
         rpc_->SendRequest(endpoint, service_name, api_name, request, response);
-    if (!status.ok() && status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
-      if (!ProcessEpochChange()) {
-        return Status::Internal("process epoch change fail");
+    if (!status.ok()) {
+      if (status.Errno() == pb::error::EROUTER_EPOCH_CHANGE) {
+        if (!ProcessEpochChange()) {
+          return Status::Internal("process epoch change fail");
+        }
+        continue;
+
+      } else if (status.Errno() == pb::error::ENOT_SERVE) {
+        if (!ProcessNotServe()) {
+          return Status::Internal("process not serve fail");
+        }
+        continue;
+
+      } else if (status.IsNetError()) {
+        if (!ProcessNetError(endpoint)) {
+          return Status::Internal("process net error fail");
+        }
+        continue;
       }
-      continue;
     }
 
     return status;
   }
 
-  return Status::Internal("send request failed.");
+  return Status::Internal("send request fail");
 }
 
 }  // namespace v2

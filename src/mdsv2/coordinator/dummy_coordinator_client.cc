@@ -32,7 +32,11 @@ DummyCoordinatorClient::~DummyCoordinatorClient() {
   CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destory mutex fail.";
 }
 
-bool DummyCoordinatorClient::Init(const std::string&) { return true; }
+bool DummyCoordinatorClient::Init(const std::string& addr) {
+  DINGO_LOG(INFO) << fmt::format("init dummy coordinator client, addr({}).", addr);
+
+  return true;
+}
 bool DummyCoordinatorClient::Destroy() { return true; }
 
 Status DummyCoordinatorClient::MDSHeartbeat(const MDSMeta& mds, std::vector<MDSMeta>& out_mdses) {

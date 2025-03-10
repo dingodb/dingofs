@@ -33,6 +33,8 @@ namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
+DEFINE_int32(client_scan_batch_size, 1000, "client scan batch size");
+
 bool StoreClient::Init(const std::string& coor_addr) {
   CHECK(!coor_addr.empty()) << "coor addr is empty.";
 
@@ -47,6 +49,22 @@ bool StoreClient::Init(const std::string& coor_addr) {
   return kv_storage_->Init(store_addrs);
 }
 
+bool StoreClient::CreateFsTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetFsTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create fs table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create fs table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
 struct TreeNode {
   bool is_orphan{true};
   pb::mdsv2::Dentry dentry;
@@ -56,48 +74,44 @@ struct TreeNode {
 };
 
 bool GenFileInodeMap(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64_t, pb::mdsv2::Inode>& file_inode_map) {
+  DINGO_LOG(INFO) << "GenFileInodeMap ...... 000001";
   Range range;
   MetaDataCodec::GetFileInodeTableRange(fs_id, range.start_key, range.end_key);
 
+  auto txn = kv_storage->NewTxn();
   std::vector<KeyValue> kvs;
-  auto status = kv_storage->Scan(range, kvs);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("scan file inode table fail, {}.", status.error_str());
-    return false;
-  }
 
-  DINGO_LOG(INFO) << fmt::format("scan file inode table kv num({}).", kvs.size());
+  do {
+    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000002";
+    kvs.clear();
+    auto status = txn->Scan(range, FLAGS_client_scan_batch_size, kvs);
+    if (!status.ok()) {
+      DINGO_LOG(ERROR) << fmt::format("scan file inode table fail, {}.", status.error_str());
+      return false;
+    }
 
-  for (const auto& kv : kvs) {
-    uint64_t ino = 0;
-    int fs_id;
-    MetaDataCodec::DecodeFileInodeKey(kv.key, fs_id, ino);
-    pb::mdsv2::Inode inode = MetaDataCodec::DecodeFileInodeValue(kv.value);
+    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000003";
 
-    file_inode_map.insert({inode.ino(), inode});
-  }
+    for (const auto& kv : kvs) {
+      // DINGO_LOG(INFO) << "GenFileInodeMap ...... 000003: " << Helper::StringToHex(kv.key);
+      uint64_t ino = 0;
+      int fs_id;
+      MetaDataCodec::DecodeFileInodeKey(kv.key, fs_id, ino);
+      pb::mdsv2::Inode inode = MetaDataCodec::DecodeFileInodeValue(kv.value);
+
+      file_inode_map.insert({inode.ino(), inode});
+    }
+    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000004";
+
+  } while (kvs.size() >= FLAGS_client_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("scan file inode table kv num({}).", file_inode_map.size());
 
   return true;
 }
 
 TreeNode* GenDentryTree(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64_t, TreeNode*>& tree_inode_map) {
-  Range range;
-  MetaDataCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
-
-  std::vector<KeyValue> kvs;
-  auto status = kv_storage->Scan(range, kvs);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("scan dentry table fail, {}.", status.error_str());
-    return nullptr;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("scan dentry table kv num({}).", kvs.size());
-
-  std::map<uint64_t, pb::mdsv2::Inode> file_inode_map;
-  if (!GenFileInodeMap(kv_storage, fs_id, file_inode_map)) {
-    return nullptr;
-  }
-
+  DINGO_LOG(INFO) << "GenDentryTree start......";
   TreeNode* root = new TreeNode();
   root->dentry.set_ino(1);
   root->dentry.set_name("/");
@@ -105,55 +119,82 @@ TreeNode* GenDentryTree(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64
   root->dentry.set_type(pb::mdsv2::FileType::DIRECTORY);
 
   tree_inode_map.insert({0, root});
-  for (const auto& kv : kvs) {
-    int fs_id = 0;
-    uint64_t ino = 0;
 
-    if (kv.key.size() == MetaDataCodec::DirInodeKeyLength()) {
-      MetaDataCodec::DecodeDirInodeKey(kv.key, fs_id, ino);
-      pb::mdsv2::Inode inode = MetaDataCodec::DecodeDirInodeValue(kv.value);
+  // get all file inode
+  std::map<uint64_t, pb::mdsv2::Inode> file_inode_map;
+  if (!GenFileInodeMap(kv_storage, fs_id, file_inode_map)) {
+    return nullptr;
+  }
 
-      DINGO_LOG(INFO) << fmt::format("dir inode({}).", inode.ShortDebugString());
-      auto it = tree_inode_map.find(ino);
-      if (it != tree_inode_map.end()) {
-        it->second->inode = inode;
-      } else {
-        tree_inode_map.insert({ino, new TreeNode{.inode = inode}});
-      }
+  Range range;
+  MetaDataCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
 
-    } else {
-      uint64_t parent_ino = 0;
-      std::string name;
-      MetaDataCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
-      pb::mdsv2::Dentry dentry = MetaDataCodec::DecodeDentryValue(kv.value);
+  // scan dentry table
+  auto txn = kv_storage->NewTxn();
+  std::vector<KeyValue> kvs;
+  uint64_t count = 0;
+  do {
+    kvs.clear();
+    auto status = txn->Scan(range, FLAGS_client_scan_batch_size, kvs);
+    if (!status.ok()) {
+      DINGO_LOG(ERROR) << fmt::format("scan dentry table fail, {}.", status.error_str());
+      return nullptr;
+    }
 
-      TreeNode* item = nullptr;
-      auto it = tree_inode_map.find(dentry.ino());
-      if (it != tree_inode_map.end()) {
-        item = it->second;
-        item->dentry = dentry;
-      } else {
-        item = new TreeNode{.dentry = dentry};
-        tree_inode_map.insert({dentry.ino(), item});
-      }
+    for (const auto& kv : kvs) {
+      int fs_id = 0;
+      uint64_t ino = 0;
 
-      if (dentry.type() == pb::mdsv2::FileType::FILE || dentry.type() == pb::mdsv2::FileType::SYM_LINK) {
-        auto it = file_inode_map.find(dentry.ino());
-        if (it != file_inode_map.end()) {
-          item->inode = it->second;
+      if (kv.key.size() == MetaDataCodec::DirInodeKeyLength()) {
+        MetaDataCodec::DecodeDirInodeKey(kv.key, fs_id, ino);
+        pb::mdsv2::Inode inode = MetaDataCodec::DecodeDirInodeValue(kv.value);
+
+        DINGO_LOG(INFO) << fmt::format("dir inode({}).", inode.ShortDebugString());
+        auto it = tree_inode_map.find(ino);
+        if (it != tree_inode_map.end()) {
+          it->second->inode = inode;
         } else {
-          DINGO_LOG(ERROR) << fmt::format("not found file inode({}) for dentry({}/{})", dentry.ino(), fs_id, name);
+          tree_inode_map.insert({ino, new TreeNode{.inode = inode}});
+        }
+
+      } else {
+        uint64_t parent_ino = 0;
+        std::string name;
+        MetaDataCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
+        pb::mdsv2::Dentry dentry = MetaDataCodec::DecodeDentryValue(kv.value);
+
+        TreeNode* item = nullptr;
+        auto it = tree_inode_map.find(dentry.ino());
+        if (it != tree_inode_map.end()) {
+          item = it->second;
+          item->dentry = dentry;
+        } else {
+          item = new TreeNode{.dentry = dentry};
+          tree_inode_map.insert({dentry.ino(), item});
+        }
+
+        if (dentry.type() == pb::mdsv2::FileType::FILE || dentry.type() == pb::mdsv2::FileType::SYM_LINK) {
+          auto it = file_inode_map.find(dentry.ino());
+          if (it != file_inode_map.end()) {
+            item->inode = it->second;
+          } else {
+            DINGO_LOG(ERROR) << fmt::format("not found file inode({}) for dentry({}/{})", dentry.ino(), fs_id, name);
+          }
+        }
+
+        it = tree_inode_map.find(parent_ino);
+        if (it != tree_inode_map.end()) {
+          it->second->children.push_back(item);
+        } else {
+          DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent_ino, fs_id, name);
         }
       }
-
-      it = tree_inode_map.find(parent_ino);
-      if (it != tree_inode_map.end()) {
-        it->second->children.push_back(item);
-      } else {
-        DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent_ino, fs_id, name);
-      }
     }
-  }
+
+    count += kvs.size();
+  } while (kvs.size() >= FLAGS_client_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("scan dentry table kv num({}).", count);
 
   return root;
 }

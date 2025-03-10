@@ -14,6 +14,9 @@
 
 #include "client/vfs/meta/v2/mds_client.h"
 
+#include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -31,6 +34,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
+
+DEFINE_uint32(client_send_request_retry, 3, "client send request retry times");
 
 static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {
@@ -75,7 +80,25 @@ static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
   return std::move(out_entry);
 }
 
-bool MDSClient::Init() { return true; }
+MDSClient::MDSClient(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
+                     MDSDiscoveryPtr mds_discovery, MDSRouterPtr mds_router,
+                     RPCPtr rpc)
+    : fs_info_(fs_info),
+      fs_id_(fs_info->GetFsId()),
+      epoch_(fs_info->GetEpoch()),
+      parent_cache_(parent_cache),
+      mds_discovery_(mds_discovery),
+      mds_router_(mds_router),
+      rpc_(rpc) {}
+
+bool MDSClient::Init() {
+  CHECK(parent_cache_ != nullptr) << "parent cache is null.";
+  CHECK(mds_discovery_ != nullptr) << "mds discovery is null.";
+  CHECK(mds_router_ != nullptr) << "mds router is null.";
+  CHECK(rpc_ != nullptr) << "rpc is null.";
+
+  return true;
+}
 
 void MDSClient::Destory() {}
 
@@ -714,10 +737,7 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-// process epoch change
-// 1. updatge fs info
-// 2. update mds router
-bool MDSClient::ProcessEpochChange() {
+bool MDSClient::UpdateRouter() {
   pb::mdsv2::FsInfo new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
   if (!status.ok()) {
@@ -735,6 +755,34 @@ bool MDSClient::ProcessEpochChange() {
   }
 
   return true;
+}
+
+// process epoch change
+// 1. updatge fs info
+// 2. update mds router
+bool MDSClient::ProcessEpochChange() {
+  DINGO_LOG(INFO) << "process epoch change.";
+  return UpdateRouter();
+}
+
+bool MDSClient::ProcessNotServe() {
+  DINGO_LOG(INFO) << "process not serve.";
+  return UpdateRouter();
+}
+
+bool MDSClient::ProcessNetError(EndPoint& endpoint) {
+  DINGO_LOG(INFO) << "process net error.";
+
+  auto mdses = mds_discovery_->GetMDSByState(mdsv2::MDSMeta::State::kNormal);
+  for (auto& mds : mdses) {
+    if (mds.Host() != endpoint.GetIp() || mds.Port() != endpoint.GetPort()) {
+      endpoint.SetIp(mds.Host());
+      endpoint.SetPort(mds.Port());
+      return true;
+    }
+  }
+
+  return false;
 }
 
 }  // namespace v2

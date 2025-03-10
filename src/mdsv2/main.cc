@@ -213,7 +213,7 @@ bool GeneratePidFile(const std::string& filepath) {
     return false;
   }
 
-  DINGO_LOG(INFO) << "generate pid file: " << filepath;
+  DINGO_LOG(INFO) << "pid file: " << filepath;
 
   return dingofs::mdsv2::Helper::SaveFile(filepath, std::to_string(pid));
 }
@@ -253,6 +253,8 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitMDSMonitor()) << "init mds monitor error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
+
+  DINGO_LOG(INFO) << "##################### init finish ######################";
 
   server.Run();
 

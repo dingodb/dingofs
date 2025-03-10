@@ -77,22 +77,24 @@ static std::vector<MDSMeta> SdkMDSList2MDSes(const std::vector<dingodb::sdk::MDS
 }
 
 bool DingoCoordinatorClient::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("Init coordinator client, addr({}).", addr);
+  DINGO_LOG(INFO) << fmt::format("init dingo coordinator client, addr({}).", addr);
 
   coordinator_addr_ = addr;
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
-  CHECK(status.ok()) << fmt::format("Build dingo sdk client fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}", status.ToString());
 
   status = client_->NewCoordinator(&coordinator_);
-  CHECK(status.ok()) << fmt::format("New dingo sdk coordinator fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("new dingo sdk coordinator fail, error: {}", status.ToString());
 
   status = client_->NewVersion(&versoin_);
-  CHECK(status.ok()) << fmt::format("New dingo sdk version fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("new dingo sdk version fail, error: {}", status.ToString());
 
   return true;
 }
 
 bool DingoCoordinatorClient::Destroy() {
+  DINGO_LOG(INFO) << fmt::format("destroy dingo coordinator client.");
+
   delete coordinator_;
   delete versoin_;
   delete client_;

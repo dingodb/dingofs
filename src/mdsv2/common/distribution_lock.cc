@@ -334,7 +334,6 @@ void CoorDistributionLock::CheckLock() {
       break;
     }
 
-    DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0001.", lock_key);
     std::string watch_key;
     int64_t watch_revision;
     auto status = CheckLock(watch_key, watch_revision);
@@ -344,8 +343,6 @@ void CoorDistributionLock::CheckLock() {
       continue;
     }
 
-    DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0002.", lock_key);
-
     // own lock
     if (watch_key.empty()) {
       DINGO_LOG(INFO) << fmt::format("[dlock.{}] mds({}) own lock.", lock_key, mds_id_);
@@ -354,10 +351,8 @@ void CoorDistributionLock::CheckLock() {
       bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
 
     } else {
-      DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0003.", lock_key);
       // not own lock, watch key
       Watch(watch_key, watch_revision);
-      DINGO_LOG(INFO) << fmt::format("[dlock.{}] here 0004.", lock_key);
     }
   }
 }

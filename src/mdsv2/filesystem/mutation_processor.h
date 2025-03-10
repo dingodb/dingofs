@@ -35,8 +35,9 @@ struct Operation {
     kUpdateInodeNlink = 2,
     kUpdateInodeAttr = 3,
     kUpdateInodeXAttr = 4,
-    kCreateDentry = 5,
-    kDeleteDentry = 6,
+    kUpdateInodeChunk = 5,
+    kCreateDentry = 6,
+    kDeleteDentry = 7,
   };
 
   static std::string OpTypeName(OpType op_type) {
@@ -51,6 +52,8 @@ struct Operation {
         return "UpdateInodeAttr";
       case OpType::kUpdateInodeXAttr:
         return "UpdateInodeXAttr";
+      case OpType::kUpdateInodeChunk:
+        return "UpdateInodeChunk";
       case OpType::kCreateDentry:
         return "CreateDentry";
       case OpType::kDeleteDentry:
@@ -83,6 +86,11 @@ struct Operation {
     std::map<std::string, std::string> xattrs;
   };
 
+  struct UpdateInodeChunk {
+    uint64_t chunk_index;
+    pb::mdsv2::SliceList slice_list;
+  };
+
   struct CreateDentry {
     pb::mdsv2::Dentry dentry;
     uint64_t time;
@@ -112,6 +120,7 @@ struct Operation {
   UpdateInodeNlink* update_inode_nlink{nullptr};
   UpdateInodeAttr* update_inode_attr{nullptr};
   UpdateInodeXAttr* update_inode_xattr{nullptr};
+  UpdateInodeChunk* update_inode_chunk{nullptr};
   CreateDentry* create_dentry{nullptr};
   UpdateDentry* update_dentry{nullptr};
   DeleteDentry* delete_dentry{nullptr};
@@ -126,6 +135,7 @@ struct Operation {
     delete delete_inode;
     delete update_inode_nlink;
     delete update_inode_attr;
+    delete update_inode_chunk;
     delete create_dentry;
     delete update_dentry;
     delete delete_dentry;
@@ -151,6 +161,9 @@ struct Operation {
 
     update_inode_xattr = other.update_inode_xattr;
     other.update_inode_xattr = nullptr;
+
+    update_inode_chunk = other.update_inode_chunk;
+    other.update_inode_chunk = nullptr;
 
     create_dentry = other.create_dentry;
     other.create_dentry = nullptr;
@@ -194,6 +207,12 @@ struct Operation {
     if (other.update_inode_xattr != nullptr) {
       update_inode_xattr = new UpdateInodeXAttr();
       update_inode_xattr->xattrs = other.update_inode_xattr->xattrs;
+    }
+
+    if (other.update_inode_chunk != nullptr) {
+      update_inode_chunk = new UpdateInodeChunk();
+      update_inode_chunk->chunk_index = other.update_inode_chunk->chunk_index;
+      update_inode_chunk->slice_list = other.update_inode_chunk->slice_list;
     }
 
     if (other.create_dentry != nullptr) {
@@ -241,6 +260,12 @@ struct Operation {
   void SetUpdateInodeXAttr(const std::map<std::string, std::string>& xattrs) {
     update_inode_xattr = new UpdateInodeXAttr();
     update_inode_xattr->xattrs = xattrs;
+  }
+
+  void SetUpdateInodeChunk(uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list) {
+    update_inode_chunk = new UpdateInodeChunk();
+    update_inode_chunk->chunk_index = chunk_index;
+    update_inode_chunk->slice_list = slice_list;
   }
 
   void SetCreateDentry(pb::mdsv2::Dentry&& dentry, uint64_t time) {

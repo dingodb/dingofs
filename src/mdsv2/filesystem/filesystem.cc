@@ -14,6 +14,7 @@
 
 #include "mdsv2/filesystem/filesystem.h"
 
+#include <bthread/bthread.h>
 #include <sys/stat.h>
 
 #include <cstdint>
@@ -1074,6 +1075,10 @@ Status FileSystem::ReadLink(uint64_t ino, std::string& link) {
 Status FileSystem::GetAttr(uint64_t ino, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("GetAttr ino({}).", ino);
 
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
   InodePtr inode;
   auto status = GetInode(ino, inode);
   if (!status.ok()) {
@@ -1653,18 +1658,28 @@ Status FileSystem::WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv
     return status;
   }
 
-  Inode inode_copy(*inode);
+  uint64_t now_time = Helper::TimestampNs();
 
-  KeyValue kv;
-  kv.opt_type = KeyValue::OpType::kPut;
-  kv.key = MetaDataCodec::EncodeFileInodeKey(fs_id_, ino);
+  bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  inode_copy.AppendChunk(chunk_index, slice_list);
-  kv.value = MetaDataCodec::EncodeFileInodeValue(inode_copy.CopyTo());
+  butil::Status rpc_status;
+  Operation inode_operation(Operation::OpType::kUpdateInodeChunk, ino, MetaDataCodec::EncodeFileInodeKey(fs_id_, ino),
+                            &count_down, &rpc_status);
+  inode_operation.SetUpdateInodeChunk(chunk_index, slice_list);
+  mix_mutation.operations.push_back(std::move(inode_operation));
 
-  status = kv_storage_->Put(KVStorage::WriteOption(), kv);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", status.error_str()));
+  if (!mutation_processor_->Commit(mix_mutation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
+  }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("writeslice {}/{} finish, elapsed_time({}us) rpc_status({}).", ino, chunk_index,
+                                 (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
+
+  if (!rpc_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", rpc_status.error_str()));
   }
 
   inode->AppendChunk(chunk_index, slice_list);
@@ -1693,19 +1708,25 @@ Status FileSystem::ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Slic
 Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); }
 
 Status FileSystem::RefreshFsInfo(const std::string& name) {
+  DINGO_LOG(INFO) << fmt::format("refresh fs({}) info.", name);
+
   std::string value;
   auto status = kv_storage_->Get(MetaDataCodec::EncodeFSKey(name), value);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  pb::mdsv2::FsInfo fs_info = MetaDataCodec::DecodeFSValue(value);
-  fs_info_->Update(fs_info);
+  RefreshFsInfo(MetaDataCodec::DecodeFSValue(value));
 
   return Status::OK();
 }
 
-void FileSystem::RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info) { fs_info_->Update(fs_info); }
+void FileSystem::RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info) {
+  can_serve_ = CanServe(self_mds_id_);
+  DINGO_LOG(INFO) << fmt::format("update fs({}) can_serve({}).", fs_info.fs_name(), can_serve_ ? "true" : "false");
+
+  fs_info_->Update(fs_info);
+}
 
 Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
   std::string key = MetaDataCodec::EncodeFSKey(fs_info_->GetName());
@@ -1803,11 +1824,8 @@ bool FileSystemSet::Init() {
   CHECK(mutation_processor_ != nullptr) << "mutation_processor is null.";
 
   if (!IsExistFsTable()) {
-    auto status = CreateFsTable();
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << "create fs table fail, error: " << status.error_str();
-      return false;
-    }
+    DINGO_LOG(ERROR) << "not exist fs table.";
+    return false;
   }
 
   if (!LoadFileSystems()) {
@@ -1890,8 +1908,9 @@ Status FileSystemSet::CreateFsTable() {
 bool FileSystemSet::IsExistFsTable() {
   std::string start_key, end_key;
   MetaDataCodec::GetFsTableRange(start_key, end_key);
-  DINGO_LOG(INFO) << fmt::format("check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
-                                 Helper::StringToHex(end_key));
+  DINGO_LOG(DEBUG) << fmt::format("check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
+                                  Helper::StringToHex(end_key));
+
   auto status = kv_storage_->IsExistTable(start_key, end_key);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
@@ -1899,8 +1918,6 @@ bool FileSystemSet::IsExistFsTable() {
     }
     return false;
   }
-
-  DINGO_LOG(INFO) << "exist fs table.";
 
   return true;
 }
@@ -2259,7 +2276,7 @@ bool FileSystemSet::LoadFileSystems() {
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
     auto file_system = GetFileSystem(fs_info.fs_id());
     if (file_system == nullptr) {
-      DINGO_LOG(INFO) << fmt::format("load fs info name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
+      DINGO_LOG(INFO) << fmt::format("add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
       auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
                                 renamer_, mutation_processor_);
       AddFileSystem(fs);

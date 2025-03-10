@@ -68,6 +68,7 @@ class Status {
     kStale = 18,
     kNoSys = 19,
     kNoPermitted = 20,
+    kNetError = 21,
   };
   static const int32_t kNone = 0;
 
@@ -106,6 +107,7 @@ class Status {
   DECLARE_ERROR_STATUS(Stale, kStale);
   DECLARE_ERROR_STATUS(NoSys, kNoSys);
   DECLARE_ERROR_STATUS(NoPermitted, kNoPermitted);
+  DECLARE_ERROR_STATUS(NetError, kNetError);
 
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
@@ -157,6 +159,8 @@ class Status {
         return ENOSYS;
       case kNoPermitted:
         return EPERM;
+      case kNetError:
+        return EIO;
       default:
         return EIO;
     }

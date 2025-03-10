@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <string>
+#include <vector>
+
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/client/mds.h"
 #include "mdsv2/client/store.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/logging.h"
 
-DEFINE_string(coor_addr, "", "coordinator address");
-DEFINE_string(addr, "127.0.0.1:7801", "mds address");
+DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
+DEFINE_string(mds_addr, "", "mds address");
 
 DEFINE_string(cmd, "", "command");
 
@@ -34,11 +38,29 @@ DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
+DEFINE_string(fs_table_name, "dingofs", "fs table name");
+
 std::set<std::string> g_mds_cmd = {"create_fs", "delete_fs", "get_fs", "mkdir", "batch_mkdir", "mknod", "batch_mknod"};
+
+std::string GetDefaultCoorAddrPath() {
+  if (!FLAGS_coor_addr.empty()) {
+    return FLAGS_coor_addr;
+  }
+
+  std::vector<std::string> paths = {"./coor_list", "./conf/coor_list", "./bin/coor_list"};
+  for (const auto& path : paths) {
+    if (dingofs::mdsv2::Helper::IsExistPath(path)) {
+      return "file://" + path;
+    }
+  }
+
+  return "";
+}
 
 int main(int argc, char* argv[]) {
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logtostdout = true;
+  FLAGS_logtostderr = true;
   FLAGS_colorlogtostdout = true;
   FLAGS_logbufsecs = 0;
   google::InitGoogleLogging(argv[0]);
@@ -48,8 +70,13 @@ int main(int argc, char* argv[]) {
   // dingofs::mdsv2::DingoLogger::InitLogger("./log", "mdsv2_client", dingofs::mdsv2::LogLevel::kINFO);
 
   if (g_mds_cmd.count(FLAGS_cmd) > 0) {
+    if (FLAGS_mds_addr.empty()) {
+      std::cout << "mds address is empty." << '\n';
+      return -1;
+    }
+
     dingofs::mdsv2::client::MDSClient mds_client;
-    if (!mds_client.Init(FLAGS_addr)) {
+    if (!mds_client.Init(FLAGS_mds_addr)) {
       std::cout << "init interaction fail." << '\n';
       return -1;
     }
@@ -84,18 +111,24 @@ int main(int argc, char* argv[]) {
       return -1;
     }
   } else {
-    if (FLAGS_coor_addr.empty()) {
+    std::string coor_addr = GetDefaultCoorAddrPath();
+    if (coor_addr.empty()) {
       std::cout << "coordinator address is empty." << '\n';
       return -1;
     }
 
+    DINGO_LOG(INFO) << "coor_addr: " << coor_addr;
+
     dingofs::mdsv2::client::StoreClient store_client;
-    if (!store_client.Init(FLAGS_coor_addr)) {
+    if (!store_client.Init(coor_addr)) {
       std::cout << "init store client fail." << '\n';
       return -1;
     }
 
-    if (FLAGS_cmd == "tree") {
+    if (FLAGS_cmd == "create_fs_table") {
+      store_client.CreateFsTable(FLAGS_fs_table_name);
+
+    } else if (FLAGS_cmd == "tree") {
       store_client.PrintDentryTree(FLAGS_fs_id, true);
 
     } else {

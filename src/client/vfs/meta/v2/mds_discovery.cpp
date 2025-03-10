@@ -68,6 +68,21 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetAllMDS() {
   return mdses;
 }
 
+std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
+    mdsv2::MDSMeta::State state) {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<mdsv2::MDSMeta> mdses;
+  mdses.reserve(mdses_.size());
+  for (const auto& [_, mds_meta] : mdses_) {
+    if (mds_meta.GetState() == state) {
+      mdses.push_back(mds_meta);
+    }
+  }
+
+  return mdses;
+}
+
 bool MDSDiscovery::UpdateMDSList() {
   std::vector<mdsv2::MDSMeta> mdses;
   auto status = coordinator_client_->GetMDSList(mdses);

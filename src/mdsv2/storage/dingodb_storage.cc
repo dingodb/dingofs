@@ -29,7 +29,7 @@ namespace mdsv2 {
 
 DEFINE_int32(dingodb_replica_num, 3, "backend store replicas");
 
-DEFINE_int32(dingodb_scan_batch_size, 1000, "dingodb scan batch size");
+DEFINE_int32(dingodb_scan_batch_size, 100000, "dingodb scan batch size");
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
@@ -58,7 +58,7 @@ static std::vector<dingodb::sdk::KVPair> ToKVPairs(const std::vector<KeyValue>& 
 }
 
 bool DingodbStorage::Init(const std::string& addr) {
-  DINGO_LOG(INFO) << fmt::format("Init dingo storage, addr({}).", addr);
+  DINGO_LOG(INFO) << fmt::format("init dingo storage, addr({}).", addr);
 
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
   CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}", status.ToString());
@@ -67,6 +67,8 @@ bool DingodbStorage::Init(const std::string& addr) {
 }
 
 bool DingodbStorage::Destroy() {
+  DINGO_LOG(INFO) << "destroy dingo storage.";
+
   delete client_;
 
   return true;
@@ -352,9 +354,9 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
-Status DingodbTxn::Scan(const Range& range, std::vector<KeyValue>& kvs) {
+Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
   std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn_->Scan(range.start_key, range.end_key, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  auto status = txn_->Scan(range.start_key, range.end_key, limit, kv_pairs);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -364,14 +366,29 @@ Status DingodbTxn::Scan(const Range& range, std::vector<KeyValue>& kvs) {
   return Status::OK();
 }
 
+void DingodbTxn::Rollback() {
+  auto status = txn_->Rollback();
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("rollback fail, error: {}", status.ToString());
+  }
+}
+
 Status DingodbTxn::Commit() {
   auto status = txn_->PreCommit();
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+    Rollback();
+    if (status.IsTxnWriteConflict()) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+    }
+    return Status(status.Errno(), status.ToString());
   }
 
   status = txn_->Commit();
   if (!status.ok()) {
+    Rollback();
+    if (status.IsTxnWriteConflict()) {
+      return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
+    }
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 

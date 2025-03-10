@@ -502,7 +502,8 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   auto fs_info = mdsv2::FsInfo::New(pb_fs_info);
 
   // create mds client
-  auto mds_client = MDSClient::New(fs_info, parent_cache, mds_router, rpc);
+  auto mds_client =
+      MDSClient::New(fs_info, parent_cache, mds_discovery, mds_router, rpc);
   if (!mds_client->Init()) {
     LOG(INFO) << "MDSClient init fail.";
     return nullptr;
