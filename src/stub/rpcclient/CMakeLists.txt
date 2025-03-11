@@ -20,6 +20,7 @@ add_library(rpcclient
     metacache.cpp
     metaserver_client.cpp
     task_excutor.cpp
+    meta_access_log.cpp
 )
 
 target_link_libraries(rpcclient
@@ -32,6 +33,9 @@ target_link_libraries(rpcclient
     gflags::gflags
     glog::glog
     fmt::fmt
+    spdlog::spdlog
+    absl::str_format
+    absl::str_format
     absl::cleanup
     absl::optional
 )

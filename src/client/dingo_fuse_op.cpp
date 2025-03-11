@@ -46,6 +46,7 @@
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/base_client.h"
 #include "stub/rpcclient/mds_client.h"
+#include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
@@ -173,7 +174,8 @@ int InitLog(const char* conf_path, const char* argv0) {
 
   bool succ = InitAccessLog(FLAGS_log_dir) &&
               InitBlockCacheLog(FLAGS_log_dir) &&
-              dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
+              dingofs::aws::InitS3AccessLog(FLAGS_log_dir)
+              && dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
   if (!succ) {
     return -1;
   }

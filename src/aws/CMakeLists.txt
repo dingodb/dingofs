@@ -22,6 +22,6 @@ target_link_libraries(aws_s3_adapter
     ${AWSSDK_LIBRARIES}
     glog::glog
     brpc::brpc
-    absl::str_format
     spdlog::spdlog
+    absl::str_format
 )

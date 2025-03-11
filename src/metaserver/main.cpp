@@ -31,6 +31,7 @@
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "stub/common/version.h"
+#include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
 DEFINE_string(confPath, "dingofs/conf/metaserver.conf", "metaserver confPath");
@@ -145,6 +146,8 @@ int main(int argc, char** argv) {
 
   // init s3 access log
   dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
+
+  dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
   dingofs::metaserver::Metaserver metaserver;
 
