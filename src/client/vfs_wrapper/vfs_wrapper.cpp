@@ -16,12 +16,14 @@
 
 #include "client/vfs_wrapper/vfs_wrapper.h"
 
+#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <cstdint>
 #include <memory>
 
 #include "client/blockcache/log.h"
+#include "client/common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
@@ -42,19 +44,22 @@ namespace vfs {
   ClientOpMetricGuard clientOpMetricGuard( \
       &rc, {&client_op_metric_->op##REQUEST, &client_op_metric_->opAll});
 
-Status InitLog(const char* argv0, std::string conf_path) {
-  dingofs::utils::Configuration conf;
-  conf.SetConfigPath(conf_path);
+static Status LoadConfig(const std::string& config_path,
+                         utils::Configuration& conf) {
+  conf.SetConfigPath(config_path);
   if (!conf.LoadConfig()) {
-    LOG(ERROR) << "LoadConfig failed, confPath = " << conf_path;
-    return Status::InvalidParam("LoadConfig failed");
+    return Status::InvalidParam("load config fail");
   }
+  conf.PrintConfig();
 
+  return Status::OK();
+}
+
+Status InitLog(const char* argv0, utils::Configuration& conf) {
   // set log dir
   if (FLAGS_log_dir.empty()) {
     if (!conf.GetStringValue("client.common.logDir", &FLAGS_log_dir)) {
-      LOG(WARNING) << "no client.common.logDir in " << conf_path
-                   << ", will log to /tmp";
+      LOG(WARNING) << "not found client.common.logDir config.";
     }
   }
 
@@ -70,29 +75,62 @@ Status InitLog(const char* argv0, std::string conf_path) {
               dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
   CHECK(succ) << "Init log failed, unexpected!";
+
   return Status::OK();
 }
 
-Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_con) {
+static Status InitConfig(utils::Configuration& conf,
+                         common::ClientOption& fuse_client_option) {
+  // init fuse client option
+  common::InitClientOption(&conf, &fuse_client_option);
+
+  return Status::OK();
+}
+
+Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   VLOG(1) << "VFSStart argv0: " << argv0;
+
+  if (vfs_conf.fs_name.empty()) {
+    LOG(ERROR) << "fs_name is empty";
+    return Status::InvalidParam("fs_name is empty");
+  }
+
+  if (vfs_conf.mount_point.empty()) {
+    LOG(ERROR) << "mount_point is empty";
+    return Status::InvalidParam("mount_point is empty");
+  }
 
   Status s;
   AccessLogGuard log(
       [&]() { return absl::StrFormat("start: %s", s.ToString()); });
 
-  s = InitLog(argv0, vfs_con.config_path);
-  if (s.ok()) {
-    client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
-    if (vfs_con.fs_type == "vfs" || vfs_con.fs_type == "vfs_v1" ||
-        vfs_con.fs_type == "vfs_v2" || vfs_con.fs_type == "vfs_dummy") {
-      vfs_ = std::make_unique<vfs::VFSImpl>();
-    } else {
-      vfs_ = std::make_unique<vfs::VFSOld>();
-      LOG(INFO) << "VFSWrapper::Start vfs type: vfs_old";
-    }
-    s = vfs_->Start(vfs_con);
+  // load config
+  s = LoadConfig(vfs_conf.config_path, conf_);
+  if (!s.ok()) {
+    return s;
   }
-  return s;
+
+  // init client option
+  common::InitClientOption(&conf_, &fuse_client_option_);
+
+  // init log
+  s = InitLog(argv0, conf_);
+  if (!s.ok()) {
+    return s;
+  }
+
+  LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
+
+  client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
+  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
+      vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
+    vfs_ = std::make_unique<vfs::VFSImpl>(fuse_client_option_);
+
+  } else {
+    vfs_ = std::make_unique<vfs::VFSOld>(fuse_client_option_);
+  }
+
+  return vfs_->Start(vfs_conf);
 }
 
 Status VFSWrapper::Stop() {
@@ -138,6 +176,11 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opLookup, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->Lookup(parent, name, attr);
   VLOG(1) << "VFSLookup end parent: " << parent << " name: " << name
@@ -221,6 +264,11 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opMkNod, &client_op_metric_->opAll});
 
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
+
   s = vfs_->MkNod(parent, name, uid, gid, mode, dev, attr);
   VLOG(1) << "VFSMknod end parent: " << parent << " name: " << name
           << " status: " << s.ToString();
@@ -239,6 +287,11 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opUnlink, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->Unlink(parent, name);
   VLOG(1) << "VFSUnlink end parent: " << parent << " name: " << name
@@ -263,6 +316,11 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
 
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
+
   s = vfs_->Symlink(parent, name, uid, gid, link, attr);
   VLOG(1) << "VFSSymlink end parent: " << parent << " name: " << name
           << " uid: " << uid << " gid: " << gid << " link: " << link
@@ -282,6 +340,13 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRename, &client_op_metric_->opAll});
+
+  if (old_name.length() > fuse_client_option_.fileSystemOption.maxNameLength ||
+      new_name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}|{}) too long",
+                                        old_name.length(), new_name.length()));
+    return s;
+  }
 
   s = vfs_->Rename(old_parent, old_name, new_parent, new_name);
   VLOG(1) << "VFSRename end old_parent: " << old_parent
@@ -346,6 +411,11 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opCreate, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->Create(parent, name, uid, gid, mode, flags, fh, attr);
 
@@ -468,6 +538,11 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
 
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
+
   // NOTE: rc is used by log guard
   s = vfs_->SetXattr(ino, name, value, flags);
   LOG(INFO) << "VFSSetXattr end inodeId=" << ino << " name: " << name
@@ -485,6 +560,11 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetXattr, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->GetXattr(ino, name, value);
   VLOG(1) << "VFSGetXattr end inodeId=" << ino << " name: " << name
@@ -532,6 +612,11 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opMkDir, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->MkDir(parent, name, uid, gid, S_IFDIR | mode, attr);
   VLOG(1) << "VFSMkdir end parent inodeId=" << parent << " name: " << name
@@ -611,6 +696,11 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRmDir, &client_op_metric_->opAll});
+
+  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+    return s;
+  }
 
   s = vfs_->RmDir(parent, name);
   VLOG(1) << "VFSRmdir end parent: " << parent << " name: " << name

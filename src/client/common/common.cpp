@@ -20,7 +20,7 @@
  * Author: lixiaocui
  */
 
-#include "client/vfs_old/common/common.h"
+#include "client/common/common.h"
 
 #include "utils/string_util.h"
 
@@ -73,19 +73,19 @@ using ::dingofs::utils::StringToUll;
 // is direction is true, add second to first
 // if direction is false, sub second from first
 bool AddUllStringToFirst(std::string* first, uint64_t second, bool direction) {
-  uint64_t firstNum = 0;
-  uint64_t secondNum = second;
-  if (StringToUll(*first, &firstNum)) {
+  uint64_t first_num = 0;
+  uint64_t second_num = second;
+  if (StringToUll(*first, &first_num)) {
     if (direction) {
-      *first = std::to_string(firstNum + secondNum);
+      *first = std::to_string(first_num + second_num);
     } else {
-      if (firstNum < secondNum) {
+      if (first_num < second_num) {
         *first = std::to_string(0);
         LOG(WARNING) << "AddUllStringToFirst failed when minus,"
-                     << " first = " << firstNum << ", second = " << secondNum;
+                     << " first = " << first_num << ", second = " << second_num;
         return false;
       }
-      *first = std::to_string(firstNum - secondNum);
+      *first = std::to_string(first_num - second_num);
     }
   } else {
     LOG(ERROR) << "StringToUll failed, first = " << *first
@@ -96,9 +96,9 @@ bool AddUllStringToFirst(std::string* first, uint64_t second, bool direction) {
 }
 
 bool AddUllStringToFirst(uint64_t* first, const std::string& second) {
-  uint64_t secondNum = 0;
-  if (StringToUll(second, &secondNum)) {
-    *first += secondNum;
+  uint64_t second_num = 0;
+  if (StringToUll(second, &second_num)) {
+    *first += second_num;
     return true;
   }
 

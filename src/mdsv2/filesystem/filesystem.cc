@@ -450,7 +450,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   pb_inode.set_atime(now_time);
   pb_inode.set_uid(param.uid);
   pb_inode.set_gid(param.gid);
-  pb_inode.set_mode(S_IFREG | param.mode);
+  pb_inode.set_mode(param.mode);
   pb_inode.set_nlink(1);
   pb_inode.set_type(pb::mdsv2::FileType::FILE);
   pb_inode.set_rdev(param.rdev);
@@ -679,7 +679,8 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
   if (partition != nullptr) {
     InodePtr inode = partition->ParentInode();
     if (inode->Nlink() > kEmptyDirMinLinkNum) {
-      return Status(pb::error::ENOT_EMPTY, fmt::format("dir({}/{}) is not empty.", parent_ino, name));
+      return Status(pb::error::ENOT_EMPTY,
+                    fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, inode->Nlink()));
     }
   }
 
@@ -700,7 +701,8 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
     // check dir is empty by nlink
     pb::mdsv2::Inode pb_inode = MetaDataCodec::DecodeDirInodeValue(value);
     if (pb_inode.nlink() > kEmptyDirMinLinkNum) {
-      status = Status(pb::error::ENOT_EMPTY, fmt::format("dir({}/{}) is not empty.", parent_ino, name));
+      status = Status(pb::error::ENOT_EMPTY,
+                      fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, pb_inode.nlink()));
       break;
     }
 
@@ -967,8 +969,7 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
   partition->DeleteChild(name);
 
   inode->SetNlinkDelta(-1, now_time);
-  auto parent_inode = partition->ParentInode();
-  parent_inode->SetNlinkDelta(1, now_time);
+  partition->ParentInode()->SetNlinkDelta(-1, now_time);
 
   return Status::OK();
 }
@@ -1075,8 +1076,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  auto parent_inode = partition->ParentInode();
-  parent_inode->SetNlinkDelta(1, now_time);
+  partition->ParentInode()->SetNlinkDelta(1, now_time);
 
   entry_out.inode.Swap(&pb_inode);
 
@@ -1139,6 +1139,8 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
 
+  uint64_t now_time = Helper::TimestampNs();
+
   InodePtr inode;
   auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
@@ -1161,6 +1163,9 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  DINGO_LOG(INFO) << fmt::format("setattr {} finish, elapsed_time({}us) rpc_status({}).", ino,
+                                 (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));

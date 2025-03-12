@@ -26,11 +26,11 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/metaserver.pb.h"
-#include "client/vfs_old/common/config.h"
+#include "client/common/config.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/package.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {

@@ -36,8 +36,8 @@
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/s3_client.h"
+#include "client/common/common.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/vfs_old/common/common.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/concurrent.h"
@@ -54,7 +54,7 @@ using blockcache::BCACHE_ERROR;
 using blockcache::Block;
 using blockcache::BlockKey;
 using blockcache::S3ClientImpl;
-using common::FuseClientOption;
+using common::ClientOption;
 using common::WarmupStorageType;
 using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
@@ -141,7 +141,7 @@ void WarmupManagerS3Impl::UnInit() {
   WarmupManager::UnInit();
 }
 
-void WarmupManagerS3Impl::Init(const FuseClientOption& option) {
+void WarmupManagerS3Impl::Init(const ClientOption& option) {
   WarmupManager::Init(option);
   bgFetchStop_.store(false, std::memory_order_release);
   bgFetchThread_ = utils::Thread(&WarmupManagerS3Impl::BackGroundFetch, this);

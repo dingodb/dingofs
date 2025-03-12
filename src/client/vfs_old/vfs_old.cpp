@@ -29,12 +29,12 @@
 #include "aws/s3_adapter.h"
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/s3_client.h"
+#include "client/common/dynamic_config.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/client_operator.h"
-#include "client/vfs_old/common/dynamic_config.h"
 #include "client/vfs_old/dentry_cache_manager.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/filesystem.h"
@@ -163,28 +163,7 @@ int VFSOld::InitBrpcServer() {
 }
 
 Status VFSOld::Start(const VFSConfig& vfs_conf) {
-  if (vfs_conf.fs_name.empty()) {
-    LOG(ERROR) << "fs_name is empty";
-    return Status::InvalidParam("fs_name is empty");
-  }
-
-  if (vfs_conf.mount_point.empty()) {
-    LOG(ERROR) << "mount_point is empty";
-    return Status::InvalidParam("mount_point is empty");
-  }
-
   vfs_conf_ = vfs_conf;
-
-  utils::Configuration conf;
-  conf.SetConfigPath(vfs_conf_.config_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "Load config failed";
-    return Status::InvalidParam("Load config failed");
-  }
-  conf.PrintConfig();
-
-  // init fuse client option
-  common::InitFuseClientOption(&conf, &fuse_client_option_);
 
   {
     // init mds client
@@ -340,7 +319,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     const auto& s3info = fs_info_->detail().s3info();
     aws::S3InfoOption fs_s3_option;
     common::S3Info2FsS3Option(s3info, &fs_s3_option);
-    SetFuseClientS3Option(&fuse_client_option_, fs_s3_option);
+    SetClientS3Option(&fuse_client_option_, fs_s3_option);
 
     // init blockcache s3 client
     blockcache::S3ClientImpl::GetInstance()->Init(

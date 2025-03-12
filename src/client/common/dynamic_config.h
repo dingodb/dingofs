@@ -23,7 +23,7 @@
 #ifndef DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
 #define DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
 
-#include <gflags/gflags.h>
+#include "gflags/gflags.h"
 
 namespace dingofs {
 namespace client {
@@ -61,6 +61,41 @@ DECLARE_int32(disk_state_unstable2down_second);
 
 // disk state health checker
 DECLARE_int32(disk_check_duration_millsecond);
+
+// ----- related stat or quota config -----
+// thread num or bthread num
+DECLARE_uint32(stat_timer_thread_num);
+DECLARE_uint32(fs_usage_flush_interval_second);
+DECLARE_uint32(flush_quota_interval_second);
+DECLARE_uint32(load_quota_interval_second);
+
+// push metrics interval
+DECLARE_uint32(push_metric_interval_millsecond);
+
+// fuse client
+DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
+
+DECLARE_bool(useFakeS3);
+
+// ----- related fuse client -----
+DECLARE_bool(enableCto);
+DECLARE_bool(supportKVcache);
+
+DECLARE_uint64(fuseClientAvgWriteIops);
+DECLARE_uint64(fuseClientBurstWriteIops);
+DECLARE_uint64(fuseClientBurstWriteIopsSecs);
+
+DECLARE_uint64(fuseClientAvgWriteBytes);
+DECLARE_uint64(fuseClientBurstWriteBytes);
+DECLARE_uint64(fuseClientBurstWriteBytesSecs);
+
+DECLARE_uint64(fuseClientAvgReadIops);
+DECLARE_uint64(fuseClientBurstReadIops);
+DECLARE_uint64(fuseClientBurstReadIopsSecs);
+
+DECLARE_uint64(fuseClientAvgReadBytes);
+DECLARE_uint64(fuseClientBurstReadBytes);
+DECLARE_uint64(fuseClientBurstReadBytesSecs);
 
 }  // namespace common
 }  // namespace client

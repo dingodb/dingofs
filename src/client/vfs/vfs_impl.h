@@ -20,6 +20,7 @@
 #include <atomic>
 #include <memory>
 
+#include "client/common/config.h"
 #include "client/vfs/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
@@ -30,7 +31,8 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl() = default;
+  VFSImpl(const common::ClientOption& fuse_client_option)
+      : fuse_client_option_(fuse_client_option) {};
 
   ~VFSImpl() override = default;
 
@@ -112,6 +114,9 @@ class VFSImpl : public VFS {
 
  private:
   std::atomic_bool started_{false};
+
+  common::ClientOption fuse_client_option_;
+
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
 };

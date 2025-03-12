@@ -30,7 +30,7 @@
 
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/s3_client.h"
-#include "client/vfs_old/common/config.h"
+#include "client/common/config.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/inode_cache_manager.h"

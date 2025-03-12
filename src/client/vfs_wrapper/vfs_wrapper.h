@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "client/common/config.h"
 #include "client/vfs/vfs.h"
 #include "stub/metric/metric.h"
 
@@ -33,7 +34,7 @@ class VFSWrapper {
 
   ~VFSWrapper() = default;
 
-  Status Start(const char* argv0, const VFSConfig& vfs_con);
+  Status Start(const char* argv0, const VFSConfig& vfs_conf);
 
   Status Stop();
 
@@ -120,6 +121,9 @@ class VFSWrapper {
   uint64_t GetMaxNameLength();
 
  private:
+  utils::Configuration conf_;
+  common::ClientOption fuse_client_option_;
+
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<stub::metric::ClientOpMetric> client_op_metric_;
 };

@@ -17,9 +17,12 @@ add_library(client_common
     dynamic_config.cpp
     slice.cpp
     status.cpp
+    config.cpp
+    common.cpp
 )
 
 target_link_libraries(client_common
+    brpc::brpc
     fmt::fmt
     glog::glog
     gflags::gflags

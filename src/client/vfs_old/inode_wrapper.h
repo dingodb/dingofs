@@ -32,9 +32,9 @@
 #include <string>
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
-#include "client/vfs_old/common/common.h"
+#include "client/common/common.h"
 #include "client/vfs_old/filesystem/error.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"

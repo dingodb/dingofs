@@ -24,11 +24,11 @@
 #include <memory>
 #include <string>
 
+#include "client/common/common.h"
+#include "client/common/config.h"
 #include "client/common/status.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/vfs_old/common/common.h"
-#include "client/vfs_old/common/config.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/lease/lease_excutor.h"
 #include "client/vfs_old/service/inode_objects_service.h"
@@ -43,7 +43,8 @@ namespace vfs {
 
 class VFSOld : public VFS {
  public:
-  VFSOld() = default;
+  VFSOld(const common::ClientOption& fuse_client_option)
+      : fuse_client_option_(fuse_client_option) {}
 
   ~VFSOld() override = default;
 
@@ -160,7 +161,7 @@ class VFSOld : public VFS {
 
   pb::mds::Mountpoint mount_point_;
 
-  common::FuseClientOption fuse_client_option_;
+  common::ClientOption fuse_client_option_;
 
   // fs info
   std::shared_ptr<pb::mds::FsInfo> fs_info_{nullptr};

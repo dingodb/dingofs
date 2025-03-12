@@ -25,7 +25,7 @@
 
 #include <memory>
 
-#include "client/vfs_old/common/config.h"
+#include "client/common/config.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/openfile.h"

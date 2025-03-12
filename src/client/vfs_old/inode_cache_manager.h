@@ -29,12 +29,12 @@
 #include <memory>
 #include <set>
 
-#include "dingofs/metaserver.pb.h"
-#include "client/vfs_old/common/config.h"
+#include "client/common/config.h"
 #include "client/vfs_old/filesystem/defer_sync.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/filesystem/openfile.h"
 #include "client/vfs_old/inode_wrapper.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/concurrent/concurrent.h"

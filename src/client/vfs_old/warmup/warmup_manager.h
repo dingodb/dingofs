@@ -38,9 +38,9 @@
 #include <vector>
 
 #include "aws/s3_adapter.h"
+#include "client/common/common.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
-#include "client/vfs_old/common/common.h"
 #include "client/vfs_old/dentry_cache_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
@@ -186,9 +186,7 @@ class WarmupManager {
         kvClientManager_(std::move(kv_client_manager)),
         vfs_(vfs) {}
 
-  virtual void Init(const common::FuseClientOption& option) {
-    option_ = option;
-  }
+  virtual void Init(const common::ClientOption& option) { option_ = option; }
   virtual void UnInit() { ClearWarmupProcess(); }
 
   virtual bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) = 0;
@@ -276,7 +274,7 @@ class WarmupManager {
 
   std::shared_ptr<KVClientManager> kvClientManager_ = nullptr;
 
-  common::FuseClientOption option_;
+  common::ClientOption option_;
 
   vfs::VFS* vfs_;
 };
@@ -299,7 +297,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   bool AddWarmupFile(Ino key, const std::string& path,
                      common::WarmupStorageType type) override;
 
-  void Init(const common::FuseClientOption& option) override;
+  void Init(const common::ClientOption& option) override;
   void UnInit() override;
 
  private:

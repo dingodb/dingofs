@@ -20,8 +20,8 @@
  * Author: lixiaocui
  */
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_OLD_COMMON_COMMON_H_
-#define DINGOFS_SRC_CLIENT_VFS_OLD_COMMON_COMMON_H_
+#ifndef DINGOFS_SRC_CLIENT_COMMON_COMMON_H_
+#define DINGOFS_SRC_CLIENT_COMMON_COMMON_H_
 
 #include <cstdint>
 #include <string>
@@ -30,7 +30,7 @@ namespace dingofs {
 namespace client {
 namespace common {
 
-enum DiskCacheType { Disable = 0, OnlyRead = 1, ReadWrite = 2 };
+enum DiskCacheType { kDisable = 0, kOnlyRead = 1, kReadWrite = 2 };
 
 constexpr int kWarmupOpNum = 4;
 
@@ -73,8 +73,9 @@ enum NlinkChange : int32_t {
 // if direction is false, sub second from first
 bool AddUllStringToFirst(std::string* first, uint64_t second, bool direction);
 bool AddUllStringToFirst(uint64_t* first, const std::string& second);
+
 }  // namespace common
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_OLD_COMMON_COMMON_H_
+#endif  // DINGOFS_SRC_CLIENT_COMMON_COMMON_H_

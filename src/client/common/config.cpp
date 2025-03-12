@@ -20,19 +20,21 @@
  * Author: xuchaojie
  */
 
-#include "client/vfs_old/common/config.h"
-
-#include <gflags/gflags.h>
+#include "client/common/config.h"
 
 #include <string>
 
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
-#include "client/common/config.h"
 #include "client/common/dynamic_config.h"
-#include "client/vfs_old/common/dynamic_config.h"
+#include "gflags/gflags.h"
 #include "utils/gflags_helper.h"
+
+namespace brpc {
+DECLARE_int32(defer_close_second);
+DECLARE_int32(health_check_interval);
+}  // namespace brpc
 
 namespace dingofs {
 namespace client {
@@ -84,73 +86,73 @@ void InitExcutorOption(Configuration* conf, ExcutorOpt* opts, bool internal) {
 }
 
 void InitBlockDeviceOption(Configuration* conf,
-                           BlockDeviceClientOptions* bdevOpt) {
-  conf->GetValueFatalIfFail("bdev.confPath", &bdevOpt->configPath);
+                           BlockDeviceClientOptions* bdev_opt) {
+  conf->GetValueFatalIfFail("bdev.confPath", &bdev_opt->configPath);
 }
 
-void InitS3Option(Configuration* conf, S3Option* s3Opt) {
+void InitS3Option(Configuration* conf, S3Option* s3_opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
   conf->GetValueFatalIfFail("data_stream.page.size",
-                            &s3Opt->s3ClientAdaptorOpt.pageSize);
+                            &s3_opt->s3ClientAdaptorOpt.pageSize);
   conf->GetValueFatalIfFail("s3.prefetchBlocks",
-                            &s3Opt->s3ClientAdaptorOpt.prefetchBlocks);
+                            &s3_opt->s3ClientAdaptorOpt.prefetchBlocks);
   conf->GetValueFatalIfFail("s3.prefetchExecQueueNum",
-                            &s3Opt->s3ClientAdaptorOpt.prefetchExecQueueNum);
+                            &s3_opt->s3ClientAdaptorOpt.prefetchExecQueueNum);
   conf->GetValueFatalIfFail("data_stream.background_flush.interval_ms",
-                            &s3Opt->s3ClientAdaptorOpt.intervalMs);
+                            &s3_opt->s3ClientAdaptorOpt.intervalMs);
   conf->GetValueFatalIfFail("data_stream.slice.stay_in_memory_max_second",
-                            &s3Opt->s3ClientAdaptorOpt.flushIntervalSec);
+                            &s3_opt->s3ClientAdaptorOpt.flushIntervalSec);
   conf->GetValueFatalIfFail("s3.writeCacheMaxByte",
-                            &s3Opt->s3ClientAdaptorOpt.writeCacheMaxByte);
+                            &s3_opt->s3ClientAdaptorOpt.writeCacheMaxByte);
   conf->GetValueFatalIfFail("s3.readCacheMaxByte",
-                            &s3Opt->s3ClientAdaptorOpt.readCacheMaxByte);
+                            &s3_opt->s3ClientAdaptorOpt.readCacheMaxByte);
   conf->GetValueFatalIfFail("s3.readCacheThreads",
-                            &s3Opt->s3ClientAdaptorOpt.readCacheThreads);
+                            &s3_opt->s3ClientAdaptorOpt.readCacheThreads);
   conf->GetValueFatalIfFail("s3.nearfullRatio",
-                            &s3Opt->s3ClientAdaptorOpt.nearfullRatio);
+                            &s3_opt->s3ClientAdaptorOpt.nearfullRatio);
   conf->GetValueFatalIfFail("s3.baseSleepUs",
-                            &s3Opt->s3ClientAdaptorOpt.baseSleepUs);
+                            &s3_opt->s3ClientAdaptorOpt.baseSleepUs);
   conf->GetValueFatalIfFail("s3.maxReadRetryIntervalMs",
-                            &s3Opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
+                            &s3_opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
-                            &s3Opt->s3ClientAdaptorOpt.readRetryIntervalMs);
+                            &s3_opt->s3ClientAdaptorOpt.readRetryIntervalMs);
   dingofs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
-                                                      &s3Opt->s3AdaptrOpt);
+                                                      &s3_opt->s3AdaptrOpt);
 }
 
-void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt) {
-  conf->GetValueFatalIfFail("volume.bigFileSize", &volumeOpt->bigFileSize);
-  conf->GetValueFatalIfFail("volume.volBlockSize", &volumeOpt->volBlockSize);
-  conf->GetValueFatalIfFail("volume.fsBlockSize", &volumeOpt->fsBlockSize);
+void InitVolumeOption(Configuration* conf, VolumeOption* volume_opt) {
+  conf->GetValueFatalIfFail("volume.bigFileSize", &volume_opt->bigFileSize);
+  conf->GetValueFatalIfFail("volume.volBlockSize", &volume_opt->volBlockSize);
+  conf->GetValueFatalIfFail("volume.fsBlockSize", &volume_opt->fsBlockSize);
   conf->GetValueFatalIfFail("volume.allocator.type",
-                            &volumeOpt->allocatorOption.type);
+                            &volume_opt->allocatorOption.type);
 
   conf->GetValueFatalIfFail(
       "volume.blockGroup.allocateOnce",
-      &volumeOpt->allocatorOption.blockGroupOption.allocateOnce);
+      &volume_opt->allocatorOption.blockGroupOption.allocateOnce);
 
-  if (volumeOpt->allocatorOption.type == "bitmap") {
+  if (volume_opt->allocatorOption.type == "bitmap") {
     conf->GetValueFatalIfFail(
         "volume.bitmapAllocator.sizePerBit",
-        &volumeOpt->allocatorOption.bitmapAllocatorOption.sizePerBit);
-    conf->GetValueFatalIfFail(
-        "volume.bitmapAllocator.smallAllocProportion",
-        &volumeOpt->allocatorOption.bitmapAllocatorOption.smallAllocProportion);
+        &volume_opt->allocatorOption.bitmapAllocatorOption.sizePerBit);
+    conf->GetValueFatalIfFail("volume.bitmapAllocator.smallAllocProportion",
+                              &volume_opt->allocatorOption.bitmapAllocatorOption
+                                   .smallAllocProportion);
   } else {
     CHECK(false) << "only support bitmap allocator";
   }
 }
 
 void InitExtentManagerOption(Configuration* conf,
-                             ExtentManagerOption* extentManagerOpt) {
+                             ExtentManagerOption* extent_manager_opt) {
   conf->GetValueFatalIfFail("extentManager.preAllocSize",
-                            &extentManagerOpt->preAllocSize);
+                            &extent_manager_opt->preAllocSize);
 }
 
-void InitLeaseOpt(Configuration* conf, LeaseOpt* leaseOpt) {
-  conf->GetValueFatalIfFail("mds.leaseTimesUs", &leaseOpt->leaseTimeUs);
+void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {
+  conf->GetValueFatalIfFail("mds.leaseTimesUs", &lease_opt->leaseTimeUs);
   conf->GetValueFatalIfFail("mds.refreshTimesPerLease",
-                            &leaseOpt->refreshTimesPerLease);
+                            &lease_opt->refreshTimesPerLease);
 }
 
 void InitRefreshDataOpt(Configuration* conf, RefreshDataOption* opt) {
@@ -175,7 +177,7 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
   c->GetValueFatalIfFail("fs.maxNameLength", &option->maxNameLength);
   c->GetValueFatalIfFail("fs.accessLogging", &FLAGS_access_logging);
   {  // kernel cache option
-    auto o = &option->kernelCacheOption;
+    auto* o = &option->kernelCacheOption;
     c->GetValueFatalIfFail("fs.kernelCache.attrTimeoutSec", &o->attrTimeoutSec);
     c->GetValueFatalIfFail("fs.kernelCache.dirAttrTimeoutSec",
                            &o->dirAttrTimeoutSec);
@@ -185,26 +187,26 @@ void InitFileSystemOption(Configuration* c, FileSystemOption* option) {
                            &o->dirEntryTimeoutSec);
   }
   {  // lookup cache option
-    auto o = &option->lookupCacheOption;
+    auto* o = &option->lookupCacheOption;
     c->GetValueFatalIfFail("fs.lookupCache.lruSize", &o->lruSize);
     c->GetValueFatalIfFail("fs.lookupCache.negativeTimeoutSec",
                            &o->negativeTimeoutSec);
     c->GetValueFatalIfFail("fs.lookupCache.minUses", &o->minUses);
   }
   {  // dir cache option
-    auto o = &option->dirCacheOption;
+    auto* o = &option->dirCacheOption;
     c->GetValueFatalIfFail("fs.dirCache.lruSize", &o->lruSize);
   }
   {  // attr watcher option
-    auto o = &option->attrWatcherOption;
+    auto* o = &option->attrWatcherOption;
     c->GetValueFatalIfFail("fs.attrWatcher.lruSize", &o->lruSize);
   }
   {  // rpc option
-    auto o = &option->rpcOption;
+    auto* o = &option->rpcOption;
     c->GetValueFatalIfFail("fs.rpc.listDentryLimit", &o->listDentryLimit);
   }
   {  // defer sync option
-    auto o = &option->deferSyncOption;
+    auto* o = &option->deferSyncOption;
     c->GetValueFatalIfFail("fs.deferSync.delay", &o->delay);
     c->GetValueFatalIfFail("fs.deferSync.deferDirMtime", &o->deferDirMtime);
   }
@@ -344,38 +346,38 @@ void SetBrpcOpt(Configuration* conf) {
              &brpc::FLAGS_health_check_interval);
 }
 
-void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
-  InitMdsOption(conf, &clientOption->mdsOpt);
-  InitMetaCacheOption(conf, &clientOption->metaCacheOpt);
-  InitExcutorOption(conf, &clientOption->excutorOpt, false);
-  InitExcutorOption(conf, &clientOption->excutorInternalOpt, true);
-  InitBlockDeviceOption(conf, &clientOption->bdevOpt);
-  InitS3Option(conf, &clientOption->s3Opt);
-  InitExtentManagerOption(conf, &clientOption->extentManagerOpt);
-  InitVolumeOption(conf, &clientOption->volumeOpt);
-  InitLeaseOpt(conf, &clientOption->leaseOpt);
-  InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
-  InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
-  InitFileSystemOption(conf, &clientOption->fileSystemOption);
-  InitDataStreamOption(conf, &clientOption->data_stream_option);
-  InitBlockCacheOption(conf, &clientOption->block_cache_option);
+void InitClientOption(Configuration* conf, ClientOption* client_option) {
+  InitMdsOption(conf, &client_option->mdsOpt);
+  InitMetaCacheOption(conf, &client_option->metaCacheOpt);
+  InitExcutorOption(conf, &client_option->excutorOpt, false);
+  InitExcutorOption(conf, &client_option->excutorInternalOpt, true);
+  InitBlockDeviceOption(conf, &client_option->bdevOpt);
+  InitS3Option(conf, &client_option->s3Opt);
+  InitExtentManagerOption(conf, &client_option->extentManagerOpt);
+  InitVolumeOption(conf, &client_option->volumeOpt);
+  InitLeaseOpt(conf, &client_option->leaseOpt);
+  InitRefreshDataOpt(conf, &client_option->refreshDataOption);
+  InitKVClientManagerOpt(conf, &client_option->kvClientManagerOpt);
+  InitFileSystemOption(conf, &client_option->fileSystemOption);
+  InitDataStreamOption(conf, &client_option->data_stream_option);
+  InitBlockCacheOption(conf, &client_option->block_cache_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
-                            &clientOption->listDentryLimit);
+                            &client_option->listDentryLimit);
   conf->GetValueFatalIfFail("fuseClient.listDentryThreads",
-                            &clientOption->listDentryThreads);
+                            &client_option->listDentryThreads);
   conf->GetValueFatalIfFail("client.dummyServer.startPort",
-                            &clientOption->dummyServerStartPort);
+                            &client_option->dummyServerStartPort);
   conf->GetValueFatalIfFail("fuseClient.enableMultiMountPointRename",
-                            &clientOption->enableMultiMountPointRename);
+                            &client_option->enableMultiMountPointRename);
   conf->GetValueFatalIfFail("fuseClient.downloadMaxRetryTimes",
-                            &clientOption->downloadMaxRetryTimes);
+                            &client_option->downloadMaxRetryTimes);
   conf->GetValueFatalIfFail("fuseClient.warmupThreadsNum",
-                            &clientOption->warmupThreadsNum);
+                            &client_option->warmupThreadsNum);
   LOG_IF(WARNING, conf->GetBoolValue("fuseClient.enableSplice",
-                                     &clientOption->enableFuseSplice))
+                                     &client_option->enableFuseSplice))
       << "Not found `fuseClient.enableSplice` in conf, use default value `"
-      << std::boolalpha << clientOption->enableFuseSplice << '`';
+      << std::boolalpha << client_option->enableFuseSplice << '`';
 
   conf->GetValueFatalIfFail("fuseClient.throttle.avgWriteBytes",
                             &FLAGS_fuseClientAvgWriteBytes);
@@ -407,25 +409,25 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   SetBrpcOpt(conf);
 }
 
-void SetFuseClientS3Option(FuseClientOption* clientOption,
-                           const S3InfoOption& fsS3Opt) {
-  clientOption->s3Opt.s3ClientAdaptorOpt.blockSize = fsS3Opt.blockSize;
-  clientOption->s3Opt.s3ClientAdaptorOpt.chunkSize = fsS3Opt.chunkSize;
-  clientOption->s3Opt.s3ClientAdaptorOpt.objectPrefix = fsS3Opt.objectPrefix;
-  clientOption->s3Opt.s3AdaptrOpt.s3Address = fsS3Opt.s3Address;
-  clientOption->s3Opt.s3AdaptrOpt.ak = fsS3Opt.ak;
-  clientOption->s3Opt.s3AdaptrOpt.sk = fsS3Opt.sk;
-  clientOption->s3Opt.s3AdaptrOpt.bucketName = fsS3Opt.bucketName;
+void SetClientS3Option(ClientOption* client_option,
+                       const S3InfoOption& fs_s3_opt) {
+  client_option->s3Opt.s3ClientAdaptorOpt.blockSize = fs_s3_opt.blockSize;
+  client_option->s3Opt.s3ClientAdaptorOpt.chunkSize = fs_s3_opt.chunkSize;
+  client_option->s3Opt.s3ClientAdaptorOpt.objectPrefix = fs_s3_opt.objectPrefix;
+  client_option->s3Opt.s3AdaptrOpt.s3Address = fs_s3_opt.s3Address;
+  client_option->s3Opt.s3AdaptrOpt.ak = fs_s3_opt.ak;
+  client_option->s3Opt.s3AdaptrOpt.sk = fs_s3_opt.sk;
+  client_option->s3Opt.s3AdaptrOpt.bucketName = fs_s3_opt.bucketName;
 }
 
-void S3Info2FsS3Option(const pb::common::S3Info& s3, S3InfoOption* fsS3Opt) {
-  fsS3Opt->ak = s3.ak();
-  fsS3Opt->sk = s3.sk();
-  fsS3Opt->s3Address = s3.endpoint();
-  fsS3Opt->bucketName = s3.bucketname();
-  fsS3Opt->blockSize = s3.blocksize();
-  fsS3Opt->chunkSize = s3.chunksize();
-  fsS3Opt->objectPrefix = s3.has_objectprefix() ? s3.objectprefix() : 0;
+void S3Info2FsS3Option(const pb::common::S3Info& s3, S3InfoOption* fs_s3_opt) {
+  fs_s3_opt->ak = s3.ak();
+  fs_s3_opt->sk = s3.sk();
+  fs_s3_opt->s3Address = s3.endpoint();
+  fs_s3_opt->bucketName = s3.bucketname();
+  fs_s3_opt->blockSize = s3.blocksize();
+  fs_s3_opt->chunkSize = s3.chunksize();
+  fs_s3_opt->objectPrefix = s3.has_objectprefix() ? s3.objectprefix() : 0;
 }
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid) {

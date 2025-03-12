@@ -266,26 +266,33 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
 static void SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set, pb::mdsv2::Inode& dst_inode) {
   if (to_set & kSetAttrMode) {
     dst_inode.set_mode(inode.mode());
+  }
 
-  } else if (to_set & kSetAttrUid) {
+  if (to_set & kSetAttrUid) {
     dst_inode.set_uid(inode.uid());
+  }
 
-  } else if (to_set & kSetAttrGid) {
+  if (to_set & kSetAttrGid) {
     dst_inode.set_gid(inode.gid());
+  }
 
-  } else if (to_set & kSetAttrLength) {
+  if (to_set & kSetAttrLength) {
     dst_inode.set_length(inode.length());
+  }
 
-  } else if (to_set & kSetAttrAtime) {
+  if (to_set & kSetAttrAtime) {
     dst_inode.set_atime(inode.atime());
+  }
 
-  } else if (to_set & kSetAttrMtime) {
+  if (to_set & kSetAttrMtime) {
     dst_inode.set_mtime(inode.mtime());
+  }
 
-  } else if (to_set & kSetAttrCtime) {
+  if (to_set & kSetAttrCtime) {
     dst_inode.set_ctime(inode.ctime());
+  }
 
-  } else if (to_set & kSetAttrNlink) {
+  if (to_set & kSetAttrNlink) {
     dst_inode.set_nlink(inode.nlink());
   }
 }

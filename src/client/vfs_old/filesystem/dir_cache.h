@@ -29,7 +29,7 @@
 #include "absl/container/btree_map.h"
 #include "base/queue/message_queue.h"
 #include "base/time/time.h"
-#include "client/vfs_old/common/config.h"
+#include "client/common/config.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/metric.h"
 #include "utils/concurrent/concurrent.h"

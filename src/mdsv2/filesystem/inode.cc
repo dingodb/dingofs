@@ -357,19 +357,33 @@ void Inode::SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set) {
 
   if (to_set & kSetAttrMode) {
     mode_ = inode.mode();
-  } else if (to_set & kSetAttrUid) {
+  }
+
+  if (to_set & kSetAttrUid) {
     uid_ = inode.uid();
-  } else if (to_set & kSetAttrGid) {
+  }
+
+  if (to_set & kSetAttrGid) {
     gid_ = inode.gid();
-  } else if (to_set & kSetAttrLength) {
+  }
+
+  if (to_set & kSetAttrLength) {
     length_ = inode.length();
-  } else if (to_set & kSetAttrAtime) {
+  }
+
+  if (to_set & kSetAttrAtime) {
     atime_ = inode.atime();
-  } else if (to_set & kSetAttrMtime) {
+  }
+
+  if (to_set & kSetAttrMtime) {
     mtime_ = inode.mtime();
-  } else if (to_set & kSetAttrCtime) {
+  }
+
+  if (to_set & kSetAttrCtime) {
     ctime_ = inode.ctime();
-  } else if (to_set & kSetAttrNlink) {
+  }
+
+  if (to_set & kSetAttrNlink) {
     nlink_ = inode.nlink();
   }
 }

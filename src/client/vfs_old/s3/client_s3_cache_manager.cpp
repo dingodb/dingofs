@@ -33,7 +33,7 @@
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
-#include "client/vfs_old/common/dynamic_config.h"
+#include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(common)
 add_subdirectory(kvclient)
 add_subdirectory(lease)
 
@@ -38,7 +37,6 @@ target_link_libraries(vfs_old_lib
     client_blockcache
     dingofs_utils
     aws_s3_adapter
-    vfs_old_common
     dingofs_threading
     stub_common
     gflags::gflags
