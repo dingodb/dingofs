@@ -25,10 +25,15 @@ namespace mdsv2 {
 class Context {
  public:
   Context() = default;
+  Context(bool is_bypass_cache) : is_bypass_cache_(is_bypass_cache) {};
+
+  void SetBypassCache(bool is_bypass_cache) { is_bypass_cache_ = is_bypass_cache; }
+  bool IsBypassCache() const { return is_bypass_cache_; }
 
   Trace& GetTrace() { return trace_; }
 
  private:
+  bool is_bypass_cache_{false};
   Trace trace_;
 };
 

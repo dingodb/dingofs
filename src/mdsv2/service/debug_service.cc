@@ -56,7 +56,7 @@ void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::deb
 
   Context ctx;
   PartitionPtr partition;
-  auto status = fs->GetPartition(request->parent_ino(), partition, ctx.GetTrace());
+  auto status = fs->GetPartition(request->parent_ino(), false, partition, ctx.GetTrace());
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status);
   }

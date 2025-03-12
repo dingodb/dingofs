@@ -26,6 +26,7 @@
 #include "glog/logging.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/filesystem/codec.h"
@@ -192,17 +193,37 @@ void MutationProcessor::LaunchExecuteTxnMutation(const TxnMutation& txn_mutation
   }
 }
 
+bool IsFileInodeTxn(Operation::OpType op_type) {
+  switch (op_type) {
+    case Operation::OpType::kCreateInode:
+    case Operation::OpType::kDeleteInode:
+    case Operation::OpType::kUpdateInodeNlink:
+    case Operation::OpType::kUpdateInodeAttr:
+    case Operation::OpType::kUpdateInodeXAttr:
+      return true;
+
+    case Operation::OpType::kCreateDentry:
+    case Operation::OpType::kDeleteDentry:
+      return false;
+
+    default:
+      LOG(FATAL) << fmt::format("unknown operation type({}).", Operation::OpTypeName(op_type));
+      break;
+  }
+}
+
 void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
+  auto op_type = txn_mutation.operations.front().op_type;
+  bool is_file_txn = IsFileInodeTxn(op_type);
+
   for (auto& operation : txn_mutation.operations) {
-    operation.notification.trace->SetTxnPendingTime();
+    operation.notification.trace->SetPendingTime(is_file_txn);
   }
 
   uint64_t start_time = Helper::TimestampUs();
   LOG(INFO) << fmt::format("[mutation] txn({}/{}) mutation.", txn_mutation.fs_id, txn_mutation.txn_id);
 
   Status status;
-
-  auto op_type = txn_mutation.operations.front().op_type;
   switch (op_type) {
     case Operation::OpType::kCreateInode:
       status = ExecuteCreateInodeTxnMutation(txn_mutation);
@@ -238,7 +259,6 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
 
   // notify operation finish
   for (auto& operation : txn_mutation.operations) {
-    operation.notification.trace->SetTxnExecTime();
     operation.notification.count_down_event->signal();
   }
 }
@@ -486,7 +506,7 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
     std::string parent_key = MetaDataCodec::EncodeDirInodeKey(txn_mutation.fs_id, txn_mutation.txn_id);
     auto status = txn->Get(parent_key, value);
     if (!status.ok()) {
-      return status;
+      break;
     }
 
     pb::mdsv2::Inode parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
@@ -510,7 +530,7 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
     status = txn->Commit();
     trace_txn = txn->GetTrace();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      return status;
+      break;
     }
 
     ++retry;

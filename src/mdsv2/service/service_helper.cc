@@ -35,5 +35,39 @@ void ServiceHelper::SetError(pb::error::Error* error, int errcode, const std::st
   error->set_errmsg(errmsg);
 }
 
+void ServiceHelper::SetResponseInfo(const Trace& trace, pb::mdsv2::ResponseInfo* info) {
+  auto* mut_time = info->mutable_time();
+  const auto& time = trace.GetTime();
+  mut_time->set_file_pending_time_us(time.file_pending_time_us);
+  mut_time->set_pending_time_us(time.pending_time_us);
+
+  auto* mut_cache = info->mutable_cache();
+  const auto& cache = trace.GetCache();
+  mut_cache->set_is_hit_partition(cache.is_hit_partition);
+  mut_cache->set_is_hit_inode(cache.is_hit_inode);
+
+  const auto& txn = trace.GetTxn();
+  if (txn.txn_id != 0) {
+    auto* mut_txn = info->add_txns();
+    mut_txn->set_txn_id(txn.txn_id);
+    mut_txn->set_is_one_pc(txn.is_one_pc);
+    mut_txn->set_is_conflict(txn.is_conflict);
+    mut_txn->set_read_time_us(txn.read_time_us);
+    mut_txn->set_write_time_us(txn.write_time_us);
+    mut_txn->set_retry(txn.retry);
+  }
+
+  const auto& file_txn = trace.GetFileTxn();
+  if (file_txn.txn_id != 0) {
+    auto* mut_txn = info->add_txns();
+    mut_txn->set_txn_id(file_txn.txn_id);
+    mut_txn->set_is_one_pc(file_txn.is_one_pc);
+    mut_txn->set_is_conflict(file_txn.is_conflict);
+    mut_txn->set_read_time_us(file_txn.read_time_us);
+    mut_txn->set_write_time_us(file_txn.write_time_us);
+    mut_txn->set_retry(file_txn.retry);
+  }
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

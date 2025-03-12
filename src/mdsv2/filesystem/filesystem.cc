@@ -116,15 +116,17 @@ bool FileSystem::CanServe(int64_t self_mds_id) {
   return false;
 }
 
-Status FileSystem::GetPartition(uint64_t parent_ino, PartitionPtr& out_partition, Trace& trace) {
-  auto partition = GetPartitionFromCache(parent_ino);
-  if (partition != nullptr) {
-    trace.SetHitPartition();
-    out_partition = partition;
-    return Status::OK();
-  }
+Status FileSystem::GetPartition(uint64_t parent_ino, bool bypass_cache, PartitionPtr& out_partition, Trace& trace) {
+  if (!bypass_cache) {
+    auto partition = GetPartitionFromCache(parent_ino);
+    if (partition != nullptr) {
+      trace.SetHitPartition();
+      out_partition = partition;
+      return Status::OK();
+    }
 
-  DINGO_LOG(INFO) << fmt::format("dentry set cache missing {}.", parent_ino);
+    DINGO_LOG(INFO) << fmt::format("dentry set cache missing {}.", parent_ino);
+  }
 
   auto status = GetPartitionFromStore(parent_ino, out_partition);
   if (!status.ok()) {
@@ -171,15 +173,17 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_
   return Status::OK();
 }
 
-Status FileSystem::GetInode(uint64_t ino, InodePtr& out_inode, Trace& trace) {
-  auto inode = GetInodeFromCache(ino);
-  if (inode != nullptr) {
-    trace.SetHitInode();
-    out_inode = inode;
-    return Status::OK();
-  }
+Status FileSystem::GetInode(uint64_t ino, bool bypass_cache, InodePtr& out_inode, Trace& trace) {
+  if (!bypass_cache) {
+    auto inode = GetInodeFromCache(ino);
+    if (inode != nullptr) {
+      trace.SetHitInode();
+      out_inode = inode;
+      return Status::OK();
+    }
 
-  DINGO_LOG(INFO) << fmt::format("inode cache missing {}.", ino);
+    DINGO_LOG(INFO) << fmt::format("inode cache missing {}.", ino);
+  }
 
   auto status = GetInodeFromStore(ino, out_inode);
   if (!status.ok()) {
@@ -281,13 +285,14 @@ Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& 
   DINGO_LOG(DEBUG) << fmt::format("Lookup parent_ino({}), name({}).", parent_ino, name);
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, partition, trace);
+  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -299,7 +304,7 @@ Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& 
 
   InodePtr inode = dentry.Inode();
   if (inode == nullptr) {
-    auto status = GetInode(dentry.Ino(), inode, trace);
+    auto status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
     if (!status.ok()) {
       return status;
     }
@@ -406,6 +411,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
   uint64_t parent_ino = param.parent_ino;
 
   // check request
@@ -419,7 +425,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   // get dentry set
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, partition, trace);
+  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -510,13 +516,14 @@ Status FileSystem::Open(Context& ctx, uint64_t ino) {
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
 
   auto inode = open_files_.IsOpened(ino);
   if (inode != nullptr) {
     return Status::OK();
   }
 
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -547,6 +554,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
   uint64_t parent_ino = param.parent_ino;
 
   // check request
@@ -560,7 +568,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   // get parent dentry
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, partition, trace);
+  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -654,9 +662,10 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
 
   auto& trace = ctx.GetTrace();
   auto& trace_txn = trace.GetTxn();
+  const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr parent_partition;
-  auto status = GetPartition(parent_ino, parent_partition, trace);
+  auto status = GetPartition(parent_ino, bypass_cache, parent_partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -751,8 +760,10 @@ Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_n
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   PartitionPtr partition;
-  auto status = GetPartition(ino, partition, trace);
+  auto status = GetPartition(ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -768,7 +779,7 @@ Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_n
       // need inode attr
       InodePtr inode = dentry.Inode();
       if (inode == nullptr) {
-        auto status = GetInode(dentry.Ino(), inode, trace);
+        auto status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
         if (!status.ok()) {
           return status;
         }
@@ -798,8 +809,10 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   PartitionPtr partition;
-  auto status = GetPartition(new_parent_ino, partition, trace);
+  auto status = GetPartition(new_parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -807,7 +820,7 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
 
   // get inode
   InodePtr inode;
-  status = GetInode(ino, inode, trace);
+  status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -881,8 +894,10 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, partition, trace);
+  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -893,7 +908,7 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
   }
 
   InodePtr inode;
-  status = GetInode(dentry.Ino(), inode, trace);
+  status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -979,8 +994,10 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   PartitionPtr partition;
-  auto status = GetPartition(new_parent_ino, partition, trace);
+  auto status = GetPartition(new_parent_ino, bypass_cache, partition, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1074,8 +1091,10 @@ Status FileSystem::ReadLink(Context& ctx, uint64_t ino, std::string& link) {
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1097,8 +1116,10 @@ Status FileSystem::GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out) {
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1116,8 +1137,10 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1159,8 +1182,10 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr) 
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1178,8 +1203,10 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, const std::string& name,
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1195,8 +1222,10 @@ Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::stri
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1233,6 +1262,8 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
   DINGO_LOG(INFO) << fmt::format("rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   uint64_t now_ns = Helper::TimestampNs();
 
   // check name is valid
@@ -1416,7 +1447,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     // update cache
     do {
       PartitionPtr old_parent_partition;
-      auto status = GetPartition(old_parent_ino, old_parent_partition, trace);
+      auto status = GetPartition(old_parent_ino, bypass_cache, old_parent_partition, trace);
       if (!status.ok()) {
         break;
       }
@@ -1424,7 +1455,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
       // check new parent dentry/inode
       PartitionPtr new_parent_partition;
-      status = GetPartition(new_parent_ino, new_parent_partition, trace);
+      status = GetPartition(new_parent_ino, bypass_cache, new_parent_partition, trace);
       if (!status.ok()) {
         break;
       }
@@ -1480,8 +1511,10 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }
@@ -1523,8 +1556,10 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   }
 
   auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
   InodePtr inode;
-  auto status = GetInode(ino, inode, trace);
+  auto status = GetInode(ino, bypass_cache, inode, trace);
   if (!status.ok()) {
     return status;
   }

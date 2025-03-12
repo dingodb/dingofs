@@ -27,8 +27,8 @@ class Trace {
   Trace() = default;
 
   struct Time {
-    uint64_t txn_pending_time_us{0};
-    uint64_t txn_exec_time_us{0};
+    uint64_t file_pending_time_us{0};
+    uint64_t pending_time_us{0};
   };
 
   struct Cache {
@@ -52,23 +52,21 @@ class Trace {
   Txn& GetTxn() { return txn_; }
   const Txn& GetTxn() const { return txn_; }
 
-  Txn& GetFileTxn() { return txn_; }
-  const Txn& GetFileTxn() const { return txn_; }
+  Txn& GetFileTxn() { return file_txn_; }
+  const Txn& GetFileTxn() const { return file_txn_; }
 
   void SetHitPartition() { cache_.is_hit_partition = true; }
   void SetHitInode() { cache_.is_hit_inode = true; }
 
   void UpdateLastTime() { last_time_us_ = Helper::TimestampUs(); }
 
-  void SetTxnPendingTime() {
+  void SetPendingTime(bool is_file_txn) {
     uint64_t now_us = Helper::TimestampUs();
-    time_.txn_pending_time_us = now_us - last_time_us_;
-    last_time_us_ = now_us;
-  }
-
-  void SetTxnExecTime() {
-    uint64_t now_us = Helper::TimestampUs();
-    time_.txn_exec_time_us = now_us - last_time_us_;
+    if (is_file_txn) {
+      time_.file_pending_time_us = now_us - last_time_us_;
+    } else {
+      time_.pending_time_us = now_us - last_time_us_;
+    }
     last_time_us_ = now_us;
   }
 

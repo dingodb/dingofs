@@ -183,12 +183,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool CanServe(int64_t self_mds_id);
 
   // get dentry
-  Status GetPartition(uint64_t parent_ino, PartitionPtr& out_partition, Trace& trace);
+  Status GetPartition(uint64_t parent_ino, bool bypass_cache, PartitionPtr& out_partition, Trace& trace);
   PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
   Status GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition);
 
   // get inode
-  Status GetInode(uint64_t ino, InodePtr& out_inode, Trace& trace);
+  Status GetInode(uint64_t ino, bool bypass_cache, InodePtr& out_inode, Trace& trace);
   InodePtr GetInodeFromCache(uint64_t ino);
   Status GetInodeFromStore(uint64_t ino, InodePtr& out_inode);
 

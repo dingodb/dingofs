@@ -38,38 +38,7 @@ class ServiceHelper {
   static void SetError(pb::error::Error* error, const Status& status);
   static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
 
-  static void SetResponseInfo(const Trace& trace, pb::mdsv2::ResponseInfo* response_info) {
-    auto* mut_cache = response_info->mutable_cache();
-    const auto& cache = trace.GetCache();
-    mut_cache->set_is_hit_partition(cache.is_hit_partition);
-    mut_cache->set_is_hit_inode(cache.is_hit_inode);
-
-    {
-      auto* mut_txn = response_info->add_txns();
-      const auto& txn = trace.GetTxn();
-      if (txn.txn_id != 0) {
-        mut_txn->set_txn_id(txn.txn_id);
-        mut_txn->set_is_one_pc(txn.is_one_pc);
-        mut_txn->set_is_conflict(txn.is_conflict);
-        mut_txn->set_read_time_us(txn.read_time_us);
-        mut_txn->set_write_time_us(txn.write_time_us);
-        mut_txn->set_retry(txn.retry);
-      }
-    }
-
-    {
-      auto* mut_txn = response_info->add_txns();
-      const auto& txn = trace.GetFileTxn();
-      if (txn.txn_id != 0) {
-        mut_txn->set_txn_id(txn.txn_id);
-        mut_txn->set_is_one_pc(txn.is_one_pc);
-        mut_txn->set_is_conflict(txn.is_conflict);
-        mut_txn->set_read_time_us(txn.read_time_us);
-        mut_txn->set_write_time_us(txn.write_time_us);
-        mut_txn->set_retry(txn.retry);
-      }
-    }
-  }
+  static void SetResponseInfo(const Trace& trace, pb::mdsv2::ResponseInfo* info);
 
   // protobuf transform
   template <typename T>
@@ -198,6 +167,10 @@ void ServiceClosure<T, U>::Run() {
 
   uint64_t elapsed_time_us = Helper::TimestampUs() - start_time_us;
 
+  auto* mut_time = response_->mutable_info()->mutable_time();
+  mut_time->set_total_rpc_time_us(elapsed_time_us);
+  mut_time->set_service_queue_wait_time_us(queue_wait_time_us);
+
   if (response_->error().errcode() != 0) {
     LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})", method_name_,
                               request_->info().request_id(), elapsed_time_us,
@@ -216,10 +189,6 @@ void ServiceClosure<T, U>::Run() {
                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     }
   }
-
-  auto* mut_time = response_->mutable_info()->mutable_time();
-  mut_time->set_total_rpc_time_us(elapsed_time_us);
-  mut_time->set_service_queue_wait_time_us(queue_wait_time_us);
 }
 
 }  // namespace mdsv2
