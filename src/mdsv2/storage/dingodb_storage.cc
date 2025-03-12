@@ -14,6 +14,7 @@
 
 #include "mdsv2/storage/dingodb_storage.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -22,6 +23,7 @@
 #include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/synchronization.h"
 
 namespace dingofs {
 
@@ -345,6 +347,9 @@ Status DingodbTxn::Delete(const std::string& key) {
 }
 
 Status DingodbTxn::Get(const std::string& key, std::string& value) {
+  uint64_t start_time = Helper::TimestampUs();
+  DEFER(txn_trace_.read_time_us += (Helper::TimestampUs() - start_time));
+
   auto status = txn_->Get(key, value);
   if (!status.ok()) {
     return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
@@ -355,6 +360,9 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
 }
 
 Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+  uint64_t start_time = Helper::TimestampUs();
+  DEFER(txn_trace_.read_time_us += (Helper::TimestampUs() - start_time));
+
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->Scan(range.start_key, range.end_key, limit, kv_pairs);
   if (!status.ok()) {
@@ -374,10 +382,17 @@ void DingodbTxn::Rollback() {
 }
 
 Status DingodbTxn::Commit() {
+  uint64_t start_time = Helper::TimestampUs();
+  ON_SCOPE_EXIT([&]() {
+    txn_trace_.is_one_pc = txn_->IsOnePc();
+    txn_trace_.write_time_us += (Helper::TimestampUs() - start_time);
+  });
+
   auto status = txn_->PreCommit();
   if (!status.ok()) {
     Rollback();
     if (status.IsTxnWriteConflict()) {
+      txn_trace_.is_conflict = true;
       return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
     }
     return Status(status.Errno(), status.ToString());
@@ -387,6 +402,7 @@ Status DingodbTxn::Commit() {
   if (!status.ok()) {
     Rollback();
     if (status.IsTxnWriteConflict()) {
+      txn_trace_.is_conflict = true;
       return Status(pb::error::ESTORE_MAYBE_RETRY, status.ToString());
     }
     return Status(pb::error::EBACKEND_STORE, status.ToString());
@@ -394,6 +410,8 @@ Status DingodbTxn::Commit() {
 
   return Status::OK();
 }
+
+Trace::Txn DingodbTxn::GetTrace() { return txn_trace_; }
 
 }  // namespace mdsv2
 }  // namespace dingofs

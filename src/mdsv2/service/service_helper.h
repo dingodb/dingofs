@@ -21,6 +21,7 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/runnable.h"
@@ -29,13 +30,46 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int64(service_log_threshold_time_ns);
+DECLARE_int64(service_log_threshold_time_us);
 DECLARE_int32(log_print_max_length);
 
 class ServiceHelper {
  public:
   static void SetError(pb::error::Error* error, const Status& status);
   static void SetError(pb::error::Error* error, int errcode, const std::string& errmsg);
+
+  static void SetResponseInfo(const Trace& trace, pb::mdsv2::ResponseInfo* response_info) {
+    auto* mut_cache = response_info->mutable_cache();
+    const auto& cache = trace.GetCache();
+    mut_cache->set_is_hit_partition(cache.is_hit_partition);
+    mut_cache->set_is_hit_inode(cache.is_hit_inode);
+
+    {
+      auto* mut_txn = response_info->add_txns();
+      const auto& txn = trace.GetTxn();
+      if (txn.txn_id != 0) {
+        mut_txn->set_txn_id(txn.txn_id);
+        mut_txn->set_is_one_pc(txn.is_one_pc);
+        mut_txn->set_is_conflict(txn.is_conflict);
+        mut_txn->set_read_time_us(txn.read_time_us);
+        mut_txn->set_write_time_us(txn.write_time_us);
+        mut_txn->set_retry(txn.retry);
+      }
+    }
+
+    {
+      auto* mut_txn = response_info->add_txns();
+      const auto& txn = trace.GetFileTxn();
+      if (txn.txn_id != 0) {
+        mut_txn->set_txn_id(txn.txn_id);
+        mut_txn->set_is_one_pc(txn.is_one_pc);
+        mut_txn->set_is_conflict(txn.is_conflict);
+        mut_txn->set_read_time_us(txn.read_time_us);
+        mut_txn->set_write_time_us(txn.write_time_us);
+        mut_txn->set_retry(txn.retry);
+      }
+    }
+  }
 
   // protobuf transform
   template <typename T>
@@ -126,14 +160,24 @@ class ServiceTask : public TaskRunnable {
   Handler handle_;
 };
 
+class TraceClosure : public google::protobuf::Closure {
+ public:
+  TraceClosure() { start_time_us = Helper::TimestampUs(); }
+  ~TraceClosure() override = default;
+
+  void SetQueueWaitTime() { queue_wait_time_us = Helper::TimestampUs() - start_time_us; }
+
+ protected:
+  uint64_t start_time_us;
+  uint64_t queue_wait_time_us;
+};
+
 // Wrapper brpc service closure for log.
 template <typename T, typename U>
-class ServiceClosure : public google::protobuf::Closure {
+class ServiceClosure : public TraceClosure {
  public:
   ServiceClosure(const std::string& method_name, google::protobuf::Closure* done, const T* request, U* response)
-      : method_name_(method_name), done_(done), request_(request), response_(response) {
-    start_time_ = Helper::TimestampNs();
-  }
+      : method_name_(method_name), done_(done), request_(request), response_(response) {}
 
   ~ServiceClosure() override = default;
 
@@ -141,8 +185,6 @@ class ServiceClosure : public google::protobuf::Closure {
 
  private:
   std::string method_name_;
-
-  uint64_t start_time_;
 
   google::protobuf::Closure* done_;
   const T* request_;
@@ -154,30 +196,33 @@ void ServiceClosure<T, U>::Run() {
   std::unique_ptr<ServiceClosure<T, U>> self_guard(this);
   brpc::ClosureGuard done_guard(done_);
 
-  uint64_t elapsed_time = (Helper::TimestampNs() - start_time_) / 1000;
+  uint64_t elapsed_time_us = Helper::TimestampUs() - start_time_us;
 
   if (response_->error().errcode() != 0) {
     LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})", method_name_,
-                              request_->request_info().request_id(), elapsed_time,
+                              request_->info().request_id(), elapsed_time_us,
                               request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                               response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
   } else {
-    if (BAIDU_UNLIKELY(elapsed_time >= FLAGS_service_log_threshold_time_ns)) {
+    if (BAIDU_UNLIKELY(elapsed_time_us >= FLAGS_service_log_threshold_time_us)) {
       LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
-                               method_name_, request_->request_info().request_id(), elapsed_time,
+                               method_name_, request_->info().request_id(), elapsed_time_us,
                                request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     } else {
       LOG(INFO) << fmt::format("[service.{}][request_id({})][{}us] Request finish, request({}) response({})",
-                               method_name_, request_->request_info().request_id(), elapsed_time,
+                               method_name_, request_->info().request_id(), elapsed_time_us,
                                request_->ShortDebugString().substr(0, FLAGS_log_print_max_length),
                                response_->ShortDebugString().substr(0, FLAGS_log_print_max_length));
     }
   }
+
+  auto* mut_time = response_->mutable_info()->mutable_time();
+  mut_time->set_total_rpc_time_us(elapsed_time_us);
+  mut_time->set_service_queue_wait_time_us(queue_wait_time_us);
 }
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDSV2_SERVICE_HELPER_H_

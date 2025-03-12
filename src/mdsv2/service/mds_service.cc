@@ -20,6 +20,7 @@
 #include "brpc/controller.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/inode.h"
@@ -56,7 +57,7 @@ static Status ValidateCreateFsRequest(const pb::mdsv2::CreateFsRequest* request)
 }
 
 void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
-                                pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::CreateFsResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -107,7 +108,7 @@ void MDSServiceImpl::CreateFs(google::protobuf::RpcController* controller, const
 }
 
 void MDSServiceImpl::DoMountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
-                               pb::mdsv2::MountFsResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::MountFsResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -134,7 +135,7 @@ void MDSServiceImpl::MountFs(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController* controller, const pb::mdsv2::UmountFsRequest* request,
-                                pb::mdsv2::UmountFsResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::UmountFsResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -161,7 +162,7 @@ void MDSServiceImpl::UmountFs(google::protobuf::RpcController* controller, const
 }
 
 void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
-                                pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::DeleteFsResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -189,7 +190,7 @@ void MDSServiceImpl::DeleteFs(google::protobuf::RpcController* controller, const
 
 void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::GetFsInfoRequest* request, pb::mdsv2::GetFsInfoResponse* response,
-                                 google::protobuf::Closure* done) {
+                                 TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -220,7 +221,7 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
 
 void MDSServiceImpl::DoRefreshFsInfo(google::protobuf::RpcController* controller,
                                      const pb::mdsv2::RefreshFsInfoRequest* request,
-                                     pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done) {
+                                     pb::mdsv2::RefreshFsInfoResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -300,9 +301,10 @@ void MDSServiceImpl::BatchGetXAttr(google::protobuf::RpcController* controller,
 
 // high level interface
 void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
-                              pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done) {
+                              pb::mdsv2::LookupResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -314,8 +316,10 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->Lookup(request->parent_ino(), request->name(), entry_out);
+  status = file_system->Lookup(ctx, request->parent_ino(), request->name(), entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -340,9 +344,10 @@ void MDSServiceImpl::Lookup(google::protobuf::RpcController* controller, const p
 }
 
 void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
-                             pb::mdsv2::MkNodResponse* response, google::protobuf::Closure* done) {
+                             pb::mdsv2::MkNodResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -362,8 +367,10 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
   param.gid = request->gid();
   param.rdev = request->rdev();
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->MkNod(param, entry_out);
+  status = file_system->MkNod(ctx, param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -388,9 +395,10 @@ void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb
 }
 
 void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
-                             pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done) {
+                             pb::mdsv2::MkDirResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -410,8 +418,10 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
   param.gid = request->gid();
   param.rdev = request->rdev();
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->MkDir(param, entry_out);
+  status = file_system->MkDir(ctx, param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -436,9 +446,10 @@ void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb
 }
 
 void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
-                             pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done) {
+                             pb::mdsv2::RmDirResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -450,7 +461,8 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  status = file_system->RmDir(request->parent_ino(), request->name());
+  Context ctx;
+  status = file_system->RmDir(ctx, request->parent_ino(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -473,9 +485,10 @@ void MDSServiceImpl::RmDir(google::protobuf::RpcController* controller, const pb
 }
 
 void MDSServiceImpl::DoReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
-                               pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::ReadDirResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -487,9 +500,11 @@ void MDSServiceImpl::DoReadDir(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   std::vector<EntryOut> entry_outs;
-  status =
-      file_system->ReadDir(request->ino(), request->last_name(), request->limit(), request->with_attr(), entry_outs);
+  status = file_system->ReadDir(ctx, request->ino(), request->last_name(), request->limit(), request->with_attr(),
+                                entry_outs);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -521,9 +536,10 @@ void MDSServiceImpl::ReadDir(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
-                            pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done) {
+                            pb::mdsv2::OpenResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -535,7 +551,9 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const p
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  status = file_system->Open(request->ino());
+  Context ctx;
+  status = file_system->Open(ctx, request->ino());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -558,9 +576,10 @@ void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb:
 }
 
 void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
-                               pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::ReleaseResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -572,7 +591,9 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  status = file_system->Release(request->ino());
+  Context ctx;
+  status = file_system->Release(ctx, request->ino());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -595,9 +616,10 @@ void MDSServiceImpl::Release(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
-                            pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done) {
+                            pb::mdsv2::LinkResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -609,8 +631,10 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->Link(request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
+  status = file_system->Link(ctx, request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -635,9 +659,10 @@ void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb:
 }
 
 void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const pb::mdsv2::UnLinkRequest* request,
-                              pb::mdsv2::UnLinkResponse* response, google::protobuf::Closure* done) {
+                              pb::mdsv2::UnLinkResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -649,7 +674,9 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  status = file_system->UnLink(request->parent_ino(), request->name());
+  Context ctx;
+  status = file_system->UnLink(ctx, request->parent_ino(), request->name());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -672,9 +699,10 @@ void MDSServiceImpl::UnLink(google::protobuf::RpcController* controller, const p
 }
 
 void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
-                               pb::mdsv2::SymlinkResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::SymlinkResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -686,10 +714,14 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->Symlink(request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
+  status = file_system->Symlink(ctx, request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
                                 request->gid(), entry_out);
-  ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (!status.ok()) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   response->mutable_inode()->Swap(&entry_out.inode);
 }
@@ -711,9 +743,10 @@ void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoReadLink(google::protobuf::RpcController* controller, const pb::mdsv2::ReadLinkRequest* request,
-                                pb::mdsv2::ReadLinkResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::ReadLinkResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -725,8 +758,10 @@ void MDSServiceImpl::DoReadLink(google::protobuf::RpcController* controller, con
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   std::string symlink;
-  status = file_system->ReadLink(request->ino(), symlink);
+  status = file_system->ReadLink(ctx, request->ino(), symlink);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -751,9 +786,10 @@ void MDSServiceImpl::ReadLink(google::protobuf::RpcController* controller, const
 }
 
 void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
-                               pb::mdsv2::GetAttrResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::GetAttrResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -765,8 +801,10 @@ void MDSServiceImpl::DoGetAttr(google::protobuf::RpcController* controller, cons
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->GetAttr(request->ino(), entry_out);
+  status = file_system->GetAttr(ctx, request->ino(), entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -791,9 +829,10 @@ void MDSServiceImpl::GetAttr(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
-                               pb::mdsv2::SetAttrResponse* response, google::protobuf::Closure* done) {
+                               pb::mdsv2::SetAttrResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -818,8 +857,10 @@ void MDSServiceImpl::DoSetAttr(google::protobuf::RpcController* controller, cons
   inode.set_mode(request->mode());
   param.to_set = request->to_set();
 
+  Context ctx;
   EntryOut entry_out;
-  status = file_system->SetAttr(request->ino(), param, entry_out);
+  status = file_system->SetAttr(ctx, request->ino(), param, entry_out);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -844,9 +885,10 @@ void MDSServiceImpl::SetAttr(google::protobuf::RpcController* controller, const 
 }
 
 void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
-                                pb::mdsv2::GetXAttrResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::GetXAttrResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -858,8 +900,10 @@ void MDSServiceImpl::DoGetXAttr(google::protobuf::RpcController* controller, con
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   std::string value;
-  status = file_system->GetXAttr(request->ino(), request->name(), value);
+  status = file_system->GetXAttr(ctx, request->ino(), request->name(), value);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -884,9 +928,10 @@ void MDSServiceImpl::GetXAttr(google::protobuf::RpcController* controller, const
 }
 
 void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
-                                pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done) {
+                                pb::mdsv2::SetXAttrResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -901,8 +946,10 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, con
   Inode::XAttrMap xattrs;
   ServiceHelper::PbMapToMap(request->xattrs(), xattrs);
 
+  Context ctx;
   std::string value;
-  status = file_system->SetXAttr(request->ino(), xattrs);
+  status = file_system->SetXAttr(ctx, request->ino(), xattrs);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -926,9 +973,10 @@ void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const
 
 void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::ListXAttrRequest* request, pb::mdsv2::ListXAttrResponse* response,
-                                 google::protobuf::Closure* done) {
+                                 TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -940,8 +988,10 @@ void MDSServiceImpl::DoListXAttr(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   Inode::XAttrMap xattrs;
-  status = file_system->GetXAttr(request->ino(), xattrs);
+  status = file_system->GetXAttr(ctx, request->ino(), xattrs);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -966,27 +1016,21 @@ void MDSServiceImpl::ListXAttr(google::protobuf::RpcController* controller, cons
 }
 
 void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
-                              pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done) {
+                              pb::mdsv2::RenameResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  done_guard.release();
-  auto status = file_system->AsyncRename(request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
-                                         request->new_name(), [response, done](Status status) {
-                                           brpc::ClosureGuard done_guard(done);
-                                           if (!status.ok()) {
-                                             ServiceHelper::SetError(response->mutable_error(), status.error_code(),
-                                                                     status.error_str());
-                                           }
-                                         });
-
+  Context ctx;
+  auto status = file_system->CommitRename(ctx, request->old_parent_ino(), request->old_name(),
+                                          request->new_parent_ino(), request->new_name());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
-    brpc::ClosureGuard done_guard(done);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 }
@@ -1009,9 +1053,10 @@ void MDSServiceImpl::Rename(google::protobuf::RpcController* controller, const p
 
 void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController* controller,
                                     const pb::mdsv2::AllocSliceIdRequest* request,
-                                    pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done) {
+                                    pb::mdsv2::AllocSliceIdResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   if (request->alloc_num() == 0) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
@@ -1023,6 +1068,8 @@ void MDSServiceImpl::DoAllocSliceId(google::protobuf::RpcController* controller,
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  // ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
 void MDSServiceImpl::AllocSliceId(google::protobuf::RpcController* controller,
@@ -1044,9 +1091,10 @@ void MDSServiceImpl::AllocSliceId(google::protobuf::RpcController* controller,
 
 void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
                                   const pb::mdsv2::WriteSliceRequest* request, pb::mdsv2::WriteSliceResponse* response,
-                                  google::protobuf::Closure* done) {
+                                  TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -1058,10 +1106,13 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  status = file_system->WriteSlice(request->ino(), request->chunk_index(), request->slice_list());
+  Context ctx;
+  status = file_system->WriteSlice(ctx, request->ino(), request->chunk_index(), request->slice_list());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
 void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
@@ -1083,9 +1134,10 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
 
 void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::ReadSliceRequest* request, pb::mdsv2::ReadSliceResponse* response,
-                                 google::protobuf::Closure* done) {
+                                 TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
@@ -1097,13 +1149,15 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
+  Context ctx;
   pb::mdsv2::SliceList slice_list;
-  status = file_system->ReadSlice(request->ino(), request->chunk_index(), slice_list);
+  status = file_system->ReadSlice(ctx, request->ino(), request->chunk_index(), slice_list);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->mutable_slice_list()->Swap(&slice_list);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
 void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,

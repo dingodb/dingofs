@@ -24,6 +24,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/filesystem/fs_info.h"
 
 namespace dingofs {
@@ -129,6 +130,7 @@ Status MDSClient::SendRequest(EndPoint& endpoint,
                               const std::string& service_name,
                               const std::string& api_name, Request& request,
                               Response& response) {
+  request.mutable_info()->set_request_id(mdsv2::Helper::TimestampNs());
   for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
     auto status =

@@ -169,5 +169,7 @@ Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>&
 
 Status DummyTxn::Commit() { return Status::OK(); }
 
+Trace::Txn DummyTxn::GetTrace() { return Trace::Txn(); }
+
 }  // namespace mdsv2
 }  // namespace dingofs

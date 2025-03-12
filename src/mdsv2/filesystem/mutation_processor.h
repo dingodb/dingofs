@@ -23,6 +23,7 @@
 #include "butil/containers/mpsc_queue.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -109,6 +110,7 @@ struct Operation {
   struct Notification {
     bthread::CountdownEvent* count_down_event{nullptr};
     Status* status{nullptr};
+    Trace* trace{nullptr};
   };
 
   uint64_t txn_id;
@@ -128,8 +130,8 @@ struct Operation {
   Notification notification;
 
   Operation(OpType op_type, uint64_t txn_id, const std::string& key, bthread::CountdownEvent* count_down_event,
-            Status* status)
-      : op_type(op_type), txn_id(txn_id), key(key), notification({count_down_event, status}){};
+            Status* status, Trace* trace)
+      : op_type(op_type), txn_id(txn_id), key(key), notification({count_down_event, status, trace}) {};
   ~Operation() {
     delete create_inode;
     delete delete_inode;

@@ -27,6 +27,7 @@
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/filesystem/codec.h"
 #include "mdsv2/storage/storage.h"
 
@@ -115,6 +116,15 @@ bool MutationProcessor::Commit(MixMutation& mix_mutation) {
     return false;
   }
 
+  // check notification
+  for (auto& operation : mix_mutation.operations) {
+    CHECK(operation.notification.count_down_event != nullptr) << "count down event is null.";
+    CHECK(operation.notification.status != nullptr) << "status is null.";
+    CHECK(operation.notification.trace != nullptr) << "trace is null.";
+
+    operation.notification.trace->UpdateLastTime();
+  }
+
   mutations_.Enqueue(mix_mutation);
 
   bthread_cond_signal(&cond_);
@@ -183,6 +193,10 @@ void MutationProcessor::LaunchExecuteTxnMutation(const TxnMutation& txn_mutation
 }
 
 void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
+  for (auto& operation : txn_mutation.operations) {
+    operation.notification.trace->SetTxnPendingTime();
+  }
+
   uint64_t start_time = Helper::TimestampUs();
   LOG(INFO) << fmt::format("[mutation] txn({}/{}) mutation.", txn_mutation.fs_id, txn_mutation.txn_id);
 
@@ -224,9 +238,8 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
 
   // notify operation finish
   for (auto& operation : txn_mutation.operations) {
-    if (operation.notification.count_down_event != nullptr) {
-      operation.notification.count_down_event->signal();
-    }
+    operation.notification.trace->SetTxnExecTime();
+    operation.notification.count_down_event->signal();
   }
 }
 
@@ -339,6 +352,9 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
 
   std::string value = param->inode.type() == pb::mdsv2::DIRECTORY ? MetaDataCodec::EncodeDirInodeValue(param->inode)
                                                                   : MetaDataCodec::EncodeFileInodeValue(param->inode);
+  // trace txn
+  auto* trace = operation.notification.trace;
+  auto& trace_txn = trace->GetFileTxn();
 
   uint32_t retry = 0;
   Status status;
@@ -350,12 +366,16 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
                                       status.error_str());
 
     status = txn->Commit();
+    trace_txn = txn->GetTrace();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      return status;
+      break;
     }
 
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.txn_id = txn_mutation.txn_id;
+  trace_txn.retry = retry;
 
   return status;
 }
@@ -372,6 +392,10 @@ Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutatio
   LOG(INFO) << fmt::format("[mutation] txn({}/{}), delete inode({}).", txn_mutation.fs_id, txn_mutation.txn_id,
                            param->ino);
 
+  // trace txn
+  auto* trace = operation.notification.trace;
+  auto& trace_txn = trace->GetFileTxn();
+
   uint32_t retry = 0;
   Status status;
   do {
@@ -382,12 +406,16 @@ Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutatio
                                       status.error_str());
 
     status = txn->Commit();
+    trace_txn = txn->GetTrace();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      return status;
+      break;
     }
 
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.txn_id = txn_mutation.txn_id;
+  trace_txn.retry = retry;
 
   return status;
 }
@@ -399,6 +427,9 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
 
   auto it = target_mutation_map.begin();
   auto& target_mutation = it->second;
+
+  // trace txn
+  Trace::Txn trace_txn;
 
   uint32_t retry = 0;
   Status status;
@@ -423,12 +454,19 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
     CHECK(status.ok()) << fmt::format("update inode fail, key({}), error({} {}).", target_mutation.key,
                                       status.error_code(), status.error_str());
     status = txn->Commit();
+    trace_txn = txn->GetTrace();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      return status;
+      break;
     }
 
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.txn_id = txn_mutation.txn_id;
+  trace_txn.retry = retry;
+  for (auto& operation : txn_mutation.operations) {
+    operation.notification.trace->GetFileTxn() = trace_txn;
+  }
 
   return status;
 }
@@ -436,6 +474,8 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
 Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
   auto target_mutation_map = GroupingByTarget(txn_mutation);
   CHECK(!target_mutation_map.empty()) << "dentry target mutation map is empty.";
+
+  Trace::Txn trace_txn;
 
   uint32_t retry = 0;
   Status status;
@@ -468,12 +508,19 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
     }
 
     status = txn->Commit();
+    trace_txn = txn->GetTrace();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       return status;
     }
 
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.txn_id = txn_mutation.txn_id;
+  trace_txn.retry = retry;
+  for (auto& operation : txn_mutation.operations) {
+    operation.notification.trace->GetTxn() = trace_txn;
+  }
 
   return status;
 }
@@ -566,11 +613,11 @@ std::map<std::string, TargetMutation> MutationProcessor::GroupingByTarget(TxnMut
     auto it = target_mutation_map.find(key);
     if (it == target_mutation_map.end()) {
       std::vector<Operation> operations;
-      operations.push_back(std::move(operation));
+      operations.push_back(operation);
       TargetMutation target_mutation = {.key = key, .operations = std::move(operations)};
       target_mutation_map.insert({key, std::move(target_mutation)});
     } else {
-      it->second.operations.push_back(std::move(operation));
+      it->second.operations.push_back(operation);
     }
   }
 

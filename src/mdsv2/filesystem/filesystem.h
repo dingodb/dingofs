@@ -24,7 +24,9 @@
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/fs_info.h"
@@ -96,7 +98,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status CreateRoot();
 
   // lookup dentry
-  Status Lookup(uint64_t parent_ino, const std::string& name, EntryOut& entry_out);
+  Status Lookup(Context& ctx, uint64_t parent_ino, const std::string& name, EntryOut& entry_out);
 
   // file
   struct MkNodParam {
@@ -108,9 +110,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t parent_ino{0};
     uint64_t rdev{0};
   };
-  Status MkNod(const MkNodParam& param, EntryOut& entry_out);
-  Status Open(uint64_t ino);
-  Status Release(uint64_t ino);
+  Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
+  Status Open(Context& ctx, uint64_t ino);
+  Status Release(Context& ctx, uint64_t ino);
 
   // directory
   struct MkDirParam {
@@ -122,20 +124,20 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t parent_ino{0};
     uint64_t rdev{0};
   };
-  Status MkDir(const MkDirParam& param, EntryOut& entry_out);
-  Status RmDir(uint64_t parent_ino, const std::string& name);
-  Status ReadDir(uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
+  Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
+  Status RmDir(Context& ctx, uint64_t parent_ino, const std::string& name);
+  Status ReadDir(Context& ctx, uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
 
   // create hard link
-  Status Link(uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out);
+  Status Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out);
   // delete link
-  Status UnLink(uint64_t parent_ino, const std::string& name);
+  Status UnLink(Context& ctx, uint64_t parent_ino, const std::string& name);
   // create symbolic link
-  Status Symlink(const std::string& symlink, uint64_t new_parent_ino, const std::string& new_name, uint32_t uid,
-                 uint32_t gid, EntryOut& entry_out);
+  Status Symlink(Context& ctx, const std::string& symlink, uint64_t new_parent_ino, const std::string& new_name,
+                 uint32_t uid, uint32_t gid, EntryOut& entry_out);
   // read symbolic link
-  Status ReadLink(uint64_t ino, std::string& link);
+  Status ReadLink(Context& ctx, uint64_t ino, std::string& link);
 
   // attr
   struct SetAttrParam {
@@ -143,23 +145,23 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     pb::mdsv2::Inode inode;
   };
 
-  Status SetAttr(uint64_t ino, const SetAttrParam& param, EntryOut& entry_out);
-  Status GetAttr(uint64_t ino, EntryOut& entry_out);
+  Status SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param, EntryOut& entry_out);
+  Status GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out);
 
   // xattr
-  Status GetXAttr(uint64_t ino, Inode::XAttrMap& xattr);
-  Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(uint64_t ino, const std::map<std::string, std::string>& xattr);
+  Status GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr);
+  Status GetXAttr(Context& ctx, uint64_t ino, const std::string& name, std::string& value);
+  Status SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattr);
 
   // rename
-  Status Rename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+  Status Rename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
                 const std::string& new_name);
-  Status AsyncRename(uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                     const std::string& new_name, RenameCbFunc cb);
+  Status CommitRename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                      const std::string& new_name);
 
   // slice
-  Status WriteSlice(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
-  Status ReadSlice(uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
+  Status WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
+  Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
 
   Status RefreshFsInfo();
   Status RefreshFsInfo(const std::string& name);
@@ -181,16 +183,14 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool CanServe(int64_t self_mds_id);
 
   // get dentry
-  Status GetPartition(uint64_t parent_ino, PartitionPtr& out_partition);
+  Status GetPartition(uint64_t parent_ino, PartitionPtr& out_partition, Trace& trace);
   PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
   Status GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition);
 
   // get inode
-  Status GetInode(uint64_t ino, InodePtr& out_inode);
+  Status GetInode(uint64_t ino, InodePtr& out_inode, Trace& trace);
   InodePtr GetInodeFromCache(uint64_t ino);
   Status GetInodeFromStore(uint64_t ino, InodePtr& out_inode);
-
-  Status GetInodeFromDentry(const Dentry& dentry, PartitionPtr& partition, InodePtr& out_inode);
 
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, uint64_t ino);

@@ -48,6 +48,8 @@ class MDSMonitor {
 
  private:
   Status MonitorMDS();
+  static void NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name);
+  static void NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name);
 
   std::atomic<bool> is_running_{false};
 

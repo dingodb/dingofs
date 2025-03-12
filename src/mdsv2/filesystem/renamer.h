@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
 
@@ -30,14 +31,19 @@ using RenameCbFunc = std::function<void(Status)>;
 
 class RenameTask : public TaskRunnable {
  public:
-  RenameTask(FileSystemPtr fs, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-             const std::string& new_name, RenameCbFunc cb)
+  RenameTask(FileSystemPtr fs, Context* ctx, uint64_t old_parent_ino, const std::string& old_name,
+             uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb)
       : fs_(fs),
+        ctx_(ctx),
         old_parent_ino_(old_parent_ino),
         old_name_(old_name),
         new_parent_ino_(new_parent_ino),
         new_name_(new_name),
-        cb_(cb) {}
+        cb_(cb) {
+    if (cb == nullptr) {
+      cond_ = std::make_shared<BthreadCond>();
+    }
+  }
 
   ~RenameTask() override = default;
 
@@ -45,11 +51,29 @@ class RenameTask : public TaskRunnable {
 
   void Run() override;
 
+  void Wait() {
+    if (cond_ != nullptr) {
+      cond_->IncreaseWait();
+    }
+  }
+  void Signal() {
+    if (cond_ != nullptr) {
+      cond_->DecreaseSignal();
+    }
+  }
+
+  Status GetStatus() { return status_; }
+
  private:
+  Context* ctx_{nullptr};
+
   uint64_t old_parent_ino_;
   std::string old_name_;
   uint64_t new_parent_ino_;
   std::string new_name_;
+
+  BthreadCondPtr cond_{nullptr};
+  Status status_;
 
   RenameCbFunc cb_;
   FileSystemPtr fs_;
@@ -71,8 +95,10 @@ class Renamer {
   bool Init();
   bool Destroy();
 
-  bool Execute(FileSystemPtr fs, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-               const std::string& new_name, RenameCbFunc cb);
+  bool AsyncExecute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+                    uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb);
+  Status Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+                 uint64_t new_parent_ino, const std::string& new_name);
 
  private:
   bool Execute(TaskRunnablePtr task);

@@ -14,6 +14,7 @@
 
 #include "mdsv2/service/debug_service.h"
 
+#include "mdsv2/common/context.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/partition.h"
@@ -53,8 +54,9 @@ void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::deb
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  Context ctx;
   PartitionPtr partition;
-  auto status = fs->GetPartition(request->parent_ino(), partition);
+  auto status = fs->GetPartition(request->parent_ino(), partition, ctx.GetTrace());
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status);
   }

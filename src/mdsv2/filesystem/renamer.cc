@@ -14,14 +14,22 @@
 
 #include "mdsv2/filesystem/renamer.h"
 
+#include "dingofs/error.pb.h"
+#include "mdsv2/common/context.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
 void RenameTask::Run() {
-  auto status = fs_->Rename(old_parent_ino_, old_name_, new_parent_ino_, new_name_);
-  cb_(status);
+  auto status = fs_->Rename(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_);
+  if (cb_ != nullptr) {
+    cb_(status);
+  } else {
+    status_ = status;
+    Signal();
+  }
 }
 
 bool Renamer::Init() {
@@ -37,10 +45,23 @@ bool Renamer::Destroy() {
   return true;
 }
 
-bool Renamer::Execute(FileSystemPtr fs, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                      const std::string& new_name, RenameCbFunc cb) {
-  auto task = std::make_shared<RenameTask>(fs, old_parent_ino, old_name, new_parent_ino, new_name, cb);
+bool Renamer::AsyncExecute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+                           uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb) {
+  auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, cb);
   return Execute(task);
+}
+
+Status Renamer::Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+                        uint64_t new_parent_ino, const std::string& new_name) {
+  auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, nullptr);
+  bool ret = Execute(task);
+  if (!ret) {
+    return Status(pb::error::EINTERNAL, "commit task fail");
+  }
+
+  task->Wait();
+
+  return task->GetStatus();
 }
 
 bool Renamer::Execute(TaskRunnablePtr task) {

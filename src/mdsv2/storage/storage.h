@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -103,6 +104,8 @@ class Txn {
   virtual Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) = 0;
 
   virtual Status Commit() = 0;
+
+  virtual Trace::Txn GetTrace() = 0;
 };
 
 }  // namespace mdsv2

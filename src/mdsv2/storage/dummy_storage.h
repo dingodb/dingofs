@@ -79,6 +79,8 @@ class DummyTxn : public Txn {
 
   Status Commit() override;
 
+  Trace::Txn GetTrace() override;
+
  private:
   DummyStorage* storage_{nullptr};
 };

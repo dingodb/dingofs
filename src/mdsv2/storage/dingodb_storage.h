@@ -63,7 +63,7 @@ class DingodbTxn : public Txn {
  public:
   using SdkTxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
-  DingodbTxn(SdkTxnUPtr txn) : txn_(std::move(txn)){};
+  DingodbTxn(SdkTxnUPtr txn) : txn_(std::move(txn)) {};
   ~DingodbTxn() override = default;
 
   Status Put(const std::string& key, const std::string& value) override;
@@ -75,12 +75,15 @@ class DingodbTxn : public Txn {
 
   Status Commit() override;
 
+  Trace::Txn GetTrace() override;
+
  private:
   using TxnUPtr = std::unique_ptr<dingodb::sdk::Transaction>;
 
   void Rollback();
 
   SdkTxnUPtr txn_;
+  Trace::Txn txn_trace_;
 };
 
 }  // namespace mdsv2

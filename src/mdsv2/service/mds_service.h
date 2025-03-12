@@ -20,6 +20,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/service/service_helper.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -139,67 +140,67 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   inline FileSystemPtr GetFileSystem(uint32_t fs_id);
 
   void DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
-                  pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::CreateFsResponse* response, TraceClosure* done);
   void DoMountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
-                 pb::mdsv2::MountFsResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::MountFsResponse* response, TraceClosure* done);
   void DoUmountFs(google::protobuf::RpcController* controller, const pb::mdsv2::UmountFsRequest* request,
-                  pb::mdsv2::UmountFsResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::UmountFsResponse* response, TraceClosure* done);
   void DoDeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
-                  pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::DeleteFsResponse* response, TraceClosure* done);
   void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
-                   pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done);
+                   pb::mdsv2::GetFsInfoResponse* response, TraceClosure* done);
   void DoRefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
-                       pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done);
+                       pb::mdsv2::RefreshFsInfoResponse* response, TraceClosure* done);
 
   void DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
-                pb::mdsv2::LookupResponse* response, google::protobuf::Closure* done);
+                pb::mdsv2::LookupResponse* response, TraceClosure* done);
   void DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
-               pb::mdsv2::MkNodResponse* response, google::protobuf::Closure* done);
+               pb::mdsv2::MkNodResponse* response, TraceClosure* done);
   void DoMkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
-               pb::mdsv2::MkDirResponse* response, google::protobuf::Closure* done);
+               pb::mdsv2::MkDirResponse* response, TraceClosure* done);
   void DoRmDir(google::protobuf::RpcController* controller, const pb::mdsv2::RmDirRequest* request,
-               pb::mdsv2::RmDirResponse* response, google::protobuf::Closure* done);
+               pb::mdsv2::RmDirResponse* response, TraceClosure* done);
   void DoReadDir(google::protobuf::RpcController* controller, const pb::mdsv2::ReadDirRequest* request,
-                 pb::mdsv2::ReadDirResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::ReadDirResponse* response, TraceClosure* done);
 
   void DoOpen(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
-              pb::mdsv2::OpenResponse* response, google::protobuf::Closure* done);
+              pb::mdsv2::OpenResponse* response, TraceClosure* done);
   void DoRelease(google::protobuf::RpcController* controller, const pb::mdsv2::ReleaseRequest* request,
-                 pb::mdsv2::ReleaseResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::ReleaseResponse* response, TraceClosure* done);
 
   void DoLink(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
-              pb::mdsv2::LinkResponse* response, google::protobuf::Closure* done);
+              pb::mdsv2::LinkResponse* response, TraceClosure* done);
   void DoUnLink(google::protobuf::RpcController* controller, const pb::mdsv2::UnLinkRequest* request,
-                pb::mdsv2::UnLinkResponse* response, google::protobuf::Closure* done);
+                pb::mdsv2::UnLinkResponse* response, TraceClosure* done);
   void DoSymlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,
-                 pb::mdsv2::SymlinkResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::SymlinkResponse* response, TraceClosure* done);
   void DoReadLink(google::protobuf::RpcController* controller, const pb::mdsv2::ReadLinkRequest* request,
-                  pb::mdsv2::ReadLinkResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::ReadLinkResponse* response, TraceClosure* done);
 
   void DoGetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetAttrRequest* request,
-                 pb::mdsv2::GetAttrResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::GetAttrResponse* response, TraceClosure* done);
 
   void DoSetAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetAttrRequest* request,
-                 pb::mdsv2::SetAttrResponse* response, google::protobuf::Closure* done);
+                 pb::mdsv2::SetAttrResponse* response, TraceClosure* done);
 
   void DoGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::GetXAttrRequest* request,
-                  pb::mdsv2::GetXAttrResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::GetXAttrResponse* response, TraceClosure* done);
 
   void DoSetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,
-                  pb::mdsv2::SetXAttrResponse* response, google::protobuf::Closure* done);
+                  pb::mdsv2::SetXAttrResponse* response, TraceClosure* done);
 
   void DoListXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::ListXAttrRequest* request,
-                   pb::mdsv2::ListXAttrResponse* response, google::protobuf::Closure* done);
+                   pb::mdsv2::ListXAttrResponse* response, TraceClosure* done);
 
   void DoRename(google::protobuf::RpcController* controller, const pb::mdsv2::RenameRequest* request,
-                pb::mdsv2::RenameResponse* response, google::protobuf::Closure* done);
+                pb::mdsv2::RenameResponse* response, TraceClosure* done);
 
   void DoAllocSliceId(google::protobuf::RpcController* controller, const pb::mdsv2::AllocSliceIdRequest* request,
-                      pb::mdsv2::AllocSliceIdResponse* response, google::protobuf::Closure* done);
+                      pb::mdsv2::AllocSliceIdResponse* response, TraceClosure* done);
   void DoWriteSlice(google::protobuf::RpcController* controller, const pb::mdsv2::WriteSliceRequest* request,
-                    pb::mdsv2::WriteSliceResponse* response, google::protobuf::Closure* done);
+                    pb::mdsv2::WriteSliceResponse* response, TraceClosure* done);
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
-                   pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done);
+                   pb::mdsv2::ReadSliceResponse* response, TraceClosure* done);
 
   // file system set
   FileSystemSetPtr file_system_set_;
