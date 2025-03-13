@@ -14,26 +14,23 @@
 
 #include "mdsv2/client/store.h"
 
-#include <glog/logging.h>
-
-#include <algorithm>
 #include <cstdint>
 #include <ostream>
 #include <string>
 
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/filesystem/codec.h"
+#include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/storage/dingodb_storage.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
 namespace client {
-
-DEFINE_int32(client_scan_batch_size, 1000, "client scan batch size");
 
 bool StoreClient::Init(const std::string& coor_addr) {
   CHECK(!coor_addr.empty()) << "coor addr is empty.";
@@ -65,183 +62,42 @@ bool StoreClient::CreateFsTable(const std::string& name) {
   return true;
 }
 
-struct TreeNode {
-  bool is_orphan{true};
-  pb::mdsv2::Dentry dentry;
-  pb::mdsv2::Inode inode;
+static std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
 
-  std::vector<TreeNode*> children;
-};
+static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
+  if (item == nullptr) return;
 
-bool GenFileInodeMap(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64_t, pb::mdsv2::Inode>& file_inode_map) {
-  DINGO_LOG(INFO) << "GenFileInodeMap ...... 000001";
-  Range range;
-  MetaDataCodec::GetFileInodeTableRange(fs_id, range.start_key, range.end_key);
-
-  auto txn = kv_storage->NewTxn();
-  std::vector<KeyValue> kvs;
-
-  do {
-    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000002";
-    kvs.clear();
-    auto status = txn->Scan(range, FLAGS_client_scan_batch_size, kvs);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("scan file inode table fail, {}.", status.error_str());
-      return false;
-    }
-
-    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000003";
-
-    for (const auto& kv : kvs) {
-      // DINGO_LOG(INFO) << "GenFileInodeMap ...... 000003: " << Helper::StringToHex(kv.key);
-      uint64_t ino = 0;
-      int fs_id;
-      MetaDataCodec::DecodeFileInodeKey(kv.key, fs_id, ino);
-      pb::mdsv2::Inode inode = MetaDataCodec::DecodeFileInodeValue(kv.value);
-
-      file_inode_map.insert({inode.ino(), inode});
-    }
-    DINGO_LOG(INFO) << "GenFileInodeMap ...... 000004";
-
-  } while (kvs.size() >= FLAGS_client_scan_batch_size);
-
-  DINGO_LOG(INFO) << fmt::format("scan file inode table kv num({}).", file_inode_map.size());
-
-  return true;
-}
-
-TreeNode* GenDentryTree(KVStoragePtr kv_storage, uint32_t fs_id, std::map<uint64_t, TreeNode*>& tree_inode_map) {
-  DINGO_LOG(INFO) << "GenDentryTree start......";
-  TreeNode* root = new TreeNode();
-  root->dentry.set_ino(1);
-  root->dentry.set_name("/");
-  root->dentry.set_parent_ino(0);
-  root->dentry.set_type(pb::mdsv2::FileType::DIRECTORY);
-
-  tree_inode_map.insert({0, root});
-
-  // get all file inode
-  std::map<uint64_t, pb::mdsv2::Inode> file_inode_map;
-  if (!GenFileInodeMap(kv_storage, fs_id, file_inode_map)) {
-    return nullptr;
+  for (int i = 0; i < level; i++) {
+    std::cout << "  ";
   }
 
-  Range range;
-  MetaDataCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
+  auto& dentry = item->dentry;
+  auto& inode = item->inode;
 
-  // scan dentry table
-  auto txn = kv_storage->NewTxn();
-  std::vector<KeyValue> kvs;
-  uint64_t count = 0;
-  do {
-    kvs.clear();
-    auto status = txn->Scan(range, FLAGS_client_scan_batch_size, kvs);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("scan dentry table fail, {}.", status.error_str());
-      return nullptr;
-    }
+  std::cout << fmt::format("{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
+                           pb::mdsv2::FileType_Name(inode.type()), inode.mode(), Helper::FsModeToString(inode.mode()),
+                           inode.nlink(), inode.uid(), inode.gid(), inode.length(), FormatTime(inode.ctime()),
+                           FormatTime(inode.mtime()), FormatTime(inode.atime()));
 
-    for (const auto& kv : kvs) {
-      int fs_id = 0;
-      uint64_t ino = 0;
-
-      if (kv.key.size() == MetaDataCodec::DirInodeKeyLength()) {
-        MetaDataCodec::DecodeDirInodeKey(kv.key, fs_id, ino);
-        pb::mdsv2::Inode inode = MetaDataCodec::DecodeDirInodeValue(kv.value);
-
-        DINGO_LOG(INFO) << fmt::format("dir inode({}).", inode.ShortDebugString());
-        auto it = tree_inode_map.find(ino);
-        if (it != tree_inode_map.end()) {
-          it->second->inode = inode;
-        } else {
-          tree_inode_map.insert({ino, new TreeNode{.inode = inode}});
-        }
-
-      } else {
-        uint64_t parent_ino = 0;
-        std::string name;
-        MetaDataCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
-        pb::mdsv2::Dentry dentry = MetaDataCodec::DecodeDentryValue(kv.value);
-
-        TreeNode* item = nullptr;
-        auto it = tree_inode_map.find(dentry.ino());
-        if (it != tree_inode_map.end()) {
-          item = it->second;
-          item->dentry = dentry;
-        } else {
-          item = new TreeNode{.dentry = dentry};
-          tree_inode_map.insert({dentry.ino(), item});
-        }
-
-        if (dentry.type() == pb::mdsv2::FileType::FILE || dentry.type() == pb::mdsv2::FileType::SYM_LINK) {
-          auto it = file_inode_map.find(dentry.ino());
-          if (it != file_inode_map.end()) {
-            item->inode = it->second;
-          } else {
-            DINGO_LOG(ERROR) << fmt::format("not found file inode({}) for dentry({}/{})", dentry.ino(), fs_id, name);
-          }
-        }
-
-        it = tree_inode_map.find(parent_ino);
-        if (it != tree_inode_map.end()) {
-          it->second->children.push_back(item);
-        } else {
-          DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent_ino, fs_id, name);
-        }
-      }
-    }
-
-    count += kvs.size();
-  } while (kvs.size() >= FLAGS_client_scan_batch_size);
-
-  DINGO_LOG(INFO) << fmt::format("scan dentry table kv num({}).", count);
-
-  return root;
-}
-
-void TraverseFunc(TreeNode* item) {
-  for (TreeNode* child : item->children) {
-    child->is_orphan = false;
-    if (child->dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
-      TraverseFunc(child);
-    }
-  }
-}
-
-std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
-
-void TraversePrint(TreeNode* item, bool is_details, int level) {
-  for (TreeNode* child : item->children) {
-    for (int i = 0; i < level; i++) {
-      std::cout << "  ";
-    }
-
-    auto& inode = child->inode;
-
-    std::cout << fmt::format("{}({}) type({}) gid({}) uid({}) mode({}) nlink({}) time({}/{}/{})", child->dentry.name(),
-                             child->dentry.ino(), pb::mdsv2::FileType_Name(inode.type()), inode.gid(), inode.uid(),
-                             inode.mode(), inode.nlink(), FormatTime(inode.ctime()), FormatTime(inode.mtime()),
-                             FormatTime(inode.atime()))
-              << '\n';
-    if (child->dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
+  if (dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
+    for (auto* child : item->children) {
       TraversePrint(child, is_details, level + 1);
     }
   }
 }
 
 void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
-  std::map<uint64_t, TreeNode*> tree_inode_map;
-  TreeNode* root = GenDentryTree(kv_storage_, fs_id, tree_inode_map);
+  FsUtils fs_utils(kv_storage_);
+
+  FsTreeNode* root = fs_utils.GenFsTree(fs_id);
   if (root == nullptr) {
     return;
   }
 
+  std::cout << "############ name [ino,type,mode,nlink,uid,gid,size,ctime,mtime,atime] ############\n";
   TraversePrint(root, is_details, 0);
 
-  // release memory
-  for (auto [ino, item] : tree_inode_map) {
-    delete item;
-  }
+  FreeFsTree(root);
 }
 
 }  // namespace client

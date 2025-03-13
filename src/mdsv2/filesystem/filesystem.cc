@@ -1379,7 +1379,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     }
   }
 
-  DINGO_LOG(INFO) << "rename here 0001.";
   // delete old dentry
   status = txn->Delete(old_dentry_key);
   if (!status.ok()) {
@@ -1400,7 +1399,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
   }
 
   if (is_same_parent) {
-    DINGO_LOG(INFO) << "rename here 0002.";
     // update parent inode ctime/mtime
     pb_old_parent_inode.set_ctime(now_ns);
     pb_old_parent_inode.set_mtime(now_ns);
@@ -1414,7 +1412,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     }
 
   } else {
-    DINGO_LOG(INFO) << "rename here 0003.";
     // update old parent inode nlink/ctime/mtime
     pb_old_parent_inode.set_ctime(now_ns);
     pb_old_parent_inode.set_mtime(now_ns);
@@ -1429,7 +1426,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     pb_new_parent_inode.set_ctime(now_ns);
     pb_new_parent_inode.set_mtime(now_ns);
     if (!is_exist_new_dentry) {
-      DINGO_LOG(INFO) << "rename here 0004.";
       pb_new_parent_inode.set_nlink(pb_new_parent_inode.nlink() + 1);
     }
 
@@ -1444,9 +1440,9 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     return Status(status.error_code(), fmt::format("commit fail, {}", status.error_str()));
   }
 
-  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, elapsed_time({}us) status({}).", old_parent_ino,
-                                 old_name, new_parent_ino, new_name, (Helper::TimestampNs() - now_ns) / 1000,
-                                 status.error_str());
+  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, state({},{}) elapsed_time({}us) status({}).",
+                                 old_parent_ino, old_name, new_parent_ino, new_name, is_same_parent,
+                                 is_exist_new_dentry, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
 
   if (IsMonoPartition()) {
     // update cache

@@ -25,4 +25,6 @@ target_link_libraries(mdsv2_filesystem
     mdsv2_common
     PROTO_OBJS
     protobuf::libprotobuf
+
+    nlohmann_json
 )

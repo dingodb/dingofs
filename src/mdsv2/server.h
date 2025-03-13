@@ -68,6 +68,7 @@ class Server {
   std::string GetListenAddr();
   MDSMeta& GetMDSMeta();
   MDSMetaMapPtr GetMDSMetaMap();
+  KVStoragePtr GetKVStorage();
   Heartbeat& GetHeartbeat() { return heartbeat_; }
   FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }

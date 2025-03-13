@@ -14,6 +14,8 @@
 
 #include "mdsv2/common/helper.h"
 
+#include <sys/stat.h>
+
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -464,6 +466,64 @@ bool Helper::SaveFile(const std::string& filepath, const std::string& data) {
   file.close();
 
   return true;
+}
+
+std::string Helper::FsModeToString(mode_t mode) {
+  std::string result(10, '-');  // 默认初始化为10个'-'字符
+
+  // 检查文件类型
+  if (S_ISREG(mode))
+    result[0] = '-';  // 普通文件
+  else if (S_ISDIR(mode))
+    result[0] = 'd';  // 目录
+  else if (S_ISLNK(mode))
+    result[0] = 'l';  // 符号链接
+  else if (S_ISFIFO(mode))
+    result[0] = 'p';  // 命名管道
+  else if (S_ISSOCK(mode))
+    result[0] = 's';  // 套接字
+  else if (S_ISCHR(mode))
+    result[0] = 'c';  // 字符设备
+  else if (S_ISBLK(mode))
+    result[0] = 'b';  // 块设备
+
+  // 设置用户权限
+  if (mode & S_IRUSR) result[1] = 'r';
+  if (mode & S_IWUSR) result[2] = 'w';
+  if (mode & S_IXUSR) {
+    if (mode & S_ISUID)
+      result[3] = 's';  // 设置用户ID
+    else
+      result[3] = 'x';
+  } else if (mode & S_ISUID) {
+    result[3] = 'S';  // 大写S表示设置了SUID位但没有执行权限
+  }
+
+  // 设置组权限
+  if (mode & S_IRGRP) result[4] = 'r';
+  if (mode & S_IWGRP) result[5] = 'w';
+  if (mode & S_IXGRP) {
+    if (mode & S_ISGID)
+      result[6] = 's';  // 设置组ID
+    else
+      result[6] = 'x';
+  } else if (mode & S_ISGID) {
+    result[6] = 'S';  // 大写S表示设置了SGID位但没有执行权限
+  }
+
+  // 设置其他人权限
+  if (mode & S_IROTH) result[7] = 'r';
+  if (mode & S_IWOTH) result[8] = 'w';
+  if (mode & S_IXOTH) {
+    if (mode & S_ISVTX)
+      result[9] = 't';  // sticky位
+    else
+      result[9] = 'x';
+  } else if (mode & S_ISVTX) {
+    result[9] = 'T';  // 大写T表示设置了sticky位但没有执行权限
+  }
+
+  return result;
 }
 
 }  // namespace mdsv2

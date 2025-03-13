@@ -16,17 +16,19 @@
 
 #include <sys/types.h>
 
+#include <cstdint>
 #include <string>
 
 #include "brpc/builtin/common.h"
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
 #include "brpc/server.h"
-#include "butil/endpoint.h"
 #include "butil/iobuf.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/logging.h"
+#include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/server.h"
 
 namespace dingofs {
@@ -146,7 +148,8 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
 
     os << "<tr>";
 
-    os << "<td>" << fs_info.fs_id() << "</td>";
+    os << "<td><a href=\"FsStatService/" << fs_info.fs_id() << R"(" target="_blank">)" << fs_info.fs_id()
+       << "</a></td>";
     os << "<td>" << fs_info.fs_name() << "</td>";
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";
     os << "<td>" << PartitionTypeName(partition_policy.type()) << "</td>";
@@ -169,18 +172,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   return buf.to_string();
 }
 
-void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller,
-                                       const pb::web::FsStatRequest* request, pb::web::FsStatResponse* response,
-                                       ::google::protobuf::Closure* done) {
-  brpc::ClosureGuard const done_guard(done);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  const brpc::Server* server = cntl->server();
-  butil::IOBufBuilder os;
-  const bool use_html = brpc::UseHTML(cntl->http_request());
-  cntl->http_response().set_content_type(use_html ? "text/html" : "text/plain");
-
-  auto file_system_set = Server::GetInstance().GetFileSystemSet();
-
+static void RenderMainPage(const brpc::Server* server, FileSystemSetPtr file_system_set, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
@@ -199,6 +191,185 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   os << RenderFsInfo(fs_infoes);
 
   os << "</body>";
+}
+
+static void RenderFsTreePage(FsUtils& fs_utils, uint32_t fs_id, butil::IOBufBuilder& os) {
+  if (fs_id == 0) {
+    os << "Invalid fs_id";
+    return;
+  }
+
+  os << "<!DOCTYPE html>";
+  os << "<html lang=\"zh-CN\">";
+
+  os << "<head>";
+  os << R"(
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File System Directory Tree</title>
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+.tree {
+  margin-left: 20px;
+}
+
+.tree,
+.tree ul {
+  list-style-type: none;
+  padding-left: 20px;
+}
+
+.tree li {
+  position: relative;
+  padding: 5px 0;
+}
+
+.tree li::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: -15px;
+  width: 10px;
+  height: 1px;
+  background-color: #666;
+}
+
+.tree li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -15px;
+  width: 1px;
+  height: 100%;
+  background-color: #666;
+}
+
+.tree li:last-child::after {
+  height: 12px;
+}
+
+.folder {
+  cursor: pointer;
+  color: #007bff;
+  font-weight: bold;
+}
+
+.file {
+  color: #333;
+}
+
+.collapsed>ul {
+  display: none;
+}
+
+.icon {
+  margin-right: 5px;
+}
+</style>)";
+  os << "</head>";
+
+  os << "<body>";
+  os << "<h1>File System Directory Tree</h1>";
+  os << "<p>format: name [ino,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
+  os << R"(
+<div class="controls">
+  <button id="expandAll">Expand</button>
+  <button id="collapseAll">Collapse</button>
+</div>
+<ul id="fileTree" class="tree"></ul>)";
+
+  os << "<script>";
+
+  os << "const fileSystem =" + fs_utils.GenFsTreeJsonString(fs_id) + ";";
+
+  os << R"(
+    function generateTree(item, parentElement) {
+      const li = document.createElement('li');
+
+      if (item.type === 'directory') {
+        const folderSpan = document.createElement('span');
+        folderSpan.className = 'folder';
+        folderSpan.innerHTML = `<span class="icon">📁</span>${item.name} [${item.ino},${item.description}]`;
+        folderSpan.addEventListener('click', function () {
+          this.parentElement.classList.toggle('collapsed');
+          if (this.parentElement.classList.contains('collapsed')) {
+            this.querySelector('.icon').textContent = '📁';
+          } else {
+            this.querySelector('.icon').textContent = '📂';
+          }
+        });
+        li.appendChild(folderSpan);
+
+        if (item.children && item.children.length > 0) {
+          const ul = document.createElement('ul');
+          item.children.forEach(child => {
+            generateTree(child, ul);
+          });
+          li.appendChild(ul);
+        }
+      } else {
+        const fileSpan = document.createElement('span');
+        fileSpan.className = 'file';
+        fileSpan.innerHTML = `<span class="icon">📄</span>${item.name} [${item.ino},${item.description}]`;
+        li.appendChild(fileSpan);
+      }
+
+      parentElement.appendChild(li);
+    }
+
+    const treeRoot = document.getElementById('fileTree');
+    generateTree(fileSystem, treeRoot);
+
+    document.getElementById('expandAll').addEventListener('click', function () {
+      const collapsedItems = document.querySelectorAll('.collapsed');
+      collapsedItems.forEach(item => {
+        item.classList.remove('collapsed');
+        item.querySelector('.icon').textContent = '📂';
+      });
+    });
+
+    document.getElementById('collapseAll').addEventListener('click', function () {
+      const folders = document.querySelectorAll('.folder');
+      folders.forEach(folder => {
+        const li = folder.parentElement;
+        if (!li.classList.contains('collapsed') && li.querySelector('ul')) {
+          li.classList.add('collapsed');
+          folder.querySelector('.icon').textContent = '📁';
+        }
+      });
+    });
+  )";
+  os << "</script>";
+  os << "</body>";
+  os << "</html>";
+}
+
+void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller,
+                                       const pb::web::FsStatRequest* request, pb::web::FsStatResponse* response,
+                                       ::google::protobuf::Closure* done) {
+  brpc::ClosureGuard const done_guard(done);
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  const brpc::Server* server = cntl->server();
+  butil::IOBufBuilder os;
+  const bool use_html = brpc::UseHTML(cntl->http_request());
+  cntl->http_response().set_content_type(use_html ? "text/html" : "text/plain");
+  const std::string& path = cntl->http_request().unresolved_path();
+
+  DINGO_LOG(INFO) << fmt::format("FsStatService path: {}", path);
+
+  if (path.empty()) {
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    RenderMainPage(server, file_system_set, os);
+
+  } else {
+    uint32_t fs_id = Helper::StringToInt32(path);
+    FsUtils fs_utils(Server::GetInstance().GetKVStorage());
+    RenderFsTreePage(fs_utils, fs_id, os);
+  }
 
   os.move_to(cntl->response_attachment());
   cntl->set_response_compress_type(brpc::COMPRESS_TYPE_GZIP);

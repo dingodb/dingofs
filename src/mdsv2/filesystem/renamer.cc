@@ -16,6 +16,7 @@
 
 #include "dingofs/error.pb.h"
 #include "mdsv2/common/context.h"
+#include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
 

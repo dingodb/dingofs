@@ -65,6 +65,7 @@ class RenameTask : public TaskRunnable {
   Status GetStatus() { return status_; }
 
  private:
+  // not delete at here
   Context* ctx_{nullptr};
 
   uint64_t old_parent_ino_;

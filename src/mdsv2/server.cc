@@ -294,6 +294,11 @@ MDSMetaMapPtr Server::GetMDSMetaMap() {
   return mds_meta_map_;
 }
 
+KVStoragePtr Server::GetKVStorage() {
+  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+  return kv_storage_;
+}
+
 void Server::Run() {
   brpc::Server brpc_server;
 

@@ -94,6 +94,8 @@ class Helper {
   static std::string ParseCoorAddr(const std::string& coor_url);
 
   static bool SaveFile(const std::string& filepath, const std::string& data);
+
+  static std::string FsModeToString(mode_t mode);
 };
 
 }  // namespace mdsv2
