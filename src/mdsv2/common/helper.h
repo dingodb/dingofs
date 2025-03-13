@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "google/protobuf/util/json_util.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -96,6 +97,8 @@ class Helper {
   static bool SaveFile(const std::string& filepath, const std::string& data);
 
   static std::string FsModeToString(mode_t mode);
+
+  static bool ProtoToJson(const google::protobuf::Message& message, std::string& json);
 };
 
 }  // namespace mdsv2

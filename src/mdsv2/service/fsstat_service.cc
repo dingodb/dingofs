@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "brpc/builtin/common.h"
 #include "brpc/closure_guard.h"
@@ -42,23 +43,25 @@ static std::string RenderHead() {
      << "<script language=\"javascript\" type=\"text/javascript\" src=\"/js/jquery_min\"></script>\n"
      << brpc::TabsHead();
 
-  os << "<meta charset=\"UTF-8\">\n"
-     << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-     << "<style>\n"
-     << "  /* Define styles for different colors */\n"
-     << "  .red-text {\n"
-     << "    color: red;\n"
-     << "  }\n"
-     << "  .blue-text {\n"
-     << "    color: blue;\n"
-     << "  }\n"
-     << "  .green-text {\n"
-     << "    color: green;\n"
-     << "  }\n"
-     << "  .bold-text {"
-     << "    font-weight: bold;"
-     << "  }"
-     << "</style>\n";
+  os << R"(<meta charset="UTF-8">"
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  }
+  .red-text {
+  color: red;
+  }
+  .blue-text {
+  color: blue;
+  }
+  .green-text {
+  color: green;
+  }
+  .bold-text {
+  font-weight: bold;
+  }
+</style>)";
 
   os << brpc::TabsHead() << "</head>";
 
@@ -128,6 +131,7 @@ static std::string RenderCapacity(uint64_t capacity) { return fmt::format("{}MB"
 static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
   butil::IOBufBuilder os;
 
+  os << "<div style=\"margin: 12px;\">";
   os << "<table class=\"gridtable sortable\" border=\"1\">\n";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -165,6 +169,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   }
 
   os << "</table>\n";
+  os << "</div>";
 
   butil::IOBuf buf;
   os.move_to(buf);
@@ -209,8 +214,7 @@ static void RenderFsTreePage(FsUtils& fs_utils, uint32_t fs_id, butil::IOBufBuil
 <title>File System Directory Tree</title>
 <style>
 body {
-  font-family: Arial, sans-serif;
-  margin: 20px;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
 }
 
 .tree {
@@ -254,7 +258,6 @@ body {
 
 .folder {
   cursor: pointer;
-  color: #007bff;
   font-weight: bold;
 }
 
@@ -274,7 +277,7 @@ body {
 
   os << "<body>";
   os << "<h1>File System Directory Tree</h1>";
-  os << "<p>format: name [ino,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
+  os << "<p style=\"color: gray;\">format: name [ino,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
   os << R"(
 <div class="controls">
   <button id="expandAll">Expand</button>
@@ -284,6 +287,7 @@ body {
 
   os << "<script>";
 
+  os << "const fs_id = " << fs_id << ";";
   os << "const fileSystem =" + fs_utils.GenFsTreeJsonString(fs_id) + ";";
 
   os << R"(
@@ -293,7 +297,7 @@ body {
       if (item.type === 'directory') {
         const folderSpan = document.createElement('span');
         folderSpan.className = 'folder';
-        folderSpan.innerHTML = `<span class="icon">📁</span>${item.name} [${item.ino},${item.description}]`;
+        folderSpan.innerHTML = `<div><span class="icon">📁</span>${item.name} [${item.ino},${item.description}]</div>`;
         folderSpan.addEventListener('click', function () {
           this.parentElement.classList.toggle('collapsed');
           if (this.parentElement.classList.contains('collapsed')) {
@@ -314,7 +318,7 @@ body {
       } else {
         const fileSpan = document.createElement('span');
         fileSpan.className = 'file';
-        fileSpan.innerHTML = `<span class="icon">📄</span>${item.name} [${item.ino},${item.description}]`;
+        fileSpan.innerHTML = `<div><span class="icon">📄</span><a href="FsStatService/${fs_id}/${item.ino}" target="_blank">${item.name}</a> [${item.ino},${item.description}]</div>`;
         li.appendChild(fileSpan);
       }
 
@@ -348,6 +352,127 @@ body {
   os << "</html>";
 }
 
+void RenderInodePage(const pb::mdsv2::Inode& inode, butil::IOBufBuilder& os) {
+  os << R"(
+  <!DOCTYPE html>
+<html lang="zh-CN">)";
+
+  os << R"(
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inode Details</title>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+      margin: 20px;
+      background-color: #f5f5f5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+
+    pre {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 15px;
+      overflow: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .string {
+      color: #008000;
+    }
+
+    .number {
+      color: #0000ff;
+    }
+
+    .boolean {
+      color: #b22222;
+    }
+
+    .null {
+      color: #808080;
+    }
+
+    .key {
+      color: #a52a2a;
+    }
+  </style>
+</head>)";
+
+  os << "<body>";
+  os << R"(<div class="container">)";
+  os << fmt::format("<h1>Inode: {}</h1>", inode.ino());
+  os << R"(<pre id="json-display"></pre>)";
+  os << "</div>";
+
+  os << "<script>";
+  std::string json;
+  if (Helper::ProtoToJson(inode, json)) {
+    os << "const jsonString =`" + json + "`;";
+  } else {
+    os << "const jsonString = \"{}\";";
+  }
+
+  os << R"(
+    function syntaxHighlight(json) {
+      if (typeof json === 'string') {
+        json = JSON.parse(json);
+      }
+
+      json = JSON.stringify(json, null, 4);
+
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+        let cls = 'number';
+
+        if (/^"/.test(match)) {
+          if (/:$/.test(match)) {
+            cls = 'key';
+          } else {
+            cls = 'string';
+          }
+        } else if (/true|false/.test(match)) {
+          cls = 'boolean';
+        } else if (/null/.test(match)) {
+          cls = 'null';
+        }
+
+        return '<span class="' + cls + '">' + match + '</span>';
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        const highlighted = syntaxHighlight(jsonString);
+        document.getElementById('json-display').innerHTML = highlighted;
+      } catch (e) {
+        document.getElementById('json-display').innerHTML = 'Invalid JSON: ' + e.message;
+      }
+    });)";
+  os << "</script>";
+
+  os << "</body>";
+  os << "</html>";
+}
+
 void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller,
                                        const pb::web::FsStatRequest* request, pb::web::FsStatResponse* response,
                                        ::google::protobuf::Closure* done) {
@@ -361,14 +486,38 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   DINGO_LOG(INFO) << fmt::format("FsStatService path: {}", path);
 
-  if (path.empty()) {
+  std::vector<int64_t> params;
+  Helper::SplitString(path, '/', params);
+
+  // /FsStatService
+  if (params.empty()) {
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     RenderMainPage(server, file_system_set, os);
 
-  } else {
-    uint32_t fs_id = Helper::StringToInt32(path);
+  } else if (params.size() == 1) {
+    // /FsStatService/{fs_id}
+    uint32_t fs_id = params[0];
     FsUtils fs_utils(Server::GetInstance().GetKVStorage());
     RenderFsTreePage(fs_utils, fs_id, os);
+
+  } else if (params.size() == 2) {
+    // /FsStatService/{fs_id}/{ino}
+    uint32_t fs_id = params[0];
+    uint64_t ino = params[1];
+
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      InodePtr inode;
+      auto status = file_system->GetInodeFromStore(ino, inode);
+      if (status.ok()) {
+        RenderInodePage(inode->CopyTo(), os);
+      } else {
+        os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());
+      }
+    } else {
+      os << fmt::format("Not found file system {}", fs_id);
+    }
   }
 
   os.move_to(cntl->response_attachment());

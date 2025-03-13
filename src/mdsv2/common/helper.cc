@@ -526,5 +526,13 @@ std::string Helper::FsModeToString(mode_t mode) {
   return result;
 }
 
+bool Helper::ProtoToJson(const google::protobuf::Message& message, std::string& json) {
+  google::protobuf::util::JsonPrintOptions options;
+  options.add_whitespace = true;
+  options.always_print_primitive_fields = true;
+  options.preserve_proto_field_names = true;
+  return MessageToJsonString(message, &json, options).ok();
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

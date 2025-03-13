@@ -43,23 +43,25 @@ static std::string RenderHead() {
      << "<script language=\"javascript\" type=\"text/javascript\" src=\"/js/jquery_min\"></script>\n"
      << brpc::TabsHead();
 
-  os << "<meta charset=\"UTF-8\">\n"
-     << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-     << "<style>\n"
-     << "  /* Define styles for different colors */\n"
-     << "  .red-text {\n"
-     << "    color: red;\n"
-     << "  }\n"
-     << "  .blue-text {\n"
-     << "    color: blue;\n"
-     << "  }\n"
-     << "  .green-text {\n"
-     << "    color: green;\n"
-     << "  }\n"
-     << "  .bold-text {"
-     << "    font-weight: bold;"
-     << "  }"
-     << "</style>\n";
+  os << R"(<meta charset="UTF-8">"
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <style>
+       body {
+         font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+       }
+       .red-text {
+       color: red;
+       }
+       .blue-text {
+       color: blue;
+       }
+       .green-text {
+       color: green;
+       }
+       .bold-text {
+       font-weight: bold;
+       }
+     </style>)";
 
   os << brpc::TabsHead() << "</head>";
 
@@ -72,6 +74,7 @@ static std::string RenderHead() {
 static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
   butil::IOBufBuilder os;
 
+  os << "<div style=\"margin: 12px;\">";
   os << "<table class=\"gridtable sortable\" border=\"1\">\n";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -101,6 +104,7 @@ static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
   }
 
   os << "</table>\n";
+  os << "</div>";
 
   butil::IOBuf buf;
   os.move_to(buf);

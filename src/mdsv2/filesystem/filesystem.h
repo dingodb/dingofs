@@ -176,6 +176,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
  private:
   friend class DebugServiceImpl;
+  friend class FsStatServiceImpl;
 
   // generate ino
   Status GenDirIno(int64_t& ino);
