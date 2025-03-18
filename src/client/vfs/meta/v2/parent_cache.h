@@ -15,6 +15,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_CACHE_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_CACHE_H_
 
+#include <sys/types.h>
+
 #include <cstdint>
 #include <memory>
 
@@ -33,16 +35,24 @@ class ParentCache {
   ParentCache();
   ~ParentCache() = default;
 
+  struct Entry {
+    int64_t parent;
+    uint64_t version;
+  };
+
   static ParentCachePtr New() { return std::make_shared<ParentCache>(); }
 
-  bool Get(int64_t ino, int64_t& parent_ino);
-  void Upsert(int64_t ino, int64_t parent_ino);
+  bool GetParent(int64_t ino, int64_t& parent);
+  bool GetVersion(int64_t ino, uint64_t& version);
+  void Upsert(int64_t ino, int64_t parent);
+  void Upsert(int64_t ino, uint64_t version);
+  void Upsert(int64_t ino, int64_t parent, uint64_t version);
   void Delete(int64_t ino);
 
  private:
   utils::RWLock lock_;
-  // ino -> parent_ino
-  std::unordered_map<int64_t, int64_t> ino_to_parent_map_;
+  // ino -> entry
+  std::unordered_map<int64_t, Entry> ino_map_;
 };
 
 }  // namespace v2

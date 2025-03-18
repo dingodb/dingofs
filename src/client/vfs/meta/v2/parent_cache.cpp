@@ -24,34 +24,77 @@ namespace v2 {
 
 ParentCache::ParentCache() {
   // root ino is its own parent
-  ino_to_parent_map_.insert({1, 1});
+  ino_map_.insert({1, Entry{1, 0}});
 }
 
-bool ParentCache::Get(int64_t ino, int64_t& parent_ino) {
+bool ParentCache::GetParent(int64_t ino, int64_t& parent) {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = ino_to_parent_map_.find(ino);
-  if (it == ino_to_parent_map_.end()) {
+  auto it = ino_map_.find(ino);
+  if (it == ino_map_.end()) {
     return false;
   }
 
-  parent_ino = it->second;
+  if (it->second.parent == 0) {
+    return false;
+  }
+
+  parent = it->second.parent;
   return true;
 }
 
-void ParentCache::Upsert(int64_t ino, int64_t parent_ino) {
-  DINGO_LOG(INFO) << fmt::format("save map ino({}) to parent({}).", ino,
-                                 parent_ino);
+bool ParentCache::GetVersion(int64_t ino, uint64_t& version) {
+  utils::ReadLockGuard lk(lock_);
 
+  auto it = ino_map_.find(ino);
+  if (it == ino_map_.end()) {
+    return false;
+  }
+
+  version = it->second.version;
+  return true;
+}
+
+void ParentCache::Upsert(int64_t ino, int64_t parent) {
   utils::WriteLockGuard lk(lock_);
 
-  ino_to_parent_map_[ino] = parent_ino;
+  auto it = ino_map_.find(ino);
+  if (it != ino_map_.end()) {
+    it->second.parent = parent;
+  } else {
+    ino_map_[ino] = Entry{.parent = parent, .version = 0};
+  }
+}
+
+void ParentCache::Upsert(int64_t ino, uint64_t version) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = ino_map_.find(ino);
+  if (it != ino_map_.end()) {
+    it->second.version = version;
+  } else {
+    ino_map_[ino] = Entry{.parent = 0, .version = version};
+  }
+}
+
+void ParentCache::Upsert(int64_t ino, int64_t parent, uint64_t version) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = ino_map_.find(ino);
+  if (it != ino_map_.end()) {
+    it->second.parent = parent;
+    if (version > it->second.version) {
+      it->second.version = version;
+    }
+  } else {
+    ino_map_[ino] = Entry{.parent = parent, .version = version};
+  }
 }
 
 void ParentCache::Delete(int64_t ino) {
   utils::WriteLockGuard lk(lock_);
 
-  ino_to_parent_map_.erase(ino);
+  ino_map_.erase(ino);
 }
 
 }  // namespace v2

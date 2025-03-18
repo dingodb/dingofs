@@ -30,7 +30,7 @@ using PartitionPtr = std::shared_ptr<Partition>;
 // consider locality
 class Partition {
  public:
-  Partition(InodePtr parent_inode) : parent_inode_(parent_inode){};
+  Partition(InodePtr parent_inode) : parent_inode_(parent_inode) {};
   ~Partition() = default;
 
   static PartitionPtr New(InodePtr parent_inode) { return std::make_shared<Partition>(parent_inode); }
@@ -50,6 +50,7 @@ class Partition {
 
   utils::RWLock lock_;
 
+  // name -> dentry
   std::map<std::string, Dentry> children_;
 };
 
@@ -63,6 +64,8 @@ class PartitionCache {
   void Delete(uint64_t ino);
 
   PartitionPtr Get(uint64_t ino);
+
+  std::map<uint64_t, PartitionPtr> GetAll();
 
  private:
   utils::LRUCache<uint64_t, PartitionPtr> cache_;

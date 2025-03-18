@@ -43,6 +43,8 @@
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/server.h"
+#include "mdsv2/service/service_access.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -89,6 +91,27 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr i
 
 FileSystemPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
 
+uint64_t FileSystem::Epoch() const {
+  auto partition_policy = fs_info_->GetPartitionPolicy();
+  if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    return partition_policy.mono().epoch();
+
+  } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
+    return partition_policy.parent_hash().epoch();
+  }
+
+  return 0;
+}
+
+pb::mdsv2::PartitionType FileSystem::PartitionType() const { return fs_info_->GetPartitionType(); }
+
+bool FileSystem::IsMonoPartition() const {
+  return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION;
+}
+bool FileSystem::IsParentHashPartition() const {
+  return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
+}
+
 // odd number is dir inode, even number is file inode
 Status FileSystem::GenDirIno(int64_t& ino) {
   bool ret = id_generator_->GenID(ino);
@@ -116,29 +139,52 @@ bool FileSystem::CanServe(int64_t self_mds_id) {
   return false;
 }
 
-Status FileSystem::GetPartition(uint64_t parent_ino, bool bypass_cache, PartitionPtr& out_partition, Trace& trace) {
-  if (!bypass_cache) {
-    auto partition = GetPartitionFromCache(parent_ino);
-    if (partition != nullptr) {
-      trace.SetHitPartition();
-      out_partition = partition;
-      return Status::OK();
+Status FileSystem::GetPartition(Context& ctx, uint64_t parent, PartitionPtr& out_partition) {
+  return GetPartition(ctx, ctx.GetInodeVersion(), parent, out_partition);
+}
+
+Status FileSystem::GetPartition(Context& ctx, uint64_t version, uint64_t parent, PartitionPtr& out_partition) {
+  auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
+  if (bypass_cache) {
+    auto status = GetPartitionFromStore(parent, "Bypass", out_partition);
+    if (!status.ok()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
     }
 
-    DINGO_LOG(INFO) << fmt::format("dentry set cache missing {}.", parent_ino);
+    return status;
   }
 
-  auto status = GetPartitionFromStore(parent_ino, out_partition);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent_ino, status.error_str()));
+  auto partition = GetPartitionFromCache(parent);
+  if (partition == nullptr) {
+    auto status = GetPartitionFromStore(parent, "CacheMiss", out_partition);
+    if (!status.ok()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
   }
+
+  auto parent_inode = partition->ParentInode();
+  if (version > parent_inode->Version()) {
+    auto status = GetPartitionFromStore(parent, "OutOfDate", out_partition);
+    if (!status.ok()) {
+      return Status(pb::error::ENOT_FOUND, fmt::format("not found partition({}), {}.", parent, status.error_str()));
+    }
+
+    return status;
+  }
+
+  trace.SetHitPartition();
+  out_partition = partition;
 
   return Status::OK();
 }
 
 PartitionPtr FileSystem::GetPartitionFromCache(uint64_t parent_ino) { return partition_cache_.Get(parent_ino); }
 
-Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition) {
+Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, const std::string& reason, PartitionPtr& out_partition) {
   // scan dentry from store
   Range range;
   MetaDataCodec::EncodeDentryRange(fs_id_, parent_ino, range.start_key, range.end_key);
@@ -155,7 +201,7 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_
 
   auto& parent_kv = kvs.at(0);
   CHECK(parent_kv.key == range.start_key) << fmt::format(
-      "Invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key), Helper::StringToHex(range.start_key));
+      "invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key), Helper::StringToHex(range.start_key));
 
   // build partition
   auto parent_inode = Inode::New(MetaDataCodec::DecodeDirInodeValue(parent_kv.value));
@@ -168,34 +214,88 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_
     partition->PutChild(dentry);
   }
 
+  partition_cache_.Put(parent_ino, partition);
+
   out_partition = partition;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch partition({}), reason({}).", fs_id_, parent_ino, reason);
 
   return Status::OK();
 }
 
-Status FileSystem::GetInode(uint64_t ino, bool bypass_cache, InodePtr& out_inode, Trace& trace) {
-  if (!bypass_cache) {
-    auto inode = GetInodeFromCache(ino);
-    if (inode != nullptr) {
-      trace.SetHitInode();
-      out_inode = inode;
-      return Status::OK();
+Status FileSystem::GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode) {
+  return GetInode(ctx, ctx.GetInodeVersion(), dentry, partition, out_inode);
+}
+
+Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition,
+                            InodePtr& out_inode) {
+  auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
+  bool is_fetch = false;
+  Status status;
+  do {
+    if (bypass_cache) {
+      status = GetInodeFromStore(dentry.Ino(), "Bypass", out_inode);
+      is_fetch = true;
+      break;
     }
 
-    DINGO_LOG(INFO) << fmt::format("inode cache missing {}.", ino);
+    auto inode = dentry.Inode();
+    if (inode == nullptr) {
+      status = GetInodeFromStore(dentry.Ino(), "CacheMiss", out_inode);
+      is_fetch = true;
+      break;
+    }
+
+    if (inode->Version() < version) {
+      status = GetInodeFromStore(dentry.Ino(), "OutOfDate", out_inode);
+      is_fetch = true;
+      break;
+    }
+
+    out_inode = inode;
+    trace.SetHitInode();
+
+  } while (false);
+
+  if (is_fetch && status.ok()) {
+    partition->PutChild(Dentry(dentry, out_inode));
   }
 
-  auto status = GetInodeFromStore(ino, out_inode);
-  if (!status.ok()) {
-    return status;
+  return status;
+}
+
+Status FileSystem::GetInode(Context& ctx, uint64_t ino, InodePtr& out_inode) {
+  return GetInode(ctx, ctx.GetInodeVersion(), ino, out_inode);
+}
+
+Status FileSystem::GetInode(Context& ctx, uint64_t version, uint64_t ino, InodePtr& out_inode) {
+  auto& trace = ctx.GetTrace();
+  const bool bypass_cache = ctx.IsBypassCache();
+
+  if (bypass_cache) {
+    return GetInodeFromStore(ino, "Bypass", out_inode);
   }
+
+  auto inode = GetInodeFromCache(ino);
+  if (inode == nullptr) {
+    return GetInodeFromStore(ino, "CacheMiss", out_inode);
+  }
+
+  if (inode->Version() < version) {
+    return GetInodeFromStore(ino, "OutOfDate", out_inode);
+  }
+
+  out_inode = inode;
+  trace.SetHitInode();
 
   return Status::OK();
 }
 
 InodePtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetInode(ino); }
 
-Status FileSystem::GetInodeFromStore(uint64_t ino, InodePtr& out_inode) {
+Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode) {
   std::string key =
       IsDir(ino) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, ino) : MetaDataCodec::EncodeFileInodeKey(fs_id_, ino);
   std::string value;
@@ -209,11 +309,13 @@ Status FileSystem::GetInodeFromStore(uint64_t ino, InodePtr& out_inode) {
 
   inode_cache_.PutInode(ino, out_inode);
 
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch inode({}), reason({}).", fs_id_, ino, reason);
+
   return Status::OK();
 }
 
 Status FileSystem::DestoryInode(uint32_t fs_id, uint64_t ino) {
-  DINGO_LOG(DEBUG) << fmt::format("destory inode {} on fs({}).", ino, fs_id);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] destory inode {}.", fs_id_, ino);
 
   std::string inode_key = MetaDataCodec::EncodeFileInodeKey(fs_id, ino);
   auto status = kv_storage_->Delete(inode_key);
@@ -240,20 +342,24 @@ Status FileSystem::CreateRoot() {
     }
   };
 
-  auto inode = Inode::New(fs_id_, kRootIno);
-  inode->SetLength(0);
-
-  inode->SetUid(1008);
-  inode->SetGid(1008);
-  inode->SetMode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
-  inode->SetNlink(kEmptyDirMinLinkNum);
-  inode->SetType(pb::mdsv2::FileType::DIRECTORY);
-  inode->SetRdev(0);
-
   uint64_t now_ns = Helper::TimestampNs();
-  inode->SetCtime(now_ns);
-  inode->SetMtime(now_ns);
-  inode->SetAtime(now_ns);
+
+  pb::mdsv2::Inode pb_inode;
+  pb_inode.set_fs_id(fs_id_);
+  pb_inode.set_ino(kRootIno);
+  pb_inode.set_length(0);
+  pb_inode.set_uid(1008);
+  pb_inode.set_gid(1008);
+  pb_inode.set_mode(S_IFDIR | S_IRUSR | S_IWUSR | S_IRGRP | S_IXUSR | S_IWGRP | S_IXGRP | S_IROTH | S_IWOTH | S_IXOTH);
+  pb_inode.set_nlink(kEmptyDirMinLinkNum);
+  pb_inode.set_type(pb::mdsv2::FileType::DIRECTORY);
+  pb_inode.set_rdev(0);
+
+  pb_inode.set_ctime(now_ns);
+  pb_inode.set_mtime(now_ns);
+  pb_inode.set_atime(now_ns);
+
+  auto inode = Inode::New(pb_inode);
 
   std::string inode_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino());
   std::string inode_value = MetaDataCodec::EncodeDirInodeValue(inode->CopyTo());
@@ -276,23 +382,20 @@ Status FileSystem::CreateRoot() {
   inode_cache_.PutInode(inode->Ino(), inode);
   partition_cache_.Put(dentry.Ino(), Partition::New(inode));
 
-  DINGO_LOG(INFO) << fmt::format("create filesystem({}) root success.", fs_id_);
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] create filesystem root success.", fs_id_);
 
   return Status::OK();
 }
 
 Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("Lookup parent_ino({}), name({}).", parent_ino, name);
-
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] lookup parent_ino({}), name({}).", fs_id_, parent_ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -302,17 +405,10 @@ Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& 
     return Status(pb::error::ENOT_FOUND, fmt::format("dentry({}) not found.", name));
   }
 
-  InodePtr inode = dentry.Inode();
-  if (inode == nullptr) {
-    auto status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
-    if (!status.ok()) {
-      return status;
-    }
-
-    partition->PutChild(Dentry(dentry, inode));
-
-  } else {
-    trace.SetHitInode();
+  InodePtr inode;
+  status = GetInode(ctx, 0, dentry, partition, inode);
+  if (!status.ok()) {
+    return status;
   }
 
   entry_out.inode = inode->CopyTo();
@@ -328,11 +424,10 @@ Status FileSystem::CleanUpInode(InodePtr inode) {
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Trace trace;
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kDeleteInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status, &trace);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &trace);
   inode_operation.SetDeleteInode(ino);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -340,6 +435,7 @@ Status FileSystem::CleanUpInode(InodePtr inode) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
+  butil::Status rpc_status;
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode fail, {}.", rpc_status.error_str()));
   }
@@ -356,18 +452,18 @@ Status FileSystem::CleanUpDentry(Dentry& dentry) {
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Trace trace;
-  butil::Status rpc_status;
   Operation dentry_operation(Operation::OpType::kDeleteDentry, parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down, &rpc_status,
-                             &trace);
+                             MetaDataCodec::EncodeDentryKey(fs_id, parent_ino, dentry.Name()), &count_down, &trace);
   dentry_operation.SetDeleteDentry(dentry.CopyTo(), 0);
-  mix_mutation.operations.push_back(std::move(dentry_operation));
+  mix_mutation.operations.push_back(&dentry_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  butil::Status rpc_status = dentry_operation.status;
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}.", rpc_status.error_str()));
@@ -381,11 +477,10 @@ Status FileSystem::RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta) {
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Trace trace;
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino, MetaDataCodec::EncodeFileInodeKey(fs_id, ino),
-                            &count_down, &rpc_status, &trace);
+                            &count_down, &trace);
   inode_operation.SetUpdateInodeNlink(ino, delta, 0);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -393,6 +488,7 @@ Status FileSystem::RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta) {
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
+  butil::Status rpc_status;
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}.", rpc_status.error_str()));
   }
@@ -400,11 +496,33 @@ Status FileSystem::RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta) {
   return Status::OK();
 }
 
+uint64_t FileSystem::GetMdsIdByIno(uint64_t ino) {
+  auto partition_policy = fs_info_->GetPartitionPolicy();
+  const auto& parent_hash = partition_policy.parent_hash();
+
+  uint64_t target_mds_id = 0;
+  uint32_t target_bucket_id = ino % parent_hash.bucket_num();
+  for (const auto& [mds_id, bucket_set] : parent_hash.distributions()) {
+    for (const auto& bucket_id : bucket_set.bucket_ids()) {
+      if (bucket_id == target_bucket_id) {
+        target_mds_id = mds_id;
+        break;
+      }
+    }
+
+    if (target_mds_id > 0) {
+      break;
+    }
+  }
+
+  return target_mds_id;
+}
+
 // create file, need below steps:
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("mknod parent_ino({}), name({}).", param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mknod parent_ino({}), name({}).", fs_id_, param.parent_ino, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -425,7 +543,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   // get dentry set
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -465,18 +583,15 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status, &trace);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
-  butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
-                             &rpc_dentry_status, &trace);
+                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down, &trace);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
-  mix_mutation.operations.push_back(std::move(dentry_operation));
+  mix_mutation.operations.push_back(&dentry_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -484,8 +599,12 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("mknod {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
-                                 param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
+  butil::Status& rpc_status = inode_operation.status;
+  butil::Status& rpc_dentry_status = dentry_operation.status;
+  auto& dentry_result = dentry_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] mknod {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
+                                 fs_id_, param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
                                  rpc_dentry_status.error_str());
 
   if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
@@ -503,7 +622,7 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  parent_inode->SetNlinkDelta(1, now_time);
+  parent_inode->UpdateNlink(dentry_result.version, dentry_result.nlink, now_time);
 
   entry_out.inode.Swap(&pb_inode);
 
@@ -523,7 +642,7 @@ Status FileSystem::Open(Context& ctx, uint64_t ino) {
     return Status::OK();
   }
 
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -533,7 +652,7 @@ Status FileSystem::Open(Context& ctx, uint64_t ino) {
   return Status::OK();
 }
 
-Status FileSystem::Release(Context& ctx, uint64_t ino) {
+Status FileSystem::Release(Context& ctx, uint64_t ino) {  // NOLINT
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
@@ -547,7 +666,7 @@ Status FileSystem::Release(Context& ctx, uint64_t ino) {
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("mkdir parent_ino({}), name({}).", param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mkdir parent_ino({}), name({}).", fs_id_, param.parent_ino, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -568,7 +687,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   // get parent dentry
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -607,18 +726,15 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status, &trace);
+                            MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
-  butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
-                             &rpc_dentry_status, &trace);
+                             MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down, &trace);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
-  mix_mutation.operations.push_back(std::move(dentry_operation));
+  mix_mutation.operations.push_back(&dentry_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -626,8 +742,12 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("mkdir {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
-                                 param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
+  butil::Status& rpc_status = inode_operation.status;
+  butil::Status& rpc_dentry_status = dentry_operation.status;
+  auto& dentry_result = dentry_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] mkdir {} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
+                                 fs_id_, param.name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
                                  rpc_dentry_status.error_str());
 
   if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
@@ -645,7 +765,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  parent_inode->SetNlinkDelta(1, now_time);
+  parent_inode->UpdateNlink(dentry_result.version, dentry_result.version, now_time);
   partition_cache_.Put(ino, Partition::New(inode));
 
   entry_out.inode.Swap(&pb_inode);
@@ -654,7 +774,7 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 }
 
 Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("rmdir parent_ino({}), name({}).", parent_ino, name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] rmdir parent_ino({}), name({}).", fs_id_, parent_ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -665,7 +785,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
   const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr parent_partition;
-  auto status = GetPartition(parent_ino, bypass_cache, parent_partition, trace);
+  auto status = GetPartition(ctx, parent_ino, parent_partition);
   if (!status.ok()) {
     return status;
   }
@@ -686,6 +806,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
 
   uint64_t now_ns = Helper::TimestampNs();
 
+  pb::mdsv2::Inode pb_parent_inode;
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
@@ -718,8 +839,13 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
     std::string parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, parent_ino);
     std::string parent_value;
     status = txn->Get(parent_key, parent_value);
+    if (!status.ok()) {
+      status = Status(pb::error::EBACKEND_STORE, fmt::format("get parent inode fail, {}", status.error_str()));
+      break;
+    }
 
-    pb::mdsv2::Inode pb_parent_inode = MetaDataCodec::DecodeDirInodeValue(parent_value);
+    pb_parent_inode = MetaDataCodec::DecodeDirInodeValue(parent_value);
+    pb_parent_inode.set_version(pb_parent_inode.version() + 1);
     pb_parent_inode.set_nlink(pb_parent_inode.nlink() - 1);
     pb_parent_inode.set_ctime(now_ns);
     pb_parent_inode.set_mtime(now_ns);
@@ -732,12 +858,14 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
+
+    ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
   trace_txn.txn_id = dentry.Ino();
   trace_txn.retry = retry;
 
-  DINGO_LOG(INFO) << fmt::format("rmdir dir {}/{} finish, elapsed_time({}us).", parent_ino, name,
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] rmdir dir {}/{} finish, elapsed_time({}us).", fs_id_, parent_ino, name,
                                  (Helper::TimestampNs() - now_ns) / 1000);
   if (!status.ok()) {
     return status;
@@ -745,8 +873,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
 
   // update cache
   parent_partition->DeleteChild(name);
-  auto parent_inode = parent_partition->ParentInode();
-  parent_inode->SetNlinkDelta(-1, now_ns);
+  parent_partition->ParentInode()->UpdateNlink(pb_parent_inode.version(), pb_parent_inode.nlink(), now_ns);
   partition_cache_.Delete(dentry.Ino());
 
   return Status::OK();
@@ -754,18 +881,15 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
 
 Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
                            std::vector<EntryOut>& entry_outs) {
-  DINGO_LOG(DEBUG) << fmt::format("readdir ino({}), last_name({}), limit({}), with_attr({}).", ino, last_name, limit,
-                                  with_attr);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readdir ino({}), last_name({}), limit({}), with_attr({}).", fs_id_, ino,
+                                  last_name, limit, with_attr);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
   PartitionPtr partition;
-  auto status = GetPartition(ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -779,15 +903,10 @@ Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_n
 
     if (with_attr) {
       // need inode attr
-      InodePtr inode = dentry.Inode();
-      if (inode == nullptr) {
-        auto status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
-        if (!status.ok()) {
-          return status;
-        }
-
-        // update dentry cache
-        partition->PutChild(Dentry(dentry, inode));
+      InodePtr inode;
+      status = GetInode(ctx, 0, dentry, partition, inode);
+      if (!status.ok()) {
+        return status;
       }
 
       entry_out.inode = inode->CopyTo();
@@ -804,17 +923,17 @@ Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_n
 // 2. update inode(mtime/ctime/nlink)
 Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, const std::string& new_name,
                         EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("link ino({}), new_parent_ino({}), new_name({}).", ino, new_parent_ino, new_name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] link ino({}), new_parent_ino({}), new_name({}).", fs_id_, ino,
+                                  new_parent_ino, new_name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr partition;
-  auto status = GetPartition(new_parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, new_parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -822,7 +941,7 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
 
   // get inode
   InodePtr inode;
-  status = GetInode(ino, bypass_cache, inode, trace);
+  status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -838,18 +957,15 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id};
 
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &rpc_status, &trace);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &trace);
   inode_operation.SetUpdateInodeNlink(ino, 1, now_time);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
-  butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, new_parent_ino,
-                             MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, dentry.Name()), &count_down,
-                             &rpc_dentry_status, &trace);
+                             MetaDataCodec::EncodeDentryKey(fs_id, new_parent_ino, dentry.Name()), &count_down, &trace);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
-  mix_mutation.operations.push_back(std::move(dentry_operation));
+  mix_mutation.operations.push_back(&dentry_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -857,9 +973,15 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("link {} -> {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).",
-                                 ino, new_parent_ino, new_name, (Helper::TimestampNs() - now_time) / 1000,
-                                 rpc_status.error_str(), rpc_dentry_status.error_str());
+  butil::Status& rpc_status = inode_operation.status;
+  butil::Status& rpc_dentry_status = dentry_operation.status;
+  auto& inode_result = inode_operation.result;
+  auto& dentry_result = dentry_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format(
+      "[fs.{}] link {} -> {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_parent_status({}).", fs_id_, ino,
+      new_parent_ino, new_name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(),
+      rpc_dentry_status.error_str());
 
   if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
@@ -874,8 +996,8 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
   }
 
   // update cache
-  inode->SetNlinkDelta(1, now_time);
-  parent_inode->SetNlinkDelta(1, now_time);
+  inode->UpdateNlink(inode_result.version, inode_result.nlink, now_time);
+  parent_inode->UpdateNlink(dentry_result.version, dentry_result.nlink, now_time);
 
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
@@ -889,17 +1011,16 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
 // 1. delete dentry and update parent inode(nlink/mtime/ctime)
 // 3. update inode(nlink/mtime/ctime)
 Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("unLink parent_ino({}), name({}).", parent_ino, name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] unLink parent_ino({}), name({}).", fs_id_, parent_ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr partition;
-  auto status = GetPartition(parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -910,7 +1031,7 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
   }
 
   InodePtr inode;
-  status = GetInode(dentry.Ino(), bypass_cache, inode, trace);
+  status = GetInode(ctx, dentry, partition, inode);
   if (!status.ok()) {
     return status;
   }
@@ -921,12 +1042,10 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
     bthread::CountdownEvent count_down(1);
     MixMutation mix_mutation = {.fs_id = fs_id_};
 
-    butil::Status rpc_dentry_status;
     Operation dentry_operation(Operation::OpType::kDeleteDentry, parent_ino,
-                               MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down,
-                               &rpc_dentry_status, &trace);
+                               MetaDataCodec::EncodeDentryKey(fs_id_, parent_ino, dentry.Name()), &count_down, &trace);
     dentry_operation.SetDeleteDentry(dentry.CopyTo(), now_time);
-    mix_mutation.operations.push_back(std::move(dentry_operation));
+    mix_mutation.operations.push_back(&dentry_operation);
 
     if (!mutation_processor_->Commit(mix_mutation)) {
       return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -934,13 +1053,19 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-    if (!rpc_dentry_status.ok()) {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}", rpc_dentry_status.error_str()));
+    butil::Status& rpc_status = dentry_operation.status;
+    auto& result = dentry_operation.result;
+
+    DINGO_LOG(INFO) << fmt::format("[fs.{}] unlink {}/{} delete dentry finish, elapsed_time({}us) rpc_status({}).",
+                                   fs_id_, parent_ino, name, (Helper::TimestampNs() - now_time) / 1000,
+                                   rpc_status.error_str());
+
+    if (!rpc_status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("delete dentry fail, {}", rpc_status.error_str()));
     }
 
-    DINGO_LOG(INFO) << fmt::format("unlink {}/{} delete dentry finish, elapsed_time({}us) rpc_dentry_status({}).",
-                                   parent_ino, name, (Helper::TimestampNs() - now_time) / 1000,
-                                   rpc_dentry_status.error_str());
+    partition->ParentInode()->UpdateNlink(result.version, result.nlink, now_time);
+    partition->DeleteChild(name);
   }
 
   // update file inode nlink
@@ -949,11 +1074,10 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
     bthread::CountdownEvent count_down(1);
     MixMutation mix_mutation = {.fs_id = fs_id_};
 
-    butil::Status rpc_status;
     Operation file_operation(Operation::OpType::kUpdateInodeNlink, dentry.Ino(),
-                             MetaDataCodec::EncodeFileInodeKey(fs_id_, dentry.Ino()), &count_down, &rpc_status, &trace);
+                             MetaDataCodec::EncodeFileInodeKey(fs_id_, dentry.Ino()), &count_down, &trace);
     file_operation.SetUpdateInodeNlink(dentry.Ino(), -1, now_time);
-    mix_mutation.operations.push_back(std::move(file_operation));
+    mix_mutation.operations.push_back(&file_operation);
 
     if (!mutation_processor_->Commit(mix_mutation)) {
       return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -961,15 +1085,18 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-    DINGO_LOG(INFO) << fmt::format("unlink {}/{} update inode finish, elapsed_time({}us) rpc_status({}).", parent_ino,
-                                   name, (Helper::TimestampNs() - start_time) / 1000, rpc_status.error_str());
+    butil::Status& rpc_status = file_operation.status;
+    auto& result = file_operation.result;
+
+    DINGO_LOG(INFO) << fmt::format("[fs.{}] unlink {}/{} update nlink finish, elapsed_time({}us) rpc_status({}).",
+                                   fs_id_, parent_ino, name, (Helper::TimestampNs() - start_time) / 1000,
+                                   rpc_status.error_str());
+    if (!rpc_status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("update nlink fail, {}", rpc_status.error_str()));
+    }
+
+    inode->UpdateNlink(result.version, result.nlink, now_time);
   }
-
-  // update cache
-  partition->DeleteChild(name);
-
-  inode->SetNlinkDelta(-1, now_time);
-  partition->ParentInode()->SetNlinkDelta(-1, now_time);
 
   return Status::OK();
 }
@@ -980,8 +1107,8 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
 // 3. update parent inode mtime/ctime/nlink
 Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t new_parent_ino,
                            const std::string& new_name, uint32_t uid, uint32_t gid, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("Symlink new_parent_ino({}), new_name({}) symlink({}).", new_parent_ino, new_name,
-                                  symlink);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] symlink new_parent_ino({}), new_name({}) symlink({}).", fs_id_,
+                                  new_parent_ino, new_name, symlink);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -995,10 +1122,9 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr partition;
-  auto status = GetPartition(new_parent_ino, bypass_cache, partition, trace);
+  auto status = GetPartition(ctx, new_parent_ino, partition);
   if (!status.ok()) {
     return status;
   }
@@ -1038,18 +1164,16 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &rpc_status, &trace);
+                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
-  butil::Status rpc_dentry_status;
   Operation dentry_operation(Operation::OpType::kCreateDentry, new_parent_ino,
                              MetaDataCodec::EncodeDentryKey(fs_id_, new_parent_ino, dentry.Name()), &count_down,
-                             &rpc_dentry_status, &trace);
+                             &trace);
   dentry_operation.SetCreateDentry(dentry.CopyTo(), now_time);
-  mix_mutation.operations.push_back(std::move(dentry_operation));
+  mix_mutation.operations.push_back(&dentry_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -1057,9 +1181,13 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("symlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).",
-                                 new_parent_ino, new_name, (Helper::TimestampNs() - now_time) / 1000,
-                                 rpc_status.error_str(), rpc_dentry_status.error_str());
+  butil::Status& rpc_status = inode_operation.status;
+  butil::Status& rpc_dentry_status = dentry_operation.status;
+  auto& dentry_result = dentry_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format(
+      "[fs.{}] symlink {}/{} finish, elapsed_time({}us) rpc_status({}) rpc_dentry_status({}).", fs_id_, new_parent_ino,
+      new_name, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str(), rpc_dentry_status.error_str());
 
   if (!rpc_status.ok() && !rpc_dentry_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", rpc_status.error_str()));
@@ -1076,7 +1204,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  partition->ParentInode()->SetNlinkDelta(1, now_time);
+  partition->ParentInode()->UpdateNlink(dentry_result.version, dentry_result.nlink, now_time);
 
   entry_out.inode.Swap(&pb_inode);
 
@@ -1084,17 +1212,14 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
 }
 
 Status FileSystem::ReadLink(Context& ctx, uint64_t ino, std::string& link) {
-  DINGO_LOG(DEBUG) << fmt::format("ReadLink ino({}).", ino);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readlink ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1109,17 +1234,14 @@ Status FileSystem::ReadLink(Context& ctx, uint64_t ino, std::string& link) {
 }
 
 Status FileSystem::GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("GetAttr ino({}).", ino);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getattr ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1130,19 +1252,18 @@ Status FileSystem::GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out) {
 }
 
 Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("SetAttr ino({}).", ino);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] setattr ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   uint64_t now_time = Helper::TimestampNs();
 
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1151,12 +1272,11 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
                                                             : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
-  Operation inode_operation(Operation::OpType::kUpdateInodeAttr, ino, key, &count_down, &rpc_status, &trace);
+  Operation inode_operation(Operation::OpType::kUpdateInodeAttr, ino, key, &count_down, &trace);
   inode_operation.SetUpdateInodeAttr(param.inode, param.to_set);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -1164,7 +1284,10 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("setattr {} finish, elapsed_time({}us) rpc_status({}).", ino,
+  butil::Status& rpc_status = inode_operation.status;
+  auto& result = inode_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] setattr {} finish, elapsed_time({}us) rpc_status({}).", fs_id_, ino,
                                  (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
 
   if (!rpc_status.ok()) {
@@ -1172,7 +1295,7 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   }
 
   // update cache
-  inode->SetAttr(param.inode, param.to_set);
+  inode->UpdateAttr(result.version, param.inode, param.to_set);
 
   inode->CopyTo(entry_out.inode);
 
@@ -1180,17 +1303,14 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
 }
 
 Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr) {
-  DINGO_LOG(DEBUG) << fmt::format("GetXAttr ino({}).", ino);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getxattr ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1201,17 +1321,14 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr) 
 }
 
 Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, const std::string& name, std::string& value) {
-  DINGO_LOG(DEBUG) << fmt::format("GetXAttr ino({}), name({}).", ino, name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getxattr ino({}), name({}).", fs_id_, ino, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
-
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1221,30 +1338,30 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, const std::string& name,
   return Status::OK();
 }
 
-Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattr) {
+Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattrs) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
+
+  uint64_t now_time = Helper::TimestampNs();
 
   // update backend store
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
                                                             : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
-  Operation inode_operation(Operation::OpType::kUpdateInodeXAttr, ino, key, &count_down, &rpc_status, &trace);
-  inode_operation.SetUpdateInodeXAttr(xattr);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  Operation inode_operation(Operation::OpType::kUpdateInodeXAttr, ino, key, &count_down, &trace);
+  inode_operation.SetUpdateInodeXAttr(xattrs);
+  mix_mutation.operations.push_back(&inode_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -1252,19 +1369,45 @@ Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::stri
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
+  butil::Status& rpc_status = inode_operation.status;
+  auto& result = inode_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] setxattr {} finish, elapsed_time({}us) rpc_status({}).", fs_id_, ino,
+                                 (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
+
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
   }
 
   // update cache
-  inode->SetXAttr(xattr);
+  inode->UpdateXAttr(result.version, xattrs);
 
   return Status::OK();
 }
 
+static void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes) {
+  MDSMeta mds_meta;
+  if (!Server::GetInstance().GetMDSMetaMap()->GetMDSMeta(mds_id, mds_meta)) {
+    DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found mds({}) meta.", fs_id, mds_id);
+    return;
+  }
+
+  butil::EndPoint endpoint;
+  butil::str2endpoint(mds_meta.Host().c_str(), mds_meta.Port(), &endpoint);
+
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] refresh inode({}) mds({}) fs({}).", fs_id, Helper::VectorToString(inoes),
+                                  mds_id);
+  auto status = ServiceAccess::RefreshInode(endpoint, fs_id, inoes);
+  if (!status.ok()) {
+    DINGO_LOG(WARNING) << fmt::format("fs.{}] refresh inode({}) fail, mds({}) {}.", fs_id,
+                                      Helper::VectorToString(inoes), mds_id, status.error_str());
+  }
+}
+
 Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                          const std::string& new_name) {
-  DINGO_LOG(INFO) << fmt::format("rename {}/{} to {}/{}.", old_parent_ino, old_name, new_parent_ino, new_name);
+                          const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version) {
+  DINGO_LOG(INFO) << fmt::format("fs.{}] rename {}/{} to {}/{}.", fs_id_, old_parent_ino, old_name, new_parent_ino,
+                                 new_name);
 
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
@@ -1309,7 +1452,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
   pb::mdsv2::Inode pb_new_parent_inode;
   std::string new_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, new_parent_ino);
   if (!is_same_parent) {
-    DINGO_LOG(INFO) << "rename in different parent.";
     value.clear();
     status = txn->Get(new_parent_key, value);
     if (!status.ok()) {
@@ -1333,7 +1475,6 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
   pb::mdsv2::Dentry pb_exist_new_dentry;
   bool is_exist_new_dentry = !value.empty();
   if (is_exist_new_dentry) {
-    DINGO_LOG(INFO) << "rename already exist new dentry.";
     pb_exist_new_dentry = MetaDataCodec::DecodeDentryValue(value);
 
     // get exist new inode
@@ -1348,12 +1489,10 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
     bool is_exist_new_inode = !value.empty();
     if (is_exist_new_inode) {
-      DINGO_LOG(INFO) << "rename already exist new inode.";
       if (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY) {
         pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeDirInodeValue(value);
         // check new dentry is empty
         if (pb_new_inode.nlink() > kEmptyDirMinLinkNum) {
-          DINGO_LOG(INFO) << "rename already exist new dir not empty.";
           return Status(pb::error::ENOT_EMPTY,
                         fmt::format("new dentry({}/{}) is not empty.", new_parent_ino, new_name));
         }
@@ -1367,6 +1506,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
       } else {
         // update exist new inode nlink
         pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeFileInodeValue(value);
+        pb_new_inode.set_version(pb_new_inode.version() + 1);
         pb_new_inode.set_nlink(pb_new_inode.nlink() - 1);
         pb_new_inode.set_ctime(std::max(pb_new_inode.ctime(), now_ns));
         pb_new_inode.set_mtime(std::max(pb_new_inode.mtime(), now_ns));
@@ -1400,6 +1540,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
   if (is_same_parent) {
     // update parent inode ctime/mtime
+    pb_old_parent_inode.set_version(pb_old_parent_inode.version() + 1);
     pb_old_parent_inode.set_ctime(now_ns);
     pb_old_parent_inode.set_mtime(now_ns);
     if (is_exist_new_dentry) {
@@ -1413,6 +1554,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
   } else {
     // update old parent inode nlink/ctime/mtime
+    pb_old_parent_inode.set_version(pb_old_parent_inode.version() + 1);
     pb_old_parent_inode.set_ctime(now_ns);
     pb_old_parent_inode.set_mtime(now_ns);
     pb_old_parent_inode.set_nlink(pb_old_parent_inode.nlink() - 1);
@@ -1423,6 +1565,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     }
 
     // update new parent inode nlink/ctime/mtime
+    pb_new_parent_inode.set_version(pb_new_parent_inode.version() + 1);
     pb_new_parent_inode.set_ctime(now_ns);
     pb_new_parent_inode.set_mtime(now_ns);
     if (!is_exist_new_dentry) {
@@ -1440,82 +1583,106 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     return Status(status.error_code(), fmt::format("commit fail, {}", status.error_str()));
   }
 
-  DINGO_LOG(INFO) << fmt::format("rename {}/{} -> {}/{} finish, state({},{}) elapsed_time({}us) status({}).",
-                                 old_parent_ino, old_name, new_parent_ino, new_name, is_same_parent,
-                                 is_exist_new_dentry, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
+  old_parent_version = pb_old_parent_inode.version();
+  new_parent_version = pb_new_parent_inode.version();
+
+  DINGO_LOG(INFO) << fmt::format(
+      "[fs.{}] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) elapsed_time({}us) status({}).", fs_id_,
+      old_parent_ino, old_name, new_parent_ino, new_name, is_same_parent, is_exist_new_dentry, old_parent_version,
+      new_parent_version, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
 
   if (IsMonoPartition()) {
     // update cache
-    do {
-      PartitionPtr old_parent_partition;
-      auto status = GetPartition(old_parent_ino, bypass_cache, old_parent_partition, trace);
-      if (!status.ok()) {
-        break;
-      }
-      InodePtr old_parent_inode = old_parent_partition->ParentInode();
-
-      // check new parent dentry/inode
-      PartitionPtr new_parent_partition;
-      status = GetPartition(new_parent_ino, bypass_cache, new_parent_partition, trace);
-      if (!status.ok()) {
-        break;
-      }
-      InodePtr new_parent_inode = new_parent_partition->ParentInode();
-
+    PartitionPtr old_parent_partition;
+    auto status = GetPartition(ctx, old_parent_ino, old_parent_partition);
+    if (status.ok()) {
       // delete old dentry at cache
       old_parent_partition->DeleteChild(old_name);
       // update old parent inode nlink at cache
-      old_parent_inode->SetNlinkDelta(1, now_ns);
+      old_parent_partition->ParentInode()->UpdateNlink(pb_old_parent_inode.version(), pb_old_parent_inode.nlink(),
+                                                       now_ns);
+    }
 
+    // check new parent dentry/inode
+    PartitionPtr new_parent_partition;
+    status = GetPartition(ctx, new_parent_ino, new_parent_partition);
+    if (status.ok()) {
       if (is_exist_new_dentry) {
         // delete new dentry at cache
         new_parent_partition->DeleteChild(new_name);
       } else {
         // update new parent inode nlink at cache
-        new_parent_inode->SetNlinkDelta(1, now_ns);
+        new_parent_partition->ParentInode()->UpdateNlink(pb_new_parent_inode.version(), pb_new_parent_inode.nlink(),
+                                                         now_ns);
       }
 
       // add new dentry at cache
-      auto old_inode = inode_cache_.GetInode(pb_old_dentry.ino());
-      Dentry new_dentry(fs_id_, new_name, new_parent_ino, pb_old_dentry.ino(), pb_old_dentry.type(), 0, old_inode);
+      Dentry new_dentry(fs_id_, new_name, new_parent_ino, pb_old_dentry.ino(), pb_old_dentry.type(), 0,
+                        GetInodeFromCache(pb_old_dentry.ino()));
       new_parent_partition->PutChild(new_dentry);
+    }
 
-      // delete exist new partition at cache
-      // need notify mds to delete partition
-      if (is_exist_new_dentry && pb_exist_new_dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
-        partition_cache_.Delete(pb_exist_new_dentry.ino());
-      }
-    } while (false);
+    // delete exist new partition at cache
+    // need notify mds to delete partition
+    if (is_exist_new_dentry && pb_exist_new_dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
+      partition_cache_.Delete(pb_exist_new_dentry.ino());
+    }
   } else {
-    // Todo: notify mds(old_parent and new_parent) to update cache
+    // notify mds(old_parent and new_parent) to update cache
+    uint64_t old_mds_id = GetMdsIdByIno(old_parent_ino);
+    uint64_t new_mds_id = GetMdsIdByIno(new_parent_ino);
+    if (old_mds_id == new_mds_id) {
+      SendRefreshInode(old_mds_id, fs_id_, {old_parent_ino, new_parent_ino});
+    } else {
+      SendRefreshInode(old_mds_id, fs_id_, {old_parent_ino});
+      SendRefreshInode(new_mds_id, fs_id_, {new_parent_ino});
+    }
   }
 
   return Status::OK();
 }
 
+Status FileSystem::RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+                                   uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
+                                   uint64_t& new_parent_version) {
+  int retry = 0;
+  do {
+    auto status =
+        Rename(ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version, new_parent_version);
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      return status;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  return Status::OK();
+}
+
 Status FileSystem::CommitRename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                                uint64_t new_parent_ino, const std::string& new_name) {
+                                uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
+                                uint64_t& new_parent_version) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  return renamer_->Execute(GetSelfPtr(), ctx, old_parent_ino, old_name, new_parent_ino, new_name);
+  return renamer_->Execute(GetSelfPtr(), ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version,
+                           new_parent_version);
 }
 
 Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
                               const pb::mdsv2::SliceList& slice_list) {
-  DINGO_LOG(DEBUG) << fmt::format("WriteSlice ino({}), chunk_index({}), slice_list.size({}).", ino, chunk_index,
-                                  slice_list.slices_size());
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] writeslice ino({}), chunk_index({}), slice_list.size({}).", fs_id_, ino,
+                                  chunk_index, slice_list.slices_size());
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1525,11 +1692,10 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  butil::Status rpc_status;
   Operation inode_operation(Operation::OpType::kUpdateInodeChunk, ino, MetaDataCodec::EncodeFileInodeKey(fs_id_, ino),
-                            &count_down, &rpc_status, &trace);
+                            &count_down, &trace);
   inode_operation.SetUpdateInodeChunk(chunk_index, slice_list);
-  mix_mutation.operations.push_back(std::move(inode_operation));
+  mix_mutation.operations.push_back(&inode_operation);
 
   if (!mutation_processor_->Commit(mix_mutation)) {
     return Status(pb::error::EINTERNAL, "commit mutation fail");
@@ -1537,30 +1703,33 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-  DINGO_LOG(INFO) << fmt::format("writeslice {}/{} finish, elapsed_time({}us) rpc_status({}).", ino, chunk_index,
-                                 (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
+  butil::Status& rpc_status = inode_operation.status;
+  auto& result = inode_operation.result;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] writeslice {}/{} finish, elapsed_time({}us) rpc_status({}).", fs_id_, ino,
+                                 chunk_index, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
 
   if (!rpc_status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", rpc_status.error_str()));
   }
 
-  inode->AppendChunk(chunk_index, slice_list);
+  // update cache
+  inode->UpdateChunk(result.version, chunk_index, slice_list);
 
   return Status::OK();
 }
 
 Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list) {
-  DINGO_LOG(DEBUG) << fmt::format("ReadSlice ino({}), chunk_index({}).", ino, chunk_index);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readslice ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
-  const bool bypass_cache = ctx.IsBypassCache();
 
   InodePtr inode;
-  auto status = GetInode(ino, bypass_cache, inode, trace);
+  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
@@ -1570,10 +1739,21 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   return Status::OK();
 }
 
+Status FileSystem::RefreshInode(const std::vector<uint64_t>& inoes) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] refresh inode({}).", fs_id_, Helper::VectorToString(inoes));
+
+  for (const auto& ino : inoes) {
+    partition_cache_.Delete(ino);
+    inode_cache_.DeleteInode(ino);
+  }
+
+  return Status::OK();
+}
+
 Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); }
 
 Status FileSystem::RefreshFsInfo(const std::string& name) {
-  DINGO_LOG(INFO) << fmt::format("refresh fs({}) info.", name);
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
 
   std::string value;
   auto status = kv_storage_->Get(MetaDataCodec::EncodeFSKey(name), value);
@@ -1590,7 +1770,8 @@ void FileSystem::RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info) {
   fs_info_->Update(fs_info);
 
   can_serve_ = CanServe(self_mds_id_);
-  DINGO_LOG(INFO) << fmt::format("update fs({}) can_serve({}).", fs_info.fs_name(), can_serve_ ? "true" : "false");
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] update fs({}) can_serve({}).", fs_id_, fs_info.fs_name(),
+                                 can_serve_ ? "true" : "false");
 }
 
 Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
@@ -1627,7 +1808,8 @@ Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
   fs_info_->Update(fs_info);
 
   can_serve_ = CanServe(self_mds_id_);
-  DINGO_LOG(INFO) << fmt::format("update fs({}) can_serve({}).", fs_info.fs_name(), can_serve_ ? "true" : "false");
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] update fs({}) can_serve({}).", fs_id_, fs_info.fs_name(),
+                                 can_serve_ ? "true" : "false");
 
   return Status::OK();
 }
@@ -1692,12 +1874,12 @@ bool FileSystemSet::Init() {
   CHECK(mutation_processor_ != nullptr) << "mutation_processor is null.";
 
   if (!IsExistFsTable()) {
-    DINGO_LOG(ERROR) << "not exist fs table.";
+    DINGO_LOG(ERROR) << "[fsset] not exist fs table.";
     return false;
   }
 
   if (!LoadFileSystems()) {
-    DINGO_LOG(ERROR) << "load already exist file systems fail.";
+    DINGO_LOG(ERROR) << "[fsset] load already exist file systems fail.";
     return false;
   }
 
@@ -1768,21 +1950,21 @@ Status FileSystemSet::CreateFsTable() {
   int64_t table_id = 0;
   KVStorage::TableOption option;
   MetaDataCodec::GetFsTableRange(option.start_key, option.end_key);
-  DINGO_LOG(INFO) << fmt::format("create fs table, start_key({}), end_key({}).", Helper::StringToHex(option.start_key),
-                                 Helper::StringToHex(option.end_key));
+  DINGO_LOG(INFO) << fmt::format("[fsset] create fs table, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
   return kv_storage_->CreateTable(kFsTableName, option, table_id);
 }
 
 bool FileSystemSet::IsExistFsTable() {
   std::string start_key, end_key;
   MetaDataCodec::GetFsTableRange(start_key, end_key);
-  DINGO_LOG(DEBUG) << fmt::format("check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
+  DINGO_LOG(DEBUG) << fmt::format("[fsset] check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
                                   Helper::StringToHex(end_key));
 
   auto status = kv_storage_->IsExistTable(start_key, end_key);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
-      DINGO_LOG(ERROR) << "check fs table exist fail, error: " << status.error_str();
+      DINGO_LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
     }
     return false;
   }
@@ -1804,7 +1986,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
     if (dentry_table_id > 0) {
       auto status = kv_storage_->DropTable(dentry_table_id);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("clean dentry table({}) fail, error: {}", dentry_table_id, status.error_str());
+        LOG(ERROR) << fmt::format("[fsset] clean dentry table({}) fail, error: {}", dentry_table_id,
+                                  status.error_str());
       }
     }
 
@@ -1812,7 +1995,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
     if (file_inode_table_id > 0) {
       auto status = kv_storage_->DropTable(file_inode_table_id);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("clean file inode table({}) fail, error: {}", file_inode_table_id,
+        LOG(ERROR) << fmt::format("[fsset] clean file inode table({}) fail, error: {}", file_inode_table_id,
                                   status.error_str());
       }
     }
@@ -1821,7 +2004,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
     if (!fs_key.empty()) {
       auto status = kv_storage_->Delete(fs_key);
       if (!status.ok()) {
-        LOG(ERROR) << fmt::format("clean fs info fail, error: {}", status.error_str());
+        LOG(ERROR) << fmt::format("[fsset] clean fs info fail, error: {}", status.error_str());
       }
     }
   };
@@ -2133,7 +2316,7 @@ bool FileSystemSet::LoadFileSystems() {
   std::vector<KeyValue> kvs;
   auto status = kv_storage_->Scan(range, kvs);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("scan fs table fail, error: {}.", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[fsset] scan fs table fail, error: {}.", status.error_str());
     return false;
   }
 
@@ -2144,7 +2327,7 @@ bool FileSystemSet::LoadFileSystems() {
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
     auto file_system = GetFileSystem(fs_info.fs_id());
     if (file_system == nullptr) {
-      DINGO_LOG(INFO) << fmt::format("add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
+      DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
       auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
                                 renamer_, mutation_processor_);
       AddFileSystem(fs);

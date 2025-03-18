@@ -104,5 +104,7 @@ PartitionPtr PartitionCache::Get(uint64_t ino) {
   return partition;
 }
 
+std::map<uint64_t, PartitionPtr> PartitionCache::GetAll() { return cache_.GetAll(); }
+
 }  // namespace mdsv2
 }  // namespace dingofs

@@ -25,15 +25,21 @@ namespace mdsv2 {
 class Context {
  public:
   Context() = default;
-  Context(bool is_bypass_cache) : is_bypass_cache_(is_bypass_cache) {};
+  Context(bool is_bypass_cache, uint64_t inode_version)
+      : is_bypass_cache_(is_bypass_cache), inode_version_(inode_version) {};
 
   void SetBypassCache(bool is_bypass_cache) { is_bypass_cache_ = is_bypass_cache; }
   bool IsBypassCache() const { return is_bypass_cache_; }
+
+  uint64_t GetInodeVersion() const { return inode_version_; }
 
   Trace& GetTrace() { return trace_; }
 
  private:
   bool is_bypass_cache_{false};
+
+  uint64_t inode_version_{0};
+
   Trace trace_;
 };
 

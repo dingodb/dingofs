@@ -169,6 +169,12 @@ EndPoint MDSClient::GetEndPointByParentIno(int64_t parent_ino) {
   return EndPoint(mds_meta.Host(), mds_meta.Port());
 }
 
+uint64_t MDSClient::GetInodeVersion(int64_t ino) {
+  uint64_t version = 0;
+  parent_cache_->GetVersion(ino, version);
+  return version;
+}
+
 Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
                          Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -177,6 +183,8 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
 
   pb::mdsv2::LookupRequest request;
   pb::mdsv2::LookupResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent_ino));
 
   request.set_fs_id(fs_id_);
   request.set_parent_ino(parent_ino);
@@ -189,7 +197,8 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
   }
 
   // save ino to parent mapping
-  parent_cache_->Upsert(response.inode().ino(), parent_ino);
+  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+                        response.inode().version());
 
   out_attr = ToAttr(response.inode());
 
@@ -220,7 +229,8 @@ Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino);
+  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+                        response.inode().version());
 
   out_attr = ToAttr(response.inode());
 
@@ -252,7 +262,8 @@ Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino);
+  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+                        response.inode().version());
 
   out_attr = ToAttr(response.inode());
 
@@ -289,6 +300,8 @@ Status MDSClient::ReadDir(uint64_t ino, const std::string& last_name,
   pb::mdsv2::ReadDirRequest request;
   pb::mdsv2::ReadDirResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_last_name(last_name);
@@ -303,7 +316,7 @@ Status MDSClient::ReadDir(uint64_t ino, const std::string& last_name,
 
   entries.reserve(response.entries_size());
   for (const auto& entry : response.entries()) {
-    parent_cache_->Upsert(entry.ino(), ino);
+    parent_cache_->Upsert(entry.ino(), ino, entry.inode().version());
     entries.push_back(ToDirEntry(entry));
   }
 
@@ -368,7 +381,8 @@ Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), new_parent_ino);
+  parent_cache_->Upsert(response.inode().ino(), new_parent_ino,
+                        response.inode().version());
 
   out_attr = ToAttr(response.inode());
 
@@ -419,7 +433,8 @@ Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino);
+  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+                        response.inode().version());
 
   out_attr = ToAttr(response.inode());
 
@@ -433,6 +448,8 @@ Status MDSClient::ReadLink(uint64_t ino, std::string& symlink) {
 
   pb::mdsv2::ReadLinkRequest request;
   pb::mdsv2::ReadLinkResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -455,6 +472,8 @@ Status MDSClient::GetAttr(uint64_t ino, Attr& out_attr) {
 
   pb::mdsv2::GetAttrRequest request;
   pb::mdsv2::GetAttrResponse response;
+
+  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -552,6 +571,8 @@ Status MDSClient::GetXAttr(uint64_t ino, const std::string& name,
   pb::mdsv2::GetXAttrRequest request;
   pb::mdsv2::GetXAttrResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_name(name);
@@ -598,6 +619,8 @@ Status MDSClient::ListXAttr(uint64_t ino,
   pb::mdsv2::ListXAttrRequest request;
   pb::mdsv2::ListXAttrResponse response;
 
+  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
@@ -634,6 +657,9 @@ Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
   if (!status.ok()) {
     return status;
   }
+
+  parent_cache_->Upsert(old_parent_ino, response.old_parent_version());
+  parent_cache_->Upsert(new_parent_ino, response.new_parent_version());
 
   return Status::OK();
 }

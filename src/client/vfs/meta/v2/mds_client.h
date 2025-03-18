@@ -101,6 +101,8 @@ class MDSClient {
   EndPoint GetEndPointByIno(int64_t ino);
   EndPoint GetEndPointByParentIno(int64_t parent_ino);
 
+  uint64_t GetInodeVersion(int64_t ino);
+
   bool UpdateRouter();
 
   bool ProcessEpochChange();

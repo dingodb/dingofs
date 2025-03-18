@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_MUTATION_PROCESSOR_H_
 #define DINGOFS_MDV2_FILESYSTEM_MUTATION_PROCESSOR_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -107,10 +108,9 @@ struct Operation {
     uint64_t time;
   };
 
-  struct Notification {
-    bthread::CountdownEvent* count_down_event{nullptr};
-    Status* status{nullptr};
-    Trace* trace{nullptr};
+  struct ChangedResult {
+    uint64_t version{0};
+    uint32_t nlink{0};
   };
 
   uint64_t txn_id;
@@ -127,11 +127,13 @@ struct Operation {
   UpdateDentry* update_dentry{nullptr};
   DeleteDentry* delete_dentry{nullptr};
 
-  Notification notification;
+  bthread::CountdownEvent* event{nullptr};
+  Status status;
+  ChangedResult result;
+  Trace* trace{nullptr};
 
-  Operation(OpType op_type, uint64_t txn_id, const std::string& key, bthread::CountdownEvent* count_down_event,
-            Status* status, Trace* trace)
-      : op_type(op_type), txn_id(txn_id), key(key), notification({count_down_event, status, trace}) {};
+  Operation(OpType op_type, uint64_t txn_id, const std::string& key, bthread::CountdownEvent* event, Trace* trace)
+      : op_type(op_type), txn_id(txn_id), key(key), event(event), trace(trace) {};
   ~Operation() {
     delete create_inode;
     delete delete_inode;
@@ -141,99 +143,6 @@ struct Operation {
     delete create_dentry;
     delete update_dentry;
     delete delete_dentry;
-  }
-
-  Operation(Operation&& other) noexcept {
-    txn_id = other.txn_id;
-    key = std::move(other.key);
-    op_type = other.op_type;
-    notification = other.notification;
-
-    create_inode = other.create_inode;
-    other.create_inode = nullptr;
-
-    delete_inode = other.delete_inode;
-    other.delete_inode = nullptr;
-
-    update_inode_nlink = other.update_inode_nlink;
-    other.update_inode_nlink = nullptr;
-
-    update_inode_attr = other.update_inode_attr;
-    other.update_inode_attr = nullptr;
-
-    update_inode_xattr = other.update_inode_xattr;
-    other.update_inode_xattr = nullptr;
-
-    update_inode_chunk = other.update_inode_chunk;
-    other.update_inode_chunk = nullptr;
-
-    create_dentry = other.create_dentry;
-    other.create_dentry = nullptr;
-
-    update_dentry = other.update_dentry;
-    other.update_dentry = nullptr;
-
-    delete_dentry = other.delete_dentry;
-    other.delete_dentry = nullptr;
-  }
-
-  Operation(const Operation& other) {
-    txn_id = other.txn_id;
-    key = other.key;
-    op_type = other.op_type;
-    notification = other.notification;
-
-    if (other.create_inode != nullptr) {
-      create_inode = new CreateInode();
-      create_inode->inode = other.create_inode->inode;
-    }
-
-    if (other.delete_inode != nullptr) {
-      delete_inode = new DeleteInode();
-      delete_inode->ino = other.delete_inode->ino;
-    }
-
-    if (other.update_inode_nlink != nullptr) {
-      update_inode_nlink = new UpdateInodeNlink();
-      update_inode_nlink->ino = other.update_inode_nlink->ino;
-      update_inode_nlink->delta = other.update_inode_nlink->delta;
-      update_inode_nlink->time = other.update_inode_nlink->time;
-    }
-
-    if (other.update_inode_attr != nullptr) {
-      update_inode_attr = new UpdateInodeAttr();
-      update_inode_attr->to_set = other.update_inode_attr->to_set;
-      update_inode_attr->inode = other.update_inode_attr->inode;
-    }
-
-    if (other.update_inode_xattr != nullptr) {
-      update_inode_xattr = new UpdateInodeXAttr();
-      update_inode_xattr->xattrs = other.update_inode_xattr->xattrs;
-    }
-
-    if (other.update_inode_chunk != nullptr) {
-      update_inode_chunk = new UpdateInodeChunk();
-      update_inode_chunk->chunk_index = other.update_inode_chunk->chunk_index;
-      update_inode_chunk->slice_list = other.update_inode_chunk->slice_list;
-    }
-
-    if (other.create_dentry != nullptr) {
-      create_dentry = new CreateDentry();
-      create_dentry->dentry = other.create_dentry->dentry;
-      create_dentry->time = other.create_dentry->time;
-    }
-
-    if (other.update_dentry != nullptr) {
-      update_dentry = new UpdateDentry();
-      update_dentry->dentry = other.update_dentry->dentry;
-      update_dentry->time = other.update_dentry->time;
-    }
-
-    if (other.delete_dentry != nullptr) {
-      delete_dentry = new DeleteDentry();
-      delete_dentry->dentry = other.delete_dentry->dentry;
-      delete_dentry->time = other.delete_dentry->time;
-    }
   }
 
   void SetCreateInode(pb::mdsv2::Inode&& inode) {
@@ -292,19 +201,19 @@ struct Operation {
 // for one target(file inode, dir inode, dentry) mutation
 struct TargetMutation {
   std::string key;
-  std::vector<Operation> operations;
+  std::vector<Operation*> operations;
 };
 
 // for one transaction mutation
 struct TxnMutation {
   uint32_t fs_id{0};
   uint64_t txn_id{0};
-  std::vector<Operation> operations;
+  std::vector<Operation*> operations;
 };
 
 struct MixMutation {
   uint32_t fs_id{0};
-  std::vector<Operation> operations;
+  std::vector<Operation*> operations;
 };
 
 class MutationProcessor;
@@ -349,7 +258,7 @@ class MutationProcessor {
   Status ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutation);
   Status ExecuteDentryTxnMutation(TxnMutation& txn_mutation);
 
-  static void ProcessFileInodeOperations(std::vector<Operation>& operations, pb::mdsv2::Inode& inode,
+  static void ProcessFileInodeOperations(std::vector<Operation*>& operations, pb::mdsv2::Inode& inode,
                                          KeyValue::OpType& op_type);
   static Status ProcessDentryOperations(TxnUPtr& txn, pb::mdsv2::Inode& parent_inode, TargetMutation& target_mutation);
 

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "butil/endpoint.h"
+#include "fmt/core.h"
 #include "google/protobuf/util/json_util.h"
 
 namespace dingofs {
@@ -99,6 +100,77 @@ class Helper {
   static std::string FsModeToString(mode_t mode);
 
   static bool ProtoToJson(const google::protobuf::Message& message, std::string& json);
+
+  // protobuf transform
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedPtrField<T>& data) {
+    std::vector<T> vec;
+    vec.reserve(data.size());
+    for (auto& item : data) {
+      vec.emplace_back(std::move(item));
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedPtrField<T>* data) {
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.emplace_back(std::move(item));
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(const google::protobuf::RepeatedField<T>& data) {
+    std::vector<T> vec;
+    vec.reserve(data.size());
+    for (auto& item : data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static std::vector<T> PbRepeatedToVector(google::protobuf::RepeatedField<T>* data) {
+    std::vector<T> vec;
+    vec.reserve(data->size());
+    for (auto& item : *data) {
+      vec.push_back(item);
+    }
+
+    return vec;
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedPtrField<T>* out) {
+    for (auto& item : vec) {
+      *(out->Add()) = item;
+    }
+  }
+
+  template <typename T>
+  static void VectorToPbRepeated(const std::vector<T>& vec, google::protobuf::RepeatedField<T>* out) {
+    for (auto& item : vec) {
+      out->Add(item);
+    }
+  }
+
+  template <typename T>
+  static std::string VectorToString(const std::vector<T>& vec) {
+    std::string str;
+    for (int i = 0; i < vec.size(); ++i) {
+      str += fmt::format("{}", vec[i]);
+      if (i + 1 < vec.size()) {
+        str += ",";
+      }
+    }
+    return str;
+  }
 };
 
 }  // namespace mdsv2

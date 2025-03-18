@@ -36,14 +36,18 @@ using InodePtr = std::shared_ptr<Inode>;
 class Inode {
  public:
   Inode() = default;
-  Inode(uint32_t fs_id, uint64_t ino);
+  Inode(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
+        uint32_t nlink);
   Inode(const pb::mdsv2::Inode& inode);
   ~Inode();
 
   Inode(const Inode& inode);
   Inode& operator=(const Inode& inode);
 
-  static InodePtr New(uint32_t fs_id, uint64_t ino) { return std::make_shared<Inode>(fs_id, ino); }
+  static InodePtr New(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
+                      uint32_t nlink) {
+    return std::make_shared<Inode>(fs_id, ino, type, mode, gid, uid, nlink);
+  }
   static InodePtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
   using ChunkMap = std::map<uint64_t, pb::mdsv2::SliceList>;
@@ -51,63 +55,36 @@ class Inode {
 
   uint32_t FsId() const { return fs_id_; }
   uint64_t Ino() const { return ino_; }
-
+  pb::mdsv2::FileType Type() { return type_; }
   uint64_t Length();
-  void SetLength(uint64_t length);
-
-  uint64_t Ctime();
-  void SetCtime(uint64_t ctime);
-
-  uint64_t Mtime();
-  void SetMtime(uint64_t mtime);
-
-  uint64_t Atime();
-  void SetAtime(uint64_t atime);
-
   uint32_t Uid();
-  void SetUid(uint32_t uid);
-
   uint32_t Gid();
-  void SetGid(uint32_t gid);
-
   uint32_t Mode();
-  void SetMode(uint32_t mode);
-
   uint32_t Nlink();
-  void SetNlink(uint32_t nlink);
-  void SetNlinkDelta(int32_t delta, uint64_t time);
-  void PrepareIncNlink();
-  void CommitIncNlink(uint64_t time);
-  void PrepareDecNlink();
-  void CommitDecNlink(uint64_t time);
-
-  pb::mdsv2::FileType Type();
-  void SetType(pb::mdsv2::FileType type);
-
   const std::string& Symlink();
-  void SetSymlink(const std::string& symlink);
-
   uint64_t Rdev();
-  void SetRdev(uint64_t rdev);
-
   uint32_t Dtime();
-  void SetDtime(uint32_t dtime);
-
+  uint64_t Ctime();
+  uint64_t Mtime();
+  uint64_t Atime();
   uint32_t Openmpcount();
-  void SetOpenmpcount(uint32_t openmpcount);
+  uint64_t Version() const { return version_; }
 
   ChunkMap GetChunkMap();
   pb::mdsv2::SliceList GetChunk(uint64_t chunk_index);
-  void AppendChunk(uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
 
   XAttrMap GetXAttrMap();
   std::string GetXAttr(const std::string& name);
-  void SetXAttr(const std::string& name, const std::string& value);
-  void SetXAttr(const std::map<std::string, std::string>& xattr);
 
-  void SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set);
+  bool UpdateNlink(uint64_t version, uint32_t nlink, uint64_t time_ns);
+  bool UpdateAttr(uint64_t version, const pb::mdsv2::Inode& inode, uint32_t to_set);
 
-  void AddParent(uint64_t parent_ino);
+  bool UpdateXAttr(uint64_t version, const std::string& name, const std::string& value);
+  bool UpdateXAttr(uint64_t version, const std::map<std::string, std::string>& xattrs);
+
+  bool UpdateChunk(uint64_t version, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
+
+  bool UpdateParent(uint64_t version, uint64_t parent_ino);
 
   pb::mdsv2::Inode CopyTo();
   void CopyTo(pb::mdsv2::Inode& inode);
@@ -135,6 +112,8 @@ class Inode {
 
   ChunkMap chunks_;
   XAttrMap xattrs_;
+
+  uint64_t version_{0};
 };
 
 // cache all file/dir inode
@@ -151,6 +130,7 @@ class InodeCache {
 
   InodePtr GetInode(uint64_t ino);
   std::vector<InodePtr> GetInodes(std::vector<uint64_t> inoes);
+  std::map<uint64_t, InodePtr> GetAllInodes();
 
  private:
   utils::LRUCache<uint64_t, InodePtr> cache_;

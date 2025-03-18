@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -124,6 +125,8 @@ class LRUCacheInterface {
    * @brief Get the size of the lru
    */
   virtual uint64_t Size() = 0;
+
+  virtual std::map<K, V> GetAll() = 0;
 };
 
 // LRUCache
@@ -219,6 +222,8 @@ class LRUCache : public LRUCacheInterface<K, V> {
    */
   uint64_t Size() override;
 
+  std::map<K, V> GetAll() override;
+
   std::shared_ptr<CacheMetrics> GetCacheMetrics() const;
 
  private:
@@ -278,6 +283,18 @@ template <typename K, typename V, typename KeyTraits, typename ValueTraits>
 uint64_t LRUCache<K, V, KeyTraits, ValueTraits>::Size() {
   ::dingofs::utils::WriteLockGuard guard(lock_);
   return cache_.size();
+}
+
+template <typename K, typename V, typename KeyTraits, typename ValueTraits>
+std::map<K, V> LRUCache<K, V, KeyTraits, ValueTraits>::GetAll() {
+  ::dingofs::utils::ReadLockGuard guard(lock_);
+
+  std::map<K, V> result;
+  for (auto& item : cache_) {
+    result[item.first] = item.second->value;
+  }
+
+  return result;
 }
 
 template <typename K, typename V, typename KeyTraits, typename ValueTraits>
@@ -475,6 +492,10 @@ class TimedLRUCache : public LRUCacheInterface<K, V> {
   void Remove(const K& key) override;
 
   uint64_t Size() override;
+
+  std::map<K, V> GetAll() override {
+    throw std::runtime_error("TimedLRUCache not support GetAll");
+  }
 
   std::shared_ptr<CacheMetrics> GetCacheMetrics() const;
 

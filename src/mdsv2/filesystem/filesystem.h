@@ -35,6 +35,7 @@
 #include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
+#include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -72,25 +73,14 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint32_t FsId() const { return fs_id_; }
   std::string FsName() const { return fs_info_->GetName(); }
-  uint64_t Epoch() const {
-    auto partition_policy = fs_info_->GetPartitionPolicy();
-    if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
-      return partition_policy.mono().epoch();
 
-    } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-      return partition_policy.parent_hash().epoch();
-    }
+  uint64_t Epoch() const;
 
-    return 0;
-  }
   pb::mdsv2::FsInfo FsInfo() const { return fs_info_->Get(); }
-  pb::mdsv2::PartitionType PartitionType() const { return fs_info_->GetPartitionType(); }
-  bool IsMonoPartition() const {
-    return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION;
-  }
-  bool IsParentHashPartition() const {
-    return fs_info_->GetPartitionType() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION;
-  }
+
+  pb::mdsv2::PartitionType PartitionType() const;
+  bool IsMonoPartition() const;
+  bool IsParentHashPartition() const;
 
   bool CanServe() const { return can_serve_; };
 
@@ -151,17 +141,21 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // xattr
   Status GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr);
   Status GetXAttr(Context& ctx, uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattr);
+  Status SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattrs);
 
   // rename
   Status Rename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                const std::string& new_name);
+                const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
+  Status RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+                         const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
   Status CommitRename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                      const std::string& new_name);
+                      const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
 
   // slice
   Status WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
   Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
+
+  Status RefreshInode(const std::vector<uint64_t>& inoes);
 
   Status RefreshFsInfo();
   Status RefreshFsInfo(const std::string& name);
@@ -184,21 +178,28 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   bool CanServe(int64_t self_mds_id);
 
   // get dentry
-  Status GetPartition(uint64_t parent_ino, bool bypass_cache, PartitionPtr& out_partition, Trace& trace);
+  Status GetPartition(Context& ctx, uint64_t parent, PartitionPtr& out_partition);
+  Status GetPartition(Context& ctx, uint64_t version, uint64_t parent, PartitionPtr& out_partition);
   PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
-  Status GetPartitionFromStore(uint64_t parent_ino, PartitionPtr& out_partition);
+  Status GetPartitionFromStore(uint64_t parent_ino, const std::string& reason, PartitionPtr& out_partition);
 
   // get inode
-  Status GetInode(uint64_t ino, bool bypass_cache, InodePtr& out_inode, Trace& trace);
+  Status GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t ino, InodePtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t version, uint64_t ino, InodePtr& out_inode);
   InodePtr GetInodeFromCache(uint64_t ino);
-  Status GetInodeFromStore(uint64_t ino, InodePtr& out_inode);
+  Status GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode);
 
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, uint64_t ino);
 
+  // part fail, clean/rollback
   Status CleanUpInode(InodePtr inode);
   Status CleanUpDentry(Dentry& dentry);
   Status RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta);
+
+  uint64_t GetMdsIdByIno(uint64_t ino);
 
   uint64_t self_mds_id_;
 

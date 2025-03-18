@@ -208,9 +208,10 @@ void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
   doc["type"] = node->dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
   // mode,nlink,uid,gid,size,ctime,mtime,atime
   auto& inode = node->inode;
-  doc["description"] = fmt::format("{}/{},{},{},{},{},{},{},{}", inode.mode(), Helper::FsModeToString(inode.mode()),
-                                   inode.nlink(), inode.uid(), inode.gid(), inode.length(), FormatTime(inode.ctime()),
-                                   FormatTime(inode.mtime()), FormatTime(inode.atime()));
+  doc["description"] =
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", inode.version(), inode.mode(), Helper::FsModeToString(inode.mode()),
+                  inode.nlink(), inode.uid(), inode.gid(), inode.length(), FormatTime(inode.ctime()),
+                  FormatTime(inode.mtime()), FormatTime(inode.atime()));
 
   nlohmann::json children;
   for (FsTreeNode* child : node->children) {

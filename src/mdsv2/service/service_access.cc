@@ -87,5 +87,56 @@ Status ServiceAccess::RefreshFsInfo(const butil::EndPoint& endpoint, const std::
   return Status::OK();
 }
 
+Status ServiceAccess::CheckAlive(const butil::EndPoint& endpoint) {
+  auto channel = ChannelPool::GetInstance().GetChannel(endpoint);
+  if (channel == nullptr) {
+    return Status(pb::error::EINTERNAL, "get channel fail");
+  }
+
+  pb::mdsv2::MDSService_Stub stub(channel.get());
+
+  brpc::Controller cntl;
+  cntl.set_timeout_ms(1000);
+
+  pb::mdsv2::CheckAliveRequest request;
+  pb::mdsv2::CheckAliveResponse response;
+
+  stub.CheckAlive(&cntl, &request, &response, nullptr);
+  if (cntl.Failed()) {
+    DINGO_LOG(ERROR) << "send request fail, " << cntl.ErrorText();
+    return Status(pb::error::EINTERNAL, cntl.ErrorText());
+  }
+
+  return Status::OK();
+}
+
+Status ServiceAccess::RefreshInode(const butil::EndPoint& endpoint, uint32_t fs_id, std::vector<uint64_t> inoes) {
+  auto channel = ChannelPool::GetInstance().GetChannel(endpoint);
+  if (channel == nullptr) {
+    return Status(pb::error::EINTERNAL, "get channel fail");
+  }
+
+  pb::mdsv2::MDSService_Stub stub(channel.get());
+
+  brpc::Controller cntl;
+  cntl.set_timeout_ms(5000);
+
+  pb::mdsv2::RefreshInodeRequest request;
+  pb::mdsv2::RefreshInodeResponse response;
+
+  request.set_fs_id(fs_id);
+  for (auto ino : inoes) {
+    request.add_inoes(ino);
+  }
+
+  stub.RefreshInode(&cntl, &request, &response, nullptr);
+  if (cntl.Failed()) {
+    DINGO_LOG(ERROR) << "send request fail, " << cntl.ErrorText();
+    return Status(pb::error::EINTERNAL, cntl.ErrorText());
+  }
+
+  return Status::OK();
+}
+
 }  // namespace mdsv2
 }  // namespace dingofs

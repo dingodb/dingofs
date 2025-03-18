@@ -135,6 +135,12 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
                       pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
 
+  void CheckAlive(google::protobuf::RpcController* controller, const pb::mdsv2::CheckAliveRequest* request,
+                  pb::mdsv2::CheckAliveResponse* response, google::protobuf::Closure* done) override;
+
+  void RefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
+                    pb::mdsv2::RefreshInodeResponse* response, google::protobuf::Closure* done) override;
+
  private:
   Status GenFsId(int64_t& fs_id);
   inline FileSystemPtr GetFileSystem(uint32_t fs_id);
@@ -201,6 +207,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                     pb::mdsv2::WriteSliceResponse* response, TraceClosure* done);
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                    pb::mdsv2::ReadSliceResponse* response, TraceClosure* done);
+
+  void DoRefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
+                      pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done);
 
   // file system set
   FileSystemSetPtr file_system_set_;

@@ -24,10 +24,16 @@ namespace dingofs {
 namespace mdsv2 {
 
 void RenameTask::Run() {
-  auto status = fs_->Rename(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_);
+  uint64_t old_parent_version;
+  uint64_t new_parent_version;
+  auto status = fs_->RenameWithRetry(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_, old_parent_version,
+                                     new_parent_version);
+
   if (cb_ != nullptr) {
     cb_(status);
   } else {
+    old_parent_version_ = old_parent_version;
+    new_parent_version_ = new_parent_version;
     status_ = status;
     Signal();
   }
@@ -46,14 +52,9 @@ bool Renamer::Destroy() {
   return true;
 }
 
-bool Renamer::AsyncExecute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                           uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb) {
-  auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, cb);
-  return Execute(task);
-}
-
 Status Renamer::Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                        uint64_t new_parent_ino, const std::string& new_name) {
+                        uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
+                        uint64_t& new_parent_version) {
   auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, nullptr);
   bool ret = Execute(task);
   if (!ret) {
@@ -61,6 +62,9 @@ Status Renamer::Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino,
   }
 
   task->Wait();
+
+  old_parent_version = task->GetOldParentVersion();
+  new_parent_version = task->GetNewParentVersion();
 
   return task->GetStatus();
 }

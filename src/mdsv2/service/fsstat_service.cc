@@ -277,7 +277,7 @@ body {
 
   os << "<body>";
   os << "<h1>File System Directory Tree</h1>";
-  os << "<p style=\"color: gray;\">format: name [ino,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
+  os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
   os << R"(
 <div class="controls">
   <button id="expandAll">Expand</button>
@@ -509,7 +509,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       InodePtr inode;
-      auto status = file_system->GetInodeFromStore(ino, inode);
+      auto status = file_system->GetInodeFromStore(ino, "Stat", inode);
       if (status.ok()) {
         RenderInodePage(inode->CopyTo(), os);
       } else {

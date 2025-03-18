@@ -16,6 +16,7 @@
 #define DINGOFS_MDSV2_SERVICE_ACCESS_H_
 
 #include <string>
+#include <vector>
 
 #include "brpc/channel.h"
 #include "bthread/types.h"
@@ -42,6 +43,8 @@ class ChannelPool {
 class ServiceAccess {
  public:
   static Status RefreshFsInfo(const butil::EndPoint& endpoint, const std::string& fs_name);
+  static Status CheckAlive(const butil::EndPoint& endpoint);
+  static Status RefreshInode(const butil::EndPoint& endpoint, uint32_t fs_id, std::vector<uint64_t> inoes);
 };
 
 }  // namespace mdsv2

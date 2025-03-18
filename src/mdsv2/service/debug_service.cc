@@ -54,9 +54,9 @@ void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::deb
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  Context ctx;
+  Context ctx(false, 0);
   PartitionPtr partition;
-  auto status = fs->GetPartition(request->parent_ino(), false, partition, ctx.GetTrace());
+  auto status = fs->GetPartition(ctx, request->parent_ino(), partition);
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status);
   }
@@ -85,15 +85,12 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
+  Context ctx(!request->use_cache(), 0);
+
   for (const auto& ino : request->inoes()) {
     InodePtr inode;
-    if (request->use_cache()) {
-      inode = fs->GetInodeFromCache(ino);
-    } else {
-      fs->GetInodeFromStore(ino, inode);
-    }
-
-    if (inode != nullptr) {
+    auto status = fs->GetInode(ctx, ino, inode);
+    if (status.ok()) {
       *response->add_inodes() = inode->CopyTo();
     }
   }

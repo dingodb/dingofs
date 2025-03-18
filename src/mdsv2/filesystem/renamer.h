@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_RENAMER_H_
 #define DINGOFS_MDV2_FILESYSTEM_RENAMER_H_
 
+#include <cstdint>
 #include <memory>
 
 #include "mdsv2/common/context.h"
@@ -63,6 +64,8 @@ class RenameTask : public TaskRunnable {
   }
 
   Status GetStatus() { return status_; }
+  uint64_t GetOldParentVersion() const { return old_parent_version_; }
+  uint64_t GetNewParentVersion() const { return new_parent_version_; }
 
  private:
   // not delete at here
@@ -75,6 +78,8 @@ class RenameTask : public TaskRunnable {
 
   BthreadCondPtr cond_{nullptr};
   Status status_;
+  uint64_t old_parent_version_;
+  uint64_t new_parent_version_;
 
   RenameCbFunc cb_;
   FileSystemPtr fs_;
@@ -96,10 +101,9 @@ class Renamer {
   bool Init();
   bool Destroy();
 
-  bool AsyncExecute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                    uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb);
   Status Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                 uint64_t new_parent_ino, const std::string& new_name);
+                 uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
+                 uint64_t& new_parent_version);
 
  private:
   bool Execute(TaskRunnablePtr task);

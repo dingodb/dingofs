@@ -113,7 +113,7 @@ mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParentIno(int64_t parent_ino) {
 mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(int64_t ino) {
   int64_t parent_ino = 1;
   if (ino != 1) {
-    CHECK(parent_cache_->Get(ino, parent_ino))
+    CHECK(parent_cache_->GetParent(ino, parent_ino))
         << fmt::format("not found parent_ino by ino({}).", ino);
   }
 

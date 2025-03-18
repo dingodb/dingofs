@@ -158,6 +158,23 @@ void MDSMonitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::s
   }
 }
 
+void CheckMdsAlive(std::vector<MDSMeta>& offline_mdses, std::vector<MDSMeta>& online_mdses) {
+  for (auto it = offline_mdses.begin(); it != offline_mdses.end();) {
+    auto& mds_meta = *it;
+
+    butil::EndPoint endpoint;
+    butil::str2endpoint(mds_meta.Host().c_str(), mds_meta.Port(), &endpoint);
+
+    auto status = ServiceAccess::CheckAlive(endpoint);
+    if (status.ok()) {
+      online_mdses.push_back(mds_meta);
+      it = offline_mdses.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
 // 1. get mds list
 // 2. check mds status
 // 3. get fs info
@@ -193,6 +210,8 @@ Status MDSMonitor::MonitorMDS() {
   std::vector<MDSMeta> online_mdses, offline_mdses;
   GetOfflineMDS(mdses, online_mdses, offline_mdses);
 
+  // check mds offline again
+  CheckMdsAlive(offline_mdses, online_mdses);
   DINGO_LOG(INFO) << fmt::format("[monitor] online mdses: {}, offline mdses: {}", online_mdses.size(),
                                  offline_mdses.size());
 
@@ -202,8 +221,6 @@ Status MDSMonitor::MonitorMDS() {
   if (online_mdses.empty()) {
     return Status(pb::error::EINTERNAL, "not has online mds");
   }
-
-  // todo: check offline again
 
   auto is_offline_func = [&offline_mdses](const uint64_t mds_id) -> bool {
     for (const auto& offline_mds : offline_mdses) {
@@ -255,8 +272,6 @@ Status MDSMonitor::MonitorMDS() {
             AdjustParentHashDistribution(GetDistributions(partition_policy.parent_hash()), online_mdses, offline_mdses);
 
         fs->UpdatePartitionPolicy(new_distributions);
-
-        // notify old mds to stop serve partition
 
         // notify new mds to start serve partition
         auto mds_metas = GetMdsMetas(mdses, GetMdsIds(new_distributions));

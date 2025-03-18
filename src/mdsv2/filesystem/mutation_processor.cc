@@ -41,17 +41,17 @@ DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 DEFINE_uint32(merge_mutation_delay_us, 0, "merge mutation delay us.");
 
 static void SetError(TargetMutation& target_mutation, Status& status) {
-  for (auto& operation : target_mutation.operations) {
-    if (operation.notification.status != nullptr && operation.notification.status->ok()) {
-      *operation.notification.status = status;
+  for (auto* operation : target_mutation.operations) {
+    if (operation->status.ok()) {
+      operation->status = status;
     }
   }
 }
 
 static void SetError(TxnMutation& txn_mutation, Status& status) {
-  for (auto& operation : txn_mutation.operations) {
-    if (operation.notification.status != nullptr && operation.notification.status->ok()) {
-      *operation.notification.status = status;
+  for (auto* operation : txn_mutation.operations) {
+    if (operation->status.ok()) {
+      operation->status = status;
     }
   }
 }
@@ -118,12 +118,11 @@ bool MutationProcessor::Commit(MixMutation& mix_mutation) {
   }
 
   // check notification
-  for (auto& operation : mix_mutation.operations) {
-    CHECK(operation.notification.count_down_event != nullptr) << "count down event is null.";
-    CHECK(operation.notification.status != nullptr) << "status is null.";
-    CHECK(operation.notification.trace != nullptr) << "trace is null.";
+  for (auto* operation : mix_mutation.operations) {
+    CHECK(operation->event != nullptr) << "count down event is null.";
+    CHECK(operation->trace != nullptr) << "trace is null.";
 
-    operation.notification.trace->UpdateLastTime();
+    operation->trace->UpdateLastTime();
   }
 
   mutations_.Enqueue(mix_mutation);
@@ -200,6 +199,7 @@ bool IsFileInodeTxn(Operation::OpType op_type) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
+    case Operation::OpType::kUpdateInodeChunk:
       return true;
 
     case Operation::OpType::kCreateDentry:
@@ -213,11 +213,11 @@ bool IsFileInodeTxn(Operation::OpType op_type) {
 }
 
 void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
-  auto op_type = txn_mutation.operations.front().op_type;
+  auto op_type = txn_mutation.operations.front()->op_type;
   bool is_file_txn = IsFileInodeTxn(op_type);
 
-  for (auto& operation : txn_mutation.operations) {
-    operation.notification.trace->SetPendingTime(is_file_txn);
+  for (auto* operation : txn_mutation.operations) {
+    operation->trace->SetPendingTime(is_file_txn);
   }
 
   uint64_t start_time = Helper::TimestampUs();
@@ -236,6 +236,7 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
+    case Operation::OpType::kUpdateInodeChunk:
       status = ExecuteUpdateInodeTxnMutation(txn_mutation);
       break;
 
@@ -258,8 +259,8 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
   }
 
   // notify operation finish
-  for (auto& operation : txn_mutation.operations) {
-    operation.notification.count_down_event->signal();
+  for (auto* operation : txn_mutation.operations) {
+    operation->event->signal();
   }
 }
 
@@ -297,48 +298,48 @@ static void SetAttr(const pb::mdsv2::Inode& inode, uint32_t to_set, pb::mdsv2::I
   }
 }
 
-void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation>& operations, pb::mdsv2::Inode& inode,
+void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation*>& operations, pb::mdsv2::Inode& inode,
                                                    KeyValue::OpType& op_type) {
   bool exist_inode = (inode.ino() != 0);
   for (auto& operation : operations) {
-    switch (operation.op_type) {
+    switch (operation->op_type) {
       case Operation::OpType::kUpdateInodeNlink: {
         if (exist_inode) {
-          auto* param = operation.update_inode_nlink;
+          auto* param = operation->update_inode_nlink;
           inode.set_nlink(inode.nlink() + param->delta);
-          inode.set_atime(std::max(inode.atime(), param->time));
-          inode.set_atime(std::max(inode.mtime(), param->time));
+          inode.set_ctime(std::max(inode.ctime(), param->time));
+          inode.set_mtime(std::max(inode.mtime(), param->time));
 
         } else {
-          *operation.notification.status = Status(pb::error::ENOT_FOUND, "inode not found");
+          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
         }
       } break;
 
       case Operation::OpType::kUpdateInodeAttr: {
         if (exist_inode) {
-          auto* param = operation.update_inode_attr;
+          auto* param = operation->update_inode_attr;
           SetAttr(param->inode, param->to_set, inode);
 
         } else {
-          *operation.notification.status = Status(pb::error::ENOT_FOUND, "inode not found");
+          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
         }
       } break;
 
       case Operation::OpType::kUpdateInodeXAttr: {
         if (exist_inode) {
-          auto* param = operation.update_inode_xattr;
+          auto* param = operation->update_inode_xattr;
           for (const auto& [key, value] : param->xattrs) {
             (*inode.mutable_xattrs())[key] = value;
           }
 
         } else {
-          *operation.notification.status = Status(pb::error::ENOT_FOUND, "inode not found");
+          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
         }
       } break;
 
       case Operation::OpType::kUpdateInodeChunk: {
         if (exist_inode) {
-          auto* param = operation.update_inode_chunk;
+          auto* param = operation->update_inode_chunk;
           auto it = inode.mutable_chunks()->find(param->chunk_index);
           if (it == inode.chunks().end()) {
             inode.mutable_chunks()->insert({param->chunk_index, param->slice_list});
@@ -347,7 +348,7 @@ void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation>& opera
           }
 
         } else {
-          *operation.notification.status = Status(pb::error::ENOT_FOUND, "inode not found");
+          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
         }
 
       } break;
@@ -358,7 +359,7 @@ void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation>& opera
       } break;
 
       default:
-        LOG(FATAL) << fmt::format("unknown operation type({}).", static_cast<int>(operation.op_type));
+        LOG(FATAL) << fmt::format("unknown operation type({}).", static_cast<int>(operation->op_type));
         break;
     }
   }
@@ -368,11 +369,11 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
   CHECK(txn_mutation.operations.size() == 1)
       << fmt::format("create inode mutation map size({}) is wrong.", txn_mutation.operations.size());
 
-  auto& operation = txn_mutation.operations.front();
-  CHECK(operation.op_type == Operation::OpType::kCreateInode)
-      << fmt::format("op type({}) is wrong.", Operation::OpTypeName(operation.op_type));
+  auto* operation = txn_mutation.operations.front();
+  CHECK(operation->op_type == Operation::OpType::kCreateInode)
+      << fmt::format("op type({}) is wrong.", Operation::OpTypeName(operation->op_type));
 
-  auto& param = operation.create_inode;
+  auto& param = operation->create_inode;
 
   LOG(INFO) << fmt::format("[mutation] txn({}/{}), create inode({}).", txn_mutation.fs_id, txn_mutation.txn_id,
                            param->inode.ShortDebugString());
@@ -380,7 +381,7 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
   std::string value = param->inode.type() == pb::mdsv2::DIRECTORY ? MetaDataCodec::EncodeDirInodeValue(param->inode)
                                                                   : MetaDataCodec::EncodeFileInodeValue(param->inode);
   // trace txn
-  auto* trace = operation.notification.trace;
+  auto* trace = operation->trace;
   auto& trace_txn = trace->GetFileTxn();
 
   uint32_t retry = 0;
@@ -388,8 +389,8 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
   do {
     auto txn = kv_storage_->NewTxn();
 
-    status = txn->Put(operation.key, value);
-    CHECK(status.ok()) << fmt::format("put inode fail, key({}), error({} {}).", operation.key, status.error_code(),
+    status = txn->Put(operation->key, value);
+    CHECK(status.ok()) << fmt::format("put inode fail, key({}), error({} {}).", operation->key, status.error_code(),
                                       status.error_str());
 
     status = txn->Commit();
@@ -411,16 +412,16 @@ Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutatio
   CHECK(txn_mutation.operations.size() == 1)
       << fmt::format("delete inode mutation map size({}) is wrong.", txn_mutation.operations.size());
 
-  auto& operation = txn_mutation.operations.front();
-  CHECK(operation.op_type == Operation::OpType::kDeleteInode)
-      << fmt::format("op type({}) is wrong.", Operation::OpTypeName(operation.op_type));
+  auto* operation = txn_mutation.operations.front();
+  CHECK(operation->op_type == Operation::OpType::kDeleteInode)
+      << fmt::format("op type({}) is wrong.", Operation::OpTypeName(operation->op_type));
 
-  auto& param = operation.delete_inode;
+  auto& param = operation->delete_inode;
   LOG(INFO) << fmt::format("[mutation] txn({}/{}), delete inode({}).", txn_mutation.fs_id, txn_mutation.txn_id,
                            param->ino);
 
   // trace txn
-  auto* trace = operation.notification.trace;
+  auto* trace = operation->trace;
   auto& trace_txn = trace->GetFileTxn();
 
   uint32_t retry = 0;
@@ -428,8 +429,8 @@ Status MutationProcessor::ExecuteDeleteInodeTxnMutation(TxnMutation& txn_mutatio
   do {
     auto txn = kv_storage_->NewTxn();
 
-    status = txn->Delete(operation.key);
-    CHECK(status.ok()) << fmt::format("delete inode fail, key({}), error({} {}).", operation.key, status.error_code(),
+    status = txn->Delete(operation->key);
+    CHECK(status.ok()) << fmt::format("delete inode fail, key({}), error({} {}).", operation->key, status.error_code(),
                                       status.error_str());
 
     status = txn->Commit();
@@ -458,6 +459,7 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
   // trace txn
   Trace::Txn trace_txn;
 
+  pb::mdsv2::Inode inode;
   uint32_t retry = 0;
   Status status;
   do {
@@ -470,7 +472,8 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
     }
 
     KeyValue::OpType op_type = KeyValue::OpType::kPut;
-    pb::mdsv2::Inode inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeFileInodeValue(value);
+    inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeFileInodeValue(value);
+    inode.set_version(inode.version() + 1);
     ProcessFileInodeOperations(target_mutation.operations, inode, op_type);
 
     LOG(INFO) << fmt::format("[mutation] {} file inode({}).", KeyValue::OpTypeName(op_type), inode.ShortDebugString());
@@ -491,8 +494,10 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
 
   trace_txn.txn_id = txn_mutation.txn_id;
   trace_txn.retry = retry;
-  for (auto& operation : txn_mutation.operations) {
-    operation.notification.trace->GetFileTxn() = trace_txn;
+  for (auto* operation : txn_mutation.operations) {
+    operation->result.version = inode.version();
+    operation->result.nlink = inode.nlink();
+    operation->trace->GetFileTxn() = trace_txn;
   }
 
   return status;
@@ -504,6 +509,7 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
 
   Trace::Txn trace_txn;
 
+  pb::mdsv2::Inode parent_inode;
   uint32_t retry = 0;
   Status status;
   do {
@@ -516,7 +522,8 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
       break;
     }
 
-    pb::mdsv2::Inode parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+    parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+    parent_inode.set_version(parent_inode.version() + 1);
 
     bool is_update_parent = false;
     for (auto& [_, target_mutation] : target_mutation_map) {
@@ -545,8 +552,10 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
 
   trace_txn.txn_id = txn_mutation.txn_id;
   trace_txn.retry = retry;
-  for (auto& operation : txn_mutation.operations) {
-    operation.notification.trace->GetTxn() = trace_txn;
+  for (auto* operation : txn_mutation.operations) {
+    operation->result.version = parent_inode.version();
+    operation->result.nlink = parent_inode.nlink();
+    operation->trace->GetTxn() = trace_txn;
   }
 
   return status;
@@ -561,13 +570,13 @@ Status MutationProcessor::ProcessDentryOperations(TxnUPtr& txn, pb::mdsv2::Inode
   uint64_t change_time = 0;
 
   KeyValue::OpType op_type = KeyValue::OpType::kPut;
-  for (auto& operation : target_mutation.operations) {
-    switch (operation.op_type) {
+  for (auto* operation : target_mutation.operations) {
+    switch (operation->op_type) {
       case Operation::OpType::kCreateDentry: {
         if (has_value) {
-          *operation.notification.status = Status(pb::error::EEXISTED, "dentry already exist.");
+          operation->status = Status(pb::error::EEXISTED, "dentry already exist.");
         } else {
-          auto& param = operation.create_dentry;
+          auto& param = operation->create_dentry;
           dentry = param->dentry;
           has_value = true;
 
@@ -577,7 +586,7 @@ Status MutationProcessor::ProcessDentryOperations(TxnUPtr& txn, pb::mdsv2::Inode
       } break;
 
       case Operation::OpType::kDeleteDentry: {
-        auto& param = operation.delete_dentry;
+        auto& param = operation->delete_dentry;
         dentry = param->dentry;
 
         has_value = false;
@@ -588,7 +597,7 @@ Status MutationProcessor::ProcessDentryOperations(TxnUPtr& txn, pb::mdsv2::Inode
       } break;
 
       default:
-        LOG(FATAL) << fmt::format("unknown operation type({}).", static_cast<int>(operation.op_type));
+        LOG(FATAL) << fmt::format("unknown operation type({}).", static_cast<int>(operation->op_type));
         break;
     }
   }
@@ -615,15 +624,15 @@ std::map<MutationProcessor::Key, TxnMutation> MutationProcessor::GroupingByTxn(
   std::map<Key, TxnMutation> mutation_map;
 
   for (auto& mix_mutation : mix_mutations) {
-    for (auto& operation : mix_mutation.operations) {
-      Key key = {.fs_id = mix_mutation.fs_id, .txn_id = operation.txn_id};
+    for (auto* operation : mix_mutation.operations) {
+      Key key = {.fs_id = mix_mutation.fs_id, .txn_id = operation->txn_id};
 
       auto it = mutation_map.find(key);
       if (it == mutation_map.end()) {
         mutation_map.insert(
-            {key, {.fs_id = mix_mutation.fs_id, .txn_id = operation.txn_id, .operations = {std::move(operation)}}});
+            {key, {.fs_id = mix_mutation.fs_id, .txn_id = operation->txn_id, .operations = {operation}}});
       } else {
-        it->second.operations.push_back(std::move(operation));
+        it->second.operations.push_back(operation);
       }
     }
   }
@@ -635,14 +644,15 @@ std::map<std::string, TargetMutation> MutationProcessor::GroupingByTarget(TxnMut
   std::map<std::string, TargetMutation> target_mutation_map;
 
   for (auto& operation : txn_mutation.operations) {
-    std::string key = operation.key;
+    const std::string& key = operation->key;
 
     auto it = target_mutation_map.find(key);
     if (it == target_mutation_map.end()) {
-      std::vector<Operation> operations;
+      std::vector<Operation*> operations;
       operations.push_back(operation);
-      TargetMutation target_mutation = {.key = key, .operations = std::move(operations)};
-      target_mutation_map.insert({key, std::move(target_mutation)});
+      TargetMutation target_mutation = {.key = key, .operations = operations};
+      target_mutation_map.insert({key, target_mutation});
+
     } else {
       it->second.operations.push_back(operation);
     }
