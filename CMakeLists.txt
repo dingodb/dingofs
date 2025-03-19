@@ -154,6 +154,9 @@ set(protobuf_MODULE_COMPATIBLE TRUE)
 find_package(Protobuf CONFIG REQUIRED)
 message("Using protobuf ${Protobuf_VERSION}" )
 
+find_package(fiu REQUIRED)
+message("Using fiu: ${FIU_LIBRARIES}, include dir: ${FIU_INCLUDE_DIRS}")
+
 find_program(PROTOC protoc REQUIRED)
 message("Using protoc ${PROTOC}")
 
