@@ -181,6 +181,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetPartition(Context& ctx, uint64_t parent, PartitionPtr& out_partition);
   Status GetPartition(Context& ctx, uint64_t version, uint64_t parent, PartitionPtr& out_partition);
   PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
+  std::map<uint64_t, PartitionPtr> GetAllPartitionsFromCache();
   Status GetPartitionFromStore(uint64_t parent_ino, const std::string& reason, PartitionPtr& out_partition);
 
   // get inode
@@ -189,6 +190,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetInode(Context& ctx, uint64_t ino, InodePtr& out_inode);
   Status GetInode(Context& ctx, uint64_t version, uint64_t ino, InodePtr& out_inode);
   InodePtr GetInodeFromCache(uint64_t ino);
+  std::map<uint64_t, InodePtr> GetAllInodesFromCache();
   Status GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode);
 
   // thorough delete inode

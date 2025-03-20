@@ -15,7 +15,9 @@
 #include "mdsv2/service/mds_service.h"
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brpc/controller.h"
@@ -45,8 +47,11 @@ static Status ValidateRequest(T* request, FileSystemPtr file_system) {
 }
 
 MDSServiceImpl::MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set,
-                               FileSystemSetPtr file_system_set)
-    : read_worker_set_(read_worker_set), write_worker_set_(write_worker_set), file_system_set_(file_system_set) {}
+                               FileSystemSetPtr file_system_set, QuotaProcessorPtr quota_processor)
+    : read_worker_set_(read_worker_set),
+      write_worker_set_(write_worker_set),
+      file_system_set_(file_system_set),
+      quota_processor_(quota_processor) {}
 
 FileSystemPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
@@ -1221,83 +1226,293 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   }
 }
 
+void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::SetFsQuotaRequest* request, pb::mdsv2::SetFsQuotaResponse* response,
+                                  TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  auto status = quota_processor_->SetFsQuota(ctx, request->fs_id(), request->quota());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
 // quota interface
 void MDSServiceImpl::SetFsQuota(google::protobuf::RpcController* controller,
                                 const pb::mdsv2::SetFsQuotaRequest* request, pb::mdsv2::SetFsQuotaResponse* response,
                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoSetFsQuota(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::GetFsQuotaRequest* request, pb::mdsv2::GetFsQuotaResponse* response,
+                                  TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  pb::mdsv2::Quota quota;
+  auto status = quota_processor_->GetFsQuota(ctx, request->fs_id(), quota);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_quota()->Swap(&quota);
 }
 
 void MDSServiceImpl::GetFsQuota(google::protobuf::RpcController* controller,
                                 const pb::mdsv2::GetFsQuotaRequest* request, pb::mdsv2::GetFsQuotaResponse* response,
                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoGetFsQuota(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoFlushFsUsage(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::FlushFsUsageRequest* request,
+                                    pb::mdsv2::FlushFsUsageResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  auto status = quota_processor_->FlushFsUsage(ctx, request->fs_id(), request->usage());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
+
 void MDSServiceImpl::FlushFsUsage(google::protobuf::RpcController* controller,
                                   const pb::mdsv2::FlushFsUsageRequest* request,
                                   pb::mdsv2::FlushFsUsageResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoFlushFsUsage(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::SetDirQuotaRequest* request,
+                                   pb::mdsv2::SetDirQuotaResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  auto status = quota_processor_->SetDirQuota(ctx, request->fs_id(), request->ino(), request->quota());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 void MDSServiceImpl::SetDirQuota(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::SetDirQuotaRequest* request, pb::mdsv2::SetDirQuotaResponse* response,
                                  google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoSetDirQuota(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::GetDirQuotaRequest* request,
+                                   pb::mdsv2::GetDirQuotaResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  pb::mdsv2::Quota quota;
+  auto status = quota_processor_->GetDirQuota(ctx, request->fs_id(), request->ino(), quota);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  response->mutable_quota()->Swap(&quota);
 }
 
 void MDSServiceImpl::GetDirQuota(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::GetDirQuotaRequest* request, pb::mdsv2::GetDirQuotaResponse* response,
                                  google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoGetDirQuota(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController* controller,
+                                      const pb::mdsv2::DeleteDirQuotaRequest* request,
+                                      pb::mdsv2::DeleteDirQuotaResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  auto status = quota_processor_->DeleteDirQuota(ctx, request->fs_id(), request->ino());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
+
 void MDSServiceImpl::DeleteDirQuota(google::protobuf::RpcController* controller,
                                     const pb::mdsv2::DeleteDirQuotaRequest* request,
                                     pb::mdsv2::DeleteDirQuotaResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoDeleteDirQuota(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController* controller,
+                                     const pb::mdsv2::LoadDirQuotasRequest* request,
+                                     pb::mdsv2::LoadDirQuotasResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  std::map<uint64_t, pb::mdsv2::Quota> quotas;
+  auto status = quota_processor_->LoadDirQuotas(ctx, request->fs_id(), quotas);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  for (const auto& [ino, quota] : quotas) {
+    response->mutable_quotas()->insert(std::make_pair(ino, quota));
+  }
 }
 
 void MDSServiceImpl::LoadDirQuotas(google::protobuf::RpcController* controller,
                                    const pb::mdsv2::LoadDirQuotasRequest* request,
                                    pb::mdsv2::LoadDirQuotasResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoLoadDirQuotas(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoFlushDirUsages(google::protobuf::RpcController* controller,
+                                      const pb::mdsv2::FlushDirUsagesRequest* request,
+                                      pb::mdsv2::FlushDirUsagesResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  std::map<uint64_t, pb::mdsv2::Usage> usages;
+  for (const auto& [ino, usage] : request->usages()) {
+    usages[ino] = usage;
+  }
+
+  auto status = quota_processor_->FlushDirUsages(ctx, request->fs_id(), usages);
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 }
 
 void MDSServiceImpl::FlushDirUsages(google::protobuf::RpcController* controller,
                                     const pb::mdsv2::FlushDirUsagesRequest* request,
                                     pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
 
-  ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_SUPPORT, "not support");
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoFlushDirUsages(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
 }
 
 void MDSServiceImpl::CheckAlive(google::protobuf::RpcController* controller,

@@ -126,6 +126,19 @@ Status DummyStorage::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
+Status DummyStorage::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  for (const auto& key : keys) {
+    auto it = data_.find(key);
+    if (it != data_.end()) {
+      kvs.push_back(KeyValue{KeyValue::OpType::kPut, key, it->second});
+    }
+  }
+
+  return Status::OK();
+}
+
 Status DummyStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) { return Status::OK(); }
 
 Status DummyStorage::Delete(const std::string& key) {
@@ -162,6 +175,10 @@ Status DummyTxn::PutIfAbsent(const std::string& key, const std::string& value) {
 Status DummyTxn::Delete(const std::string& key) { return storage_->Delete(key); }
 
 Status DummyTxn::Get(const std::string& key, std::string& value) { return storage_->Get(key, value); }
+
+Status DummyTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+  return storage_->BatchGet(keys, kvs);
+}
 
 Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
   return storage_->Scan(range, kvs);

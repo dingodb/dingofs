@@ -82,6 +82,7 @@ class KVStorage {
   virtual Status Put(WriteOption option, const std::vector<KeyValue>& kvs) = 0;
 
   virtual Status Get(const std::string& key, std::string& value) = 0;
+  virtual Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) = 0;
 
   virtual Status Scan(const Range& range, std::vector<KeyValue>& kvs) = 0;
 
@@ -101,6 +102,7 @@ class Txn {
   virtual Status Delete(const std::string& key) = 0;
 
   virtual Status Get(const std::string& key, std::string& value) = 0;
+  virtual Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) = 0;
   virtual Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) = 0;
 
   virtual Status Commit() = 0;

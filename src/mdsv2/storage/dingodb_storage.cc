@@ -243,6 +243,33 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
+Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+  auto txn = NewSdkTxn();
+  if (txn == nullptr) {
+    return Status(pb::error::EBACKEND_STORE, "new transaction fail");
+  }
+
+  std::vector<dingodb::sdk::KVPair> kv_pairs;
+  auto status = txn->BatchGet(keys, kv_pairs);
+  if (!status.ok()) {
+    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
+                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  status = txn->PreCommit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+  status = txn->Commit();
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  KvPairsToKeyValues(kv_pairs, kvs);
+
+  return Status::OK();
+}
+
 Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
@@ -321,27 +348,21 @@ TxnUPtr DingodbStorage::NewTxn() { return std::make_unique<DingodbTxn>(NewSdkTxn
 
 Status DingodbTxn::Put(const std::string& key, const std::string& value) {
   auto status = txn_->Put(key, value);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
+  CHECK(status.ok()) << "txn put fail, " << status.ToString();
 
   return Status::OK();
 }
 
 Status DingodbTxn::PutIfAbsent(const std::string& key, const std::string& value) {
   auto status = txn_->PutIfAbsent(key, value);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
+  CHECK(status.ok()) << "txn put fail, " << status.ToString();
 
   return Status::OK();
 }
 
 Status DingodbTxn::Delete(const std::string& key) {
   auto status = txn_->Delete(key);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
-  }
+  CHECK(status.ok()) << "txn put fail, " << status.ToString();
 
   return Status::OK();
 }
@@ -355,6 +376,22 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
     return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
                                : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
+
+  return Status::OK();
+}
+
+Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+  uint64_t start_time = Helper::TimestampUs();
+  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+
+  std::vector<dingodb::sdk::KVPair> kv_pairs;
+  auto status = txn_->BatchGet(keys, kv_pairs);
+  if (!status.ok()) {
+    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
+                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+
+  KvPairsToKeyValues(kv_pairs, kvs);
 
   return Status::OK();
 }

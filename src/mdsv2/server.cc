@@ -165,6 +165,13 @@ bool Server::InitStorage(const std::string& store_url) {
   return kv_storage_->Init(store_addrs);
 }
 
+bool Server::InitQuotaProcessor() {
+  quota_processor_ = QuotaProcessor::New(kv_storage_);
+  CHECK(quota_processor_ != nullptr) << "new QuotaProcessor fail.";
+
+  return quota_processor_->Init();
+}
+
 bool Server::InitRenamer() {
   renamer_ = Renamer::New();
   CHECK(renamer_ != nullptr) << "new Renamer fail.";
@@ -302,7 +309,12 @@ KVStoragePtr Server::GetKVStorage() {
 void Server::Run() {
   brpc::Server brpc_server;
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_);
+  CHECK(read_worker_set_ != nullptr) << "read worker set is nullptr.";
+  CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";
+  CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
+  CHECK(quota_processor_ != nullptr) << "quota processor is nullptr.";
+
+  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_);
   CHECK(brpc_server.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
   DebugServiceImpl debug_service(file_system_set_);
@@ -327,6 +339,8 @@ void Server::Run() {
 }
 
 void Server::Stop() {
+  LOG(INFO) << "stop 00010";
+  quota_processor_->Destroy();
   LOG(INFO) << "stop 0001";
   renamer_->Destroy();
 

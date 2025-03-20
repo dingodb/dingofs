@@ -43,6 +43,7 @@ class DummyStorage : public KVStorage {
   Status Put(WriteOption option, KeyValue& kv) override;
   Status Put(WriteOption option, const std::vector<KeyValue>& kvs) override;
   Status Get(const std::string& key, std::string& value) override;
+  Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) override;
   Status Scan(const Range& range, std::vector<KeyValue>& kvs) override;
   Status Delete(const std::string& key) override;
   Status Delete(const std::vector<std::string>& keys) override;
@@ -75,6 +76,7 @@ class DummyTxn : public Txn {
   Status Delete(const std::string& key) override;
 
   Status Get(const std::string& key, std::string& value) override;
+  Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) override;
   Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) override;
 
   Status Commit() override;

@@ -20,6 +20,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/filesystem/quota.h"
 #include "mdsv2/service/service_helper.h"
 
 namespace dingofs {
@@ -27,7 +28,8 @@ namespace mdsv2 {
 
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
-  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system);
+  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system,
+                 QuotaProcessorPtr quota_processor);
 
   // fs interface
   void CreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
@@ -211,8 +213,28 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoRefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
                       pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done);
 
+  void DoSetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,
+                    pb::mdsv2::SetFsQuotaResponse* response, TraceClosure* done);
+  void DoGetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsQuotaRequest* request,
+                    pb::mdsv2::GetFsQuotaResponse* response, TraceClosure* done);
+  void DoFlushFsUsage(google::protobuf::RpcController* controller, const pb::mdsv2::FlushFsUsageRequest* request,
+                      pb::mdsv2::FlushFsUsageResponse* response, TraceClosure* done);
+  void DoSetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetDirQuotaRequest* request,
+                     pb::mdsv2::SetDirQuotaResponse* response, TraceClosure* done);
+  void DoGetDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetDirQuotaRequest* request,
+                     pb::mdsv2::GetDirQuotaResponse* response, TraceClosure* done);
+  void DoDeleteDirQuota(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteDirQuotaRequest* request,
+                        pb::mdsv2::DeleteDirQuotaResponse* response, TraceClosure* done);
+  void DoLoadDirQuotas(google::protobuf::RpcController* controller, const pb::mdsv2::LoadDirQuotasRequest* request,
+                       pb::mdsv2::LoadDirQuotasResponse* response, TraceClosure* done);
+  void DoFlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
+                        pb::mdsv2::FlushDirUsagesResponse* response, TraceClosure* done);
+
   // file system set
   FileSystemSetPtr file_system_set_;
+
+  // quota processor
+  QuotaProcessorPtr quota_processor_;
 
   // Run service request.
   WorkerSetPtr read_worker_set_;

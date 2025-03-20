@@ -184,6 +184,8 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, uint64_t parent,
 
 PartitionPtr FileSystem::GetPartitionFromCache(uint64_t parent_ino) { return partition_cache_.Get(parent_ino); }
 
+std::map<uint64_t, PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
+
 Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, const std::string& reason, PartitionPtr& out_partition) {
   // scan dentry from store
   Range range;
@@ -294,6 +296,8 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, uint64_t ino, InodeP
 }
 
 InodePtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetInode(ino); }
+
+std::map<uint64_t, InodePtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
 
 Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode) {
   std::string key =

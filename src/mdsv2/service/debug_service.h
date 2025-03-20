@@ -25,13 +25,13 @@ namespace mdsv2 {
 
 class DebugServiceImpl : public pb::debug::DebugService {
  public:
-  DebugServiceImpl(FileSystemSetPtr file_system_set) : file_system_set_(file_system_set){};
+  DebugServiceImpl(FileSystemSetPtr file_system_set) : file_system_set_(file_system_set) {};
 
   void GetFs(google::protobuf::RpcController* controller, const pb::debug::GetFsRequest* request,
              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) override;
 
-  void GetDentry(google::protobuf::RpcController* controller, const pb::debug::GetDentryRequest* request,
-                 pb::debug::GetDentryResponse* response, google::protobuf::Closure* done) override;
+  void GetPartition(google::protobuf::RpcController* controller, const pb::debug::GetPartitionRequest* request,
+                    pb::debug::GetPartitionResponse* response, google::protobuf::Closure* done) override;
 
   void GetInode(google::protobuf::RpcController* controller, const pb::debug::GetInodeRequest* request,
                 pb::debug::GetInodeResponse* response, google::protobuf::Closure* done) override;

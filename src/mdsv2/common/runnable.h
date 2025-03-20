@@ -211,6 +211,7 @@ class WorkerSet {
 };
 
 using WorkerSetPtr = std::shared_ptr<WorkerSet>;
+using WorkerSetUPtr = std::unique_ptr<WorkerSet>;
 
 // MPSC Multiple producer, single consumer
 // Use brpc ExecutionQueueId implement
@@ -222,6 +223,10 @@ class ExecqWorkerSet : public WorkerSet {
 
   static WorkerSetPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
     return std::make_shared<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
+  }
+
+  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
+    return std::make_unique<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
   }
 
   bool Init() override;

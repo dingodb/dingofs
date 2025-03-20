@@ -14,6 +14,7 @@
 
 #include "mdsv2/service/debug_service.h"
 
+#include "dingofs/debug.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/inode.h"
@@ -44,14 +45,41 @@ void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::
   }
 }
 
-void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::debug::GetDentryRequest* request,
-                                 pb::debug::GetDentryResponse* response, google::protobuf::Closure* done) {
+static void FillPartition(PartitionPtr partition, bool with_inode,
+                          pb::debug::GetPartitionResponse::Partition* pb_partition) {
+  *pb_partition->mutable_parent_inode() = partition->ParentInode()->CopyTo();
+
+  auto child_dentries = partition->GetAllChildren();
+  for (auto& child_dentry : child_dentries) {
+    auto* pb_dentry = pb_partition->add_entries();
+    *pb_dentry->mutable_dentry() = child_dentry.CopyTo();
+    auto inode = child_dentry.Inode();
+    if (with_inode && inode != nullptr) {
+      *pb_dentry->mutable_inode() = inode->CopyTo();
+    }
+  }
+}
+
+void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
+                                    const pb::debug::GetPartitionRequest* request,
+                                    pb::debug::GetPartitionResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
   brpc::ClosureGuard done_guard(svr_done);
 
   auto fs = GetFileSystem(request->fs_id());
   if (!fs) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  // get all partition
+  if (request->parent_ino() == 0) {
+    auto partition_map = fs->GetAllPartitionsFromCache();
+    for (auto& [_, partition] : partition_map) {
+      auto* pb_partition = response->add_partitions();
+      FillPartition(partition, request->with_inode(), pb_partition);
+    }
+
+    return;
   }
 
   Context ctx(false, 0);
@@ -61,16 +89,19 @@ void DebugServiceImpl::GetDentry(google::protobuf::RpcController*, const pb::deb
     return ServiceHelper::SetError(response->mutable_error(), status);
   }
 
-  *response->mutable_parent_inode() = partition->ParentInode()->CopyTo();
+  auto* pb_partition = response->add_partitions();
 
-  auto child_dentries = partition->GetAllChildren();
-  for (auto& dentry : child_dentries) {
-    auto* entry = response->add_child_entries();
-    *entry->mutable_dentry() = dentry.CopyTo();
-
+  // get all children of one partition
+  if (request->name().empty()) {
+    FillPartition(partition, request->with_inode(), pb_partition);
+  } else {
+    Dentry dentry;
+    partition->GetChild(request->name(), dentry);
+    *pb_partition->mutable_parent_inode() = partition->ParentInode()->CopyTo();
+    auto* pb_dentry = pb_partition->add_entries();
     auto inode = dentry.Inode();
     if (request->with_inode() && inode != nullptr) {
-      *entry->mutable_inode() = inode->CopyTo();
+      *pb_dentry->mutable_inode() = inode->CopyTo();
     }
   }
 }
@@ -86,6 +117,13 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
   }
 
   Context ctx(!request->use_cache(), 0);
+
+  if (request->inoes().empty() && request->use_cache()) {
+    auto inode_map = fs->GetAllInodesFromCache();
+    for (auto& [_, inode] : inode_map) {
+      *response->add_inodes() = inode->CopyTo();
+    }
+  }
 
   for (const auto& ino : request->inoes()) {
     InodePtr inode;

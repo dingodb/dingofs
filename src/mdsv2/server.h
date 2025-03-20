@@ -24,6 +24,7 @@
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/filesystem/quota.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
@@ -47,6 +48,8 @@ class Server {
   bool InitCoordinatorClient(const std::string& coor_url);
 
   bool InitStorage(const std::string& store_url);
+
+  bool InitQuotaProcessor();
 
   bool InitRenamer();
 
@@ -101,6 +104,9 @@ class Server {
 
   // backend kv storage
   KVStoragePtr kv_storage_;
+
+  // quota processor
+  QuotaProcessorPtr quota_processor_;
 
   // renamer
   RenamerPtr renamer_;
