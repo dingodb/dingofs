@@ -23,14 +23,20 @@
 #include "client/vfs_old/filesystem/meta.h"
 
 #include <glog/logging.h>
+#include <json/json.h>
 #include <sys/stat.h>
 
 #include <cstdint>
+#include <fstream>
+
+#include "base/string/string.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using base::string::BufToHexString;
+using base::string::HexStringToBuf;
 using utils::Mutex;
 using utils::ReadLockGuard;
 using utils::RWLock;
@@ -65,6 +71,114 @@ void HandlerManager::ReleaseHandler(uint64_t fh) {
   UniqueLock lk(mutex_);
   dirBuffer_->DirBufferRelease(fh);
   handlers_.erase(fh);
+}
+
+void HandlerManager::SaveAllHandlers(const std::string& path) {
+  UniqueLock lk(mutex_);
+  Json::Value root;
+  Json::Value handle_array;
+
+  for (const auto& handle : handlers_) {
+    auto fileHandle = handle.second;
+
+    Json::Value item;
+    item["fh"] = fileHandle->fh;
+    item["padding"] = fileHandle->padding;
+    // do not store dir_handler_init, it's can reinitialize
+    // item["dir_handler_init"] = fileHandle->dir_handler_init;
+
+    Json::Value timespec_item;
+    timespec_item["seconds"] = fileHandle->mtime.seconds;
+    timespec_item["nanoSeconds"] = fileHandle->mtime.nanoSeconds;
+    item["timespec_item"] = timespec_item;
+
+    Json::Value buffer_item;
+    buffer_item["wasRead"] = fileHandle->buffer->wasRead;
+    size_t size = fileHandle->buffer->size;
+    buffer_item["size"] = size;
+    buffer_item["p"] =
+        size > 0
+            ? BufToHexString(
+                  reinterpret_cast<unsigned char*>(fileHandle->buffer->p), size)
+            : "";
+    item["buffer"] = buffer_item;
+
+    handle_array.append(item);
+  }
+  root["handlers"] = handle_array;
+
+  std::ofstream file(path);
+  if (file.is_open()) {
+    Json::StreamWriterBuilder writer;
+    std::string json_string = Json::writeString(writer, root);
+    file << json_string;
+    file.close();
+    LOG(INFO) << "successfuly write " << handlers_.size()
+              << " handlers to file: " << path;
+  } else {
+    LOG(ERROR) << "write dingo-fuse state file failed, file: " << path;
+  }
+}
+
+void HandlerManager::LoadAllHandlers(const std::string& path) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    LOG(ERROR) << "open dingo-fuse state file failed, file: " << path;
+    return;
+  }
+
+  Json::Value root;
+  Json::CharReaderBuilder reader;
+  std::string errs;
+  if (!Json::parseFromStream(reader, file, &root, &errs)) {
+    LOG(ERROR) << "failed to parse state json file: " << path
+               << ", errors: " << errs;
+    return;
+  }
+
+  const Json::Value handlers = root["handlers"];
+  if (!handlers.isArray()) {
+    return;
+  }
+  for (const auto& handler : handlers) {
+    // peek fh,padding
+    uint64_t fh = handler["fh"].asUInt64();
+    bool padding = handler["padding"].asBool();
+    // peek timespec
+    const Json::Value timespec_item = handler["timespec_item"];
+    uint64_t seconds = timespec_item["seconds"].asUInt64();
+    uint32_t nanoSeconds = timespec_item["nanoSeconds"].asUInt();
+    // peek buffer
+    const Json::Value buffer = handler["buffer"];
+    std::string p = buffer["p"].asString();
+    size_t size = buffer["size"].asUInt64();
+    bool wasRead = buffer["wasRead"].asBool();
+
+    {
+      UniqueLock lk(mutex_);
+      auto handler = std::make_shared<FileHandler>();
+      handler->fh = dirBuffer_->DirBufferNewWithIndex(fh);
+      handler->buffer = dirBuffer_->DirBufferGet(handler->fh);
+      handler->padding = padding;
+      handler->mtime = base::time::TimeSpec(seconds, nanoSeconds);
+      handler->buffer->size = size;
+      handler->buffer->wasRead = wasRead;
+      if (size > 0 && size == (p.size() / 2)) {
+        handler->buffer->p = (char*)malloc(size);
+        int ret = HexStringToBuf(
+            p.c_str(), reinterpret_cast<unsigned char*>(handler->buffer->p),
+            size);
+        if (ret == -1) {
+          free(handler->buffer->p);
+          handler->buffer->p = nullptr;
+        }
+      }
+
+      handlers_.emplace(handler->fh, handler);
+    }
+  }
+  LOG(INFO) << "successfuly load " << handlers_.size()
+            << " handlers from: " << path;
 }
 
 std::string StrMode(uint16_t mode) {

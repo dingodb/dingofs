@@ -119,6 +119,10 @@ class HandlerManager {
 
   void ReleaseHandler(uint64_t id);
 
+  void SaveAllHandlers(const std::string& path);
+
+  void LoadAllHandlers(const std::string& path);
+
  private:
   utils::Mutex mutex_;
   std::shared_ptr<DirBuffer> dirBuffer_;

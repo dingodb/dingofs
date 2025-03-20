@@ -28,6 +28,7 @@ target_link_libraries(fuse_client_lib
     PROTO_OBJS
     vfs_old_lib
     vfs_lib
+    jsoncpp
     ${FUSE3_LIBRARY}
 )
 

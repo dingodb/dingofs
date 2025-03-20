@@ -204,10 +204,10 @@ static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
 
 int InitFuseClient(const char* argv0, const struct MountOption* mount_option) {
   dingofs::client::vfs::VFSConfig config = {
-      .mount_point = mount_option->mountPoint,
-      .fs_name = mount_option->fsName,
+      .mount_point = mount_option->mount_point,
+      .fs_name = mount_option->fs_name,
       .config_path = mount_option->conf,
-      .fs_type = mount_option->fsType,
+      .fs_type = mount_option->fs_type,
   };
 
   g_vfs = new dingofs::client::vfs::VFSWrapper();

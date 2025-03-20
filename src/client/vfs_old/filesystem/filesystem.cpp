@@ -25,14 +25,18 @@
 #include <cstdint>
 #include <memory>
 
+#include "base/string/string.h"
 #include "base/timer/timer_impl.h"
 #include "client/common/dynamic_config.h"
+#include "client/common/share_var.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/dir_parent_watcher.h"
 #include "client/vfs_old/filesystem/fs_stat_manager.h"
 #include "client/vfs_old/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
+
+#define FD_STATE_PATH "/tmp/dingo-fuse-state.json.%d"
 
 namespace dingofs {
 namespace client {
@@ -44,6 +48,9 @@ using common::FileSystemOption;
 
 using pb::metaserver::InodeAttr;
 using pb::metaserver::Quota;
+
+using ::dingofs::base::string::StrFormat;
+using ::dingofs::client::common::ShareVar;
 
 USING_FLAG(stat_timer_thread_num);
 
@@ -84,6 +91,12 @@ void FileSystem::Run() {
   fs_stat_manager_->Start();
   dir_quota_manager_->Start();
   fs_push_metrics_manager_->Start();
+
+  // load file handlers
+  if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
+    std::string pid_str = ShareVar::GetInstance().GetValue(common::kOldPid);
+    LoadAllHandlers(StrFormat(FD_STATE_PATH, std::stoi(pid_str)));
+  }
 }
 
 void FileSystem::Destory() {
@@ -95,6 +108,11 @@ void FileSystem::Destory() {
   fs_stat_manager_->Stop();
   dir_quota_manager_->Stop();
   fs_push_metrics_manager_->Stop();
+
+  // save file handlers
+  if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeOld)) {
+    SaveAllHandlers(StrFormat(FD_STATE_PATH, getpid()));
+  }
 }
 
 // handler*
@@ -108,6 +126,14 @@ std::shared_ptr<FileHandler> FileSystem::FindHandler(uint64_t fh) {
 
 void FileSystem::ReleaseHandler(uint64_t fh) {
   return handlerManager_->ReleaseHandler(fh);
+}
+
+void FileSystem::SaveAllHandlers(const std::string& path) {
+  return handlerManager_->SaveAllHandlers(path);
+}
+
+void FileSystem::LoadAllHandlers(const std::string& path) {
+  return handlerManager_->LoadAllHandlers(path);
 }
 
 FileSystemMember FileSystem::BorrowMember() {

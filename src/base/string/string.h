@@ -84,6 +84,76 @@ inline std::string TrimSpace(const std::string& str) {
   return s;
 }
 
+// remove whitespace、\r、\n from string
+inline std::string TrimAsciiWhitespace(const std::string& str) {
+  std::string s = str;
+
+  s.erase(std::remove_if(s.begin(), s.end(),
+                         [](unsigned char ch) {
+                           return ch == ' ' || ch == '\n' || ch == '\r';
+                         }),
+          s.end());
+
+  return s;
+}
+
+inline std::string TrimChars(const std::string& str,
+                             const std::string& chars_to_trim) {
+  size_t first = str.find_first_not_of(chars_to_trim);
+  if (first == std::string::npos) return "";
+
+  size_t last = str.find_last_not_of(chars_to_trim);
+
+  return str.substr(first, (last - first + 1));
+}
+
+// convert hex char to int value
+inline int HexCharToInt(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  } else if (c >= 'A' && c <= 'F') {
+    return 10 + (c - 'A');
+  } else if (c >= 'a' && c <= 'f') {
+    return 10 + (c - 'a');
+  } else {
+    return -1;
+  }
+}
+
+// convert hex string to byte buffer
+inline int HexStringToBuf(const char* hex_str, unsigned char* buf,
+                          size_t buf_size) {
+  size_t hex_len = strlen(hex_str);
+  if (hex_len % 2 != 0) {
+    return -1;
+  }
+  size_t buf_len = hex_len / 2;
+  if (buf_len > buf_size) {
+    return -1;
+  }
+
+  for (size_t i = 0; i < buf_len; i++) {
+    int high_nibble = HexCharToInt(hex_str[2 * i]);
+    int low_nibble = HexCharToInt(hex_str[2 * i + 1]);
+    if (high_nibble == -1 || low_nibble == -1) {
+      return -1;
+    }
+
+    buf[i] = (high_nibble << 4) | low_nibble;
+  }
+
+  return buf_len;
+}
+
+// convert buf to hex string
+inline std::string BufToHexString(unsigned char* buf, size_t buf_size) {
+  std::ostringstream oss;
+  for (int i = 0; i < buf_size; i++) {
+    oss << std::hex << std::setw(2) << std::setfill('0') << int((buf)[i]);
+  }
+  return oss.str();
+}
+
 }  // namespace string
 }  // namespace base
 }  // namespace dingofs

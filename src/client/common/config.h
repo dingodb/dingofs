@@ -220,6 +220,10 @@ struct FileSystemOption {
   RPCOption rpcOption;
   DeferSyncOption deferSyncOption;
 };
+
+struct UdsOption {
+  std::string fd_comm_path;
+};
 // }
 
 struct ClientOption {
@@ -259,6 +263,8 @@ void S3Info2FsS3Option(const pb::common::S3Info& s3,
 void InitLeaseOpt(utils::Configuration* conf, LeaseOpt* lease_opt);
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
+
+void InitUdsOption(utils::Configuration* conf, UdsOption* uds_option);
 
 }  // namespace common
 }  // namespace client

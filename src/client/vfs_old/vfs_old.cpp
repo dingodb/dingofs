@@ -1375,7 +1375,7 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
     size_t file_size = data_buf->size;
     size_t len = read_size(size, offset, file_size);
-    if (len > 0) {
+    if (len > 0 && data_buf->p != nullptr) {
       memcpy(buf, data_buf->p + offset, len);
     }
     *out_rsize = len;

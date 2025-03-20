@@ -31,7 +31,7 @@
 extern "C" {
 #endif
 
-int InitFuseClient(const char* argv0, const struct MountOption* mount_option) ;
+int InitFuseClient(const char* argv0, const struct MountOption* mount_option);
 
 void UnInitFuseClient();
 

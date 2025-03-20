@@ -28,12 +28,15 @@
 #include <cstring>
 
 #include "client/common/config.h"
+#include "client/common/share_var.h"
 #include "client/datastream/metric.h"
 #include "client/datastream/page_allocator.h"
 
 namespace dingofs {
 namespace client {
 namespace datastream {
+
+using ::dingofs::client::common::ShareVar;
 
 bool DataStream::Init(DataStreamOption option) {
   option_ = option;
@@ -80,6 +83,11 @@ bool DataStream::Init(DataStreamOption option) {
   // page
   {
     auto o = option.page_option;
+    // Smooth upgrade use DefaultPageAllocator
+    if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
+      LOG(INFO) << "use default page allocate for smooth upgrade";
+      o.use_pool = false;
+    }
     if (o.use_pool) {
       page_allocator_ = std::make_shared<PagePool>();
     } else {

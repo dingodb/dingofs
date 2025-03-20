@@ -1,269 +1,102 @@
 /*
- *  Copyright (c) 2021 NetEase Inc.
+ * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-/*
- * Project: dingo
- * Created Date: Thur May 27 2021
- * Author: xuchaojie
- */
+#include <signal.h>
+#include <stdlib.h>
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
-#include <string>
-#include <unordered_map>
-
-#include "client/fuse/fuse_common.h"
+#include "absl/cleanup/cleanup.h"
 #include "client/fuse/fuse_op.h"
-#include "stub/common/version.h"
+#include "client/fuse/fuse_server.h"
+#include "client/vfs_wrapper/global_log.h"
+#include "common/config.h"
+#include "utils/configuration.h"
 
-static const struct fuse_lowlevel_ops kFuseOp = {
-    .init = FuseOpInit,
-    .destroy = FuseOpDestroy,
-    .lookup = FuseOpLookup,
-    .forget = nullptr,
-    .getattr = FuseOpGetAttr,
-    .setattr = FuseOpSetAttr,
-    .readlink = FuseOpReadLink,
-    .mknod = FuseOpMkNod,
-    .mkdir = FuseOpMkDir,
-    .unlink = FuseOpUnlink,
-    .rmdir = FuseOpRmDir,
-    .symlink = FuseOpSymlink,
-    .rename = FuseOpRename,
-    .link = FuseOpLink,
-    .open = FuseOpOpen,
-    .read = FuseOpRead,
-    .write = FuseOpWrite,
-    .flush = FuseOpFlush,
-    .release = FuseOpRelease,
-    .fsync = FuseOpFsync,
-    .opendir = FuseOpOpenDir,
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
-    .readdir = nullptr,
-#else
-    .readdir = FuseOpReadDir,
-#endif
-    .releasedir = FuseOpReleaseDir,
-    .fsyncdir = nullptr,
-    .statfs = FuseOpStatFs,
-    .setxattr = FuseOpSetXattr,
-    .getxattr = FuseOpGetXattr,
-    .listxattr = FuseOpListXattr,
-    .removexattr = nullptr,
-    .access = nullptr,
-    .create = FuseOpCreate,
-    .getlk = nullptr,
-    .setlk = nullptr,
-    .bmap = nullptr,
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 8)
-    .ioctl = nullptr,
-    .poll = nullptr,
-#endif
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(2, 9)
-    .write_buf = nullptr,
-    .retrieve_reply = nullptr,
-    .forget_multi = nullptr,
-    .flock = nullptr,
-    .fallocate = nullptr,
-#endif
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 0)
-    .readdirplus = FuseOpReadDirPlus,
-#else
-    .readdirplus = nullptr,
-#endif
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 4)
-    .copy_file_range = nullptr,
-#endif
-#if FUSE_VERSION >= FUSE_MAKE_VERSION(3, 8)
-    .lseek = nullptr
-#endif
-};
+using FuseServer = dingofs::client::fuse::FuseServer;
+using Configuration = dingofs::utils::Configuration;
 
-void PrintOptionHelp(const char* o, const char* msg) {
-  printf("    -o %-20s%s\n", o, msg);
-}
+static FuseServer* fuse_server = nullptr;
 
-void ExtraOptionsHelp() {
-  printf("\nExtra options:\n");
-  PrintOptionHelp("fsname", "[required] name of filesystem to be mounted");
-  PrintOptionHelp("fstype",
-                  "[required] type of filesystem to be mounted (s3/volume)");
-  PrintOptionHelp("conf", "[required] path of config file");
-  printf("    --mdsAddr              mdsAddr of dingofs cluster\n");
-}
-
-std::string MatchAnyPattern(
-    const std::unordered_map<std::string, char**>& patterns, const char* src) {
-  size_t src_len = strlen(src);
-  for (const auto& pair : patterns) {
-    const auto& pattern = pair.first;
-    if (pattern.length() < src_len &&
-        strncmp(pattern.c_str(), src, pattern.length()) == 0) {
-      return pattern;
+// signal handler
+static void HandleSignal(int sig) {
+  printf("Received signal %d, exit...\n", sig);
+  if (sig == SIGHUP) {
+    if (fuse_server != nullptr) {
+      fuse_server->SetNoUmount(true);
+      fuse_server->Shutown();
     }
   }
-  return {};
 }
 
-int FuseAddOpts(struct fuse_args* args, const char* arg_value) {
-  if (fuse_opt_add_arg(args, "-o") == -1) return 1;
-  if (fuse_opt_add_arg(args, arg_value) == -1) return 1;
+static int InstallSignal(int sig, void (*handler)(int)) {
+  struct sigaction sa;
+
+  memset(&sa, 0, sizeof(struct sigaction));
+  sa.sa_handler = handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = 0;
+
+  if (sigaction(sig, &sa, nullptr) == -1) {
+    perror("dingo-fuse: cannot set signal handler");
+    return -1;
+  }
   return 0;
 }
 
-void ParseOption(int argc, char** argv, int* parsed_argc_p, char** parsed_argv,
-                 struct MountOption* opts) {
-  // add support for parsing option value with comma(,)
-  std::unordered_map<std::string, char**> patterns = {
-      {"--mdsaddr=", &opts->mdsAddr}};
-  for (int i = 0, j = 0; j < argc; j++) {
-    std::string p = MatchAnyPattern(patterns, argv[j]);
-    int p_len = p.length();
-    int src_len = strlen(argv[j]);
-    if (p_len) {
-      if (*patterns[p]) {
-        free(*patterns[p]);
-      }
-      *patterns[p] =
-          reinterpret_cast<char*>(malloc(sizeof(char) * (src_len - p_len + 1)));
-      memcpy(*patterns[p], argv[j] + p_len, src_len - p_len);
-      (*patterns[p])[src_len - p_len] = '\0';
-      *parsed_argc_p = *parsed_argc_p - 1;
-    } else {
-      parsed_argv[i] =
-          reinterpret_cast<char*>(malloc(sizeof(char) * (src_len + 1)));
-      memcpy(parsed_argv[i], argv[j], src_len);
-      parsed_argv[i][src_len] = '\0';
-      i++;
-    }
-  }
-}
-
-void FreeParsedArgv(char** parsed_argv, int alloc_size) {
-  for (int i = 0; i < alloc_size; i++) {
-    free(parsed_argv[i]);
-  }
-  free(parsed_argv);
-}
-
 int main(int argc, char* argv[]) {
-  struct MountOption m_opts = {nullptr};
-  int parsed_argc = argc;
-  char** parsed_argv = reinterpret_cast<char**>(malloc(sizeof(char*) * argc));
-  ParseOption(argc, argv, &parsed_argc, parsed_argv, &m_opts);
+  struct MountOption mount_option = {nullptr};
 
-  struct fuse_args args = FUSE_ARGS_INIT(parsed_argc, parsed_argv);
-  struct fuse_session* se;
-  struct fuse_cmdline_opts opts;
-  struct fuse_loop_config config;
-  std::string arg_value;
-  int ret = -1;
+  InstallSignal(SIGHUP, HandleSignal);
 
-  if (fuse_parse_cmdline(&args, &opts) != 0) return 1;
-  if (opts.show_help) {
-    printf(
-        "usage: %s -o conf=/etc/dingofs/client.conf -o fsname=testfs \\\n"
-        "       -o fstype=s3 [--mdsaddr=1.1.1.1:1234,2.2.2.2:1234] \\\n"
-        "       [OPTIONS] <mountpoint>\n",
-        argv[0]);
-    printf("Fuse Options:\n");
-    fuse_cmdline_help();
-    fuse_lowlevel_help();
-    ExtraOptionsHelp();
-    ret = 0;
-    goto err_out1;
-  } else if (opts.show_version) {
-    dingofs::stub::common::ShowVerion();
+  fuse_server = new FuseServer();
+  if (fuse_server == nullptr) return EXIT_FAILURE;
+  auto defer_free = ::absl::MakeCleanup([&]() { delete fuse_server; });
 
-    printf("FUSE library version %s\n", fuse_pkgversion());
-    fuse_lowlevel_version();
-    ret = 0;
-    goto err_out1;
+  // init fuse
+  if (fuse_server->Init(argc, argv, &mount_option) == 1) return EXIT_FAILURE;
+  auto defer_uninit = ::absl::MakeCleanup([&]() { UnInitFuseClient(); });
+
+  // init global log
+  InitLog(argv[0], mount_option.conf);
+
+  // create fuse ssssion
+  if (fuse_server->CreateSession() == 1) return EXIT_FAILURE;
+  auto defer_destory =
+      ::absl::MakeCleanup([&]() { fuse_server->DestorySsesion(); });
+
+  // mount filesystem
+  if (fuse_server->SessionMount() == 1) return EXIT_FAILURE;
+  auto defer_unmount =
+      ::absl::MakeCleanup([&]() { fuse_server->SessionUnmount(); });
+
+  // init fuse client
+  if (InitFuseClient(argv[0], &mount_option) != 0) {
+    LOG(ERROR) << "init fuse client fail, conf = " << mount_option.conf;
+    return EXIT_FAILURE;
   }
 
-  if (opts.mountpoint == nullptr) {
-    printf("required option is missing: mountpoint\n");
-    ret = 1;
-    goto err_out1;
+  // init config
+  Configuration conf;
+  conf.SetConfigPath(mount_option.conf);
+  if (!conf.LoadConfig()) {
+    LOG(ERROR) << "load config file failed: " << mount_option.conf;
   }
+  dingofs::client::common::UdsOption uds_option;
+  dingofs::client::common::InitUdsOption(&conf, &uds_option);
 
-  if (fuse_opt_parse(&args, &m_opts, mount_opts, nullptr) == -1) {
-    return 1;
-  }
+  if (fuse_server->Serve(uds_option.fd_comm_path) == 1) return EXIT_FAILURE;
 
-  //  Values shown in "df -T" and friends first column "Filesystem",DindoFS +
-  //  filesystem name
-  FuseAddOpts(&args, (const char*)"subtype=dingofs");
-  arg_value.append("fsname=DingoFS");
-  arg_value.append(":");
-  arg_value.append(m_opts.fsName);
-  FuseAddOpts(&args, arg_value.c_str());
-
-  m_opts.mountPoint = opts.mountpoint;
-
-  if (m_opts.conf == nullptr || m_opts.fsName == nullptr ||
-      m_opts.fsType == nullptr) {
-    printf(
-        "one of required options is missing. conf, fsname, fstype are "
-        "required.\n");
-    ret = 1;
-    goto err_out1;
-  }
-
-  printf("Begin to mount fs %s to %s\n", m_opts.fsName, m_opts.mountPoint);
-
-  se = fuse_session_new(&args, &kFuseOp, sizeof(kFuseOp), &m_opts);
-  if (se == nullptr) goto err_out1;
-
-  if (fuse_set_signal_handlers(se) != 0) goto err_out2;
-
-  if (fuse_session_mount(se, opts.mountpoint) != 0) goto err_out3;
-
-  fuse_daemonize(opts.foreground);
-
-  ret = InitFuseClient(argv[0], &m_opts);
-  if (ret != 0) {
-    LOG(ERROR) << "init fuse client fail, conf = " << m_opts.conf;
-    goto err_out4;
-  }
-
-  LOG(INFO) << "fuse start loop, singlethread = " << opts.singlethread
-            << ", max_idle_threads = " << opts.max_idle_threads;
-
-  /* Block until ctrl+c or fusermount -u */
-  if (opts.singlethread) {
-    ret = fuse_session_loop(se);
-  } else {
-    config.clone_fd = opts.clone_fd;
-    config.max_idle_threads = opts.max_idle_threads;
-    ret = fuse_session_loop_mt(se, &config);
-  }
-
-err_out4:
-  fuse_session_unmount(se);
-err_out3:
-  fuse_remove_signal_handlers(se);
-err_out2:
-  fuse_session_destroy(se);
-err_out1:
-  UnInitFuseClient();
-  free(opts.mountpoint);
-  FreeParsedArgv(parsed_argv, argc);
-  fuse_opt_free_args(&args);
-
-  return ret ? 1 : 0;
+  return EXIT_SUCCESS;
 }

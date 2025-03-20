@@ -155,6 +155,10 @@ void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {
                             &lease_opt->refreshTimesPerLease);
 }
 
+void InitUdsOption(Configuration* conf, UdsOption* uds_opt) {
+  conf->GetValueFatalIfFail("uds.fdCommPath", &uds_opt->fd_comm_path);
+}
+
 void InitRefreshDataOpt(Configuration* conf, RefreshDataOption* opt) {
   conf->GetValueFatalIfFail("fuseClient.maxDataSize", &opt->maxDataSize);
   conf->GetValueFatalIfFail("fuseClient.refreshDataIntervalSec",
