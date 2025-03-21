@@ -67,6 +67,8 @@ DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
 DECLARE_uint32(txn_max_retry_times);
 
+DECLARE_int32(fs_scan_batch_size);
+
 bool IsReserveNode(uint64_t ino) { return ino == kRootIno; }
 
 bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
@@ -206,7 +208,7 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, const std::string&
       "invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key), Helper::StringToHex(range.start_key));
 
   // build partition
-  auto parent_inode = Inode::New(MetaDataCodec::DecodeDirInodeValue(parent_kv.value));
+  auto parent_inode = Inode::New(MetaDataCodec::DecodeInodeValue(parent_kv.value));
   auto partition = Partition::New(parent_inode);
 
   // add child dentry
@@ -223,6 +225,56 @@ Status FileSystem::GetPartitionFromStore(uint64_t parent_ino, const std::string&
   DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch partition({}), reason({}).", fs_id_, parent_ino, reason);
 
   return Status::OK();
+}
+
+Status FileSystem::GetDentryFromStore(uint64_t parent, const std::string& name, Dentry& dentry) {
+  std::string value;
+  auto status = kv_storage_->Get(MetaDataCodec::EncodeDentryKey(fs_id_, parent, name), value);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{}), {}", parent, name, status.error_str()));
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch dentry({}/{}).", fs_id_, parent, name);
+
+  dentry = Dentry(MetaDataCodec::DecodeDentryValue(value));
+
+  return Status::OK();
+}
+
+Status FileSystem::ListDentryFromStore(uint64_t parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
+                                       std::vector<Dentry>& dentries) {
+  // scan dentry from store
+  Range range;
+  MetaDataCodec::EncodeDentryRange(fs_id_, parent, range.start_key, range.end_key);
+  if (!last_name.empty()) {
+    range.start_key = MetaDataCodec::EncodeDentryKey(fs_id_, parent, last_name);
+  }
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      return status;
+    }
+
+    for (auto& kv : kvs) {
+      auto dentry = MetaDataCodec::DecodeDentryValue(kv.value);
+      if (is_only_dir && dentry.type() != pb::mdsv2::FileType::DIRECTORY) {
+        continue;
+      }
+
+      dentries.push_back(Dentry(dentry));
+      if (dentries.size() >= limit) {
+        return Status::OK();
+      }
+    }
+
+  } while (kvs.size() < FLAGS_fs_scan_batch_size);
+
+  return txn->Commit();
 }
 
 Status FileSystem::GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode) {
@@ -300,16 +352,14 @@ InodePtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetIn
 std::map<uint64_t, InodePtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
 
 Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode) {
-  std::string key =
-      IsDir(ino) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, ino) : MetaDataCodec::EncodeFileInodeKey(fs_id_, ino);
+  std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, ino);
   std::string value;
   auto status = kv_storage_->Get(key, value);
   if (!status.ok()) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({}), {}", ino, status.error_str()));
   }
 
-  out_inode =
-      Inode::New(IsDir(ino) ? MetaDataCodec::DecodeDirInodeValue(value) : MetaDataCodec::DecodeFileInodeValue(value));
+  out_inode = Inode::New(MetaDataCodec::DecodeInodeValue(value));
 
   inode_cache_.PutInode(ino, out_inode);
 
@@ -318,10 +368,34 @@ Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, In
   return Status::OK();
 }
 
+Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodePtr>& out_inodes) {
+  std::vector<std::string> keys;
+  keys.reserve(inoes.size());
+  for (auto ino : inoes) {
+    keys.push_back(MetaDataCodec::EncodeInodeKey(fs_id_, ino));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = kv_storage_->BatchGet(keys, kvs);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND,
+                  fmt::format("not found inode({}), {}", Helper::VectorToString(inoes), status.error_str()));
+  }
+
+  for (const auto& kv : kvs) {
+    uint32_t fs_id = 0;
+    uint64_t ino = 0;
+    MetaDataCodec::DecodeInodeKey(kv.key, fs_id, ino);
+    out_inodes.push_back(Inode::New(MetaDataCodec::DecodeInodeValue(kv.value)));
+  }
+
+  return Status::OK();
+}
+
 Status FileSystem::DestoryInode(uint32_t fs_id, uint64_t ino) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] destory inode {}.", fs_id_, ino);
 
-  std::string inode_key = MetaDataCodec::EncodeFileInodeKey(fs_id, ino);
+  std::string inode_key = MetaDataCodec::EncodeInodeKey(fs_id, ino);
   auto status = kv_storage_->Delete(inode_key);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("delete inode fail, {}", status.error_str()));
@@ -365,8 +439,8 @@ Status FileSystem::CreateRoot() {
 
   auto inode = Inode::New(pb_inode);
 
-  std::string inode_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino());
-  std::string inode_value = MetaDataCodec::EncodeDirInodeValue(inode->CopyTo());
+  std::string inode_key = MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino());
+  std::string inode_value = MetaDataCodec::EncodeInodeValue(inode->CopyTo());
   KVStorage::WriteOption option;
   auto status = kv_storage_->Put(option, inode_key, inode_value);
   if (!status.ok()) {
@@ -428,8 +502,8 @@ Status FileSystem::CleanUpInode(InodePtr inode) {
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Trace trace;
-  Operation inode_operation(Operation::OpType::kDeleteInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &trace);
+  Operation inode_operation(Operation::OpType::kDeleteInode, ino, MetaDataCodec::EncodeInodeKey(fs_id, inode->Ino()),
+                            &count_down, &trace);
   inode_operation.SetDeleteInode(ino);
   mix_mutation.operations.push_back(&inode_operation);
 
@@ -481,7 +555,7 @@ Status FileSystem::RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta) {
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Trace trace;
-  Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino, MetaDataCodec::EncodeFileInodeKey(fs_id, ino),
+  Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino, MetaDataCodec::EncodeInodeKey(fs_id, ino),
                             &count_down, &trace);
   inode_operation.SetUpdateInodeNlink(ino, delta, 0);
   mix_mutation.operations.push_back(&inode_operation);
@@ -587,8 +661,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
+  Operation inode_operation(Operation::OpType::kCreateInode, ino, MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino()),
+                            &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(&inode_operation);
 
@@ -730,8 +804,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
+  Operation inode_operation(Operation::OpType::kCreateInode, ino, MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino()),
+                            &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(&inode_operation);
 
@@ -815,7 +889,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
   do {
     auto txn = kv_storage_->NewTxn();
 
-    std::string key = MetaDataCodec::EncodeDirInodeKey(fs_id_, dentry.Ino());
+    std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, dentry.Ino());
     std::string value;
     status = txn->Get(key, value);
     if (!status.ok()) {
@@ -824,7 +898,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
     }
 
     // check dir is empty by nlink
-    pb::mdsv2::Inode pb_inode = MetaDataCodec::DecodeDirInodeValue(value);
+    pb::mdsv2::Inode pb_inode = MetaDataCodec::DecodeInodeValue(value);
     if (pb_inode.nlink() > kEmptyDirMinLinkNum) {
       status = Status(pb::error::ENOT_EMPTY,
                       fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, pb_inode.nlink()));
@@ -840,7 +914,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
     CHECK(status.ok()) << fmt::format("delete dentry({}/{}) fail, {}", parent_ino, name, status.error_str());
 
     // update parent inode nlink/ctime/mtime
-    std::string parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, parent_ino);
+    std::string parent_key = MetaDataCodec::EncodeInodeKey(fs_id_, parent_ino);
     std::string parent_value;
     status = txn->Get(parent_key, parent_value);
     if (!status.ok()) {
@@ -848,13 +922,13 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
       break;
     }
 
-    pb_parent_inode = MetaDataCodec::DecodeDirInodeValue(parent_value);
+    pb_parent_inode = MetaDataCodec::DecodeInodeValue(parent_value);
     pb_parent_inode.set_version(pb_parent_inode.version() + 1);
     pb_parent_inode.set_nlink(pb_parent_inode.nlink() - 1);
     pb_parent_inode.set_ctime(now_ns);
     pb_parent_inode.set_mtime(now_ns);
 
-    status = txn->Put(parent_key, MetaDataCodec::EncodeDirInodeValue(pb_parent_inode));
+    status = txn->Put(parent_key, MetaDataCodec::EncodeInodeValue(pb_parent_inode));
     CHECK(status.ok()) << fmt::format("put parent inode({}) fail, {}", parent_ino, status.error_str());
 
     status = txn->Commit();
@@ -962,7 +1036,7 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
   MixMutation mix_mutation = {.fs_id = fs_id};
 
   Operation inode_operation(Operation::OpType::kUpdateInodeNlink, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id, inode->Ino()), &count_down, &trace);
+                            MetaDataCodec::EncodeInodeKey(fs_id, inode->Ino()), &count_down, &trace);
   inode_operation.SetUpdateInodeNlink(ino, 1, now_time);
   mix_mutation.operations.push_back(&inode_operation);
 
@@ -1079,7 +1153,7 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
     MixMutation mix_mutation = {.fs_id = fs_id_};
 
     Operation file_operation(Operation::OpType::kUpdateInodeNlink, dentry.Ino(),
-                             MetaDataCodec::EncodeFileInodeKey(fs_id_, dentry.Ino()), &count_down, &trace);
+                             MetaDataCodec::EncodeInodeKey(fs_id_, dentry.Ino()), &count_down, &trace);
     file_operation.SetUpdateInodeNlink(dentry.Ino(), -1, now_time);
     mix_mutation.operations.push_back(&file_operation);
 
@@ -1168,8 +1242,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, uint64_t ne
   bthread::CountdownEvent count_down(2);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  Operation inode_operation(Operation::OpType::kCreateInode, ino,
-                            MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino()), &count_down, &trace);
+  Operation inode_operation(Operation::OpType::kCreateInode, ino, MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino()),
+                            &count_down, &trace);
   inode_operation.SetCreateInode(inode->CopyTo());
   mix_mutation.operations.push_back(&inode_operation);
 
@@ -1276,8 +1350,7 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
-                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
+  std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino());
   Operation inode_operation(Operation::OpType::kUpdateInodeAttr, ino, key, &count_down, &trace);
   inode_operation.SetUpdateInodeAttr(param.inode, param.to_set);
   mix_mutation.operations.push_back(&inode_operation);
@@ -1361,8 +1434,7 @@ Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::stri
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  std::string key = (inode->Type() == pb::mdsv2::DIRECTORY) ? MetaDataCodec::EncodeDirInodeKey(fs_id_, inode->Ino())
-                                                            : MetaDataCodec::EncodeFileInodeKey(fs_id_, inode->Ino());
+  std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino());
   Operation inode_operation(Operation::OpType::kUpdateInodeXAttr, ino, key, &count_down, &trace);
   inode_operation.SetUpdateInodeXAttr(xattrs);
   mix_mutation.operations.push_back(&inode_operation);
@@ -1431,14 +1503,14 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
   // get old parent inode
   std::string value;
-  std::string old_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, old_parent_ino);
+  std::string old_parent_key = MetaDataCodec::EncodeInodeKey(fs_id_, old_parent_ino);
   auto status = txn->Get(old_parent_key, value);
   if (!status.ok()) {
     return Status(status.error_code(),
                   fmt::format("not found old parent inode({}), {}", old_parent_ino, status.error_str()));
   }
 
-  pb::mdsv2::Inode pb_old_parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+  pb::mdsv2::Inode pb_old_parent_inode = MetaDataCodec::DecodeInodeValue(value);
 
   // get old dentry
   std::string old_dentry_key = MetaDataCodec::EncodeDentryKey(fs_id_, old_parent_ino, old_name);
@@ -1454,7 +1526,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
   bool is_same_parent = (old_parent_ino == new_parent_ino);
   // get new parent inode
   pb::mdsv2::Inode pb_new_parent_inode;
-  std::string new_parent_key = MetaDataCodec::EncodeDirInodeKey(fs_id_, new_parent_ino);
+  std::string new_parent_key = MetaDataCodec::EncodeInodeKey(fs_id_, new_parent_ino);
   if (!is_same_parent) {
     value.clear();
     status = txn->Get(new_parent_key, value);
@@ -1462,7 +1534,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
       return Status(status.error_code(),
                     fmt::format("not found new parent inode({}), {}", new_parent_ino, status.error_str()));
     }
-    pb_new_parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+    pb_new_parent_inode = MetaDataCodec::DecodeInodeValue(value);
 
   } else {
     pb_new_parent_inode = pb_old_parent_inode;
@@ -1482,9 +1554,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     pb_exist_new_dentry = MetaDataCodec::DecodeDentryValue(value);
 
     // get exist new inode
-    std::string new_inode_key = (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY)
-                                    ? MetaDataCodec::EncodeDirInodeKey(fs_id_, pb_exist_new_dentry.ino())
-                                    : MetaDataCodec::EncodeFileInodeKey(fs_id_, pb_exist_new_dentry.ino());
+    std::string new_inode_key = MetaDataCodec::EncodeInodeKey(fs_id_, pb_exist_new_dentry.ino());
     value.clear();
     status = txn->Get(new_inode_key, value);
     if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
@@ -1494,7 +1564,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     bool is_exist_new_inode = !value.empty();
     if (is_exist_new_inode) {
       if (pb_exist_new_dentry.type() == pb::mdsv2::DIRECTORY) {
-        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeDirInodeValue(value);
+        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeInodeValue(value);
         // check new dentry is empty
         if (pb_new_inode.nlink() > kEmptyDirMinLinkNum) {
           return Status(pb::error::ENOT_EMPTY,
@@ -1509,13 +1579,13 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 
       } else {
         // update exist new inode nlink
-        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeFileInodeValue(value);
+        pb::mdsv2::Inode pb_new_inode = MetaDataCodec::DecodeInodeValue(value);
         pb_new_inode.set_version(pb_new_inode.version() + 1);
         pb_new_inode.set_nlink(pb_new_inode.nlink() - 1);
         pb_new_inode.set_ctime(std::max(pb_new_inode.ctime(), now_ns));
         pb_new_inode.set_mtime(std::max(pb_new_inode.mtime(), now_ns));
 
-        status = txn->Put(new_inode_key, MetaDataCodec::EncodeFileInodeValue(pb_new_inode));
+        status = txn->Put(new_inode_key, MetaDataCodec::EncodeInodeValue(pb_new_inode));
         if (!status.ok()) {
           return Status(status.error_code(), fmt::format("put new inode fail, {}", status.error_str()));
         }
@@ -1551,7 +1621,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
       pb_old_parent_inode.set_nlink(pb_old_parent_inode.nlink() - 1);
     }
 
-    status = txn->Put(old_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_old_parent_inode));
+    status = txn->Put(old_parent_key, MetaDataCodec::EncodeInodeValue(pb_old_parent_inode));
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("put old parent inode fail, {}", status.error_str()));
     }
@@ -1563,7 +1633,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
     pb_old_parent_inode.set_mtime(now_ns);
     pb_old_parent_inode.set_nlink(pb_old_parent_inode.nlink() - 1);
 
-    status = txn->Put(old_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_old_parent_inode));
+    status = txn->Put(old_parent_key, MetaDataCodec::EncodeInodeValue(pb_old_parent_inode));
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("put old parent inode fail, {}", status.error_str()));
     }
@@ -1576,7 +1646,7 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
       pb_new_parent_inode.set_nlink(pb_new_parent_inode.nlink() + 1);
     }
 
-    status = txn->Put(new_parent_key, MetaDataCodec::EncodeDirInodeValue(pb_new_parent_inode));
+    status = txn->Put(new_parent_key, MetaDataCodec::EncodeInodeValue(pb_new_parent_inode));
     if (!status.ok()) {
       return Status(status.error_code(), fmt::format("put new parent inode fail, {}", status.error_str()));
     }
@@ -1696,7 +1766,7 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
   bthread::CountdownEvent count_down(1);
   MixMutation mix_mutation = {.fs_id = fs_id_};
 
-  Operation inode_operation(Operation::OpType::kUpdateInodeChunk, ino, MetaDataCodec::EncodeFileInodeKey(fs_id_, ino),
+  Operation inode_operation(Operation::OpType::kUpdateInodeChunk, ino, MetaDataCodec::EncodeInodeKey(fs_id_, ino),
                             &count_down, &trace);
   inode_operation.SetUpdateInodeChunk(chunk_index, slice_list);
   mix_mutation.operations.push_back(&inode_operation);
@@ -1739,6 +1809,141 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   }
 
   out_slice_list = inode->GetChunk(chunk_index);
+
+  return Status::OK();
+}
+
+Status FileSystem::GetDentry(Context& ctx, uint64_t parent, const std::string& name, Dentry& dentry) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getdentry name({}/{}).", fs_id_, parent, name);
+
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  if (!bypass_cache) {
+    auto partition = GetPartitionFromCache(parent);
+    if (partition != nullptr) {
+      trace.SetHitPartition();
+      if (partition->GetChild(name, dentry)) {
+        trace.SetHitDentry();
+        return Status::OK();
+      }
+    }
+  }
+
+  return GetDentryFromStore(parent, name, dentry);
+}
+
+Status FileSystem::ListDentry(Context& ctx, uint64_t parent, const std::string& last_name, uint32_t limit,
+                              bool is_only_dir, std::vector<Dentry>& dentries) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] listdentry name({}/{}) limit({}).", fs_id_, parent, last_name, limit);
+
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  if (!bypass_cache) {
+    auto partition = GetPartitionFromCache(parent);
+    if (partition != nullptr) {
+      trace.SetHitPartition();
+      dentries = partition->GetChildren(last_name, limit, is_only_dir);
+      return Status::OK();
+    }
+  }
+
+  return ListDentryFromStore(parent, last_name, limit, is_only_dir, dentries);
+}
+
+Status FileSystem::GetInode(Context& ctx, uint64_t ino, EntryOut& entry_out) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getinode ino({}).", fs_id_, ino);
+
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  InodePtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  entry_out.inode = inode->CopyTo();
+
+  return Status::OK();
+}
+
+Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetinode inoes({}).", fs_id_, Helper::VectorToString(inoes));
+
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  out_entries.reserve(inoes.size());
+  if (!bypass_cache) {
+    for (auto ino : inoes) {
+      InodePtr inode = GetInodeFromCache(ino);
+      if (inode == nullptr) {
+        DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
+        continue;
+      }
+
+      EntryOut entry_out;
+      entry_out.inode = inode->CopyTo();
+      out_entries.push_back(entry_out);
+    }
+
+  } else {
+    std::vector<InodePtr> inodes;
+    auto status = BatchGetInodeFromStore(inoes, inodes);
+    if (!status.ok()) {
+      return status;
+    }
+
+    for (auto& inode : inodes) {
+      EntryOut entry_out;
+      entry_out.inode = inode->CopyTo();
+      out_entries.push_back(entry_out);
+    }
+  }
+
+  return Status::OK();
+}
+
+Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes,
+                                 std::vector<pb::mdsv2::XAttr>& out_xattrs) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetxattr inoes({}).", fs_id_, Helper::VectorToString(inoes));
+
+  bool bypass_cache = ctx.IsBypassCache();
+  auto& trace = ctx.GetTrace();
+
+  auto add_xattr_func = [&out_xattrs](const InodePtr& inode) {
+    pb::mdsv2::XAttr xattr;
+    for (auto& [k, v] : inode->GetXAttrMap()) {
+      xattr.mutable_xattrs()->insert({k, v});
+    }
+    out_xattrs.push_back(xattr);
+  };
+
+  out_xattrs.reserve(inoes.size());
+  if (!bypass_cache) {
+    for (auto ino : inoes) {
+      InodePtr inode = GetInodeFromCache(ino);
+      if (inode == nullptr) {
+        DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
+        continue;
+      }
+
+      add_xattr_func(inode);
+    }
+
+  } else {
+    std::vector<InodePtr> inodes;
+    auto status = BatchGetInodeFromStore(inoes, inodes);
+    if (!status.ok()) {
+      return status;
+    }
+
+    for (auto& inode : inodes) {
+      add_xattr_func(inode);
+    }
+  }
 
   return Status::OK();
 }

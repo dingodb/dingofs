@@ -38,27 +38,21 @@ class MetaDataCodec {
   static pb::mdsv2::FsInfo DecodeFSValue(const std::string& value);
 
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino, $kDelimiter, $name]
-  static std::string EncodeDentryKey(int fs_id, uint64_t ino, const std::string& name);
-  static void DecodeDentryKey(const std::string& key, int& fs_id, uint64_t& ino, std::string& name);
+  static std::string EncodeDentryKey(uint32_t fs_id, uint64_t ino, const std::string& name);
+  static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
   static std::string EncodeDentryValue(const pb::mdsv2::Dentry& dentry);
   static pb::mdsv2::Dentry DecodeDentryValue(const std::string& value);
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino+1]
-  static void EncodeDentryRange(int fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
+  static void EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
 
+  // inode
   // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
-  static uint32_t DirInodeKeyLength();
-  static std::string EncodeDirInodeKey(int fs_id, uint64_t ino);
-  static void DecodeDirInodeKey(const std::string& key, int& fs_id, uint64_t& ino);
-  static std::string EncodeDirInodeValue(const pb::mdsv2::Inode& inode);
-  static pb::mdsv2::Inode DecodeDirInodeValue(const std::string& value);
-
-  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
-  static uint32_t FileInodeKeyLength();
-  static std::string EncodeFileInodeKey(int fs_id, uint64_t ino);
-  static void DecodeFileInodeKey(const std::string& key, int& fs_id, uint64_t& ino);
-  static std::string EncodeFileInodeValue(const pb::mdsv2::Inode& inode);
-  static pb::mdsv2::Inode DecodeFileInodeValue(const std::string& value);
+  static uint32_t InodeKeyLength();
+  static std::string EncodeInodeKey(uint32_t fs_id, uint64_t ino);
+  static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
+  static std::string EncodeInodeValue(const pb::mdsv2::Inode& inode);
+  static pb::mdsv2::Inode DecodeInodeValue(const std::string& value);
 
   // quota encode/decode
   // fs format: [$prefix, $type, $kDelimiter, $fs_id]

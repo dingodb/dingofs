@@ -16,6 +16,8 @@
 
 #include <fmt/format.h>
 
+#include <cstdint>
+
 #include "fmt/core.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -59,9 +61,9 @@ static bool GenFileInodeMap(KVStoragePtr kv_storage, uint32_t fs_id,
 
     for (const auto& kv : kvs) {
       uint64_t ino = 0;
-      int fs_id;
-      MetaDataCodec::DecodeFileInodeKey(kv.key, fs_id, ino);
-      pb::mdsv2::Inode inode = MetaDataCodec::DecodeFileInodeValue(kv.value);
+      uint32_t fs_id;
+      MetaDataCodec::DecodeInodeKey(kv.key, fs_id, ino);
+      pb::mdsv2::Inode inode = MetaDataCodec::DecodeInodeValue(kv.value);
 
       file_inode_map.insert({inode.ino(), inode});
     }
@@ -97,13 +99,13 @@ static FsTreeNode* GenFsTreeStruct(KVStoragePtr kv_storage, uint32_t fs_id,
     }
 
     for (const auto& kv : kvs) {
-      int fs_id = 0;
+      uint32_t fs_id = 0;
       uint64_t ino = 0;
 
-      if (kv.key.size() == MetaDataCodec::DirInodeKeyLength()) {
+      if (kv.key.size() == MetaDataCodec::InodeKeyLength()) {
         // dir inode
-        MetaDataCodec::DecodeDirInodeKey(kv.key, fs_id, ino);
-        pb::mdsv2::Inode inode = MetaDataCodec::DecodeDirInodeValue(kv.value);
+        MetaDataCodec::DecodeInodeKey(kv.key, fs_id, ino);
+        pb::mdsv2::Inode inode = MetaDataCodec::DecodeInodeValue(kv.value);
 
         DINGO_LOG(INFO) << fmt::format("dir inode({}).", inode.ShortDebugString());
         auto it = inode_map.find(ino);

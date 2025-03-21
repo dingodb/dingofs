@@ -31,6 +31,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system,
                  QuotaProcessorPtr quota_processor);
 
+  // mds
+  void GetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
+                  pb::mdsv2::GetMDSListResponse* response, google::protobuf::Closure* done) override;
+
   // fs interface
   void CreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
                 pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done) override;
@@ -42,6 +46,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                 pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done) override;
   void GetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
                  pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done) override;
+  void ListFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::ListFsInfoRequest* request,
+                  pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done) override;
+  void UpdateFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateFsInfoRequest* request,
+                    pb::mdsv2::UpdateFsInfoResponse* response, google::protobuf::Closure* done) override;
   void RefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
                      pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done) override;
 
@@ -54,6 +62,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   // inode interface
   void GetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
                 pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done) override;
+  void BatchGetInode(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetInodeRequest* request,
+                     pb::mdsv2::BatchGetInodeResponse* response, google::protobuf::Closure* done) override;
   void BatchGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetXAttrRequest* request,
                      pb::mdsv2::BatchGetXAttrResponse* response, google::protobuf::Closure* done) override;
 
@@ -137,6 +147,16 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void FlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
                       pb::mdsv2::FlushDirUsagesResponse* response, google::protobuf::Closure* done) override;
 
+  // fs statistics
+  void SetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsStatsRequest* request,
+                  pb::mdsv2::SetFsStatsResponse* response, google::protobuf::Closure* done) override;
+  void GetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsStatsRequest* request,
+                  pb::mdsv2::GetFsStatsResponse* response, google::protobuf::Closure* done) override;
+  void GetFsPerSecondStats(google::protobuf::RpcController* controller,
+                           const pb::mdsv2::GetFsPerSecondStatsRequest* request,
+                           pb::mdsv2::GetFsPerSecondStatsResponse* response, google::protobuf::Closure* done) override;
+
+  // internal interface
   void CheckAlive(google::protobuf::RpcController* controller, const pb::mdsv2::CheckAliveRequest* request,
                   pb::mdsv2::CheckAliveResponse* response, google::protobuf::Closure* done) override;
 
@@ -147,6 +167,11 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   Status GenFsId(int64_t& fs_id);
   inline FileSystemPtr GetFileSystem(uint32_t fs_id);
 
+  // mds
+  void DoGetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
+                    pb::mdsv2::GetMDSListResponse* response, google::protobuf::Closure* done);
+
+  // fs interface
   void DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,
                   pb::mdsv2::CreateFsResponse* response, TraceClosure* done);
   void DoMountFs(google::protobuf::RpcController* controller, const pb::mdsv2::MountFsRequest* request,
@@ -157,9 +182,28 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                   pb::mdsv2::DeleteFsResponse* response, TraceClosure* done);
   void DoGetFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsInfoRequest* request,
                    pb::mdsv2::GetFsInfoResponse* response, TraceClosure* done);
+  void DoListFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::ListFsInfoRequest* request,
+                    pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done);
+  void DoUpdateFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateFsInfoRequest* request,
+                      pb::mdsv2::UpdateFsInfoResponse* response, google::protobuf::Closure* done);
   void DoRefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
                        pb::mdsv2::RefreshFsInfoResponse* response, TraceClosure* done);
 
+  // dentry interface
+  void DoGetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
+                   pb::mdsv2::GetDentryResponse* response, google::protobuf::Closure* done);
+  void DoListDentry(google::protobuf::RpcController* controller, const pb::mdsv2::ListDentryRequest* request,
+                    pb::mdsv2::ListDentryResponse* response, google::protobuf::Closure* done);
+
+  // inode interface
+  void DoGetInode(google::protobuf::RpcController* controller, const pb::mdsv2::GetInodeRequest* request,
+                  pb::mdsv2::GetInodeResponse* response, google::protobuf::Closure* done);
+  void DoBatchGetInode(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetInodeRequest* request,
+                       pb::mdsv2::BatchGetInodeResponse* response, google::protobuf::Closure* done);
+  void DoBatchGetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::BatchGetXAttrRequest* request,
+                       pb::mdsv2::BatchGetXAttrResponse* response, google::protobuf::Closure* done);
+
+  // high level interface
   void DoLookup(google::protobuf::RpcController* controller, const pb::mdsv2::LookupRequest* request,
                 pb::mdsv2::LookupResponse* response, TraceClosure* done);
   void DoMkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
@@ -213,6 +257,7 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoRefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
                       pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done);
 
+  // quota interface
   void DoSetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,
                     pb::mdsv2::SetFsQuotaResponse* response, TraceClosure* done);
   void DoGetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsQuotaRequest* request,
@@ -229,6 +274,15 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                        pb::mdsv2::LoadDirQuotasResponse* response, TraceClosure* done);
   void DoFlushDirUsages(google::protobuf::RpcController* controller, const pb::mdsv2::FlushDirUsagesRequest* request,
                         pb::mdsv2::FlushDirUsagesResponse* response, TraceClosure* done);
+
+  // fs statistics
+  void DoSetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsStatsRequest* request,
+                    pb::mdsv2::SetFsStatsResponse* response, google::protobuf::Closure* done);
+  void DoGetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsStatsRequest* request,
+                    pb::mdsv2::GetFsStatsResponse* response, google::protobuf::Closure* done);
+  void DoGetFsPerSecondStats(google::protobuf::RpcController* controller,
+                             const pb::mdsv2::GetFsPerSecondStatsRequest* request,
+                             pb::mdsv2::GetFsPerSecondStatsResponse* response, google::protobuf::Closure* done);
 
   // file system set
   FileSystemSetPtr file_system_set_;

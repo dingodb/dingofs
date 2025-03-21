@@ -33,6 +33,7 @@ class Trace {
 
   struct Cache {
     bool is_hit_partition{false};
+    bool is_hit_dentry{false};
     bool is_hit_inode{false};
   };
 
@@ -56,6 +57,7 @@ class Trace {
   const Txn& GetFileTxn() const { return file_txn_; }
 
   void SetHitPartition() { cache_.is_hit_partition = true; }
+  void SetHitDentry() { cache_.is_hit_dentry = true; }
   void SetHitInode() { cache_.is_hit_inode = true; }
 
   void UpdateLastTime() { last_time_us_ = Helper::TimestampUs(); }

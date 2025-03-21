@@ -378,8 +378,7 @@ Status MutationProcessor::ExecuteCreateInodeTxnMutation(TxnMutation& txn_mutatio
   LOG(INFO) << fmt::format("[mutation] txn({}/{}), create inode({}).", txn_mutation.fs_id, txn_mutation.txn_id,
                            param->inode.ShortDebugString());
 
-  std::string value = param->inode.type() == pb::mdsv2::DIRECTORY ? MetaDataCodec::EncodeDirInodeValue(param->inode)
-                                                                  : MetaDataCodec::EncodeFileInodeValue(param->inode);
+  std::string value = MetaDataCodec::EncodeInodeValue(param->inode);
   // trace txn
   auto* trace = operation->trace;
   auto& trace_txn = trace->GetFileTxn();
@@ -472,15 +471,14 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
     }
 
     KeyValue::OpType op_type = KeyValue::OpType::kPut;
-    inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeFileInodeValue(value);
+    inode = value.empty() ? pb::mdsv2::Inode() : MetaDataCodec::DecodeInodeValue(value);
     inode.set_version(inode.version() + 1);
     ProcessFileInodeOperations(target_mutation.operations, inode, op_type);
 
     LOG(INFO) << fmt::format("[mutation] {} file inode({}).", KeyValue::OpTypeName(op_type), inode.ShortDebugString());
 
-    status = (op_type == KeyValue::OpType::kPut)
-                 ? txn->Put(target_mutation.key, MetaDataCodec::EncodeFileInodeValue(inode))
-                 : txn->Delete(target_mutation.key);
+    status = (op_type == KeyValue::OpType::kPut) ? txn->Put(target_mutation.key, MetaDataCodec::EncodeInodeValue(inode))
+                                                 : txn->Delete(target_mutation.key);
     CHECK(status.ok()) << fmt::format("update inode fail, key({}), error({} {}).", target_mutation.key,
                                       status.error_code(), status.error_str());
     status = txn->Commit();
@@ -516,13 +514,13 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
     auto txn = kv_storage_->NewTxn();
 
     std::string value;
-    std::string parent_key = MetaDataCodec::EncodeDirInodeKey(txn_mutation.fs_id, txn_mutation.txn_id);
+    std::string parent_key = MetaDataCodec::EncodeInodeKey(txn_mutation.fs_id, txn_mutation.txn_id);
     auto status = txn->Get(parent_key, value);
     if (!status.ok()) {
       break;
     }
 
-    parent_inode = MetaDataCodec::DecodeDirInodeValue(value);
+    parent_inode = MetaDataCodec::DecodeInodeValue(value);
     parent_inode.set_version(parent_inode.version() + 1);
 
     bool is_update_parent = false;
@@ -536,7 +534,7 @@ Status MutationProcessor::ExecuteDentryTxnMutation(TxnMutation& txn_mutation) {
     }
 
     if (is_update_parent) {
-      status = txn->Put(parent_key, MetaDataCodec::EncodeDirInodeValue(parent_inode));
+      status = txn->Put(parent_key, MetaDataCodec::EncodeInodeValue(parent_inode));
       CHECK(status.ok()) << fmt::format("put fail, key({}), error({} {}).", parent_key, status.error_code(),
                                         status.error_str());
     }

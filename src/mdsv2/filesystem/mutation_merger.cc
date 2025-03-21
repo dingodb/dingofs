@@ -302,8 +302,8 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
 
       KeyValue kv;
       kv.opt_type = merge_mutation.inode_op.op_type;
-      kv.key = MetaDataCodec::EncodeFileInodeKey(merge_mutation.fs_id, inode.ino());
-      kv.value = MetaDataCodec::EncodeFileInodeValue(inode);
+      kv.key = MetaDataCodec::EncodeInodeKey(merge_mutation.fs_id, inode.ino());
+      kv.value = MetaDataCodec::EncodeInodeValue(inode);
 
       KVStorage::WriteOption option;
       auto status = kv_storage_->Put(option, kv);
@@ -317,8 +317,8 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
 
       KeyValue kv;
       kv.opt_type = merge_mutation.inode_op.op_type;
-      kv.key = MetaDataCodec::EncodeDirInodeKey(merge_mutation.fs_id, inode.ino());
-      kv.value = MetaDataCodec::EncodeDirInodeValue(inode);
+      kv.key = MetaDataCodec::EncodeInodeKey(merge_mutation.fs_id, inode.ino());
+      kv.value = MetaDataCodec::EncodeInodeValue(inode);
 
       KVStorage::WriteOption option;
       auto status = kv_storage_->Put(option, kv);
@@ -335,8 +335,8 @@ void MutationMerger::ExecuteMutation(const MergeMutation& merge_mutation) {
 
       KeyValue kv;
       kv.opt_type = merge_mutation.inode_op.op_type;
-      kv.key = MetaDataCodec::EncodeDirInodeKey(merge_mutation.fs_id, parent_inode.ino());
-      kv.value = MetaDataCodec::EncodeDirInodeValue(parent_inode);
+      kv.key = MetaDataCodec::EncodeInodeKey(merge_mutation.fs_id, parent_inode.ino());
+      kv.value = MetaDataCodec::EncodeInodeValue(parent_inode);
       kvs.push_back(kv);
 
       for (const auto& dentry_op : merge_mutation.dentry_ops) {
