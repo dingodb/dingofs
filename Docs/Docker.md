@@ -2,7 +2,7 @@
 
 DingoFS services run within Docker containers. Users must install Docker on each server and ensure the Docker Daemon is operational.
 
-   ```toml
+   ```
 $ sudo docker run --rm hello-world
   ```
 This command will download a test image and run it in a container. When the container starts, it prints a message and then exits.
@@ -36,7 +36,7 @@ Currently, docker-compose startup is only supported on Linux environments. Windo
 
 You need to configure the git, Docker, and docker-compose environments in advance.
 
-   ```toml
+   ```
  # Note: Check your docker-compose version and correspondingly modify the 'version' field in the downloaded configuration file 'docker-compose.yml' as follows:
   docker-compose.yml version| Docker Engine version| Docker Compose version
   2.4；                       17.12.0+；              1.21.0+
@@ -47,14 +47,14 @@ You need to configure the git, Docker, and docker-compose environments in advanc
    ```
 
 ### 1.2 Pull container
-   ```toml
+   ```
 docker pull dingodatabase/dingo-store:latest
 docker pull dingodatabase/dingo:latest
    ```
 
 ### 2. Starting a container based on Docker Compose
 ### 2.1 Pull the corresponding Docker Compose configuration
-   ```toml
+   ```
 # Method one
 curl https://raw.githubusercontent.com/dingodb/dingofs/develop/docker/docker-compose.yml -o docker-compose.yml
  
@@ -68,7 +68,7 @@ The docker-compose file includes 3 coordinators, 3 stores, 3 indexes, 1 executor
 The coordinators, stores, and indexes use the host network mode, while the executor and proxy use the bridge network mode.
 ### 2.3 Start the corresponding containers
 
-   ```toml
+   ```
 #  Replace with your own IP address (do not use 127.0.0.1 as proxy and executor use the bridge network and 127.0.0.1 does not point to the host)
 # If the docker-compose.yml file is in the current directory and has the same name, you do not need to use the -f parameter.
 DINGO_HOST_IP=x.x.x.x docker-compose -f ./docker-compose.yml up -d
@@ -82,7 +82,7 @@ docker-compose -f ./docker-compose.yml down
 
 To check if all 11 containers specified in the docker-compose.yml configuration file are in an “Up” state.
 
-   ```toml
+   ```
 [root@dingo221 ~]# docker ps
 CONTAINER ID   IMAGE                                      COMMAND                  CREATED        STATUS        PORTS                                                                                      NAMES
 0bde306f4c2e   dingodatabase/dingo-store:latest           "/opt/dingo-store/sc…"   45 hours ago   Up 45 hours                                                                                              store3
@@ -101,7 +101,7 @@ c927d17f848f   dingodatabase/dingo:latest                 "/opt/dingo/bin/star�
 ### 3.2 View the state of dingo-store(coordinator/store/index)
 In the new version, all the dingodb_client_coordinator instances have been merged into dingodb_client.
 
-   ```toml
+   ```
 # To enter a container
 docker exec -it coordinator1 bash
 cd build/bin/
@@ -253,7 +253,7 @@ DINGODB_HAVE_INDEX_AVAILABLE, index_count=3
 
    ```
 ### 3.3 View the state of dingo(executor/proxy)
-   ```toml
+   ```
 
 # To view the executor and ensure that the MySQL init process was successful.
 [root@dingo221 ~]# docker logs executor
