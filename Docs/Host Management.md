@@ -4,7 +4,7 @@ The Host Module is designed to centrally manage user hosts, eliminating the need
 
 ## Host Configuration
 ### Example Configuration
-   ```toml
+   ```
 global:
 user: dingo.
 ssh_port: 22
@@ -38,7 +38,7 @@ labels:
 
 ## Import Host List
 ### Prepare Host List
-   ```toml
+   ```
 $ vim hosts.yaml
 global:
 user: dingo.
@@ -59,11 +59,11 @@ labels: - client
    ```
    
 ### Import Host List
-   ```toml
+   ```
 $ dingoadm hosts commit hosts.yam!
    ```
 ## View Host Configuration
-   ```toml
+   ```
 $ dingoadm hosts ls
    ```
 DingoAdm displays all hosts by default.
@@ -77,7 +77,7 @@ DingoAdm displays all hosts by default.
 To filter hosts by tags, use the - parameter.
 
 ## Display Host Configuration
-   ```toml
+   ```
 $ dingoadm hosts show
 global:
 user: dingo
@@ -98,16 +98,16 @@ labels:
 -client
    ```
 ## Log in to a Host
-   ```toml
+   ```
    $ dingoadm ssh <host> 
   ```
 Example: Log in to the host server1
-   ```toml
+   ```
    $ dingoadm ssh serverl 
   ```
 
 Note:
 If SSH connection issues occur, you can manually simulate DingoAdm's connection process locally based on the host's configuration to troubleshoot. For example:
-   ```toml
+   ```
 $ ssh<user>@<hostname>-p<ssh_port>-i<private_key_file>
   ```
