@@ -46,9 +46,8 @@ Deploying a cluster via DingoAdm requires the following two network prerequisite
 
 - All servers must be able to pull images from the Docker registry.
 
-
-## 2. Developing Environment
-We recommend Rocky and Ubuntu to develop the DingoFS codebase
+## 2. Install dependencies
+We recommend Rocky and Ubuntu to develop the DingoFS codebase.
 
 ### Rocky 8.9/9.3
 
@@ -72,13 +71,10 @@ tar zxvf cmake-3.30.1-linux-x86_64.tar.gz
 sudo cp -rf cmake-3.30.1-linux-x86_64/bin/* /usr/local/bin/ && sudo cp -rf  cmake-3.30.1-linux-x86_64/share/* /usr/local/share && rm -rf cmake-3.30.1-linux-x86_64
 ```
 
-### Docker
-If you installed the software using a Docker container, the container already includes pre-integrated Dingo-eureka and Dingo-sdk.
+### GCC 13
+We recommend using GCC 13 as the primary compiled language.
 
-### Language
-We recommend using GCC as the primary compiled language.
-
-## Setup Guide
+## 3. Build DingoFS
 ### 1. Setup Dingo-eureka and Dingo-sdk
 
 - [Dingo-eureka](https://github.com/dingodb/dingo-eureka): A Necessary Service Components for DingoFS.
@@ -90,6 +86,9 @@ wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0
 tar -xjvf jemalloc-5.3.0.tar.bz2
 cd jemalloc-5.3.0 && ./configure && make && make install
 ```
+
+ - ### Tips
+If you installed the software using a Docker container, the container already includes pre-integrated Dingo-eureka and Dingo-sdk.
 
 ### 3. Download dep
 ```sh
@@ -109,9 +108,6 @@ cd build
 cmake ..
 make -j 32
 ```
-
-
-
 
 
 ## Special Thanks
