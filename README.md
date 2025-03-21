@@ -88,7 +88,7 @@ cd jemalloc-5.3.0 && ./configure && make && make install
 ```
 
  - ### Tips
-If you installed the software using a Docker container, the container already includes pre-integrated Dingo-eureka and Dingo-sdk.
+If you installed the software using a [Docker](https://github.com/wangpy84/dingofs/blob/main/Docs/Docker.md) container, the container already includes pre-integrated Dingo-eureka and Dingo-sdk.
 
 ### 3. Download dep
 ```sh
@@ -134,8 +134,8 @@ If you have any technical questions or business needs, please contact us.
 
 Attach the Wetchat QR Code
 
-![](https://github.com/dingodb/dingo/raw/develop/docs/en/images/dingo_contact_Wetchat.png)
+![](https://github.com/wangpy84/dingofs/blob/main/Docs/en/images/dingo_contact_Wetchat.png)
 
 Attach the Offical Account QR Code
 
-![](https://github.com/dingodb/dingo/blob/develop/docs/en/images/dingo_contact_officalAccount.png)
+![](https://github.com/wangpy84/dingofs/blob/main/Docs/en/images/dingo_contact_officalAccount.png)
