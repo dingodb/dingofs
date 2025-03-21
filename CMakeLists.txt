@@ -129,6 +129,12 @@ add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
+find_package(backtrace REQUIRED)
+message("Using backtrace ${LIBBACKTRACE_VERSION}, lib:${LIBBACKTRACE_LIBRARY}")
+
+find_package(libunwind REQUIRED)
+message("Using libunwind ${LIBUNWIND_VERSION}, lib:${LIBUNWIND_LIBRARY}")
+
 find_package(FUSE3 REQUIRED)
 message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")
 include_directories(${FUSE3_INCLUDE_DIR})

@@ -15,9 +15,10 @@
 #ifndef DINGOFS_MDSV2_SERVER_H_
 #define DINGOFS_MDSV2_SERVER_H_
 
-#include <memory>
+#include <atomic>
 #include <string>
 
+#include "brpc/server.h"
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/heartbeat.h"
 #include "mdsv2/background/mds_monitor.h"
@@ -86,6 +87,9 @@ class Server {
  private:
   explicit Server() = default;
   ~Server();
+
+  std::atomic<bool> stop_{false};
+  brpc::Server brpc_server_;
 
   Configuration conf_;
 

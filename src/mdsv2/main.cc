@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <csignal>
+#include <iostream>
+#include <string>
 
 #include "backtrace.h"
 #include "dlfcn.h"
@@ -26,185 +28,173 @@
 DEFINE_string(conf, "./conf/mdsv2.conf", "mdsv2 config path");
 DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
 
-// struct DingoStackTraceInfo {
-//   char* filename;
-//   int lineno;
-//   char* function;
-//   uintptr_t pc;
-// };
+const int kMaxStacktraceSize = 128;
 
-// // Passed to backtrace callback function.
-// struct DingoBacktraceData {
-//   struct DingoStackTraceInfo* all;
-//   size_t index;
-//   size_t max;
-//   int failed;
-// };
+struct StackTraceInfo {
+  char* filename{nullptr};
+  int lineno{0};
+  char* function{nullptr};
+  uintptr_t pc{0};
+};
 
-// int BacktraceCallback(void* vdata, uintptr_t pc, const char* filename, int lineno, const char* function) {
-//   struct DingoBacktraceData* data = (struct DingoBacktraceData*)vdata;
-//   struct DingoStackTraceInfo* p;
+// Passed to backtrace callback function.
+struct BacktraceData {
+  struct StackTraceInfo* stack_traces{nullptr};
+  size_t index{0};
+  size_t max{0};
+  int fail{0};
+};
 
-//   if (data->index >= data->max) {
-//     fprintf(stderr, "callback_one: callback called too many times\n");  // NOLINT
-//     data->failed = 1;
-//     return 1;
-//   }
+int BacktraceCallback(void* vdata, uintptr_t pc, const char* filename, int lineno, const char* function) {
+  struct BacktraceData* backtrace = (struct BacktraceData*)vdata;
+  struct StackTraceInfo* stack_trace;
 
-//   p = &data->all[data->index];
+  if (backtrace->index >= backtrace->max) {
+    std::cerr << "stack index beyond max.\n";
+    backtrace->fail = 1;
+    return 1;
+  }
 
-//   // filename
-//   if (filename == nullptr)
-//     p->filename = nullptr;
-//   else {
-//     p->filename = strdup(filename);
-//     assert(p->filename != nullptr);
-//   }
+  stack_trace = &backtrace->stack_traces[backtrace->index];
 
-//   // lineno
-//   p->lineno = lineno;
+  stack_trace->filename = (filename == nullptr) ? nullptr : strdup(filename);
+  stack_trace->lineno = lineno;
+  stack_trace->function = (function == nullptr) ? nullptr : strdup(function);
+  stack_trace->pc = pc;
 
-//   // function
-//   if (function == nullptr)
-//     p->function = nullptr;
-//   else {
-//     p->function = strdup(function);
-//     assert(p->function != nullptr);
-//   }
+  ++backtrace->index;
 
-//   // pc
-//   if (pc != 0) {
-//     p->pc = pc;
-//   }
+  return 0;
+}
 
-//   ++data->index;
+// An error callback passed to backtrace.
+void ErrorCallback(void* vdata, const char* msg, int errnum) {
+  struct BacktraceData* data = (struct BacktraceData*)vdata;
 
-//   return 0;
-// }
+  std::cerr << msg;
+  if (errnum > 0) {
+    std::cerr << ": " << strerror(errnum) << "\n";
+  }
+  data->fail = 1;
+}
 
-// // An error callback passed to backtrace.
-// void ErrorCallback(void* vdata, const char* msg, int errnum) {
-//   struct DingoBacktraceData* data = (struct DingoBacktraceData*)vdata;
+// The signal handler
+static void SignalHandler(int signo) {
+  if (signo == SIGTERM) {
+    dingofs::mdsv2::Server& server = dingofs::mdsv2::Server::GetInstance();
+    server.Stop();
 
-//   fprintf(stderr, "%s", msg);                                 // NOLINT
-//   if (errnum > 0) fprintf(stderr, ": %s", strerror(errnum));  // NOLINT
-//   fprintf(stderr, "\n");                                      // NOLINT
-//   data->failed = 1;
-// }
+    _exit(0);
+  }
 
-// // The signal handler
-// #define MAX_STACKTRACE_SIZE 128
-// static void SignalHandler(int signo) {
-//   printf("========== handle signal '%d' ==========\n", signo);
+  std::cerr << "received signal: " << signo << '\n';
+  std::cerr << "stack trace:\n";
+  DINGO_LOG(ERROR) << "received signal " << signo;
+  DINGO_LOG(ERROR) << "stack trace:";
 
-//   if (signo == SIGTERM) {
-//     // clean temp directory
-//     // dingofs::mdsv2::Helper::RemoveFileOrDirectory(dingodb::Server::GetInstance().PidFilePath());
-//     // DINGO_LOG(WARNING) << "GRACEFUL SHUTDOWN, clean up checkpoint dir: "
-//     //                    << ", clean up pid_file: " << dingodb::Server::GetInstance().PidFilePath();
-//     _exit(0);
-//   }
+  struct backtrace_state* state = backtrace_create_state(nullptr, 0, ErrorCallback, nullptr);
+  if (state == nullptr) {
+    std::cerr << "state is null.\n";
+    _exit(1);
+  }
 
-//   std::cerr << "Received signal " << signo << '\n';
-//   std::cerr << "Stack trace:" << '\n';
-//   DINGO_LOG(ERROR) << "Received signal " << signo;
-//   DINGO_LOG(ERROR) << "Stack trace:";
+  struct StackTraceInfo stack_traces[kMaxStacktraceSize];
+  struct BacktraceData data;
 
-//   struct backtrace_state* state = backtrace_create_state(nullptr, 0, ErrorCallback, nullptr);
-//   if (state == nullptr) {
-//     std::cerr << "state is null" << '\n';
-//   }
+  data.stack_traces = &stack_traces[0];
+  data.index = 0;
+  data.max = kMaxStacktraceSize;
+  data.fail = 0;
 
-//   struct DingoStackTraceInfo all[MAX_STACKTRACE_SIZE];
-//   struct DingoBacktraceData data;
+  if (backtrace_full(state, 0, BacktraceCallback, ErrorCallback, &data) != 0) {
+    std::cerr << "backtrace_full fail." << '\n';
+    DINGO_LOG(ERROR) << "backtrace_full fail.";
+  }
 
-//   data.all = &all[0];
-//   data.index = 0;
-//   data.max = MAX_STACKTRACE_SIZE;
-//   data.failed = 0;
+  for (size_t i = 0; i < data.index; ++i) {
+    auto& stack_trace = stack_traces[i];
+    int status;
+    char* nameptr = stack_trace.function;
+    char* demangled = abi::__cxa_demangle(stack_trace.function, nullptr, nullptr, &status);
+    if (status == 0 && demangled) {
+      nameptr = demangled;
+    }
 
-//   int i = backtrace_full(state, 0, BacktraceCallback, ErrorCallback, &data);
-//   if (i != 0) {
-//     std::cerr << "backtrace_full failed" << '\n';
-//     DINGO_LOG(ERROR) << "backtrace_full failed";
-//   }
+    Dl_info info = {};
 
-//   for (size_t x = 0; x < data.index; x++) {
-//     int status;
-//     char* nameptr = all[x].function;
-//     char* demangled = abi::__cxa_demangle(all[x].function, nullptr, nullptr, &status);
-//     if (status == 0 && demangled) {
-//       nameptr = demangled;
-//     }
+    std::string error_msg;
+    if (!dladdr((void*)stack_trace.pc, &info)) {
+      error_msg = butil::string_printf("#%zu source[%s:%d] symbol[%s] pc[0x%0lx]", i, stack_trace.filename,
+                                       stack_trace.lineno, nameptr, static_cast<uint64_t>(stack_trace.pc));
 
-//     Dl_info info = {};
+    } else {
+      error_msg = butil::string_printf(
+          "#%zu source[%s:%d] symbol[%s] pc[0x%0lx] fname[%s] fbase[0x%lx] sname[%s] saddr[0x%lx] ", i,
+          stack_trace.filename, stack_trace.lineno, nameptr, static_cast<uint64_t>(stack_trace.pc), info.dli_fname,
+          (uint64_t)info.dli_fbase, info.dli_sname, (uint64_t)info.dli_saddr);
+    }
 
-//     if (!dladdr((void*)all[x].pc, &info)) {
-//       auto error_msg = butil::string_printf("#%zu source[%s:%d] symbol[%s] pc[0x%0lx]", x, all[x].filename,
-//                                             all[x].lineno, nameptr, static_cast<uint64_t>(all[x].pc));
-//       DINGO_LOG(ERROR) << error_msg;
-//       std::cout << error_msg << '\n';
-//     } else {
-//       auto error_msg = butil::string_printf(
-//           "#%zu source[%s:%d] symbol[%s] pc[0x%0lx] fname[%s] fbase[0x%lx] sname[%s] saddr[0x%lx] ", x,
-//           all[x].filename, all[x].lineno, nameptr, static_cast<uint64_t>(all[x].pc), info.dli_fname,
-//           (uint64_t)info.dli_fbase, info.dli_sname, (uint64_t)info.dli_saddr);
-//       DINGO_LOG(ERROR) << error_msg;
-//       std::cout << error_msg << '\n';
-//     }
-//     if (demangled) {
-//       free(demangled);
-//     }
-//   }
+    DINGO_LOG(ERROR) << error_msg;
+    std::cerr << error_msg << '\n';
 
-//   // call abort() to generate core dump
-//   DINGO_LOG(ERROR) << "call abort() to generate core dump for signo=" << signo << " " << strsignal(signo);
-//   auto s = signal(SIGABRT, SIG_DFL);
-//   if (s == SIG_ERR) {
-//     std::cerr << "Failed to set signal handler to SIG_DFL for SIGABRT" << '\n';
-//   }
-//   abort();
-// }
+    if (demangled) {
+      free(demangled);
+    }
+  }
 
-// void SetupSignalHandler() {
-//   sighandler_t s;
-//   s = signal(SIGTERM, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGTERM\n");
-//     exit(-1);
-//   }
-//   s = signal(SIGSEGV, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGSEGV\n");
-//     exit(-1);
-//   }
-//   s = signal(SIGFPE, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGFPE\n");
-//     exit(-1);
-//   }
-//   s = signal(SIGBUS, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGBUS\n");
-//     exit(-1);
-//   }
-//   s = signal(SIGILL, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGILL\n");
-//     exit(-1);
-//   }
-//   s = signal(SIGABRT, SignalHandler);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGABRT\n");
-//     exit(-1);
-//   }
-//   // ignore SIGPIPE
-//   s = signal(SIGPIPE, SIG_IGN);
-//   if (s == SIG_ERR) {
-//     printf("Failed to setup signal handler for SIGPIPE\n");
-//     exit(-1);
-//   }
-// }
+  // call abort() to generate core dump
+  if (signal(SIGABRT, SIG_DFL) == SIG_ERR) {
+    std::cerr << "setup SIGABRT signal to SIG_DFL fail.\n";
+  }
+
+  abort();
+}
+
+void SetupSignalHandler() {
+  sighandler_t s;
+  s = signal(SIGTERM, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGTERM signal fail.\n";
+    exit(-1);
+  }
+
+  s = signal(SIGSEGV, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGSEGV signal fail.\n";
+    exit(-1);
+  }
+
+  s = signal(SIGFPE, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGFPE signal fail.\n";
+    exit(-1);
+  }
+
+  s = signal(SIGBUS, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGBUS signal fail.\n";
+    exit(-1);
+  }
+
+  s = signal(SIGILL, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGILL signal fail.\n";
+    exit(-1);
+  }
+
+  s = signal(SIGABRT, SignalHandler);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGABRT signal fail.\n";
+    exit(-1);
+  }
+
+  // ignore SIGPIPE
+  s = signal(SIGPIPE, SIG_IGN);
+  if (s == SIG_ERR) {
+    std::cout << "setup SIGPIPE signal fail.\n";
+    exit(-1);
+  }
+}
 
 bool GeneratePidFile(const std::string& filepath) {
   int64_t pid = dingofs::mdsv2::Helper::GetPid();
@@ -236,6 +226,8 @@ int main(int argc, char* argv[]) {
         "--coor_url=file://./conf/coor_list\n");
     exit(-1);
   }
+
+  SetupSignalHandler();
 
   dingofs::mdsv2::Server& server = dingofs::mdsv2::Server::GetInstance();
 

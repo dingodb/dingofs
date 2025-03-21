@@ -17,7 +17,6 @@
 #include <cstdint>
 #include <string>
 
-#include "brpc/server.h"
 #include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -32,7 +31,6 @@
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/service/mdsstat_service.h"
 #include "mdsv2/storage/dingodb_storage.h"
-#include "openssl/asn1.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -307,63 +305,50 @@ KVStoragePtr Server::GetKVStorage() {
 }
 
 void Server::Run() {
-  brpc::Server brpc_server;
-
   CHECK(read_worker_set_ != nullptr) << "read worker set is nullptr.";
   CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
   CHECK(quota_processor_ != nullptr) << "quota processor is nullptr.";
 
   MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_);
-  CHECK(brpc_server.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
+  CHECK(brpc_server_.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
   DebugServiceImpl debug_service(file_system_set_);
-  CHECK(brpc_server.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
+  CHECK(brpc_server_.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
 
   MdsStatServiceImpl mds_stat_service;
-  CHECK(brpc_server.AddService(&mds_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+  CHECK(brpc_server_.AddService(&mds_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
       << "add mdsstat service error.";
 
   FsStatServiceImpl fs_stat_service;
-  CHECK(brpc_server.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";
+  CHECK(brpc_server_.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";
 
   brpc::ServerOptions option;
-  CHECK(brpc_server.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
+  CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
 
-  brpc_server.RunUntilAskedToQuit();
-  LOG(INFO) << "stop 0000";
-
-  brpc_server.Stop(0);
-
-  brpc_server.Join();
+  while (!brpc::IsAskedToQuit() && !stop_.load()) {
+    bthread_usleep(1000000L);
+  }
 }
 
 void Server::Stop() {
-  LOG(INFO) << "stop 00010";
+  // Only stop once
+  bool expected = false;
+  if (!stop_.compare_exchange_strong(expected, true)) {
+    return;
+  }
+
+  brpc_server_.Stop(0);
+  brpc_server_.Join();
   quota_processor_->Destroy();
-  LOG(INFO) << "stop 0001";
   renamer_->Destroy();
-
-  LOG(INFO) << "stop 0002";
   mutation_processor_->Destroy();
-
-  LOG(INFO) << "stop 0003";
   heartbeat_.Destroy();
-
-  LOG(INFO) << "stop 0004";
   crontab_manager_.Destroy();
-
-  LOG(INFO) << "stop 0005";
   read_worker_set_->Destroy();
-
-  LOG(INFO) << "stop 0006";
   write_worker_set_->Destroy();
-
-  LOG(INFO) << "stop 0007";
   mds_monitor_->Destroy();
-  LOG(INFO) << "stop 0008";
 }
 
 }  // namespace mdsv2
-
 }  // namespace dingofs

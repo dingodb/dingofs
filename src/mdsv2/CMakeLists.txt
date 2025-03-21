@@ -52,6 +52,8 @@ target_link_libraries(mdsv2_lib
   fmt
   gflags
   glog
+  backtrace
+  libunwind
 )
 
 add_executable(dingo-mdsv2 main.cc)
