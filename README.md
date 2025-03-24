@@ -1,18 +1,53 @@
-# DINGOFS
+# DingoFS
 
-## What's dingofs
+[DingoFS](https://github.com/dingodb/dingofs) is a cloud-native distributed high-speed file storage system designed and developed by [DataCanvas](https://www.datacanvas.com/). It integrates multiple features such as elasticity, multi-cloud compatibility, multi-protocol convergence, and exceptional performance.By leveraging its multi-tiered, multi-type, and high-performance distributed multi-level caching architecture, DingoFS accelerates data I/O for AI workflows, effectively addressing burst I/O challenges in AI scenarios. Additionally, it provides local cache storage capabilities to meet the full lifecycle storage requirements of large-scale AI models.
 
-DingoFS is a project fork from Curve. 
 
-Curve is a sandbox project hosted by the CNCF Foundation. It's cloud-native, high-performance, and easy to operate. Curve is an open-source distributed storage system for block and shared file storage.
+## Key Features
 
-## Requirements
+**1. POSIX Compliance**
 
-gcc 13
+DingoFS delivers a native file system-like operational experience, enabling seamless system integration.
 
-[dingo-eureka](https://github.com/dingodb/dingo-eureka)
+**2. AI-Native Architecture**
 
-## Dependencies
+Deeply optimized for large language model (LLM) workflows, efficiently managing massive training datasets and checkpoint workloads.
+
+**3. S3 Protocol Compatibility**
+
+DingoFS supports standard S3 interface protocols for streamlined access to filesystem namespace resources.
+
+**4. Fully Distributed Architecture**
+
+DingoFS's metadata Service (MDS), data storage layer, caching system, and client components all support linear scalability.
+
+**5. Exceptional Performance**
+
+Combines SSD-level low-latency responsiveness with object storage-grade elastic throughput capacity.
+
+**6. Intelligent Caching Acceleration System**
+
+DingFS implements a three-tier caching topology (memory/local SSD/distributed cluster) to deliver high-throughput, low-latency intelligent I/O acceleration for AI workloads.
+
+
+## Get Start
+
+## 1. Installation prerequisites
+### Linux Operating system
+| Release    | Version     | 
+|----------|---------------|
+| Debian   | 9+   |
+| Centos   | 7+   |
+| Ubuntu   | 20+  |
+### Network
+Deploying a cluster via DingoAdm requires the following two network prerequisites:
+
+- The control machine where DingoAdm is installed must have SSH access to the target servers for service deployment.
+
+- All servers must be able to pull images from the Docker registry.
+
+## 2. Install dependencies
+We recommend Rocky and Ubuntu to develop the DingoFS codebase.
 
 ### Rocky 8.9/9.3
 
@@ -26,9 +61,7 @@ sudo cp -rf cmake-3.30.1-linux-x86_64/bin/* /usr/local/bin/ &&   sudo cp -rf  cm
 
 source /opt/rh/gcc-toolset-13/enable
 ```
-
 ### Ubuntu 22.04/24.04
-
 ```sh
 sudo apt update
 sudo apt install -y make gcc g++ libnl-genl-3-dev libunwind-dev libfuse3-dev python3-dev
@@ -38,37 +71,71 @@ tar zxvf cmake-3.30.1-linux-x86_64.tar.gz
 sudo cp -rf cmake-3.30.1-linux-x86_64/bin/* /usr/local/bin/ && sudo cp -rf  cmake-3.30.1-linux-x86_64/share/* /usr/local/share && rm -rf cmake-3.30.1-linux-x86_64
 ```
 
-## How to build 
+### GCC 13
+We recommend using GCC 13 as the primary compiled language.
 
-### Build dingo-eureka
+## 3. Build DingoFS
+### 1. Setup Dingo-eureka and Dingo-sdk
 
-refer https://github.com/dingodb/dingo-eureka
+- [Dingo-eureka](https://github.com/dingodb/dingo-eureka): A Necessary Service Components for DingoFS.
+- [Dingo-sdk](https://github.com/dingodb/dingo-sdk): A Unified Software Development Kit (SDK) required for DingoFS.
 
-
-### Install jemalloc
+### 2. Install jemalloc
 ```shell
 wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
 tar -xjvf jemalloc-5.3.0.tar.bz2
 cd jemalloc-5.3.0 && ./configure && make && make install
 ```
 
-### Download dep 
+ - ### Tips
+If you installed the software using a [Docker](./Docs/Docker.md) container, the container already includes pre-integrated Dingo-eureka and Dingo-sdk.
 
+### 3. Download dep
 ```sh
 git submodule sync
 git submodule update --init --recursive
 ```
 
-### Build Etcd Client
-
+### 4. Build Etcd Client
 ```sh
 bash build_thirdparties.sh
 ```
 
-### Build 
+### 5. Build
 ```sh
 mkdir build
 cd build
 cmake ..
 make -j 32
 ```
+
+
+## Special Thanks
+
+### DataCanvas
+
+DingoFS is Sponsored by [DataCanvas](https://www.datacanvas.com/), a new platform to do data science and data process in real-time.
+
+### Java Profiler tools: YourKit
+
+[![YourKit](https://www.yourkit.com/images/yklogo.png)](https://www.yourkit.com/java/profiler/index.jsp)
+
+I highly recommend YourKit Java Profiler for any preformance critical application you make.
+
+Check it out at https://www.yourkit.com/
+
+
+DingoFS is an open-source project licensed in **License Version 3.0**, welcome any feedback from the community.
+For any support or suggestion, please contact us.
+
+## Contact us
+
+If you have any technical questions or business needs, please contact us.
+
+Attach the Wetchat QR Code
+
+![](./Docs/en/images/dingo_contact_Wetchat.png)
+
+Attach the Offical Account QR Code
+
+![](./Docs/en/images/dingo_contact_officalAccount.png)
