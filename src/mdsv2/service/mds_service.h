@@ -22,6 +22,7 @@
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/quota.h"
 #include "mdsv2/service/service_helper.h"
+#include "mdsv2/statistics/fs_stat.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -29,7 +30,7 @@ namespace mdsv2 {
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
   MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system,
-                 QuotaProcessorPtr quota_processor);
+                 QuotaProcessorPtr quota_processor, FsStatsUPtr fs_stat);
 
   // mds
   void GetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
@@ -277,18 +278,21 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   // fs statistics
   void DoSetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsStatsRequest* request,
-                    pb::mdsv2::SetFsStatsResponse* response, google::protobuf::Closure* done);
+                    pb::mdsv2::SetFsStatsResponse* response, TraceClosure* done);
   void DoGetFsStats(google::protobuf::RpcController* controller, const pb::mdsv2::GetFsStatsRequest* request,
-                    pb::mdsv2::GetFsStatsResponse* response, google::protobuf::Closure* done);
+                    pb::mdsv2::GetFsStatsResponse* response, TraceClosure* done);
   void DoGetFsPerSecondStats(google::protobuf::RpcController* controller,
                              const pb::mdsv2::GetFsPerSecondStatsRequest* request,
-                             pb::mdsv2::GetFsPerSecondStatsResponse* response, google::protobuf::Closure* done);
+                             pb::mdsv2::GetFsPerSecondStatsResponse* response, TraceClosure* done);
 
   // file system set
   FileSystemSetPtr file_system_set_;
 
   // quota processor
   QuotaProcessorPtr quota_processor_;
+
+  // fs stats
+  FsStatsUPtr fs_stat_;
 
   // Run service request.
   WorkerSetPtr read_worker_set_;

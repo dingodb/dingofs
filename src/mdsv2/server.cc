@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "fmt/core.h"
 #include "gflags/gflags.h"
@@ -30,6 +31,7 @@
 #include "mdsv2/service/fsstat_service.h"
 #include "mdsv2/service/mds_service.h"
 #include "mdsv2/service/mdsstat_service.h"
+#include "mdsv2/statistics/fs_stat.h"
 #include "mdsv2/storage/dingodb_storage.h"
 
 namespace dingofs {
@@ -310,7 +312,11 @@ void Server::Run() {
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
   CHECK(quota_processor_ != nullptr) << "quota processor is nullptr.";
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_);
+  auto fs_stats = FsStats::New(kv_storage_);
+  CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
+
+  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_,
+                             std::move(fs_stats));
   CHECK(brpc_server_.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
   DebugServiceImpl debug_service(file_system_set_);

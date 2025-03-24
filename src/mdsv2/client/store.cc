@@ -46,6 +46,38 @@ bool StoreClient::Init(const std::string& coor_addr) {
   return kv_storage_->Init(store_addrs);
 }
 
+bool StoreClient::CreateLockTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetLockTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create lock table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create lock table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
+bool StoreClient::CreateMdsTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetMdsTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create mds table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create mds table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
 bool StoreClient::CreateFsTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
@@ -57,6 +89,38 @@ bool StoreClient::CreateFsTable(const std::string& name) {
   }
 
   DINGO_LOG(INFO) << fmt::format("create fs table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
+bool StoreClient::CreateFsQuotaTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetQuotaTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create fs quota table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create fs quota table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
+bool StoreClient::CreateFsStatsTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetFsStatsTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create fs stats table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create fs stats table success, start_key({}), end_key({}).",
                                  Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
 
   return true;

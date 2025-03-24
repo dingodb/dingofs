@@ -20,6 +20,7 @@ add_subdirectory(mds)
 add_subdirectory(service)
 add_subdirectory(storage)
 add_subdirectory(background)
+add_subdirectory(statistics)
 add_subdirectory(client)
 
 add_library(mdsv2_lib
@@ -36,6 +37,7 @@ target_link_libraries(mdsv2_lib
   mdsv2_storage
   mdsv2_service
   mdsv2_background
+  mdsv2_statistics
 
   dingofs_utils
 

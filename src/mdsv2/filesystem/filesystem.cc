@@ -1719,10 +1719,10 @@ Status FileSystem::Rename(Context& ctx, uint64_t old_parent_ino, const std::stri
 Status FileSystem::RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
                                    uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
                                    uint64_t& new_parent_version) {
+  Status status;
   int retry = 0;
   do {
-    auto status =
-        Rename(ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version, new_parent_version);
+    status = Rename(ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version, new_parent_version);
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       return status;
     }
@@ -1730,7 +1730,7 @@ Status FileSystem::RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const 
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
-  return Status::OK();
+  return status;
 }
 
 Status FileSystem::CommitRename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
@@ -2404,7 +2404,49 @@ Status FileSystemSet::DeleteFs(const std::string& fs_name) {
   return Status::OK();
 }
 
-Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info) {
+Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, const pb::mdsv2::FsInfo& fs_info) {
+  auto trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
+
+  std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
+
+  Status status;
+  int retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+
+    std::string value;
+    status = txn->Get(fs_key, value);
+    if (!status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("get fs({}) fail, {}.", fs_name, status.error_str()));
+    }
+
+    auto new_fs_info = MetaDataCodec::DecodeFSValue(value);
+    new_fs_info.set_capacity(fs_info.capacity());
+    new_fs_info.set_block_size(fs_info.block_size());
+    new_fs_info.set_owner(fs_info.owner());
+    new_fs_info.set_recycle_time_hour(fs_info.recycle_time_hour());
+
+    txn->Put(fs_key, MetaDataCodec::EncodeFSValue(new_fs_info));
+
+    status = txn->Commit();
+    trace_txn = txn->GetTrace();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.retry = retry;
+
+  return status;
+}
+
+Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info) {
+  auto& trace_txn = ctx.GetTrace().GetTxn();
+
+  uint64_t now_us = Helper::TimestampUs();
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
   std::string value;
   Status status = kv_storage_->Get(fs_key, value);
@@ -2412,12 +2454,18 @@ Status FileSystemSet::GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& f
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
   }
 
+  trace_txn.read_time_us = Helper::TimestampUs() - now_us;
+
   fs_info = MetaDataCodec::DecodeFSValue(value);
 
   return Status::OK();
 }
 
-Status FileSystemSet::GetAllFsInfo(std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
+Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
+  auto& trace_txn = ctx.GetTrace().GetTxn();
+
+  uint64_t now_us = Helper::TimestampUs();
+
   Range range;
   MetaDataCodec::GetFsTableRange(range.start_key, range.end_key);
 
@@ -2427,6 +2475,8 @@ Status FileSystemSet::GetAllFsInfo(std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
   if (!status.ok()) {
     return status;
   }
+
+  trace_txn.read_time_us = Helper::TimestampUs() - now_us;
 
   for (const auto& kv : kvs) {
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
@@ -2503,6 +2553,18 @@ FileSystemPtr FileSystemSet::GetFileSystem(const std::string& fs_name) {
   }
 
   return nullptr;
+}
+
+uint32_t FileSystemSet::GetFsId(const std::string& fs_name) {
+  utils::ReadLockGuard lk(lock_);
+
+  for (auto& [fs_id, fs] : fs_map_) {
+    if (fs->FsName() == fs_name) {
+      return fs_id;
+    }
+  }
+
+  return 0;
 }
 
 std::vector<FileSystemPtr> FileSystemSet::GetAllFileSystem() {

@@ -25,11 +25,15 @@ namespace mdsv2 {
 
 class MetaDataCodec {
  public:
+  static void GetLockTableRange(std::string& start_key, std::string& end_key);
+  static void GetMdsTableRange(std::string& start_key, std::string& end_key);
   static void GetFsTableRange(std::string& start_key, std::string& end_key);
   static void GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetFsQuotaRange(std::string& start_key, std::string& end_key);
+  static void GetQuotaTableRange(std::string& start_key, std::string& end_key);
   static void GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetFsStatsTableRange(std::string& start_key, std::string& end_key);
+  static void GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
 
   // format: [$prefix, $type, $kDelimiter, $name]
   static std::string EncodeFSKey(const std::string& name);
@@ -66,6 +70,13 @@ class MetaDataCodec {
   static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
   static std::string EncodeDirQuotaValue(const pb::mdsv2::Quota& quota);
   static pb::mdsv2::Quota DecodeDirQuotaValue(const std::string& value);
+
+  // fs stats
+  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $time]
+  static std::string EncodeFsStatsKey(uint32_t fs_id, uint64_t time);
+  static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time);
+  static std::string EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats);
+  static pb::mdsv2::FsStatsData DecodeFsStatsValue(const std::string& value);
 };
 
 }  // namespace mdsv2

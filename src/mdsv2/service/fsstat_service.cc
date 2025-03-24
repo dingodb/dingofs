@@ -27,6 +27,7 @@
 #include "butil/iobuf.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
+#include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/filesystem/fs_utils.h"
@@ -187,8 +188,9 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetPtr file_sys
   os << "<body>";
   server->PrintTabsBody(os, "fsstat");
 
+  Context ctx;
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
-  file_system_set->GetAllFsInfo(fs_infoes);
+  file_system_set->GetAllFsInfo(ctx, fs_infoes);
   // sort by fs_id
   sort(fs_infoes.begin(), fs_infoes.end(),
        [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });

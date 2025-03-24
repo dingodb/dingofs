@@ -38,7 +38,11 @@ DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
-DEFINE_string(fs_table_name, "dingofs", "fs table name");
+DEFINE_string(lock_table_name, "dingofs-lock", "lock table name");
+DEFINE_string(mds_table_name, "dingofs-mds", "mds table name");
+DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
+DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
+DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
 
 std::set<std::string> g_mds_cmd = {"create_fs", "delete_fs", "get_fs", "mkdir", "batch_mkdir", "mknod", "batch_mknod"};
 
@@ -125,8 +129,27 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    if (FLAGS_cmd == "create_fs_table") {
+    if (FLAGS_cmd == "create_lock_table") {
+      store_client.CreateLockTable(FLAGS_lock_table_name);
+
+    } else if (FLAGS_cmd == "create_mds_table") {
+      store_client.CreateMdsTable(FLAGS_mds_table_name);
+
+    } else if (FLAGS_cmd == "create_fs_table") {
       store_client.CreateFsTable(FLAGS_fs_table_name);
+
+    } else if (FLAGS_cmd == "create_quota_table") {
+      store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
+
+    } else if (FLAGS_cmd == "create_stats_table") {
+      store_client.CreateFsStatsTable(FLAGS_stats_table_name);
+
+    } else if (FLAGS_cmd == "create_all_table") {
+      store_client.CreateLockTable(FLAGS_lock_table_name);
+      store_client.CreateMdsTable(FLAGS_mds_table_name);
+      store_client.CreateFsTable(FLAGS_fs_table_name);
+      store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
+      store_client.CreateFsStatsTable(FLAGS_stats_table_name);
 
     } else if (FLAGS_cmd == "tree") {
       store_client.PrintDentryTree(FLAGS_fs_id, true);

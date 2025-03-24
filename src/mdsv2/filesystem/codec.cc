@@ -35,16 +35,36 @@ static const size_t kPrefixSize = std::char_traits<char>::length(kPrefix);
 static const char kDelimiter = ':';
 
 enum KeyType : unsigned char {
-  kTypeFS = 1,
-  kTypeDentryOrDir = 2,
-  kTypeFile = 3,
-  kTypeFsQuota = 4,
-  kTypeDirQuota = 5,
+  kTypeLock = 1,
+  kTypeMds = 2,
+  kTypeFS = 3,
+  kTypeDentryOrDir = 4,
+  kTypeFile = 5,
+  kTypeFsQuota = 6,
+  kTypeDirQuota = 7,
+  kTypeFsStats = 8,
 };
+
+void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeLock);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeLock + 1);
+}
+
+void MetaDataCodec::GetMdsTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeMds);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeMds + 1);
+}
 
 void MetaDataCodec::GetFsTableRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeFS);
+
   end_key = kPrefix;
   end_key.push_back(kTypeFS + 1);
 }
@@ -73,9 +93,10 @@ void MetaDataCodec::GetFileInodeTableRange(uint32_t fs_id, std::string& start_ke
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
-void MetaDataCodec::GetFsQuotaRange(std::string& start_key, std::string& end_key) {
+void MetaDataCodec::GetQuotaTableRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeFsQuota);
+
   end_key = kPrefix;
   end_key.push_back(kTypeFsQuota + 1);
 }
@@ -88,6 +109,26 @@ void MetaDataCodec::GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std
 
   end_key = kPrefix;
   end_key.push_back(kTypeDirQuota);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
+}
+
+void MetaDataCodec::GetFsStatsTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeFsStats);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFsStats + 1);
+}
+
+void MetaDataCodec::GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeFsStats);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFsStats);
   end_key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
@@ -286,7 +327,40 @@ std::string MetaDataCodec::EncodeDirQuotaValue(const pb::mdsv2::Quota& quota) { 
 pb::mdsv2::Quota MetaDataCodec::DecodeDirQuotaValue(const std::string& value) {
   pb::mdsv2::Quota quota;
   CHECK(quota.ParseFromString(value)) << "parse quota fail.";
-  return quota;
+  return std::move(quota);
+}
+
+std::string MetaDataCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time) {
+  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+
+  std::string key;
+  key.reserve(kPrefixSize + 15);
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeFsStats);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(time, key);
+
+  return key;
+}
+
+void MetaDataCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time) {
+  CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeFsStats) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
+  time = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
+}
+
+std::string MetaDataCodec::EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats) { return stats.SerializeAsString(); }
+
+pb::mdsv2::FsStatsData MetaDataCodec::DecodeFsStatsValue(const std::string& value) {
+  pb::mdsv2::FsStatsData stats;
+  CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
+  return std::move(stats);
 }
 
 }  // namespace mdsv2

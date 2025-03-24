@@ -280,8 +280,9 @@ class FileSystemSet {
   Status MountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
   Status DeleteFs(const std::string& fs_name);
-  Status GetFsInfo(const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
-  Status GetAllFsInfo(std::vector<pb::mdsv2::FsInfo>& fs_infoes);
+  Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const pb::mdsv2::FsInfo& fs_info);
+  Status GetFsInfo(Context& ctx, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
+  Status GetAllFsInfo(Context& ctx, std::vector<pb::mdsv2::FsInfo>& fs_infoes);
   Status RefreshFsInfo(const std::string& fs_name);
   Status RefreshFsInfo(uint32_t fs_id);
 
@@ -289,6 +290,7 @@ class FileSystemSet {
 
   FileSystemPtr GetFileSystem(uint32_t fs_id);
   FileSystemPtr GetFileSystem(const std::string& fs_name);
+  uint32_t GetFsId(const std::string& fs_name);
   std::vector<FileSystemPtr> GetAllFileSystem();
 
   // load already exist filesystem
