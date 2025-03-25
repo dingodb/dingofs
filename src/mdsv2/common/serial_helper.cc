@@ -108,6 +108,53 @@ int64_t SerialHelper::ReadLong(const std::string_view& value) {
   return static_cast<int64_t>(l);
 }
 
+void SerialHelper::WriteULong(uint64_t value, std::string& output) {
+  if (BAIDU_LIKELY(IsLE())) {
+    // value is little endian
+    output.push_back(static_cast<char>(value >> 56));
+    output.push_back(static_cast<char>(value >> 48));
+    output.push_back(static_cast<char>(value >> 40));
+    output.push_back(static_cast<char>(value >> 32));
+    output.push_back(static_cast<char>(value >> 24));
+    output.push_back(static_cast<char>(value >> 16));
+    output.push_back(static_cast<char>(value >> 8));
+    output.push_back(static_cast<char>(value));
+  } else {
+    // value is big endian
+    output.push_back(static_cast<char>(value));
+    output.push_back(static_cast<char>(value >> 8));
+    output.push_back(static_cast<char>(value >> 16));
+    output.push_back(static_cast<char>(value >> 24));
+    output.push_back(static_cast<char>(value >> 32));
+    output.push_back(static_cast<char>(value >> 40));
+    output.push_back(static_cast<char>(value >> 48));
+    output.push_back(static_cast<char>(value >> 56));
+  }
+}
+
+uint64_t SerialHelper::ReadULong(const std::string_view& value) {
+  CHECK(value.size() >= 8) << "value size must is gt 8.";
+
+  uint64_t l = 0;
+  l |= (value.at(0) & 0xFF);
+  l <<= 8;
+  l |= (value.at(1) & 0xFF);
+  l <<= 8;
+  l |= (value.at(2) & 0xFF);
+  l <<= 8;
+  l |= (value.at(3) & 0xFF);
+  l <<= 8;
+  l |= (value.at(4) & 0xFF);
+  l <<= 8;
+  l |= (value.at(5) & 0xFF);
+  l <<= 8;
+  l |= (value.at(6) & 0xFF);
+  l <<= 8;
+  l |= (value.at(7) & 0xFF);
+
+  return l;
+}
+
 void SerialHelper::WriteLongWithNegation(int64_t value, std::string& output) {
   CHECK(value >= 0) << "value must be positive.";
 

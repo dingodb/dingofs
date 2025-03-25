@@ -37,6 +37,10 @@ class SerialHelper {
   static void WriteLong(int64_t value, std::string& output);
   static int64_t ReadLong(const std::string_view& value);
 
+  // write value
+  static void WriteULong(uint64_t value, std::string& output);
+  static uint64_t ReadULong(const std::string_view& value);
+
   // write ~value
   static void WriteLongWithNegation(int64_t value, std::string& output);
   static int64_t ReadLongWithNegation(const std::string_view& value);

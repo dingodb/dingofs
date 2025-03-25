@@ -25,13 +25,17 @@
 #include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
+#include "mdsv2/filesystem/codec.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_uint32(distribution_lock_lease_ttl_ms, 10000, "distribution lock lease ttl.");
+DEFINE_uint32(distribution_lock_lease_ttl_ms, 18000, "distribution lock lease ttl.");
 DEFINE_uint32(distribution_lock_scan_size, 1024, "distribution lock scan size.");
+
+DECLARE_uint32(txn_max_retry_times);
 
 CoorDistributionLock::CoorDistributionLock(CoordinatorClientPtr coordinator_client, const std::string& lock_prefix,
                                            int64_t mds_id)
@@ -351,7 +355,7 @@ void CoorDistributionLock::CheckLock() {
       DINGO_LOG(INFO) << fmt::format("[dlock.{}] mds({}) own lock.", lock_key, mds_id_);
 
       is_locked_.store(true);
-      bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 2);
+      bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 3);
 
     } else {
       // not own lock, watch key
@@ -370,6 +374,162 @@ void CoorDistributionLock::StopCheckLock() {
   }
 
   if (bthread_join(check_lock_th_, nullptr) != 0) {
+    DINGO_LOG(ERROR) << fmt::format("[dlock.{}] bthread_join fail.", LockKey());
+  }
+}
+
+StoreDistributionLock::StoreDistributionLock(const std::string& name, int64_t mds_id) : name_(name), mds_id_(mds_id) {}
+
+StoreDistributionLockPtr StoreDistributionLock::GetSelfPtr() {
+  return std::dynamic_pointer_cast<StoreDistributionLock>(shared_from_this());
+}
+
+bool StoreDistributionLock::Init() { return true; }
+
+void StoreDistributionLock::Destroy() {
+  // just run once
+  bool expect = false;
+  if (!is_stop_.compare_exchange_strong(expect, true)) {
+    return;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] destroy dlock.", LockKey());
+
+  StopRenewLease();
+}
+
+std::string StoreDistributionLock::LockKey() { return name_; }
+
+bool StoreDistributionLock::IsLocked() {
+  if (!is_locked_.load()) {
+    return false;
+  }
+
+  // silence period, avoid multi-owner
+  uint64_t now_ns = Helper::TimestampNs();
+  if (now_ns < last_lock_time_ns_.load() + FLAGS_distribution_lock_lease_ttl_ms * 1000 * 1000) {
+    return false;
+  }
+
+  return is_locked_.load();
+}
+
+Status StoreDistributionLock::RenewLease() {
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] renew lease.", LockKey());
+
+  Status status;
+  int retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+
+    const std::string key = MetaDataCodec::EncodeLockKey(name_);
+    std::string value;
+    status = txn->Get(key, value);
+    if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+      DINGO_LOG(ERROR) << fmt::format("[dlock.{}] get lock key fail, error: {}", LockKey(), status.error_str());
+      break;
+    }
+
+    bool need_update_last_lock_time = false;
+    uint64_t now_ns = Helper::TimestampNs();
+    uint64_t expire_time_ns = 0;
+    if (status.ok()) {
+      // already exist lock owner
+      int64_t lock_mds_id;
+      MetaDataCodec::DecodeLockValue(value, lock_mds_id, expire_time_ns);
+
+      // self is lock owner
+      if (lock_mds_id == mds_id_) {
+        is_locked_.store(true);
+        expire_time_ns = Helper::TimestampNs() + FLAGS_distribution_lock_lease_ttl_ms * 1000 * 1000;
+
+      } else {
+        is_locked_.store(false);
+        if (expire_time_ns >= now_ns) {
+          // self is not lock owner, and lock is not expired
+          break;
+
+        } else {
+          // self is not lock owner, but lock is expired
+          expire_time_ns = Helper::TimestampNs() + FLAGS_distribution_lock_lease_ttl_ms * 1000 * 1000;
+          need_update_last_lock_time = true;
+        }
+      }
+
+    } else if (status.error_code() != pb::error::ENOT_FOUND) {
+      // not exist lock owner
+      expire_time_ns = Helper::TimestampNs() + FLAGS_distribution_lock_lease_ttl_ms * 1000 * 1000;
+      need_update_last_lock_time = true;
+    }
+
+    txn->Put(key, MetaDataCodec::EncodeLockValue(mds_id_, expire_time_ns));
+    status = txn->Commit();
+    if (status.ok()) {
+      is_locked_.store(true);
+      if (need_update_last_lock_time) last_lock_time_ns_.store(now_ns);
+      DINGO_LOG(ERROR) << fmt::format("[dlock.{}] own lock.", LockKey());
+
+      break;
+
+    } else if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  DINGO_LOG(INFO) << fmt::format("[dlock.{}] renew lease finish, error: {}", LockKey(), status.error_str());
+
+  return status;
+}
+
+bool StoreDistributionLock::LaunchRenewLease() {
+  struct Params {
+    StoreDistributionLockPtr self;
+  };
+
+  Params* param = new Params();
+  param->self = GetSelfPtr();
+
+  // bthread_attr_t attr;
+  if (bthread_start_background(
+          &lease_th_, nullptr,
+          [](void* arg) -> void* {
+            Params* param = static_cast<Params*>(arg);
+            auto self = param->self;
+
+            for (;;) {
+              if (self->is_stop_.load()) {
+                break;
+              }
+
+              self->RenewLease();
+
+              bthread_usleep(FLAGS_distribution_lock_lease_ttl_ms * 1000 / 3);
+            }
+
+            delete param;
+            return nullptr;
+          },
+          (void*)param) != 0) {
+    DINGO_LOG(FATAL) << "bthread_start_background fail.";
+    delete param;
+    return false;
+  }
+
+  return true;
+}
+
+void StoreDistributionLock::StopRenewLease() {
+  if (lease_th_ == 0) {
+    return;
+  }
+
+  if (bthread_stop(lease_th_) != 0) {
+    DINGO_LOG(ERROR) << fmt::format("[dlock.{}] bthread_stop fail.", LockKey());
+  }
+
+  if (bthread_join(lease_th_, nullptr) != 0) {
     DINGO_LOG(ERROR) << fmt::format("[dlock.{}] bthread_join fail.", LockKey());
   }
 }

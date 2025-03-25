@@ -134,9 +134,50 @@ void MetaDataCodec::GetFsStatsRange(uint32_t fs_id, std::string& start_key, std:
 }
 
 // format: [$prefix, $type, $kDelimiter, $name]
+std::string MetaDataCodec::EncodeLockKey(const std::string& name) {
+  CHECK(!name.empty()) << fmt::format("lock name is empty.", name);
+
+  std::string key;
+  key.reserve(kPrefixSize + 2 + name.size());
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeLock);
+  key.push_back(kDelimiter);
+  key.append(name);
+
+  return std::move(key);
+}
+
+void MetaDataCodec::DecodeLockKey(const std::string& key, std::string& name) {
+  CHECK(key.size() > (kPrefixSize + 2)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeLock) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  name = key.substr(kPrefixSize + 2);
+}
+
+// format: [$mds_id, $kDelimiter, $expire_time_ns]
+std::string MetaDataCodec::EncodeLockValue(int64_t mds_id, uint64_t expire_time_ns) {
+  std::string value;
+
+  SerialHelper::WriteLong(mds_id, value);
+  value.push_back(kDelimiter);
+  SerialHelper::WriteULong(expire_time_ns, value);
+
+  return std::move(value);
+}
+
+void MetaDataCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ns) {
+  CHECK(value.size() > 16) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
+
+  mds_id = SerialHelper::ReadLong(value);
+  expire_time_ns = SerialHelper::ReadULong(value.substr(8));
+}
+
+// format: [$prefix, $type, $kDelimiter, $name]
 // size: >= 1+1+1 = 3
 std::string MetaDataCodec::EncodeFSKey(const std::string& name) {
-  CHECK(!name.empty()) << fmt::format("FS name is empty.", name);
+  CHECK(!name.empty()) << fmt::format("fs name is empty.", name);
 
   std::string key;
   key.reserve(kPrefixSize + 2 + name.size());
@@ -146,13 +187,13 @@ std::string MetaDataCodec::EncodeFSKey(const std::string& name) {
   key.push_back(kDelimiter);
   key.append(name);
 
-  return key;
+  return std::move(key);
 }
 
 void MetaDataCodec::DecodeFSKey(const std::string& key, std::string& name) {
-  CHECK(key.size() > (kPrefixSize + 2)) << fmt::format("Key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeFS) << "Key type is invalid.";
-  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
+  CHECK(key.size() > (kPrefixSize + 2)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeFS) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
 
   name = key.substr(kPrefixSize + 2);
 }
@@ -161,14 +202,14 @@ std::string MetaDataCodec::EncodeFSValue(const pb::mdsv2::FsInfo& fs_info) { ret
 
 pb::mdsv2::FsInfo MetaDataCodec::DecodeFSValue(const std::string& value) {
   pb::mdsv2::FsInfo fs_info;
-  CHECK(fs_info.ParseFromString(value)) << "Parse fs info fail.";
+  CHECK(fs_info.ParseFromString(value)) << "parse fs info fail.";
   return fs_info;
 }
 
 // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino, $kDelimiter, $name]
 /// size: >= kPrefixSize+1+1+4+1+8+1+1
 std::string MetaDataCodec::EncodeDentryKey(uint32_t fs_id, uint64_t ino, const std::string& name) {
-  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
   key.reserve(kPrefixSize + 16 + name.size());
@@ -187,7 +228,7 @@ std::string MetaDataCodec::EncodeDentryKey(uint32_t fs_id, uint64_t ino, const s
 
 void MetaDataCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name) {
   CHECK(key.size() >= (kPrefixSize + 16))
-      << fmt::format("Key({}) length({}) is invalid.", Helper::StringToHex(key), key.size());
+      << fmt::format("key({}) length({}) is invalid.", Helper::StringToHex(key), key.size());
   CHECK(key.at(kPrefixSize) == KeyType::kTypeDentryOrDir) << "Key type is invalid.";
   CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
 
@@ -200,13 +241,13 @@ std::string MetaDataCodec::EncodeDentryValue(const pb::mdsv2::Dentry& dentry) { 
 
 pb::mdsv2::Dentry MetaDataCodec::DecodeDentryValue(const std::string& value) {
   pb::mdsv2::Dentry dentry;
-  CHECK(dentry.ParseFromString(value)) << "Parse dentry fail.";
+  CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
   return dentry;
 }
 
 void MetaDataCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
-  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
-  CHECK(ino > 0) << fmt::format("Invalid ino {}.", ino);
+  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
+  CHECK(ino > 0) << fmt::format("invalid ino {}.", ino);
 
   start_key.reserve(kPrefixSize + 16);
 
@@ -230,7 +271,7 @@ void MetaDataCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string&
 uint32_t MetaDataCodec::InodeKeyLength() { return kPrefixSize + 15; }
 
 static std::string EncodeInodeKeyImpl(int fs_id, uint64_t ino, KeyType type) {
-  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
   key.reserve(kPrefixSize + 15);
@@ -250,8 +291,8 @@ std::string MetaDataCodec::EncodeInodeKey(uint32_t fs_id, uint64_t ino) {
 }
 
 void MetaDataCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
-  CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("Key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "Delimiter is invalid.";
+  CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
   ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
@@ -261,13 +302,13 @@ std::string MetaDataCodec::EncodeInodeValue(const pb::mdsv2::Inode& inode) { ret
 
 pb::mdsv2::Inode MetaDataCodec::DecodeInodeValue(const std::string& value) {
   pb::mdsv2::Inode inode;
-  CHECK(inode.ParseFromString(value)) << "Parse inode fail.";
+  CHECK(inode.ParseFromString(value)) << "parse inode fail.";
   return std::move(inode);
 }
 
 // fs format: [$prefix, $type, $kDelimiter, $fs_id]
 std::string MetaDataCodec::EncodeFsQuotaKey(uint32_t fs_id) {
-  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
   key.reserve(kPrefixSize + 15);
@@ -298,7 +339,7 @@ pb::mdsv2::Quota MetaDataCodec::DecodeFsQuotaValue(const std::string& value) {
 
 // dir format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino]
 std::string MetaDataCodec::EncodeDirQuotaKey(uint32_t fs_id, uint64_t ino) {
-  CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
+  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
   key.reserve(kPrefixSize + 15);

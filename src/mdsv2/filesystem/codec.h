@@ -35,6 +35,14 @@ class MetaDataCodec {
   static void GetFsStatsTableRange(std::string& start_key, std::string& end_key);
   static void GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
 
+  // lock
+  // format: [$prefix, $type, $kDelimiter, $name]
+  static std::string EncodeLockKey(const std::string& name);
+  static void DecodeLockKey(const std::string& key, std::string& name);
+  static std::string EncodeLockValue(int64_t mds_id, uint64_t expire_time_ns);
+  static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ns);
+
+  // fs
   // format: [$prefix, $type, $kDelimiter, $name]
   static std::string EncodeFSKey(const std::string& name);
   static void DecodeFSKey(const std::string& key, std::string& name);

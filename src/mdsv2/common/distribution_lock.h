@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_COMMON_DISTRIBUTION_H_
 #define DINGOFS_MDSV2_COMMON_DISTRIBUTION_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -24,6 +25,7 @@
 #include "dingosdk/version.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
+#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -44,6 +46,9 @@ using DistributionLockPtr = std::shared_ptr<DistributionLock>;
 
 class CoorDistributionLock;
 using CoorDistributionLockPtr = std::shared_ptr<CoorDistributionLock>;
+
+class StoreDistributionLock;
+using StoreDistributionLockPtr = std::shared_ptr<StoreDistributionLock>;
 
 class CoorDistributionLock : public DistributionLock {
  public:
@@ -96,6 +101,41 @@ class CoorDistributionLock : public DistributionLock {
   bthread_t check_lock_th_{0};
 
   CoordinatorClientPtr coordinator_client_;
+};
+
+// use store transaction implement distribution lock
+// get lock:
+// 1. get key with transaction
+// 2. if key not exist, put key with transaction
+// 3. if key exist,
+class StoreDistributionLock : public DistributionLock {
+ public:
+  StoreDistributionLock(const std::string& name, int64_t mds_id);
+  ~StoreDistributionLock() override = default;
+
+  StoreDistributionLockPtr GetSelfPtr();
+
+  bool Init() override;
+  void Destroy() override;
+  std::string LockKey() override;
+  bool IsLocked() override;
+
+ private:
+  Status RenewLease();
+  bool LaunchRenewLease();
+  void StopRenewLease();
+
+  const std::string name_;
+  int64_t mds_id_;
+
+  std::atomic<bool> is_stop_{false};
+
+  bthread_t lease_th_{0};
+
+  std::atomic<bool> is_locked_{false};
+  std::atomic<uint64_t> last_lock_time_ns_{0};
+
+  KVStoragePtr kv_storage_;
 };
 
 }  // namespace mdsv2
