@@ -135,7 +135,3 @@ If you have any technical questions or business needs, please contact us.
 Attach the Wetchat QR Code
 
 ![](./Docs/en/images/dingo_contact_Wetchat.png)
-
-Attach the Offical Account QR Code
-
-![](./Docs/en/images/dingo_contact_officalAccount.png)
