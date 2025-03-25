@@ -208,7 +208,10 @@ bool Server::InitFileSystem() {
 
 bool Server::InitHeartbeat() {
   DINGO_LOG(INFO) << "init heartbeat.";
-  return heartbeat_.Init();
+  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+
+  heartbeat_ = Heartbeat::New(kv_storage_);
+  return heartbeat_->Init();
 }
 
 bool Server::InitFsInfoSync() {
@@ -238,10 +241,12 @@ bool Server::InitWorkerSet() {
 bool Server::InitMDSMonitor() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
   CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
+  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
-  auto dist_lock = CoorDistributionLock::New(coordinator_client_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
+  // auto dist_lock = CoorDistributionLock::New(coordinator_client_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
 
-  mds_monitor_ = MDSMonitor::New(coordinator_client_, file_system_set_, dist_lock);
+  mds_monitor_ = MDSMonitor::New(file_system_set_, dist_lock);
   CHECK(mds_monitor_ != nullptr) << "new MDSMonitor fail.";
 
   CHECK(mds_monitor_->Init()) << "init MDSMonitor fail.";
@@ -349,7 +354,7 @@ void Server::Stop() {
   quota_processor_->Destroy();
   renamer_->Destroy();
   mutation_processor_->Destroy();
-  heartbeat_.Destroy();
+  heartbeat_->Destroy();
   crontab_manager_.Destroy();
   read_worker_set_->Destroy();
   write_worker_set_->Destroy();

@@ -20,9 +20,9 @@
 #include <vector>
 
 #include "gflags/gflags.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {

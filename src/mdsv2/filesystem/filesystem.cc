@@ -31,12 +31,12 @@
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
@@ -272,7 +272,7 @@ Status FileSystem::ListDentryFromStore(uint64_t parent, const std::string& last_
       }
     }
 
-  } while (kvs.size() < FLAGS_fs_scan_batch_size);
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   return txn->Commit();
 }
@@ -2599,9 +2599,9 @@ bool FileSystemSet::LoadFileSystems() {
     auto file_system = GetFileSystem(fs_info.fs_id());
     if (file_system == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
-      auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                                renamer_, mutation_processor_);
-      AddFileSystem(fs);
+      file_system = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
+                                    kv_storage_, renamer_, mutation_processor_);
+      AddFileSystem(file_system);
 
     } else {
       file_system->RefreshFsInfo(fs_info);

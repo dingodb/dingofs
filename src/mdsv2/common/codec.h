@@ -26,7 +26,9 @@ namespace mdsv2 {
 class MetaDataCodec {
  public:
   static void GetLockTableRange(std::string& start_key, std::string& end_key);
-  static void GetMdsTableRange(std::string& start_key, std::string& end_key);
+  static void GetHeartbeatTableRange(std::string& start_key, std::string& end_key);
+  static void GetHeartbeatMdsRange(std::string& start_key, std::string& end_key);
+  static void GetHeartbeatClientRange(std::string& start_key, std::string& end_key);
   static void GetFsTableRange(std::string& start_key, std::string& end_key);
   static void GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
@@ -39,8 +41,20 @@ class MetaDataCodec {
   // format: [$prefix, $type, $kDelimiter, $name]
   static std::string EncodeLockKey(const std::string& name);
   static void DecodeLockKey(const std::string& key, std::string& name);
-  static std::string EncodeLockValue(int64_t mds_id, uint64_t expire_time_ns);
-  static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ns);
+  static std::string EncodeLockValue(int64_t mds_id, uint64_t expire_time_ms);
+  static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ms);
+
+  // heartbeat
+  // format: [$prefix, $type, $kDelimiter, $role, $kDelimiter, $mds_id]
+  // or format: [$prefix, $type, $kDelimiter, $role, $kDelimiter, $client_mountpoint]
+  static std::string EncodeHeartbeatKey(int64_t mds_id);
+  static std::string EncodeHeartbeatKey(const std::string& client_mountpoint);
+  static void DecodeHeartbeatKey(const std::string& key, int64_t& mds_id);
+  static void DecodeHeartbeatKey(const std::string& key, std::string& client_mountpoint);
+  static std::string EncodeHeartbeatValue(const pb::mdsv2::MDS& mds);
+  static std::string EncodeHeartbeatValue(const pb::mdsv2::Client& client);
+  static void DecodeHeartbeatValue(const std::string& value, pb::mdsv2::MDS& mds);
+  static void DecodeHeartbeatValue(const std::string& value, pb::mdsv2::Client& client);
 
   // fs
   // format: [$prefix, $type, $kDelimiter, $name]

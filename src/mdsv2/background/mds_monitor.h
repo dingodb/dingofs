@@ -17,11 +17,9 @@
 
 #include <atomic>
 #include <memory>
-#include <utility>
 
 #include "mdsv2/common/distribution_lock.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
 
 namespace dingofs {
@@ -32,13 +30,11 @@ using MDSMonitorPtr = std::shared_ptr<MDSMonitor>;
 
 class MDSMonitor {
  public:
-  MDSMonitor(CoordinatorClientPtr coordinator_client, FileSystemSetPtr fs_set, DistributionLockPtr dist_lock)
-      : coordinator_client_(coordinator_client), fs_set_(fs_set), dist_lock_(dist_lock) {}
+  MDSMonitor(FileSystemSetPtr fs_set, DistributionLockPtr dist_lock) : fs_set_(fs_set), dist_lock_(dist_lock) {}
   ~MDSMonitor() = default;
 
-  static MDSMonitorPtr New(CoordinatorClientPtr coordinator_client, FileSystemSetPtr fs_set,
-                           DistributionLockPtr dist_lock) {
-    return std::make_shared<MDSMonitor>(coordinator_client, fs_set, dist_lock);
+  static MDSMonitorPtr New(FileSystemSetPtr fs_set, DistributionLockPtr dist_lock) {
+    return std::make_shared<MDSMonitor>(fs_set, dist_lock);
   }
 
   bool Init();
@@ -48,12 +44,11 @@ class MDSMonitor {
 
  private:
   Status MonitorMDS();
+  Status ProcessFaultMDS(std::vector<MDSMeta>& mdses);
   static void NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name);
   static void NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name);
 
   std::atomic<bool> is_running_{false};
-
-  CoordinatorClientPtr coordinator_client_;
 
   FileSystemSetPtr fs_set_;
 

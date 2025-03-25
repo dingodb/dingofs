@@ -119,6 +119,9 @@ std::string Status::ToString() const {
       case kNoPermitted:
         type = "NoPermitted";
         break;
+      case kNetError:
+        type = "NetError";
+        break;
       default:
         std::string tmp =
             fmt::format("Unknown code({}):", static_cast<int>(code_));

@@ -24,12 +24,12 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {

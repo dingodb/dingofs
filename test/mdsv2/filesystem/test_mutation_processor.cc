@@ -22,9 +22,9 @@
 #include "fmt/core.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/storage/dummy_storage.h"
 

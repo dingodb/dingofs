@@ -17,10 +17,53 @@
 #include <cstdint>
 #include <vector>
 
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "mdsv2/common/logging.h"
 
 namespace dingofs {
 namespace mdsv2 {
+
+static pb::mdsv2::MDS::State ToPbMdsState(MDSMeta::State state) {
+  switch (state) {
+    case MDSMeta::State::kInit:
+      return pb::mdsv2::MDS_State_INIT;
+    case MDSMeta::State::kNormal:
+      return pb::mdsv2::MDS_State_NORMAL;
+    case MDSMeta::State::kAbnormal:
+      return pb::mdsv2::MDS_State_ABNORMAL;
+    default:
+      DINGO_LOG(FATAL) << "Unknown MDSMeta state: " << static_cast<int>(state);
+      break;
+  }
+
+  return pb::mdsv2::MDS_State_INIT;
+}
+
+static MDSMeta::State ToMdsState(pb::mdsv2::MDS::State state) {
+  switch (state) {
+    case pb::mdsv2::MDS_State_INIT:
+      return MDSMeta::State::kInit;
+    case pb::mdsv2::MDS_State_NORMAL:
+      return MDSMeta::State::kNormal;
+    case pb::mdsv2::MDS_State_ABNORMAL:
+      return MDSMeta::State::kAbnormal;
+    default:
+      DINGO_LOG(FATAL) << "Unknown MDS state: " << static_cast<int>(state);
+      break;
+  }
+
+  return MDSMeta::State::kInit;
+}
+
+MDSMeta::MDSMeta(const pb::mdsv2::MDS& pb_mds) {
+  id_ = pb_mds.id();
+  host_ = pb_mds.location().host();
+  port_ = pb_mds.location().port();
+  state_ = ToMdsState(pb_mds.state());
+  register_time_ms_ = pb_mds.register_time_ms();
+  last_online_time_ms_ = pb_mds.last_online_time_ms();
+}
 
 MDSMeta::MDSMeta(const MDSMeta& mds_meta) {
   id_ = mds_meta.id_;
@@ -34,6 +77,18 @@ MDSMeta::MDSMeta(const MDSMeta& mds_meta) {
 std::string MDSMeta::ToString() const {
   return fmt::format("MDSMeta[id={}, host={}, port={}, state={}, register_time_ms={}, last_online_time_ms={}]", id_,
                      host_, port_, static_cast<int>(state_), register_time_ms_, last_online_time_ms_);
+}
+
+pb::mdsv2::MDS MDSMeta::ToProto() const {
+  pb::mdsv2::MDS pb_mds;
+  pb_mds.set_id(id_);
+  pb_mds.mutable_location()->set_host(host_);
+  pb_mds.mutable_location()->set_port(port_);
+  pb_mds.set_state(ToPbMdsState(state_));
+  pb_mds.set_register_time_ms(register_time_ms_);
+  pb_mds.set_last_online_time_ms(last_online_time_ms_);
+
+  return std::move(pb_mds);
 }
 
 void MDSMetaMap::UpsertMDSMeta(const MDSMeta& mds_meta) {

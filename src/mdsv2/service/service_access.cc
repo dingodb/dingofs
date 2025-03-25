@@ -103,7 +103,7 @@ Status ServiceAccess::CheckAlive(const butil::EndPoint& endpoint) {
 
   stub.CheckAlive(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    DINGO_LOG(ERROR) << "send request fail, " << cntl.ErrorText();
+    DINGO_LOG(DEBUG) << "send request fail, " << cntl.ErrorText();
     return Status(pb::error::EINTERNAL, cntl.ErrorText());
   }
 

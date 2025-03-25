@@ -55,11 +55,11 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 
   } else if (vfs_conf.fs_type == "vfs_v2") {
     LOG(INFO) << "use mdsv2 file system.";
-    std::string coor_addr;
-    conf.GetValueFatalIfFail("coordinator.addr", &coor_addr);
-    LOG(INFO) << fmt::format("coordinator addr: {}.", coor_addr);
+    std::string mds_addr;
+    conf.GetValueFatalIfFail("mds.addr", &mds_addr);
+    LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
 
-    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, coor_addr,
+    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
                                               vfs_conf.mount_point);
   } else {
     LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);

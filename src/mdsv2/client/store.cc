@@ -21,9 +21,9 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/storage/dingodb_storage.h"
 #include "mdsv2/storage/storage.h"
@@ -62,17 +62,17 @@ bool StoreClient::CreateLockTable(const std::string& name) {
   return true;
 }
 
-bool StoreClient::CreateMdsTable(const std::string& name) {
+bool StoreClient::CreateHeartbeatTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetMdsTableRange(option.start_key, option.end_key);
+  MetaDataCodec::GetHeartbeatTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create mds table fail, error: {}.", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("create heartbeat table fail, error: {}.", status.error_str());
     return false;
   }
 
-  DINGO_LOG(INFO) << fmt::format("create mds table success, start_key({}), end_key({}).",
+  DINGO_LOG(INFO) << fmt::format("create heartbeat table success, start_key({}), end_key({}).",
                                  Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
 
   return true;

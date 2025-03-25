@@ -20,8 +20,8 @@
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
-#include "mdsv2/filesystem/codec.h"
 
 namespace dingofs {
 namespace mdsv2 {

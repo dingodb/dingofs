@@ -436,34 +436,24 @@ Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
 }
 
 MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
-                                           const std::string& coor_addr,
+                                           const std::string& mds_addr,
                                            const std::string& mountpoint) {
-  LOG(INFO) << fmt::format("fs_name: {}, coor_addr: {}, mountpoint: {}.",
-                           fs_name, coor_addr, mountpoint);
+  LOG(INFO) << fmt::format("fs_name: {}, mds_addr: {}, mountpoint: {}.",
+                           fs_name, mds_addr, mountpoint);
 
   CHECK(!fs_name.empty()) << "fs_name is empty.";
-  CHECK(!coor_addr.empty()) << "coor_addr is empty.";
+  CHECK(!mds_addr.empty()) << "mds_addr is empty.";
   CHECK(!mountpoint.empty()) << "mountpoint is empty.";
 
-  auto coordinator_client = dingofs::mdsv2::DingoCoordinatorClient::New();
-  if (!coordinator_client->Init(coor_addr)) {
-    LOG(ERROR) << "CoordinatorClient init fail.";
-    return nullptr;
-  }
-
-  auto mds_discovery = MDSDiscovery::New(coordinator_client);
-  if (!mds_discovery->Init()) {
-    LOG(ERROR) << "MDSDiscovery init fail.";
-    return nullptr;
-  }
-
-  // use first mds as default, get fs info
-  dingofs::mdsv2::MDSMeta mds_meta;
-  mds_discovery->PickFirstMDS(mds_meta);
-
-  auto rpc = RPC::New(EndPoint(mds_meta.Host(), mds_meta.Port()));
+  auto rpc = RPC::New(mds_addr);
   if (!rpc->Init()) {
     LOG(ERROR) << "RPC init fail.";
+    return nullptr;
+  }
+
+  auto mds_discovery = MDSDiscovery::New(rpc);
+  if (!mds_discovery->Init()) {
+    LOG(ERROR) << "MDSDiscovery init fail.";
     return nullptr;
   }
 

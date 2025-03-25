@@ -22,7 +22,6 @@ namespace dingofs {
 namespace mdsv2 {
 
 void FsInfoSyncTask::Run() {
-  DINGO_LOG(INFO) << "[fs_sync] start...";
   bool ret = file_system_set_->LoadFileSystems();
   DINGO_LOG(INFO) << fmt::format("[fs_sync] finish, load fs {}.", (ret ? "success" : "fail"));
 }

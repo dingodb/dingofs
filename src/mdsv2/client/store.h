@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <map>
 #include <string>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -30,7 +28,7 @@ class StoreClient {
   bool Init(const std::string& coor_addr);
 
   bool CreateLockTable(const std::string& name);
-  bool CreateMdsTable(const std::string& name);
+  bool CreateHeartbeatTable(const std::string& name);
   bool CreateFsTable(const std::string& name);
   bool CreateFsQuotaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);

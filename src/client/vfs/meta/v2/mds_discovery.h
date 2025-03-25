@@ -19,7 +19,8 @@
 #include <memory>
 #include <vector>
 
-#include "mdsv2/coordinator/coordinator_client.h"
+#include "client/common/status.h"
+#include "client/vfs/meta/v2/rpc.h"
 #include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
@@ -32,11 +33,11 @@ using MDSDiscoveryPtr = std::shared_ptr<MDSDiscovery>;
 
 class MDSDiscovery {
  public:
-  MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client);
+  MDSDiscovery(RPCPtr rpc) : rpc_(rpc) {};
   ~MDSDiscovery() = default;
 
-  static MDSDiscoveryPtr New(mdsv2::CoordinatorClientPtr coordinator_client) {
-    return std::make_shared<MDSDiscovery>(coordinator_client);
+  static MDSDiscoveryPtr New(RPCPtr rpc) {
+    return std::make_shared<MDSDiscovery>(rpc);
   }
 
   bool Init();
@@ -48,12 +49,13 @@ class MDSDiscovery {
   std::vector<mdsv2::MDSMeta> GetMDSByState(mdsv2::MDSMeta::State state);
 
  private:
+  Status GetMDSList(std::vector<mdsv2::MDSMeta>& mdses);
   bool UpdateMDSList();
 
   utils::RWLock lock_;
   std::map<int64_t, mdsv2::MDSMeta> mdses_;
 
-  mdsv2::CoordinatorClientPtr coordinator_client_;
+  RPCPtr rpc_;
 };
 
 }  // namespace v2

@@ -15,7 +15,10 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_RPC_H_
 
+#include <butil/endpoint.h>
+#include <fmt/format.h>
 #include <gflags/gflags_declare.h>
+#include <glog/logging.h>
 #include <json/config.h>
 
 #include <map>
@@ -34,39 +37,42 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
+DECLARE_uint32(rpc_timeout_ms);
 DECLARE_int32(rpc_retry_times);
 
 class RPC;
 using RPCPtr = std::shared_ptr<RPC>;
 
-class EndPoint {
- public:
-  EndPoint() = default;
-  EndPoint(const std::string& ip, int port) : ip_(ip), port_(port) {}
-  ~EndPoint() = default;
+using EndPoint = butil::EndPoint;
 
-  bool operator<(const EndPoint& other) const {
-    return other.ip_ < ip_ || (other.ip_ == ip_ && other.port_ < port_);
-  }
+inline EndPoint StrToEndpoint(const std::string& ip, int port) {
+  EndPoint endpoint;
+  butil::str2endpoint(ip.c_str(), port, &endpoint);
 
-  const std::string& GetIp() const { return ip_; }
-  void SetIp(const std::string& ip) { ip_ = ip; }
+  return endpoint;
+}
 
-  int GetPort() const { return port_; }
-  void SetPort(int port) { port_ = port; }
+inline std::string EndPointToStr(const EndPoint& endpoint) {
+  return butil::endpoint2str(endpoint).c_str();
+}
 
-  std::string ToString() const { return fmt::format("{}:{}", ip_, port_); }
-
- private:
-  std::string ip_;
-  int port_;
-};
+inline std::string TakeIp(const EndPoint& endpoint) {
+  return std::string(butil::ip2str(endpoint.ip).c_str());
+}
 
 class RPC {
  public:
+  RPC(const std::string& addr);
+  RPC(const std::string& ip, int port);
   RPC(const EndPoint& endpoint);
   ~RPC() = default;
 
+  static RPCPtr New(const std::string& addr) {
+    return std::make_shared<RPC>(addr);
+  }
+  static RPCPtr New(const std::string& ip, int port) {
+    return std::make_shared<RPC>(ip, port);
+  }
   static RPCPtr New(const EndPoint& endpoint) {
     return std::make_shared<RPC>(endpoint);
   }
@@ -86,7 +92,7 @@ class RPC {
   }
 
   template <typename Request, typename Response>
-  Status SendRequest(EndPoint endpoint, const std::string& service_name,
+  Status SendRequest(const EndPoint& endpoint, const std::string& service_name,
                      const std::string& api_name, const Request& request,
                      Response& response);
 
@@ -95,7 +101,8 @@ class RPC {
   using ChannelPtr = std::shared_ptr<Channel>;
 
   ChannelPtr NewChannel(const EndPoint& endpoint);
-  Channel* GetChannel(EndPoint endpoint);
+  Channel* GetChannel(const EndPoint& endpoint);
+  void DeleteChannel(const EndPoint& endpoint);
 
   utils::RWLock lock_;
   std::map<EndPoint, ChannelPtr> channels_;
@@ -103,7 +110,8 @@ class RPC {
 };
 
 template <typename Request, typename Response>
-Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
+Status RPC::SendRequest(const EndPoint& endpoint,
+                        const std::string& service_name,
                         const std::string& api_name, const Request& request,
                         Response& response) {
   const google::protobuf::MethodDescriptor* method = nullptr;
@@ -120,26 +128,29 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
   }
 
   auto* channel = GetChannel(endpoint);
+  CHECK(channel != nullptr)
+      << fmt::format("[rpc][{}] channel is null.", EndPointToStr(endpoint));
 
   int retry_count = 0;
   do {
     brpc::Controller cntl;
-    cntl.set_timeout_ms(1000);
+    cntl.set_timeout_ms(FLAGS_rpc_timeout_ms);
     cntl.set_log_id(butil::fast_rand());
 
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
     if (cntl.Failed()) {
       LOG(ERROR) << fmt::format("[rpc][{}][{}] fail, {} {} {} request({}).",
-                                endpoint.ToString(), api_name, cntl.log_id(),
-                                cntl.ErrorCode(), cntl.ErrorText(),
-                                request.ShortDebugString());
+                                EndPointToStr(endpoint), api_name,
+                                cntl.log_id(), cntl.ErrorCode(),
+                                cntl.ErrorText(), request.ShortDebugString());
+      DeleteChannel(endpoint);
       return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
     }
 
     if (response.error().errcode() == pb::error::OK) {
       LOG(INFO) << fmt::format(
           "[rpc][{}][{}] success, request({}) response({}).",
-          endpoint.ToString(), api_name, request.ShortDebugString(),
+          EndPointToStr(endpoint), api_name, request.ShortDebugString(),
           response.ShortDebugString());
       return Status();
     }
@@ -148,8 +159,8 @@ Status RPC::SendRequest(EndPoint endpoint, const std::string& service_name,
 
     LOG(ERROR) << fmt::format(
         "[rpc][{}][{}] fail, request({}) retry_count({}) error({} {}).",
-        endpoint.ToString(), api_name, request.ShortDebugString(), retry_count,
-        pb::error::Errno_Name(response.error().errcode()),
+        EndPointToStr(endpoint), api_name, request.ShortDebugString(),
+        retry_count, pb::error::Errno_Name(response.error().errcode()),
         response.error().errmsg());
 
     // the errno of need retry

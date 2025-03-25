@@ -33,6 +33,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                  QuotaProcessorPtr quota_processor, FsStatsUPtr fs_stat);
 
   // mds
+  void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
+                 pb::mdsv2::HeartbeatResponse* response, google::protobuf::Closure* done) override;
   void GetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
                   pb::mdsv2::GetMDSListResponse* response, google::protobuf::Closure* done) override;
 
@@ -169,8 +171,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   inline FileSystemPtr GetFileSystem(uint32_t fs_id);
 
   // mds
-  void DoGetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
-                    pb::mdsv2::GetMDSListResponse* response, google::protobuf::Closure* done);
+  static void DoHeartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
+                          pb::mdsv2::HeartbeatResponse* response, TraceClosure* done);
+  static void DoGetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest* request,
+                           pb::mdsv2::GetMDSListResponse* response, TraceClosure* done);
 
   // fs interface
   void DoCreateFs(google::protobuf::RpcController* controller, const pb::mdsv2::CreateFsRequest* request,

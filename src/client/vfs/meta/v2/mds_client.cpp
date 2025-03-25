@@ -159,14 +159,14 @@ EndPoint MDSClient::GetEndPointByIno(int64_t ino) {
   auto mds_meta = mds_router_->GetMDSByIno(ino);
   DINGO_LOG(INFO) << fmt::format("query target mds({}:{}) for ino({}).",
                                  mds_meta.Host(), mds_meta.Port(), ino);
-  return EndPoint(mds_meta.Host(), mds_meta.Port());
+  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
 EndPoint MDSClient::GetEndPointByParentIno(int64_t parent_ino) {
   auto mds_meta = mds_router_->GetMDSByParentIno(parent_ino);
   DINGO_LOG(INFO) << fmt::format("query target mds({}:{}) for parent({}).",
                                  mds_meta.Host(), mds_meta.Port(), parent_ino);
-  return EndPoint(mds_meta.Host(), mds_meta.Port());
+  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
 uint64_t MDSClient::GetInodeVersion(int64_t ino) {
@@ -801,9 +801,8 @@ bool MDSClient::ProcessNetError(EndPoint& endpoint) {
 
   auto mdses = mds_discovery_->GetMDSByState(mdsv2::MDSMeta::State::kNormal);
   for (auto& mds : mdses) {
-    if (mds.Host() != endpoint.GetIp() || mds.Port() != endpoint.GetPort()) {
-      endpoint.SetIp(mds.Host());
-      endpoint.SetPort(mds.Port());
+    if (mds.Host() != TakeIp(endpoint) || mds.Port() != endpoint.port) {
+      endpoint = StrToEndpoint(mds.Host(), mds.Port());
       return true;
     }
   }

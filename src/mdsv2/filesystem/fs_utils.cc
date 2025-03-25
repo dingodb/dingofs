@@ -19,9 +19,9 @@
 #include <cstdint>
 
 #include "fmt/core.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
-#include "mdsv2/filesystem/codec.h"
 #include "mdsv2/storage/dingodb_storage.h"
 #include "nlohmann/json.hpp"
 

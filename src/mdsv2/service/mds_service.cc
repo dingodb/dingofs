@@ -65,10 +65,68 @@ static Status ValidateCreateFsRequest(const pb::mdsv2::CreateFsRequest* request)
   return Status::OK();
 }
 
-void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::GetMDSListRequest* request, pb::mdsv2::GetMDSListResponse* response,
-                                  google::protobuf::Closure* done) {
-  // Todo: Implement this function
+void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::HeartbeatRequest* request, pb::mdsv2::HeartbeatResponse* response,
+                                 TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto heartbeat = Server::GetInstance().GetHeartbeat();
+  if (BAIDU_UNLIKELY(heartbeat == nullptr)) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
+  }
+
+  Status status;
+  if (request->role() == pb::mdsv2::ROLE_MDS) {
+    auto mds = request->mds();
+    status = heartbeat->SendHeartbeat(mds);
+
+  } else if (request->role() == pb::mdsv2::ROLE_CLIENT) {
+    auto client = request->client();
+    status = heartbeat->SendHeartbeat(client);
+
+  } else {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER, "role is illegal");
+  }
+
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
+                               pb::mdsv2::HeartbeatResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoHeartbeat(controller, request, response, svr_done); });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController* controller, const pb::mdsv2::GetMDSListRequest*,
+                                  pb::mdsv2::GetMDSListResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+
+  auto heartbeat = Server::GetInstance().GetHeartbeat();
+  if (BAIDU_UNLIKELY(heartbeat == nullptr)) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
+  }
+
+  std::vector<pb::mdsv2::MDS> mdses;
+  auto status = heartbeat->GetMDSList(mdses);
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  Helper::VectorToPbRepeated(mdses, response->mutable_mdses());
 }
 
 void MDSServiceImpl::GetMDSList(google::protobuf::RpcController* controller,

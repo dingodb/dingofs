@@ -72,7 +72,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   }
 
   static MDSV2FileSystemUPtr Build(const std::string& fs_name,
-                                   const std::string& coor_addr,
+                                   const std::string& mds_addr,
                                    const std::string& mountpoint);
 
   Status Init() override;

@@ -25,8 +25,10 @@
 #include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/common/synchronization.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/server.h"
 #include "mdsv2/service/service_access.h"
 
 namespace dingofs {
@@ -188,23 +190,38 @@ Status MDSMonitor::MonitorMDS() {
   }
   DEFER(is_running_.store(false));
 
-  if (!dist_lock_->IsLocked()) {
-    return Status(pb::error::EINTERNAL, "not own lock");
-  }
+  auto& server = Server::GetInstance();
+  auto heartbeat = server.GetHeartbeat();
+  auto mds_meta_map = Server::GetInstance().GetMDSMetaMap();
 
-  auto fs_set = fs_set_->GetAllFileSystem();
-  if (fs_set.empty()) {
-    return Status::OK();
-  }
-
+  // get all mds meta
   std::vector<MDSMeta> mdses;
-  auto status = coordinator_client_->GetMDSList(mdses);
+  auto status = heartbeat->GetMDSList(mdses);
   if (!status.ok()) {
     return Status(status.error_code(), fmt::format("get mds list fail, {}", status.error_str()));
   }
 
   if (mdses.empty()) {
     return Status(pb::error::EINTERNAL, "mds list is empty");
+  }
+
+  for (const auto& mds_meta : mdses) {
+    DINGO_LOG(DEBUG) << "[monitor] upsert mds meta: " << mds_meta.ToString();
+    mds_meta_map->UpsertMDSMeta(mds_meta);
+  }
+
+  if (!dist_lock_->IsLocked()) {
+    return Status(pb::error::EINTERNAL, "not own lock");
+  }
+
+  // just own lock can process fault mds
+  return ProcessFaultMDS(mdses);
+}
+
+Status MDSMonitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
+  auto fs_set = fs_set_->GetAllFileSystem();
+  if (fs_set.empty()) {
+    return Status::OK();
   }
 
   std::vector<MDSMeta> online_mdses, offline_mdses;

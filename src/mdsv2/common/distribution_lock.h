@@ -104,14 +104,14 @@ class CoorDistributionLock : public DistributionLock {
 };
 
 // use store transaction implement distribution lock
-// get lock:
-// 1. get key with transaction
-// 2. if key not exist, put key with transaction
-// 3. if key exist,
 class StoreDistributionLock : public DistributionLock {
  public:
-  StoreDistributionLock(const std::string& name, int64_t mds_id);
+  StoreDistributionLock(KVStoragePtr kv_storage, const std::string& name, int64_t mds_id);
   ~StoreDistributionLock() override = default;
+
+  static StoreDistributionLockPtr New(KVStoragePtr kv_storage, const std::string& name, int64_t mds_id) {
+    return std::make_shared<StoreDistributionLock>(kv_storage, name, mds_id);
+  }
 
   StoreDistributionLockPtr GetSelfPtr();
 
@@ -133,7 +133,7 @@ class StoreDistributionLock : public DistributionLock {
   bthread_t lease_th_{0};
 
   std::atomic<bool> is_locked_{false};
-  std::atomic<uint64_t> last_lock_time_ns_{0};
+  std::atomic<uint64_t> last_lock_time_ms_{0};
 
   KVStoragePtr kv_storage_;
 };

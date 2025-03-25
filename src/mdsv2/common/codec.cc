@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/filesystem/codec.h"
+#include "mdsv2/common/codec.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -20,6 +20,7 @@
 #include <string_view>
 #include <utility>
 
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
 #include "mdsv2/common/helper.h"
@@ -36,7 +37,7 @@ static const char kDelimiter = ':';
 
 enum KeyType : unsigned char {
   kTypeLock = 1,
-  kTypeMds = 2,
+  kTypeHeartbeat = 2,
   kTypeFS = 3,
   kTypeDentryOrDir = 4,
   kTypeFile = 5,
@@ -53,12 +54,36 @@ void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_k
   end_key.push_back(kTypeLock + 1);
 }
 
-void MetaDataCodec::GetMdsTableRange(std::string& start_key, std::string& end_key) {
+void MetaDataCodec::GetHeartbeatTableRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeMds);
+  start_key.push_back(kTypeHeartbeat);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeMds + 1);
+  end_key.push_back(kTypeHeartbeat + 1);
+}
+
+void MetaDataCodec::GetHeartbeatMdsRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeHeartbeat);
+  start_key.push_back(kDelimiter);
+  start_key.push_back(pb::mdsv2::ROLE_MDS);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeHeartbeat);
+  end_key.push_back(kDelimiter);
+  end_key.push_back(pb::mdsv2::ROLE_MDS + 1);
+}
+
+void MetaDataCodec::GetHeartbeatClientRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeHeartbeat);
+  start_key.push_back(kDelimiter);
+  start_key.push_back(pb::mdsv2::ROLE_CLIENT);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeHeartbeat);
+  end_key.push_back(kDelimiter);
+  end_key.push_back(pb::mdsv2::ROLE_CLIENT + 1);
 }
 
 void MetaDataCodec::GetFsTableRange(std::string& start_key, std::string& end_key) {
@@ -156,22 +181,80 @@ void MetaDataCodec::DecodeLockKey(const std::string& key, std::string& name) {
   name = key.substr(kPrefixSize + 2);
 }
 
-// format: [$mds_id, $kDelimiter, $expire_time_ns]
-std::string MetaDataCodec::EncodeLockValue(int64_t mds_id, uint64_t expire_time_ns) {
+// format: [$mds_id, $kDelimiter, $expire_time_ms]
+std::string MetaDataCodec::EncodeLockValue(int64_t mds_id, uint64_t expire_time_ms) {
   std::string value;
 
   SerialHelper::WriteLong(mds_id, value);
   value.push_back(kDelimiter);
-  SerialHelper::WriteULong(expire_time_ns, value);
+  SerialHelper::WriteULong(expire_time_ms, value);
 
   return std::move(value);
 }
 
-void MetaDataCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ns) {
+void MetaDataCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ms) {
   CHECK(value.size() > 16) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
 
   mds_id = SerialHelper::ReadLong(value);
-  expire_time_ns = SerialHelper::ReadULong(value.substr(8));
+  expire_time_ms = SerialHelper::ReadULong(value.substr(9));
+}
+
+// format: [$prefix, $type, $kDelimiter, $role, $kDelimiter, $mds_id]
+std::string MetaDataCodec::EncodeHeartbeatKey(int64_t mds_id) {
+  std::string key;
+  key.reserve(kPrefixSize + 15);
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeHeartbeat);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(mds_id, key);
+
+  return key;
+}
+
+// or format: [$prefix, $type, $kDelimiter, $role, $kDelimiter, $client_mountpoint]
+std::string MetaDataCodec::EncodeHeartbeatKey(const std::string& client_mountpoint) {
+  std::string key;
+  key.reserve(kPrefixSize + 8 + client_mountpoint.size());
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeHeartbeat);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT, key);
+  key.push_back(kDelimiter);
+  key.append(client_mountpoint);
+
+  return key;
+}
+
+void MetaDataCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
+  CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  mds_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
+}
+
+void MetaDataCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_mountpoint) {
+  CHECK(key.size() > (kPrefixSize + 8)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  client_mountpoint = key.substr(kPrefixSize + 8);
+}
+
+std::string MetaDataCodec::EncodeHeartbeatValue(const pb::mdsv2::MDS& mds) { return mds.SerializeAsString(); }
+
+std::string MetaDataCodec::EncodeHeartbeatValue(const pb::mdsv2::Client& client) { return client.SerializeAsString(); }
+
+void MetaDataCodec::DecodeHeartbeatValue(const std::string& value, pb::mdsv2::MDS& mds) {
+  CHECK(mds.ParseFromString(value)) << "parse mds fail.";
+}
+
+void MetaDataCodec::DecodeHeartbeatValue(const std::string& value, pb::mdsv2::Client& client) {
+  CHECK(client.ParseFromString(value)) << "parse client fail.";
 }
 
 // format: [$prefix, $type, $kDelimiter, $name]
@@ -219,7 +302,7 @@ std::string MetaDataCodec::EncodeDentryKey(uint32_t fs_id, uint64_t ino, const s
   key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, key);
   key.push_back(kDelimiter);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
   key.push_back(kDelimiter);
   key.append(name);
 
@@ -256,7 +339,7 @@ void MetaDataCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string&
   start_key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, start_key);
   start_key.push_back(kDelimiter);
-  SerialHelper::WriteLong(ino, start_key);
+  SerialHelper::WriteULong(ino, start_key);
 
   end_key.reserve(kPrefixSize + 16);
 
@@ -265,7 +348,7 @@ void MetaDataCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string&
   end_key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, end_key);
   end_key.push_back(kDelimiter);
-  SerialHelper::WriteLong(ino + 1, end_key);
+  SerialHelper::WriteULong(ino + 1, end_key);
 }
 
 uint32_t MetaDataCodec::InodeKeyLength() { return kPrefixSize + 15; }
@@ -274,7 +357,7 @@ static std::string EncodeInodeKeyImpl(int fs_id, uint64_t ino, KeyType type) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
-  key.reserve(kPrefixSize + 15);
+  key.reserve(kPrefixSize + 32);
 
   key.append(kPrefix);
   key.push_back(type);
@@ -287,7 +370,7 @@ static std::string EncodeInodeKeyImpl(int fs_id, uint64_t ino, KeyType type) {
 }
 
 std::string MetaDataCodec::EncodeInodeKey(uint32_t fs_id, uint64_t ino) {
-  return EncodeInodeKeyImpl(fs_id, ino, ino % 2 == 0 ? KeyType::kTypeDentryOrDir : KeyType::kTypeFile);
+  return EncodeInodeKeyImpl(fs_id, ino, ino % 2 == 1 ? KeyType::kTypeDentryOrDir : KeyType::kTypeFile);
 }
 
 void MetaDataCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {

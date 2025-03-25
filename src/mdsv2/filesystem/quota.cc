@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-#include "mdsv2/filesystem/codec.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -298,7 +298,7 @@ Status QuotaProcessor::LoadDirQuotas(Context& ctx, uint32_t fs_id, std::map<uint
       Quota quota = MetaDataCodec::DecodeDirQuotaValue(kv.value);
       quotas[ino] = quota;
     }
-  } while (kvs.size() <= FLAGS_fs_scan_batch_size);
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   auto status = txn->Commit();
   trace_txn = txn->GetTrace();

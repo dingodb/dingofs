@@ -14,16 +14,33 @@
 
 #include "client/vfs/meta/v2/rpc.h"
 
+#include <butil/endpoint.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
+
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
 
+DEFINE_uint32(rpc_timeout_ms, 2000, "rpc timeout ms");
+
 DEFINE_int32(rpc_retry_times, 3, "rpc retry time");
 BRPC_VALIDATE_GFLAG(rpc_retry_times, brpc::PositiveInteger);
+
+RPC::RPC(const std::string& addr) {
+  EndPoint endpoint;
+  butil::str2endpoint(addr.c_str(), &endpoint);
+  default_endpoint_ = endpoint;
+}
+
+RPC::RPC(const std::string& ip, int port) {
+  EndPoint endpoint;
+  butil::str2endpoint(ip.c_str(), port, &endpoint);
+  default_endpoint_ = endpoint;
+}
 
 RPC::RPC(const EndPoint& endpoint) : default_endpoint_(endpoint) {}
 
@@ -42,7 +59,8 @@ void RPC::Destory() {}
 bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
   utils::WriteLockGuard lk(lock_);
 
-  EndPoint endpoint(ip, port);
+  EndPoint endpoint;
+  butil::str2endpoint(ip.c_str(), port, &endpoint);
   auto it = channels_.find(endpoint);
   if (it != channels_.end()) {
     return false;
@@ -65,7 +83,8 @@ bool RPC::AddEndpoint(const std::string& ip, int port, bool is_default) {
 void RPC::DeleteEndpoint(const std::string& ip, int port) {
   utils::WriteLockGuard lk(lock_);
 
-  EndPoint endpoint(ip, port);
+  EndPoint endpoint;
+  butil::str2endpoint(ip.c_str(), port, &endpoint);
   auto it = channels_.find(endpoint);
   if (it != channels_.end()) {
     channels_.erase(it);
@@ -73,14 +92,13 @@ void RPC::DeleteEndpoint(const std::string& ip, int port) {
 }
 
 RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
-  CHECK(!endpoint.GetIp().empty()) << "ip is empty.";
-  CHECK(endpoint.GetPort() > 0) << "port is invalid.";
+  CHECK(endpoint.port > 0) << "port is invalid.";
 
   ChannelPtr channel = std::make_shared<brpc::Channel>();
-  if (channel->Init(endpoint.GetIp().c_str(), endpoint.GetPort(), nullptr) !=
-      0) {
-    LOG(ERROR) << fmt::format("init channel fail, addr({}:{})",
-                              endpoint.GetIp(), endpoint.GetPort());
+  if (channel->Init(butil::ip2str(endpoint.ip).c_str(), endpoint.port,
+                    nullptr) != 0) {
+    LOG(ERROR) << fmt::format("init channel fail, addr({}).",
+                              EndPointToStr(endpoint));
 
     return nullptr;
   }
@@ -88,7 +106,7 @@ RPC::ChannelPtr RPC::NewChannel(const EndPoint& endpoint) {  // NOLINT
   return channel;
 }
 
-RPC::Channel* RPC::GetChannel(EndPoint endpoint) {
+RPC::Channel* RPC::GetChannel(const EndPoint& endpoint) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = channels_.find(endpoint);
@@ -103,6 +121,12 @@ RPC::Channel* RPC::GetChannel(EndPoint endpoint) {
 
   channels_[endpoint] = std::move(channel);
   return channels_[endpoint].get();
+}
+
+void RPC::DeleteChannel(const EndPoint& endpoint) {
+  utils::WriteLockGuard lk(lock_);
+
+  channels_.erase(endpoint);
 }
 
 }  // namespace v2

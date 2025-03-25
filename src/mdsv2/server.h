@@ -73,7 +73,7 @@ class Server {
   MDSMeta& GetMDSMeta();
   MDSMetaMapPtr GetMDSMetaMap();
   KVStoragePtr GetKVStorage();
-  Heartbeat& GetHeartbeat() { return heartbeat_; }
+  HeartbeatPtr GetHeartbeat() { return heartbeat_; }
   FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
@@ -122,7 +122,7 @@ class Server {
   FileSystemSetPtr file_system_set_;
 
   // heartbeat to coordinator
-  Heartbeat heartbeat_;
+  HeartbeatPtr heartbeat_;
 
   // fs info sync
   FsInfoSync fs_info_sync_;

@@ -17,15 +17,13 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
-
-MDSDiscovery::MDSDiscovery(mdsv2::CoordinatorClientPtr coordinator_client)
-    : coordinator_client_(coordinator_client) {}
 
 bool MDSDiscovery::Init() { return UpdateMDSList(); }
 
@@ -83,12 +81,30 @@ std::vector<mdsv2::MDSMeta> MDSDiscovery::GetMDSByState(
   return mdses;
 }
 
+Status MDSDiscovery::GetMDSList(std::vector<mdsv2::MDSMeta>& mdses) {
+  pb::mdsv2::GetMDSListRequest request;
+  pb::mdsv2::GetMDSListResponse response;
+
+  auto status =
+      rpc_->SendRequest("MDSService", "GetMDSList", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  mdses.reserve(response.mdses_size());
+  for (const auto& mds : response.mdses()) {
+    mdses.push_back(mdsv2::MDSMeta(mds));
+  }
+
+  return Status::OK();
+}
+
 bool MDSDiscovery::UpdateMDSList() {
   std::vector<mdsv2::MDSMeta> mdses;
-  auto status = coordinator_client_->GetMDSList(mdses);
+  auto status = GetMDSList(mdses);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("get mds list fail, error: {}.",
-                              status.error_str());
+                              status.ToString());
     return false;
   }
 

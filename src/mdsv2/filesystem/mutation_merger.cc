@@ -25,10 +25,10 @@
 #include "fmt/core.h"
 #include "fmt/format.h"
 #include "gflags/gflags.h"
+#include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/codec.h"
 
 namespace dingofs {
 namespace mdsv2 {
