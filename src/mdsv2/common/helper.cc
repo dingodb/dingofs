@@ -16,6 +16,7 @@
 
 #include <sys/stat.h>
 
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -104,6 +105,22 @@ bool Helper::IsEqualIgnoreCase(const std::string& str1, const std::string& str2)
   }
   return std::equal(str1.begin(), str1.end(), str2.begin(),
                     [](const char c1, const char c2) { return std::tolower(c1) == std::tolower(c2); });
+}
+
+std::string Helper::ToUpperCase(const std::string& str) {
+  std::string result = str;
+  for (char& c : result) {
+    c = toupper(c);
+  }
+  return result;
+}
+
+std::string Helper::ToLowerCase(const std::string& str) {
+  std::string result = str;
+  for (char& c : result) {
+    c = tolower(c);
+  }
+  return result;
 }
 
 bool Helper::StringToBool(const std::string& str) { return !(str == "0" || str == "false"); }

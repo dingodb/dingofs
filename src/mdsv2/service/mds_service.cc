@@ -1844,9 +1844,7 @@ void MDSServiceImpl::DoSetFsStats(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  const auto& req_ctx = request->context();
   Context ctx;
-
   auto status = fs_stat_->UploadFsStat(ctx, fs_id, request->stats());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1883,9 +1881,7 @@ void MDSServiceImpl::DoGetFsStats(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  const auto& req_ctx = request->context();
   Context ctx;
-
   pb::mdsv2::FsStatsData stats;
   auto status = fs_stat_->GetFsStat(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -1925,9 +1921,7 @@ void MDSServiceImpl::DoGetFsPerSecondStats(google::protobuf::RpcController* cont
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  const auto& req_ctx = request->context();
   Context ctx;
-
   std::map<uint64_t, pb::mdsv2::FsStatsData> stats;
   auto status = fs_stat_->GetFsStatsPerSecond(ctx, fs_id, stats);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());

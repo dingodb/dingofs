@@ -454,7 +454,7 @@ pb::mdsv2::Quota MetaDataCodec::DecodeDirQuotaValue(const std::string& value) {
   return std::move(quota);
 }
 
-std::string MetaDataCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time) {
+std::string MetaDataCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns) {
   CHECK(fs_id > 0) << fmt::format("Invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -465,18 +465,18 @@ std::string MetaDataCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time) {
   key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, key);
   key.push_back(kDelimiter);
-  SerialHelper::WriteLong(time, key);
+  SerialHelper::WriteLong(time_ns, key);
 
   return key;
 }
 
-void MetaDataCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time) {
+void MetaDataCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
   CHECK(key.size() == (kPrefixSize + 15)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
   CHECK(key.at(kPrefixSize) == KeyType::kTypeFsStats) << "key type is invalid.";
   CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
-  time = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
+  time_ns = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
 }
 
 std::string MetaDataCodec::EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats) { return stats.SerializeAsString(); }

@@ -35,6 +35,16 @@ bool MDSClient::Init(const std::string& mds_addr) {
   return interaction_->Init(mds_addr);
 }
 
+void MDSClient::GetMdsList() {
+  pb::mdsv2::GetMDSListRequest request;
+  pb::mdsv2::GetMDSListResponse response;
+
+  interaction_->SendRequest("MDSService", "GetMDSList", request, response);
+  for (const auto& mds : response.mdses()) {
+    DINGO_LOG(INFO) << "mds: " << mds.ShortDebugString();
+  }
+}
+
 void MDSClient::CreateFs(const std::string& fs_name, const std::string& partition_type) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
@@ -97,6 +107,19 @@ void MDSClient::DeleteFs(const std::string& fs_name) {
   DINGO_LOG(INFO) << "DeleteFs response: " << response.ShortDebugString();
 }
 
+void MDSClient::UpdateFs(const std::string& fs_name) {
+  pb::mdsv2::UpdateFsInfoRequest request;
+  pb::mdsv2::UpdateFsInfoResponse response;
+
+  request.set_fs_name(fs_name);
+
+  pb::mdsv2::FsInfo fs_info;
+  fs_info.set_owner("deng");
+  request.mutable_fs_info()->CopyFrom(fs_info);
+
+  interaction_->SendRequest("MDSService", "UpdateFsInfo", request, response);
+}
+
 void MDSClient::GetFs(const std::string& fs_name) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
@@ -113,6 +136,17 @@ void MDSClient::GetFs(const std::string& fs_name) {
   interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
 
   DINGO_LOG(INFO) << "GetFsInfo response: " << response.ShortDebugString();
+}
+
+void MDSClient::ListFs() {
+  pb::mdsv2::ListFsInfoRequest request;
+  pb::mdsv2::ListFsInfoResponse response;
+
+  interaction_->SendRequest("MDSService", "ListFsInfo", request, response);
+
+  for (const auto& fs_info : response.fs_infos()) {
+    DINGO_LOG(INFO) << "fs_info: " << fs_info.ShortDebugString();
+  }
 }
 
 void MDSClient::MkDir(uint32_t fs_id, uint64_t parent, const std::string& name) {
@@ -174,6 +208,144 @@ void MDSClient::BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, 
       std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
       MkNod(fs_id, parent, name);
     }
+  }
+}
+
+void MDSClient::GetDentry(uint32_t fs_id, uint64_t parent, const std::string& name) {
+  pb::mdsv2::GetDentryRequest request;
+  pb::mdsv2::GetDentryResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_parent(parent);
+  request.set_name(name);
+
+  interaction_->SendRequest("MDSService", "GetDentry", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "dentry: " << response.dentry().ShortDebugString();
+  }
+}
+
+void MDSClient::ListDentry(uint32_t fs_id, uint64_t parent, bool is_only_dir) {
+  pb::mdsv2::ListDentryRequest request;
+  pb::mdsv2::ListDentryResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_parent(parent);
+  request.set_is_only_dir(is_only_dir);
+
+  interaction_->SendRequest("MDSService", "ListDentry", request, response);
+
+  for (const auto& dentry : response.dentries()) {
+    DINGO_LOG(INFO) << "dentry: " << dentry.ShortDebugString();
+  }
+}
+
+void MDSClient::GetInode(uint32_t fs_id, uint64_t ino) {
+  pb::mdsv2::GetInodeRequest request;
+  pb::mdsv2::GetInodeResponse response;
+
+  request.set_fs_id(fs_id);
+  request.set_ino(ino);
+
+  interaction_->SendRequest("MDSService", "GetInode", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "inode: " << response.inode().ShortDebugString();
+  }
+}
+
+void MDSClient::BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos) {
+  pb::mdsv2::BatchGetInodeRequest request;
+  pb::mdsv2::BatchGetInodeResponse response;
+
+  request.set_fs_id(fs_id);
+  for (auto ino : inos) {
+    request.add_inoes(ino);
+  }
+
+  interaction_->SendRequest("MDSService", "BatchGetInode", request, response);
+
+  for (const auto& inode : response.inodes()) {
+    DINGO_LOG(INFO) << "inode: " << inode.ShortDebugString();
+  }
+}
+
+void MDSClient::BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos) {
+  pb::mdsv2::BatchGetXAttrRequest request;
+  pb::mdsv2::BatchGetXAttrResponse response;
+
+  request.set_fs_id(fs_id);
+  for (auto ino : inos) {
+    request.add_inoes(ino);
+  }
+
+  interaction_->SendRequest("MDSService", "BatchGetXattr", request, response);
+
+  for (const auto& xattr : response.xattrs()) {
+    DINGO_LOG(INFO) << "xattr: " << xattr.ShortDebugString();
+  }
+}
+
+void MDSClient::SetFsStats(const std::string& fs_name) {
+  pb::mdsv2::SetFsStatsRequest request;
+  pb::mdsv2::SetFsStatsResponse response;
+
+  request.set_fs_name(fs_name);
+
+  using Helper = dingofs::mdsv2::Helper;
+
+  pb::mdsv2::FsStatsData stats;
+  stats.set_read_bytes(Helper::GenerateRealRandomInteger(1000, 10000000));
+  stats.set_read_qps(Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_write_bytes(Helper::GenerateRealRandomInteger(1000, 10000000));
+  stats.set_write_qps(Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_s3_read_bytes(Helper::GenerateRealRandomInteger(1000, 1000000));
+  stats.set_s3_read_qps(Helper::GenerateRealRandomInteger(100, 1000));
+  stats.set_s3_write_bytes(Helper::GenerateRealRandomInteger(1000, 1000000));
+  stats.set_s3_write_qps(Helper::GenerateRealRandomInteger(100, 10000));
+
+  request.mutable_stats()->CopyFrom(stats);
+
+  interaction_->SendRequest("MDSService", "SetFsStats", request, response);
+}
+
+void MDSClient::ContinueSetFsStats(const std::string& fs_name) {
+  for (;;) {
+    SetFsStats(fs_name);
+    bthread_usleep(100000);  // 100ms
+  }
+}
+
+void MDSClient::GetFsStats(const std::string& fs_name) {
+  pb::mdsv2::GetFsStatsRequest request;
+  pb::mdsv2::GetFsStatsResponse response;
+
+  request.set_fs_name(fs_name);
+
+  interaction_->SendRequest("MDSService", "GetFsStats", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "fs stats: " << response.stats().ShortDebugString();
+  }
+}
+
+void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
+  pb::mdsv2::GetFsPerSecondStatsRequest request;
+  pb::mdsv2::GetFsPerSecondStatsResponse response;
+
+  request.set_fs_name(fs_name);
+
+  interaction_->SendRequest("MDSService", "GetFsPerSecondStats", request, response);
+
+  // sort by time
+  std::map<uint64_t, pb::mdsv2::FsStatsData> sorted_stats;
+  for (const auto& [time_s, stats] : response.stats()) {
+    sorted_stats.insert(std::make_pair(time_s, stats));
+  }
+
+  for (const auto& [time_s, stats] : sorted_stats) {
+    DINGO_LOG(INFO) << fmt::format("time: {} stats: {}.", Helper::FormatTime(time_s), stats.ShortDebugString());
   }
 }
 

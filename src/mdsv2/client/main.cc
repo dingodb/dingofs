@@ -44,7 +44,25 @@ DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
 DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
 
-std::set<std::string> g_mds_cmd = {"create_fs", "delete_fs", "get_fs", "mkdir", "batch_mkdir", "mknod", "batch_mknod"};
+std::set<std::string> g_mds_cmd = {"getmdslist",
+                                   "createfs",
+                                   "deletefs",
+                                   "updatefs",
+                                   "getfs",
+                                   "listfs",
+                                   "mkdir",
+                                   "batchmkdir",
+                                   "mknod",
+                                   "batchmknod",
+                                   "getdentry",
+                                   "listdentry",
+                                   "getinode",
+                                   "batchgetinode",
+                                   "batchgetxattr",
+                                   "setfsstats",
+                                   "continuesetfsstats",
+                                   "getfsstats",
+                                   "getfspersecondstats"};
 
 std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
@@ -73,7 +91,11 @@ int main(int argc, char* argv[]) {
 
   // dingofs::mdsv2::DingoLogger::InitLogger("./log", "mdsv2_client", dingofs::mdsv2::LogLevel::kINFO);
 
-  if (g_mds_cmd.count(FLAGS_cmd) > 0) {
+  using Helper = dingofs::mdsv2::Helper;
+
+  std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
+
+  if (g_mds_cmd.count(lower_cmd) > 0) {
     if (FLAGS_mds_addr.empty()) {
       std::cout << "mds address is empty." << '\n';
       return -1;
@@ -85,33 +107,73 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    if (FLAGS_cmd == "create_fs") {
+    if (lower_cmd == Helper::ToLowerCase("GetMdsList")) {
+      mds_client.GetMdsList();
+
+    } else if (lower_cmd == Helper::ToLowerCase("CreateFs")) {
       mds_client.CreateFs(FLAGS_fs_name, FLAGS_fs_partition_type);
 
-    } else if (FLAGS_cmd == "delete_fs") {
+    } else if (lower_cmd == Helper::ToLowerCase("DeleteFs")) {
       mds_client.DeleteFs(FLAGS_fs_name);
 
-    } else if (FLAGS_cmd == "get_fs") {
+    } else if (lower_cmd == Helper::ToLowerCase("UpdateFs")) {
+      mds_client.UpdateFs(FLAGS_fs_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetFs")) {
       mds_client.GetFs(FLAGS_fs_name);
 
-    } else if (FLAGS_cmd == "mkdir") {
+    } else if (lower_cmd == Helper::ToLowerCase("ListFs")) {
+      mds_client.ListFs();
+
+    } else if (lower_cmd == Helper::ToLowerCase("MkDir")) {
       mds_client.MkDir(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
 
-    } else if (FLAGS_cmd == "batch_mkdir") {
+    } else if (lower_cmd == Helper::ToLowerCase("BatchMkDir")) {
       std::vector<int64_t> parents;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
       mds_client.BatchMkDir(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
 
-    } else if (FLAGS_cmd == "mknod") {
+    } else if (lower_cmd == Helper::ToLowerCase("MkNod")) {
       mds_client.MkNod(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
 
-    } else if (FLAGS_cmd == "batch_mknod") {
+    } else if (lower_cmd == Helper::ToLowerCase("BatchMkNod")) {
       std::vector<int64_t> parents;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
       mds_client.BatchMkNod(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
 
+    } else if (lower_cmd == Helper::ToLowerCase("GetDentry")) {
+      mds_client.GetDentry(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("ListDentry")) {
+      mds_client.ListDentry(FLAGS_fs_id, FLAGS_parent, false);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetInode")) {
+      mds_client.GetInode(FLAGS_fs_id, FLAGS_parent);
+
+    } else if (lower_cmd == Helper::ToLowerCase("BatchGetInode")) {
+      std::vector<int64_t> inos;
+      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
+      mds_client.BatchGetInode(FLAGS_fs_id, inos);
+
+    } else if (lower_cmd == Helper::ToLowerCase("BatchGetXattr")) {
+      std::vector<int64_t> inos;
+      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
+      mds_client.BatchGetXattr(FLAGS_fs_id, inos);
+
+    } else if (lower_cmd == Helper::ToLowerCase("SetFsStats")) {
+      mds_client.SetFsStats(FLAGS_fs_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("ContinueSetFsStats")) {
+      mds_client.ContinueSetFsStats(FLAGS_fs_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetFsStats")) {
+      mds_client.GetFsStats(FLAGS_fs_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetFsPerSecondStats")) {
+      mds_client.GetFsPerSecondStats(FLAGS_fs_name);
+
     } else {
-      std::cout << "Invalid command: " << FLAGS_cmd;
+      std::cout << "Invalid command: " << lower_cmd;
       return -1;
     }
   } else {
@@ -129,33 +191,33 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    if (FLAGS_cmd == "create_lock_table") {
+    if (lower_cmd == Helper::ToLowerCase("CreateLockTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
 
-    } else if (FLAGS_cmd == "create_heartbeat_table") {
+    } else if (lower_cmd == Helper::ToLowerCase("CreateHeartbeatTable")) {
       store_client.CreateHeartbeatTable(FLAGS_mds_table_name);
 
-    } else if (FLAGS_cmd == "create_fs_table") {
+    } else if (lower_cmd == Helper::ToLowerCase("CreateFsTable")) {
       store_client.CreateFsTable(FLAGS_fs_table_name);
 
-    } else if (FLAGS_cmd == "create_quota_table") {
+    } else if (lower_cmd == Helper::ToLowerCase("CreateFsQuotaTable")) {
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
 
-    } else if (FLAGS_cmd == "create_stats_table") {
+    } else if (lower_cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
 
-    } else if (FLAGS_cmd == "create_all_table") {
+    } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
       store_client.CreateHeartbeatTable(FLAGS_mds_table_name);
       store_client.CreateFsTable(FLAGS_fs_table_name);
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
 
-    } else if (FLAGS_cmd == "tree") {
+    } else if (lower_cmd == Helper::ToLowerCase("tree")) {
       store_client.PrintDentryTree(FLAGS_fs_id, true);
 
     } else {
-      std::cout << "Invalid command: " << FLAGS_cmd;
+      std::cout << "invalid command: " << FLAGS_cmd;
       return -1;
     }
   }

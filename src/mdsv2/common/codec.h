@@ -94,9 +94,9 @@ class MetaDataCodec {
   static pb::mdsv2::Quota DecodeDirQuotaValue(const std::string& value);
 
   // fs stats
-  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $time]
-  static std::string EncodeFsStatsKey(uint32_t fs_id, uint64_t time);
-  static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time);
+  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $time_ns]
+  static std::string EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns);
+  static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
   static std::string EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats);
   static pb::mdsv2::FsStatsData DecodeFsStatsValue(const std::string& value);
 };

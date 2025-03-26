@@ -28,15 +28,30 @@ class MDSClient {
 
   bool Init(const std::string& mds_addr);
 
+  void GetMdsList();
+
   void CreateFs(const std::string& fs_name, const std::string& partition_type);
   void DeleteFs(const std::string& fs_name);
+  void UpdateFs(const std::string& fs_name);
   void GetFs(const std::string& fs_name);
+  void ListFs();
 
   void MkDir(uint32_t fs_id, uint64_t parent_ino, const std::string& name);
   void BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
 
   void MkNod(uint32_t fs_id, uint64_t parent_ino, const std::string& name);
   void BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+
+  void GetDentry(uint32_t fs_id, uint64_t parent, const std::string& name);
+  void ListDentry(uint32_t fs_id, uint64_t parent, bool is_only_dir);
+  void GetInode(uint32_t fs_id, uint64_t ino);
+  void BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos);
+  void BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos);
+
+  void SetFsStats(const std::string& fs_name);
+  void ContinueSetFsStats(const std::string& fs_name);
+  void GetFsStats(const std::string& fs_name);
+  void GetFsPerSecondStats(const std::string& fs_name);
 
  private:
   InteractionPtr interaction_;

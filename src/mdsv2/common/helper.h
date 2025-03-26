@@ -52,6 +52,8 @@ class Helper {
   static std::string GetNowFormatMsTime();
 
   static bool IsEqualIgnoreCase(const std::string& str1, const std::string& str2);
+  static std::string ToUpperCase(const std::string& str);
+  static std::string ToLowerCase(const std::string& str);
 
   // string type cast
   static bool StringToBool(const std::string& str);

@@ -34,6 +34,8 @@ DECLARE_int32(fs_scan_batch_size);
 DEFINE_uint32(fs_stats_compact_interval_s, 3600, "compact fs stats interval seconds.");
 DEFINE_uint32(fs_stats_duration_s, 60, "get per seconds fs stats duration.");
 
+const uint64_t kNsPerSecond = 1000 * 1000 * 1000;
+
 Status FsStats::UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsStatsData& stats) {
   auto& trace_txn = ctx.GetTrace().GetTxn();
 
@@ -55,6 +57,7 @@ Status FsStats::UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsSt
 
   } while (retry < FLAGS_txn_max_retry_times);
 
+  trace_txn.txn_id = fs_id;
   trace_txn.retry = retry;
 
   return status;
@@ -85,7 +88,7 @@ Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& 
     return status;
   }
 
-  uint64_t mart_time_ns = Helper::TimestampNs() - FLAGS_fs_stats_duration_s * 1000000000;
+  uint64_t mart_time_ns = Helper::TimestampNs() - FLAGS_fs_stats_duration_s * kNsPerSecond;
   std::string mark_key = MetaDataCodec::EncodeFsStatsKey(fs_id, mart_time_ns);
   pb::mdsv2::FsStatsData compact_stats;
   bool compacted = false;
@@ -112,6 +115,8 @@ Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& 
     DINGO_LOG(WARNING) << fmt::format("[fsstat.{}] commit fs stats fail, {}.", fs_id, status.error_str());
   }
 
+  trace_txn.txn_id = fs_id;
+
   return Status::OK();
 }
 
@@ -122,7 +127,7 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
   Range range;
   MetaDataCodec::GetFsStatsRange(fs_id, range.start_key, range.end_key);
   uint64_t start_time_s = Helper::Timestamp() - FLAGS_fs_stats_duration_s;
-  range.start_key = MetaDataCodec::EncodeFsStatsKey(fs_id, start_time_s);
+  range.start_key = MetaDataCodec::EncodeFsStatsKey(fs_id, start_time_s * kNsPerSecond);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -137,9 +142,9 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
   pb::mdsv2::FsStatsData sum_stats;
   for (auto& kv : kvs) {
     uint32_t fs_id = 0;
-    uint64_t time = 0;
-    MetaDataCodec::DecodeFsStatsKey(kv.key, fs_id, time);
-    uint64_t time_s = time / 1000000000;
+    uint64_t time_ns = 0;
+    MetaDataCodec::DecodeFsStatsKey(kv.key, fs_id, time_ns);
+    uint64_t time_s = time_ns / kNsPerSecond;
     if (time_s == mark_time_s) {
       SumFsStats(MetaDataCodec::DecodeFsStatsValue(kv.value), sum_stats);
 
@@ -155,6 +160,8 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
   if (!status.ok()) {
     DINGO_LOG(WARNING) << fmt::format("[fsstat.{}] commit fs stats fail, {}.", fs_id, status.error_str());
   }
+
+  trace_txn.txn_id = fs_id;
 
   return Status::OK();
 }
