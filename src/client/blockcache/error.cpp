@@ -43,6 +43,7 @@ static const std::unordered_map<BCACHE_ERROR, std::string> errors = {
     {BCACHE_ERROR::CACHE_UNHEALTHY, "cache is unhealthy"},
     {BCACHE_ERROR::CACHE_FULL, "cache is full"},
     {BCACHE_ERROR::NOT_SUPPORTED, "not supported"},
+    {BCACHE_ERROR::INTERNAL_ERROR, "internal error"},
 };
 
 std::string StrErr(BCACHE_ERROR code) {

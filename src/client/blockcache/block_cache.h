@@ -29,21 +29,20 @@
 #include "client/blockcache/block_cache_metric.h"
 #include "client/blockcache/block_cache_throttle.h"
 #include "client/blockcache/block_cache_uploader.h"
+#include "client/blockcache/block_prefetcher.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
 #include "client/blockcache/error.h"
 #include "client/blockcache/s3_client.h"
 #include "client/common/config.h"
-#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::TaskThreadPool;
 using ::dingofs::client::common::BlockCacheOption;
 
-enum class StoreType {
+enum class StoreType : uint8_t {
   NONE,
   DISK,
 };
@@ -61,6 +60,8 @@ class BlockCache {
 
   virtual BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
                              char* buffer, bool retrive = true) = 0;
+
+  virtual BCACHE_ERROR PreFetch(const BlockKey& key, size_t length) = 0;
 
   virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
 
@@ -87,6 +88,8 @@ class BlockCacheImpl : public BlockCache {
   BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
                      char* buffer, bool retrive = true) override;
 
+  BCACHE_ERROR PreFetch(const BlockKey& key, size_t size) override;
+
   BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
 
   BCACHE_ERROR Flush(uint64_t ino) override;
@@ -94,6 +97,9 @@ class BlockCacheImpl : public BlockCache {
   bool IsCached(const BlockKey& key) override;
 
   StoreType GetStoreType() override;
+
+ private:
+  BCACHE_ERROR DoPreFetch(const BlockKey& key, size_t size);
 
  private:
   friend class BlockCacheBuilder;
@@ -106,6 +112,7 @@ class BlockCacheImpl : public BlockCache {
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<BlockCacheThrottle> throttle_;
   std::shared_ptr<BlockCacheUploader> uploader_;
+  std::unique_ptr<BlockPrefetcher> prefetcher_;
   std::unique_ptr<BlockCacheMetric> metric_;
 };
 
