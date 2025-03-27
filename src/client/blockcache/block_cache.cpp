@@ -30,6 +30,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "client/blockcache/block_cache_metric.h"
 #include "client/blockcache/block_cache_throttle.h"
+#include "client/blockcache/block_prefetcher.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_group.h"
 #include "client/blockcache/error.h"
@@ -54,6 +55,7 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option)
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   }
   uploader_ = std::make_shared<BlockCacheUploader>(s3_, store_, stage_count_);
+  prefetcher_ = std::make_unique<BlockPrefetcherImpl>();
   metric_ = std::make_unique<BlockCacheMetric>(
       option, BlockCacheMetric::AuxMember(uploader_, throttle_));
 }
@@ -63,17 +65,33 @@ BCACHE_ERROR BlockCacheImpl::Init() {
     throttle_->Start();
     uploader_->Init(option_.upload_stage_workers,
                     option_.upload_stage_queue_size);
-    return store_->Init([this](const BlockKey& key,
-                               const std::string& stage_path,
-                               BlockContext ctx) {
-      uploader_->AddStageBlock(key, stage_path, ctx);
-    });
+    auto rc =
+        store_->Init([this](const BlockKey& key, const std::string& stage_path,
+                            BlockContext ctx) {
+          uploader_->AddStageBlock(key, stage_path, ctx);
+        });
+    if (rc != BCACHE_ERROR::OK) {
+      return rc;
+    }
+
+    rc =
+        prefetcher_->Init(option_.prefetch_workers, option_.prefetch_queue_size,
+                          [this](const BlockKey& key, size_t length) {
+                            return DoPreFetch(key, length);
+                          });
+    if (rc != BCACHE_ERROR::OK) {
+      return rc;
+    }
   }
   return BCACHE_ERROR::OK;
 }
 
 BCACHE_ERROR BlockCacheImpl::Shutdown() {
   if (running_.exchange(false)) {
+    auto rc = prefetcher_->Shutdown();
+    if (rc != BCACHE_ERROR::OK) {
+      return rc;
+    }
     uploader_->WaitAllUploaded();  // wait all stage blocks uploaded
     uploader_->Shutdown();
     store_->Shutdown();
@@ -136,6 +154,34 @@ BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
   timer.NextPhase(Phase::S3_RANGE);
   if (retrive) {
     rc = s3_->Range(key.StoreKey(), offset, length, buffer);
+  }
+  return rc;
+}
+
+BCACHE_ERROR BlockCacheImpl::PreFetch(const BlockKey& key, size_t length) {
+  prefetcher_->Submit(key, length);
+}
+
+BCACHE_ERROR BlockCacheImpl::DoPreFetch(const BlockKey& key, size_t length) {
+  BCACHE_ERROR rc;
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return StrFormat("prefetch(%s,%d): %s%s", key.Filename(), length,
+                     StrErr(rc), timer.ToString());
+  });
+
+  if (IsCached(key)) {
+    rc = BCACHE_ERROR::OK;
+    return rc;
+  }
+
+  timer.NextPhase(Phase::S3_RANGE);
+  std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
+  rc = s3_->Range(key.StoreKey(), 0, length, buffer.get());
+  if (rc == BCACHE_ERROR::OK) {
+    timer.NextPhase(Phase::CACHE_BLOCK);
+    Block block(buffer.get(), length);
+    rc = store_->Cache(key, block);
   }
   return rc;
 }

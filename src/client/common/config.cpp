@@ -384,6 +384,10 @@ void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
                            &option->upload_stage_workers);
     c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
                            &option->upload_stage_queue_size);
+    c->GetValueFatalIfFail("block_cache.prefetch_workers",
+                           &option->prefetch_workers);
+    c->GetValueFatalIfFail("block_cache.prefetch_queue_size",
+                           &option->prefetch_queue_size);
     c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store);
     if (option->cache_store != "none" && option->cache_store != "disk") {
       CHECK(false) << "Only support disk or none cache store.";

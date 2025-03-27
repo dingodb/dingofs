@@ -44,6 +44,7 @@ enum class BCACHE_ERROR {
   CACHE_UNHEALTHY,
   CACHE_FULL,
   NOT_SUPPORTED,
+  INTERNAL_ERROR,
 };
 
 std::string StrErr(BCACHE_ERROR code);
