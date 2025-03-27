@@ -24,9 +24,12 @@
 
 #include <butil/time.h>
 #include <bvar/bvar.h>
+#include <glog/logging.h>
 #include <malloc.h>
 #include <sys/types.h>
 
+#include <atomic>
+#include <cstdint>
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
@@ -48,7 +51,6 @@ namespace dingofs {
 namespace client {
 
 using aws::GetObjectAsyncCallBack;
-using aws::GetObjectAsyncContext;
 using aws::PutObjectAsyncCallBack;
 using aws::PutObjectAsyncContext;
 
@@ -61,8 +63,6 @@ using blockcache::StrErr;
 
 using datastream::DataStream;
 using filesystem::Ino;
-using stub::metric::MetricGuard;
-using stub::metric::S3Metric;
 using utils::CountDownEvent;
 using utils::ReadLockGuard;
 using utils::RWLock;
@@ -472,7 +472,7 @@ int FileCacheManager::HandleReadS3NotExist(
 
 int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
                            char* data_buf) {
-  VLOG(3) << "read inodeId=" << inode_id << ", offset=" << offset
+  VLOG(1) << "read inodeId=" << inode_id << ", offset=" << offset
           << ", length=" << length;
   // 1. read from memory cache
   uint64_t actual_read_len = 0;
@@ -489,6 +489,13 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
   if (DINGOFS_ERROR::OK != inode_manager->GetInode(inode_id, inode_wrapper)) {
     LOG(ERROR) << "get inodeId=" << inode_id << " fail";
     return -1;
+  }
+
+  // in time warmup
+  if (s3ClientAdaptor_->HasDiskCache() && common::FLAGS_in_time_warmup) {
+    auto inode_prefetch_manager = s3ClientAdaptor_->GetIntimeWarmUpManager();
+    CHECK_NOTNULL(inode_prefetch_manager);
+    inode_prefetch_manager->Submit(inode_wrapper);
   }
 
   uint32_t retry = 0;
@@ -619,10 +626,11 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
   uint64_t block_pos = 0;
   GetBlockLoc(req.offset, &chunk_index, &chunk_pos, &block_index, &block_pos);
 
-  const uint64_t chunk_size = s3ClientAdaptor_->GetChunkSize();
   const uint64_t block_size = s3ClientAdaptor_->GetBlockSize();
+  const uint64_t chunk_size = s3ClientAdaptor_->GetChunkSize();
+
   // prefetch
-  if (s3ClientAdaptor_->HasDiskCache()) {
+  if (s3ClientAdaptor_->HasDiskCache() && common::FLAGS_s3_prefetch) {
     PrefetchForBlock(req, file_len, block_size, chunk_size, block_index);
   }
 
@@ -668,7 +676,8 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
       if (ReadKVRequestFromS3(store_key, current_buf, block_pos - object_offset,
                               current_read_len, &rc)) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
-                << " from s3 ok";
+                << " offset: " << (block_pos - object_offset)
+                << " len: " << current_read_len << " from s3 ok";
         break;
       }
 
@@ -696,121 +705,43 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
 }
 
 void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
-                                        uint64_t fileLen, uint64_t blockSize,
-                                        uint64_t chunkSize,
-                                        uint64_t startBlockIndex) {
-  uint32_t prefetchBlocks = s3ClientAdaptor_->GetPrefetchBlocks();
-  uint32_t objectPrefix = s3ClientAdaptor_->GetObjectPrefix();
-  std::vector<std::pair<BlockKey, uint64_t>> prefetchObjs;
+                                        uint64_t file_len, uint64_t block_size,
+                                        uint64_t chunk_size,
+                                        uint64_t start_block_index) {
+  uint32_t prefetch_blocks = s3ClientAdaptor_->GetPrefetchBlocks();
+  uint32_t object_prefix = s3ClientAdaptor_->GetObjectPrefix();
 
-  uint64_t blockIndex = startBlockIndex;
-  for (uint32_t i = 0; i < prefetchBlocks; i++) {
-    BlockKey key(req.fsId, req.inodeId, req.chunkId, blockIndex,
+  std::vector<std::pair<BlockKey, uint64_t>> prefetch_objs;
+
+  uint64_t block_index = start_block_index;
+  for (uint32_t i = 0; i < prefetch_blocks; i++) {
+    BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
                  req.compaction);
-    uint64_t maxReadLen = (blockIndex + 1) * blockSize;
-    uint64_t needReadLen =
-        maxReadLen > fileLen ? fileLen - blockIndex * blockSize : blockSize;
+    uint64_t max_read_len = (block_index + 1) * block_size;
+    uint64_t need_read_len = max_read_len > file_len
+                                 ? file_len - (block_index * block_size)
+                                 : block_size;
 
-    prefetchObjs.push_back(std::make_pair(key, needReadLen));
+    prefetch_objs.push_back(std::make_pair(key, need_read_len));
 
-    blockIndex++;
-    if (maxReadLen > fileLen || blockIndex >= chunkSize / blockSize) {
+    block_index++;
+    if (max_read_len > file_len || block_index >= chunk_size / block_size) {
       break;
     }
   }
 
-  PrefetchS3Objs(prefetchObjs);
+  PrefetchS3Objs(prefetch_objs);
 }
 
-class AsyncPrefetchCallback {
- public:
-  AsyncPrefetchCallback(BlockKey key, uint64_t inode,
-                        S3ClientAdaptorImpl* s3Client)
-      : key(key), inode_(inode), s3Client_(s3Client), startTime_(butil::cpuwide_time_us()) {}
-
-  void operator()(const aws::S3Adapter*,
-                  const std::shared_ptr<GetObjectAsyncContext>& context) {
-    VLOG(9) << "prefetch end: " << context->key << ", len " << context->len
-            << "actual len: " << context->actualLen;
-    std::unique_ptr<char[]> guard(context->buf);
-    // prefetch s3 data metrics
-    MetricGuard metric_guard(&context->retCode,
-                             &S3Metric::GetInstance().read_s3,
-                             context->actualLen, startTime_);
-    auto file_cache =
-        s3Client_->GetFsCacheManager()->FindFileCacheManager(inode_);
-
-    if (!file_cache) {
-      VLOG(3) << "prefetch inodeId=" << inode_
-              << " end, but file cache is released, key: " << context->key;
-      return;
-    }
-
-    if (context->retCode != 0) {
-      LOG(WARNING) << "prefetch failed, key: " << context->key;
-      return;
-    }
-
-    auto block_cache = s3Client_->GetBlockCache();
-    Block block(context->buf, context->actualLen);
-    auto rc = block_cache->Cache(key, block);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG_EVERY_SECOND(INFO)
-          << "Cache block( " << key.Filename() << ") failed: " << StrErr(rc);
-    }
-
-    {
-      dingofs::utils::LockGuard lg(file_cache->downloadMtx_);
-      file_cache->downloadingObj_.erase(context->key);
-    }
-  }
-
- private:
-  BlockKey key;
-  const uint64_t inode_;
-  S3ClientAdaptorImpl* s3Client_;
-  int64_t startTime_;
-};
-
 void FileCacheManager::PrefetchS3Objs(
-    const std::vector<std::pair<BlockKey, uint64_t>>& prefetchObjs) {
-  for (const auto& obj : prefetchObjs) {
+    const std::vector<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
+  for (const auto& obj : prefetch_objs) {
     BlockKey key = obj.first;
     std::string name = key.StoreKey();
     uint64_t read_len = obj.second;
-    dingofs::utils::LockGuard lg(downloadMtx_);
-    if (downloadingObj_.find(name) != downloadingObj_.end()) {
-      VLOG(9) << "inodeId=" << key.ino
-              << " obj is already in downloading: " << name
-              << ", size: " << downloadingObj_.size();
-      continue;
-    }
-    if (s3ClientAdaptor_->GetBlockCache()->IsCached(key)) {
-      VLOG(9) << "inodeId=" << key.ino
-              << " downloading is exist in cache: " << name
-              << ", size: " << downloadingObj_.size();
-      continue;
-    }
-
-    VLOG(9) << "inodeId=" << key.ino << " download start: " << name
-            << ", size: " << downloadingObj_.size();
-    downloadingObj_.emplace(name);
-
-    auto inodeid = inode_;
-    auto* s3_client_adaptor = s3ClientAdaptor_;
-    auto task = [key, name, inodeid, s3_client_adaptor, read_len]() {
-      char* data_cache_s3 = new char[read_len];
-      auto context = std::make_shared<GetObjectAsyncContext>();
-      context->key = name;
-      context->buf = data_cache_s3;
-      context->offset = 0;
-      context->len = read_len;
-      context->cb = AsyncPrefetchCallback{key, inodeid, s3_client_adaptor};
-      VLOG(9) << "inodeId=" << key.ino << "prefetch start: " << context->key
-              << ", len: " << context->len;
-      s3_client_adaptor->GetS3Client()->AsyncGet(context);
-    };
-    s3ClientAdaptor_->PushAsyncTask(task);
+    VLOG(3) << "try to prefetch s3 obj inodeId=" << key.ino
+            << " block: " << name << ", read len: " << read_len;
+    s3ClientAdaptor_->GetBlockCache()->PreFetch(key, read_len);
   }
 }
 

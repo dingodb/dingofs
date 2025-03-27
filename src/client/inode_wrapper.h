@@ -28,13 +28,14 @@
 
 #include <climits>
 #include <cstdint>
+#include <ctime>
 #include <memory>
 #include <string>
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/common/common.h"
 #include "client/filesystem/error.h"
+#include "dingofs/metaserver.pb.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
@@ -146,6 +147,14 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
   pb::metaserver::Inode GetInode() const {
     dingofs::utils::UniqueLock lg(mtx_);
     return inode_;
+  }
+
+  timespec GetMtime() const {
+    timespec mtime;
+    dingofs::utils::UniqueLock lg(mtx_);
+    mtime.tv_sec = inode_.mtime();
+    mtime.tv_nsec = inode_.mtime_ns();
+    return mtime;
   }
 
   // Get an immutable inode.

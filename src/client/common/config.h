@@ -27,7 +27,6 @@
 #include <string>
 
 #include "aws/s3_adapter.h"
-#include "client/common/common.h"
 #include "dingofs/common.pb.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
@@ -36,19 +35,10 @@ namespace dingofs {
 namespace client {
 namespace common {
 
-struct BlockDeviceClientOptions {
-  std::string configPath;
-};
-
 struct LeaseOpt {
   uint32_t refreshTimesPerLease = 5;
   // default = 20s
   uint32_t leaseTimeUs = 20000000;
-};
-
-struct SpaceAllocServerOption {
-  std::string spaceaddr;
-  uint64_t rpcTimeoutMs;
 };
 
 struct KVClientManagerOpt {
@@ -77,32 +67,6 @@ struct S3ClientAdaptorOption {
 struct S3Option {
   S3ClientAdaptorOption s3ClientAdaptorOpt;
   aws::S3AdapterOption s3AdaptrOpt;
-};
-
-struct BlockGroupOption {
-  uint32_t allocateOnce;
-};
-
-struct BitmapAllocatorOption {
-  uint64_t sizePerBit;
-  double smallAllocProportion;
-};
-
-struct VolumeAllocatorOption {
-  std::string type;
-  BitmapAllocatorOption bitmapAllocatorOption;
-  BlockGroupOption blockGroupOption;
-};
-
-struct VolumeOption {
-  uint64_t bigFileSize;
-  uint64_t volBlockSize;
-  uint64_t fsBlockSize;
-  VolumeAllocatorOption allocatorOption;
-};
-
-struct ExtentManagerOption {
-  uint64_t preAllocSize;
 };
 
 struct RefreshDataOption {
@@ -245,11 +209,7 @@ struct FuseClientOption {
   stub::common::MetaCacheOpt metaCacheOpt;
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
-  SpaceAllocServerOption spaceOpt;
-  BlockDeviceClientOptions bdevOpt;
   S3Option s3Opt;
-  ExtentManagerOption extentManagerOpt;
-  VolumeOption volumeOpt;
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;

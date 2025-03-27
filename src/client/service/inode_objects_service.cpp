@@ -19,9 +19,9 @@
 #include "brpc/closure_guard.h"
 #include "brpc/controller.h"
 #include "brpc/errno.pb.h"
-#include "dingofs/metaserver.pb.h"
 #include "client/inode_wrapper.h"
 #include "client/service/flat_file.h"
+#include "client/service/flat_file_util.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -29,7 +29,6 @@ namespace client {
 
 using pb::client::InodeObjectsRequest;
 using pb::client::InodeObjectsResponse;
-using pb::metaserver::Inode;
 
 void InodeObjectsService::default_method(
     google::protobuf::RpcController* controller,
@@ -62,20 +61,9 @@ void InodeObjectsService::default_method(
         os << "Get inode failed, inodeId=" << inode_id << "\n";
         return;
       } else {
-        Inode inode = inode_wrapper->GetInode();
-        FlatFile flat_file(inode.fsid(), inode.inodeid(),
-                           s3_adapter_->GetBlockSize());
-
-        for (const auto& chunk : inode.s3chunkinfomap()) {
-          uint64_t chunk_index = chunk.first;
-
-          for (int i = 0; i < chunk.second.s3chunks_size(); i++) {
-            const auto& chunk_info = chunk.second.s3chunks(i);
-            VLOG(6) << "Insert chunk info, " << chunk_info.DebugString();
-
-            flat_file.InsertChunkInfo(chunk_index, chunk_info);
-          }
-        }
+        FlatFile flat_file =
+            InodeWrapperToFlatFile(inode_wrapper, s3_adapter_->GetChunkSize(),
+                                   s3_adapter_->GetBlockSize());
 
         const std::string* delimiter =
             cntl->http_request().uri().GetQuery("delimiter");

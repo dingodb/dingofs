@@ -57,7 +57,6 @@ DEFINE_validator(block_cache_stage_bandwidth_throttle_mb, &PassUint64);
 
 // disk cache
 DEFINE_bool(drop_page_cache, true, "drop page cache for disk cache");
-
 DEFINE_validator(drop_page_cache, &PassBool);
 
 // disk_cache_cleanup_expire_interval_millsecond
@@ -117,6 +116,14 @@ DEFINE_validator(push_metric_interval_millsecond, &PassUint32);
 DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,
               "fuse read max retry when s3 object not exist");
 DEFINE_validator(fuse_read_max_retry_s3_not_exist, &PassUint32);
+
+// s3 prefetch
+DEFINE_bool(s3_prefetch, true, "enable s3 prefetch when read miss");
+DEFINE_validator(s3_prefetch, &PassBool);
+
+// in time warmup
+DEFINE_bool(in_time_warmup, false, "in time warmup inode when enable");
+DEFINE_validator(in_time_warmup, &PassBool);
 
 }  // namespace common
 }  // namespace client

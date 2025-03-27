@@ -52,14 +52,16 @@ namespace client {
 namespace common {
 
 using dingofs::aws::S3InfoOption;
-using ::dingofs::base::filepath::PathJoin;
-using ::dingofs::base::math::kMiB;
-using ::dingofs::base::string::Str2Int;
+using dingofs::base::filepath::PathJoin;
+using dingofs::base::math::kMiB;
+using dingofs::base::string::Str2Int;
 using dingofs::utils::Configuration;
 
-using ::dingofs::base::string::StrSplit;
+using dingofs::base::string::StrSplit;
 using dingofs::stub::common::ExcutorOpt;
 using dingofs::stub::common::MetaCacheOpt;
+
+using dingofs::client::common::FLAGS_in_time_warmup;
 
 static bool pass_bool(const char*, bool) { return true; }
 DEFINE_bool(enableCto, true, "acheieve cto consistency");
@@ -148,11 +150,6 @@ void InitExcutorOption(Configuration* conf, ExcutorOpt* opts, bool internal) {
                             &opts->enableRenameParallel);
 }
 
-void InitBlockDeviceOption(Configuration* conf,
-                           BlockDeviceClientOptions* bdevOpt) {
-  conf->GetValueFatalIfFail("bdev.confPath", &bdevOpt->configPath);
-}
-
 void InitS3Option(Configuration* conf, S3Option* s3Opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
   conf->GetValueFatalIfFail("data_stream.page.size",
@@ -181,35 +178,6 @@ void InitS3Option(Configuration* conf, S3Option* s3Opt) {
                             &s3Opt->s3ClientAdaptorOpt.readRetryIntervalMs);
   dingofs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
                                                       &s3Opt->s3AdaptrOpt);
-}
-
-void InitVolumeOption(Configuration* conf, VolumeOption* volumeOpt) {
-  conf->GetValueFatalIfFail("volume.bigFileSize", &volumeOpt->bigFileSize);
-  conf->GetValueFatalIfFail("volume.volBlockSize", &volumeOpt->volBlockSize);
-  conf->GetValueFatalIfFail("volume.fsBlockSize", &volumeOpt->fsBlockSize);
-  conf->GetValueFatalIfFail("volume.allocator.type",
-                            &volumeOpt->allocatorOption.type);
-
-  conf->GetValueFatalIfFail(
-      "volume.blockGroup.allocateOnce",
-      &volumeOpt->allocatorOption.blockGroupOption.allocateOnce);
-
-  if (volumeOpt->allocatorOption.type == "bitmap") {
-    conf->GetValueFatalIfFail(
-        "volume.bitmapAllocator.sizePerBit",
-        &volumeOpt->allocatorOption.bitmapAllocatorOption.sizePerBit);
-    conf->GetValueFatalIfFail(
-        "volume.bitmapAllocator.smallAllocProportion",
-        &volumeOpt->allocatorOption.bitmapAllocatorOption.smallAllocProportion);
-  } else {
-    CHECK(false) << "only support bitmap allocator";
-  }
-}
-
-void InitExtentManagerOption(Configuration* conf,
-                             ExtentManagerOption* extentManagerOpt) {
-  conf->GetValueFatalIfFail("extentManager.preAllocSize",
-                            &extentManagerOpt->preAllocSize);
 }
 
 void InitLeaseOpt(Configuration* conf, LeaseOpt* leaseOpt) {
@@ -439,10 +407,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   InitMetaCacheOption(conf, &clientOption->metaCacheOpt);
   InitExcutorOption(conf, &clientOption->excutorOpt, false);
   InitExcutorOption(conf, &clientOption->excutorInternalOpt, true);
-  InitBlockDeviceOption(conf, &clientOption->bdevOpt);
   InitS3Option(conf, &clientOption->s3Opt);
-  InitExtentManagerOption(conf, &clientOption->extentManagerOpt);
-  InitVolumeOption(conf, &clientOption->volumeOpt);
   InitLeaseOpt(conf, &clientOption->leaseOpt);
   InitRefreshDataOpt(conf, &clientOption->refreshDataOption);
   InitKVClientManagerOpt(conf, &clientOption->kvClientManagerOpt);
@@ -463,6 +428,14 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
                             &clientOption->downloadMaxRetryTimes);
   conf->GetValueFatalIfFail("fuseClient.warmupThreadsNum",
                             &clientOption->warmupThreadsNum);
+
+  if (!conf->GetBoolValue("fuseClient.in_time_warmup",
+                          &FLAGS_in_time_warmup)) {
+    LOG(INFO) << "Not found `fuseClient.in_time_warmup` in conf, default to "
+                 "false";
+    FLAGS_in_time_warmup = false;
+  }
+
   LOG_IF(WARNING, conf->GetBoolValue("fuseClient.enableSplice",
                                      &clientOption->enableFuseSplice))
       << "Not found `fuseClient.enableSplice` in conf, use default value `"

@@ -97,7 +97,6 @@ using stub::filesystem::XATTR_DIR_RENTRIES;
 using stub::filesystem::XATTR_DIR_RFBYTES;
 using stub::filesystem::XATTR_DIR_RFILES;
 using stub::filesystem::XATTR_DIR_RSUBDIRS;
-using stub::metric::FSMetric;
 using stub::rpcclient::ChannelManager;
 using stub::rpcclient::Cli2ClientImpl;
 using stub::rpcclient::InodeParam;

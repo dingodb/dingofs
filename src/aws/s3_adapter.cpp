@@ -468,7 +468,8 @@ int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
   if (response.IsSuccess()) {
     return 0;
   } else {
-    LOG(ERROR) << "GetObject error: " << response.GetError().GetExceptionName()
+    LOG(ERROR) << "GetObject fail, bucket: " << bucketName_ << ", key: " << key
+               << " error: " << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return -1;
   }
@@ -548,8 +549,8 @@ bool S3Adapter::ObjectExist(const Aws::String& key) {
   if (response.IsSuccess()) {
     return true;
   } else {
-    LOG(ERROR) << "HeadObject error:" << bucketName_ << "--" << key << "--"
-               << response.GetError().GetExceptionName()
+    LOG(ERROR) << "HeadObject error bucket: " << bucketName_ << "--" << key
+               << "--" << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return false;
   }

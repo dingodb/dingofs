@@ -44,6 +44,7 @@ namespace client {
 namespace blockcache {
 
 using ::dingofs::client::common::BlockCacheOption;
+using ::dingofs::utils::TaskThreadPool;
 
 enum class StoreType : uint8_t {
   NONE,

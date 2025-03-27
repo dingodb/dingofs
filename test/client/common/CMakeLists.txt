@@ -14,7 +14,6 @@
 
 add_executable(test_dingofs_client_common 
     test_add_ull_string.cpp
-    test_config.cpp
 )
 target_link_libraries(test_dingofs_client_common
     client_common

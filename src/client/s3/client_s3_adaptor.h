@@ -34,6 +34,7 @@
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"
 #include "client/inode_cache_manager.h"
+#include "client/in_time_warmup_manager.h"
 #include "client/s3/client_s3_cache_manager.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/wait_interval.h"
@@ -86,6 +87,7 @@ class S3ClientAdaptor {
   virtual uint32_t GetObjectPrefix() = 0;
   virtual std::shared_ptr<blockcache::BlockCache> GetBlockCache() = 0;
   virtual bool HasDiskCache() = 0;
+  virtual std::shared_ptr<IntimeWarmUpManager> GetIntimeWarmUpManager() = 0;
 };
 
 using FlushChunkCacheCallBack =
@@ -164,6 +166,10 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     return block_cache_;
   }
 
+  std::shared_ptr<IntimeWarmUpManager> GetIntimeWarmUpManager() override {
+    return in_time_warmup_manager_;
+  }
+
   pb::mds::FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
                                        uint64_t* chunkId) override;
 
@@ -233,6 +239,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   std::shared_ptr<InodeCacheManager> inodeManager_;
   std::shared_ptr<filesystem::FileSystem> filesystem_;
   std::shared_ptr<blockcache::BlockCache> block_cache_;
+  std::shared_ptr<IntimeWarmUpManager> in_time_warmup_manager_;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   uint32_t fsId_;
   std::string fsName_;

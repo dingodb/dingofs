@@ -58,7 +58,7 @@ BCACHE_ERROR BlockPrefetcherImpl::Init(uint32_t workers, uint32_t queue_size,
       LOG(ERROR) << "Start prefetch thread pool failed, rc = " << rc;
       return BCACHE_ERROR::INTERNAL_ERROR;
     }
-    LOG(ERROR) << "Start prefetch thread pool success.";
+    LOG(INFO) << "Start prefetch thread pool success.";
   }
   return BCACHE_ERROR::OK;
 }
@@ -92,27 +92,26 @@ int BlockPrefetcherImpl::BatchSubmit(void* meta,
     auto& block_key = task.block_key;
     size_t block_size = task.block_size;
     prefetcher->prefetch_thread_pool_->Enqueue(
-        [&] { prefetcher->Prefetch(block_key, block_size); });
+        [prefetcher, block_key, block_size] {
+          prefetcher->Prefetch(block_key, block_size);
+        });
   }
   return 0;
 }
 
 void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
   {
-    ReadLockGuard lk(rwlock_);
-    if (busy_[key.Filename()]) {
+    WriteLockGuard lk(rwlock_);
+
+    if (busy_.find(key.Filename()) != busy_.end()) {
       return;
     }
-  }
-
-  {
-    WriteLockGuard lk(rwlock_);
     busy_[key.Filename()] = true;
   }
 
   auto rc = prefetch_func_(key, length);
   if (rc != BCACHE_ERROR::OK) {
-    LOG(ERROR) << "PreFetch for block(" << key.Filename()
+    LOG(ERROR) << "PreFetch for block(" << key.StoreKey()
                << ") failed, rc = " << StrErr(rc);
   }
 

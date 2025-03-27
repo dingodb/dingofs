@@ -21,8 +21,8 @@
 #include <sstream>
 #include <string>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/blockcache/cache_store.h"
+#include "dingofs/metaserver.pb.h"
 #include "glog/logging.h"
 
 namespace dingofs {
@@ -200,10 +200,18 @@ class S3ChunkHoler {
 
 class FlatFile {
  public:
-  FlatFile(uint64_t fs_id, uint64_t ino, uint64_t block_size)
-      : fs_id_(fs_id), ino_(ino), block_size_(block_size) {}
+  FlatFile(uint64_t fs_id, uint64_t ino, uint64_t chunk_size,
+           uint64_t block_size)
+      : fs_id_(fs_id),
+        ino_(ino),
+        chunk_size_(chunk_size),
+        block_size_(block_size) {}
 
   ~FlatFile() = default;
+
+  void InsertFlatFileSlice(uint64_t chunk_index, const FlatFileSlice& slice) {
+    chunk_index_flat_file_chunk_[chunk_index].InsertChunkInfo(slice);
+  }
 
   void InsertChunkInfo(uint64_t chunk_index,
                        const pb::metaserver::S3ChunkInfo& chunk_info) {
@@ -214,22 +222,29 @@ class FlatFile {
 
     FlatFileSlice slice = {chunk_info.offset(), chunk_info.len(),
                            chunk_info.chunkid()};
-    chunk_index_flat_file_chunk_[chunk_index].InsertChunkInfo(slice);
+    InsertFlatFileSlice(chunk_index, slice);
   }
 
-  std::string ToString() const {
-    std::ostringstream os;
-    os << "chunk_id_to_chunk_info_:\n";
-    for (const auto& chunk_holder : chunk_id_to_s3_chunk_holer_) {
-      os << "chunk_id: " << chunk_holder.first << chunk_holder.second.ToString()
-         << "\n";
+  std::vector<BlockObj> GetBlockObj(uint64_t offset, uint64_t length) const;
+
+  void DumpToString() const {
+    {
+      std::ostringstream os;
+      for (const auto& chunk_holder : chunk_id_to_s3_chunk_holer_) {
+        os << "chunk_id: " << chunk_holder.first
+           << chunk_holder.second.ToString() << "\n";
+      }
+      LOG(INFO) << "chunk_id_to_chunk_info_:\n " << os.str();
     }
 
-    os << "\n chunk_index_flat_file_chunk_:\n";
-    for (const auto& chunk : chunk_index_flat_file_chunk_) {
-      os << "chunk_index: " << chunk.first << chunk.second.ToString();
+    {
+      std::ostringstream os;
+      os << "chunk_index_flat_file_chunk_:\n";
+      for (const auto& chunk : chunk_index_flat_file_chunk_) {
+        os << "chunk_index: " << chunk.first << chunk.second.ToString();
+      }
+      LOG(INFO) << "chunk_index_flat_file_chunk_:\n " << os.str();
     }
-    return os.str();
   }
 
   std::string FormatStringWithHeader(bool use_delimiter = false) const {
@@ -290,6 +305,7 @@ class FlatFile {
  private:
   uint64_t fs_id_;  // filesystem id
   uint64_t ino_;    // inode id
+  uint64_t chunk_size_;
   uint64_t block_size_;
   // chunk id to s3 chunk holder
   std::map<uint64_t, S3ChunkHoler> chunk_id_to_s3_chunk_holer_;
