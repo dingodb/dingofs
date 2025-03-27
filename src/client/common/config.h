@@ -232,8 +232,10 @@ struct BlockCacheOption {
   uint32_t flush_file_queue_size;
   uint32_t flush_slice_workers;
   uint32_t flush_slice_queue_size;
-  uint64_t upload_stage_workers;
-  uint64_t upload_stage_queue_size;
+  uint32_t upload_stage_workers;
+  uint32_t upload_stage_queue_size;
+  uint32_t prefetch_workers;
+  uint32_t prefetch_queue_size;
   std::vector<DiskCacheOption> disk_cache_options;
 };
 // }

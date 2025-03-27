@@ -54,8 +54,8 @@ BlockCacheUploader::BlockCacheUploader(std::shared_ptr<S3Client> s3,
       std::make_unique<TaskThreadPool<>>("upload_stage_worker");
 }
 
-void BlockCacheUploader::Init(uint64_t upload_workers,
-                              uint64_t upload_queue_size) {
+void BlockCacheUploader::Init(uint32_t upload_workers,
+                              uint32_t upload_queue_size) {
   if (!running_.exchange(true)) {
     // pending and uploading queue
     pending_queue_ = std::make_shared<PendingQueue>();
@@ -67,7 +67,7 @@ void BlockCacheUploader::Init(uint64_t upload_workers,
 
     // upload stage block worker
     CHECK(upload_stage_thread_pool_->Start(upload_workers) == 0);
-    for (uint64_t i = 0; i < upload_workers; i++) {
+    for (uint32_t i = 0; i < upload_workers; i++) {
       upload_stage_thread_pool_->Enqueue(&BlockCacheUploader::UploadingWorker,
                                          this);
     }
