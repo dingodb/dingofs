@@ -32,9 +32,9 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "common/s3util.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "common/s3util.h"
 #include "metaserver/copyset/meta_operator.h"
 #include "metaserver/s3compact_manager.h"
 
@@ -67,13 +67,28 @@ std::vector<uint64_t> CompactInodeJob::GetNeedCompact(
       needCompact.push_back(item.first);
     } else {
       const auto& l = item.second;
+      uint64_t total_s3Chunks_size = 0;
+      std::unordered_set<uint64_t> offset_set;
+
       for (int i = 0; i < l.s3chunks_size(); i++) {
-        if (l.s3chunks(i).offset() + l.s3chunks(i).len() > inodeLen) {
+        uint64_t chunk_size = l.s3chunks(i).len();
+        uint64_t offset = l.s3chunks(i).offset();
+
+        total_s3Chunks_size += chunk_size;
+        // offset + chunk_size > inodeLen,then need compact
+        // total s3Chunks size by chunk index > inodeLen,then need compact
+        // two identical offset exists, then need compact
+        if (offset + chunk_size > inodeLen || total_s3Chunks_size > inodeLen ||
+            offset_set.count(offset)) {
           // part of chunk is useless, we need to delete them
           needCompact.push_back(item.first);
           break;
         }
+
+        offset_set.insert(offset);
       }
+
+      offset_set.clear();
     }
   }
   return needCompact;
@@ -439,6 +454,7 @@ S3Adapter* CompactInodeJob::SetupS3Adapter(uint64_t fsId,
             << ", bucket: " << s3info.bucketname();
   } else {
     LOG(WARNING) << "s3compact: fail to get s3info of " << fsId;
+    opts_->s3adapterManager->ReleaseS3Adapter(*s3adapterIndex);
     return nullptr;
   }
   VLOG(6) << "s3compact: set s3adapter " << s3info.ak() << ", " << s3info.sk()
