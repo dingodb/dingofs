@@ -33,6 +33,16 @@ uint64_t DirBuffer::DirBufferNew() {
   return dindex;
 }
 
+uint64_t DirBuffer::DirBufferNewWithIndex(uint64_t index) {
+  dingofs::utils::WriteLockGuard wlg(bufferMtx_);
+  DirBufferHead* head = new DirBufferHead();
+  buffer_.emplace(index, head);
+  if (index_.load() <= index) {
+    index_.store(index + 1);
+  }
+  return index;
+}
+
 DirBufferHead* DirBuffer::DirBufferGet(uint64_t dindex) {
   dingofs::utils::ReadLockGuard rlg(bufferMtx_);
   auto it = buffer_.find(dindex);

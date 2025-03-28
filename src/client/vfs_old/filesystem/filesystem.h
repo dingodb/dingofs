@@ -105,6 +105,10 @@ class FileSystem {
 
   void ReleaseHandler(uint64_t fh);
 
+  void SaveAllHandlers(std::string path);
+
+  void LoadAllHandlers(std::string path);
+
   // utility: others
   FileSystemMember BorrowMember();
 

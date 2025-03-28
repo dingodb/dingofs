@@ -46,6 +46,8 @@ class DirBuffer {
   DirBuffer() : index_(0) {}
   // New a buffer head, and return a dindex
   uint64_t DirBufferNew();
+  // New a buffer head by index, and return same index
+  uint64_t DirBufferNewWithIndex(uint64_t index);
   // Get the buffer head by the dindex
   DirBufferHead* DirBufferGet(uint64_t dindex);
   // Release the buffer and buffer head by the dindex

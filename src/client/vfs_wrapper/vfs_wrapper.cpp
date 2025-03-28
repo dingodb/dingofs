@@ -55,22 +55,7 @@ static Status LoadConfig(const std::string& config_path,
   return Status::OK();
 }
 
-Status InitLog(const char* argv0, utils::Configuration& conf) {
-  // set log dir
-  if (FLAGS_log_dir.empty()) {
-    if (!conf.GetStringValue("client.common.logDir", &FLAGS_log_dir)) {
-      LOG(WARNING) << "not found client.common.logDir config.";
-    }
-  }
-
-  dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
-  dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
-  dingofs::common::FLAGS_vlog_level = FLAGS_v;
-
-  FLAGS_logbufsecs = 0;
-  // initialize logging module
-  google::InitGoogleLogging(argv0);
-
+Status InitLog() {
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
@@ -114,7 +99,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   common::InitClientOption(&conf_, &fuse_client_option_);
 
   // init log
-  s = InitLog(argv0, conf_);
+  s = InitLog();
   if (!s.ok()) {
     return s;
   }
