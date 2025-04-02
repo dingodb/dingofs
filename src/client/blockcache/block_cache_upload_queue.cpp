@@ -20,9 +20,10 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "client/blockcache/block_cache_upload_queue.h"
+
 #include <glog/logging.h>
 
-#include "client/blockcache/block_cache_uploader_cmmon.h"
 #include "client/common/dynamic_config.h"
 
 namespace dingofs {
@@ -84,7 +85,18 @@ void PendingQueue::Stat(struct StatBlocks* stat) {
   *stat = StatBlocks(num_total, num_from_cto, num_from_nocto, num_from_reload);
 }
 
-UploadingQueue::UploadingQueue(size_t capacity) : capacity_(capacity) {}
+UploadingQueue::UploadingQueue(size_t capacity)
+    : running_(false), capacity_(capacity) {}
+
+void UploadingQueue::Start() {
+  running_.exchange(true, std::memory_order_acq_rel);
+}
+
+void UploadingQueue::Stop() {
+  if (running_.exchange(false, std::memory_order_acq_rel)) {
+    not_empty_.notify_all();
+  }
+}
 
 void UploadingQueue::Push(const StageBlock& stage_block) {
   std::unique_lock<std::mutex> lk(mutex_);
@@ -98,11 +110,14 @@ void UploadingQueue::Push(const StageBlock& stage_block) {
 
 StageBlock UploadingQueue::Pop() {
   std::unique_lock<std::mutex> lk(mutex_);
-  while (queue_.empty()) {
+  while (queue_.empty() && running_.load(std::memory_order_acquire)) {
     not_empty_.wait(lk);
   }
 
-  CHECK(queue_.size() != 0);
+  if (queue_.empty()) {  // For queue stopped
+    return StageBlock();
+  }
+
   auto stage_block = queue_.top();
   queue_.pop();
   CHECK(count_[stage_block.ctx.from] > 0);

@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOADER_COMMON_H_
-#define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOADER_COMMON_H_
+#ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
+#define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
 
 #include <condition_variable>
 #include <memory>
@@ -37,9 +37,14 @@ namespace client {
 namespace blockcache {
 
 struct StageBlock {
-  StageBlock(uint64_t seq_num, const BlockKey& key,
-             const std::string& stage_path, BlockContext ctx)
-      : seq_num(seq_num), key(key), stage_path(stage_path), ctx(ctx) {}
+  StageBlock() : seq_num(0) {}
+
+  StageBlock(const BlockKey& key, const std::string& stage_path,
+             BlockContext ctx)
+      : key(key), stage_path(stage_path), ctx(ctx) {
+    static std::atomic<uint64_t> g_seq_num(0);
+    seq_num = g_seq_num.fetch_add(1, std::memory_order_relaxed);
+  }
 
   bool operator<(const StageBlock& other) const {
     static std::unordered_map<BlockFrom, uint8_t> priority{
@@ -53,6 +58,8 @@ struct StageBlock {
     }
     return priority[ctx.from] > priority[other.ctx.from];
   }
+
+  bool Valid() const { return seq_num > 0; }
 
   uint64_t seq_num;
   BlockKey key;
@@ -99,6 +106,10 @@ class UploadingQueue {
  public:
   explicit UploadingQueue(size_t capacity);
 
+  void Start();
+
+  void Stop();
+
   void Push(const StageBlock& stage_block);
 
   StageBlock Pop();
@@ -111,6 +122,7 @@ class UploadingQueue {
 
  private:
   std::mutex mutex_;
+  std::atomic<bool> running_;
   size_t capacity_;
   std::condition_variable not_empty_;
   std::condition_variable not_full_;
@@ -122,4 +134,4 @@ class UploadingQueue {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOADER_COMMON_H_
+#endif  // DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_

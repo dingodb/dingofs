@@ -27,7 +27,7 @@
 #include <memory>
 #include <mutex>
 
-#include "client/blockcache/block_cache_uploader_cmmon.h"
+#include "client/blockcache/block_cache_upload_queue.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
 #include "client/blockcache/error.h"

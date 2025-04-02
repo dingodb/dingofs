@@ -74,13 +74,11 @@ struct Block {
   size_t size;
 };
 
-enum class BlockFrom {
-  CTO_FLUSH,
-  NOCTO_FLUSH,
-  RELOAD,
-};
+enum class BlockFrom : uint8_t { CTO_FLUSH, NOCTO_FLUSH, RELOAD, UNKNOWN };
 
 struct BlockContext {
+  BlockContext() : from(BlockFrom::UNKNOWN) {}
+
   BlockContext(BlockFrom from) : from(from) {}
 
   BlockContext(BlockFrom from, const std::string& store_id)
