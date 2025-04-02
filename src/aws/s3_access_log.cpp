@@ -14,25 +14,22 @@
  * limitations under the License.
  */
 
-#include "client/vfs/meta/meta_log.h"
+#include "aws/s3_access_log.h"
 
-#include "spdlog/sinks/daily_file_sink.h"
-#include "spdlog/spdlog.h"
+#include <absl/strings/str_format.h>
 
 namespace dingofs {
-namespace client {
-namespace vfs {
+namespace aws {
 
-std::shared_ptr<spdlog::logger> meta_logger;
+std::shared_ptr<spdlog::logger> s3_logger;
 
-bool InitMetaLog(const std::string& log_dir) {
+bool InitS3AccessLog(const std::string& prefix) {
   std::string filename =
-      fmt::format("{}/vfs_meta_{}.log", log_dir, getpid());
-  meta_logger = spdlog::daily_logger_mt("vfs_meta", filename, 0, 0);
+      absl::StrFormat("%s/s3_access_%d.log", prefix, getpid());
+  s3_logger = spdlog::daily_logger_mt("s3_access", filename, 0, 0);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;
 }
 
-}  // namespace vfs
-}  // namespace client
+}  // namespace aws
 }  // namespace dingofs

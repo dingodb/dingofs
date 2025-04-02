@@ -50,7 +50,7 @@ class MetaLogGuard {
 
     timer_.stop();
 
-    meta_logger->info("[{:.6f}] {}", timer_.u_elapsed() / 1e6, handler_());
+    meta_logger->info("{0} <{1:.6f}>", handler_(), timer_.u_elapsed() / 1e6);
   }
 
  private:

@@ -13,12 +13,15 @@
 # limitations under the License.
 
 add_library(aws_s3_adapter
-    s3_adapter.h
     s3_adapter.cpp
+    s3_access_log.cpp
 )
+
 target_link_libraries(aws_s3_adapter
     dingofs_utils
+    ${AWSSDK_LIBRARIES}
     glog::glog
     brpc::brpc
-    ${AWSSDK_LIBRARIES}
+    spdlog::spdlog
+    absl::str_format
 )

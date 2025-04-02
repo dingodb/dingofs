@@ -22,20 +22,23 @@
 
 #include "aws/s3_adapter.h"
 
+#include <absl/strings/str_format.h>
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
+#include <butil/time.h>
 #include <glog/logging.h>
+#include <opentelemetry/exporters/otlp/otlp_http_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
+#include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h>
+#include <smithy/tracing/impl/opentelemetry/OtelTelemetryProvider.h>
 
 #include <memory>
 #include <sstream>
 #include <string>
 #include <utility>
 
+#include "aws/s3_access_log.h"
 #include "utils/dingo_define.h"
 #include "utils/macros.h"
-#include "opentelemetry/exporters/otlp/otlp_http_exporter_factory.h"
-#include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h"
-#include "opentelemetry/exporters/otlp/otlp_http_metric_exporter_options.h"
-#include "smithy/tracing/impl/opentelemetry/OtelTelemetryProvider.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)
 
@@ -256,6 +259,10 @@ std::string S3Adapter::GetS3Endpoint() {
 }
 
 int S3Adapter::CreateBucket() {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("create_bucket %s", bucketName_);
+  });
+
   Aws::S3::Model::CreateBucketRequest request;
   request.SetBucket(bucketName_);
   Aws::S3::Model::CreateBucketConfiguration conf;
@@ -274,6 +281,10 @@ int S3Adapter::CreateBucket() {
 }
 
 int S3Adapter::DeleteBucket() {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("delete_bucket %s", bucketName_);
+  });
+
   Aws::S3::Model::DeleteBucketRequest request;
   request.SetBucket(bucketName_);
   auto response = s3Client_->DeleteBucket(request);
@@ -288,6 +299,10 @@ int S3Adapter::DeleteBucket() {
 }
 
 bool S3Adapter::BucketExist() {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("head_bucket %s", bucketName_);
+  });
+
   Aws::S3::Model::HeadBucketRequest request;
   request.SetBucket(bucketName_);
   auto response = s3Client_->HeadBucket(request);
@@ -303,6 +318,10 @@ bool S3Adapter::BucketExist() {
 
 int S3Adapter::PutObject(const Aws::String& key, const char* buffer,
                          const size_t buffer_size) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("put_object %s (%d)", key, buffer_size);
+  });
+
   Aws::S3::Model::PutObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(key);
@@ -334,6 +353,8 @@ int S3Adapter::PutObject(const Aws::String& key, const std::string& data) {
 }
 
 void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+
   Aws::S3::Model::PutObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(Aws::String{context->key.c_str(), context->key.size()});
@@ -353,12 +374,17 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
       };
 
   Aws::S3::PutObjectResponseReceivedHandler handler =
-      [context, this](
+      [context, this, start_us](
           const Aws::S3::S3Client* /*client*/,
           const Aws::S3::Model::PutObjectRequest& /*request*/,
           const Aws::S3::Model::PutObjectOutcome& response,
           const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
               aws_ctx) {
+        S3AccessLogGuard log(start_us, [&]() {
+          return absl::StrFormat("async_put_object %s (%d)", context->key,
+                                 context->bufferSize);
+        });
+
         s3_object_put_async_num_ << -1;
 
         std::shared_ptr<PutObjectAsyncContext> ctx =
@@ -387,6 +413,9 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
 }
 
 int S3Adapter::GetObject(const Aws::String& key, std::string* data) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(),
+                       [&]() { return absl::StrFormat("get_object %s", key); });
+
   Aws::S3::Model::GetObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(key);
@@ -414,6 +443,10 @@ int S3Adapter::GetObject(const Aws::String& key, std::string* data) {
 
 int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
                          size_t len) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("range_object %s (%d,%d)", key, offset, len);
+  });
+
   Aws::S3::Model::GetObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(Aws::String{key.c_str(), key.size()});
@@ -435,13 +468,16 @@ int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
   if (response.IsSuccess()) {
     return 0;
   } else {
-    LOG(ERROR) << "GetObject error: " << response.GetError().GetExceptionName()
+    LOG(ERROR) << "GetObject fail, bucket: " << bucketName_ << ", key: " << key
+               << " error: " << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return -1;
   }
 }
 
 void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+
   Aws::S3::Model::GetObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(Aws::String{context->key.c_str(), context->key.size()});
@@ -465,11 +501,17 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
       };
 
   Aws::S3::GetObjectResponseReceivedHandler handler =
-      [this](const Aws::S3::S3Client* /*client*/,
-             const Aws::S3::Model::GetObjectRequest& /*request*/,
-             const Aws::S3::Model::GetObjectOutcome& response,
-             const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
-                 aws_ctx) {
+      [this, start_us, context](
+          const Aws::S3::S3Client* /*client*/,
+          const Aws::S3::Model::GetObjectRequest& /*request*/,
+          const Aws::S3::Model::GetObjectOutcome& response,
+          const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
+              aws_ctx) {
+        S3AccessLogGuard log(start_us, [&]() {
+          return absl::StrFormat("async_get_object %s (%d,%d)", context->key,
+                                 context->offset, context->len);
+        });
+
         s3_object_get_async_num_ << -1;
 
         std::shared_ptr<GetObjectAsyncContext> ctx =
@@ -496,6 +538,10 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
 }
 
 bool S3Adapter::ObjectExist(const Aws::String& key) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("head_object %s", key);
+  });
+
   Aws::S3::Model::HeadObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(key);
@@ -503,14 +549,17 @@ bool S3Adapter::ObjectExist(const Aws::String& key) {
   if (response.IsSuccess()) {
     return true;
   } else {
-    LOG(ERROR) << "HeadObject error:" << bucketName_ << "--" << key << "--"
-               << response.GetError().GetExceptionName()
+    LOG(ERROR) << "HeadObject error bucket: " << bucketName_ << "--" << key
+               << "--" << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return false;
   }
 }
 
 int S3Adapter::DeleteObject(const Aws::String& key) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("delete_object %s", key);
+  });
   Aws::S3::Model::DeleteObjectRequest request;
   request.SetBucket(bucketName_);
   request.SetKey(key);
@@ -526,6 +575,10 @@ int S3Adapter::DeleteObject(const Aws::String& key) {
 }
 
 int S3Adapter::DeleteObjects(const std::list<Aws::String>& key_list) {
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("delete_objects (%d)", key_list.size());
+  });
+
   Aws::S3::Model::DeleteObjectsRequest delete_objects_request;
   Aws::S3::Model::Delete delete_objects;
   for (const auto& key : key_list) {

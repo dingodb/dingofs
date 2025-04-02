@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "aws/s3_access_log.h"
 #include "client/blockcache/log.h"
 #include "client/common/status.h"
 #include "client/vfs/common/helper.h"
@@ -30,11 +31,9 @@
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/vfs_old.h"
 #include "client/vfs_wrapper/access_log.h"
-#include "common/dynamic_vlog.h"
 #include "common/rpc_stream.h"
 #include "stub/metric/metric.h"
 #include "utils/configuration.h"
-#include "utils/gflags_helper.h"
 
 namespace dingofs {
 namespace client {
@@ -58,6 +57,7 @@ static Status LoadConfig(const std::string& config_path,
 Status InitLog() {
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
+              dingofs::aws::InitS3AccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
   CHECK(succ) << "Init log failed, unexpected!";
 

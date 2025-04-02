@@ -14,25 +14,23 @@
  * limitations under the License.
  */
 
-#include "client/vfs/meta/meta_log.h"
+#include "stub/rpcclient/meta_access_log.h"
 
-#include "spdlog/sinks/daily_file_sink.h"
-#include "spdlog/spdlog.h"
+#include <absl/strings/str_format.h>
 
 namespace dingofs {
-namespace client {
-namespace vfs {
+namespace stub {
 
-std::shared_ptr<spdlog::logger> meta_logger;
+std::shared_ptr<spdlog::logger> meta_access_logger;
 
-bool InitMetaLog(const std::string& log_dir) {
+bool InitMetaAccessLog(const std::string& prefix) {
   std::string filename =
-      fmt::format("{}/vfs_meta_{}.log", log_dir, getpid());
-  meta_logger = spdlog::daily_logger_mt("vfs_meta", filename, 0, 0);
+      absl::StrFormat("%s/meta_access_%d.log", prefix, getpid());
+  meta_access_logger = spdlog::daily_logger_mt("meta_access", filename, 0, 0);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;
 }
 
-}  // namespace vfs
-}  // namespace client
+}  // namespace stub
+
 }  // namespace dingofs

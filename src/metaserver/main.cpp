@@ -24,12 +24,14 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "aws/s3_access_log.h"
 #include "common/dynamic_vlog.h"
 #include "common/process.h"
 #include "common/threading.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "stub/common/version.h"
+#include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
 DEFINE_string(confPath, "dingofs/conf/metaserver.conf", "metaserver confPath");
@@ -109,6 +111,8 @@ void LoadConfigFromCmdline(Configuration* conf) {
 
 }  // namespace
 
+static void InstallSigHandler() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
+
 int main(int argc, char** argv) {
   // config initialization
   google::ParseCommandLineFlags(&argc, &argv, false);
@@ -131,6 +135,8 @@ int main(int argc, char** argv) {
   LoadConfigFromCmdline(conf.get());
   FLAGS_vlog_level = FLAGS_v;
 
+  InstallSigHandler();
+
   // initialize logging module
   google::InitGoogleLogging(argv[0]);
 
@@ -141,6 +147,11 @@ int main(int argc, char** argv) {
   // init access logging
   LOG_IF(FATAL, !InitAccessLog(FLAGS_log_dir))
       << "Init access log failed, log dir = " << FLAGS_log_dir;
+
+  // init s3 access log
+  dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
+
+  dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
   dingofs::metaserver::Metaserver metaserver;
 

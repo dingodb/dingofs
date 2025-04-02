@@ -22,7 +22,9 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <csignal>
 
+#include "aws/s3_access_log.h"
 #include "common/dynamic_vlog.h"
 #include "mds/mds.h"
 #include "stub/common/version.h"
@@ -44,6 +46,8 @@ void LoadConfigFromCmdline(Configuration* conf) {
     conf->SetIntValue("mds.loglevel", FLAGS_v);
   }
 }
+
+static void InstallSigHandler() { CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN)); }
 
 int main(int argc, char** argv) {
   // config initialization
@@ -68,10 +72,14 @@ int main(int argc, char** argv) {
     }
   }
 
+  InstallSigHandler();
+
   // initialize logging module
   google::InitGoogleLogging(argv[0]);
 
   dingofs::stub::common::LogVerion();
+
+  dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
 
   conf->PrintConfig();
 

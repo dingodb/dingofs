@@ -20,5 +20,5 @@ target_link_libraries(mds_leader_election
     mds_kvstorage_client
     gflags::gflags
     glog::glog
-    fiu
+    fiu::fiu
 )
