@@ -30,9 +30,11 @@
 #include <vector>
 
 #include "aws/s3_access_log.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/blockcache/log.h"
 #include "client/common/common.h"
 #include "client/common/config.h"
+#include "client/common/dynamic_config.h"
 #include "client/filesystem/access_log.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/meta.h"
@@ -54,6 +56,8 @@ using dingofs::client::DINGOFS_ERROR;
 using dingofs::client::FuseClient;
 using dingofs::client::FuseS3Client;
 using dingofs::client::blockcache::InitBlockCacheLog;
+using dingofs::client::blockcache::IOBufferImpl;
+using dingofs::client::blockcache::RawBuffer;
 using dingofs::client::common::FuseClientOption;
 using dingofs::client::common::FuseConnInfo;
 using dingofs::client::filesystem::AccessLogGuard;
@@ -174,8 +178,8 @@ int InitLog(const char* conf_path, const char* argv0) {
 
   bool succ = InitAccessLog(FLAGS_log_dir) &&
               InitBlockCacheLog(FLAGS_log_dir) &&
-              dingofs::aws::InitS3AccessLog(FLAGS_log_dir)
-              && dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
+              dingofs::aws::InitS3AccessLog(FLAGS_log_dir) &&
+              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
   if (!succ) {
     return -1;
   }
@@ -612,24 +616,28 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                 struct fuse_file_info* fi) {
-  DINGOFS_ERROR rc;
-  size_t r_size = 0;
-  std::unique_ptr<char[]> buffer(new char[size]);
+  DINGOFS_ERROR rc = DINGOFS_ERROR::OK;
+  IOBufferImpl buffer;
   auto* client = Client();
   auto fs = client->GetFileSystem();
   METRIC_GUARD(Read);
   AccessLogGuard log([&]() {
     return StrFormat("read (%d,%d,%d,%d): %s (%d)", ino, size, off, fi->fh,
-                     StrErr(rc), r_size);
+                     StrErr(rc), buffer.Size());
   });
 
   ReadThrottleAdd(size);
-  rc = client->FuseOpRead(req, ino, size, off, fi, buffer.get(), &r_size);
+  rc = client->FuseOpRead(req, ino, size, off, fi, &buffer);
   if (rc != DINGOFS_ERROR::OK) {
     return fs->ReplyError(req, rc);
   }
-  struct fuse_bufvec bufvec = FUSE_BUFVEC_INIT(r_size);
-  bufvec.buf[0].mem = buffer.get();
+
+  auto raw_buffers = buffer.Fetch();
+  fuse_bufvec bufvec = FUSE_BUFVEC_INIT(buffer.Size());
+  for (auto& raw_buffer : raw_buffers) {
+    bufvec.buf[0].mem = raw_buffer.data;
+    bufvec.buf[0].size = raw_buffer.size;
+  }
   return fs->ReplyData(req, &bufvec, FUSE_BUF_SPLICE_MOVE);
 }
 

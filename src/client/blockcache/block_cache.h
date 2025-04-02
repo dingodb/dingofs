@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_H_
 
+#include <butil/iobuf.h>
+
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -63,9 +65,9 @@ class BlockCache {
                            BlockContext ctx) = 0;
 
   virtual BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
-                             char* buffer, bool retrive = true) = 0;
+                             butil::IOBuf* buffer, bool retrive = true) = 0;
 
-  virtual BCACHE_ERROR PreFetch(const BlockKey& key, size_t length) = 0;
+  virtual BCACHE_ERROR Prefetch(const BlockKey& key, size_t length) = 0;
 
   virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
 
@@ -90,9 +92,9 @@ class BlockCacheImpl : public BlockCache {
                    BlockContext ctx) override;
 
   BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
-                     char* buffer, bool retrive = true) override;
+                     butil::IOBuf* buffer, bool retrive = true) override;
 
-  BCACHE_ERROR PreFetch(const BlockKey& key, size_t size) override;
+  BCACHE_ERROR Prefetch(const BlockKey& key, size_t size) override;
 
   BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
 
@@ -103,7 +105,7 @@ class BlockCacheImpl : public BlockCache {
   StoreType GetStoreType() override;
 
  private:
-  BCACHE_ERROR DoPreFetch(const BlockKey& key, size_t size);
+  BCACHE_ERROR DoPrefetch(const BlockKey& key, size_t size);
 
  private:
   friend class BlockCacheBuilder;

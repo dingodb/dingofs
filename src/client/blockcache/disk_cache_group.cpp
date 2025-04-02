@@ -117,6 +117,11 @@ BCACHE_ERROR DiskCacheGroup::Load(const BlockKey& key,
   return GetStore(key)->Load(key, reader);
 }
 
+BCACHE_ERROR DiskCacheGroup::Load(const BlockKey& key, off_t offset,
+                                  size_t length, butil::IOBuf* buffer) {
+  return GetStore(key)->Load(key, offset, length, buffer);
+}
+
 bool DiskCacheGroup::IsCached(const BlockKey& key) {
   return GetStore(key)->IsCached(key);
 }

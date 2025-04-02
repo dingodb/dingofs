@@ -137,7 +137,7 @@ void IntimeWarmUpManager::Prefetch(
                              obj.version);
     VLOG(3) << "try to prefetch inodeId=" << inode_id
             << " block: " << key.StoreKey() << " len: " << obj.obj_len;
-    block_cache_->PreFetch(key, obj.obj_len);
+    block_cache_->Prefetch(key, obj.obj_len);
   }
 }
 

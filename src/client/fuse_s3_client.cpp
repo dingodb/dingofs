@@ -237,8 +237,8 @@ DINGOFS_ERROR FuseS3Client::FuseOpWrite(fuse_req_t req, fuse_ino_t ino,
 
 DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
                                        size_t size, off_t off,
-                                       struct fuse_file_info* fi, char* buffer,
-                                       size_t* r_size) {
+                                       struct fuse_file_info* fi,
+                                       IOBuffer* buffer) {
   (void)req;
   auto GetReadSize = [](size_t& size, off_t& off, size_t& file_size) -> size_t {
     if (static_cast<int64_t>(file_size) <= off) {
@@ -256,9 +256,8 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
 
     size_t file_size = data_buf->size;
     size_t len = GetReadSize(size, off, file_size);
-    *r_size = len;
     if (len > 0) {
-      memcpy(buffer, data_buf->p + off, len);
+      buffer->Copy(0, data_buf->p + off, len);
     }
     return DINGOFS_ERROR::OK;
   }
@@ -273,8 +272,11 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
   // fuse read metrics
   bool metric_ret = true;
   uint64_t start = butil::cpuwide_time_us();
-  FsMetricGuard guard(&metric_ret, &FSMetric::GetInstance().user_read, r_size,
-                      start);
+
+  // FsMetricGuard guard(&metric_ret, &FSMetric::GetInstance().user_read,
+  // r_size,
+  //                     start);
+
   std::shared_ptr<InodeWrapper> inode_wrapper;
   DINGOFS_ERROR ret = inodeManager_->GetInode(ino, inode_wrapper);
   if (ret != DINGOFS_ERROR::OK) {
@@ -287,7 +289,6 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
 
   size_t len = GetReadSize(size, off, file_size);
   if (len == 0) {
-    *r_size = 0;
     return DINGOFS_ERROR::OK;
   }
 
@@ -298,13 +299,12 @@ DINGOFS_ERROR FuseS3Client::FuseOpRead(fuse_req_t req, fuse_ino_t ino,
     LOG(ERROR) << "s3Adaptor_ read failed, ret = " << r_ret;
     return DINGOFS_ERROR::INTERNAL;
   }
-  *r_size = r_ret;
 
   utils::UniqueLock lg_guard = inode_wrapper->GetUniqueLock();
   inode_wrapper->UpdateTimestampLocked(kAccessTime);
   inodeManager_->ShipToFlush(inode_wrapper);
 
-  VLOG(9) << "read end, read size = " << *r_size;
+  VLOG(9) << "read end, read size = " << buffer->Size();
   return ret;
 }
 

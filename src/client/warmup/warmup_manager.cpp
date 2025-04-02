@@ -33,6 +33,7 @@
 
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
+#include "client/blockcache/iobuffer.h"
 #include "client/blockcache/s3_client.h"
 #include "client/common/common.h"
 #include "client/inode_wrapper.h"
@@ -52,6 +53,7 @@ using blockcache::BCACHE_ERROR;
 using blockcache::Block;
 using blockcache::BlockKey;
 using blockcache::S3ClientImpl;
+using client::blockcache::IOBufferImpl;
 using common::FuseClientOption;
 using common::WarmupStorageType;
 using stub::metric::MetricGuard;
@@ -155,10 +157,12 @@ void WarmupManagerS3Impl::GetWarmupList(const WarmupFilelist& filelist,
   fi.flags &= ~O_DIRECT;
   size_t rSize = 0;
   std::unique_ptr<char[]> data(new char[filelist.GetFileLen() + 1]);
+  IOBufferImpl buffer;
   std::memset(data.get(), 0, filelist.GetFileLen());
+
   data[filelist.GetFileLen()] = '\n';
-  fuseOpRead_(nullptr, filelist.GetKey(), filelist.GetFileLen(), 0, &fi,
-              data.get(), &rSize);
+  // fuseOpRead_(nullptr, filelist.GetKey(), filelist.GetFileLen(), 0, &fi,
+  //             data.get(), &rSize);
   std::string file = data.get();
   VLOG(9) << "file is: " << file;
   // remove enter, newline, blank

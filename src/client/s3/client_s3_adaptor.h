@@ -29,12 +29,13 @@
 #include <vector>
 
 #include "client/blockcache/block_cache.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/blockcache/s3_client.h"
 #include "client/common/config.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/filesystem.h"
-#include "client/inode_cache_manager.h"
 #include "client/in_time_warmup_manager.h"
+#include "client/inode_cache_manager.h"
 #include "client/s3/client_s3_cache_manager.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/wait_interval.h"
@@ -45,6 +46,7 @@ namespace client {
 class DiskCacheManagerImpl;
 class ChunkCacheManager;
 struct FlushChunkCacheContext;
+using client::blockcache::IOBuffer;
 
 class S3ClientAdaptor {
  public:
@@ -68,10 +70,13 @@ class S3ClientAdaptor {
    * @brief write data to s3
    * @param[in] options the options for s3 client
    */
-  virtual int Write(uint64_t inodeId, uint64_t offset, uint64_t length,
-                    const char* buf) = 0;
-  virtual int Read(uint64_t inodeId, uint64_t offset, uint64_t length,
-                   char* buf) = 0;
+
+  virtual int Write(uint64_t inode_id, uint64_t file_offset, uint64_t length,
+                    const char* buffer) = 0;
+
+  virtual int Read(uint64_t inode_id, uint64_t file_offset, uint64_t length,
+                   IOBuffer* buffer) = 0;
+
   virtual DINGOFS_ERROR Truncate(InodeWrapper* inodeWrapper, uint64_t size) = 0;
   virtual void ReleaseCache(uint64_t inodeId) = 0;
   virtual DINGOFS_ERROR Flush(uint64_t inodeId) = 0;
@@ -127,8 +132,8 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   int Write(uint64_t inodeId, uint64_t offset, uint64_t length,
             const char* buf) override;
 
-  int Read(uint64_t inode_id, uint64_t offset, uint64_t length,
-           char* buf) override;
+  int Read(uint64_t inode_id, uint64_t file_offset, uint64_t length,
+           IOBuffer* buffer) override;
 
   DINGOFS_ERROR Truncate(InodeWrapper* inodeWrapper, uint64_t size) override;
   void ReleaseCache(uint64_t inodeId) override;

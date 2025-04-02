@@ -429,8 +429,7 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   conf->GetValueFatalIfFail("fuseClient.warmupThreadsNum",
                             &clientOption->warmupThreadsNum);
 
-  if (!conf->GetBoolValue("fuseClient.in_time_warmup",
-                          &FLAGS_in_time_warmup)) {
+  if (!conf->GetBoolValue("fuseClient.in_time_warmup", &FLAGS_in_time_warmup)) {
     LOG(INFO) << "Not found `fuseClient.in_time_warmup` in conf, default to "
                  "false";
     FLAGS_in_time_warmup = false;

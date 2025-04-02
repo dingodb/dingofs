@@ -31,8 +31,7 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/common.pb.h"
-#include "dingofs/mds.pb.h"
+#include "client/blockcache/io_buffer.h"
 #include "client/client_operator.h"
 #include "client/common/common.h"
 #include "client/common/config.h"
@@ -44,6 +43,8 @@
 #include "client/lease/lease_excutor.h"
 #include "client/warmup/warmup_manager.h"
 #include "client/xattr_manager.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metaserver_client.h"
@@ -58,6 +59,8 @@ namespace dingofs {
 namespace client {
 
 const uint32_t kMaxHostNameLength = 255u;
+
+using client::blockcache::IOBuffer;
 
 class FuseClient {
  public:
@@ -111,7 +114,7 @@ class FuseClient {
 
   virtual DINGOFS_ERROR FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size,
                                    off_t off, struct fuse_file_info* fi,
-                                   char* buffer, size_t* rSize) = 0;
+                                   IOBuffer* buffer) = 0;
 
   virtual DINGOFS_ERROR FuseOpLookup(fuse_req_t req, fuse_ino_t parent,
                                      const char* name,

@@ -36,7 +36,7 @@ class MemCache : public CacheStore {
  public:
   MemCache() = default;
 
-  virtual ~MemCache() = default;
+  ~MemCache() override = default;
 
   BCACHE_ERROR Init(UploadFunc) override { return BCACHE_ERROR::OK; }
 
@@ -55,6 +55,10 @@ class MemCache : public CacheStore {
   }
 
   BCACHE_ERROR Load(const BlockKey&, std::shared_ptr<BlockReader>&) override {
+    return BCACHE_ERROR::NOT_SUPPORTED;
+  }
+
+  BCACHE_ERROR Load(const BlockKey&, off_t, size_t, butil::IOBuf*) override {
     return BCACHE_ERROR::NOT_SUPPORTED;
   }
 
