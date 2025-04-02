@@ -122,6 +122,13 @@ DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,
               "fuse read max retry when s3 object not exist");
 DEFINE_validator(fuse_read_max_retry_s3_not_exist, &PassUint32);
 
+DEFINE_bool(s3_prefetch, true, "enable s3 prefetch when read miss");
+DEFINE_validator(s3_prefetch, &PassBool);
+
+// in time warmup
+DEFINE_bool(in_time_warmup, false, "in time warmup inode when enable");
+DEFINE_validator(in_time_warmup, &PassBool);
+
 // from config.h and config.cpp
 DEFINE_bool(enableCto, true, "acheieve cto consistency");
 DEFINE_bool(useFakeS3, false,

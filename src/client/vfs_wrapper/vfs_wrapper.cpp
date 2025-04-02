@@ -33,6 +33,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "stub/metric/metric.h"
+#include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -55,12 +56,15 @@ static Status LoadConfig(const std::string& config_path,
 }
 
 Status InitLog() {
+  // Todo: remove InitMetaAccessLog when vfs is ready,  used by vfs old and old
+  // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
               dingofs::aws::InitS3AccessLog(FLAGS_log_dir) &&
-              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir);
-  CHECK(succ) << "Init log failed, unexpected!";
+              dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
+              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
+  CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();
 }
 

@@ -79,6 +79,9 @@ DECLARE_uint32(push_metric_interval_millsecond);
 // fuse client
 DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
 
+DECLARE_bool(s3_prefetch);
+DECLARE_bool(in_time_warmup);
+
 DECLARE_bool(useFakeS3);
 
 // ----- related fuse client -----

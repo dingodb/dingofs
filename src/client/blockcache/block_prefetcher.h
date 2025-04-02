@@ -79,7 +79,7 @@ class BlockPrefetcherImpl : public BlockPrefetcher {
   void Prefetch(const BlockKey& key, size_t length);
 
  private:
-  RWLock rwlock_;
+  utils::RWLock rwlock_;
   PrefetchFunc prefetch_func_;
   std::atomic<bool> running_;
   std::unordered_map<std::string, bool> busy_;

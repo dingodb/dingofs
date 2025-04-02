@@ -50,6 +50,8 @@ using ::dingofs::base::string::StrSplit;
 using ::dingofs::stub::common::ExcutorOpt;
 using ::dingofs::stub::common::MetaCacheOpt;
 
+using dingofs::client::common::FLAGS_in_time_warmup;
+
 static void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
   conf->GetValueFatalIfFail("metaCacheOpt.metacacheGetLeaderRetry",
                             &opts->metacacheGetLeaderRetry);
@@ -59,7 +61,8 @@ static void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
                             &opts->metacacheGetLeaderRPCTimeOutMS);
 }
 
-static void InitExcutorOption(Configuration* conf, ExcutorOpt* opts, bool internal) {
+static void InitExcutorOption(Configuration* conf, ExcutorOpt* opts,
+                              bool internal) {
   if (internal) {
     conf->GetValueFatalIfFail("executorOpt.maxInternalRetry", &opts->maxRetry);
   } else {
@@ -122,7 +125,9 @@ static void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {
 }
 
 void InitUdsOption(Configuration* conf, UdsOption* uds_opt) {
-  conf->GetValueFatalIfFail("uds.fdCommPath", &uds_opt->fd_comm_path);
+  if (conf->GetValue("uds.fdCommPath", &uds_opt->fd_comm_path)) {
+    uds_opt->fd_comm_path = "/var/run";
+  }
 }
 
 static void InitRefreshDataOpt(Configuration* conf, RefreshDataOption* opt) {
@@ -131,7 +136,8 @@ static void InitRefreshDataOpt(Configuration* conf, RefreshDataOption* opt) {
                             &opt->refreshDataIntervalSec);
 }
 
-static void InitKVClientManagerOpt(Configuration* conf, KVClientManagerOpt* config) {
+static void InitKVClientManagerOpt(Configuration* conf,
+                                   KVClientManagerOpt* config) {
   conf->GetValueFatalIfFail("fuseClient.supportKVcache", &FLAGS_supportKVcache);
   conf->GetValueFatalIfFail("fuseClient.setThreadPool",
                             &config->setThreadPooln);
@@ -367,10 +373,11 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
                             &client_option->downloadMaxRetryTimes);
   conf->GetValueFatalIfFail("fuseClient.warmupThreadsNum",
                             &client_option->warmupThreadsNum);
-  LOG_IF(WARNING, conf->GetBoolValue("fuseClient.enableSplice",
-                                     &client_option->enableFuseSplice))
-      << "Not found `fuseClient.enableSplice` in conf, use default value `"
-      << std::boolalpha << client_option->enableFuseSplice << '`';
+  if (!conf->GetBoolValue("fuseClient.in_time_warmup", &FLAGS_in_time_warmup)) {
+    LOG(INFO) << "Not found `fuseClient.in_time_warmup` in conf, default to "
+                 "false";
+    FLAGS_in_time_warmup = false;
+  }
 
   conf->GetValueFatalIfFail("fuseClient.throttle.avgWriteBytes",
                             &FLAGS_fuseClientAvgWriteBytes);

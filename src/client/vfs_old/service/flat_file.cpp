@@ -15,10 +15,10 @@
 
 #include "client/vfs_old/service/flat_file.h"
 
+#include <cstdint>
+
 namespace dingofs {
 namespace client {
-
-using pb::metaserver::S3ChunkInfo;
 
 void FlatFileChunk::InsertChunkInfo(const FlatFileSlice& new_slice) {
   VLOG(6) << "Will insert new slice, " << new_slice.ToString();
@@ -97,6 +97,59 @@ void FlatFileChunk::InsertChunkInfo(const FlatFileSlice& new_slice) {
   CHECK(file_offset_slice_
             .insert(std::make_pair(new_slice.file_offset, new_slice))
             .second);
+}
+
+std::vector<BlockObj> FlatFile::GetBlockObj(uint64_t offset,
+                                            uint64_t length) const {
+  VLOG(1) << "GetBlockObj for inodeId=" << ino_ << " offset: " << offset
+          << " length: " << length;
+  uint64_t chunk_index = offset / chunk_size_;
+
+  auto iter = chunk_index_flat_file_chunk_.find(chunk_index);
+  if (iter == chunk_index_flat_file_chunk_.end()) {
+    LOG(WARNING) << "inodeId=" << ino_
+                 << " not found chunk_index: " << chunk_index
+                 << ", offset: " << offset << ", length: " << length
+                 << ", chunk_size_: " << chunk_size_;
+    DumpToString();
+    return {};
+  }
+
+  bool end = false;
+
+  std::vector<BlockObj> block_objs;
+
+  // Iterate through chunks
+  for (; iter != chunk_index_flat_file_chunk_.end(); ++iter) {
+    const FlatFileChunk& flat_file_chunk = iter->second;
+
+    // Iterate through slices in the current chunk
+    for (const auto& [file_offset, slice] :
+         flat_file_chunk.GetFileOffsetSlice()) {
+      // Skip slices that end before the requested offset
+      if (slice.file_offset + slice.len < offset) {
+        continue;
+      }
+
+      // Process slices that overlap with the requested range
+      if (slice.file_offset < offset + length) {
+        auto chunk_iter = chunk_id_to_s3_chunk_holer_.find(slice.chunk_id);
+        CHECK(chunk_iter != chunk_id_to_s3_chunk_holer_.end())
+            << "chunk_id: " << slice.chunk_id << " not found";
+
+        const S3ChunkHoler& chunk_holder = chunk_iter->second;
+        const auto& overlap_block_keys = chunk_holder.GetBlockObj(slice);
+
+        block_objs.insert(block_objs.end(), overlap_block_keys.begin(),
+                          overlap_block_keys.end());
+      } else {
+        // Stop processing if the slice starts beyond the requested range
+        return block_objs;
+      }
+    }
+  }
+
+  return block_objs;
 }
 
 }  // namespace client

@@ -86,8 +86,10 @@ struct BlockCacheOption {
   uint32_t flush_file_queue_size;
   uint32_t flush_slice_workers;
   uint32_t flush_slice_queue_size;
-  uint64_t upload_stage_workers;
-  uint64_t upload_stage_queue_size;
+  uint32_t upload_stage_workers;
+  uint32_t upload_stage_queue_size;
+  uint32_t prefetch_workers;
+  uint32_t prefetch_queue_size;
   std::vector<DiskCacheOption> disk_cache_options;
 };
 // }
@@ -96,11 +98,6 @@ struct LeaseOpt {
   uint32_t refreshTimesPerLease = 5;
   // default = 20s
   uint32_t leaseTimeUs = 20000000;
-};
-
-struct SpaceAllocServerOption {
-  std::string spaceaddr;
-  uint64_t rpcTimeoutMs;
 };
 
 struct KVClientManagerOpt {
@@ -216,7 +213,6 @@ struct ClientOption {
   stub::common::MetaCacheOpt metaCacheOpt;
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
-  SpaceAllocServerOption spaceOpt;
   S3Option s3Opt;
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
@@ -230,7 +226,6 @@ struct ClientOption {
   uint32_t listDentryThreads;
   uint32_t dummyServerStartPort;
   bool enableMultiMountPointRename = false;
-  bool enableFuseSplice = false;
   uint32_t downloadMaxRetryTimes;
   uint32_t warmupThreadsNum = 10;
 };

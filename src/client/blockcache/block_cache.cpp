@@ -34,7 +34,6 @@
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_group.h"
 #include "client/blockcache/error.h"
-#include "client/blockcache/local_filesystem.h"
 #include "client/blockcache/log.h"
 #include "client/blockcache/mem_cache.h"
 #include "client/blockcache/phase_timer.h"
@@ -158,7 +157,7 @@ BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
   return rc;
 }
 
-BCACHE_ERROR BlockCacheImpl::PreFetch(const BlockKey& key, size_t length) {
+void BlockCacheImpl::SubmitPreFetch(const BlockKey& key, size_t length) {
   prefetcher_->Submit(key, length);
 }
 

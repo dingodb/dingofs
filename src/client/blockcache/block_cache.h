@@ -24,7 +24,10 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_H_
 
 #include <atomic>
+#include <functional>
 #include <memory>
+#include <mutex>
+#include <string>
 
 #include "client/blockcache/block_cache_metric.h"
 #include "client/blockcache/block_cache_throttle.h"
@@ -41,6 +44,7 @@ namespace client {
 namespace blockcache {
 
 using ::dingofs::client::common::BlockCacheOption;
+using ::dingofs::utils::TaskThreadPool;
 
 enum class StoreType : uint8_t {
   NONE,
@@ -61,7 +65,7 @@ class BlockCache {
   virtual BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
                              char* buffer, bool retrive = true) = 0;
 
-  virtual BCACHE_ERROR PreFetch(const BlockKey& key, size_t length) = 0;
+  virtual void SubmitPreFetch(const BlockKey& key, size_t length) = 0;
 
   virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
 
@@ -88,7 +92,7 @@ class BlockCacheImpl : public BlockCache {
   BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
                      char* buffer, bool retrive = true) override;
 
-  BCACHE_ERROR PreFetch(const BlockKey& key, size_t size) override;
+  void SubmitPreFetch(const BlockKey& key, size_t size) override;
 
   BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
 

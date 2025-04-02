@@ -23,6 +23,7 @@
 #define DINGOFS_SRC_CLIENT_S3_CLIENT_S3_CACHE_MANAGER_H_
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <list>
 #include <map>
@@ -33,12 +34,12 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/blockcache/cache_store.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -357,7 +358,7 @@ class FileCacheManager {
 
   void PrefetchS3Objs(
       const std::vector<std::pair<blockcache::BlockKey, uint64_t>>&
-          prefetchObjs);
+          prefetch_objs);
 
   void HandleReadRequest(const ReadRequest& request,
                          const pb::metaserver::S3ChunkInfo& s3ChunkInfo,
@@ -434,9 +435,9 @@ class FileCacheManager {
                            const std::shared_ptr<InodeWrapper>& inode_wrapper);
 
   // prefetch for block
-  void PrefetchForBlock(const S3ReadRequest& req, uint64_t fileLen,
-                        uint64_t blockSize, uint64_t chunkSize,
-                        uint64_t startBlockIndex);
+  void PrefetchForBlock(const S3ReadRequest& req, uint64_t file_len,
+                        uint64_t block_size, uint64_t chunk_size,
+                        uint64_t start_block_index);
 
   friend class AsyncPrefetchCallback;
 
@@ -451,6 +452,9 @@ class FileCacheManager {
 
   std::shared_ptr<KVClientManager> kvClientManager_;
   std::shared_ptr<utils::TaskThreadPool<>> readTaskPool_;
+
+  // the next prefetch offset
+  std::atomic<uint64_t> next_prefetch_offset_{0};
 };
 
 class FsCacheManager {

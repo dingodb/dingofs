@@ -25,12 +25,17 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 
+#include <utility>
+
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/error.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/filesystem.h"
+#include "client/vfs_old/in_time_warmup_manager.h"
+#include "client/vfs_old/s3/client_s3_cache_manager.h"
 
 namespace dingofs {
+
 namespace client {
 
 using blockcache::BCACHE_ERROR;
@@ -101,7 +106,12 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
         return DINGOFS_ERROR::INTERNAL;
       }
     }
+
+    in_time_warmup_manager_ = std::make_shared<IntimeWarmUpManager>(
+        block_cache_, chunkSize_, blockSize_);
+    in_time_warmup_manager_->Start();
   }
+
   if (startBackGround) {
     toStop_.store(false, std::memory_order_release);
     bgFlushThread_ = Thread(&S3ClientAdaptorImpl::BackGroundFlush, this);
@@ -294,12 +304,15 @@ int S3ClientAdaptorImpl::Stop() {
   if (bgFlushThread_.joinable()) {
     bgFlushThread_.join();
   }
+
   if (HasDiskCache()) {
     for (auto& q : downloadTaskQueues_) {
       bthread::execution_queue_stop(q);
       bthread::execution_queue_join(q);
     }
+    in_time_warmup_manager_->Stop();
   }
+
   block_cache_->Shutdown();
   return 0;
 }

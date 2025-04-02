@@ -52,7 +52,7 @@ class BlockCacheUploader {
 
   virtual ~BlockCacheUploader() = default;
 
-  void Init(uint32_t upload_workers, uint32_t upload_queue_size);
+  void Init(uint64_t upload_workers, uint64_t upload_queue_size);
 
   void Shutdown();
 

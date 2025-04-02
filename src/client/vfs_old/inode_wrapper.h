@@ -148,6 +148,14 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
     return inode_;
   }
 
+  timespec GetMtime() const {
+    timespec mtime;
+    dingofs::utils::UniqueLock lg(mtx_);
+    mtime.tv_sec = inode_.mtime();
+    mtime.tv_nsec = inode_.mtime_ns();
+    return mtime;
+  }
+
   // Get an immutable inode.
   //
   // The const return value is used to forbid modify inode through this
