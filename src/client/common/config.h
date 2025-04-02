@@ -92,13 +92,6 @@ struct BlockCacheOption {
 };
 // }
 
-using ::dingofs::client::common::BlockCacheOption;
-using ::dingofs::client::common::DataStreamOption;
-
-struct BlockDeviceClientOptions {
-  std::string configPath;
-};
-
 struct LeaseOpt {
   uint32_t refreshTimesPerLease = 5;
   // default = 20s
@@ -138,36 +131,28 @@ struct S3Option {
   aws::S3AdapterOption s3AdaptrOpt;
 };
 
-struct BlockGroupOption {
-  uint32_t allocateOnce;
-};
-
-struct BitmapAllocatorOption {
-  uint64_t sizePerBit;
-  double smallAllocProportion;
-};
-
-struct VolumeAllocatorOption {
-  std::string type;
-  BitmapAllocatorOption bitmapAllocatorOption;
-  BlockGroupOption blockGroupOption;
-};
-
-struct VolumeOption {
-  uint64_t bigFileSize;
-  uint64_t volBlockSize;
-  uint64_t fsBlockSize;
-  VolumeAllocatorOption allocatorOption;
-};
-
-struct ExtentManagerOption {
-  uint64_t preAllocSize;
-};
-
 struct RefreshDataOption {
   uint64_t maxDataSize = 1024;
   uint32_t refreshDataIntervalSec = 30;
 };
+
+// { fuse module option
+struct FuseConnInfo {
+  bool want_splice_move;
+  bool want_splice_read;
+  bool want_splice_write;
+  bool want_auto_inval_data;
+};
+
+struct FuseFileInfo {
+  bool keep_cache;
+};
+
+struct FuseOption {
+  FuseConnInfo conn_info;
+  FuseFileInfo file_info;
+};
+// }
 
 // { filesystem option
 struct KernelCacheOption {
@@ -232,16 +217,14 @@ struct ClientOption {
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
   SpaceAllocServerOption spaceOpt;
-  BlockDeviceClientOptions bdevOpt;
   S3Option s3Opt;
-  ExtentManagerOption extentManagerOpt;
-  VolumeOption volumeOpt;
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
   BlockCacheOption block_cache_option;
+  FuseOption fuse_option;
 
   uint32_t listDentryLimit;
   uint32_t listDentryThreads;
@@ -259,8 +242,6 @@ void SetClientS3Option(ClientOption* client_option,
 
 void S3Info2FsS3Option(const pb::common::S3Info& s3,
                        aws::S3InfoOption* fs_s3_opt);
-
-void InitLeaseOpt(utils::Configuration* conf, LeaseOpt* lease_opt);
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
 

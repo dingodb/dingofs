@@ -40,6 +40,10 @@ namespace common {
 // access log
 DECLARE_bool(access_logging);
 
+// fuse module
+DECLARE_bool(fuse_file_info_direct_io);
+DECLARE_bool(fuse_file_info_keep_cache);
+
 // block cache logging
 DECLARE_bool(block_cache_logging);
 DECLARE_bool(block_cache_stage_bandwidth_throttle_enable);

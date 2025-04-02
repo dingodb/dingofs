@@ -437,11 +437,6 @@ Status VFSOld::Stop() {
   return Status::OK();
 }
 
-bool VFSOld::EnableSplice() {
-  CHECK(started_.load()) << "vfs not started";
-  return fuse_client_option_.enableFuseSplice;
-}
-
 double VFSOld::GetAttrTimeout(const FileType& type) {
   if (type == FileType::kDirectory) {
     return fuse_client_option_.fileSystemOption.kernelCacheOption

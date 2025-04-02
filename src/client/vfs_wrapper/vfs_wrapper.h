@@ -44,8 +44,6 @@ class VFSWrapper {
   // for fuse op destroy, may remove in future
   void Destory();
 
-  bool EnableSplice();
-
   double GetAttrTimeout(const FileType& type);
 
   double GetEntryTimeout(const FileType& type);
@@ -119,6 +117,8 @@ class VFSWrapper {
   uint64_t GetFsId();
 
   uint64_t GetMaxNameLength();
+
+  common::FuseOption GetFuseOption() const;
 
  private:
   utils::Configuration conf_;

@@ -52,8 +52,6 @@ class VFSOld : public VFS {
 
   Status Stop() override;
 
-  bool EnableSplice() override;
-
   double GetAttrTimeout(const FileType& type) override;
 
   double GetEntryTimeout(const FileType& type) override;
@@ -123,6 +121,10 @@ class VFSOld : public VFS {
   uint64_t GetFsId() override { return fs_info_->fsid(); }
 
   uint64_t GetMaxNameLength() override;
+
+  common::FuseOption GetFuseOption() override {
+    return fuse_client_option_.fuse_option;
+  }
 
   void InitQosParam();
 

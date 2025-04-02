@@ -40,8 +40,6 @@ class VFSImpl : public VFS {
 
   Status Stop() override;
 
-  bool EnableSplice() override;
-
   double GetAttrTimeout(const FileType& type) override;
 
   double GetEntryTimeout(const FileType& type) override;
@@ -111,6 +109,10 @@ class VFSImpl : public VFS {
   uint64_t GetFsId() override;
 
   uint64_t GetMaxNameLength() override;
+
+  common::FuseOption GetFuseOption() override {
+    return fuse_client_option_.fuse_option;
+  }
 
  private:
   std::atomic_bool started_{false};

@@ -96,8 +96,6 @@ Status VFSImpl::Stop() {
   return Status::OK();
 }
 
-bool VFSImpl::EnableSplice() { return true; }
-
 double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
 
 double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT

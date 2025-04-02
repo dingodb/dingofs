@@ -137,11 +137,6 @@ void VFSWrapper::Destory() {
   AccessLogGuard log([&]() { return "destroy: OK"; });
 }
 
-bool VFSWrapper::EnableSplice() {
-  VLOG(1) << "VFSEnableSplice";
-  return vfs_->EnableSplice();
-}
-
 double VFSWrapper::GetAttrTimeout(const FileType& type) {
   return vfs_->GetAttrTimeout(type);
 }
@@ -719,6 +714,10 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   uint64_t max_name_length = vfs_->GetMaxNameLength();
   VLOG(6) << "VFSGetMaxNameLength max_name_length: " << max_name_length;
   return max_name_length;
+}
+
+common::FuseOption VFSWrapper::GetFuseOption() const {
+  return vfs_->GetFuseOption();
 }
 
 }  // namespace vfs

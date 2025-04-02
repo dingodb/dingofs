@@ -25,6 +25,8 @@
 #include <memory>
 #include <string>
 
+#include "client/common/config.h"
+#include "client/common/dynamic_config.h"
 #include "client/common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
@@ -34,24 +36,35 @@
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 
+USING_FLAG(fuse_file_info_direct_io);
+USING_FLAG(fuse_file_info_keep_cache);
+
 using dingofs::client::Status;
 using dingofs::client::vfs::Attr;
 using dingofs::client::vfs::FsStat;
 
 namespace {
 
-void EnableSplice(struct fuse_conn_info* conn) {
-  if (conn->capable & FUSE_CAP_SPLICE_MOVE) {
+void InitFuseConnInfo(struct fuse_conn_info* conn) {
+  auto fuse_option = g_vfs->GetFuseOption();
+  const auto& option = fuse_option.conn_info;
+
+  if (conn->capable & FUSE_CAP_SPLICE_MOVE && option.want_splice_move) {
     conn->want |= FUSE_CAP_SPLICE_MOVE;
-    LOG(INFO) << "FUSE_CAP_SPLICE_MOVE enabled";
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_MOVE";
   }
-  if (conn->capable & FUSE_CAP_SPLICE_READ) {
+  if (conn->capable & FUSE_CAP_SPLICE_READ && option.want_splice_read) {
     conn->want |= FUSE_CAP_SPLICE_READ;
-    LOG(INFO) << "FUSE_CAP_SPLICE_READ enabled";
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_READ";
   }
-  if (conn->capable & FUSE_CAP_SPLICE_WRITE) {
+  if (conn->capable & FUSE_CAP_SPLICE_WRITE && option.want_splice_write) {
     conn->want |= FUSE_CAP_SPLICE_WRITE;
-    LOG(INFO) << "FUSE_CAP_SPLICE_WRITE enabled";
+    LOG(INFO) << "[enabled] FUSE_CAP_SPLICE_WRITE";
+  }
+  if (conn->capable & FUSE_CAP_AUTO_INVAL_DATA &&
+      !option.want_auto_inval_data) {
+    conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+    LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
 }
 
@@ -125,7 +138,8 @@ static void ReplyOpen(fuse_req_t req, struct fuse_file_info* fi) {
   fuse_reply_open(req, fi);
 }
 
-void ReplyCreate(fuse_req_t req, struct fuse_file_info* fi, const Attr& attr) {
+static void ReplyCreate(fuse_req_t req, struct fuse_file_info* fi,
+                        const Attr& attr) {
   fuse_entry_param e;
   memset(&e, 0, sizeof(fuse_entry_param));
   Attr2FuseEntry(attr, &e);
@@ -157,7 +171,7 @@ static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
   uint64_t total_bytes = stat.max_bytes;
   uint64_t total_blocks =
       ((total_bytes % block_size == 0) ? total_bytes / block_size
-                                       : total_bytes / block_size + 1);
+                                       : (total_bytes / block_size) + 1);
 
   uint64_t used_bytes = stat.used_bytes;
 
@@ -168,7 +182,7 @@ static void ReplyStatfs(fuse_req_t req, const FsStat& stat) {
     if (used_bytes > 0) {
       uint64_t used_blocks = (used_bytes % block_size == 0)
                                  ? used_bytes / block_size
-                                 : used_bytes / block_size + 1;
+                                 : (used_bytes / block_size) + 1;
       free_blocks = total_blocks - used_blocks;
     } else {
       free_blocks = total_blocks;
@@ -225,13 +239,8 @@ void UnInitFuseClient() { delete g_vfs; }
 void FuseOpInit(void* userdata, struct fuse_conn_info* conn) {
   VLOG(1) << "FuseOpInit userdata: " << userdata;
   (void)userdata;
-
-  if (g_vfs->EnableSplice()) {
-    VLOG(1) << "Enable splice";
-    EnableSplice(conn);
-  }
-
   g_vfs->Init();
+  InitFuseConnInfo(conn);
   LOG(INFO) << "FuseOpInit() success";
 }
 
@@ -392,9 +401,12 @@ void FuseOpOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
     ReplyError(req, s);
   } else {
     fi->fh = fh;
+    fi->direct_io = FLAGS_fuse_file_info_direct_io ? 1 : 0;
+    fi->keep_cache = FLAGS_fuse_file_info_keep_cache ? 1 : 0;
     if (dingofs::IsInternalNode(ino)) {
       fi->direct_io = 1;
     }
+
     ReplyOpen(req, fi);
   }
 }

@@ -41,6 +41,13 @@ bool PassBool(const char*, bool) { return true; }
 DEFINE_bool(access_logging, true, "enable access log");
 DEFINE_validator(access_logging, &PassBool);
 
+// fuse module
+DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");
+DEFINE_bool(fuse_file_info_keep_cache, false, "keep file page cache");
+
+DEFINE_validator(fuse_file_info_direct_io, &PassBool);
+DEFINE_validator(fuse_file_info_keep_cache, &PassBool);
+
 // block cache
 DEFINE_bool(block_cache_logging, true, "enable block cache logging");
 DEFINE_bool(block_cache_stage_bandwidth_throttle_enable, false,
