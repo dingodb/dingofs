@@ -21,14 +21,11 @@
 #include <vector>
 
 #include "client/common/status.h"
-#include "client/vfs/common/helper.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "mdsv2/coordinator/dingo_coordinator_client.h"
-#include "mdsv2/mds/mds_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -66,6 +63,9 @@ Status MdsV2DirIterator::Seek() {
 
   offset_ = 0;
   entries_ = std::move(entries);
+  if (!entries_.empty()) {
+    last_name_ = entries_.back().name;
+  }
 
   return Status::OK();
 }
@@ -80,8 +80,7 @@ DirEntry MdsV2DirIterator::GetValue(bool with_attr) {
 }
 
 void MdsV2DirIterator::Next() {
-  if (offset_ < entries_.size()) {
-    ++offset_;
+  if (++offset_ < entries_.size()) {
     return;
   }
 
@@ -94,6 +93,9 @@ void MdsV2DirIterator::Next() {
 
   offset_ = 0;
   entries_ = std::move(entries);
+  if (!entries_.empty()) {
+    last_name_ = entries_.back().name;
+  }
 }
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,

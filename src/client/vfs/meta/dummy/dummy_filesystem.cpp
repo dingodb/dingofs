@@ -1000,9 +1000,11 @@ DirEntry DummyDirIterator::GetValue(bool with_attr) {
 }
 
 void DummyDirIterator::Next() {
-  if (offset_ < dir_entries_.size()) {
-    ++offset_;
+  if (++offset_ < dir_entries_.size()) {
+    return;
   }
+
+  dir_entries_.clear();
 }
 
 void DummyDirIterator::SetDirEntries(std::vector<DirEntry>&& dir_entries) {

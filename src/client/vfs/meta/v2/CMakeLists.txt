@@ -23,7 +23,6 @@ target_link_libraries(vfs_meta_v2_lib
     PROTO_OBJS
     dingofs_base_lib
 
-    mdsv2_coordinator
     mdsv2_mds
 
     dingofs_common
