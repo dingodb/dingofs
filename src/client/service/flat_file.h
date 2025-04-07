@@ -93,8 +93,10 @@ struct BlockObjSlice {
 class S3ChunkHoler {
  public:
   S3ChunkHoler(const pb::metaserver::S3ChunkInfo& chunk_info,
-               uint64_t block_size)
-      : chunk_info_(chunk_info), block_size_(block_size) {
+               uint64_t chunk_size, uint64_t block_size)
+      : chunk_info_(chunk_info),
+        chunk_size_(chunk_size),
+        block_size_(block_size) {
     Init();
   }
 
@@ -168,33 +170,36 @@ class S3ChunkHoler {
 
  private:
   void Init() {
-    uint64_t block_id = chunk_info_.offset() / block_size_;
+    uint64_t offset_in_chunk = chunk_info_.offset() % chunk_size_;
+    uint64_t block_index_in_chunk = offset_in_chunk / block_size_;
+
     uint64_t chunk_end = chunk_info_.len() + chunk_info_.offset();
     uint64_t offset = chunk_info_.offset();
 
-    uint64_t start_block_id = block_id;
+    uint64_t block_id = chunk_info_.offset() / block_size_;
     while (offset < chunk_end) {
       uint64_t block_boundary = (block_id + 1) * block_size_;
       uint64_t obj_len = std::min(block_boundary, chunk_end) - offset;
 
-      BlockObj block_obj = {
-          offset,
-          obj_len,
-          chunk_info_.zero(),
-          chunk_info_.compaction(),
-          chunk_info_.chunkid(),
-          (block_id - start_block_id)  //  block index start from 0 in chunk
-      };
+      BlockObj block_obj = {offset,
+                            obj_len,
+                            chunk_info_.zero(),
+                            chunk_info_.compaction(),
+                            chunk_info_.chunkid(),
+                            block_index_in_chunk};
 
       CHECK(offset_to_block_.insert({offset, block_obj}).second);
 
       block_id++;
       offset += obj_len;
+
+      block_index_in_chunk++;
     }
   }
 
   pb::metaserver::S3ChunkInfo chunk_info_;
-  uint64_t block_size_;
+  uint64_t chunk_size_{0};
+  uint64_t block_size_{0};
   std::map<uint64_t, BlockObj> offset_to_block_;
 };
 
@@ -216,8 +221,8 @@ class FlatFile {
   void InsertChunkInfo(uint64_t chunk_index,
                        const pb::metaserver::S3ChunkInfo& chunk_info) {
     CHECK(chunk_id_to_s3_chunk_holer_
-              .insert(
-                  {chunk_info.chunkid(), S3ChunkHoler(chunk_info, block_size_)})
+              .insert({chunk_info.chunkid(),
+                       S3ChunkHoler(chunk_info, chunk_size_, block_size_)})
               .second);
 
     FlatFileSlice slice = {chunk_info.offset(), chunk_info.len(),
