@@ -269,7 +269,7 @@ void FuseOpGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    LOG(INFO) << "FuseOpGetAttr inodeId=" << ino << " attr=" << Attr2Str(attr);
+    VLOG(1) << "FuseOpGetAttr inodeId=" << ino << " attr=" << Attr2Str(attr);
 
     ReplyAttr(req, attr);
   }
@@ -478,8 +478,8 @@ void FuseOpOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info* fi) {
 
 void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                    struct fuse_file_info* fi) {
-  LOG(INFO) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
-                           fi->fh, off, size);
+  VLOG(1) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
+                         fi->fh, off, size);
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
@@ -521,17 +521,16 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   } else {
     buffer.resize(writed_size);
 
-    LOG(INFO) << fmt::format(
-        "read dir success, ino({}) fh({}) off({}) size({}) ", ino, fi->fh, off,
-        buffer.size());
+    VLOG(1) << fmt::format("read dir success, ino({}) fh({}) off({}) size({}) ",
+                           ino, fi->fh, off, buffer.size());
     ReplyBuf(req, buffer.data(), buffer.size());
   }
 }
 
 void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                        struct fuse_file_info* fi) {
-  LOG(INFO) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
-                           fi->fh, off, size);
+  VLOG(1) << fmt::format("read dir, ino({}) fh({}) off({}) size({})", ino,
+                         fi->fh, off, size);
 
   CHECK_GE(off, 0) << "offset is illegal, offset: " << off;
 
@@ -540,9 +539,8 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, true,
       [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
-        LOG(INFO) << fmt::format("read dir entry({}/{}) attr({})",
-                                 dir_entry.name, dir_entry.ino,
-                                 Attr2Str(dir_entry.attr));
+        VLOG(1) << fmt::format("read dir entry({}/{}) attr({})", dir_entry.name,
+                               dir_entry.ino, Attr2Str(dir_entry.attr));
 
         fuse_entry_param fuse_entry;
         memset(&fuse_entry, 0, sizeof(fuse_entry_param));
@@ -572,9 +570,8 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     ReplyError(req, s);
   } else {
     buffer.resize(writed_size);
-    LOG(INFO) << fmt::format(
-        "read dir success, ino({}) fh({}) off({}) size({}) ", ino, fi->fh, off,
-        buffer.size());
+    VLOG(1) << fmt::format("read dir success, ino({}) fh({}) off({}) size({}) ",
+                           ino, fi->fh, off, buffer.size());
 
     ReplyBuf(req, buffer.data(), buffer.size());
   }
