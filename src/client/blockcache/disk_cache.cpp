@@ -29,7 +29,6 @@
 #include "absl/cleanup/cleanup.h"
 #include "base/string/string.h"
 #include "base/time/time.h"
-#include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_layout.h"
 #include "client/blockcache/disk_cache_manager.h"
 #include "client/blockcache/disk_cache_metric.h"
@@ -46,34 +45,6 @@ using ::dingofs::base::string::GenUuid;
 using ::dingofs::base::string::TrimSpace;
 using ::dingofs::base::time::TimeNow;
 
-using DiskCacheTotalMetric = ::dingofs::stub::metric::DiskCacheMetric;
-using DiskCacheMetricGuard =
-    ::dingofs::client::blockcache::DiskCacheMetricGuard;
-
-BlockReaderImpl::BlockReaderImpl(int fd, std::shared_ptr<LocalFileSystem> fs)
-    : fd_(fd), fs_(fs) {}
-
-BCACHE_ERROR BlockReaderImpl::ReadAt(off_t offset, size_t length,
-                                     char* buffer) {
-  return fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
-    BCACHE_ERROR rc;
-    DiskCacheMetricGuard guard(
-        &rc, &DiskCacheTotalMetric::GetInstance().read_disk, length);
-    rc = posix->LSeek(fd_, offset, SEEK_SET);
-    if (rc == BCACHE_ERROR::OK) {
-      rc = posix->Read(fd_, buffer, length);
-    }
-    return rc;
-  });
-}
-
-void BlockReaderImpl::Close() {
-  fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
-    posix->Close(fd_);
-    return BCACHE_ERROR::OK;
-  });
-}
-
 DiskCache::DiskCache(DiskCacheOption option)
     : option_(option), running_(false), use_direct_write_(false) {
   metric_ = std::make_shared<DiskCacheMetric>(option);
@@ -85,6 +56,7 @@ DiskCache::DiskCache(DiskCacheOption option)
   manager_ = std::make_shared<DiskCacheManager>(option.cache_size, layout_, fs_,
                                                 metric_);
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
+  aio_queue_ = std::make_shared<AioQueueImpl>("/mnt/3fs", true);
 }
 
 BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
@@ -100,9 +72,13 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
     return rc;
   }
 
+  if (!aio_queue_->Init(256)) {
+    return BCACHE_ERROR::INTERNAL_ERROR;
+  }
+
   uploader_ = uploader;
-  metric_->Init();   // For restart
-  DetectDirectIO();  // Detect filesystem whether support direct IO, filesystem
+  metric_->Init();   // for restart
+  DetectDirectIO();  // detect filesystem whether support direct IO, filesystem
                      // like tmpfs (/dev/shm) will not support it.
   disk_state_machine_->Start();         // monitor disk state
   disk_state_health_checker_->Start();  // probe disk health
@@ -127,6 +103,10 @@ BCACHE_ERROR DiskCache::Shutdown() {
   disk_state_health_checker_->Stop();
   disk_state_machine_->Stop();
   metric_->SetRunningStatus(kCacheDown);
+
+  if (!aio_queue_->Shutdown()) {
+    return BCACHE_ERROR::INTERNAL_ERROR;
+  }
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
   return BCACHE_ERROR::OK;
@@ -246,7 +226,7 @@ BCACHE_ERROR DiskCache::Load(const BlockKey& key,
     int fd;
     auto rc = posix->Open(GetCachePath(key), O_RDONLY, &fd);
     if (rc == BCACHE_ERROR::OK) {
-      reader = std::make_shared<BlockReaderImpl>(fd, fs_);
+      reader = std::make_shared<RemoteBlockReader>(fd, fs_, aio_queue_);
     }
     return rc;
   });

@@ -29,6 +29,7 @@
 #include <string>
 
 #include "base/string/string.h"
+#include "client/blockcache/block_reader.h"
 #include "client/blockcache/error.h"
 
 namespace dingofs {
@@ -92,13 +93,6 @@ struct BlockContext {
 
   BlockFrom from;
   std::string store_id;
-};
-
-class BlockReader {
- public:
-  virtual BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) = 0;
-
-  virtual void Close() = 0;
 };
 
 class CacheStore {

@@ -1091,7 +1091,7 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
                      << newparent_nearest_quota_ino;
 
         return Status::NotSupport("Not support rename dir between quota dir");
-      }j
+      }
     }
   }
 

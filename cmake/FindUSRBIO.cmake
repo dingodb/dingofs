@@ -1,0 +1,22 @@
+# Find USRBIO
+
+find_path(USRBIO_INCLUDE_DIR
+  NAMES hf3fs_usrbio.h)
+
+find_library(USRBIO_LIBRARY
+  NAMES hf3fs_api_shared)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(USRBIO DEFAULT_MSG USRBIO_LIBRARY USRBIO_INCLUDE_DIR)
+
+mark_as_advanced(USRBIO_LIBRARY USRBIO_INCLUDE_DIR)
+
+if(USRBIO_FOUND AND NOT (TARGET USRBIO::USRBIO))
+  add_library (USRBIO::USRBIO INTERFACE IMPORTED)
+  set_target_properties(USRBIO::USRBIO
+    PROPERTIES
+      IMPORTED_LOCATION ${USRBIO_LIBRARY}
+      INTERFACE_INCLUDE_DIRECTORIES ${USRBIO_INCLUDE_DIR}
+      INTERFACE_LINK_LIBRARIES "${USRBIO_LIBRARY}"
+  )
+endif()

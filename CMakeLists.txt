@@ -129,6 +129,10 @@ add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
+find_package(USRBIO REQUIRED)
+message("Using USRBIO include_dir:${USRBIO_INCLUDE_DIR}, library:${USRBIO_LIBRARY}")
+include_directories(${USRBIO_INCLUDE_DIR})
+
 find_package(FUSE3 REQUIRED)
 message("Using FUSE3 include_dir:${FUSE3_INCLUDE_DIR}, library:${FUSE3_LIBRARY}")
 include_directories(${FUSE3_INCLUDE_DIR})
@@ -142,7 +146,7 @@ find_package(gflags REQUIRED)
 message("Using gflags ${gflags_VERSION}, include_dir:${gflags_INCLUDE_DIR}")
 
 # openssl
-if(NOT OPENSSL_ROOT_DIR) 
+if(NOT OPENSSL_ROOT_DIR)
   set(OPENSSL_ROOT_DIR ${THIRD_PARTY_INSTALL_PATH})
 endif()
 find_package(OpenSSL REQUIRED)
@@ -209,7 +213,7 @@ find_package(RocksDB REQUIRED)
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
 
-# ------------------------ related to source code ------------------------ 
+# ------------------------ related to source code ------------------------
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -260,17 +264,17 @@ foreach(msg ${MSG_PROTOS})
 endforeach()
 
 set_source_files_properties(
-  ${PROTO_SRCS} 
-  ${PROTO_HDRS} 
+  ${PROTO_SRCS}
+  ${PROTO_HDRS}
   PROPERTIES GENERATED TRUE)
 
 set(PROTO_OBJS_SRC
-    ${PROTO_SRCS} 
-    ${PROTO_HDRS} 
+    ${PROTO_SRCS}
+    ${PROTO_HDRS}
 )
 
-add_library(PROTO_OBJS OBJECT 
-    ${PROTO_OBJS_SRC} 
+add_library(PROTO_OBJS OBJECT
+    ${PROTO_OBJS_SRC}
 )
 
 set_target_properties(PROTO_OBJS

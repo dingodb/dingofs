@@ -75,6 +75,7 @@ struct DiskCacheOption {
   uint32_t index;
   std::string cache_dir;
   uint64_t cache_size;  // bytes
+  std::string filesystem;
 };
 
 struct BlockCacheOption {

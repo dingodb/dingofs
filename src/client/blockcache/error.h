@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CLIENT_BLOCKCACHE_ERROR_H_
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_ERROR_H_
 
+#include <cstdint>
 #include <ostream>
 #include <string>
 
@@ -44,6 +45,7 @@ enum class BCACHE_ERROR {
   CACHE_UNHEALTHY,
   CACHE_FULL,
   NOT_SUPPORTED,
+  INTERNAL_ERROR,
 };
 
 std::string StrErr(BCACHE_ERROR code);

@@ -27,6 +27,7 @@
 #include <memory>
 #include <string>
 
+#include "client/blockcache/aio_queue.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_layout.h"
 #include "client/blockcache/disk_cache_loader.h"
@@ -43,21 +44,6 @@ namespace client {
 namespace blockcache {
 
 using ::dingofs::client::common::DiskCacheOption;
-
-class BlockReaderImpl : public BlockReader {
- public:
-  BlockReaderImpl(int fd, std::shared_ptr<LocalFileSystem> fs);
-
-  virtual ~BlockReaderImpl() = default;
-
-  BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) override;
-
-  void Close() override;
-
- private:
-  int fd_;
-  std::shared_ptr<LocalFileSystem> fs_;
-};
 
 class DiskCache : public CacheStore {
   enum : uint8_t {
@@ -125,6 +111,7 @@ class DiskCache : public CacheStore {
   std::shared_ptr<LocalFileSystem> fs_;
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
+  std::shared_ptr<AioQueue> aio_queue_;
   bool use_direct_write_;
 };
 

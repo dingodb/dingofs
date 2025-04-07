@@ -30,4 +30,5 @@ target_link_libraries(client_blockcache
     brpc::brpc
     spdlog::spdlog
     absl::cleanup
+    ${USRBIO_LIBRARY}
 )
