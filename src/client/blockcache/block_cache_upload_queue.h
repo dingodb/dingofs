@@ -42,7 +42,7 @@ struct StageBlock {
   StageBlock(const BlockKey& key, const std::string& stage_path,
              BlockContext ctx)
       : key(key), stage_path(stage_path), ctx(ctx) {
-    static std::atomic<uint64_t> g_seq_num(0);
+    static std::atomic<uint64_t> g_seq_num(1);
     seq_num = g_seq_num.fetch_add(1, std::memory_order_relaxed);
   }
 

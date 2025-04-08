@@ -117,6 +117,9 @@ void BlockCacheUploader::UploadingWorker() {
     auto stage_block = uploading_queue_->Pop();
    if (stage_block.Valid()) {
       UploadStageBlock(stage_block);
+    } else {
+      LOG(WARNING) << "Abort invalid block(" << stage_block.key.Filename()
+                   << "," << stage_block.seq_num << ").";
     }
   }
 }
