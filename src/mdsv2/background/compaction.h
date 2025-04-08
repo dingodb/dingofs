@@ -25,20 +25,26 @@
 namespace dingofs {
 namespace mdsv2 {
 
+class CompactChunkProcessor;
+using CompactChunkProcessorPtr = std::shared_ptr<CompactChunkProcessor>;
+
 class CompactChunkTask : public TaskRunnable {
  public:
-  CompactChunkTask();
+  CompactChunkTask(CompactChunkProcessorPtr compact_chunk_processor);
   ~CompactChunkTask() override = default;
 
   std::string Type() override { return "COMPACT_CHUNK"; }
 
   void Run() override;
+
+ private:
+  CompactChunkProcessorPtr compact_chunk_processor_;
 };
 
-class CompactFileChunk {
+class CompactChunkProcessor {
  public:
-  CompactFileChunk() = default;
-  ~CompactFileChunk() = default;
+  CompactChunkProcessor() = default;
+  ~CompactChunkProcessor() = default;
 
   bool Init();
   bool Destroy();
@@ -48,11 +54,15 @@ class CompactFileChunk {
   void Compact(InodePtr inode);
 
  private:
+  Status ScanFile();
+
   Status CleanSlice(const std::vector<pb::mdsv2::Slice>& slices);
 
   static std::vector<pb::mdsv2::Slice> CalculateInvalidSlices(std::map<uint64_t, pb::mdsv2::SliceList>& chunk_map,
                                                               uint64_t file_length, uint64_t chunk_size);
 
+  // previous process file inode
+  uint64_t last_ino_;
   KVStoragePtr kv_storage_;
 
   WorkerSetPtr worker_set_;

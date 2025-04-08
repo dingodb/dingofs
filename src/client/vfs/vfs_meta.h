@@ -156,6 +156,7 @@ struct FsInfo {
   uint64_t chunk_size;
   uint64_t block_size;
   StoreType store_type;
+  std::string uuid;
 };
 
 struct S3Info {

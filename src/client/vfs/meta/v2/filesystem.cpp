@@ -127,6 +127,44 @@ void MDSV2FileSystem::UnInit() {
   UnmountFs();
 }
 
+static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
+  switch (fs_type) {
+    case pb::mdsv2::FsType::S3:
+      return StoreType::kS3;
+
+    case pb::mdsv2::FsType::RADOS:
+      return StoreType::kRados;
+
+    default:
+      CHECK(false) << "unknown fs type: " << pb::mdsv2::FsType_Name(fs_type);
+  }
+}
+
+Status MDSV2FileSystem::GetFsInfo(FsInfo* fs_info) {
+  auto temp_fs_info = fs_info_->Get();
+
+  fs_info->name = name_;
+  fs_info->id = temp_fs_info.fs_id();
+  fs_info->chunk_size = temp_fs_info.chunk_size();
+  fs_info->block_size = temp_fs_info.block_size();
+  fs_info->store_type = ToStoreType(temp_fs_info.fs_type());
+  fs_info->uuid = temp_fs_info.uuid();
+
+  return Status::OK();
+}
+
+Status MDSV2FileSystem::GetS3Info(S3Info* s3_info) {
+  auto temp_fs_info = fs_info_->Get();
+  auto temp_s3_info = temp_fs_info.extra().s3_info();
+
+  s3_info->ak = temp_s3_info.ak();
+  s3_info->sk = temp_s3_info.sk();
+  s3_info->endpoint = temp_s3_info.endpoint();
+  s3_info->bucket = temp_s3_info.bucketname();
+
+  return Status::OK();
+}
+
 bool MDSV2FileSystem::MountFs() {
   pb::mdsv2::MountPoint mount_point;
   mount_point.set_hostname(client_id_.Hostname());

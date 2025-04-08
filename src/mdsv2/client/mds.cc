@@ -56,6 +56,8 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
 
   request.set_fs_name(fs_name);
   request.set_block_size(4 * 1024 * 1024);
+  request.set_chunk_size(4 * 1024 * 1024);
+
   request.set_fs_type(pb::mdsv2::FsType::S3);
   request.set_owner("deng");
   request.set_capacity(1024 * 1024 * 1024);
@@ -72,8 +74,7 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
   s3_info.set_sk("2222222222222222222222222");
   s3_info.set_endpoint("http://s3.dingodb.com");
   s3_info.set_bucketname("dingo");
-  s3_info.set_block_size(4 * 1024 * 1024);
-  s3_info.set_chunk_size(4 * 1024 * 1024);
+
   s3_info.set_object_prefix(0);
 
   *request.mutable_fs_extra()->mutable_s3_info() = s3_info;

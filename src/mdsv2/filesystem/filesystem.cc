@@ -46,6 +46,7 @@
 #include "mdsv2/server.h"
 #include "mdsv2/service/service_access.h"
 #include "mdsv2/storage/storage.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -2144,6 +2145,7 @@ pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& p
   fs_info.set_capacity(param.capacity);
   fs_info.set_recycle_time_hour(param.recycle_time_hour);
   fs_info.mutable_extra()->CopyFrom(param.fs_extra);
+  fs_info.set_uuid(utils::UUIDGenerator::GenerateUUID());
 
   auto mds_metas = mds_meta_map_->GetAllMDSMeta();
   auto* partition_policy = fs_info.mutable_partition_policy();

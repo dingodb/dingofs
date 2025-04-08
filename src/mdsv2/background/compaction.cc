@@ -35,13 +35,15 @@ struct OffsetRange {
   std::vector<pb::mdsv2::Slice> slices;
 };
 
-bool CompactFileChunk::Init() { return true; }
+bool CompactChunkProcessor::Init() { return true; }
 
-bool CompactFileChunk::Destroy() { return true; }
+bool CompactChunkProcessor::Destroy() { return true; }
 
-void CompactFileChunk::TriggerCompaction() {}
+void CompactChunkProcessor::TriggerCompaction() {}
 
-Status CompactFileChunk::CleanSlice(const std::vector<pb::mdsv2::Slice>& slices) { return Status::OK(); }
+Status CompactChunkProcessor::ScanFile() { return Status::OK(); }
+
+Status CompactChunkProcessor::CleanSlice(const std::vector<pb::mdsv2::Slice>& slices) { return Status::OK(); }
 
 static std::map<uint64_t, pb::mdsv2::Slice> GenSliceMap(const std::map<uint64_t, pb::mdsv2::SliceList>& chunk_map) {
   std::map<uint64_t, pb::mdsv2::Slice> slice_map;
@@ -54,7 +56,7 @@ static std::map<uint64_t, pb::mdsv2::Slice> GenSliceMap(const std::map<uint64_t,
   return slice_map;
 }
 
-std::vector<pb::mdsv2::Slice> CompactFileChunk::CalculateInvalidSlices(
+std::vector<pb::mdsv2::Slice> CompactChunkProcessor::CalculateInvalidSlices(
     std::map<uint64_t, pb::mdsv2::SliceList>& chunk_map, uint64_t file_length, uint64_t chunk_size) {
   std::vector<pb::mdsv2::Slice> delete_slices;
 
@@ -78,8 +80,8 @@ std::vector<pb::mdsv2::Slice> CompactFileChunk::CalculateInvalidSlices(
     }
 
     // sort by offset
-    // std::sort(chunk.slices().begin(), chunk.slices().end(),
-    //           [](const pb::mdsv2::Slice* a, const pb::mdsv2::Slice* b) { return a->offset() < b->offset(); });
+    std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
+              [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.offset() < b.offset(); });
 
     // get offset ranges
     std::vector<uint64_t> offsets;
@@ -108,8 +110,8 @@ std::vector<pb::mdsv2::Slice> CompactFileChunk::CalculateInvalidSlices(
 
     std::set<uint64_t> reserve_slice_ids;
     for (auto& offset_range : offset_ranges) {
-      // std::sort(offset_range.slices.begin(), offset_range.slices.end(),
-      //           [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.id() > b.id(); });
+      std::sort(offset_range.slices.begin(), offset_range.slices.end(),
+                [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.id() > b.id(); });
       reserve_slice_ids.insert(offset_range.slices.front().id());
     }
 
@@ -126,7 +128,7 @@ std::vector<pb::mdsv2::Slice> CompactFileChunk::CalculateInvalidSlices(
 
 // delete invalid slice
 // merge slices
-void CompactFileChunk::Compact(InodePtr inode) {
+void CompactChunkProcessor::Compact(InodePtr inode) {
   uint64_t chunk_size = 64 * 1024 * 1024;
   uint64_t file_length = inode->Length();
   auto chunk_map = inode->GetChunkMap();

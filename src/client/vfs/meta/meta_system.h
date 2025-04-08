@@ -126,7 +126,7 @@ class MetaSystem {
                         Ino new_parent, const std::string& new_name) = 0;
 
   // -------- below related to file system --------
-  virtual Status GetFsIno(FsInfo* fs_info) = 0;
+  virtual Status GetFsInfo(FsInfo* fs_info) = 0;
 
   virtual Status GetS3Info(S3Info* s3_info) = 0;
   // -------- above related to file system --------

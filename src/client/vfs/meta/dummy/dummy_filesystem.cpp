@@ -738,6 +738,42 @@ Status DummyFileSystem::StatFs(Ino ino, FsStat* fs_stat) {
   return Status::OK();
 }
 
+static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
+  switch (fs_type) {
+    case pb::mdsv2::FsType::S3:
+      return StoreType::kS3;
+
+    case pb::mdsv2::FsType::RADOS:
+      return StoreType::kRados;
+
+    default:
+      CHECK(false) << "unknown fs type: " << pb::mdsv2::FsType_Name(fs_type);
+  }
+}
+
+Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
+  fs_info->name = "dummy";
+  fs_info->id = fs_info_.fs_id();
+  fs_info->chunk_size = fs_info_.chunk_size();
+  fs_info->block_size = fs_info_.block_size();
+
+  fs_info->store_type = ToStoreType(fs_info_.fs_type());
+  fs_info->uuid = fs_info_.uuid();
+
+  return Status::OK();
+}
+
+Status DummyFileSystem::GetS3Info(S3Info* s3_info) {
+  auto temp_s3_info = fs_info_.extra().s3_info();
+
+  s3_info->ak = temp_s3_info.ak();
+  s3_info->sk = temp_s3_info.sk();
+  s3_info->endpoint = temp_s3_info.endpoint();
+  s3_info->bucket = temp_s3_info.bucketname();
+
+  return Status::OK();
+}
+
 void DummyFileSystem::AddDentry(const Dentry& dentry) {
   BAIDU_SCOPED_LOCK(mutex_);
 

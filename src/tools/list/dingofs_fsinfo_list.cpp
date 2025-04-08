@@ -83,7 +83,12 @@ bool FsInfoListTool::AfterSendRequestToHost(const std::string& host) {
     option.add_whitespace = true;
     option.always_print_primitive_fields = true;
     option.preserve_proto_field_names = true;
-    MessageToJsonString(*response_, &output, option);
+    auto status = MessageToJsonString(*response_, &output, option);
+    if (!status.ok()) {
+      std::cout << "fail to convert fsinfo to json: " << status.message()
+                << std::endl;
+      return false;
+    }
     std::cout << output << std::endl;
 
     ret = true;
