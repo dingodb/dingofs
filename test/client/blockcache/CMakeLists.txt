@@ -27,6 +27,7 @@ function(add_blockcache_test test_name)
     )
 endfunction()
 
+add_blockcache_test(test_block_cache_upload_queue test_block_cache_upload_queue.cpp)
 add_blockcache_test(test_block_cache test_block_cache.cpp)
 add_blockcache_test(test_countdown test_countdown.cpp)
 add_blockcache_test(test_disk_cache_layout test_disk_cache_layout.cpp)
