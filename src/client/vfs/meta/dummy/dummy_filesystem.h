@@ -225,6 +225,10 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
+  Status GetFsIno(FsInfo* fs_info) override;
+
+  Status GetS3Info(S3Info* s3_info) override;
+
  private:
   friend class DummyDirIterator;
 

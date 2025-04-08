@@ -134,6 +134,37 @@ struct Slice {
   uint64_t size;        // now same as length, maybe use for future or remove
 };
 
+enum StoreType : uint8_t {
+  kS3 = 1,
+  kRados = 2,
+};
+
+inline std::string StoreType2Str(const StoreType& store_type) {
+  switch (store_type) {
+    case kS3:
+      return "S3";
+    case kRados:
+      return "Rados";
+    default:
+      return "Unknown";
+  }
+}
+
+struct FsInfo {
+  std::string name;
+  uint32_t id;
+  uint64_t chunk_size;
+  uint64_t block_size;
+  StoreType store_type;
+};
+
+struct S3Info {
+  std::string ak;
+  std::string sk;
+  std::string endpoint;
+  std::string bucket;
+};
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

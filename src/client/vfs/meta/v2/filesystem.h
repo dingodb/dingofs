@@ -128,6 +128,10 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
                 const std::string& new_name) override;
 
+  Status GetFsIno(FsInfo* fs_info) override;
+
+  Status GetS3Info(S3Info* s3_info) override;
+
  private:
   bool SetRandomEndpoint();
   bool SetEndpoints();
