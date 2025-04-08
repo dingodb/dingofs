@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_BASE_MATH_MATH_H_
 #define DINGOFS_SRC_BASE_MATH_MATH_H_
 
+#include <glog/logging.h>
+
 #include <cassert>
 #include <cstdint>
 
@@ -36,7 +38,7 @@ constexpr uint64_t kGiB = 1024ULL * kMiB;
 constexpr uint64_t kTiB = 1024ULL * kGiB;
 
 inline double Divide(uint64_t a, uint64_t b) {
-  assert(b != 0);
+  CHECK_NE(b, 0);
   return static_cast<double>(a) / static_cast<double>(b);
 }
 

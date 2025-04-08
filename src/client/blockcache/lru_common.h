@@ -33,8 +33,8 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::cache::Cache;
-using ::dingofs::base::time::TimeSpec;
+using base::cache::Cache;
+using base::time::TimeSpec;
 
 using CacheKey = BlockKey;
 

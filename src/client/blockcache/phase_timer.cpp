@@ -22,7 +22,10 @@
 
 #include "client/blockcache/phase_timer.h"
 
+#include <absl/strings/str_format.h>
 #include <butil/time.h>
+
+#include <unordered_map>
 
 #include "base/string/string.h"
 
@@ -30,8 +33,49 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::base::string::StrJoin;
+using base::string::StrFormat;
+using base::string::StrJoin;
+
+std::string StrPhase(Phase phase) {
+  static const std::unordered_map<Phase, std::string> kPhases = {
+      // unknown
+      {Phase::kUnknown, "unknown"},
+
+      // block cache
+      {Phase::kStageBlock, "stage_block"},
+      {Phase::kCacheBlock, "cache_block"},
+      {Phase::kLoadBlock, "load_block"},
+      {Phase::kReadBlock, "read_block"},
+
+      // s3
+      {Phase::kS3Put, "s3_put"},
+      {Phase::kS3Range, "s3_range"},
+
+      // disk cache
+      {Phase::kOpenFile, "open"},
+      {Phase::kWriteFile, "write"},
+      {Phase::kReadFile, "read"},
+      {Phase::kLink, "link"},
+      {Phase::kCacheAdd, "cache_add"},
+      {Phase::kEnqueueUpload, "enqueue"},
+
+      // aio
+      {Phase::kQueued, "queued"},
+      {Phase::kCheckIo, "check"},
+      {Phase::kEnqueue, "enqueue"},
+      {Phase::kPrepareIo, "prepare"},
+      {Phase::kSubmitIo, "submit"},
+      {Phase::kExecuteIo, "execute"},
+      {Phase::kMemcpy, "memcpy"},
+      {Phase::kRunClosure, "clousre"},
+  };
+
+  auto it = kPhases.find(phase);
+  if (it != kPhases.end()) {
+    return it->second;
+  }
+  return "unknown";
+}
 
 PhaseTimer::PhaseTimer() { g_timer_.start(); }
 
@@ -52,30 +96,11 @@ void PhaseTimer::NextPhase(Phase phase) {
   StartNewTimer(phase);
 }
 
-std::string PhaseTimer::StrPhase(Phase phase) {
-  static const std::unordered_map<Phase, std::string> phases = {
-      // block cache
-      {Phase::STAGE_BLOCK, "stage_block"},
-      {Phase::CACHE_BLOCK, "cache_block"},
-      {Phase::LOAD_BLOCK, "load_block"},
-      {Phase::READ_BLOCK, "read_block"},
-      // s3
-      {Phase::S3_PUT, "s3_put"},
-      {Phase::S3_RANGE, "s3_range"},
-      // disk cache
-      {Phase::OPEN_FILE, "open"},
-      {Phase::WRITE_FILE, "write"},
-      {Phase::READ_FILE, "read"},
-      {Phase::LINK, "link"},
-      {Phase::CACHE_ADD, "cache_add"},
-      {Phase::ENQUEUE_UPLOAD, "enqueue"},
-  };
-
-  auto it = phases.find(phase);
-  if (it != phases.end()) {
-    return it->second;
+Phase PhaseTimer::CurrentPhase() {
+  if (timers_.empty()) {
+    return Phase::kUnknown;
   }
-  return "unknown";
+  return timers_.back().phase;
 }
 
 std::string PhaseTimer::ToString() {

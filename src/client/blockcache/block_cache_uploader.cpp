@@ -24,16 +24,13 @@
 
 #include <chrono>
 #include <memory>
-#include <mutex>
 #include <string>
-#include <utility>
 
 #include "absl/cleanup/cleanup.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/blockcache/log.h"
 #include "client/blockcache/phase_timer.h"
-#include "client/blockcache/segments.h"
 #include "client/common/dynamic_config.h"
 
 namespace dingofs {
@@ -98,7 +95,7 @@ bool BlockCacheUploader::CanUpload(const std::vector<StageBlock>& blocks) {
     return false;
   }
   auto from = blocks[0].ctx.from;
-  return from == BlockFrom::CTO_FLUSH ||
+  return from == BlockFrom::kCtoFlush ||
          uploading_queue_->Size() < uploading_queue_->Capacity() * 0.5;
 }
 
@@ -152,10 +149,10 @@ void BlockCacheUploader::UploadStageBlock(const StageBlock& stage_block) {
     }
   });
 
-  timer.NextPhase(Phase::READ_BLOCK);
+  timer.NextPhase(Phase::kReadBlock);
   status = ReadBlock(stage_block, buffer, &length);
   if (status.ok()) {  // OK
-    timer.NextPhase(Phase::S3_PUT);
+    timer.NextPhase(Phase::kS3Put);
     UploadBlock(stage_block, buffer, length, timer);
   } else if (status.IsNotFound()) {  // already deleted
     Uploaded(stage_block, false);
@@ -221,7 +218,7 @@ void BlockCacheUploader::Uploaded(const StageBlock& stage_block, bool success) {
 }
 
 bool BlockCacheUploader::NeedCount(const StageBlock& stage_block) {
-  return stage_block.ctx.from == BlockFrom::CTO_FLUSH;
+  return stage_block.ctx.from == BlockFrom::kCtoFlush;
 }
 
 void BlockCacheUploader::WaitAllUploaded() {

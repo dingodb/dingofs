@@ -38,7 +38,7 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::string::TrimSpace;
+using base::string::TrimSpace;
 
 DiskCacheWatcher::DiskCacheWatcher()
     : running_(false),

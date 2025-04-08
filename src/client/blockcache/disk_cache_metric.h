@@ -25,9 +25,7 @@
 
 #include <bvar/bvar.h>
 
-#include <memory>
 #include <string>
-#include <type_traits>
 
 #include "base/string/string.h"
 #include "client/common/config.h"
@@ -41,9 +39,9 @@ namespace blockcache {
 
 USING_FLAG(disk_cache_free_space_ratio);
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::client::common::DiskCacheOption;
-using ::dingofs::stub::metric::InterfaceMetric;
+using base::string::StrFormat;
+using client::common::DiskCacheOption;
+using stub::metric::InterfaceMetric;
 
 constexpr const char* kLoadStopped = "STOP";  // load status
 constexpr const char* kOnLoading = "LOADING";
@@ -174,26 +172,26 @@ class DiskCacheMetric {
 struct DiskCacheMetricGuard {
   explicit DiskCacheMetricGuard(Status* status, InterfaceMetric* metric,
                                 size_t count)
-      : status_(status), metric_(metric), count_(count) {
-    start_ = butil::cpuwide_time_us();
+      : status(status), metric(metric), count(count) {
+    start = butil::cpuwide_time_us();
   }
 
   ~DiskCacheMetricGuard() {
-    if (status_->ok()) {
-      metric_->bps.count << count_;
-      metric_->qps.count << 1;
-      auto duration = butil::cpuwide_time_us() - start_;
-      metric_->latency << duration;
-      metric_->latTotal << duration;
+    if (status->ok()) {
+      metric->bps.count << count;
+      metric->qps.count << 1;
+      auto duration = butil::cpuwide_time_us() - start;
+      metric->latency << duration;
+      metric->latTotal << duration;
     } else {
-      metric_->eps.count << 1;
+      metric->eps.count << 1;
     }
   }
 
-  Status* status_;
-  InterfaceMetric* metric_;
-  size_t count_;
-  uint64_t start_;
+  Status* status;
+  InterfaceMetric* metric;
+  size_t count;
+  uint64_t start;
 };
 
 }  // namespace blockcache

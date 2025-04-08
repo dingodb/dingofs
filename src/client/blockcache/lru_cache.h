@@ -24,8 +24,6 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_LRU_CACHE_H_
 
 #include <functional>
-#include <memory>
-#include <string_view>
 
 #include "client/blockcache/lru_common.h"
 
@@ -33,10 +31,10 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-enum class FilterStatus {
-  EVICT_IT,
-  SKIP,
-  FINISH,
+enum class FilterStatus : std::int8_t {
+  kEvictIt,
+  kSkip,
+  kFinish,
 };
 
 // How it implements:

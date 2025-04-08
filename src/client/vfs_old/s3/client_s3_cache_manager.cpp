@@ -740,7 +740,7 @@ void FileCacheManager::PrefetchS3Objs(
     uint64_t read_len = obj.second;
     VLOG(3) << "try to prefetch s3 obj inodeId=" << key.ino
             << " block: " << name << ", read len: " << read_len;
-    s3ClientAdaptor_->GetBlockCache()->SubmitPreFetch(key, read_len);
+    s3ClientAdaptor_->GetBlockCache()->SubmitPrefetch(key, read_len);
   }
 }
 
@@ -2340,8 +2340,8 @@ void DataCache::FlushTaskExecute(
       BlockKey key = fblock.key;
       Block block(context->buffer, context->bufferSize);
       auto from = entry_watcher->ShouldWriteback(key.ino)
-                      ? BlockFrom::NOCTO_FLUSH
-                      : BlockFrom::CTO_FLUSH;
+                      ? BlockFrom::kNoctoFlush
+                      : BlockFrom::kCtoFlush;
       BlockContext ctx(from);
       DataStream::GetInstance().EnterFlushSliceQueue(
           [&, key, block, ctx, callback]() {

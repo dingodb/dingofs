@@ -31,6 +31,7 @@ target_link_libraries(client_blockcache
     gflags::gflags
     brpc::brpc
     spdlog::spdlog
+    uring::uring
     absl::cleanup
 )
 

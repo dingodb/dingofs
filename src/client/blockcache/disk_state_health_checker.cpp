@@ -31,8 +31,8 @@ namespace blockcache {
 
 USING_FLAG(disk_check_duration_millsecond);
 
-using ::dingofs::base::filepath::PathJoin;
-using ::dingofs::base::timer::TimerImpl;
+using base::filepath::PathJoin;
+using base::timer::TimerImpl;
 
 DiskStateHealthChecker::DiskStateHealthChecker(
     std::shared_ptr<DiskCacheLayout> layout,

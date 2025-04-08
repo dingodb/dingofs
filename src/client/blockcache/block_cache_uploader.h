@@ -31,7 +31,6 @@
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
 #include "client/blockcache/phase_timer.h"
-#include "client/common/status.h"
 #include "dataaccess/accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -40,7 +39,7 @@ namespace client {
 namespace blockcache {
 
 using dataaccess::DataAccesserPtr;
-using ::dingofs::utils::TaskThreadPool;
+using utils::TaskThreadPool;
 
 // How it works:
 //               add                   scan                     put
@@ -74,8 +73,8 @@ class BlockCacheUploader {
 
   void UploadStageBlock(const StageBlock& stage_block);
 
-  Status ReadBlock(const StageBlock& stage_block, std::shared_ptr<char>& buffer,
-                   size_t* length);
+  static Status ReadBlock(const StageBlock& stage_block,
+                          std::shared_ptr<char>& buffer, size_t* length);
 
   void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
                    size_t length, PhaseTimer timer);
@@ -86,7 +85,7 @@ class BlockCacheUploader {
 
   void Uploaded(const StageBlock& stage_block, bool success);
 
-  bool NeedCount(const StageBlock& stage_block);
+  static bool NeedCount(const StageBlock& stage_block);
 
  private:
   std::mutex mutex_;

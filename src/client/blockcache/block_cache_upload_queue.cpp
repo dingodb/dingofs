@@ -47,9 +47,10 @@ void PendingQueue::Push(const StageBlock& stage_block) {
 
 std::vector<StageBlock> PendingQueue::Pop(bool peek) {
   static std::vector<BlockFrom> pop_prority{
-      BlockFrom::CTO_FLUSH,
-      BlockFrom::NOCTO_FLUSH,
-      BlockFrom::RELOAD,
+      BlockFrom::kCtoFlush,
+      BlockFrom::kNoctoFlush,
+      BlockFrom::kReload,
+      BlockFrom::kUnknown,
   };
 
   std::unique_lock<std::mutex> lk(mutex_);
@@ -78,9 +79,9 @@ size_t PendingQueue::Size() {
 
 void PendingQueue::Stat(struct StatBlocks* stat) {
   std::unique_lock<std::mutex> lk(mutex_);
-  auto num_from_cto = count_[BlockFrom::CTO_FLUSH];
-  auto num_from_nocto = count_[BlockFrom::NOCTO_FLUSH];
-  auto num_from_reload = count_[BlockFrom::RELOAD];
+  auto num_from_cto = count_[BlockFrom::kCtoFlush];
+  auto num_from_nocto = count_[BlockFrom::kNoctoFlush];
+  auto num_from_reload = count_[BlockFrom::kReload];
   auto num_total = num_from_cto + num_from_nocto + num_from_reload;
   *stat = StatBlocks(num_total, num_from_cto, num_from_nocto, num_from_reload);
 }
@@ -133,9 +134,9 @@ size_t UploadingQueue::Size() {
 
 void UploadingQueue::Stat(struct StatBlocks* stat) {
   std::unique_lock<std::mutex> lk(mutex_);
-  auto num_from_cto = count_[BlockFrom::CTO_FLUSH];
-  auto num_from_nocto = count_[BlockFrom::NOCTO_FLUSH];
-  auto num_from_reload = count_[BlockFrom::RELOAD];
+  auto num_from_cto = count_[BlockFrom::kCtoFlush];
+  auto num_from_nocto = count_[BlockFrom::kNoctoFlush];
+  auto num_from_reload = count_[BlockFrom::kReload];
   auto num_total = num_from_cto + num_from_nocto + num_from_reload;
   *stat = StatBlocks(num_total, num_from_cto, num_from_nocto, num_from_reload);
 }

@@ -32,7 +32,6 @@
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/lru_cache.h"
 #include "client/blockcache/lru_common.h"
-#include "client/common/config.h"
 #include "client/common/dynamic_config.h"
 
 namespace dingofs {
@@ -43,11 +42,11 @@ USING_FLAG(disk_cache_expire_second);
 USING_FLAG(disk_cache_cleanup_expire_interval_millsecond);
 USING_FLAG(disk_cache_free_space_ratio);
 
-using ::butil::Timer;
-using ::dingofs::base::math::kMiB;
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::base::time::TimeNow;
-using ::dingofs::utils::LockGuard;
+using base::math::kMiB;
+using base::string::StrFormat;
+using base::time::TimeNow;
+using butil::Timer;
+using utils::LockGuard;
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    std::shared_ptr<DiskCacheLayout> layout,
@@ -177,14 +176,14 @@ void DiskCacheManager::CheckFreeSpace() {
 void DiskCacheManager::CleanupFull(uint64_t goal_bytes, uint64_t goal_files) {
   auto to_del = lru_->Evict([&](const CacheValue& value) {
     if (used_bytes_ <= goal_bytes && lru_->Size() <= goal_files) {
-      return FilterStatus::FINISH;
+      return FilterStatus::kFinish;
     }
     UpdateUsage(-1, -value.size);
-    return FilterStatus::EVICT_IT;
+    return FilterStatus::kEvictIt;
   });
 
   if (to_del.size() > 0) {
-    mq_->Publish({to_del, DeleteFrom::CACHE_FULL});
+    mq_->Publish({to_del, DeleteFrom::kCacheFull});
   }
 }
 
@@ -202,17 +201,17 @@ void DiskCacheManager::CleanupExpire() {
       LockGuard lk(mutex_);
       to_del = lru_->Evict([&](const CacheValue& value) {
         if (++num_checks > 1e3) {
-          return FilterStatus::FINISH;
+          return FilterStatus::kFinish;
         } else if (value.atime + FLAGS_disk_cache_expire_second > now) {
-          return FilterStatus::SKIP;
+          return FilterStatus::kSkip;
         }
         UpdateUsage(-1, -value.size);
-        return FilterStatus::EVICT_IT;
+        return FilterStatus::kEvictIt;
       });
     }
 
     if (to_del.size() > 0) {
-      mq_->Publish({to_del, DeleteFrom::CACHE_EXPIRED});
+      mq_->Publish({to_del, DeleteFrom::kCacheExpired});
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(
         FLAGS_disk_cache_cleanup_expire_interval_millsecond));
@@ -264,7 +263,7 @@ std::string DiskCacheManager::GetCachePath(const CacheKey& key) {
 }
 
 std::string DiskCacheManager::StrFrom(DeleteFrom from) {
-  if (from == DeleteFrom::CACHE_FULL) {
+  if (from == DeleteFrom::kCacheFull) {
     return "cache full";
   } else {
     return "cache expired";

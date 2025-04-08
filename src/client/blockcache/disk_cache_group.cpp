@@ -38,8 +38,8 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::hash::ConNode;
-using ::dingofs::base::hash::KetamaConHash;
+using base::hash::ConNode;
+using base::hash::KetamaConHash;
 using DiskCacheTotalMetric = ::dingofs::stub::metric::DiskCacheMetric;
 
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)

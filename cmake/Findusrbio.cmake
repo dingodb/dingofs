@@ -39,12 +39,12 @@ if(USRBIO_FOUND AND NOT (TARGET 3fs::usrbio))
       double-conversion
       event
       boost_filesystem
-      boost_context) 
+      boost_context)
   message("USRBIO_DEPS_LIBS: ${USRBIO_DEPS_LIBS}")
   add_library(3fs::usrbio STATIC IMPORTED)
   set_target_properties(3fs::usrbio
     PROPERTIES
       IMPORTED_LOCATION ${USRBIO_LIBRARIES}
       INTERFACE_INCLUDE_DIRECTORIES ${USRBIO_INCLUDE_DIRS}
-      INTERFACE_LINK_LIBRARIES "${USRBIO_DEPS_LIBS}") 
+      INTERFACE_LINK_LIBRARIES "${USRBIO_DEPS_LIBS}")
 endif()

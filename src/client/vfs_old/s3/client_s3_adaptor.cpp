@@ -87,7 +87,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   {
     auto status = block_cache_->Init();
     if (!status.ok()) {
-      LOG(ERROR) << "Init bcache cache failed: " << status.ToString();
+      LOG(ERROR) << "Init block cache failed: " << status.ToString();
       return DINGOFS_ERROR::INTERNAL;
     }
   }

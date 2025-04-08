@@ -37,11 +37,13 @@
 #include "client/blockcache/mem_cache.h"
 #include "client/blockcache/phase_timer.h"
 #include "client/common/status.h"
-#include "dataaccess/s3_accesser.h"
+#include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
+
+using utils::kMB;
 
 BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
                                DataAccesserPtr data_accesser)
@@ -80,7 +82,7 @@ Status BlockCacheImpl::Init() {
     status =
         prefetcher_->Init(option_.prefetch_workers, option_.prefetch_queue_size,
                           [this](const BlockKey& key, size_t length) {
-                            return DoPreFetch(key, length);
+                            return DoPrefetch(key, length);
                           });
     if (!status.ok()) {
       return status;
@@ -114,7 +116,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
 
   auto wait = throttle_->Add(block.size);  // stage throttle
   if (option_.stage && !wait) {
-    timer.NextPhase(Phase::STAGE_BLOCK);
+    timer.NextPhase(Phase::kStageBlock);
     status = store_->Stage(key, block, ctx);
     if (status.ok()) {
       return status;
@@ -128,7 +130,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
   }
 
   // TODO(@Wine93): Cache the block which put to storage directly
-  timer.NextPhase(Phase::S3_PUT);
+  timer.NextPhase(Phase::kS3Put);
   status = data_accesser_->Put(key.StoreKey(), block.data, block.size);
   return status;
 }
@@ -142,48 +144,21 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
                      status.ToString(), timer.ToString());
   });
 
-  timer.NextPhase(Phase::LOAD_BLOCK);
+  timer.NextPhase(Phase::kLoadBlock);
   std::shared_ptr<BlockReader> reader;
   status = store_->Load(key, reader);
   if (status.ok()) {
-    timer.NextPhase(Phase::READ_BLOCK);
-    auto defer = ::absl::MakeCleanup([reader]() { reader->Close(); });
+    timer.NextPhase(Phase::kReadBlock);
+    auto defer = absl::MakeCleanup([reader]() { reader->Close(); });
     status = reader->ReadAt(offset, length, buffer);
     if (status.ok()) {
       return status;
     }
   }
 
-  timer.NextPhase(Phase::S3_RANGE);
+  timer.NextPhase(Phase::kS3Range);
   if (retrive) {
     status = data_accesser_->Get(key.StoreKey(), offset, length, buffer);
-  }
-  return status;
-}
-
-void BlockCacheImpl::SubmitPreFetch(const BlockKey& key, size_t length) {
-  prefetcher_->Submit(key, length);
-}
-
-Status BlockCacheImpl::DoPreFetch(const BlockKey& key, size_t length) {
-  Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return StrFormat("prefetch(%s,%d): %s%s", key.Filename(), length,
-                     status.ToString(), timer.ToString());
-  });
-
-  if (IsCached(key)) {
-    return Status::OK();
-  }
-
-  timer.NextPhase(Phase::S3_RANGE);
-  std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
-  status = data_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
-  if (status.ok()) {
-    timer.NextPhase(Phase::CACHE_BLOCK);
-    Block block(buffer.get(), length);
-    status = store_->Cache(key, block);
   }
   return status;
 }
@@ -208,15 +183,42 @@ Status BlockCacheImpl::Flush(uint64_t ino) {
   return status;
 }
 
+void BlockCacheImpl::SubmitPrefetch(const BlockKey& key, size_t length) {
+  prefetcher_->Submit(key, length);
+}
+
+Status BlockCacheImpl::DoPrefetch(const BlockKey& key, size_t length) {
+  Status status;
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return StrFormat("prefetch(%s,%d): %s%s", key.Filename(), length,
+                     status.ToString(), timer.ToString());
+  });
+
+  if (IsCached(key)) {
+    return Status::OK();
+  }
+
+  timer.NextPhase(Phase::kS3Range);
+  std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
+  status = data_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
+  if (status.ok()) {
+    timer.NextPhase(Phase::kCacheBlock);
+    Block block(buffer.get(), length);
+    status = store_->Cache(key, block);
+  }
+  return status;
+}
+
 bool BlockCacheImpl::IsCached(const BlockKey& key) {
   return store_->IsCached(key);
 }
 
 StoreType BlockCacheImpl::GetStoreType() {
   if (option_.cache_store == "none") {
-    return StoreType::NONE;
+    return StoreType::kNone;
   }
-  return StoreType::DISK;
+  return StoreType::kDisk;
 }
 
 }  // namespace blockcache

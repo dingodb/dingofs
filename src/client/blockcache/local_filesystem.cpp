@@ -22,34 +22,29 @@
 
 #include "client/blockcache/local_filesystem.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <glog/logging.h>
 #include <sys/vfs.h>
 
 #include <memory>
-#include <sstream>
 
 #include "absl/cleanup/cleanup.h"
 #include "base/file/file.h"
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
-#include "base/string/string.h"
-#include "client/common/dynamic_config.h"
+#include "client/blockcache/helper.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::file::IsDir;
-using ::dingofs::base::file::IsFile;
-using ::dingofs::base::file::StrMode;
-using ::dingofs::base::filepath::Filename;
-using ::dingofs::base::filepath::ParentDir;
-using ::dingofs::base::filepath::PathJoin;
-using ::dingofs::base::math::Divide;
-using ::dingofs::base::math::kMiB;
-using ::dingofs::base::string::StrFormat;
+using base::file::IsDir;
+using base::file::IsFile;
+using base::file::StrMode;
+using base::filepath::ParentDir;
+using base::filepath::PathJoin;
+using base::math::Divide;
+using base::math::kMiB;
 
 // posix filesystem
 PosixFileSystem::PosixFileSystem(
@@ -79,12 +74,11 @@ Status PosixFileSystem::PosixError(int code, const char* format,
   }
 
   // log & update disk state
-  std::ostringstream message;
-  message << StrFormat(format, args...) << ": " << ::strerror(code);
+  std::string message = Helper::Errorf(code, format, args...);
   if (status.IsIoError() || status.IsInvalidParam()) {
-    LOG(ERROR) << message.str();
+    LOG(ERROR) << message;
   } else if (status.IsNotFound()) {
-    LOG(WARNING) << message.str();
+    LOG(WARNING) << message;
   }
 
   CheckError(status);
@@ -399,6 +393,8 @@ Status LocalFileSystem::GetDiskUsage(const std::string& path, StatDisk* stat) {
     stat->total_files = statfs.f_files;
     stat->free_bytes = statfs.f_bfree * statfs.f_bsize;
     stat->free_files = statfs.f_ffree;
+    stat->free_bytes_ratio = 1;
+    stat->free_files_ratio = 1;
     stat->free_bytes_ratio = Divide(stat->free_bytes, stat->total_bytes);
     stat->free_files_ratio = Divide(stat->free_files, stat->total_files);
   }

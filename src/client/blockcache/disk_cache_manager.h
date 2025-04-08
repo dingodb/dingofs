@@ -42,18 +42,18 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::cache::Cache;
-using ::dingofs::base::queue::MessageQueue;
-using ::dingofs::base::time::TimeSpec;
-using ::dingofs::client::blockcache::LRUCache;
-using ::dingofs::utils::Mutex;
-using ::dingofs::utils::TaskThreadPool;
+using base::cache::Cache;
+using base::queue::MessageQueue;
+using base::time::TimeSpec;
+using client::blockcache::LRUCache;
+using utils::Mutex;
+using utils::TaskThreadPool;
 
 // Manage cache items and its capacity
 class DiskCacheManager {
-  enum class DeleteFrom {
-    CACHE_FULL,
-    CACHE_EXPIRED,
+  enum class DeleteFrom : uint8_t {
+    kCacheFull,
+    kCacheExpired,
   };
 
   using MessageType = std::pair<CacheItems, DeleteFrom>;

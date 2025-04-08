@@ -36,9 +36,9 @@ namespace blockcache {
 
 class Countdown {
   struct Counter {
-    Counter() : count(0), cond(std::make_shared<std::condition_variable>()) {}
+    Counter() : cond(std::make_shared<std::condition_variable>()) {}
 
-    int64_t count;
+    int64_t count{0};
     std::shared_ptr<std::condition_variable> cond;
   };
 

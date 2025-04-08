@@ -43,7 +43,7 @@ TEST_F(BlockCacheTest, Basic) {
 
   auto block_cache = builder.Build();
   ASSERT_EQ(block_cache->Init(), BCACHE_ERROR::OK);
-  ASSERT_EQ(block_cache->GetStoreType(), StoreType::DISK);
+  ASSERT_EQ(block_cache->GetStoreType(), StoreType::kDisk);
   ASSERT_EQ(block_cache->Shutdown(), BCACHE_ERROR::OK);
 }
 

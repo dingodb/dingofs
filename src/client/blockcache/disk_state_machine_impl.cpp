@@ -32,7 +32,7 @@ USING_FLAG(disk_state_unstable2normal_io_succ_num);
 USING_FLAG(disk_state_unstable2down_second);
 USING_FLAG(disk_state_tick_duration_second);
 
-using ::dingofs::base::timer::TimerImpl;
+using base::timer::TimerImpl;
 
 void NormalDiskState::IOErr() {
   io_error_count_.fetch_add(1);

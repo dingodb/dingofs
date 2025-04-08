@@ -17,8 +17,8 @@
 
 #include <memory>
 
-#include "bthread/execution_queue.h"
 #include "base/timer/timer_impl.h"
+#include "bthread/execution_queue.h"
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/disk_state_machine.h"
 #include "utils/concurrent/rw_lock.h"
@@ -28,7 +28,7 @@ namespace client {
 namespace blockcache {
 
 using namespace std::chrono;
-using ::dingofs::base::timer::TimerImpl;
+using base::timer::TimerImpl;
 
 class DiskStateMachine;
 

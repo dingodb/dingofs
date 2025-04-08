@@ -29,15 +29,17 @@
 #include <string>
 
 #include "base/string/string.h"
+#include "client/blockcache/block_reader.h"
 #include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::base::string::Strs2Ints;
-using ::dingofs::base::string::StrSplit;
+using base::string::StrFormat;
+using base::string::Strs2Ints;
+using base::string::StrSplit;
+using client::Status;
 
 struct BlockKey {
   BlockKey() : fs_id(0), ino(0), id(0), index(0), version(0) {}
@@ -74,29 +76,27 @@ struct Block {
   size_t size;
 };
 
-enum class BlockFrom : uint8_t { CTO_FLUSH, NOCTO_FLUSH, RELOAD, UNKNOWN };
+enum class BlockFrom : uint8_t {
+  kCtoFlush = 0,
+  kNoctoFlush = 1,
+  kReload = 2,
+  kUnknown = 3,
+};
 
 struct BlockContext {
-  BlockContext() : from(BlockFrom::UNKNOWN) {}
+  BlockContext() : from(BlockFrom::kUnknown) {}
 
   BlockContext(BlockFrom from) : from(from) {}
 
   BlockContext(BlockFrom from, const std::string& store_id)
       : from(from), store_id(store_id) {
     if (!store_id.empty()) {  // Only for block which from reload
-      CHECK(from == BlockFrom::RELOAD);
+      CHECK(from == BlockFrom::kReload);
     }
   }
 
   BlockFrom from;
   std::string store_id;
-};
-
-class BlockReader {
- public:
-  virtual Status ReadAt(off_t offset, size_t length, char* buffer) = 0;
-
-  virtual void Close() = 0;
 };
 
 class CacheStore {
@@ -105,6 +105,8 @@ class CacheStore {
       const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
 
  public:
+  virtual ~CacheStore() = default;
+
   virtual Status Init(UploadFunc uploader) = 0;
 
   virtual Status Shutdown() = 0;

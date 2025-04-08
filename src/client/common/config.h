@@ -74,7 +74,11 @@ struct DataStreamOption {
 struct DiskCacheOption {
   uint32_t index;
   std::string cache_dir;
-  uint64_t cache_size;  // bytes
+  uint64_t cache_size;          // bytes
+  std::string filesystem_type;  // local or 3fs
+  uint32_t ioring_iodepth;
+  uint32_t ioring_blksize;
+  bool ioring_prefetch;
 };
 
 struct BlockCacheOption {

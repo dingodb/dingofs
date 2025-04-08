@@ -41,7 +41,7 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::time::TimeSpec;
+using base::time::TimeSpec;
 
 class PosixFileSystem {
  public:
@@ -148,7 +148,7 @@ class LocalFileSystem {
   Status Do(DoFunc func);
 
  private:
-  bool IsAligned(uint64_t n);
+  static bool IsAligned(uint64_t n);
 
  private:
   std::shared_ptr<PosixFileSystem> posix_;

@@ -34,7 +34,7 @@ DingFS implements a three-tier caching topology (memory/local SSD/distributed cl
 
 ## 1. Installation prerequisites
 ### Linux Operating system
-| Release    | Version     | 
+| Release    | Version     |
 |----------|---------------|
 | Debian   | 9+   |
 | Centos   | 7+   |
@@ -106,11 +106,14 @@ bash build_thirdparties.sh
 mkdir build
 cd build
 cmake ..
-or
-cmake -DWITH_LIBUSRBIO=ON ..  #enable usrbio feature
 make -j 32
 ```
 
+If you want use 3FS as your block cache, you should build with `WITH_LIBUSRBIO` option:
+
+```
+cmake -DWITH_LIBUSRBIO=ON ..
+```
 
 ## Special Thanks
 
