@@ -24,12 +24,10 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
 
 #include <condition_variable>
-#include <memory>
 #include <mutex>
 #include <unordered_map>
 
 #include "client/blockcache/cache_store.h"
-#include "client/blockcache/countdown.h"
 #include "client/blockcache/segments.h"
 
 namespace dingofs {
@@ -48,9 +46,10 @@ struct StageBlock {
 
   bool operator<(const StageBlock& other) const {
     static std::unordered_map<BlockFrom, uint8_t> priority{
-        {BlockFrom::CTO_FLUSH, 0},
-        {BlockFrom::NOCTO_FLUSH, 1},
-        {BlockFrom::RELOAD, 2},
+        {BlockFrom::kCtoFlush, 0},
+        {BlockFrom::kNoctoFlush, 1},
+        {BlockFrom::kReload, 2},
+        {BlockFrom::kUnknown, 3},
     };
 
     if (ctx.from == other.ctx.from) {

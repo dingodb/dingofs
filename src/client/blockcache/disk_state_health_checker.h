@@ -26,7 +26,7 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::timer::TimerImpl;
+using base::timer::TimerImpl;
 
 class DiskStateHealthChecker {
  public:

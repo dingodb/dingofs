@@ -32,7 +32,7 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::filepath::PathJoin;
+using base::filepath::PathJoin;
 
 /*
  * disk cache layout:

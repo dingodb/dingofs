@@ -24,7 +24,6 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_NONE_CACHE_H_
 
 #include "client/blockcache/cache_store.h"
-#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -36,7 +35,7 @@ class MemCache : public CacheStore {
  public:
   MemCache() = default;
 
-  virtual ~MemCache() = default;
+  ~MemCache() override = default;
 
   Status Init(UploadFunc) override { return Status::OK(); }
 

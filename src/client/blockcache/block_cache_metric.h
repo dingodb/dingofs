@@ -41,8 +41,8 @@ namespace blockcache {
 USING_FLAG(block_cache_stage_bandwidth_throttle_enable);
 USING_FLAG(block_cache_stage_bandwidth_throttle_mb);
 
-using ::dingofs::utils::TaskThreadPool;
-using ::dingofs::client::common::BlockCacheOption;
+using client::common::BlockCacheOption;
+using utils::TaskThreadPool;
 
 class BlockCacheMetricHelper {
  public:

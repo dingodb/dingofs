@@ -32,8 +32,7 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::ReadLockGuard;
-using ::dingofs::utils::WriteLockGuard;
+using utils::LockGuard;
 
 BlockPrefetcherImpl::BlockPrefetcherImpl()
     : running_(false),
@@ -58,7 +57,7 @@ Status BlockPrefetcherImpl::Init(uint32_t workers, uint32_t queue_size,
       LOG(ERROR) << "Start prefetch thread pool failed, rc = " << rc;
       return Status::Internal("start fail");
     }
-    LOG(INFO) << "Start prefetch thread pool success.";
+    LOG(INFO) << "Start block prefetch thread pool success.";
   }
   return Status::OK();
 }
@@ -101,9 +100,8 @@ int BlockPrefetcherImpl::BatchSubmit(void* meta,
 
 void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
   {
-    WriteLockGuard lk(rwlock_);
-
-    if (busy_.find(key.Filename()) != busy_.end()) {
+    LockGuard lk(mutex_);
+    if (busy_.find(key.Filename()) != busy_.end()) {  // on prefetching
       return;
     }
     busy_[key.Filename()] = true;
@@ -116,7 +114,7 @@ void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
   }
 
   {
-    WriteLockGuard lk(rwlock_);
+    LockGuard lk(mutex_);
     busy_.erase(key.Filename());
   }
 }
