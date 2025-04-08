@@ -92,11 +92,11 @@ class AioQueueImpl : public AioQueue {
 
   void BackgroundWait();
 
+  static void RunClosure(const hf3fs_cqe* completed_entries, int n);
+
   static void OnError(const std::vector<BlockTask*>& tasks);
 
   static void OnSuccess(const std::vector<BlockTask*>& tasks);
-
-  static void RunClosure(const hf3fs_cqe* completed_entries, int n);
 
  private:
   std::atomic<bool> running_;
