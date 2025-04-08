@@ -12,11 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_COMPACTION_H_
-#define DINGOFS_MDSV2_COMPACTION_H_
+#ifndef DINGOFS_MDSV2_BACKGROUND_COMPACTION_H_
+#define DINGOFS_MDSV2_BACKGROUND_COMPACTION_H_
+
+#include <cstdint>
+
+#include "mdsv2/common/runnable.h"
+#include "mdsv2/common/status.h"
+#include "mdsv2/filesystem/inode.h"
+#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
+
+class CompactChunkTask : public TaskRunnable {
+ public:
+  CompactChunkTask();
+  ~CompactChunkTask() override = default;
+
+  std::string Type() override { return "COMPACT_CHUNK"; }
+
+  void Run() override;
+};
 
 class CompactFileChunk {
  public:
@@ -26,10 +43,22 @@ class CompactFileChunk {
   bool Init();
   bool Destroy();
 
+  static void TriggerCompaction();
+
+  void Compact(InodePtr inode);
+
  private:
+  Status CleanSlice(const std::vector<pb::mdsv2::Slice>& slices);
+
+  static std::vector<pb::mdsv2::Slice> CalculateInvalidSlices(std::map<uint64_t, pb::mdsv2::SliceList>& chunk_map,
+                                                              uint64_t file_length, uint64_t chunk_size);
+
+  KVStoragePtr kv_storage_;
+
+  WorkerSetPtr worker_set_;
 };
 
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_COMPACTION_H_
+#endif  // DINGOFS_MDSV2_BACKGROUND_COMPACTION_H_

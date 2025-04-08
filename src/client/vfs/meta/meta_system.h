@@ -132,6 +132,9 @@ class MetaSystem {
   // -------- above related to file system --------
 };
 
+using MetaSystemPtr = std::shared_ptr<MetaSystem>;
+using MetaSystemUPtr = std::unique_ptr<MetaSystem>;
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

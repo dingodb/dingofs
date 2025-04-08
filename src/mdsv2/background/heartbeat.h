@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_HEARTBEAT_H_
-#define DINGOFS_MDSV2_HEARTBEAT_H_
+#ifndef DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
+#define DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
@@ -69,4 +69,4 @@ class Heartbeat {
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_HEARTBEAT_H_
+#endif  // DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_

@@ -44,6 +44,7 @@ enum KeyType : unsigned char {
   kTypeFsQuota = 6,
   kTypeDirQuota = 7,
   kTypeFsStats = 8,
+  kTypeFileSession = 9,
 };
 
 void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {
@@ -156,6 +157,42 @@ void MetaDataCodec::GetFsStatsRange(uint32_t fs_id, std::string& start_key, std:
   end_key.push_back(kTypeFsStats);
   end_key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id + 1, end_key);
+}
+
+void MetaDataCodec::GetFileSessionTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeFileSession);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFileSession + 1);
+}
+
+void MetaDataCodec::GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeFileSession);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFileSession);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
+}
+
+void MetaDataCodec::GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeFileSession);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeFileSession);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, end_key);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino + 1, end_key);
 }
 
 // format: [$prefix, $type, $kDelimiter, $name]
@@ -485,6 +522,44 @@ pb::mdsv2::FsStatsData MetaDataCodec::DecodeFsStatsValue(const std::string& valu
   pb::mdsv2::FsStatsData stats;
   CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
   return std::move(stats);
+}
+
+std::string MetaDataCodec::EncodeFileSessionKey(uint32_t fs_id, uint64_t ino, const std::string& session_id) {
+  std::string key;
+  key.reserve(kPrefixSize + 16 + session_id.size());
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeFileSession);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino, key);
+  key.push_back(kDelimiter);
+  key.append(session_id);
+
+  return key;
+}
+
+void MetaDataCodec::DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino,
+                                         std::string& session_id) {
+  CHECK(key.size() == (kPrefixSize + 16 + session_id.size()))
+      << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeFileSession) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 15));
+  session_id = key.substr(kPrefixSize + 16);
+}
+
+std::string MetaDataCodec::EncodeFileSessionValue(const pb::mdsv2::FileSession& file_session) {
+  return file_session.SerializeAsString();
+}
+
+pb::mdsv2::FileSession MetaDataCodec::DecodeFileSessionValue(const std::string& value) {
+  pb::mdsv2::FileSession file_session;
+  CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
+  return std::move(file_session);
 }
 
 }  // namespace mdsv2

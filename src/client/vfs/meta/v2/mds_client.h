@@ -20,6 +20,7 @@
 #include <string>
 
 #include "client/common/status.h"
+#include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "client/vfs/vfs_meta.h"
@@ -40,15 +41,17 @@ using MDSClientPtr = std::shared_ptr<MDSClient>;
 
 class MDSClient {
  public:
-  MDSClient(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
-            MDSDiscoveryPtr mds_discovery, MDSRouterPtr mds_router, RPCPtr rpc);
+  MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+            ParentCachePtr parent_cache, MDSDiscoveryPtr mds_discovery,
+            MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
-  static MDSClientPtr New(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
+  static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+                          ParentCachePtr parent_cache,
                           MDSDiscoveryPtr mds_discovery,
                           MDSRouterPtr mds_router, RPCPtr rpc) {
-    return std::make_shared<MDSClient>(fs_info, parent_cache, mds_discovery,
-                                       mds_router, rpc);
+    return std::make_shared<MDSClient>(client_id, fs_info, parent_cache,
+                                       mds_discovery, mds_router, rpc);
   }
 
   bool Init();
@@ -117,6 +120,8 @@ class MDSClient {
 
   uint32_t fs_id_{0};
   uint64_t epoch_{0};
+
+  const ClientId client_id_;
   mdsv2::FsInfoPtr fs_info_;
 
   ParentCachePtr parent_cache_;
@@ -134,6 +139,7 @@ Status MDSClient::SendRequest(EndPoint& endpoint,
                               const std::string& api_name, Request& request,
                               Response& response) {
   request.mutable_info()->set_request_id(mdsv2::Helper::TimestampNs());
+  request.mutable_context()->set_client_id(client_id_.ID());
   for (int retry = 0; retry < FLAGS_client_send_request_retry; ++retry) {
     request.mutable_context()->set_epoch(epoch_);
     auto status =

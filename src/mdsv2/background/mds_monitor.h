@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDV2_MDS_MONITOR_H_
-#define DINGOFS_MDV2_MDS_MONITOR_H_
+#ifndef DINGOFS_MDV2_BACKGROUND_MDS_MONITOR_H_
+#define DINGOFS_MDV2_BACKGROUND_MDS_MONITOR_H_
 
 #include <atomic>
 #include <memory>
@@ -60,4 +60,4 @@ using MDSMonitorPtr = std::shared_ptr<MDSMonitor>;
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDV2_MDS_MONITOR_H_
+#endif  // DINGOFS_MDV2_BACKGROUND_MDS_MONITOR_H_

@@ -16,6 +16,8 @@
 
 #include "client/vfs/vfs_impl.h"
 
+#include <fcntl.h>
+
 #include <memory>
 #include <utility>
 
@@ -207,6 +209,12 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
       [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
 
   s = meta_system_->Open(ino, flags);
+  if (!s.ok()) {
+    return s;
+  }
+
+  *fh = 1;
+
   return s;
 }
 

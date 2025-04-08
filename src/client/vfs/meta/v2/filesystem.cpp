@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "client/common/status.h"
+#include "client/vfs/meta/v2/client_id.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
@@ -99,11 +100,11 @@ void MdsV2DirIterator::Next() {
 }
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
-                                 const std::string& mount_path,
+                                 const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
                                  MDSClientPtr mds_client)
     : name_(fs_info->GetName()),
-      mount_path_(mount_path),
+      client_id_(client_id),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
       mds_client_(mds_client) {}
@@ -127,16 +128,9 @@ void MDSV2FileSystem::UnInit() {
 }
 
 bool MDSV2FileSystem::MountFs() {
-  std::string hostname = GetHostName();
-  if (hostname.empty()) {
-    LOG(ERROR) << "get hostname fail.";
-    return false;
-  }
-
   pb::mdsv2::MountPoint mount_point;
-  mount_point.set_hostname(hostname);
-  mount_point.set_port(9999);
-  mount_point.set_path(mount_path_);
+  mount_point.set_hostname(client_id_.Hostname());
+  mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
 
   LOG(INFO) << fmt::format("mount point: {}.", mount_point.ShortDebugString());
@@ -144,7 +138,8 @@ bool MDSV2FileSystem::MountFs() {
   auto status = mds_client_->MountFs(name_, mount_point);
   if (!status.ok() && status.Errno() != pb::error::EEXISTED) {
     LOG(ERROR) << fmt::format("mount fs({}) info fail, mountpoint({}), {}.",
-                              name_, mount_path_, status.ToString());
+                              name_, client_id_.Mountpoint(),
+                              status.ToString());
     return false;
   }
 
@@ -152,20 +147,15 @@ bool MDSV2FileSystem::MountFs() {
 }
 
 bool MDSV2FileSystem::UnmountFs() {
-  std::string hostname = GetHostName();
-  if (hostname.empty()) {
-    return false;
-  }
-
   pb::mdsv2::MountPoint mount_point;
-  mount_point.set_hostname(hostname);
-  mount_point.set_port(9999);
-  mount_point.set_path(mount_path_);
+  mount_point.set_hostname(client_id_.Hostname());
+  mount_point.set_port(client_id_.Port());
+  mount_point.set_path(client_id_.Mountpoint());
 
   auto status = mds_client_->UmountFs(name_, mount_point);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("mount fs({}) info fail, mountpoint({}).", name_,
-                              mount_path_);
+                              client_id_.Mountpoint());
     return false;
   }
 
@@ -447,6 +437,15 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   CHECK(!mds_addr.empty()) << "mds_addr is empty.";
   CHECK(!mountpoint.empty()) << "mountpoint is empty.";
 
+  std::string hostname = GetHostName();
+  if (hostname.empty()) {
+    LOG(ERROR) << "get hostname fail.";
+    return nullptr;
+  }
+
+  ClientId client_id(hostname, 0, mountpoint);
+  LOG(INFO) << fmt::format("client_id: {}", client_id.ID());
+
   auto rpc = RPC::New(mds_addr);
   if (!rpc->Init()) {
     LOG(ERROR) << "RPC init fail.";
@@ -494,15 +493,15 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   auto fs_info = mdsv2::FsInfo::New(pb_fs_info);
 
   // create mds client
-  auto mds_client =
-      MDSClient::New(fs_info, parent_cache, mds_discovery, mds_router, rpc);
+  auto mds_client = MDSClient::New(client_id, fs_info, parent_cache,
+                                   mds_discovery, mds_router, rpc);
   if (!mds_client->Init()) {
     LOG(INFO) << "MDSClient init fail.";
     return nullptr;
   }
 
   // create filesystem
-  return MDSV2FileSystem::New(fs_info, mountpoint, mds_discovery, mds_client);
+  return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, mds_client);
 }
 
 }  // namespace v2

@@ -80,10 +80,11 @@ static DirEntry ToDirEntry(const pb::mdsv2::ReadDirResponse::Entry& entry) {
   return std::move(out_entry);
 }
 
-MDSClient::MDSClient(mdsv2::FsInfoPtr fs_info, ParentCachePtr parent_cache,
-                     MDSDiscoveryPtr mds_discovery, MDSRouterPtr mds_router,
-                     RPCPtr rpc)
-    : fs_info_(fs_info),
+MDSClient::MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
+                     ParentCachePtr parent_cache, MDSDiscoveryPtr mds_discovery,
+                     MDSRouterPtr mds_router, RPCPtr rpc)
+    : client_id_(client_id),
+      fs_info_(fs_info),
       fs_id_(fs_info->GetFsId()),
       epoch_(fs_info->GetEpoch()),
       parent_cache_(parent_cache),

@@ -886,13 +886,16 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const p
   }
 
   const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version(), req_ctx.client_id());
 
-  status = file_system->Open(ctx, request->ino());
+  std::string session_id;
+  status = file_system->Open(ctx, request->ino(), session_id);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->set_session_id(session_id);
 }
 
 void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,
@@ -928,9 +931,9 @@ void MDSServiceImpl::DoRelease(google::protobuf::RpcController* controller, cons
   }
 
   const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version(), req_ctx.client_id());
 
-  status = file_system->Release(ctx, request->ino());
+  status = file_system->Release(ctx, request->ino(), request->session_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

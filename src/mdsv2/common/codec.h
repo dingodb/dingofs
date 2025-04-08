@@ -36,6 +36,9 @@ class MetaDataCodec {
   static void GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFsStatsTableRange(std::string& start_key, std::string& end_key);
   static void GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetFileSessionTableRange(std::string& start_key, std::string& end_key);
+  static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
 
   // lock
   // format: [$prefix, $type, $kDelimiter, $name]
@@ -99,6 +102,13 @@ class MetaDataCodec {
   static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
   static std::string EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats);
   static pb::mdsv2::FsStatsData DecodeFsStatsValue(const std::string& value);
+
+  // file session
+  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino, $kDelimiter, $session_id]
+  static std::string EncodeFileSessionKey(uint32_t fs_id, uint64_t ino, const std::string& session_id);
+  static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
+  static std::string EncodeFileSessionValue(const pb::mdsv2::FileSession& file_session);
+  static pb::mdsv2::FileSession DecodeFileSessionValue(const std::string& value);
 };
 
 }  // namespace mdsv2

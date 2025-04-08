@@ -22,6 +22,7 @@
 #include "client/common/status.h"
 #include "client/vfs/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
+#include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/vfs_meta.h"
@@ -59,15 +60,15 @@ class MdsV2DirIterator : public DirIterator {
 
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
-  MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const std::string& mount_path,
+  MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const ClientId& client_id,
                   MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
   ~MDSV2FileSystem() override;
 
   static MDSV2FileSystemUPtr New(mdsv2::FsInfoPtr fs_info,
-                                 const std::string& mount_path,
+                                 const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
                                  MDSClientPtr mds_client) {
-    return std::make_unique<MDSV2FileSystem>(fs_info, mount_path, mds_discovery,
+    return std::make_unique<MDSV2FileSystem>(fs_info, client_id, mds_discovery,
                                              mds_client);
   }
 
@@ -139,7 +140,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   bool UnmountFs();
 
   const std::string name_;
-  const std::string mount_path_;
+  const ClientId client_id_;
 
   mdsv2::FsInfoPtr fs_info_;
 

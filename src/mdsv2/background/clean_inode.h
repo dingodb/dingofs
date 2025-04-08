@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_CLEAN_INODE_H_
-#define DINGOFS_MDSV2_CLEAN_INODE_H_
+#ifndef DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_
+#define DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_
 
 #include "mdsv2/common/distribution_lock.h"
 #include "mdsv2/common/status.h"
@@ -40,4 +40,4 @@ class CleanInode {
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_CLEAN_INODE_H_
+#endif  // DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_

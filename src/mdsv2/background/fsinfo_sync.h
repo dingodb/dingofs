@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_FSINFO_SYNC_H_
-#define DINGOFS_MDSV2_FSINFO_SYNC_H_
+#ifndef DINGOFS_MDSV2_BACKGROUND_FSINFO_SYNC_H_
+#define DINGOFS_MDSV2_BACKGROUND_FSINFO_SYNC_H_
 
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
@@ -54,4 +54,4 @@ class FsInfoSync {
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGOFS_MDSV2_FSINFO_SYNC_H_
+#endif  // DINGOFS_MDSV2_BACKGROUND_FSINFO_SYNC_H_

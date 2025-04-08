@@ -26,9 +26,9 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/common/tracing.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file.h"
+#include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
@@ -101,8 +101,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, uint64_t ino);
-  Status Release(Context& ctx, uint64_t ino);
+  Status Open(Context& ctx, uint64_t ino, std::string& session_id);
+  Status Release(Context& ctx, uint64_t ino, const std::string& session_id);
 
   // directory
   struct MkDirParam {
@@ -233,6 +233,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // for open/read/write/close file
   OpenFiles open_files_;
+  FileSessionManagerPtr file_session_manager_;
 
   // organize dentry directory tree
   PartitionCache partition_cache_;

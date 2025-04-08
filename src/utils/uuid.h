@@ -22,6 +22,7 @@
 
 #ifndef SRC_COMMON_UUID_H_
 #define SRC_COMMON_UUID_H_
+
 extern "C" {
 #include <uuid/uuid.h>
 void uuid_generate(uuid_t out);
@@ -30,14 +31,18 @@ void uuid_generate_time(uuid_t out);
 // 指明由uuid_generate_time生成的uuid是否使用了时间同步机制，不进行封装。
 int uuid_generate_time_safe(uuid_t out);
 }
+
 #include <string>
+
 #define BUFF_LEN 36
+
 namespace dingofs {
 namespace utils {
+
 // 生成uuid的生成器
 class UUIDGenerator {
  public:
-  UUIDGenerator() {}
+  UUIDGenerator() = default;
 
   /**
    *  @brief 生成uuid，优先采用的算法
@@ -48,7 +53,7 @@ class UUIDGenerator {
    *  @param :
    *  @return 生成的uuid
    */
-  std::string GenerateUUID() {
+  static std::string GenerateUUID() {
     uuid_t out;
     char buf[BUFF_LEN];
     uuid_generate(out);
@@ -64,7 +69,7 @@ class UUIDGenerator {
    *  @param :
    *  @return 生成的uuid
    */
-  std::string GenerateUUIDTime() {
+  static std::string GenerateUUIDTime() {
     uuid_t out;
     char buf[BUFF_LEN];
     uuid_generate_time(out);
@@ -79,7 +84,7 @@ class UUIDGenerator {
    *  在使用伪随机数生成器的情况下，uuid有重复的风险。
    *  @return 生成的uuid
    */
-  std::string GenerateUUIDRandom() {
+  static std::string GenerateUUIDRandom() {
     uuid_t out;
     char buf[BUFF_LEN];
     uuid_generate_random(out);

@@ -89,6 +89,8 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr i
       renamer_(renamer),
       mutation_processor_(mutation_processor) {
   can_serve_ = CanServe(self_mds_id);
+
+  file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
 };
 
 FileSystemPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
@@ -707,13 +709,14 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, uint64_t ino) {
+Status FileSystem::Open(Context& ctx, uint64_t ino, std::string& session_id) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
+  const std::string& client_id = ctx.ClientId();
 
   auto inode = open_files_.IsOpened(ino);
   if (inode != nullptr) {
@@ -725,17 +728,30 @@ Status FileSystem::Open(Context& ctx, uint64_t ino) {
     return status;
   }
 
-  open_files_.Open(ino, inode);
+  // O_TRUNC && (O_WRONLY || O_RDWR)
+  // truncate file
+  // set file length to 0 and update inode mtime/ctime
+
+  FileSession file_session;
+  status = file_session_manager_->Create(ino, client_id, file_session);
+  if (!status.ok()) {
+    return status;
+  }
+
+  session_id = file_session.SessionId();
 
   return Status::OK();
 }
 
-Status FileSystem::Release(Context& ctx, uint64_t ino) {  // NOLINT
+Status FileSystem::Release(Context& ctx, uint64_t ino, const std::string& session_id) {  // NOLINT
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  open_files_.Close(ino);
+  auto status = file_session_manager_->Delete(ino, session_id);
+  if (!status.ok()) {
+    return status;
+  }
 
   return Status::OK();
 }
