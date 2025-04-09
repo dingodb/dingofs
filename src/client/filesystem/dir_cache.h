@@ -53,6 +53,8 @@ class DirEntryList {
 
   bool Get(Ino ino, DirEntry* dirEntry);
 
+  bool Get(const std::string& name, DirEntry* dirEntry);
+
   bool UpdateAttr(Ino ino, const pb::metaserver::InodeAttr& attr);
 
   bool UpdateLength(Ino ino, const pb::metaserver::InodeAttr& open);
@@ -68,6 +70,7 @@ class DirEntryList {
   base::time::TimeSpec mtime_;
   std::vector<DirEntry> entries_;
   absl::btree_map<Ino, uint32_t> index_;
+  absl::btree_map<std::string, uint32_t> index2_;
 };
 
 class DirCache {

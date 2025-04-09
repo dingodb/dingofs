@@ -24,9 +24,9 @@
 
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
@@ -53,12 +53,24 @@ void DirEntryList::Add(const DirEntry& dirEntry) {
   WriteLockGuard lk(rwlock_);
   entries_.push_back(std::move(dirEntry));
   index_[dirEntry.ino] = entries_.size() - 1;
+  index2_[dirEntry.name] = entries_.size() - 1;
 }
 
 bool DirEntryList::Get(Ino ino, DirEntry* dirEntry) {
   ReadLockGuard lk(rwlock_);
   auto iter = index_.find(ino);
   if (iter == index_.end()) {
+    return false;
+  }
+
+  *dirEntry = entries_[iter->second];
+  return true;
+}
+
+bool DirEntryList::Get(const std::string& name, DirEntry* dirEntry) {
+  ReadLockGuard lk(rwlock_);
+  auto iter = index2_.find(name);
+  if (iter == index2_.end()) {
     return false;
   }
 
@@ -147,9 +159,8 @@ void DirCache::Delete(Ino parent, std::shared_ptr<DirEntryList> entries,
   mq_->Publish(entries);  // clear entries in background
   lru_->Remove(parent);
 
-  VLOG(1) << "Delete directory cache (evit=" << evit
-          << "): " << "parent = " << parent
-          << ", mtime = " << entries->GetMtime()
+  VLOG(1) << "Delete directory cache (evit=" << evit << "): "
+          << "parent = " << parent << ", mtime = " << entries->GetMtime()
           << ", delete size = " << ndelete << ", nentries = " << nentries_;
 }
 
