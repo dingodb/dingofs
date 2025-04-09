@@ -296,8 +296,10 @@ DINGOFS_ERROR FileSystem::Lookup(Request req, Ino parent,
   if (yes) {
     DirEntry dir_entry;
     yes = entries->Get(name, &dir_entry);
-    entry_out->attr = std::move(dir_entry.attr);
-    return DINGOFS_ERROR::OK;
+    if (yes) {
+      entry_out->attr = std::move(dir_entry.attr);
+      return DINGOFS_ERROR::OK;
+    }
   }
 
   auto rc = rpc_->Lookup(parent, name, entry_out);
