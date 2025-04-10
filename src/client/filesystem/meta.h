@@ -27,10 +27,10 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/dir_buffer.h"
 #include "client/fuse_common.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -87,6 +87,9 @@ struct FileOut {
 
 struct FileHandler {
   uint64_t fh;
+  // for file
+  int32_t flags;
+
   DirBufferHead* buffer;
   base::time::TimeSpec mtime;
   bool padding;  // padding buffer

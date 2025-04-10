@@ -27,6 +27,7 @@
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/s3_client.h"
 #include "client/datastream/data_stream.h"
+#include "client/filesystem/meta.h"
 #include "client/kvclient/memcache_client.h"
 #include "common/define.h"
 #include "stub/filesystem/xattr.h"
@@ -439,10 +440,25 @@ DINGOFS_ERROR FuseS3Client::FuseOpFlush(fuse_req_t req, fuse_ino_t ino,
                                         struct fuse_file_info* fi) {
   (void)req;
   (void)fi;
-  VLOG(1) << "FuseOpFlush, inodeId=" << ino;
+  VLOG(1) << "FuseOpFlush, inodeId=" << ino << ", fh: " << fi->fh;
   DINGOFS_ERROR ret = DINGOFS_ERROR::OK;
 
   if (ino == STATSINODEID) return ret;
+
+  std::shared_ptr<filesystem::FileHandler> handler = fs_->FindHandler(fi->fh);
+
+  if (handler == nullptr) {
+    LOG(ERROR) << "FuseOpFlush find handler fail, inodeId=" << ino
+               << " fh: " << fi->fh;
+    return DINGOFS_ERROR::INTERNAL;
+  }
+
+  VLOG(1) << "FuseOpFlush inodeId=" << ino << " fh: " << fi->fh
+          << " Octal flags: " << std::oct << handler->flags;
+
+  if ((handler->flags & O_ACCMODE) == O_RDONLY) {
+    return DINGOFS_ERROR::OK;
+  }
 
   auto entry_watcher = fs_->BorrowMember().entry_watcher;
 

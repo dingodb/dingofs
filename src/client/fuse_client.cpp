@@ -37,10 +37,10 @@
 #include "client/inode_wrapper.h"
 #include "client/service/metrics_dumper.h"
 #include "common/define.h"
+#include "glog/logging.h"
 #include "stub/common/common.h"
 #include "stub/filesystem/xattr.h"
 #include "utils/net_common.h"
-#include "glog/logging.h"
 
 #define RETURN_IF_UNSUCCESS(action) \
   do {                              \
@@ -332,7 +332,9 @@ DINGOFS_ERROR FuseClient::HandleOpenFlags(fuse_req_t req, fuse_ino_t ino,
 DINGOFS_ERROR FuseClient::FuseOpOpen(fuse_req_t req, fuse_ino_t ino,
                                      struct fuse_file_info* fi,
                                      FileOut* fileOut) {
-  VLOG(1) << "FuseOpOpen, ino: " << ino << ", flags: " << fi->flags;
+  VLOG(1) << "FuseOpOpen inodeId=" << ino << " Octal flags: " << std::oct
+          << fi->flags;
+
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
   if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
@@ -358,14 +360,18 @@ DINGOFS_ERROR FuseClient::FuseOpOpen(fuse_req_t req, fuse_ino_t ino,
     InodeAttr attr = GenerateVirtualInodeAttr(STATSINODEID, fsInfo_->fsid());
     *fileOut = FileOut(fi, attr);
     return DINGOFS_ERROR::OK;
-  }
+  } else {
+    auto handler = fs_->NewHandler();
+    fi->fh = handler->fh;
+    handler->flags = fi->flags;
 
-  DINGOFS_ERROR rc = fs_->Open(req, ino, fi);
-  if (rc != DINGOFS_ERROR::OK) {
-    LOG(ERROR) << "open(" << ino << ") failed, retCode = " << rc;
-    return rc;
+    DINGOFS_ERROR rc = fs_->Open(req, ino, fi);
+    if (rc != DINGOFS_ERROR::OK) {
+      LOG(ERROR) << "open(" << ino << ") failed, retCode = " << rc;
+      return rc;
+    }
+    return HandleOpenFlags(req, ino, fi, fileOut);
   }
-  return HandleOpenFlags(req, ino, fi, fileOut);
 }
 
 DINGOFS_ERROR FuseClient::UpdateParentMCTimeAndNlink(fuse_ino_t parent,
