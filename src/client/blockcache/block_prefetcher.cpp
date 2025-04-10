@@ -26,7 +26,7 @@
 
 #include <cassert>
 
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -39,8 +39,8 @@ BlockPrefetcherImpl::BlockPrefetcherImpl()
     : running_(false),
       prefetch_thread_pool_(std::make_unique<TaskThreadPool<>>()) {}
 
-BCACHE_ERROR BlockPrefetcherImpl::Init(uint32_t workers, uint32_t queue_size,
-                                       PrefetchFunc prefetch_func) {
+Status BlockPrefetcherImpl::Init(uint32_t workers, uint32_t queue_size,
+                                 PrefetchFunc prefetch_func) {
   if (!running_.exchange(true)) {
     prefetch_func_ = prefetch_func;
 
@@ -50,29 +50,29 @@ BCACHE_ERROR BlockPrefetcherImpl::Init(uint32_t workers, uint32_t queue_size,
                                             BatchSubmit, this);
     if (rc != 0) {
       LOG(ERROR) << "execution_queue_start() failed, rc=" << rc;
-      return BCACHE_ERROR::INTERNAL_ERROR;
+      return Status::Internal("execution_queue_start fail");
     }
 
     rc = prefetch_thread_pool_->Start(workers, queue_size);
     if (rc != 0) {
       LOG(ERROR) << "Start prefetch thread pool failed, rc = " << rc;
-      return BCACHE_ERROR::INTERNAL_ERROR;
+      return Status::Internal("start fail");
     }
     LOG(INFO) << "Start prefetch thread pool success.";
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR BlockPrefetcherImpl::Shutdown() {
+Status BlockPrefetcherImpl::Shutdown() {
   if (running_.exchange(false)) {
     bthread::execution_queue_stop(submit_queue_id_);
     int rc = bthread::execution_queue_join(submit_queue_id_);
     if (rc != 0) {
-      return BCACHE_ERROR::INTERNAL_ERROR;
+      return Status::Internal("execution_queue_join fail");
     }
     prefetch_thread_pool_->Stop();
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
 void BlockPrefetcherImpl::Submit(const BlockKey& block_key, size_t length) {
@@ -109,10 +109,10 @@ void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
     busy_[key.Filename()] = true;
   }
 
-  auto rc = prefetch_func_(key, length);
-  if (rc != BCACHE_ERROR::OK) {
+  auto status = prefetch_func_(key, length);
+  if (!status.ok()) {
     LOG(ERROR) << "PreFetch for block(" << key.StoreKey()
-               << ") failed, rc = " << StrErr(rc);
+               << ") failed, rc = " << status.ToString();
   }
 
   {

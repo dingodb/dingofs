@@ -45,7 +45,7 @@
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/task_thread_pool.h"
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/accesser.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
@@ -407,7 +407,7 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   void PutObjectToCache(
       Ino ino,
-      const std::shared_ptr<dataaccess::aws::GetObjectAsyncContext>& context);
+      const std::shared_ptr<dataaccess::GetObjectAsyncContext>& context);
 
  protected:
   std::deque<WarmupFilelist> warmupFilelistDeque_;
@@ -433,6 +433,8 @@ class WarmupManagerS3Impl : public WarmupManager {
   mutable utils::RWLock inode2FetchS3ObjectsPoolMutex_;
 
   dingofs::stub::metric::WarmupManagerS3Metric warmupS3Metric_;
+
+  dataaccess::DataAccesserPtr data_accesser_;
 };
 
 }  // namespace warmup

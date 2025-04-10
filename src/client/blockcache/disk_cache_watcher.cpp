@@ -31,8 +31,8 @@
 #include "base/string/string.h"
 #include "client/blockcache/disk_cache.h"
 #include "client/blockcache/disk_cache_group.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -95,9 +95,10 @@ bool DiskCacheWatcher::CheckUuId(const std::string& lock_path,
   size_t length;
   std::shared_ptr<char> buffer;
   auto fs = NewTempLocalFileSystem();
-  auto rc = fs->ReadFile(lock_path, buffer, &length);
-  if (rc != BCACHE_ERROR::OK) {
-    LOG(ERROR) << "Read lock file (" << lock_path << ") failed: " << StrErr(rc);
+  auto status = fs->ReadFile(lock_path, buffer, &length);
+  if (!status.ok()) {
+    LOG(ERROR) << "Read lock file (" << lock_path
+               << ") failed: " << status.ToString();
     return false;
   }
 
@@ -115,26 +116,26 @@ void DiskCacheWatcher::Shutdown(WatchStore* watch_store) {
   }
 
   auto root_dir = watch_store->root_dir;
-  auto rc = watch_store->store->Shutdown();
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = watch_store->store->Shutdown();
+  if (status.ok()) {
     LOG(INFO) << "Shutdown disk cache (dir=" << root_dir
               << ") success for disk maybe broken.";
   } else {
     LOG(ERROR) << "Try to shutdown cache store (" << root_dir
-               << ") failed: " << StrErr(rc);
+               << ") failed: " << status.ToString();
   }
   watch_store->status = CacheStatus::DOWN;
 }
 
 void DiskCacheWatcher::Restart(WatchStore* watch_store) {
   auto root_dir = watch_store->root_dir;
-  auto rc = watch_store->store->Init(uploader_);
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = watch_store->store->Init(uploader_);
+  if (status.ok()) {
     watch_store->status = CacheStatus::UP;
     LOG(INFO) << "Restart disk cache (dir=" << root_dir << ") success.";
   } else {
     LOG(ERROR) << "Try to restart cache store (" << root_dir
-               << ") failed: " << StrErr(rc);
+               << ") failed: " << status.ToString();
   }
 }
 

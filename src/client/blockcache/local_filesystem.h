@@ -33,7 +33,7 @@
 
 #include "base/time/time.h"
 #include "client/blockcache/disk_state_machine_impl.h"
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 #define IO_ALIGNED_BLOCK_SIZE 4096
 
@@ -49,43 +49,43 @@ class PosixFileSystem {
 
   ~PosixFileSystem() = default;
 
-  BCACHE_ERROR Stat(const std::string& path, struct stat* stat);
+  Status Stat(const std::string& path, struct stat* stat);
 
-  BCACHE_ERROR MkDir(const std::string& path, uint16_t mode);
+  Status MkDir(const std::string& path, uint16_t mode);
 
-  BCACHE_ERROR OpenDir(const std::string& path, ::DIR** dir);
+  Status OpenDir(const std::string& path, ::DIR** dir);
 
-  BCACHE_ERROR ReadDir(::DIR* dir, struct dirent** dirent);
+  Status ReadDir(::DIR* dir, struct dirent** dirent);
 
-  BCACHE_ERROR CloseDir(::DIR* dir);
+  Status CloseDir(::DIR* dir);
 
-  BCACHE_ERROR Create(const std::string& path, int* fd, bool use_direct);
+  Status Create(const std::string& path, int* fd, bool use_direct);
 
-  BCACHE_ERROR Open(const std::string& path, int flags, int* fd);
+  Status Open(const std::string& path, int flags, int* fd);
 
-  BCACHE_ERROR LSeek(int fd, off_t offset, int whence);
+  Status LSeek(int fd, off_t offset, int whence);
 
-  BCACHE_ERROR Write(int fd, const char* buffer, size_t length);
+  Status Write(int fd, const char* buffer, size_t length);
 
-  BCACHE_ERROR Read(int fd, char* buffer, size_t length);
+  Status Read(int fd, char* buffer, size_t length);
 
-  BCACHE_ERROR Close(int fd);
+  Status Close(int fd);
 
-  BCACHE_ERROR Unlink(const std::string& path);
+  Status Unlink(const std::string& path);
 
-  BCACHE_ERROR Link(const std::string& oldpath, const std::string& newpath);
+  Status Link(const std::string& oldpath, const std::string& newpath);
 
-  BCACHE_ERROR Rename(const std::string& oldpath, const std::string& newpath);
+  Status Rename(const std::string& oldpath, const std::string& newpath);
 
-  BCACHE_ERROR StatFS(const std::string& path, struct statfs* statfs);
+  Status StatFS(const std::string& path, struct statfs* statfs);
 
-  BCACHE_ERROR FAdvise(int fd, int advise);
+  Status FAdvise(int fd, int advise);
 
  private:
   template <typename... Args>
-  BCACHE_ERROR PosixError(int code, const char* format, const Args&... args);
+  Status PosixError(int code, const char* format, const Args&... args);
 
-  void CheckError(BCACHE_ERROR rc);
+  void CheckError(Status status);
 
  private:
   std::shared_ptr<DiskStateMachine> disk_state_machine_;
@@ -114,11 +114,11 @@ class LocalFileSystem {
     TimeSpec atime;
   };
 
-  using WalkFunc = std::function<BCACHE_ERROR(const std::string& prefix,
-                                              const FileInfo& info)>;
+  using WalkFunc =
+      std::function<Status(const std::string& prefix, const FileInfo& info)>;
 
-  using DoFunc = std::function<BCACHE_ERROR(
-      const std::shared_ptr<PosixFileSystem>& posix)>;
+  using DoFunc =
+      std::function<Status(const std::shared_ptr<PosixFileSystem>& posix)>;
 
  public:
   explicit LocalFileSystem(
@@ -126,26 +126,26 @@ class LocalFileSystem {
 
   ~LocalFileSystem() = default;
 
-  BCACHE_ERROR MkDirs(const std::string& path);
+  Status MkDirs(const std::string& path);
 
   // NOTE: only invoke WalkFunc for file
-  BCACHE_ERROR Walk(const std::string& prefix, WalkFunc func);
+  Status Walk(const std::string& prefix, WalkFunc func);
 
-  BCACHE_ERROR WriteFile(const std::string& path, const char* buffer,
-                         size_t length, bool use_direct = false);
+  Status WriteFile(const std::string& path, const char* buffer, size_t length,
+                   bool use_direct = false);
 
-  BCACHE_ERROR ReadFile(const std::string& path, std::shared_ptr<char>& buffer,
-                        size_t* length, bool drop_page_cache = false);
+  Status ReadFile(const std::string& path, std::shared_ptr<char>& buffer,
+                  size_t* length, bool drop_page_cache = false);
 
-  BCACHE_ERROR RemoveFile(const std::string& path);
+  Status RemoveFile(const std::string& path);
 
-  BCACHE_ERROR HardLink(const std::string& oldpath, const std::string& newpath);
+  Status HardLink(const std::string& oldpath, const std::string& newpath);
 
   bool FileExists(const std::string& path);
 
-  BCACHE_ERROR GetDiskUsage(const std::string& path, struct StatDisk* stat);
+  Status GetDiskUsage(const std::string& path, struct StatDisk* stat);
 
-  BCACHE_ERROR Do(DoFunc func);
+  Status Do(DoFunc func);
 
  private:
   bool IsAligned(uint64_t n);

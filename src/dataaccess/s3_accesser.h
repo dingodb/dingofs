@@ -50,10 +50,20 @@ struct S3Option {
   bool enableTelemetry;
 };
 
+class S3Accesser;
+using S3AccesserPtr = std::shared_ptr<S3Accesser>;
+
+// S3Accesser is a class that provides a way to access data from a S3 data
+// source. It is a derived class of DataAccesser.
+// use aws-sdk-cpp implement
 class S3Accesser : public DataAccesser {
  public:
-  S3Accesser(const aws::S3AdapterOption option) : option_(option) {}
+  S3Accesser(const aws::S3AdapterOption& option) : option_(option) {}
   ~S3Accesser() override = default;
+
+  static S3AccesserPtr New(const aws::S3AdapterOption& option) {
+    return std::make_shared<S3Accesser>(option);
+  }
 
   bool Init() override;
 
@@ -68,6 +78,8 @@ class S3Accesser : public DataAccesser {
   Status Get(const std::string& key, off_t offset, size_t length,
              char* buffer) override;
   void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+
+  Status Delete(const std::string& key) override;
 
  private:
   static Aws::String S3Key(const std::string& key);

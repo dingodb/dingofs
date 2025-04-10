@@ -30,7 +30,6 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "client/blockcache/cache_store.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/blockcache/log.h"
 #include "client/blockcache/phase_timer.h"
@@ -43,10 +42,13 @@ namespace blockcache {
 
 USING_FLAG(drop_page_cache);
 
-BlockCacheUploader::BlockCacheUploader(std::shared_ptr<S3Client> s3,
+BlockCacheUploader::BlockCacheUploader(DataAccesserPtr data_accesser,
                                        std::shared_ptr<CacheStore> store,
                                        std::shared_ptr<Countdown> stage_count)
-    : running_(false), s3_(s3), store_(store), stage_count_(stage_count) {
+    : running_(false),
+      data_accesser_(data_accesser),
+      store_(store),
+      stage_count_(stage_count) {
   scan_stage_thread_pool_ =
       std::make_unique<TaskThreadPool<>>("scan_stage_worker");
   upload_stage_thread_pool_ =
@@ -129,53 +131,53 @@ void BlockCacheUploader::UploadingWorker() {
 
 namespace {
 
-void Log(const StageBlock& stage_block, size_t length, BCACHE_ERROR rc,
+void Log(const StageBlock& stage_block, size_t length, Status status,
          PhaseTimer timer) {
-  auto message = StrFormat("upload_stage(%s,%d): %s%s <%.6lf>",
-                           stage_block.key.Filename(), length, StrErr(rc),
-                           timer.ToString(), timer.TotalUElapsed() / 1e6);
+  auto message = StrFormat(
+      "upload_stage(%s,%d): %s%s <%.6lf>", stage_block.key.Filename(), length,
+      status.ToString(), timer.ToString(), timer.TotalUElapsed() / 1e6);
   LogIt(message);
 }
 
 };  // namespace
 
 void BlockCacheUploader::UploadStageBlock(const StageBlock& stage_block) {
-  BCACHE_ERROR rc = BCACHE_ERROR::OK;
+  Status status;
   PhaseTimer timer;
   std::shared_ptr<char> buffer;
   size_t length;
   auto defer = ::absl::MakeCleanup([&]() {
-    if (rc != BCACHE_ERROR::OK) {
-      Log(stage_block, length, rc, timer);
+    if (!status.ok()) {
+      Log(stage_block, length, status, timer);
     }
   });
 
   timer.NextPhase(Phase::READ_BLOCK);
-  rc = ReadBlock(stage_block, buffer, &length);
-  if (rc == BCACHE_ERROR::OK) {  // OK
+  status = ReadBlock(stage_block, buffer, &length);
+  if (status.ok()) {  // OK
     timer.NextPhase(Phase::S3_PUT);
     UploadBlock(stage_block, buffer, length, timer);
-  } else if (rc == BCACHE_ERROR::NOT_FOUND) {  // already deleted
+  } else if (status.IsNotFound()) {  // already deleted
     Uploaded(stage_block, false);
   } else {  // throw error
     Uploaded(stage_block, false);
   }
 }
 
-BCACHE_ERROR BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
-                                           std::shared_ptr<char>& buffer,
-                                           size_t* length) {
+Status BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
+                                     std::shared_ptr<char>& buffer,
+                                     size_t* length) {
   auto stage_path = stage_block.stage_path;
   auto fs = NewTempLocalFileSystem();
-  auto rc = fs->ReadFile(stage_path, buffer, length, FLAGS_drop_page_cache);
-  if (rc == BCACHE_ERROR::NOT_FOUND) {
+  auto status = fs->ReadFile(stage_path, buffer, length, FLAGS_drop_page_cache);
+  if (status.IsNotFound()) {
     LOG(ERROR) << "Stage block (path=" << stage_path
                << ") already deleted, abort upload!";
-  } else if (rc != BCACHE_ERROR::OK) {
+  } else if (!status.ok()) {
     LOG(ERROR) << "Read stage block (path=" << stage_path
-               << ") failed: " << StrErr(rc) << ", abort upload!";
+               << ") failed: " << status.ToString() << ", abort upload!";
   }
-  return rc;
+  return status;
 }
 
 void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
@@ -191,17 +193,18 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
 
     RemoveBlock(stage_block);
     Uploaded(stage_block, true);
-    Log(stage_block, length, BCACHE_ERROR::OK, timer);
+    Log(stage_block, length, Status::OK(), timer);
     return false;
   };
-  s3_->AsyncPut(stage_block.key.StoreKey(), buffer.get(), length, retry_cb);
+  data_accesser_->AsyncPut(stage_block.key.StoreKey(), buffer.get(), length,
+                           retry_cb);
 }
 
 void BlockCacheUploader::RemoveBlock(const StageBlock& stage_block) {
-  auto rc = store_->RemoveStage(stage_block.key, stage_block.ctx);
-  if (rc != BCACHE_ERROR::OK) {
+  auto status = store_->RemoveStage(stage_block.key, stage_block.ctx);
+  if (!status.ok()) {
     LOG(WARNING) << "Remove stage block (path=" << stage_block.stage_path
-                 << ") after upload failed: " << StrErr(rc);
+                 << ") after upload failed: " << status.ToString();
   }
 }
 

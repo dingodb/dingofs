@@ -28,7 +28,6 @@
 #include <utility>
 
 #include "client/blockcache/block_cache.h"
-#include "client/blockcache/error.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/in_time_warmup_manager.h"
@@ -38,9 +37,7 @@ namespace dingofs {
 
 namespace client {
 
-using blockcache::BCACHE_ERROR;
 using blockcache::BlockCache;
-using blockcache::S3Client;
 using common::S3ClientAdaptorOption;
 using datastream::DataStream;
 using filesystem::FileSystem;
@@ -53,7 +50,7 @@ using pb::metaserver::S3ChunkInfoList;
 
 DINGOFS_ERROR
 S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
-                          std::shared_ptr<S3Client> client,
+                          DataAccesserPtr data_accesser,
                           std::shared_ptr<InodeCacheManager> inodeManager,
                           std::shared_ptr<MdsClient> mdsClient,
                           std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -77,7 +74,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   maxReadRetryIntervalMs_ = option.maxReadRetryIntervalMs;
   readRetryIntervalMs_ = option.readRetryIntervalMs;
   objectPrefix_ = option.objectPrefix;
-  client_ = client;
+  data_accesser_ = data_accesser;
   inodeManager_ = inodeManager;
   mdsClient_ = mdsClient;
   fsCacheManager_ = fsCacheManager;
@@ -88,9 +85,9 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
 
   // init block cache
   {
-    auto rc = block_cache_->Init();
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Init bcache cache failed: " << StrErr(rc);
+    auto status = block_cache_->Init();
+    if (!status.ok()) {
+      LOG(ERROR) << "Init bcache cache failed: " << status.ToString();
       return DINGOFS_ERROR::INTERNAL;
     }
   }
@@ -353,8 +350,8 @@ DINGOFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
     VLOG(6) << "FlushAllCache, wait inodeId=" << inodeId
             << " related chunk upload to s3";
 
-    auto rc = block_cache_->Flush(inodeId);
-    if (rc != BCACHE_ERROR::OK) {
+    auto status = block_cache_->Flush(inodeId);
+    if (!status.ok()) {
       return DINGOFS_ERROR::INTERNAL;
     }
 

@@ -35,14 +35,15 @@
 #include "client/blockcache/block_prefetcher.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
-#include "client/blockcache/error.h"
-#include "client/blockcache/s3_client.h"
 #include "client/common/config.h"
+#include "client/common/status.h"
+#include "dataaccess/accesser.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
+using dataaccess::DataAccesserPtr;
 using ::dingofs::client::common::BlockCacheOption;
 using ::dingofs::utils::TaskThreadPool;
 
@@ -55,21 +56,21 @@ class BlockCache {
  public:
   virtual ~BlockCache() = default;
 
-  virtual BCACHE_ERROR Init() = 0;
+  virtual Status Init() = 0;
 
-  virtual BCACHE_ERROR Shutdown() = 0;
+  virtual Status Shutdown() = 0;
 
-  virtual BCACHE_ERROR Put(const BlockKey& key, const Block& block,
-                           BlockContext ctx) = 0;
+  virtual Status Put(const BlockKey& key, const Block& block,
+                     BlockContext ctx) = 0;
 
-  virtual BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
-                             char* buffer, bool retrive = true) = 0;
+  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
+                       char* buffer, bool retrive = true) = 0;
 
   virtual void SubmitPreFetch(const BlockKey& key, size_t length) = 0;
 
-  virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
 
-  virtual BCACHE_ERROR Flush(uint64_t ino) = 0;
+  virtual Status Flush(uint64_t ino) = 0;
 
   virtual bool IsCached(const BlockKey& key) = 0;
 
@@ -78,32 +79,33 @@ class BlockCache {
 
 class BlockCacheImpl : public BlockCache {
  public:
-  explicit BlockCacheImpl(BlockCacheOption option);
+  explicit BlockCacheImpl(BlockCacheOption option,
+                          DataAccesserPtr data_accesser);
 
   ~BlockCacheImpl() override = default;
 
-  BCACHE_ERROR Init() override;
+  Status Init() override;
 
-  BCACHE_ERROR Shutdown() override;
+  Status Shutdown() override;
 
-  BCACHE_ERROR Put(const BlockKey& key, const Block& block,
-                   BlockContext ctx) override;
+  Status Put(const BlockKey& key, const Block& block,
+             BlockContext ctx) override;
 
-  BCACHE_ERROR Range(const BlockKey& key, off_t offset, size_t length,
-                     char* buffer, bool retrive = true) override;
+  Status Range(const BlockKey& key, off_t offset, size_t length, char* buffer,
+               bool retrive = true) override;
 
   void SubmitPreFetch(const BlockKey& key, size_t size) override;
 
-  BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
 
-  BCACHE_ERROR Flush(uint64_t ino) override;
+  Status Flush(uint64_t ino) override;
 
   bool IsCached(const BlockKey& key) override;
 
   StoreType GetStoreType() override;
 
  private:
-  BCACHE_ERROR DoPreFetch(const BlockKey& key, size_t size);
+  Status DoPreFetch(const BlockKey& key, size_t size);
 
  private:
   friend class BlockCacheBuilder;
@@ -111,7 +113,7 @@ class BlockCacheImpl : public BlockCache {
  private:
   BlockCacheOption option_;
   std::atomic<bool> running_;
-  std::shared_ptr<S3Client> s3_;
+  DataAccesserPtr data_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<BlockCacheThrottle> throttle_;

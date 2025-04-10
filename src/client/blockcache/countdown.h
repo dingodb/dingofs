@@ -28,7 +28,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -47,7 +47,7 @@ class Countdown {
 
   void Add(uint64_t key, int64_t n, bool has_error = false);
 
-  BCACHE_ERROR Wait(uint64_t key);
+  Status Wait(uint64_t key);
 
   size_t Size();
 

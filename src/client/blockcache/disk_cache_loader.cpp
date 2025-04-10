@@ -29,7 +29,7 @@
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_metric.h"
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -86,31 +86,32 @@ bool DiskCacheLoader::IsLoading() {
 // If load failed, it only takes up some spaces.
 void DiskCacheLoader::LoadAllBlocks(const std::string& root, BlockType type) {
   Timer timer;
-  BCACHE_ERROR rc;
+  Status status;
   uint64_t num_blocks = 0, num_invalids = 0, size = 0;
 
   timer.start();
-  rc = fs_->Walk(root, [&](const std::string& prefix, const FileInfo& file) {
-    if (!running_.load(std::memory_order_relaxed)) {
-      return BCACHE_ERROR::ABORT;
-    }
+  status =
+      fs_->Walk(root, [&](const std::string& prefix, const FileInfo& file) {
+        if (!running_.load(std::memory_order_relaxed)) {
+          return Status::Abort("disk cache loader stopped");
+        }
 
-    if (LoadOneBlock(prefix, file, type)) {
-      num_blocks++;
-      size += file.size;
-    } else {
-      num_invalids++;
-    }
-    return BCACHE_ERROR::OK;
-  });
+        if (LoadOneBlock(prefix, file, type)) {
+          num_blocks++;
+          size += file.size;
+        } else {
+          num_invalids++;
+        }
+        return Status::OK();
+      });
   timer.stop();
 
   std::string message = StrFormat(
       "Load %s (dir=%s) %s: %d blocks loaded, %d invalid blocks found, costs "
       "%.6f seconds.",
-      ToString(type), root, StrErr(rc), num_blocks, num_invalids,
+      ToString(type), root, status.ToString(), num_blocks, num_invalids,
       timer.u_elapsed() / 1e6);
-  if (rc == BCACHE_ERROR::OK) {
+  if (status.ok()) {
     LOG(INFO) << message;
   } else {
     LOG(ERROR) << message;
@@ -128,12 +129,12 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
   std::string path = PathJoin({prefix, name});
 
   if (HasSuffix(name, ".tmp") || !key.ParseFilename(name)) {
-    auto rc = fs_->RemoveFile(path);
-    if (rc == BCACHE_ERROR::OK) {
+    auto status = fs_->RemoveFile(path);
+    if (status.ok()) {
       LOG(INFO) << "Remove invalid block (path=" << path << ") success.";
     } else {
       LOG(WARNING) << "Remove invalid block (path=" << path
-                   << ") failed: " << StrErr(rc);
+                   << ") failed: " << status.ToString();
     }
     return false;
   }

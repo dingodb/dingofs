@@ -22,7 +22,6 @@
 #include "base/filepath/filepath.h"
 #include "base/timer/timer_impl.h"
 #include "client/blockcache/disk_state_machine.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/common/dynamic_config.h"
 
@@ -89,20 +88,21 @@ void DiskStateHealthChecker::ProbeDisk() {
   std::unique_ptr<char[]> buffer(new (std::nothrow) char[8192]);
   std::string path = PathJoin({layout_->GetProbeDir(), "probe"});
   auto defer = ::absl::MakeCleanup([&]() {
-    auto rc = fs->RemoveFile(path);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(WARNING) << "Remove file " << path << " failed: " << StrErr(rc);
+    auto status = fs->RemoveFile(path);
+    if (!status.ok()) {
+      LOG(WARNING) << "Remove file " << path
+                   << " failed: " << status.ToString();
     }
   });
 
-  auto rc = fs->WriteFile(path, buffer.get(), sizeof(buffer));
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = fs->WriteFile(path, buffer.get(), sizeof(buffer));
+  if (status.ok()) {
     size_t length;
     std::shared_ptr<char> output;
-    rc = fs->ReadFile(path, output, &length);
+    status = fs->ReadFile(path, output, &length);
   }
 
-  if (rc != BCACHE_ERROR::OK) {
+  if (!status.ok()) {
     disk_state_machine_->IOErr();
   } else {
     disk_state_machine_->IOSucc();

@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "client/blockcache/cache_store.h"
+#include "client/common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/inode_wrapper.h"
@@ -396,14 +397,13 @@ class FileCacheManager {
     S3_NOT_EXIST = -2,
   };
 
-  ReadStatus toReadStatus(blockcache::BCACHE_ERROR rc) {
-    ReadStatus st = ReadStatus::OK;
-    if (rc != blockcache::BCACHE_ERROR::OK) {
-      st = (rc == blockcache::BCACHE_ERROR::NOT_FOUND)
-               ? ReadStatus::S3_NOT_EXIST
-               : ReadStatus::S3_READ_FAIL;
+  static ReadStatus toReadStatus(const Status& status) {
+    if (status.ok()) {
+      return ReadStatus::OK;
     }
-    return st;
+
+    return status.IsNotFound() ? ReadStatus::S3_NOT_EXIST
+                               : ReadStatus::S3_READ_FAIL;
   }
 
   // read kv request, need
@@ -411,10 +411,8 @@ class FileCacheManager {
                            char* data_buf, uint64_t file_len);
 
   // thread function for ReadKVRequest
-  void ProcessKVRequest(const S3ReadRequest& req, char* data_buf,
-                        uint64_t file_len, std::once_flag& cancel_flag,
-                        std::atomic<bool>& is_canceled,
-                        std::atomic<blockcache::BCACHE_ERROR>& ret_code);
+  Status ProcessKVRequest(const S3ReadRequest& req, char* data_buf,
+                          uint64_t file_len);
 
   // read kv request from local disk cache
   bool ReadKVRequestFromLocalCache(const blockcache::BlockKey& key,
@@ -426,9 +424,8 @@ class FileCacheManager {
                                     uint64_t offset, uint64_t length);
 
   // read kv request from s3
-  bool ReadKVRequestFromS3(const std::string& name, char* databuf,
-                           uint64_t offset, uint64_t length,
-                           blockcache::BCACHE_ERROR* rc);
+  Status ReadKVRequestFromS3(const std::string& name, char* databuf,
+                             uint64_t offset, uint64_t length);
 
   // read retry policy when read from s3 occur not exist error
   int HandleReadS3NotExist(uint32_t retry,

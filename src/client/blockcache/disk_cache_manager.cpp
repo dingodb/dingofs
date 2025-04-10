@@ -107,12 +107,12 @@ void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value) {
   }
 }
 
-BCACHE_ERROR DiskCacheManager::Get(const CacheKey& key, CacheValue* value) {
+Status DiskCacheManager::Get(const CacheKey& key, CacheValue* value) {
   LockGuard lk(mutex_);
   if (lru_->Get(key, value)) {
-    return BCACHE_ERROR::OK;
+    return Status::OK();
   }
-  return BCACHE_ERROR::NOT_FOUND;
+  return Status::NotFound("cache not found");
 }
 
 void DiskCacheManager::Delete(const CacheKey& key) {
@@ -137,9 +137,9 @@ void DiskCacheManager::CheckFreeSpace() {
   std::string root_dir = layout_->GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
-    auto rc = fs_->GetDiskUsage(root_dir, &stat);
-    if (rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Check free space failed: " << StrErr(rc);
+    auto status = fs_->GetDiskUsage(root_dir, &stat);
+    if (!status.ok()) {
+      LOG(ERROR) << "Check free space failed: " << status.ToString();
       std::this_thread::sleep_for(std::chrono::seconds(1));
       continue;
     }
@@ -228,14 +228,14 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del, DeleteFrom from) {
     CacheKey key = item.key;
     CacheValue value = item.value;
     std::string cache_path = GetCachePath(key);
-    auto rc = fs_->RemoveFile(cache_path);
-    if (rc == BCACHE_ERROR::NOT_FOUND) {
+    auto status = fs_->RemoveFile(cache_path);
+    if (status.IsNotFound()) {
       LOG(WARNING) << "Cache block (path=" << cache_path
                    << ") already deleted.";
       continue;
-    } else if (rc != BCACHE_ERROR::OK) {
+    } else if (!status.ok()) {
       LOG(ERROR) << "Delete cache block (path=" << cache_path
-                 << ") failed: " << StrErr(rc);
+                 << ") failed: " << status.ToString();
       continue;
     }
 

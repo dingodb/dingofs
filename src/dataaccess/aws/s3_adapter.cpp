@@ -81,14 +81,6 @@ Aws::String GetObjectRequestRange(uint64_t offset, uint64_t len) {
 
 }  // namespace
 
-void InitS3AdaptorOption(Configuration* conf, S3AdapterOption* s3_opt) {
-  InitS3AdaptorOptionExceptS3InfoOption(conf, s3_opt);
-  LOG_IF(FATAL, !conf->GetStringValue("s3.endpoint", &s3_opt->s3Address));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.ak", &s3_opt->ak));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.sk", &s3_opt->sk));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.bucket_name", &s3_opt->bucketName));
-}
-
 void InitS3AdaptorOptionExceptS3InfoOption(Configuration* conf,
                                            S3AdapterOption* s3_opt) {
   LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &s3_opt->loglevel));
@@ -128,26 +120,6 @@ void InitS3AdaptorOptionExceptS3InfoOption(Configuration* conf,
     LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";
     s3_opt->enableTelemetry = false;
   }
-}
-
-void S3Adapter::Init(const std::string& path) {
-  LOG(INFO) << "Loading s3 configurations";
-  conf_.SetConfigPath(path);
-  LOG_IF(FATAL, !conf_.LoadConfig())
-      << "Failed to open s3 config file: " << conf_.GetConfigPath();
-  S3AdapterOption option;
-  InitS3AdaptorOption(&conf_, &option);
-  Init(option);
-}
-
-void S3Adapter::InitExceptFsS3Option(const std::string& path) {
-  LOG(INFO) << "Loading s3 configurations";
-  conf_.SetConfigPath(path);
-  LOG_IF(FATAL, !conf_.LoadConfig())
-      << "Failed to open s3 config file: " << conf_.GetConfigPath();
-  S3AdapterOption option;
-  InitS3AdaptorOptionExceptS3InfoOption(&conf_, &option);
-  Init(option);
 }
 
 void S3Adapter::Init(const S3AdapterOption& option) {
@@ -704,13 +676,6 @@ void S3Adapter::AsyncRequestInflightBytesThrottle::OnComplete(uint64_t len) {
   std::unique_lock<std::mutex> lock(mtx_);
   inflightBytes_ -= len;
   cond_.notify_all();
-}
-
-void S3Adapter::SetS3Option(const S3InfoOption& fs_s3_opt) {
-  s3Address_ = fs_s3_opt.s3Address;
-  s3Ak_ = fs_s3_opt.ak;
-  s3Sk_ = fs_s3_opt.sk;
-  bucketName_ = fs_s3_opt.bucketName;
 }
 
 }  // namespace aws

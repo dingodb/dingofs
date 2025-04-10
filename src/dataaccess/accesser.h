@@ -37,26 +37,30 @@ using PutObjectAsyncCallBack =
 struct PutObjectAsyncContext {
   std::string key;
   const char* buffer;
-  size_t bufferSize;
+  size_t buffer_size;
+  uint64_t start_time;
+  int ret_code;
+
   PutObjectAsyncCallBack cb;
-  uint64_t startTime;
-  int retCode;
 };
 
-using GetObjectAsyncCallBack = std::function<void(
-    const void*, const std::shared_ptr<GetObjectAsyncContext>&)>;
+using GetObjectAsyncCallBack =
+    std::function<void(const std::shared_ptr<GetObjectAsyncContext>&)>;
 
 struct GetObjectAsyncContext {
   std::string key;
   char* buf;
   off_t offset;
   size_t len;
-  GetObjectAsyncCallBack cb;
-  int retCode;
+  int ret_code;
   uint32_t retry;
-  size_t actualLen;
+  size_t actual_len;
+
+  GetObjectAsyncCallBack cb;
 };
 
+// DataAccesser is a class that provides a way to access data from a data
+// source. It is a base class for all data access classes.
 class DataAccesser {
  public:
   DataAccesser() = default;
@@ -77,7 +81,11 @@ class DataAccesser {
   virtual Status Get(const std::string& key, off_t offset, size_t length,
                      char* buffer) = 0;
   virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
+
+  virtual Status Delete(const std::string& key) = 0;
 };
+
+using DataAccesserPtr = std::shared_ptr<DataAccesser>;
 
 }  // namespace dataaccess
 }  // namespace dingofs

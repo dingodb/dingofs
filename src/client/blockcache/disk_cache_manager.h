@@ -42,12 +42,12 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::Mutex;
-using ::dingofs::utils::TaskThreadPool;
 using ::dingofs::base::cache::Cache;
 using ::dingofs::base::queue::MessageQueue;
 using ::dingofs::base::time::TimeSpec;
 using ::dingofs::client::blockcache::LRUCache;
+using ::dingofs::utils::Mutex;
+using ::dingofs::utils::TaskThreadPool;
 
 // Manage cache items and its capacity
 class DiskCacheManager {
@@ -72,7 +72,7 @@ class DiskCacheManager {
 
   virtual void Add(const BlockKey& key, const CacheValue& value);
 
-  virtual BCACHE_ERROR Get(const BlockKey& key, CacheValue* value);
+  virtual Status Get(const BlockKey& key, CacheValue* value);
 
   virtual void Delete(const BlockKey& key);
 

@@ -34,9 +34,9 @@
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/disk_state_health_checker.h"
 #include "client/blockcache/disk_state_machine.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/common/config.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -50,7 +50,7 @@ class BlockReaderImpl : public BlockReader {
 
   virtual ~BlockReaderImpl() = default;
 
-  BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) override;
+  Status ReadAt(off_t offset, size_t length, char* buffer) override;
 
   void Close() override;
 
@@ -71,33 +71,33 @@ class DiskCache : public CacheStore {
 
   explicit DiskCache(DiskCacheOption option);
 
-  BCACHE_ERROR Init(UploadFunc uploader) override;
+  Status Init(UploadFunc uploader) override;
 
-  BCACHE_ERROR Shutdown() override;
+  Status Shutdown() override;
 
-  BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
-                     BlockContext ctx) override;
+  Status Stage(const BlockKey& key, const Block& block,
+               BlockContext ctx) override;
 
-  BCACHE_ERROR RemoveStage(const BlockKey& key, BlockContext ctx) override;
+  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
 
-  BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
 
-  BCACHE_ERROR Load(const BlockKey& key,
-                    std::shared_ptr<BlockReader>& reader) override;
+  Status Load(const BlockKey& key,
+              std::shared_ptr<BlockReader>& reader) override;
 
   bool IsCached(const BlockKey& key) override;
 
   std::string Id() override;
 
  private:
-  BCACHE_ERROR CreateDirs();
+  Status CreateDirs();
 
-  BCACHE_ERROR LoadLockFile();
+  Status LoadLockFile();
 
   void DetectDirectIO();
 
   // check running status, disk healthy and disk free space
-  BCACHE_ERROR Check(uint8_t want);
+  Status Check(uint8_t want);
 
   bool IsLoading() const;
 

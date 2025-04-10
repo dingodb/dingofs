@@ -33,6 +33,7 @@
 #include "client/blockcache/disk_cache.h"
 #include "client/blockcache/disk_cache_watcher.h"
 #include "client/common/config.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -48,19 +49,19 @@ class DiskCacheGroup : public CacheStore {
 
   explicit DiskCacheGroup(std::vector<DiskCacheOption> options);
 
-  BCACHE_ERROR Init(UploadFunc uploader) override;
+  Status Init(UploadFunc uploader) override;
 
-  BCACHE_ERROR Shutdown() override;
+  Status Shutdown() override;
 
-  BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
-                     BlockContext ctx) override;
+  Status Stage(const BlockKey& key, const Block& block,
+               BlockContext ctx) override;
 
-  BCACHE_ERROR RemoveStage(const BlockKey& key, BlockContext ctx) override;
+  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
 
-  BCACHE_ERROR Cache(const BlockKey& key, const Block& block) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
 
-  BCACHE_ERROR Load(const BlockKey& key,
-                    std::shared_ptr<BlockReader>& reader) override;
+  Status Load(const BlockKey& key,
+              std::shared_ptr<BlockReader>& reader) override;
 
   bool IsCached(const BlockKey& key) override;
 

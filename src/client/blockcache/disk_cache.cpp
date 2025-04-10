@@ -33,9 +33,9 @@
 #include "client/blockcache/disk_cache_layout.h"
 #include "client/blockcache/disk_cache_manager.h"
 #include "client/blockcache/disk_cache_metric.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/log.h"
 #include "client/blockcache/phase_timer.h"
+#include "client/common/status.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
@@ -53,24 +53,23 @@ using DiskCacheMetricGuard =
 BlockReaderImpl::BlockReaderImpl(int fd, std::shared_ptr<LocalFileSystem> fs)
     : fd_(fd), fs_(fs) {}
 
-BCACHE_ERROR BlockReaderImpl::ReadAt(off_t offset, size_t length,
-                                     char* buffer) {
+Status BlockReaderImpl::ReadAt(off_t offset, size_t length, char* buffer) {
   return fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
-    BCACHE_ERROR rc;
+    Status status;
     DiskCacheMetricGuard guard(
-        &rc, &DiskCacheTotalMetric::GetInstance().read_disk, length);
-    rc = posix->LSeek(fd_, offset, SEEK_SET);
-    if (rc == BCACHE_ERROR::OK) {
-      rc = posix->Read(fd_, buffer, length);
+        &status, &DiskCacheTotalMetric::GetInstance().read_disk, length);
+    status = posix->LSeek(fd_, offset, SEEK_SET);
+    if (status.ok()) {
+      status = posix->Read(fd_, buffer, length);
     }
-    return rc;
+    return status;
   });
 }
 
 void BlockReaderImpl::Close() {
   fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
     posix->Close(fd_);
-    return BCACHE_ERROR::OK;
+    return Status::OK();
   });
 }
 
@@ -87,17 +86,17 @@ DiskCache::DiskCache(DiskCacheOption option)
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
 }
 
-BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
+Status DiskCache::Init(UploadFunc uploader) {
   if (running_.exchange(true)) {
-    return BCACHE_ERROR::OK;  // already running
+    return Status::OK();  // already running
   }
 
-  auto rc = CreateDirs();
-  if (rc == BCACHE_ERROR::OK) {
-    rc = LoadLockFile();
+  auto status = CreateDirs();
+  if (status.ok()) {
+    status = LoadLockFile();
   }
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  if (!status.ok()) {
+    return status;
   }
 
   uploader_ = uploader;
@@ -112,12 +111,12 @@ BCACHE_ERROR DiskCache::Init(UploadFunc uploader) {
   metric_->SetRunningStatus(kCacheUp);
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is up.";
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR DiskCache::Shutdown() {
+Status DiskCache::Shutdown() {
   if (!running_.exchange(false)) {
-    return BCACHE_ERROR::OK;
+    return Status::OK();
   }
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is shutting down...";
@@ -129,15 +128,15 @@ BCACHE_ERROR DiskCache::Shutdown() {
   metric_->SetRunningStatus(kCacheDown);
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
-                              BlockContext ctx) {
-  BCACHE_ERROR rc;
+Status DiskCache::Stage(const BlockKey& key, const Block& block,
+                        BlockContext ctx) {
+  Status status;
   PhaseTimer timer;
   auto metric_guard = ::absl::MakeCleanup([&] {
-    if (rc == BCACHE_ERROR::OK) {
+    if (status.ok()) {
       metric_->AddStageBlock(1);
     } else {
       metric_->AddStageSkip();
@@ -145,124 +144,125 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
   });
   LogGuard log([&]() {
     return StrFormat("stage(%s,%d): %s%s", key.Filename(), block.size,
-                     StrErr(rc), timer.ToString());
+                     status.ToString(), timer.ToString());
   });
 
-  rc = Check(WANT_EXEC | WANT_STAGE);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status = Check(WANT_EXEC | WANT_STAGE);
+  if (!status.ok()) {
+    return status;
   }
 
   timer.NextPhase(Phase::WRITE_FILE);
   std::string stage_path(GetStagePath(key));
   std::string cache_path(GetCachePath(key));
-  rc = fs_->WriteFile(stage_path, block.data, block.size, use_direct_write_);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status =
+      fs_->WriteFile(stage_path, block.data, block.size, use_direct_write_);
+  if (!status.ok()) {
+    return status;
   }
 
   timer.NextPhase(Phase::LINK);
-  rc = fs_->HardLink(stage_path, cache_path);
-  if (rc == BCACHE_ERROR::OK) {
+  status = fs_->HardLink(stage_path, cache_path);
+  if (status.ok()) {
     timer.NextPhase(Phase::CACHE_ADD);
     manager_->Add(key, CacheValue(block.size, TimeNow()));
   } else {
     LOG(WARNING) << "Link " << stage_path << " to " << cache_path
-                 << " failed: " << StrErr(rc);
-    rc = BCACHE_ERROR::OK;  // ignore link error
+                 << " failed: " << status.ToString();
+    status = Status::OK();  // ignore link error
   }
 
   timer.NextPhase(Phase::ENQUEUE_UPLOAD);
   uploader_(key, stage_path, ctx);
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key, BlockContext ctx) {
-  BCACHE_ERROR rc;
+Status DiskCache::RemoveStage(const BlockKey& key, BlockContext ctx) {
+  Status status;
   auto metric_guard = ::absl::MakeCleanup([&] {
-    if (rc == BCACHE_ERROR::OK) {
+    if (status.ok()) {
       metric_->AddStageBlock(-1);
     }
   });
   LogGuard log([&]() {
-    return StrFormat("removestage(%s): %s", key.Filename(), StrErr(rc));
+    return StrFormat("removestage(%s): %s", key.Filename(), status.ToString());
   });
 
   // NOTE: we will try to delete stage file even if the disk cache
   //       is down or unhealthy, so we remove the Check(...) here.
-  rc = fs_->RemoveFile(GetStagePath(key));
-  return rc;
+  status = fs_->RemoveFile(GetStagePath(key));
+  return status;
 }
 
-BCACHE_ERROR DiskCache::Cache(const BlockKey& key, const Block& block) {
-  BCACHE_ERROR rc;
+Status DiskCache::Cache(const BlockKey& key, const Block& block) {
+  Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
     return StrFormat("cache(%s,%d): %s%s", key.Filename(), block.size,
-                     StrErr(rc), timer.ToString());
+                     status.ToString(), timer.ToString());
   });
 
-  rc = Check(WANT_EXEC | WANT_CACHE);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status = Check(WANT_EXEC | WANT_CACHE);
+  if (!status.ok()) {
+    return status;
   }
 
   timer.NextPhase(Phase::WRITE_FILE);
-  rc = fs_->WriteFile(GetCachePath(key), block.data, block.size);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status = fs_->WriteFile(GetCachePath(key), block.data, block.size);
+  if (!status.ok()) {
+    return status;
   }
 
   timer.NextPhase(Phase::CACHE_ADD);
   manager_->Add(key, CacheValue(block.size, TimeNow()));
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR DiskCache::Load(const BlockKey& key,
-                             std::shared_ptr<BlockReader>& reader) {
-  BCACHE_ERROR rc;
+Status DiskCache::Load(const BlockKey& key,
+                       std::shared_ptr<BlockReader>& reader) {
+  Status status;
   PhaseTimer timer;
   auto metric_guard = ::absl::MakeCleanup([&] {
-    if (rc == BCACHE_ERROR::OK) {
+    if (status.ok()) {
       metric_->AddCacheHit();
     } else {
       metric_->AddCacheMiss();
     }
   });
   LogGuard log([&]() {
-    return StrFormat("load(%s): %s%s", key.Filename(), StrErr(rc),
+    return StrFormat("load(%s): %s%s", key.Filename(), status.ToString(),
                      timer.ToString());
   });
 
-  rc = Check(WANT_EXEC);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status = Check(WANT_EXEC);
+  if (!status.ok()) {
+    return status;
   } else if (!IsCached(key)) {
-    return BCACHE_ERROR::NOT_FOUND;
+    return Status::NotFound("cache not found");
   }
 
   timer.NextPhase(Phase::OPEN_FILE);
-  rc = fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
+  status = fs_->Do([&](const std::shared_ptr<PosixFileSystem> posix) {
     int fd;
-    auto rc = posix->Open(GetCachePath(key), O_RDONLY, &fd);
-    if (rc == BCACHE_ERROR::OK) {
+    auto status = posix->Open(GetCachePath(key), O_RDONLY, &fd);
+    if (status.ok()) {
       reader = std::make_shared<BlockReaderImpl>(fd, fs_);
     }
-    return rc;
+    return status;
   });
 
   // Delete corresponding key of block which maybe already deleted by accident.
-  if (rc == BCACHE_ERROR::NOT_FOUND) {
+  if (status.IsNotFound()) {
     manager_->Delete(key);
   }
-  return rc;
+  return status;
 }
 
 bool DiskCache::IsCached(const BlockKey& key) {
   CacheValue value;
   std::string cache_path = GetCachePath(key);
-  auto rc = manager_->Get(key, &value);
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = manager_->Get(key, &value);
+  if (status.ok()) {
     return true;
   } else if (loader_->IsLoading() && fs_->FileExists(cache_path)) {
     return true;
@@ -272,7 +272,7 @@ bool DiskCache::IsCached(const BlockKey& key) {
 
 std::string DiskCache::Id() { return uuid_; }
 
-BCACHE_ERROR DiskCache::CreateDirs() {
+Status DiskCache::CreateDirs() {
   std::vector<std::string> dirs{
       layout_->GetRootDir(),
       layout_->GetStageDir(),
@@ -281,46 +281,48 @@ BCACHE_ERROR DiskCache::CreateDirs() {
   };
 
   for (const auto& dir : dirs) {
-    auto rc = fs_->MkDirs(dir);
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    auto status = fs_->MkDirs(dir);
+    if (!status.ok()) {
+      return status;
     }
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR DiskCache::LoadLockFile() {
+Status DiskCache::LoadLockFile() {
   size_t length;
   std::shared_ptr<char> buffer;
   auto lock_path = layout_->GetLockPath();
-  auto rc = fs_->ReadFile(lock_path, buffer, &length);
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = fs_->ReadFile(lock_path, buffer, &length);
+  if (status.ok()) {
     uuid_ = TrimSpace(std::string(buffer.get(), length));
-  } else if (rc == BCACHE_ERROR::NOT_FOUND) {
+  } else if (status.IsNotFound()) {
     uuid_ = GenUuid();
-    rc = fs_->WriteFile(lock_path, uuid_.c_str(), uuid_.size());
+    status = fs_->WriteFile(lock_path, uuid_.c_str(), uuid_.size());
   }
-  return rc;
+  return status;
 }
 
 void DiskCache::DetectDirectIO() {
   std::string filepath = layout_->GetDetectPath();
-  auto rc = fs_->Do([filepath](const std::shared_ptr<PosixFileSystem> posix) {
-    int fd;
-    auto rc = posix->Create(filepath, &fd, true);
-    posix->Close(fd);
-    posix->Unlink(filepath);
-    return rc;
-  });
+  auto status =
+      fs_->Do([filepath](const std::shared_ptr<PosixFileSystem> posix) {
+        int fd;
+        auto status = posix->Create(filepath, &fd, true);
+        posix->Close(fd);
+        posix->Unlink(filepath);
+        return status;
+      });
 
-  if (rc == BCACHE_ERROR::OK) {
+  if (status.ok()) {
     use_direct_write_ = true;
     LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
               << ") supports direct IO.";
   } else {
     use_direct_write_ = false;
     LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
-              << ") not support direct IO, using buffer IO, detect rc = " << rc;
+              << ") not support direct IO, using buffer IO, detect rc = "
+              << status.ToString();
   }
   metric_->SetUseDirectWrite(use_direct_write_);
 }
@@ -329,19 +331,19 @@ void DiskCache::DetectDirectIO() {
 //   1. check running status (UP/DOWN)
 //   2. check disk healthy (HEALTHY/UNHEALTHY)
 //   3. check disk free space (FULL or NOT)
-BCACHE_ERROR DiskCache::Check(uint8_t want) {
+Status DiskCache::Check(uint8_t want) {
   if (!running_.load(std::memory_order_relaxed)) {
-    return BCACHE_ERROR::CACHE_DOWN;
+    return Status::CacheDown("disk cache is down");
   }
 
   if ((want & WANT_EXEC) && !IsHealthy()) {
-    return BCACHE_ERROR::CACHE_UNHEALTHY;
+    return Status::CacheUnhealthy("disk cache is unhealthy");
   } else if ((want & WANT_STAGE) && StageFull()) {
-    return BCACHE_ERROR::CACHE_FULL;
+    return Status::CacheFull("disk cache is full");
   } else if ((want & WANT_CACHE) && CacheFull()) {
-    return BCACHE_ERROR::CACHE_FULL;
+    return Status::CacheFull("disk cache is full");
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
 bool DiskCache::IsLoading() const { return loader_->IsLoading(); }

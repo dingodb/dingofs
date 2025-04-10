@@ -35,7 +35,6 @@
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
-#include "client/blockcache/error.h"
 #include "client/common/dynamic_config.h"
 
 namespace dingofs {
@@ -58,22 +57,22 @@ PosixFileSystem::PosixFileSystem(
     : disk_state_machine_(disk_state_machine) {}
 
 template <typename... Args>
-BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,
-                                         const Args&... args) {
+Status PosixFileSystem::PosixError(int code, const char* format,
+                                   const Args&... args) {
   // code
-  auto rc = BCACHE_ERROR::IO_ERROR;
+  auto status = Status::IoError("io error");
   switch (code) {
     case 0:
-      rc = BCACHE_ERROR::OK;
+      status = Status::OK();
       break;
     case EINVAL:
-      rc = BCACHE_ERROR::INVALID_ARGUMENT;
+      status = Status::InvalidParam("invalid param");
       break;
     case ENOENT:
-      rc = BCACHE_ERROR::NOT_FOUND;
+      status = Status::NotFound("not found");
       break;
     case EEXIST:
-      rc = BCACHE_ERROR::EXISTS;
+      status = Status::Exist("exists");
       break;
     default:  // IO error
       break;
@@ -82,68 +81,68 @@ BCACHE_ERROR PosixFileSystem::PosixError(int code, const char* format,
   // log & update disk state
   std::ostringstream message;
   message << StrFormat(format, args...) << ": " << ::strerror(code);
-  if (rc == BCACHE_ERROR::IO_ERROR || rc == BCACHE_ERROR::INVALID_ARGUMENT) {
+  if (status.IsIoError() || status.IsInvalidParam()) {
     LOG(ERROR) << message.str();
-  } else if (rc == BCACHE_ERROR::NOT_FOUND) {
+  } else if (status.IsNotFound()) {
     LOG(WARNING) << message.str();
   }
 
-  CheckError(rc);
-  return rc;
+  CheckError(status);
+  return status;
 }
 
-void PosixFileSystem::CheckError(BCACHE_ERROR rc) {
+void PosixFileSystem::CheckError(Status status) {
   if (disk_state_machine_ == nullptr) {
     return;
   }
-  if (rc == BCACHE_ERROR::IO_ERROR) {
+  if (status.IsIoError()) {
     disk_state_machine_->IOErr();
   } else {
     disk_state_machine_->IOSucc();
   }
 }
 
-BCACHE_ERROR PosixFileSystem::Stat(const std::string& path, struct stat* stat) {
+Status PosixFileSystem::Stat(const std::string& path, struct stat* stat) {
   if (::stat(path.c_str(), stat) < 0) {
     return PosixError(errno, "stat(%s)", path);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::MkDir(const std::string& path, uint16_t mode) {
+Status PosixFileSystem::MkDir(const std::string& path, uint16_t mode) {
   if (::mkdir(path.c_str(), mode) != 0) {
     return PosixError(errno, "mkdir(%s,%s)", path, StrMode(mode));
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::OpenDir(const std::string& path, ::DIR** dir) {
+Status PosixFileSystem::OpenDir(const std::string& path, ::DIR** dir) {
   *dir = ::opendir(path.c_str());
   if (nullptr == *dir) {
     return PosixError(errno, "opendir(%s)", path);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::ReadDir(::DIR* dir, struct dirent** dirent) {
+Status PosixFileSystem::ReadDir(::DIR* dir, struct dirent** dirent) {
   errno = 0;
   *dirent = ::readdir(dir);
   if (nullptr == *dirent) {
     if (errno == 0) {  // no more files
-      return BCACHE_ERROR::END_OF_FILE;
+      return Status::EndOfFile("end of file");
     }
     return PosixError(errno, "readdir()");
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::CloseDir(::DIR* dir) {
+Status PosixFileSystem::CloseDir(::DIR* dir) {
   ::closedir(dir);
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Create(const std::string& path, int* fd,
-                                     bool use_direct) {
+Status PosixFileSystem::Create(const std::string& path, int* fd,
+                               bool use_direct) {
   int flags = O_TRUNC | O_WRONLY | O_CREAT;
   if (use_direct) {
     flags = flags | O_DIRECT;
@@ -152,26 +151,25 @@ BCACHE_ERROR PosixFileSystem::Create(const std::string& path, int* fd,
   if (*fd < 0) {
     return PosixError(errno, "open(%s,%#x,0644)", path, flags);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Open(const std::string& path, int flags,
-                                   int* fd) {
+Status PosixFileSystem::Open(const std::string& path, int flags, int* fd) {
   *fd = ::open(path.c_str(), flags);
   if (*fd < 0) {
     return PosixError(errno, "open(%s,%#x)", path, flags);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::LSeek(int fd, off_t offset, int whence) {
+Status PosixFileSystem::LSeek(int fd, off_t offset, int whence) {
   if (::lseek(fd, offset, whence) < 0) {
     return PosixError(errno, "lseek(%d,%d,%d)", fd, offset, whence);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Write(int fd, const char* buffer, size_t length) {
+Status PosixFileSystem::Write(int fd, const char* buffer, size_t length) {
   while (length > 0) {
     ssize_t nwritten = ::write(fd, buffer, length);
     if (nwritten < 0) {
@@ -186,10 +184,10 @@ BCACHE_ERROR PosixFileSystem::Write(int fd, const char* buffer, size_t length) {
     length -= nwritten;
   }
 
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Read(int fd, char* buffer, size_t length) {
+Status PosixFileSystem::Read(int fd, char* buffer, size_t length) {
   for (;;) {
     ssize_t n = ::read(fd, buffer, length);
     if (n < 0) {
@@ -201,95 +199,94 @@ BCACHE_ERROR PosixFileSystem::Read(int fd, char* buffer, size_t length) {
     }
     break;  // success
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Close(int fd) {
+Status PosixFileSystem::Close(int fd) {
   ::close(fd);
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Unlink(const std::string& path) {
+Status PosixFileSystem::Unlink(const std::string& path) {
   if (::unlink(path.c_str()) < 0) {
     return PosixError(errno, "unlink(%s)", path);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Link(const std::string& oldpath,
-                                   const std::string& newpath) {
+Status PosixFileSystem::Link(const std::string& oldpath,
+                             const std::string& newpath) {
   if (::link(oldpath.c_str(), newpath.c_str()) < 0) {
     return PosixError(errno, "link(%s,%s)", oldpath, newpath);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::Rename(const std::string& oldpath,
-                                     const std::string& newpath) {
+Status PosixFileSystem::Rename(const std::string& oldpath,
+                               const std::string& newpath) {
   if (::rename(oldpath.c_str(), newpath.c_str()) < 0) {
     return PosixError(errno, "rename(%s,%s)", oldpath, newpath);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::StatFS(const std::string& path,
-                                     struct statfs* statfs) {
+Status PosixFileSystem::StatFS(const std::string& path, struct statfs* statfs) {
   if (::statfs(path.c_str(), statfs) < 0) {
     return PosixError(errno, "statfs(%s)", path);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR PosixFileSystem::FAdvise(int fd, int advise) {
+Status PosixFileSystem::FAdvise(int fd, int advise) {
   if (::posix_fadvise(fd, 0, 0, advise) != 0) {
     return PosixError(errno, "posix_fadvise(%d, 0, 0, %d)", fd, advise);
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
 LocalFileSystem::LocalFileSystem(
     std::shared_ptr<DiskStateMachine> disk_state_machine)
     : posix_(std::make_shared<PosixFileSystem>(disk_state_machine)) {}
 
-BCACHE_ERROR LocalFileSystem::MkDirs(const std::string& path) {
+Status LocalFileSystem::MkDirs(const std::string& path) {
   // The parent diectory already exists in most time
-  auto rc = posix_->MkDir(path, 0755);
-  if (rc == BCACHE_ERROR::OK) {
-    return rc;
-  } else if (rc == BCACHE_ERROR::EXISTS) {
+  auto status = posix_->MkDir(path, 0755);
+  if (status.ok()) {
+    return status;
+  } else if (status.IsExist()) {
     struct stat stat;
-    rc = posix_->Stat(path, &stat);
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    status = posix_->Stat(path, &stat);
+    if (!status.ok()) {
+      return status;
     } else if (!IsDir(&stat)) {
-      return BCACHE_ERROR::NOT_DIRECTORY;
+      return Status::NotDirectory("not a directory");
     }
-    return BCACHE_ERROR::OK;
-  } else if (rc == BCACHE_ERROR::NOT_FOUND) {  // parent directory not exist
-    rc = MkDirs(ParentDir(path));
-    if (rc == BCACHE_ERROR::OK) {
-      rc = MkDirs(path);
+    return Status::OK();
+  } else if (status.IsNotFound()) {  // parent directory not exist
+    status = MkDirs(ParentDir(path));
+    if (status.ok()) {
+      status = MkDirs(path);
     }
   }
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
+Status LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
   ::DIR* dir;
-  auto rc = posix_->OpenDir(prefix, &dir);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  auto status = posix_->OpenDir(prefix, &dir);
+  if (!status.ok()) {
+    return status;
   }
 
   struct dirent* dirent;
   struct stat stat;
   auto defer = ::absl::MakeCleanup([dir, this]() { posix_->CloseDir(dir); });
   for (;;) {
-    rc = posix_->ReadDir(dir, &dirent);
-    if (rc == BCACHE_ERROR::END_OF_FILE) {
-      rc = BCACHE_ERROR::OK;
+    status = posix_->ReadDir(dir, &dirent);
+    if (status.IsEndOfFile()) {
+      status = Status::OK();
       break;
-    } else if (rc != BCACHE_ERROR::OK) {
+    } else if (!status.ok()) {
       break;
     }
 
@@ -299,29 +296,28 @@ BCACHE_ERROR LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
     }
 
     std::string path(PathJoin({prefix, name}));
-    rc = posix_->Stat(path, &stat);
-    if (rc != BCACHE_ERROR::OK) {
+    status = posix_->Stat(path, &stat);
+    if (!status.ok()) {
       // break
     } else if (IsDir(&stat)) {
-      rc = Walk(path, func);
+      status = Walk(path, func);
     } else {  // file
       TimeSpec atime(stat.st_atime, 0);
-      rc = func(prefix, FileInfo(name, stat.st_size, atime));
+      status = func(prefix, FileInfo(name, stat.st_size, atime));
     }
 
-    if (rc != BCACHE_ERROR::OK) {
+    if (!status.ok()) {
       break;
     }
   }
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
-                                        const char* buffer, size_t length,
-                                        bool use_direct) {
-  auto rc = MkDirs(ParentDir(path));
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+Status LocalFileSystem::WriteFile(const std::string& path, const char* buffer,
+                                  size_t length, bool use_direct) {
+  auto status = MkDirs(ParentDir(path));
+  if (!status.ok()) {
+    return status;
   }
 
   int fd;
@@ -330,76 +326,75 @@ BCACHE_ERROR LocalFileSystem::WriteFile(const std::string& path,
     use_direct = IsAligned(length) &&
                  IsAligned(reinterpret_cast<std::uintptr_t>(buffer));
   }
-  rc = posix_->Create(tmp, &fd, use_direct);
-  if (rc == BCACHE_ERROR::OK) {
-    rc = posix_->Write(fd, buffer, length);
+  status = posix_->Create(tmp, &fd, use_direct);
+  if (status.ok()) {
+    status = posix_->Write(fd, buffer, length);
     posix_->Close(fd);
-    if (rc == BCACHE_ERROR::OK) {
-      rc = posix_->Rename(tmp, path);
+    if (status.ok()) {
+      status = posix_->Rename(tmp, path);
     }
   }
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR LocalFileSystem::ReadFile(const std::string& path,
-                                       std::shared_ptr<char>& buffer,
-                                       size_t* length, bool drop_page_cache) {
+Status LocalFileSystem::ReadFile(const std::string& path,
+                                 std::shared_ptr<char>& buffer, size_t* length,
+                                 bool drop_page_cache) {
   struct stat stat;
-  auto rc = posix_->Stat(path, &stat);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  auto status = posix_->Stat(path, &stat);
+  if (!status.ok()) {
+    return status;
   } else if (!IsFile(&stat)) {
-    return BCACHE_ERROR::NOT_FOUND;
+    return Status::NotFound("not found");
   }
 
   size_t size = stat.st_size;
   if (size > kMiB * 4) {
     LOG(ERROR) << "File is too large: path=" << path << ", size=" << size;
-    return BCACHE_ERROR::FILE_TOO_LARGE;
+    return Status::FileTooLarge("file too large");
   }
 
   int fd;
-  rc = posix_->Open(path, O_RDONLY, &fd);
-  if (rc != BCACHE_ERROR::OK) {
-    return rc;
+  status = posix_->Open(path, O_RDONLY, &fd);
+  if (!status.ok()) {
+    return status;
   }
 
   *length = size;
   buffer = std::shared_ptr<char>(new char[size], std::default_delete<char[]>());
-  rc = posix_->Read(fd, buffer.get(), size);
+  status = posix_->Read(fd, buffer.get(), size);
 
-  if (rc == BCACHE_ERROR::OK && drop_page_cache) {
+  if (status.ok() && drop_page_cache) {
     posix_->FAdvise(fd, POSIX_FADV_DONTNEED);
   }
   posix_->Close(fd);
 
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR LocalFileSystem::RemoveFile(const std::string& path) {
+Status LocalFileSystem::RemoveFile(const std::string& path) {
   return posix_->Unlink(path);
 }
 
-BCACHE_ERROR LocalFileSystem::HardLink(const std::string& oldpath,
-                                       const std::string& newpath) {
-  auto rc = MkDirs(ParentDir(newpath));
-  if (rc == BCACHE_ERROR::OK) {
-    rc = posix_->Link(oldpath, newpath);
+Status LocalFileSystem::HardLink(const std::string& oldpath,
+                                 const std::string& newpath) {
+  auto status = MkDirs(ParentDir(newpath));
+  if (status.ok()) {
+    status = posix_->Link(oldpath, newpath);
   }
-  return rc;
+  return status;
 }
 
 bool LocalFileSystem::FileExists(const std::string& path) {
   struct stat stat;
-  auto rc = posix_->Stat(path, &stat);
-  return rc == BCACHE_ERROR::OK && IsFile(&stat);
+  auto status = posix_->Stat(path, &stat);
+  return status.ok() && IsFile(&stat);
 }
 
-BCACHE_ERROR LocalFileSystem::GetDiskUsage(const std::string& path,
-                                           StatDisk* stat) {
+Status LocalFileSystem::GetDiskUsage(const std::string& path, StatDisk* stat) {
   struct statfs statfs;
-  auto rc = posix_->StatFS(path, &statfs);
-  if (rc == BCACHE_ERROR::OK) {
+  auto status = posix_->StatFS(path, &statfs);
+  if (status.ok()) {
     stat->total_bytes = statfs.f_blocks * statfs.f_bsize;
     stat->total_files = statfs.f_files;
     stat->free_bytes = statfs.f_bfree * statfs.f_bsize;
@@ -407,10 +402,10 @@ BCACHE_ERROR LocalFileSystem::GetDiskUsage(const std::string& path,
     stat->free_bytes_ratio = Divide(stat->free_bytes, stat->total_bytes);
     stat->free_files_ratio = Divide(stat->free_files, stat->total_files);
   }
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR LocalFileSystem::Do(DoFunc func) { return func(posix_); }
+Status LocalFileSystem::Do(DoFunc func) { return func(posix_); }
 
 bool LocalFileSystem::IsAligned(uint64_t n) {
   return n % IO_ALIGNED_BLOCK_SIZE == 0;

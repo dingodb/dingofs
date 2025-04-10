@@ -27,7 +27,6 @@
 #include <vector>
 
 #include "client/blockcache/block_cache.h"
-#include "client/blockcache/s3_client.h"
 #include "client/common/dynamic_config.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
@@ -44,7 +43,9 @@
 #include "client/vfs_old/service/metrics_dumper.h"
 #include "client/vfs_old/tools.h"
 #include "common/define.h"
+#include "dataaccess/accesser.h"
 #include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3_accesser.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/filesystem/xattr.h"
@@ -322,8 +323,9 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     SetClientS3Option(&fuse_client_option_, fs_s3_option);
 
     // init blockcache s3 client
-    blockcache::S3ClientImpl::GetInstance()->Init(
-        fuse_client_option_.s3Opt.s3AdaptrOpt);
+    data_accesser_ =
+        dataaccess::S3Accesser::New(fuse_client_option_.s3Opt.s3AdaptrOpt);
+    data_accesser_->Init();
   }
 
   // data stream
@@ -349,13 +351,12 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
       uuid = fs_info_->uuid();
     }
     RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache =
-        std::make_shared<blockcache::BlockCacheImpl>(block_cache_option);
+    auto block_cache = std::make_shared<blockcache::BlockCacheImpl>(
+        block_cache_option, data_accesser_);
 
     if (s3_adapter_->Init(fuse_client_option_.s3Opt.s3ClientAdaptorOpt,
-                          blockcache::S3ClientImpl::GetInstance(),
-                          inode_cache_manager_, mds_client_, fs_cache_manager,
-                          fs_, block_cache, nullptr,
+                          data_accesser_, inode_cache_manager_, mds_client_,
+                          fs_cache_manager, fs_, block_cache, nullptr,
                           true) != DINGOFS_ERROR::OK) {
       LOG(ERROR) << "s3_adapter_ init failed";
       return Status::Internal("s3_adapter_ init failed");
@@ -431,7 +432,7 @@ Status VFSOld::Stop() {
   }
 
   s3_adapter_->Stop();
-  blockcache::S3ClientImpl::GetInstance()->Destroy();
+  data_accesser_->Destroy();
   datastream::DataStream::GetInstance().Shutdown();
 
   return Status::OK();

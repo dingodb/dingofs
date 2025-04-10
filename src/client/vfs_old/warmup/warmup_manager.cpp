@@ -35,7 +35,6 @@
 
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
-#include "client/blockcache/s3_client.h"
 #include "client/common/common.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/inode_wrapper.h"
@@ -48,14 +47,10 @@ namespace client {
 namespace warmup {
 
 using base::filepath::PathSplit;
-using blockcache::BCACHE_ERROR;
 using blockcache::Block;
 using blockcache::BlockKey;
-using blockcache::S3ClientImpl;
 using common::ClientOption;
 using common::WarmupStorageType;
-using dataaccess::aws::GetObjectAsyncCallBack;
-using dataaccess::aws::GetObjectAsyncContext;
 using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
 using utils::ReadLockGuard;
@@ -503,19 +498,17 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   dingofs::utils::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
   // callback function
-  GetObjectAsyncCallBack cb =
-      [&](const dataaccess::aws::S3Adapter* adapter,
-          const std::shared_ptr<GetObjectAsyncContext>& context) {
-        (void)adapter;
+  dataaccess::GetObjectAsyncCallBack cb =
+      [&](const std::shared_ptr<dataaccess::GetObjectAsyncContext>& context) {
         // metrics for async get data from s3
-        MetricGuard guard(&context->retCode, &S3Metric::GetInstance().read_s3,
+        MetricGuard guard(&context->ret_code, &S3Metric::GetInstance().read_s3,
                           context->len, start);
         if (bgFetchStop_.load(std::memory_order_acquire)) {
           VLOG(9) << "need stop warmup";
           cond.Signal();
           return;
         }
-        if (context->retCode == 0) {
+        if (context->ret_code == 0) {
           VLOG(9) << "Get Object success: " << context->key;
           PutObjectToCache(ino, context);
           CollectMetrics(&warmupS3Metric_.warmupS3Cached, context->len, start);
@@ -540,7 +533,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
 
         LOG(WARNING) << "Get Object failed, key: " << context->key
                      << ", offset: " << context->offset;
-        S3ClientImpl::GetInstance()->AsyncGet(context);
+        data_accesser_->AsyncGet(context);
       };
 
   pending_req.fetch_add(prefetch_objs.size(), std::memory_order_seq_cst);
@@ -566,14 +559,14 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
 
       char* cache_s3 = new char[read_len];
       memset(cache_s3, 0, read_len);
-      auto context = std::make_shared<GetObjectAsyncContext>();
+      auto context = std::make_shared<dataaccess::GetObjectAsyncContext>();
       context->key = name;
       context->buf = cache_s3;
       context->offset = 0;
       context->len = read_len;
       context->cb = cb;
       context->retry = 0;
-      S3ClientImpl::GetInstance()->AsyncGet(context);
+      data_accesser_->AsyncGet(context);
     }
 
     if (pending_req.load()) cond.Wait();
@@ -720,7 +713,8 @@ void WarmupManagerS3Impl::AddFetchS3objectsTask(Ino key,
 }
 
 void WarmupManagerS3Impl::PutObjectToCache(
-    Ino ino, const std::shared_ptr<GetObjectAsyncContext>& context) {
+    Ino ino,
+    const std::shared_ptr<dataaccess::GetObjectAsyncContext>& context) {
   ReadLockGuard lock(inode2ProgressMutex_);
   auto iter = FindWarmupProgressByKeyLocked(ino);
   if (iter == inode2Progress_.end()) {
@@ -737,13 +731,13 @@ void WarmupManagerS3Impl::PutObjectToCache(
       CHECK_GT(items.size(), 0);
       CHECK(key.ParseFilename(items.back()));
       auto block_cache = s3Adaptor_->GetBlockCache();
-      auto rc = block_cache->Cache(key, block);
-      if (rc != BCACHE_ERROR::OK) {
+      auto status = block_cache->Cache(key, block);
+      if (!status.ok()) {
         // cache failed,add error count
         iter->second.ErrorsPlusOne();
-        LOG_EVERY_SECOND(INFO)
-            << "Cache block (" << key.Filename() << ")"
-            << " store key " << key.StoreKey() << " failed: " << StrErr(rc);
+        LOG_EVERY_SECOND(INFO) << "Cache block (" << key.Filename() << ")"
+                               << " store key " << key.StoreKey()
+                               << " fail, error: " << status.ToString();
       }
     }
       delete[] context->buf;

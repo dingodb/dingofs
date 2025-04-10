@@ -35,13 +35,14 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "client/blockcache/cache_store.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/common/dynamic_config.h"
+#include "client/common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
+#include "mdsv2/common/status.h"
 #include "stub/metric/metric.h"
 
 static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
@@ -54,12 +55,10 @@ using dataaccess::aws::GetObjectAsyncCallBack;
 using dataaccess::aws::PutObjectAsyncCallBack;
 using dataaccess::aws::PutObjectAsyncContext;
 
-using blockcache::BCACHE_ERROR;
 using blockcache::Block;
 using blockcache::BlockContext;
 using blockcache::BlockFrom;
 using blockcache::BlockKey;
-using blockcache::StrErr;
 
 using datastream::DataStream;
 using filesystem::Ino;
@@ -540,8 +539,8 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
       return false;
     }
 
-    auto rc = block_cache->Range(key, offset, len, buffer, false);
-    if (rc != BCACHE_ERROR::OK) {
+    auto status = block_cache->Range(key, offset, len, buffer, false);
+    if (!status.ok()) {
       LOG(WARNING) << "Object " << key.Filename() << " not cached in disk.";
       return false;
     }
@@ -570,54 +569,57 @@ bool FileCacheManager::ReadKVRequestFromRemoteCache(const std::string& name,
   return task->res;
 }
 
-bool FileCacheManager::ReadKVRequestFromS3(const std::string& name,
-                                           char* databuf, uint64_t offset,
-                                           uint64_t length, BCACHE_ERROR* rc) {
-  {
-    *rc = s3ClientAdaptor_->GetS3Client()->Range(name, offset, length, databuf);
-    if (*rc != BCACHE_ERROR::OK) {
-      LOG(ERROR) << "Object " << name << " read from s3 failed" << ", rc=" << rc
-                 << ", " << StrErr(*rc);
-      return false;
-    }
+Status FileCacheManager::ReadKVRequestFromS3(const std::string& name,
+                                             char* databuf, uint64_t offset,
+                                             uint64_t length) {
+  auto status =
+      s3ClientAdaptor_->GetDataAccesser()->Get(name, offset, length, databuf);
+  if (!status.ok()) {
+    LOG(ERROR) << "Object " << name << " read from s3 failed"
+               << ", rc=" << status.ToString();
   }
 
-  return true;
+  return status;
 }
 
 FileCacheManager::ReadStatus FileCacheManager::ReadKVRequest(
     const std::vector<S3ReadRequest>& kv_requests, char* data_buf,
     uint64_t file_len) {
   absl::BlockingCounter counter(kv_requests.size());
-  std::once_flag cancel_flag;
   std::atomic<bool> is_canceled{false};
-  std::atomic<BCACHE_ERROR> ret_code{BCACHE_ERROR::OK};
+
+  std::once_flag flag;
+  Status final_status;
 
   for (const auto& req : kv_requests) {
     readTaskPool_->Enqueue([&]() {
       auto defer = absl::MakeCleanup([&]() { counter.DecrementCount(); });
+
       if (is_canceled) {
         LOG(WARNING) << "kv request is canceled " << req.DebugString();
         return;
       }
-      ProcessKVRequest(req, data_buf, file_len, cancel_flag, is_canceled,
-                       ret_code);
+
+      auto status = ProcessKVRequest(req, data_buf, file_len);
+      if (!status.ok()) {
+        std::call_once(flag, [&]() {
+          is_canceled.store(true);
+          final_status = status;
+        });
+      }
     });
   }
 
   counter.Wait();
 
   VLOG(3) << "read  inodeId=" << inode_
-          << " kv request end, ret_code : " << ret_code.load()
+          << " kv request end, status : " << final_status.ToString()
           << ", is_canceled: " << is_canceled.load();
-  return toReadStatus(ret_code.load());
+  return toReadStatus(final_status);
 }
 
-void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
-                                        char* data_buf, uint64_t file_len,
-                                        std::once_flag& cancel_flag,
-                                        std::atomic<bool>& is_canceled,
-                                        std::atomic<BCACHE_ERROR>& ret_code) {
+Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
+                                          char* data_buf, uint64_t file_len) {
   VLOG(3) << "read inodeId=" << inode_ << " from kv request "
           << req.DebugString();
   uint64_t chunk_index = 0;
@@ -646,6 +648,7 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
   uint64_t read_buf_offset = 0;
   uint64_t object_offset = req.objectOffset;
 
+  Status status;
   while (length > 0) {
     current_read_len =
         length + block_pos > block_size ? block_size - block_pos : length;
@@ -672,9 +675,9 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
         break;
       }
 
-      BCACHE_ERROR rc = BCACHE_ERROR::OK;
-      if (ReadKVRequestFromS3(store_key, current_buf, block_pos - object_offset,
-                              current_read_len, &rc)) {
+      status = ReadKVRequestFromS3(store_key, current_buf,
+                                   block_pos - object_offset, current_read_len);
+      if (status.ok()) {
         VLOG(9) << "inodeId=" << inode_ << " read " << store_key
                 << " offset: " << (block_pos - object_offset)
                 << " len: " << current_read_len << " from s3 ok";
@@ -682,15 +685,9 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
       }
 
       LOG(ERROR) << "inodeId=" << inode_ << " read " << name << " fail"
-                 << ", rc:" << rc;
+                 << ", status:" << status.ToString();
 
-      // make sure variable is set only once
-      std::call_once(cancel_flag, [&]() {
-        is_canceled.store(true);
-        ret_code.store(rc);
-      });
-
-      return;
+      return status;
     } while (false);
 
     // update param
@@ -702,6 +699,8 @@ void FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
       object_offset = 0;
     }
   }
+
+  return status;
 }
 
 void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
@@ -2347,8 +2346,8 @@ void DataCache::FlushTaskExecute(
       DataStream::GetInstance().EnterFlushSliceQueue(
           [&, key, block, ctx, callback]() {
             for (;;) {
-              auto rc = block_cache->Put(key, block, ctx);
-              if (rc == BCACHE_ERROR::OK) {
+              auto status = block_cache->Put(key, block, ctx);
+              if (status.ok()) {
                 callback(context);
                 break;
               }

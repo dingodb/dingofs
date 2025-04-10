@@ -30,15 +30,16 @@
 #include "client/blockcache/block_cache_upload_queue.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/phase_timer.h"
-#include "client/blockcache/s3_client.h"
+#include "client/common/status.h"
+#include "dataaccess/accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
+using dataaccess::DataAccesserPtr;
 using ::dingofs::utils::TaskThreadPool;
 
 // How it works:
@@ -46,7 +47,7 @@ using ::dingofs::utils::TaskThreadPool;
 // [stage block]----> [pending queue] -----> [uploading queue] ----> [s3]
 class BlockCacheUploader {
  public:
-  BlockCacheUploader(std::shared_ptr<S3Client> s3,
+  BlockCacheUploader(DataAccesserPtr data_accesser,
                      std::shared_ptr<CacheStore> store,
                      std::shared_ptr<Countdown> stage_count);
 
@@ -73,8 +74,8 @@ class BlockCacheUploader {
 
   void UploadStageBlock(const StageBlock& stage_block);
 
-  BCACHE_ERROR ReadBlock(const StageBlock& stage_block,
-                         std::shared_ptr<char>& buffer, size_t* length);
+  Status ReadBlock(const StageBlock& stage_block, std::shared_ptr<char>& buffer,
+                   size_t* length);
 
   void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
                    size_t length, PhaseTimer timer);
@@ -90,7 +91,7 @@ class BlockCacheUploader {
  private:
   std::mutex mutex_;
   std::atomic<bool> running_;
-  std::shared_ptr<S3Client> s3_;
+  DataAccesserPtr data_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<PendingQueue> pending_queue_;

@@ -17,8 +17,8 @@
 #include "dataaccess/s3_accesser.h"
 
 #include <memory>
-#include <ostream>
 
+#include "fmt/format.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
@@ -40,17 +40,22 @@ bool S3Accesser::Destroy() {
   return true;
 }
 
+Aws::String S3Accesser::S3Key(const std::string& key) {
+  return Aws::String(key.c_str(), key.size());
+}
+
 Status S3Accesser::Put(const std::string& key, const char* buffer,
                        size_t length) {
-  int rc;
+  int rc = 0;
   // write s3 metrics
   auto start = butil::cpuwide_time_us();
   MetricGuard guard(&rc, &S3Metric::GetInstance().write_s3, length, start);
 
   rc = client_->PutObject(S3Key(key), buffer, length);
   if (rc < 0) {
-    LOG(ERROR) << "Put object(" << key << ") failed, retCode=" << rc;
-    return Status::IoError("Put object fail");
+    LOG(ERROR) << fmt::format("[accesser] put object({}) fail, retcode: {}.",
+                              key, rc);
+    return Status::IoError("put object fail");
   }
 
   return Status::OK();
@@ -80,15 +85,15 @@ void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
   auto aws_ctx = std::make_shared<aws::PutObjectAsyncContext>();
   aws_ctx->key = context->key;
   aws_ctx->buffer = context->buffer;
-  aws_ctx->bufferSize = context->bufferSize;
-  aws_ctx->startTime = context->startTime;
-  aws_ctx->retCode = context->retCode;
+  aws_ctx->bufferSize = context->buffer_size;
+  aws_ctx->startTime = context->start_time;
+  aws_ctx->retCode = context->ret_code;
   aws_ctx->cb =
       [context](const std::shared_ptr<aws::PutObjectAsyncContext>& aws_ctx) {
         context->buffer = aws_ctx->buffer;
-        context->bufferSize = aws_ctx->bufferSize;
-        context->retCode = aws_ctx->retCode;
-        context->startTime = aws_ctx->startTime;
+        context->buffer_size = aws_ctx->bufferSize;
+        context->ret_code = aws_ctx->retCode;
+        context->start_time = aws_ctx->startTime;
 
         context->cb(context);
       };
@@ -106,11 +111,12 @@ Status S3Accesser::Get(const std::string& key, off_t offset, size_t length,
   rc = client_->GetObject(S3Key(key), buffer, offset, length);
   if (rc < 0) {
     if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
-      LOG(WARNING) << "Object(" << key << ") not found.";
+      LOG(WARNING) << fmt::format("[accesser] object({}) not found.", key);
       return Status::NotFound("object not found");
     }
 
-    LOG(ERROR) << "Get object(" << key << ") failed, retCode=" << rc;
+    LOG(ERROR) << fmt::format("[accesser] get object({}) fail, ret_code: {}.",
+                              key, rc);
     return Status::IoError("get object fail");
   }
 
@@ -123,16 +129,35 @@ void S3Accesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
   aws_ctx->buf = context->buf;
   aws_ctx->offset = context->offset;
   aws_ctx->len = context->len;
-  aws_ctx->retCode = context->retCode;
+  aws_ctx->retCode = context->ret_code;
   aws_ctx->retry = context->retry;
-  aws_ctx->actualLen = context->actualLen;
+  aws_ctx->actualLen = context->actual_len;
 
-  // aws_ctx->cb =
-  //     [context](const std::shared_ptr<aws::GetObjectAsyncContext>& aws_ctx) {
-  //       context->cb(context);
-  //     };
+  aws_ctx->cb =
+      [context](const aws::S3Adapter*,
+                const std::shared_ptr<aws::GetObjectAsyncContext>& aws_ctx) {
+        context->buf = aws_ctx->buf;
+        context->offset = aws_ctx->offset;
+        context->len = aws_ctx->len;
+        context->ret_code = aws_ctx->retCode;
+        context->retry = aws_ctx->retry;
+        context->actual_len = aws_ctx->actualLen;
+
+        context->cb(context);
+      };
 
   client_->GetObjectAsync(aws_ctx);
+}
+
+Status S3Accesser::Delete(const std::string& key) {
+  int rc = client_->DeleteObject(S3Key(key));
+  if (rc < 0) {
+    LOG(ERROR) << fmt::format(
+        "[accesser] delete object({}) fail, ret_code: {}.", key, rc);
+    return Status::IoError("delete object fail");
+  }
+
+  return Status::OK();
 }
 
 }  // namespace dataaccess

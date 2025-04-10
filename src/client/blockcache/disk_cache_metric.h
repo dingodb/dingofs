@@ -30,9 +30,9 @@
 #include <type_traits>
 
 #include "base/string/string.h"
-#include "client/blockcache/error.h"
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
+#include "client/common/status.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
@@ -172,14 +172,14 @@ class DiskCacheMetric {
 };
 
 struct DiskCacheMetricGuard {
-  explicit DiskCacheMetricGuard(BCACHE_ERROR* rc, InterfaceMetric* metric,
+  explicit DiskCacheMetricGuard(Status* status, InterfaceMetric* metric,
                                 size_t count)
-      : rc_(rc), metric_(metric), count_(count) {
+      : status_(status), metric_(metric), count_(count) {
     start_ = butil::cpuwide_time_us();
   }
 
   ~DiskCacheMetricGuard() {
-    if (*rc_ == BCACHE_ERROR::OK) {
+    if (status_->ok()) {
       metric_->bps.count << count_;
       metric_->qps.count << 1;
       auto duration = butil::cpuwide_time_us() - start_;
@@ -190,7 +190,7 @@ struct DiskCacheMetricGuard {
     }
   }
 
-  BCACHE_ERROR* rc_;
+  Status* status_;
   InterfaceMetric* metric_;
   size_t count_;
   uint64_t start_;

@@ -198,6 +198,8 @@ class VFSOld : public VFS {
   // s3 adaptor
   std::shared_ptr<S3ClientAdaptor> s3_adapter_;
 
+  DataAccesserPtr data_accesser_;
+
   brpc::Server server_;
   InodeObjectsService inode_object_service_;
 

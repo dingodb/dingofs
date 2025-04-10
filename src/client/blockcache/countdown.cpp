@@ -26,7 +26,7 @@
 
 #include <cassert>
 
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -52,7 +52,7 @@ void Countdown::Add(uint64_t key, int64_t n, bool has_error) {
   }
 }
 
-BCACHE_ERROR Countdown::Wait(uint64_t key) {
+Status Countdown::Wait(uint64_t key) {
   std::unique_lock<std::mutex> lk(mutex_);
   while (true) {
     auto it = counters_.find(key);
@@ -67,10 +67,10 @@ BCACHE_ERROR Countdown::Wait(uint64_t key) {
 
   auto it = has_error_.find(key);
   if (it == has_error_.end()) {
-    return BCACHE_ERROR::OK;
+    return Status::OK();
   }
   has_error_.erase(it);
-  return BCACHE_ERROR::NOT_FOUND;
+  return Status::NotFound("countdown not found");
 }
 
 size_t Countdown::Size() {

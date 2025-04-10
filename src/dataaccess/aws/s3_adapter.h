@@ -109,8 +109,6 @@ struct S3InfoOption {
 void InitS3AdaptorOptionExceptS3InfoOption(utils::Configuration* conf,
                                            S3AdapterOption* s3_opt);
 
-void InitS3AdaptorOption(utils::Configuration* conf, S3AdapterOption* s3_opt);
-
 using GetObjectAsyncCallBack = std::function<void(
     const S3Adapter*, const std::shared_ptr<GetObjectAsyncContext>&)>;
 
@@ -150,15 +148,8 @@ class S3Adapter {
 
   virtual ~S3Adapter() { Deinit(); }
 
-  virtual void Init(const std::string& path);
-
-  // 初始化S3Adapter 但不包括 S3InfoOption
-  virtual void InitExceptFsS3Option(const std::string& path);
-
   // 初始化S3Adapter
   virtual void Init(const S3AdapterOption& option);
-
-  virtual void SetS3Option(const S3InfoOption& fs_s3_opt);
 
   // 释放S3Adapter资源
   virtual void Deinit();

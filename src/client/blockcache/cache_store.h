@@ -29,7 +29,7 @@
 #include <string>
 
 #include "base/string/string.h"
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -94,7 +94,7 @@ struct BlockContext {
 
 class BlockReader {
  public:
-  virtual BCACHE_ERROR ReadAt(off_t offset, size_t length, char* buffer) = 0;
+  virtual Status ReadAt(off_t offset, size_t length, char* buffer) = 0;
 
   virtual void Close() = 0;
 };
@@ -105,19 +105,19 @@ class CacheStore {
       const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
 
  public:
-  virtual BCACHE_ERROR Init(UploadFunc uploader) = 0;
+  virtual Status Init(UploadFunc uploader) = 0;
 
-  virtual BCACHE_ERROR Shutdown() = 0;
+  virtual Status Shutdown() = 0;
 
-  virtual BCACHE_ERROR Stage(const BlockKey& key, const Block& block,
-                             BlockContext ctx) = 0;
+  virtual Status Stage(const BlockKey& key, const Block& block,
+                       BlockContext ctx) = 0;
 
-  virtual BCACHE_ERROR RemoveStage(const BlockKey& key, BlockContext ctx) = 0;
+  virtual Status RemoveStage(const BlockKey& key, BlockContext ctx) = 0;
 
-  virtual BCACHE_ERROR Cache(const BlockKey& key, const Block& block) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
 
-  virtual BCACHE_ERROR Load(const BlockKey& key,
-                            std::shared_ptr<BlockReader>& reader) = 0;
+  virtual Status Load(const BlockKey& key,
+                      std::shared_ptr<BlockReader>& reader) = 0;
 
   virtual bool IsCached(const BlockKey& key) = 0;
 

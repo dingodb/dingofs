@@ -41,15 +41,15 @@ using ::dingofs::utils::TaskThreadPool;
 class BlockPrefetcher {
  public:
   using PrefetchFunc =
-      std::function<BCACHE_ERROR(const BlockKey& key, size_t length)>;
+      std::function<Status(const BlockKey& key, size_t length)>;
 
  public:
   virtual ~BlockPrefetcher() = default;
 
-  virtual BCACHE_ERROR Init(uint32_t workers, uint32_t queue_size,
-                            PrefetchFunc prefetch_func) = 0;
+  virtual Status Init(uint32_t workers, uint32_t queue_size,
+                      PrefetchFunc prefetch_func) = 0;
 
-  virtual BCACHE_ERROR Shutdown() = 0;
+  virtual Status Shutdown() = 0;
 
   virtual void Submit(const BlockKey& key, size_t length) = 0;
 };
@@ -66,10 +66,10 @@ class BlockPrefetcherImpl : public BlockPrefetcher {
  public:
   BlockPrefetcherImpl();
 
-  BCACHE_ERROR Init(uint32_t workers, uint32_t queue_size,
-                    PrefetchFunc prefetch_func) override;
+  Status Init(uint32_t workers, uint32_t queue_size,
+              PrefetchFunc prefetch_func) override;
 
-  BCACHE_ERROR Shutdown() override;
+  Status Shutdown() override;
 
   void Submit(const BlockKey& key, size_t length) override;
 

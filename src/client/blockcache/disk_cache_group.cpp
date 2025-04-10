@@ -47,13 +47,13 @@ DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
       chash_(std::make_unique<KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()) {}
 
-BCACHE_ERROR DiskCacheGroup::Init(UploadFunc uploader) {
+Status DiskCacheGroup::Init(UploadFunc uploader) {
   auto weights = CalcWeights(options_);
   for (size_t i = 0; i < options_.size(); i++) {
     auto store = std::make_shared<DiskCache>(options_[i]);
-    auto rc = store->Init(uploader);
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    auto status = store->Init(uploader);
+    if (!status.ok()) {
+      return status;
     }
 
     stores_[store->Id()] = store;
@@ -65,31 +65,30 @@ BCACHE_ERROR DiskCacheGroup::Init(UploadFunc uploader) {
 
   chash_->Final();
   watcher_->Start(uploader);
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR DiskCacheGroup::Shutdown() {
+Status DiskCacheGroup::Shutdown() {
   for (const auto& it : stores_) {
-    auto rc = it.second->Shutdown();
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    auto status = it.second->Shutdown();
+    if (!status.ok()) {
+      return status;
     }
   }
   watcher_->Stop();
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
-                                   BlockContext ctx) {
-  BCACHE_ERROR rc;
+Status DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
+                             BlockContext ctx) {
+  Status status;
   DiskCacheMetricGuard guard(
-      &rc, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
-  rc = GetStore(key)->Stage(key, block, ctx);
-  return rc;
+      &status, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
+  status = GetStore(key)->Stage(key, block, ctx);
+  return status;
 }
 
-BCACHE_ERROR DiskCacheGroup::RemoveStage(const BlockKey& key,
-                                         BlockContext ctx) {
+Status DiskCacheGroup::RemoveStage(const BlockKey& key, BlockContext ctx) {
   auto store = GetStore(key);
 
   // We should pass the request to specified store if |ctx.store_id|
@@ -104,16 +103,16 @@ BCACHE_ERROR DiskCacheGroup::RemoveStage(const BlockKey& key,
   return store->RemoveStage(key, ctx);
 }
 
-BCACHE_ERROR DiskCacheGroup::Cache(const BlockKey& key, const Block& block) {
-  BCACHE_ERROR rc;
+Status DiskCacheGroup::Cache(const BlockKey& key, const Block& block) {
+  Status status;
   DiskCacheMetricGuard guard(
-      &rc, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
-  rc = GetStore(key)->Cache(key, block);
-  return rc;
+      &status, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
+  status = GetStore(key)->Cache(key, block);
+  return status;
 }
 
-BCACHE_ERROR DiskCacheGroup::Load(const BlockKey& key,
-                                  std::shared_ptr<BlockReader>& reader) {
+Status DiskCacheGroup::Load(const BlockKey& key,
+                            std::shared_ptr<BlockReader>& reader) {
   return GetStore(key)->Load(key, reader);
 }
 

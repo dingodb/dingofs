@@ -24,7 +24,7 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_NONE_CACHE_H_
 
 #include "client/blockcache/cache_store.h"
-#include "client/blockcache/error.h"
+#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -38,24 +38,24 @@ class MemCache : public CacheStore {
 
   virtual ~MemCache() = default;
 
-  BCACHE_ERROR Init(UploadFunc) override { return BCACHE_ERROR::OK; }
+  Status Init(UploadFunc) override { return Status::OK(); }
 
-  BCACHE_ERROR Shutdown() override { return BCACHE_ERROR::OK; }
+  Status Shutdown() override { return Status::OK(); }
 
-  BCACHE_ERROR Stage(const BlockKey&, const Block&, BlockContext) override {
-    return BCACHE_ERROR::NOT_SUPPORTED;
+  Status Stage(const BlockKey&, const Block&, BlockContext) override {
+    return Status::NotSupport("not support");
   }
 
-  BCACHE_ERROR RemoveStage(const BlockKey&, BlockContext) override {
-    return BCACHE_ERROR::NOT_SUPPORTED;
+  Status RemoveStage(const BlockKey&, BlockContext) override {
+    return Status::NotSupport("not support");
   }
 
-  BCACHE_ERROR Cache(const BlockKey&, const Block&) override {
-    return BCACHE_ERROR::NOT_SUPPORTED;
+  Status Cache(const BlockKey&, const Block&) override {
+    return Status::NotSupport("not support");
   }
 
-  BCACHE_ERROR Load(const BlockKey&, std::shared_ptr<BlockReader>&) override {
-    return BCACHE_ERROR::NOT_SUPPORTED;
+  Status Load(const BlockKey&, std::shared_ptr<BlockReader>&) override {
+    return Status::NotSupport("not support");
   }
 
   bool IsCached(const BlockKey&) override { return false; }

@@ -33,19 +33,21 @@
 #include "client/blockcache/block_prefetcher.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_group.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/log.h"
 #include "client/blockcache/mem_cache.h"
 #include "client/blockcache/phase_timer.h"
+#include "client/common/status.h"
+#include "dataaccess/s3_accesser.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
-BlockCacheImpl::BlockCacheImpl(BlockCacheOption option)
+BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
+                               DataAccesserPtr data_accesser)
     : option_(option),
+      data_accesser_(data_accesser),
       running_(false),
-      s3_(S3ClientImpl::GetInstance()),
       stage_count_(std::make_shared<Countdown>()),
       throttle_(std::make_unique<BlockCacheThrottle>()) {
   if (option.cache_store == "none") {
@@ -53,155 +55,157 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option)
   } else {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   }
-  uploader_ = std::make_shared<BlockCacheUploader>(s3_, store_, stage_count_);
+
+  uploader_ =
+      std::make_shared<BlockCacheUploader>(data_accesser, store_, stage_count_);
   prefetcher_ = std::make_unique<BlockPrefetcherImpl>();
   metric_ = std::make_unique<BlockCacheMetric>(
       option, BlockCacheMetric::AuxMember(uploader_, throttle_));
 }
 
-BCACHE_ERROR BlockCacheImpl::Init() {
+Status BlockCacheImpl::Init() {
   if (!running_.exchange(true)) {
     throttle_->Start();
     uploader_->Init(option_.upload_stage_workers,
                     option_.upload_stage_queue_size);
-    auto rc =
+    auto status =
         store_->Init([this](const BlockKey& key, const std::string& stage_path,
                             BlockContext ctx) {
           uploader_->AddStageBlock(key, stage_path, ctx);
         });
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    if (!status.ok()) {
+      return status;
     }
 
-    rc =
+    status =
         prefetcher_->Init(option_.prefetch_workers, option_.prefetch_queue_size,
                           [this](const BlockKey& key, size_t length) {
                             return DoPreFetch(key, length);
                           });
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    if (!status.ok()) {
+      return status;
     }
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR BlockCacheImpl::Shutdown() {
+Status BlockCacheImpl::Shutdown() {
   if (running_.exchange(false)) {
-    auto rc = prefetcher_->Shutdown();
-    if (rc != BCACHE_ERROR::OK) {
-      return rc;
+    auto status = prefetcher_->Shutdown();
+    if (!status.ok()) {
+      return status;
     }
     uploader_->WaitAllUploaded();  // wait all stage blocks uploaded
     uploader_->Shutdown();
     store_->Shutdown();
     throttle_->Stop();
   }
-  return BCACHE_ERROR::OK;
+  return Status::OK();
 }
 
-BCACHE_ERROR BlockCacheImpl::Put(const BlockKey& key, const Block& block,
-                                 BlockContext ctx) {
-  BCACHE_ERROR rc;
+Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
+                           BlockContext ctx) {
+  Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return StrFormat("put(%s,%d): %s%s", key.Filename(), block.size, StrErr(rc),
-                     timer.ToString());
+    return StrFormat("put(%s,%d): %s%s", key.Filename(), block.size,
+                     status.ToString(), timer.ToString());
   });
 
   auto wait = throttle_->Add(block.size);  // stage throttle
   if (option_.stage && !wait) {
     timer.NextPhase(Phase::STAGE_BLOCK);
-    rc = store_->Stage(key, block, ctx);
-    if (rc == BCACHE_ERROR::OK) {
-      return rc;
-    } else if (rc == BCACHE_ERROR::CACHE_FULL) {
-      LOG_EVERY_SECOND(WARNING)
-          << "Stage block " << key.Filename() << " failed: " << StrErr(rc);
-    } else if (rc != BCACHE_ERROR::NOT_SUPPORTED) {
+    status = store_->Stage(key, block, ctx);
+    if (status.ok()) {
+      return status;
+    } else if (status.IsCacheFull()) {
+      LOG_EVERY_SECOND(WARNING) << "Stage block " << key.Filename()
+                                << " failed: " << status.ToString();
+    } else if (!status.IsNotSupport()) {
       LOG(WARNING) << "Stage block " << key.Filename()
-                   << " failed: " << StrErr(rc);
+                   << " failed: " << status.ToString();
     }
   }
 
   // TODO(@Wine93): Cache the block which put to storage directly
   timer.NextPhase(Phase::S3_PUT);
-  rc = s3_->Put(key.StoreKey(), block.data, block.size);
-  return rc;
+  status = data_accesser_->Put(key.StoreKey(), block.data, block.size);
+  return status;
 }
 
-BCACHE_ERROR BlockCacheImpl::Range(const BlockKey& key, off_t offset,
-                                   size_t length, char* buffer, bool retrive) {
-  BCACHE_ERROR rc;
+Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
+                             char* buffer, bool retrive) {
+  Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
     return StrFormat("range(%s,%d,%d): %s%s", key.Filename(), offset, length,
-                     StrErr(rc), timer.ToString());
+                     status.ToString(), timer.ToString());
   });
 
   timer.NextPhase(Phase::LOAD_BLOCK);
   std::shared_ptr<BlockReader> reader;
-  rc = store_->Load(key, reader);
-  if (rc == BCACHE_ERROR::OK) {
+  status = store_->Load(key, reader);
+  if (status.ok()) {
     timer.NextPhase(Phase::READ_BLOCK);
     auto defer = ::absl::MakeCleanup([reader]() { reader->Close(); });
-    rc = reader->ReadAt(offset, length, buffer);
-    if (rc == BCACHE_ERROR::OK) {
-      return rc;
+    status = reader->ReadAt(offset, length, buffer);
+    if (status.ok()) {
+      return status;
     }
   }
 
   timer.NextPhase(Phase::S3_RANGE);
   if (retrive) {
-    rc = s3_->Range(key.StoreKey(), offset, length, buffer);
+    status = data_accesser_->Get(key.StoreKey(), offset, length, buffer);
   }
-  return rc;
+  return status;
 }
 
 void BlockCacheImpl::SubmitPreFetch(const BlockKey& key, size_t length) {
   prefetcher_->Submit(key, length);
 }
 
-BCACHE_ERROR BlockCacheImpl::DoPreFetch(const BlockKey& key, size_t length) {
-  BCACHE_ERROR rc;
+Status BlockCacheImpl::DoPreFetch(const BlockKey& key, size_t length) {
+  Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
     return StrFormat("prefetch(%s,%d): %s%s", key.Filename(), length,
-                     StrErr(rc), timer.ToString());
+                     status.ToString(), timer.ToString());
   });
 
   if (IsCached(key)) {
-    rc = BCACHE_ERROR::OK;
-    return rc;
+    return Status::OK();
   }
 
   timer.NextPhase(Phase::S3_RANGE);
   std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
-  rc = s3_->Range(key.StoreKey(), 0, length, buffer.get());
-  if (rc == BCACHE_ERROR::OK) {
+  status = data_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
+  if (status.ok()) {
     timer.NextPhase(Phase::CACHE_BLOCK);
     Block block(buffer.get(), length);
-    rc = store_->Cache(key, block);
+    status = store_->Cache(key, block);
   }
-  return rc;
+  return status;
 }
 
-BCACHE_ERROR BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
-  BCACHE_ERROR rc;
+Status BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
+  Status status;
   LogGuard log([&]() {
     return StrFormat("cache(%s,%d): %s", key.Filename(), block.size,
-                     StrErr(rc));
+                     status.ToString());
   });
 
-  rc = store_->Cache(key, block);
-  return rc;
+  status = store_->Cache(key, block);
+  return status;
 }
 
-BCACHE_ERROR BlockCacheImpl::Flush(uint64_t ino) {
-  BCACHE_ERROR rc;
-  LogGuard log([&]() { return StrFormat("flush(%d): %s", ino, StrErr(rc)); });
+Status BlockCacheImpl::Flush(uint64_t ino) {
+  Status status;
+  LogGuard log(
+      [&]() { return StrFormat("flush(%d): %s", ino, status.ToString()); });
 
-  rc = stage_count_->Wait(ino);
-  return rc;
+  status = stage_count_->Wait(ino);
+  return status;
 }
 
 bool BlockCacheImpl::IsCached(const BlockKey& key) {

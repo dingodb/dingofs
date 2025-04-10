@@ -70,6 +70,13 @@ class Status {
     kNoPermitted = 20,
     kNetError = 21,
     kNotFound = 22,
+    kNotDirectory = 23,
+    kFileTooLarge = 24,
+    kEndOfFile = 25,
+    kAbort = 26,
+    kCacheDown = 27,
+    kCacheUnhealthy = 28,
+    kCacheFull = 29,
   };
   static const int32_t kNone = 0;
 
@@ -110,6 +117,14 @@ class Status {
   DECLARE_ERROR_STATUS(NoPermitted, kNoPermitted);
   DECLARE_ERROR_STATUS(NetError, kNetError);
   DECLARE_ERROR_STATUS(NotFound, kNotFound);
+  DECLARE_ERROR_STATUS(NotDirectory, kNotDirectory);
+  DECLARE_ERROR_STATUS(FileTooLarge, kFileTooLarge);
+  DECLARE_ERROR_STATUS(EndOfFile, kEndOfFile);
+  DECLARE_ERROR_STATUS(Abort, kAbort);
+  DECLARE_ERROR_STATUS(CacheDown, kCacheDown);
+  DECLARE_ERROR_STATUS(CacheUnhealthy, kCacheUnhealthy);
+  DECLARE_ERROR_STATUS(CacheFull, kCacheFull);
+
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
   std::string ToString() const;
