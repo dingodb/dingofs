@@ -24,10 +24,10 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "aws/s3_access_log.h"
 #include "common/dynamic_vlog.h"
 #include "common/process.h"
 #include "common/threading.h"
+#include "dataaccess/aws/s3_access_log.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "stub/common/version.h"
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
       << "Init access log failed, log dir = " << FLAGS_log_dir;
 
   // init s3 access log
-  dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
+  dingofs::dataaccess::aws::InitS3AccessLog(FLAGS_log_dir);
 
   dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
   // stop server and background threads
   metaserver.Stop();
 
-  dingofs::aws::S3Adapter::Shutdown();
+  dingofs::dataaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

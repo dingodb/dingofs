@@ -34,9 +34,9 @@
 namespace dingofs {
 namespace metaserver {
 
-using aws::InitS3AdaptorOptionExceptS3InfoOption;
-using aws::S3Adapter;
-using aws::S3AdapterOption;
+using dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption;
+using dataaccess::aws::S3Adapter;
+using dataaccess::aws::S3AdapterOption;
 using pb::common::S3Info;
 using utils::Configuration;
 using utils::InterruptibleSleeper;

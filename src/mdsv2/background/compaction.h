@@ -19,7 +19,7 @@
 
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -30,7 +30,9 @@ using CompactChunkProcessorPtr = std::shared_ptr<CompactChunkProcessor>;
 
 class CompactChunkTask : public TaskRunnable {
  public:
-  CompactChunkTask(CompactChunkProcessorPtr compact_chunk_processor);
+  CompactChunkTask(CompactChunkProcessorPtr compact_chunk_processor, const std::vector<pb::mdsv2::Slice>& delete_slices)
+      : compact_chunk_processor_(compact_chunk_processor), delete_slices_(delete_slices) {}
+
   ~CompactChunkTask() override = default;
 
   std::string Type() override { return "COMPACT_CHUNK"; }
@@ -39,31 +41,49 @@ class CompactChunkTask : public TaskRunnable {
 
  private:
   CompactChunkProcessorPtr compact_chunk_processor_;
-};
 
-class CompactChunkProcessor {
+  std::vector<pb::mdsv2::Slice> delete_slices_;
+};
+using CompactChunkTaskPtr = std::shared_ptr<CompactChunkTask>;
+
+// compact file chunk, main purpose free data store space and improve read performance
+// 1. delete invalid slices
+// 2. merge slices
+class CompactChunkProcessor : public std::enable_shared_from_this<CompactChunkProcessor> {
  public:
-  CompactChunkProcessor() = default;
+  CompactChunkProcessor(KVStoragePtr kv_storage, FileSystemSetPtr fs_set) : kv_storage_(kv_storage), fs_set_(fs_set) {}
   ~CompactChunkProcessor() = default;
+
+  static CompactChunkProcessorPtr New(KVStoragePtr kv_storage, FileSystemSetPtr fs_set) {
+    return std::make_shared<CompactChunkProcessor>(kv_storage, fs_set);
+  }
+
+  CompactChunkProcessorPtr GetSelfPtr();
 
   bool Init();
   bool Destroy();
 
-  static void TriggerCompaction();
-
-  void Compact(InodePtr inode);
+  void LaunchCompaction();
 
  private:
-  Status ScanFile();
+  Status ScanFileSystem(const pb::mdsv2::FsInfo& fs_info);
 
-  Status CleanSlice(const std::vector<pb::mdsv2::Slice>& slices);
+  static std::vector<pb::mdsv2::Slice> CheckInvalidSlices(pb::mdsv2::Inode& inode, uint64_t chunk_size);
 
-  static std::vector<pb::mdsv2::Slice> CalculateInvalidSlices(std::map<uint64_t, pb::mdsv2::SliceList>& chunk_map,
-                                                              uint64_t file_length, uint64_t chunk_size);
+  Status CleanChunkData(uint32_t fs_id, uint64_t ino, const std::vector<pb::mdsv2::Slice>& slices);
+  Status UpdateChunkMetaData(uint32_t fs_id, uint64_t ino, const std::vector<pb::mdsv2::Slice>& delete_slices);
+
+  void Compact(uint32_t fs_id, uint64_t ino, const std::vector<pb::mdsv2::Slice>& delete_slices);
+
+  void ExecuteCompactTask(CompactChunkTaskPtr task);
+
+  std::atomic<bool> is_running_{false};
 
   // previous process file inode
   uint64_t last_ino_;
   KVStoragePtr kv_storage_;
+
+  FileSystemSetPtr fs_set_;
 
   WorkerSetPtr worker_set_;
 };

@@ -26,7 +26,6 @@
 #include <memory>
 #include <vector>
 
-#include "aws/s3_adapter.h"
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/s3_client.h"
 #include "client/common/dynamic_config.h"
@@ -45,6 +44,7 @@
 #include "client/vfs_old/service/metrics_dumper.h"
 #include "client/vfs_old/tools.h"
 #include "common/define.h"
+#include "dataaccess/aws/s3_adapter.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/filesystem/xattr.h"
@@ -317,7 +317,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   {
     // fill fuse client option s3 option use fs s3 info
     const auto& s3info = fs_info_->detail().s3info();
-    aws::S3InfoOption fs_s3_option;
+    dataaccess::aws::S3InfoOption fs_s3_option;
     common::S3Info2FsS3Option(s3info, &fs_s3_option);
     SetClientS3Option(&fuse_client_option_, fs_s3_option);
 

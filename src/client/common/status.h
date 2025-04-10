@@ -69,6 +69,7 @@ class Status {
     kNoSys = 19,
     kNoPermitted = 20,
     kNetError = 21,
+    kNotFound = 22,
   };
   static const int32_t kNone = 0;
 
@@ -108,7 +109,7 @@ class Status {
   DECLARE_ERROR_STATUS(NoSys, kNoSys);
   DECLARE_ERROR_STATUS(NoPermitted, kNoPermitted);
   DECLARE_ERROR_STATUS(NetError, kNetError);
-
+  DECLARE_ERROR_STATUS(NotFound, kNotFound);
   // Return a string representation of this status suitable for printing.
   // Returns the string "OK" for success.
   std::string ToString() const;
@@ -161,6 +162,8 @@ class Status {
         return EPERM;
       case kNetError:
         return EIO;
+      case kNotFound:
+        return ENOENT;
       default:
         return EIO;
     }

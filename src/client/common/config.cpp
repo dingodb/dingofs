@@ -40,10 +40,10 @@ namespace dingofs {
 namespace client {
 namespace common {
 
-using ::dingofs::aws::S3InfoOption;
 using ::dingofs::base::filepath::PathJoin;
 using ::dingofs::base::math::kMiB;
 using ::dingofs::base::string::Str2Int;
+using ::dingofs::dataaccess::aws::S3InfoOption;
 using ::dingofs::utils::Configuration;
 
 using ::dingofs::base::string::StrSplit;
@@ -114,8 +114,8 @@ static void InitS3Option(Configuration* conf, S3Option* s3_opt) {
                             &s3_opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
                             &s3_opt->s3ClientAdaptorOpt.readRetryIntervalMs);
-  dingofs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
-                                                      &s3_opt->s3AdaptrOpt);
+  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
+                                                         &s3_opt->s3AdaptrOpt);
 }
 
 static void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {

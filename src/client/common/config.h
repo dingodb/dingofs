@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "aws/s3_adapter.h"
+#include "dataaccess/aws/s3_adapter.h"
 #include "dingofs/common.pb.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
@@ -125,7 +125,7 @@ struct S3ClientAdaptorOption {
 
 struct S3Option {
   S3ClientAdaptorOption s3ClientAdaptorOpt;
-  aws::S3AdapterOption s3AdaptrOpt;
+  dataaccess::aws::S3AdapterOption s3AdaptrOpt;
 };
 
 struct RefreshDataOption {
@@ -233,10 +233,10 @@ struct ClientOption {
 void InitClientOption(utils::Configuration* conf, ClientOption* client_option);
 
 void SetClientS3Option(ClientOption* client_option,
-                       const aws::S3InfoOption& fs_s3_opt);
+                       const dataaccess::aws::S3InfoOption& fs_s3_opt);
 
 void S3Info2FsS3Option(const pb::common::S3Info& s3,
-                       aws::S3InfoOption* fs_s3_opt);
+                       dataaccess::aws::S3InfoOption* fs_s3_opt);
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
 

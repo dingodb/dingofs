@@ -29,9 +29,9 @@
 #include <utility>
 #include <vector>
 
+#include "dataaccess/aws/s3_adapter.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
-#include "aws/s3_adapter.h"
 #include "mds/common/types.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_info_wrapper.h"
@@ -49,7 +49,7 @@ struct FsManagerOption {
   uint32_t backEndThreadRunInterSec;
   uint32_t spaceReloadConcurrency = 10;
   uint32_t clientTimeoutSec = 20;
-  aws::S3AdapterOption s3AdapterOption;
+  dataaccess::aws::S3AdapterOption s3AdapterOption;
 };
 
 class FsManager {
@@ -57,7 +57,7 @@ class FsManager {
   FsManager(const std::shared_ptr<FsStorage>& fs_storage,
             const std::shared_ptr<MetaserverClient>& metaserver_client,
             const std::shared_ptr<topology::TopologyManager>& topo_manager,
-            const std::shared_ptr<aws::S3Adapter>& s3_adapter,
+            const std::shared_ptr<dataaccess::aws::S3Adapter>& s3_adapter,
             const std::shared_ptr<dlock::DLock>& dlock,
             const FsManagerOption& option)
       : fsStorage_(fs_storage),
@@ -233,7 +233,7 @@ class FsManager {
   std::shared_ptr<MetaserverClient> metaserverClient_;
   dingofs::utils::GenericNameLock<Mutex> nameLock_;
   std::shared_ptr<topology::TopologyManager> topoManager_;
-  std::shared_ptr<aws::S3Adapter> s3Adapter_;
+  std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter_;
   std::shared_ptr<dlock::DLock> dlock_;
 
   // Manage fs background delete threads

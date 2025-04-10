@@ -26,8 +26,8 @@
 #include <functional>
 #include <string>
 
-#include "aws/s3_adapter.h"
 #include "client/blockcache/error.h"
+#include "dataaccess/aws/s3_adapter.h"
 
 namespace dingofs {
 namespace client {
@@ -40,7 +40,7 @@ class S3Client {
 
   virtual ~S3Client() = default;
 
-  virtual void Init(const aws::S3AdapterOption& option) = 0;
+  virtual void Init(const dataaccess::aws::S3AdapterOption& option) = 0;
 
   virtual void Destroy() = 0;
 
@@ -54,10 +54,10 @@ class S3Client {
                         size_t length, RetryCallback callback) = 0;
 
   virtual void AsyncPut(
-      std::shared_ptr<aws::PutObjectAsyncContext> context) = 0;
+      std::shared_ptr<dataaccess::aws::PutObjectAsyncContext> context) = 0;
 
   virtual void AsyncGet(
-      std::shared_ptr<aws::GetObjectAsyncContext> context) = 0;
+      std::shared_ptr<dataaccess::aws::GetObjectAsyncContext> context) = 0;
 };
 
 class S3ClientImpl : public S3Client {
@@ -70,7 +70,7 @@ class S3ClientImpl : public S3Client {
 
   ~S3ClientImpl() override = default;
 
-  void Init(const aws::S3AdapterOption& option) override;
+  void Init(const dataaccess::aws::S3AdapterOption& option) override;
 
   void Destroy() override;
 
@@ -83,14 +83,16 @@ class S3ClientImpl : public S3Client {
   void AsyncPut(const std::string& key, const char* buffer, size_t length,
                 RetryCallback retry) override;
 
-  void AsyncPut(std::shared_ptr<aws::PutObjectAsyncContext> context) override;
+  void AsyncPut(
+      std::shared_ptr<dataaccess::aws::PutObjectAsyncContext> context) override;
 
-  void AsyncGet(std::shared_ptr<aws::GetObjectAsyncContext> context) override;
+  void AsyncGet(
+      std::shared_ptr<dataaccess::aws::GetObjectAsyncContext> context) override;
 
  private:
   static Aws::String S3Key(const std::string& key);
 
-  std::unique_ptr<::dingofs::aws::S3Adapter> client_;
+  std::unique_ptr<dataaccess::aws::S3Adapter> client_;
 };
 
 }  // namespace blockcache

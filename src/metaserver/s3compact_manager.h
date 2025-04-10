@@ -42,23 +42,24 @@ class S3AdapterManager {
   std::mutex mtx_;
   bool inited_;
   uint64_t size_;  // same size as worker thread count
-  std::vector<std::unique_ptr<aws::S3Adapter>> s3adapters_;
+  std::vector<std::unique_ptr<dataaccess::aws::S3Adapter>> s3adapters_;
   std::vector<bool> used_;
-  aws::S3AdapterOption opts_;
+  dataaccess::aws::S3AdapterOption opts_;
 
  public:
-  explicit S3AdapterManager(uint64_t size, const aws::S3AdapterOption& opts)
+  explicit S3AdapterManager(uint64_t size,
+                            const dataaccess::aws::S3AdapterOption& opts)
       : inited_(false), size_(size), opts_(opts) {}
   virtual ~S3AdapterManager() = default;
   virtual void Init();
   virtual void Deinit();
-  virtual std::pair<uint64_t, aws::S3Adapter*> GetS3Adapter();
+  virtual std::pair<uint64_t, dataaccess::aws::S3Adapter*> GetS3Adapter();
   virtual void ReleaseS3Adapter(uint64_t index);
-  virtual aws::S3AdapterOption GetBasicS3AdapterOption();
+  virtual dataaccess::aws::S3AdapterOption GetBasicS3AdapterOption();
 };
 
 struct S3CompactWorkQueueOption {
-  aws::S3AdapterOption s3opts;
+  dataaccess::aws::S3AdapterOption s3opts;
   bool enable;
   uint64_t threadNum;
   uint64_t fragmentThreshold;

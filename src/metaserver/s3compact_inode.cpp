@@ -32,17 +32,17 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "common/s3util.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "common/s3util.h"
 #include "metaserver/copyset/meta_operator.h"
 #include "metaserver/s3compact_manager.h"
 
 namespace dingofs {
 namespace metaserver {
 
-using aws::S3Adapter;
 using copyset::GetOrModifyS3ChunkInfoOperator;
+using dataaccess::aws::S3Adapter;
 
 using pb::common::S3Info;
 using pb::metaserver::Inode;

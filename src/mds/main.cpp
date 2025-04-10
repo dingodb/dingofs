@@ -22,10 +22,11 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+
 #include <csignal>
 
-#include "aws/s3_access_log.h"
 #include "common/dynamic_vlog.h"
+#include "dataaccess/aws/s3_access_log.h"
 #include "mds/mds.h"
 #include "stub/common/version.h"
 #include "utils/configuration.h"
@@ -79,7 +80,7 @@ int main(int argc, char** argv) {
 
   dingofs::stub::common::LogVerion();
 
-  dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
+  dingofs::dataaccess::aws::InitS3AccessLog(FLAGS_log_dir);
 
   conf->PrintConfig();
 
@@ -101,7 +102,7 @@ int main(int argc, char** argv) {
   // stop server and background threads
   mds.Stop();
 
-  dingofs::aws::S3Adapter::Shutdown();
+  dingofs::dataaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

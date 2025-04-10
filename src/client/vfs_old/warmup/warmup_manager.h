@@ -37,7 +37,6 @@
 #include <utility>
 #include <vector>
 
-#include "aws/s3_adapter.h"
 #include "client/common/common.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
@@ -46,6 +45,7 @@
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/task_thread_pool.h"
+#include "dataaccess/aws/s3_adapter.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
@@ -406,7 +406,8 @@ class WarmupManagerS3Impl : public WarmupManager {
   void AddFetchS3objectsTask(Ino key, std::function<void()> task);
 
   void PutObjectToCache(
-      Ino ino, const std::shared_ptr<aws::GetObjectAsyncContext>& context);
+      Ino ino,
+      const std::shared_ptr<dataaccess::aws::GetObjectAsyncContext>& context);
 
  protected:
   std::deque<WarmupFilelist> warmupFilelistDeque_;

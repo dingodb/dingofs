@@ -25,11 +25,12 @@
 namespace dingofs {
 namespace metaserver {
 
-void S3ClientImpl::SetAdaptor(std::shared_ptr<aws::S3Adapter> s3Adapter) {
+void S3ClientImpl::SetAdaptor(
+    std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter) {
   s3Adapter_ = s3Adapter;
 }
 
-void S3ClientImpl::Init(const aws::S3AdapterOption& option) {
+void S3ClientImpl::Init(const dataaccess::aws::S3AdapterOption& option) {
   s3Adapter_->Init(option);
   option_ = option;
 }

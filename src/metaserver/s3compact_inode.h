@@ -81,7 +81,7 @@ class CompactInodeJob {
     uint64_t chunkSize;
     uint64_t s3adapterIndex;
     uint32_t objectPrefix;
-    aws::S3Adapter* s3adapter;
+    dataaccess::aws::S3Adapter* s3adapter;
   };
 
   struct S3NewChunkInfo {
@@ -151,11 +151,13 @@ class CompactInodeJob {
       uint64_t inodeLen, uint64_t chunkSize);
   bool CompactPrecheck(const struct S3CompactTask& task,
                        pb::metaserver::Inode* inode);
-  aws::S3Adapter* SetupS3Adapter(uint64_t fsid, uint64_t* s3adapterIndex,
-                                 uint64_t* blockSize, uint64_t* chunkSize,
-                                 uint32_t* objectPrefix);
+  dataaccess::aws::S3Adapter* SetupS3Adapter(uint64_t fsid,
+                                             uint64_t* s3adapterIndex,
+                                             uint64_t* blockSize,
+                                             uint64_t* chunkSize,
+                                             uint32_t* objectPrefix);
   void DeleteObjs(const std::vector<std::string>& objsAdded,
-                  aws::S3Adapter* s3adapter);
+                  dataaccess::aws::S3Adapter* s3adapter);
   std::list<struct Node> BuildValidList(const S3ChunkInfoList& s3chunkinfolist,
                                         uint64_t inodeLen, uint64_t index,
                                         uint64_t chunkSize);

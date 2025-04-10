@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(dataaccess)
-add_subdirectory(utils)
-add_subdirectory(utils/concurrent)
-add_subdirectory(base)
-add_subdirectory(common)
-add_subdirectory(fs)
-add_subdirectory(stub)
+add_library(aws_s3_adapter
+    s3_adapter.cpp
+    s3_access_log.cpp
+)
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(client)
-add_subdirectory(tools)
-
-add_subdirectory(mdsv2)
+target_link_libraries(aws_s3_adapter
+    dingofs_utils
+    ${AWSSDK_LIBRARIES}
+    glog::glog
+    brpc::brpc
+    spdlog::spdlog
+    absl::str_format
+)

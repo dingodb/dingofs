@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "aws/s3_adapter.h"
+#include "dataaccess/aws/s3_adapter.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
 #include "metaserver/copyset/copyset_service.h"
@@ -213,10 +213,11 @@ void InitMetaCacheOption(const std::shared_ptr<Configuration>& conf,
 namespace {
 
 std::shared_ptr<S3ClientAdaptorImpl> CreateS3Adaptor(
-    const aws::S3AdapterOption& o1, const S3ClientAdaptorOption& o2) {
+    const dataaccess::aws::S3AdapterOption& o1,
+    const S3ClientAdaptorOption& o2) {
   // s3_client
   auto* s3_client = new S3ClientImpl;
-  s3_client->SetAdaptor(std::make_shared<dingofs::aws::S3Adapter>());
+  s3_client->SetAdaptor(std::make_shared<dataaccess::aws::S3Adapter>());
   s3_client->Init(o1);
 
   // s3_adaptor: s3_client will be freed when s3_adaptor destruct
@@ -242,8 +243,9 @@ void Metaserver::Init() {
 
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
-  aws::S3AdapterOption s3_adapter_option;
-  aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(), &s3_adapter_option);
+  dataaccess::aws::S3AdapterOption s3_adapter_option;
+  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
+                                                         &s3_adapter_option);
 
   trashOption.s3Adaptor =
       CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option);

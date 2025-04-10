@@ -47,8 +47,6 @@ namespace dingofs {
 namespace client {
 namespace warmup {
 
-using aws::GetObjectAsyncCallBack;
-using aws::GetObjectAsyncContext;
 using base::filepath::PathSplit;
 using blockcache::BCACHE_ERROR;
 using blockcache::Block;
@@ -56,6 +54,8 @@ using blockcache::BlockKey;
 using blockcache::S3ClientImpl;
 using common::ClientOption;
 using common::WarmupStorageType;
+using dataaccess::aws::GetObjectAsyncCallBack;
+using dataaccess::aws::GetObjectAsyncContext;
 using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
 using utils::ReadLockGuard;
@@ -504,7 +504,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   uint64_t start = butil::cpuwide_time_us();
   // callback function
   GetObjectAsyncCallBack cb =
-      [&](const aws::S3Adapter* adapter,
+      [&](const dataaccess::aws::S3Adapter* adapter,
           const std::shared_ptr<GetObjectAsyncContext>& context) {
         (void)adapter;
         // metrics for async get data from s3

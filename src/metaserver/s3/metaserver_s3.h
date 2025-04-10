@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "aws/s3_adapter.h"
+#include "dataaccess/aws/s3_adapter.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -35,7 +35,7 @@ class S3Client {
  public:
   S3Client() = default;
   virtual ~S3Client() = default;
-  virtual void Init(const aws::S3AdapterOption& option) = 0;
+  virtual void Init(const dataaccess::aws::S3AdapterOption& option) = 0;
   virtual int Delete(const std::string& name) = 0;
   virtual int DeleteBatch(const std::list<std::string>& nameList) = 0;
   virtual void Reinit(const std::string& ak, const std::string& sk,
@@ -48,8 +48,8 @@ class S3ClientImpl : public S3Client {
   S3ClientImpl() = default;
   ~S3ClientImpl() override = default;
 
-  void SetAdaptor(std::shared_ptr<aws::S3Adapter> s3Adapter);
-  void Init(const aws::S3AdapterOption& option) override;
+  void SetAdaptor(std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter);
+  void Init(const dataaccess::aws::S3AdapterOption& option) override;
   void Reinit(const std::string& ak, const std::string& sk,
               const std::string& endpoint,
               const std::string& bucketName) override;
@@ -68,8 +68,8 @@ class S3ClientImpl : public S3Client {
   int DeleteBatch(const std::list<std::string>& nameList) override;
 
  private:
-  std::shared_ptr<aws::S3Adapter> s3Adapter_;
-  aws::S3AdapterOption option_;
+  std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter_;
+  dataaccess::aws::S3AdapterOption option_;
 };
 
 }  // namespace metaserver

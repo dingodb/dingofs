@@ -41,7 +41,7 @@ DECLARE_bool(graceful_quit_on_sigterm);
 namespace dingofs {
 namespace mds {
 
-using aws::S3Adapter;
+using dataaccess::aws::S3Adapter;
 using election::LeaderElection;
 using election::LeaderElectionOptions;
 using kvstorage::EtcdClientImp;
@@ -174,7 +174,7 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
          "default value: "
       << fs_manager_option->spaceReloadConcurrency;
 
-  aws::InitS3AdaptorOptionExceptS3InfoOption(
+  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(
       conf_.get(), &fs_manager_option->s3AdapterOption);
 }
 

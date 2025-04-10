@@ -24,7 +24,7 @@
 namespace dingofs {
 namespace client {
 
-void S3ClientImpl::Init(const aws::S3AdapterOption& option) {
+void S3ClientImpl::Init(const dataaccess::aws::S3AdapterOption& option) {
   s3Adapter_->Init(option);
 }
 

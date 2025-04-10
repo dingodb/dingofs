@@ -12,17 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(dataaccess)
-add_subdirectory(utils)
-add_subdirectory(utils/concurrent)
-add_subdirectory(base)
-add_subdirectory(common)
-add_subdirectory(fs)
-add_subdirectory(stub)
+add_subdirectory(aws)
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(client)
-add_subdirectory(tools)
+add_library(dataaccess
+    s3_accesser.cpp
+)
 
-add_subdirectory(mdsv2)
+target_link_libraries(dataaccess
+    dingofs_utils
+    ${AWSSDK_LIBRARIES}
+    aws_s3_adapter
+    
+    glog::glog
+    spdlog::spdlog
+    absl::str_format
+)
