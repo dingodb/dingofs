@@ -336,7 +336,7 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
   auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Symlink({}/{}) fail, symlink({}) error: {}.",
-                              parent, name, symlink, status.ToString());
+                              parent, name, link, status.ToString());
     return status;
   }
 
