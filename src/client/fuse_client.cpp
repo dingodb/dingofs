@@ -1503,6 +1503,19 @@ DINGOFS_ERROR FuseClient::FuseOpReadLink(fuse_req_t req, fuse_ino_t ino,
 
 DINGOFS_ERROR FuseClient::FuseOpRelease(fuse_req_t req, fuse_ino_t ino,
                                         struct fuse_file_info* fi) {
+  if (ino == STATSINODEID) {
+    fs_->ReleaseHandler(fi->fh);
+    return DINGOFS_ERROR::OK;
+  }
+
+  auto handler = fs_->FindHandler(fi->fh);
+  if (handler == nullptr) {
+    LOG(WARNING) << "release not fine handle, inodeId=" << ino
+                 << " fh=" << fi->fh;
+  } else {
+    fs_->ReleaseHandler(fi->fh);
+  }
+
   DINGOFS_ERROR rc = fs_->Release(req, ino, fi);
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "release() failed, inodeId=" << ino;

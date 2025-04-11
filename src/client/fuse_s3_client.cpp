@@ -314,7 +314,7 @@ DINGOFS_ERROR FuseS3Client::FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
                                          struct fuse_file_info* fi,
                                          filesystem::EntryOut* entry_out) {
   VLOG(1) << "FuseOpCreate, parent: " << parent << ", name: " << name
-          << ", mode: " << mode;
+          << ", mode: " << mode << " Octal flags: " << std::oct << fi->flags;
 
   std::shared_ptr<InodeWrapper> inode;
   DINGOFS_ERROR ret =
@@ -323,6 +323,10 @@ DINGOFS_ERROR FuseS3Client::FuseOpCreate(fuse_req_t req, fuse_ino_t parent,
   if (ret != DINGOFS_ERROR::OK) {
     return ret;
   }
+
+  auto handler = fs_->NewHandler();
+  fi->fh = handler->fh;
+  handler->flags = fi->flags;
 
   auto openFiles = fs_->BorrowMember().openFiles;
   openFiles->Open(inode->GetInodeId(), inode);
@@ -383,12 +387,32 @@ DINGOFS_ERROR FuseS3Client::FuseOpFsync(fuse_req_t req, fuse_ino_t ino,
   (void)fi;
   VLOG(1) << "FuseOpFsync, inodeId=" << ino << ", datasync: " << datasync;
 
-  DINGOFS_ERROR ret = s3Adaptor_->Flush(ino);
+  DINGOFS_ERROR ret = DINGOFS_ERROR::OK;
+
+  if (ino == STATSINODEID) return ret;
+
+  std::shared_ptr<filesystem::FileHandler> handler = fs_->FindHandler(fi->fh);
+
+  if (handler == nullptr) {
+    LOG(ERROR) << "FuseOpFsync find handler fail, inodeId=" << ino
+               << " fh: " << fi->fh;
+    return DINGOFS_ERROR::INTERNAL;
+  }
+
+  VLOG(1) << "FuseOpFsync inodeId=" << ino << " fh: " << fi->fh
+          << " Octal flags: " << std::oct << handler->flags;
+
+  if ((handler->flags & O_ACCMODE) == O_RDONLY) {
+    return DINGOFS_ERROR::OK;
+  }
+
+  ret = s3Adaptor_->Flush(ino);
   if (ret != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "s3Adaptor_ flush failed, ret = " << ret
                << ", inodeId=" << ino;
     return ret;
   }
+
   if (datasync != 0) {
     return DINGOFS_ERROR::OK;
   }
