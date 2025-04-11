@@ -387,10 +387,6 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
 }
 
 DINGOFS_ERROR FileSystem::Release(Request req, Ino ino, FileInfo* fi) {
-  if (ino == STATSINODEID) {
-    ReleaseHandler(fi->fh);
-    return DINGOFS_ERROR::OK;
-  }
   openFiles_->Close(ino);
   return DINGOFS_ERROR::OK;
 }
