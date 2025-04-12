@@ -24,15 +24,18 @@
 
 #include <glog/logging.h>
 
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "aws/s3_access_log.h"
+#include "bthread/bthread.h"
 #include "client/blockcache/log.h"
 #include "client/common/common.h"
 #include "client/common/config.h"
+#include "client/common/dynamic_config.h"
 #include "client/filesystem/access_log.h"
 #include "client/filesystem/error.h"
 #include "client/filesystem/meta.h"
@@ -81,6 +84,10 @@ using dingofs::pb::mds::FSStatusCode_Name;
 static FuseClient* g_client_instance = nullptr;
 static FuseClientOption* g_fuse_client_option = nullptr;
 static ClientOpMetric* g_clientOpMetric = nullptr;
+
+namespace bthread {
+DECLARE_int32(bthread_concurrency);
+}  // namespace bthread
 
 namespace {
 
@@ -174,8 +181,8 @@ int InitLog(const char* conf_path, const char* argv0) {
 
   bool succ = InitAccessLog(FLAGS_log_dir) &&
               InitBlockCacheLog(FLAGS_log_dir) &&
-              dingofs::aws::InitS3AccessLog(FLAGS_log_dir)
-              && dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
+              dingofs::aws::InitS3AccessLog(FLAGS_log_dir) &&
+              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
   if (!succ) {
     return -1;
   }
@@ -198,6 +205,13 @@ int InitFuseClient(const struct MountOption* mount_option) {
 
   g_fuse_client_option = new FuseClientOption();
   dingofs::client::common::InitFuseClientOption(&conf, g_fuse_client_option);
+
+  int32_t bthread_worker_num =
+      dingofs::client::common::FLAGS_bthread_worker_num;
+  if (bthread_worker_num > 0) {
+    bthread::FLAGS_bthread_concurrency = bthread_worker_num;
+    LOG(INFO) << "set bthread concurrency to " << bthread_worker_num;
+  }
 
   auto fs_info = std::make_shared<FsInfo>();
   if (GetFsInfo(mount_option->fsName, fs_info.get()) != 0) {

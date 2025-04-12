@@ -429,11 +429,17 @@ void InitFuseClientOption(Configuration* conf, FuseClientOption* clientOption) {
   conf->GetValueFatalIfFail("fuseClient.warmupThreadsNum",
                             &clientOption->warmupThreadsNum);
 
-  if (!conf->GetBoolValue("fuseClient.in_time_warmup",
-                          &FLAGS_in_time_warmup)) {
+  if (!conf->GetBoolValue("fuseClient.in_time_warmup", &FLAGS_in_time_warmup)) {
     LOG(INFO) << "Not found `fuseClient.in_time_warmup` in conf, default to "
                  "false";
     FLAGS_in_time_warmup = false;
+  }
+
+  if (!conf->GetIntValue("fuseClient.bthread_worker_num",
+                         &FLAGS_bthread_worker_num)) {
+    FLAGS_bthread_worker_num = 0;
+    LOG(INFO)
+        << "Not found `fuseClient.bthread_worker_num` in conf, default to 0";
   }
 
   LOG_IF(WARNING, conf->GetBoolValue("fuseClient.enableSplice",

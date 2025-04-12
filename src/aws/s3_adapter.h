@@ -82,7 +82,8 @@ struct S3AdapterOption {
   int maxConnections;
   int connectTimeout;
   int requestTimeout;
-  int asyncThreadNum;
+  bool use_thread_pool{true};
+  int asyncThreadNum{256};
   uint64_t maxAsyncRequestInflightBytes;
   uint64_t iopsTotalLimit;
   uint64_t iopsReadLimit;

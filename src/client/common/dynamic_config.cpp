@@ -125,6 +125,9 @@ DEFINE_validator(s3_prefetch, &PassBool);
 DEFINE_bool(in_time_warmup, false, "in time warmup inode when enable");
 DEFINE_validator(in_time_warmup, &PassBool);
 
+
+DEFINE_int32(bthread_worker_num, 0, "bthread worker num");
+
 }  // namespace common
 }  // namespace client
 }  // namespace dingofs

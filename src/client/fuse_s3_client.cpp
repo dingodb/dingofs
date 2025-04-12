@@ -26,6 +26,7 @@
 
 #include "client/blockcache/block_cache.h"
 #include "client/blockcache/s3_client.h"
+#include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
 #include "client/filesystem/meta.h"
 #include "client/kvclient/memcache_client.h"
@@ -566,6 +567,9 @@ DINGOFS_ERROR FuseS3Client::InitBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
+  if (common::FLAGS_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = common::FLAGS_bthread_worker_num;
+  }
 
   uint32_t listen_port = 0;
   if (!StartBrpcServer(server_, &brpc_server_options,

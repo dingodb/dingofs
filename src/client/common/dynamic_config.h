@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 
 namespace dingofs {
 namespace client {
@@ -79,6 +80,8 @@ DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
 DECLARE_bool(s3_prefetch);
 
 DECLARE_bool(in_time_warmup);
+
+DECLARE_int32(bthread_worker_num);
 
 }  // namespace common
 }  // namespace client

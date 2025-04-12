@@ -30,6 +30,10 @@
 #include "client/fuse_common.h"
 #include "stub/common/version.h"
 
+namespace bthread {
+DECLARE_int32(bthread_concurrency);
+}  // namespace bthread
+
 static const struct fuse_lowlevel_ops fuse_op = {
     .init = FuseOpInit,
     .destroy = FuseOpDestroy,
