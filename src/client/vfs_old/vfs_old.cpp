@@ -142,6 +142,9 @@ int VFSOld::InitBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
+  if (common::FLAGS_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = common::FLAGS_bthread_worker_num;
+  }
 
   uint32_t listen_port = 0;
   if (!StartBrpcServer(server_, &brpc_server_options,

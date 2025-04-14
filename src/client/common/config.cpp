@@ -379,6 +379,13 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
     FLAGS_in_time_warmup = false;
   }
 
+  if (!conf->GetIntValue("fuseClient.bthread_worker_num",
+                         &FLAGS_bthread_worker_num)) {
+    FLAGS_bthread_worker_num = 0;
+    LOG(INFO)
+        << "Not found `fuseClient.bthread_worker_num` in conf, default to 0";
+  }
+
   conf->GetValueFatalIfFail("fuseClient.throttle.avgWriteBytes",
                             &FLAGS_fuseClientAvgWriteBytes);
   conf->GetValueFatalIfFail("fuseClient.throttle.burstWriteBytes",

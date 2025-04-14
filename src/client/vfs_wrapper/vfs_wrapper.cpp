@@ -108,6 +108,14 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
     return s;
   }
 
+  int32_t bthread_worker_num =
+      dingofs::client::common::FLAGS_bthread_worker_num;
+  if (bthread_worker_num > 0) {
+    bthread_setconcurrency(bthread_worker_num);
+    LOG(INFO) << "set bthread concurrency to " << bthread_worker_num
+              << " actual concurrency:" << bthread_getconcurrency();
+  }
+
   LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
 
   client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();

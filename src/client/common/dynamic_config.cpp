@@ -129,6 +129,8 @@ DEFINE_validator(s3_prefetch, &PassBool);
 DEFINE_bool(in_time_warmup, false, "in time warmup inode when enable");
 DEFINE_validator(in_time_warmup, &PassBool);
 
+DEFINE_int32(bthread_worker_num, 0, "bthread worker num");
+
 // from config.h and config.cpp
 DEFINE_bool(enableCto, true, "acheieve cto consistency");
 DEFINE_bool(useFakeS3, false,
