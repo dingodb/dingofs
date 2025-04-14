@@ -99,6 +99,9 @@ class FsDirIterator : public vfs::DirIterator {
 
 struct FileHandler {
   uint64_t fh;
+  // for file
+  int32_t flags;
+
   DirBufferHead* buffer;
   base::time::TimeSpec mtime;
   bool padding;  // padding buffer
