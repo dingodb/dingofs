@@ -100,8 +100,19 @@ void InitS3AdaptorOptionExceptS3InfoOption(Configuration* conf,
          !conf->GetIntValue("s3.connectTimeout", &s3_opt->connectTimeout));
   LOG_IF(FATAL,
          !conf->GetIntValue("s3.requestTimeout", &s3_opt->requestTimeout));
-  LOG_IF(FATAL, !conf->GetIntValue("data_stream.s3.async_upload_workers",
-                                   &s3_opt->asyncThreadNum));
+
+  if (!conf->GetBoolValue("s3.use_thread_pool", &s3_opt->use_thread_pool)) {
+    LOG(INFO) << "Not found s3.use_thread_pool in conf, use default "
+              << (s3_opt->use_thread_pool ? "true" : "false");
+  }
+
+  if (!conf->GetIntValue("s3.async_thread_num_in_thread_pool",
+                         &s3_opt->asyncThreadNum)) {
+    LOG(INFO)
+        << "Not found s3.async_thread_num_in_thread_pool in conf, use default"
+        << s3_opt->asyncThreadNum;
+  }
+
   LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
                                       &s3_opt->iopsTotalLimit));
   LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
@@ -173,11 +184,14 @@ void S3Adapter::Init(const S3AdapterOption& option) {
   clientCfg_->connectTimeoutMs = option.connectTimeout;
   clientCfg_->requestTimeoutMs = option.requestTimeout;
   clientCfg_->endpointOverride = s3Address_;
-  int async_thread_num = option.asyncThreadNum;
-  LOG(INFO) << "S3Adapter init thread num = " << async_thread_num << std::endl;
-  clientCfg_->executor =
-      Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
-          "S3Adapter.S3Client", async_thread_num);
+
+  if (option.use_thread_pool) {
+    LOG(INFO) << "S3Adapter init async thread pool thread num = "
+              << option.asyncThreadNum;
+    clientCfg_->executor =
+        Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
+            "S3Adapter.S3Client", option.asyncThreadNum);
+  }
 
   if (option.enableTelemetry) {
     LOG(INFO) << "Enable telemetry for aws s3 adapter";
