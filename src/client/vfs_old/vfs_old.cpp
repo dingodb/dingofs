@@ -1271,7 +1271,7 @@ Status VFSOld::HandleOpenFlags(Ino ino, int flags) {
 }
 
 Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
-  VLOG(1) << "Open inodeId=" << ino << ", flags: " << flags;
+  VLOG(1) << "Open inodeId=" << ino << " Octal flags: " << std::oct << flags;
 
   // check if ino is .stats inode,if true ,get metric data and generate
   // inodeattr information
@@ -1294,20 +1294,24 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
     memcpy(handler->buffer->p, contents.c_str(), len);
 
     return Status::OK();
-  }
+  } else {
+    auto handler = fs_->NewHandler();
+    *fh = handler->fh;
+    handler->flags = flags;
 
-  DINGOFS_ERROR rc = fs_->Open(ino);
-  if (rc != DINGOFS_ERROR::OK) {
-    LOG(ERROR) << "Failed open inodeId=" << ino << ", rc: " << rc;
-    return filesystem::DingofsErrorToStatus(rc);
-  }
+    DINGOFS_ERROR rc = fs_->Open(ino);
+    if (rc != DINGOFS_ERROR::OK) {
+      LOG(ERROR) << "Failed open inodeId=" << ino << ", rc: " << rc;
+      return filesystem::DingofsErrorToStatus(rc);
+    }
 
-  Status s = HandleOpenFlags(ino, flags);
-  if (!s.ok()) {
-    LOG(ERROR) << "Fail HandleOpenFlags, inodeId=" << ino
-               << ", flags: " << flags << ", status: " << s.ToString();
+    Status s = HandleOpenFlags(ino, flags);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail HandleOpenFlags, inodeId=" << ino
+                 << ", flags: " << flags << ", status: " << s.ToString();
+    }
+    return s;
   }
-  return s;
 }
 
 Status VFSOld::Create(Ino parent, const std::string& name, uint32_t uid,
@@ -1315,7 +1319,7 @@ Status VFSOld::Create(Ino parent, const std::string& name, uint32_t uid,
                       Attr* attr) {
   VLOG(1) << "Create parent inodeId=" << parent << ", name: " << name
           << ", uid: " << uid << ", gid: " << gid << ", mode: " << mode
-          << ", flags: " << flags;
+          << " Octal flags: " << std::oct << flags;
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
   Status s =
@@ -1327,6 +1331,10 @@ Status VFSOld::Create(Ino parent, const std::string& name, uint32_t uid,
                  << ", flags: " << flags << ", status: " << s.ToString();
     return s;
   }
+
+  auto handler = fs_->NewHandler();
+  *fh = handler->fh;
+  handler->flags = flags;
 
   // open
   auto open_files = fs_->BorrowMember().openFiles;
@@ -1495,6 +1503,20 @@ Status VFSOld::Flush(Ino ino, uint64_t fh) {
     return Status::OK();
   }
 
+  std::shared_ptr<filesystem::FileHandler> handler = fs_->FindHandler(fh);
+
+  if (handler == nullptr) {
+    LOG(ERROR) << "Flush find handler fail, inodeId=" << ino << " fh: " << fh;
+    return Status::Internal("find handler fail");
+  }
+
+  VLOG(1) << "Flush inodeId=" << ino << " fh: " << fh
+          << " Octal flags: " << std::oct << handler->flags;
+
+  if ((handler->flags & O_ACCMODE) == O_RDONLY) {
+    return Status::OK();
+  }
+
   auto entry_watcher = fs_->BorrowMember().entry_watcher;
 
   // if enableCto, flush all write cache both in memory cache and disk cache
@@ -1545,6 +1567,13 @@ Status VFSOld::Release(Ino ino, uint64_t fh) {
     return Status::OK();
   }
 
+  auto handler = fs_->FindHandler(fh);
+  if (handler == nullptr) {
+    LOG(WARNING) << "Release not fine handle, inodeId=" << ino << " fh=" << fh;
+  } else {
+    fs_->ReleaseHandler(fh);
+  }
+
   DINGOFS_ERROR rc = fs_->Release(ino);
   if (rc != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail release inodeId=" << ino << ", rc: " << rc;
@@ -1561,6 +1590,20 @@ Status VFSOld::Fsync(Ino ino, int datasync, uint64_t fh) {
           << ", fh: " << fh;
 
   if (ino == STATSINODEID) {
+    return Status::OK();
+  }
+
+  std::shared_ptr<filesystem::FileHandler> handler = fs_->FindHandler(fh);
+
+  if (handler == nullptr) {
+    LOG(ERROR) << "Fsync find handler fail, inodeId=" << ino << " fh: " << fh;
+    return Status::Internal("find handler fail");
+  }
+
+  VLOG(1) << "FuseOpFsync inodeId=" << ino << " fh: " << fh
+          << " Octal flags: " << std::oct << handler->flags;
+
+  if ((handler->flags & O_ACCMODE) == O_RDONLY) {
     return Status::OK();
   }
 
