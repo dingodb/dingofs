@@ -17,6 +17,7 @@
 #include "client/common/status.h"
 
 #include <cstdio>
+#include <string>
 
 #include "fmt/core.h"
 #include "glog/logging.h"
@@ -122,10 +123,33 @@ std::string Status::ToString() const {
       case kNetError:
         type = "NetError";
         break;
+      case kNotFound:
+        type = "NotFound";
+        break;
+      case kNotDirectory:
+        type = "NotDirectory";
+        break;
+      case kFileTooLarge:
+        type = "FileTooLarge";
+        break;
+      case kEndOfFile:
+        type = "EndOfFile";
+        break;
+      case kAbort:
+        type = "Abort";
+        break;
+      case kCacheDown:
+        type = "CacheDown";
+        break;
+      case kCacheUnhealthy:
+        type = "CacheUnhealthy";
+        break;
+      case kCacheFull:
+        type = "CacheFull";
+        break;
       default:
-        std::string tmp =
-            fmt::format("Unknown code({}):", static_cast<int>(code_));
-        CHECK(false) << tmp;
+        type = std::to_string(code_).c_str();
+        LOG(ERROR) << fmt::format("Unknown code({}):", static_cast<int>(code_));
     }
 
     std::string result(type);
