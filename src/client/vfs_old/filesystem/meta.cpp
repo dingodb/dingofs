@@ -83,6 +83,7 @@ void HandlerManager::SaveAllHandlers(const std::string& path) {
 
     Json::Value item;
     item["fh"] = fileHandle->fh;
+    item["flags"] = fileHandle->flags;
     item["padding"] = fileHandle->padding;
     // do not store dir_handler_init, it's can reinitialize
     // item["dir_handler_init"] = fileHandle->dir_handler_init;
@@ -141,9 +142,10 @@ void HandlerManager::LoadAllHandlers(const std::string& path) {
     return;
   }
   for (const auto& handler : handlers) {
-    // peek fh,padding
+    // peek fh,padding,flags
     uint64_t fh = handler["fh"].asUInt64();
     bool padding = handler["padding"].asBool();
+    uint flags = handler["flags"].asUInt();
     // peek timespec
     const Json::Value timespec_item = handler["timespec_item"];
     uint64_t seconds = timespec_item["seconds"].asUInt64();
@@ -160,6 +162,7 @@ void HandlerManager::LoadAllHandlers(const std::string& path) {
       handler->fh = dirBuffer_->DirBufferNewWithIndex(fh);
       handler->buffer = dirBuffer_->DirBufferGet(handler->fh);
       handler->padding = padding;
+      handler->flags = flags;
       handler->mtime = base::time::TimeSpec(seconds, nanoSeconds);
       handler->buffer->size = size;
       handler->buffer->wasRead = wasRead;
