@@ -33,7 +33,6 @@ struct S3Option {
   std::string region;
   int loglevel;
   std::string logPrefix;
-  int scheme;
   bool verifySsl;
   int maxConnections;
   int connectTimeout;

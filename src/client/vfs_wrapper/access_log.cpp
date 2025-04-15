@@ -22,8 +22,7 @@ namespace client {
 std::shared_ptr<spdlog::logger> logger;
 
 bool InitAccessLog(const std::string& prefix) {
-  std::string filename =
-      absl::StrFormat("%s/dingo-fuse.access_%d.log", prefix, getpid());
+  std::string filename = absl::StrFormat("%s/access_%d.log", prefix, getpid());
   logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;

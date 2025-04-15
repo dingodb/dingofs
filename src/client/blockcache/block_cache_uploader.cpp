@@ -186,7 +186,7 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
   auto retry_cb = [stage_block, buffer, length, timer, this](int code) {
     auto key = stage_block.key;
     if (code != 0) {
-      LOG(ERROR) << "Upload object " << key.Filename()
+      LOG(ERROR) << "Upload object " << key.StoreKey()
                  << " failed, code=" << code;
       return true;  // retry
     }

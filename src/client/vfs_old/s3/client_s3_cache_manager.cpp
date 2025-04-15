@@ -42,7 +42,6 @@
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
-#include "mdsv2/common/status.h"
 #include "stub/metric/metric.h"
 
 static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
@@ -51,9 +50,9 @@ static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
 namespace dingofs {
 namespace client {
 
-using dataaccess::aws::GetObjectAsyncCallBack;
-using dataaccess::aws::PutObjectAsyncCallBack;
-using dataaccess::aws::PutObjectAsyncContext;
+using dataaccess::GetObjectAsyncCallBack;
+using dataaccess::PutObjectAsyncCallBack;
+using dataaccess::PutObjectAsyncContext;
 
 using blockcache::Block;
 using blockcache::BlockContext;
@@ -2283,8 +2282,8 @@ DINGOFS_ERROR DataCache::PrepareFlushTasks(
     auto context = std::make_shared<PutObjectAsyncContext>();
     context->key = key.StoreKey();
     context->buffer = data + (*writeOffset);
-    context->bufferSize = curentLen;
-    context->startTime = butil::cpuwide_time_us();
+    context->buffer_size = curentLen;
+    context->start_time = butil::cpuwide_time_us();
     s3Tasks->emplace_back(FlushBlock(key, context));
 
     // generate flush to kvcache task
@@ -2338,7 +2337,7 @@ void DataCache::FlushTaskExecute(
     for (const auto& fblock : s3Tasks) {
       auto context = fblock.context;
       BlockKey key = fblock.key;
-      Block block(context->buffer, context->bufferSize);
+      Block block(context->buffer, context->buffer_size);
       auto from = entry_watcher->ShouldWriteback(key.ino)
                       ? BlockFrom::NOCTO_FLUSH
                       : BlockFrom::CTO_FLUSH;

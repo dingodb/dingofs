@@ -182,8 +182,8 @@ message("Using fiu: ${FIU_LIBRARIES}, include dir: ${FIU_INCLUDE_DIRS}")
 find_program(PROTOC protoc REQUIRED)
 message("Using protoc ${PROTOC}")
 
-find_package(AWSSDK COMPONENTS s3)
-message("Using AWSSDK ${AWSSDK_VERSION}, lib:${AWSSDK_LIBRARIES}")
+find_package(AWSSDK REQUIRED COMPONENTS s3-crt s3)
+message("Using AWSSDK ${AWSSDK_VERSION}, AWSSDK_LINK_LIBRARIES: ${AWSSDK_LINK_LIBRARIES}")
 
 find_package(absl REQUIRED)
 message("Using absl ${absl_VERSION}")

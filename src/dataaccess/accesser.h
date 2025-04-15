@@ -22,42 +22,10 @@
 #include <string>
 
 #include "client/common/status.h"
+#include "dataaccess/accesser_common.h"
 
 namespace dingofs {
 namespace dataaccess {
-
-using ::dingofs::client::Status;
-
-struct GetObjectAsyncContext;
-struct PutObjectAsyncContext;
-
-using PutObjectAsyncCallBack =
-    std::function<void(const std::shared_ptr<PutObjectAsyncContext>&)>;
-
-struct PutObjectAsyncContext {
-  std::string key;
-  const char* buffer;
-  size_t buffer_size;
-  uint64_t start_time;
-  int ret_code;
-
-  PutObjectAsyncCallBack cb;
-};
-
-using GetObjectAsyncCallBack =
-    std::function<void(const std::shared_ptr<GetObjectAsyncContext>&)>;
-
-struct GetObjectAsyncContext {
-  std::string key;
-  char* buf;
-  off_t offset;
-  size_t len;
-  int ret_code;
-  uint32_t retry;
-  size_t actual_len;
-
-  GetObjectAsyncCallBack cb;
-};
 
 // DataAccesser is a class that provides a way to access data from a data
 // source. It is a base class for all data access classes.

@@ -185,7 +185,6 @@ TEST_F(S3CompactTest, test_S3AdapterManager) {
   opt.ak = "";
   opt.sk = "";
   opt.bucketName = "";
-  opt.scheme = 0;
   opt.verifySsl = false;
   opt.maxConnections = 32;
   opt.connectTimeout = 60000;

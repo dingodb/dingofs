@@ -66,9 +66,6 @@ void S3AdapterManager::Deinit() {
     else
       return;
   }
-  for (auto& s3adapter : s3adapters_) {
-    s3adapter->Deinit();
-  }
 }
 
 std::pair<uint64_t, S3Adapter*> S3AdapterManager::GetS3Adapter() {
