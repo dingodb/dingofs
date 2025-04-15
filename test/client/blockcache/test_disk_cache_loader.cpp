@@ -24,9 +24,9 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
+#include "client/blockcache/builder/builder.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/log.h"
-#include "client/blockcache/builder/builder.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
@@ -55,12 +55,12 @@ TEST_F(DiskCacheLoaderTest, LoadStage) {
   auto root_dir = builder.GetRootDir();
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
   auto rc = fs->WriteFile(stage_path, "xyz", 3);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   std::vector<BlockKey> uploading;
   rc = disk_cache->Init([&](const BlockKey& key, const std::string&,
                             BlockContext) { uploading.emplace_back(key); });
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   std::this_thread::sleep_for(std::chrono::seconds(3));  // wait for reload
   ASSERT_FALSE(disk_cache->IsCached(key));
   ASSERT_EQ(uploading.size(), 1);
@@ -80,11 +80,11 @@ TEST_F(DiskCacheLoaderTest, LoadCache) {
   auto root_dir = builder.GetRootDir();
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
   auto rc = fs->WriteFile(cache_path, "xyz", 3);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   std::this_thread::sleep_for(std::chrono::seconds(3));  // wait for reload
   ASSERT_TRUE(disk_cache->IsCached(key));
 }

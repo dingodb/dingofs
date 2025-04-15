@@ -23,13 +23,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/blockcache/error.h"
-#include "client/vfs_old/common/dynamic_config.h"
-#include "client/vfs_old/mock_client_s3.h"
+#include "client/common/dynamic_config.h"
+#include "client/common/status.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
+#include "dataaccess/mock/mock_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -42,8 +42,6 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
 using ::testing::WithArg;
-
-using ::dingofs::client::blockcache::BCACHE_ERROR;
 
 // extern KVClientManager *g_kvClientManager;
 
@@ -70,9 +68,9 @@ class FileCacheManagerTest : public testing::Test {
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,
         option.readCacheThreads, nullptr);
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
-    mockS3Client_ = std::make_shared<MockS3Client>();
-    s3ClientAdaptor_->Init(option, mockS3Client_, mockInodeManager_, nullptr,
-                           fsCacheManager, nullptr, nullptr, nullptr);
+    mockDataAccesser_ = std::make_shared<dataaccess::MockDataAccesser>();
+    s3ClientAdaptor_->Init(option, mockDataAccesser_, mockInodeManager_,
+                           nullptr, fsCacheManager, nullptr, nullptr, nullptr);
     s3ClientAdaptor_->SetFsId(fsId);
 
     threadPool_->Start(option.readCacheThreads);
@@ -94,7 +92,7 @@ class FileCacheManagerTest : public testing::Test {
   std::shared_ptr<FileCacheManager> fileCacheManager_;
   std::shared_ptr<MockChunkCacheManager> mockChunkCacheManager_;
   std::shared_ptr<MockInodeCacheManager> mockInodeManager_;
-  std::shared_ptr<MockS3Client> mockS3Client_;
+  std::shared_ptr<dataaccess::MockDataAccesser> mockDataAccesser_;
   std::shared_ptr<KVClientManager> kvClientManager_;
   std::shared_ptr<TaskThreadPool<>> threadPool_ =
       std::make_shared<TaskThreadPool<>>();
@@ -254,10 +252,9 @@ TEST_F(FileCacheManagerTest, test_read_s3) {
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)))
       .WillOnce(
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)));
-  EXPECT_CALL(*mockS3Client_, Range(_, _, _, _))
-      .WillOnce(
-          DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(BCACHE_ERROR::OK)))
-      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
+  EXPECT_CALL(*mockDataAccesser_, Get(_, _, _, _))
+      .WillOnce(DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(Status::OK())))
+      .WillOnce(Return(Status::IoError("")));
 
   ASSERT_EQ(len, fileCacheManager_->Read(inodeId, offset, len, buf.data()));
   ASSERT_EQ(-1, fileCacheManager_->Read(inodeId, offset, len, buf.data()));

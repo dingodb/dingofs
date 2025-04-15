@@ -95,17 +95,19 @@ Status CreateRoot(MutationProcessor& mutation_processor) {
 
   bthread::CountdownEvent count_down(1);
 
-  butil::Status rpc_status;
   auto inode = GenInode(kFsId, kRootIno, pb::mdsv2::FileType::FILE);
 
+  Trace trace;
   Operation operation(Operation::OpType::kCreateInode, kRootParentIno,
-                      MetaDataCodec::EncodeDirInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+                      MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()), &count_down, &trace);
   operation.SetCreateInode(std::move(inode));
-  mix_mutation.operations.push_back(operation);
+  mix_mutation.operations.push_back(&operation);
 
   CHECK(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
   CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  butil::Status rpc_status = operation.status;
 
   LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()), rpc_status.error_str());
 
@@ -127,17 +129,19 @@ TEST_F(MutationProcessorTest, CreateFileInode) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, 20000 + i, pb::mdsv2::FileType::FILE);
 
-    Operation operation(Operation::OpType::kCreateInode, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kCreateInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     operation.SetCreateInode(std::move(inode));
-    mix_mutation.operations.push_back(operation);
+    mix_mutation.operations.push_back(&operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str());
@@ -159,17 +163,19 @@ TEST_F(MutationProcessorTest, CreateDirInode) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, 30000 + i, pb::mdsv2::FileType::DIRECTORY);
 
-    Operation operation(Operation::OpType::kCreateInode, inode.ino(),
-                        MetaDataCodec::EncodeDirInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kCreateInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     operation.SetCreateInode(std::move(inode));
-    mix_mutation.operations.push_back(operation);
+    mix_mutation.operations.push_back(&operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str());
@@ -192,17 +198,19 @@ TEST_F(MutationProcessorTest, UpdateInodeNlink) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, ino, pb::mdsv2::FileType::FILE);
 
-    Operation operation(Operation::OpType::kCreateInode, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kCreateInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     operation.SetCreateInode(std::move(inode));
-    mix_mutation.operations.push_back(operation);
+    mix_mutation.operations.push_back(&operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str());
@@ -214,19 +222,21 @@ TEST_F(MutationProcessorTest, UpdateInodeNlink) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, ino, pb::mdsv2::FileType::FILE);
 
     uint64_t now_ns = Helper::TimestampNs();
 
+    Trace trace;
     Operation operation(Operation::OpType::kUpdateInodeNlink, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+                        MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()), &count_down, &trace);
     operation.SetUpdateInodeNlink(inode.ino(), 1, now_ns);
-    mix_mutation.operations.push_back(operation);
+    mix_mutation.operations.push_back(&operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str());
@@ -238,24 +248,29 @@ TEST_F(MutationProcessorTest, UpdateInodeNlink) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, ino, pb::mdsv2::FileType::FILE);
 
     uint64_t now_ns = Helper::TimestampNs();
 
+    Trace trace;
     for (int i = 0; i < 100; ++i) {
       Operation operation(Operation::OpType::kUpdateInodeNlink, inode.ino(),
-                          MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+                          MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()), &count_down, &trace);
       operation.SetUpdateInodeNlink(inode.ino(), 1, now_ns);
-      mix_mutation.operations.push_back(std::move(operation));
+      mix_mutation.operations.push_back(&operation);
     }
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
 
-    LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
-                             rpc_status.error_str());
+    for (auto& operation : mix_mutation.operations) {
+      butil::Status rpc_status = operation->status;
+      if (!rpc_status.ok()) {
+        LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
+                                 rpc_status.error_str());
+      }
+    }
   }
 }
 
@@ -274,17 +289,19 @@ TEST_F(MutationProcessorTest, DeleteInode) {
 
     bthread::CountdownEvent count_down(1);
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, 20000, pb::mdsv2::FileType::FILE);
 
-    Operation operation(Operation::OpType::kDeleteInode, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kDeleteInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     operation.SetDeleteInode(inode.ino());
-    mix_mutation.operations.push_back(operation);
+    mix_mutation.operations.push_back(&operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str());
@@ -313,26 +330,28 @@ TEST_F(MutationProcessorTest, MkNod) {
 
     uint64_t ino = 20000 + i;
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, ino, pb::mdsv2::FileType::FILE);
 
-    Operation operation(Operation::OpType::kCreateInode, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kCreateInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     auto inode_copy = inode;
     operation.SetCreateInode(std::move(inode_copy));
-    mix_mutation.operations.push_back(std::move(operation));
+    mix_mutation.operations.push_back(&operation);
 
     pb::mdsv2::Dentry dentry = GenDentry(kFsId, kRootIno, ino, "file_" + std::to_string(ino));
-    butil::Status rpc_dentry_status;
     Operation dentry_operation(Operation::OpType::kCreateDentry, dentry.parent_ino(),
                                MetaDataCodec::EncodeDentryKey(kFsId, dentry.parent_ino(), dentry.name()), &count_down,
-                               &rpc_dentry_status);
+                               &trace);
     dentry_operation.SetCreateDentry(std::move(dentry), now_ns);
-    mix_mutation.operations.push_back(std::move(dentry_operation));
+    mix_mutation.operations.push_back(&dentry_operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
+    butil::Status rpc_dentry_status = dentry_operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {} {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str(), pb::error::Errno_Name(rpc_dentry_status.error_code()),
@@ -359,26 +378,28 @@ TEST_F(MutationProcessorTest, MkDir) {
 
     uint64_t ino = 20000 + i;
 
-    butil::Status rpc_status;
     auto inode = GenInode(kFsId, ino, pb::mdsv2::FileType::DIRECTORY);
 
-    Operation operation(Operation::OpType::kCreateInode, inode.ino(),
-                        MetaDataCodec::EncodeFileInodeKey(kFsId, inode.ino()), &count_down, &rpc_status);
+    Trace trace;
+    Operation operation(Operation::OpType::kCreateInode, inode.ino(), MetaDataCodec::EncodeInodeKey(kFsId, inode.ino()),
+                        &count_down, &trace);
     auto inode_copy = inode;
     operation.SetCreateInode(std::move(inode_copy));
-    mix_mutation.operations.push_back(std::move(operation));
+    mix_mutation.operations.push_back(&operation);
 
     pb::mdsv2::Dentry dentry = GenDentry(kFsId, kRootIno, ino, "dir_" + std::to_string(ino));
-    butil::Status rpc_dentry_status;
     Operation dentry_operation(Operation::OpType::kCreateDentry, dentry.parent_ino(),
                                MetaDataCodec::EncodeDentryKey(kFsId, dentry.parent_ino(), dentry.name()), &count_down,
-                               &rpc_dentry_status);
+                               &trace);
     dentry_operation.SetCreateDentry(std::move(dentry), now_ns);
-    mix_mutation.operations.push_back(std::move(dentry_operation));
+    mix_mutation.operations.push_back(&dentry_operation);
 
     ASSERT_TRUE(mutation_processor.Commit(mix_mutation)) << "commit mutation fail.";
 
     CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+    butil::Status rpc_status = operation.status;
+    butil::Status rpc_dentry_status = dentry_operation.status;
 
     LOG(INFO) << fmt::format("rpc status: {} {} {} {}", pb::error::Errno_Name(rpc_status.error_code()),
                              rpc_status.error_str(), pb::error::Errno_Name(rpc_dentry_status.error_code()),

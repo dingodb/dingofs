@@ -42,15 +42,15 @@ TEST_F(BlockCacheTest, Basic) {
   auto defer = MakeCleanup([&]() { builder.Cleanup(); });
 
   auto block_cache = builder.Build();
-  ASSERT_EQ(block_cache->Init(), BCACHE_ERROR::OK);
-  ASSERT_EQ(block_cache->GetStoreType(), StoreType::kDisk);
-  ASSERT_EQ(block_cache->Shutdown(), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Init(), Status::OK());
+  ASSERT_EQ(block_cache->GetStoreType(), StoreType::DISK);
+  ASSERT_EQ(block_cache->Shutdown(), Status::OK());
 }
 
 TEST_F(BlockCacheTest, Put) {
   auto builder = BlockCacheBuilder();
   auto block_cache = builder.Build();
-  ASSERT_EQ(block_cache->Init(), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Init(), Status::OK());
   auto defer = MakeCleanup([&]() {
     block_cache->Shutdown();
     builder.Cleanup();
@@ -59,7 +59,7 @@ TEST_F(BlockCacheTest, Put) {
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
   auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
-  ASSERT_EQ(block_cache->Put(key, block, ctx), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Put(key, block, ctx), Status::OK());
   ASSERT_TRUE(block_cache->IsCached(key));
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -74,22 +74,22 @@ TEST_F(BlockCacheTest, Put) {
 TEST_F(BlockCacheTest, Range) {
   auto builder = BlockCacheBuilder();
   auto block_cache = builder.Build();
-  ASSERT_EQ(block_cache->Init(), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Init(), Status::OK());
   auto defer = MakeCleanup([&]() {
     block_cache->Shutdown();
     builder.Cleanup();
   });
 
   auto key = BlockKeyBuilder().Build(100);
-  EXPECT_CALL(*builder.GetS3Client(), Range(_, _, _, _))
-      .WillOnce(Return(BCACHE_ERROR::OK));
-  ASSERT_EQ(block_cache->Range(key, 0, 0, nullptr, true), BCACHE_ERROR::OK);
+  EXPECT_CALL(*builder.GetDataAccesser(), Get(_, _, _, _))
+      .WillOnce(Return(Status::OK()));
+  ASSERT_EQ(block_cache->Range(key, 0, 0, nullptr, true), Status::OK());
 }
 
 TEST_F(BlockCacheTest, Cache) {
   auto builder = BlockCacheBuilder();
   auto block_cache = builder.Build();
-  ASSERT_EQ(block_cache->Init(), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Init(), Status::OK());
   auto defer = MakeCleanup([&]() {
     block_cache->Shutdown();
     builder.Cleanup();
@@ -97,7 +97,7 @@ TEST_F(BlockCacheTest, Cache) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  ASSERT_EQ(block_cache->Cache(key, block), BCACHE_ERROR::OK);
+  ASSERT_EQ(block_cache->Cache(key, block), Status::OK());
   ASSERT_TRUE(block_cache->IsCached(key));
 
   auto fs = NewTempLocalFileSystem();

@@ -37,7 +37,7 @@
 #include "client/blockcache/log.h"
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
-#include "client/blockcache/mock/mock_s3_client.h"
+#include "dataaccess/mock/mock_accesser.h"
 
 namespace dingofs {
 namespace client {
@@ -136,16 +136,17 @@ class BlockCacheBuilder {
     std::string root_dir = GetRootDir();
     system(("mkdir -p " + root_dir).c_str());
 
-    auto block_cache = std::make_shared<BlockCacheImpl>(option_);
-    s3_client_ = std::make_shared<MockS3Client>();
-    block_cache->s3_ = s3_client_;
+    auto block_cache = std::make_shared<BlockCacheImpl>(
+        option_, std::make_shared<dataaccess::MockDataAccesser>());
 
     return block_cache;
   }
 
   void Cleanup() { system(("rm -r " + GetRootDir()).c_str()); }
 
-  std::shared_ptr<MockS3Client> GetS3Client() { return s3_client_; }
+  std::shared_ptr<dataaccess::MockDataAccesser> GetDataAccesser() {
+    return data_accesser_;
+  }
 
   std::string GetRootDir() const {
     return option_.disk_cache_options[0].cache_dir;
@@ -153,7 +154,7 @@ class BlockCacheBuilder {
 
  private:
   BlockCacheOption option_;
-  std::shared_ptr<MockS3Client> s3_client_;
+  std::shared_ptr<dataaccess::MockDataAccesser> data_accesser_;
 };
 
 }  // namespace blockcache

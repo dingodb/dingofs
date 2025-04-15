@@ -29,17 +29,17 @@
 #include <memory>
 #include <string>
 
-#include "aws/s3_adapter.h"
+#include "dataaccess/aws/s3_adapter.h"
 
 using ::testing::Return;
 
-using dingofs::aws::GetObjectAsyncContext;
-using dingofs::aws::PutObjectAsyncContext;
+using dingofs::dataaccess::aws::GetObjectAsyncContext;
+using dingofs::dataaccess::aws::PutObjectAsyncContext;
 
 namespace dingofs {
 namespace client {
 
-class MockS3Adapter : public aws::S3Adapter {
+class MockS3Adapter : public dataaccess::aws::S3Adapter {
  public:
   MockS3Adapter() = default;
   ~MockS3Adapter() override = default;

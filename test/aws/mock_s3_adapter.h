@@ -30,10 +30,11 @@
 #include <memory>
 #include <string>
 
-#include "aws/s3_adapter.h"
+#include "dataaccess/aws/s3_adapter.h"
 
 using ::testing::Return;
 namespace dingofs {
+namespace dataaccess {
 namespace aws {
 
 class MockS3Adapter : public S3Adapter {
@@ -71,6 +72,9 @@ class MockS3Adapter : public S3Adapter {
                    const Aws::Vector<Aws::S3::Model::CompletedPart>&));
   MOCK_METHOD2(AbortMultiUpload, int(const Aws::String&, const Aws::String&));
 };
+
 }  // namespace aws
+}  // namespace dataaccess
 }  // namespace dingofs
+
 #endif  // TEST_COMMON_MOCK_S3_ADAPTER_H_

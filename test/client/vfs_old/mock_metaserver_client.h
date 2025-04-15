@@ -166,13 +166,14 @@ class MockMetaServerClient : public MetaServerClient {
                std::vector<std::vector<uint64_t>>* inodeGroups),
               (override));
 
-  MOCK_METHOD(void, AsyncUpdateVolumeExtent,
-              (uint32_t, uint64_t, const VolumeExtentList&,
-               MetaServerClientDone*),
-              (override));
+  //   MOCK_METHOD(void, AsyncUpdateVolumeExtent,
+  //               (uint32_t, uint64_t, const VolumeExtentList&,
+  //                MetaServerClientDone*),
+  //               (override));
 
-  MOCK_METHOD(MetaStatusCode, GetVolumeExtent,
-              (uint32_t, uint64_t, bool, VolumeExtentList*), (override));
+  //   MOCK_METHOD(MetaStatusCode, GetVolumeExtent,
+  //               (uint32_t, uint64_t, bool, VolumeExtentList*), (override));
+
   MOCK_METHOD(MetaStatusCode, GetFsQuota, (uint32_t fs_id, Quota& quota),
               (override));
 

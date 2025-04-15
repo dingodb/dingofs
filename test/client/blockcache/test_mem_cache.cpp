@@ -43,14 +43,14 @@ TEST_F(MemCacheTest, Basic) {
   Block block(nullptr, 0);
   std::shared_ptr<BlockReader> reader;
 
-  ASSERT_EQ(store->Init(nullptr), BCACHE_ERROR::OK);
-  ASSERT_EQ(store->Shutdown(), BCACHE_ERROR::OK);
+  ASSERT_EQ(store->Init(nullptr), Status::OK());
+  ASSERT_EQ(store->Shutdown(), Status::OK());
   ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::CTO_FLUSH)),
-            BCACHE_ERROR::NOT_SUPPORTED);
+            Status::NotSupport(""));
   ASSERT_EQ(store->RemoveStage(key, BlockContext(BlockFrom::CTO_FLUSH)),
-            BCACHE_ERROR::NOT_SUPPORTED);
-  ASSERT_EQ(store->Cache(key, block), BCACHE_ERROR::NOT_SUPPORTED);
-  ASSERT_EQ(store->Load(key, reader), BCACHE_ERROR::NOT_SUPPORTED);
+            Status::NotSupport(""));
+  ASSERT_EQ(store->Cache(key, block), Status::NotSupport(""));
+  ASSERT_EQ(store->Load(key, reader), Status::NotSupport(""));
   ASSERT_FALSE(store->IsCached(key));
   ASSERT_EQ(store->Id(), "memory_cache");
 }

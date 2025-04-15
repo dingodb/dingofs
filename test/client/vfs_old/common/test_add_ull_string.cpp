@@ -22,7 +22,7 @@
 
 #include <gtest/gtest.h>
 
-#include "client/vfs_old/common/common.h"
+#include "client/common/common.h"
 
 namespace dingofs {
 namespace client {

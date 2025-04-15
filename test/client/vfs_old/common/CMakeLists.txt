@@ -16,7 +16,7 @@ add_executable(test_dingofs_vfs_old_common
     test_add_ull_string.cpp
 )
 target_link_libraries(test_dingofs_vfs_old_common
-    vfs_old_common
+    client_common
     ${TEST_DEPS}
 )
 set_target_properties(test_dingofs_vfs_old_common PROPERTIES

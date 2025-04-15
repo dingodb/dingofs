@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020 NetEase Inc.
+ * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -15,13 +15,13 @@
  */
 
 /*
- * Project: dingo
- * Created Date: Thur Jun 22 2021
- * Author: huyao
+ * Project: Dingofs
+ * Created Date: 2024-09-08
+ * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_TEST_CLIENT_MOCK_CLIENT_S3_H_
-#define DINGOFS_TEST_CLIENT_MOCK_CLIENT_S3_H_
+#ifndef DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_
+#define DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -29,46 +29,40 @@
 #include <memory>
 #include <string>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/s3_client.h"
+#include "dataaccess/accesser.h"
 
 using ::testing::_;
 using ::testing::Return;
 
 namespace dingofs {
-namespace client {
+namespace dataaccess {
 
-using ::dingofs::aws::GetObjectAsyncContext;
-using ::dingofs::aws::PutObjectAsyncContext;
-using ::dingofs::aws::S3AdapterOption;
-using ::dingofs::client::blockcache::BCACHE_ERROR;
-using ::dingofs::client::blockcache::S3Client;
-
-class MockS3Client : public S3Client {
+class MockDataAccesser : public DataAccesser {
  public:
-  MockS3Client() = default;
+  MockDataAccesser() = default;
 
-  ~MockS3Client() override = default;
+  ~MockDataAccesser() override = default;
 
-  MOCK_METHOD1(Init, void(const S3AdapterOption& options));
+  MOCK_METHOD0(Init, bool());
 
-  MOCK_METHOD0(Destroy, void());
+  MOCK_METHOD0(Destroy, bool());
 
-  MOCK_METHOD3(Put, BCACHE_ERROR(const std::string& key, const char* buffer,
-                                 size_t length));
-
-  MOCK_METHOD4(Range, BCACHE_ERROR(const std::string& key, off_t offset,
-                                   size_t length, char* buffer));
-
+  MOCK_METHOD3(Put, Status(const std::string& key, const char* buffer,
+                           size_t length));
   MOCK_METHOD4(AsyncPut, void(const std::string& key, const char* buffer,
                               size_t length, RetryCallback callback));
 
   MOCK_METHOD1(AsyncPut, void(std::shared_ptr<PutObjectAsyncContext> context));
 
+  MOCK_METHOD4(Get, Status(const std::string& key, off_t offset, size_t length,
+                           char* buffer));
+
   MOCK_METHOD1(AsyncGet, void(std::shared_ptr<GetObjectAsyncContext> context));
+
+  MOCK_METHOD1(Delete, Status(const std::string& key));
 };
 
-}  // namespace client
+}  // namespace dataaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_MOCK_CLIENT_S3_H_
+#endif  // DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_

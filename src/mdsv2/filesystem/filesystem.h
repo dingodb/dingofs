@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "dataaccess/accesser.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
@@ -60,13 +61,14 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-             RenamerPtr renamer, MutationProcessorPtr mutation_processor);
+             RenamerPtr renamer, MutationProcessorPtr mutation_processor, MDSMetaMapPtr mds_meta_map);
   ~FileSystem() = default;
 
   static FileSystemPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator,
-                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor) {
+                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor,
+                           MDSMetaMapPtr mds_meta_map) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
-                                        mutation_processor);
+                                        mutation_processor, mds_meta_map);
   }
 
   FileSystemPtr GetSelfPtr();
@@ -155,6 +157,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
   Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
 
+  // compact
+  Status CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index,
+                      std::vector<pb::mdsv2::TrashSlice>& out_trash_slices);
+  Status CleanTrashFileData(Context& ctx, uint64_t ino);
+
   // dentry/inode
   Status GetDentry(Context& ctx, uint64_t parent, const std::string& name, Dentry& dentry);
   Status ListDentry(Context& ctx, uint64_t parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
@@ -217,6 +224,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint64_t GetMdsIdByIno(uint64_t ino);
 
+  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(const pb::mdsv2::Inode& inode, uint64_t chunk_index,
+                                                    pb::mdsv2::SliceList chunk);
+
+  void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes);
+
   uint64_t self_mds_id_;
 
   // filesystem info
@@ -241,10 +253,16 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // organize inode
   InodeCache inode_cache_;
 
+  // mds meta map
+  MDSMetaMapPtr mds_meta_map_;
+
   RenamerPtr renamer_;
 
   // muation merger
   MutationProcessorPtr mutation_processor_;
+
+  // data accessor for s3
+  dataaccess::DataAccesserPtr data_accessor_;
 };
 
 // manage all filesystem

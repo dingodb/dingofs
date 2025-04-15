@@ -45,6 +45,7 @@ enum KeyType : unsigned char {
   kTypeDirQuota = 7,
   kTypeFsStats = 8,
   kTypeFileSession = 9,
+  kTypeTrashChunk = 10,
 };
 
 void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {
@@ -189,6 +190,42 @@ void MetaDataCodec::GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::strin
 
   end_key = kPrefix;
   end_key.push_back(kTypeFileSession);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, end_key);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino + 1, end_key);
+}
+
+void MetaDataCodec::GetTrashChunkTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeTrashChunk);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeTrashChunk + 1);
+}
+
+void MetaDataCodec::GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeTrashChunk);
+  end_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
+}
+
+void MetaDataCodec::GetTrashChunkRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, start_key);
+  start_key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeTrashChunk);
   end_key.push_back(kDelimiter);
   SerialHelper::WriteInt(fs_id, end_key);
   end_key.push_back(kDelimiter);
@@ -560,6 +597,46 @@ pb::mdsv2::FileSession MetaDataCodec::DecodeFileSessionValue(const std::string& 
   pb::mdsv2::FileSession file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
   return std::move(file_session);
+}
+
+std::string MetaDataCodec::EncodeTrashChunkKey(uint32_t fs_id, uint64_t ino, uint64_t slice_id, uint64_t time_ns) {
+  std::string key;
+  key.reserve(kPrefixSize + 16 + 16 + 16 + 16);
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeTrashChunk);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(ino, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(slice_id, key);
+  key.push_back(kDelimiter);
+  SerialHelper::WriteLong(time_ns, key);
+
+  return std::move(key);
+}
+void MetaDataCodec::DecodeTrashChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& slice_id,
+                                        uint64_t& time_ns) {
+  CHECK(key.size() == (kPrefixSize + 16 + 16 + 16 + 16))
+      << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeTrashChunk) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize + 1) == kDelimiter) << "delimiter is invalid.";
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 2, kPrefixSize + 6));
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 7, kPrefixSize + 23));
+  slice_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 23, kPrefixSize + 39));
+  time_ns = SerialHelper::ReadLong(key.substr(kPrefixSize + 39, kPrefixSize + 55));
+}
+
+std::string MetaDataCodec::EncodeTrashChunkValue(const pb::mdsv2::TrashSlice& slice) {
+  return slice.SerializeAsString();
+}
+
+pb::mdsv2::TrashSlice MetaDataCodec::DecodeTrashChunkValue(const std::string& value) {
+  pb::mdsv2::TrashSlice slice;
+  CHECK(slice.ParseFromString(value)) << "parse trash slice fail.";
+  return std::move(slice);
 }
 
 }  // namespace mdsv2

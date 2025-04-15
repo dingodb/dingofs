@@ -32,8 +32,8 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::UUIDGenerator;
 using ::dingofs::base::filepath::PathJoin;
+using ::dingofs::utils::UUIDGenerator;
 using FileInfo = LocalFileSystem::FileInfo;
 
 class LocalFileSystemTest : public ::testing::Test {
@@ -53,16 +53,16 @@ TEST_F(LocalFileSystemTest, MkDirs) {
   auto fs = std::make_unique<LocalFileSystem>();
 
   auto rc = fs->MkDirs(PathJoin({root_dir_, "a", "b"}));
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   std::string path = PathJoin({root_dir_, "a", "b", "file1"});
   rc = fs->WriteFile(path, "hello world", 11);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   size_t count;
   std::shared_ptr<char> buffer;
   rc = fs->ReadFile(path, buffer, &count);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   ASSERT_EQ(count, 11);
   ASSERT_EQ(std::string(buffer.get(), count), "hello world");
 }
@@ -70,20 +70,17 @@ TEST_F(LocalFileSystemTest, MkDirs) {
 TEST_F(LocalFileSystemTest, Walk) {
   auto fs = std::make_unique<LocalFileSystem>(nullptr);
 
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "a"}), "x", 1),
-            BCACHE_ERROR::OK);
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "b"}), "x", 1),
-            BCACHE_ERROR::OK);
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "c"}), "x", 1),
-            BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "a"}), "x", 1), Status::OK());
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "b"}), "x", 1), Status::OK());
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "c"}), "x", 1), Status::OK());
 
   std::vector<std::string> files;
   auto rc = fs->Walk(PathJoin({root_dir_}),
                      [&](const std::string& prefix, const FileInfo& info) {
                        files.emplace_back(info.name);
-                       return BCACHE_ERROR::OK;
+                       return Status::OK();
                      });
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   ASSERT_EQ(files.size(), 3);
   ASSERT_EQ(files[0], "c");
   ASSERT_EQ(files[1], "a");
@@ -94,16 +91,16 @@ TEST_F(LocalFileSystemTest, WriteFile) {
   auto fs = std::make_unique<LocalFileSystem>();
 
   std::string path = PathJoin({root_dir_, "f1"});
-  ASSERT_EQ(fs->WriteFile(path, "x", 1), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(path, "x", 1), Status::OK());
 
   size_t count;
   std::shared_ptr<char> buffer;
-  ASSERT_EQ(fs->ReadFile(path, buffer, &count), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->ReadFile(path, buffer, &count), Status::OK());
   ASSERT_EQ(count, 1);
   ASSERT_EQ(std::string(buffer.get(), count), "x");
 
-  ASSERT_EQ(fs->WriteFile(path, "yy", 2), BCACHE_ERROR::OK);
-  ASSERT_EQ(fs->ReadFile(path, buffer, &count), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(path, "yy", 2), Status::OK());
+  ASSERT_EQ(fs->ReadFile(path, buffer, &count), Status::OK());
   ASSERT_EQ(count, 2);
   ASSERT_EQ(std::string(buffer.get(), count), "yy");
 }
@@ -112,10 +109,10 @@ TEST_F(LocalFileSystemTest, RemoveFile) {
   auto fs = std::make_unique<LocalFileSystem>();
 
   std::string path = PathJoin({root_dir_, "f1"});
-  ASSERT_EQ(fs->WriteFile(path, "x", 1), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(path, "x", 1), Status::OK());
   ASSERT_TRUE(fs->FileExists(path));
 
-  ASSERT_EQ(fs->RemoveFile(path), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->RemoveFile(path), Status::OK());
   ASSERT_FALSE(fs->FileExists(path));
 }
 
@@ -124,11 +121,11 @@ TEST_F(LocalFileSystemTest, HardLink) {
 
   std::string src = PathJoin({root_dir_, "dir", "f1"});
   std::string dest = PathJoin({root_dir_, "dir", "f2"});
-  ASSERT_EQ(fs->WriteFile(src, "x", 1), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(src, "x", 1), Status::OK());
   ASSERT_TRUE(fs->FileExists(src));
   ASSERT_FALSE(fs->FileExists(dest));
 
-  ASSERT_EQ(fs->HardLink(src, dest), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->HardLink(src, dest), Status::OK());
   ASSERT_TRUE(fs->FileExists(dest));
 }
 
@@ -137,12 +134,12 @@ TEST_F(LocalFileSystemTest, FileExists) {
 
   std::string dir = PathJoin({root_dir_, "dir"});
   ASSERT_FALSE(fs->FileExists(dir));
-  ASSERT_EQ(fs->MkDirs(dir), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->MkDirs(dir), Status::OK());
   ASSERT_FALSE(fs->FileExists(dir));
 
   std::string path = PathJoin({dir, "file"});
   ASSERT_FALSE(fs->FileExists(path));
-  ASSERT_EQ(fs->WriteFile(path, "x", 1), BCACHE_ERROR::OK);
+  ASSERT_EQ(fs->WriteFile(path, "x", 1), Status::OK());
   ASSERT_TRUE(fs->FileExists(path));
 }
 

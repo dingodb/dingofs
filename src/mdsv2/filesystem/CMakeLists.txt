@@ -22,9 +22,11 @@ add_library(mdsv2_filesystem
 )
 
 target_link_libraries(mdsv2_filesystem
+    client_common
     mdsv2_common
+    mdsv2_service
+
     PROTO_OBJS
     protobuf::libprotobuf
-
     nlohmann_json
 )

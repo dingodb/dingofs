@@ -39,6 +39,9 @@ class MetaDataCodec {
   static void GetFileSessionTableRange(std::string& start_key, std::string& end_key);
   static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
+  static void GetTrashChunkTableRange(std::string& start_key, std::string& end_key);
+  static void GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetTrashChunkRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
 
   // lock
   // format: [$prefix, $type, $kDelimiter, $name]
@@ -109,6 +112,15 @@ class MetaDataCodec {
   static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
   static std::string EncodeFileSessionValue(const pb::mdsv2::FileSession& file_session);
   static pb::mdsv2::FileSession DecodeFileSessionValue(const std::string& value);
+
+  // trash chunk
+  // format: [$prefix, $type, $kDelimiter, $fs_id, $kDelimiter, $ino, $kDelimiter, $slice_id,
+  // $kDelimiter, $time_ns]
+  static std::string EncodeTrashChunkKey(uint32_t fs_id, uint64_t ino, uint64_t slice_id, uint64_t time_ns);
+  static void DecodeTrashChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& slice_id,
+                                  uint64_t& time_ns);
+  static std::string EncodeTrashChunkValue(const pb::mdsv2::TrashSlice& slice);
+  static pb::mdsv2::TrashSlice DecodeTrashChunkValue(const std::string& value);
 };
 
 }  // namespace mdsv2

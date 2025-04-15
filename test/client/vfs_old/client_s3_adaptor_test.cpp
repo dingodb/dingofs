@@ -29,10 +29,9 @@
 #include <memory>
 
 #include "client/blockcache/block_cache.h"
-#include "client/blockcache/error.h"
 #include "client/blockcache/mock/mock_block_cache.h"
+#include "client/common/status.h"
 #include "client/vfs_old/inode_wrapper.h"
-#include "client/vfs_old/mock_client_s3.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
 #include "stub/rpcclient/mock_mds_client.h"
@@ -44,7 +43,6 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using dingofs::client::blockcache::BCACHE_ERROR;
 using dingofs::client::blockcache::MockBlockCache;
 using dingofs::client::blockcache::StoreType;
 using dingofs::client::common::S3ClientAdaptorOption;
@@ -273,8 +271,7 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
   EXPECT_CALL(*mockBlockCache_, GetStoreType())
       .WillOnce(Return(StoreType::NONE));
-  EXPECT_CALL(*mockBlockCache_, Flush(_))
-      .WillOnce(Return(BCACHE_ERROR::IO_ERROR));
+  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::IoError("")));
   ASSERT_EQ(DINGOFS_ERROR::INTERNAL, s3ClientAdaptor_->FlushAllCache(1));
 
   LOG(INFO)
@@ -283,8 +280,8 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
   EXPECT_CALL(*mockBlockCache_, GetStoreType())
-      .WillOnce(Return(StoreType::kDisk));
-  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(BCACHE_ERROR::OK));
+      .WillOnce(Return(StoreType::DISK));
+  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::OK()));
   ASSERT_EQ(DINGOFS_ERROR::OK, s3ClientAdaptor_->FlushAllCache(1));
 }
 

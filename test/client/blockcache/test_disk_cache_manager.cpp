@@ -24,9 +24,9 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
+#include "client/blockcache/builder/builder.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/log.h"
-#include "client/blockcache/builder/builder.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
@@ -53,20 +53,20 @@ TEST_F(DiskCacheManagerTest, CleanupFull) {
 
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   auto key_100 = BlockKeyBuilder().Build(100);
   auto key_200 = BlockKeyBuilder().Build(200);
   auto block = BlockBuilder().Build(std::string(10, '0'));
   auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
-  ASSERT_EQ(disk_cache->Stage(key_100, block, ctx), BCACHE_ERROR::OK);
-  ASSERT_EQ(disk_cache->Stage(key_200, block, ctx), BCACHE_ERROR::OK);
+  ASSERT_EQ(disk_cache->Stage(key_100, block, ctx), Status::OK());
+  ASSERT_EQ(disk_cache->Stage(key_200, block, ctx), Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_100));
   ASSERT_TRUE(disk_cache->IsCached(key_200));
 
   // NOTE: key_100, key_200 is in active, so we will evict key_300 firstly
   auto key_300 = BlockKeyBuilder().Build(300);
-  ASSERT_EQ(disk_cache->Stage(key_300, block, ctx), BCACHE_ERROR::OK);
+  ASSERT_EQ(disk_cache->Stage(key_300, block, ctx), Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_100));
   ASSERT_TRUE(disk_cache->IsCached(key_200));
   ASSERT_FALSE(disk_cache->IsCached(key_300));
@@ -83,12 +83,12 @@ TEST_F(DiskCacheManagerTest, CleanupExpire) {
 
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build(std::string(10, '0'));
   auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
-  ASSERT_EQ(disk_cache->Stage(key, block, ctx), BCACHE_ERROR::OK);
+  ASSERT_EQ(disk_cache->Stage(key, block, ctx), Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key));
 
   std::this_thread::sleep_for(std::chrono::seconds(5));

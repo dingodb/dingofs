@@ -26,6 +26,7 @@ target_link_libraries(mdsv2_service
     mdsv2_filesystem
     mdsv2_coordinator
     mdsv2_mds
+    mdsv2_statistics
     
     PROTO_OBJS
     protobuf::libprotobuf

@@ -22,9 +22,9 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "base/filepath/filepath.h"
+#include "client/blockcache/builder/builder.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/local_filesystem.h"
-#include "client/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
@@ -48,14 +48,14 @@ TEST_F(DiskCacheTest, Basic) {
   auto disk_cache = builder.Build();
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   std::string id = disk_cache->Id();
   ASSERT_GT(id.size(), 0);
   LOG(INFO) << "disk cache uuid=" << id;
 
   rc = disk_cache->Shutdown();
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 }
 
 TEST_F(DiskCacheTest, Stage) {
@@ -66,14 +66,14 @@ TEST_F(DiskCacheTest, Stage) {
   std::vector<BlockKey> staging;
   auto rc = disk_cache->Init([&](const BlockKey& key, const std::string&,
                                  BlockContext) { staging.emplace_back(key); });
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
   auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
   rc = disk_cache->Stage(key, block, ctx);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   auto fs = NewTempLocalFileSystem();
   auto root_dir = builder.GetRootDir();
@@ -94,14 +94,14 @@ TEST_F(DiskCacheTest, RemoveStage) {
   auto disk_cache = builder.Build();
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
   auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
   rc = disk_cache->Stage(key, block, ctx);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   auto fs = NewTempLocalFileSystem();
   auto root_dir = builder.GetRootDir();
@@ -109,7 +109,7 @@ TEST_F(DiskCacheTest, RemoveStage) {
   ASSERT_TRUE(fs->FileExists(stage_path));
 
   rc = disk_cache->RemoveStage(key, ctx);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   ASSERT_FALSE(fs->FileExists(stage_path));
 }
 
@@ -120,13 +120,13 @@ TEST_F(DiskCacheTest, Cache) {
   auto disk_cache = builder.Build();
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("xyz");
   rc = disk_cache->Cache(key, block);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
 
   auto fs = NewTempLocalFileSystem();
   auto root_dir = builder.GetRootDir();
@@ -136,7 +136,7 @@ TEST_F(DiskCacheTest, Cache) {
   char buffer[5];
   std::shared_ptr<BlockReader> reader;
   rc = disk_cache->Load(key, reader);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   rc = reader->ReadAt(0, 3, buffer);
   ASSERT_EQ(std::string(buffer, 3), "xyz");
 }
@@ -148,7 +148,7 @@ TEST_F(DiskCacheTest, IsCached) {
   auto disk_cache = builder.Build();
   auto rc = disk_cache->Init(
       [](const BlockKey&, const std::string&, BlockContext) {});
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   auto defer = MakeCleanup([&]() { disk_cache->Shutdown(); });
 
   auto key_100 = BlockKeyBuilder().Build(100);
@@ -159,11 +159,11 @@ TEST_F(DiskCacheTest, IsCached) {
   auto block = BlockBuilder().Build("xyz");
   auto ctx = BlockContext(BlockFrom::RELOAD);
   rc = disk_cache->Stage(key_100, block, ctx);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_100));
 
   rc = disk_cache->Cache(key_200, block);
-  ASSERT_EQ(rc, BCACHE_ERROR::OK);
+  ASSERT_EQ(rc, Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_200));
 }
 

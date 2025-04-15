@@ -30,16 +30,16 @@
 
 #include <string>
 
-#include "dingofs/mds.pb.h"
-#include "mds/topology/topology_storage_codec.h"
-#include "mds/topology/topology_storge_etcd.h"
 #include "aws/mock_s3_adapter.h"
+#include "dingofs/mds.pb.h"
 #include "mds/fake_metaserver.h"
 #include "mds/mock/mock_cli2.h"
 #include "mds/mock/mock_kvstorage_client.h"
 #include "mds/mock/mock_topology.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge_etcd.h"
 
-using ::dingofs::aws::MockS3Adapter;
+using ::dingofs::dataaccess::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;
 using ::dingofs::mds::topology::DefaultTokenGenerator;
 using ::dingofs::mds::topology::MockEtcdClient;
@@ -69,7 +69,7 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using ::dingofs::aws::MockS3Adapter;
+using ::dingofs::dataaccess::aws::MockS3Adapter;
 using ::google::protobuf::util::MessageDifferencer;
 
 namespace dingofs {

@@ -81,14 +81,15 @@ static inline bool IsDir(uint64_t ino) { return (ino & 1) == 1; }
 static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-                       RenamerPtr renamer, MutationProcessorPtr mutation_processor)
+                       RenamerPtr renamer, MutationProcessorPtr mutation_processor, MDSMetaMapPtr mds_meta_map)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
       id_generator_(std::move(id_generator)),
       kv_storage_(kv_storage),
       renamer_(renamer),
-      mutation_processor_(mutation_processor) {
+      mutation_processor_(mutation_processor),
+      mds_meta_map_(mds_meta_map) {
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
@@ -1478,9 +1479,9 @@ Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::stri
   return Status::OK();
 }
 
-static void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes) {
+void FileSystem::SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes) {
   MDSMeta mds_meta;
-  if (!Server::GetInstance().GetMDSMetaMap()->GetMDSMeta(mds_id, mds_meta)) {
+  if (!mds_meta_map_->GetMDSMeta(mds_id, mds_meta)) {
     DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found mds({}) meta.", fs_id, mds_id);
     return;
   }
@@ -1826,6 +1827,254 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   }
 
   out_slice_list = inode->GetChunk(chunk_index);
+
+  return Status::OK();
+}
+
+std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::Inode& inode, uint64_t chunk_index,
+                                                              pb::mdsv2::SliceList chunk) {
+  struct OffsetRange {
+    uint64_t start;
+    uint64_t end;
+    std::vector<pb::mdsv2::Slice> slices;
+  };
+
+  struct Block {
+    uint64_t slice_id;
+    uint64_t offset;
+    uint64_t size;
+  };
+
+  const auto& fs_info = FsInfo();
+
+  const uint32_t fs_id = fs_info.fs_id();
+  const uint64_t chunk_offset = chunk_index * fs_info.chunk_size();
+  const uint64_t block_size = fs_info.block_size();
+  const uint64_t file_length = inode.length();
+
+  std::vector<pb::mdsv2::TrashSlice> trash_slices;
+
+  // out of file length slices
+  if (chunk_offset >= file_length) {
+    for (const auto& slice : chunk.slices()) {
+      if (slice.offset() >= file_length) {
+        pb::mdsv2::TrashSlice trash_slice;
+        trash_slice.set_fs_id(fs_id);
+        trash_slice.set_ino(inode.ino());
+        trash_slice.set_chunk_index(chunk_index);
+        trash_slice.set_slice_id(slice.id());
+        trash_slice.set_offset(slice.offset());
+        trash_slice.set_len(slice.len());
+
+        trash_slices.push_back(std::move(trash_slice));
+      }
+    }
+
+    return trash_slices;
+  }
+
+  // get complete overlapped slices
+  // sort by offset
+  std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
+            [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.offset() < b.offset(); });
+
+  // get offset ranges
+  std::vector<uint64_t> offsets;
+  for (const auto& slice : chunk.slices()) {
+    offsets.push_back(slice.offset());
+    offsets.push_back(slice.offset() + slice.len());
+  }
+
+  std::sort(offsets.begin(), offsets.end());
+
+  std::vector<OffsetRange> offset_ranges;
+  for (size_t i = 0; i < offsets.size() - 1; ++i) {
+    offset_ranges.push_back({.start = offsets[i], .end = offsets[i + 1]});
+  }
+
+  for (auto& offset_range : offset_ranges) {
+    for (const auto& slice : chunk.slices()) {
+      uint64_t slice_start = slice.offset();
+      uint64_t slice_end = slice.offset() + slice.len();
+      if ((slice_start >= offset_range.start && slice_start < offset_range.end) ||
+          (slice_end >= offset_range.start && slice_end < offset_range.end)) {
+        offset_range.slices.push_back(slice);
+      }
+    }
+  }
+
+  // get reserve slice ids
+  std::set<uint64_t> reserve_slice_ids;
+  for (auto& offset_range : offset_ranges) {
+    // sort by id, from newest to oldest
+    std::sort(offset_range.slices.begin(), offset_range.slices.end(),
+              [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.id() > b.id(); });
+    reserve_slice_ids.insert(offset_range.slices.front().id());
+  }
+
+  // get delete slices
+  for (const auto& slice : chunk.slices()) {
+    if (reserve_slice_ids.count(slice.id()) == 0) {
+      pb::mdsv2::TrashSlice trash_slice;
+      trash_slice.set_fs_id(fs_id);
+      trash_slice.set_ino(inode.ino());
+      trash_slice.set_chunk_index(chunk_index);
+      trash_slice.set_slice_id(slice.id());
+      trash_slice.set_offset(slice.offset());
+      trash_slice.set_len(slice.len());
+
+      trash_slices.push_back(std::move(trash_slice));
+    }
+  }
+
+  // get delete blocks from covered slices
+  std::vector<Block> delete_blocks;
+  for (auto& offset_range : offset_ranges) {
+    auto& slices = offset_range.slices;
+    auto reserve_slice = slices.front();
+    for (int i = 1; i < slices.size(); ++i) {
+      auto& slice = slices[i];
+      if (reserve_slice_ids.count(slice.id()) == 0) {
+        continue;
+      }
+
+      auto start_offset = std::max(offset_range.start, slice.offset());
+      auto end_offset = std::min(offset_range.end, slice.offset() + slice.len());
+
+      for (uint64_t block_offset = slice.offset(); block_offset < end_offset; block_offset += block_size) {
+        if (block_offset >= start_offset && block_offset + block_size < end_offset) {
+          delete_blocks.push_back({.slice_id = slice.id(), .offset = block_offset, .size = block_size});
+        }
+      }
+    }
+  }
+
+  return trash_slices;
+}
+
+static std::map<uint64_t, pb::mdsv2::TrashSlice> GenSliceMap(const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+  std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
+  for (const auto& slice : trash_slices) {
+    slice_map[slice.slice_id()] = slice;
+  }
+
+  return slice_map;
+}
+
+static void UpdateChunk(pb::mdsv2::Inode& pb_inode, const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+  auto trash_slice_map = GenSliceMap(trash_slices);
+  // delete slices from chunks
+  for (auto chunk_it = pb_inode.mutable_chunks()->begin(); chunk_it != pb_inode.mutable_chunks()->end();) {
+    auto& chunk = chunk_it->second;
+    for (auto slice_it = chunk.mutable_slices()->begin(); slice_it != chunk.mutable_slices()->end();) {
+      if (trash_slice_map.count(slice_it->id()) > 0) {
+        slice_it = chunk.mutable_slices()->erase(slice_it);
+      } else {
+        ++slice_it;
+      }
+    }
+
+    if (chunk.slices().empty()) {
+      chunk_it = pb_inode.mutable_chunks()->erase(chunk_it);
+    } else {
+      ++chunk_it;
+    }
+  }
+}
+
+Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index,
+                                std::vector<pb::mdsv2::TrashSlice>& out_trash_slices) {
+  auto trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
+
+  std::string inode_key = MetaDataCodec::EncodeInodeKey(fs_id_, ino);
+  std::vector<pb::mdsv2::TrashSlice> trash_slices;
+
+  int retry = 0;
+  do {
+    trash_slices.clear();
+    auto txn = kv_storage_->NewTxn();
+
+    std::string value;
+    auto status = txn->Get(inode_key, value);
+    if (!status.ok()) {
+      return status;
+    }
+
+    auto pb_inode = MetaDataCodec::DecodeInodeValue(value);
+
+    if (chunk_index != 0) {
+      auto it = pb_inode.chunks().find(chunk_index);
+      if (it == pb_inode.chunks().end()) {
+        return Status(pb::error::ENOT_FOUND, fmt::format("chunk index({}) not found.", chunk_index));
+      }
+
+      trash_slices = DoCompactChunk(pb_inode, chunk_index, it->second);
+    } else {
+      for (const auto& [index, chunk] : pb_inode.chunks()) {
+        auto chunk_trash_slices = DoCompactChunk(pb_inode, index, chunk);
+        trash_slices.insert(trash_slices.end(), chunk_trash_slices.begin(), chunk_trash_slices.end());
+      }
+    }
+
+    // update inode chunk info
+    UpdateChunk(pb_inode, trash_slices);
+    pb_inode.set_version(pb_inode.version() + 1);
+    txn->Put(inode_key, MetaDataCodec::EncodeInodeValue(pb_inode));
+
+    // save delete slices
+    for (const auto& slice : trash_slices) {
+      std::string key =
+          MetaDataCodec::EncodeTrashChunkKey(slice.fs_id(), slice.ino(), slice.chunk_index(), slice.slice_id());
+      auto status = txn->Put(key, MetaDataCodec::EncodeTrashChunkValue(slice));
+      if (!status.ok()) {
+        return status;
+      }
+    }
+
+    status = txn->Commit();
+    trace_txn = txn->GetTrace();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.retry = retry;
+
+  out_trash_slices = std::move(trash_slices);
+
+  return Status::OK();
+}
+
+Status FileSystem::CleanTrashFileData(Context& ctx, uint64_t ino) {
+  auto trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
+
+  Range range;
+  MetaDataCodec::GetTrashChunkRange(fs_id_, ino, range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      return status;
+    }
+
+    for (const auto& kv : kvs) {
+      pb::mdsv2::TrashSlice trash_slice = MetaDataCodec::DecodeTrashChunkValue(kv.value);
+
+      auto status = data_accessor_->Delete("");
+      if (!status.ok()) {
+        DINGO_LOG(ERROR) << fmt::format("[fs.{}] delete trash slice({}) fail, {}", fs_id_,
+                                        trash_slice.ShortDebugString(), status.ToString());
+      }
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   return Status::OK();
 }
@@ -2291,7 +2540,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs
   CHECK(id_generator->Init()) << "init id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                            renamer_, mutation_processor_);
+                            renamer_, mutation_processor_, mds_meta_map_);
   CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
   // create root inode
@@ -2618,7 +2867,7 @@ bool FileSystemSet::LoadFileSystems() {
     if (file_system == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
       file_system = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
-                                    kv_storage_, renamer_, mutation_processor_);
+                                    kv_storage_, renamer_, mutation_processor_, mds_meta_map_);
       AddFileSystem(file_system);
 
     } else {

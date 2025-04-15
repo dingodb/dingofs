@@ -90,6 +90,8 @@ class Status {
 
   Status(Status&& rhs) noexcept;
   Status& operator=(Status&& rhs) noexcept;
+  bool operator==(const Status& rhs) const { return code_ == rhs.code_; }
+  bool operator!=(const Status& rhs) const { return code_ != rhs.code_; }
 
   bool ok() const { return code_ == kOk; }  // NOLINT
   static Status OK() { return Status(); }

@@ -33,27 +33,27 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::client::blockcache::BCACHE_ERROR;
-
 class MockBlockCache : public BlockCache {
  public:
   MockBlockCache() = default;
 
   ~MockBlockCache() override = default;
 
-  MOCK_METHOD0(Init, BCACHE_ERROR());
+  MOCK_METHOD0(Init, Status());
 
-  MOCK_METHOD0(Shutdown, BCACHE_ERROR());
+  MOCK_METHOD0(Shutdown, Status());
 
-  MOCK_METHOD3(Put, BCACHE_ERROR(const BlockKey& key, const Block& block,
-                                 BlockContext ctx));
+  MOCK_METHOD3(Put, Status(const BlockKey& key, const Block& block,
+                           BlockContext ctx));
 
-  MOCK_METHOD5(Range, BCACHE_ERROR(const BlockKey& key, off_t offset,
-                                   size_t size, char* buffer, bool retrive));
+  MOCK_METHOD5(Range, Status(const BlockKey& key, off_t offset, size_t size,
+                             char* buffer, bool retrive));
 
-  MOCK_METHOD2(Cache, BCACHE_ERROR(const BlockKey& key, const Block& block));
+  MOCK_METHOD2(SubmitPreFetch, void(const BlockKey& key, size_t length));
 
-  MOCK_METHOD1(Flush, BCACHE_ERROR(uint64_t ino));
+  MOCK_METHOD2(Cache, Status(const BlockKey& key, const Block& block));
+
+  MOCK_METHOD1(Flush, Status(uint64_t ino));
 
   MOCK_METHOD1(IsCached, bool(const BlockKey& key));
 

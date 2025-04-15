@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fmt/format.h>
-
+#include <cstdint>
 #include <string>
 
 #include "fmt/core.h"
@@ -100,7 +99,7 @@ TEST_F(MetaDataCodecTest, EncodeDentryKey) {
     std::string expected_name = "dentry";
     std::string key = MetaDataCodec::EncodeDentryKey(expected_fs_id, expected_inode_id, expected_name);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
     std::string actual_name;
     MetaDataCodec::DecodeDentryKey(key, actual_fs_id, actual_inode_id, actual_name);
@@ -115,7 +114,7 @@ TEST_F(MetaDataCodecTest, EncodeDentryKey) {
     std::string expected_name = "dentryfdsaf";
     std::string key = MetaDataCodec::EncodeDentryKey(expected_fs_id, expected_inode_id, expected_name);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
     std::string actual_name;
     MetaDataCodec::DecodeDentryKey(key, actual_fs_id, actual_inode_id, actual_name);
@@ -127,25 +126,25 @@ TEST_F(MetaDataCodecTest, EncodeDentryKey) {
 
 TEST_F(MetaDataCodecTest, EncodeDirInodeKey) {
   {
-    int expected_fs_id = 1;
+    uint32_t expected_fs_id = 1;
     uint64_t expected_inode_id = 12345;
-    std::string key = MetaDataCodec::EncodeDirInodeKey(expected_fs_id, expected_inode_id);
+    std::string key = MetaDataCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
-    MetaDataCodec::DecodeDirInodeKey(key, actual_fs_id, actual_inode_id);
+    MetaDataCodec::DecodeInodeKey(key, actual_fs_id, actual_inode_id);
     EXPECT_EQ(expected_fs_id, actual_fs_id);
     EXPECT_EQ(expected_inode_id, actual_inode_id);
   }
 
   {
-    int expected_fs_id = 100;
+    uint32_t expected_fs_id = 100;
     uint64_t expected_inode_id = 123434345;
-    std::string key = MetaDataCodec::EncodeDirInodeKey(expected_fs_id, expected_inode_id);
+    std::string key = MetaDataCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
-    MetaDataCodec::DecodeDirInodeKey(key, actual_fs_id, actual_inode_id);
+    MetaDataCodec::DecodeInodeKey(key, actual_fs_id, actual_inode_id);
     EXPECT_EQ(expected_fs_id, actual_fs_id);
     EXPECT_EQ(expected_inode_id, actual_inode_id);
   }
@@ -153,24 +152,24 @@ TEST_F(MetaDataCodecTest, EncodeDirInodeKey) {
 
 TEST_F(MetaDataCodecTest, EncodeFileInodeKey) {
   {
-    int expected_fs_id = 1;
+    uint32_t expected_fs_id = 1;
     uint64_t expected_inode_id = 12345;
-    std::string key = MetaDataCodec::EncodeFileInodeKey(expected_fs_id, expected_inode_id);
+    std::string key = MetaDataCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
-    MetaDataCodec::DecodeFileInodeKey(key, actual_fs_id, actual_inode_id);
+    MetaDataCodec::DecodeInodeKey(key, actual_fs_id, actual_inode_id);
     EXPECT_EQ(expected_fs_id, actual_fs_id);
     EXPECT_EQ(expected_inode_id, actual_inode_id);
   }
   {
-    int expected_fs_id = 1000;
+    uint32_t expected_fs_id = 1000;
     uint64_t expected_inode_id = 12397745;
-    std::string key = MetaDataCodec::EncodeFileInodeKey(expected_fs_id, expected_inode_id);
+    std::string key = MetaDataCodec::EncodeInodeKey(expected_fs_id, expected_inode_id);
 
-    int actual_fs_id;
+    uint32_t actual_fs_id;
     uint64_t actual_inode_id;
-    MetaDataCodec::DecodeFileInodeKey(key, actual_fs_id, actual_inode_id);
+    MetaDataCodec::DecodeInodeKey(key, actual_fs_id, actual_inode_id);
     EXPECT_EQ(expected_fs_id, actual_fs_id);
     EXPECT_EQ(expected_inode_id, actual_inode_id);
   }
