@@ -13,6 +13,8 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
+option(WITH_LIBUSRBIO "Enable LIBUSRBIO feature" OFF)
+
 file(GLOB BLOCKCACHE_LIB_SRCS
     "*.cpp"
 )
@@ -31,3 +33,14 @@ target_link_libraries(client_blockcache
     spdlog::spdlog
     absl::cleanup
 )
+
+# currently only support Ubuntu
+cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
+if(WITH_LIBUSRBIO AND ${PRETTY_NAME} MATCHES "Ubuntu")
+    find_package(usrbio REQUIRED)
+    target_compile_definitions(client_blockcache PRIVATE WITH_LIBUSRBIO)
+    message(STATUS "LIBUSRBIO feature enabled")
+    target_link_libraries(client_blockcache 3fs::usrbio)
+else()
+    message(STATUS "LIBUSRBIO feature disabled")
+endif()

@@ -106,6 +106,8 @@ bash build_thirdparties.sh
 mkdir build
 cd build
 cmake ..
+or
+cmake -DWITH_LIBUSRBIO=ON ..  #enable usrbio feature
 make -j 32
 ```
 
