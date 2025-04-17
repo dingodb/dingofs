@@ -19,8 +19,8 @@
 #include <string>
 
 #include "brpc/server.h"
-#include "mdsv2/background/compaction.h"
 #include "mdsv2/background/fsinfo_sync.h"
+#include "mdsv2/background/gc.h"
 #include "mdsv2/background/heartbeat.h"
 #include "mdsv2/background/mds_monitor.h"
 #include "mdsv2/common/crontab.h"
@@ -67,7 +67,7 @@ class Server {
 
   bool InitMDSMonitor();
 
-  bool InitCompactChunkProcessor();
+  bool InitGcProcessor();
 
   bool InitCrontab();
 
@@ -81,7 +81,6 @@ class Server {
   CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorPtr GetMDSMonitor() { return mds_monitor_; }
-  CompactChunkProcessorPtr GetCompactChunkProcessor() { return compact_chunk_processor_; }
   MutationProcessorPtr GetMutationProcessor() { return mutation_processor_; }
 
   void Run();
@@ -134,8 +133,8 @@ class Server {
   // mds monitor
   MDSMonitorPtr mds_monitor_;
 
-  // compaction
-  CompactChunkProcessorPtr compact_chunk_processor_;
+  // gc
+  GcProcessorSPtr gc_processor_;
 
   // worker set for service request
   WorkerSetPtr read_worker_set_;

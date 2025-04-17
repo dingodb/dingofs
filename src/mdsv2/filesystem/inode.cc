@@ -55,9 +55,6 @@ Inode::Inode(const pb::mdsv2::Inode& inode)
     parents_.push_back(parent);
   }
 
-  for (const auto& [index, slice_list] : inode.chunks()) {
-    chunks_.insert(std::make_pair(index, slice_list));
-  }
   for (const auto& [key, value] : inode.xattrs()) {
     xattrs_.insert(std::make_pair(key, value));
   }
@@ -79,7 +76,6 @@ Inode::Inode(const Inode& inode) {
   rdev_ = inode.rdev_;
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
-  chunks_ = inode.chunks_;
   xattrs_ = inode.xattrs_;
 }
 
@@ -103,7 +99,6 @@ Inode& Inode::operator=(const Inode& inode) {
   rdev_ = inode.rdev_;
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
-  chunks_ = inode.chunks_;
   xattrs_ = inode.xattrs_;
 
   return *this;
@@ -180,23 +175,6 @@ uint32_t Inode::Openmpcount() {
   utils::ReadLockGuard lk(lock_);
 
   return openmpcount_;
-}
-
-Inode::ChunkMap Inode::GetChunkMap() {
-  utils::ReadLockGuard lk(lock_);
-
-  return chunks_;
-}
-
-pb::mdsv2::SliceList Inode::GetChunk(uint64_t chunk_index) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = chunks_.find(chunk_index);
-  if (it == chunks_.end()) {
-    return pb::mdsv2::SliceList();
-  }
-
-  return it->second;
 }
 
 Inode::XAttrMap Inode::GetXAttrMap() {
@@ -296,23 +274,6 @@ bool Inode::UpdateXAttr(uint64_t version, const std::map<std::string, std::strin
   return true;
 }
 
-bool Inode::UpdateChunk(uint64_t version, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (version <= version_) {
-    return false;
-  }
-
-  auto it = chunks_.find(chunk_index);
-  if (it == chunks_.end()) {
-    chunks_.insert({chunk_index, slice_list});
-  } else {
-    it->second.MergeFrom(slice_list);
-  }
-
-  return true;
-}
-
 bool Inode::UpdateParent(uint64_t version, uint64_t parent_ino) {
   utils::WriteLockGuard lk(lock_);
 
@@ -350,10 +311,6 @@ void Inode::CopyTo(pb::mdsv2::Inode& inode) {
 
   for (auto& parent : parents_) {
     inode.add_parent_inos(parent);
-  }
-
-  for (const auto& [index, slice_list] : chunks_) {
-    inode.mutable_chunks()->insert({index, slice_list});
   }
 
   for (const auto& [key, value] : xattrs_) {

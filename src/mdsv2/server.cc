@@ -41,6 +41,7 @@ DEFINE_int32(heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
 DEFINE_int32(mdsmonitor_interval_s, 5, "mds monitor interval seconds");
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
+DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
 DEFINE_int32(compact_chunk_interval_s, 5, "compact chunk interval seconds");
 
 DEFINE_uint32(read_worker_num, 128, "read service worker num");
@@ -255,14 +256,16 @@ bool Server::InitMDSMonitor() {
   return true;
 }
 
-bool Server::InitCompactChunkProcessor() {
+bool Server::InitGcProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
-  CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
-  compact_chunk_processor_ = CompactChunkProcessor::New(kv_storage_, file_system_set_);
-  CHECK(compact_chunk_processor_ != nullptr) << "new CompactChunkProcessor fail.";
+  auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, mds_meta_.ID());
 
-  return compact_chunk_processor_->Init();
+  gc_processor_ = GcProcessor::New(kv_storage_, dist_lock);
+
+  CHECK(gc_processor_->Init()) << "init GcProcessor fail.";
+
+  return true;
 }
 
 bool Server::InitCrontab() {
@@ -290,14 +293,6 @@ bool Server::InitCrontab() {
       FLAGS_mdsmonitor_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetMDSMonitor()->Run(); },
-  });
-
-  // Add fs info sync crontab
-  crontab_configs_.push_back({
-      "COMPACT_CHUNK",
-      FLAGS_compact_chunk_interval_s * 1000,
-      true,
-      [](void*) { Server::GetInstance().GetCompactChunkProcessor()->LaunchCompaction(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);
@@ -378,7 +373,6 @@ void Server::Stop() {
   read_worker_set_->Destroy();
   write_worker_set_->Destroy();
   mds_monitor_->Destroy();
-  compact_chunk_processor_->Destroy();
 }
 
 }  // namespace mdsv2

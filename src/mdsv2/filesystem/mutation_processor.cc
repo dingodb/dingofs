@@ -199,7 +199,6 @@ bool IsFileInodeTxn(Operation::OpType op_type) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
-    case Operation::OpType::kUpdateInodeChunk:
       return true;
 
     case Operation::OpType::kCreateDentry:
@@ -236,7 +235,6 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
-    case Operation::OpType::kUpdateInodeChunk:
       status = ExecuteUpdateInodeTxnMutation(txn_mutation);
       break;
 
@@ -335,22 +333,6 @@ void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation*>& oper
         } else {
           operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
         }
-      } break;
-
-      case Operation::OpType::kUpdateInodeChunk: {
-        if (exist_inode) {
-          auto* param = operation->update_inode_chunk;
-          auto it = inode.mutable_chunks()->find(param->chunk_index);
-          if (it == inode.chunks().end()) {
-            inode.mutable_chunks()->insert({param->chunk_index, param->slice_list});
-          } else {
-            it->second.MergeFrom(param->slice_list);
-          }
-
-        } else {
-          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
-        }
-
       } break;
 
       case Operation::OpType::kDeleteInode: {

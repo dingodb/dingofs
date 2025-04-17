@@ -208,12 +208,10 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
 
-  s = meta_system_->Open(ino, flags);
+  s = meta_system_->Open(ino, flags, fh);
   if (!s.ok()) {
     return s;
   }
-
-  *fh = 1;
 
   return s;
 }
@@ -228,7 +226,7 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
                            StrAttr(attr));
   });
 
-  s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr);
+  s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr, fh);
   return s;
 }
 

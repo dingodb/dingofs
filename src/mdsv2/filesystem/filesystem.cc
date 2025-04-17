@@ -38,6 +38,7 @@
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/filesystem/dentry.h"
+#include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
@@ -66,6 +67,8 @@ static const std::string kRecyleName = ".recycle";
 DEFINE_uint32(filesystem_name_max_size, 1024, "Max size of filesystem name.");
 DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
+DEFINE_uint32(compact_slice_threshold_num, 16, "Compact slice threshold num.");
+
 DECLARE_uint32(txn_max_retry_times);
 
 DECLARE_int32(fs_scan_batch_size);
@@ -93,6 +96,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr i
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
+  chunk_cache_ = ChunkCache::New();
 };
 
 FileSystemPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
@@ -720,11 +724,7 @@ Status FileSystem::Open(Context& ctx, uint64_t ino, std::string& session_id) {
   const bool bypass_cache = ctx.IsBypassCache();
   const std::string& client_id = ctx.ClientId();
 
-  auto inode = open_files_.IsOpened(ino);
-  if (inode != nullptr) {
-    return Status::OK();
-  }
-
+  InodePtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -734,13 +734,13 @@ Status FileSystem::Open(Context& ctx, uint64_t ino, std::string& session_id) {
   // truncate file
   // set file length to 0 and update inode mtime/ctime
 
-  FileSession file_session;
+  FileSessionPtr file_session;
   status = file_session_manager_->Create(ino, client_id, file_session);
   if (!status.ok()) {
     return status;
   }
 
-  session_id = file_session.SessionId();
+  session_id = file_session->SessionId();
 
   return Status::OK();
 }
@@ -1771,47 +1771,62 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto& trace = ctx.GetTrace();
-
   InodePtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
 
-  uint64_t now_time = Helper::TimestampNs();
+  auto& trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
 
-  bthread::CountdownEvent count_down(1);
-  MixMutation mix_mutation = {.fs_id = fs_id_};
+  uint64_t now_ns = Helper::TimestampNs();
+  std::string key = MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index);
+  std::string value;
+  pb::mdsv2::Chunk chunk;
+  int retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+    std::string value;
+    status = txn->Get(key, value);
+    if (!status.ok()) {
+      return status;
+    }
 
-  Operation inode_operation(Operation::OpType::kUpdateInodeChunk, ino, MetaDataCodec::EncodeInodeKey(fs_id_, ino),
-                            &count_down, &trace);
-  inode_operation.SetUpdateInodeChunk(chunk_index, slice_list);
-  mix_mutation.operations.push_back(&inode_operation);
+    chunk = MetaDataCodec::DecodeChunkValue(value);
 
-  if (!mutation_processor_->Commit(mix_mutation)) {
-    return Status(pb::error::EINTERNAL, "commit mutation fail");
+    // append new slices
+    chunk.mutable_slices()->MergeFrom(slice_list.slices());
+
+    // compact chunk
+    if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
+      DoCompactChunk(inode->Ino(), inode->Length(), chunk, txn.get());
+    }
+
+    txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
+    status = txn->Commit();
+    trace_txn = txn->GetTrace();
+    if (!status.ok()) {
+      return status;
+    }
+
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
+
+  trace_txn.retry = retry;
+
+  if (status.ok()) {
+    // update chunk cache
+    chunk_cache_->Upsert(ino, chunk_index, chunk);
   }
 
-  CHECK(count_down.wait() == 0) << "count down wait fail.";
-
-  butil::Status& rpc_status = inode_operation.status;
-  auto& result = inode_operation.result;
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] writeslice {}/{} finish, elapsed_time({}us) rpc_status({}).", fs_id_, ino,
-                                 chunk_index, (Helper::TimestampNs() - now_time) / 1000, rpc_status.error_str());
-
-  if (!rpc_status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put fail, {}", rpc_status.error_str()));
-  }
-
-  // update cache
-  inode->UpdateChunk(result.version, chunk_index, slice_list);
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] writeslice {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
+                                 chunk_index, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
 
   return Status::OK();
 }
 
-Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list) {
+Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& slice_list) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readslice ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
 
   if (!CanServe()) {
@@ -1819,6 +1834,9 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   }
 
   auto& trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
+
+  uint64_t now_ns = Helper::TimestampNs();
 
   InodePtr inode;
   auto status = GetInode(ctx, ino, inode);
@@ -1826,13 +1844,32 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
     return status;
   }
 
-  out_slice_list = inode->GetChunk(chunk_index);
+  // try to get from cache
+  auto chunk = chunk_cache_->Get(ino, chunk_index);
+  if (chunk != nullptr) {
+    *slice_list.mutable_slices() = chunk->slices();
+    return Status::OK();
+  }
 
-  return Status::OK();
+  // take from store
+  auto txn = kv_storage_->NewTxn();
+  std::string value;
+  status = txn->Get(MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index), value);
+  if (status.ok()) {
+    pb::mdsv2::Chunk chunk = MetaDataCodec::DecodeChunkValue(value);
+    *slice_list.mutable_slices() = chunk.slices();
+  }
+
+  trace_txn = txn->GetTrace();
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] readslice {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
+                                 chunk_index, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
+
+  return status;
 }
 
-std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::Inode& inode, uint64_t chunk_index,
-                                                              pb::mdsv2::SliceList chunk) {
+std::vector<pb::mdsv2::TrashSlice> FileSystem::GenTrashSlices(uint64_t ino, uint64_t file_length,
+                                                              const pb::mdsv2::Chunk& chunk) const {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
@@ -1848,23 +1885,32 @@ std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::I
   const auto& fs_info = FsInfo();
 
   const uint32_t fs_id = fs_info.fs_id();
-  const uint64_t chunk_offset = chunk_index * fs_info.chunk_size();
+  const uint64_t chunk_size = fs_info.chunk_size();
   const uint64_t block_size = fs_info.block_size();
-  const uint64_t file_length = inode.length();
+  const uint64_t chunk_offset = chunk.index() * chunk_size;
+
+  auto chunk_copy = chunk;
 
   std::vector<pb::mdsv2::TrashSlice> trash_slices;
 
-  // out of file length slices
-  if (chunk_offset >= file_length) {
+  // 1. complete out of file length slices
+  // chunk offset:               |______|
+  // file length: |____________|
+  // 2. partial out of file length slices
+  // chunk offset:          |______|
+  // file length: |____________|
+  if (chunk_offset + chunk_size > file_length) {
     for (const auto& slice : chunk.slices()) {
       if (slice.offset() >= file_length) {
         pb::mdsv2::TrashSlice trash_slice;
         trash_slice.set_fs_id(fs_id);
-        trash_slice.set_ino(inode.ino());
-        trash_slice.set_chunk_index(chunk_index);
+        trash_slice.set_ino(ino);
+        trash_slice.set_chunk_index(chunk.index());
         trash_slice.set_slice_id(slice.id());
-        trash_slice.set_offset(slice.offset());
-        trash_slice.set_len(slice.len());
+        trash_slice.set_is_partial(false);
+        auto* range = trash_slice.add_ranges();
+        range->set_offset(slice.offset());
+        range->set_len(slice.len());
 
         trash_slices.push_back(std::move(trash_slice));
       }
@@ -1873,14 +1919,18 @@ std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::I
     return trash_slices;
   }
 
-  // get complete overlapped slices
+  // 3. complete overlapped slices
+  //     |______4________|      slices
+  // |__1__|___2___|____3_____| slices
+  // |________________________| chunk
+  // slice-2 is complete overlapped by slice-4
   // sort by offset
-  std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
+  std::sort(chunk_copy.mutable_slices()->begin(), chunk_copy.mutable_slices()->end(),
             [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::vector<uint64_t> offsets;
-  for (const auto& slice : chunk.slices()) {
+  for (const auto& slice : chunk_copy.slices()) {
     offsets.push_back(slice.offset());
     offsets.push_back(slice.offset() + slice.len());
   }
@@ -1893,7 +1943,7 @@ std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::I
   }
 
   for (auto& offset_range : offset_ranges) {
-    for (const auto& slice : chunk.slices()) {
+    for (const auto& slice : chunk_copy.slices()) {
       uint64_t slice_start = slice.offset();
       uint64_t slice_end = slice.offset() + slice.len();
       if ((slice_start >= offset_range.start && slice_start < offset_range.end) ||
@@ -1913,22 +1963,38 @@ std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::I
   }
 
   // get delete slices
-  for (const auto& slice : chunk.slices()) {
+  for (const auto& slice : chunk_copy.slices()) {
     if (reserve_slice_ids.count(slice.id()) == 0) {
       pb::mdsv2::TrashSlice trash_slice;
       trash_slice.set_fs_id(fs_id);
-      trash_slice.set_ino(inode.ino());
-      trash_slice.set_chunk_index(chunk_index);
+      trash_slice.set_ino(ino);
+      trash_slice.set_chunk_index(chunk.index());
       trash_slice.set_slice_id(slice.id());
-      trash_slice.set_offset(slice.offset());
-      trash_slice.set_len(slice.len());
+      trash_slice.set_is_partial(false);
+      auto* range = trash_slice.add_ranges();
+      range->set_offset(slice.offset());
+      range->set_len(slice.len());
 
       trash_slices.push_back(std::move(trash_slice));
     }
   }
 
-  // get delete blocks from covered slices
-  std::vector<Block> delete_blocks;
+  // 4. partial overlapped slices
+  //     |______4________|      slices
+  // |__1__|___2___|____3_____| slices
+  // |________________________| chunk
+  // slice-2 and slice-3 are partial overlapped by slice-4
+  // or
+  //     |______4________|      slices
+  // |___________1____________| slices
+  // |________________________| chunk
+  // slice-1 is partial overlapped by slice-4
+  // or
+  //     |___2___|   |___3___|   slices
+  // |___________1____________| slices
+  // |________________________| chunk
+  // slice-1 is partial overlapped by slice-2 and slice-3
+  std::map<uint64_t, pb::mdsv2::TrashSlice> temp_trash_slice_map;
   for (auto& offset_range : offset_ranges) {
     auto& slices = offset_range.slices;
     auto reserve_slice = slices.front();
@@ -1943,93 +2009,174 @@ std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(const pb::mdsv2::I
 
       for (uint64_t block_offset = slice.offset(); block_offset < end_offset; block_offset += block_size) {
         if (block_offset >= start_offset && block_offset + block_size < end_offset) {
-          delete_blocks.push_back({.slice_id = slice.id(), .offset = block_offset, .size = block_size});
+          auto it = temp_trash_slice_map.find(slice.id());
+          if (it == temp_trash_slice_map.end()) {
+            pb::mdsv2::TrashSlice trash_slice;
+            trash_slice.set_fs_id(fs_id);
+            trash_slice.set_ino(ino);
+            trash_slice.set_chunk_index(chunk.index());
+            trash_slice.set_slice_id(slice.id());
+            trash_slice.set_is_partial(true);
+            auto* range = trash_slice.add_ranges();
+            range->set_offset(slice.offset());
+            range->set_len(slice.len());
+
+            temp_trash_slice_map[slice.id()] = trash_slice;
+          } else {
+            auto* range = it->second.add_ranges();
+            range->set_offset(block_offset);
+            range->set_len(block_size);
+          }
         }
       }
     }
   }
 
+  for (auto& [_, trash_slice] : temp_trash_slice_map) {
+    trash_slices.push_back(std::move(trash_slice));
+  }
+
   return trash_slices;
 }
 
-static std::map<uint64_t, pb::mdsv2::TrashSlice> GenSliceMap(const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
-  std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
-  for (const auto& slice : trash_slices) {
-    slice_map[slice.slice_id()] = slice;
-  }
+static void UpdateChunk(pb::mdsv2::Chunk& chunk, const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+  auto gen_slice_map_fn = [](const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+    std::map<uint64_t, pb::mdsv2::TrashSlice> slice_map;
+    for (const auto& slice : trash_slices) {
+      slice_map[slice.slice_id()] = slice;
+    }
+    return slice_map;
+  };
 
-  return slice_map;
+  auto trash_slice_map = gen_slice_map_fn(trash_slices);
+  for (auto slice_it = chunk.mutable_slices()->begin(); slice_it != chunk.mutable_slices()->end();) {
+    auto it = trash_slice_map.find(slice_it->id());
+    if (it != trash_slice_map.end() && !it->second.is_partial()) {
+      slice_it = chunk.mutable_slices()->erase(slice_it);
+    } else {
+      ++slice_it;
+    }
+  }
 }
 
-static void UpdateChunk(pb::mdsv2::Inode& pb_inode, const std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
-  auto trash_slice_map = GenSliceMap(trash_slices);
-  // delete slices from chunks
-  for (auto chunk_it = pb_inode.mutable_chunks()->begin(); chunk_it != pb_inode.mutable_chunks()->end();) {
-    auto& chunk = chunk_it->second;
-    for (auto slice_it = chunk.mutable_slices()->begin(); slice_it != chunk.mutable_slices()->end();) {
-      if (trash_slice_map.count(slice_it->id()) > 0) {
-        slice_it = chunk.mutable_slices()->erase(slice_it);
-      } else {
-        ++slice_it;
-      }
-    }
+std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(uint64_t ino, uint64_t file_length,
+                                                              pb::mdsv2::Chunk& chunk) {
+  auto trash_slices = GenTrashSlices(ino, file_length, chunk);
 
-    if (chunk.slices().empty()) {
-      chunk_it = pb_inode.mutable_chunks()->erase(chunk_it);
-    } else {
-      ++chunk_it;
-    }
+  UpdateChunk(chunk, trash_slices);
+
+  return std::move(trash_slices);
+}
+
+std::vector<pb::mdsv2::TrashSlice> FileSystem::DoCompactChunk(uint64_t ino, uint64_t file_length,
+                                                              pb::mdsv2::Chunk& chunk, Txn* txn) {
+  auto trash_slices = DoCompactChunk(ino, file_length, chunk);
+
+  pb::mdsv2::TrashSliceList trash_slice_list;
+  for (auto& slice : trash_slices) {
+    trash_slice_list.add_slices()->Swap(&slice);
   }
+
+  uint64_t now_ns = Helper::TimestampNs();
+  txn->Put(MetaDataCodec::EncodeTrashChunkKey(fs_id_, ino, chunk.index(), now_ns),
+           MetaDataCodec::EncodeTrashChunkValue(trash_slice_list));
+
+  return std::move(trash_slices);
 }
 
 Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index,
-                                std::vector<pb::mdsv2::TrashSlice>& out_trash_slices) {
+                                std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactchunk ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
+
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  InodePtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
   auto trace = ctx.GetTrace();
   auto& trace_txn = trace.GetTxn();
 
-  std::string inode_key = MetaDataCodec::EncodeInodeKey(fs_id_, ino);
-  std::vector<pb::mdsv2::TrashSlice> trash_slices;
+  uint64_t now_ns = Helper::TimestampNs();
+
+  std::string key = MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index);
 
   int retry = 0;
   do {
-    trash_slices.clear();
     auto txn = kv_storage_->NewTxn();
 
     std::string value;
-    auto status = txn->Get(inode_key, value);
+    status = txn->Get(key, value);
     if (!status.ok()) {
       return status;
     }
 
-    auto pb_inode = MetaDataCodec::DecodeInodeValue(value);
+    auto chunk = MetaDataCodec::DecodeChunkValue(value);
 
-    if (chunk_index != 0) {
-      auto it = pb_inode.chunks().find(chunk_index);
-      if (it == pb_inode.chunks().end()) {
-        return Status(pb::error::ENOT_FOUND, fmt::format("chunk index({}) not found.", chunk_index));
-      }
+    trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
 
-      trash_slices = DoCompactChunk(pb_inode, chunk_index, it->second);
-    } else {
-      for (const auto& [index, chunk] : pb_inode.chunks()) {
-        auto chunk_trash_slices = DoCompactChunk(pb_inode, index, chunk);
-        trash_slices.insert(trash_slices.end(), chunk_trash_slices.begin(), chunk_trash_slices.end());
-      }
+    txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
+
+    status = txn->Commit();
+    trace_txn = txn->GetTrace();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
     }
 
-    // update inode chunk info
-    UpdateChunk(pb_inode, trash_slices);
-    pb_inode.set_version(pb_inode.version() + 1);
-    txn->Put(inode_key, MetaDataCodec::EncodeInodeValue(pb_inode));
+    ++retry;
+  } while (retry < FLAGS_txn_max_retry_times);
 
-    // save delete slices
-    for (const auto& slice : trash_slices) {
-      std::string key =
-          MetaDataCodec::EncodeTrashChunkKey(slice.fs_id(), slice.ino(), slice.chunk_index(), slice.slice_id());
-      auto status = txn->Put(key, MetaDataCodec::EncodeTrashChunkValue(slice));
-      if (!status.ok()) {
-        return status;
-      }
+  trace_txn.retry = retry;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] compactchunk {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
+                                 chunk_index, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
+
+  return status;
+}
+
+Status FileSystem::CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactfile ino({}).", fs_id_, ino);
+
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  InodePtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto trace = ctx.GetTrace();
+  auto& trace_txn = trace.GetTxn();
+
+  uint64_t now_ns = Helper::TimestampNs();
+
+  Range range;
+  MetaDataCodec::GetChunkRange(fs_id_, ino, range.start_key, range.end_key);
+
+  int retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+
+    std::vector<KeyValue> kvs;
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      return status;
+    }
+
+    CHECK(kvs.size() <= FLAGS_fs_scan_batch_size) << fmt::format("file({}) has too many chunks.", ino);
+
+    for (const auto& kv : kvs) {
+      auto chunk = MetaDataCodec::DecodeChunkValue(kv.value);
+
+      trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
+
+      txn->Put(MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk.index()), MetaDataCodec::EncodeChunkValue(chunk));
     }
 
     status = txn->Commit();
@@ -2043,38 +2190,83 @@ Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index
 
   trace_txn.retry = retry;
 
-  out_trash_slices = std::move(trash_slices);
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] compactfile {} finish, elapsed_time({}us) status({}).", fs_id_, ino,
+                                 (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
 
-  return Status::OK();
+  return status;
 }
 
-Status FileSystem::CleanTrashFileData(Context& ctx, uint64_t ino) {
-  auto trace = ctx.GetTrace();
-  auto& trace_txn = trace.GetTxn();
+Status FileSystem::CompactAll(Context& ctx, uint64_t& checked_count, uint64_t& compacted_count) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactall.", fs_id_);
+
+  checked_count = 0;
+  compacted_count = 0;
+
+  uint64_t now_ns = Helper::TimestampNs();
 
   Range range;
-  MetaDataCodec::GetTrashChunkRange(fs_id_, ino, range.start_key, range.end_key);
+  MetaDataCodec::GetFileInodeTableRange(fs_id_, range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
+
+  Status status;
   std::vector<KeyValue> kvs;
   do {
     kvs.clear();
-    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
     if (!status.ok()) {
-      return status;
+      break;
     }
 
-    for (const auto& kv : kvs) {
-      pb::mdsv2::TrashSlice trash_slice = MetaDataCodec::DecodeTrashChunkValue(kv.value);
+    for (auto& kv : kvs) {
+      ++checked_count;
+      auto pb_inode = MetaDataCodec::DecodeInodeValue(kv.value);
 
-      auto status = data_accessor_->Delete("");
+      std::vector<pb::mdsv2::TrashSlice> trash_slices;
+      status = CompactFile(ctx, pb_inode.ino(), trash_slices);
       if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[fs.{}] delete trash slice({}) fail, {}", fs_id_,
-                                        trash_slice.ShortDebugString(), status.ToString());
+        break;
+      }
+      if (!trash_slices.empty()) {
+        ++compacted_count;
       }
     }
 
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+  } while (status.ok() && kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] compactall finish, elapsed_time({}us) status({}).", fs_id_,
+                                 (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
+
+  return status;
+}
+
+Status FileSystem::CleanTrashFileData(Context& ctx, uint64_t ino) {
+  // auto trace = ctx.GetTrace();
+  // auto& trace_txn = trace.GetTxn();
+
+  // Range range;
+  // MetaDataCodec::GetTrashChunkRange(fs_id_, ino, range.start_key, range.end_key);
+
+  // auto txn = kv_storage_->NewTxn();
+  // std::vector<KeyValue> kvs;
+  // do {
+  //   kvs.clear();
+  //   auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+  //   if (!status.ok()) {
+  //     return status;
+  //   }
+
+  //   for (const auto& kv : kvs) {
+  //     pb::mdsv2::TrashSlice trash_slice = MetaDataCodec::DecodeTrashChunkValue(kv.value);
+
+  //     auto status = data_accessor_->Delete("");
+  //     if (!status.ok()) {
+  //       DINGO_LOG(ERROR) << fmt::format("[fs.{}] delete trash slice({}) fail, {}", fs_id_,
+  //                                       trash_slice.ShortDebugString(), status.ToString());
+  //     }
+  //   }
+
+  // } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   return Status::OK();
 }
@@ -2866,6 +3058,7 @@ bool FileSystemSet::LoadFileSystems() {
     auto file_system = GetFileSystem(fs_info.fs_id());
     if (file_system == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
+
       file_system = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
                                     kv_storage_, renamer_, mutation_processor_, mds_meta_map_);
       AddFileSystem(file_system);

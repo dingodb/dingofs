@@ -32,6 +32,9 @@ class StoreClient {
   bool CreateFsTable(const std::string& name);
   bool CreateFsQuotaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);
+  bool CreateChunkTable(const std::string& name);
+  bool CreateTrashChunkTable(const std::string& name);
+
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 

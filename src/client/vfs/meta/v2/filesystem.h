@@ -58,6 +58,21 @@ class MdsV2DirIterator : public DirIterator {
   MDSClientPtr mds_client_;
 };
 
+class FileSessionMap {
+ public:
+  FileSessionMap() = default;
+  ~FileSessionMap() = default;
+
+  bool Put(uint64_t fh, std::string session_id);
+  void Delete(uint64_t fh);
+  std::string Get(uint64_t fh);
+
+ private:
+  utils::RWLock lock_;
+  // fh -> session id
+  std::map<uint64_t, std::string> file_session_map_;
+};
+
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
   MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const ClientId& client_id,
@@ -91,13 +106,13 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Lookup(Ino parent, const std::string& name, Attr* out_attr) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-                uint32_t mode, int flags, Attr* attr) override;
+                uint32_t mode, int flags, Attr* attr, uint64_t* fh) override;
 
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Open(Ino ino, int flags) override;
-  Status Close(Ino ino) override;
+  Status Open(Ino ino, int flags, uint64_t* fh) override;
+  Status Close(Ino ino, uint64_t fh) override;
 
   Status ReadSlice(Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;
@@ -147,6 +162,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   MDSDiscoveryPtr mds_discovery_;
 
   MDSClientPtr mds_client_;
+
+  FileSessionMap file_session_map_;
 };
 
 }  // namespace v2

@@ -16,8 +16,10 @@
 
 #include <fmt/format.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "client/common/status.h"
@@ -97,6 +99,32 @@ void MdsV2DirIterator::Next() {
   if (!entries_.empty()) {
     last_name_ = entries_.back().name;
   }
+}
+
+bool FileSessionMap::Put(uint64_t fh, std::string session_id) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = file_session_map_.find(fh);
+  if (it != file_session_map_.end()) {
+    return false;
+  }
+
+  file_session_map_.insert(std::make_pair(fh, session_id));
+
+  return true;
+}
+
+void FileSessionMap::Delete(uint64_t fh) {
+  utils::WriteLockGuard lk(lock_);
+
+  file_session_map_.erase(fh);
+}
+
+std::string FileSessionMap::Get(uint64_t fh) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = file_session_map_.find(fh);
+  return (it != file_session_map_.end()) ? it->second : "";
 }
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
@@ -224,13 +252,13 @@ Status MDSV2FileSystem::Lookup(Ino parent, const std::string& name,
 
 Status MDSV2FileSystem::Create(Ino parent, const std::string& name,
                                uint32_t uid, uint32_t gid, uint32_t mode,
-                               int flags, Attr* attr) {
+                               int flags, Attr* attr, uint64_t* fh) {
   auto status = MkNod(parent, name, uid, gid, mode, 0, attr);
   if (!status.ok()) {
     return status;
   }
 
-  return Open(attr->ino, flags);
+  return Open(attr->ino, flags, fh);
 }
 
 Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
@@ -245,22 +273,34 @@ Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Open(Ino ino, int flags) {
+Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t* fh) {
+  static std::atomic<uint64_t> fh_generator = 0;
   LOG(INFO) << fmt::format("Open ino({}).", ino);
 
-  auto status = mds_client_->Open(ino);
+  std::string session_id;
+  auto status = mds_client_->Open(ino, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Open ino({}) fail, error: {}.", ino,
                               status.ToString());
     return status;
   }
 
+  *fh = fh_generator.fetch_add(1, std::memory_order_relaxed);
+
+  CHECK(file_session_map_.Put(*fh, session_id))
+      << fmt::format("put file session fail, ino: {}.", ino);
+
   return Status::OK();
 }
 
-Status MDSV2FileSystem::Close(Ino ino) {
+Status MDSV2FileSystem::Close(Ino ino, uint64_t fh) {
   LOG(INFO) << fmt::format("Release ino({}).", ino);
-  auto status = mds_client_->Release(ino);
+
+  std::string session_id = file_session_map_.Get(fh);
+  CHECK(!session_id.empty())
+      << fmt::format("get file session fail, ino({}) fh({}).", ino, fh);
+
+  auto status = mds_client_->Release(ino, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("Release ino({}) fail, error: {}.", ino,
                               status.ToString());

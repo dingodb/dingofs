@@ -33,7 +33,6 @@ class Context {
 
   uint64_t GetInodeVersion() const { return inode_version_; }
   const std::string& ClientId() const { return client_id_; }
-
   Trace& GetTrace() { return trace_; }
 
  private:

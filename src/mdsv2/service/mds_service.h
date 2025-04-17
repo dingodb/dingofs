@@ -129,8 +129,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                  pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) override;
 
   // compact interface
-  void CompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
-                    pb::mdsv2::CompactChunkResponse* response, google::protobuf::Closure* done) override;
+  void Compact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
+               pb::mdsv2::CompactResponse* response, google::protobuf::Closure* done) override;
+  void CompactAll(google::protobuf::RpcController* controller, const pb::mdsv2::CompactAllRequest* request,
+                  pb::mdsv2::CompactAllResponse* response, google::protobuf::Closure* done) override;
   void CleanTrashFileData(google::protobuf::RpcController* controller,
                           const pb::mdsv2::CleanTrashFileDataRequest* request,
                           pb::mdsv2::CleanTrashFileDataResponse* response, google::protobuf::Closure* done) override;
@@ -266,8 +268,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                    pb::mdsv2::ReadSliceResponse* response, TraceClosure* done);
 
-  void DoCompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
-                      pb::mdsv2::CompactChunkResponse* response, TraceClosure* done);
+  void DoCompact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
+                 pb::mdsv2::CompactResponse* response, TraceClosure* done);
+  void DoCompactAll(google::protobuf::RpcController* controller, const pb::mdsv2::CompactAllRequest* request,
+                    pb::mdsv2::CompactAllResponse* response, TraceClosure* done);
   void DoCleanTrashFileData(google::protobuf::RpcController* controller,
                             const pb::mdsv2::CleanTrashFileDataRequest* request,
                             pb::mdsv2::CleanTrashFileDataResponse* response, TraceClosure* done);

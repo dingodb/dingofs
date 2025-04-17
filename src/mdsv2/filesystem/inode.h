@@ -50,7 +50,6 @@ class Inode {
   }
   static InodePtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
-  using ChunkMap = std::map<uint64_t, pb::mdsv2::SliceList>;
   using XAttrMap = std::map<std::string, std::string>;
 
   uint32_t FsId() const { return fs_id_; }
@@ -69,9 +68,6 @@ class Inode {
   uint64_t Atime();
   uint32_t Openmpcount();
   uint64_t Version() const { return version_; }
-
-  ChunkMap GetChunkMap();
-  pb::mdsv2::SliceList GetChunk(uint64_t chunk_index);
 
   XAttrMap GetXAttrMap();
   std::string GetXAttr(const std::string& name);
@@ -110,7 +106,6 @@ class Inode {
   uint32_t openmpcount_{0};
   std::vector<uint64_t> parents_;
 
-  ChunkMap chunks_;
   XAttrMap xattrs_;
 
   uint64_t version_{0};

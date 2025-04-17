@@ -43,6 +43,8 @@ DEFINE_string(mds_table_name, "dingofs-heartbeat", "mds table name");
 DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
 DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
+DEFINE_string(chunk_table_name, "dingofs-chunk", "chunk table name");
+DEFINE_string(trash_chunk_table_name, "dingofs-trashchunk", "trash chunk table name");
 
 std::set<std::string> g_mds_cmd = {"getmdslist",
                                    "createfs",
@@ -206,12 +208,20 @@ int main(int argc, char* argv[]) {
     } else if (lower_cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
 
+    } else if (lower_cmd == Helper::ToLowerCase("CreateChunkTable")) {
+      store_client.CreateChunkTable(FLAGS_chunk_table_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("CreateTrashChunkTable")) {
+      store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
+
     } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
       store_client.CreateHeartbeatTable(FLAGS_mds_table_name);
       store_client.CreateFsTable(FLAGS_fs_table_name);
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
+      store_client.CreateChunkTable(FLAGS_chunk_table_name);
+      store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("tree")) {
       store_client.PrintDentryTree(FLAGS_fs_id, true);

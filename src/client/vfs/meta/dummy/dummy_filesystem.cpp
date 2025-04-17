@@ -407,7 +407,7 @@ Status DummyFileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
   return Status::OK();
 }
 
-Status DummyFileSystem::Open(Ino ino, int flags) {
+Status DummyFileSystem::Open(Ino ino, int flags, uint64_t* fh) {
   if (open_file_memo_.IsOpened(ino)) {
     open_file_memo_.Open(ino);
     return Status::OK();
@@ -420,12 +420,12 @@ Status DummyFileSystem::Open(Ino ino, int flags) {
 
 Status DummyFileSystem::Create(Ino parent, const std::string& name,
                                uint32_t uid, uint32_t gid, uint32_t mode,
-                               int flags, Attr* attr) {
+                               int flags, Attr* attr, uint64_t* fh) {
   DINGOFS_RETURN_NOT_OK(MkNod(parent, name, uid, gid, mode, 0, attr));
-  return Open(attr->ino, flags);
+  return Open(attr->ino, flags, fh);
 }
 
-Status DummyFileSystem::Close(Ino ino) {
+Status DummyFileSystem::Close(Ino ino, uint64_t fh) {
   if (!open_file_memo_.IsOpened(ino)) {
     return Status::OK();
   }

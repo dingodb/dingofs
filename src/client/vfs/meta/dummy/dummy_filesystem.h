@@ -181,12 +181,12 @@ class DummyFileSystem : public vfs::MetaSystem {
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Open(Ino ino, int flags) override;
+  Status Open(Ino ino, int flags, uint64_t* fh) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-                uint32_t mode, int flags, Attr* attr) override;
+                uint32_t mode, int flags, Attr* attr, uint64_t* fh) override;
 
-  Status Close(Ino ino) override;
+  Status Close(Ino ino, uint64_t fh) override;
 
   Status ReadSlice(Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;

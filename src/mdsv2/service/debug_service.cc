@@ -144,12 +144,12 @@ void DebugServiceImpl::GetOpenFile(google::protobuf::RpcController*, const pb::d
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto states = fs->GetOpenFiles().GetAllState();
-  for (const auto& state : states) {
-    auto* open_file = response->add_open_files();
-    open_file->set_ino(state.inode->Ino());
-    open_file->set_ref_count(state.ref_count);
-  }
+  // auto states = fs->GetOpenFiles().GetAllState();
+  // for (const auto& state : states) {
+  //   auto* open_file = response->add_open_files();
+  //   open_file->set_ino(state.inode->Ino());
+  //   open_file->set_ref_count(state.ref_count);
+  // }
 }
 
 }  // namespace mdsv2

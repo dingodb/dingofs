@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitMDSMonitor()) << "init mds monitor error.";
-  CHECK(server.InitCompactChunkProcessor()) << "init compact chunk processor error.";
+  CHECK(server.InitGcProcessor()) << "init gc error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
 
   DINGO_LOG(INFO) << "##################### init finish ######################";

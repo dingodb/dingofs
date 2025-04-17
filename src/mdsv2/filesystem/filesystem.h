@@ -23,12 +23,11 @@
 #include <utility>
 #include <vector>
 
-#include "dataaccess/accesser.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/filesystem/chunk_cache.h"
 #include "mdsv2/filesystem/dentry.h"
-#include "mdsv2/filesystem/file.h"
 #include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
@@ -155,11 +154,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // slice
   Status WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
-  Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& out_slice_list);
+  Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& slice_list);
 
   // compact
   Status CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index,
-                      std::vector<pb::mdsv2::TrashSlice>& out_trash_slices);
+                      std::vector<pb::mdsv2::TrashSlice>& trash_slices);
+  Status CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
+  Status CompactAll(Context& ctx, uint64_t& checked_count, uint64_t& compacted_count);
   Status CleanTrashFileData(Context& ctx, uint64_t ino);
 
   // dentry/inode
@@ -179,7 +180,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status UpdatePartitionPolicy(uint64_t mds_id);
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
 
-  OpenFiles& GetOpenFiles() { return open_files_; }
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
@@ -224,8 +224,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint64_t GetMdsIdByIno(uint64_t ino);
 
-  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(const pb::mdsv2::Inode& inode, uint64_t chunk_index,
-                                                    pb::mdsv2::SliceList chunk);
+  std::vector<pb::mdsv2::TrashSlice> GenTrashSlices(uint64_t ino, uint64_t file_length,
+                                                    const pb::mdsv2::Chunk& chunk) const;
+  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(uint64_t ino, uint64_t file_length, pb::mdsv2::Chunk& chunk);
+  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(uint64_t ino, uint64_t file_length, pb::mdsv2::Chunk& chunk,
+                                                    Txn* txn);
 
   void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes);
 
@@ -244,14 +247,16 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   KVStoragePtr kv_storage_;
 
   // for open/read/write/close file
-  OpenFiles open_files_;
-  FileSessionManagerPtr file_session_manager_;
+  FileSessionManagerUPtr file_session_manager_;
 
   // organize dentry directory tree
   PartitionCache partition_cache_;
 
   // organize inode
   InodeCache inode_cache_;
+
+  // chunk cache
+  ChunkCacheUPtr chunk_cache_;
 
   // mds meta map
   MDSMetaMapPtr mds_meta_map_;
@@ -260,9 +265,6 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // muation merger
   MutationProcessorPtr mutation_processor_;
-
-  // data accessor for s3
-  dataaccess::DataAccesserPtr data_accessor_;
 };
 
 // manage all filesystem

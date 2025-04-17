@@ -46,12 +46,13 @@ class MetaSystem {
                        uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags) = 0;
+  virtual Status Open(Ino ino, int flags, uint64_t* fh) = 0;
 
   virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
-                        uint32_t gid, uint32_t mode, int flags, Attr* attr) = 0;
+                        uint32_t gid, uint32_t mode, int flags, Attr* attr,
+                        uint64_t* fh) = 0;
 
-  virtual Status Close(Ino ino) = 0;
+  virtual Status Close(Ino ino, uint64_t fh) = 0;
 
   /**
    * Read the slices of a file meta
