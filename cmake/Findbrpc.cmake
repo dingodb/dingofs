@@ -3,7 +3,7 @@
 #
 # BRPC_INCLUDE_DIRS - where to find brpc headers
 # BRPC_LIBRARIES - List of libraries when using brpc.
-# BRPC_FOUND - True if zstd found.
+# BRPC_FOUND - True if brpc found.
 
 
 find_path(BRPC_INCLUDE_DIRS
