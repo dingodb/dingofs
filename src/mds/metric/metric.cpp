@@ -49,8 +49,6 @@ void FsMountMetric::OnMount(const Mountpoint& mp) {
 
     mps_.emplace(std::move(key), metric);
   }
-
-  count_ << 1;
 }
 
 void FsMountMetric::OnUnMount(const Mountpoint& mp) {
@@ -58,8 +56,10 @@ void FsMountMetric::OnUnMount(const Mountpoint& mp) {
     std::lock_guard<Mutex> lock(mtx_);
     mps_.erase(Key(mp));
   }
+}
 
-  count_ << -1;
+void FsMountMetric::OnUpdateMountCount(const uint32_t& mount_count) {
+  count_.set_value(mount_count);
 }
 
 std::string FsMountMetric::Key(const Mountpoint& mp) {

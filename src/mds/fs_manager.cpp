@@ -405,7 +405,7 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
         child_status = fsStorage_->Delete(fs_name);
         if (child_status != FSStatusCode::OK) {
           LOG(ERROR) << "CreateFs fail, " << error_map[failure_stage]
-                     << ", then delete fs fail" << ", fsName = " << fs_name
+                     << ", then delete fs fail, fsName = " << fs_name
                      << ", ret = " << FSStatusCode_Name(child_status);
           return child_status;
         }
@@ -614,7 +614,6 @@ FSStatusCode FsManager::MountFs(const std::string& fs_name,
   UpdateClientAliveTime(mountpoint, fs_name, false);
 
   // convert fs info
-  FsMetric::GetInstance().OnMount(wrapper.GetFsName(), mountpoint);
   *fs_info = std::move(wrapper).ProtoFsInfo();
 
   return FSStatusCode::OK;
@@ -671,7 +670,6 @@ FSStatusCode FsManager::UmountFs(const std::string& fs_name,
     return ret;
   }
 
-  FsMetric::GetInstance().OnUnMount(fs_name, mountpoint);
   return FSStatusCode::OK;
 }
 
@@ -809,7 +807,11 @@ void FsManager::RefreshSession(const pb::mds::RefreshSessionRequest* request,
     return;
   }
 
-  response->set_enablesumindir(wrapper.ProtoFsInfo().enablesumindir());
+  auto fs_info = wrapper.ProtoFsInfo();
+  response->set_enablesumindir(fs_info.enablesumindir());
+  // update mount_count metrics
+  FsMetric::GetInstance().OnUpdateMountCount(fs_info.fsname(),
+                                             fs_info.mountnum());
 }
 
 void FsManager::GetLatestTxId(

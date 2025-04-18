@@ -54,6 +54,19 @@ void FsMetric::OnUnMount(const std::string& fsname, const Mountpoint& mp) {
   iter->second->OnUnMount(mp);
 }
 
+void FsMetric::OnUpdateMountCount(const std::string& fsname,
+                                  const uint32_t& mount_count) {
+  std::lock_guard<Mutex> lock(mtx_);
+
+  auto iter = metrics_.find(fsname);
+  if (iter == metrics_.end()) {
+    auto r = metrics_.emplace(fsname, new FsMountMetric(fsname));
+    iter = r.first;
+  }
+
+  iter->second->OnUpdateMountCount(mount_count);
+}
+
 void FsMetric::SetFsStats(const std::string& fsname,
                           const FsStatsData& fs_stats_data) {
   std::lock_guard<Mutex> lock(mtx_);

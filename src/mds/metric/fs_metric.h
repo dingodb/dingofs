@@ -45,6 +45,8 @@ class FsMetric {
 
   void OnMount(const std::string& fsname, const Mountpoint& mp);
   void OnUnMount(const std::string& fsname, const Mountpoint& mp);
+  void OnUpdateMountCount(const std::string& fsname,
+                          const uint32_t& mount_count);
   void SetFsStats(const std::string& fsname, const FsStatsData& fs_stats_data);
   FSStatusCode GetFsStats(const std::string& fsname,
                           FsStatsData* fs_stats_data);
