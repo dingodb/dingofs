@@ -369,7 +369,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   {
     warmup_manager_ = std::make_shared<warmup::WarmupManagerS3Impl>(
         metaserver_client_, inode_cache_manager_, dentry_cache_manager_,
-        fs_info_, s3_adapter_, nullptr, this);
+        fs_info_, s3_adapter_, nullptr, this, data_accesser_);
     warmup_manager_->Init(fuse_client_option_);
     warmup_manager_->SetFsInfo(fs_info_);
     warmup_manager_->SetMounted(true);

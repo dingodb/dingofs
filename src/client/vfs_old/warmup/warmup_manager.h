@@ -287,11 +287,13 @@ class WarmupManagerS3Impl : public WarmupManager {
       std::shared_ptr<DentryCacheManager> dentry_manager,
       std::shared_ptr<pb::mds::FsInfo> fs_info,
       std::shared_ptr<S3ClientAdaptor> s3_adaptor,
-      std::shared_ptr<KVClientManager> kv_client_manager, vfs::VFS* vfs)
+      std::shared_ptr<KVClientManager> kv_client_manager, vfs::VFS* vfs,
+      std::shared_ptr<dataaccess::DataAccesser> data_accesser)
       : WarmupManager(std::move(meta_client), std::move(inode_manager),
                       std::move(dentry_manager), std::move(fs_info),
                       std::move(kv_client_manager), vfs),
-        s3Adaptor_(std::move(s3_adaptor)) {}
+        s3Adaptor_(std::move(s3_adaptor)),
+        data_accesser_(std::move(data_accesser)) {}
 
   bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) override;
   bool AddWarmupFile(Ino key, const std::string& path,
