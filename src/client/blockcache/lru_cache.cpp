@@ -35,8 +35,8 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::base::cache::NewLRUCache;
-using ::dingofs::base::time::TimeNow;
+using base::cache::NewLRUCache;
+using base::time::TimeNow;
 
 static void FreeNode(const std::string_view&, void* value) {
   ListNode* node = reinterpret_cast<ListNode*>(value);
@@ -137,13 +137,13 @@ bool LRUCache::EvictNode(ListNode* list, FilterFunc filter,
   while (curr != list) {
     ListNode* next = curr->next;
     auto rc = filter(curr->value);
-    if (rc == FilterStatus::EVICT_IT) {
+    if (rc == FilterStatus::kEvictIt) {
       evicted->emplace_back(KV(curr));
       ListRemove(curr);
       HashDelete(curr);
-    } else if (rc == FilterStatus::SKIP) {
+    } else if (rc == FilterStatus::kSkip) {
       // do nothing
-    } else if (rc == FilterStatus::FINISH) {
+    } else if (rc == FilterStatus::kFinish) {
       return false;
     } else {
       CHECK(false);  // never happen

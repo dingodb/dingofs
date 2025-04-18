@@ -33,9 +33,9 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::LeakyBucket;
-using ::dingofs::utils::Throttle;
-using ::dingofs::base::timer::TimerImpl;
+using base::timer::TimerImpl;
+using utils::LeakyBucket;
+using utils::Throttle;
 
 class BlockCacheMetricHelper;
 class BlockCacheThrottleClosure;

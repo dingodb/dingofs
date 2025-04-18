@@ -36,8 +36,8 @@ namespace blockcache {
 
 USING_FLAG(block_cache_logging);
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::client::common::FLAGS_block_cache_logging;
+using base::string::StrFormat;
+using client::common::FLAGS_block_cache_logging;
 using MessageHandler = std::function<std::string()>;
 
 static std::shared_ptr<spdlog::logger> logger;

@@ -336,7 +336,7 @@ int FuseServer::Serve(const std::string& fd_comm_path) {
   // export fd_comm_path value for new dingo-fuse use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
-  UdsServerStart();
+  // UdsServerStart();
   fuse_daemonize(opts_.foreground);
 
   LOG(INFO) << "dingo-fuse start loop, singlethread = " << opts_.singlethread

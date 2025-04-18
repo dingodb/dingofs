@@ -27,6 +27,7 @@
 #include <memory>
 #include <string>
 
+#include "client/blockcache/aio_queue.h"
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_layout.h"
 #include "client/blockcache/disk_cache_loader.h"
@@ -36,38 +37,22 @@
 #include "client/blockcache/disk_state_machine.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/common/config.h"
-#include "client/common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::client::common::DiskCacheOption;
-
-class BlockReaderImpl : public BlockReader {
- public:
-  BlockReaderImpl(int fd, std::shared_ptr<LocalFileSystem> fs);
-
-  virtual ~BlockReaderImpl() = default;
-
-  Status ReadAt(off_t offset, size_t length, char* buffer) override;
-
-  void Close() override;
-
- private:
-  int fd_;
-  std::shared_ptr<LocalFileSystem> fs_;
-};
+using client::common::DiskCacheOption;
 
 class DiskCache : public CacheStore {
-  enum : uint8_t {
-    WANT_EXEC = 1,
-    WANT_STAGE = 2,
-    WANT_CACHE = 4,
+  enum : std::int8_t {
+    kWantExec = 1,
+    kWantStage = 2,
+    kWantCache = 4,
   };
 
  public:
-  virtual ~DiskCache() = default;
+  ~DiskCache() override = default;
 
   explicit DiskCache(DiskCacheOption option);
 
@@ -90,11 +75,16 @@ class DiskCache : public CacheStore {
   std::string Id() override;
 
  private:
+  // for init
   Status CreateDirs();
 
   Status LoadLockFile();
 
   void DetectDirectIO();
+
+  // for read
+  Status NewBlockReader(const BlockKey& key,
+                        std::shared_ptr<BlockReader>& reader);
 
   // check running status, disk healthy and disk free space
   Status Check(uint8_t want);
@@ -125,6 +115,7 @@ class DiskCache : public CacheStore {
   std::shared_ptr<LocalFileSystem> fs_;
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
+  std::shared_ptr<AioQueueImpl> aio_queue_;
   bool use_direct_write_;
 };
 

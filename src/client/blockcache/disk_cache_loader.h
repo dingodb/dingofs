@@ -37,14 +37,14 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::TaskThreadPool;
+using utils::TaskThreadPool;
 using FileInfo = LocalFileSystem::FileInfo;
 using UploadFunc = CacheStore::UploadFunc;
 
 class DiskCacheLoader {
-  enum class BlockType {
-    STAGE_BLOCK,
-    CACHE_BLOCK,
+  enum class BlockType : uint8_t {
+    kStageBlock = 0,
+    kCacheBlock = 1,
   };
 
  public:
@@ -67,7 +67,7 @@ class DiskCacheLoader {
   bool LoadOneBlock(const std::string& prefix, const FileInfo& file,
                     BlockType type);
 
-  std::string ToString(BlockType type);
+  static std::string StrType(BlockType type);
 
  private:
   std::string disk_id_;

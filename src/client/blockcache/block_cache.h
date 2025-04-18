@@ -24,10 +24,7 @@
 #define DINGOFS_SRC_CLIENT_BLOCKCACHE_BLOCK_CACHE_H_
 
 #include <atomic>
-#include <functional>
 #include <memory>
-#include <mutex>
-#include <string>
 
 #include "client/blockcache/block_cache_metric.h"
 #include "client/blockcache/block_cache_throttle.h"
@@ -36,20 +33,19 @@
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/countdown.h"
 #include "client/common/config.h"
-#include "client/common/status.h"
 #include "dataaccess/accesser.h"
 
 namespace dingofs {
 namespace client {
 namespace blockcache {
 
+using client::common::BlockCacheOption;
 using dataaccess::DataAccesserPtr;
-using ::dingofs::client::common::BlockCacheOption;
-using ::dingofs::utils::TaskThreadPool;
+using utils::TaskThreadPool;
 
 enum class StoreType : uint8_t {
-  NONE,
-  DISK,
+  kNone,
+  kDisk,
 };
 
 class BlockCache {
@@ -66,11 +62,11 @@ class BlockCache {
   virtual Status Range(const BlockKey& key, off_t offset, size_t length,
                        char* buffer, bool retrive = true) = 0;
 
-  virtual void SubmitPreFetch(const BlockKey& key, size_t length) = 0;
-
   virtual Status Cache(const BlockKey& key, const Block& block) = 0;
 
   virtual Status Flush(uint64_t ino) = 0;
+
+  virtual void SubmitPrefetch(const BlockKey& key, size_t length) = 0;
 
   virtual bool IsCached(const BlockKey& key) = 0;
 
@@ -94,18 +90,18 @@ class BlockCacheImpl : public BlockCache {
   Status Range(const BlockKey& key, off_t offset, size_t length, char* buffer,
                bool retrive = true) override;
 
-  void SubmitPreFetch(const BlockKey& key, size_t size) override;
-
   Status Cache(const BlockKey& key, const Block& block) override;
 
   Status Flush(uint64_t ino) override;
+
+  void SubmitPrefetch(const BlockKey& key, size_t length) override;
 
   bool IsCached(const BlockKey& key) override;
 
   StoreType GetStoreType() override;
 
  private:
-  Status DoPreFetch(const BlockKey& key, size_t size);
+  Status DoPrefetch(const BlockKey& key, size_t length);
 
  private:
   friend class BlockCacheBuilder;

@@ -289,15 +289,15 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     pb::mds::FSStatusCode mount_ret =
         mds_client_->MountFs(vfs_conf_.fs_name, mount_point_, fs_info_.get());
     // NOTE: why check MOUNT_POINT_EXIST ?
-    if (mount_ret != pb::mds::FSStatusCode::OK &&
-        mount_ret != pb::mds::FSStatusCode::MOUNT_POINT_EXIST) {
-      LOG(ERROR) << "MountFs failed, FSStatusCode = " << mount_ret
-                 << ", FSStatusCode_Name = "
-                 << pb::mds::FSStatusCode_Name(mount_ret)
-                 << ", fsName = " << vfs_conf_.fs_name
-                 << ", mountPoint = " << mount_point_.ShortDebugString();
-      return Status::Internal("MountFs failed");
-    }
+    // if (mount_ret != pb::mds::FSStatusCode::OK &&
+    //    mount_ret != pb::mds::FSStatusCode::MOUNT_POINT_EXIST) {
+    //  LOG(ERROR) << "MountFs failed, FSStatusCode = " << mount_ret
+    //             << ", FSStatusCode_Name = "
+    //             << pb::mds::FSStatusCode_Name(mount_ret)
+    //             << ", fsName = " << vfs_conf_.fs_name
+    //             << ", mountPoint = " << mount_point_.ShortDebugString();
+    //  return Status::Internal("MountFs failed");
+    //}
 
     LOG(INFO) << "MountFs success, fsName = " << vfs_conf_.fs_name
               << ", mountPoint = " << mount_point_.ShortDebugString();

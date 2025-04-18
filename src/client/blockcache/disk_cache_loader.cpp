@@ -35,9 +35,9 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::butil::Timer;
-using ::dingofs::base::filepath::HasSuffix;
-using ::dingofs::base::filepath::PathJoin;
+using base::filepath::HasSuffix;
+using base::filepath::PathJoin;
+using butil::Timer;
 
 DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
                                  std::shared_ptr<LocalFileSystem> fs,
@@ -60,9 +60,9 @@ void DiskCacheLoader::Start(const std::string& disk_id,
   uploader_ = uploader;
   task_pool_->Start(2);
   task_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
-                      layout_->GetStageDir(), BlockType::STAGE_BLOCK);
+                      layout_->GetStageDir(), BlockType::kStageBlock);
   task_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
-                      layout_->GetCacheDir(), BlockType::CACHE_BLOCK);
+                      layout_->GetCacheDir(), BlockType::kCacheBlock);
 
   metric_->SetLoadStatus(kOnLoading);
   LOG(INFO) << "Disk cache loading thread start success.";
@@ -109,7 +109,7 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& root, BlockType type) {
   std::string message = StrFormat(
       "Load %s (dir=%s) %s: %d blocks loaded, %d invalid blocks found, costs "
       "%.6f seconds.",
-      ToString(type), root, status.ToString(), num_blocks, num_invalids,
+      StrType(type), root, status.ToString(), num_blocks, num_invalids,
       timer.u_elapsed() / 1e6);
   if (status.ok()) {
     LOG(INFO) << message;
@@ -117,7 +117,7 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& root, BlockType type) {
     LOG(ERROR) << message;
   }
 
-  if (type == BlockType::CACHE_BLOCK) {
+  if (type == BlockType::kCacheBlock) {
     metric_->SetLoadStatus(kLoadFinised);
   }
 }
@@ -139,19 +139,19 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
     return false;
   }
 
-  if (type == BlockType::STAGE_BLOCK) {
+  if (type == BlockType::kStageBlock) {
     metric_->AddStageBlock(1);
-    uploader_(key, path, BlockContext(BlockFrom::RELOAD, disk_id_));
-  } else if (type == BlockType::CACHE_BLOCK) {
+    uploader_(key, path, BlockContext(BlockFrom::kReload, disk_id_));
+  } else if (type == BlockType::kCacheBlock) {
     manager_->Add(key, CacheValue(file.size, file.atime));
   }
   return true;
 }
 
-std::string DiskCacheLoader::ToString(BlockType type) {
-  if (type == BlockType::STAGE_BLOCK) {
+std::string DiskCacheLoader::StrType(BlockType type) {
+  if (type == BlockType::kStageBlock) {
     return "stage";
-  } else if (type == BlockType::CACHE_BLOCK) {
+  } else if (type == BlockType::kCacheBlock) {
     return "cache";
   }
   return "unknown";

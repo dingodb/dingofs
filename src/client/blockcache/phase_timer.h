@@ -32,25 +32,39 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-enum class Phase {
+enum class Phase : uint8_t {
+  // unknown
+  kUnknown = 0,
+
   // block cache
-  STAGE_BLOCK,
-  CACHE_BLOCK,
-  LOAD_BLOCK,
-  READ_BLOCK,
+  kStageBlock = 1,
+  kCacheBlock = 2,
+  kLoadBlock = 3,
+  kReadBlock = 4,
 
   // s3
-  S3_PUT,
-  S3_RANGE,
+  kS3Put = 10,
+  kS3Range = 11,
 
   // disk cache
-  OPEN_FILE,
-  WRITE_FILE,
-  READ_FILE,
-  LINK,
-  CACHE_ADD,
-  ENQUEUE_UPLOAD,
+  kOpenFile = 20,
+  kWriteFile = 21,
+  kReadFile = 22,
+  kLink = 23,
+  kCacheAdd = 24,
+  kEnqueueUpload = 25,
+
+  // aio
+  kCheckIo = 30,
+  kEnqueue = 31,
+  kPrepareIo = 32,
+  kSubmitIo = 33,
+  kExecuteIo = 34,
+  kMemcpy = 35,
+  kRunClosure = 36,
 };
+
+std::string StrPhase(Phase phase);
 
 class PhaseTimer {
   struct Timer {
@@ -75,6 +89,8 @@ class PhaseTimer {
 
   void NextPhase(Phase phase);
 
+  Phase CurrentPhase();
+
   std::string ToString();
 
   int64_t TotalUElapsed();
@@ -84,10 +100,10 @@ class PhaseTimer {
 
   void StartNewTimer(Phase phase);
 
-  std::string StrPhase(Phase phase);
-
  private:
-  ::butil::Timer g_timer_;
+  int64_t start_ns_;
+  int64_t end_ns_;
+  butil::Timer g_timer_;
   std::vector<Timer> timers_;
 };
 

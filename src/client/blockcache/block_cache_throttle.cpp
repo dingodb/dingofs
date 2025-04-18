@@ -36,7 +36,7 @@ namespace blockcache {
 USING_FLAG(block_cache_stage_bandwidth_throttle_enable);
 USING_FLAG(block_cache_stage_bandwidth_throttle_mb);
 
-using ::dingofs::base::math::kMiB;
+using base::math::kMiB;
 
 BlockCacheThrottle::BlockCacheThrottle()
     : current_bandwidth_throttle_mb_(

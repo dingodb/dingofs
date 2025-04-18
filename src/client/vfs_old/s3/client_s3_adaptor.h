@@ -151,7 +151,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   uint32_t GetPrefetchBlocks() const { return prefetchBlocks_; }
 
   bool HasDiskCache() override {
-    return block_cache_->GetStoreType() == blockcache::StoreType::DISK;
+    return block_cache_->GetStoreType() == blockcache::StoreType::kDisk;
   }
 
   std::shared_ptr<InodeCacheManager> GetInodeCacheManager() {

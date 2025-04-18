@@ -73,8 +73,12 @@ struct DataStreamOption {
 // { block cache option
 struct DiskCacheOption {
   uint32_t index;
+  std::string filesystem_type;  // local or 3fs
   std::string cache_dir;
   uint64_t cache_size;  // bytes
+  uint32_t ioring_iodepth;
+  uint32_t ioring_blksize;  // bytes
+  uint64_t block_prefetch_total_size_mb;
 };
 
 struct BlockCacheOption {
@@ -135,6 +139,8 @@ struct RefreshDataOption {
 
 // { fuse module option
 struct FuseConnInfo {
+  uint64_t max_readahead;
+  uint64_t max_read;
   bool want_splice_move;
   bool want_splice_read;
   bool want_splice_write;

@@ -302,7 +302,10 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
     c->GetValueFatalIfFail("block_cache.prefetch_queue_size",
                            &option->prefetch_queue_size);
     c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store);
-    if (option->cache_store != "none" && option->cache_store != "disk") {
+
+    std::string cache_store = option->cache_store;
+    if (cache_store != "none" && cache_store != "disk" &&
+        cache_store != "3fs") {
       CHECK(false) << "Only support disk or none cache store.";
     }
   }
@@ -320,7 +323,13 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
         &FLAGS_disk_cache_cleanup_expire_interval_millsecond);
     c->GetValueFatalIfFail("disk_cache.drop_page_cache",
                            &FLAGS_drop_page_cache);
-    if (option->cache_store == "disk") {
+    c->GetValueFatalIfFail("disk_cache.ioring_iodepth", &o.ioring_iodepth);
+    c->GetValueFatalIfFail("disk_cache.ioring_blksize", &o.ioring_blksize);
+    c->GetValueFatalIfFail("disk_cache.block_prefetch_total_size_mb",
+                           &o.block_prefetch_total_size_mb);
+
+    if (option->cache_store == "disk" || option->cache_store == "3fs") {
+      o.filesystem_type = (option->cache_store == "3fs") ? "3fs" : "local";
       SplitDiskCacheOption(o, &option->disk_cache_options);
     }
   }
