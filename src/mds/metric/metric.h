@@ -44,12 +44,13 @@ class FsMountMetric {
  public:
   explicit FsMountMetric(const std::string& fsname)
       : fsname_(fsname),
-        count_("fs_" + fsname + "_mount_count"),
+        count_("fs_" + fsname + "_mount_count", 0),
         mtx_(),
         mps_() {}
 
   void OnMount(const Mountpoint& mp);
   void OnUnMount(const Mountpoint& mp);
+  void OnUpdateMountCount(const uint32_t& mount_count);
 
  private:
   // mountpoint metric key
@@ -60,7 +61,7 @@ class FsMountMetric {
   const std::string fsname_;
 
   // current number of fs mountpoints
-  bvar::Adder<int64_t> count_;
+  bvar::Status<uint32_t> count_;
 
   using MountPointMetric =
       std::unordered_map<std::string,
