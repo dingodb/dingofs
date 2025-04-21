@@ -1,50 +1,75 @@
 #!/bin/sh
 
-WORKDIR=`pwd`
-echo "monitor work dirctory is: ${WORKDIR}"
+# This script is used to start or stop dingofs monitor system.
+# You must be in the directory where dingo-monitor.sh installed to run this script.
+# Usage:
+# sudo sh dingo-monitor.sh start
+# sudo sh dingo-monitor.sh stop
+# sudo sh dingo-monitor.sh restart
 
-if [ ! -d $WORKDIR ]; then
-  echo "${WORKDIR} not exists"
-  exit 1
-fi
-
-cd $WORKDIR
-chmod -R 777 prometheus
-chmod -R 777 grafana
+change_permission() {
+    echo "change prometheus directory permission"
+    chmod -R 777 prometheus
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to execute 'chmod -R 777 prometheus'"
+        exit 1
+    fi
+    echo "change grafana directory permission"
+    chmod -R 777 grafana
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to execute 'chmod -R 777 grafana'"
+        exit 1
+    fi
+}
 
 start() {
-    echo "==========start==========="
-    echo "" > monitor.log
-    docker-compose up -d >> monitor.log 2>&1 &
+    change_permission
+    echo "starting monitor system..."
+    docker-compose up -d
     if [ $? -eq 0 ]; then
-        echo "start monitor system success!"
+        echo "start monitor system success"
     else
-        echo "start monitor system failed,please check monitor.log"
+        echo "start monitor system failed"
+        exit 1
     fi
 }
 
 stop() {
-    echo "===========stop============"
-    docker-compose down >> monitor.log 2>&1 &
+    echo "stopping monitor system..."
+    docker-compose down
     if [ $? -eq 0 ]; then
-        echo "stop monitor system success!"
+        echo "stop monitor system success"
     else
-        echo "stop monitor system failed,please check monitor.log"
+        echo "stop monitor system failed"
+        exit 1
     fi
     ID=`(ps -ef | grep "target_json.py"| grep -v "grep") | awk '{print $2}'`
     for id in $ID
     do
-        kill -9 $id
-	echo "killed $id"
+        if  kill -9 $id ; then
+            echo "killed $id success"
+        else
+            echo "killed $id failed"
+            exit 1
+        fi
     done
 }
 
 restart() {
     stop
-    echo "sleeping........."
     sleep 3
     start
 }
+
+WORKDIR=`pwd`
+echo "monitor work dirctory is: ${WORKDIR}"
+
+if [ ! -d ${WORKDIR} ]; then
+  echo "${WORKDIR} does not exists"
+  exit 1
+fi
+
+cd ${WORKDIR}
 
 case "$1" in
     'start')
@@ -60,4 +85,4 @@ case "$1" in
     echo "usage: $0 {start|stop|restart}"
     exit 1
         ;;
-    esac
+esac   
