@@ -70,7 +70,7 @@ void QuotaTask::Run() {
   }
 }
 
-QuotaProcessor::QuotaProcessor(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {
+QuotaProcessor::QuotaProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
   worker_set_ =
       ExecqWorkerSet::NewUnique(kQuotaWorkerSetName, FLAGS_quota_worker_num, FLAGS_quota_worker_max_pending_num);
 }
@@ -90,7 +90,9 @@ void QuotaProcessor::Destroy() {
   }
 }
 
-QuotaProcessorPtr QuotaProcessor::GetSelfPtr() { return std::dynamic_pointer_cast<QuotaProcessor>(shared_from_this()); }
+QuotaProcessorSPtr QuotaProcessor::GetSelfPtr() {
+  return std::dynamic_pointer_cast<QuotaProcessor>(shared_from_this());
+}
 
 Status QuotaProcessor::SetFsQuota(Context& ctx, uint32_t fs_id, const Quota& quota) {
   const std::string key = MetaDataCodec::EncodeFsQuotaKey(fs_id);

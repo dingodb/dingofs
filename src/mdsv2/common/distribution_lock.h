@@ -45,22 +45,22 @@ class DistributionLock : public std::enable_shared_from_this<DistributionLock> {
 using DistributionLockPtr = std::shared_ptr<DistributionLock>;
 
 class CoorDistributionLock;
-using CoorDistributionLockPtr = std::shared_ptr<CoorDistributionLock>;
+using CoorDistributionLockSPtr = std::shared_ptr<CoorDistributionLock>;
 
 class StoreDistributionLock;
 using StoreDistributionLockPtr = std::shared_ptr<StoreDistributionLock>;
 
 class CoorDistributionLock : public DistributionLock {
  public:
-  CoorDistributionLock(CoordinatorClientPtr coordinator_client, const std::string& lock_prefix, int64_t mds_id);
+  CoorDistributionLock(CoordinatorClientSPtr coordinator_client, const std::string& lock_prefix, int64_t mds_id);
   ~CoorDistributionLock() override = default;
 
-  static CoorDistributionLockPtr New(CoordinatorClientPtr coordinator_client, const std::string& lock_prefix,
-                                     int64_t mds_id) {
+  static CoorDistributionLockSPtr New(CoordinatorClientSPtr coordinator_client, const std::string& lock_prefix,
+                                      int64_t mds_id) {
     return std::make_shared<CoorDistributionLock>(coordinator_client, lock_prefix, mds_id);
   }
 
-  CoorDistributionLockPtr GetSelfPtr();
+  CoorDistributionLockSPtr GetSelfPtr();
 
   bool Init() override;
   void Destroy() override;
@@ -100,16 +100,16 @@ class CoorDistributionLock : public DistributionLock {
   std::atomic<bool> is_locked_{false};
   bthread_t check_lock_th_{0};
 
-  CoordinatorClientPtr coordinator_client_;
+  CoordinatorClientSPtr coordinator_client_;
 };
 
 // use store transaction implement distribution lock
 class StoreDistributionLock : public DistributionLock {
  public:
-  StoreDistributionLock(KVStoragePtr kv_storage, const std::string& name, int64_t mds_id);
+  StoreDistributionLock(KVStorageSPtr kv_storage, const std::string& name, int64_t mds_id);
   ~StoreDistributionLock() override = default;
 
-  static StoreDistributionLockPtr New(KVStoragePtr kv_storage, const std::string& name, int64_t mds_id) {
+  static StoreDistributionLockPtr New(KVStorageSPtr kv_storage, const std::string& name, int64_t mds_id) {
     return std::make_shared<StoreDistributionLock>(kv_storage, name, mds_id);
   }
 
@@ -135,7 +135,7 @@ class StoreDistributionLock : public DistributionLock {
   std::atomic<bool> is_locked_{false};
   std::atomic<uint64_t> last_lock_time_ms_{0};
 
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace mdsv2

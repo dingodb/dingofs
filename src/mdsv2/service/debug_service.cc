@@ -24,7 +24,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-FileSystemPtr DebugServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
+FileSystemSPtr DebugServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
 void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::GetFsRequest* request,
                              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) {
@@ -126,7 +126,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
   }
 
   for (const auto& ino : request->inoes()) {
-    InodePtr inode;
+    InodeSPtr inode;
     auto status = fs->GetInode(ctx, ino, inode);
     if (status.ok()) {
       *response->add_inodes() = inode->CopyTo();

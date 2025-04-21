@@ -43,7 +43,7 @@ void FreeFsTree(FsTreeNode* root) {
 }
 
 // generate file inode map by scan file inode table
-static bool GenFileInodeMap(KVStoragePtr kv_storage, uint32_t fs_id,
+static bool GenFileInodeMap(KVStorageSPtr kv_storage, uint32_t fs_id,
                             std::map<uint64_t, pb::mdsv2::Inode>& file_inode_map) {
   Range range;
   MetaDataCodec::GetFileInodeTableRange(fs_id, range.start_key, range.end_key);
@@ -75,7 +75,7 @@ static bool GenFileInodeMap(KVStoragePtr kv_storage, uint32_t fs_id,
   return true;
 }
 
-static FsTreeNode* GenFsTreeStruct(KVStoragePtr kv_storage, uint32_t fs_id,
+static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
                                    std::map<uint64_t, FsTreeNode*>& inode_map) {
   // get all file inode
   std::map<uint64_t, pb::mdsv2::Inode> file_inode_map;

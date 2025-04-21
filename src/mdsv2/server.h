@@ -74,14 +74,14 @@ class Server {
   std::string GetPidFilePath();
   std::string GetListenAddr();
   MDSMeta& GetMDSMeta();
-  MDSMetaMapPtr GetMDSMetaMap();
-  KVStoragePtr GetKVStorage();
-  HeartbeatPtr GetHeartbeat() { return heartbeat_; }
+  MDSMetaMapSPtr GetMDSMetaMap();
+  KVStorageSPtr GetKVStorage();
+  HeartbeatSPtr GetHeartbeat() { return heartbeat_; }
   FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
-  CoordinatorClientPtr GetCoordinatorClient() { return coordinator_client_; }
-  FileSystemSetPtr GetFileSystemSet() { return file_system_set_; }
-  MDSMonitorPtr GetMDSMonitor() { return mds_monitor_; }
-  MutationProcessorPtr GetMutationProcessor() { return mutation_processor_; }
+  CoordinatorClientSPtr GetCoordinatorClient() { return coordinator_client_; }
+  FileSystemSetSPtr GetFileSystemSet() { return file_system_set_; }
+  MDSMonitorSPtr GetMDSMonitor() { return mds_monitor_; }
+  MutationProcessorSPtr GetMutationProcessor() { return mutation_processor_; }
 
   void Run();
 
@@ -99,7 +99,7 @@ class Server {
   // mds self info
   MDSMeta mds_meta_;
   // all cluster mds
-  MDSMetaMapPtr mds_meta_map_;
+  MDSMetaMapSPtr mds_meta_map_;
 
   // This is manage crontab, like heartbeat.
   CrontabManager crontab_manager_;
@@ -107,38 +107,38 @@ class Server {
   std::vector<CrontabConfig> crontab_configs_;
 
   // coordinator client
-  CoordinatorClientPtr coordinator_client_;
+  CoordinatorClientSPtr coordinator_client_;
 
   // backend kv storage
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   // quota processor
-  QuotaProcessorPtr quota_processor_;
+  QuotaProcessorSPtr quota_processor_;
 
   // renamer
   RenamerPtr renamer_;
 
   // mutation merger
-  MutationProcessorPtr mutation_processor_;
+  MutationProcessorSPtr mutation_processor_;
 
   // filesystem
-  FileSystemSetPtr file_system_set_;
+  FileSystemSetSPtr file_system_set_;
 
   // heartbeat to coordinator
-  HeartbeatPtr heartbeat_;
+  HeartbeatSPtr heartbeat_;
 
   // fs info sync
   FsInfoSync fs_info_sync_;
 
   // mds monitor
-  MDSMonitorPtr mds_monitor_;
+  MDSMonitorSPtr mds_monitor_;
 
   // gc
   GcProcessorSPtr gc_processor_;
 
   // worker set for service request
-  WorkerSetPtr read_worker_set_;
-  WorkerSetPtr write_worker_set_;
+  WorkerSetSPtr read_worker_set_;
+  WorkerSetSPtr write_worker_set_;
 };
 
 }  // namespace mdsv2

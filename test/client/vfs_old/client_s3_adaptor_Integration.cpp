@@ -20,6 +20,7 @@
  * Author: huyao
  */
 
+#include <aws/core/Aws.h>
 #include <brpc/server.h>
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>

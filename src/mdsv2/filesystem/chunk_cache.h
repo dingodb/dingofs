@@ -51,8 +51,9 @@ class ChunkCache {
 
   static ChunkCacheUPtr New() { return std::make_unique<ChunkCache>(); }
 
-  void Upsert(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk);
-  void Upsert(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk);
+  // if version is newer then put
+  bool PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk);
+  bool PutIf(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk);
   void Delete(uint64_t ino, uint64_t chunk_index);
   void Delete(uint64_t ino);
   Value Get(uint64_t ino, uint64_t chunk_index);

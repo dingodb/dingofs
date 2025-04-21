@@ -91,7 +91,7 @@ class KVStorage {
 
   virtual TxnUPtr NewTxn() = 0;
 };
-using KVStoragePtr = std::shared_ptr<KVStorage>;
+using KVStorageSPtr = std::shared_ptr<KVStorage>;
 
 class Txn {
  public:

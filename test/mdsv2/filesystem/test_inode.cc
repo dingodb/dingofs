@@ -62,28 +62,28 @@ TEST_F(InodeCacheTest, Put) {
   InodeCache inode_cache;
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2001, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2001, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2003, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2003, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2005, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2005, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
@@ -94,7 +94,7 @@ TEST_F(InodeCacheTest, Delete) {
   InodeCache inode_cache;
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2000, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
@@ -105,7 +105,7 @@ TEST_F(InodeCacheTest, Delete) {
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2001, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2001, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
@@ -116,7 +116,7 @@ TEST_F(InodeCacheTest, Delete) {
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2002, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2002, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);
@@ -127,7 +127,7 @@ TEST_F(InodeCacheTest, Delete) {
   }
 
   {
-    InodePtr inode = Inode::New(GenInode(kFsId, 2003, pb::mdsv2::FileType::DIRECTORY));
+    InodeSPtr inode = Inode::New(GenInode(kFsId, 2003, pb::mdsv2::FileType::DIRECTORY));
     inode_cache.PutInode(inode->Ino(), inode);
 
     ASSERT_TRUE(inode_cache.GetInode(inode->Ino()) != nullptr);

@@ -39,10 +39,10 @@ using IdGeneratorPtr = std::unique_ptr<IdGenerator>;
 
 class AutoIncrementIdGenerator : public IdGenerator {
  public:
-  AutoIncrementIdGenerator(CoordinatorClientPtr client, int64_t table_id, int64_t start_id, int batch_size);
+  AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size);
   ~AutoIncrementIdGenerator() override;
 
-  static IdGeneratorPtr New(CoordinatorClientPtr client, int64_t table_id, int64_t start_id, int batch_size) {
+  static IdGeneratorPtr New(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size) {
     return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
 
@@ -59,7 +59,7 @@ class AutoIncrementIdGenerator : public IdGenerator {
   int64_t start_id_{0};
   const int batch_size_{0};
 
-  CoordinatorClientPtr client_;
+  CoordinatorClientSPtr client_;
 
   bthread_mutex_t mutex_;
 

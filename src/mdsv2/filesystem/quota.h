@@ -29,13 +29,13 @@ namespace dingofs {
 namespace mdsv2 {
 
 class QuotaProcessor;
-using QuotaProcessorPtr = std::shared_ptr<QuotaProcessor>;
+using QuotaProcessorSPtr = std::shared_ptr<QuotaProcessor>;
 
 class QuotaTask : public TaskRunnable {
  public:
   using Quota = pb::mdsv2::Quota;
   using Usage = pb::mdsv2::Usage;
-  QuotaTask(QuotaProcessorPtr quota_processor) : quota_processor(quota_processor) {}
+  QuotaTask(QuotaProcessorSPtr quota_processor) : quota_processor(quota_processor) {}
   ~QuotaTask() override = default;
 
   enum class Type {
@@ -57,23 +57,23 @@ class QuotaTask : public TaskRunnable {
   Quota quota;
   Usage usage;
   std::map<uint64_t, Usage> usages;
-  QuotaProcessorPtr quota_processor;
+  QuotaProcessorSPtr quota_processor;
 };
 
 class QuotaProcessor : public std::enable_shared_from_this<QuotaProcessor> {
  public:
-  QuotaProcessor(KVStoragePtr kv_storage);
+  QuotaProcessor(KVStorageSPtr kv_storage);
   ~QuotaProcessor() = default;
 
   using Quota = pb::mdsv2::Quota;
   using Usage = pb::mdsv2::Usage;
 
-  static QuotaProcessorPtr New(KVStoragePtr kv_storage) { return std::make_shared<QuotaProcessor>(kv_storage); }
+  static QuotaProcessorSPtr New(KVStorageSPtr kv_storage) { return std::make_shared<QuotaProcessor>(kv_storage); }
 
   bool Init();
   void Destroy();
 
-  QuotaProcessorPtr GetSelfPtr();
+  QuotaProcessorSPtr GetSelfPtr();
 
   Status SetFsQuota(Context& ctx, uint32_t fs_id, const Quota& quota);
   Status GetFsQuota(Context& ctx, uint32_t fs_id, Quota& quota);
@@ -96,7 +96,7 @@ class QuotaProcessor : public std::enable_shared_from_this<QuotaProcessor> {
 
  private:
   // persistence store dentry/inode
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   WorkerSetUPtr worker_set_;
 };

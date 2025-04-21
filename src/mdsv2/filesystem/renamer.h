@@ -26,13 +26,13 @@ namespace dingofs {
 namespace mdsv2 {
 
 class FileSystem;
-using FileSystemPtr = std::shared_ptr<FileSystem>;
+using FileSystemSPtr = std::shared_ptr<FileSystem>;
 
 using RenameCbFunc = std::function<void(Status)>;
 
 class RenameTask : public TaskRunnable {
  public:
-  RenameTask(FileSystemPtr fs, Context* ctx, uint64_t old_parent_ino, const std::string& old_name,
+  RenameTask(FileSystemSPtr fs, Context* ctx, uint64_t old_parent_ino, const std::string& old_name,
              uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb)
       : fs_(fs),
         ctx_(ctx),
@@ -82,7 +82,7 @@ class RenameTask : public TaskRunnable {
   uint64_t new_parent_version_;
 
   RenameCbFunc cb_;
-  FileSystemPtr fs_;
+  FileSystemSPtr fs_;
 };
 
 class Renamer;
@@ -101,14 +101,14 @@ class Renamer {
   bool Init();
   bool Destroy();
 
-  Status Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+  Status Execute(FileSystemSPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
                  uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
                  uint64_t& new_parent_version);
 
  private:
   bool Execute(TaskRunnablePtr task);
 
-  WorkerPtr worker_;
+  WorkerSPtr worker_;
 };
 
 }  // namespace mdsv2

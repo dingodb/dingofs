@@ -178,7 +178,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   return buf.to_string();
 }
 
-static void RenderMainPage(const brpc::Server* server, FileSystemSetPtr file_system_set, butil::IOBufBuilder& os) {
+static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
@@ -510,7 +510,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
-      InodePtr inode;
+      InodeSPtr inode;
       auto status = file_system->GetInodeFromStore(ino, "Stat", inode);
       if (status.ok()) {
         RenderInodePage(inode->CopyTo(), os);

@@ -29,7 +29,7 @@ class DingoCoordinatorClient : public CoordinatorClient {
   DingoCoordinatorClient() = default;
   ~DingoCoordinatorClient() override = default;
 
-  static CoordinatorClientPtr New() { return std::make_shared<DingoCoordinatorClient>(); }
+  static CoordinatorClientSPtr New() { return std::make_shared<DingoCoordinatorClient>(); }
 
   bool Init(const std::string& addr) override;
   bool Destroy() override;

@@ -23,7 +23,7 @@ namespace mdsv2 {
 
 class FsInfoSyncTask : public TaskRunnable {
  public:
-  FsInfoSyncTask(FileSystemSetPtr file_system_set) : file_system_set_(file_system_set) {}
+  FsInfoSyncTask(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {}
 
   ~FsInfoSyncTask() override = default;
 
@@ -32,7 +32,7 @@ class FsInfoSyncTask : public TaskRunnable {
   void Run() override;
 
  private:
-  FileSystemSetPtr file_system_set_;
+  FileSystemSetSPtr file_system_set_;
 };
 
 class FsInfoSync {
@@ -48,7 +48,7 @@ class FsInfoSync {
  private:
   bool Execute(TaskRunnablePtr task);
 
-  WorkerPtr worker_;
+  WorkerSPtr worker_;
 };
 
 }  // namespace mdsv2

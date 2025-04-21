@@ -36,7 +36,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 template <typename T>
-static Status ValidateRequest(T* request, FileSystemPtr file_system) {
+static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
   if (request->context().epoch() < file_system->Epoch()) {
     return Status(pb::error::EROUTER_EPOCH_CHANGE, "epoch change");
 
@@ -47,15 +47,16 @@ static Status ValidateRequest(T* request, FileSystemPtr file_system) {
   return Status::OK();
 }
 
-MDSServiceImpl::MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set,
-                               FileSystemSetPtr file_system_set, QuotaProcessorPtr quota_processor, FsStatsUPtr fs_stat)
+MDSServiceImpl::MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set,
+                               FileSystemSetSPtr file_system_set, QuotaProcessorSPtr quota_processor,
+                               FsStatsUPtr fs_stat)
     : read_worker_set_(read_worker_set),
       write_worker_set_(write_worker_set),
       file_system_set_(file_system_set),
       quota_processor_(quota_processor),
       fs_stat_(std::move(fs_stat)) {}
 
-FileSystemPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
+FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
 static Status ValidateCreateFsRequest(const pb::mdsv2::CreateFsRequest* request) {
   if (request->fs_name().empty()) {

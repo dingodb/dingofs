@@ -322,12 +322,12 @@ InodeCache::InodeCache() : cache_(0) {}  // NOLINT
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutInode(uint64_t ino, InodePtr inode) { cache_.Put(ino, inode); }
+void InodeCache::PutInode(uint64_t ino, InodeSPtr inode) { cache_.Put(ino, inode); }
 
 void InodeCache::DeleteInode(uint64_t ino) { cache_.Remove(ino); };
 
-InodePtr InodeCache::GetInode(uint64_t ino) {
-  InodePtr inode;
+InodeSPtr InodeCache::GetInode(uint64_t ino) {
+  InodeSPtr inode;
   if (!cache_.Get(ino, &inode)) {
     DINGO_LOG(INFO) << fmt::format("inode({}) not found.", ino);
     return nullptr;
@@ -336,10 +336,10 @@ InodePtr InodeCache::GetInode(uint64_t ino) {
   return inode;
 }
 
-std::vector<InodePtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
-  std::vector<InodePtr> inodes;
+std::vector<InodeSPtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
+  std::vector<InodeSPtr> inodes;
   for (auto& ino : inoes) {
-    InodePtr inode;
+    InodeSPtr inode;
     if (cache_.Get(ino, &inode)) {
       inodes.push_back(inode);
     }
@@ -348,7 +348,7 @@ std::vector<InodePtr> InodeCache::GetInodes(std::vector<uint64_t> inoes) {
   return inodes;
 }
 
-std::map<uint64_t, InodePtr> InodeCache::GetAllInodes() { return cache_.GetAll(); }
+std::map<uint64_t, InodeSPtr> InodeCache::GetAllInodes() { return cache_.GetAll(); }
 
 }  // namespace mdsv2
 }  // namespace dingofs

@@ -31,7 +31,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 class Inode;
-using InodePtr = std::shared_ptr<Inode>;
+using InodeSPtr = std::shared_ptr<Inode>;
 
 class Inode {
  public:
@@ -44,11 +44,11 @@ class Inode {
   Inode(const Inode& inode);
   Inode& operator=(const Inode& inode);
 
-  static InodePtr New(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
-                      uint32_t nlink) {
+  static InodeSPtr New(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid,
+                       uint32_t uid, uint32_t nlink) {
     return std::make_shared<Inode>(fs_id, ino, type, mode, gid, uid, nlink);
   }
-  static InodePtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
   using XAttrMap = std::map<std::string, std::string>;
 
@@ -120,15 +120,15 @@ class InodeCache {
   InodeCache(const InodeCache&) = delete;
   InodeCache& operator=(const InodeCache&) = delete;
 
-  void PutInode(uint64_t ino, InodePtr inode);
+  void PutInode(uint64_t ino, InodeSPtr inode);
   void DeleteInode(uint64_t ino);
 
-  InodePtr GetInode(uint64_t ino);
-  std::vector<InodePtr> GetInodes(std::vector<uint64_t> inoes);
-  std::map<uint64_t, InodePtr> GetAllInodes();
+  InodeSPtr GetInode(uint64_t ino);
+  std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
+  std::map<uint64_t, InodeSPtr> GetAllInodes();
 
  private:
-  utils::LRUCache<uint64_t, InodePtr> cache_;
+  utils::LRUCache<uint64_t, InodeSPtr> cache_;
 };
 
 }  // namespace mdsv2

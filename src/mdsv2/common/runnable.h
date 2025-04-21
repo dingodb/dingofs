@@ -125,7 +125,7 @@ class Worker {
   std::map<uint64_t, std::string> pending_task_traces_;
 };
 
-using WorkerPtr = std::shared_ptr<Worker>;
+using WorkerSPtr = std::shared_ptr<Worker>;
 
 class WorkerSet {
  public:
@@ -210,7 +210,7 @@ class WorkerSet {
   std::atomic<bool> is_destroied{false};
 };
 
-using WorkerSetPtr = std::shared_ptr<WorkerSet>;
+using WorkerSetSPtr = std::shared_ptr<WorkerSet>;
 using WorkerSetUPtr = std::unique_ptr<WorkerSet>;
 
 // MPSC Multiple producer, single consumer
@@ -221,7 +221,7 @@ class ExecqWorkerSet : public WorkerSet {
       : WorkerSet(name, worker_num, max_pending_task_count, false, false) {}
   ~ExecqWorkerSet() override = default;
 
-  static WorkerSetPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count) {
     return std::make_shared<ExecqWorkerSet>(name, worker_num, max_pending_task_count);
   }
 
@@ -242,7 +242,7 @@ class ExecqWorkerSet : public WorkerSet {
  private:
   uint32_t LeastPendingTaskWorker();
 
-  std::vector<WorkerPtr> workers_;
+  std::vector<WorkerSPtr> workers_;
   std::atomic<uint64_t> active_worker_id_{0};
 };
 
@@ -254,8 +254,8 @@ class SimpleWorkerSet : public WorkerSet {
                   bool is_inplace_run);
   ~SimpleWorkerSet() override;
 
-  static WorkerSetPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
-                          bool is_inplace_run) {
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
+                           bool is_inplace_run) {
     return std::make_shared<SimpleWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 
@@ -284,8 +284,8 @@ class PriorWorkerSet : public WorkerSet {
                  bool is_inplace_run);
   ~PriorWorkerSet() override;
 
-  static WorkerSetPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
-                          bool is_inplace_run) {
+  static WorkerSetSPtr New(std::string name, uint32_t worker_num, uint32_t max_pending_task_count, bool use_pthread,
+                           bool is_inplace_run) {
     return std::make_shared<PriorWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 

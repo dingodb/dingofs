@@ -56,7 +56,7 @@ static void SetError(TxnMutation& txn_mutation, Status& status) {
   }
 }
 
-MutationProcessor::MutationProcessor(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {
+MutationProcessor::MutationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);
 }

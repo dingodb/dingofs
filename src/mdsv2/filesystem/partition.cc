@@ -17,7 +17,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-InodePtr Partition::ParentInode() {
+InodeSPtr Partition::ParentInode() {
   CHECK(parent_inode_ != nullptr) << "parent inode is null.";
 
   return parent_inode_;

@@ -29,7 +29,7 @@ class DingodbStorage : public KVStorage {
   DingodbStorage() = default;
   ~DingodbStorage() override = default;
 
-  static KVStoragePtr New() { return std::make_shared<DingodbStorage>(); }
+  static KVStorageSPtr New() { return std::make_shared<DingodbStorage>(); }
 
   bool Init(const std::string& addr) override;
   bool Destroy() override;

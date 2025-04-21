@@ -103,10 +103,10 @@ using FileSessionManagerUPtr = std::unique_ptr<FileSessionManager>;
 // persist store file session and cache file session
 class FileSessionManager {
  public:
-  FileSessionManager(uint32_t fs_id, KVStoragePtr kv_storage) : fs_id_(fs_id), kv_storage_(kv_storage) {}
+  FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage) : fs_id_(fs_id), kv_storage_(kv_storage) {}
   ~FileSessionManager() = default;
 
-  static FileSessionManagerUPtr New(uint32_t fs_id, KVStoragePtr kv_storage) {
+  static FileSessionManagerUPtr New(uint32_t fs_id, KVStorageSPtr kv_storage) {
     return std::make_unique<FileSessionManager>(fs_id, kv_storage);
   }
 
@@ -127,7 +127,7 @@ class FileSessionManager {
   uint32_t fs_id_;
 
   // store file session
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   // cache file session
   FileSessionCache file_session_cache_;

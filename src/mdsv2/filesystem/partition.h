@@ -30,12 +30,12 @@ using PartitionPtr = std::shared_ptr<Partition>;
 // consider locality
 class Partition {
  public:
-  Partition(InodePtr parent_inode) : parent_inode_(parent_inode) {};
+  Partition(InodeSPtr parent_inode) : parent_inode_(parent_inode) {};
   ~Partition() = default;
 
-  static PartitionPtr New(InodePtr parent_inode) { return std::make_shared<Partition>(parent_inode); }
+  static PartitionPtr New(InodeSPtr parent_inode) { return std::make_shared<Partition>(parent_inode); }
 
-  InodePtr ParentInode();
+  InodeSPtr ParentInode();
 
   void PutChild(const Dentry& dentry);
   void DeleteChild(const std::string& name);
@@ -46,7 +46,7 @@ class Partition {
   std::vector<Dentry> GetAllChildren();
 
  private:
-  InodePtr parent_inode_;
+  InodeSPtr parent_inode_;
 
   utils::RWLock lock_;
 

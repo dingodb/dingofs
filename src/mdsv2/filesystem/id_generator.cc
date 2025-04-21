@@ -25,7 +25,7 @@ namespace dingofs {
 
 namespace mdsv2 {
 
-AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientPtr client, int64_t table_id, int64_t start_id,
+AutoIncrementIdGenerator::AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id,
                                                    int batch_size)
     : client_(client), table_id_(table_id), start_id_(start_id), batch_size_(batch_size) {
   next_id_ = start_id;

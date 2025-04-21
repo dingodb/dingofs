@@ -30,7 +30,7 @@ class DummyStorage : public KVStorage {
   DummyStorage();
   ~DummyStorage() override;
 
-  static KVStoragePtr New() { return std::make_shared<DummyStorage>(); }
+  static KVStorageSPtr New() { return std::make_shared<DummyStorage>(); }
 
   bool Init(const std::string& addr) override;
   bool Destroy() override;

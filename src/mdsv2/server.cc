@@ -315,12 +315,12 @@ std::string Server::GetListenAddr() {
 
 MDSMeta& Server::GetMDSMeta() { return mds_meta_; }
 
-MDSMetaMapPtr Server::GetMDSMetaMap() {
+MDSMetaMapSPtr Server::GetMDSMetaMap() {
   CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";
   return mds_meta_map_;
 }
 
-KVStoragePtr Server::GetKVStorage() {
+KVStorageSPtr Server::GetKVStorage() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   return kv_storage_;
 }

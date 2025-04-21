@@ -37,11 +37,11 @@ DEFINE_uint32(distribution_lock_scan_size, 1024, "distribution lock scan size.")
 
 DECLARE_uint32(txn_max_retry_times);
 
-CoorDistributionLock::CoorDistributionLock(CoordinatorClientPtr coordinator_client, const std::string& lock_prefix,
+CoorDistributionLock::CoorDistributionLock(CoordinatorClientSPtr coordinator_client, const std::string& lock_prefix,
                                            int64_t mds_id)
     : coordinator_client_(coordinator_client), lock_prefix_(lock_prefix), mds_id_(mds_id) {}
 
-CoorDistributionLockPtr CoorDistributionLock::GetSelfPtr() {
+CoorDistributionLockSPtr CoorDistributionLock::GetSelfPtr() {
   return std::dynamic_pointer_cast<CoorDistributionLock>(shared_from_this());
 }
 
@@ -257,7 +257,7 @@ Status CoorDistributionLock::Watch(const std::string& watch_key, int64_t watch_r
 
 bool CoorDistributionLock::LaunchRenewLease() {
   struct Params {
-    CoorDistributionLockPtr self;
+    CoorDistributionLockSPtr self;
   };
 
   Params* param = new Params();
@@ -308,7 +308,7 @@ void CoorDistributionLock::StopRenewLease() {
 
 bool CoorDistributionLock::LaunchCheckLock() {
   struct Params {
-    CoorDistributionLockPtr self;
+    CoorDistributionLockSPtr self;
   };
 
   Params* param = new Params();
@@ -378,7 +378,7 @@ void CoorDistributionLock::StopCheckLock() {
   }
 }
 
-StoreDistributionLock::StoreDistributionLock(KVStoragePtr kv_storage, const std::string& name, int64_t mds_id)
+StoreDistributionLock::StoreDistributionLock(KVStorageSPtr kv_storage, const std::string& name, int64_t mds_id)
     : kv_storage_(kv_storage), name_(name), mds_id_(mds_id) {}
 
 StoreDistributionLockPtr StoreDistributionLock::GetSelfPtr() {

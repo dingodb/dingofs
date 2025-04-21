@@ -30,7 +30,7 @@ class DummyCoordinatorClient : public CoordinatorClient {
   DummyCoordinatorClient();
   ~DummyCoordinatorClient() override;
 
-  static CoordinatorClientPtr New() { return std::make_shared<DummyCoordinatorClient>(); }
+  static CoordinatorClientSPtr New() { return std::make_shared<DummyCoordinatorClient>(); }
 
   bool Init(const std::string& addr) override;
   bool Destroy() override;

@@ -202,12 +202,12 @@ struct MixMutation {
 };
 
 class MutationProcessor;
-using MutationProcessorPtr = std::shared_ptr<MutationProcessor>;
+using MutationProcessorSPtr = std::shared_ptr<MutationProcessor>;
 
 // process mutation
 class MutationProcessor {
  public:
-  MutationProcessor(KVStoragePtr kv_storage);
+  MutationProcessor(KVStorageSPtr kv_storage);
   ~MutationProcessor();
 
   struct Key {
@@ -223,7 +223,7 @@ class MutationProcessor {
     }
   };
 
-  static MutationProcessorPtr New(KVStoragePtr kv_storage) { return std::make_shared<MutationProcessor>(kv_storage); }
+  static MutationProcessorSPtr New(KVStorageSPtr kv_storage) { return std::make_shared<MutationProcessor>(kv_storage); }
 
   bool Init();
   bool Destroy();
@@ -256,7 +256,7 @@ class MutationProcessor {
   butil::MPSCQueue<MixMutation> mutations_;
 
   // persistence store
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace mdsv2

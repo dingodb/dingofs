@@ -43,10 +43,10 @@ namespace dingofs {
 namespace mdsv2 {
 
 class FileSystem;
-using FileSystemPtr = std::shared_ptr<FileSystem>;
+using FileSystemSPtr = std::shared_ptr<FileSystem>;
 
 class FileSystemSet;
-using FileSystemSetPtr = std::shared_ptr<FileSystemSet>;
+using FileSystemSetSPtr = std::shared_ptr<FileSystemSet>;
 
 struct EntryOut {
   EntryOut() = default;
@@ -59,18 +59,18 @@ struct EntryOut {
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-             RenamerPtr renamer, MutationProcessorPtr mutation_processor, MDSMetaMapPtr mds_meta_map);
+  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStorageSPtr kv_storage,
+             RenamerPtr renamer, MutationProcessorSPtr mutation_processor, MDSMetaMapSPtr mds_meta_map);
   ~FileSystem() = default;
 
-  static FileSystemPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator,
-                           KVStoragePtr kv_storage, RenamerPtr renamer, MutationProcessorPtr mutation_processor,
-                           MDSMetaMapPtr mds_meta_map) {
+  static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator,
+                            KVStorageSPtr kv_storage, RenamerPtr renamer, MutationProcessorSPtr mutation_processor,
+                            MDSMetaMapSPtr mds_meta_map) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
                                         mutation_processor, mds_meta_map);
   }
 
-  FileSystemPtr GetSelfPtr();
+  FileSystemSPtr GetSelfPtr();
 
   uint32_t FsId() const { return fs_id_; }
   std::string FsName() const { return fs_info_->GetName(); }
@@ -205,20 +205,20 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                              std::vector<Dentry>& dentries);
 
   // get inode
-  Status GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t ino, InodePtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t version, uint64_t ino, InodePtr& out_inode);
-  InodePtr GetInodeFromCache(uint64_t ino);
-  std::map<uint64_t, InodePtr> GetAllInodesFromCache();
-  Status GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode);
-  Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodePtr>& out_inodes);
+  Status GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t ino, InodeSPtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t version, uint64_t ino, InodeSPtr& out_inode);
+  InodeSPtr GetInodeFromCache(uint64_t ino);
+  std::map<uint64_t, InodeSPtr> GetAllInodesFromCache();
+  Status GetInodeFromStore(uint64_t ino, const std::string& reason, InodeSPtr& out_inode);
+  Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
 
   // thorough delete inode
   Status DestoryInode(uint32_t fs_id, uint64_t ino);
 
   // part fail, clean/rollback
-  Status CleanUpInode(InodePtr inode);
+  Status CleanUpInode(InodeSPtr inode);
   Status CleanUpDentry(Dentry& dentry);
   Status RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta);
 
@@ -244,7 +244,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   IdGeneratorPtr id_generator_;
 
   // persistence store dentry/inode
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   // for open/read/write/close file
   FileSessionManagerUPtr file_session_manager_;
@@ -259,25 +259,25 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   ChunkCacheUPtr chunk_cache_;
 
   // mds meta map
-  MDSMetaMapPtr mds_meta_map_;
+  MDSMetaMapSPtr mds_meta_map_;
 
   RenamerPtr renamer_;
 
   // muation merger
-  MutationProcessorPtr mutation_processor_;
+  MutationProcessorSPtr mutation_processor_;
 };
 
 // manage all filesystem
 class FileSystemSet {
  public:
-  FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-                MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map, RenamerPtr renamer,
-                MutationProcessorPtr mutation_processor);
+  FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorPtr id_generator, KVStorageSPtr kv_storage,
+                MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
+                MutationProcessorSPtr mutation_processor);
   ~FileSystemSet();
 
-  static FileSystemSetPtr New(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                              KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map,
-                              RenamerPtr renamer, MutationProcessorPtr mutation_processor) {
+  static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorPtr id_generator,
+                               KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
+                               RenamerPtr renamer, MutationProcessorSPtr mutation_processor) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(id_generator), kv_storage, self_mds_meta,
                                            mds_meta_map, renamer, mutation_processor);
   }
@@ -309,10 +309,10 @@ class FileSystemSet {
 
   Status AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids);
 
-  FileSystemPtr GetFileSystem(uint32_t fs_id);
-  FileSystemPtr GetFileSystem(const std::string& fs_name);
+  FileSystemSPtr GetFileSystem(uint32_t fs_id);
+  FileSystemSPtr GetFileSystem(const std::string& fs_name);
   uint32_t GetFsId(const std::string& fs_name);
-  std::vector<FileSystemPtr> GetAllFileSystem();
+  std::vector<FileSystemSPtr> GetAllFileSystem();
 
   // load already exist filesystem
   bool LoadFileSystems();
@@ -324,29 +324,29 @@ class FileSystemSet {
   Status CreateFsTable();
   bool IsExistFsTable();
 
-  bool AddFileSystem(FileSystemPtr fs, bool is_force = false);
+  bool AddFileSystem(FileSystemSPtr fs, bool is_force = false);
   void DeleteFileSystem(uint32_t fs_id);
 
-  CoordinatorClientPtr coordinator_client_;
+  CoordinatorClientSPtr coordinator_client_;
 
   // for fs id
   IdGeneratorPtr id_generator_;
   // for slice id
   IdGeneratorPtr slice_id_generator_;
 
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   RenamerPtr renamer_;
 
-  MutationProcessorPtr mutation_processor_;
+  MutationProcessorSPtr mutation_processor_;
 
   MDSMeta self_mds_meta_;
-  MDSMetaMapPtr mds_meta_map_;
+  MDSMetaMapSPtr mds_meta_map_;
 
   // protect fs_map_
   utils::RWLock lock_;
   // key: fs_id
-  std::map<uint32_t, FileSystemPtr> fs_map_;
+  std::map<uint32_t, FileSystemSPtr> fs_map_;
 };
 
 }  // namespace mdsv2

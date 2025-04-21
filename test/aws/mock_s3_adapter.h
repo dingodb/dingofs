@@ -62,15 +62,16 @@ class MockS3Adapter : public S3Adapter {
       MOCK_METHOD2(GetObjectMeta, int(const Aws::String &key,
                            Aws::Map<Aws::String, Aws::String> *));
   */
-  MOCK_METHOD1(MultiUploadInit, Aws::String(const Aws::String&));
-  MOCK_METHOD5(UploadOnePart,
-               Aws::S3::Model::CompletedPart(const Aws::String&,
-                                             const Aws::String, int, int,
-                                             const char*));
-  MOCK_METHOD3(CompleteMultiUpload,
-               int(const Aws::String&, const Aws::String&,
-                   const Aws::Vector<Aws::S3::Model::CompletedPart>&));
-  MOCK_METHOD2(AbortMultiUpload, int(const Aws::String&, const Aws::String&));
+  // MOCK_METHOD1(MultiUploadInit, Aws::String(const Aws::String&));
+  // MOCK_METHOD5(UploadOnePart,
+  //              Aws::S3::Model::CompletedPart(const Aws::String&,
+  //                                            const Aws::String, int, int,
+  //                                            const char*));
+  // MOCK_METHOD3(CompleteMultiUpload,
+  //              int(const Aws::String&, const Aws::String&,
+  //                  const Aws::Vector<Aws::S3::Model::CompletedPart>&));
+  // MOCK_METHOD2(AbortMultiUpload, int(const Aws::String&, const
+  // Aws::String&));
 };
 
 }  // namespace aws

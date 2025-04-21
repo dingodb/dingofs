@@ -30,10 +30,10 @@ using FsStatsUPtr = std::unique_ptr<FsStats>;
 
 class FsStats {
  public:
-  FsStats(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {};
+  FsStats(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {};
   ~FsStats() = default;
 
-  static FsStatsUPtr New(KVStoragePtr kv_storage) { return std::make_unique<FsStats>(kv_storage); }
+  static FsStatsUPtr New(KVStorageSPtr kv_storage) { return std::make_unique<FsStats>(kv_storage); }
 
   Status UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsStatsData& stats);
   Status GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& stats);
@@ -42,7 +42,7 @@ class FsStats {
 
  private:
   // persistence store stats
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace mdsv2

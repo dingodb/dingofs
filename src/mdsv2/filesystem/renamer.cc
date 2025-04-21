@@ -52,7 +52,7 @@ bool Renamer::Destroy() {
   return true;
 }
 
-Status Renamer::Execute(FileSystemPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
                         uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
                         uint64_t& new_parent_version) {
   auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, nullptr);

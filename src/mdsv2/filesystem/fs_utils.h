@@ -35,13 +35,13 @@ void FreeFsTree(FsTreeNode* root);
 
 class FsUtils {
  public:
-  FsUtils(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {}
+  FsUtils(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {}
 
   FsTreeNode* GenFsTree(uint32_t fs_id);
   std::string GenFsTreeJsonString(uint32_t fs_id);
 
  private:
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace mdsv2

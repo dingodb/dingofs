@@ -29,8 +29,8 @@ namespace mdsv2 {
 
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
-  MDSServiceImpl(WorkerSetPtr read_worker_set, WorkerSetPtr write_worker_set, FileSystemSetPtr file_system,
-                 QuotaProcessorPtr quota_processor, FsStatsUPtr fs_stat);
+  MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set, FileSystemSetSPtr file_system,
+                 QuotaProcessorSPtr quota_processor, FsStatsUPtr fs_stat);
 
   // mds
   void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
@@ -177,7 +177,7 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
  private:
   Status GenFsId(int64_t& fs_id);
-  inline FileSystemPtr GetFileSystem(uint32_t fs_id);
+  inline FileSystemSPtr GetFileSystem(uint32_t fs_id);
 
   // mds
   static void DoHeartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
@@ -307,17 +307,17 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                              pb::mdsv2::GetFsPerSecondStatsResponse* response, TraceClosure* done);
 
   // file system set
-  FileSystemSetPtr file_system_set_;
+  FileSystemSetSPtr file_system_set_;
 
   // quota processor
-  QuotaProcessorPtr quota_processor_;
+  QuotaProcessorSPtr quota_processor_;
 
   // fs stats
   FsStatsUPtr fs_stat_;
 
   // Run service request.
-  WorkerSetPtr read_worker_set_;
-  WorkerSetPtr write_worker_set_;
+  WorkerSetSPtr read_worker_set_;
+  WorkerSetSPtr write_worker_set_;
 };
 
 }  // namespace mdsv2

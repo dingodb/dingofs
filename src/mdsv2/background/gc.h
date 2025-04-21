@@ -38,11 +38,11 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStoragePtr kv_storage, dataaccess::DataAccesserPtr data_accessor, const KeyValue& kv)
+  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor, const KeyValue& kv)
       : kv_storage_(kv_storage), data_accessor_(data_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(KVStoragePtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
+  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
                                        const KeyValue& kv) {
     return std::make_shared<CleanDeletedSliceTask>(kv_storage, data_accessor, kv);
   }
@@ -55,7 +55,7 @@ class CleanDeletedSliceTask : public TaskRunnable {
 
   KeyValue kv_;
 
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   // data accessor for s3
   dataaccess::DataAccesserPtr data_accessor_;
@@ -75,11 +75,11 @@ class CleanDeletedFileTask : public TaskRunnable {
 
 class GcProcessor {
  public:
-  GcProcessor(KVStoragePtr kv_storage, DistributionLockPtr dist_lock)
+  GcProcessor(KVStorageSPtr kv_storage, DistributionLockPtr dist_lock)
       : kv_storage_(kv_storage), dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
-  static GcProcessorSPtr New(KVStoragePtr kv_storage, DistributionLockPtr dist_lock) {
+  static GcProcessorSPtr New(KVStorageSPtr kv_storage, DistributionLockPtr dist_lock) {
     return std::make_shared<GcProcessor>(kv_storage, dist_lock);
   }
 
@@ -98,12 +98,12 @@ class GcProcessor {
 
   DistributionLockPtr dist_lock_;
 
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
   // data accessor for s3
   dataaccess::DataAccesserPtr data_accessor_;
 
-  WorkerSetPtr worker_set_;
+  WorkerSetSPtr worker_set_;
 };
 
 }  // namespace mdsv2

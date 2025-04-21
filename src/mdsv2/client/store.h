@@ -39,7 +39,7 @@ class StoreClient {
   void PrintDentryTree(uint32_t fs_id, bool is_details);
 
  private:
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 };
 
 }  // namespace client

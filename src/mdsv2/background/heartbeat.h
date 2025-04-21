@@ -24,11 +24,11 @@ namespace dingofs {
 namespace mdsv2 {
 
 class Heartbeat;
-using HeartbeatPtr = std::shared_ptr<Heartbeat>;
+using HeartbeatSPtr = std::shared_ptr<Heartbeat>;
 
 class HeartbeatTask : public TaskRunnable {
  public:
-  HeartbeatTask(HeartbeatPtr heartbeat) : heartbeat_(heartbeat) {}
+  HeartbeatTask(HeartbeatSPtr heartbeat) : heartbeat_(heartbeat) {}
   ~HeartbeatTask() override = default;
 
   std::string Type() override { return "HEARTBEAT"; }
@@ -36,15 +36,15 @@ class HeartbeatTask : public TaskRunnable {
   void Run() override;
 
  private:
-  HeartbeatPtr heartbeat_;
+  HeartbeatSPtr heartbeat_;
 };
 
 class Heartbeat {
  public:
-  Heartbeat(KVStoragePtr kv_storage) : kv_storage_(kv_storage) {};
+  Heartbeat(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {};
   ~Heartbeat() = default;
 
-  static HeartbeatPtr New(KVStoragePtr kv_storage) { return std::make_shared<Heartbeat>(kv_storage); }
+  static HeartbeatSPtr New(KVStorageSPtr kv_storage) { return std::make_shared<Heartbeat>(kv_storage); }
 
   bool Init();
   bool Destroy();
@@ -61,9 +61,9 @@ class Heartbeat {
  private:
   bool Execute(TaskRunnablePtr task);
 
-  KVStoragePtr kv_storage_;
+  KVStorageSPtr kv_storage_;
 
-  WorkerPtr worker_;
+  WorkerSPtr worker_;
 };
 
 }  // namespace mdsv2

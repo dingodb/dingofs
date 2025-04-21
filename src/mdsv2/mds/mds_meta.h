@@ -28,7 +28,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 class MDSMetaMap;
-using MDSMetaMapPtr = std::shared_ptr<MDSMetaMap>;
+using MDSMetaMapSPtr = std::shared_ptr<MDSMetaMap>;
 
 class MDSMeta {
  public:
@@ -98,7 +98,7 @@ class MDSMetaMap {
   MDSMetaMap(const MDSMetaMap& mds_meta_map) = delete;
   MDSMetaMap& operator=(const MDSMetaMap& mds_meta_map) = delete;
 
-  static MDSMetaMapPtr New() { return std::make_shared<MDSMetaMap>(); }
+  static MDSMetaMapSPtr New() { return std::make_shared<MDSMetaMap>(); }
 
   void UpsertMDSMeta(const MDSMeta& mds_meta);
   void DeleteMDSMeta(int64_t id);

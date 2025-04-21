@@ -126,7 +126,7 @@ class CoordinatorClient {
   virtual Status Watch(const std::string& key, int64_t start_revision, WatchOut& out) = 0;
 };
 
-using CoordinatorClientPtr = std::shared_ptr<CoordinatorClient>;
+using CoordinatorClientSPtr = std::shared_ptr<CoordinatorClient>;
 
 }  // namespace mdsv2
 

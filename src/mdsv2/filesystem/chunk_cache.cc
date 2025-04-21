@@ -14,25 +14,52 @@
 
 #include "mdsv2/filesystem/chunk_cache.h"
 
+#include <utility>
 #include <vector>
 
 namespace dingofs {
 namespace mdsv2 {
 
-void ChunkCache::Upsert(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk) {
+bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk) {
   utils::WriteLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = chunk_index};
 
-  chunk_map_.insert_or_assign(key, std::make_shared<pb::mdsv2::Chunk>(chunk));
+  auto it = chunk_map_.find(key);
+  if (it == chunk_map_.end()) {
+    chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(chunk)));
+
+  } else {
+    const auto& old_chunk = it->second;
+    if (chunk.version() <= old_chunk->version()) {
+      return false;
+    }
+
+    it->second = std::make_shared<pb::mdsv2::Chunk>(chunk);
+  }
+
+  return true;
 }
 
-void ChunkCache::Upsert(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk) {
+bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& chunk) {
   utils::WriteLockGuard lk(lock_);
 
   auto key = Key{.ino = ino, .chunk_index = chunk_index};
 
-  chunk_map_.insert_or_assign(key, std::make_shared<pb::mdsv2::Chunk>(std::move(chunk)));
+  auto it = chunk_map_.find(key);
+  if (it == chunk_map_.end()) {
+    chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(std::move(chunk))));
+
+  } else {
+    const auto& old_chunk = it->second;
+    if (chunk.version() <= old_chunk->version()) {
+      return false;
+    }
+
+    it->second = std::make_shared<pb::mdsv2::Chunk>(std::move(chunk));
+  }
+
+  return true;
 }
 
 void ChunkCache::Delete(uint64_t ino, uint64_t chunk_index) {

@@ -25,7 +25,7 @@ namespace mdsv2 {
 
 class DebugServiceImpl : public pb::debug::DebugService {
  public:
-  DebugServiceImpl(FileSystemSetPtr file_system_set) : file_system_set_(file_system_set) {};
+  DebugServiceImpl(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {};
 
   void GetFs(google::protobuf::RpcController* controller, const pb::debug::GetFsRequest* request,
              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) override;
@@ -40,9 +40,9 @@ class DebugServiceImpl : public pb::debug::DebugService {
                    pb::debug::GetOpenFileResponse* response, google::protobuf::Closure* done) override;
 
  private:
-  FileSystemPtr GetFileSystem(uint32_t fs_id);
+  FileSystemSPtr GetFileSystem(uint32_t fs_id);
 
-  FileSystemSetPtr file_system_set_;
+  FileSystemSetSPtr file_system_set_;
 };
 
 }  // namespace mdsv2

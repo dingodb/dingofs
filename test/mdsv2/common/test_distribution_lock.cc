@@ -41,7 +41,7 @@ TEST_F(CoorDistributionLockTest, Lock) {
 
   std::string lock_prefix = "/lock07";
 
-  std::vector<CoorDistributionLockPtr> dist_locks;
+  std::vector<CoorDistributionLockSPtr> dist_locks;
   for (int i = 0; i < 2; ++i) {
     auto dist_lock = CoorDistributionLock::New(coordinator_client, lock_prefix, 10000 + i);
     ASSERT_TRUE(dist_lock->Init());

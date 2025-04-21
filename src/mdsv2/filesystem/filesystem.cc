@@ -83,8 +83,8 @@ static inline bool IsDir(uint64_t ino) { return (ino & 1) == 1; }
 
 static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
-FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStoragePtr kv_storage,
-                       RenamerPtr renamer, MutationProcessorPtr mutation_processor, MDSMetaMapPtr mds_meta_map)
+FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStorageSPtr kv_storage,
+                       RenamerPtr renamer, MutationProcessorSPtr mutation_processor, MDSMetaMapSPtr mds_meta_map)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
@@ -99,7 +99,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr i
   chunk_cache_ = ChunkCache::New();
 };
 
-FileSystemPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
+FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
 
 uint64_t FileSystem::Epoch() const {
   auto partition_policy = fs_info_->GetPartitionPolicy();
@@ -285,12 +285,12 @@ Status FileSystem::ListDentryFromStore(uint64_t parent, const std::string& last_
   return txn->Commit();
 }
 
-Status FileSystem::GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodePtr& out_inode) {
+Status FileSystem::GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode) {
   return GetInode(ctx, ctx.GetInodeVersion(), dentry, partition, out_inode);
 }
 
 Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition,
-                            InodePtr& out_inode) {
+                            InodeSPtr& out_inode) {
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
 
@@ -328,11 +328,11 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, Part
   return status;
 }
 
-Status FileSystem::GetInode(Context& ctx, uint64_t ino, InodePtr& out_inode) {
+Status FileSystem::GetInode(Context& ctx, uint64_t ino, InodeSPtr& out_inode) {
   return GetInode(ctx, ctx.GetInodeVersion(), ino, out_inode);
 }
 
-Status FileSystem::GetInode(Context& ctx, uint64_t version, uint64_t ino, InodePtr& out_inode) {
+Status FileSystem::GetInode(Context& ctx, uint64_t version, uint64_t ino, InodeSPtr& out_inode) {
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
 
@@ -355,11 +355,11 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, uint64_t ino, InodeP
   return Status::OK();
 }
 
-InodePtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetInode(ino); }
+InodeSPtr FileSystem::GetInodeFromCache(uint64_t ino) { return inode_cache_.GetInode(ino); }
 
-std::map<uint64_t, InodePtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
+std::map<uint64_t, InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
 
-Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, InodePtr& out_inode) {
+Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, InodeSPtr& out_inode) {
   std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, ino);
   std::string value;
   auto status = kv_storage_->Get(key, value);
@@ -376,7 +376,7 @@ Status FileSystem::GetInodeFromStore(uint64_t ino, const std::string& reason, In
   return Status::OK();
 }
 
-Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodePtr>& out_inodes) {
+Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes) {
   std::vector<std::string> keys;
   keys.reserve(inoes.size());
   for (auto ino : inoes) {
@@ -491,7 +491,7 @@ Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& 
     return Status(pb::error::ENOT_FOUND, fmt::format("dentry({}) not found.", name));
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   status = GetInode(ctx, 0, dentry, partition, inode);
   if (!status.ok()) {
     return status;
@@ -502,7 +502,7 @@ Status FileSystem::Lookup(Context& ctx, uint64_t parent_ino, const std::string& 
   return Status::OK();
 }
 
-Status FileSystem::CleanUpInode(InodePtr inode) {
+Status FileSystem::CleanUpInode(InodeSPtr inode) {
   uint32_t fs_id = inode->FsId();
   uint64_t ino = inode->Ino();
 
@@ -724,7 +724,7 @@ Status FileSystem::Open(Context& ctx, uint64_t ino, std::string& session_id) {
   const bool bypass_cache = ctx.IsBypassCache();
   const std::string& client_id = ctx.ClientId();
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -893,7 +893,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
 
   PartitionPtr partition = GetPartitionFromCache(dentry.Ino());
   if (partition != nullptr) {
-    InodePtr inode = partition->ParentInode();
+    InodeSPtr inode = partition->ParentInode();
     if (inode->Nlink() > kEmptyDirMinLinkNum) {
       return Status(pb::error::ENOT_EMPTY,
                     fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, inode->Nlink()));
@@ -999,7 +999,7 @@ Status FileSystem::ReadDir(Context& ctx, uint64_t ino, const std::string& last_n
 
     if (with_attr) {
       // need inode attr
-      InodePtr inode;
+      InodeSPtr inode;
       status = GetInode(ctx, 0, dentry, partition, inode);
       if (!status.ok()) {
         return status;
@@ -1036,7 +1036,7 @@ Status FileSystem::Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, con
   auto parent_inode = partition->ParentInode();
 
   // get inode
-  InodePtr inode;
+  InodeSPtr inode;
   status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1126,7 +1126,7 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
     return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent_ino, name));
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   status = GetInode(ctx, dentry, partition, inode);
   if (!status.ok()) {
     return status;
@@ -1314,7 +1314,7 @@ Status FileSystem::ReadLink(Context& ctx, uint64_t ino, std::string& link) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1336,7 +1336,7 @@ Status FileSystem::GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1358,7 +1358,7 @@ Status FileSystem::SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param
 
   uint64_t now_time = Helper::TimestampNs();
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1404,7 +1404,7 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr) 
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1422,7 +1422,7 @@ Status FileSystem::GetXAttr(Context& ctx, uint64_t ino, const std::string& name,
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1440,7 +1440,7 @@ Status FileSystem::SetXAttr(Context& ctx, uint64_t ino, const std::map<std::stri
 
   auto& trace = ctx.GetTrace();
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1771,7 +1771,7 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -1787,7 +1787,6 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
-    std::string value;
     status = txn->Get(key, value);
     if (!status.ok()) {
       return status;
@@ -1803,6 +1802,7 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
       DoCompactChunk(inode->Ino(), inode->Length(), chunk, txn.get());
     }
 
+    chunk.set_version(chunk.version() + 1);
     txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
     status = txn->Commit();
     trace_txn = txn->GetTrace();
@@ -1817,7 +1817,7 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
 
   if (status.ok()) {
     // update chunk cache
-    chunk_cache_->Upsert(ino, chunk_index, chunk);
+    chunk_cache_->PutIf(ino, chunk_index, chunk);
   }
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] writeslice {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
@@ -1838,7 +1838,7 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
 
   uint64_t now_ns = Helper::TimestampNs();
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -2092,7 +2092,7 @@ Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -2119,6 +2119,7 @@ Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index
 
     trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
 
+    chunk.set_version(chunk.version() + 1);
     txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
 
     status = txn->Commit();
@@ -2145,7 +2146,7 @@ Status FileSystem::CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -2176,6 +2177,7 @@ Status FileSystem::CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2
 
       trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
 
+      chunk.set_version(chunk.version() + 1);
       txn->Put(MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk.index()), MetaDataCodec::EncodeChunkValue(chunk));
     }
 
@@ -2316,7 +2318,7 @@ Status FileSystem::GetInode(Context& ctx, uint64_t ino, EntryOut& entry_out) {
   bool bypass_cache = ctx.IsBypassCache();
   auto& trace = ctx.GetTrace();
 
-  InodePtr inode;
+  InodeSPtr inode;
   auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
@@ -2336,7 +2338,7 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
   out_entries.reserve(inoes.size());
   if (!bypass_cache) {
     for (auto ino : inoes) {
-      InodePtr inode = GetInodeFromCache(ino);
+      InodeSPtr inode = GetInodeFromCache(ino);
       if (inode == nullptr) {
         DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
         continue;
@@ -2348,7 +2350,7 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
     }
 
   } else {
-    std::vector<InodePtr> inodes;
+    std::vector<InodeSPtr> inodes;
     auto status = BatchGetInodeFromStore(inoes, inodes);
     if (!status.ok()) {
       return status;
@@ -2371,7 +2373,7 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
   bool bypass_cache = ctx.IsBypassCache();
   auto& trace = ctx.GetTrace();
 
-  auto add_xattr_func = [&out_xattrs](const InodePtr& inode) {
+  auto add_xattr_func = [&out_xattrs](const InodeSPtr& inode) {
     pb::mdsv2::XAttr xattr;
     for (auto& [k, v] : inode->GetXAttrMap()) {
       xattr.mutable_xattrs()->insert({k, v});
@@ -2382,7 +2384,7 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
   out_xattrs.reserve(inoes.size());
   if (!bypass_cache) {
     for (auto ino : inoes) {
-      InodePtr inode = GetInodeFromCache(ino);
+      InodeSPtr inode = GetInodeFromCache(ino);
       if (inode == nullptr) {
         DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found inode({}).", fs_id_, ino);
         continue;
@@ -2392,7 +2394,7 @@ Status FileSystem::BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoe
     }
 
   } else {
-    std::vector<InodePtr> inodes;
+    std::vector<InodeSPtr> inodes;
     auto status = BatchGetInodeFromStore(inoes, inodes);
     if (!status.ok()) {
       return status;
@@ -2520,9 +2522,9 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   return Status::OK();
 }
 
-FileSystemSet::FileSystemSet(CoordinatorClientPtr coordinator_client, IdGeneratorPtr id_generator,
-                             KVStoragePtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapPtr mds_meta_map,
-                             RenamerPtr renamer, MutationProcessorPtr mutation_processor)
+FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorPtr id_generator,
+                             KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
+                             RenamerPtr renamer, MutationProcessorSPtr mutation_processor)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(id_generator)),
       kv_storage_(kv_storage),
@@ -2976,7 +2978,7 @@ Status FileSystemSet::AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& sl
   return Status::OK();
 }
 
-bool FileSystemSet::AddFileSystem(FileSystemPtr fs, bool is_force) {
+bool FileSystemSet::AddFileSystem(FileSystemSPtr fs, bool is_force) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = fs_map_.find(fs->FsId());
@@ -2995,14 +2997,14 @@ void FileSystemSet::DeleteFileSystem(uint32_t fs_id) {
   fs_map_.erase(fs_id);
 }
 
-FileSystemPtr FileSystemSet::GetFileSystem(uint32_t fs_id) {
+FileSystemSPtr FileSystemSet::GetFileSystem(uint32_t fs_id) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = fs_map_.find(fs_id);
   return it != fs_map_.end() ? it->second : nullptr;
 }
 
-FileSystemPtr FileSystemSet::GetFileSystem(const std::string& fs_name) {
+FileSystemSPtr FileSystemSet::GetFileSystem(const std::string& fs_name) {
   utils::ReadLockGuard lk(lock_);
 
   for (auto& [fs_id, fs] : fs_map_) {
@@ -3026,10 +3028,10 @@ uint32_t FileSystemSet::GetFsId(const std::string& fs_name) {
   return 0;
 }
 
-std::vector<FileSystemPtr> FileSystemSet::GetAllFileSystem() {
+std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() {
   utils::ReadLockGuard lk(lock_);
 
-  std::vector<FileSystemPtr> fses;
+  std::vector<FileSystemSPtr> fses;
   fses.reserve(fs_map_.size());
   for (const auto& [fs_id, fs] : fs_map_) {
     fses.push_back(fs);

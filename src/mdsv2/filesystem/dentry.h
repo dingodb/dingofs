@@ -32,16 +32,16 @@ namespace dingofs {
 namespace mdsv2 {
 
 class DentrySet;
-using DentrySetPtr = std::shared_ptr<DentrySet>;
+using DentrySetSPtr = std::shared_ptr<DentrySet>;
 
 // represent a file or directory entry
 class Dentry {
  public:
   Dentry() = default;
   Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type,
-         uint32_t flag, InodePtr inode = nullptr);
-  Dentry(const pb::mdsv2::Dentry& dentry, InodePtr inode = nullptr);
-  Dentry(const Dentry& dentry, InodePtr inode);
+         uint32_t flag, InodeSPtr inode = nullptr);
+  Dentry(const pb::mdsv2::Dentry& dentry, InodeSPtr inode = nullptr);
+  Dentry(const Dentry& dentry, InodeSPtr inode);
   ~Dentry();
 
   // Dentry(const Dentry& other);
@@ -54,7 +54,7 @@ class Dentry {
   pb::mdsv2::FileType Type() const { return type_; }
   uint32_t Flag() const { return flag_; }
 
-  InodePtr Inode() const { return inode_; }
+  InodeSPtr Inode() const { return inode_; }
 
   pb::mdsv2::Dentry CopyTo();
 
@@ -67,7 +67,7 @@ class Dentry {
   uint32_t flag_;
 
   // maybe null, just inode shortcut
-  InodePtr inode_;
+  InodeSPtr inode_;
 };
 
 }  // namespace mdsv2

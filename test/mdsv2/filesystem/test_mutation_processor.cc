@@ -85,10 +85,10 @@ class MutationProcessorTest : public testing::Test {
   void TearDown() override {}
 
  public:
-  static KVStoragePtr kv_storage;
+  static KVStorageSPtr kv_storage;
 };
 
-KVStoragePtr MutationProcessorTest::kv_storage = nullptr;
+KVStorageSPtr MutationProcessorTest::kv_storage = nullptr;
 
 Status CreateRoot(MutationProcessor& mutation_processor) {
   MixMutation mix_mutation = {.fs_id = kFsId};
@@ -115,7 +115,7 @@ Status CreateRoot(MutationProcessor& mutation_processor) {
 }
 
 TEST_F(MutationProcessorTest, CreateFileInode) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);
@@ -149,7 +149,7 @@ TEST_F(MutationProcessorTest, CreateFileInode) {
 }
 
 TEST_F(MutationProcessorTest, CreateDirInode) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);
@@ -183,7 +183,7 @@ TEST_F(MutationProcessorTest, CreateDirInode) {
 }
 
 TEST_F(MutationProcessorTest, UpdateInodeNlink) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);
@@ -275,7 +275,7 @@ TEST_F(MutationProcessorTest, UpdateInodeNlink) {
 }
 
 TEST_F(MutationProcessorTest, DeleteInode) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);
@@ -309,7 +309,7 @@ TEST_F(MutationProcessorTest, DeleteInode) {
 }
 
 TEST_F(MutationProcessorTest, MkNod) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);
@@ -360,7 +360,7 @@ TEST_F(MutationProcessorTest, MkNod) {
 }
 
 TEST_F(MutationProcessorTest, MkDir) {
-  KVStoragePtr kv_storage = DummyStorage::New();
+  KVStorageSPtr kv_storage = DummyStorage::New();
   ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
   MutationProcessor mutation_processor(kv_storage);

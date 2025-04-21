@@ -32,7 +32,7 @@ class CleanInode {
  private:
   std::atomic<bool> is_running_{false};
 
-  FileSystemSetPtr fs_set_;
+  FileSystemSetSPtr fs_set_;
 
   DistributionLockPtr dist_lock_;
 };

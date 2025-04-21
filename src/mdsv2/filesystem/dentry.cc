@@ -24,10 +24,10 @@ namespace dingofs {
 namespace mdsv2 {
 
 Dentry::Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type,
-               uint32_t flag, InodePtr inode)
+               uint32_t flag, InodeSPtr inode)
     : fs_id_(fs_id), name_(name), parent_ino_(parent_ino), ino_(ino), type_(type), flag_(flag), inode_(inode) {}
 
-Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodePtr inode)
+Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodeSPtr inode)
     : name_(dentry.name()),
       fs_id_(dentry.fs_id()),
       ino_(dentry.ino()),
@@ -36,7 +36,7 @@ Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodePtr inode)
       flag_(dentry.flag()),
       inode_(inode) {}
 
-Dentry::Dentry(const Dentry& dentry, InodePtr inode)
+Dentry::Dentry(const Dentry& dentry, InodeSPtr inode)
     : name_(dentry.Name()),
       fs_id_(dentry.FsId()),
       ino_(dentry.Ino()),
