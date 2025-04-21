@@ -14,11 +14,16 @@
 
 #include "mdsv2/filesystem/chunk_cache.h"
 
+#include <string>
 #include <utility>
 #include <vector>
 
 namespace dingofs {
 namespace mdsv2 {
+
+static const std::string kChunkCacheCountMetricsName = "dingofs_chunk_cache_count";
+
+ChunkCache::ChunkCache() : count_metrics_(kChunkCacheCountMetricsName) {}
 
 bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chunk& chunk) {
   utils::WriteLockGuard lk(lock_);
@@ -28,6 +33,8 @@ bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, const pb::mdsv2::Chun
   auto it = chunk_map_.find(key);
   if (it == chunk_map_.end()) {
     chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(chunk)));
+
+    count_metrics_ << 1;
 
   } else {
     const auto& old_chunk = it->second;
@@ -50,6 +57,8 @@ bool ChunkCache::PutIf(uint64_t ino, uint64_t chunk_index, pb::mdsv2::Chunk&& ch
   if (it == chunk_map_.end()) {
     chunk_map_.insert(std::make_pair(key, std::make_shared<pb::mdsv2::Chunk>(std::move(chunk))));
 
+    count_metrics_ << 1;
+
   } else {
     const auto& old_chunk = it->second;
     if (chunk.version() <= old_chunk->version()) {
@@ -67,6 +76,8 @@ void ChunkCache::Delete(uint64_t ino, uint64_t chunk_index) {
 
   auto key = Key{.ino = ino, .chunk_index = chunk_index};
   chunk_map_.erase(key);
+
+  count_metrics_ << -1;
 }
 
 void ChunkCache::Delete(uint64_t ino) {
@@ -79,6 +90,7 @@ void ChunkCache::Delete(uint64_t ino) {
     }
 
     it = chunk_map_.erase(it);
+    count_metrics_ << -1;
   }
 }
 

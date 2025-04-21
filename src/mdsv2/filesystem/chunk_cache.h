@@ -32,7 +32,7 @@ using ChunkCacheUPtr = std::unique_ptr<ChunkCache>;
 // single file chunk cache
 class ChunkCache {
  public:
-  ChunkCache() = default;
+  ChunkCache();
   ~ChunkCache() = default;
 
   struct Key {
@@ -64,6 +64,9 @@ class ChunkCache {
 
   // ino/chunk_index -> pb::mdsv2::Chunk
   std::map<Key, Value> chunk_map_;
+
+  // statistics
+  bvar::Adder<int64_t> count_metrics_;
 };
 
 }  // namespace mdsv2

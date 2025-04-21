@@ -66,7 +66,7 @@ class FileSession {
 // cache file session
 class FileSessionCache {
  public:
-  FileSessionCache() = default;
+  FileSessionCache();
   ~FileSessionCache() = default;
 
   struct Key {
@@ -94,6 +94,9 @@ class FileSessionCache {
   utils::RWLock lock_;
   // ino/session_id -> file_session
   std::map<Key, FileSessionPtr> file_session_map_;
+
+  // statistics
+  bvar::Adder<int64_t> count_metrics_;
 };
 
 class FileSessionManager;
@@ -103,7 +106,7 @@ using FileSessionManagerUPtr = std::unique_ptr<FileSessionManager>;
 // persist store file session and cache file session
 class FileSessionManager {
  public:
-  FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage) : fs_id_(fs_id), kv_storage_(kv_storage) {}
+  FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage);
   ~FileSessionManager() = default;
 
   static FileSessionManagerUPtr New(uint32_t fs_id, KVStorageSPtr kv_storage) {
@@ -131,6 +134,10 @@ class FileSessionManager {
 
   // cache file session
   FileSessionCache file_session_cache_;
+
+  // statistics
+  bvar::Adder<uint64_t> total_count_metrics_;
+  bvar::Adder<int64_t> count_metrics_;
 };
 
 }  // namespace mdsv2

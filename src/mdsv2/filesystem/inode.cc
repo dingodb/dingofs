@@ -14,8 +14,11 @@
 
 #include "mdsv2/filesystem/inode.h"
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <memory>
+#include <string>
 #include <utility>
 
 #include "fmt/core.h"
@@ -25,6 +28,11 @@
 
 namespace dingofs {
 namespace mdsv2 {
+
+static const std::string kInodeCacheMetricsPrefix = "dingofs_inode_cache_";
+
+// 0: no limit
+DEFINE_uint32(inode_cache_max_count, 0, "inode cache max count");
 
 Inode::Inode(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
              uint32_t nlink)
@@ -318,7 +326,8 @@ void Inode::CopyTo(pb::mdsv2::Inode& inode) {
   }
 }
 
-InodeCache::InodeCache() : cache_(0) {}  // NOLINT
+InodeCache::InodeCache()
+    : cache_(FLAGS_inode_cache_max_count, std::make_shared<utils::CacheMetrics>(kInodeCacheMetricsPrefix)) {}
 
 InodeCache::~InodeCache() {}  // NOLINT
 

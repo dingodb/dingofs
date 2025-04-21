@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -33,6 +34,11 @@ namespace mdsv2 {
 DECLARE_int32(fs_scan_batch_size);
 DECLARE_uint32(txn_max_retry_times);
 
+static const std::string kFileSessionCacheCountMetricsName = "dingofs_file_session_cache_count";
+
+static const std::string kFileSessionTatalCountMetricsName = "dingofs_file_session_total_count";
+static const std::string kFileSessionCountMetricsName = "dingofs_file_session_count";
+
 std::string FileSession::EncodeKey(uint32_t fs_id, uint64_t ino, const std::string& session_id) {
   return MetaDataCodec::EncodeFileSessionKey(fs_id, ino, session_id);
 }
@@ -48,6 +54,8 @@ std::string FileSession::EncodeValue() const {
   return MetaDataCodec::EncodeFileSessionValue(file_session);
 }
 
+FileSessionCache::FileSessionCache() : count_metrics_(kFileSessionCacheCountMetricsName) {}
+
 bool FileSessionCache::Put(FileSessionPtr file_session) {
   utils::WriteLockGuard guard(lock_);
   auto key = Key{.ino = file_session->Ino(), .session_id = file_session->SessionId()};
@@ -57,6 +65,9 @@ bool FileSessionCache::Put(FileSessionPtr file_session) {
   }
 
   file_session_map_[key] = file_session;
+
+  count_metrics_ << 1;
+
   return true;
 }
 
@@ -64,7 +75,16 @@ void FileSessionCache::Upsert(FileSessionPtr file_session) {
   utils::WriteLockGuard guard(lock_);
 
   auto key = Key{.ino = file_session->Ino(), .session_id = file_session->SessionId()};
-  file_session_map_.insert_or_assign(key, file_session);
+
+  auto it = file_session_map_.find(key);
+  if (it == file_session_map_.end()) {
+    file_session_map_.insert(std::make_pair(key, file_session));
+
+    count_metrics_ << 1;
+
+  } else {
+    it->second = file_session;
+  }
 }
 
 void FileSessionCache::Delete(uint64_t ino, const std::string& session_id) {
@@ -72,6 +92,7 @@ void FileSessionCache::Delete(uint64_t ino, const std::string& session_id) {
 
   auto key = Key{.ino = ino, .session_id = session_id};
   file_session_map_.erase(key);
+  count_metrics_ << -1;
 }
 
 void FileSessionCache::Delete(uint64_t ino) {
@@ -85,6 +106,7 @@ void FileSessionCache::Delete(uint64_t ino) {
     }
 
     it = file_session_map_.erase(it);
+    count_metrics_ << -1;
   }
 }
 
@@ -128,6 +150,12 @@ bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
   return file_session_map_.find(key) != file_session_map_.end();
 }
 
+FileSessionManager::FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage)
+    : fs_id_(fs_id),
+      kv_storage_(kv_storage),
+      total_count_metrics_(kFileSessionTatalCountMetricsName),
+      count_metrics_(kFileSessionCountMetricsName) {}
+
 Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session) {
   file_session = FileSession::New(fs_id_, ino, client_id);
 
@@ -141,6 +169,9 @@ Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, Fi
   // add to cache
   CHECK(file_session_cache_.Put(file_session))
       << fmt::format("[filesession] put file session fail, {}/{}", ino, client_id);
+
+  total_count_metrics_ << 1;
+  count_metrics_ << 1;
 
   return Status::OK();
 }
@@ -166,6 +197,7 @@ FileSessionPtr FileSessionManager::Get(uint64_t ino, const std::string& session_
 
   return file_session;
 }
+
 std::vector<FileSessionPtr> FileSessionManager::Get(uint64_t ino, bool just_cache) {
   auto file_sessions = file_session_cache_.Get(ino);
   if (!file_sessions.empty()) {
@@ -207,6 +239,8 @@ Status FileSessionManager::Delete(uint64_t ino, const std::string& session_id) {
   // delete cache
   file_session_cache_.Delete(ino, session_id);
 
+  count_metrics_ << -1;
+
   return Status::OK();
 }
 
@@ -240,6 +274,8 @@ Status FileSessionManager::Delete(uint64_t ino) {
   if (status.ok()) {
     // delete cache
     file_session_cache_.Delete(ino);
+
+    count_metrics_ << (0 - static_cast<int64_t>(file_sessions.size()));
   }
 
   return status;

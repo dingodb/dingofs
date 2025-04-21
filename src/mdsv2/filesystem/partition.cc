@@ -14,8 +14,15 @@
 
 #include "mdsv2/filesystem/partition.h"
 
+#include <memory>
+
 namespace dingofs {
 namespace mdsv2 {
+
+static const std::string kPartitionMetricsPrefix = "dingofs_partition_cache_";
+
+// 0: no limit
+DEFINE_uint32(partition_cache_max_count, 0, "partition cache max count");
 
 InodeSPtr Partition::ParentInode() {
   CHECK(parent_inode_ != nullptr) << "parent inode is null.";
@@ -88,7 +95,8 @@ std::vector<Dentry> Partition::GetAllChildren() {
   return dentries;
 }
 
-PartitionCache::PartitionCache() : cache_(0) {}
+PartitionCache::PartitionCache()
+    : cache_(FLAGS_partition_cache_max_count, std::make_shared<utils::CacheMetrics>(kPartitionMetricsPrefix)) {}
 PartitionCache::~PartitionCache() {}  // NOLINT
 
 void PartitionCache::Put(uint64_t ino, PartitionPtr partition) { cache_.Put(ino, partition); }
