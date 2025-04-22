@@ -26,7 +26,7 @@
 #include <memory>
 #include <vector>
 
-#include "client/blockcache/block_cache.h"
+#include "cache/blockcache/block_cache.h"
 #include "client/common/dynamic_config.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
@@ -71,6 +71,8 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+using cache::blockcache::BlockCacheImpl;
 
 static void OnThrottleTimer(void* arg) {
   VFSOld* vfs = reinterpret_cast<VFSOld*>(arg);
@@ -354,8 +356,8 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
       uuid = fs_info_->uuid();
     }
     RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache = std::make_shared<blockcache::BlockCacheImpl>(
-        block_cache_option, data_accesser_);
+    auto block_cache =
+        std::make_shared<BlockCacheImpl>(block_cache_option, data_accesser_);
 
     if (s3_adapter_->Init(fuse_client_option_.s3Opt.s3ClientAdaptorOpt,
                           data_accesser_, inode_cache_manager_, mds_client_,

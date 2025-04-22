@@ -83,6 +83,7 @@ inline void InitS3AdaptorOptionExceptS3InfoOption(utils::Configuration* conf,
          !conf->GetIntValue("s3.requestTimeout", &s3_opt->requestTimeout));
 
   if (!conf->GetBoolValue("s3.use_crt_client", &s3_opt->use_crt_client)) {
+    s3_opt->use_crt_client = false;
     LOG(INFO) << "Not found s3.use_crt_client in conf, use default "
               << (s3_opt->use_crt_client ? "true" : "false");
   }

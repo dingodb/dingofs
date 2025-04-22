@@ -22,6 +22,7 @@ add_subdirectory(stub)
 
 add_subdirectory(mds)
 add_subdirectory(metaserver)
+add_subdirectory(cache)
 add_subdirectory(client)
 add_subdirectory(tools)
 

@@ -26,13 +26,13 @@
 #include <cstdint>
 #include <string>
 
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace common {
 namespace s3util {
 
-using ::dingofs::client::blockcache::BlockKey;
+using cache::blockcache::BlockKey;
 
 inline std::string GenObjName(uint64_t chunkid, uint64_t index,
                               uint64_t compaction, uint64_t fsid,

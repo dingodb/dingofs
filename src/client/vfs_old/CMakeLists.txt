@@ -34,7 +34,7 @@ target_link_libraries(vfs_old_lib
     client_memcached_client
     dynamic_vlog
     client_datastream
-    client_blockcache
+    cache_blockcache
     dingofs_utils
     aws_s3_adapter
     dingofs_threading

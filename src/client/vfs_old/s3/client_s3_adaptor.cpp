@@ -27,7 +27,7 @@
 
 #include <utility>
 
-#include "client/blockcache/block_cache.h"
+#include "cache/blockcache/block_cache.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/in_time_warmup_manager.h"
@@ -37,7 +37,7 @@ namespace dingofs {
 
 namespace client {
 
-using blockcache::BlockCache;
+using cache::blockcache::BlockCache;
 using common::S3ClientAdaptorOption;
 using datastream::DataStream;
 using filesystem::FileSystem;

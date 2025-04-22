@@ -22,7 +22,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/blockcache/log.h"
+#include "cache/common/log.h"
 #include "client/common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
@@ -59,7 +59,7 @@ Status InitLog() {
   // Todo: remove InitMetaAccessLog when vfs is ready,  used by vfs old and old
   // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
+              dingofs::cache::common::InitTraceLog(FLAGS_log_dir) &&
               dataaccess::aws::InitS3AccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);

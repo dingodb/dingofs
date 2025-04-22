@@ -34,7 +34,7 @@
 #include <utility>
 
 #include "base/filepath/filepath.h"
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/inode_wrapper.h"
@@ -47,8 +47,8 @@ namespace client {
 namespace warmup {
 
 using base::filepath::PathSplit;
-using blockcache::Block;
-using blockcache::BlockKey;
+using cache::blockcache::Block;
+using cache::blockcache::BlockKey;
 using common::ClientOption;
 using common::WarmupStorageType;
 using stub::metric::MetricGuard;

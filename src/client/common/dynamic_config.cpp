@@ -48,55 +48,6 @@ DEFINE_bool(fuse_file_info_keep_cache, false, "keep file page cache");
 DEFINE_validator(fuse_file_info_direct_io, &PassBool);
 DEFINE_validator(fuse_file_info_keep_cache, &PassBool);
 
-// block cache
-DEFINE_bool(block_cache_logging, true, "enable block cache logging");
-DEFINE_bool(block_cache_stage_bandwidth_throttle_enable, false,
-            "enable block cache stage bandwidth throttle");
-DEFINE_uint64(block_cache_stage_bandwidth_throttle_mb, 102400,
-              "block cache stage bandwidth throttle");
-
-DEFINE_validator(block_cache_logging, &PassBool);
-DEFINE_validator(block_cache_stage_bandwidth_throttle_enable, &PassBool);
-DEFINE_validator(block_cache_stage_bandwidth_throttle_mb, &PassUint64);
-
-// disk cache
-DEFINE_bool(drop_page_cache, true, "drop page cache for disk cache");
-
-DEFINE_validator(drop_page_cache, &PassBool);
-
-// disk_cache_cleanup_expire_interval_millsecond
-
-// disk cache manager
-DEFINE_uint64(disk_cache_expire_second, 0,
-              "cache expire time, 0 means never expired");
-DEFINE_uint64(disk_cache_cleanup_expire_interval_millsecond, 1000,
-              "cleanup expire blocks interval in millsecond");
-DEFINE_double(disk_cache_free_space_ratio, 0.1, "disk free space ratio");
-
-DEFINE_validator(disk_cache_expire_second, &PassUint64);
-DEFINE_validator(disk_cache_cleanup_expire_interval_millsecond, &PassUint64);
-DEFINE_validator(disk_cache_free_space_ratio, &PassDouble);
-
-// disk state machine
-DEFINE_int32(disk_state_tick_duration_second, 60,
-             "tick duration in seconds for disk state machine");
-DEFINE_int32(disk_state_normal2unstable_io_error_num, 3,
-             "io error number to transit from normal to unstable");
-DEFINE_int32(disk_state_unstable2normal_io_succ_num, 10,
-             "io success number to transit from unstable to normal");
-DEFINE_int32(disk_state_unstable2down_second, 30 * 60,
-             "second to transit from unstable to down");
-
-DEFINE_validator(disk_state_tick_duration_second, &PassInt32);
-DEFINE_validator(disk_state_normal2unstable_io_error_num, &PassInt32);
-DEFINE_validator(disk_state_unstable2normal_io_succ_num, &PassInt32);
-DEFINE_validator(disk_state_unstable2down_second, &PassInt32);
-
-// disk state health checker
-DEFINE_int32(disk_check_duration_millsecond, 1 * 1000,
-             "disk health check duration in millsecond");
-DEFINE_validator(disk_check_duration_millsecond, &PassInt32);
-
 // thread num or bthread num
 DEFINE_uint32(stat_timer_thread_num, 8, "stat timer thread num");
 DEFINE_validator(stat_timer_thread_num, &PassUint32);

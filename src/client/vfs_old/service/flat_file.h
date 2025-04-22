@@ -21,7 +21,7 @@
 #include <sstream>
 #include <string>
 
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 #include "dingofs/metaserver.pb.h"
 #include "glog/logging.h"
 
@@ -29,6 +29,8 @@ namespace dingofs {
 namespace client {
 
 class FlatFile;
+
+using cache::blockcache::BlockKey;
 
 struct FlatFileSlice {
   uint64_t file_offset;
@@ -255,13 +257,24 @@ class FlatFile {
   std::string FormatStringWithHeader(bool use_delimiter = false) const {
     std::ostringstream os;
     if (use_delimiter) {
-      os << std::left << "file_offset" << "|" << "len" << "|" << "block_offset"
-         << "|" << "block_name" << "|" << "block_len" << "|" << "zero" << "\n";
+      os << std::left << "file_offset"
+         << "|"
+         << "len"
+         << "|"
+         << "block_offset"
+         << "|"
+         << "block_name"
+         << "|"
+         << "block_len"
+         << "|"
+         << "zero"
+         << "\n";
     } else {
       os << std::left << std::setw(20) << "file_offset" << std::setw(15)
          << "len" << std::setw(15) << "block_offset" << std::setw(100)
          << "block_name" << std::setw(15) << "block_len" << std::setw(10)
-         << "zero" << "\n";
+         << "zero"
+         << "\n";
     }
 
     for (const auto& flat_file_chunk_iter : chunk_index_flat_file_chunk_) {
@@ -281,9 +294,8 @@ class FlatFile {
             chunk_holder.GetBlockObjSlice(flat_file_slice);
 
         for (const auto& obj_slice : obj_slices) {
-          blockcache::BlockKey key(fs_id_, ino_, obj_slice.obj.chunk_id,
-                                   obj_slice.obj.block_index,
-                                   obj_slice.obj.version);
+          BlockKey key(fs_id_, ino_, obj_slice.obj.chunk_id,
+                       obj_slice.obj.block_index, obj_slice.obj.version);
 
           uint64_t block_offset =
               obj_slice.file_offset - obj_slice.obj.file_offset;

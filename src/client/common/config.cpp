@@ -27,6 +27,7 @@
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
+#include "cache/common/dynamic_config.h"
 #include "client/common/dynamic_config.h"
 #include "gflags/gflags.h"
 #include "utils/gflags_helper.h"
@@ -287,12 +288,16 @@ void SplitDiskCacheOption(DiskCacheOption option,
 
 static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   {  // block cache option
+    USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_enable);
+    USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_mb);
+    USING_CACHE_FLAG(trace_logging);
+
     c->GetValueFatalIfFail("block_cache.stage", &option->stage);
     c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_enable",
                            &FLAGS_block_cache_stage_bandwidth_throttle_enable);
     c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_mb",
                            &FLAGS_block_cache_stage_bandwidth_throttle_mb);
-    c->GetValueFatalIfFail("block_cache.logging", &FLAGS_block_cache_logging);
+    c->GetValueFatalIfFail("block_cache.logging", &FLAGS_trace_logging);
     c->GetValueFatalIfFail("block_cache.upload_stage_workers",
                            &option->upload_stage_workers);
     c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
@@ -311,6 +316,11 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 
   {  // disk cache option
+    USING_CACHE_FLAG(disk_cache_free_space_ratio);
+    USING_CACHE_FLAG(disk_cache_expire_second);
+    USING_CACHE_FLAG(disk_cache_cleanup_expire_interval_millsecond);
+    USING_CACHE_FLAG(drop_page_cache);
+
     DiskCacheOption o;
     c->GetValueFatalIfFail("disk_cache.cache_dir", &o.cache_dir);
     c->GetValueFatalIfFail("disk_cache.cache_size_mb", &o.cache_size);
@@ -338,6 +348,12 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 
   {  // disk state option
+    USING_CACHE_FLAG(disk_state_tick_duration_second);
+    USING_CACHE_FLAG(disk_state_normal2unstable_io_error_num);
+    USING_CACHE_FLAG(disk_state_unstable2normal_io_succ_num);
+    USING_CACHE_FLAG(disk_state_unstable2down_second);
+    USING_CACHE_FLAG(disk_check_duration_millsecond);
+
     c->GetValueFatalIfFail("disk_state.tick_duration_second",
                            &FLAGS_disk_state_tick_duration_second);
     c->GetValueFatalIfFail("disk_state.normal2unstable_io_error_num",

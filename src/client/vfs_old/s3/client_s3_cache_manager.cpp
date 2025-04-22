@@ -34,8 +34,8 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/local_filesystem.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/sys_conf.h"
 #include "client/common/dynamic_config.h"
 #include "client/common/status.h"
 #include "client/datastream/data_stream.h"
@@ -54,10 +54,11 @@ using dataaccess::GetObjectAsyncCallBack;
 using dataaccess::PutObjectAsyncCallBack;
 using dataaccess::PutObjectAsyncContext;
 
-using blockcache::Block;
-using blockcache::BlockContext;
-using blockcache::BlockFrom;
-using blockcache::BlockKey;
+using cache::blockcache::Block;
+using cache::blockcache::BlockContext;
+using cache::blockcache::BlockFrom;
+using cache::blockcache::BlockKey;
+using cache::common::SysConf;
 
 using datastream::DataStream;
 using filesystem::Ino;
@@ -2215,7 +2216,8 @@ DINGOFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
   // generate flush task
   std::vector<FlushBlock> s3Tasks;
   std::vector<std::shared_ptr<SetKVCacheTask>> kvCacheTasks;
-  char* data = reinterpret_cast<char*>(memalign(IO_ALIGNED_BLOCK_SIZE, len_));
+  char* data =
+      reinterpret_cast<char*>(memalign(SysConf::GetAlignedBlockSize(), len_));
   if (!data) {
     LOG(ERROR) << "new data failed.";
     return DINGOFS_ERROR::INTERNAL;

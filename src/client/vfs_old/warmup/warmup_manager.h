@@ -37,6 +37,7 @@
 #include <utility>
 #include <vector>
 
+#include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
@@ -55,6 +56,7 @@ namespace dingofs {
 namespace client {
 namespace warmup {
 
+using cache::blockcache::BlockKey;
 using dingofs::client::vfs::Ino;
 
 using ThreadPool = dingofs::common::TaskThreadPool2<bthread::Mutex,
@@ -375,15 +377,14 @@ class WarmupManagerS3Impl : public WarmupManager {
   void TravelChunks(Ino key, Ino ino,
                     const S3ChunkInfoMapType& s3_chunk_info_map);
 
-  using ObjectListType = std::list<std::pair<blockcache::BlockKey, uint64_t>>;
+  using ObjectListType = std::list<std::pair<BlockKey, uint64_t>>;
   // travel and download all objs belong to the chunk
   void TravelChunk(Ino ino, const pb::metaserver::S3ChunkInfoList& chunk_info,
                    ObjectListType* prefetch_objs);
 
   // warmup all the prefetchObjs
-  void WarmUpAllObjs(Ino ino,
-                     const std::list<std::pair<blockcache::BlockKey, uint64_t>>&
-                         prefetch_objs);
+  void WarmUpAllObjs(
+      Ino ino, const std::list<std::pair<BlockKey, uint64_t>>& prefetch_objs);
 
   /**
    * @brief Whether the warmup task[key] is completed (or terminated)

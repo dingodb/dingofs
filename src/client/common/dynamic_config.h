@@ -44,28 +44,6 @@ DECLARE_bool(access_logging);
 DECLARE_bool(fuse_file_info_direct_io);
 DECLARE_bool(fuse_file_info_keep_cache);
 
-// block cache logging
-DECLARE_bool(block_cache_logging);
-DECLARE_bool(block_cache_stage_bandwidth_throttle_enable);
-DECLARE_uint64(block_cache_stage_bandwidth_throttle_mb);
-
-// disk cache
-DECLARE_bool(drop_page_cache);
-
-// disk cache manager
-DECLARE_uint64(disk_cache_expire_second);
-DECLARE_uint64(disk_cache_cleanup_expire_interval_millsecond);
-DECLARE_double(disk_cache_free_space_ratio);
-
-// disk state machine
-DECLARE_int32(disk_state_tick_duration_second);
-DECLARE_int32(disk_state_normal2unstable_io_error_num);
-DECLARE_int32(disk_state_unstable2normal_io_succ_num);
-DECLARE_int32(disk_state_unstable2down_second);
-
-// disk state health checker
-DECLARE_int32(disk_check_duration_millsecond);
-
 // ----- related stat or quota config -----
 // thread num or bthread num
 DECLARE_uint32(stat_timer_thread_num);
