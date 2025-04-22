@@ -22,7 +22,7 @@
 
 #include <sstream>
 
-#include "cache/common/log.h"
+#include "cache/utils/access_log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
@@ -30,7 +30,7 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::LogGuard;
+using cache::utils::LogGuard;
 
 class LogTest : public ::testing::Test {
  protected:

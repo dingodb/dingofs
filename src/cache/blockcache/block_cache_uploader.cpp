@@ -28,19 +28,19 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/dynamic_config.h"
-#include "cache/common/local_filesystem.h"
-#include "cache/common/log.h"
-#include "cache/common/phase_timer.h"
+#include "cache/utils/access_log.h"
+#include "cache/utils/local_filesystem.h"
+#include "cache/utils/phase_timer.h"
+#include "options/cache/app.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(drop_page_cache);
-
-using cache::common::LogIt;
-using cache::common::Phase;
+using dingofs::cache::utils::LogIt;
+using dingofs::cache::utils::Phase;
+using dingofs::options::cache::AppOption;
+using dingofs::utils::TaskThreadPool;
 
 BlockCacheUploader::BlockCacheUploader(DataAccesserPtr data_accesser,
                                        std::shared_ptr<CacheStore> store,
@@ -171,7 +171,8 @@ Status BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
                                      size_t* length) {
   auto stage_path = stage_block.stage_path;
   auto fs = LocalFileSystem();
-  auto status = fs.ReadFile(stage_path, buffer, length, FLAGS_drop_page_cache);
+  auto status =
+      fs.ReadFile(stage_path, buffer, length, FLAGS_disk_cache_drop_page_cache);
   if (status.IsNotFound()) {
     LOG(ERROR) << "Stage block (path=" << stage_path
                << ") already deleted, abort upload!";

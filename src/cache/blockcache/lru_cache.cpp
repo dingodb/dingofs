@@ -35,8 +35,8 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::cache::NewLRUCache;
-using base::time::TimeNow;
+using dingofs::base::cache::NewLRUCache;
+using dingofs::base::time::TimeNow;
 
 static void FreeNode(const std::string_view&, void* value) {
   ListNode* node = reinterpret_cast<ListNode*>(value);

@@ -28,13 +28,13 @@
 #include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/segments.h"
+#include "cache/utils/segments.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::Segments;
+using dingofs::cache::utils::Segments;
 
 struct StageBlock {
   StageBlock() : seq_num(0) {}

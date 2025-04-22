@@ -18,13 +18,14 @@ add_subdirectory(handle)
 add_subdirectory(hub)
 add_subdirectory(meta)
 
-add_library(vfs_lib 
+add_library(vfs_lib
     vfs_impl.cpp
 )
 
 target_link_libraries(vfs_lib
     client_common
     dingofs_common
+    dingofs_options
     vfs_meta_lib
     vfs_data
     vfs_hub

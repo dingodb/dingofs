@@ -23,8 +23,8 @@
 #include <cstdlib>
 
 #include "base/filepath/filepath.h"
-#include "cache/common/local_filesystem.h"
-#include "common/status.h"
+#include "cache/common/common.h"
+#include "cache/utils/local_filesystem.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "utils/uuid.h"
@@ -33,9 +33,9 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::filepath::PathJoin;
-using cache::common::LocalFileSystem;
-using utils::UUIDGenerator;
+using dingofs::base::filepath::PathJoin;
+using dingofs::cache::utils::LocalFileSystem;
+using dingofs::utils::UUIDGenerator;
 using FileInfo = LocalFileSystem::FileInfo;
 
 class LocalFileSystemTest : public ::testing::Test {

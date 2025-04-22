@@ -30,7 +30,7 @@
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/countdown.h"
-#include "cache/common/phase_timer.h"
+#include "cache/utils/phase_timer.h"
 #include "dataaccess/accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -38,9 +38,9 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::PhaseTimer;
-using dataaccess::DataAccesserPtr;
-using utils::TaskThreadPool;
+using dingofs::cache::utils::PhaseTimer;
+using dingofs::dataaccess::DataAccesserPtr;
+using dingofs::utils::TaskThreadPool;
 
 // How it works:
 //               add                   scan                     put

@@ -27,9 +27,9 @@
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
-#include "cache/common/dynamic_config.h"
 #include "client/common/dynamic_config.h"
 #include "gflags/gflags.h"
+#include "options/cache/blockcache.h"
 #include "utils/gflags_helper.h"
 
 namespace brpc {
@@ -52,6 +52,9 @@ using ::dingofs::stub::common::ExcutorOpt;
 using ::dingofs::stub::common::MetaCacheOpt;
 
 using dingofs::client::common::FLAGS_in_time_warmup;
+
+using options::cache::DiskCacheOption;
+using options::cache::DiskStateOption;
 
 static void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
   conf->GetValueFatalIfFail("metaCacheOpt.metacacheGetLeaderRetry",
@@ -265,21 +268,21 @@ namespace {
 
 void SplitDiskCacheOption(DiskCacheOption option,
                           std::vector<DiskCacheOption>* options) {
-  std::vector<std::string> dirs = StrSplit(option.cache_dir, ";");
+  std::vector<std::string> dirs = StrSplit(option.cache_dir(), ";");
   for (size_t i = 0; i < dirs.size(); i++) {
-    uint64_t cache_size = option.cache_size;
+    uint64_t cache_size_mb = option.cache_size_mb();
     std::vector<std::string> items = StrSplit(dirs[i], ":");
     if (items.size() > 2 ||
-        (items.size() == 2 && !Str2Int(items[1], &cache_size))) {
+        (items.size() == 2 && !Str2Int(items[1], &cache_size_mb))) {
       CHECK(false) << "Invalid cache dir: " << dirs[i];
-    } else if (cache_size == 0) {
+    } else if (cache_size_mb == 0) {
       CHECK(false) << "Cache size must greater than 0.";
     }
 
     DiskCacheOption o = option;
-    o.index = i;
-    o.cache_dir = items[0];
-    o.cache_size = cache_size * kMiB;
+    o.cache_index() = i;
+    o.cache_dir() = items[0];
+    o.cache_size_mb() = cache_size_mb;
     options->emplace_back(o);
   }
 }
@@ -288,27 +291,23 @@ void SplitDiskCacheOption(DiskCacheOption option,
 
 static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   {  // block cache option
-    USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_enable);
-    USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_mb);
-    USING_CACHE_FLAG(trace_logging);
-
-    c->GetValueFatalIfFail("block_cache.stage", &option->stage);
+    c->GetValueFatalIfFail("block_cache.logging", &option->logging());
+    c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store());
+    c->GetValueFatalIfFail("block_cache.stage", &option->stage());
     c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_enable",
-                           &FLAGS_block_cache_stage_bandwidth_throttle_enable);
+                           &option->stage_bandwidth_throttle_enable());
     c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_mb",
-                           &FLAGS_block_cache_stage_bandwidth_throttle_mb);
-    c->GetValueFatalIfFail("block_cache.logging", &FLAGS_trace_logging);
+                           &option->stage_bandwidth_throttle_mb());
     c->GetValueFatalIfFail("block_cache.upload_stage_workers",
-                           &option->upload_stage_workers);
+                           &option->upload_stage_workers());
     c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
-                           &option->upload_stage_queue_size);
+                           &option->upload_stage_queue_size());
     c->GetValueFatalIfFail("block_cache.prefetch_workers",
-                           &option->prefetch_workers);
+                           &option->prefetch_workers());
     c->GetValueFatalIfFail("block_cache.prefetch_queue_size",
-                           &option->prefetch_queue_size);
-    c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store);
+                           &option->prefetch_queue_size());
 
-    std::string cache_store = option->cache_store;
+    std::string cache_store = option->cache_store();
     if (cache_store != "none" && cache_store != "disk" &&
         cache_store != "3fs") {
       CHECK(false) << "Only support none, disk or 3fs cache store.";
@@ -316,54 +315,47 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 
   {  // disk cache option
-    USING_CACHE_FLAG(disk_cache_free_space_ratio);
-    USING_CACHE_FLAG(disk_cache_expire_second);
-    USING_CACHE_FLAG(disk_cache_cleanup_expire_interval_millsecond);
-    USING_CACHE_FLAG(drop_page_cache);
-
-    DiskCacheOption o;
-    c->GetValueFatalIfFail("disk_cache.cache_dir", &o.cache_dir);
-    c->GetValueFatalIfFail("disk_cache.cache_size_mb", &o.cache_size);
+    DiskCacheOption& o = option->disk_cache_option();
+    c->GetValueFatalIfFail("disk_cache.cache_dir", &o.cache_dir());
+    c->GetValueFatalIfFail("disk_cache.cache_size_mb", &o.cache_size_mb());
     c->GetValueFatalIfFail("disk_cache.free_space_ratio",
-                           &FLAGS_disk_cache_free_space_ratio);
+                           &o.free_space_ratio());
     c->GetValueFatalIfFail("disk_cache.cache_expire_second",
-                           &FLAGS_disk_cache_expire_second);
-    c->GetValueFatalIfFail(
-        "disk_cache.cleanup_expire_interval_millsecond",
-        &FLAGS_disk_cache_cleanup_expire_interval_millsecond);
-    c->GetValueFatalIfFail("disk_cache.drop_page_cache",
-                           &FLAGS_drop_page_cache);
-    if (!c->GetUInt32Value("disk_cache.ioring_iodepth", &o.ioring_iodepth)) {
-      o.ioring_iodepth = 128;
+                           &o.cache_expire_s());
+    c->GetValueFatalIfFail("disk_cache.cleanup_expire_interval_millsecond",
+                           &o.cleanup_expire_interval_ms());
+    c->GetValueFatalIfFail("disk_cache.drop_page_cache", &o.drop_page_cache());
+    if (!c->GetUInt32Value("disk_cache.ioring_iodepth", &o.ioring_iodepth())) {
+      o.ioring_iodepth() = 128;
     }
-    if (!c->GetUInt32Value("disk_cache.ioring_blksize", &o.ioring_blksize)) {
-      o.ioring_blksize = 1048576;
+    if (!c->GetUInt32Value("disk_cache.ioring_blksize", &o.ioring_blksize())) {
+      o.ioring_blksize() = 1048576;
     }
-    o.ioring_prefetch = c->GetBoolValue("disk_cache.ioring_prefetch", true);
-
-    if (option->cache_store == "disk" || option->cache_store == "3fs") {
-      o.filesystem_type = (option->cache_store == "3fs") ? "3fs" : "local";
-      SplitDiskCacheOption(o, &option->disk_cache_options);
-    }
+    o.ioring_prefetch() = c->GetBoolValue("disk_cache.ioring_prefetch", true);
   }
 
   {  // disk state option
-    USING_CACHE_FLAG(disk_state_tick_duration_second);
-    USING_CACHE_FLAG(disk_state_normal2unstable_io_error_num);
-    USING_CACHE_FLAG(disk_state_unstable2normal_io_succ_num);
-    USING_CACHE_FLAG(disk_state_unstable2down_second);
-    USING_CACHE_FLAG(disk_check_duration_millsecond);
 
+    DiskStateOption& o = option->disk_cache_option().disk_state_option();
     c->GetValueFatalIfFail("disk_state.tick_duration_second",
-                           &FLAGS_disk_state_tick_duration_second);
+                           &o.tick_duration_s());
     c->GetValueFatalIfFail("disk_state.normal2unstable_io_error_num",
-                           &FLAGS_disk_state_normal2unstable_io_error_num);
+                           &o.normal2unstable_io_error_num());
     c->GetValueFatalIfFail("disk_state.unstable2normal_io_succ_num",
-                           &FLAGS_disk_state_unstable2normal_io_succ_num);
+                           &o.unstable2normal_io_succ_num());
     c->GetValueFatalIfFail("disk_state.unstable2down_second",
-                           &FLAGS_disk_state_unstable2down_second);
+                           &o.unstable2down_s());
     c->GetValueFatalIfFail("disk_state.disk_check_duration_millsecond",
-                           &FLAGS_disk_check_duration_millsecond);
+                           &o.disk_check_duration_ms());
+  }
+
+  // rewrite disk cache options
+  {
+    DiskCacheOption& o = option->disk_cache_option();
+    if (option->cache_store() == "disk" || option->cache_store() == "3fs") {
+      o.filesystem_type() = (option->cache_store() == "3fs") ? "3fs" : "local";
+      SplitDiskCacheOption(o, &option->disk_cache_options());
+    }
   }
 }
 
@@ -466,10 +458,10 @@ void S3Info2FsS3Option(const pb::common::S3Info& s3, S3InfoOption* fs_s3_opt) {
 }
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid) {
-  auto& disk_cache_options = option->disk_cache_options;
+  auto& disk_cache_options = option->disk_cache_options();
   for (auto& disk_cache_option : disk_cache_options) {
-    std::string cache_dir = disk_cache_option.cache_dir;
-    disk_cache_option.cache_dir = PathJoin({cache_dir, uuid});
+    std::string cache_dir = disk_cache_option.cache_dir();
+    disk_cache_option.cache_dir() = PathJoin({cache_dir, uuid});
   }
 }
 

@@ -26,7 +26,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/builder/builder.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/log.h"
+#include "cache/utils/access_log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 

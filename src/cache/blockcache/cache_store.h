@@ -31,15 +31,15 @@
 #include "base/string/string.h"
 #include "cache/blockcache/block_reader.h"
 #include "cache/common/common.h"
-#include "common/status.h"
+#include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::string::StrFormat;
-using base::string::Strs2Ints;
-using base::string::StrSplit;
+using dingofs::base::string::StrFormat;
+using dingofs::base::string::Strs2Ints;
+using dingofs::base::string::StrSplit;
 
 struct BlockKey {
   BlockKey() : fs_id(0), ino(0), id(0), index(0), version(0) {}
@@ -48,6 +48,13 @@ struct BlockKey {
            uint64_t version)
       : fs_id(fs_id), ino(ino), id(id), index(index), version(version) {}
 
+  BlockKey(pb::cache::blockcache::BlockKey pb)
+      : fs_id(pb.fs_id()),
+        ino(pb.ino()),
+        id(pb.id()),
+        index(pb.index()),
+        version(pb.version()) {}
+
   std::string Filename() const {
     return StrFormat("%d_%d_%d_%d_%d", fs_id, ino, id, index, version);
   }
@@ -55,6 +62,16 @@ struct BlockKey {
   std::string StoreKey() const {
     return StrFormat("blocks/%d/%d/%s", id / 1000 / 1000, id / 1000,
                      Filename());
+  }
+
+  pb::cache::blockcache::BlockKey ToPb() const {
+    pb::cache::blockcache::BlockKey pb;
+    pb.set_fs_id(fs_id);
+    pb.set_ino(ino);
+    pb.set_id(id);
+    pb.set_index(index);
+    pb.set_version(version);
+    return pb;
   }
 
   bool ParseFilename(const std::string_view& filename) {

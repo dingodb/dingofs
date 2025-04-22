@@ -39,8 +39,7 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::BlockCacheOption;
-using dataaccess::DataAccesserPtr;
+using dingofs::dataaccess::DataAccesserPtr;
 
 enum class StoreType : uint8_t {
   kNone = 0,

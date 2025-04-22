@@ -26,18 +26,6 @@
 namespace dingofs {
 namespace options {
 
-namespace internal {
-
-bool pass_bool(const char*, bool) { return true; }
-bool pass_int32(const char*, int32_t) { return true; }
-bool pass_uint32(const char*, uint32_t) { return true; }
-bool pass_int64(const char*, int64_t) { return true; }
-bool pass_uint64(const char*, uint64_t) { return true; }
-bool pass_double(const char*, double) { return true; }
-bool pass_string(const char*, std::string) { return true; }
-
-}  // namespace internal
-
 bool BaseOption::Parse(const std::string& filepath) {
   const auto input = toml::try_parse(filepath);
   if (input.is_ok()) {
@@ -60,7 +48,15 @@ bool BaseOption::Walk(const toml::value& node) {
       return false;
     }
   }
-  return true;
+
+  bool succ = true;
+  if (rewrite_func_) {
+    succ = rewrite_func_(this);
+    if (succ && validate_func_) {
+      succ = validate_func_(this);
+    }
+  }
+  return succ;
 }
 
 bool BaseOption::HandleTable(const std::string& key, const toml::value& value) {

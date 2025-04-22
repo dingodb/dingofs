@@ -35,9 +35,9 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::filepath::HasSuffix;
-using base::filepath::PathJoin;
 using butil::Timer;
+using dingofs::base::filepath::HasSuffix;
+using dingofs::base::filepath::PathJoin;
 
 DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
                                  std::shared_ptr<LocalFileSystem> fs,

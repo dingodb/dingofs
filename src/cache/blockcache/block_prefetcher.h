@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/common/common.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -35,8 +36,8 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using utils::Mutex;
-using utils::TaskThreadPool;
+using dingofs::utils::Mutex;
+using dingofs::utils::TaskThreadPool;
 
 class BlockPrefetcher {
  public:

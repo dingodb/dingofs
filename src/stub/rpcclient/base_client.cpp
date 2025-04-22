@@ -24,6 +24,8 @@
 
 #include <cstdint>
 
+#include "dingofs/cachegroup.pb.h"
+
 namespace dingofs {
 namespace stub {
 namespace rpcclient {
@@ -45,6 +47,18 @@ using pb::mds::SetFsStatsRequest;
 using pb::mds::SetFsStatsResponse;
 using pb::mds::UmountFsRequest;
 using pb::mds::UmountFsResponse;
+using pb::mds::cachegroup::AddMemberRequest;
+using pb::mds::cachegroup::AddMemberResponse;
+using pb::mds::cachegroup::CacheGroupMember;
+using pb::mds::cachegroup::CacheGroupMemberService_Stub;
+using pb::mds::cachegroup::HeartbeatRequest;
+using pb::mds::cachegroup::HeartbeatResponse;
+using pb::mds::cachegroup::LoadMembersRequest;
+using pb::mds::cachegroup::LoadMembersResponse;
+using pb::mds::cachegroup::RegisterMemberRequest;
+using pb::mds::cachegroup::RegisterMemberResponse;
+using pb::mds::cachegroup::ReweightMemberRequest;
+using pb::mds::cachegroup::ReweightMemberResponse;
 using pb::mds::space::AcquireBlockGroupRequest;
 using pb::mds::space::AcquireBlockGroupResponse;
 using pb::mds::space::AllocateBlockGroupRequest;
@@ -59,6 +73,7 @@ using pb::mds::topology::CreatePartitionResponse;
 using pb::mds::topology::GetCopysetOfPartitionRequest;
 using pb::mds::topology::GetCopysetOfPartitionResponse;
 using pb::mds::topology::GetMetaServerInfoRequest;
+
 using pb::mds::topology::GetMetaServerInfoResponse;
 using pb::mds::topology::GetMetaServerListInCopySetsRequest;
 using pb::mds::topology::GetMetaServerListInCopySetsResponse;
@@ -267,6 +282,70 @@ void MDSBaseClient::SetFsStats(const SetFsStatsRequest& request,
                                brpc::Controller* cntl, brpc::Channel* channel) {
   dingofs::pb::mds::MdsService_Stub stub(channel);
   stub.SetFsStats(cntl, &request, response, nullptr);
+}
+
+// cache group
+void MDSBaseClient::RegisterCacheGroupMember(uint64_t old_id,
+                                             RegisterMemberResponse* response,
+                                             brpc::Controller* cntl,
+                                             brpc::Channel* channel) {
+  RegisterMemberRequest request;
+  request.set_old_id(old_id);
+
+  CacheGroupMemberService_Stub stub(channel);
+  stub.RegisterMember(cntl, &request, response, nullptr);
+}
+
+void MDSBaseClient::AddCacheGroupMember(const std::string& group_name,
+                                        const CacheGroupMember& member,
+                                        AddMemberResponse* response,
+                                        brpc::Controller* cntl,
+                                        brpc::Channel* channel) {
+  AddMemberRequest request;
+  request.set_group_name(group_name);
+  *request.mutable_member() = member;
+
+  CacheGroupMemberService_Stub stub(channel);
+  stub.AddMember(cntl, &request, response, nullptr);
+}
+
+void MDSBaseClient::LoadCacheGroupMembers(const std::string& group_name,
+                                          LoadMembersResponse* response,
+                                          brpc::Controller* cntl,
+                                          brpc::Channel* channel) {
+  LoadMembersRequest request;
+  request.set_group_name(group_name);
+
+  CacheGroupMemberService_Stub stub(channel);
+  stub.LoadMembers(cntl, &request, response, nullptr);
+}
+
+void MDSBaseClient::ReweightCacheGroupMember(const std::string& group_name,
+                                             uint64_t member_id,
+                                             uint32_t weight,
+                                             ReweightMemberResponse* response,
+                                             brpc::Controller* cntl,
+                                             brpc::Channel* channel) {
+  ReweightMemberRequest request;
+  request.set_group_name(group_name);
+  request.set_member_id(member_id);
+  request.set_weight(weight);
+
+  CacheGroupMemberService_Stub stub(channel);
+  stub.ReweightMember(cntl, &request, response, nullptr);
+}
+
+void MDSBaseClient::SendCacheGroupHeartbeat(
+    const std::string& group_name, uint64_t member_id,
+    const HeartbeatRequest::Statistic& stat, HeartbeatResponse* response,
+    brpc::Controller* cntl, brpc::Channel* channel) {
+  HeartbeatRequest request;
+  request.set_group_name(group_name);
+  request.set_member_id(member_id);
+  *request.mutable_stat() = stat;
+
+  CacheGroupMemberService_Stub stub(channel);
+  stub.Heartbeat(cntl, &request, response, nullptr);
 }
 
 }  // namespace rpcclient

@@ -22,8 +22,7 @@
 #include <cstdint>
 #include <memory>
 
-#include "cache/common/log.h"
-#include "common/status.h"
+#include "cache/utils/access_log.h"
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
@@ -32,6 +31,7 @@
 #include "client/vfs_old/vfs_old.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
+#include "common/status.h"
 #include "dataaccess/s3/aws/s3_access_log.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/meta_access_log.h"
@@ -60,7 +60,7 @@ Status InitLog() {
   // Todo: remove InitMetaAccessLog when vfs is ready,  used by vfs old and old
   // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::cache::common::InitTraceLog(FLAGS_log_dir) &&
+              dingofs::cache::utils::InitAccessLog(FLAGS_log_dir) &&
               dataaccess::aws::InitS3AccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);

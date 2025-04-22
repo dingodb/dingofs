@@ -135,6 +135,10 @@ Checks: "*,
   -readability-uppercase-literal-suffix,
   -readability-use-anyofallof,
   -readability-redundant-access-specifiers,
+  -readability-identifier-naming,
+  -readability-redundant-string-init,
+  -readability-convert-member-functions-to-static,
+  -readability-simplify-boolean-expr,
 
   -zirkon-*,
   "

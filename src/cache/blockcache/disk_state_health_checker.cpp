@@ -22,17 +22,14 @@
 #include "base/filepath/filepath.h"
 #include "base/timer/timer_impl.h"
 #include "cache/blockcache/disk_state_machine.h"
-#include "cache/common/dynamic_config.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(disk_check_duration_millsecond);
-
-using base::filepath::PathJoin;
-using base::timer::TimerImpl;
+using dingofs::base::filepath::PathJoin;
+using dingofs::base::timer::TimerImpl;
 
 DiskStateHealthChecker::DiskStateHealthChecker(
     std::shared_ptr<DiskCacheLayout> layout,
@@ -50,7 +47,7 @@ bool DiskStateHealthChecker::Start() {
 
   running_ = true;
 
-  timer_->Add([this] { RunCheck(); }, FLAGS_disk_check_duration_millsecond);
+  timer_->Add([this] { RunCheck(); }, FLAGS_disk_state_disk_check_duration_ms);
 
   LOG(INFO) << "DiskStateHealthChecker start";
   return true;
@@ -80,7 +77,7 @@ void DiskStateHealthChecker::RunCheck() {
   }
 
   ProbeDisk();
-  timer_->Add([this] { RunCheck(); }, FLAGS_disk_check_duration_millsecond);
+  timer_->Add([this] { RunCheck(); }, FLAGS_disk_state_disk_check_duration_ms);
 }
 
 void DiskStateHealthChecker::ProbeDisk() {

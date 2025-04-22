@@ -27,12 +27,13 @@
 #include <cassert>
 
 #include "cache/common/common.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using utils::LockGuard;
+using dingofs::utils::LockGuard;
 
 BlockPrefetcherImpl::BlockPrefetcherImpl()
     : running_(false),

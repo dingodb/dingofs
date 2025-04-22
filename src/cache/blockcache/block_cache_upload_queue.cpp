@@ -24,13 +24,9 @@
 
 #include <glog/logging.h>
 
-#include "cache/common/dynamic_config.h"
-
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-USING_CACHE_FLAG(drop_page_cache);
 
 void PendingQueue::Push(const StageBlock& stage_block) {
   std::unique_lock<std::mutex> lk(mutex_);

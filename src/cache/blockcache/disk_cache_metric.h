@@ -27,21 +27,21 @@
 
 #include <string>
 
+#include "base/math/math.h"
 #include "base/string/string.h"
 #include "cache/common/common.h"
-#include "cache/common/dynamic_config.h"
-#include "common/status.h"
+#include "options/cache/blockcache.h"
 #include "stub/metric/metric.h"
+#include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(disk_cache_free_space_ratio);
-
-using base::string::StrFormat;
-using cache::common::DiskCacheOption;
-using stub::metric::InterfaceMetric;
+using dingofs::base::math::kMiB;
+using dingofs::base::string::StrFormat;
+using dingofs::options::cache::DiskCacheOption;
+using dingofs::stub::metric::InterfaceMetric;
 
 constexpr const char* kLoadStopped = "STOP";  // load status
 constexpr const char* kOnLoading = "LOADING";
@@ -53,16 +53,16 @@ class DiskCacheMetric {
  public:
   explicit DiskCacheMetric(DiskCacheOption option)
       : option_(option),
-        metric_(StrFormat("dingofs_block_cache.disk_caches_%d", option.index)) {
-  }
+        metric_(StrFormat("dingofs_block_cache.disk_caches_%d",
+                          option.cache_index())) {}
 
   virtual ~DiskCacheMetric() = default;
 
   void Init() {
-    metric_.dir.set_value(option_.cache_dir);
+    metric_.dir.set_value(option_.cache_dir());
     metric_.used_bytes.set_value(0);
-    metric_.capacity.set_value(option_.cache_size);
-    metric_.free_space_ratio.set_value(FLAGS_disk_cache_free_space_ratio);
+    metric_.capacity.set_value(option_.cache_size_mb() * kMiB);
+    metric_.free_space_ratio.set_value(option_.free_space_ratio());
     metric_.load_status.set_value(kLoadStopped);
     metric_.running_status.set_value(kCacheDown);
     metric_.healthy_status.set_value("unknown");

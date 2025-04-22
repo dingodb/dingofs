@@ -32,21 +32,16 @@
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
-#include "cache/common/dynamic_config.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(disk_cache_expire_second);
-USING_CACHE_FLAG(disk_cache_cleanup_expire_interval_millsecond);
-USING_CACHE_FLAG(disk_cache_free_space_ratio);
-
-using base::math::kMiB;
-using base::string::StrFormat;
-using base::time::TimeNow;
 using butil::Timer;
-using utils::LockGuard;
+using dingofs::base::math::kMiB;
+using dingofs::base::string::StrFormat;
+using dingofs::base::time::TimeNow;
+using dingofs::utils::LockGuard;
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    std::shared_ptr<DiskCacheLayout> layout,
@@ -80,7 +75,7 @@ void DiskCacheManager::Start() {
   task_pool_->Enqueue(&DiskCacheManager::CleanupExpire, this);
   LOG(INFO) << "Disk cache manager start, capacity=" << capacity_
             << ", free_space_ratio=" << FLAGS_disk_cache_free_space_ratio
-            << ", cache_expire_second=" << FLAGS_disk_cache_expire_second;
+            << ", cache_expire_second=" << FLAGS_disk_cache_expire_s;
 }
 
 void DiskCacheManager::Stop() {
@@ -203,7 +198,7 @@ void DiskCacheManager::CleanupExpire() {
   while (running_.load(std::memory_order_relaxed)) {
     uint64_t num_checks = 0;
     auto now = TimeNow();
-    if (FLAGS_disk_cache_expire_second == 0) {
+    if (FLAGS_disk_cache_expire_s == 0) {
       std::this_thread::sleep_for(std::chrono::seconds(3));
       continue;
     }
@@ -213,7 +208,7 @@ void DiskCacheManager::CleanupExpire() {
       to_del = lru_->Evict([&](const CacheValue& value) {
         if (++num_checks > 1e3) {
           return FilterStatus::kFinish;
-        } else if (value.atime + FLAGS_disk_cache_expire_second > now) {
+        } else if (value.atime + FLAGS_disk_cache_expire_s > now) {
           return FilterStatus::kSkip;
         }
         UpdateUsage(-1, -value.size);
@@ -224,8 +219,8 @@ void DiskCacheManager::CleanupExpire() {
     if (!to_del.empty()) {
       mq_->Publish({to_del, DeleteFrom::kCacheExpired});
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(
-        FLAGS_disk_cache_cleanup_expire_interval_millsecond));
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(FLAGS_disk_cache_cleanup_expire_interval_ms));
   }
 }
 

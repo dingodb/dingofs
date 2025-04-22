@@ -13,6 +13,7 @@
 # limitations under the License.
 
 file(GLOB DINGOFS_OPTIONS_LIB_SRCS
+    "cache/*.cpp"
     "options.cpp"
 )
 

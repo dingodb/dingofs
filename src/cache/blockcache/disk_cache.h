@@ -34,14 +34,16 @@
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_state_health_checker.h"
 #include "cache/blockcache/disk_state_machine.h"
-#include "cache/common/aio_queue.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/aio_queue.h"
+#include "cache/utils/local_filesystem.h"
+#include "options/cache/app.h"
+#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::AioQueueImpl;
+using dingofs::cache::utils::AioQueueImpl;
 
 class DiskCache : public CacheStore {
   enum : std::int8_t {
@@ -106,6 +108,7 @@ class DiskCache : public CacheStore {
   std::string uuid_;
   UploadFunc uploader_;
   DiskCacheOption option_;
+  bool use_direct_write_;
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheMetric> metric_;
   std::shared_ptr<DiskCacheLayout> layout_;
@@ -115,7 +118,6 @@ class DiskCache : public CacheStore {
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
   std::shared_ptr<AioQueueImpl> aio_queue_;
-  bool use_direct_write_;
 };
 
 }  // namespace blockcache

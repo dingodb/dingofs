@@ -30,14 +30,14 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/blockcache/disk_cache_metric.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using utils::TaskThreadPool;
+using dingofs::utils::TaskThreadPool;
 using FileInfo = LocalFileSystem::FileInfo;
 using UploadFunc = CacheStore::UploadFunc;
 

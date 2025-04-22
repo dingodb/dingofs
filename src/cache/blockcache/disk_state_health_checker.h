@@ -21,12 +21,14 @@
 #include "base/timer/timer_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_state_machine.h"
+#include "cache/common/common.h"
+#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::timer::TimerImpl;
+using dingofs::base::timer::TimerImpl;
 
 class DiskStateHealthChecker {
  public:

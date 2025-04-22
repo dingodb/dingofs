@@ -31,17 +31,11 @@
 #include "cache/blockcache/block_cache_throttle.h"
 #include "cache/blockcache/block_cache_uploader.h"
 #include "cache/common/common.h"
-#include "cache/common/dynamic_config.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_enable);
-USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_mb);
-
-using cache::common::BlockCacheOption;
 
 class BlockCacheMetricHelper {
  public:
@@ -94,9 +88,9 @@ class BlockCacheMetric {
  public:
   BlockCacheMetric(BlockCacheOption option, AuxMember aux_members)
       : metric_("dingofs_block_cache", aux_members) {
-    metric_.upload_stage_workers.set_value(option.upload_stage_workers);
+    metric_.upload_stage_workers.set_value(option.upload_stage_workers());
     metric_.upload_stage_queue_capacity.set_value(
-        option.upload_stage_queue_size);
+        option.upload_stage_queue_size());
   }
 
   virtual ~BlockCacheMetric() = default;

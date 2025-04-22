@@ -29,7 +29,6 @@
 #include <unordered_map>
 
 #include "cache/common/common.h"
-#include "common/status.h"
 
 namespace dingofs {
 namespace cache {

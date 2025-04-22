@@ -53,6 +53,17 @@ inline bool Str2Int(const std::string& str, uint64_t* num) noexcept {
   }
 }
 
+inline bool Str2Int(const std::string& str, uint32_t* num) noexcept {
+  try {
+    *num = std::stoull(str);
+    return true;
+  } catch (std::invalid_argument& e) {
+    return false;
+  } catch (std::out_of_range& e) {
+    return false;
+  }
+}
+
 inline bool Strs2Ints(const std::vector<std::string>& strs,
                       const std::vector<uint64_t*>& nums) {
   if (strs.size() != nums.size()) {

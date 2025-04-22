@@ -32,13 +32,13 @@
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_group.h"
 #include "cache/common/common.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::string::TrimSpace;
+using dingofs::base::string::TrimSpace;
 
 DiskCacheWatcher::DiskCacheWatcher()
     : running_(false),

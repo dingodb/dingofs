@@ -20,5 +20,5 @@ add_library(cache_blockcache ${BLOCKCACHE_LIB_SRCS})
 
 target_link_libraries(cache_blockcache
     cache_common
-    dingofs_status
+    cache_utils
 )

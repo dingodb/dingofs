@@ -34,7 +34,7 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/lru_cache.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -42,10 +42,10 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::queue::MessageQueue;
-using cache::blockcache::LRUCache;
-using utils::Mutex;
-using utils::TaskThreadPool;
+using dingofs::base::queue::MessageQueue;
+using dingofs::cache::blockcache::LRUCache;
+using dingofs::utils::Mutex;
+using dingofs::utils::TaskThreadPool;
 
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {

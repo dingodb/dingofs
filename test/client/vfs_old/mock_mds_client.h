@@ -29,6 +29,8 @@ namespace dingofs {
 namespace stub {
 namespace rpcclient {
 
+using pb::mds::cachegroup::CacheGroupErrCode;
+
 class MockMdsClient : public MdsClient {
  public:
   MOCK_METHOD(pb::mds::FSStatusCode, Init,
@@ -135,6 +137,30 @@ class MockMdsClient : public MdsClient {
               (const std::string& fsname,
                const pb::mds::FsStatsData& fs_stat_data),
               (override));
+
+  MOCK_METHOD2(RegisterCacheGroupMember,
+               CacheGroupErrCode(uint64_t old_id, uint64_t* member_id));
+
+  MOCK_METHOD2(
+      AddCacheGroupMember,
+      CacheGroupErrCode(const std::string& group_name,
+                        const pb::mds::cachegroup::CacheGroupMember& member));
+
+  MOCK_METHOD2(
+      LoadCacheGroupMembers,
+      CacheGroupErrCode(
+          const std::string& group_name,
+          std::vector<pb::mds::cachegroup::CacheGroupMember>* members));
+
+  MOCK_METHOD3(ReweightCacheGroupMember,
+               CacheGroupErrCode(const std::string& group_name,
+                                 uint64_t member_id, uint32_t weight));
+
+  MOCK_METHOD3(
+      SendCacheGroupHeartbeat,
+      CacheGroupErrCode(
+          const std::string& group_name, uint64_t member_id,
+          const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat));
 };
 
 }  // namespace rpcclient

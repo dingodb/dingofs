@@ -35,13 +35,13 @@
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/sys_conf.h"
+#include "cache/utils/sys_conf.h"
 #include "client/common/dynamic_config.h"
-#include "common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
+#include "common/status.h"
 #include "stub/metric/metric.h"
 
 static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
@@ -58,7 +58,7 @@ using cache::blockcache::Block;
 using cache::blockcache::BlockContext;
 using cache::blockcache::BlockFrom;
 using cache::blockcache::BlockKey;
-using cache::common::SysConf;
+using cache::utils::SysConf;
 
 using datastream::DataStream;
 using filesystem::Ino;

@@ -24,7 +24,7 @@
 #include "base/filepath/filepath.h"
 #include "cache/blockcache/builder/builder.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {

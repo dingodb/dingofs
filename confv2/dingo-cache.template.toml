@@ -1,0 +1,54 @@
+[cache_group_node]
+group_name = ""
+listen_ip = "127.0.0.1"
+listen_port = 9301
+group_weight = 100
+max_range_size_kb = 256
+metadata_filepath = "/var/log/cache_group_meta"
+load_members_interval_ms = 1000
+
+[cache_group_node.mds_rpc]
+addrs = [ "127.0.0.1:6700" ]
+max_retry_ms = 16000
+max_rpc_timeout_ms = 2000
+rpc_timeout_ms = 500
+rpc_retry_interval_us = 50000
+max_failed_times_before_change_addr = 2
+normal_retry_times_before_trigger_wait = 3
+wait_sleep_ms = 1000
+
+[cache_group_node.block_cache]
+logging = true
+cache_store = "disk"
+stage = true
+stage_bandwidth_throttle_enable = false
+stage_bandwidth_throttle_mb = 10240
+upload_stage_workers = 10
+upload_stage_queue_size = 10000
+prefetch_workers = 128
+prefetch_queue_size = 10000
+
+[cache_group_node.block_cache.disk_cache]
+cache_dirs = [ '/var/run/dingofs' ]
+cache_size_mb = 10240
+free_space_ratio = 0.1
+cache_expire_s = 259200
+cleanup_expire_interval_ms = 1000
+drop_page_cache = true
+ioring_iodepth = 128
+ioring_blksize = 1048576
+ioring_prefetch = true
+
+[cache_group_node.block_cache.disk_cache.disk_state]
+tick_duration_s = 60
+normal2unstable_io_error_num = 3
+unstable2normal_io_succ_num = 10
+unstable2down_s = 1800
+disk_check_duration_ms = 3000
+
+[remote_block_cache]
+group_name = ""
+load_members_interval_ms = 1000
+
+[remote_block_cache.remote_node]
+rpc_timeout_ms = 3000

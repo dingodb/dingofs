@@ -28,12 +28,16 @@
 
 #include "dataaccess/s3/aws/aws_s3_common.h"
 #include "dingofs/common.pb.h"
+#include "options/cache/app.h"
+#include "options/cache/blockcache.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
 namespace common {
+
+using options::cache::BlockCacheOption;
 
 // { data stream option
 struct BackgroundFlushOption {
@@ -67,34 +71,6 @@ struct DataStreamOption {
   ChunkOption chunk_option;
   SliceOption slice_option;
   PageOption page_option;
-};
-// }
-
-// { block cache option
-struct DiskCacheOption {
-  uint32_t index;
-  std::string cache_dir;
-  uint64_t cache_size;          // bytes
-  std::string filesystem_type;  // local or 3fs
-  uint32_t ioring_iodepth;
-  uint32_t ioring_blksize;
-  bool ioring_prefetch;
-};
-
-struct BlockCacheOption {
-  std::string cache_store;
-  bool stage;
-  bool stage_throttle_enable;
-  uint64_t stage_throttle_bandwidth_mb;
-  uint32_t flush_file_workers;
-  uint32_t flush_file_queue_size;
-  uint32_t flush_slice_workers;
-  uint32_t flush_slice_queue_size;
-  uint32_t upload_stage_workers;
-  uint32_t upload_stage_queue_size;
-  uint32_t prefetch_workers;
-  uint32_t prefetch_queue_size;
-  std::vector<DiskCacheOption> disk_cache_options;
 };
 // }
 

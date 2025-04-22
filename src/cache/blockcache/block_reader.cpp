@@ -30,18 +30,18 @@
 #include <cstddef>
 #include <cstring>
 
-#include "cache/common/aio.h"
 #include "cache/common/common.h"
-#include "cache/common/posix.h"
+#include "cache/utils/aio.h"
+#include "cache/utils/posix.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::Aio;
-using cache::common::AioType;
-using cache::common::Closure;
-using cache::common::Posix;
+using dingofs::cache::utils::Aio;
+using dingofs::cache::utils::AioType;
+using dingofs::cache::utils::Closure;
+using dingofs::cache::utils::Posix;
 
 LocalBlockReader::LocalBlockReader(int fd, std::shared_ptr<LocalFileSystem> fs)
     : fd_(fd), fs_(fs) {}

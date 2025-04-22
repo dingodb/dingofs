@@ -32,7 +32,7 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_cache_watcher.h"
-#include "cache/common/local_filesystem.h"
+#include "cache/utils/local_filesystem.h"
 
 namespace dingofs {
 namespace cache {
@@ -58,8 +58,8 @@ Status DiskCacheGroup::Init(UploadFunc uploader) {
 
     stores_[store->Id()] = store;
     chash_->AddNode(store->Id(), weights[i]);
-    watcher_->Add(options_[i].cache_dir, store);
-    LOG(INFO) << "Add disk cache (dir=" << options_[i].cache_dir
+    watcher_->Add(options_[i].cache_dir(), store);
+    LOG(INFO) << "Add disk cache (dir=" << options_[i].cache_dir()
               << ", weight=" << weights[i] << ") to disk cache group success.";
   }
 
@@ -127,8 +127,8 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
   uint64_t gcd = 0;
   std::vector<uint64_t> weights;
   for (const auto& option : options) {
-    weights.push_back(option.cache_size);
-    gcd = std::gcd(gcd, option.cache_size);
+    weights.push_back(option.cache_size_mb());
+    gcd = std::gcd(gcd, option.cache_size_mb());
   }
   assert(gcd != 0);
 

@@ -28,6 +28,9 @@
 
 #include <utility>
 
+#include "mds/cachegroup/cache_group_member_manager.h"
+#include "mds/cachegroup/cache_group_member_service.h"
+#include "mds/cachegroup/config.h"
 #include "mds/heartbeat/heartbeat_service.h"
 #include "mds/mds_service.h"
 #include "mds/topology/topology_service.h"
@@ -44,6 +47,9 @@ namespace mds {
 using election::LeaderElection;
 using election::LeaderElectionOptions;
 using kvstorage::EtcdClientImp;
+using mds::cachegroup::CacheGroupMemberManagerImpl;
+using mds::cachegroup::CacheGroupMemberServiceImpl;
+using mds::cachegroup::CacheGroupOption;
 using mds::dlock::DLock;
 using mds::dlock::DLockOptions;
 using mds::heartbeat::HeartbeatOption;
@@ -193,6 +199,7 @@ void MDS::Init() {
   InitTopologyManager(options_.topologyOptions);
   InitCoordinator();
   InitHeartbeatManager();
+  InitCacheGroup();
   FsManagerOption fs_manager_option;
   InitFsManagerOptions(&fs_manager_option);
 
@@ -279,6 +286,15 @@ void MDS::Run() {
   LOG_IF(FATAL, server.AddService(&topology_service,
                                   brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
       << "add topologyService error";
+
+  // add cachegroup member service
+  CacheGroupMemberServiceImpl cache_group_member_service(
+      cache_group_member_manager_);
+  auto rc = server.AddService(&cache_group_member_service,
+                              brpc::SERVER_DOESNT_OWN_SERVICE);
+  if (rc != 0) {
+    LOG(FATAL) << "Add cache group member service failed, rc = " << rc;
+  }
 
   // start rpc server
   brpc::ServerOptions option;
@@ -426,6 +442,25 @@ void MDS::InitHeartbeatManager() {
   heartbeatManager_ = std::make_shared<heartbeat::HeartbeatManager>(
       heartbeat_option, topology_, coordinator_);
   heartbeatManager_->Init();
+}
+
+void MDS::InitCacheGroupOption(CacheGroupOption* option) {
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.interval_second",
+                             &option->heartbeat_interval_second);
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.miss_timeout_second",
+                             &option->heartbeat_miss_timeout_second);
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.offline_timeout_second",
+                             &option->heartbeat_offline_timeout_second);
+}
+
+void MDS::InitCacheGroup() {
+  CacheGroupOption option;
+  InitCacheGroupOption(&option);
+
+  cache_group_member_manager_ =
+      std::make_shared<CacheGroupMemberManagerImpl>(option, etcdClient_);
+  LOG_IF(FATAL, cache_group_member_manager_->Init())
+      << "Init cache group member failed.";
 }
 
 }  // namespace mds

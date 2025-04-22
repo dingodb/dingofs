@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_OPTIONS_OPTIONS_H_
 #define DINGOFS_SRC_OPTIONS_OPTIONS_H_
 
+#include <brpc/reloadable_flags.h>
 #include <gflags/gflags.h>
 #include <gflags/gflags_declare.h>
 #include <glog/logging.h>
@@ -131,26 +132,55 @@ class BaseOption {
 
   bool HandleNormal(const std::string& key, const toml::value& value);
 
+  std::function<bool(BaseOption*)> rewrite_func_{nullptr};
+  std::function<bool(BaseOption*)> validate_func_{nullptr};
   std::unordered_map<std::string, BaseOption*> childs_;
   std::unordered_map<std::string, IItem*> items_;
 };
-
-namespace internal {
-
-bool pass_bool(const char*, bool);
-bool pass_int32(const char*, int32_t);
-bool pass_uint32(const char*, uint32_t);
-bool pass_int64(const char*, int64_t);
-bool pass_uint64(const char*, uint64_t);
-bool pass_double(const char*, double);
-bool pass_string(const char*, std::string);
-
-};  // namespace internal
 
 }  // namespace options
 }  // namespace dingofs
 
 // macros
+
+// bind base
+#define BIND_any(T, name, default_value, comment)                             \
+ public:                                                                      \
+  T& name() { return name##_; }                                               \
+  const T& name() const { return name##_; }                                   \
+  void set_##name(T value) { name##Item_.SetValue(value); }                   \
+                                                                              \
+ private:                                                                     \
+  T name##_{default_value};                                                   \
+  Item<T> name##Item_ = Item<T>(#name, &name##_, comment);                    \
+  [[maybe_unused]] bool name##Insert_ = [this]() {                            \
+    BaseOption::items_[#name] = reinterpret_cast<IItem*>(&this->name##Item_); \
+    return true;                                                              \
+  }()
+
+// bind anonymous base
+#define BIND_ANON_any(T, name, default_value, comment) \
+ public:                                               \
+  T& name() { return name##_; }                        \
+  const T& name() const { return name##_; }            \
+  void set_##name(T value) { name##_ = value; }        \
+                                                       \
+ private:                                              \
+  T name##_{default_value};
+
+// bind gflags
+#define BIND_FLAG_any(T, name, gflag_name)                                    \
+ public:                                                                      \
+  T& name() { return FLAGS_##gflag_name; }                                    \
+  const T& name() const { return FLAGS_##gflag_name; }                        \
+  void set_##name(T value) { FLAGS_##gflag_name = value; }                    \
+                                                                              \
+ private:                                                                     \
+  Item<T> name##Item_ = Item<T>(#name, &FLAGS_##gflag_name, "");              \
+  [[maybe_unused]] bool name##Insert_ = [this]() {                            \
+    BaseOption::items_[#name] = reinterpret_cast<IItem*>(&this->name##Item_); \
+    return true;                                                              \
+  }()
 
 // bind suboption
 #define BIND_suboption(name, child_name, cls)          \
@@ -166,122 +196,92 @@ bool pass_string(const char*, std::string);
     return true;                                       \
   }()
 
-// bind base
-#define BIND_base(T, name, default_value, comment)                            \
- public:                                                                      \
-  T& name() { return name##_; }                                               \
-  const T& name() const { return name##_; }                                   \
-  void set_##name(T value) { name##Item_.SetValue(value); }                   \
-                                                                              \
- private:                                                                     \
-  T name##_{default_value};                                                   \
-  Item<T> name##Item_ = Item<T>(#name, &name##_, comment);                    \
-  [[maybe_unused]] bool name##Insert_ = [this]() {                            \
-    BaseOption::items_[#name] = reinterpret_cast<IItem*>(&this->name##Item_); \
-    return true;                                                              \
+// { REWRITE, VALIDATE }_BY
+#define REWRITE_BY(rewrite_func)              \
+ private:                                     \
+  [[maybe_unused]] bool Rewrite_ = [this]() { \
+    BaseOption::rewrite_func_ = rewrite_func; \
+    return true;                              \
   }()
 
-// bind gflags
-#define BIND_ONFLY_base(T, name, gflag_name)                                  \
- public:                                                                      \
-  T& name() { return FLAGS_##gflag_name; }                                    \
-  const T& name() const { return FLAGS_##gflag_name; }                        \
-  void set_##name(T value) { FLAGS_##gflag_name = value; }                    \
-                                                                              \
- private:                                                                     \
-  Item<T> name##Item_ = Item<T>(#name, &FLAGS_##gflag_name, "");              \
-  [[maybe_unused]] bool name##Insert_ = [this]() {                            \
-    BaseOption::items_[#name] = reinterpret_cast<IItem*>(&this->name##Item_); \
-    return true;                                                              \
+#define VALIDATE_BY(validate_func)              \
+ private:                                       \
+  [[maybe_unused]] bool Validate_ = [this]() {  \
+    BaseOption::validate_func_ = validate_func; \
+    return true;                                \
   }()
 
-// bind_*
+// BIND_*: bind configure item to member
 #define BIND_bool(name, default_value, comment) \
-  BIND_base(bool, name, default_value, comment)
+  BIND_any(bool, name, default_value, comment)
 
 #define BIND_int32(name, default_value, comment) \
-  BIND_base(int32_t, name, default_value, comment)
+  BIND_any(int32_t, name, default_value, comment)
 
 #define BIND_uint32(name, default_value, comment) \
-  BIND_base(uint32_t, name, default_value, comment)
+  BIND_any(uint32_t, name, default_value, comment)
 
 #define BIND_int64(name, default_value, comment) \
-  BIND_base(int64_t, name, default_value, comment)
+  BIND_any(int64_t, name, default_value, comment)
 
 #define BIND_uint64(name, default_value, comment) \
-  BIND_base(uint64_t, name, default_value, comment)
+  BIND_any(uint64_t, name, default_value, comment)
 
 #define BIND_double(name, default_value, comment) \
-  BIND_base(double, name, default_value, comment)
+  BIND_any(double, name, default_value, comment)
 
 #define BIND_string(name, default_value, comment) \
-  BIND_base(std::string, name, default_value, comment)
+  BIND_any(std::string, name, default_value, comment)
 
 #define BIND_string_array(name, default_value, comment) \
-  BIND_base(std::vector<std::string>, name, default_value, comment)
+  BIND_any(std::vector<std::string>, name, default_value, comment)
 
 #define BIND_uint32_array(name, default_value, comment) \
-  BIND_base(std::vector<uint32_t>, name, default_value, comment)
+  BIND_any(std::vector<uint32_t>, name, default_value, comment)
 
-// declare_onfly_*
-#define DECLARE_ONFLY_bool(name) DECLARE_bool(name);
-#define DECLARE_ONFLY_int32(name) DECLARE_int32(name);
-#define DECLARE_ONFLY_int64(name) DECLARE_int64(name);
-#define DECLARE_ONFLY_uint32(name) DECLARE_uint32(name);
-#define DECLARE_ONFLY_uint64(name) DECLARE_uint64(name);
-#define DECLARE_ONFLY_double(name) DECLARE_double(name);
-#define DECLARE_ONFLY_string(name) DECLARE_string(name);
+// BIND_ANON_*: bind anonymous to member (means bind nothing, declare member
+// only)
+#define BIND_ANON_bool(name, default_value, comment) \
+  BIND_ANON_any(bool, name, default_value, comment)
 
-// declare_onfly_*
-#define DEFINE_ONFLY_bool(name, default_value, comment) \
-  DEFINE_bool(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_bool);
+#define BIND_ANON_int32(name, default_value, comment) \
+  BIND_ANON_any(int32_t, name, default_value, comment)
 
-#define DEFINE_ONFLY_int32(name, default_value, comment) \
-  DEFINE_int32(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_int32);
+#define BIND_ANON_uint32(name, default_value, comment) \
+  BIND_ANON_any(uint32_t, name, default_value, comment)
 
-#define DEFINE_ONFLY_uint32(name, default_value, comment) \
-  DEFINE_uint32(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_uint32);
+#define BIND_ANON_int64(name, default_value, comment) \
+  BIND_ANON_any(int64_t, name, default_value, comment)
 
-#define DEFINE_ONFLY_int64(name, default_value, comment) \
-  DEFINE_int64(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_int64);
+#define BIND_ANON_uint64(name, default_value, comment) \
+  BIND_ANON_any(uint64_t, name, default_value, comment)
 
-#define DEFINE_ONFLY_uint64(name, default_value, comment) \
-  DEFINE_uint64(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_uint64);
+#define BIND_ANON_double(name, default_value, comment) \
+  BIND_ANON_any(double, name, default_value, comment)
 
-#define DEFINE_ONFLY_double(name, default_value, comment) \
-  DEFINE_double(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_double);
+#define BIND_ANON_string(name, default_value, comment) \
+  BIND_ANON_any(std::string, name, default_value, comment)
 
-#define DEFINE_ONFLY_string(name, default_value, comment) \
-  DEFINE_string(name, default_value, comment);            \
-  DEFINE_validator(name, &internal::pass_string);
+// BIND_FLAG_*: bind gflag to member
+#define BIND_FLAG_bool(name, gflag_name) BIND_FLAG_any(bool, name, gflag_name)
 
-// bind_onfly_*
-#define BIND_ONFLY_bool(name, gflag_name) \
-  BIND_ONFLY_base(bool, name, gflag_name)
+#define BIND_FLAG_int32(name, gflag_name) \
+  BIND_FLAG_any(int32_t, name, gflag_name)
 
-#define BIND_ONFLY_int32(name, gflag_name) \
-  BIND_ONFLY_base(int32_t, name, gflag_name)
+#define BIND_FLAG_uint32(name, gflag_name) \
+  BIND_FLAG_any(uint32_t, name, gflag_name)
 
-#define BIND_ONFLY_uint32(name, gflag_name) \
-  BIND_ONFLY_base(uint32_t, name, gflag_name)
+#define BIND_FLAG_int64(name, gflag_name) \
+  BIND_FLAG_any(int64_t, name, gflag_name)
 
-#define BIND_ONFLY_int64(name, gflag_name) \
-  BIND_ONFLY_base(int64_t, name, gflag_name)
+#define BIND_FLAG_uint64(name, gflag_name) \
+  BIND_FLAG_any(uint64_t, name, gflag_name)
 
-#define BIND_ONFLY_uint64(name, gflag_name) \
-  BIND_ONFLY_base(uint64_t, name, gflag_name)
+#define BIND_FLAG_double(name, gflag_name) \
+  BIND_FLAG_any(double, name, gflag_name)
 
-#define BIND_ONFLY_double(name, gflag_name) \
-  BIND_ONFLY_base(double, name, gflag_name)
-
-#define BIND_ONFLY_string(name, gflag_name) \
-  BIND_ONFLY_base(std::string, name, gflag_name)
+#define BIND_FLAG_string(name, gflag_name) \
+  BIND_FLAG_any(std::string, name, gflag_name)
 
 // utils
 #define STR_ARRAY std::vector<std::string>

@@ -13,4 +13,16 @@
 # limitations under the License.
 
 add_subdirectory(common)
+add_subdirectory(utils)
 add_subdirectory(blockcache)
+add_subdirectory(cachegroup)
+add_subdirectory(remotecache)
+add_subdirectory(benchmark)
+
+add_executable(dingo-cache dingo_cache.cpp)
+target_link_libraries(dingo-cache
+    cache_common
+    cache_utils
+    cache_blockcache
+    cache_cachegroup
+)

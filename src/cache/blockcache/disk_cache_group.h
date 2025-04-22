@@ -38,8 +38,7 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::hash::ConHash;
-using cache::common::DiskCacheOption;
+using dingofs::base::hash::ConHash;
 using UploadFunc = CacheStore::UploadFunc;
 
 class DiskCacheGroup : public CacheStore {

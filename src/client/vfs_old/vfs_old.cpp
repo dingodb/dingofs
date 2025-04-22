@@ -27,8 +27,8 @@
 #include <vector>
 
 #include "cache/blockcache/block_cache.h"
+#include "client/common/config.h"
 #include "client/common/dynamic_config.h"
-#include "common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
@@ -43,6 +43,7 @@
 #include "client/vfs_old/service/metrics_dumper.h"
 #include "client/vfs_old/tools.h"
 #include "common/define.h"
+#include "common/status.h"
 #include "dataaccess/accesser.h"
 #include "dataaccess/s3/aws/s3_adapter.h"
 #include "dataaccess/s3/s3_accesser.h"
@@ -73,6 +74,7 @@ namespace client {
 namespace vfs {
 
 using cache::blockcache::BlockCacheImpl;
+using client::common::RewriteCacheDir;
 
 static void OnThrottleTimer(void* arg) {
   VFSOld* vfs = reinterpret_cast<VFSOld*>(arg);

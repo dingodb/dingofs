@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "absl/cleanup/cleanup.h"
+#include "base/math/math.h"
 #include "base/string/string.h"
 #include "base/time/time.h"
 #include "cache/blockcache/block_reader.h"
@@ -35,36 +36,37 @@
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_state_machine_impl.h"
-#include "cache/common/aio.h"
-#include "cache/common/aio_queue.h"
-#include "cache/common/aio_uring.h"
-#include "cache/common/aio_usrbio.h"
 #include "cache/common/common.h"
-#include "cache/common/local_filesystem.h"
-#include "cache/common/log.h"
-#include "cache/common/phase_timer.h"
-#include "cache/common/posix.h"
+#include "cache/utils/access_log.h"
+#include "cache/utils/aio.h"
+#include "cache/utils/aio_queue.h"
+#include "cache/utils/aio_uring.h"
+#include "cache/utils/aio_usrbio.h"
+#include "cache/utils/local_filesystem.h"
+#include "cache/utils/phase_timer.h"
+#include "cache/utils/posix.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::string::GenUuid;
-using base::string::TrimSpace;
-using base::time::TimeNow;
-using cache::common::IoRing;
-using cache::common::LinuxIoUring;
-using cache::common::LogGuard;
-using cache::common::Phase;
-using cache::common::PhaseTimer;
-using cache::common::Posix;
-using cache::common::Usrbio;
+using dingofs::base::math::kMiB;
+using dingofs::base::string::GenUuid;
+using dingofs::base::string::TrimSpace;
+using dingofs::base::time::TimeNow;
+using dingofs::cache::utils::IoRing;
+using dingofs::cache::utils::LinuxIoUring;
+using dingofs::cache::utils::LogGuard;
+using dingofs::cache::utils::Phase;
+using dingofs::cache::utils::PhaseTimer;
+using dingofs::cache::utils::Posix;
+using dingofs::cache::utils::Usrbio;
 
 DiskCache::DiskCache(DiskCacheOption option)
-    : option_(option), running_(false), use_direct_write_(false) {
+    : option_(option), use_direct_write_(false), running_(false) {
   metric_ = std::make_shared<DiskCacheMetric>(option);
-  layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
+  layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir());
   disk_state_machine_ = std::make_shared<DiskStateMachineImpl>(metric_);
   disk_state_health_checker_ =
       std::make_unique<DiskStateHealthChecker>(layout_, disk_state_machine_);
@@ -76,14 +78,14 @@ DiskCache::DiskCache(DiskCacheOption option)
     }
     return status;
   });
-  manager_ = std::make_shared<DiskCacheManager>(option.cache_size, layout_, fs_,
-                                                metric_);
+  manager_ = std::make_shared<DiskCacheManager>(option.cache_size_mb() * kMiB,
+                                                layout_, fs_, metric_);
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
 
   std::shared_ptr<IoRing> io_ring;
-  if (option_.filesystem_type == "3fs") {
+  if (option_.filesystem_type() == "3fs") {
     io_ring =
-        std::make_shared<Usrbio>(option_.cache_dir, option_.ioring_blksize);
+        std::make_shared<Usrbio>(option_.cache_dir(), option_.ioring_blksize());
   } else {
     io_ring = std::make_shared<LinuxIoUring>();
   }
@@ -95,7 +97,7 @@ Status DiskCache::Init(UploadFunc uploader) {
     return Status::OK();  // already running
   }
 
-  Status status = aio_queue_->Init(option_.ioring_iodepth);
+  Status status = aio_queue_->Init(option_.ioring_iodepth());
   if (status.ok()) {
     status = CreateDirs();
     if (status.ok()) {
@@ -269,8 +271,8 @@ Status DiskCache::NewBlockReader(const BlockKey& key,
       return status;
     }
 
-    if (option_.filesystem_type == "3fs") {
-      reader = std::make_shared<RemoteBlockReader>(fd, option_.ioring_blksize,
+    if (option_.filesystem_type() == "3fs") {
+      reader = std::make_shared<RemoteBlockReader>(fd, option_.ioring_blksize(),
                                                    fs_, aio_queue_);
     } else {
       reader = std::make_shared<LocalBlockReader>(fd, fs_);

@@ -28,6 +28,8 @@
 #include <memory>
 #include <string>
 
+#include "mds/cachegroup/cache_group_member_manager.h"
+#include "mds/cachegroup/config.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
 #include "mds/heartbeat/copyset_conf_generator.h"
@@ -106,6 +108,9 @@ class MDS {
 
   void InitFsManagerOptions(FsManagerOption* fs_manager_option);
 
+  void InitCacheGroupOption(cachegroup::CacheGroupOption* option);
+  void InitCacheGroup();
+
   // mds configuration items
   std::shared_ptr<utils::Configuration> conf_;
   // initialized or not
@@ -131,6 +136,9 @@ class MDS {
   bvar::Status<std::string> status_;
 
   std::string etcdEndpoint_;
+
+  std::shared_ptr<cachegroup::CacheGroupMemberManager>
+      cache_group_member_manager_;
 };
 
 }  // namespace mds

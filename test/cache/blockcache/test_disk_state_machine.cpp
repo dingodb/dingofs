@@ -15,17 +15,12 @@
 #include <unistd.h>
 
 #include "cache/blockcache/disk_state_machine_impl.h"
-#include "cache/common/dynamic_config.h"
+#include "cache/common/common.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-USING_CACHE_FLAG(disk_state_normal2unstable_io_error_num);
-USING_CACHE_FLAG(disk_state_tick_duration_second);
-USING_CACHE_FLAG(disk_state_unstable2down_second);
-USING_CACHE_FLAG(disk_state_unstable2normal_io_succ_num);
 
 class DiskStateMachineTest : public ::testing::Test {
  public:
@@ -63,7 +58,7 @@ TEST_F(DiskStateMachineTest, Unstable2Down) {
   DiskStateMachineImpl disk_state_machine(nullptr);
 
   // NOTE: must set before start
-  FLAGS_disk_state_tick_duration_second = 5;
+  FLAGS_disk_state_tick_duration_s = 5;
 
   EXPECT_TRUE(disk_state_machine.Start());
 
@@ -74,7 +69,7 @@ TEST_F(DiskStateMachineTest, Unstable2Down) {
 
   EXPECT_EQ(disk_state_machine.GetDiskState(), DiskState::kDiskStateUnStable);
 
-  FLAGS_disk_state_unstable2down_second = 10;
+  FLAGS_disk_state_unstable2down_s = 10;
   sleep(20);
 
   EXPECT_EQ(disk_state_machine.GetDiskState(), DiskState::kDiskStateDown);

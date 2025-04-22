@@ -26,17 +26,16 @@
 #include <cstddef>
 #include <memory>
 
-#include "cache/common/aio_queue.h"
 #include "cache/common/common.h"
-#include "cache/common/local_filesystem.h"
-#include "common/status.h"
+#include "cache/utils/aio_queue.h"
+#include "cache/utils/local_filesystem.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using cache::common::AioQueue;
-using cache::common::LocalFileSystem;
+using dingofs::cache::utils::AioQueue;
+using dingofs::cache::utils::LocalFileSystem;
 
 class BlockReader {
  public:

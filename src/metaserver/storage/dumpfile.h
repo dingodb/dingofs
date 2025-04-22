@@ -40,7 +40,7 @@ class LocalFileSystem;
 class Ext4FileSystemImpl;
 
 }  // namespace fs
-}  // namespace dingo
+}  // namespace dingofs
 
 namespace dingofs {
 namespace metaserver {

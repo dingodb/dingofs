@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(mds_kvstorage_client 
+add_library(mds_kvstorage_client
     etcd_client.cpp)
 target_link_libraries(mds_kvstorage_client
     dingofs_utils

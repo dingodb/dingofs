@@ -55,6 +55,7 @@ using pb::common::PartitionInfo;
 using pb::mds::FsInfo;
 using pb::mds::FSStatusCode;
 using pb::mds::Mountpoint;
+using pb::mds::cachegroup::CacheGroupErrCode;
 using pb::mds::space::SpaceErrCode;
 using pb::mds::topology::Copyset;
 using pb::mds::topology::PartitionTxId;
@@ -143,6 +144,30 @@ class MockMdsClient : public MdsClient {
   MOCK_METHOD2(SetFsStats,
                FSStatusCode(const std::string& fsName,
                             const pb::mds::FsStatsData& fsStatsData));
+
+  MOCK_METHOD2(RegisterCacheGroupMember,
+               CacheGroupErrCode(uint64_t old_id, uint64_t* member_id));
+
+  MOCK_METHOD2(
+      AddCacheGroupMember,
+      CacheGroupErrCode(const std::string& group_name,
+                        const pb::mds::cachegroup::CacheGroupMember& member));
+
+  MOCK_METHOD2(
+      LoadCacheGroupMembers,
+      CacheGroupErrCode(
+          const std::string& group_name,
+          std::vector<pb::mds::cachegroup::CacheGroupMember>* members));
+
+  MOCK_METHOD3(ReweightCacheGroupMember,
+               CacheGroupErrCode(const std::string& group_name,
+                                 uint64_t member_id, uint32_t weight));
+
+  MOCK_METHOD3(
+      SendCacheGroupHeartbeat,
+      CacheGroupErrCode(
+          const std::string& group_name, uint64_t member_id,
+          const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat));
 };
 }  // namespace rpcclient
 }  // namespace stub

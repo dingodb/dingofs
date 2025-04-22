@@ -14,23 +14,18 @@
 
 #include "cache/blockcache/disk_state_machine_impl.h"
 
+#include <glog/logging.h>
+
 #include <functional>
 #include <memory>
 
 #include "base/time/time.h"
 #include "base/timer/timer_impl.h"
 #include "cache/blockcache/disk_state_machine.h"
-#include "cache/common/dynamic_config.h"
-#include "glog/logging.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-USING_CACHE_FLAG(disk_state_normal2unstable_io_error_num);
-USING_CACHE_FLAG(disk_state_unstable2normal_io_succ_num);
-USING_CACHE_FLAG(disk_state_unstable2down_second);
-USING_CACHE_FLAG(disk_state_tick_duration_second);
 
 using base::timer::TimerImpl;
 
@@ -53,7 +48,7 @@ void UnstableDiskState::IOSucc() {
 void UnstableDiskState::Tick() {
   uint64_t now =
       duration_cast<seconds>(steady_clock::now().time_since_epoch()).count();
-  if (now - start_time_ > (uint64_t)FLAGS_disk_state_unstable2down_second) {
+  if (now - start_time_ > (uint64_t)FLAGS_disk_state_unstable2down_s) {
     disk_state_machine->OnEvent(DiskStateEvent::kDiskStateEventDown);
   }
 
@@ -88,8 +83,7 @@ bool DiskStateMachineImpl::Start() {
 
   running_ = true;
 
-  timer_->Add([this] { TickTock(); },
-              FLAGS_disk_state_tick_duration_second * 1000);
+  timer_->Add([this] { TickTock(); }, FLAGS_disk_state_tick_duration_s * 1000);
 
   LOG(INFO) << "Success start disk state machine";
 
@@ -133,8 +127,7 @@ void DiskStateMachineImpl::TickTock() {
 
   state_->Tick();
 
-  timer_->Add([this] { TickTock(); },
-              FLAGS_disk_state_tick_duration_second * 1000);
+  timer_->Add([this] { TickTock(); }, FLAGS_disk_state_tick_duration_s * 1000);
 }
 
 void DiskStateMachineImpl::OnEvent(DiskStateEvent event) {

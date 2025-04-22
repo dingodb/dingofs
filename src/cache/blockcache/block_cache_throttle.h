@@ -33,8 +33,8 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::timer::TimerImpl;
-using utils::LeakyBucket;
+using dingofs::base::timer::TimerImpl;
+using dingofs::utils::LeakyBucket;
 
 class BlockCacheMetricHelper;
 class BlockCacheThrottleClosure;

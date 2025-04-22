@@ -34,21 +34,17 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
-#include "cache/common/dynamic_config.h"
-#include "cache/common/log.h"
+#include "cache/utils/access_log.h"
 #include "dataaccess/mock/mock_accesser.h"
+#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(trace_logging);
-USING_CACHE_FLAG(disk_cache_expire_second);
-USING_CACHE_FLAG(disk_cache_free_space_ratio);
-
 using base::string::GenUuid;
-using cache::common::BlockCacheOption;
-using cache::common::DiskCacheOption;
+using options::cache::BlockCacheOption;
+using options::cache::DiskCacheOption;
 
 class BlockKeyBuilder {
  public:
@@ -77,14 +73,12 @@ class DiskCacheBuilder {
   using Callback = std::function<void(DiskCacheOption* option)>;
 
   static DiskCacheOption DefaultOption() {
-    FLAGS_trace_logging = false;
-    FLAGS_disk_cache_free_space_ratio = 0.1;
-    FLAGS_disk_cache_expire_second = 0;
-    return DiskCacheOption{
-        .index = 0,
-        .cache_dir = "." + GenUuid(),
-        .cache_size = 1073741824,  // 1GiB
-    };
+    auto option = DiskCacheOption();
+    option.cache_index() = 0;
+    option.cache_dir() = "." + GenUuid();
+    option.cache_size_mb() = 1024;
+    option.cache_expire_s() = 0;
+    return option;
   }
 
  public:
@@ -102,7 +96,7 @@ class DiskCacheBuilder {
 
   void Cleanup() const { system(("rm -r " + GetRootDir()).c_str()); }
 
-  std::string GetRootDir() const { return option_.cache_dir; }
+  std::string GetRootDir() const { return option_.cache_dir(); }
 
  private:
   DiskCacheOption option_;
@@ -113,15 +107,13 @@ class BlockCacheBuilder {
   using Callback = std::function<void(BlockCacheOption* option)>;
 
   static BlockCacheOption DefaultOption() {
-    FLAGS_trace_logging = false;
-    return BlockCacheOption{
-        .cache_store = "disk",
-        .stage = true,
-        .upload_stage_workers = 2,
-        .upload_stage_queue_size = 10,
-        .disk_cache_options =
-            std::vector<DiskCacheOption>{DiskCacheBuilder::DefaultOption()},
-    };
+    auto option = BlockCacheOption();
+    option.logging() = false;
+    option.upload_stage_workers() = 2;
+    option.upload_stage_queue_size() = 10;
+    option.disk_cache_options() =
+        std::vector<DiskCacheOption>{DiskCacheBuilder::DefaultOption()};
+    return option;
   }
 
  public:
@@ -149,7 +141,7 @@ class BlockCacheBuilder {
   }
 
   std::string GetRootDir() const {
-    return option_.disk_cache_options[0].cache_dir;
+    return option_.disk_cache_options()[0].cache_dir();
   }
 
  private:

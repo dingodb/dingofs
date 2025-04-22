@@ -28,6 +28,7 @@
 #include <string>
 #include <vector>
 
+#include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "dingofs/space.pb.h"
@@ -145,6 +146,32 @@ class MDSBaseClient {
   virtual void SetFsStats(const pb::mds::SetFsStatsRequest& request,
                           pb::mds::SetFsStatsResponse* response,
                           brpc::Controller* cntl, brpc::Channel* channel);
+  // cache group
+  virtual void RegisterCacheGroupMember(
+      uint64_t old_id, pb::mds::cachegroup::RegisterMemberResponse* response,
+      brpc::Controller* cntl, brpc::Channel* channel);
+
+  virtual void AddCacheGroupMember(
+      const std::string& group_name,
+      const pb::mds::cachegroup::CacheGroupMember& member,
+      pb::mds::cachegroup::AddMemberResponse* response, brpc::Controller* cntl,
+      brpc::Channel* channel);
+
+  virtual void LoadCacheGroupMembers(
+      const std::string& group_name,
+      pb::mds::cachegroup::LoadMembersResponse* response,
+      brpc::Controller* cntl, brpc::Channel* channel);
+
+  virtual void ReweightCacheGroupMember(
+      const std::string& group_name, uint64_t member_id, uint32_t weight,
+      pb::mds::cachegroup::ReweightMemberResponse* response,
+      brpc::Controller* cntl, brpc::Channel* channel);
+
+  virtual void SendCacheGroupHeartbeat(
+      const std::string& group_name, uint64_t member_id,
+      const pb::mds::cachegroup::HeartbeatRequest::Statistic& stat,
+      pb::mds::cachegroup::HeartbeatResponse* response, brpc::Controller* cntl,
+      brpc::Channel* channel);
 };
 
 }  // namespace rpcclient

@@ -24,9 +24,10 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
+#include "base/math/math.h"
 #include "cache/blockcache/builder/builder.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/log.h"
+#include "cache/utils/access_log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
@@ -35,6 +36,7 @@ namespace cache {
 namespace blockcache {
 
 using ::absl::MakeCleanup;
+using base::math::kMiB;
 
 class DiskCacheManagerTest : public ::testing::Test {
  protected:
@@ -44,7 +46,8 @@ class DiskCacheManagerTest : public ::testing::Test {
 
 TEST_F(DiskCacheManagerTest, CleanupFull) {
   auto builder = DiskCacheBuilder();
-  builder.SetOption([](DiskCacheOption* option) { option->cache_size = 30; });
+  builder.SetOption(
+      [](DiskCacheOption* option) { option->cache_size_mb() = 30; });
   auto disk_cache = builder.Build();
   auto defer = MakeCleanup([&]() {
     disk_cache->Shutdown();
@@ -57,7 +60,7 @@ TEST_F(DiskCacheManagerTest, CleanupFull) {
 
   auto key_100 = BlockKeyBuilder().Build(100);
   auto key_200 = BlockKeyBuilder().Build(200);
-  auto block = BlockBuilder().Build(std::string(10, '0'));
+  auto block = BlockBuilder().Build(std::string(10 * kMiB, '0'));
   auto ctx = BlockContext(BlockFrom::kCtoFlush);
   ASSERT_EQ(disk_cache->Stage(key_100, block, ctx), Status::OK());
   ASSERT_EQ(disk_cache->Stage(key_200, block, ctx), Status::OK());
@@ -73,7 +76,7 @@ TEST_F(DiskCacheManagerTest, CleanupFull) {
 }
 
 TEST_F(DiskCacheManagerTest, CleanupExpire) {
-  FLAGS_disk_cache_expire_second = 3;
+  FLAGS_disk_cache_expire_s = 3;
   auto builder = DiskCacheBuilder();
   auto disk_cache = builder.Build();
   auto defer = MakeCleanup([&]() {

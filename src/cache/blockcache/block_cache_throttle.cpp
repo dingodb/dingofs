@@ -26,17 +26,14 @@
 #include <mutex>
 
 #include "base/math/math.h"
-#include "cache/common/dynamic_config.h"
+#include "cache/common/common.h"
 #include "utils/leaky_bucket.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_enable);
-USING_CACHE_FLAG(block_cache_stage_bandwidth_throttle_mb);
-
-using base::math::kMiB;
+using dingofs::base::math::kMiB;
 
 BlockCacheThrottle::BlockCacheThrottle()
     : current_bandwidth_throttle_mb_(

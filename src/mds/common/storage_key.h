@@ -36,14 +36,11 @@ namespace mds {
 
 const char FS_NAME_KEY_PREFIX[] = "fs_01";
 const char FS_NAME_KEY_END[] = "fs_02";
-
 const char FS_ID_KEY_PREFIX[] = "fs_02";
-
 const char CHUNKID_NAME_KEY_PREFIX[] = "fs_03";
 const char CHUNKID_NAME_KEY_END[] = "fs_04";
 const char BLOCKGROUP_KEY_PREFIX[] = "fs_04";
 const char BLOCKGROUP_KEY_END[] = "fs_05";
-
 constexpr uint32_t COMMON_PREFIX_LENGTH = 5;
 
 const char POOLKEYPREFIX[] = "fs_1001";
@@ -63,12 +60,22 @@ const char MEMCACHECLUSTERKEYPREFIX[] = "fs_1009";
 const char MEMCACHECLUSTERKEYEND[] = "fs_1010";
 const char FS2MEMCACHECLUSTERKEYPREFIX[] = "fs_1010";
 const char FS2MEMCACHECLUSTERKEYEND[] = "fs_1011";
-
 constexpr uint32_t TOPOLOGY_PREFIX_LENGTH = 7;
 
 const char DLOCK_KEY_PREFIX[] = "dlock_01";
-
 constexpr uint32_t DLOCK_PREFIX_LENGTH = 8;
+
+// member id
+const char CACHE_GROUP_MEMBER_ID_KEY_PREFIX[] = "fs_10001";
+// group id
+const char CACHE_GROUP_GROUP_ID_KEY_PREFIX[] = "fs_10002";
+// group name
+const char CACHE_GROUP_GROUP_NAME_KEY_PREFIX[] = "fs_10003";
+const char CACHE_GROUP_GROUP_NAME_KEY_END[] = "fs_10004";
+// group member
+const char CACHE_GROUP_GROUP_MEMBER_KEY_PREFIX[] = "fs_10004";
+const char CACHE_GROUP_GROUP_MEMBER_KEY_END[] = "fs_10005";
+constexpr uint32_t CACHE_GROUP_PREFIX_LENGTH = 8;
 
 }  // namespace mds
 }  // namespace dingofs
