@@ -32,6 +32,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "dataaccess/aws/s3_access_log.h"
+#include "options/client/app.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
@@ -39,6 +40,8 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+using options::client::OPTIONS_client;
 
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
@@ -68,14 +71,6 @@ Status InitLog() {
   return Status::OK();
 }
 
-static Status InitConfig(utils::Configuration& conf,
-                         common::ClientOption& fuse_client_option) {
-  // init fuse client option
-  common::InitClientOption(&conf, &fuse_client_option);
-
-  return Status::OK();
-}
-
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   VLOG(1) << "VFSStart argv0: " << argv0;
 
@@ -93,14 +88,10 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   AccessLogGuard log(
       [&]() { return absl::StrFormat("start: %s", s.ToString()); });
 
-  // load config
-  s = LoadConfig(vfs_conf.config_path, conf_);
-  if (!s.ok()) {
-    return s;
+  bool succ = OPTIONS_client.Parse(vfs_conf.config_path);
+  if (!succ) {
+    return Status::Internal("parse config file failed");
   }
-
-  // init client option
-  common::InitClientOption(&conf_, &fuse_client_option_);
 
   // init log
   s = InitLog();
@@ -109,7 +100,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   int32_t bthread_worker_num =
-      dingofs::client::common::FLAGS_bthread_worker_num;
+      OPTIONS_client.global_option().bthread_worker_num();
   if (bthread_worker_num > 0) {
     bthread_setconcurrency(bthread_worker_num);
     LOG(INFO) << "set bthread concurrency to " << bthread_worker_num
@@ -121,10 +112,10 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
-    vfs_ = std::make_unique<vfs::VFSImpl>(fuse_client_option_);
+    vfs_ = std::make_unique<vfs::VFSImpl>(option_);
 
   } else {
-    vfs_ = std::make_unique<vfs::VFSOld>(fuse_client_option_);
+    vfs_ = std::make_unique<vfs::VFSOld>(option_);
   }
 
   return vfs_->Start(vfs_conf);
@@ -169,7 +160,7 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opLookup, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > option) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -726,10 +717,6 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   uint64_t max_name_length = vfs_->GetMaxNameLength();
   VLOG(6) << "VFSGetMaxNameLength max_name_length: " << max_name_length;
   return max_name_length;
-}
-
-common::FuseOption VFSWrapper::GetFuseOption() const {
-  return vfs_->GetFuseOption();
 }
 
 }  // namespace vfs

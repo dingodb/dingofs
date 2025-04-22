@@ -15,31 +15,24 @@
  */
 
 #include "common/dynamic_vlog.h"
+#include "options/client/app.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 
 static int InitLog(const char* argv0, std::string conf_path) {
-  dingofs::utils::Configuration conf;
-  conf.SetConfigPath(conf_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "LoadConfig failed, confPath = " << conf_path;
+  dingofs::options::client::AppOption option;
+
+  if (!option.Parse(conf_path)) {
+    LOG(ERROR) << "Parse config file failed, confpath = " << conf_path;
     return 1;
   }
 
-  // set log dir
-  if (FLAGS_log_dir.empty()) {
-    if (!conf.GetStringValue("client.common.logDir", &FLAGS_log_dir)) {
-      LOG(WARNING) << "no client.common.logDir in " << conf_path
-                   << ", will log to /tmp";
-    }
-  }
+  const auto& global_option = option.global_option();
 
-  dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
-  dummy.Load(&conf, "v", "client.loglevel", &FLAGS_v);
-  dingofs::common::FLAGS_vlog_level = FLAGS_v;
-
-  FLAGS_logbufsecs = 0;
   // initialize logging module
+  FLAGS_log_dir = global_option.log_dir();
+  FLAGS_v = global_option.vlog_level();
+  FLAGS_logbufsecs = 0;
   google::InitGoogleLogging(argv0);
 
   return 0;

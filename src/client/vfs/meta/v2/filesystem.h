@@ -27,6 +27,7 @@
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
+#include "options/client/meta.h"
 
 namespace dingofs {
 namespace client {
@@ -36,6 +37,7 @@ namespace v2 {
 class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
+using options::client::MetaOption;
 
 class MdsV2DirIterator : public DirIterator {
  public:
@@ -88,8 +90,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   }
 
   static MDSV2FileSystemUPtr Build(const std::string& fs_name,
-                                   const std::string& mds_addr,
-                                   const std::string& mountpoint);
+                                   const std::string& mountpoint,
+                                   const MetaOption& option);
 
   Status Init() override;
 

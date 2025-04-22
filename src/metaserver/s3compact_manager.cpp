@@ -29,6 +29,7 @@
 #include "absl/memory/memory.h"
 #include "metaserver/partition.h"
 #include "metaserver/s3compact_worker.h"
+#include "options/client/s3.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
@@ -36,7 +37,7 @@ namespace metaserver {
 
 using dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption;
 using dataaccess::aws::S3Adapter;
-using dataaccess::aws::S3AdapterOption;
+using options::client::S3Option;
 using pb::common::S3Info;
 using utils::Configuration;
 using utils::InterruptibleSleeper;
@@ -89,7 +90,7 @@ void S3AdapterManager::ReleaseS3Adapter(uint64_t index) {
   used_[index] = false;
 }
 
-S3AdapterOption S3AdapterManager::GetBasicS3AdapterOption() { return opts_; }
+S3Option S3AdapterManager::GetBasicS3AdapterOption() { return opts_; }
 
 void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
   std::string mdsAddrsStr;
@@ -98,10 +99,10 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
   conf->GetValueFatalIfFail("global.ip", &metaserverIpStr);
   conf->GetValueFatalIfFail("global.port", &metaserverPort);
   // leave ak,sk,addr,bucket,chunksize,blocksize blank
-  s3opts.ak = "";
-  s3opts.sk = "";
-  s3opts.s3Address = "";
-  s3opts.bucketName = "";
+  s3opts.bucket_option().set_ak("");
+  s3opts.bucket_option().set_sk("");
+  s3opts.bucket_option().set_endpoint("");
+  s3opts.bucket_option().set_bucket_name("");
   InitS3AdaptorOptionExceptS3InfoOption(conf.get(), &s3opts);
   conf->GetValueFatalIfFail("s3compactwq.enable", &enable);
   conf->GetValueFatalIfFail("s3compactwq.thread_num", &threadNum);

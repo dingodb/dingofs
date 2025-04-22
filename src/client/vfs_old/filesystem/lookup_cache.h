@@ -26,13 +26,15 @@
 #include <memory>
 #include <string>
 
-#include "client/common/config.h"
 #include "client/vfs_old/filesystem/meta.h"
+#include "options/client/vfs.h"
 #include "utils/lru_cache.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
+
+using options::client::LookupCacheOption;
 
 // memory cache for lookup result, now we only support cache negative result,
 // and other positive entry will be cached in kernel.
@@ -45,7 +47,7 @@ class LookupCache {
 
   using LRUType = utils::LRUCache<std::string, CacheEntry>;
 
-  explicit LookupCache(common::LookupCacheOption option);
+  explicit LookupCache(const LookupCacheOption& option);
 
   bool Get(Ino parent, const std::string& name);
 
@@ -58,7 +60,7 @@ class LookupCache {
 
   bool enable_;
   utils::RWLock rwlock_;
-  common::LookupCacheOption option_;
+  LookupCacheOption option_;
   std::shared_ptr<LRUType> lru_;
 };
 

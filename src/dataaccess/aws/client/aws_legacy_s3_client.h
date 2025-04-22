@@ -23,7 +23,6 @@
 #include <atomic>
 #include <memory>
 
-#include "dataaccess/aws/aws_s3_common.h"
 #include "dataaccess/aws/client/aws_s3_client.h"
 
 namespace dingofs {
@@ -36,21 +35,21 @@ class AwsLegacyS3Client : public AwsS3Client {
 
   ~AwsLegacyS3Client() override = default;
 
-  void Init(const S3AdapterOption& option) override;
+  void Init(const S3Option& option) override;
 
   std::string GetAk() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.ak;
+    return option_.bucket_option().ak();
   }
 
   std::string GetSk() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.sk;
+    return option_.bucket_option().sk();
   }
 
   std::string GetEndpoint() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.s3Address;
+    return option_.bucket_option().endpoint();
   }
 
   bool BucketExist(std::string bucket) override;
@@ -81,7 +80,7 @@ class AwsLegacyS3Client : public AwsS3Client {
 
  private:
   std::atomic<bool> initialized_{false};
-  S3AdapterOption option_;
+  S3Option option_;
 
   std::unique_ptr<Aws::Client::ClientConfiguration> cfg_{nullptr};
   std::unique_ptr<Aws::S3::S3Client> client_{nullptr};

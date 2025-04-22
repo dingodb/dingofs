@@ -21,7 +21,6 @@
 #include <functional>
 #include <string>
 
-#include "client/common/config.h"
 #include "client/common/status.h"
 #include "client/vfs/vfs_meta.h"
 
@@ -127,11 +126,6 @@ class VFS {
   virtual double GetEntryTimeout(const FileType& type) = 0;
 
   virtual uint64_t GetMaxNameLength() = 0;
-
-  // TODO: refactor this interface
-  // used for fuse
-  virtual common::FuseOption GetFuseOption() = 0;
-
 };
 
 }  // namespace vfs

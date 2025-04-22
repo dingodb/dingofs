@@ -29,15 +29,17 @@
 #include <unordered_map>
 #include <vector>
 
-#include "client/common/config.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/inode_wrapper.h"
+#include "options/client/vfs.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
+
+using options::client::DeferSyncOption;
 
 class DeferSync;
 class SyncInodeClosure : public stub::rpcclient::MetaServerClientDone {
@@ -55,7 +57,7 @@ class SyncInodeClosure : public stub::rpcclient::MetaServerClientDone {
 
 class DeferSync : public std::enable_shared_from_this<DeferSync> {
  public:
-  explicit DeferSync(common::DeferSyncOption option);
+  explicit DeferSync(const DeferSyncOption& option);
 
   void Start();
 
@@ -71,7 +73,7 @@ class DeferSync : public std::enable_shared_from_this<DeferSync> {
   void SyncTask();
   void Synced(uint64_t sync_seq, pb::metaserver::MetaStatusCode status);
 
-  common::DeferSyncOption option_;
+  DeferSyncOption option_;
   utils::Mutex mutex_;
   std::atomic<bool> running_;
   std::thread thread_;

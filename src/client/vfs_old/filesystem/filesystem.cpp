@@ -44,7 +44,6 @@ namespace filesystem {
 
 using base::time::TimeSpec;
 using base::timer::TimerImpl;
-using common::FileSystemOption;
 
 using pb::metaserver::InodeAttr;
 using pb::metaserver::Quota;
@@ -55,15 +54,15 @@ using ::dingofs::client::common::ShareVar;
 USING_FLAG(stat_timer_thread_num);
 
 FileSystem::FileSystem(uint32_t fs_id, std::string fs_name,
-                       FileSystemOption option, ExternalMember member)
+                       const VFSOption& option, ExternalMember member)
     : fs_id_(fs_id), fs_name_(fs_name), option_(option), member(member) {
-  deferSync_ = std::make_shared<DeferSync>(option.deferSyncOption);
-  negative_ = std::make_shared<LookupCache>(option.lookupCacheOption);
-  dirCache_ = std::make_shared<DirCache>(option.dirCacheOption);
+  deferSync_ = std::make_shared<DeferSync>(option.defer_sync_option());
+  negative_ = std::make_shared<LookupCache>(option.lookup_cache_option());
+  dirCache_ = std::make_shared<DirCache>(option.dir_cache_option());
   openFiles_ = std::make_shared<OpenFiles>(option_.openFilesOption, deferSync_);
-  attrWatcher_ = std::make_shared<AttrWatcher>(option_.attrWatcherOption,
+  attrWatcher_ = std::make_shared<AttrWatcher>(option_.attr_watcher_option(),
                                                openFiles_, dirCache_);
-  entry_watcher_ = std::make_shared<EntryWatcher>(option_.nocto_suffix);
+  entry_watcher_ = std::make_shared<EntryWatcher>(option_.nocto_suffix());
   handlerManager_ = std::make_shared<HandlerManager>();
   rpc_ = std::make_shared<RPCClient>(option.rpcOption, member);
 }

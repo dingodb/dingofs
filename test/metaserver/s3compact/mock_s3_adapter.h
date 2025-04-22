@@ -41,8 +41,7 @@ namespace metaserver {
 
 class MockS3AdapterManager : public S3AdapterManager {
  public:
-  MockS3AdapterManager(uint64_t size,
-                       const dataaccess::aws::S3AdapterOption& opts)
+  MockS3AdapterManager(uint64_t size, const options::client::S3Option& opts)
       : S3AdapterManager(size, opts) {}
   ~MockS3AdapterManager() override = default;
   MOCK_METHOD0(Init, void());
@@ -57,7 +56,7 @@ class MockS3Adapter : public S3Adapter {
 
   MOCK_METHOD1(Init, void(const std::string&));
   MOCK_METHOD0(Deinit, void());
-  MOCK_METHOD1(Reinit, void(const dataaccess::aws::S3AdapterOption& opt));
+  MOCK_METHOD1(Reinit, void(const options::client::S3Option& opt));
   MOCK_METHOD0(GetS3Ak, std::string());
   MOCK_METHOD0(GetS3Sk, std::string());
   MOCK_METHOD0(GetS3Endpoint, std::string());

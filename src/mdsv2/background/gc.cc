@@ -85,7 +85,7 @@ Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key,
 void CleanDeletedFileTask::Run() {}
 
 bool GcProcessor::Init() {
-  dataaccess::aws::S3AdapterOption option;
+  options::client::S3Option option;
   data_accessor_ = dataaccess::S3Accesser::New(option);
   CHECK(data_accessor_->Init()) << "init data accesser fail.";
 

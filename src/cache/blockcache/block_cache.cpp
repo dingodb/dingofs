@@ -54,10 +54,11 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
       running_(false),
       stage_count_(std::make_shared<Countdown>()),
       throttle_(std::make_unique<BlockCacheThrottle>()) {
-  if (option.cache_store == "none") {
+  if (option.cache_store() == "none") {
     store_ = std::make_shared<MemCache>();
   } else {
-    store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
+    store_ = std::make_shared<DiskCacheGroup>(
+        option.disk_cache_option());  // FIXME(Wine93)
   }
 
   uploader_ =
@@ -70,8 +71,8 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
 Status BlockCacheImpl::Init() {
   if (!running_.exchange(true)) {
     throttle_->Start();
-    uploader_->Init(option_.upload_stage_workers,
-                    option_.upload_stage_queue_size);
+    uploader_->Init(option_.upload_stage_workers(),
+                    option_.upload_stage_queue_size());
     auto status =
         store_->Init([this](const BlockKey& key, const std::string& stage_path,
                             BlockContext ctx) {
@@ -81,11 +82,11 @@ Status BlockCacheImpl::Init() {
       return status;
     }
 
-    status =
-        prefetcher_->Init(option_.prefetch_workers, option_.prefetch_queue_size,
-                          [this](const BlockKey& key, size_t length) {
-                            return DoPrefetch(key, length);
-                          });
+    status = prefetcher_->Init(option_.prefetch_workers(),
+                               option_.prefetch_queue_size(),
+                               [this](const BlockKey& key, size_t length) {
+                                 return DoPrefetch(key, length);
+                               });
     if (!status.ok()) {
       return status;
     }
@@ -117,7 +118,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
   });
 
   auto wait = throttle_->Add(block.size);  // stage throttle
-  if (option_.stage && !wait) {
+  if (option_.stage() && !wait) {
     timer.NextPhase(Phase::kStageBlock);
     status = store_->Stage(key, block, ctx);
     if (status.ok()) {
@@ -217,7 +218,7 @@ bool BlockCacheImpl::IsCached(const BlockKey& key) {
 }
 
 StoreType BlockCacheImpl::GetStoreType() {
-  if (option_.cache_store == "none") {
+  if (option_.cache_store() == "none") {
     return StoreType::kNone;
   }
   return StoreType::kDisk;

@@ -24,6 +24,8 @@
 #include <string>
 
 #include "dataaccess/accesser_common.h"
+#include "options/client/s3.h"
+#include "options/options.h"
 #include "utils/configuration.h"
 #include "utils/macros.h"
 
@@ -33,98 +35,72 @@ namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-struct S3AdapterOption {
-  std::string ak;
-  std::string sk;
-  std::string s3Address;
-  std::string bucketName;
-  std::string region{"us-east-1"};
-  int loglevel{4};
-  std::string logPrefix;
-  bool verifySsl{false};
-  int maxConnections{32};
-  int connectTimeout{60000};
-  int requestTimeout{10000};
-  bool use_crt_client{false};
-  bool use_thread_pool{true};  // this only work when use_crt_client is false
-  int asyncThreadNum{16};      // this only work when use_crt_client is false
-  uint64_t maxAsyncRequestInflightBytes{0};
-  uint64_t iopsTotalLimit{0};
-  uint64_t iopsReadLimit{0};
-  uint64_t iopsWriteLimit{0};
-  uint64_t bpsTotalMB{0};
-  uint64_t bpsReadMB{0};
-  uint64_t bpsWriteMB{0};
-  bool useVirtualAddressing{false};
-  bool enableTelemetry{false};
-};
-
-struct S3InfoOption {
-  // should get from mds
-  std::string ak;
-  std::string sk;
-  std::string s3Address;
-  std::string bucketName;
-  uint64_t blockSize;
-  uint64_t chunkSize;
-  uint32_t objectPrefix;
-};
+using options::client::S3Option;
 
 inline void InitS3AdaptorOptionExceptS3InfoOption(utils::Configuration* conf,
-                                                  S3AdapterOption* s3_opt) {
-  LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &s3_opt->loglevel));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.logPrefix", &s3_opt->logPrefix));
-  LOG_IF(FATAL, !conf->GetBoolValue("s3.verify_SSL", &s3_opt->verifySsl));
-  LOG_IF(FATAL,
-         !conf->GetIntValue("s3.maxConnections", &s3_opt->maxConnections));
-  LOG_IF(FATAL,
-         !conf->GetIntValue("s3.connectTimeout", &s3_opt->connectTimeout));
-  LOG_IF(FATAL,
-         !conf->GetIntValue("s3.requestTimeout", &s3_opt->requestTimeout));
+                                                  S3Option* s3_option) {
+  auto* global_option = &s3_option->global_option();
+  auto* request_option = &s3_option->request_option();
+  auto* throttle_option = &s3_option->throttle_option();
 
-  if (!conf->GetBoolValue("s3.use_crt_client", &s3_opt->use_crt_client)) {
-    s3_opt->use_crt_client = false;
+  // global
+  LOG_IF(FATAL, !conf->GetIntValue("s3.logLevel", &global_option->log_level()));
+  LOG_IF(FATAL,
+         !conf->GetStringValue("s3.logPrefix", &global_option->log_prefix()));
+  if (!conf->GetBoolValue("s3.enableTelemetry",
+                          &global_option->telemetry_enable())) {
+    LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";
+    global_option->telemetry_enable() = false;
+  }
+
+  // request
+  LOG_IF(FATAL,
+         !conf->GetBoolValue("s3.verify_SSL", &request_option->verify_ssl()));
+  LOG_IF(FATAL, !conf->GetIntValue("s3.maxConnections",
+                                   &request_option->max_connections()));
+  LOG_IF(FATAL, !conf->GetIntValue("s3.connectTimeout",
+                                   &request_option->connect_timeout_ms()));
+  LOG_IF(FATAL, !conf->GetIntValue("s3.requestTimeout",
+                                   &request_option->request_timeout_ms()));
+
+  if (!conf->GetBoolValue("s3.use_crt_client",
+                          &request_option->use_crt_client())) {
     LOG(INFO) << "Not found s3.use_crt_client in conf, use default "
-              << (s3_opt->use_crt_client ? "true" : "false");
+              << (request_option->use_crt_client() ? "true" : "false");
   }
-
-  if (!conf->GetBoolValue("s3.use_thread_pool", &s3_opt->use_thread_pool)) {
+  if (!conf->GetBoolValue("s3.use_thread_pool",
+                          &request_option->use_thread_pool())) {
     LOG(INFO) << "Not found s3.use_thread_pool in conf, use default "
-              << (s3_opt->use_thread_pool ? "true" : "false");
+              << (request_option->use_thread_pool() ? "true" : "false");
   }
-
   if (!conf->GetIntValue("s3.async_thread_num_in_thread_pool",
-                         &s3_opt->asyncThreadNum)) {
+                         &request_option->async_thread_num())) {
     LOG(INFO)
         << "Not found s3.async_thread_num_in_thread_pool in conf, use default"
-        << s3_opt->asyncThreadNum;
+        << request_option->async_thread_num();
   }
-
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
-                                      &s3_opt->iopsTotalLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
-                                      &s3_opt->iopsReadLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsWriteLimit",
-                                      &s3_opt->iopsWriteLimit));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsTotalMB", &s3_opt->bpsTotalMB));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsReadMB", &s3_opt->bpsReadMB));
-  LOG_IF(FATAL,
-         !conf->GetUInt64Value("s3.throttle.bpsWriteMB", &s3_opt->bpsWriteMB));
-  LOG_IF(FATAL, !conf->GetBoolValue("s3.useVirtualAddressing",
-                                    &s3_opt->useVirtualAddressing));
-  LOG_IF(FATAL, !conf->GetStringValue("s3.region", &s3_opt->region));
-
-  if (!conf->GetUInt64Value("s3.maxAsyncRequestInflightBytes",
-                            &s3_opt->maxAsyncRequestInflightBytes)) {
+  if (!conf->GetUInt64Value(
+          "s3.maxAsyncRequestInflightBytes",
+          &request_option->max_async_request_inflight_bytes())) {
     LOG(WARNING) << "Not found s3.maxAsyncRequestInflightBytes in conf";
-    s3_opt->maxAsyncRequestInflightBytes = 0;
   }
-  if (!conf->GetBoolValue("s3.enableTelemetry", &s3_opt->enableTelemetry)) {
-    LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";
-    s3_opt->enableTelemetry = false;
-  }
+
+  // throttle
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
+                                      &throttle_option->iops_total_limit()));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
+                                      &throttle_option->iops_read_limit()));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsWriteLimit",
+                                      &throttle_option->iops_write_limit()));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsTotalMB",
+                                      &throttle_option->bps_total_mb()));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsReadMB",
+                                      &throttle_option->bps_read_mb()));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsWriteMB",
+                                      &throttle_option->bps_write_mb()));
+  LOG_IF(FATAL, !conf->GetBoolValue("s3.useVirtualAddressing",
+                                    &request_option->use_virtual_addressing()));
+  LOG_IF(FATAL, !conf->GetStringValue("s3.region", &request_option->region()));
 }
 
 struct AwsGetObjectAsyncContext;

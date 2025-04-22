@@ -32,35 +32,38 @@
 
 #include <memory>
 
-#include "dataaccess/aws/aws_s3_common.h"
-
 namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-void AwsCrtS3Client::Init(const S3AdapterOption& option) {
+void AwsCrtS3Client::Init(const S3Option& option) {
+  const auto& global_option = option.global_option();
+  const auto& bucket_option = option.bucket_option();
+  const auto& request_option = option.request_option();
+
   CHECK(!initialized_.load()) << "AwsCrtS3Client already initialized";
-  LOG(INFO) << "AwsCrtS3Client init ak: " << option.ak << " sk: " << option.sk
-            << " s3_address: " << option.s3Address
-            << " bucket_name: " << option.bucketName;
+  LOG(INFO) << "AwsCrtS3Client init ak: " << bucket_option.ak()
+            << " sk: " << bucket_option.sk()
+            << " s3_address: " << bucket_option.endpoint()
+            << " bucket_name: " << bucket_option.bucket_name();
 
   option_ = option;
 
   {
     auto config = std::make_unique<Aws::S3Crt::S3CrtClientConfiguration>();
     // config->scheme = Aws::Http::Scheme(option.scheme);
-    config->verifySSL = option.verifySsl;
-    config->region = option.region;
-    config->maxConnections = option.maxConnections;
-    config->connectTimeoutMs = option.connectTimeout;
-    config->requestTimeoutMs = option.requestTimeout;
-    config->endpointOverride = option.s3Address;
-    config->useVirtualAddressing = option.useVirtualAddressing;
+    config->verifySSL = request_option.verify_ssl();
+    config->region = request_option.region();
+    config->maxConnections = request_option.max_connections();
+    config->connectTimeoutMs = request_option.connect_timeout_ms();
+    config->requestTimeoutMs = request_option.request_timeout_ms();
+    config->endpointOverride = bucket_option.endpoint();
+    config->useVirtualAddressing = request_option.use_virtual_addressing();
 
     // TODO : to support
     // config.throughputTargetGbps = throughput_target_gbps;
 
-    if (option.enableTelemetry) {
+    if (global_option.telemetry_enable()) {
       LOG(INFO) << "Enable telemetry for aws s3 adapter";
       ::opentelemetry::exporter::otlp::OtlpHttpExporterOptions opts;
       auto span_exporter =
@@ -81,7 +84,7 @@ void AwsCrtS3Client::Init(const S3AdapterOption& option) {
   }
 
   client_ = std::make_unique<Aws::S3Crt::S3CrtClient>(
-      Aws::Auth::AWSCredentials(option_.ak, option_.sk), *cfg_,
+      Aws::Auth::AWSCredentials(bucket_option.ak(), bucket_option.sk()), *cfg_,
       Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never);
 
   initialized_.store(true);

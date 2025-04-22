@@ -46,13 +46,13 @@ using utils::WriteLockGuard;
     }                              \
   } while (0)
 
-LookupCache::LookupCache(LookupCacheOption option)
-    : enable_(option.negativeTimeoutSec > 0), rwlock_(), option_(option) {
-  lru_ = std::make_shared<LRUType>(option.lruSize);
+LookupCache::LookupCache(const LookupCacheOption& option)
+    : enable_(option.negative_timeout_s() > 0), rwlock_(), option_(option) {
+  lru_ = std::make_shared<LRUType>(option.lru_size());
   if (enable_) {
     LOG(INFO) << "Using lookup negative lru cache"
-              << ", timeout = " << option.negativeTimeoutSec
-              << ", capacity = " << option.lruSize;
+              << ", timeout = " << option.negative_timeout_s()
+              << ", capacity = " << option.lru_size();
   }
 }
 
@@ -70,7 +70,7 @@ bool LookupCache::Get(Ino parent, const std::string& name) {
     VLOG(1) << absl::StrFormat("Lookup cache not found: key(%d,%s)", parent,
                                name);
     return false;
-  } else if (entry.uses < option_.minUses) {
+  } else if (entry.uses < option_.min_uses()) {
     return false;
   } else if (entry.expireTime < Now()) {
     return false;
@@ -91,7 +91,7 @@ bool LookupCache::Put(Ino parent, const std::string& name) {
   }
 
   entry.expireTime =
-      Now() + base::time::TimeSpec(option_.negativeTimeoutSec, 0);
+      Now() + base::time::TimeSpec(option_.negative_timeout_s(), 0);
   lru_->Put(key, entry);
   return true;
 }

@@ -27,7 +27,7 @@
 #include <cassert>
 #include <cstring>
 
-#include "client/common/config.h"
+#include "base/math/math.h"
 #include "client/common/share_var.h"
 #include "client/datastream/metric.h"
 #include "client/datastream/page_allocator.h"
@@ -36,18 +36,19 @@ namespace dingofs {
 namespace client {
 namespace datastream {
 
+using base::math::kMiB;
 using ::dingofs::client::common::ShareVar;
 
-bool DataStream::Init(DataStreamOption option) {
+bool DataStream::Init(const DataOption& option) {
   option_ = option;
 
   // file
   {
-    auto o = option.file_option;
+    auto o = option.flush_file_option();
     flush_file_thread_pool_ =
         std::make_shared<TaskThreadPool<>>("flush_file_worker");
     auto rc =
-        flush_file_thread_pool_->Start(o.flush_workers, o.flush_queue_size);
+        flush_file_thread_pool_->Start(o.flush_workers(), o.flush_queue_size());
     if (rc != 0) {
       LOG(ERROR) << "Start flush file thread pool failed, rc = " << rc;
       return false;
@@ -56,11 +57,11 @@ bool DataStream::Init(DataStreamOption option) {
 
   // chunk
   {
-    auto o = option.chunk_option;
+    auto o = option.flush_chunk_option();
     flush_chunk_thread_pool_ =
         std::make_shared<TaskThreadPool<>>("flush_chunk_worker");
-    auto rc =
-        flush_chunk_thread_pool_->Start(o.flush_workers, o.flush_queue_size);
+    auto rc = flush_chunk_thread_pool_->Start(o.flush_workers(),
+                                              o.flush_queue_size());
     if (rc != 0) {
       LOG(ERROR) << "Start flush chunk thread pool failed, rc = " << rc;
       return false;
@@ -69,11 +70,11 @@ bool DataStream::Init(DataStreamOption option) {
 
   // slice
   {
-    auto o = option.slice_option;
+    auto o = option.flush_slice_option();
     flush_slice_thread_pool_ =
         std::make_shared<TaskThreadPool<>>("flush_slice_worker");
-    auto rc =
-        flush_slice_thread_pool_->Start(o.flush_workers, o.flush_queue_size);
+    auto rc = flush_slice_thread_pool_->Start(o.flush_workers(),
+                                              o.flush_queue_size());
     if (rc != 0) {
       LOG(ERROR) << "Start flush slice thread pool failed, rc = " << rc;
       return false;
@@ -82,19 +83,21 @@ bool DataStream::Init(DataStreamOption option) {
 
   // page
   {
-    auto o = option.page_option;
+    auto o = option.page_option();
     // Smooth upgrade use DefaultPageAllocator
+    bool use_pool = o.use_pool();
     if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
       LOG(INFO) << "use default page allocate for smooth upgrade";
-      o.use_pool = false;
+      use_pool = false;
     }
-    if (o.use_pool) {
+    if (use_pool) {
       page_allocator_ = std::make_shared<PagePool>();
     } else {
       page_allocator_ = std::make_shared<DefaultPageAllocator>();
     }
 
-    auto ok = page_allocator_->Init(o.page_size, o.total_size / o.page_size);
+    auto ok = page_allocator_->Init(
+        o.page_size(), o.total_size_mb() * base::math::kMiB / o.page_size());
     if (!ok) {
       LOG(ERROR) << "Init page allocator failed.";
       return false;
@@ -136,9 +139,9 @@ void DataStream::FreePage(char* page) { page_allocator_->DeAllocate(page); }
 
 bool DataStream::MemoryNearFull() {
   double trigger_force_memory_ratio =
-      option_.background_flush_option.trigger_force_memory_ratio;
-  uint64_t page_size = option_.page_option.page_size;
-  uint64_t total_size = option_.page_option.total_size;
+      option_.background_flush_option().trigger_force_memory_ratio();
+  uint64_t page_size = option_.page_option().page_size();
+  uint64_t total_size = option_.page_option().total_size_mb() * kMiB;
   bool is_full = page_allocator_->GetFreePages() * page_size <=
                  total_size * (1.0 - trigger_force_memory_ratio);
   return is_full;

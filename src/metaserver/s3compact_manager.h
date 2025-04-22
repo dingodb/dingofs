@@ -32,6 +32,7 @@
 #include "metaserver/s3compact.h"
 #include "metaserver/s3compact_worker.h"
 #include "metaserver/s3infocache.h"
+#include "options/client/s3.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -44,22 +45,23 @@ class S3AdapterManager {
   uint64_t size_;  // same size as worker thread count
   std::vector<std::unique_ptr<dataaccess::aws::S3Adapter>> s3adapters_;
   std::vector<bool> used_;
-  dataaccess::aws::S3AdapterOption opts_;
+  options::client::S3Option opts_;
 
  public:
   explicit S3AdapterManager(uint64_t size,
-                            const dataaccess::aws::S3AdapterOption& opts)
+                            const options::client::S3Option& opts)
       : inited_(false), size_(size), opts_(opts) {}
   virtual ~S3AdapterManager() = default;
   virtual void Init();
   virtual void Deinit();
   virtual std::pair<uint64_t, dataaccess::aws::S3Adapter*> GetS3Adapter();
   virtual void ReleaseS3Adapter(uint64_t index);
-  virtual dataaccess::aws::S3AdapterOption GetBasicS3AdapterOption();
+  virtual options::client::S3Option GetBasicS3AdapterOption();
 };
 
 struct S3CompactWorkQueueOption {
-  dataaccess::aws::S3AdapterOption s3opts;
+  options::client::S3Option s3opts;
+
   bool enable;
   uint64_t threadNum;
   uint64_t fragmentThreshold;

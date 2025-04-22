@@ -31,16 +31,13 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::OpenFilesOption;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 
-OpenFiles::OpenFiles(OpenFilesOption option,
-                     std::shared_ptr<DeferSync> defer_sync)
-    : option_(option), deferSync_(defer_sync) {
+OpenFiles::OpenFiles(std::shared_ptr<DeferSync> defer_sync)
+    : deferSync_(defer_sync) {
   metric_ = std::make_shared<OpenfilesMetric>();
-  LOG(INFO) << "Using openfile lru cache but ignored, capacity is "
-            << option.lruSize;
+  LOG(INFO) << "Using openfile cache.";
 }
 
 void OpenFiles::Open(Ino ino, std::shared_ptr<InodeWrapper> inode) {

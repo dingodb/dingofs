@@ -25,21 +25,23 @@
 
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/openfile.h"
+#include "options/client/vfs.h"
 #include "utils/lru_cache.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using options::client::AttrWatcherOption;
+
 class AttrWatcher {
  public:
   using LRUType = utils::LRUCache<Ino, base::time::TimeSpec>;
 
-  AttrWatcher(common::AttrWatcherOption option,
+  AttrWatcher(const AttrWatcherOption& option,
               std::shared_ptr<OpenFiles> openFiles,
               std::shared_ptr<DirCache> dirCache);
 

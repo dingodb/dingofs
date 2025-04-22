@@ -38,6 +38,7 @@
 #include "mds/fs_storage.h"
 #include "mds/metaserverclient/metaserver_client.h"
 #include "mds/topology/topology_manager.h"
+#include "options/client/s3.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/interruptible_sleeper.h"
 
@@ -48,7 +49,7 @@ struct FsManagerOption {
   uint32_t backEndThreadRunInterSec;
   uint32_t spaceReloadConcurrency = 10;
   uint32_t clientTimeoutSec = 20;
-  dataaccess::aws::S3AdapterOption s3AdapterOption;
+  options::client::S3Option s3_option;
 };
 
 class FsManager {

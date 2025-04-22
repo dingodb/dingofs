@@ -47,8 +47,7 @@ class OpenFiles {
  public:
   // option not used, but keeped here, we can turn on/off openfiles cache in the
   // future like juicefs
-  explicit OpenFiles(common::OpenFilesOption option,
-                     std::shared_ptr<DeferSync> defer_sync);
+  explicit OpenFiles(std::shared_ptr<DeferSync> defer_sync);
 
   void Open(Ino ino, std::shared_ptr<InodeWrapper> inode);
 
@@ -62,7 +61,6 @@ class OpenFiles {
 
  private:
   utils::RWLock rwlock_;
-  common::OpenFilesOption option_;
   std::shared_ptr<DeferSync> deferSync_;
   std::unordered_map<Ino, std::unique_ptr<OpenFile>> files_;
   std::shared_ptr<OpenfilesMetric> metric_;

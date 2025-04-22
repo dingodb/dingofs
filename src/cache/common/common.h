@@ -23,16 +23,16 @@
 #ifndef DINGOFS_SRC_CACHE_COMMON_COMMON_H_
 #define DINGOFS_SRC_CACHE_COMMON_COMMON_H_
 
-#include "client/common/common.h"
-#include "client/common/config.h"
+#include "client/common/status.h"
+#include "options/cache/app.h"
 
 namespace dingofs {
 namespace cache {
 namespace common {
 
 using Status = client::Status;
-using BlockCacheOption = client::common::BlockCacheOption;
-using DiskCacheOption = client::common::DiskCacheOption;
+using BlockCacheOption = options::cache::BlockCacheOption;
+using DiskCacheOption = options::cache::DiskCacheOption;
 
 }  // namespace common
 }  // namespace cache

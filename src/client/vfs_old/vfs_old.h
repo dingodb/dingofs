@@ -25,7 +25,6 @@
 #include <string>
 
 #include "client/common/common.h"
-#include "client/common/config.h"
 #include "client/common/status.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
@@ -34,6 +33,8 @@
 #include "client/vfs_old/service/inode_objects_service.h"
 #include "client/vfs_old/warmup/warmup_manager.h"
 #include "dingofs/mds.pb.h"
+#include "options/client/app.h"
+#include "options/client/vfs.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/throttle.h"
 
@@ -41,10 +42,11 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+using options::client::VFSOption;
+
 class VFSOld : public VFS {
  public:
-  VFSOld(const common::ClientOption& fuse_client_option)
-      : fuse_client_option_(fuse_client_option) {}
+  VFSOld(const VFSOption& option) : option_(option) {}
 
   ~VFSOld() override = default;
 
@@ -122,10 +124,6 @@ class VFSOld : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  common::FuseOption GetFuseOption() override {
-    return fuse_client_option_.fuse_option;
-  }
-
   void InitQosParam();
 
  private:
@@ -163,7 +161,7 @@ class VFSOld : public VFS {
 
   pb::mds::Mountpoint mount_point_;
 
-  common::ClientOption fuse_client_option_;
+  VFSOption option_;
 
   // fs info
   std::shared_ptr<pb::mds::FsInfo> fs_info_{nullptr};

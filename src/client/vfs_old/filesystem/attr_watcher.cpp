@@ -22,8 +22,8 @@
 
 #include "client/vfs_old/filesystem/attr_watcher.h"
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_old/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
@@ -36,10 +36,10 @@ using utils::WriteLockGuard;
 
 using pb::metaserver::InodeAttr;
 
-AttrWatcher::AttrWatcher(AttrWatcherOption option,
+AttrWatcher::AttrWatcher(const AttrWatcherOption& option,
                          std::shared_ptr<OpenFiles> openFiles,
                          std::shared_ptr<DirCache> dirCache)
-    : modifiedAt_(std::make_shared<LRUType>(option.lruSize)),
+    : modifiedAt_(std::make_shared<LRUType>(option.lru_size())),
       openFiles_(openFiles),
       dirCache_(dirCache) {}
 

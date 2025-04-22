@@ -27,9 +27,9 @@
 #include <functional>
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/datastream/metric.h"
 #include "client/datastream/page_allocator.h"
+#include "options/client/data.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -37,7 +37,7 @@ namespace client {
 namespace datastream {
 
 using ::dingofs::utils::TaskThreadPool;
-using ::dingofs::client::common::DataStreamOption;
+using options::client::DataOption;
 
 class DataStream {
   using TaskFunc = std::function<void()>;
@@ -49,7 +49,7 @@ class DataStream {
   }
 
  public:
-  bool Init(DataStreamOption option);
+  bool Init(const DataOption& option);
 
   void Shutdown();
 
@@ -71,7 +71,7 @@ class DataStream {
   std::shared_ptr<TaskThreadPool<>> flush_slice_thread_pool_;
   std::shared_ptr<PageAllocator> page_allocator_;
   std::unique_ptr<DataStreamMetric> metric_;
-  DataStreamOption option_;
+  DataOption option_;
 };
 
 }  // namespace datastream

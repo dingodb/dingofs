@@ -174,7 +174,7 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
       << fs_manager_option->spaceReloadConcurrency;
 
   dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(
-      conf_.get(), &fs_manager_option->s3AdapterOption);
+      conf_.get(), &fs_manager_option->s3_option);
 }
 
 void MDS::Init() {

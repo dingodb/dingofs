@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(kvclient)
 add_subdirectory(lease)
 
 file(GLOB VFS_OLD_SRC_LIB
@@ -30,6 +29,7 @@ target_link_libraries(vfs_old_lib
     dingofs_base_lib
     rpcclient
     dingofs_common
+    dingofs_options
     client_lease
     client_memcached_client
     dynamic_vlog

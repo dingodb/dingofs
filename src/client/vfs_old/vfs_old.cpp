@@ -80,6 +80,10 @@ static void OnThrottleTimer(void* arg) {
 }
 
 void VFSOld::InitQosParam() {
+  const auto& o = option_.vfs_option().throttle_option();
+
+  // o.avg_write_iops(),
+
   utils::ReadWriteThrottleParams params;
   params.iopsWrite =
       utils::ThrottleParams(common::FLAGS_fuseClientAvgWriteIops,
@@ -150,8 +154,8 @@ int VFSOld::InitBrpcServer() {
 
   uint32_t listen_port = 0;
   if (!StartBrpcServer(server_, &brpc_server_options,
-                       fuse_client_option_.dummyServerStartPort, PORT_LIMIT,
-                       &listen_port)) {
+                       option_.global_option().dummy_server_start_port(),
+                       PORT_LIMIT, &listen_port)) {
     LOG(ERROR) << "Start brpc server failed!";
     return -1;
   }
@@ -444,22 +448,20 @@ Status VFSOld::Stop() {
 }
 
 double VFSOld::GetAttrTimeout(const FileType& type) {
+  const auto& option = option_.kernel_cache_option();
   if (type == FileType::kDirectory) {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .dirAttrTimeoutSec;
+    return option.dir_attr_timeout_s();
   } else {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .attrTimeoutSec;
+    return option.attr_timeout_s();
   }
 }
 
 double VFSOld::GetEntryTimeout(const FileType& type) {
+  const auto& option = option_.kernel_cache_option();
   if (type == FileType::kDirectory) {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .dirEntryTimeoutSec;
+    return option.dir_entry_timeout_s();
   } else {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .entryTimeoutSec;
+    return option.entry_timeout_s();
   }
 }
 

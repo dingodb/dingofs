@@ -35,7 +35,7 @@ class S3Client {
  public:
   S3Client() = default;
   virtual ~S3Client() = default;
-  virtual void Init(const dataaccess::aws::S3AdapterOption& option) = 0;
+  virtual void Init(const options::client::S3Option& option) = 0;
   virtual int Delete(const std::string& name) = 0;
   virtual int DeleteBatch(const std::list<std::string>& nameList) = 0;
   virtual void Reinit(const std::string& ak, const std::string& sk,
@@ -49,7 +49,7 @@ class S3ClientImpl : public S3Client {
   ~S3ClientImpl() override = default;
 
   void SetAdaptor(std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter);
-  void Init(const dataaccess::aws::S3AdapterOption& option) override;
+  void Init(const options::client::S3Option& option) override;
   void Reinit(const std::string& ak, const std::string& sk,
               const std::string& endpoint,
               const std::string& bucketName) override;
@@ -69,7 +69,7 @@ class S3ClientImpl : public S3Client {
 
  private:
   std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter_;
-  dataaccess::aws::S3AdapterOption option_;
+  options::client::S3Option option_;
 };
 
 }  // namespace metaserver

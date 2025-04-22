@@ -20,6 +20,7 @@
 #include <aws/s3/S3ServiceClientModel.h>
 
 #include "dataaccess/aws/aws_s3_common.h"
+#include "options/client/s3.h"
 
 namespace dingofs {
 namespace dataaccess {
@@ -31,7 +32,7 @@ class AwsS3Client {
 
   virtual ~AwsS3Client() = default;
 
-  virtual void Init(const S3AdapterOption& option) = 0;
+  virtual void Init(const S3Option& option) = 0;
 
   virtual std::string GetAk() = 0;
   virtual std::string GetSk() = 0;
@@ -43,16 +44,18 @@ class AwsS3Client {
                         const char* buffer, size_t buffer_size) = 0;
 
   virtual void PutObjectAsync(
-      std::string bucket, std::shared_ptr<AwsPutObjectAsyncContext> context) = 0;
+      std::string bucket,
+      std::shared_ptr<AwsPutObjectAsyncContext> context) = 0;
 
   virtual int GetObject(std::string bucket, const std::string& key,
                         std::string* data) = 0;
 
   virtual int RangeObject(std::string bucket, const std::string& key, char* buf,
-                        off_t offset, size_t len) = 0;
+                          off_t offset, size_t len) = 0;
 
   virtual void GetObjectAsync(
-      std::string bucket, std::shared_ptr<AwsGetObjectAsyncContext> context) = 0;
+      std::string bucket,
+      std::shared_ptr<AwsGetObjectAsyncContext> context) = 0;
 
   virtual int DeleteObject(std::string bucket, const std::string& key) = 0;
 

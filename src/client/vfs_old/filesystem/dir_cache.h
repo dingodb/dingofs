@@ -29,9 +29,9 @@
 #include "absl/container/btree_map.h"
 #include "base/queue/message_queue.h"
 #include "base/time/time.h"
-#include "client/common/config.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/filesystem/metric.h"
+#include "options/client/vfs.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/lru_cache.h"
@@ -39,6 +39,8 @@
 namespace dingofs {
 namespace client {
 namespace filesystem {
+
+using options::client::DirCacheOption;
 
 class DirEntryList {
  public:
@@ -77,7 +79,7 @@ class DirCache {
   using MessageType = std::shared_ptr<DirEntryList>;
   using MessageQueueType = base::queue::MessageQueue<MessageType>;
 
-  explicit DirCache(common::DirCacheOption option);
+  explicit DirCache(const DirCacheOption& option);
 
   void Start();
 
@@ -96,7 +98,7 @@ class DirCache {
 
   utils::RWLock rwlock_;
   size_t nentries_;
-  common::DirCacheOption option_;
+  DirCacheOption option_;
   std::shared_ptr<LRUType> lru_;
   std::shared_ptr<MessageQueueType> mq_;
   std::shared_ptr<DirCacheMetric> metric_;

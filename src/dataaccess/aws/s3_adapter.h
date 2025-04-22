@@ -33,6 +33,7 @@
 #include "dataaccess/accesser_common.h"
 #include "dataaccess/aws/aws_s3_common.h"
 #include "dataaccess/aws/client/aws_s3_client.h"
+#include "options/client/s3.h"
 #include "utils/configuration.h"
 #include "utils/throttle.h"
 
@@ -47,11 +48,11 @@ class S3Adapter {
   virtual ~S3Adapter() = default;
 
   // 初始化S3Adapter
-  virtual void Init(const S3AdapterOption& option);
+  virtual void Init(const S3Option& option);
 
   static void Shutdown();
 
-  virtual void Reinit(const S3AdapterOption& option);
+  virtual void Reinit(const S3Option& option);
 
   virtual std::string GetS3Ak();
   virtual std::string GetS3Sk();

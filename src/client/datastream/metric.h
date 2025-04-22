@@ -28,8 +28,8 @@
 
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/datastream/page_allocator.h"
+#include "options/client/data.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -37,7 +37,7 @@ namespace client {
 namespace datastream {
 
 using ::dingofs::utils::TaskThreadPool;
-using ::dingofs::client::common::DataStreamOption;
+using options::client::DataOption;
 
 static uint32_t GetQueueSize(void* arg) {
   auto* thread_pool = reinterpret_cast<TaskThreadPool<>*>(arg);
@@ -59,33 +59,33 @@ class DataStreamMetric {
   };
 
  public:
-  DataStreamMetric(DataStreamOption option, AuxMembers aux_members)
+  DataStreamMetric(DataOption option, AuxMembers aux_members)
       : metric_("dingofs_data_stream", aux_members) {
     // file
     {
-      auto o = option.file_option;
-      metric_.flush_file_workers.set_value(o.flush_workers);
-      metric_.flush_file_queue_capacity.set_value(o.flush_queue_size);
+      auto o = option.flush_file_option();
+      metric_.flush_file_workers.set_value(o.flush_workers());
+      metric_.flush_file_queue_capacity.set_value(o.flush_queue_size());
     }
 
     // chunk
     {
-      auto o = option.chunk_option;
-      metric_.flush_chunk_workers.set_value(o.flush_workers);
-      metric_.flush_chunk_queue_capacity.set_value(o.flush_queue_size);
+      auto o = option.flush_chunk_option();
+      metric_.flush_chunk_workers.set_value(o.flush_workers());
+      metric_.flush_chunk_queue_capacity.set_value(o.flush_queue_size());
     }
 
     // slice
     {
-      auto o = option.slice_option;
-      metric_.flush_slice_workers.set_value(o.flush_workers);
-      metric_.flush_slice_queue_capacity.set_value(o.flush_queue_size);
+      auto o = option.flush_slice_option();
+      metric_.flush_slice_workers.set_value(o.flush_workers());
+      metric_.flush_slice_queue_capacity.set_value(o.flush_queue_size());
     }
 
     // page
     {
-      auto o = option.page_option;
-      metric_.use_page_pool.set_value(o.use_pool);
+      auto o = option.page_option();
+      metric_.use_page_pool.set_value(o.use_pool());
     }
   }
 

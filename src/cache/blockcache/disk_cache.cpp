@@ -76,14 +76,14 @@ DiskCache::DiskCache(DiskCacheOption option)
     }
     return status;
   });
-  manager_ = std::make_shared<DiskCacheManager>(option.cache_size, layout_, fs_,
-                                                metric_);
+  manager_ = std::make_shared<DiskCacheManager>(option.cache_size(), layout_,
+                                                fs_, metric_);
   loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
 
   std::shared_ptr<IoRing> io_ring;
   if (option_.filesystem_type == "3fs") {
     io_ring =
-        std::make_shared<Usrbio>(option_.cache_dir, option_.ioring_blksize);
+        std::make_shared<Usrbio>(option_.cache_dir(), option_.ioring_blksize());
   } else {
     io_ring = std::make_shared<LinuxIoUring>();
   }
@@ -95,7 +95,7 @@ Status DiskCache::Init(UploadFunc uploader) {
     return Status::OK();  // already running
   }
 
-  Status status = aio_queue_->Init(option_.ioring_iodepth);
+  Status status = aio_queue_->Init(option_.ioring_iodepth());
   if (status.ok()) {
     status = CreateDirs();
     if (status.ok()) {

@@ -21,8 +21,10 @@
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
 #include "client/vfs_wrapper/global_log.h"
-#include "common/config.h"
+#include "options/client/app.h"
 #include "utils/configuration.h"
+
+using dingofs::options::client::OPTIONS_client;
 
 using FuseServer = dingofs::client::fuse::FuseServer;
 using Configuration = dingofs::utils::Configuration;

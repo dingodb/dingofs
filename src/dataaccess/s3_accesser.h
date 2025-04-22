@@ -19,35 +19,13 @@
 
 #include "dataaccess/accesser.h"
 #include "dataaccess/aws/s3_adapter.h"
+#include "options/client/s3.h"
 
 namespace dingofs {
 namespace dataaccess {
 
 using ::dingofs::client::Status;
-
-struct S3Option {
-  std::string ak;
-  std::string sk;
-  std::string s3Address;
-  std::string bucketName;
-  std::string region;
-  int loglevel;
-  std::string logPrefix;
-  bool verifySsl;
-  int maxConnections;
-  int connectTimeout;
-  int requestTimeout;
-  int asyncThreadNum;
-  uint64_t maxAsyncRequestInflightBytes;
-  uint64_t iopsTotalLimit;
-  uint64_t iopsReadLimit;
-  uint64_t iopsWriteLimit;
-  uint64_t bpsTotalMB;
-  uint64_t bpsReadMB;
-  uint64_t bpsWriteMB;
-  bool useVirtualAddressing;
-  bool enableTelemetry;
-};
+using options::client::S3Option;
 
 class S3Accesser;
 using S3AccesserPtr = std::shared_ptr<S3Accesser>;
@@ -57,10 +35,10 @@ using S3AccesserPtr = std::shared_ptr<S3Accesser>;
 // use aws-sdk-cpp implement
 class S3Accesser : public DataAccesser {
  public:
-  S3Accesser(const aws::S3AdapterOption& option) : option_(option) {}
+  S3Accesser(const S3Option& option) : option_(option) {}
   ~S3Accesser() override = default;
 
-  static S3AccesserPtr New(const aws::S3AdapterOption& option) {
+  static S3AccesserPtr New(const S3Option& option) {
     return std::make_shared<S3Accesser>(option);
   }
 
@@ -83,7 +61,7 @@ class S3Accesser : public DataAccesser {
  private:
   static Aws::String S3Key(const std::string& key);
 
-  const aws::S3AdapterOption option_;
+  const S3Option option_;
 
   std::unique_ptr<dataaccess::aws::S3Adapter> client_;
 };

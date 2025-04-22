@@ -23,7 +23,7 @@ add_subdirectory(schedule)
 add_subdirectory(heartbeat)
 add_subdirectory(metric)
 
-add_library(mds_lib 
+add_library(mds_lib
     fs_info_wrapper.cpp
     fs_manager.cpp
     fs_storage.cpp
@@ -45,6 +45,7 @@ target_link_libraries(mds_lib
     mds_kvstorage_client
     dingofs_base_lib
     dingofs_common
+    dingofs_options
     dynamic_vlog
     dingofs_utils
     aws_s3_adapter

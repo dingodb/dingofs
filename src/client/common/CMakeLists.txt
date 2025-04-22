@@ -17,7 +17,6 @@ add_library(client_common
     dynamic_config.cpp
     slice.cpp
     status.cpp
-    config.cpp
     common.cpp
 )
 

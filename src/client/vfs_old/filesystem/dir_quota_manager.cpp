@@ -22,6 +22,7 @@
 #include "client/vfs_old/inode_wrapper.h"
 #include "common/define.h"
 #include "glog/logging.h"
+#include "options/client/app.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -32,12 +33,10 @@ using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::WriteLockGuard;
 
+using options::client::OPTIONS_client;
 using pb::metaserver::MetaStatusCode;
 using pb::metaserver::Quota;
 using pb::metaserver::Usage;
-
-USING_FLAG(flush_quota_interval_second);
-USING_FLAG(load_quota_interval_second);
 
 void DirQuota::UpdateUsage(int64_t new_space, int64_t new_inodes) {
   VLOG(6) << "UpdateUsage dir inodeId=" << ino_ << " new_space:" << new_space
@@ -137,10 +136,9 @@ void DirQuotaManager::Start() {
     return;
   }
 
-  timer_->Add([this] { FlushQuotas(); },
-              FLAGS_flush_quota_interval_second * 1000);
-  timer_->Add([this] { LoadQuotas(); },
-              FLAGS_load_quota_interval_second * 1000);
+  const auto& o = OPTIONS_client.vfs_option().quota_option();
+  timer_->Add([this] { FlushQuotas(); }, o.flush_quota_interval_s() * 1000);
+  timer_->Add([this] { LoadQuotas(); }, o.load_quota_interval_s() * 1000);
 
   running_.store(true);
 }

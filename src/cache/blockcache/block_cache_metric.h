@@ -94,9 +94,9 @@ class BlockCacheMetric {
  public:
   BlockCacheMetric(BlockCacheOption option, AuxMember aux_members)
       : metric_("dingofs_block_cache", aux_members) {
-    metric_.upload_stage_workers.set_value(option.upload_stage_workers);
+    metric_.upload_stage_workers.set_value(option.upload_stage_workers());
     metric_.upload_stage_queue_capacity.set_value(
-        option.upload_stage_queue_size);
+        option.upload_stage_queue_size());
   }
 
   virtual ~BlockCacheMetric() = default;

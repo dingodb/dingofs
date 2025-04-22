@@ -59,7 +59,7 @@ class DiskCacheMetric {
   virtual ~DiskCacheMetric() = default;
 
   void Init() {
-    metric_.dir.set_value(option_.cache_dir);
+    metric_.dir.set_value(option_.cache_dir());
     metric_.used_bytes.set_value(0);
     metric_.capacity.set_value(option_.cache_size);
     metric_.free_space_ratio.set_value(FLAGS_disk_cache_free_space_ratio);

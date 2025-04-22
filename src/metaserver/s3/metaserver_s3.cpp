@@ -30,7 +30,7 @@ void S3ClientImpl::SetAdaptor(
   s3Adapter_ = s3Adapter;
 }
 
-void S3ClientImpl::Init(const dataaccess::aws::S3AdapterOption& option) {
+void S3ClientImpl::Init(const options::client::S3Option& option) {
   s3Adapter_->Init(option);
   option_ = option;
 }
@@ -38,10 +38,10 @@ void S3ClientImpl::Init(const dataaccess::aws::S3AdapterOption& option) {
 void S3ClientImpl::Reinit(const std::string& ak, const std::string& sk,
                           const std::string& endpoint,
                           const std::string& bucketName) {
-  option_.ak = ak;
-  option_.sk = sk;
-  option_.s3Address = endpoint;
-  option_.bucketName = bucketName;
+  option_.bucket_option().ak() = ak;
+  option_.bucket_option().sk() = sk;
+  option_.bucket_option().endpoint() = endpoint;
+  option_.bucket_option().bucket_name() = bucketName;
   s3Adapter_->Reinit(option_);
 }
 

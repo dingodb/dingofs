@@ -30,7 +30,6 @@
 #include <string>
 
 #include "base/timer/timer.h"
-#include "client/common/config.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/defer_sync.h"
 #include "client/vfs_old/filesystem/dir_cache.h"
@@ -45,6 +44,7 @@
 #include "client/vfs_old/filesystem/openfile.h"
 #include "client/vfs_old/filesystem/package.h"
 #include "client/vfs_old/filesystem/rpc_client.h"
+#include "options/client/vfs.h"
 
 namespace dingofs {
 namespace client {
@@ -55,6 +55,8 @@ class VFSOld;
 }
 
 namespace filesystem {
+
+using options::client::VFSOption;
 
 struct FileSystemMember {
   FileSystemMember(std::shared_ptr<DeferSync> deferSync,
@@ -74,8 +76,8 @@ struct FileSystemMember {
 
 class FileSystem {
  public:
-  FileSystem(uint32_t fs_id, std::string fs_name,
-             common::FileSystemOption option, ExternalMember member);
+  FileSystem(uint32_t fs_id, std::string fs_name, const VFSOption& option,
+             ExternalMember member);
 
   void Run();
 
@@ -150,7 +152,7 @@ class FileSystem {
 
   uint32_t fs_id_;
   std::string fs_name_;
-  common::FileSystemOption option_;
+  VFSOption option_;
   ExternalMember member;
   std::shared_ptr<DeferSync> deferSync_;
   std::shared_ptr<LookupCache> negative_;

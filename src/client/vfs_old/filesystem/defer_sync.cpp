@@ -28,14 +28,13 @@
 #include <vector>
 
 #include "client/vfs_old/inode_wrapper.h"
-#include "utils/concurrent/concurrent.h"
 #include "glog/logging.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::DeferSyncOption;
 using pb::metaserver::MetaStatusCode;
 using utils::LockGuard;
 using utils::Mutex;
@@ -52,7 +51,7 @@ void SyncInodeClosure::Run() {
   defer_sync->Synced(sync_seq_, rc);
 }
 
-DeferSync::DeferSync(DeferSyncOption option)
+DeferSync::DeferSync(const DeferSyncOption& option)
     : option_(option), running_(false), sleeper_() {}
 
 void DeferSync::Start() {
@@ -73,7 +72,7 @@ void DeferSync::Stop() {
 
 void DeferSync::SyncTask() {
   for (;;) {
-    bool running = sleeper_.wait_for(std::chrono::seconds(option_.delay));
+    bool running = sleeper_.wait_for(std::chrono::seconds(option_.delay_s()));
 
     std::unordered_map<uint64_t, std::shared_ptr<InodeWrapper>> sync_inodes;
     {

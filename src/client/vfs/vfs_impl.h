@@ -20,19 +20,21 @@
 #include <atomic>
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/vfs/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
+#include "options/client/app.h"
+#include "options/client/vfs.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
+using options::client::VFSOption;
+
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const common::ClientOption& fuse_client_option)
-      : fuse_client_option_(fuse_client_option) {};
+  VFSImpl(const VFSOption& option) : option_(option){};
 
   ~VFSImpl() override = default;
 
@@ -110,14 +112,10 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  common::FuseOption GetFuseOption() override {
-    return fuse_client_option_.fuse_option;
-  }
-
  private:
   std::atomic_bool started_{false};
 
-  common::ClientOption fuse_client_option_;
+  VFSOption option_;
 
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;

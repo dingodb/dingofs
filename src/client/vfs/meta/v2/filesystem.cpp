@@ -506,10 +506,10 @@ Status MDSV2FileSystem::Rename(Ino old_parent, const std::string& old_name,
 }
 
 MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
-                                           const std::string& mds_addr,
-                                           const std::string& mountpoint) {
+                                           const std::string& mountpoint,
+                                           const MetaOption& option) {
   LOG(INFO) << fmt::format("fs_name: {}, mds_addr: {}, mountpoint: {}.",
-                           fs_name, mds_addr, mountpoint);
+                           fs_name, mountpoint);
 
   CHECK(!fs_name.empty()) << "fs_name is empty.";
   CHECK(!mds_addr.empty()) << "mds_addr is empty.";

@@ -20,8 +20,8 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/vfs/vfs.h"
+#include "options/client/app.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
@@ -118,12 +118,7 @@ class VFSWrapper {
 
   uint64_t GetMaxNameLength();
 
-  common::FuseOption GetFuseOption() const;
-
  private:
-  utils::Configuration conf_;
-  common::ClientOption fuse_client_option_;
-
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<stub::metric::ClientOpMetric> client_op_metric_;
 };

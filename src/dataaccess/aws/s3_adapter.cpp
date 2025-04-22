@@ -31,9 +31,11 @@
 #include <memory>
 #include <string>
 
+#include "dataaccess/aws/aws_s3_common.h"
 #include "dataaccess/aws/client/aws_crt_s3_client.h"
 #include "dataaccess/aws/client/aws_legacy_s3_client.h"
 #include "dataaccess/aws/s3_access_log.h"
+#include "options/client/s3.h"
 #include "utils/dingo_define.h"
 #include "utils/macros.h"
 
@@ -54,19 +56,25 @@ static std::once_flag s3_init_flag;
 static std::once_flag s3_shutdown_flag;
 static Aws::SDKOptions aws_sdk_options;
 
-void S3Adapter::Init(const S3AdapterOption& option) {
+void S3Adapter::Init(const S3Option& option) {
+  const auto& global_option = option.global_option();
+  const auto& bucket_option = option.bucket_option();
+  const auto& request_option = option.request_option();
+  const auto& throttle_option = option.throttle_option();
+
   // TODO: refact this
   auto init_sdk = [&]() {
     aws_sdk_options.loggingOptions.logLevel =
-        Aws::Utils::Logging::LogLevel(option.loglevel);
-    aws_sdk_options.loggingOptions.defaultLogPrefix = option.logPrefix.c_str();
+        Aws::Utils::Logging::LogLevel(global_option.log_level());
+    aws_sdk_options.loggingOptions.defaultLogPrefix =
+        global_option.log_prefix().c_str();
     Aws::InitAPI(aws_sdk_options);
   };
   std::call_once(s3_init_flag, init_sdk);
 
-  bucket_ = option.bucketName;
+  bucket_ = bucket_option.bucket_name();
 
-  if (option.use_crt_client) {
+  if (request_option.use_crt_client()) {
     s3_client_ = std::make_unique<AwsCrtS3Client>();
   } else {
     // init aws s3 client
@@ -77,21 +85,21 @@ void S3Adapter::Init(const S3AdapterOption& option) {
 
   {
     utils::ReadWriteThrottleParams params;
-    params.iopsTotal.limit = option.iopsTotalLimit;
-    params.iopsRead.limit = option.iopsReadLimit;
-    params.iopsWrite.limit = option.iopsWriteLimit;
-    params.bpsTotal.limit = option.bpsTotalMB * kMB;
-    params.bpsRead.limit = option.bpsReadMB * kMB;
-    params.bpsWrite.limit = option.bpsWriteMB * kMB;
+    params.iopsTotal.limit = throttle_option.iops_total_limit();
+    params.iopsRead.limit = throttle_option.iops_read_limit();
+    params.iopsWrite.limit = throttle_option.iops_write_limit();
+    params.bpsTotal.limit = throttle_option.bps_total_mb();
+    params.bpsRead.limit = throttle_option.bps_read_mb();
+    params.bpsWrite.limit = throttle_option.bps_write_mb();
 
     throttle_ = std::make_unique<utils::Throttle>();
     throttle_->UpdateThrottleParams(params);
 
     inflightBytesThrottle_ =
         std::make_unique<AsyncRequestInflightBytesThrottle>(
-            option.maxAsyncRequestInflightBytes == 0
+            request_option.max_async_request_inflight_bytes() == 0
                 ? UINT64_MAX
-                : option.maxAsyncRequestInflightBytes);
+                : request_option.max_async_request_inflight_bytes());
   }
 }
 
@@ -101,7 +109,7 @@ void S3Adapter::Shutdown() {
   std::call_once(s3_shutdown_flag, shutdown_sdk);
 }
 
-void S3Adapter::Reinit(const S3AdapterOption& option) { Init(option); }
+void S3Adapter::Reinit(const S3Option& option) { Init(option); }
 
 std::string S3Adapter::GetS3Ak() { return s3_client_->GetAk(); }
 

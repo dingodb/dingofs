@@ -423,10 +423,10 @@ S3Adapter* CompactInodeJob::SetupS3Adapter(uint64_t fsId,
         s3adapter->GetS3Sk() != s3info.sk() ||
         s3adapter->GetS3Endpoint() != s3info.endpoint()) {
       auto option = opts_->s3adapterManager->GetBasicS3AdapterOption();
-      option.ak = s3info.ak();
-      option.sk = s3info.sk();
-      option.s3Address = s3info.endpoint();
-      option.bucketName = s3info.bucketname();
+      option.bucket_option().ak() = s3info.ak();
+      option.bucket_option().sk() = s3info.sk();
+      option.bucket_option().endpoint() = s3info.endpoint();
+      option.bucket_option().bucket_name() = s3info.bucketname();
       s3adapter->Reinit(option);
     }
     Aws::String bucketName(s3info.bucketname().c_str(),

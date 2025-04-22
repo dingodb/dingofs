@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,21 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_library(client_memcached_client
-    kvclient_manager.cpp
-    memcache_client.cpp
+file(GLOB DINGOFS_OPTIONS_LIB_SRCS
+    "options.cpp"
+    "cache/*.cpp"
+    "client/*.cpp"
 )
 
-target_link_libraries(client_memcached_client
-    PROTO_OBJS
-    stub_metric
-    dingofs_utils
-    aws_s3_adapter
-    absl::strings
+add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
+
+target_link_libraries(dingofs_options
+    toml11::toml11
+    gflags::gflags
     glog::glog
-    brpc::brpc
-    ${LIBMEMCACHED_LIBRARY}
-    ${hashkit_LIBRARIES} 
 )

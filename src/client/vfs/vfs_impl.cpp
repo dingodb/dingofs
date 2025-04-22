@@ -44,25 +44,14 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
   MetaLogGuard log_guard(
       [&]() { return absl::StrFormat("init %s", s.ToString()); });
 
-  utils::Configuration conf;
-  conf.SetConfigPath(vfs_conf.config_path);
-  if (!conf.LoadConfig()) {
-    LOG(ERROR) << "load config fail, confPath = " << vfs_conf.config_path;
-    return Status::Internal("load config fail");
-  }
-
   if (vfs_conf.fs_type == "vfs_dummy") {
     LOG(INFO) << "use dummy file system.";
     meta_system_ = std::make_unique<dummy::DummyFileSystem>();
 
   } else if (vfs_conf.fs_type == "vfs_v2") {
     LOG(INFO) << "use mdsv2 file system.";
-    std::string mds_addr;
-    conf.GetValueFatalIfFail("mds.addr", &mds_addr);
-    LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
-
-    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
-                                              vfs_conf.mount_point);
+    meta_system_ =
+        v2::MDSV2FileSystem::Build(vfs_conf.fs_name, vfs_conf.mount_point);
   } else {
     LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
     return Status::Internal("not unknown file system");
@@ -98,9 +87,23 @@ Status VFSImpl::Stop() {
   return Status::OK();
 }
 
-double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
+double VFSImpl::GetAttrTimeout(const FileType& type) {
+  const auto& option = option_.kernel_cache_option();
+  if (type == FileType::kDirectory) {
+    return option.dir_attr_timeout_s();
+  } else {
+    return option.attr_timeout_s();
+  }
+}
 
-double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT
+double VFSImpl::GetEntryTimeout(const FileType& type) {
+  const auto& option = option_.kernel_cache_option();
+  if (type == FileType::kDirectory) {
+    return option.dir_entry_timeout_s();
+  } else {
+    return option.entry_timeout_s();
+  }
+}
 
 Status VFSImpl::Lookup(Ino parent, const std::string& name, Attr* attr) {
   Status s;

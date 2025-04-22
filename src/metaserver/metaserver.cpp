@@ -213,8 +213,7 @@ void InitMetaCacheOption(const std::shared_ptr<Configuration>& conf,
 namespace {
 
 std::shared_ptr<S3ClientAdaptorImpl> CreateS3Adaptor(
-    const dataaccess::aws::S3AdapterOption& o1,
-    const S3ClientAdaptorOption& o2) {
+    const options::client::S3Option& o1, const S3ClientAdaptorOption& o2) {
   // s3_client
   auto* s3_client = new S3ClientImpl;
   s3_client->SetAdaptor(std::make_shared<dataaccess::aws::S3Adapter>());
@@ -243,7 +242,7 @@ void Metaserver::Init() {
 
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
-  dataaccess::aws::S3AdapterOption s3_adapter_option;
+  options::client::S3Option s3_adapter_option;
   dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
                                                          &s3_adapter_option);
 

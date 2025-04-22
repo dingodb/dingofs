@@ -294,12 +294,11 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   if (!skip_create_new_fs && detail.has_s3info()) {
     const auto& s3_info = detail.s3info();
 
-    dataaccess::aws::S3AdapterOption s3_adapter_option =
-        option_.s3AdapterOption;
-    s3_adapter_option.ak = s3_info.ak();
-    s3_adapter_option.sk = s3_info.sk();
-    s3_adapter_option.s3Address = s3_info.endpoint();
-    s3_adapter_option.bucketName = s3_info.bucketname();
+    options::client::S3Option s3_adapter_option = option_.s3_option;
+    s3_adapter_option.bucket_option().ak() = s3_info.ak();
+    s3_adapter_option.bucket_option().sk() = s3_info.sk();
+    s3_adapter_option.bucket_option().endpoint() = s3_info.endpoint();
+    s3_adapter_option.bucket_option().bucket_name() = s3_info.bucketname();
 
     auto s3_adapter = std::make_shared<dataaccess::aws::S3Adapter>();
     s3_adapter->Init(s3_adapter_option);

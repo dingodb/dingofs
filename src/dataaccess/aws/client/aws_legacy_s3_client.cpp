@@ -56,11 +56,16 @@ namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
+void AwsLegacyS3Client::Init(const S3Option& option) {
+  const auto& global_option = option.global_option();
+  const auto& bucket_option = option.bucket_option();
+  const auto& request_option = option.request_option();
+
   CHECK(!initialized_.load()) << "AwsLegacyS3Client already initialized";
-  LOG(INFO) << "AwsLegacyS3Client init ak: " << option.ak
-            << " sk: " << option.sk << " s3_address: " << option.s3Address
-            << " bucket_name: " << option.bucketName;
+  LOG(INFO) << "AwsLegacyS3Client init ak: " << bucket_option.ak()
+            << " sk: " << bucket_option.sk()
+            << " s3_address: " << bucket_option.endpoint()
+            << " bucket_name: " << bucket_option.bucket_name();
 
   option_ = option;
 
@@ -68,23 +73,23 @@ void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
     // init config
     auto config = std::make_unique<Aws::Client::ClientConfiguration>();
     // config->scheme = Aws::Http::Scheme(option.scheme);
-    config->verifySSL = option.verifySsl;
+    config->verifySSL = request_option.verify_ssl();
     config->userAgent = "S3 Browser";
-    config->region = option.region;
-    config->maxConnections = option.maxConnections;
-    config->connectTimeoutMs = option.connectTimeout;
-    config->requestTimeoutMs = option.requestTimeout;
-    config->endpointOverride = option.s3Address;
+    config->region = request_option.region();
+    config->maxConnections = request_option.max_connections();
+    config->connectTimeoutMs = request_option.connect_timeout_ms();
+    config->requestTimeoutMs = request_option.request_timeout_ms();
+    config->endpointOverride = bucket_option.endpoint();
 
-    if (option.use_thread_pool) {
+    if (request_option.use_thread_pool()) {
       LOG(INFO) << "AwsLegacyS3Client init async thread pool thread num = "
-                << option.asyncThreadNum;
+                << request_option.async_thread_num();
       config->executor =
           Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
-              "AwsLegacyS3Client", option.asyncThreadNum);
+              "AwsLegacyS3Client", request_option.async_thread_num());
     }
 
-    if (option.enableTelemetry) {
+    if (global_option.telemetry_enable()) {
       LOG(INFO) << "Enable telemetry for aws s3 adapter";
       ::opentelemetry::exporter::otlp::OtlpHttpExporterOptions opts;
       auto span_exporter =
@@ -106,9 +111,9 @@ void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
   }
 
   client_ = std::make_unique<Aws::S3::S3Client>(
-      Aws::Auth::AWSCredentials(option_.ak, option_.sk), *cfg_,
+      Aws::Auth::AWSCredentials(bucket_option.ak(), bucket_option.sk()), *cfg_,
       Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-      option.useVirtualAddressing);
+      request_option.use_virtual_addressing());
 
   initialized_.store(true);
 }

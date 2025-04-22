@@ -36,6 +36,7 @@ target_link_libraries(cache_common
     dingofs_base_lib
     dingofs_utils
     dingofs_common
+    dingofs_options
     client_common
 )
 

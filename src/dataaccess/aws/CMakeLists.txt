@@ -21,6 +21,7 @@ add_library(aws_s3_adapter
 
 target_link_libraries(aws_s3_adapter
     dingofs_utils
+    dingofs_options
     ${AWSSDK_LIBRARIES}
     glog::glog
     brpc::brpc

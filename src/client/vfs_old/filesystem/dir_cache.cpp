@@ -24,9 +24,9 @@
 
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/vfs_old/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
@@ -118,7 +118,7 @@ TimeSpec DirEntryList::GetMtime() {
   return mtime_;
 }
 
-DirCache::DirCache(DirCacheOption option)
+DirCache::DirCache(const DirCacheOption& option)
     : rwlock_(), nentries_(0), option_(option) {
   lru_ = std::make_shared<LRUType>(0);  // control size by ourself
   mq_ = std::make_shared<MessageQueueType>("dircache", 10000);
@@ -126,14 +126,14 @@ DirCache::DirCache(DirCacheOption option)
       [&](const std::shared_ptr<DirEntryList>& entries) { entries->Clear(); });
   metric_ = std::make_shared<DirCacheMetric>();
 
-  LOG(INFO) << "Using directory lru cache, capacity = " << option_.lruSize;
+  LOG(INFO) << "Using directory lru cache, capacity = " << option_.lru_size();
 }
 
 void DirCache::Start() { mq_->Start(); }
 
 void DirCache::Stop() {
   WriteLockGuard lk(rwlock_);
-  Evit(option_.lruSize);
+  Evit(option_.lru_size());
   mq_->Stop();
 }
 
@@ -153,7 +153,7 @@ void DirCache::Delete(Ino parent, std::shared_ptr<DirEntryList> entries,
 void DirCache::Evit(size_t size) {
   Ino parent;
   std::shared_ptr<DirEntryList> entries;
-  while (nentries_ + size >= option_.lruSize) {
+  while (nentries_ + size >= option_.lru_size()) {
     bool yes = lru_->GetLast(&parent, &entries);
     if (!yes) {
       break;
