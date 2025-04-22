@@ -93,8 +93,8 @@ jobs:
         images: dingodatabase/dingofs
         tags: |
           type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=sha,prefix=,format=long
+          type=raw,value=latest,enable=${{github.ref == 'refs/heads/main' && env.EVENT != 'tag'}}
+          type=sha,prefix=,format=long,enable=${{env.EVENT != 'tag'}}
 
     - name: Build and push
       if: steps.check-event.outputs.continue == 'true'
