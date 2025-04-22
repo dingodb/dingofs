@@ -40,7 +40,7 @@ bool EtcdIdGenerator::Init() {
   // get alloc id
   uint64_t alloc_id;
   if (!GetOrPutAllocId(&alloc_id)) {
-    LOG(ERROR) << "init get alloc id fail.";
+    LOG(ERROR) << fmt::format("[idalloc.{}] init get alloc id fail.", key_);
     return false;
   }
 
@@ -52,7 +52,7 @@ bool EtcdIdGenerator::Init() {
 
 int EtcdIdGenerator::GenId(uint64_t num, uint64_t* id) {
   if (num == 0) {
-    LOG(ERROR) << "[idalloc] num cant not 0.";
+    LOG(ERROR) << fmt::format("[idalloc.{}] num cant not 0.", key_);
     return -1;
   }
 
@@ -60,7 +60,7 @@ int EtcdIdGenerator::GenId(uint64_t num, uint64_t* id) {
 
   if (next_id_ + num > last_alloc_id_) {
     if (!AllocateIds(std::max(num, bundle_size_))) {
-      LOG(ERROR) << "[idalloc] allocate chunkid fail.";
+      LOG(ERROR) << fmt::format("[idalloc.{}] allocate id fail.", key_);
       return -1;
     }
   }
@@ -68,7 +68,7 @@ int EtcdIdGenerator::GenId(uint64_t num, uint64_t* id) {
   // allocate id
   *id = next_id_;
   next_id_ += num;
-  VLOG(3) << "[idalloc] alloc chunkid: " << *id;
+  VLOG(3) << fmt::format("[idalloc.{}] alloc id: {}", key_, *id);
 
   return 0;
 }
@@ -88,19 +88,20 @@ bool EtcdIdGenerator::AllocateIds(uint64_t bundle_size) {
     uint64_t new_alloc_id = last_alloc_id_ + bundle_size;
     int ret = client_->CompareAndSwap(key_, prev_value, EncodeID(new_alloc_id));
     if (ret == EtcdErrCode::EtcdOK) {
-      LOG(INFO) << fmt::format("[idalloc] allocate id range [{}, {}).",
+      LOG(INFO) << fmt::format("[idalloc.{}] allocate id range [{}, {}).", key_,
                                last_alloc_id_, new_alloc_id);
       last_alloc_id_ = new_alloc_id;
       return true;
 
     } else if (ret == EtcdErrCode::EtcdValueNotEqual) {
-      LOG(WARNING) << fmt::format("[idalloc] compare value fail, value: {}.",
-                                  prev_value);
-
       uint64_t alloc_id;
       if (!GetOrPutAllocId(&alloc_id)) {
         return false;
       }
+
+      LOG(WARNING) << fmt::format(
+          "[idalloc.{}] compare value fail, pre_id({}) alloc_id({}).", key_,
+          prev_value, alloc_id);
 
       if (last_alloc_id_ < alloc_id) {
         last_alloc_id_ = alloc_id;
@@ -108,19 +109,20 @@ bool EtcdIdGenerator::AllocateIds(uint64_t bundle_size) {
       } else if (last_alloc_id_ > alloc_id) {
         int ret = client_->Put(key_, EncodeID(last_alloc_id_));
         if (ret != EtcdErrCode::EtcdOK) {
-          LOG(ERROR) << fmt::format("[idalloc] put value fail, ret: {}.", ret);
+          LOG(ERROR) << fmt::format("[idalloc.{}] put value fail, ret: {}.",
+                                    key_, ret);
           return false;
         }
       }
 
     } else {
-      LOG(ERROR) << fmt::format("[idalloc] cas fail, ret: {}.", ret);
+      LOG(ERROR) << fmt::format("[idalloc.{}] cas fail, ret: {}.", key_, ret);
       return false;
     }
 
   } while (++retry < kRetryTimes);
 
-  LOG(ERROR) << "[idalloc] exceed max retry times.";
+  LOG(ERROR) << fmt::format("[idalloc.{}] exceed max retry times.", key_);
 
   return false;
 }
@@ -130,18 +132,21 @@ bool EtcdIdGenerator::GetOrPutAllocId(uint64_t* alloc_id) {
     std::string value;
     int ret = client_->Get(key_, &value);
     if (ret == EtcdErrCode::EtcdOK) {
-      CHECK(DecodeID(value, alloc_id)) << "decode id valud error.";
+      CHECK(DecodeID(value, alloc_id))
+          << fmt::format("[idalloc.{}] decode id valud error.", key_);
       return true;
 
     } else if (ret == EtcdErrCode::EtcdKeyNotExist) {
       int ret = client_->Put(key_, EncodeID(last_alloc_id_));
       if (ret != EtcdErrCode::EtcdOK) {
-        LOG(ERROR) << fmt::format("[idalloc] put value fail, ret: {}.", ret);
+        LOG(ERROR) << fmt::format("[idalloc.{}] put value fail, ret: {}.", key_,
+                                  ret);
         return false;
       }
 
     } else {
-      LOG(ERROR) << fmt::format("[idalloc] get value fail, ret: {}.", ret);
+      LOG(ERROR) << fmt::format("[idalloc.{}] get value fail, ret: {}.", key_,
+                                ret);
       return false;
     }
 
