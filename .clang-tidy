@@ -135,6 +135,7 @@ Checks: "*,
   -readability-uppercase-literal-suffix,
   -readability-use-anyofallof,
   -readability-redundant-access-specifiers,
+  -readability-identifier-naming,
 
   -zirkon-*,
   "

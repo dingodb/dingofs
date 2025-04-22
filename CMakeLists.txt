@@ -157,6 +157,9 @@ message("OpenSSL libraries: ${OPENSSL_LIBRARIES}, include dir: ${OPENSSL_INCLUDE
 find_package(Snappy)
 message("Using Snappy ${Snappy_VERSION}")
 
+find_package(toml11 REQUIRED)
+message("Using toml11 ${toml11_VERSION}")
+
 find_package(fmt REQUIRED)
 message("Using fmt ${fmt_VERSION}")
 
