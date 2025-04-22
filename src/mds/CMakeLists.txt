@@ -24,7 +24,6 @@ add_subdirectory(heartbeat)
 add_subdirectory(metric)
 
 add_library(mds_lib 
-    chunkid_allocator.cpp
     fs_info_wrapper.cpp
     fs_manager.cpp
     fs_storage.cpp

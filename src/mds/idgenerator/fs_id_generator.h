@@ -25,8 +25,8 @@
 
 #include <memory>
 
-#include "mds/idgenerator/etcd_id_generator.h"
 #include "mds/common/storage_key.h"
+#include "mds/idgenerator/etcd_id_generator.h"
 
 namespace dingofs {
 namespace mds {
@@ -35,17 +35,17 @@ class FsIdGenerator {
  public:
   explicit FsIdGenerator(
       const std::shared_ptr<dingofs::kvstorage::KVStorageClient>& client)
-      : generator_(new dingofs::idgenerator::EtcdIdGenerator(
+      : id_generator_(std::make_unique<idgenerator::EtcdIdGenerator>(
             client, FS_ID_KEY_PREFIX, FS_ID_INIT, FS_ID_ALLOCATE_BUNDLE)) {}
 
-  bool GenFsId(uint64_t* id) { return generator_->GenID(id); }
+  bool Init() { return id_generator_->Init(); }
+  bool GenFsId(uint64_t* id) { return id_generator_->GenId(1, id) == 0; }
 
  private:
   static constexpr uint64_t FS_ID_INIT = 0;
   static constexpr uint64_t FS_ID_ALLOCATE_BUNDLE = 100;
 
- private:
-  std::unique_ptr<dingofs::idgenerator::EtcdIdGenerator> generator_;
+  idgenerator::IdAllocatorUPtr id_generator_;
 };
 
 }  // namespace mds

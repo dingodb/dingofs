@@ -22,62 +22,133 @@
 
 #include "mds/idgenerator/etcd_id_generator.h"
 
-#include <glog/logging.h>
-
 #include <string>
 
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
 namespace idgenerator {
 
-bool EtcdIdGenerator::GenID(uint64_t* id) {
-  std::lock_guard<dingofs::utils::Mutex> guard(lock_);
+static const int kRetryTimes = 16;
 
-  if (nextId_ > bundleEnd_ || nextId_ == initialize_) {
-    if (!AllocateBundleIds(bundle_)) {
-      return false;
+bool EtcdIdGenerator::Init() {
+  CHECK(client_ != nullptr) << "client is nullptr.";
+  CHECK(!key_.empty()) << "key is empty.";
+
+  // get alloc id
+  uint64_t alloc_id;
+  if (!GetOrPutAllocId(&alloc_id)) {
+    LOG(ERROR) << "init get alloc id fail.";
+    return false;
+  }
+
+  next_id_ = alloc_id;
+  last_alloc_id_ = alloc_id;
+
+  return true;
+}
+
+int EtcdIdGenerator::GenId(uint64_t num, uint64_t* id) {
+  if (num == 0) {
+    LOG(ERROR) << "[idalloc] num cant not 0.";
+    return -1;
+  }
+
+  utils::WriteLockGuard guard(lock_);
+
+  if (next_id_ + num > last_alloc_id_) {
+    if (!AllocateIds(std::max(num, bundle_size_))) {
+      LOG(ERROR) << "[idalloc] allocate chunkid fail.";
+      return -1;
     }
   }
 
-  *id = nextId_++;
-  return true;
+  // allocate id
+  *id = next_id_;
+  next_id_ += num;
+  VLOG(3) << "[idalloc] alloc chunkid: " << *id;
+
+  return 0;
 }
 
-bool EtcdIdGenerator::AllocateBundleIds(int requiredNum) {
-  // get the maximum value that has been allocated
-  std::string out;
-  uint64_t alloc;
-  int errCode = client_->Get(storeKey_, &out);
-  // failed
-  if (EtcdErrCode::EtcdOK != errCode &&
-      EtcdErrCode::EtcdKeyNotExist != errCode) {
-    LOG(ERROR) << "get store key: " << storeKey_
-               << " err, errCode: " << errCode;
-    return false;
-  } else if (EtcdErrCode::EtcdKeyNotExist == errCode) {
-    // key not exist, indicates the first allocation
-    alloc = initialize_;
-  } else if (!dingofs::utils::StringToUll(out, &alloc)) {
-    // The value corresponding to the key exists, but the decode fails,
-    // indicating that an internal err has occurred, alarm!
-    LOG(ERROR) << "decode id: " << out << "err";
-    return false;
-  }
+bool EtcdIdGenerator::DecodeID(const std::string& value, uint64_t* out) {
+  return utils::StringToUll(value, out);
+}
 
-  const uint64_t target = alloc + requiredNum;
-  errCode = client_->CompareAndSwap(storeKey_, out, std::to_string(target));
-  if (EtcdErrCode::EtcdOK != errCode) {
-    LOG(ERROR) << "do CAS {preV: " << out << ", target: " << target
-               << ", err, errCode: " << errCode;
-    return false;
-  }
+std::string EtcdIdGenerator::EncodeID(uint64_t value) {
+  return std::to_string(value);
+}
 
-  // assign values ​​to next and end
-  bundleEnd_ = target;
-  nextId_ = alloc + 1;
-  return true;
+bool EtcdIdGenerator::AllocateIds(uint64_t bundle_size) {
+  int retry = 0;
+  do {
+    std::string prev_value = EncodeID(last_alloc_id_);
+    uint64_t new_alloc_id = last_alloc_id_ + bundle_size;
+    int ret = client_->CompareAndSwap(key_, prev_value, EncodeID(new_alloc_id));
+    if (ret == EtcdErrCode::EtcdOK) {
+      LOG(INFO) << fmt::format("[idalloc] allocate id range [{}, {}).",
+                               last_alloc_id_, new_alloc_id);
+      last_alloc_id_ = new_alloc_id;
+      return true;
+
+    } else if (ret == EtcdErrCode::EtcdValueNotEqual) {
+      LOG(WARNING) << fmt::format("[idalloc] compare value fail, value: {}.",
+                                  prev_value);
+
+      uint64_t alloc_id;
+      if (!GetOrPutAllocId(&alloc_id)) {
+        return false;
+      }
+
+      if (last_alloc_id_ < alloc_id) {
+        last_alloc_id_ = alloc_id;
+
+      } else if (last_alloc_id_ > alloc_id) {
+        int ret = client_->Put(key_, EncodeID(last_alloc_id_));
+        if (ret != EtcdErrCode::EtcdOK) {
+          LOG(ERROR) << fmt::format("[idalloc] put value fail, ret: {}.", ret);
+          return false;
+        }
+      }
+
+    } else {
+      LOG(ERROR) << fmt::format("[idalloc] cas fail, ret: {}.", ret);
+      return false;
+    }
+
+  } while (++retry < kRetryTimes);
+
+  LOG(ERROR) << "[idalloc] exceed max retry times.";
+
+  return false;
+}
+
+bool EtcdIdGenerator::GetOrPutAllocId(uint64_t* alloc_id) {
+  do {
+    std::string value;
+    int ret = client_->Get(key_, &value);
+    if (ret == EtcdErrCode::EtcdOK) {
+      CHECK(DecodeID(value, alloc_id)) << "decode id valud error.";
+      return true;
+
+    } else if (ret == EtcdErrCode::EtcdKeyNotExist) {
+      int ret = client_->Put(key_, EncodeID(last_alloc_id_));
+      if (ret != EtcdErrCode::EtcdOK) {
+        LOG(ERROR) << fmt::format("[idalloc] put value fail, ret: {}.", ret);
+        return false;
+      }
+
+    } else {
+      LOG(ERROR) << fmt::format("[idalloc] get value fail, ret: {}.", ret);
+      return false;
+    }
+
+  } while (true);
+
+  return false;
 }
 
 }  // namespace idgenerator
-}  // namespace dingo
+}  // namespace dingofs

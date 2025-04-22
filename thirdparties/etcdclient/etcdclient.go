@@ -57,6 +57,7 @@ enum EtcdErrCode
     EtcdGetLeaderKeyOK = 28,
     EtcdObserverLeaderNotExist = 29,
     EtcdObjectLenNotEnough = 30,
+		EtcdValueNotEqual = 31,
 };
 
 enum OpType {
@@ -405,16 +406,15 @@ func EtcdClientCompareAndSwap(timeout C.int, key, prev, target *C.char,
 		time.Duration(int(timeout))*time.Millisecond)
 	defer cancel()
 
-	var err error
-	_, err = globalClient.Txn(ctx).
-		If(clientv3.Compare(clientv3.CreateRevision(goKey), "=", 0)).
-		Then(clientv3.OpPut(goKey, goTarget)).
-		Commit()
-
-	_, err = globalClient.Txn(ctx).
+	rsp, err := globalClient.Txn(ctx).
 		If(clientv3.Compare(clientv3.Value(goKey), "=", goPrev)).
 		Then(clientv3.OpPut(goKey, goTarget)).
 		Commit()
+
+	if err == nil && !rsp.Succeeded {
+		return C.EtcdValueNotEqual
+	}
+
 	return GetErrCode(EtcdCmpAndSwp, err)
 }
 

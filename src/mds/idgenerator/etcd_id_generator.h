@@ -34,46 +34,60 @@ namespace idgenerator {
 
 using dingofs::kvstorage::KVStorageClient;
 
-class EtcdIdGenerator {
+class IdAllocator {
  public:
-  EtcdIdGenerator(const std::shared_ptr<KVStorageClient>& client,
-                  const std::string& storeKey, uint64_t initial,
-                  uint64_t bundle)
-      : storeKey_(storeKey),
-        initialize_(initial),
-        bundle_(bundle),
-        client_(client),
-        nextId_(initial),
-        bundleEnd_(initial),
-        lock_() {}
+  IdAllocator() = default;
+  virtual ~IdAllocator() = default;
 
-  ~EtcdIdGenerator() {}
+  virtual bool Init() = 0;
 
-  bool GenID(uint64_t* id);
+  virtual int GenId(uint64_t num, uint64_t* id) = 0;
+};
+
+using IdAllocatorSPtr = std::shared_ptr<IdAllocator>;
+using IdAllocatorUPtr = std::unique_ptr<IdAllocator>;
+
+class EtcdIdGenerator : public IdAllocator {
+ public:
+  EtcdIdGenerator(std::shared_ptr<kvstorage::KVStorageClient> client,
+                  std::string key, uint64_t init_id, uint64_t bundle_size)
+      : client_(client),
+        key_(key),
+        next_id_(init_id),
+        last_alloc_id_(init_id),
+        bundle_size_(bundle_size) {}
+
+  ~EtcdIdGenerator() override = default;
+
+  int GenId(uint64_t num, uint64_t* id) override;
+
+  bool Init() override;
 
  private:
-  /*
-   * @brief apply for IDs in batches from storage
-   *
-   * @param[in] requiredNum Number of IDs that need to be applied
-   *
-   * @param[out] false if failed, true if succeeded
-   */
-  bool AllocateBundleIds(int requiredNum);
+  static bool DecodeID(const std::string& value, uint64_t* out);
+  static std::string EncodeID(uint64_t value);
 
- private:
-  const std::string storeKey_;
-  uint64_t initialize_;
-  uint64_t bundle_;
+  bool AllocateIds(uint64_t bundle_size);
+  bool GetOrPutAllocId(uint64_t* alloc_id);
 
-  std::shared_ptr<KVStorageClient> client_;
-  uint64_t nextId_;
-  uint64_t bundleEnd_;
+  // the etcd client
+  std::shared_ptr<kvstorage::KVStorageClient> client_;
 
-  dingofs::utils::Mutex lock_;
+  // guarantee the uniqueness of the id
+  utils::RWLock lock_;
+
+  // the key of id
+  std::string key_;
+
+  // the next id can be allocated in this bunlde
+  uint64_t next_id_;
+  // the last id can be allocated in this bunlde
+  uint64_t last_alloc_id_;
+  // get the numnber of id at a time
+  uint64_t bundle_size_;
 };
 
 }  // namespace idgenerator
-}  // namespace dingo
+}  // namespace dingofs
 
 #endif  // SRC_IDGENERATOR_ETCD_ID_GENERATOR_H_

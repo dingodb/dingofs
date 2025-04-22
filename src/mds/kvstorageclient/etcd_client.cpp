@@ -336,6 +336,7 @@ bool EtcdClientImp::NeedRetry(int errCode) {
     case EtcdErrCode::EtcdUnauthenticated:
     case EtcdErrCode::EtcdTxnUnkownOp:
     case EtcdErrCode::EtcdKeyNotExist:
+    case EtcdErrCode::EtcdValueNotEqual:
       return false;
 
     case EtcdErrCode::EtcdDeadlineExceeded:

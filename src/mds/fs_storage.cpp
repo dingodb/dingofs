@@ -180,8 +180,12 @@ FSStatusCode PersisKVStorage::Get(uint64_t fsId, FsInfoWrapper* fsInfo) {
 }
 
 bool PersisKVStorage::Init() {
-  bool ret = LoadAllFs();
-  return ret;
+  if (!idGen_->Init()) {
+    LOG(ERROR) << "init fs id generator fail";
+    return false;
+  }
+
+  return LoadAllFs();
 }
 
 void PersisKVStorage::Uninit() {}

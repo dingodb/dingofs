@@ -29,12 +29,12 @@
 #include <string>
 
 #include "dataaccess/aws/s3_adapter.h"
-#include "mds/chunkid_allocator.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
 #include "mds/heartbeat/copyset_conf_generator.h"
 #include "mds/heartbeat/heartbeat_manager.h"
 #include "mds/heartbeat/metaserver_healthy_checker.h"
+#include "mds/idgenerator/chunkid_allocator.h"
 #include "mds/leader_election/leader_election.h"
 #include "mds/schedule/schedule_define.h"
 #include "mds/topology/topology.h"
@@ -129,8 +129,6 @@ class MDS {
   std::shared_ptr<dingofs::kvstorage::EtcdClientImp> etcdClient_;
 
   std::shared_ptr<dingofs::election::LeaderElection> leaderElection_;
-
-  std::shared_ptr<dingofs::idgenerator::EtcdIdGenerator> idGen_;
 
   bvar::Status<std::string> status_;
 

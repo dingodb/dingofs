@@ -203,7 +203,8 @@ void MDS::Init() {
                                            fs_manager_option);
   LOG_IF(FATAL, !fsManager_->Init()) << "fsManager Init fail";
 
-  chunkIdAllocator_ = std::make_shared<ChunkIdAllocatorImpl>(etcdClient_);
+  chunkIdAllocator_ = std::make_shared<ChunkIdAllocator>(etcdClient_);
+  CHECK(chunkIdAllocator_->Init()) << "init chunk id allocator fail";
 
   inited_ = true;
 

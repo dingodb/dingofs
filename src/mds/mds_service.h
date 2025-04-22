@@ -31,9 +31,9 @@
 #include <utility>
 
 #include "dingofs/mds.pb.h"
-#include "mds/chunkid_allocator.h"
 #include "mds/common/mds_define.h"
 #include "mds/fs_manager.h"
+#include "mds/idgenerator/chunkid_allocator.h"
 
 namespace dingofs {
 namespace mds {
