@@ -81,12 +81,13 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
 
   DINGO_LOG(INFO) << "CreateFs request: " << request.ShortDebugString();
 
-  interaction_->SendRequest("MDSService", "CreateFs", request, response);
-
-  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    DINGO_LOG(INFO) << "CreateFs success, fs_id: " << response.fs_info().fs_id();
-  } else {
-    DINGO_LOG(ERROR) << "CreateFs fail, error: " << response.ShortDebugString();
+  auto status = interaction_->SendRequest("MDSService", "CreateFs", request, response);
+  if (status.ok()) {
+    if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+      DINGO_LOG(INFO) << "CreateFs success, fs_id: " << response.fs_info().fs_id();
+    } else {
+      DINGO_LOG(ERROR) << "CreateFs fail, error: " << response.ShortDebugString();
+    }
   }
 }
 

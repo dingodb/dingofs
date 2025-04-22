@@ -45,9 +45,9 @@ TEST_F(MemCacheTest, Basic) {
 
   ASSERT_EQ(store->Init(nullptr), Status::OK());
   ASSERT_EQ(store->Shutdown(), Status::OK());
-  ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::CTO_FLUSH)),
+  ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::kCtoFlush)),
             Status::NotSupport(""));
-  ASSERT_EQ(store->RemoveStage(key, BlockContext(BlockFrom::CTO_FLUSH)),
+  ASSERT_EQ(store->RemoveStage(key, BlockContext(BlockFrom::kCtoFlush)),
             Status::NotSupport(""));
   ASSERT_EQ(store->Cache(key, block), Status::NotSupport(""));
   ASSERT_EQ(store->Load(key, reader), Status::NotSupport(""));

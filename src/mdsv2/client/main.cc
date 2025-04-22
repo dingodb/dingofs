@@ -39,10 +39,11 @@ DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
 DEFINE_string(lock_table_name, "dingofs-lock", "lock table name");
-DEFINE_string(mds_table_name, "dingofs-heartbeat", "mds table name");
+DEFINE_string(heartbeat_table_name, "dingofs-heartbeat", "heartbeat table name");
 DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
 DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
+DEFINE_string(filesession_table_name, "dingofs-filesession", "file session table name");
 DEFINE_string(chunk_table_name, "dingofs-chunk", "chunk table name");
 DEFINE_string(trash_chunk_table_name, "dingofs-trashchunk", "trash chunk table name");
 
@@ -197,7 +198,7 @@ int main(int argc, char* argv[]) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateHeartbeatTable")) {
-      store_client.CreateHeartbeatTable(FLAGS_mds_table_name);
+      store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateFsTable")) {
       store_client.CreateFsTable(FLAGS_fs_table_name);
@@ -208,6 +209,9 @@ int main(int argc, char* argv[]) {
     } else if (lower_cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
 
+    } else if (lower_cmd == Helper::ToLowerCase("CreateFileSessionTable")) {
+      store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
+
     } else if (lower_cmd == Helper::ToLowerCase("CreateChunkTable")) {
       store_client.CreateChunkTable(FLAGS_chunk_table_name);
 
@@ -216,10 +220,11 @@ int main(int argc, char* argv[]) {
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
-      store_client.CreateHeartbeatTable(FLAGS_mds_table_name);
+      store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
       store_client.CreateFsTable(FLAGS_fs_table_name);
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
+      store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
       store_client.CreateChunkTable(FLAGS_chunk_table_name);
       store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
 

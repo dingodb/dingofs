@@ -102,9 +102,9 @@ TEST_F(LRUCacheTest, Evict) {
   // CASE 2: Evict keys
   auto evicted = cache->Evict([&](const CacheValue& value) {
     if (value.size == 1) {
-      return FilterStatus::SKIP;
+      return FilterStatus::kSkip;
     }
-    return FilterStatus::EVICT_IT;
+    return FilterStatus::kEvictIt;
   });
   ASSERT_EQ(evicted.size(), 2);
   ASSERT_EQ(evicted[0].value.size, 2);
@@ -129,9 +129,9 @@ TEST_F(LRUCacheTest, EvictPolicy) {
   int cnt = 0;
   auto evicted = cache->Evict([&](const CacheValue&) {
     if (++cnt > 1) {
-      return FilterStatus::FINISH;
+      return FilterStatus::kFinish;
     }
-    return FilterStatus::EVICT_IT;
+    return FilterStatus::kEvictIt;
   });
   ASSERT_EQ(evicted.size(), 1);
   ASSERT_EQ(cache->Size(), 2);
@@ -152,7 +152,7 @@ TEST_F(LRUCacheTest, Size) {
   ASSERT_EQ(cache->Size(), 3);
 
   auto evicted =
-      cache->Evict([&](const CacheValue&) { return FilterStatus::EVICT_IT; });
+      cache->Evict([&](const CacheValue&) { return FilterStatus::kEvictIt; });
   ASSERT_EQ(evicted.size(), 3);
   ASSERT_EQ(cache->Size(), 0);
 

@@ -49,7 +49,7 @@ class MockBlockCache : public BlockCache {
   MOCK_METHOD5(Range, Status(const BlockKey& key, off_t offset, size_t size,
                              char* buffer, bool retrive));
 
-  MOCK_METHOD2(SubmitPreFetch, void(const BlockKey& key, size_t length));
+  MOCK_METHOD2(SubmitPrefetch, void(const BlockKey& key, size_t length));
 
   MOCK_METHOD2(Cache, Status(const BlockKey& key, const Block& block));
 

@@ -270,7 +270,7 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
   EXPECT_CALL(*mockBlockCache_, GetStoreType())
-      .WillOnce(Return(StoreType::NONE));
+      .WillOnce(Return(StoreType::kNone));
   EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::IoError("")));
   ASSERT_EQ(DINGOFS_ERROR::INTERNAL, s3ClientAdaptor_->FlushAllCache(1));
 
@@ -280,7 +280,7 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
   EXPECT_CALL(*mockBlockCache_, GetStoreType())
-      .WillOnce(Return(StoreType::DISK));
+      .WillOnce(Return(StoreType::kDisk));
   EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::OK()));
   ASSERT_EQ(DINGOFS_ERROR::OK, s3ClientAdaptor_->FlushAllCache(1));
 }

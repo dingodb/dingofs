@@ -71,7 +71,7 @@ TEST_F(DiskCacheTest, Stage) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  auto ctx = BlockContext(BlockFrom::kCtoFlush);
   rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, Status::OK());
 
@@ -99,7 +99,7 @@ TEST_F(DiskCacheTest, RemoveStage) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  auto ctx = BlockContext(BlockFrom::kCtoFlush);
   rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, Status::OK());
 
@@ -157,7 +157,7 @@ TEST_F(DiskCacheTest, IsCached) {
   ASSERT_FALSE(disk_cache->IsCached(key_200));
 
   auto block = BlockBuilder().Build("xyz");
-  auto ctx = BlockContext(BlockFrom::RELOAD);
+  auto ctx = BlockContext(BlockFrom::kReload);
   rc = disk_cache->Stage(key_100, block, ctx);
   ASSERT_EQ(rc, Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_100));

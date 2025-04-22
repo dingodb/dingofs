@@ -58,7 +58,7 @@ TEST_F(DiskCacheManagerTest, CleanupFull) {
   auto key_100 = BlockKeyBuilder().Build(100);
   auto key_200 = BlockKeyBuilder().Build(200);
   auto block = BlockBuilder().Build(std::string(10, '0'));
-  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  auto ctx = BlockContext(BlockFrom::kCtoFlush);
   ASSERT_EQ(disk_cache->Stage(key_100, block, ctx), Status::OK());
   ASSERT_EQ(disk_cache->Stage(key_200, block, ctx), Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key_100));
@@ -87,7 +87,7 @@ TEST_F(DiskCacheManagerTest, CleanupExpire) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build(std::string(10, '0'));
-  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  auto ctx = BlockContext(BlockFrom::kCtoFlush);
   ASSERT_EQ(disk_cache->Stage(key, block, ctx), Status::OK());
   ASSERT_TRUE(disk_cache->IsCached(key));
 

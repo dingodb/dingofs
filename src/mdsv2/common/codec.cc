@@ -32,18 +32,19 @@ namespace mdsv2 {
 static const char* const kPrefix = "xDINGOFS:";
 static const size_t kPrefixSize = std::char_traits<char>::length(kPrefix);
 
+// not continuous for don't make region merge (region range not continuous)
 enum KeyType : unsigned char {
   kTypeLock = 1,
-  kTypeHeartbeat = 2,
-  kTypeFS = 3,
-  kTypeDentryOrDir = 4,
-  kTypeFile = 5,
-  kTypeFsQuota = 6,
-  kTypeDirQuota = 7,
-  kTypeFsStats = 8,
-  kTypeFileSession = 9,
-  kTypeChunk = 10,
-  kTypeTrashChunk = 11,
+  kTypeHeartbeat = 3,
+  kTypeFS = 5,
+  kTypeDentryOrDir = 7,
+  kTypeFile = 9,
+  kTypeFsQuota = 11,
+  kTypeDirQuota = 13,
+  kTypeFsStats = 15,
+  kTypeFileSession = 17,
+  kTypeChunk = 19,
+  kTypeTrashChunk = 21,
 };
 
 void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {

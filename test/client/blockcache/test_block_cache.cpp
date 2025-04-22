@@ -43,7 +43,7 @@ TEST_F(BlockCacheTest, Basic) {
 
   auto block_cache = builder.Build();
   ASSERT_EQ(block_cache->Init(), Status::OK());
-  ASSERT_EQ(block_cache->GetStoreType(), StoreType::DISK);
+  ASSERT_EQ(block_cache->GetStoreType(), StoreType::kDisk);
   ASSERT_EQ(block_cache->Shutdown(), Status::OK());
 }
 
@@ -58,7 +58,7 @@ TEST_F(BlockCacheTest, Put) {
 
   auto key = BlockKeyBuilder().Build(100);
   auto block = BlockBuilder().Build("");
-  auto ctx = BlockContext(BlockFrom::CTO_FLUSH);
+  auto ctx = BlockContext(BlockFrom::kCtoFlush);
   ASSERT_EQ(block_cache->Put(key, block, ctx), Status::OK());
   ASSERT_TRUE(block_cache->IsCached(key));
 
