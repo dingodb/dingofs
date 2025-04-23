@@ -53,6 +53,8 @@ BlockCacheUploader::BlockCacheUploader(std::shared_ptr<S3Client> s3,
       std::make_unique<TaskThreadPool<>>("upload_stage_worker");
 }
 
+BlockCacheUploader::~BlockCacheUploader() { Shutdown(); }
+
 void BlockCacheUploader::Init(uint64_t upload_workers,
                               uint64_t upload_queue_size) {
   if (!running_.exchange(true)) {
