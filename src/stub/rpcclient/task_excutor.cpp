@@ -25,6 +25,7 @@
 #include <brpc/describable.h>
 #include <butil/endpoint.h>
 #include <butil/fast_rand.h>
+#include <glog/logging.h>
 
 #include "dingofs/metaserver.pb.h"
 #include "utils/math_util.h"
@@ -116,11 +117,16 @@ int TaskExecutor::DoRPCTaskInner(TaskExecutorDone* done) {
             << ", channel: " << desc.str();
 
     retCode = ExcuteTask(channel.get(), done);
+
+    VLOG(12) << "Fail task ret_code: " << retCode
+             << "task: " << task_->TaskContextStr();
+
     needRetry = OnReturn(retCode);
 
     if (needRetry) {
       PreProcessBeforeRetry(retCode);
     }
+    // TODO:  maybe check task is suspend or not?
   } while (needRetry);
 
   return retCode;

@@ -110,17 +110,20 @@ std::string S3Adapter::GetS3Sk() { return s3_client_->GetSk(); }
 std::string S3Adapter::GetS3Endpoint() { return s3_client_->GetEndpoint(); }
 
 bool S3Adapter::BucketExist() {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("head_bucket %s", bucket_);
+    return absl::StrFormat("head_bucket %s : %d", bucket_, rc);
   });
 
-  return s3_client_->BucketExist(bucket_);
+  rc = s3_client_->BucketExist(bucket_);
+  return rc;
 }
 
 int S3Adapter::PutObject(const std::string& key, const char* buffer,
                          const size_t buffer_size) {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("put_object %s (%d)", key, buffer_size);
+    return absl::StrFormat("put_object %s (%d) : %d", key, buffer_size, rc);
   });
 
   s3_object_put_sync_num << 1;
@@ -131,7 +134,8 @@ int S3Adapter::PutObject(const std::string& key, const char* buffer,
     throttle_->Add(false, buffer_size);
   }
 
-  return s3_client_->PutObject(bucket_, key, buffer, buffer_size);
+  rc = s3_client_->PutObject(bucket_, key, buffer, buffer_size);
+  return rc;
 }
 
 int S3Adapter::PutObject(const std::string& key, const std::string& data) {
@@ -144,20 +148,21 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
 
   auto aws_ctx = std::make_shared<AwsPutObjectAsyncContext>();
   aws_ctx->put_obj_ctx = context;
-  aws_ctx->cb = [this, start_us](
-                    const std::shared_ptr<AwsPutObjectAsyncContext>& ctx) {
-    S3AccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_put_object %s (%d)", ctx->put_obj_ctx->key,
-                             ctx->put_obj_ctx->buffer_size);
-    });
+  aws_ctx->cb =
+      [this, start_us](const std::shared_ptr<AwsPutObjectAsyncContext>& ctx) {
+        S3AccessLogGuard log(start_us, [&]() {
+          return absl::StrFormat(
+              "async_put_object %s (%d) : %d", ctx->put_obj_ctx->key,
+              ctx->put_obj_ctx->buffer_size, ctx->put_obj_ctx->ret_code);
+        });
 
-    s3_object_put_async_num << -1;
-    inflightBytesThrottle_->OnComplete(ctx->put_obj_ctx->buffer_size);
+        s3_object_put_async_num << -1;
+        inflightBytesThrottle_->OnComplete(ctx->put_obj_ctx->buffer_size);
 
-    // for return
-    ctx->put_obj_ctx->ret_code = ctx->retCode;
-    ctx->put_obj_ctx->cb(ctx->put_obj_ctx);
-  };
+        // for return
+        ctx->put_obj_ctx->ret_code = ctx->retCode;
+        ctx->put_obj_ctx->cb(ctx->put_obj_ctx);
+      };
 
   if (throttle_) {
     throttle_->Add(false, context->buffer_size);
@@ -169,8 +174,10 @@ void S3Adapter::PutObjectAsync(std::shared_ptr<PutObjectAsyncContext> context) {
 }
 
 int S3Adapter::GetObject(const std::string& key, std::string* data) {
-  S3AccessLogGuard log(butil::cpuwide_time_us(),
-                       [&]() { return absl::StrFormat("get_object %s", key); });
+  int rc = 0;
+  S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("get_object %s : %d", key, rc);
+  });
 
   s3_object_get_sync_num << 1;
   auto dec = ::absl::MakeCleanup([&]() { s3_object_get_sync_num << -1; });
@@ -179,13 +186,16 @@ int S3Adapter::GetObject(const std::string& key, std::string* data) {
     throttle_->Add(true, 1);
   }
 
-  return s3_client_->GetObject(bucket_, key, data);
+  rc = s3_client_->GetObject(bucket_, key, data);
+  return rc;
 }
 
 int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
                          size_t len) {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("range_object %s (%d,%d)", key, offset, len);
+    return absl::StrFormat("range_object %s (%d,%d) : %d", key, offset, len,
+                           rc);
   });
 
   s3_object_get_async_num << 1;
@@ -195,7 +205,8 @@ int S3Adapter::GetObject(const std::string& key, char* buf, off_t offset,
     throttle_->Add(true, len);
   }
 
-  return s3_client_->RangeObject(bucket_, key, buf, offset, len);
+  rc = s3_client_->RangeObject(bucket_, key, buf, offset, len);
+  return rc;
 }
 
 void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
@@ -207,9 +218,9 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
   aws_ctx->cb = [this, start_us](
                     const std::shared_ptr<AwsGetObjectAsyncContext>& ctx) {
     S3AccessLogGuard log(start_us, [&]() {
-      return absl::StrFormat("async_get_object %s (%d,%d)",
+      return absl::StrFormat("async_get_object %s (%d,%d) : %d",
                              ctx->get_obj_ctx->key, ctx->get_obj_ctx->offset,
-                             ctx->get_obj_ctx->len);
+                             ctx->get_obj_ctx->len, ctx->get_obj_ctx->ret_code);
     });
 
     s3_object_get_async_num << -1;
@@ -231,26 +242,32 @@ void S3Adapter::GetObjectAsync(std::shared_ptr<GetObjectAsyncContext> context) {
 }
 
 int S3Adapter::DeleteObject(const std::string& key) {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("delete_object %s", key);
+    return absl::StrFormat("delete_object %s : %d", key, rc);
   });
 
-  return s3_client_->DeleteObject(bucket_, key);
+  rc = s3_client_->DeleteObject(bucket_, key);
+  return rc;
 }
 
 int S3Adapter::DeleteObjects(const std::list<std::string>& key_list) {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("delete_objects (%d)", key_list.size());
+    return absl::StrFormat("delete_objects (%d) : %d", key_list.size(), rc);
   });
 
-  return s3_client_->DeleteObjects(bucket_, key_list);
+  rc = s3_client_->DeleteObjects(bucket_, key_list);
+  return rc;
 }
 
 bool S3Adapter::ObjectExist(const std::string& key) {
+  int rc = 0;
   S3AccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("head_object %s", key);
+    return absl::StrFormat("head_object %s : %c", key, rc);
   });
-  return s3_client_->ObjectExist(bucket_, key);
+  rc = s3_client_->ObjectExist(bucket_, key);
+  return rc;
 }
 
 void S3Adapter::AsyncRequestInflightBytesThrottle::OnStart(uint64_t len) {

@@ -26,8 +26,8 @@
 #include <utility>
 #include <vector>
 
-#include "dingofs/space.pb.h"
 #include "common/metric_utils.h"
+#include "dingofs/space.pb.h"
 #include "stub/common/config.h"
 
 namespace dingofs {
@@ -715,6 +715,9 @@ FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
       is_ok = false;
       return -cntl->ErrorCode();
     }
+
+    VLOG(9) << "AllocS3ChunkId: fsid = " << fsId << " id_num: " << idNum
+            << " response: " << response.ShortDebugString();
 
     FSStatusCode ret = response.statuscode();
     if (ret != FSStatusCode::OK) {

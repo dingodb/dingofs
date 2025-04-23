@@ -51,7 +51,7 @@ class BlockCacheUploader {
                      std::shared_ptr<CacheStore> store,
                      std::shared_ptr<Countdown> stage_count);
 
-  virtual ~BlockCacheUploader() = default;
+  virtual ~BlockCacheUploader();
 
   void Init(uint64_t upload_workers, uint64_t upload_queue_size);
 
