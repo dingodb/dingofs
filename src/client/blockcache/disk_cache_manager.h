@@ -26,6 +26,7 @@
 #include <atomic>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #include "base/cache/cache.h"
 #include "base/queue/message_queue.h"
@@ -33,6 +34,7 @@
 #include "client/blockcache/cache_store.h"
 #include "client/blockcache/disk_cache_layout.h"
 #include "client/blockcache/disk_cache_metric.h"
+#include "client/blockcache/error.h"
 #include "client/blockcache/local_filesystem.h"
 #include "client/blockcache/lru_cache.h"
 #include "utils/concurrent/concurrent.h"
@@ -42,12 +44,19 @@ namespace dingofs {
 namespace client {
 namespace blockcache {
 
-using ::dingofs::utils::Mutex;
-using ::dingofs::utils::TaskThreadPool;
 using ::dingofs::base::cache::Cache;
 using ::dingofs::base::queue::MessageQueue;
 using ::dingofs::base::time::TimeSpec;
 using ::dingofs::client::blockcache::LRUCache;
+using ::dingofs::utils::Mutex;
+using ::dingofs::utils::TaskThreadPool;
+
+// phase: staging -> uploaded -> cached
+enum class BlockPhase : uint8_t {
+  kStaging = 0,
+  kUploaded = 1,
+  kCached = 2,
+};
 
 // Manage cache items and its capacity
 class DiskCacheManager {
@@ -70,11 +79,12 @@ class DiskCacheManager {
 
   virtual void Stop();
 
-  virtual void Add(const BlockKey& key, const CacheValue& value);
-
-  virtual BCACHE_ERROR Get(const BlockKey& key, CacheValue* value);
+  virtual void Add(const BlockKey& key, const CacheValue& value,
+                   BlockPhase phase);
 
   virtual void Delete(const BlockKey& key);
+
+  virtual bool Exist(const BlockKey& key);
 
   virtual bool StageFull() const;
 
@@ -104,7 +114,8 @@ class DiskCacheManager {
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheLayout> layout_;
   std::shared_ptr<LocalFileSystem> fs_;
-  std::unique_ptr<LRUCache> lru_;
+  std::unique_ptr<LRUCache> lru_;                        // store cache block
+  std::unordered_map<std::string, CacheValue> staging_;  // store stage block
   std::unique_ptr<MessageQueueType> mq_;
   std::shared_ptr<DiskCacheMetric> metric_;
   std::unique_ptr<TaskThreadPool<>> task_pool_;

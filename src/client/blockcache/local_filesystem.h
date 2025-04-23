@@ -106,10 +106,12 @@ class LocalFileSystem {
   };
 
   struct FileInfo {
-    FileInfo(const std::string& name, size_t size, TimeSpec atime)
-        : name(name), size(size), atime(atime) {}
+    FileInfo(const std::string& name, uint32_t nlink, size_t size,
+             TimeSpec atime)
+        : name(name), nlink(nlink), size(size), atime(atime) {}
 
     std::string name;
+    uint32_t nlink;
     size_t size;
     TimeSpec atime;
   };

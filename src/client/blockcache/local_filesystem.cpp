@@ -306,7 +306,7 @@ BCACHE_ERROR LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
       rc = Walk(path, func);
     } else {  // file
       TimeSpec atime(stat.st_atime, 0);
-      rc = func(prefix, FileInfo(name, stat.st_size, atime));
+      rc = func(prefix, FileInfo(name, stat.st_nlink, stat.st_size, atime));
     }
 
     if (rc != BCACHE_ERROR::OK) {

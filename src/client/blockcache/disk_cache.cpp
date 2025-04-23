@@ -35,6 +35,7 @@
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/error.h"
 #include "client/blockcache/log.h"
+#include "client/blockcache/lru_common.h"
 #include "client/blockcache/phase_timer.h"
 #include "stub/metric/metric.h"
 
@@ -165,7 +166,7 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
   rc = fs_->HardLink(stage_path, cache_path);
   if (rc == BCACHE_ERROR::OK) {
     timer.NextPhase(Phase::CACHE_ADD);
-    manager_->Add(key, CacheValue(block.size, TimeNow()));
+    manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
   } else {
     LOG(WARNING) << "Link " << stage_path << " to " << cache_path
                  << " failed: " << StrErr(rc);
@@ -191,6 +192,7 @@ BCACHE_ERROR DiskCache::RemoveStage(const BlockKey& key, BlockContext ctx) {
   // NOTE: we will try to delete stage file even if the disk cache
   //       is down or unhealthy, so we remove the Check(...) here.
   rc = fs_->RemoveFile(GetStagePath(key));
+  manager_->Add(key, CacheValue(), BlockPhase::kUploaded);
   return rc;
 }
 
@@ -214,7 +216,7 @@ BCACHE_ERROR DiskCache::Cache(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::CACHE_ADD);
-  manager_->Add(key, CacheValue(block.size, TimeNow()));
+  manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kCached);
   return rc;
 }
 
@@ -259,10 +261,8 @@ BCACHE_ERROR DiskCache::Load(const BlockKey& key,
 }
 
 bool DiskCache::IsCached(const BlockKey& key) {
-  CacheValue value;
   std::string cache_path = GetCachePath(key);
-  auto rc = manager_->Get(key, &value);
-  if (rc == BCACHE_ERROR::OK) {
+  if (manager_->Exist(key)) {
     return true;
   } else if (loader_->IsLoading() && fs_->FileExists(cache_path)) {
     return true;

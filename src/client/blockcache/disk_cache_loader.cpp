@@ -28,6 +28,7 @@
 
 #include "base/filepath/filepath.h"
 #include "client/blockcache/cache_store.h"
+#include "client/blockcache/disk_cache_manager.h"
 #include "client/blockcache/disk_cache_metric.h"
 #include "client/blockcache/error.h"
 
@@ -140,9 +141,10 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
 
   if (type == BlockType::STAGE_BLOCK) {
     metric_->AddStageBlock(1);
+    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
     uploader_(key, path, BlockContext(BlockFrom::RELOAD, disk_id_));
-  } else if (type == BlockType::CACHE_BLOCK) {
-    manager_->Add(key, CacheValue(file.size, file.atime));
+  } else if (type == BlockType::CACHE_BLOCK && file.nlink == 1) {
+    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kCached);
   }
   return true;
 }
