@@ -38,13 +38,17 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor, const KeyValue& kv)
+  CleanDeletedSliceTask(KVStorageSPtr kv_storage,
+                        dataaccess::DataAccesserPtr data_accessor,
+                        const KeyValue& kv)
       : kv_storage_(kv_storage), data_accessor_(data_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
-                                       const KeyValue& kv) {
-    return std::make_shared<CleanDeletedSliceTask>(kv_storage, data_accessor, kv);
+  static CleanDeletedSliceTaskSPtr New(
+      KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
+      const KeyValue& kv) {
+    return std::make_shared<CleanDeletedSliceTask>(kv_storage, data_accessor,
+                                                   kv);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -79,7 +83,8 @@ class GcProcessor {
       : kv_storage_(kv_storage), dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
-  static GcProcessorSPtr New(KVStorageSPtr kv_storage, DistributionLockPtr dist_lock) {
+  static GcProcessorSPtr New(KVStorageSPtr kv_storage,
+                             DistributionLockPtr dist_lock) {
     return std::make_shared<GcProcessor>(kv_storage, dist_lock);
   }
 

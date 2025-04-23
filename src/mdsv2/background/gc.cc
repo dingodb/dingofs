@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/cache_store.h"
 #include "dataaccess/s3_accesser.h"
 #include "dingofs/error.pb.h"
 #include "mdsv2/common/codec.h"
@@ -44,24 +44,30 @@ static const std::string kWorkerSetName = "GC";
 void CleanDeletedSliceTask::Run() {
   auto status = CleanDeletedSlice(kv_.key, kv_.value);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] clean deleted slice fail, {}", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc] clean deleted slice fail, {}",
+                                    status.error_str());
   }
 }
 
-Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key, const std::string& value) {
+Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key,
+                                                const std::string& value) {
   // delete data from s3
   auto trash_slice_list = MetaDataCodec::DecodeTrashChunkValue(value);
   for (const auto& slice : trash_slice_list.slices()) {
-    DINGO_LOG(INFO) << fmt::format("[gc] clean deleted slice {}/{}/{}/{}.", slice.fs_id(), slice.ino(),
+    DINGO_LOG(INFO) << fmt::format("[gc] clean deleted slice {}/{}/{}/{}.",
+                                   slice.fs_id(), slice.ino(),
                                    slice.chunk_index(), slice.slice_id());
 
     for (const auto& range : slice.ranges()) {
       uint64_t index = range.offset() / slice.chunk_size();
-      client::blockcache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.chunk_index(), index, 0);
+      cache::blockcache::BlockKey block_key(slice.fs_id(), slice.ino(),
+                                            slice.chunk_index(), index, 0);
 
       auto status = data_accessor_->Delete(block_key.StoreKey());
       if (!status.ok()) {
-        return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
+        return Status(
+            pb::error::EINTERNAL,
+            fmt::format("delete s3 object fail, {}", status.ToString()));
       }
     }
   }
@@ -69,7 +75,8 @@ Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key, const st
   // delete slice
   auto status = kv_storage_->Delete(key);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] delete slice fail, {}", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc] delete slice fail, {}",
+                                    status.error_str());
   }
 
   return status;
@@ -82,7 +89,8 @@ bool GcProcessor::Init() {
   data_accessor_ = dataaccess::S3Accesser::New(option);
   CHECK(data_accessor_->Init()) << "init data accesser fail.";
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num, FLAGS_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num,
+                                    FLAGS_gc_max_pending_task_count);
   return worker_set_->Init();
 }
 
