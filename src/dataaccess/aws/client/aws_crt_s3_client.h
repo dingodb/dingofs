@@ -84,7 +84,7 @@ class AwsCrtS3Client : public AwsS3Client {
   std::atomic<bool> initialized_{false};
   S3AdapterOption option_;
 
-  Aws::S3Crt::S3CrtClientConfiguration cfg_;
+  std::unique_ptr<Aws::S3Crt::S3CrtClientConfiguration> cfg_{nullptr};
   std::unique_ptr<Aws::S3Crt::S3CrtClient> client_{nullptr};
 };
 

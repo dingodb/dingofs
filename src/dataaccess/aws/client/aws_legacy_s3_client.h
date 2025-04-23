@@ -83,7 +83,7 @@ class AwsLegacyS3Client : public AwsS3Client {
   std::atomic<bool> initialized_{false};
   S3AdapterOption option_;
 
-  Aws::Client::ClientConfiguration cfg_;
+  std::unique_ptr<Aws::Client::ClientConfiguration> cfg_{nullptr};
   std::unique_ptr<Aws::S3::S3Client> client_{nullptr};
 };
 

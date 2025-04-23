@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/aws/aws_s3_common.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
 #include "mds/common/types.h"
@@ -37,7 +37,6 @@
 #include "mds/fs_info_wrapper.h"
 #include "mds/fs_storage.h"
 #include "mds/metaserverclient/metaserver_client.h"
-#include "mds/topology/topology.h"
 #include "mds/topology/topology_manager.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/interruptible_sleeper.h"
@@ -57,13 +56,11 @@ class FsManager {
   FsManager(const std::shared_ptr<FsStorage>& fs_storage,
             const std::shared_ptr<MetaserverClient>& metaserver_client,
             const std::shared_ptr<topology::TopologyManager>& topo_manager,
-            const std::shared_ptr<dataaccess::aws::S3Adapter>& s3_adapter,
             const std::shared_ptr<dlock::DLock>& dlock,
             const FsManagerOption& option)
       : fsStorage_(fs_storage),
         metaserverClient_(metaserver_client),
         topoManager_(topo_manager),
-        s3Adapter_(s3_adapter),
         dlock_(dlock),
         isStop_(true),
         option_(option) {}
@@ -233,7 +230,6 @@ class FsManager {
   std::shared_ptr<MetaserverClient> metaserverClient_;
   dingofs::utils::GenericNameLock<Mutex> nameLock_;
   std::shared_ptr<topology::TopologyManager> topoManager_;
-  std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter_;
   std::shared_ptr<dlock::DLock> dlock_;
 
   // Manage fs background delete threads

@@ -28,7 +28,6 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/aws/s3_adapter.h"
 #include "mds/dlock/dlock.h"
 #include "mds/fs_manager.h"
 #include "mds/heartbeat/copyset_conf_generator.h"
@@ -122,7 +121,6 @@ class MDS {
   std::shared_ptr<heartbeat::Coordinator> coordinator_;
   std::shared_ptr<heartbeat::HeartbeatManager> heartbeatManager_;
   std::shared_ptr<topology::TopologyMetricService> topologyMetricService_;
-  std::shared_ptr<dataaccess::aws::S3Adapter> s3Adapter_;
   MDSOptions options_;
 
   bool etcdClientInited_;

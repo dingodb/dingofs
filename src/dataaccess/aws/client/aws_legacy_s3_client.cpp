@@ -50,6 +50,7 @@
 #include <smithy/tracing/impl/opentelemetry/OtelTelemetryProvider.h>
 
 #include <memory>
+#include <utility>
 
 namespace dingofs {
 namespace dataaccess {
@@ -65,20 +66,20 @@ void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
 
   {
     // init config
-    Aws::Client::ClientConfiguration config;
-    // config.scheme = Aws::Http::Scheme(option.scheme);
-    config.verifySSL = option.verifySsl;
-    config.userAgent = "S3 Browser";
-    config.region = option.region;
-    config.maxConnections = option.maxConnections;
-    config.connectTimeoutMs = option.connectTimeout;
-    config.requestTimeoutMs = option.requestTimeout;
-    config.endpointOverride = option.s3Address;
+    auto config = std::make_unique<Aws::Client::ClientConfiguration>();
+    // config->scheme = Aws::Http::Scheme(option.scheme);
+    config->verifySSL = option.verifySsl;
+    config->userAgent = "S3 Browser";
+    config->region = option.region;
+    config->maxConnections = option.maxConnections;
+    config->connectTimeoutMs = option.connectTimeout;
+    config->requestTimeoutMs = option.requestTimeout;
+    config->endpointOverride = option.s3Address;
 
     if (option.use_thread_pool) {
       LOG(INFO) << "AwsLegacyS3Client init async thread pool thread num = "
                 << option.asyncThreadNum;
-      config.executor =
+      config->executor =
           Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
               "AwsLegacyS3Client", option.asyncThreadNum);
     }
@@ -96,15 +97,16 @@ void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
       auto push_exporter = ::opentelemetry::exporter::otlp::
           OtlpHttpMetricExporterFactory::Create(exporter_options);
 
-      config.telemetryProvider = smithy::components::tracing::
+      config->telemetryProvider = smithy::components::tracing::
           OtelTelemetryProvider::CreateOtelProvider(std::move(span_exporter),
                                                     std::move(push_exporter));
     }
-    cfg_ = config;
+
+    cfg_ = std::move(config);
   }
 
   client_ = std::make_unique<Aws::S3::S3Client>(
-      Aws::Auth::AWSCredentials(option_.ak, option_.sk), cfg_,
+      Aws::Auth::AWSCredentials(option_.ak, option_.sk), *cfg_,
       Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
       option.useVirtualAddressing);
 
