@@ -236,7 +236,7 @@ class FsManager {
   utils::Thread backEndThread_;
   utils::Atomic<bool> isStop_;
   utils::InterruptibleSleeper sleeper_;
-  FsManagerOption option_;
+  const FsManagerOption option_;
 
   // deal with check mountpoint alive
   utils::Thread checkMountPointThread_;

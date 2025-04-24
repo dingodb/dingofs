@@ -24,10 +24,10 @@
 
 #include <glog/logging.h>
 #include <google/protobuf/util/message_differencer.h>
-#include <sys/stat.h>  // for S_IFDIR
+#include <sys/stat.h>
 
 #include <list>
-#include <regex>  // NOLINT
+#include <regex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -294,7 +294,8 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   if (!skip_create_new_fs && detail.has_s3info()) {
     const auto& s3_info = detail.s3info();
 
-    dataaccess::aws::S3AdapterOption s3_adapter_option;
+    dataaccess::aws::S3AdapterOption s3_adapter_option =
+        option_.s3AdapterOption;
     s3_adapter_option.ak = s3_info.ak();
     s3_adapter_option.sk = s3_info.sk();
     s3_adapter_option.s3Address = s3_info.endpoint();

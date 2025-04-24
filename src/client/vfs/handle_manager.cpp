@@ -18,8 +18,6 @@
 
 #include <memory>
 
-#include "glog/logging.h"
-
 namespace dingofs {
 namespace client {
 namespace vfs {
