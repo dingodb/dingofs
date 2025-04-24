@@ -53,7 +53,6 @@ using NameLockGuard = ::dingofs::utils::GenericNameLockGuard<Mutex>;
 
 bool FsManager::Init() {
   LOG_IF(FATAL, !fsStorage_->Init()) << "fsStorage Init fail";
-  s3Adapter_->Init(option_.s3AdapterOption);
   RebuildTimeRecorder();
   return true;
 }
@@ -293,12 +292,17 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   // check s3info
   if (!skip_create_new_fs && detail.has_s3info()) {
     const auto& s3_info = detail.s3info();
-    option_.s3AdapterOption.ak = s3_info.ak();
-    option_.s3AdapterOption.sk = s3_info.sk();
-    option_.s3AdapterOption.s3Address = s3_info.endpoint();
-    option_.s3AdapterOption.bucketName = s3_info.bucketname();
-    s3Adapter_->Reinit(option_.s3AdapterOption);
-    if (!s3Adapter_->BucketExist()) {
+
+    aws::S3AdapterOption s3_adapter_option = option_.s3AdapterOption;
+    s3_adapter_option.ak = s3_info.ak();
+    s3_adapter_option.sk = s3_info.sk();
+    s3_adapter_option.s3Address = s3_info.endpoint();
+    s3_adapter_option.bucketName = s3_info.bucketname();
+
+    auto s3_adapter = std::make_shared<aws::S3Adapter>();
+    s3_adapter->Init(s3_adapter_option);
+
+    if (!s3_adapter->BucketExist()) {
       LOG(ERROR) << "CreateFs " << fs_name
                  << " error, s3info is not available!";
       return FSStatusCode::S3_INFO_ERROR;

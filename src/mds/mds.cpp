@@ -41,7 +41,6 @@ DECLARE_bool(graceful_quit_on_sigterm);
 namespace dingofs {
 namespace mds {
 
-using aws::S3Adapter;
 using election::LeaderElection;
 using election::LeaderElectionOptions;
 using kvstorage::EtcdClientImp;
@@ -197,10 +196,9 @@ void MDS::Init() {
   FsManagerOption fs_manager_option;
   InitFsManagerOptions(&fs_manager_option);
 
-  s3Adapter_ = std::make_shared<S3Adapter>();
-  fsManager_ = std::make_shared<FsManager>(fsStorage_, metaserverClient_,
-                                           topologyManager_, s3Adapter_, dlock,
-                                           fs_manager_option);
+  fsManager_ =
+      std::make_shared<FsManager>(fsStorage_, metaserverClient_,
+                                  topologyManager_, dlock, fs_manager_option);
   LOG_IF(FATAL, !fsManager_->Init()) << "fsManager Init fail";
 
   chunkIdAllocator_ = std::make_shared<ChunkIdAllocator>(etcdClient_);

@@ -74,25 +74,25 @@ struct S3AdapterOption {
   std::string sk;
   std::string s3Address;
   std::string bucketName;
-  std::string region;
-  int loglevel;
+  std::string region{"us-east-1"};
+  int loglevel{4};
   std::string logPrefix;
   int scheme;
-  bool verifySsl;
-  int maxConnections;
-  int connectTimeout;
-  int requestTimeout;
-  bool use_thread_pool{true};
-  int asyncThreadNum{256};
-  uint64_t maxAsyncRequestInflightBytes;
-  uint64_t iopsTotalLimit;
-  uint64_t iopsReadLimit;
-  uint64_t iopsWriteLimit;
-  uint64_t bpsTotalMB;
-  uint64_t bpsReadMB;
-  uint64_t bpsWriteMB;
-  bool useVirtualAddressing;
-  bool enableTelemetry;
+  bool verifySsl{false};
+  int maxConnections{32};
+  int connectTimeout{60000};
+  int requestTimeout{10000};
+  bool use_thread_pool{true};  // this only work when use_crt_client is false
+  int asyncThreadNum{16};      // this only work when use_crt_client is false
+  uint64_t maxAsyncRequestInflightBytes{0};
+  uint64_t iopsTotalLimit{0};
+  uint64_t iopsReadLimit{0};
+  uint64_t iopsWriteLimit{0};
+  uint64_t bpsTotalMB{0};
+  uint64_t bpsReadMB{0};
+  uint64_t bpsWriteMB{0};
+  bool useVirtualAddressing{false};
+  bool enableTelemetry{false};
 };
 
 struct S3InfoOption {
