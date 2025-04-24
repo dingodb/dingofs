@@ -20,17 +20,17 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_TEST_CLIENT_MOCK_BLOCKCACHE_H_
-#define DINGOFS_TEST_CLIENT_MOCK_BLOCKCACHE_H_
+#ifndef DINGOFS_TEST_CACHE_MOCK_BLOCKCACHE_H_
+#define DINGOFS_TEST_CACHE_MOCK_BLOCKCACHE_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 class MockBlockCache : public BlockCache {
@@ -61,7 +61,7 @@ class MockBlockCache : public BlockCache {
 };
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_MOCK_BLOCKCACHE_H_
+#endif  // DINGOFS_TEST_CACHE_MOCK_BLOCKCACHE_H_

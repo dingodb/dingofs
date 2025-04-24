@@ -16,52 +16,45 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2024-09-05
+ * Created Date: 2024-09-04
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/blockcache/countdown.h"
+#include <sstream>
+
+#include "cache/blockcache/cache_store.h"
+#include "cache/blockcache/mem_cache.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
-class CountdownTest : public ::testing::Test {
+class MemCacheTest : public ::testing::Test {
  protected:
   void SetUp() override {}
   void TearDown() override {}
 };
 
-TEST_F(CountdownTest, Basic) {
-  Countdown count;
-  ASSERT_EQ(count.Size(), 0);
+TEST_F(MemCacheTest, Basic) {
+  auto store = std::make_unique<MemCache>();
+  BlockKey key;
+  Block block(nullptr, 0);
+  std::shared_ptr<BlockReader> reader;
 
-  count.Add(1, 10);
-  ASSERT_EQ(count.Size(), 1);
-
-  count.Add(1, -5);
-  ASSERT_EQ(count.Size(), 1);
-
-  count.Add(1, -5);
-  ASSERT_EQ(count.Size(), 0);
-}
-
-TEST_F(CountdownTest, Add) {
-  Countdown count;
-  ASSERT_EQ(count.Size(), 0);
-
-  count.Add(1, 10);
-  count.Add(2, 10);
-  ASSERT_EQ(count.Size(), 2);
-
-  count.Add(1, -10);
-  ASSERT_EQ(count.Size(), 1);
-  count.Add(2, -10);
-  ASSERT_EQ(count.Size(), 0);
+  ASSERT_EQ(store->Init(nullptr), Status::OK());
+  ASSERT_EQ(store->Shutdown(), Status::OK());
+  ASSERT_EQ(store->Stage(key, block, BlockContext(BlockFrom::kCtoFlush)),
+            Status::NotSupport(""));
+  ASSERT_EQ(store->RemoveStage(key, BlockContext(BlockFrom::kCtoFlush)),
+            Status::NotSupport(""));
+  ASSERT_EQ(store->Cache(key, block), Status::NotSupport(""));
+  ASSERT_EQ(store->Load(key, reader), Status::NotSupport(""));
+  ASSERT_FALSE(store->IsCached(key));
+  ASSERT_EQ(store->Id(), "memory_cache");
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

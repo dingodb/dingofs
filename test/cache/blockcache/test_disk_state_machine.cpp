@@ -14,19 +14,18 @@
 
 #include <unistd.h>
 
-#include "client/blockcache/disk_state_machine_impl.h"
-#include "client/common/dynamic_config.h"
+#include "cache/blockcache/disk_state_machine_impl.h"
+#include "cache/common/dynamic_config.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-
-namespace client {
+namespace cache {
 namespace blockcache {
 
-USING_FLAG(disk_state_normal2unstable_io_error_num);
-USING_FLAG(disk_state_tick_duration_second);
-USING_FLAG(disk_state_unstable2down_second);
-USING_FLAG(disk_state_unstable2normal_io_succ_num);
+USING_CACHE_FLAG(disk_state_normal2unstable_io_error_num);
+USING_CACHE_FLAG(disk_state_tick_duration_second);
+USING_CACHE_FLAG(disk_state_unstable2down_second);
+USING_CACHE_FLAG(disk_state_unstable2normal_io_succ_num);
 
 class DiskStateMachineTest : public ::testing::Test {
  public:
@@ -108,6 +107,5 @@ TEST_F(DiskStateMachineTest, Unstable2Normal) {
 }
 
 }  // namespace blockcache
-}  // namespace client
-
+}  // namespace cache
 }  // namespace dingofs

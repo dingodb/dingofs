@@ -22,12 +22,12 @@
 
 #include <memory>
 
-#include "client/blockcache/disk_cache_layout.h"
+#include "cache/blockcache/disk_cache_layout.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 class DiskCacheLayoutTest : public ::testing::Test {
@@ -50,5 +50,5 @@ TEST_F(DiskCacheLayoutTest, Basic) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

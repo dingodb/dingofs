@@ -105,7 +105,7 @@ class MdsServiceTest : public ::testing::Test {
     s3_adapter = std::make_shared<MockS3Adapter>();
     fs_manager =
         std::make_shared<FsManager>(fs_storage, metaserver_client, topo_manager,
-                                    s3_adapter, nullptr, fs_manager_option);
+                                    nullptr, fs_manager_option);
     ASSERT_TRUE(fs_manager->Init());
   }
 

@@ -14,7 +14,7 @@
 
 set(BLOCKCACHE_TEST_DEPS
     fuse_client_lib
-    client_blockcache
+    cache_blockcache
     ${TEST_DEPS}
 )
 

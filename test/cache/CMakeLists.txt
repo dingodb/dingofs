@@ -12,37 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-set(TEST_DEPS
-    GTest::gtest
-    GTest::gmock
-    GTest::gtest_main
-    glog::glog
-    gflags::gflags
-    brpc::brpc
-    dl
-)
-
-set(TEST_DEPS_WITHOUT_MAIN
-    GTest::gtest
-    GTest::gmock
-    glog
-    gflags
-    brpc
-    dl
-)
-
-
-add_subdirectory(base)
-add_subdirectory(common)
-add_subdirectory(fs)
-add_subdirectory(stub)
-add_subdirectory(utils)
-
-add_subdirectory(tools)
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(mdsv2)
+add_subdirectory(blockcache)

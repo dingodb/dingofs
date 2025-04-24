@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
-#define DINGOFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
+#ifndef DINGOFS_TEST_CACHE_BLOCKCACHE_BUILDER_BUILDER_H_
+#define DINGOFS_TEST_CACHE_BLOCKCACHE_BUILDER_BUILDER_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -31,26 +31,24 @@
 
 #include "base/filepath/filepath.h"
 #include "base/string/string.h"
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/disk_cache.h"
-#include "client/blockcache/log.h"
-#include "client/common/config.h"
-#include "client/common/dynamic_config.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/blockcache/disk_cache.h"
+#include "cache/common/dynamic_config.h"
+#include "cache/common/log.h"
 #include "dataaccess/mock/mock_accesser.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
-USING_FLAG(block_cache_logging);
-USING_FLAG(disk_cache_expire_second);
-USING_FLAG(disk_cache_free_space_ratio);
+USING_CACHE_FLAG(trace_logging);
+USING_CACHE_FLAG(disk_cache_expire_second);
+USING_CACHE_FLAG(disk_cache_free_space_ratio);
 
-using ::dingofs::base::string::GenUuid;
-using ::dingofs::base::string::StrJoin;
-using ::dingofs::client::common::BlockCacheOption;
-using ::dingofs::client::common::DiskCacheOption;
+using base::string::GenUuid;
+using cache::common::BlockCacheOption;
+using cache::common::DiskCacheOption;
 
 class BlockKeyBuilder {
  public:
@@ -58,7 +56,9 @@ class BlockKeyBuilder {
 
   ~BlockKeyBuilder() = default;
 
-  BlockKey Build(uint64_t chunk_id) { return BlockKey(1, 1, chunk_id, 0, 0); }
+  static BlockKey Build(uint64_t chunk_id) {
+    return BlockKey(1, 1, chunk_id, 0, 0);
+  }
 };
 
 class BlockBuilder {
@@ -67,7 +67,7 @@ class BlockBuilder {
 
   ~BlockBuilder() = default;
 
-  Block Build(const std::string& buffer) {
+  static Block Build(const std::string& buffer) {
     return Block(buffer.c_str(), buffer.length());
   }
 };
@@ -77,7 +77,7 @@ class DiskCacheBuilder {
   using Callback = std::function<void(DiskCacheOption* option)>;
 
   static DiskCacheOption DefaultOption() {
-    FLAGS_block_cache_logging = false;
+    FLAGS_trace_logging = false;
     FLAGS_disk_cache_free_space_ratio = 0.1;
     FLAGS_disk_cache_expire_second = 0;
     return DiskCacheOption{
@@ -100,7 +100,7 @@ class DiskCacheBuilder {
     return std::make_shared<DiskCache>(option_);
   }
 
-  void Cleanup() { system(("rm -r " + GetRootDir()).c_str()); }
+  void Cleanup() const { system(("rm -r " + GetRootDir()).c_str()); }
 
   std::string GetRootDir() const { return option_.cache_dir; }
 
@@ -113,7 +113,7 @@ class BlockCacheBuilder {
   using Callback = std::function<void(BlockCacheOption* option)>;
 
   static BlockCacheOption DefaultOption() {
-    FLAGS_block_cache_logging = false;
+    FLAGS_trace_logging = false;
     return BlockCacheOption{
         .cache_store = "disk",
         .stage = true,
@@ -142,7 +142,7 @@ class BlockCacheBuilder {
     return block_cache;
   }
 
-  void Cleanup() { system(("rm -r " + GetRootDir()).c_str()); }
+  void Cleanup() const { system(("rm -r " + GetRootDir()).c_str()); }
 
   std::shared_ptr<dataaccess::MockDataAccesser> GetDataAccesser() {
     return data_accesser_;
@@ -158,7 +158,7 @@ class BlockCacheBuilder {
 };
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_BLOCKCACHE_BUILDER_BUILDER_H_
+#endif  // DINGOFS_TEST_CACHE_BLOCKCACHE_BUILDER_BUILDER_H_

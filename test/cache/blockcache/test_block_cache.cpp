@@ -21,12 +21,12 @@
  */
 
 #include "absl/cleanup/cleanup.h"
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/builder/builder.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/builder/builder.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 using ::absl::MakeCleanup;
@@ -63,12 +63,12 @@ TEST_F(BlockCacheTest, Put) {
   ASSERT_TRUE(block_cache->IsCached(key));
 
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  ASSERT_TRUE(fs->FileExists(stage_path));
-  ASSERT_TRUE(fs->FileExists(cache_path));
+  ASSERT_TRUE(fs.FileExists(stage_path));
+  ASSERT_TRUE(fs.FileExists(cache_path));
 }
 
 TEST_F(BlockCacheTest, Range) {
@@ -100,12 +100,12 @@ TEST_F(BlockCacheTest, Cache) {
   ASSERT_EQ(block_cache->Cache(key, block), Status::OK());
   ASSERT_TRUE(block_cache->IsCached(key));
 
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  ASSERT_TRUE(fs->FileExists(cache_path));
+  ASSERT_TRUE(fs.FileExists(cache_path));
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 
-#include "client/blockcache/block_cache.h"
+#include "cache/blockcache/block_cache.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"

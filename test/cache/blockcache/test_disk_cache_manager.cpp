@@ -24,14 +24,14 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
-#include "client/blockcache/builder/builder.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/log.h"
+#include "cache/blockcache/builder/builder.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 using ::absl::MakeCleanup;
@@ -96,5 +96,5 @@ TEST_F(DiskCacheManagerTest, CleanupExpire) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

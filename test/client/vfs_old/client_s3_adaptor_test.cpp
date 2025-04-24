@@ -28,8 +28,8 @@
 
 #include <memory>
 
-#include "client/blockcache/block_cache.h"
-#include "client/blockcache/mock/mock_block_cache.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/mock/mock_block_cache.h"
 #include "client/common/status.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
@@ -43,8 +43,8 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using dingofs::client::blockcache::MockBlockCache;
-using dingofs::client::blockcache::StoreType;
+using dingofs::cache::blockcache::MockBlockCache;
+using dingofs::cache::blockcache::StoreType;
 using dingofs::client::common::S3ClientAdaptorOption;
 using dingofs::stub::rpcclient::MockMdsClient;
 

@@ -108,9 +108,8 @@ class FSManagerTest : public ::testing::Test {
     fsManagerOption.backEndThreadRunInterSec = 1;
     fsManagerOption.clientTimeoutSec = 1;
     s3Adapter_ = std::make_shared<MockS3Adapter>();
-    fsManager_ =
-        std::make_shared<FsManager>(fsStorage_, metaserverClient_, topoManager_,
-                                    s3Adapter_, nullptr, fsManagerOption);
+    fsManager_ = std::make_shared<FsManager>(
+        fsStorage_, metaserverClient_, topoManager_, nullptr, fsManagerOption);
     ASSERT_TRUE(fsManager_->Init());
 
     ASSERT_EQ(0, server_.AddService(&mockMetaserverService_,

@@ -21,12 +21,12 @@
  */
 
 #include "base/time/time.h"
-#include "client/blockcache/lru_cache.h"
+#include "cache/blockcache/lru_cache.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 class LRUCacheTest : public ::testing::Test {
@@ -34,9 +34,11 @@ class LRUCacheTest : public ::testing::Test {
   void SetUp() override {}
   void TearDown() override {}
 
-  CacheKey Key(uint64_t id) { return BlockKey(1, 1, id, 1, 0); }
+  static CacheKey Key(uint64_t id) { return BlockKey(1, 1, id, 1, 0); }
 
-  CacheValue Value(size_t size) { return CacheValue(size, TimeSpec(0, 0)); }
+  static CacheValue Value(size_t size) {
+    return CacheValue(size, TimeSpec(0, 0));
+  }
 };
 
 TEST_F(LRUCacheTest, Basic) {
@@ -162,5 +164,5 @@ TEST_F(LRUCacheTest, Size) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

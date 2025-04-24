@@ -22,17 +22,17 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "base/filepath/filepath.h"
-#include "client/blockcache/builder/builder.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/local_filesystem.h"
+#include "cache/blockcache/builder/builder.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/local_filesystem.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 using ::absl::MakeCleanup;
-using ::dingofs::base::filepath::PathJoin;
+using base::filepath::PathJoin;
 
 class DiskCacheTest : public ::testing::Test {
  protected:
@@ -75,13 +75,13 @@ TEST_F(DiskCacheTest, Stage) {
   rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, Status::OK());
 
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
   ASSERT_TRUE(disk_cache->IsCached(key));
-  ASSERT_TRUE(fs->FileExists(stage_path));
-  ASSERT_TRUE(fs->FileExists(cache_path));
+  ASSERT_TRUE(fs.FileExists(stage_path));
+  ASSERT_TRUE(fs.FileExists(cache_path));
 
   ASSERT_EQ(staging.size(), 1);
   ASSERT_EQ(staging[0].id, 100);
@@ -103,14 +103,14 @@ TEST_F(DiskCacheTest, RemoveStage) {
   rc = disk_cache->Stage(key, block, ctx);
   ASSERT_EQ(rc, Status::OK());
 
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
-  ASSERT_TRUE(fs->FileExists(stage_path));
+  ASSERT_TRUE(fs.FileExists(stage_path));
 
   rc = disk_cache->RemoveStage(key, ctx);
   ASSERT_EQ(rc, Status::OK());
-  ASSERT_FALSE(fs->FileExists(stage_path));
+  ASSERT_FALSE(fs.FileExists(stage_path));
 }
 
 TEST_F(DiskCacheTest, Cache) {
@@ -128,10 +128,10 @@ TEST_F(DiskCacheTest, Cache) {
   rc = disk_cache->Cache(key, block);
   ASSERT_EQ(rc, Status::OK());
 
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  ASSERT_TRUE(fs->FileExists(cache_path));
+  ASSERT_TRUE(fs.FileExists(cache_path));
 
   char buffer[5];
   std::shared_ptr<BlockReader> reader;
@@ -168,5 +168,5 @@ TEST_F(DiskCacheTest, IsCached) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

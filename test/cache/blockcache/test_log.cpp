@@ -20,15 +20,17 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/blockcache/log.h"
+#include <sstream>
+
+#include "cache/common/log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
-#include <sstream>
-
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
+
+using cache::common::LogGuard;
 
 class LogTest : public ::testing::Test {
  protected:
@@ -38,9 +40,9 @@ class LogTest : public ::testing::Test {
 
 // Only test core dump
 TEST_F(LogTest, Basic) {
-  LogGuard log([]{ return "hello world"; });
+  LogGuard log([] { return "hello world"; });
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

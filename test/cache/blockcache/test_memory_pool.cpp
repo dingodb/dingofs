@@ -25,11 +25,11 @@
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
-using ::dingofs::base::math::kMiB;
-using ::dingofs::client::datastream::MemoryPool;
+using base::math::kMiB;
+using client::datastream::MemoryPool;
 
 class MemoryPoolTest : public ::testing::Test {
  protected:
@@ -105,5 +105,5 @@ TEST_F(MemoryPoolTest, DeAllocate) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

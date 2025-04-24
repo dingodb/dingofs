@@ -23,39 +23,41 @@
 #include <cstdlib>
 
 #include "base/filepath/filepath.h"
-#include "client/blockcache/local_filesystem.h"
+#include "cache/common/local_filesystem.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
-using ::dingofs::base::filepath::PathJoin;
-using ::dingofs::utils::UUIDGenerator;
+using base::filepath::PathJoin;
+using cache::common::LocalFileSystem;
+using cache::common::Status;
+using utils::UUIDGenerator;
 using FileInfo = LocalFileSystem::FileInfo;
 
 class LocalFileSystemTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    root_dir_ = "." + UUIDGenerator().GenerateUUID();
-    std::system(("mkdir -p " + root_dir_).c_str());
+    root_dir = "." + UUIDGenerator().GenerateUUID();
+    std::system(("mkdir -p " + root_dir).c_str());
   }
 
-  void TearDown() override { std::system(("rm -rf " + root_dir_).c_str()); }
+  void TearDown() override { std::system(("rm -rf " + root_dir).c_str()); }
 
  protected:
-  std::string root_dir_;
+  std::string root_dir;
 };
 
 TEST_F(LocalFileSystemTest, MkDirs) {
   auto fs = std::make_unique<LocalFileSystem>();
 
-  auto rc = fs->MkDirs(PathJoin({root_dir_, "a", "b"}));
+  auto rc = fs->MkDirs(PathJoin({root_dir, "a", "b"}));
   ASSERT_EQ(rc, Status::OK());
 
-  std::string path = PathJoin({root_dir_, "a", "b", "file1"});
+  std::string path = PathJoin({root_dir, "a", "b", "file1"});
   rc = fs->WriteFile(path, "hello world", 11);
   ASSERT_EQ(rc, Status::OK());
 
@@ -70,13 +72,13 @@ TEST_F(LocalFileSystemTest, MkDirs) {
 TEST_F(LocalFileSystemTest, Walk) {
   auto fs = std::make_unique<LocalFileSystem>(nullptr);
 
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "a"}), "x", 1), Status::OK());
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "b"}), "x", 1), Status::OK());
-  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir_, "c"}), "x", 1), Status::OK());
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir, "a"}), "x", 1), Status::OK());
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir, "b"}), "x", 1), Status::OK());
+  ASSERT_EQ(fs->WriteFile(PathJoin({root_dir, "c"}), "x", 1), Status::OK());
 
   std::vector<std::string> files;
-  auto rc = fs->Walk(PathJoin({root_dir_}),
-                     [&](const std::string& prefix, const FileInfo& info) {
+  auto rc = fs->Walk(PathJoin({root_dir}),
+                     [&](const std::string& /*prefix*/, const FileInfo& info) {
                        files.emplace_back(info.name);
                        return Status::OK();
                      });
@@ -90,7 +92,7 @@ TEST_F(LocalFileSystemTest, Walk) {
 TEST_F(LocalFileSystemTest, WriteFile) {
   auto fs = std::make_unique<LocalFileSystem>();
 
-  std::string path = PathJoin({root_dir_, "f1"});
+  std::string path = PathJoin({root_dir, "f1"});
   ASSERT_EQ(fs->WriteFile(path, "x", 1), Status::OK());
 
   size_t count;
@@ -108,7 +110,7 @@ TEST_F(LocalFileSystemTest, WriteFile) {
 TEST_F(LocalFileSystemTest, RemoveFile) {
   auto fs = std::make_unique<LocalFileSystem>();
 
-  std::string path = PathJoin({root_dir_, "f1"});
+  std::string path = PathJoin({root_dir, "f1"});
   ASSERT_EQ(fs->WriteFile(path, "x", 1), Status::OK());
   ASSERT_TRUE(fs->FileExists(path));
 
@@ -119,8 +121,8 @@ TEST_F(LocalFileSystemTest, RemoveFile) {
 TEST_F(LocalFileSystemTest, HardLink) {
   auto fs = std::make_unique<LocalFileSystem>();
 
-  std::string src = PathJoin({root_dir_, "dir", "f1"});
-  std::string dest = PathJoin({root_dir_, "dir", "f2"});
+  std::string src = PathJoin({root_dir, "dir", "f1"});
+  std::string dest = PathJoin({root_dir, "dir", "f2"});
   ASSERT_EQ(fs->WriteFile(src, "x", 1), Status::OK());
   ASSERT_TRUE(fs->FileExists(src));
   ASSERT_FALSE(fs->FileExists(dest));
@@ -132,7 +134,7 @@ TEST_F(LocalFileSystemTest, HardLink) {
 TEST_F(LocalFileSystemTest, FileExists) {
   auto fs = std::make_unique<LocalFileSystem>();
 
-  std::string dir = PathJoin({root_dir_, "dir"});
+  std::string dir = PathJoin({root_dir, "dir"});
   ASSERT_FALSE(fs->FileExists(dir));
   ASSERT_EQ(fs->MkDirs(dir), Status::OK());
   ASSERT_FALSE(fs->FileExists(dir));
@@ -144,5 +146,5 @@ TEST_F(LocalFileSystemTest, FileExists) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

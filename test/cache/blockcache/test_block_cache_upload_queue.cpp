@@ -20,12 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/blockcache/block_cache_upload_queue.h"
-#include "client/blockcache/cache_store.h"
+#include "cache/blockcache/block_cache_upload_queue.h"
+#include "cache/blockcache/cache_store.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
 class BlockCacheUploadQueue : public ::testing::Test {
@@ -55,5 +55,5 @@ TEST_F(BlockCacheUploadQueue, StageBlock) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs

@@ -24,17 +24,17 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
-#include "client/blockcache/builder/builder.h"
-#include "client/blockcache/cache_store.h"
-#include "client/blockcache/log.h"
+#include "cache/blockcache/builder/builder.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/log.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
-namespace client {
+namespace cache {
 namespace blockcache {
 
-using ::absl::MakeCleanup;
+using absl::MakeCleanup;
 
 class DiskCacheLoaderTest : public ::testing::Test {
  protected:
@@ -51,10 +51,10 @@ TEST_F(DiskCacheLoaderTest, LoadStage) {
   });
 
   auto key = BlockKeyBuilder().Build(100);
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto stage_path = PathJoin({root_dir, "stage", key.StoreKey()});
-  auto rc = fs->WriteFile(stage_path, "xyz", 3);
+  auto rc = fs.WriteFile(stage_path, "xyz", 3);
   ASSERT_EQ(rc, Status::OK());
 
   std::vector<BlockKey> uploading;
@@ -76,10 +76,10 @@ TEST_F(DiskCacheLoaderTest, LoadCache) {
   });
 
   auto key = BlockKeyBuilder().Build(100);
-  auto fs = NewTempLocalFileSystem();
+  auto fs = LocalFileSystem();
   auto root_dir = builder.GetRootDir();
   auto cache_path = PathJoin({root_dir, "cache", key.StoreKey()});
-  auto rc = fs->WriteFile(cache_path, "xyz", 3);
+  auto rc = fs.WriteFile(cache_path, "xyz", 3);
   ASSERT_EQ(rc, Status::OK());
 
   rc = disk_cache->Init(
@@ -90,5 +90,5 @@ TEST_F(DiskCacheLoaderTest, LoadCache) {
 }
 
 }  // namespace blockcache
-}  // namespace client
+}  // namespace cache
 }  // namespace dingofs
