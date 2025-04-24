@@ -45,7 +45,7 @@ struct S3AdapterOption {
   int maxConnections;
   int connectTimeout;
   int requestTimeout;
-  bool use_crt_client{true};
+  bool use_crt_client{false};
   bool use_thread_pool{true};  // this only work when use_crt_client is false
   int asyncThreadNum{256};     // this only work when use_crt_client is false
   uint64_t maxAsyncRequestInflightBytes;
