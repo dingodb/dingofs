@@ -63,7 +63,7 @@ void InitFuseConnInfo(struct fuse_conn_info* conn) {
   }
   if (conn->capable & FUSE_CAP_AUTO_INVAL_DATA &&
       !option.want_auto_inval_data) {
-    conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+    fuse_unset_feature_flag(conn, FUSE_CAP_AUTO_INVAL_DATA);
     LOG(INFO) << "[disabled] FUSE_CAP_AUTO_INVAL_DATA";
   }
 }
