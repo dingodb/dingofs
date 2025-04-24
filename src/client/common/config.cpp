@@ -88,6 +88,7 @@ static void InitExcutorOption(Configuration* conf, ExcutorOpt* opts,
                             &opts->enableRenameParallel);
 }
 
+// TODO: ugly refact this
 static void InitS3Option(Configuration* conf, S3Option* s3_opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
   conf->GetValueFatalIfFail("data_stream.page.size",
@@ -114,6 +115,12 @@ static void InitS3Option(Configuration* conf, S3Option* s3_opt) {
                             &s3_opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
                             &s3_opt->s3ClientAdaptorOpt.readRetryIntervalMs);
+
+  if (!conf->GetBoolValue("s3.prefetch", &FLAGS_s3_prefetch)) {
+    LOG(INFO) << "Not found `s3.prefetch` in conf, default: "
+              << (FLAGS_s3_prefetch ? "true" : "false");
+  }
+
   dingofs::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
                                                       &s3_opt->s3AdaptrOpt);
 }
@@ -361,12 +368,31 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   InitBlockCacheOption(conf, &client_option->block_cache_option);
   InitFuseOption(conf, &client_option->fuse_option);
 
+  conf->GetValueFatalIfFail("client.dummyServer.startPort",
+                            &client_option->dummyServerStartPort);
+  if (!conf->GetUInt32Value("client.fs_usage_flush_interval_second",
+                            &FLAGS_fs_usage_flush_interval_second)) {
+    LOG(INFO) << "Not found `client.fs_usage_flush_interval_second` in conf, "
+                 "default: "
+              << FLAGS_fs_usage_flush_interval_second;
+  }
+  if (!conf->GetUInt32Value("client.flush_quota_interval_second",
+                            &FLAGS_flush_quota_interval_second)) {
+    LOG(INFO) << "Not found `client.flush_quota_interval_second` in conf, "
+                 "default: "
+              << FLAGS_flush_quota_interval_second;
+  }
+  if (!conf->GetUInt32Value("client.load_quota_interval_second",
+                            &FLAGS_load_quota_interval_second)) {
+    LOG(INFO) << "Not found `client.load_quota_interval_second` in conf, "
+                 "default: "
+              << FLAGS_load_quota_interval_second;
+  }
+
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",
                             &client_option->listDentryLimit);
   conf->GetValueFatalIfFail("fuseClient.listDentryThreads",
                             &client_option->listDentryThreads);
-  conf->GetValueFatalIfFail("client.dummyServer.startPort",
-                            &client_option->dummyServerStartPort);
   conf->GetValueFatalIfFail("fuseClient.enableMultiMountPointRename",
                             &client_option->enableMultiMountPointRename);
   conf->GetValueFatalIfFail("fuseClient.downloadMaxRetryTimes",
