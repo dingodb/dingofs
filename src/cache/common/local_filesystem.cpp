@@ -118,7 +118,7 @@ Status LocalFileSystem::Walk(const std::string& prefix, WalkFunc func) {
       status = Walk(path, func);
     } else {  // file
       TimeSpec atime(stat.st_atime, 0);
-      status = func(prefix, FileInfo(name, stat.st_size, atime));
+      status = func(prefix, FileInfo(name, stat.st_nlink, stat.st_size, atime));
     }
 
     if (!status.ok()) {

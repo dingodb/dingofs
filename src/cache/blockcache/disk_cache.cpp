@@ -173,7 +173,7 @@ Status DiskCache::Stage(const BlockKey& key, const Block& block,
   status = fs_->HardLink(stage_path, cache_path);
   if (status.ok()) {
     timer.NextPhase(Phase::kCacheAdd);
-    manager_->Add(key, CacheValue(block.size, TimeNow()));
+    manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
   } else {
     LOG(WARNING) << "Link " << stage_path << " to " << cache_path
                  << " failed: " << status.ToString();
@@ -199,6 +199,7 @@ Status DiskCache::RemoveStage(const BlockKey& key, BlockContext /*ctx*/) {
   // NOTE: we will try to delete stage file even if the disk cache
   //       is down or unhealthy, so we remove the Check(...) here.
   status = fs_->RemoveFile(GetStagePath(key));
+  manager_->Add(key, CacheValue(), BlockPhase::kUploaded);
   return status;
 }
 
@@ -222,7 +223,7 @@ Status DiskCache::Cache(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::kCacheAdd);
-  manager_->Add(key, CacheValue(block.size, TimeNow()));
+  manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kCached);
   return status;
 }
 
@@ -279,10 +280,8 @@ Status DiskCache::NewBlockReader(const BlockKey& key,
 }
 
 bool DiskCache::IsCached(const BlockKey& key) {
-  CacheValue value;
   std::string cache_path = GetCachePath(key);
-  auto status = manager_->Get(key, &value);
-  if (status.ok()) {
+  if (manager_->Exist(key)) {
     return true;
   } else if (loader_->IsLoading() && fs_->FileExists(cache_path)) {
     return true;

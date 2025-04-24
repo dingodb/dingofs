@@ -141,9 +141,10 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
 
   if (type == BlockType::kStageBlock) {
     metric_->AddStageBlock(1);
+    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kStaging);
     uploader_(key, path, BlockContext(BlockFrom::kReload, disk_id_));
-  } else if (type == BlockType::kCacheBlock) {
-    manager_->Add(key, CacheValue(file.size, file.atime));
+  } else if (type == BlockType::kCacheBlock && file.nlink == 1) {
+    manager_->Add(key, CacheValue(file.size, file.atime), BlockPhase::kCached);
   }
   return true;
 }

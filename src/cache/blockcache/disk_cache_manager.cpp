@@ -95,23 +95,27 @@ void DiskCacheManager::Stop() {
   LOG(INFO) << "Disk cache manager thread stopped.";
 }
 
-void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value) {
+void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
+                           BlockPhase phase) {
   LockGuard lk(mutex_);
-  lru_->Add(key, value);
-  UpdateUsage(1, value.size);
+  if (phase == BlockPhase::kStaging) {
+    staging_.emplace(key.Filename(), value);
+    UpdateUsage(1, value.size);
+  } else if (phase == BlockPhase::kUploaded) {
+    auto iter = staging_.find(key.Filename());
+    CHECK(iter != staging_.end());
+    lru_->Add(key, iter->second);
+    staging_.erase(iter);
+  } else {  // cached
+    lru_->Add(key, value);
+    UpdateUsage(1, value.size);
+  }
+
   if (used_bytes_ >= capacity_) {
     uint64_t goal_bytes = capacity_ * 0.95;
     uint64_t goal_files = lru_->Size() * 0.95;
     CleanupFull(goal_bytes, goal_files);
   }
-}
-
-Status DiskCacheManager::Get(const CacheKey& key, CacheValue* value) {
-  LockGuard lk(mutex_);
-  if (lru_->Get(key, value)) {
-    return Status::OK();
-  }
-  return Status::NotFound("cache not found");
 }
 
 void DiskCacheManager::Delete(const CacheKey& key) {
@@ -120,6 +124,13 @@ void DiskCacheManager::Delete(const CacheKey& key) {
   if (lru_->Delete(key, &value)) {  // exist
     UpdateUsage(-1, -value.size);
   }
+}
+
+bool DiskCacheManager::Exist(const BlockKey& key) {
+  LockGuard lk(mutex_);
+  CacheValue value;
+  return lru_->Get(key, &value) ||
+         staging_.find(key.Filename()) != staging_.end();
 }
 
 bool DiskCacheManager::StageFull() const {

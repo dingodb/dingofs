@@ -47,6 +47,13 @@ using cache::blockcache::LRUCache;
 using utils::Mutex;
 using utils::TaskThreadPool;
 
+// phase: staging -> uploaded -> cached
+enum class BlockPhase : uint8_t {
+  kStaging = 0,
+  kUploaded = 1,
+  kCached = 2,
+};
+
 // Manage cache items and its capacity
 class DiskCacheManager {
   enum class DeleteFrom : uint8_t {
@@ -68,11 +75,12 @@ class DiskCacheManager {
 
   virtual void Stop();
 
-  virtual void Add(const BlockKey& key, const CacheValue& value);
-
-  virtual Status Get(const BlockKey& key, CacheValue* value);
+  virtual void Add(const BlockKey& key, const CacheValue& value,
+                   BlockPhase phase);
 
   virtual void Delete(const BlockKey& key);
+
+  virtual bool Exist(const BlockKey& key);
 
   virtual bool StageFull() const;
 
@@ -102,7 +110,8 @@ class DiskCacheManager {
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheLayout> layout_;
   std::shared_ptr<LocalFileSystem> fs_;
-  std::unique_ptr<LRUCache> lru_;
+  std::unique_ptr<LRUCache> lru_;                        // store cache block
+  std::unordered_map<std::string, CacheValue> staging_;  // store stage block
   std::unique_ptr<MessageQueueType> mq_;
   std::shared_ptr<DiskCacheMetric> metric_;
   std::unique_ptr<TaskThreadPool<>> task_pool_;
