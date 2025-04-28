@@ -32,6 +32,11 @@ scrape_configs:
     file_sd_configs:
     - files: ['/prometheus/targets.json']
 
+  - job_name: 'etcd_metrics'
+    metrics_path: 'metrics'
+    file_sd_configs:
+    - files: ['/prometheus/etcd_targets.json']
+
   - job_name: 'node'
     # Override the global default and scrape targets from this job every 5 seconds.
     scrape_interval: 5s

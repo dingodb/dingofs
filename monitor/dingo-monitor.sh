@@ -9,12 +9,14 @@
 
 change_permission() {
     echo "change prometheus directory permission"
+    mkdir -p prometheus/data
     chmod -R 777 prometheus
     if [ $? -ne 0 ]; then
         echo "Error: Failed to execute 'chmod -R 777 prometheus'"
         exit 1
     fi
     echo "change grafana directory permission"
+    mkdir -p grafana/data
     chmod -R 777 grafana
     if [ $? -ne 0 ]; then
         echo "Error: Failed to execute 'chmod -R 777 grafana'"

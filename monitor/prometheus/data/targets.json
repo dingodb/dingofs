@@ -19,12 +19,5 @@
         },
         "targets": [
         ]
-    },
-    {
-        "labels": {
-            "job": "etcd"
-        },
-        "targets": [
-        ]
     }
 ]
