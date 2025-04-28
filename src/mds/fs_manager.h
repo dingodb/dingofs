@@ -226,6 +226,8 @@ class FsManager {
 
   uint64_t GetRootId();
 
+  void UpdateFsMountMetrics();
+
   std::shared_ptr<FsStorage> fsStorage_;
   std::shared_ptr<MetaserverClient> metaserverClient_;
   dingofs::utils::GenericNameLock<Mutex> nameLock_;
