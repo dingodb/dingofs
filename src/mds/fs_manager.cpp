@@ -234,6 +234,9 @@ void FsManager::BackEndCheckMountPoint() {
   while (checkMountPointSleeper_.wait_for(
       std::chrono::seconds(option_.backEndThreadRunInterSec))) {
     CheckMountPoint();
+    // update mount point metrics, when leader transfer or dingo-fuse abnormal
+    // exit, metrics still valid
+    UpdateFsMountMetrics();
   }
 }
 
@@ -1096,6 +1099,17 @@ bool FsManager::GetClientAliveTime(const std::string& mountpoint,
 
   *out = iter->second;
   return true;
+}
+
+void FsManager::UpdateFsMountMetrics() {
+  std::vector<FsInfoWrapper> fs_info_wrappers;
+  fsStorage_->GetAll(&fs_info_wrappers);
+  for (auto const& wrapper : fs_info_wrappers) {
+    auto fs_info = wrapper.ProtoFsInfo();
+    // update mount_count metrics
+    FsMetric::GetInstance().OnUpdateMountCount(fs_info.fsname(),
+                                               fs_info.mountnum());
+  }
 }
 
 }  // namespace mds
