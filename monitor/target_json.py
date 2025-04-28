@@ -14,12 +14,15 @@ HOSTNAME_PORT_REGEX = r"[^\"\ ]\S*:\d+"
 IP_PORT_REGEX = r"[0-9]+(?:\.[0-9]+){3}:\d+"
 
 targetPath=None
+etcdTargetPath=None
 
 def loadConf():
     global targetPath
+    global etcdTargetPath
     conf=configparser.ConfigParser()
     conf.read("target.ini")
     targetPath=conf.get("path", "target_path")
+    etcdTargetPath=conf.get("path", "etcd_target_path")
 
 def runDingofsToolCommand(command):
     cmd = [DingoFS_TOOL]+command
@@ -118,6 +121,7 @@ def unitValue(lables, targets):
 
 def refresh():
     targets = []
+    etcd_targets = []
 
     # load mds
     mdsServers = loadMdsServer()
@@ -125,12 +129,12 @@ def refresh():
     # load metaserver
     metaServers = loadMetaServer()
     targets.append(metaServers)
-    # load etcd
-    etcdServers = loadEtcdServer()
-    targets.append(etcdServers)
     # load client
     client = loadClient()
     targets.append(client)
+    # load etcd
+    etcdServers = loadEtcdServer()
+    etcd_targets.append(etcdServers)
 
     with open(targetPath+'.new', 'w', 0o777) as fd:
         json.dump(targets, fd, indent=4)
@@ -140,6 +144,13 @@ def refresh():
     os.rename(targetPath+'.new', targetPath)
     os.chmod(targetPath, 0o777)
 
+    with open(etcdTargetPath+'.new', 'w', 0o777) as etcd_fd:
+        json.dump(etcd_targets, etcd_fd, indent=4)
+        etcd_fd.flush()
+        os.fsync(etcd_fd.fileno())
+        
+    os.rename(etcdTargetPath+'.new', etcdTargetPath)
+    os.chmod(etcdTargetPath, 0o777)
 
 if __name__ == '__main__':
     while True:

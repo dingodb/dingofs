@@ -1,0 +1,9 @@
+[
+    {
+        "labels": {
+            "job": "etcd"
+        },
+        "targets": [
+        ]
+    }
+]

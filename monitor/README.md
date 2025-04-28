@@ -105,12 +105,18 @@ ff6f895bf9b1   grafana/grafana                            "/run.sh"             
 
 你可以手工或者自动方式来更新监控的目标信息，这两种方式只能选择其一。
 监控的目标必须来自同一个集群，暂不支持多个集群的监控。
-自动更新会实时从集群中获取监控目标，并重新生成targets.json文件，对于你手工修改的信息，将会被覆盖。
+你可以手工编辑targets.json和etcd_targets.json文件来修改监控目标信息。
+其中targets.json用来修改mds、metaserver、client的监控目标,etcd_targets.json用来
+修改etcd的监控目标，这2个文件的位置在prometheus/data目录下。
+
+自动更新会实时从集群中获取监控目标，并重新生成targets.json和etcd_targets.json文件,对于你手工修改的信息，将会被覆盖。
+
 
 * 手工修改
 
-你可以手工修改监控目标文件（prometheus/data/targets.json）来新增或者删除目标，如下所示：
+你可以手工修改监控目标文件targets.json和etcd_targets.json来新增或者删除目标，如下所示：
 
+targets.json:
 ```
 [
     {
@@ -135,21 +141,27 @@ ff6f895bf9b1   grafana/grafana                            "/run.sh"             
     },
     {
         "labels": {
+            "job": "client"
+        },
+        "targets": [
+            "172.20.0.10:9002",
+            "172.20.0.11:9002"
+        ]
+    }
+]
+```
+
+etcd_targets.json:
+```
+[
+    {
+        "labels": {
             "job": "etcd"
         },
         "targets": [
             "172.20.0.10:2379",
             "172.20.0.11:2379",
             "172.20.0.12:2379",
-        ]
-    },
-    {
-        "labels": {
-            "job": "client"
-        },
-        "targets": [
-            "172.20.0.10:9002",
-            "172.20.0.11:9002"
         ]
     }
 ]
