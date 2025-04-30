@@ -132,7 +132,7 @@ static void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {
 }
 
 void InitUdsOption(Configuration* conf, UdsOption* uds_opt) {
-  if (conf->GetValue("uds.fdCommPath", &uds_opt->fd_comm_path)) {
+  if (!conf->GetValue("uds.fdCommPath", &uds_opt->fd_comm_path)) {
     uds_opt->fd_comm_path = "/var/run";
   }
 }
