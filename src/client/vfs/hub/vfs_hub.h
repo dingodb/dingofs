@@ -17,17 +17,23 @@
 #ifndef DINGOFS_CLIENT_VFS_VFS_HUB_H_
 #define DINGOFS_CLIENT_VFS_VFS_HUB_H_
 
+#include <glog/logging.h>
+
 #include <atomic>
+#include <cstdint>
 #include <memory>
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
+#include "client/datastream/page_allocator.h"
+#include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
@@ -52,7 +58,15 @@ class VFSHub {
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
+  virtual Executor* GetFlushExecutor() = 0;
+
+  virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
+
+  virtual datastream::PageAllocator* GetPageAllocator() = 0;
+
   virtual FsInfo GetFsInfo() = 0;
+
+  virtual uint64_t GetPageSize() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -66,15 +80,50 @@ class VFSHubImpl : public VFSHub {
 
   Status Stop() override;
 
-  MetaSystem* GetMetaSystem() override;
+  MetaSystem* GetMetaSystem() override {
+    CHECK_NOTNULL(meta_system_);
+    return meta_system_.get();
+  }
 
-  HandleManager* GetHandleManager() override;
+  HandleManager* GetHandleManager() override {
+    CHECK_NOTNULL(handle_manager_);
+    return handle_manager_.get();
+  }
 
-  cache::BlockCache* GetBlockCache() override;
+  cache::BlockCache* GetBlockCache() override {
+    CHECK_NOTNULL(handle_manager_);
+    return block_cache_.get();
+  }
 
-  blockaccess::BlockAccesser* GetBlockAccesser() override;
+  blockaccess::BlockAccesser* GetBlockAccesser() override {
+    CHECK_NOTNULL(block_accesser_);
+    return block_accesser_.get();
+  }
 
-  FsInfo GetFsInfo() override;
+  Executor* GetFlushExecutor() override {
+    CHECK_NOTNULL(flush_executor_);
+    return flush_executor_.get();
+  }
+
+  IPeriodicFlushManager* GetPeriodicFlushManger() override {
+    CHECK_NOTNULL(priodic_flush_manager_);
+    return priodic_flush_manager_.get();
+  }
+
+  datastream::PageAllocator* GetPageAllocator() override {
+    CHECK_NOTNULL(page_allocator_);
+    return page_allocator_.get();
+  }
+
+  FsInfo GetFsInfo() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return fs_info_;
+  }
+
+  uint64_t GetPageSize() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return client_option_.data_stream_option.page_option.page_size;
+  }
 
  private:
   std::atomic_bool started_{false};
@@ -86,6 +135,9 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<cache::BlockCache> block_cache_;
+  std::unique_ptr<Executor> flush_executor_;
+  std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
+  std::shared_ptr<datastream::PageAllocator> page_allocator_;
 };
 
 }  // namespace vfs

@@ -41,7 +41,7 @@ target_link_libraries(dingofs_threading
 )
 
 add_library(dingofs_status
-    slice.cpp
+    string_slice.cpp
     status.cpp
 )
 target_link_libraries(dingofs_status

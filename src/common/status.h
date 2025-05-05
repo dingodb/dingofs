@@ -23,25 +23,26 @@
 #include <string>
 #include <utility>
 
-#include "common/slice.h"
+#include "common/string_slice.h"
 
 namespace dingofs {
 
 /// @brief Return the given status if it is not @c OK.
-#define DINGOFS_RETURN_NOT_OK(s)               \
-  do {                                         \
+#define DINGOFS_RETURN_NOT_OK(s)       \
+  do {                                 \
     const ::dingofs::Status& _s = (s); \
-    if (!_s.IsOK()) return _s;                 \
+    if (!_s.IsOK()) return _s;         \
   } while (0)
 
-#define DECLARE_ERROR_STATUS(NAME, CODE)                              \
-  static Status NAME(const Slice& msg, const Slice& msg2 = Slice()) { \
-    return Status(CODE, kNone, msg, msg2);                            \
-  };                                                                  \
-  static Status NAME(int32_t p_errno, const Slice& msg,               \
-                     const Slice& msg2 = Slice()) {                   \
-    return Status(CODE, p_errno, msg, msg2);                          \
-  }                                                                   \
+#define DECLARE_ERROR_STATUS(NAME, CODE)                        \
+  static Status NAME(const StringSlice& msg,                    \
+                     const StringSlice& msg2 = StringSlice()) { \
+    return Status(CODE, kNone, msg, msg2);                      \
+  };                                                            \
+  static Status NAME(int32_t p_errno, const StringSlice& msg,   \
+                     const StringSlice& msg2 = StringSlice()) { \
+    return Status(CODE, p_errno, msg, msg2);                    \
+  }                                                             \
   bool Is##NAME() const { return code_ == (CODE); }
 
 class Status {
@@ -187,7 +188,8 @@ class Status {
   }
 
  private:
-  Status(Code code, int32_t p_errno, const Slice& msg, const Slice& msg2);
+  Status(Code code, int32_t p_errno, const StringSlice& msg,
+         const StringSlice& msg2);
 
   static std::unique_ptr<const char[]> CopyState(const char* s);
 

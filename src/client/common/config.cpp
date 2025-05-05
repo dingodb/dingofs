@@ -33,6 +33,7 @@
 #include "cache/config/block_cache.h"
 #include "cache/config/remote_cache.h"
 #include "client/common/dynamic_config.h"
+#include "client/vfs/common/config.h"
 #include "gflags/gflags.h"
 #include "utils/gflags_helper.h"
 
@@ -421,6 +422,15 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
                             &FLAGS_fuseClientBurstReadIops);
   conf->GetValueFatalIfFail("fuseClient.throttle.burstReadIopsSecs",
                             &FLAGS_fuseClientBurstReadIopsSecs);
+
+  // vfs related
+  if (!conf->GetBoolValue("vfs.data.use_direct_write",
+                          &vfs::FLAGS_data_use_direct_write)) {
+    vfs::FLAGS_data_use_direct_write = true;
+    LOG(INFO) << "Not found `vfs.data.use_direct_write` in conf, "
+                 "default to true";
+  }
+
   SetBrpcOpt(conf);
 }
 

@@ -14,12 +14,30 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/slice_data.h"
+#ifndef DINGOFS_CLIENT_VFS_BACKGROUND_IPERIODIC_FLUSH_MANAGER_H_
+#define DINGOFS_CLIENT_VFS_BACKGROUND_IPERIODIC_FLUSH_MANAGER_H_
+
+#include <sys/types.h>
+
+#include "client/vfs/handle/handle_manager.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
+class IPeriodicFlushManager {
+ public:
+  virtual ~IPeriodicFlushManager() = default;
+
+  virtual void Start() = 0;
+
+  virtual void Stop() = 0;
+
+  virtual void SubmitToFlush(HandleSPtr handle) = 0;
+};
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
+
+#endif  // DINGOFS_CLIENT_VFS_BACKGROUND_IPERIODIC_FLUSH_MANAGER_H_

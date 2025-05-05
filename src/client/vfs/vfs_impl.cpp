@@ -168,12 +168,15 @@ Status VFSImpl::Link(Ino ino, Ino new_parent, const std::string& new_name,
 
 Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
   Status s;
-  MetaLogGuard log_guard(
-      [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
 
-  auto handle = handle_manager_->NewHandle();
+  HandleSPtr handle = handle_manager_->NewHandle();
 
-  s = meta_system_->Open(ino, flags, handle->fh);
+  {
+    MetaLogGuard log_guard(
+        [&]() { return absl::StrFormat("open (%d): %s", ino, s.ToString()); });
+    s = meta_system_->Open(ino, flags, handle->fh);
+  }
+
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
@@ -181,6 +184,9 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
     *fh = handle->fh;
+
+    // TOOD: if flags is O_RDONLY, no need schedule flush
+    vfs_hub_->GetPeriodicFlushManger()->SubmitToFlush(handle);
   }
 
   return s;
@@ -190,16 +196,20 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
                        uint32_t gid, uint32_t mode, int flags, uint64_t* fh,
                        Attr* attr) {
   Status s;
-  MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("create (%d,%s,%s:0%04o): (%d,%d) %s %s", parent,
-                           name, StrMode(mode), mode, uid, gid, s.ToString(),
-                           StrAttr(attr));
-  });
 
   auto handle = handle_manager_->NewHandle();
 
-  s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr,
-                           handle->fh);
+  {
+    MetaLogGuard log_guard([&]() {
+      return absl::StrFormat("create (%d,%s,%s:0%04o): (%d,%d) %s %s", parent,
+                             name, StrMode(mode), mode, uid, gid, s.ToString(),
+                             StrAttr(attr));
+    });
+
+    s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr,
+                             handle->fh);
+  }
+
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
@@ -241,19 +251,45 @@ Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
   return handle->file->Write(buf, size, offset, out_wsize);
 }
 
-Status VFSImpl::Flush(Ino ino, uint64_t fh) { return Status::OK(); }
+Status VFSImpl::Flush(Ino ino, uint64_t fh) {
+  auto handle = handle_manager_->FindHandler(fh);
+  CHECK(handle != nullptr) << "handle is null, ino: " << ino << ", fh: " << fh;
 
-Status VFSImpl::Release(Ino ino, uint64_t fh) {
-  auto s = meta_system_->Close(ino, fh);
-  if (!s.ok()) {
-    handle_manager_->ReleaseHandler(fh);
+  if (handle->file == nullptr) {
+    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+    return Status::BadFd(fmt::format("bad  fh:{}", fh));
   }
 
+  return handle->file->Flush();
+}
+
+Status VFSImpl::Release(Ino ino, uint64_t fh) {
+  auto handle = handle_manager_->FindHandler(fh);
+  CHECK(handle != nullptr) << "handle is null, ino: " << ino << ", fh: " << fh;
+
+  if (handle->file == nullptr) {
+    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+  }
+
+  // how do we return
+  DINGOFS_RETURN_NOT_OK(meta_system_->Close(ino, fh));
+
+  handle_manager_->ReleaseHandler(fh);
   return Status::OK();
 }
 
+// TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
-  return Status::OK();
+  auto handle = handle_manager_->FindHandler(fh);
+  CHECK(handle != nullptr) << "handle is null, ino: " << ino << ", fh: " << fh;
+
+  if (handle->file == nullptr) {
+    LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
+    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+  }
+
+  return handle->file->Flush();
 }
 
 Status VFSImpl::SetXattr(Ino ino, const std::string& name,

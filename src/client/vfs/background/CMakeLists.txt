@@ -12,17 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_hub 
-    vfs_hub.cpp
+add_library(vfs_background
+    periodic_flush_manager.cc
 )
 
-target_link_libraries(vfs_hub
-    client_common
-    cache_blockcache
-    vfs_background
-    vfs_meta_dummy_lib
-    vfs_meta_v2_lib
-    block_accesser
-    vfs_handle
-    absl::str_format
+target_link_libraries(vfs_background
+    gflags::gflags
+    glog::glog
+    vfs_hub
 )

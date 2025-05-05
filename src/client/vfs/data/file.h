@@ -22,8 +22,11 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "common/status.h"
+#include "client/vfs/data/background/file_flush_task.h"
 #include "client/vfs/data/chunk.h"
+#include "client/vfs/data/ifile.h"
+#include "common/callback.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -31,17 +34,21 @@ namespace vfs {
 
 class VFSHub;
 
-class File {
+class File : public IFile {
  public:
   File(VFSHub* hub, uint64_t ino) : vfs_hub_(hub), ino_(ino) {}
 
-  ~File() = default;
+  ~File() override = default;
 
   Status Write(const char* buf, uint64_t size, uint64_t offset,
-               uint64_t* out_wsize);
+               uint64_t* out_wsize) override;
 
   Status Read(char* buf, uint64_t size, uint64_t offset,
-              uint64_t* out_rsize);
+              uint64_t* out_rsize) override;
+
+  Status Flush() override;
+
+  void AsyncFlush(StatusCallback cb) override;
 
  private:
   VFSHub* vfs_hub_;
@@ -57,6 +64,10 @@ class File {
   std::mutex mutex_;
   // chunk_index -> chunk
   std::unordered_map<uint64_t, std::unique_ptr<Chunk>> chunks_;
+  // TODO: monitor this and add a manager
+  // file_flush_id -> FileFlushTask
+  std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>
+      inflight_flush_tasks_;
 };
 
 }  // namespace vfs

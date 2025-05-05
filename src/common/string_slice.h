@@ -26,29 +26,32 @@
 
 namespace dingofs {
 
-class Slice {
+class StringSlice {
  public:
   // Create an empty slice.
-  Slice() : data_(""), size_(0) {}
+  StringSlice() : data_(""), size_(0) {}
 
   // Create a slice that refers to d[0,n-1].
-  Slice(const char* d, size_t n) : data_(d), size_(n) {}
+  StringSlice(const char* d, size_t n) : data_(d), size_(n) {}
 
   // Create a slice that refers to the contents of "s"
   /* implicit */
-  Slice(const std::string& s) : data_(s.data()), size_(s.size()) {}
+  StringSlice(const std::string& s) : data_(s.data()), size_(s.size()) {}
 
   // Create a slice that refers to the same contents as "sv"
   /* implicit */
-  Slice(const std::string_view& sv) : data_(sv.data()), size_(sv.size()) {}
+  StringSlice(const std::string_view& sv)
+      : data_(sv.data()), size_(sv.size()) {}
 
   // Create a slice that refers to s[0,strlen(s)-1]
   /* implicit */
-  Slice(const char* s) : data_(s) { size_ = (s == nullptr) ? 0 : strlen(s); }
+  StringSlice(const char* s) : data_(s) {
+    size_ = (s == nullptr) ? 0 : strlen(s);
+  }
 
-  // Create a single slice from SliceParts using buf as storage.
+  // Create a single slice from StringSliceParts using buf as storage.
   // buf must exist as long as the returned Slice exists.
-  Slice(const struct SliceParts& parts, std::string* buf);
+  StringSlice(const struct StringSliceParts& parts, std::string* buf);
 
   // Return a pointer to the beginning of the referenced data
   const char* data() const { return data_; }  // NOLINT
@@ -95,7 +98,7 @@ class Slice {
 
   // Decodes the current slice interpreted as an hexadecimal string into result,
   // if successful returns true, if this isn't a valid hex string
-  // (e.g not coming from Slice::ToString(true)) DecodeHex returns false.
+  // (e.g not coming from StringSlice::ToString(true)) DecodeHex returns false.
   // This slice is expected to have an even number of 0-9A-F characters
   // also accepts lowercase (a-f)
   bool DecodeHex(std::string* result) const;
@@ -104,22 +107,22 @@ class Slice {
   //   <  0 iff "*this" <  "b",
   //   == 0 iff "*this" == "b",
   //   >  0 iff "*this" >  "b"
-  int compare(const Slice& b) const;  // NOLINT
+  int compare(const StringSlice& b) const;  // NOLINT
 
   // Return true iff "x" is a prefix of "*this"
-  bool starts_with(const Slice& x) const  // NOLINT
+  bool starts_with(const StringSlice& x) const  // NOLINT
   {
     return ((size_ >= x.size_) && (memcmp(data_, x.data_, x.size_) == 0));
   }
 
-  bool ends_with(const Slice& x) const  // NOLINT
+  bool ends_with(const StringSlice& x) const  // NOLINT
   {
     return ((size_ >= x.size_) &&
             (memcmp(data_ + size_ - x.size_, x.data_, x.size_) == 0));
   }
 
   // Compare two slices and returns the first byte where they differ
-  size_t difference_offset(const Slice& b) const;  // NOLINT
+  size_t difference_offset(const StringSlice& b) const;  // NOLINT
 
   // private: make these public for rocksdbjni access
   const char* data_;  // NOLINT
@@ -130,23 +133,25 @@ class Slice {
 
 // A set of Slices that are virtually concatenated together.  'parts' points
 // to an array of Slices.  The number of elements in the array is 'num_parts'.
-struct SliceParts {
-  SliceParts(const Slice* _parts, int _num_parts)
+struct StringSliceParts {
+  StringSliceParts(const StringSlice* _parts, int _num_parts)
       : parts(_parts), num_parts(_num_parts) {}  // NOLINT
-  SliceParts() : parts(nullptr), num_parts(0) {}
+  StringSliceParts() : parts(nullptr), num_parts(0) {}
 
-  const Slice* parts;
+  const StringSlice* parts;
   int num_parts;
 };
 
-inline bool operator==(const Slice& x, const Slice& y) {
+inline bool operator==(const StringSlice& x, const StringSlice& y) {
   return ((x.size() == y.size()) &&
           (memcmp(x.data(), y.data(), x.size()) == 0));
 }
 
-inline bool operator!=(const Slice& x, const Slice& y) { return !(x == y); }
+inline bool operator!=(const StringSlice& x, const StringSlice& y) {
+  return !(x == y);
+}
 
-inline int Slice::compare(const Slice& b) const {
+inline int StringSlice::compare(const StringSlice& b) const {
   assert(data_ != nullptr && b.data_ != nullptr);
   const size_t min_len = (size_ < b.size_) ? size_ : b.size_;
   int r = memcmp(data_, b.data_, min_len);
@@ -159,7 +164,7 @@ inline int Slice::compare(const Slice& b) const {
   return r;
 }
 
-inline size_t Slice::difference_offset(const Slice& b) const {
+inline size_t StringSlice::difference_offset(const StringSlice& b) const {
   size_t off = 0;
   const size_t len = (size_ < b.size_) ? size_ : b.size_;
   for (; off < len; off++) {

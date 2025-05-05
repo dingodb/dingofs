@@ -23,9 +23,9 @@
 #ifndef SRC_COMMON_CONCURRENT_COUNT_DOWN_EVENT_H_
 #define SRC_COMMON_CONCURRENT_COUNT_DOWN_EVENT_H_
 
-#include <chrono>              //NOLINT
-#include <condition_variable>  //NOLINT
-#include <mutex>               //NOLINT
+#include <chrono>
+#include <condition_variable>
+#include <mutex>
 
 namespace dingofs {
 namespace utils {
@@ -38,9 +38,9 @@ namespace utils {
  */
 class CountDownEvent {
  public:
-  CountDownEvent() : mutex_(), cond_(), count_() {}
+  CountDownEvent() = default;
 
-  explicit CountDownEvent(int initCnt) : mutex_(), cond_(), count_(initCnt) {}
+  explicit CountDownEvent(int initCnt) : count_(initCnt) {}
 
   /**
    * 重新设置event计数
@@ -105,7 +105,7 @@ class CountDownEvent {
   mutable std::mutex mutex_;
   std::condition_variable cond_;
   // 需要等待的事件计数
-  int count_;
+  int count_{0};
 };
 
 }  // namespace utils

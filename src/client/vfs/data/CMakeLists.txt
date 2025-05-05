@@ -13,15 +13,20 @@
 # limitations under the License.
 
 add_subdirectory(flat)
+add_subdirectory(slice)
 
 add_library(vfs_data 
     common.cpp
     file.cpp
     chunk.cpp
-    slice_data.cpp
+    background/chunk_flush_task.cpp
+    background//file_flush_task.cpp
 )
 
 target_link_libraries(vfs_data
     PROTO_OBJS
     vfs_data_flat
+    vfs_data_slice
+    vfs_background
+    vfs_common_lib
 )

@@ -13,6 +13,7 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
+# Seperate memory_pool and page_allocator from datastream
 add_library(client_datastream 
     data_stream.cpp
     memory_pool.cpp

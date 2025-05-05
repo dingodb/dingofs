@@ -18,11 +18,13 @@
 
 #include <memory>
 
+#include "glog/logging.h"
+
 namespace dingofs {
 namespace client {
 namespace vfs {
 
-HandlePtr HandleManager::NewHandle() {
+HandleSPtr HandleManager::NewHandle() {
   auto handle = std::make_shared<Handle>();
   std::lock_guard<std::mutex> lock(mutex_);
   handle->fh = next_fh_++;
@@ -31,7 +33,7 @@ HandlePtr HandleManager::NewHandle() {
   return handle;
 }
 
-HandlePtr HandleManager::FindHandler(uint64_t fh) {
+HandleSPtr HandleManager::FindHandler(uint64_t fh) {
   std::lock_guard<std::mutex> lock(mutex_);
   auto it = handles_.find(fh);
   return (it == handles_.end()) ? nullptr : it->second;
@@ -41,6 +43,17 @@ void HandleManager::ReleaseHandler(uint64_t fh) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   handles_.erase(fh);
+}
+
+void HandleManager::FlushAll() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  for (auto& [fh, handle] : handles_) {
+    Status s = handle->file->Flush();
+    if (s.ok()) {
+      LOG(ERROR) << "Failed to flush file handle: " << fh
+                 << ", error: " << s.ToString();
+    }
+  }
 }
 
 }  // namespace vfs

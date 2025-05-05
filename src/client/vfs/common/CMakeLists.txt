@@ -14,6 +14,7 @@
 
 
 add_library(vfs_common_lib 
+    config.cpp
     dynamic_param.cpp
 )
 target_link_libraries(vfs_common_lib

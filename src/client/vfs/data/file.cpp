@@ -19,15 +19,23 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
 
 #include "client/common/utils.h"
+#include "client/vfs/data/async_util.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/callback.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+static std::atomic<uint64_t> file_flush_id_gen{1};
 
 uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
 
@@ -125,6 +133,63 @@ Status File::Read(char* buf, uint64_t size, uint64_t offset,
 
   *out_rsize = has_read;
   return Status::OK();
+}
+
+void File::AsyncFlush(StatusCallback cb) {
+  uint64_t file_flush_id = file_flush_id_gen.fetch_add(1);
+  VLOG(3) << "File::AsyncFlush start ino: " << ino_
+          << ", file_flush_id: " << file_flush_id;
+
+  FileFlushTask* flush_task{nullptr};
+  bool is_empty = false;
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    uint64_t chunk_count = chunks_.size();
+    if (chunk_count == 0) {
+      is_empty = true;
+    } else {
+      // TODO: maybe we only need chunk index
+      std::unordered_map<uint64_t, Chunk*> flush_chunks;
+      for (const auto& [chunk_index, chunk] : chunks_) {
+        flush_chunks[chunk_index] = chunk.get();
+      }
+
+      auto flush_task_unique_ptr = std::make_unique<FileFlushTask>(
+          ino_, file_flush_id, std::move(flush_chunks));
+      flush_task = flush_task_unique_ptr.get();
+
+      CHECK(inflight_flush_tasks_
+                .emplace(file_flush_id, std::move(flush_task_unique_ptr))
+                .second);
+    }
+  }
+
+  if (is_empty) {
+    VLOG(1) << "File::AsyncFlush end ino: " << ino_
+            << ", file_flush_id: " << file_flush_id
+            << ", no chunks to flush, calling callback directly";
+    cb(Status::OK());
+    return;
+  }
+
+  CHECK_NOTNULL(flush_task);
+  // TODO: maybe we need add callback to check if the flush task is
+  // failed or not, if failed, we need to mark file bad or retry?
+  flush_task->RunAsync(cb);
+
+  VLOG(3) << "File::AsyncFlush end ino: " << ino_
+          << ", file_flush_id: " << file_flush_id
+          << ", task: " << flush_task->ToString();
+}
+
+Status File::Flush() {
+  Status ret;
+  Synchronizer sync;
+  AsyncFlush(sync.AsStatusCallBack(ret));
+  sync.Wait();
+  return ret;
 }
 
 }  // namespace vfs

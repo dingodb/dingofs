@@ -26,10 +26,6 @@
 #include <bits/types/struct_iovec.h>
 #include <butil/iobuf.h>
 
-#include <cstdint>
-#include <memory>
-#include <string>
-
 namespace dingofs {
 
 // for block { put,range,cache... }:

@@ -36,6 +36,8 @@ namespace datastream {
 
 class PageAllocator {
  public:
+  virtual ~PageAllocator() = default;
+
   virtual bool Init(uint64_t page_size, uint64_t num_pages) = 0;
 
   virtual char* Allocate() = 0;
@@ -49,7 +51,7 @@ class DefaultPageAllocator : public PageAllocator {
  public:
   DefaultPageAllocator();
 
-  virtual ~DefaultPageAllocator() = default;
+  ~DefaultPageAllocator() override = default;
 
   bool Init(uint64_t page_size, uint64_t num_pages) override;
 
@@ -70,7 +72,7 @@ class PagePool : public PageAllocator {
  public:
   PagePool();
 
-  virtual ~PagePool();
+  ~PagePool() override;
 
   bool Init(uint64_t page_size, uint64_t num_pages) override;
 

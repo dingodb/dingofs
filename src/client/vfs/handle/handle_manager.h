@@ -20,9 +20,10 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <unordered_map>
 
-#include "client/vfs/data/file.h"
+#include "client/vfs/data/ifile.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 
@@ -35,29 +36,39 @@ struct Handle {
   uint64_t fh;
   // file ralted
   int32_t flags;
-  std::unique_ptr<File> file;
+  std::unique_ptr<IFile> file;
 
   // dir related
   std::unique_ptr<DirIterator> dir_iterator;
+
+  std::string ToString() const {
+    std::ostringstream oss;
+    oss << "Handle{ino: " << ino << ", fh; " << fh << ", flags: " << std::oct
+        << flags << "}";
+    return oss.str();
+  }
 };
 
-using HandlePtr = std::shared_ptr<Handle>;
+using HandleSPtr = std::shared_ptr<Handle>;
 
 class HandleManager {
  public:
   HandleManager() = default;
   ~HandleManager() = default;
 
-  HandlePtr NewHandle();
+  HandleSPtr NewHandle();
 
-  HandlePtr FindHandler(uint64_t fh);
+  HandleSPtr FindHandler(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
+
+  //  only called when process exit
+  void FlushAll();
 
  private:
   std::mutex mutex_;
   uint64_t next_fh_{1};
-  std::unordered_map<uint64_t, HandlePtr> handles_;
+  std::unordered_map<uint64_t, HandleSPtr> handles_;
 };
 
 }  // namespace vfs

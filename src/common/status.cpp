@@ -31,7 +31,8 @@ std::unique_ptr<const char[]> Status::CopyState(const char* s) {
   return std::unique_ptr<const char[]>(rv);
 }
 
-Status::Status(Code code, int32_t p_errno, const Slice& msg, const Slice& msg2)
+Status::Status(Code code, int32_t p_errno, const StringSlice& msg,
+               const StringSlice& msg2)
     : code_(code), errno_(p_errno) {
   const uint32_t len1 = static_cast<uint32_t>(msg.size());
   const uint32_t len2 = static_cast<uint32_t>(msg2.size());

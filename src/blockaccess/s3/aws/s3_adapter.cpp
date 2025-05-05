@@ -18,6 +18,8 @@
 
 #include <aws/core/Aws.h>
 
+#include <cstdlib>
+
 #include "blockaccess/s3/aws/client/aws_crt_s3_client.h"
 #include "blockaccess/s3/aws/client/aws_legacy_s3_client.h"
 
@@ -31,6 +33,8 @@ static std::once_flag s3_init_flag;
 static std::once_flag s3_shutdown_flag;
 static Aws::SDKOptions aws_sdk_options;
 
+static void CleanUp() { Aws::ShutdownAPI(aws_sdk_options); }
+
 void S3Adapter::Init(const S3Options& options) {
   auto init_sdk = [&]() {
     aws_sdk_options.loggingOptions.logLevel =
@@ -38,7 +42,12 @@ void S3Adapter::Init(const S3Options& options) {
     aws_sdk_options.loggingOptions.defaultLogPrefix =
         options.aws_sdk_config.logPrefix.c_str();
     Aws::InitAPI(aws_sdk_options);
+
+    if (std::atexit(CleanUp) != 0) {
+      LOG(FATAL) << "Failed to register cleanup function for AWS SDK";
+    }
   };
+
   std::call_once(s3_init_flag, init_sdk);
 
   s3_options_ = options;
@@ -55,9 +64,9 @@ void S3Adapter::Init(const S3Options& options) {
 }
 
 void S3Adapter::Shutdown() {
-  // one program should only call once
-  auto shutdown_sdk = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
-  std::call_once(s3_shutdown_flag, shutdown_sdk);
+//   // one program should only call once
+//   auto shutdown_sdk = [&]() { Aws::ShutdownAPI(aws_sdk_options); };
+//   std::call_once(s3_shutdown_flag, shutdown_sdk);
 }
 
 bool S3Adapter::BucketExist() { return s3_client_->BucketExist(bucket_); }

@@ -17,6 +17,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 
 #include <fmt/format.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <atomic>
@@ -29,12 +30,17 @@
 #include "cache/storage/storage_impl.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/config.h"
+#include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/v2/filesystem.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/configuration.h"
+#include "utils/executor/executor.h"
+#include "utils/executor/executor_impl.h"
+
+DEFINE_int32(flush_bg_thread, 16, "Number of background flush threads");
 
 namespace dingofs {
 namespace client {
@@ -120,6 +126,31 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     DINGOFS_RETURN_NOT_OK(block_cache_->Init());
   }
 
+  {
+    flush_executor_ = std::make_unique<ExecutorImpl>();
+    flush_executor_->Start(FLAGS_flush_bg_thread);
+  }
+
+  {
+    priodic_flush_manager_ = std::make_unique<PeriodicFlushManager>(this);
+    priodic_flush_manager_->Start();
+  }
+
+  {
+    auto o = client_option_.data_stream_option.page_option;
+    if (o.use_pool) {
+      page_allocator_ = std::make_shared<datastream::PagePool>();
+    } else {
+      page_allocator_ = std::make_shared<datastream::DefaultPageAllocator>();
+    }
+
+    auto ok = page_allocator_->Init(o.page_size, o.total_size / o.page_size);
+    if (!ok) {
+      LOG(ERROR) << "Init page allocator failed.";
+      return Status::Internal("Init page allocator failed");
+    }
+  }
+
   started_.store(true, std::memory_order_relaxed);
   return Status::OK();
 }
@@ -131,34 +162,14 @@ Status VFSHubImpl::Stop() {
 
   started_.store(false, std::memory_order_relaxed);
 
+  handle_manager_->FlushAll();
+
+  block_cache_->Shutdown();
+  flush_executor_->Stop();
+  priodic_flush_manager_->Stop();
   meta_system_->UnInit();
 
   return Status::OK();
-}
-
-MetaSystem* VFSHubImpl::GetMetaSystem() {
-  CHECK_NOTNULL(meta_system_);
-  return meta_system_.get();
-}
-
-HandleManager* VFSHubImpl::GetHandleManager() {
-  CHECK_NOTNULL(handle_manager_);
-  return handle_manager_.get();
-}
-
-cache::BlockCache* VFSHubImpl::GetBlockCache() {
-  CHECK_NOTNULL(handle_manager_);
-  return block_cache_.get();
-}
-
-blockaccess::BlockAccesser* VFSHubImpl::GetBlockAccesser() {
-  CHECK_NOTNULL(block_accesser_);
-  return block_accesser_.get();
-}
-
-FsInfo VFSHubImpl::GetFsInfo() {
-  CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-  return fs_info_;
 }
 
 }  // namespace vfs

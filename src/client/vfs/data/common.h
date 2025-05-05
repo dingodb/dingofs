@@ -32,7 +32,6 @@ struct FileRange {
   uint64_t len;
 
   uint64_t End() const { return offset + len; }
-
   std::string ToString() const;
 };
 
@@ -42,7 +41,6 @@ struct SliceReadReq {
   std::optional<Slice> slice;
 
   uint64_t End() const { return file_offset + len; }
-
   std::string ToString() const;
 };
 
@@ -55,7 +53,6 @@ struct BlockDesc {
   uint64_t index;  // block index in the chunk
 
   uint64_t End() const { return file_offset + block_len; }
-
   std::string ToString() const;
 };
 
@@ -66,7 +63,6 @@ struct BlockReadReq {
 
   // Note: this is the offset in the block, not the file offset.
   uint64_t End() const { return block_offset + len; }
-
   std::string ToString() const;
 };
 
