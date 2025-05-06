@@ -27,12 +27,12 @@
 
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
-#include "client/common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
+#include "common/status.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
@@ -40,7 +40,7 @@ static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
 USING_FLAG(fuse_file_info_direct_io);
 USING_FLAG(fuse_file_info_keep_cache);
 
-using dingofs::client::Status;
+using dingofs::Status;
 using dingofs::client::vfs::Attr;
 using dingofs::client::vfs::FsStat;
 

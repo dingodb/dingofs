@@ -30,6 +30,7 @@
 #include "base/string/string.h"
 #include "cache/common/common.h"
 #include "cache/common/dynamic_config.h"
+#include "common/status.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {
@@ -40,7 +41,6 @@ USING_CACHE_FLAG(disk_cache_free_space_ratio);
 
 using base::string::StrFormat;
 using cache::common::DiskCacheOption;
-using cache::common::Status;
 using stub::metric::InterfaceMetric;
 
 constexpr const char* kLoadStopped = "STOP";  // load status

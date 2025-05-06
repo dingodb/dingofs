@@ -22,7 +22,7 @@
 #include <map>
 #include <memory>
 
-#include "client/common/status.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {

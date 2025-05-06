@@ -14,35 +14,16 @@
  * limitations under the License.
  */
 
-#include "dataaccess/aws/client/aws_legacy_s3_client.h"
+#include "dataaccess/s3/aws/client/aws_crt_s3_client.h"
 
-#include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
-#include <aws/core/client/ClientConfiguration.h>
-#include <aws/core/http/HttpRequest.h>
-#include <aws/core/http/Scheme.h>
-#include <aws/core/utils/memory/AWSMemory.h>
-#include <aws/core/utils/memory/stl/AWSString.h>
-#include <aws/core/utils/memory/stl/AWSStringStream.h>
-#include <aws/core/utils/threading/Executor.h>
+#include <aws/s3-crt/model/BucketLocationConstraint.h>
+#include <aws/s3-crt/model/DeleteObjectRequest.h>
+#include <aws/s3-crt/model/DeleteObjectsRequest.h>
+#include <aws/s3-crt/model/GetObjectRequest.h>
+#include <aws/s3-crt/model/HeadBucketRequest.h>
+#include <aws/s3-crt/model/HeadObjectRequest.h>
+#include <aws/s3-crt/model/PutObjectRequest.h>
 #include <aws/s3/S3Client.h>
-#include <aws/s3/model/AbortMultipartUploadRequest.h>
-#include <aws/s3/model/BucketLocationConstraint.h>
-#include <aws/s3/model/CompleteMultipartUploadRequest.h>
-#include <aws/s3/model/CompletedPart.h>
-#include <aws/s3/model/CreateBucketConfiguration.h>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/CreateMultipartUploadRequest.h>
-#include <aws/s3/model/Delete.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
-#include <aws/s3/model/DeleteObjectRequest.h>
-#include <aws/s3/model/DeleteObjectsRequest.h>
-#include <aws/s3/model/GetObjectRequest.h>
-#include <aws/s3/model/HeadBucketRequest.h>
-#include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/ObjectIdentifier.h>
-#include <aws/s3/model/PutObjectRequest.h>
-#include <aws/s3/model/UploadPartRequest.h>
 #include <glog/logging.h>
 #include <opentelemetry/exporters/otlp/otlp_http_exporter_factory.h>
 #include <opentelemetry/exporters/otlp/otlp_http_metric_exporter_factory.h>
@@ -50,39 +31,34 @@
 #include <smithy/tracing/impl/opentelemetry/OtelTelemetryProvider.h>
 
 #include <memory>
-#include <utility>
+
+#include "dataaccess/s3/aws/aws_s3_common.h"
 
 namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
-  CHECK(!initialized_.load()) << "AwsLegacyS3Client already initialized";
-  LOG(INFO) << "AwsLegacyS3Client init ak: " << option.ak
-            << " sk: " << option.sk << " s3_address: " << option.s3Address
+void AwsCrtS3Client::Init(const S3AdapterOption& option) {
+  CHECK(!initialized_.load()) << "AwsCrtS3Client already initialized";
+  LOG(INFO) << "AwsCrtS3Client init ak: " << option.ak << " sk: " << option.sk
+            << " s3_address: " << option.s3Address
             << " bucket_name: " << option.bucketName;
 
   option_ = option;
 
   {
-    // init config
-    auto config = std::make_unique<Aws::Client::ClientConfiguration>();
+    auto config = std::make_unique<Aws::S3Crt::S3CrtClientConfiguration>();
     // config->scheme = Aws::Http::Scheme(option.scheme);
     config->verifySSL = option.verifySsl;
-    config->userAgent = "S3 Browser";
     config->region = option.region;
     config->maxConnections = option.maxConnections;
     config->connectTimeoutMs = option.connectTimeout;
     config->requestTimeoutMs = option.requestTimeout;
     config->endpointOverride = option.s3Address;
+    config->useVirtualAddressing = option.useVirtualAddressing;
 
-    if (option.use_thread_pool) {
-      LOG(INFO) << "AwsLegacyS3Client init async thread pool thread num = "
-                << option.asyncThreadNum;
-      config->executor =
-          Aws::MakeShared<Aws::Utils::Threading::PooledThreadExecutor>(
-              "AwsLegacyS3Client", option.asyncThreadNum);
-    }
+    // TODO : to support
+    // config.throughputTargetGbps = throughput_target_gbps;
 
     if (option.enableTelemetry) {
       LOG(INFO) << "Enable telemetry for aws s3 adapter";
@@ -101,21 +77,19 @@ void AwsLegacyS3Client::Init(const S3AdapterOption& option) {
           OtelTelemetryProvider::CreateOtelProvider(std::move(span_exporter),
                                                     std::move(push_exporter));
     }
-
     cfg_ = std::move(config);
   }
 
-  client_ = std::make_unique<Aws::S3::S3Client>(
+  client_ = std::make_unique<Aws::S3Crt::S3CrtClient>(
       Aws::Auth::AWSCredentials(option_.ak, option_.sk), *cfg_,
-      Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-      option.useVirtualAddressing);
+      Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never);
 
   initialized_.store(true);
 }
 
-bool AwsLegacyS3Client::BucketExist(std::string bucket) {
+bool AwsCrtS3Client::BucketExist(std::string bucket) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::HeadBucketRequest request;
+  Aws::S3Crt::Model::HeadBucketRequest request;
   request.SetBucket(bucket);
   auto response = client_->HeadBucket(request);
   if (response.IsSuccess()) {
@@ -128,10 +102,10 @@ bool AwsLegacyS3Client::BucketExist(std::string bucket) {
   }
 }
 
-int AwsLegacyS3Client::PutObject(std::string bucket, const std::string& key,
-                                 const char* buffer, size_t buffer_size) {
+int AwsCrtS3Client::PutObject(std::string bucket, const std::string& key,
+                              const char* buffer, size_t buffer_size) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::PutObjectRequest request;
+  Aws::S3Crt::Model::PutObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
   request.SetBody(Aws::MakeShared<PreallocatedIOStream>(AWS_ALLOCATE_TAG,
@@ -149,10 +123,10 @@ int AwsLegacyS3Client::PutObject(std::string bucket, const std::string& key,
   }
 }
 
-void AwsLegacyS3Client::PutObjectAsync(
+void AwsCrtS3Client::PutObjectAsync(
     std::string bucket, std::shared_ptr<AwsPutObjectAsyncContext> context) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::PutObjectRequest request;
+  Aws::S3Crt::Model::PutObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(std::string{context->put_obj_ctx->key.c_str(),
                              context->put_obj_ctx->key.size()});
@@ -160,11 +134,11 @@ void AwsLegacyS3Client::PutObjectAsync(
       AWS_ALLOCATE_TAG, context->put_obj_ctx->buffer,
       context->put_obj_ctx->buffer_size));
 
-  Aws::S3::PutObjectResponseReceivedHandler handler =
+  Aws::S3Crt::PutObjectResponseReceivedHandler handler =
       [context, this](
-          const Aws::S3::S3Client* /*client*/,
-          const Aws::S3::Model::PutObjectRequest& /*request*/,
-          const Aws::S3::Model::PutObjectOutcome& response,
+          const Aws::S3Crt::S3CrtClient* /*client*/,
+          const Aws::S3Crt::Model::PutObjectRequest& /*request*/,
+          const Aws::S3Crt::Model::PutObjectOutcome& response,
           const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
               aws_ctx) {
         std::shared_ptr<AwsPutObjectAsyncContext> ctx =
@@ -185,14 +159,14 @@ void AwsLegacyS3Client::PutObjectAsync(
   client_->PutObjectAsync(request, handler, context);
 }
 
-int AwsLegacyS3Client::GetObject(std::string bucket, const std::string& key,
-                                 std::string* data) {
+int AwsCrtS3Client::GetObject(std::string bucket, const std::string& key,
+                              std::string* data) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::GetObjectRequest request;
+  Aws::S3Crt::Model::GetObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
 
-  Aws::S3::Model::GetObjectOutcome response = client_->GetObject(request);
+  Aws::S3Crt::Model::GetObjectOutcome response = client_->GetObject(request);
   if (response.IsSuccess()) {
     std::stringstream ss;
     ss << response.GetResult().GetBody().rdbuf();
@@ -205,10 +179,10 @@ int AwsLegacyS3Client::GetObject(std::string bucket, const std::string& key,
   }
 }
 
-int AwsLegacyS3Client::RangeObject(std::string bucket, const std::string& key,
-                                   char* buf, off_t offset, size_t len) {
+int AwsCrtS3Client::RangeObject(std::string bucket, const std::string& key,
+                                char* buf, off_t offset, size_t len) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::GetObjectRequest request;
+  Aws::S3Crt::Model::GetObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(std::string{key.c_str(), key.size()});
   request.SetRange(GetObjectRequestRange(offset, len));
@@ -229,10 +203,10 @@ int AwsLegacyS3Client::RangeObject(std::string bucket, const std::string& key,
   }
 }
 
-void AwsLegacyS3Client::GetObjectAsync(
+void AwsCrtS3Client::GetObjectAsync(
     std::string bucket, std::shared_ptr<AwsGetObjectAsyncContext> context) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::GetObjectRequest request;
+  Aws::S3Crt::Model::GetObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(std::string{context->get_obj_ctx->key.c_str(),
                              context->get_obj_ctx->key.size()});
@@ -243,11 +217,11 @@ void AwsLegacyS3Client::GetObjectAsync(
         AWS_ALLOCATE_TAG, context->get_obj_ctx->buf, context->get_obj_ctx->len);
   });
 
-  Aws::S3::GetObjectResponseReceivedHandler handler =
+  Aws::S3Crt::GetObjectResponseReceivedHandler handler =
       [this, context](
-          const Aws::S3::S3Client* /*client*/,
-          const Aws::S3::Model::GetObjectRequest& /*request*/,
-          const Aws::S3::Model::GetObjectOutcome& response,
+          const Aws::S3Crt::S3CrtClient* /*client*/,
+          const Aws::S3Crt::Model::GetObjectRequest& /*request*/,
+          const Aws::S3Crt::Model::GetObjectOutcome& response,
           const std::shared_ptr<const Aws::Client::AsyncCallerContext>&
               aws_ctx) {
         std::shared_ptr<AwsGetObjectAsyncContext> ctx =
@@ -268,10 +242,9 @@ void AwsLegacyS3Client::GetObjectAsync(
   client_->GetObjectAsync(request, handler, context);
 }
 
-int AwsLegacyS3Client::DeleteObject(std::string bucket,
-                                    const std::string& key) {
+int AwsCrtS3Client::DeleteObject(std::string bucket, const std::string& key) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::DeleteObjectRequest request;
+  Aws::S3Crt::Model::DeleteObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
   auto response = client_->DeleteObject(request);
@@ -285,13 +258,13 @@ int AwsLegacyS3Client::DeleteObject(std::string bucket,
   }
 }
 
-int AwsLegacyS3Client::DeleteObjects(std::string bucket,
-                                     const std::list<std::string>& key_list) {
+int AwsCrtS3Client::DeleteObjects(std::string bucket,
+                                  const std::list<std::string>& key_list) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::DeleteObjectsRequest delete_objects_request;
-  Aws::S3::Model::Delete delete_objects;
+  Aws::S3Crt::Model::DeleteObjectsRequest delete_objects_request;
+  Aws::S3Crt::Model::Delete delete_objects;
   for (const auto& key : key_list) {
-    Aws::S3::Model::ObjectIdentifier obj_ident;
+    Aws::S3Crt::Model::ObjectIdentifier obj_ident;
     obj_ident.SetKey(key);
     delete_objects.AddObjects(obj_ident);
   }
@@ -323,18 +296,17 @@ int AwsLegacyS3Client::DeleteObjects(std::string bucket,
   return 0;
 }
 
-bool AwsLegacyS3Client::ObjectExist(std::string bucket,
-                                    const std::string& key) {
+bool AwsCrtS3Client::ObjectExist(std::string bucket, const std::string& key) {
   DCHECK(initialized_.load(std::memory_order_relaxed));
-  Aws::S3::Model::HeadObjectRequest request;
+  Aws::S3Crt::Model::HeadObjectRequest request;
   request.SetBucket(bucket);
   request.SetKey(key);
   auto response = client_->HeadObject(request);
   if (response.IsSuccess()) {
     return true;
   } else {
-    LOG(ERROR) << "HeadObject error bucket: " << bucket << ", key:" << key
-               << ", error: " << response.GetError().GetExceptionName()
+    LOG(ERROR) << "HeadObject error bucket: " << bucket << "--" << key << "--"
+               << response.GetError().GetExceptionName()
                << response.GetError().GetMessage();
     return false;
   }

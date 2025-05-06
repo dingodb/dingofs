@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3_accesser.h"
+#include "dataaccess/s3/s3_accesser.h"
 
 #include <memory>
 

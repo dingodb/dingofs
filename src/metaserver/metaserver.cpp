@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
 #include "metaserver/copyset/copyset_service.h"

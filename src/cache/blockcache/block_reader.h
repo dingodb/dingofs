@@ -29,6 +29,7 @@
 #include "cache/common/aio_queue.h"
 #include "cache/common/common.h"
 #include "cache/common/local_filesystem.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,7 +37,6 @@ namespace blockcache {
 
 using cache::common::AioQueue;
 using cache::common::LocalFileSystem;
-using cache::common::Status;
 
 class BlockReader {
  public:

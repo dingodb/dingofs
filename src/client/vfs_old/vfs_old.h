@@ -26,7 +26,7 @@
 
 #include "client/common/common.h"
 #include "client/common/config.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/inode_cache_manager.h"

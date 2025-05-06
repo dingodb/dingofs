@@ -27,7 +27,7 @@
 
 #include "brpc/channel.h"
 #include "brpc/controller.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "utils/concurrent/concurrent.h"

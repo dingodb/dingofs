@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "client/common/dynamic_config.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"

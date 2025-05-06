@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "client/common/slice.h"
+#include "common/slice.h"
 
 namespace dingofs {
-namespace client {
 
 // 2 small internal utility functions, for efficient hex conversions
 // and no need for snprintf, toupper etc...
@@ -103,5 +102,4 @@ bool Slice::DecodeHex(std::string* result) const {
   return true;
 }
 
-}  // namespace client
 }  // namespace dingofs

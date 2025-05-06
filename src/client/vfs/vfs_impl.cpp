@@ -22,7 +22,7 @@
 #include <memory>
 #include <utility>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/dir_iterator.h"

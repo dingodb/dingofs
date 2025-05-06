@@ -36,7 +36,7 @@ target_link_libraries(cache_common
     dingofs_base_lib
     dingofs_utils
     dingofs_common
-    client_common
+    dingofs_status
 )
 
 # now we support 3fs usrbio only for ubuntu

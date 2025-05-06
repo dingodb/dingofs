@@ -24,7 +24,7 @@
 #include <string>
 
 #include "dingofs/metaserver.pb.h"
-#include "client/common/status.h"
+#include "common/status.h"
 
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_ERROR_H_

@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/aws_s3_common.h"
 #include "dingofs/common.pb.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"

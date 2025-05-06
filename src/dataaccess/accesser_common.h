@@ -21,12 +21,8 @@
 #include <memory>
 #include <string>
 
-#include "client/common/status.h"
-
 namespace dingofs {
 namespace dataaccess {
-
-using ::dingofs::client::Status;
 
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;

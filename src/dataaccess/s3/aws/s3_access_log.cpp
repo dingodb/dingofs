@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/aws/s3_access_log.h"
+#include "dataaccess/s3/aws/s3_access_log.h"
 
 #include <absl/strings/str_format.h>
 

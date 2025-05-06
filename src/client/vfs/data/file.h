@@ -22,7 +22,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/data/chunk.h"
 
 namespace dingofs {

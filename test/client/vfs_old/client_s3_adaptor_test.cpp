@@ -30,7 +30,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/mock/mock_block_cache.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"

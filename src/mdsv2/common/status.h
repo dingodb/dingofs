@@ -18,9 +18,11 @@
 #include "butil/status.h"
 
 namespace dingofs {
+namespace mdsv2 {
 
 using Status = butil::Status;
 
+}
 }  // namespace dingofs
 
 #endif  // DINGOFS_MDV2_COMMON_STATUS_H_

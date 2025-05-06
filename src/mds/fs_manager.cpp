@@ -33,7 +33,7 @@
 #include <utility>
 
 #include "common/define.h"
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/common/types.h"

@@ -19,7 +19,7 @@
 #include <memory>
 #include <string>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"

@@ -11,17 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_library(client_common
-    dynamic_config.cpp
-    config.cpp
-    common.cpp
+add_subdirectory(aws)
+
+add_library(s3_accesser
+    s3_accesser.cpp
 )
 
-target_link_libraries(client_common
-    brpc::brpc
-    fmt::fmt
+target_link_libraries(s3_accesser
+    dingofs_utils
+    dingofs_status
+    ${AWSSDK_LIBRARIES}
+    aws_s3_adapter
     glog::glog
-    gflags::gflags
+    spdlog::spdlog
+    absl::str_format
 )

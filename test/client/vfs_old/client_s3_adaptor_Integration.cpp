@@ -27,7 +27,7 @@
 
 #include <memory>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"

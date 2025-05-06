@@ -29,12 +29,11 @@
 #include <unordered_map>
 
 #include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using cache::common::Status;
 
 class Countdown {
   struct Counter {

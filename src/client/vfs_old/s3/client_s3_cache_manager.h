@@ -35,7 +35,7 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/inode_wrapper.h"

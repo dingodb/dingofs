@@ -23,7 +23,7 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
-#include "dataaccess/s3_accesser.h"
+#include "dataaccess/s3/s3_accesser.h"
 #include "dingofs/error.pb.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/logging.h"

@@ -31,8 +31,8 @@
 #include <string>
 
 #include "dataaccess/accesser_common.h"
-#include "dataaccess/aws/aws_s3_common.h"
-#include "dataaccess/aws/client/aws_s3_client.h"
+#include "dataaccess/s3/aws/aws_s3_common.h"
+#include "dataaccess/s3/aws/client/aws_s3_client.h"
 #include "utils/configuration.h"
 #include "utils/throttle.h"
 

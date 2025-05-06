@@ -31,6 +31,7 @@
 #include "base/string/string.h"
 #include "cache/blockcache/block_reader.h"
 #include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -39,7 +40,6 @@ namespace blockcache {
 using base::string::StrFormat;
 using base::string::Strs2Ints;
 using base::string::StrSplit;
-using cache::common::Status;
 
 struct BlockKey {
   BlockKey() : fs_id(0), ino(0), id(0), index(0), version(0) {}

@@ -22,7 +22,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"

@@ -30,7 +30,7 @@
 #include <string>
 #include <utility>
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 #include "metaserver/s3compact_manager.h"
 
 using ::dingofs::dataaccess::aws::S3Adapter;

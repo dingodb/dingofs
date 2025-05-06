@@ -20,7 +20,7 @@
 > Created Time: Wed Dec 19 15:19:40 2018
  ************************************************************************/
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 
 #include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
@@ -31,9 +31,9 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/aws/client/aws_crt_s3_client.h"
-#include "dataaccess/aws/client/aws_legacy_s3_client.h"
-#include "dataaccess/aws/s3_access_log.h"
+#include "dataaccess/s3/aws/client/aws_crt_s3_client.h"
+#include "dataaccess/s3/aws/client/aws_legacy_s3_client.h"
+#include "dataaccess/s3/aws/s3_access_log.h"
 #include "utils/dingo_define.h"
 #include "utils/macros.h"
 

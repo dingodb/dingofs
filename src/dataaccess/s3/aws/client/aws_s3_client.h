@@ -19,7 +19,7 @@
 
 #include <aws/s3/S3ServiceClientModel.h>
 
-#include "dataaccess/aws/aws_s3_common.h"
+#include "dataaccess/s3/aws/aws_s3_common.h"
 
 namespace dingofs {
 namespace dataaccess {

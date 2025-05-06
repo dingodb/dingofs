@@ -30,7 +30,6 @@ namespace dingofs {
 namespace cache {
 namespace common {
 
-using Status = client::Status;
 using BlockCacheOption = client::common::BlockCacheOption;
 using DiskCacheOption = client::common::DiskCacheOption;
 

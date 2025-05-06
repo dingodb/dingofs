@@ -18,7 +18,7 @@
 #ifndef DATA_ACCESS_AWS_FAKE_S3_ADAPTER_H
 #define DATA_ACCESS_AWS_FAKE_S3_ADAPTER_H
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 
 namespace dingofs {
 namespace dataaccess {

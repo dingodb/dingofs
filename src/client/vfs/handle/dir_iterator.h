@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/vfs_meta.h"
 
 namespace dingofs {

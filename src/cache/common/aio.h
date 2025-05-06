@@ -34,6 +34,7 @@
 
 #include "cache/common/common.h"
 #include "cache/common/phase_timer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/common/status.h"
+#include "common/status.h"
 
 #include <cstdio>
 #include <string>
@@ -23,7 +23,6 @@
 #include "glog/logging.h"
 
 namespace dingofs {
-namespace client {
 
 std::unique_ptr<const char[]> Status::CopyState(const char* s) {
   const size_t cch = std::strlen(s) + 1;  // +1 for the null terminator
@@ -166,5 +165,4 @@ std::string Status::ToString() const {
   }
 }
 
-}  // namespace client
 }  // namespace dingofs

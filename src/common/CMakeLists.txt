@@ -38,3 +38,12 @@ add_library(dingofs_threading
 target_link_libraries(dingofs_threading
     glog::glog
 )
+
+add_library(dingofs_status
+    slice.cpp
+    status.cpp
+)
+target_link_libraries(dingofs_status
+    fmt::fmt
+    glog::glog
+)

@@ -32,7 +32,7 @@
 #include <string>
 
 #include "base/time/time.h"
-#include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {

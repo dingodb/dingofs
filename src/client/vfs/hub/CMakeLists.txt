@@ -21,7 +21,7 @@ target_link_libraries(vfs_hub
     cache_blockcache
     vfs_meta_dummy_lib
     vfs_meta_v2_lib
-    dataaccess
+    s3_accesser
     vfs_handle
     absl::str_format
 )

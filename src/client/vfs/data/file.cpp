@@ -18,7 +18,7 @@
 
 #include <cstdint>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/hub/vfs_hub.h"

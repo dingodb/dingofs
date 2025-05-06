@@ -24,12 +24,12 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/v2/filesystem.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
-#include "dataaccess/s3_accesser.h"
+#include "dataaccess/s3/s3_accesser.h"
 #include "utils/configuration.h"
 
 namespace dingofs {

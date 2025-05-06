@@ -26,7 +26,7 @@
 #include <ostream>
 #include <utility>
 
-#include "client/common/status.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {

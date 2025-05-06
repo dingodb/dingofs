@@ -37,7 +37,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/sys_conf.h"
 #include "client/common/dynamic_config.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"

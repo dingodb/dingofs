@@ -19,7 +19,7 @@
 #include <memory>
 #include <vector>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "mdsv2/mds/mds_meta.h"
 

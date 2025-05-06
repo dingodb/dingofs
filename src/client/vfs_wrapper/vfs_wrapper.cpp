@@ -23,7 +23,7 @@
 #include <memory>
 
 #include "cache/common/log.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
@@ -32,7 +32,7 @@
 #include "client/vfs_old/vfs_old.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
-#include "dataaccess/aws/s3_access_log.h"
+#include "dataaccess/s3/aws/s3_access_log.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"

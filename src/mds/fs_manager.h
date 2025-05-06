@@ -29,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#include "dataaccess/aws/aws_s3_common.h"
+#include "dataaccess/s3/aws/aws_s3_common.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
 #include "mds/common/types.h"

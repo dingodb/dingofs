@@ -17,13 +17,12 @@
 #ifndef DINGOFS_DATA_ACCESS_S3_ACCESSER_H_
 #define DINGOFS_DATA_ACCESS_S3_ACCESSER_H_
 
+#include "common/status.h"
 #include "dataaccess/accesser.h"
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 
 namespace dingofs {
 namespace dataaccess {
-
-using ::dingofs::client::Status;
 
 struct S3Option {
   std::string ak;

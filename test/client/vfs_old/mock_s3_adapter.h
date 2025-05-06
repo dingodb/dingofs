@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/aws/s3_adapter.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 
 using ::testing::Return;
 

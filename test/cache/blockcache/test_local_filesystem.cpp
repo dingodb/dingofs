@@ -24,6 +24,7 @@
 
 #include "base/filepath/filepath.h"
 #include "cache/common/local_filesystem.h"
+#include "common/status.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "utils/uuid.h"
@@ -34,7 +35,6 @@ namespace blockcache {
 
 using base::filepath::PathJoin;
 using cache::common::LocalFileSystem;
-using cache::common::Status;
 using utils::UUIDGenerator;
 using FileInfo = LocalFileSystem::FileInfo;
 

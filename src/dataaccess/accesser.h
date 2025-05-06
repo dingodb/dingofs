@@ -21,7 +21,7 @@
 #include <memory>
 #include <string>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "dataaccess/accesser_common.h"
 
 namespace dingofs {

@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
 

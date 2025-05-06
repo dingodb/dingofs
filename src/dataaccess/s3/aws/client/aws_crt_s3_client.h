@@ -14,27 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
-#define SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
+#ifndef SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
+#define SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_
 
-#include <aws/s3/S3Client.h>
+#include <aws/s3-crt/S3CrtClient.h>
+#include <aws/s3-crt/S3CrtClientConfiguration.h>
 #include <glog/logging.h>
 
 #include <atomic>
 #include <memory>
 
-#include "dataaccess/aws/aws_s3_common.h"
-#include "dataaccess/aws/client/aws_s3_client.h"
+#include "dataaccess/s3/aws/aws_s3_common.h"
+#include "dataaccess/s3/aws/client/aws_s3_client.h"
 
 namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-class AwsLegacyS3Client : public AwsS3Client {
+class AwsCrtS3Client : public AwsS3Client {
  public:
-  explicit AwsLegacyS3Client() = default;
+  explicit AwsCrtS3Client() = default;
 
-  ~AwsLegacyS3Client() override = default;
+  ~AwsCrtS3Client() override = default;
 
   void Init(const S3AdapterOption& option) override;
 
@@ -83,12 +84,12 @@ class AwsLegacyS3Client : public AwsS3Client {
   std::atomic<bool> initialized_{false};
   S3AdapterOption option_;
 
-  std::unique_ptr<Aws::Client::ClientConfiguration> cfg_{nullptr};
-  std::unique_ptr<Aws::S3::S3Client> client_{nullptr};
+  std::unique_ptr<Aws::S3Crt::S3CrtClientConfiguration> cfg_{nullptr};
+  std::unique_ptr<Aws::S3Crt::S3CrtClient> client_{nullptr};
 };
 
 }  // namespace aws
 }  // namespace dataaccess
 }  // namespace dingofs
 
-#endif  // SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_
+#endif  // SRC_AWS_S3_CLIENT_AWS_CRT_S3_CLIENT_H_

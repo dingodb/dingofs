@@ -21,7 +21,7 @@
 #include <cstdint>
 
 #include "cache/blockcache/cache_store.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"

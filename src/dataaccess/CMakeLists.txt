@@ -12,18 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(aws)
-
-add_library(dataaccess
-    s3_accesser.cpp
-)
-
-target_link_libraries(dataaccess
-    dingofs_utils
-    ${AWSSDK_LIBRARIES}
-    aws_s3_adapter
-    
-    glog::glog
-    spdlog::spdlog
-    absl::str_format
-)
+add_subdirectory(s3)

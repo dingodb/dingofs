@@ -22,7 +22,7 @@
 #include <utility>
 #include <vector>
 
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"

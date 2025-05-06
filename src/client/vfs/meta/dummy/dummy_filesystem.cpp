@@ -24,7 +24,7 @@
 #include <vector>
 
 #include "bthread/mutex.h"
-#include "client/common/status.h"
+#include "common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/error.pb.h"
