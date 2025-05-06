@@ -35,6 +35,7 @@ class StoreClient {
   bool CreateFileSessionTable(const std::string& name);
   bool CreateChunkTable(const std::string& name);
   bool CreateTrashChunkTable(const std::string& name);
+  bool CreateDelFileTable(const std::string& name);
 
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);

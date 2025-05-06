@@ -1132,6 +1132,10 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
     return status;
   }
 
+  if (inode->Type() == pb::mdsv2::FileType::DIRECTORY) {
+    return Status(pb::error::ENOT_FILE, "directory not allow unlink");
+  }
+
   uint64_t now_time = Helper::TimestampNs();
   // delete dentry
   {
@@ -1165,34 +1169,47 @@ Status FileSystem::UnLink(Context& ctx, uint64_t parent_ino, const std::string& 
   }
 
   // update file inode nlink
-  {
-    uint64_t start_time = Helper::TimestampNs();
-    bthread::CountdownEvent count_down(1);
-    MixMutation mix_mutation = {.fs_id = fs_id_};
-
-    Operation file_operation(Operation::OpType::kUpdateInodeNlink, dentry.Ino(),
-                             MetaDataCodec::EncodeInodeKey(fs_id_, dentry.Ino()), &count_down, &trace);
-    file_operation.SetUpdateInodeNlink(dentry.Ino(), -1, now_time);
-    mix_mutation.operations.push_back(&file_operation);
-
-    if (!mutation_processor_->Commit(mix_mutation)) {
-      return Status(pb::error::EINTERNAL, "commit mutation fail");
+  pb::mdsv2::Inode pb_inode;
+  int retry = 0;
+  do {
+    uint64_t now_time = Helper::TimestampNs();
+    auto txn = kv_storage_->NewTxn();
+    std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, dentry.Ino());
+    std::string value;
+    status = txn->Get(key, value);
+    if (!status.ok()) {
+      return Status(pb::error::EBACKEND_STORE, fmt::format("get inode fail, {}", status.error_str()));
     }
 
-    CHECK(count_down.wait() == 0) << "count down wait fail.";
+    pb_inode = MetaDataCodec::DecodeInodeValue(value);
+    pb_inode.set_ctime(now_time);
+    pb_inode.set_mtime(now_time);
+    pb_inode.set_version(pb_inode.version() + 1);
+    pb_inode.set_nlink(pb_inode.nlink() - 1);
 
-    butil::Status& rpc_status = file_operation.status;
-    auto& result = file_operation.result;
-
-    DINGO_LOG(INFO) << fmt::format("[fs.{}] unlink {}/{} update nlink finish, elapsed_time({}us) rpc_status({}).",
-                                   fs_id_, parent_ino, name, (Helper::TimestampNs() - start_time) / 1000,
-                                   rpc_status.error_str());
-    if (!rpc_status.ok()) {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("update nlink fail, {}", rpc_status.error_str()));
+    if (pb_inode.nlink() == 0) {
+      // delete inode
+      txn->Delete(key);
+      // save delete file info
+      txn->Put(MetaDataCodec::EncodeDelFileKey(fs_id_, dentry.Ino()), MetaDataCodec::EncodeDelFileValue(pb_inode));
+    } else {
+      txn->Put(key, MetaDataCodec::EncodeInodeValue(pb_inode));
     }
 
-    inode->UpdateNlink(result.version, result.nlink, now_time);
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_txn_max_retry_times);
+
+  if (status.ok()) {
+    inode_cache_.DeleteInode(dentry.Ino());
+    inode->UpdateNlink(pb_inode.version(), pb_inode.nlink(), pb_inode.ctime());
   }
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] unlink {}/{} finish, elapsed_time({}us).", fs_id_, parent_ino, name,
+                                 (Helper::TimestampNs() - now_time) / 1000);
 
   return Status::OK();
 }
@@ -1789,10 +1806,16 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
     auto txn = kv_storage_->NewTxn();
     status = txn->Get(key, value);
     if (!status.ok()) {
-      return status;
-    }
+      if (status.error_code() != pb::error::ENOT_FOUND) {
+        return status;
+      }
+      // create new chunk
+      chunk.set_index(chunk_index);
+      chunk.set_size(fs_info_->GetChunkSize());
 
-    chunk = MetaDataCodec::DecodeChunkValue(value);
+    } else {
+      chunk = MetaDataCodec::DecodeChunkValue(value);
+    }
 
     // append new slices
     chunk.mutable_slices()->MergeFrom(slice_list.slices());

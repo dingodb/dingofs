@@ -15,6 +15,7 @@
 #ifndef DINGOFS_SRC_MDSV2_FS_INFO_H_
 #define DINGOFS_SRC_MDSV2_FS_INFO_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -52,6 +53,18 @@ class FsInfo {
     utils::ReadLockGuard lock(lock_);
 
     return fs_info_.fs_name();
+  }
+
+  uint64_t GetBlockSize() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.block_size();
+  }
+
+  uint64_t GetChunkSize() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.chunk_size();
   }
 
   pb::mdsv2::PartitionType GetPartitionType() {

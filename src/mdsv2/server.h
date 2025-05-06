@@ -82,6 +82,7 @@ class Server {
   FileSystemSetSPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorSPtr GetMDSMonitor() { return mds_monitor_; }
   MutationProcessorSPtr GetMutationProcessor() { return mutation_processor_; }
+  GcProcessorSPtr GetGcProcessor() { return gc_processor_; }
 
   void Run();
 

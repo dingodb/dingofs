@@ -26,6 +26,7 @@
 #include "dataaccess/s3/s3_accesser.h"
 #include "dingofs/error.pb.h"
 #include "mdsv2/common/codec.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
@@ -39,35 +40,31 @@ DECLARE_int32(fs_scan_batch_size);
 DEFINE_uint32(gc_worker_num, 4, "gc worker set num");
 DEFINE_uint32(gc_max_pending_task_count, 512, "gc max pending task count");
 
+DEFINE_uint32(gc_del_file_reserve_time_s, 86400, "gc del file reserve time");
+
 static const std::string kWorkerSetName = "GC";
 
 void CleanDeletedSliceTask::Run() {
   auto status = CleanDeletedSlice(kv_.key, kv_.value);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] clean deleted slice fail, {}",
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc] clean deleted slice fail, {}", status.error_str());
   }
 }
 
-Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key,
-                                                const std::string& value) {
+Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key, const std::string& value) {
   // delete data from s3
   auto trash_slice_list = MetaDataCodec::DecodeTrashChunkValue(value);
   for (const auto& slice : trash_slice_list.slices()) {
-    DINGO_LOG(INFO) << fmt::format("[gc] clean deleted slice {}/{}/{}/{}.",
-                                   slice.fs_id(), slice.ino(),
+    DINGO_LOG(INFO) << fmt::format("[gc] clean deleted slice {}/{}/{}/{}.", slice.fs_id(), slice.ino(),
                                    slice.chunk_index(), slice.slice_id());
 
     for (const auto& range : slice.ranges()) {
       uint64_t index = range.offset() / slice.chunk_size();
-      cache::blockcache::BlockKey block_key(slice.fs_id(), slice.ino(),
-                                            slice.chunk_index(), index, 0);
+      cache::blockcache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.chunk_index(), index, 0);
 
       auto status = data_accessor_->Delete(block_key.StoreKey());
       if (!status.ok()) {
-        return Status(
-            pb::error::EINTERNAL,
-            fmt::format("delete s3 object fail, {}", status.ToString()));
+        return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
       }
     }
   }
@@ -75,22 +72,71 @@ Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key,
   // delete slice
   auto status = kv_storage_->Delete(key);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] delete slice fail, {}",
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc] delete slice fail, {}", status.error_str());
   }
 
   return status;
 }
 
-void CleanDeletedFileTask::Run() {}
+void CleanDeletedFileTask::Run() {
+  auto status = CleanDeletedFile(inode_);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc] clean deleted file fail, {}", status.error_str());
+  }
+}
+
+Status CleanDeletedFileTask::CleanDeletedFile(const pb::mdsv2::Inode& inode) {
+  // delete data from s3
+  Range range;
+  MetaDataCodec::GetChunkRange(inode.fs_id(), inode.ino(), range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      auto chunk = MetaDataCodec::DecodeChunkValue(kv.value);
+      DINGO_LOG(INFO) << fmt::format("[gc] clean deleted file {}/{}/{}/{}.", inode.fs_id(), inode.ino(), chunk.index(),
+                                     chunk.version());
+
+      for (const auto& slice : chunk.slices()) {
+        uint64_t index = slice.offset() / chunk.size();
+        cache::blockcache::BlockKey block_key(inode.fs_id(), inode.ino(), chunk.index(), index, 0);
+
+        auto status = data_accessor_->Delete(block_key.StoreKey());
+        if (!status.ok()) {
+          return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
+        }
+      }
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc] clean file data fail, {}", status.error_str());
+    return status;
+  }
+
+  // delete inode
+  status = kv_storage_->Delete(MetaDataCodec::EncodeDelFileKey(inode.fs_id(), inode.ino()));
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc] clean del file fail, {}", status.error_str());
+  }
+
+  return status;
+}
 
 bool GcProcessor::Init() {
   dataaccess::aws::S3AdapterOption option;
   data_accessor_ = dataaccess::S3Accesser::New(option);
   CHECK(data_accessor_->Init()) << "init data accesser fail.";
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num,
-                                    FLAGS_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num, FLAGS_gc_max_pending_task_count);
   return worker_set_->Init();
 }
 
@@ -100,16 +146,29 @@ void GcProcessor::Destroy() {
   }
 }
 
-void GcProcessor::LaunchGc() {
+void GcProcessor::Run() {
+  auto status = LaunchGc();
+  if (!status.ok()) {
+    DINGO_LOG(INFO) << fmt::format("[gc] run gc, {}.", status.error_str());
+  }
+}
+
+Status GcProcessor::LaunchGc() {
   bool running = false;
   if (!is_running_.compare_exchange_strong(running, true)) {
-    DINGO_LOG(INFO) << "[gc] already running......";
-    return;
+    return Status(pb::error::EINTERNAL, "gc already running");
   }
 
   DEFER(is_running_.store(false));
 
-  ScanDeletedSlice();
+  if (!dist_lock_->IsLocked()) {
+    return Status(pb::error::EINTERNAL, "not own lock");
+  }
+
+  // ScanDeletedSlice();
+  // ScanDeletedFile();
+
+  return Status::OK();
 }
 
 void GcProcessor::Execute(TaskRunnablePtr task) {
@@ -139,7 +198,34 @@ void GcProcessor::ScanDeletedSlice() {
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 }
 
-void GcProcessor::ScanDeletedFile() {}
+void GcProcessor::ScanDeletedFile() {
+  Range range;
+  MetaDataCodec::GetDelFileTableRange(range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      auto pb_inode = MetaDataCodec::DecodeDelFileValue(kv.value);
+      if (ShouldDeleteFile(pb_inode)) {
+        Execute(CleanDeletedFileTask::New(kv_storage_, data_accessor_, pb_inode));
+      }
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+}
+
+bool GcProcessor::ShouldDeleteFile(const pb::mdsv2::Inode& inode) {
+  uint64_t now_s = Helper::Timestamp();
+  return (inode.ctime() / 1000000000 + FLAGS_gc_del_file_reserve_time_s) < now_s;
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs

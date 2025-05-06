@@ -40,6 +40,8 @@ namespace mdsv2 {
 DEFINE_int32(heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
 DEFINE_int32(mdsmonitor_interval_s, 5, "mds monitor interval seconds");
+DEFINE_int32(gc_interval_s, 60, "gc interval seconds");
+
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
 DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
 DEFINE_int32(compact_chunk_interval_s, 5, "compact chunk interval seconds");
@@ -293,6 +295,14 @@ bool Server::InitCrontab() {
       FLAGS_mdsmonitor_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetMDSMonitor()->Run(); },
+  });
+
+  // Add fs info sync crontab
+  crontab_configs_.push_back({
+      "GC",
+      FLAGS_gc_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);

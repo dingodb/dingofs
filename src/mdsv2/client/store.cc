@@ -174,6 +174,22 @@ bool StoreClient::CreateTrashChunkTable(const std::string& name) {
   return true;
 }
 
+bool StoreClient::CreateDelFileTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaDataCodec::GetDelFileTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create del file table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create del file table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
 static std::string FormatTime(uint64_t time_ns) { return Helper::FormatMsTime(time_ns / 1000000, "%H:%M:%S"); }
 
 static void TraversePrint(FsTreeNode* item, bool is_details, int level) {

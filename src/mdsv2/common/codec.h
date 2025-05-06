@@ -26,16 +26,21 @@ namespace mdsv2 {
 class MetaDataCodec {
  public:
   static void GetLockTableRange(std::string& start_key, std::string& end_key);
+
   static void GetHeartbeatTableRange(std::string& start_key, std::string& end_key);
   static void GetHeartbeatMdsRange(std::string& start_key, std::string& end_key);
   static void GetHeartbeatClientRange(std::string& start_key, std::string& end_key);
+
   static void GetFsTableRange(std::string& start_key, std::string& end_key);
   static void GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+
   static void GetQuotaTableRange(std::string& start_key, std::string& end_key);
   static void GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+
   static void GetFsStatsTableRange(std::string& start_key, std::string& end_key);
   static void GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+
   static void GetFileSessionTableRange(std::string& start_key, std::string& end_key);
   static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
@@ -48,6 +53,8 @@ class MetaDataCodec {
   static void GetTrashChunkRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
   static void GetTrashChunkRange(uint32_t fs_id, uint64_t ino, uint64_t chunk_index, std::string& start_key,
                                  std::string& end_key);
+
+  static void GetDelFileTableRange(std::string& start_key, std::string& end_key);
 
   // lock
   // format: [$prefix, $type, $name]
@@ -133,6 +140,13 @@ class MetaDataCodec {
                                   uint64_t& time_ns);
   static std::string EncodeTrashChunkValue(const pb::mdsv2::TrashSliceList& slice_list);
   static pb::mdsv2::TrashSliceList DecodeTrashChunkValue(const std::string& value);
+
+  // del file
+  // format: [$prefix, $type, $fs_id, $ino]
+  static std::string EncodeDelFileKey(uint32_t fs_id, uint64_t ino);
+  static void DecodeDelFileKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
+  static std::string EncodeDelFileValue(const pb::mdsv2::Inode& inode);
+  static pb::mdsv2::Inode DecodeDelFileValue(const std::string& value);
 };
 
 }  // namespace mdsv2

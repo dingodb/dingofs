@@ -19,6 +19,7 @@
 #include <string>
 
 #include "dataaccess/accesser.h"
+#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/distribution_lock.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
@@ -67,14 +68,29 @@ class CleanDeletedSliceTask : public TaskRunnable {
 
 class CleanDeletedFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask() = default;
+  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
+                       const pb::mdsv2::Inode& inode)
+      : kv_storage_(kv_storage), data_accessor_(data_accessor), inode_(inode) {}
   ~CleanDeletedFileTask() override = default;
+
+  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
+                                      const pb::mdsv2::Inode& inode) {
+    return std::make_shared<CleanDeletedFileTask>(kv_storage, data_accessor, inode);
+  }
 
   std::string Type() override { return "CLEAN_DELETED_FILE"; }
 
   void Run() override;
 
  private:
+  Status CleanDeletedFile(const pb::mdsv2::Inode& inode);
+
+  pb::mdsv2::Inode inode_;
+
+  KVStorageSPtr kv_storage_;
+
+  // data accessor for s3
+  dataaccess::DataAccesserPtr data_accessor_;
 };
 
 class GcProcessor {
@@ -91,13 +107,17 @@ class GcProcessor {
   bool Init();
   void Destroy();
 
-  void LaunchGc();
+  void Run();
+
+  Status LaunchGc();
 
  private:
   void Execute(TaskRunnablePtr task);
 
   void ScanDeletedSlice();
   void ScanDeletedFile();
+
+  static bool ShouldDeleteFile(const pb::mdsv2::Inode& inode);
 
   std::atomic<bool> is_running_{false};
 

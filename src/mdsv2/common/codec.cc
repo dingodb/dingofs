@@ -45,6 +45,7 @@ enum KeyType : unsigned char {
   kTypeFileSession = 17,
   kTypeChunk = 19,
   kTypeTrashChunk = 21,
+  kTypeDelFile = 23,
 };
 
 void MetaDataCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {
@@ -245,6 +246,14 @@ void MetaDataCodec::GetTrashChunkRange(uint32_t fs_id, uint64_t ino, uint64_t ch
   SerialHelper::WriteInt(fs_id, end_key);
   SerialHelper::WriteLong(ino, end_key);
   SerialHelper::WriteULong(chunk_index + 1, end_key);
+}
+
+void MetaDataCodec::GetDelFileTableRange(std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeDelFile);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeDelFile + 1);
 }
 
 // format: [$prefix, $type, $name]
@@ -643,6 +652,34 @@ pb::mdsv2::TrashSliceList MetaDataCodec::DecodeTrashChunkValue(const std::string
   pb::mdsv2::TrashSliceList slice_list;
   CHECK(slice_list.ParseFromString(value)) << "parse trash slice list fail.";
   return std::move(slice_list);
+}
+
+std::string MetaDataCodec::EncodeDelFileKey(uint32_t fs_id, uint64_t ino) {
+  std::string key;
+  key.reserve(kPrefixSize + 32);
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeDelFile);
+  SerialHelper::WriteInt(fs_id, key);
+  SerialHelper::WriteLong(ino, key);
+
+  return std::move(key);
+}
+
+void MetaDataCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
+  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeDelFile) << "key type is invalid.";
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
+  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
+}
+
+std::string MetaDataCodec::EncodeDelFileValue(const pb::mdsv2::Inode& inode) { return inode.SerializeAsString(); }
+
+pb::mdsv2::Inode MetaDataCodec::DecodeDelFileValue(const std::string& value) {
+  pb::mdsv2::Inode inode;
+  CHECK(inode.ParseFromString(value)) << "parse inode fail.";
+  return std::move(inode);
 }
 
 }  // namespace mdsv2
