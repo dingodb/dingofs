@@ -25,7 +25,7 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-DEFINE_uint32(rpc_timeout_ms, 2000, "rpc timeout ms");
+DEFINE_uint32(rpc_timeout_ms, 5000, "rpc timeout ms");
 
 DEFINE_int32(rpc_retry_times, 3, "rpc retry time");
 BRPC_VALIDATE_GFLAG(rpc_retry_times, brpc::PositiveInteger);

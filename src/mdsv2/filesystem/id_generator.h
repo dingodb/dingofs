@@ -35,14 +35,15 @@ class IdGenerator {
   virtual bool GenID(int64_t& id) = 0;
 };
 
-using IdGeneratorPtr = std::unique_ptr<IdGenerator>;
+using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
+using IdGeneratorSPtr = std::shared_ptr<IdGenerator>;
 
 class AutoIncrementIdGenerator : public IdGenerator {
  public:
   AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size);
   ~AutoIncrementIdGenerator() override;
 
-  static IdGeneratorPtr New(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size) {
+  static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size) {
     return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
 

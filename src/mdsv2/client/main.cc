@@ -27,9 +27,17 @@ DEFINE_string(mds_addr, "", "mds address");
 
 DEFINE_string(cmd, "", "command");
 
+DEFINE_string(s3_endpoint, "", "s3 endpoint");
+DEFINE_string(s3_ak, "", "s3 ak");
+DEFINE_string(s3_sk, "", "s3 sk");
+DEFINE_string(s3_bucketname, "", "s3 bucket name");
+
 DEFINE_string(fs_name, "", "fs name");
 DEFINE_uint32(fs_id, 0, "fs id");
 DEFINE_string(fs_partition_type, "mono", "fs partition type");
+
+DEFINE_uint32(chunk_size, 64 * 1024 * 1024, "chunk size");
+DEFINE_uint32(block_size, 4 * 1024 * 1024, "block size");
 
 DEFINE_string(name, "", "name");
 DEFINE_string(prefix, "", "prefix");
@@ -44,9 +52,10 @@ DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
 DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
 DEFINE_string(filesession_table_name, "dingofs-filesession", "file session table name");
-DEFINE_string(chunk_table_name, "dingofs-chunk", "chunk table name");
 DEFINE_string(trash_chunk_table_name, "dingofs-trashchunk", "trash chunk table name");
 DEFINE_string(del_file_table_name, "dingofs-delfile", "del file table name");
+
+DEFINE_bool(is_force, false, "is force");
 
 std::set<std::string> g_mds_cmd = {"getmdslist",
                                    "createfs",
@@ -115,10 +124,19 @@ int main(int argc, char* argv[]) {
       mds_client.GetMdsList();
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateFs")) {
-      mds_client.CreateFs(FLAGS_fs_name, FLAGS_fs_partition_type);
+      dingofs::mdsv2::client::MDSClient::CreateFsParams params;
+      params.partition_type = FLAGS_fs_partition_type;
+      params.chunk_size = FLAGS_chunk_size;
+      params.block_size = FLAGS_block_size;
+      params.s3_endpoint = FLAGS_s3_endpoint;
+      params.s3_ak = FLAGS_s3_ak;
+      params.s3_sk = FLAGS_s3_sk;
+      params.s3_bucketname = FLAGS_s3_bucketname;
+
+      mds_client.CreateFs(FLAGS_fs_name, params);
 
     } else if (lower_cmd == Helper::ToLowerCase("DeleteFs")) {
-      mds_client.DeleteFs(FLAGS_fs_name);
+      mds_client.DeleteFs(FLAGS_fs_name, FLAGS_is_force);
 
     } else if (lower_cmd == Helper::ToLowerCase("UpdateFs")) {
       mds_client.UpdateFs(FLAGS_fs_name);
@@ -213,9 +231,6 @@ int main(int argc, char* argv[]) {
     } else if (lower_cmd == Helper::ToLowerCase("CreateFileSessionTable")) {
       store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
 
-    } else if (lower_cmd == Helper::ToLowerCase("CreateChunkTable")) {
-      store_client.CreateChunkTable(FLAGS_chunk_table_name);
-
     } else if (lower_cmd == Helper::ToLowerCase("CreateTrashChunkTable")) {
       store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
 
@@ -229,7 +244,6 @@ int main(int argc, char* argv[]) {
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
       store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
-      store_client.CreateChunkTable(FLAGS_chunk_table_name);
       store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
       store_client.CreateDelFileTable(FLAGS_del_file_table_name);
 

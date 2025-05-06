@@ -63,6 +63,10 @@ static const int64_t kFsTableId = 1000;
 static const int64_t kFsIdBatchSize = 8;
 static const int64_t kFsIdStartId = 20000;
 
+static const int64_t kSliceTableId = 1001;
+static const int64_t kSliceIdBatchSize = 8;
+static const int64_t kSliceIdStartId = 10000000;
+
 Server::~Server() {}  // NOLINT
 
 Server& Server::GetInstance() {
@@ -200,11 +204,16 @@ bool Server::InitFileSystem() {
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
 
   auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
-  CHECK(fs_id_generator != nullptr) << "new AutoIncrementIdGenerator fail.";
-  CHECK(fs_id_generator->Init()) << "init AutoIncrementIdGenerator fail.";
+  CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
+  CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), kv_storage_, mds_meta_,
-                                        mds_meta_map_, renamer_, mutation_processor_);
+  auto slice_id_generator =
+      AutoIncrementIdGenerator::New(coordinator_client_, kSliceTableId, kSliceIdStartId, kSliceIdBatchSize);
+  CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
+  CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
+
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
+                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, mutation_processor_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();

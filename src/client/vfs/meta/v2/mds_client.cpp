@@ -674,7 +674,7 @@ static Slice ToSlice(const pb::mdsv2::Slice& slice) {
   out_slice.id = slice.id();
   out_slice.offset = slice.offset();
   out_slice.length = slice.len();
-  out_slice.compaction = slice.compaction();
+  out_slice.compaction = slice.compaction_version();
   out_slice.is_zero = slice.zero();
   out_slice.size = slice.size();
 
@@ -687,38 +687,11 @@ static pb::mdsv2::Slice ToSlice(const Slice& slice) {
   out_slice.set_id(slice.id);
   out_slice.set_offset(slice.offset);
   out_slice.set_len(slice.length);
-  out_slice.set_compaction(slice.compaction);
+  out_slice.set_compaction_version(slice.compaction);
   out_slice.set_zero(slice.is_zero);
   out_slice.set_size(slice.size);
 
   return out_slice;
-}
-
-Status MDSClient::ReadSlice(Ino ino, uint64_t index,
-                            std::vector<Slice>* slices) {
-  CHECK(fs_id_ != 0) << "fs_id is invalid.";
-  CHECK(slices != nullptr) << "slices is nullptr.";
-
-  auto endpoint = GetEndPointByIno(ino);
-
-  pb::mdsv2::ReadSliceRequest request;
-  pb::mdsv2::ReadSliceResponse response;
-
-  request.set_fs_id(fs_id_);
-  request.set_ino(ino);
-  request.set_chunk_index(index);
-
-  auto status =
-      SendRequest(endpoint, "MDSService", "ReadSlice", request, response);
-  if (!status.ok()) {
-    return status;
-  }
-
-  for (const auto& slice : response.slice_list().slices()) {
-    slices->push_back(ToSlice(slice));
-  }
-
-  return Status::OK();
 }
 
 Status MDSClient::NewSliceId(uint64_t* id) {
@@ -742,6 +715,33 @@ Status MDSClient::NewSliceId(uint64_t* id) {
   return Status::OK();
 }
 
+Status MDSClient::ReadSlice(Ino ino, uint64_t index,
+                            std::vector<Slice>* slices) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  CHECK(slices != nullptr) << "slices is nullptr.";
+
+  auto endpoint = GetEndPointByIno(ino);
+
+  pb::mdsv2::ReadSliceRequest request;
+  pb::mdsv2::ReadSliceResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_chunk_index(index);
+
+  auto status =
+      SendRequest(endpoint, "MDSService", "ReadSlice", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (const auto& slice : response.slices()) {
+    slices->push_back(ToSlice(slice));
+  }
+
+  return Status::OK();
+}
+
 Status MDSClient::WriteSlice(Ino ino, uint64_t index,
                              const std::vector<Slice>& slices) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
@@ -752,10 +752,11 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
   pb::mdsv2::WriteSliceResponse response;
 
   request.set_fs_id(fs_id_);
+  request.set_ino(ino);
   request.set_chunk_index(index);
 
   for (const auto& slice : slices) {
-    *request.mutable_slice_list()->add_slices() = ToSlice(slice);
+    *request.add_slices() = ToSlice(slice);
   }
 
   auto status =
@@ -771,7 +772,8 @@ bool MDSClient::UpdateRouter() {
   pb::mdsv2::FsInfo new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("get fs info fail, {}.", status.ToString());
+    LOG(ERROR) << fmt::format("[meta] get fs info fail, {}.",
+                              status.ToString());
     return false;
   }
 
@@ -781,7 +783,7 @@ bool MDSClient::UpdateRouter() {
   fs_info_->Update(new_fs_info);
 
   if (!mds_router_->UpdateRouter(new_fs_info.partition_policy())) {
-    LOG(ERROR) << "update mds router fail.";
+    LOG(ERROR) << "[meta] update mds router fail.";
   }
 
   return true;

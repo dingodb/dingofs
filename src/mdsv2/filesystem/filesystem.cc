@@ -44,7 +44,6 @@
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "mdsv2/server.h"
 #include "mdsv2/service/service_access.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/uuid.h"
@@ -83,7 +82,7 @@ static inline bool IsDir(uint64_t ino) { return (ino & 1) == 1; }
 
 static inline bool IsFile(uint64_t ino) { return (ino & 1) == 0; }
 
-FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr id_generator, KVStorageSPtr kv_storage,
+FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
                        RenamerPtr renamer, MutationProcessorSPtr mutation_processor, MDSMetaMapSPtr mds_meta_map)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
@@ -96,7 +95,6 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorPtr i
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
-  chunk_cache_ = ChunkCache::New();
 };
 
 FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
@@ -955,8 +953,7 @@ Status FileSystem::RmDir(Context& ctx, uint64_t parent_ino, const std::string& n
       break;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   trace_txn.txn_id = dentry.Ino();
   trace_txn.retry = retry;
@@ -1762,8 +1759,7 @@ Status FileSystem::RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const 
       return status;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   return status;
 }
@@ -1780,9 +1776,9 @@ Status FileSystem::CommitRename(Context& ctx, uint64_t old_parent_ino, const std
 }
 
 Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
-                              const pb::mdsv2::SliceList& slice_list) {
+                              const std::vector<pb::mdsv2::Slice>& slices) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] writeslice ino({}), chunk_index({}), slice_list.size({}).", fs_id_, ino,
-                                  chunk_index, slice_list.slices_size());
+                                  chunk_index, slices.size());
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -1798,58 +1794,43 @@ Status FileSystem::WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index,
   auto& trace_txn = trace.GetTxn();
 
   uint64_t now_ns = Helper::TimestampNs();
-  std::string key = MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index);
-  std::string value;
-  pb::mdsv2::Chunk chunk;
-  int retry = 0;
-  do {
-    auto txn = kv_storage_->NewTxn();
-    status = txn->Get(key, value);
-    if (!status.ok()) {
-      if (status.error_code() != pb::error::ENOT_FOUND) {
-        return status;
-      }
-      // create new chunk
-      chunk.set_index(chunk_index);
-      chunk.set_size(fs_info_->GetChunkSize());
 
-    } else {
-      chunk = MetaDataCodec::DecodeChunkValue(value);
-    }
+  // update backend store
+  bthread::CountdownEvent count_down(1);
+  MixMutation mix_mutation = {.fs_id = fs_id_};
 
-    // append new slices
-    chunk.mutable_slices()->MergeFrom(slice_list.slices());
+  std::string key = MetaDataCodec::EncodeInodeKey(fs_id_, inode->Ino());
+  Operation inode_operation(Operation::OpType::kUpdateChunk, ino, key, &count_down, &trace);
+  inode_operation.SetUpdateChunk(ino, chunk_index, fs_info_->GetChunkSize(), slices, now_ns);
+  mix_mutation.operations.push_back(&inode_operation);
 
-    // compact chunk
-    if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
-      DoCompactChunk(inode->Ino(), inode->Length(), chunk, txn.get());
-    }
-
-    chunk.set_version(chunk.version() + 1);
-    txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
-    status = txn->Commit();
-    trace_txn = txn->GetTrace();
-    if (!status.ok()) {
-      return status;
-    }
-
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
-
-  trace_txn.retry = retry;
-
-  if (status.ok()) {
-    // update chunk cache
-    chunk_cache_->PutIf(ino, chunk_index, chunk);
+  if (!mutation_processor_->Commit(mix_mutation)) {
+    return Status(pb::error::EINTERNAL, "commit mutation fail");
   }
+
+  CHECK(count_down.wait() == 0) << "count down wait fail.";
+
+  butil::Status& rpc_status = inode_operation.status;
+  auto& result = inode_operation.result;
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] writeslice {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
                                  chunk_index, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
 
+  if (!rpc_status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", rpc_status.error_str()));
+  }
+
+  // update cache
+  inode->UpdateChunk(result.version, chunk_index, result.chunk, result.length);
+
+  // check whether need to compact chunk
+  // if (result.chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
+  // }
+
   return Status::OK();
 }
 
-Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, pb::mdsv2::SliceList& slice_list) {
+Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readslice ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
 
   if (!CanServe()) {
@@ -1857,7 +1838,6 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
   }
 
   auto& trace = ctx.GetTrace();
-  auto& trace_txn = trace.GetTxn();
 
   uint64_t now_ns = Helper::TimestampNs();
 
@@ -1867,23 +1847,12 @@ Status FileSystem::ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, p
     return status;
   }
 
-  // try to get from cache
-  auto chunk = chunk_cache_->Get(ino, chunk_index);
-  if (chunk != nullptr) {
-    *slice_list.mutable_slices() = chunk->slices();
-    return Status::OK();
+  pb::mdsv2::Chunk chunk;
+  if (!inode->GetChunk(chunk_index, chunk)) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found chunk({})", chunk_index));
   }
 
-  // take from store
-  auto txn = kv_storage_->NewTxn();
-  std::string value;
-  status = txn->Get(MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index), value);
-  if (status.ok()) {
-    pb::mdsv2::Chunk chunk = MetaDataCodec::DecodeChunkValue(value);
-    *slice_list.mutable_slices() = chunk.slices();
-  }
-
-  trace_txn = txn->GetTrace();
+  slices = Helper::PbRepeatedToVector(chunk.slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] readslice {}/{} finish, elapsed_time({}us) status({}).", fs_id_, ino,
                                  chunk_index, (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
@@ -2126,24 +2095,16 @@ Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index
 
   uint64_t now_ns = Helper::TimestampNs();
 
-  std::string key = MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk_index);
+  pb::mdsv2::Chunk chunk;
+  if (!inode->GetChunk(chunk_index, chunk)) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found chunk({})", chunk_index));
+  }
 
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 
-    std::string value;
-    status = txn->Get(key, value);
-    if (!status.ok()) {
-      return status;
-    }
-
-    auto chunk = MetaDataCodec::DecodeChunkValue(value);
-
     trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
-
-    chunk.set_version(chunk.version() + 1);
-    txn->Put(key, MetaDataCodec::EncodeChunkValue(chunk));
 
     status = txn->Commit();
     trace_txn = txn->GetTrace();
@@ -2151,8 +2112,7 @@ Status FileSystem::CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index
       break;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   trace_txn.retry = retry;
 
@@ -2179,29 +2139,14 @@ Status FileSystem::CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2
   auto& trace_txn = trace.GetTxn();
 
   uint64_t now_ns = Helper::TimestampNs();
-
-  Range range;
-  MetaDataCodec::GetChunkRange(fs_id_, ino, range.start_key, range.end_key);
+  auto chunks = inode->GetChunks();
 
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 
-    std::vector<KeyValue> kvs;
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      return status;
-    }
-
-    CHECK(kvs.size() <= FLAGS_fs_scan_batch_size) << fmt::format("file({}) has too many chunks.", ino);
-
-    for (const auto& kv : kvs) {
-      auto chunk = MetaDataCodec::DecodeChunkValue(kv.value);
-
+    for (auto& [index, chunk] : chunks) {
       trash_slices = DoCompactChunk(ino, inode->Length(), chunk, txn.get());
-
-      chunk.set_version(chunk.version() + 1);
-      txn->Put(MetaDataCodec::EncodeChunkKey(fs_id_, ino, chunk.index()), MetaDataCodec::EncodeChunkValue(chunk));
     }
 
     status = txn->Commit();
@@ -2210,13 +2155,12 @@ Status FileSystem::CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2
       break;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
-
-  trace_txn.retry = retry;
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] compactfile {} finish, elapsed_time({}us) status({}).", fs_id_, ino,
                                  (Helper::TimestampNs() - now_ns) / 1000, status.error_str());
+
+  trace_txn.retry = retry;
 
   return status;
 }
@@ -2545,11 +2489,12 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   return Status::OK();
 }
 
-FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorPtr id_generator,
-                             KVStorageSPtr kv_storage, MDSMeta self_mds_meta, MDSMetaMapSPtr mds_meta_map,
-                             RenamerPtr renamer, MutationProcessorSPtr mutation_processor)
+FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
+                             IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
+                             MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, MutationProcessorSPtr mutation_processor)
     : coordinator_client_(coordinator_client),
-      id_generator_(std::move(id_generator)),
+      id_generator_(std::move(fs_id_generator)),
+      slice_id_generator_(std::move(slice_id_generator)),
       kv_storage_(kv_storage),
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
@@ -2606,6 +2551,7 @@ pb::mdsv2::FsInfo FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& p
   fs_info.set_fs_type(param.fs_type);
   fs_info.set_status(::dingofs::pb::mdsv2::FsStatus::NEW);
   fs_info.set_block_size(param.block_size);
+  fs_info.set_chunk_size(param.chunk_size);
   fs_info.set_enable_sum_in_dir(param.enable_sum_in_dir);
   fs_info.set_owner(param.owner);
   fs_info.set_capacity(param.capacity);
@@ -2665,10 +2611,31 @@ bool FileSystemSet::IsExistFsTable() {
   return true;
 }
 
+Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
+  if (param.fs_name.empty()) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+  }
+
+  if (param.block_size == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "block size is zero");
+  }
+
+  if (param.chunk_size == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "chunk size is zero");
+  }
+
+  return Status::OK();
+}
+
 // todo: create fs/dentry/inode table
 Status FileSystemSet::CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs_info) {
+  auto status = ValidateCreateFsParam(param);
+  if (!status.ok()) {
+    return status;
+  }
+
   int64_t fs_id = 0;
-  auto status = GenFsId(fs_id);
+  status = GenFsId(fs_id);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return status;
   }
@@ -2858,34 +2825,47 @@ Status FileSystemSet::UmountFs(const std::string& fs_name, const pb::mdsv2::Moun
 
 // check if fs is mounted
 // rename fs name to oldname+"_deleting"
-Status FileSystemSet::DeleteFs(const std::string& fs_name) {
+Status FileSystemSet::DeleteFs(const std::string& fs_name, bool is_force) {
   std::string fs_key = MetaDataCodec::EncodeFSKey(fs_name);
-  std::string value;
-  Status status = kv_storage_->Get(fs_key, value);
-  if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
+
+  pb::mdsv2::FsInfo fs_info;
+  Status status;
+  int retry = 0;
+  do {
+    auto txn = kv_storage_->NewTxn();
+
+    std::string value;
+    status = txn->Get(fs_key, value);
+    if (!status.ok()) {
+      if (status.error_code() == pb::error::ENOT_FOUND) {
+        return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
+      }
+      return status;
+    }
+
+    fs_info = MetaDataCodec::DecodeFSValue(value);
+    if (!is_force && fs_info.mount_points_size() > 0) {
+      return Status(pb::error::EEXISTED, "Fs exist mount point.");
+    }
+
+    txn->Delete(fs_key);
+
+    fs_info.set_is_deleted(true);
+    fs_info.set_delete_time_s(Helper::Timestamp());
+    txn->Put(fs_key, MetaDataCodec::EncodeFSValue(fs_info));
+
+    status = txn->Commit();
+    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
+      break;
+    }
+
+  } while (++retry < FLAGS_txn_max_retry_times);
+
+  if (status.ok()) {
+    DeleteFileSystem(fs_info.fs_id());
   }
 
-  auto fs_info = MetaDataCodec::DecodeFSValue(value);
-  if (fs_info.mount_points_size() > 0) {
-    return Status(pb::error::EEXISTED, "Fs exist mount point.");
-  }
-
-  status = kv_storage_->Delete(fs_key);
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("Delete fs fail, {}", status.error_str()));
-  }
-
-  KVStorage::WriteOption option;
-  std::string delete_fs_name = fmt::format("{}_deleting", fs_name);
-  status = kv_storage_->Put(option, MetaDataCodec::EncodeFSKey(delete_fs_name), MetaDataCodec::EncodeFSValue(fs_info));
-  if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
-  }
-
-  DeleteFileSystem(fs_info.fs_id());
-
-  return Status::OK();
+  return status;
 }
 
 Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, const pb::mdsv2::FsInfo& fs_info) {
@@ -2919,8 +2899,7 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
       break;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   trace_txn.retry = retry;
 
@@ -2964,7 +2943,9 @@ Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<pb::mdsv2::FsInfo>&
 
   for (const auto& kv : kvs) {
     auto fs_info = MetaDataCodec::DecodeFSValue(kv.value);
-    fs_infoes.push_back(std::move(fs_info));
+    if (!fs_info.is_deleted()) {
+      fs_infoes.push_back(std::move(fs_info));
+    }
   }
 
   return Status::OK();

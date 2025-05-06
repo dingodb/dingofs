@@ -45,9 +45,23 @@ void MDSClient::GetMdsList() {
   }
 }
 
-void MDSClient::CreateFs(const std::string& fs_name, const std::string& partition_type) {
+void MDSClient::CreateFs(const std::string& fs_name, const CreateFsParams& params) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
+    return;
+  }
+
+  if (params.s3_endpoint.empty() || params.s3_ak.empty() || params.s3_sk.empty() || params.s3_bucketname.empty()) {
+    DINGO_LOG(ERROR) << "s3 info is empty";
+    return;
+  }
+
+  if (params.chunk_size == 0) {
+    DINGO_LOG(ERROR) << "chunk_size is 0";
+    return;
+  }
+  if (params.block_size == 0) {
+    DINGO_LOG(ERROR) << "block_size is 0";
     return;
   }
 
@@ -55,25 +69,25 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
   pb::mdsv2::CreateFsResponse response;
 
   request.set_fs_name(fs_name);
-  request.set_block_size(4 * 1024 * 1024);
-  request.set_chunk_size(4 * 1024 * 1024);
+  request.set_block_size(params.block_size);
+  request.set_chunk_size(params.chunk_size);
 
   request.set_fs_type(pb::mdsv2::FsType::S3);
-  request.set_owner("deng");
+  request.set_owner(params.owner);
   request.set_capacity(1024 * 1024 * 1024);
   request.set_recycle_time_hour(24);
 
-  if (partition_type == "mono") {
+  if (params.partition_type == "mono") {
     request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::MONOLITHIC_PARTITION);
-  } else if (partition_type == "parent_hash") {
+  } else if (params.partition_type == "parent_hash") {
     request.set_partition_type(::dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION);
   }
 
   pb::mdsv2::S3Info s3_info;
-  s3_info.set_ak("1111111111111111111111111");
-  s3_info.set_sk("2222222222222222222222222");
-  s3_info.set_endpoint("http://s3.dingodb.com");
-  s3_info.set_bucketname("dingo");
+  s3_info.set_ak(params.s3_ak);
+  s3_info.set_sk(params.s3_sk);
+  s3_info.set_endpoint(params.s3_endpoint);
+  s3_info.set_bucketname(params.s3_bucketname);
 
   s3_info.set_object_prefix(0);
 
@@ -91,7 +105,7 @@ void MDSClient::CreateFs(const std::string& fs_name, const std::string& partitio
   }
 }
 
-void MDSClient::DeleteFs(const std::string& fs_name) {
+void MDSClient::DeleteFs(const std::string& fs_name, bool is_force) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
     return;
@@ -101,6 +115,7 @@ void MDSClient::DeleteFs(const std::string& fs_name) {
   pb::mdsv2::DeleteFsResponse response;
 
   request.set_fs_name(fs_name);
+  request.set_is_force(is_force);
 
   DINGO_LOG(INFO) << "DeleteFs request: " << request.ShortDebugString();
 

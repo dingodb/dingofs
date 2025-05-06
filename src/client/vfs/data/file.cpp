@@ -16,12 +16,14 @@
 
 #include "client/vfs/data/file.h"
 
+#include <glog/logging.h>
+
 #include <cstdint>
 
-#include "common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/hub/vfs_hub.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -45,6 +47,7 @@ Chunk* File::GetOrCreateChunk(uint64_t chunk_index) {
 Status File::Write(const char* buf, uint64_t size, uint64_t offset,
                    uint64_t* out_wsize) {
   uint64_t chunk_size = GetChunkSize();
+  CHECK(chunk_size > 0) << "chunk size not allow 0";
 
   uint64_t chunk_index = offset / chunk_size;
   uint64_t chunk_offset = offset % chunk_size;

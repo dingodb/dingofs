@@ -199,6 +199,7 @@ bool IsFileInodeTxn(Operation::OpType op_type) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
+    case Operation::OpType::kUpdateChunk:
       return true;
 
     case Operation::OpType::kCreateDentry:
@@ -235,6 +236,7 @@ void MutationProcessor::ExecuteTxnMutation(TxnMutation& txn_mutation) {
     case Operation::OpType::kUpdateInodeNlink:
     case Operation::OpType::kUpdateInodeAttr:
     case Operation::OpType::kUpdateInodeXAttr:
+    case Operation::OpType::kUpdateChunk:
       status = ExecuteUpdateInodeTxnMutation(txn_mutation);
       break;
 
@@ -329,6 +331,45 @@ void MutationProcessor::ProcessFileInodeOperations(std::vector<Operation*>& oper
           for (const auto& [key, value] : param->xattrs) {
             (*inode.mutable_xattrs())[key] = value;
           }
+
+        } else {
+          operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
+        }
+      } break;
+
+      case Operation::OpType::kUpdateChunk: {
+        if (exist_inode) {
+          auto* param = operation->update_chunk;
+          auto it = inode.mutable_chunks()->find(param->index);
+          if (it == inode.chunks().end()) {
+            pb::mdsv2::Chunk chunk;
+            chunk.set_index(param->index);
+            chunk.set_size(param->size);
+            chunk.set_version(0);
+            Helper::VectorToPbRepeated(param->slices, chunk.mutable_slices());
+
+            operation->result.chunk = chunk;
+            inode.mutable_chunks()->insert({param->index, std::move(chunk)});
+
+          } else {
+            auto& chunk = it->second;
+            for (auto& slice : param->slices) {
+              *chunk.add_slices() = slice;
+            }
+
+            operation->result.chunk = chunk;
+          }
+
+          // update length
+          for (auto& slice : param->slices) {
+            if (inode.length() < slice.offset() + slice.len()) {
+              inode.set_length(slice.offset() + slice.len());
+            }
+          }
+
+          // update ctime/mtime
+          inode.set_ctime(std::max(inode.ctime(), param->time));
+          inode.set_mtime(std::max(inode.mtime(), param->time));
 
         } else {
           operation->status = Status(pb::error::ENOT_FOUND, "inode not found");
@@ -477,6 +518,7 @@ Status MutationProcessor::ExecuteUpdateInodeTxnMutation(TxnMutation& txn_mutatio
   for (auto* operation : txn_mutation.operations) {
     operation->result.version = inode.version();
     operation->result.nlink = inode.nlink();
+    operation->result.length = inode.length();
     operation->trace->GetFileTxn() = trace_txn;
   }
 

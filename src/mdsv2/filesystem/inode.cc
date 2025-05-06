@@ -17,6 +17,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -58,13 +60,18 @@ Inode::Inode(const pb::mdsv2::Inode& inode)
       symlink_(inode.symlink()),
       rdev_(inode.rdev()),
       dtime_(inode.dtime()),
-      openmpcount_(inode.openmpcount()) {
+      openmpcount_(inode.openmpcount()),
+      version_(inode.version()) {
   for (auto parent : inode.parent_inos()) {
     parents_.push_back(parent);
   }
 
   for (const auto& [key, value] : inode.xattrs()) {
     xattrs_.insert(std::make_pair(key, value));
+  }
+
+  for (const auto& [index, chunk] : inode.chunks()) {
+    chunks_.insert(std::make_pair(index, chunk));
   }
 }
 
@@ -85,6 +92,8 @@ Inode::Inode(const Inode& inode) {
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
   xattrs_ = inode.xattrs_;
+  chunks_ = inode.chunks_;
+  version_ = inode.version_;
 }
 
 Inode& Inode::operator=(const Inode& inode) {
@@ -108,6 +117,8 @@ Inode& Inode::operator=(const Inode& inode) {
   dtime_ = inode.dtime_;
   openmpcount_ = inode.openmpcount_;
   xattrs_ = inode.xattrs_;
+  chunks_ = inode.chunks_;
+  version_ = inode.version_;
 
   return *this;
 }
@@ -202,14 +213,15 @@ std::string Inode::GetXAttr(const std::string& name) {
 bool Inode::UpdateNlink(uint64_t version, uint32_t nlink, uint64_t time_ns) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version <= version_) {
+  if (version < version_) {
     return false;
   }
 
   nlink_ = nlink;
-  version_ = version;
   ctime_ = time_ns;
   mtime_ = time_ns;
+
+  version_ = version;
 
   return true;
 }
@@ -217,7 +229,7 @@ bool Inode::UpdateNlink(uint64_t version, uint32_t nlink, uint64_t time_ns) {
 bool Inode::UpdateAttr(uint64_t version, const pb::mdsv2::Inode& inode, uint32_t to_set) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version <= version_) {
+  if (version < version_) {
     return false;
   }
 
@@ -253,17 +265,21 @@ bool Inode::UpdateAttr(uint64_t version, const pb::mdsv2::Inode& inode, uint32_t
     nlink_ = inode.nlink();
   }
 
+  version_ = version;
+
   return true;
 }
 
 bool Inode::UpdateXAttr(uint64_t version, const std::string& name, const std::string& value) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version <= version_) {
+  if (version < version_) {
     return false;
   }
 
   xattrs_[name] = value;
+
+  version_ = version;
 
   return true;
 }
@@ -271,13 +287,67 @@ bool Inode::UpdateXAttr(uint64_t version, const std::string& name, const std::st
 bool Inode::UpdateXAttr(uint64_t version, const std::map<std::string, std::string>& xattrs) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version <= version_) {
+  if (version < version_) {
     return false;
   }
 
   for (const auto& [key, value] : xattrs) {
     xattrs_[key] = value;
   }
+  version_ = version;
+
+  return true;
+}
+
+Inode::ChunkMap Inode::GetChunks() {
+  utils::ReadLockGuard lk(lock_);
+
+  return chunks_;
+}
+
+bool Inode::GetChunk(uint64_t index, pb::mdsv2::Chunk& chunk) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = chunks_.find(index);
+  if (it == chunks_.end()) {
+    return false;
+  }
+
+  chunk = it->second;
+  return true;
+}
+
+bool Inode::UpdateChunk(uint64_t version, uint64_t index, const Chunk& chunk, uint64_t length) {
+  utils::WriteLockGuard lk(lock_);
+
+  if (version < version_) {
+    return false;
+  }
+
+  auto it = chunks_.find(index);
+  if (it == chunks_.end()) {
+    chunks_.insert({index, chunk});
+
+  } else {
+    it->second = chunk;
+  }
+
+  length_ = length;
+
+  version_ = version;
+
+  return true;
+}
+
+bool Inode::UpdateChunk(uint64_t version, const ChunkMap& chunks) {
+  utils::WriteLockGuard lk(lock_);
+
+  if (version < version_) {
+    return false;
+  }
+
+  chunks_ = chunks;
+  version_ = version;
 
   return true;
 }

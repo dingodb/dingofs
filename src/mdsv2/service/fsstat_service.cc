@@ -16,6 +16,7 @@
 
 #include <sys/types.h>
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -84,6 +85,17 @@ static std::string RenderMountpoint(const pb::mdsv2::FsInfo& fs_info) {
   return result;
 };
 
+static std::string RenderS3Info(const pb::mdsv2::S3Info& s3_info) {
+  std::string result;
+  if (!s3_info.endpoint().empty()) {
+    result += fmt::format("{}", s3_info.endpoint());
+    result += "<br>";
+    result += fmt::format("{}", s3_info.bucketname());
+  }
+
+  return result;
+}
+
 static std::string RenderPartitionPolicy(pb::mdsv2::PartitionPolicy partition_policy) {
   std::string result;
 
@@ -127,12 +139,10 @@ static std::string PartitionTypeName(pb::mdsv2::PartitionType partition_type) {
   }
 }
 
-static std::string RenderCapacity(uint64_t capacity) { return fmt::format("{}MB", capacity / (1024 * 1024)); }
-
 static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
   butil::IOBufBuilder os;
 
-  os << "<div style=\"margin: 12px;\">";
+  os << "<div style=\"margin: 12px;font-size:smaller\">";
   os << "<table class=\"gridtable sortable\" border=\"1\">\n";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -140,10 +150,13 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   os << "<th>Type</th>";
   os << "<th>PartitionType</th>";
   os << "<th>PartitionPolicy</th>";
-  os << "<th>Capacity</th>";
+  os << "<th>ChunkSize(MB)</th>";
+  os << "<th>BlockSize(MB)</th>";
+  os << "<th>Capacity(MB)</th>";
   os << "<th>Owner</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
+  os << "<th>S3</th>";
   os << "<th>UpdateTime</th>";
   os << "<th>CreateTime</th>";
   os << "</tr>";
@@ -159,12 +172,15 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";
     os << "<td>" << PartitionTypeName(partition_policy.type()) << "</td>";
     os << "<td>" << RenderPartitionPolicy(partition_policy) << "</td>";
-    os << "<td>" << RenderCapacity(fs_info.capacity()) << "</td>";
+    os << "<td>" << fs_info.chunk_size() / (1024 * 1024) << "</td>";
+    os << "<td>" << fs_info.block_size() / (1024 * 1024) << "</td>";
+    os << "<td>" << fs_info.capacity() / (1024 * 1024) << "</td>";
     os << "<td>" << fs_info.owner() << "</td>";
     os << "<td>" << fs_info.recycle_time_hour() << "</td>";
-    os << "<td style=\"font-size:smaller\">" << RenderMountpoint(fs_info) << "</td>";
-    os << "<td style=\"font-size:smaller\">" << Helper::FormatNsTime(fs_info.last_update_time_ns()) << "</td>";
-    os << "<td style=\"font-size:smaller\">" << Helper::FormatTime(fs_info.create_time_s()) << "</td>";
+    os << "<td>" << RenderMountpoint(fs_info) << "</td>";
+    os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
+    os << "<td>" << Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000) << "</td>";
+    os << "<td>" << Helper::FormatTime(fs_info.create_time_s()) << "</td>";
 
     os << "</tr>";
   }

@@ -30,8 +30,19 @@ class MDSClient {
 
   void GetMdsList();
 
-  void CreateFs(const std::string& fs_name, const std::string& partition_type);
-  void DeleteFs(const std::string& fs_name);
+  struct CreateFsParams {
+    std::string partition_type;
+    uint32_t chunk_size;
+    uint32_t block_size;
+    std::string s3_endpoint;
+    std::string s3_ak;
+    std::string s3_sk;
+    std::string s3_bucketname;
+    std::string owner = "deng";
+  };
+
+  void CreateFs(const std::string& fs_name, const CreateFsParams& params);
+  void DeleteFs(const std::string& fs_name, bool is_force);
   void UpdateFs(const std::string& fs_name);
   void GetFs(const std::string& fs_name);
   void ListFs();

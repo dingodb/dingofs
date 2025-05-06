@@ -51,6 +51,8 @@ class Inode {
   static InodeSPtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
 
   using XAttrMap = std::map<std::string, std::string>;
+  using Chunk = pb::mdsv2::Chunk;
+  using ChunkMap = std::map<uint64_t, Chunk>;
 
   uint32_t FsId() const { return fs_id_; }
   uint64_t Ino() const { return ino_; }
@@ -78,7 +80,10 @@ class Inode {
   bool UpdateXAttr(uint64_t version, const std::string& name, const std::string& value);
   bool UpdateXAttr(uint64_t version, const std::map<std::string, std::string>& xattrs);
 
-  bool UpdateChunk(uint64_t version, uint64_t chunk_index, const pb::mdsv2::SliceList& slice_list);
+  ChunkMap GetChunks();
+  bool GetChunk(uint64_t index, pb::mdsv2::Chunk& chunk);
+  bool UpdateChunk(uint64_t version, uint64_t index, const Chunk& chunk, uint64_t length);
+  bool UpdateChunk(uint64_t version, const ChunkMap& chunks);
 
   bool UpdateParent(uint64_t version, uint64_t parent_ino);
 
@@ -107,6 +112,8 @@ class Inode {
   std::vector<uint64_t> parents_;
 
   XAttrMap xattrs_;
+
+  ChunkMap chunks_;
 
   uint64_t version_{0};
 };

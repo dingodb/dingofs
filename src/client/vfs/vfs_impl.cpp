@@ -22,12 +22,12 @@
 #include <memory>
 #include <utility>
 
-#include "common/status.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_log.h"
+#include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "utils/configuration.h"
@@ -173,11 +173,10 @@ Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
 
   auto handle = handle_manager_->NewHandle();
 
-  s = meta_system_->Open(ino, flags, &handle->fh);
+  s = meta_system_->Open(ino, flags, handle->fh);
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
-    handle->flags = flags;
     handle->ino = ino;
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
@@ -200,14 +199,13 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
   auto handle = handle_manager_->NewHandle();
 
   s = meta_system_->Create(parent, name, uid, gid, mode, flags, attr,
-                           &handle->fh);
+                           handle->fh);
   if (!s.ok()) {
     handle_manager_->ReleaseHandler(handle->fh);
   } else {
     CHECK_GT(attr->ino, 0) << "ino in attr is null";
     Ino ino = attr->ino;
 
-    handle->flags = flags;
     handle->ino = ino;
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);

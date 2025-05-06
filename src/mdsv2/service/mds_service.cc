@@ -58,14 +58,6 @@ MDSServiceImpl::MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr writ
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 
-static Status ValidateCreateFsRequest(const pb::mdsv2::CreateFsRequest* request) {
-  if (request->fs_name().empty()) {
-    return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
-  }
-
-  return Status::OK();
-}
-
 void MDSServiceImpl::DoHeartbeat(google::protobuf::RpcController* controller,
                                  const pb::mdsv2::HeartbeatRequest* request, pb::mdsv2::HeartbeatResponse* response,
                                  TraceClosure* done) {
@@ -157,6 +149,7 @@ void MDSServiceImpl::DoCreateFs(google::protobuf::RpcController* controller, con
   FileSystemSet::CreateFsParam param;
   param.mds_id = mds_meta.ID();
   param.fs_name = request->fs_name();
+  param.chunk_size = request->chunk_size();
   param.block_size = request->block_size();
   param.fs_type = request->fs_type();
   param.fs_extra = request->fs_extra();
@@ -180,7 +173,24 @@ void MDSServiceImpl::CreateFs(google::protobuf::RpcController* controller, const
                               pb::mdsv2::CreateFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
-  auto status = ValidateCreateFsRequest(request);
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+
+    if (request->chunk_size() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk size is zero");
+    }
+
+    if (request->block_size() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "block size is zero");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
   if (BAIDU_UNLIKELY(!status.ok())) {
     brpc::ClosureGuard done_guard(svr_done);
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -213,6 +223,28 @@ void MDSServiceImpl::MountFs(google::protobuf::RpcController* controller, const 
                              pb::mdsv2::MountFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+    const auto& mount_point = request->mount_point();
+    if (mount_point.hostname().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "hostname is empty");
+    }
+    if (mount_point.path().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "mount point path is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoMountFs(controller, request, response, svr_done); });
@@ -240,6 +272,31 @@ void MDSServiceImpl::UmountFs(google::protobuf::RpcController* controller, const
                               pb::mdsv2::UmountFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+    const auto& mount_point = request->mount_point();
+    if (mount_point.hostname().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "hostname is empty");
+    }
+    if (mount_point.port() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "mount point port is zero");
+    }
+    if (mount_point.path().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "mount point path is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoUmountFs(controller, request, response, svr_done); });
@@ -257,7 +314,7 @@ void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController* controller, con
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
-  auto status = file_system_set_->DeleteFs(request->fs_name());
+  auto status = file_system_set_->DeleteFs(request->fs_name(), request->is_force());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -266,6 +323,21 @@ void MDSServiceImpl::DoDeleteFs(google::protobuf::RpcController* controller, con
 void MDSServiceImpl::DeleteFs(google::protobuf::RpcController* controller, const pb::mdsv2::DeleteFsRequest* request,
                               pb::mdsv2::DeleteFsResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -299,6 +371,21 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
                                pb::mdsv2::GetFsInfoResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_name().empty()) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoGetFsInfo(controller, request, response, svr_done); });
@@ -311,9 +398,8 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::ListFsInfoRequest* request, pb::mdsv2::ListFsInfoResponse* response,
-                                  google::protobuf::Closure* done) {
+void MDSServiceImpl::DoListFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::ListFsInfoRequest*,
+                                  pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
@@ -1476,7 +1562,8 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->WriteSlice(ctx, request->ino(), request->chunk_index(), request->slice_list());
+  status = file_system->WriteSlice(ctx, request->ino(), request->chunk_index(),
+                                   Helper::PbRepeatedToVector(request->slices()));
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1521,13 +1608,13 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  pb::mdsv2::SliceList slice_list;
-  status = file_system->ReadSlice(ctx, request->ino(), request->chunk_index(), slice_list);
+  std::vector<pb::mdsv2::Slice> slices;
+  status = file_system->ReadSlice(ctx, request->ino(), request->chunk_index(), slices);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->mutable_slice_list()->Swap(&slice_list);
+  Helper::VectorToPbRepeated(slices, response->mutable_slices());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 

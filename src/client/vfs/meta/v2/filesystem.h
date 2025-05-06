@@ -19,13 +19,13 @@
 #include <memory>
 #include <string>
 
-#include "common/status.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 
 namespace dingofs {
@@ -106,12 +106,12 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Lookup(Ino parent, const std::string& name, Attr* out_attr) override;
 
   Status Create(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
-                uint32_t mode, int flags, Attr* attr, uint64_t* fh) override;
+                uint32_t mode, int flags, Attr* attr, uint64_t fh) override;
 
   Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
                uint32_t mode, uint64_t rdev, Attr* attr) override;
 
-  Status Open(Ino ino, int flags, uint64_t* fh) override;
+  Status Open(Ino ino, int flags, uint64_t fh) override;
   Status Close(Ino ino, uint64_t fh) override;
 
   Status ReadSlice(Ino ino, uint64_t index,

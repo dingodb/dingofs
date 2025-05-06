@@ -16,6 +16,8 @@
 
 #include "dataaccess/s3/s3_accesser.h"
 
+#include <glog/logging.h>
+
 #include <memory>
 
 #include "fmt/format.h"
@@ -28,6 +30,12 @@ using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
 
 bool S3Accesser::Init() {
+  LOG(INFO) << fmt::format(
+      "[accesser] init s3 accesser, endpoint({}) bucket({}) ak({}) sk({}) "
+      "region({}).",
+      option_.s3Address, option_.bucketName, option_.ak, option_.sk,
+      option_.region);
+
   client_ = std::make_unique<dataaccess::aws::S3Adapter>();
   client_->Init(option_);
 

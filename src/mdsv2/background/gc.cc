@@ -87,43 +87,23 @@ void CleanDeletedFileTask::Run() {
 
 Status CleanDeletedFileTask::CleanDeletedFile(const pb::mdsv2::Inode& inode) {
   // delete data from s3
-  Range range;
-  MetaDataCodec::GetChunkRange(inode.fs_id(), inode.ino(), range.start_key, range.end_key);
+  for (const auto& [_, chunk] : inode.chunks()) {
+    DINGO_LOG(INFO) << fmt::format("[gc] clean deleted file {}/{}/{}/{}.", inode.fs_id(), inode.ino(), chunk.index(),
+                                   chunk.version());
 
-  auto txn = kv_storage_->NewTxn();
-  Status status;
-  std::vector<KeyValue> kvs;
-  do {
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+    for (const auto& slice : chunk.slices()) {
+      uint64_t index = slice.offset() / chunk.size();
+      cache::blockcache::BlockKey block_key(inode.fs_id(), inode.ino(), chunk.index(), index, 0);
 
-    for (auto& kv : kvs) {
-      auto chunk = MetaDataCodec::DecodeChunkValue(kv.value);
-      DINGO_LOG(INFO) << fmt::format("[gc] clean deleted file {}/{}/{}/{}.", inode.fs_id(), inode.ino(), chunk.index(),
-                                     chunk.version());
-
-      for (const auto& slice : chunk.slices()) {
-        uint64_t index = slice.offset() / chunk.size();
-        cache::blockcache::BlockKey block_key(inode.fs_id(), inode.ino(), chunk.index(), index, 0);
-
-        auto status = data_accessor_->Delete(block_key.StoreKey());
-        if (!status.ok()) {
-          return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
-        }
+      auto status = data_accessor_->Delete(block_key.StoreKey());
+      if (!status.ok()) {
+        return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
       }
     }
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] clean file data fail, {}", status.error_str());
-    return status;
   }
 
   // delete inode
-  status = kv_storage_->Delete(MetaDataCodec::EncodeDelFileKey(inode.fs_id(), inode.ino()));
+  auto status = kv_storage_->Delete(MetaDataCodec::EncodeDelFileKey(inode.fs_id(), inode.ino()));
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc] clean del file fail, {}", status.error_str());
   }

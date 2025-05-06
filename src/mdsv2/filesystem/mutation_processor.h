@@ -38,8 +38,9 @@ struct Operation {
     kUpdateInodeNlink = 2,
     kUpdateInodeAttr = 3,
     kUpdateInodeXAttr = 4,
-    kCreateDentry = 5,
-    kDeleteDentry = 6,
+    kUpdateChunk = 5,
+    kCreateDentry = 6,
+    kDeleteDentry = 7,
   };
 
   static std::string OpTypeName(OpType op_type) {
@@ -54,6 +55,8 @@ struct Operation {
         return "UpdateInodeAttr";
       case OpType::kUpdateInodeXAttr:
         return "UpdateInodeXAttr";
+      case OpType::kUpdateChunk:
+        return "kUpdateChunk";
       case OpType::kCreateDentry:
         return "CreateDentry";
       case OpType::kDeleteDentry:
@@ -86,6 +89,14 @@ struct Operation {
     std::map<std::string, std::string> xattrs;
   };
 
+  struct UpdateChunk {
+    uint64_t ino;
+    uint64_t index;
+    uint64_t size;
+    std::vector<pb::mdsv2::Slice> slices;
+    uint64_t time;
+  };
+
   struct CreateDentry {
     pb::mdsv2::Dentry dentry;
     uint64_t time;
@@ -104,6 +115,8 @@ struct Operation {
   struct ChangedResult {
     uint64_t version{0};
     uint32_t nlink{0};
+    uint64_t length{0};
+    pb::mdsv2::Chunk chunk;
   };
 
   uint64_t txn_id;
@@ -115,6 +128,7 @@ struct Operation {
   UpdateInodeNlink* update_inode_nlink{nullptr};
   UpdateInodeAttr* update_inode_attr{nullptr};
   UpdateInodeXAttr* update_inode_xattr{nullptr};
+  UpdateChunk* update_chunk{nullptr};
   CreateDentry* create_dentry{nullptr};
   UpdateDentry* update_dentry{nullptr};
   DeleteDentry* delete_dentry{nullptr};
@@ -131,6 +145,7 @@ struct Operation {
     delete delete_inode;
     delete update_inode_nlink;
     delete update_inode_attr;
+    delete update_chunk;
     delete create_dentry;
     delete update_dentry;
     delete delete_dentry;
@@ -162,6 +177,16 @@ struct Operation {
   void SetUpdateInodeXAttr(const std::map<std::string, std::string>& xattrs) {
     update_inode_xattr = new UpdateInodeXAttr();
     update_inode_xattr->xattrs = xattrs;
+  }
+
+  void SetUpdateChunk(uint64_t ino, uint64_t index, uint64_t size, const std::vector<pb::mdsv2::Slice>& slices,
+                      uint64_t time) {
+    update_chunk = new UpdateChunk();
+    update_chunk->ino = ino;
+    update_chunk->index = index;
+    update_chunk->size = size;
+    update_chunk->slices = slices;
+    update_chunk->time = time;
   }
 
   void SetCreateDentry(pb::mdsv2::Dentry&& dentry, uint64_t time) {

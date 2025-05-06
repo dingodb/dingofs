@@ -19,11 +19,11 @@
 #include <memory>
 #include <string>
 
-#include "common/status.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/helper.h"
@@ -97,8 +97,8 @@ class MDSClient {
   Status Rename(uint64_t old_parent_ino, const std::string& old_name,
                 uint64_t new_parent_ino, const std::string& new_name);
 
-  Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
   Status NewSliceId(uint64_t* id);
+  Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
   Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
 
  private:

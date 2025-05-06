@@ -21,9 +21,9 @@
 #include <string>
 #include <vector>
 
-#include "common/status.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -51,11 +51,11 @@ class MetaSystem {
                        uint32_t gid, uint32_t mode, uint64_t rdev,
                        Attr* attr) = 0;
 
-  virtual Status Open(Ino ino, int flags, uint64_t* fh) = 0;
+  virtual Status Open(Ino ino, int flags, uint64_t fh) = 0;
 
   virtual Status Create(Ino parent, const std::string& name, uint32_t uid,
                         uint32_t gid, uint32_t mode, int flags, Attr* attr,
-                        uint64_t* fh) = 0;
+                        uint64_t fh) = 0;
 
   virtual Status Close(Ino ino, uint64_t fh) = 0;
 
