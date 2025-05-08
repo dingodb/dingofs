@@ -42,7 +42,7 @@ class FsIdGenerator {
   bool GenFsId(uint64_t* id) { return id_generator_->GenId(1, id) == 0; }
 
  private:
-  static constexpr uint64_t FS_ID_INIT = 0;
+  static constexpr uint64_t FS_ID_INIT = 1;
   static constexpr uint64_t FS_ID_ALLOCATE_BUNDLE = 100;
 
   idgenerator::IdAllocatorUPtr id_generator_;
