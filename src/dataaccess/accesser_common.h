@@ -24,6 +24,7 @@
 namespace dingofs {
 namespace dataaccess {
 
+// TODO: refact this use one struct
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;
 

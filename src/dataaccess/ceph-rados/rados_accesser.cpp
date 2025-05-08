@@ -1,0 +1,266 @@
+/*
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include <absl/cleanup/cleanup.h>
+#include <butil/time.h>
+#include <glog/logging.h>
+#include <rados/librados.h>
+
+#include <cstddef>
+#include <cstring>
+#include <functional>
+#include <memory>
+#include <variant>
+
+#include "dataaccess/ceph-rados/rados_accesser.h"
+
+namespace dingofs {
+namespace dataaccess {
+
+namespace {
+
+int CreateIoContext(rados_t cluster, const std::string& pool_name,
+                    rados_ioctx_t* ioctx) {
+  return rados_ioctx_create(cluster, pool_name.c_str(), ioctx);
+}
+
+void DestroyIoctx(rados_ioctx_t ioctx) {
+  if (ioctx != nullptr) {
+    rados_ioctx_destroy(ioctx);
+  }
+}
+
+template <typename Context>
+void InvokeCallback(const std::shared_ptr<Context>& context, int err) {
+  context->ret_code = err;
+  context->cb(context);
+}
+}  // namespace
+
+static void CompleteCallback(rados_completion_t cb, void* arg) {
+  RadosAsyncIOUnit* io_unit = static_cast<RadosAsyncIOUnit*>(arg);
+
+  CHECK_NOTNULL(io_unit);
+  CHECK(rados_aio_is_complete(io_unit->completion))
+      << "Completion is not "
+      << "complete, key: " << io_unit->key;
+
+  int err = rados_aio_get_return_value(cb);
+  if (err < 0) {
+    LOG(WARNING) << "Async operation failed, key: " << io_unit->key
+                 << ", error: " << strerror(-err);
+  }
+
+  std::visit([err](auto&& ctx) { InvokeCallback(ctx, err); },
+             io_unit->async_context);
+
+  delete io_unit;
+}
+
+bool RadosAccesser::Init() {
+  rados_t cluster;
+
+  uint64_t flags = 0;
+  int err = rados_create2(&cluster, options_.cluster_name.c_str(),
+                          options_.user_name.c_str(), flags);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to create rados cluster, name: "
+               << options_.cluster_name << ", user: " << options_.user_name
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(cluster, "mon_host", options_.mon_host.c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set mon_host: " << options_.mon_host
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_conf_set(cluster, "key", options_.key.c_str());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to set key: " << options_.key
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  err = rados_connect(cluster);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to connect to rados cluster, name: "
+               << options_.cluster_name << ", user: " << options_.user_name
+               << ", err: " << strerror(-err);
+    return false;
+  }
+
+  cluster_ = cluster;
+
+  VLOG(1) << "Succss init RadosAccesser cluster: "
+          << ", mon_host: " << options_.mon_host << options_.cluster_name
+          << ", user: " << options_.user_name << ", key: " << options_.key
+          << ", pool: " << options_.pool_name;
+
+  return true;
+}
+
+Status RadosAccesser::ExecuteSyncOp(
+    const std::string& key,
+    std::function<Status(rados_ioctx_t ioctx)> sync_op) {
+  rados_ioctx_t ioctx;
+  int err = CreateIoContext(cluster_, options_.pool_name, &ioctx);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to create ioctx, pool: " << options_.pool_name
+               << ", key: " << key << ", err: " << strerror(-err);
+    return Status::IoError(err, "Failed to create ioctx");
+  }
+
+  err = rados_ioctx_create(cluster_, options_.pool_name.c_str(), &ioctx);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to create ioctx, pool: " << options_.pool_name
+               << ", key: " << key << ", err: " << strerror(-err);
+    return Status::IoError(err, "Failed to create ioctx");
+  }
+
+  auto defer = ::absl::MakeCleanup([&]() { DestroyIoctx(ioctx); });
+
+  return sync_op(ioctx);
+}
+
+Status RadosAccesser::Put(const std::string& key, const char* buffer,
+                          size_t length) {
+  return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
+    int err = rados_write(ioctx, key.c_str(), buffer, length, 0);
+    if (err < 0) {
+      LOG(ERROR) << "Failed to write object, key: " << key
+                 << ", length: " << length << ", err: " << strerror(-err);
+      return Status::IoError("Failed to write object");
+    }
+    return Status::OK();
+  });
+}
+
+Status RadosAccesser::Get(const std::string& key, off_t offset, size_t length,
+                          char* buffer) {
+  return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
+    int err = rados_read(ioctx, key.c_str(), buffer, length, offset);
+    if (err < 0) {
+      LOG(ERROR) << "Failed to read object, key: " << key
+                 << ", length: " << length << ", offset: " << offset
+                 << ", err: " << strerror(-err);
+      return Status::IoError("Failed to read object");
+    }
+    return Status::OK();
+  });
+}
+
+Status RadosAccesser::Delete(const std::string& key) {
+  return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
+    int err = rados_remove(ioctx, key.c_str());
+    if (err < 0) {
+      LOG(ERROR) << "Failed to remove object, key: " << key
+                 << ", err: " << strerror(-err);
+      return Status::IoError("Failed to remove object");
+    }
+    return Status::OK();
+  });
+}
+
+RadosAsyncIOUnit::~RadosAsyncIOUnit() {
+  if (completion) {
+    rados_aio_release(completion);
+  }
+  if (ioctx) {
+    rados_ioctx_destroy(ioctx);
+  }
+}
+
+template <typename Context>
+void RadosAccesser::ExecuteAsyncOperation(
+    std::shared_ptr<Context> context,
+    std::function<int(const RadosAsyncIOUnit&)> async_op) {
+  auto io_unit = std::make_unique<RadosAsyncIOUnit>(context);
+  io_unit->key = context->key;
+
+  int err = CreateIoContext(cluster_, options_.pool_name, &io_unit->ioctx);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to create ioctx, pool: " << options_.pool_name
+               << ", key: " << context->key << ", err: " << strerror(-err);
+    InvokeCallback(context, err);
+    return;
+  }
+
+  err = rados_aio_create_completion(io_unit.get(), &CompleteCallback, nullptr,
+                                    &io_unit->ioctx);
+  if (err < 0) {
+    LOG(ERROR) << "Failed to create completion, key: " << context->key
+               << ", err: " << strerror(-err);
+    InvokeCallback(context, err);
+    return;
+  }
+
+  err = async_op(*io_unit.get());
+  if (err < 0) {
+    LOG(ERROR) << "Failed to async_op, key: " << context->key
+               << ", err: " << strerror(-err);
+    InvokeCallback(context, err);
+    return;
+  }
+
+  // transfer ownership of io_unit to the callback
+  auto* released_io_unit = io_unit.release();
+}
+
+void RadosAccesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
+  ExecuteAsyncOperation(context, [this, context](const RadosAsyncIOUnit& unit) {
+    int err = rados_aio_read(unit.ioctx, context->key.c_str(), unit.completion,
+                             context->buf, context->len, context->offset);
+    LOG(ERROR) << "Fail AsyncGet key: " << context->key
+               << ", length: " << context->len
+               << ", offset: " << context->offset
+               << ", err: " << strerror(-err);
+    return err;
+  });
+}
+
+void RadosAccesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
+  ExecuteAsyncOperation(context, [this, context](const RadosAsyncIOUnit& unit) {
+    int err = rados_aio_write(unit.ioctx, context->key.c_str(), unit.completion,
+                              context->buffer, context->buffer_size, 0);
+    LOG(ERROR) << "Fail AsyncPut key: " << context->key
+               << ", length: " << context->buffer_size
+               << ", err: " << strerror(-err);
+    return err;
+  });
+}
+
+void RadosAccesser::AsyncPut(const std::string& key, const char* buffer,
+                             size_t length, RetryCallback retry_cb) {
+  auto put_obj_ctx = std::make_shared<PutObjectAsyncContext>();
+  put_obj_ctx->key = key;
+  put_obj_ctx->buffer = buffer;
+  put_obj_ctx->buffer_size = length;
+  put_obj_ctx->start_time = butil::cpuwide_time_us();
+  put_obj_ctx->cb =
+      [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
+        if (retry_cb(ctx->ret_code)) {
+          AsyncPut(ctx);
+        }
+      };
+
+  AsyncPut(put_obj_ctx);
+}
+
+}  // namespace dataaccess
+}  // namespace dingofs

@@ -202,8 +202,7 @@ find_package(uring REQUIRED)
 message("Using uring ${uring_VERSION}")
 
 find_package(hashkit REQUIRED)
-message("Using hashkit")
-message("hashkit_LIBRARIES: ${hashkit_LIBRARIES}")
+message("Using hashkit: ${hashkit_LIBRARIES}")
 
 find_package(jsoncpp REQUIRED)
 message("Using jsoncpp ${jsoncpp_VERSION}")
@@ -214,6 +213,9 @@ message("Using leveldb ${leveldb_VERSION}")
 find_package(brpc REQUIRED)
 find_package(braft REQUIRED)
 find_package(RocksDB REQUIRED)
+
+find_package(rados REQUIRED)
+message("Using rados: ${RADOS_LIBRARIES}")
 
 find_package(dingosdk REQUIRED)
 message(STATUS "Found dingosdk: ${dingosdk_VERSION}")
