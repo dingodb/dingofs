@@ -16,7 +16,6 @@
 #include <string>
 
 #include "fmt/core.h"
-#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mdsv2/coordinator/dummy_coordinator_client.h"
 #include "mdsv2/filesystem/id_generator.h"
@@ -45,8 +44,8 @@ TEST_F(AutoIncrementIdGeneratorTest, GenID) {
   ASSERT_TRUE(id_generator->Init()) << "init id generator fail.";
 
   for (int i = 0; i < 1000; ++i) {
-    int64_t id = 0;
-    ASSERT_TRUE(id_generator->GenID(id));
+    uint64_t id = 0;
+    ASSERT_TRUE(id_generator->GenID(1, id));
     ASSERT_EQ(id, 20000 + i);
   }
 }

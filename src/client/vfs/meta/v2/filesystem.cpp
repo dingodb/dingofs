@@ -194,6 +194,7 @@ Status MDSV2FileSystem::GetS3Info(S3Info* s3_info) {
 
 bool MDSV2FileSystem::MountFs() {
   pb::mdsv2::MountPoint mount_point;
+  mount_point.set_client_id(client_id_.ID());
   mount_point.set_hostname(client_id_.Hostname());
   mount_point.set_path(client_id_.Mountpoint());
   mount_point.set_cto(false);
@@ -214,6 +215,7 @@ bool MDSV2FileSystem::MountFs() {
 
 bool MDSV2FileSystem::UnmountFs() {
   pb::mdsv2::MountPoint mount_point;
+  mount_point.set_client_id(client_id_.ID());
   mount_point.set_hostname(client_id_.Hostname());
   mount_point.set_port(client_id_.Port());
   mount_point.set_path(client_id_.Mountpoint());
@@ -277,7 +279,7 @@ Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
   LOG(INFO) << fmt::format("[meta.{}] open ino({}).", name_, ino);
 
   std::string session_id;
-  auto status = mds_client_->Open(ino, session_id);
+  auto status = mds_client_->Open(ino, flags, session_id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.{}] open ino({}) fail, error: {}.", name_,
                               ino, status.ToString());

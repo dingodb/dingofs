@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/lru_cache.h"
 
@@ -32,90 +33,54 @@ namespace mdsv2 {
 
 class Inode;
 using InodeSPtr = std::shared_ptr<Inode>;
+using InodeWPtr = std::weak_ptr<Inode>;
 
 class Inode {
  public:
-  Inode() = default;
-  Inode(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
-        uint32_t nlink);
-  Inode(const pb::mdsv2::Inode& inode);
-  ~Inode();
+  using AttrType = mdsv2::AttrType;
+  using XAttrMap = ::google::protobuf::Map<std::string, std::string>;
+  using ChunkMap = ::google::protobuf::Map<uint64_t, ChunkType>;
 
-  Inode(const Inode& inode);
-  Inode& operator=(const Inode& inode);
+  Inode(const AttrType& attr) { attr_ = attr; }
+  Inode(AttrType&& attr) { attr_ = std::move(attr); }
+  ~Inode() = default;
 
-  static InodeSPtr New(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid,
-                       uint32_t uid, uint32_t nlink) {
-    return std::make_shared<Inode>(fs_id, ino, type, mode, gid, uid, nlink);
-  }
-  static InodeSPtr New(const pb::mdsv2::Inode& inode) { return std::make_shared<Inode>(inode); }
+  static InodeSPtr New(const AttrType& inode) { return std::make_shared<Inode>(inode); }
 
-  using XAttrMap = std::map<std::string, std::string>;
-  using Chunk = pb::mdsv2::Chunk;
-  using ChunkMap = std::map<uint64_t, Chunk>;
-
-  uint32_t FsId() const { return fs_id_; }
-  uint64_t Ino() const { return ino_; }
-  pb::mdsv2::FileType Type() { return type_; }
+  uint32_t FsId();
+  uint64_t Ino();
+  pb::mdsv2::FileType Type();
   uint64_t Length();
   uint32_t Uid();
   uint32_t Gid();
   uint32_t Mode();
   uint32_t Nlink();
-  const std::string& Symlink();
+  std::string Symlink();
   uint64_t Rdev();
   uint32_t Dtime();
   uint64_t Ctime();
   uint64_t Mtime();
   uint64_t Atime();
   uint32_t Openmpcount();
-  uint64_t Version() const { return version_; }
+  uint64_t Version();
 
-  XAttrMap GetXAttrMap();
-  std::string GetXAttr(const std::string& name);
+  XAttrMap XAttrs();
+  std::string XAttr(const std::string& name);
 
-  bool UpdateNlink(uint64_t version, uint32_t nlink, uint64_t time_ns);
-  bool UpdateAttr(uint64_t version, const pb::mdsv2::Inode& inode, uint32_t to_set);
+  ChunkMap Chunks();
+  bool Chunk(uint64_t index, ChunkType& chunk);
 
-  bool UpdateXAttr(uint64_t version, const std::string& name, const std::string& value);
-  bool UpdateXAttr(uint64_t version, const std::map<std::string, std::string>& xattrs);
+  bool UpdateIf(const AttrType& attr);
+  bool UpdateIf(AttrType&& attr);
 
-  ChunkMap GetChunks();
-  bool GetChunk(uint64_t index, pb::mdsv2::Chunk& chunk);
-  bool UpdateChunk(uint64_t version, uint64_t index, const Chunk& chunk, uint64_t length);
-  bool UpdateChunk(uint64_t version, const ChunkMap& chunks);
-
-  bool UpdateParent(uint64_t version, uint64_t parent_ino);
-
-  pb::mdsv2::Inode CopyTo();
-  void CopyTo(pb::mdsv2::Inode& inode);
+  AttrType Copy();
+  AttrType CopyTo();
+  AttrType&& Move();
 
  private:
   utils::RWLock lock_;
 
-  uint32_t fs_id_{0};
-  uint64_t ino_{0};
-  uint64_t length_{0};
-  uint64_t ctime_{0};
-  uint64_t mtime_{0};
-  uint64_t atime_{0};
-  uint32_t uid_{0};
-  uint32_t gid_{0};
-  uint32_t mode_{0};
-  int32_t nlink_{0};
-  int32_t pending_nlink_{0};
-  pb::mdsv2::FileType type_{0};
-  std::string symlink_;
-  uint64_t rdev_{0};
-  uint32_t dtime_{0};
-  uint32_t openmpcount_{0};
-  std::vector<uint64_t> parents_;
-
-  XAttrMap xattrs_;
-
-  ChunkMap chunks_;
-
-  uint64_t version_{0};
+  AttrType attr_;
 };
 
 // cache all file/dir inode
@@ -127,10 +92,10 @@ class InodeCache {
   InodeCache(const InodeCache&) = delete;
   InodeCache& operator=(const InodeCache&) = delete;
 
-  void PutInode(uint64_t ino, InodeSPtr inode);
-  void DeleteInode(uint64_t ino);
+  void PutInode(Ino ino, InodeSPtr inode);
+  void DeleteInode(Ino ino);
 
-  InodeSPtr GetInode(uint64_t ino);
+  InodeSPtr GetInode(Ino ino);
   std::vector<InodeSPtr> GetInodes(std::vector<uint64_t> inoes);
   std::map<uint64_t, InodeSPtr> GetAllInodes();
 

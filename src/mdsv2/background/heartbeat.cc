@@ -74,8 +74,7 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::MDS& mds) {
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
 
   KVStorage::WriteOption option;
-  auto status =
-      kv_storage_->Put(option, MetaDataCodec::EncodeHeartbeatKey(mds.id()), MetaDataCodec::EncodeHeartbeatValue(mds));
+  auto status = kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(mds.id()), MetaCodec::EncodeHeartbeatValue(mds));
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, mds({}) error({}).", mds.ShortDebugString(),
                                     status.error_str());
@@ -91,8 +90,8 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::Client& client) {
 
   KVStorage::WriteOption option;
   std::string mountpoint = fmt::format("{}:{}:{}", client.hostname(), client.port(), client.path());
-  auto status = kv_storage_->Put(option, MetaDataCodec::EncodeHeartbeatKey(mountpoint),
-                                 MetaDataCodec::EncodeHeartbeatValue(client));
+  auto status =
+      kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(mountpoint), MetaCodec::EncodeHeartbeatValue(client));
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, client({}) error({}).", client.ShortDebugString(),
                                     status.error_str());
@@ -105,7 +104,7 @@ Status Heartbeat::GetMDSList(std::vector<pb::mdsv2::MDS>& mdses) {
   auto txn = kv_storage_->NewTxn();
 
   Range range;
-  MetaDataCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
+  MetaCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
 
   Status status;
   std::vector<KeyValue> kvs;
@@ -120,7 +119,7 @@ Status Heartbeat::GetMDSList(std::vector<pb::mdsv2::MDS>& mdses) {
 
     for (auto& kv : kvs) {
       pb::mdsv2::MDS mds;
-      MetaDataCodec::DecodeHeartbeatValue(kv.value, mds);
+      MetaCodec::DecodeHeartbeatValue(kv.value, mds);
       mdses.push_back(mds);
     }
 

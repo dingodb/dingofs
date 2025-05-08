@@ -324,7 +324,7 @@ Status MDSClient::ReadDir(uint64_t ino, const std::string& last_name,
   return Status::OK();
 }
 
-Status MDSClient::Open(uint64_t ino, std::string& session_id) {
+Status MDSClient::Open(uint64_t ino, int flags, std::string& session_id) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
   auto endpoint = GetEndPointByIno(ino);
@@ -334,6 +334,7 @@ Status MDSClient::Open(uint64_t ino, std::string& session_id) {
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
+  request.set_flags(flags);
 
   auto status = SendRequest(endpoint, "MDSService", "Open", request, response);
   if (!status.ok()) {
@@ -708,9 +709,7 @@ Status MDSClient::NewSliceId(uint64_t* id) {
     return status;
   }
 
-  if (!response.slice_ids().empty()) {
-    *id = response.slice_ids().at(0);
-  }
+  *id = response.slice_id();
 
   return Status::OK();
 }

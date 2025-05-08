@@ -159,6 +159,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   os << "<th>S3</th>";
   os << "<th>UpdateTime</th>";
   os << "<th>CreateTime</th>";
+  os << "<th>Details</th>";
   os << "</tr>";
 
   for (const auto& fs_info : fs_infoes) {
@@ -181,7 +182,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
     os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
     os << "<td>" << Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000) << "</td>";
     os << "<td>" << Helper::FormatTime(fs_info.create_time_s()) << "</td>";
-
+    os << "<td><a href=\"FsStatService/details/" << fs_info.fs_id() << R"(" target="_blank">details</a></td>)";
     os << "</tr>";
   }
 
@@ -295,7 +296,7 @@ body {
 
   os << "<body>";
   os << "<h1>File System Directory Tree</h1>";
-  os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,size,ctime,mtime,atime]</p>";
+  os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,length,ctime,mtime,atime]</p>";
   os << R"(
 <div class="controls">
   <button id="expandAll">Expand</button>
@@ -370,7 +371,7 @@ body {
   os << "</html>";
 }
 
-void RenderInodePage(const pb::mdsv2::Inode& inode, butil::IOBufBuilder& os) {
+void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   os << R"(
   <!DOCTYPE html>
 <html lang="zh-CN">)";
@@ -436,13 +437,13 @@ void RenderInodePage(const pb::mdsv2::Inode& inode, butil::IOBufBuilder& os) {
 
   os << "<body>";
   os << R"(<div class="container">)";
-  os << fmt::format("<h1>Inode: {}</h1>", inode.ino());
+  os << fmt::format("<h1>Inode: {}</h1>", attr.ino());
   os << R"(<pre id="json-display"></pre>)";
   os << "</div>";
 
   os << "<script>";
   std::string json;
-  if (Helper::ProtoToJson(inode, json)) {
+  if (Helper::ProtoToJson(attr, json)) {
     os << "const jsonString =`" + json + "`;";
   } else {
     os << "const jsonString = \"{}\";";
@@ -491,9 +492,8 @@ void RenderInodePage(const pb::mdsv2::Inode& inode, butil::IOBufBuilder& os) {
   os << "</html>";
 }
 
-void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller,
-                                       const pb::web::FsStatRequest* request, pb::web::FsStatResponse* response,
-                                       ::google::protobuf::Closure* done) {
+void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest*,
+                                       pb::web::FsStatResponse*, ::google::protobuf::Closure* done) {
   brpc::ClosureGuard const done_guard(done);
   brpc::Controller* cntl = (brpc::Controller*)controller;
   const brpc::Server* server = cntl->server();
@@ -504,7 +504,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   DINGO_LOG(INFO) << fmt::format("FsStatService path: {}", path);
 
-  std::vector<int64_t> params;
+  std::vector<std::string> params;
   Helper::SplitString(path, '/', params);
 
   // /FsStatService
@@ -514,14 +514,25 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
   } else if (params.size() == 1) {
     // /FsStatService/{fs_id}
-    uint32_t fs_id = params[0];
+    uint32_t fs_id = Helper::StringToInt32(params[0]);
     FsUtils fs_utils(Server::GetInstance().GetKVStorage());
     RenderFsTreePage(fs_utils, fs_id, os);
 
+  } else if (params.size() == 2 && params[0] == "details") {
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      auto fs_info = file_system->GetFsInfo();
+      os << fs_info.DebugString();
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
   } else if (params.size() == 2) {
     // /FsStatService/{fs_id}/{ino}
-    uint32_t fs_id = params[0];
-    uint64_t ino = params[1];
+    uint32_t fs_id = Helper::StringToInt32(params[0]);
+    uint64_t ino = Helper::StringToInt64(params[1]);
 
     auto file_system_set = Server::GetInstance().GetFileSystemSet();
     auto file_system = file_system_set->GetFileSystem(fs_id);

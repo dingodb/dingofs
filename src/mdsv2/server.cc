@@ -187,13 +187,13 @@ bool Server::InitRenamer() {
   return renamer_->Init();
 }
 
-bool Server::InitMutationMerger() {
+bool Server::InitOperationProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
-  mutation_processor_ = MutationProcessor::New(kv_storage_);
-  CHECK(mutation_processor_ != nullptr) << "new MutationProcessor fail.";
+  operation_processor_ = OperationProcessor::New(kv_storage_);
+  CHECK(operation_processor_ != nullptr) << "new OperationProcessor fail.";
 
-  return mutation_processor_->Init();
+  return operation_processor_->Init();
 }
 
 bool Server::InitFileSystem() {
@@ -213,7 +213,7 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
   file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
-                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, mutation_processor_);
+                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, operation_processor_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -386,7 +386,7 @@ void Server::Stop() {
   brpc_server_.Join();
   quota_processor_->Destroy();
   renamer_->Destroy();
-  mutation_processor_->Destroy();
+  operation_processor_->Destroy();
   heartbeat_->Destroy();
   crontab_manager_.Destroy();
   read_worker_set_->Destroy();

@@ -36,13 +36,15 @@ class ClientId {
         mountpoint_(mountpoint) {}
   ~ClientId() = default;
 
-  std::string ID() const {
-    return fmt::format("{}:{}:{}:{}", uuid_, hostname_, port_, mountpoint_);
-  }
+  std::string ID() const { return uuid_; }
   std::string Uuid() const { return uuid_; }
   std::string Hostname() const { return hostname_; }
   uint32_t Port() const { return port_; }
   std::string Mountpoint() const { return mountpoint_; }
+  std::string Description() const {
+    return fmt::format("ClientId[{}]: {}:{}{}", uuid_, hostname_, port_,
+                       mountpoint_);
+  }
 
   bool operator==(const ClientId& other) const { return uuid_ == other.uuid_; }
   bool operator!=(const ClientId& other) const { return uuid_ != other.uuid_; }

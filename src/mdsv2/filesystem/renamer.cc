@@ -26,8 +26,8 @@ namespace mdsv2 {
 void RenameTask::Run() {
   uint64_t old_parent_version;
   uint64_t new_parent_version;
-  auto status = fs_->RenameWithRetry(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_, old_parent_version,
-                                     new_parent_version);
+  auto status = fs_->Rename(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_, old_parent_version,
+                            new_parent_version);
 
   if (cb_ != nullptr) {
     cb_(status);

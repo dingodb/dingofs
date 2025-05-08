@@ -26,14 +26,15 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
-#include "mdsv2/filesystem/mutation_processor.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
@@ -49,24 +50,25 @@ using FileSystemSetSPtr = std::shared_ptr<FileSystemSet>;
 
 struct EntryOut {
   EntryOut() = default;
+  using AttrType = Inode::AttrType;
 
-  explicit EntryOut(const pb::mdsv2::Inode& inode) : inode(inode) {}
+  explicit EntryOut(const AttrType& attr) : attr(attr) {}
 
   std::string name;
-  pb::mdsv2::Inode inode;
+  AttrType attr;
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-             RenamerPtr renamer, MutationProcessorSPtr mutation_processor, MDSMetaMapSPtr mds_meta_map);
+             RenamerPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map);
   ~FileSystem() = default;
 
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
-                            KVStorageSPtr kv_storage, RenamerPtr renamer, MutationProcessorSPtr mutation_processor,
+                            KVStorageSPtr kv_storage, RenamerPtr renamer, OperationProcessorSPtr operation_processor,
                             MDSMetaMapSPtr mds_meta_map) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
-                                        mutation_processor, mds_meta_map);
+                                        operation_processor, mds_meta_map);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -76,7 +78,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint64_t Epoch() const;
 
-  pb::mdsv2::FsInfo FsInfo() const { return fs_info_->Get(); }
+  FsInfoType GetFsInfo() const { return fs_info_->Get(); }
 
   pb::mdsv2::PartitionType PartitionType() const;
   bool IsMonoPartition() const;
@@ -88,7 +90,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status CreateRoot();
 
   // lookup dentry
-  Status Lookup(Context& ctx, uint64_t parent_ino, const std::string& name, EntryOut& entry_out);
+  Status Lookup(Context& ctx, Ino parent_ino, const std::string& name, EntryOut& entry_out);
 
   // file
   struct MkNodParam {
@@ -97,12 +99,12 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    uint64_t parent_ino{0};
+    Ino parent_ino{0};
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, uint64_t ino, std::string& session_id);
-  Status Release(Context& ctx, uint64_t ino, const std::string& session_id);
+  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id);
+  Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   // directory
   struct MkDirParam {
@@ -111,62 +113,59 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    uint64_t parent_ino{0};
+    Ino parent_ino{0};
     uint64_t rdev{0};
   };
   Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
-  Status RmDir(Context& ctx, uint64_t parent_ino, const std::string& name);
-  Status ReadDir(Context& ctx, uint64_t ino, const std::string& last_name, uint limit, bool with_attr,
+  Status RmDir(Context& ctx, Ino parent_ino, const std::string& name);
+  Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
 
   // create hard link
-  Status Link(Context& ctx, uint64_t ino, uint64_t new_parent_ino, const std::string& new_name, EntryOut& entry_out);
+  Status Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::string& new_name, EntryOut& entry_out);
   // delete link
-  Status UnLink(Context& ctx, uint64_t parent_ino, const std::string& name);
+  Status UnLink(Context& ctx, Ino parent_ino, const std::string& name);
   // create symbolic link
-  Status Symlink(Context& ctx, const std::string& symlink, uint64_t new_parent_ino, const std::string& new_name,
+  Status Symlink(Context& ctx, const std::string& symlink, Ino new_parent_ino, const std::string& new_name,
                  uint32_t uid, uint32_t gid, EntryOut& entry_out);
   // read symbolic link
-  Status ReadLink(Context& ctx, uint64_t ino, std::string& link);
+  Status ReadLink(Context& ctx, Ino ino, std::string& link);
 
   // attr
   struct SetAttrParam {
     uint32_t to_set{0};
-    pb::mdsv2::Inode inode;
+    AttrType attr;
   };
 
-  Status SetAttr(Context& ctx, uint64_t ino, const SetAttrParam& param, EntryOut& entry_out);
-  Status GetAttr(Context& ctx, uint64_t ino, EntryOut& entry_out);
+  Status SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, EntryOut& entry_out);
+  Status GetAttr(Context& ctx, Ino ino, EntryOut& entry_out);
 
   // xattr
-  Status GetXAttr(Context& ctx, uint64_t ino, Inode::XAttrMap& xattr);
-  Status GetXAttr(Context& ctx, uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(Context& ctx, uint64_t ino, const std::map<std::string, std::string>& xattrs);
+  Status GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr);
+  Status GetXAttr(Context& ctx, Ino ino, const std::string& name, std::string& value);
+  Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs);
 
   // rename
-  Status Rename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+  Status Rename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
                 const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
-  Status RenameWithRetry(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
-                         const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
-  Status CommitRename(Context& ctx, uint64_t old_parent_ino, const std::string& old_name, uint64_t new_parent_ino,
+  Status CommitRename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
                       const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
 
   // slice
-  Status WriteSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, const std::vector<pb::mdsv2::Slice>& slices);
-  Status ReadSlice(Context& ctx, uint64_t ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices);
+  Status WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index, const std::vector<pb::mdsv2::Slice>& slices);
+  Status ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices);
 
   // compact
-  Status CompactChunk(Context& ctx, uint64_t ino, uint64_t chunk_index,
-                      std::vector<pb::mdsv2::TrashSlice>& trash_slices);
-  Status CompactFile(Context& ctx, uint64_t ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
+  Status CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
+  Status CompactFile(Context& ctx, Ino ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
   Status CompactAll(Context& ctx, uint64_t& checked_count, uint64_t& compacted_count);
-  Status CleanTrashFileData(Context& ctx, uint64_t ino);
+  Status CleanTrashFileData(Context& ctx, Ino ino);
 
   // dentry/inode
-  Status GetDentry(Context& ctx, uint64_t parent, const std::string& name, Dentry& dentry);
-  Status ListDentry(Context& ctx, uint64_t parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
+  Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
+  Status ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                     std::vector<Dentry>& dentries);
-  Status GetInode(Context& ctx, uint64_t ino, EntryOut& entry_out);
+  Status GetInode(Context& ctx, Ino ino, EntryOut& entry_out);
   Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries);
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mdsv2::XAttr>& out_xattrs);
 
@@ -174,7 +173,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   Status RefreshFsInfo();
   Status RefreshFsInfo(const std::string& name);
-  void RefreshFsInfo(const pb::mdsv2::FsInfo& fs_info);
+  void RefreshFsInfo(const FsInfoType& fs_info);
 
   Status UpdatePartitionPolicy(uint64_t mds_id);
   Status UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions);
@@ -186,48 +185,42 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;
 
+  Status RunOperation(Operation* operation);
+
   // generate ino
-  Status GenDirIno(int64_t& ino);
-  Status GenFileIno(int64_t& ino);
+  Status GenDirIno(Ino& ino);
+  Status GenFileIno(Ino& ino);
   bool CanServe(int64_t self_mds_id);
 
   // get partition
-  Status GetPartition(Context& ctx, uint64_t parent, PartitionPtr& out_partition);
-  Status GetPartition(Context& ctx, uint64_t version, uint64_t parent, PartitionPtr& out_partition);
-  PartitionPtr GetPartitionFromCache(uint64_t parent_ino);
+  Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
+  Status GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition);
+  PartitionPtr GetPartitionFromCache(Ino parent_ino);
   std::map<uint64_t, PartitionPtr> GetAllPartitionsFromCache();
-  Status GetPartitionFromStore(uint64_t parent_ino, const std::string& reason, PartitionPtr& out_partition);
+  Status GetPartitionFromStore(Ino parent_ino, const std::string& reason, PartitionPtr& out_partition);
 
   // get dentry
-  Status GetDentryFromStore(uint64_t parent, const std::string& name, Dentry& dentry);
-  Status ListDentryFromStore(uint64_t parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
+  Status GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry);
+  Status ListDentryFromStore(Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                              std::vector<Dentry>& dentries);
 
   // get inode
   Status GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
   Status GetInode(Context& ctx, uint64_t version, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t ino, InodeSPtr& out_inode);
-  Status GetInode(Context& ctx, uint64_t version, uint64_t ino, InodeSPtr& out_inode);
-  InodeSPtr GetInodeFromCache(uint64_t ino);
+  Status GetInode(Context& ctx, Ino ino, InodeSPtr& out_inode);
+  Status GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode);
+  InodeSPtr GetInodeFromCache(Ino ino);
   std::map<uint64_t, InodeSPtr> GetAllInodesFromCache();
-  Status GetInodeFromStore(uint64_t ino, const std::string& reason, InodeSPtr& out_inode);
+  Status GetInodeFromStore(Ino ino, const std::string& reason, InodeSPtr& out_inode);
   Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
 
+  // delete inode from cache
+  void DeleteInodeFromCache(Ino ino);
+
   // thorough delete inode
-  Status DestoryInode(uint32_t fs_id, uint64_t ino);
+  Status DestoryInode(uint32_t fs_id, Ino ino);
 
-  // part fail, clean/rollback
-  Status CleanUpInode(InodeSPtr inode);
-  Status CleanUpDentry(Dentry& dentry);
-  Status RollbackFileNlink(uint32_t fs_id, uint64_t ino, int delta);
-
-  uint64_t GetMdsIdByIno(uint64_t ino);
-
-  std::vector<pb::mdsv2::TrashSlice> GenTrashSlices(uint64_t ino, uint64_t file_length,
-                                                    const pb::mdsv2::Chunk& chunk) const;
-  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(uint64_t ino, uint64_t file_length, pb::mdsv2::Chunk& chunk);
-  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(uint64_t ino, uint64_t file_length, pb::mdsv2::Chunk& chunk,
-                                                    Txn* txn);
+  uint64_t GetMdsIdByIno(Ino ino);
 
   void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes);
 
@@ -259,8 +252,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   RenamerPtr renamer_;
 
-  // muation merger
-  MutationProcessorSPtr mutation_processor_;
+  OperationProcessorSPtr operation_processor_;
 };
 
 // manage all filesystem
@@ -268,16 +260,16 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, MutationProcessorSPtr mutation_processor);
+                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, OperationProcessorSPtr operation_processor);
   ~FileSystemSet();
 
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
-                               MutationProcessorSPtr mutation_processor) {
+                               OperationProcessorSPtr operation_processor) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           renamer, mutation_processor);
+                                           renamer, operation_processor);
   }
 
   bool Init();
@@ -296,17 +288,17 @@ class FileSystemSet {
     pb::mdsv2::PartitionType partition_type;
   };
 
-  Status CreateFs(const CreateFsParam& param, pb::mdsv2::FsInfo& fs_info);
-  Status MountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
-  Status UmountFs(const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
-  Status DeleteFs(const std::string& fs_name, bool is_force);
-  Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const pb::mdsv2::FsInfo& fs_info);
-  Status GetFsInfo(Context& ctx, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info);
-  Status GetAllFsInfo(Context& ctx, std::vector<pb::mdsv2::FsInfo>& fs_infoes);
+  Status CreateFs(const CreateFsParam& param, FsInfoType& fs_info);
+  Status MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
+  Status UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
+  Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
+  Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info);
+  Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info);
+  Status GetAllFsInfo(Context& ctx, std::vector<FsInfoType>& fs_infoes);
   Status RefreshFsInfo(const std::string& fs_name);
   Status RefreshFsInfo(uint32_t fs_id);
 
-  Status AllocSliceId(uint32_t slice_num, std::vector<uint64_t>& slice_ids);
+  Status AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id);
 
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(const std::string& fs_name);
@@ -317,14 +309,16 @@ class FileSystemSet {
   bool LoadFileSystems();
 
  private:
-  Status GenFsId(int64_t& fs_id);
-  pb::mdsv2::FsInfo GenFsInfo(int64_t fs_id, const CreateFsParam& param);
+  Status GenFsId(uint32_t& fs_id);
+  FsInfoType GenFsInfo(int64_t fs_id, const CreateFsParam& param);
 
   Status CreateFsTable();
   bool IsExistFsTable();
 
   bool AddFileSystem(FileSystemSPtr fs, bool is_force = false);
   void DeleteFileSystem(uint32_t fs_id);
+
+  Status RunOperation(Operation* operation);
 
   CoordinatorClientSPtr coordinator_client_;
 
@@ -337,7 +331,7 @@ class FileSystemSet {
 
   RenamerPtr renamer_;
 
-  MutationProcessorSPtr mutation_processor_;
+  OperationProcessorSPtr operation_processor_;
 
   MDSMeta self_mds_meta_;
   MDSMetaMapSPtr mds_meta_map_;

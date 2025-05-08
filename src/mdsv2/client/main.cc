@@ -47,6 +47,7 @@ DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
 DEFINE_string(lock_table_name, "dingofs-lock", "lock table name");
+DEFINE_string(autoincrement_table_name, "dingofs-autoincrement", "autoincrement table name");
 DEFINE_string(heartbeat_table_name, "dingofs-heartbeat", "heartbeat table name");
 DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
@@ -216,6 +217,9 @@ int main(int argc, char* argv[]) {
     if (lower_cmd == Helper::ToLowerCase("CreateLockTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
 
+    } else if (lower_cmd == Helper::ToLowerCase("CreateAutoIncrementTable")) {
+      store_client.CreateAutoIncrementTable(FLAGS_autoincrement_table_name);
+
     } else if (lower_cmd == Helper::ToLowerCase("CreateHeartbeatTable")) {
       store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
 
@@ -239,6 +243,7 @@ int main(int argc, char* argv[]) {
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
       store_client.CreateLockTable(FLAGS_lock_table_name);
+      store_client.CreateAutoIncrementTable(FLAGS_autoincrement_table_name);
       store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
       store_client.CreateFsTable(FLAGS_fs_table_name);
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);

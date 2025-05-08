@@ -40,10 +40,10 @@ static const std::string kFileSessionTatalCountMetricsName = "dingofs_file_sessi
 static const std::string kFileSessionCountMetricsName = "dingofs_file_session_count";
 
 std::string FileSession::EncodeKey(uint32_t fs_id, uint64_t ino, const std::string& session_id) {
-  return MetaDataCodec::EncodeFileSessionKey(fs_id, ino, session_id);
+  return MetaCodec::EncodeFileSessionKey(fs_id, ino, session_id);
 }
 
-std::string FileSession::EncodeKey() const { return MetaDataCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_); }
+std::string FileSession::EncodeKey() const { return MetaCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_); }
 
 std::string FileSession::EncodeValue() const {
   pb::mdsv2::FileSession file_session;
@@ -51,7 +51,7 @@ std::string FileSession::EncodeValue() const {
   file_session.set_ino(ino_);
   file_session.set_client_id(client_id_);
 
-  return MetaDataCodec::EncodeFileSessionValue(file_session);
+  return MetaCodec::EncodeFileSessionValue(file_session);
 }
 
 FileSessionCache::FileSessionCache() : count_metrics_(kFileSessionCacheCountMetricsName) {}
@@ -283,7 +283,7 @@ Status FileSessionManager::Delete(uint64_t ino) {
 
 Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionPtr>& file_sessions) {
   Range range;
-  MetaDataCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
+  MetaCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
   std::vector<KeyValue> kvs;
@@ -297,7 +297,7 @@ Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<Fi
     }
 
     for (auto& kv : kvs) {
-      file_sessions.push_back(FileSession::New(fs_id_, MetaDataCodec::DecodeFileSessionValue(kv.value)));
+      file_sessions.push_back(FileSession::New(fs_id_, MetaCodec::DecodeFileSessionValue(kv.value)));
     }
 
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
@@ -316,14 +316,14 @@ Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::stri
     return status;
   }
 
-  file_session = FileSession::New(fs_id_, MetaDataCodec::DecodeFileSessionValue(value));
+  file_session = FileSession::New(fs_id_, MetaCodec::DecodeFileSessionValue(value));
 
   return Status::OK();
 }
 
 Status FileSessionManager::IsExistFromStore(uint64_t ino, bool& is_exist) {
   Range range;
-  MetaDataCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
+  MetaCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
 
   std::vector<KeyValue> kvs;
   auto txn = kv_storage_->NewTxn();

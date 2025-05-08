@@ -36,364 +36,174 @@ static const std::string kInodeCacheMetricsPrefix = "dingofs_inode_cache_";
 // 0: no limit
 DEFINE_uint32(inode_cache_max_count, 0, "inode cache max count");
 
-Inode::Inode(uint32_t fs_id, uint64_t ino, pb::mdsv2::FileType type, uint32_t mode, uint32_t gid, uint32_t uid,
-             uint32_t nlink)
-    : fs_id_(fs_id), ino_(ino), type_(type), mode_(mode), gid_(gid), uid_(uid), nlink_(nlink) {
-  uint64_t now_ns = Helper::TimestampNs();
-  ctime_ = now_ns;
-  mtime_ = now_ns;
-  atime_ = now_ns;
+uint32_t Inode::FsId() {
+  utils::ReadLockGuard lk(lock_);
+
+  return attr_.fs_id();
 }
 
-Inode::Inode(const pb::mdsv2::Inode& inode)
-    : fs_id_(inode.fs_id()),
-      ino_(inode.ino()),
-      length_(inode.length()),
-      ctime_(inode.ctime()),
-      mtime_(inode.mtime()),
-      atime_(inode.atime()),
-      uid_(inode.uid()),
-      gid_(inode.gid()),
-      mode_(inode.mode()),
-      nlink_(inode.nlink()),
-      type_(inode.type()),
-      symlink_(inode.symlink()),
-      rdev_(inode.rdev()),
-      dtime_(inode.dtime()),
-      openmpcount_(inode.openmpcount()),
-      version_(inode.version()) {
-  for (auto parent : inode.parent_inos()) {
-    parents_.push_back(parent);
-  }
+uint64_t Inode::Ino() {
+  utils::ReadLockGuard lk(lock_);
 
-  for (const auto& [key, value] : inode.xattrs()) {
-    xattrs_.insert(std::make_pair(key, value));
-  }
-
-  for (const auto& [index, chunk] : inode.chunks()) {
-    chunks_.insert(std::make_pair(index, chunk));
-  }
+  return attr_.ino();
 }
 
-Inode::Inode(const Inode& inode) {
-  fs_id_ = inode.fs_id_;
-  ino_ = inode.ino_;
-  length_ = inode.length_;
-  ctime_ = inode.ctime_;
-  mtime_ = inode.mtime_;
-  atime_ = inode.atime_;
-  uid_ = inode.uid_;
-  gid_ = inode.gid_;
-  mode_ = inode.mode_;
-  nlink_ = inode.nlink_;
-  type_ = inode.type_;
-  symlink_ = inode.symlink_;
-  rdev_ = inode.rdev_;
-  dtime_ = inode.dtime_;
-  openmpcount_ = inode.openmpcount_;
-  xattrs_ = inode.xattrs_;
-  chunks_ = inode.chunks_;
-  version_ = inode.version_;
+pb::mdsv2::FileType Inode::Type() {
+  utils::ReadLockGuard lk(lock_);
+
+  return attr_.type();
 }
-
-Inode& Inode::operator=(const Inode& inode) {
-  if (this == &inode) {
-    return *this;
-  }
-
-  fs_id_ = inode.fs_id_;
-  ino_ = inode.ino_;
-  length_ = inode.length_;
-  ctime_ = inode.ctime_;
-  mtime_ = inode.mtime_;
-  atime_ = inode.atime_;
-  uid_ = inode.uid_;
-  gid_ = inode.gid_;
-  mode_ = inode.mode_;
-  nlink_ = inode.nlink_;
-  type_ = inode.type_;
-  symlink_ = inode.symlink_;
-  rdev_ = inode.rdev_;
-  dtime_ = inode.dtime_;
-  openmpcount_ = inode.openmpcount_;
-  xattrs_ = inode.xattrs_;
-  chunks_ = inode.chunks_;
-  version_ = inode.version_;
-
-  return *this;
-}
-
-Inode::~Inode() {}  // NOLINT
 
 uint64_t Inode::Length() {
   utils::ReadLockGuard lk(lock_);
 
-  return length_;
+  return attr_.length();
 }
 
 uint32_t Inode::Uid() {
   utils::ReadLockGuard lk(lock_);
 
-  return uid_;
+  return attr_.uid();
 }
 
 uint32_t Inode::Gid() {
   utils::ReadLockGuard lk(lock_);
 
-  return gid_;
+  return attr_.gid();
 }
 
 uint32_t Inode::Mode() {
   utils::ReadLockGuard lk(lock_);
 
-  return mode_;
+  return attr_.mode();
 }
 
 uint32_t Inode::Nlink() {
   utils::ReadLockGuard lk(lock_);
 
-  return nlink_;
+  return attr_.nlink();
 }
 
-const std::string& Inode::Symlink() {
+std::string Inode::Symlink() {
   utils::ReadLockGuard lk(lock_);
 
-  return symlink_;
+  return attr_.symlink();
 }
 
 uint64_t Inode::Rdev() {
   utils::ReadLockGuard lk(lock_);
 
-  return rdev_;
+  return attr_.rdev();
 }
 
 uint32_t Inode::Dtime() {
   utils::ReadLockGuard lk(lock_);
 
-  return dtime_;
+  return attr_.dtime();
 }
+
 uint64_t Inode::Ctime() {
   utils::ReadLockGuard lk(lock_);
 
-  return ctime_;
+  return attr_.ctime();
 }
 
 uint64_t Inode::Mtime() {
   utils::ReadLockGuard lk(lock_);
 
-  return mtime_;
+  return attr_.mtime();
 }
 
 uint64_t Inode::Atime() {
   utils::ReadLockGuard lk(lock_);
 
-  return atime_;
+  return attr_.atime();
 }
 
 uint32_t Inode::Openmpcount() {
   utils::ReadLockGuard lk(lock_);
 
-  return openmpcount_;
+  return attr_.openmpcount();
 }
 
-Inode::XAttrMap Inode::GetXAttrMap() {
+uint64_t Inode::Version() {
   utils::ReadLockGuard lk(lock_);
 
-  return xattrs_;
+  return attr_.version();
 }
 
-std::string Inode::GetXAttr(const std::string& name) {
+Inode::XAttrMap Inode::XAttrs() {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = xattrs_.find(name);
-
-  return it != xattrs_.end() ? it->second : "";
+  return attr_.xattrs();
 }
 
-bool Inode::UpdateNlink(uint64_t version, uint32_t nlink, uint64_t time_ns) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (version < version_) {
-    return false;
-  }
-
-  nlink_ = nlink;
-  ctime_ = time_ns;
-  mtime_ = time_ns;
-
-  version_ = version;
-
-  return true;
-}
-
-bool Inode::UpdateAttr(uint64_t version, const pb::mdsv2::Inode& inode, uint32_t to_set) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (version < version_) {
-    return false;
-  }
-
-  if (to_set & kSetAttrMode) {
-    mode_ = inode.mode();
-  }
-
-  if (to_set & kSetAttrUid) {
-    uid_ = inode.uid();
-  }
-
-  if (to_set & kSetAttrGid) {
-    gid_ = inode.gid();
-  }
-
-  if (to_set & kSetAttrLength) {
-    length_ = inode.length();
-  }
-
-  if (to_set & kSetAttrAtime) {
-    atime_ = inode.atime();
-  }
-
-  if (to_set & kSetAttrMtime) {
-    mtime_ = inode.mtime();
-  }
-
-  if (to_set & kSetAttrCtime) {
-    ctime_ = inode.ctime();
-  }
-
-  if (to_set & kSetAttrNlink) {
-    nlink_ = inode.nlink();
-  }
-
-  version_ = version;
-
-  return true;
-}
-
-bool Inode::UpdateXAttr(uint64_t version, const std::string& name, const std::string& value) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (version < version_) {
-    return false;
-  }
-
-  xattrs_[name] = value;
-
-  version_ = version;
-
-  return true;
-}
-
-bool Inode::UpdateXAttr(uint64_t version, const std::map<std::string, std::string>& xattrs) {
-  utils::WriteLockGuard lk(lock_);
-
-  if (version < version_) {
-    return false;
-  }
-
-  for (const auto& [key, value] : xattrs) {
-    xattrs_[key] = value;
-  }
-  version_ = version;
-
-  return true;
-}
-
-Inode::ChunkMap Inode::GetChunks() {
+std::string Inode::XAttr(const std::string& name) {
   utils::ReadLockGuard lk(lock_);
 
-  return chunks_;
+  auto it = attr_.xattrs().find(name);
+  return (it != attr_.xattrs().end()) ? it->second : std::string();
 }
 
-bool Inode::GetChunk(uint64_t index, pb::mdsv2::Chunk& chunk) {
+Inode::ChunkMap Inode::Chunks() {
   utils::ReadLockGuard lk(lock_);
 
-  auto it = chunks_.find(index);
-  if (it == chunks_.end()) {
+  return attr_.chunks();
+}
+
+bool Inode::Chunk(uint64_t index, ChunkType& chunk) {
+  utils::ReadLockGuard lk(lock_);
+
+  auto it = attr_.chunks().find(index);
+  if (it == attr_.chunks().end()) {
     return false;
   }
 
   chunk = it->second;
+
   return true;
 }
 
-bool Inode::UpdateChunk(uint64_t version, uint64_t index, const Chunk& chunk, uint64_t length) {
+bool Inode::UpdateIf(const AttrType& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version < version_) {
+  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
+                                 attr_.version(), attr.version());
+  if (attr.version() <= attr_.version()) {
     return false;
   }
 
-  auto it = chunks_.find(index);
-  if (it == chunks_.end()) {
-    chunks_.insert({index, chunk});
-
-  } else {
-    it->second = chunk;
-  }
-
-  length_ = length;
-
-  version_ = version;
+  attr_ = attr;
 
   return true;
 }
 
-bool Inode::UpdateChunk(uint64_t version, const ChunkMap& chunks) {
+bool Inode::UpdateIf(AttrType&& attr) {
   utils::WriteLockGuard lk(lock_);
 
-  if (version < version_) {
+  DINGO_LOG(INFO) << fmt::format("[inode.{}] update attr,this({}) version({}->{}).", attr_.ino(), (void*)this,
+                                 attr_.version(), attr.version());
+  if (attr.version() <= attr_.version()) {
     return false;
   }
 
-  chunks_ = chunks;
-  version_ = version;
+  attr_ = std::move(attr);
 
   return true;
 }
 
-bool Inode::UpdateParent(uint64_t version, uint64_t parent_ino) {
+Inode::AttrType Inode::Copy() {
+  utils::ReadLockGuard lk(lock_);
+
+  return attr_;
+}
+
+Inode::AttrType Inode::CopyTo() { return Copy(); }
+
+Inode::AttrType&& Inode::Move() {
   utils::WriteLockGuard lk(lock_);
 
-  if (version <= version_) {
-    return false;
-  }
-
-  parents_.push_back(parent_ino);
-
-  return true;
-}
-
-pb::mdsv2::Inode Inode::CopyTo() {
-  pb::mdsv2::Inode inode;
-  CopyTo(inode);
-  return std::move(inode);
-}
-
-void Inode::CopyTo(pb::mdsv2::Inode& inode) {
-  inode.set_fs_id(fs_id_);
-  inode.set_ino(ino_);
-  inode.set_length(length_);
-  inode.set_ctime(ctime_);
-  inode.set_mtime(mtime_);
-  inode.set_atime(atime_);
-  inode.set_uid(uid_);
-  inode.set_gid(gid_);
-  inode.set_mode(mode_);
-  inode.set_nlink(nlink_);
-  inode.set_type(type_);
-  inode.set_symlink(symlink_);
-  inode.set_rdev(rdev_);
-  inode.set_dtime(dtime_);
-  inode.set_openmpcount(openmpcount_);
-
-  for (auto& parent : parents_) {
-    inode.add_parent_inos(parent);
-  }
-
-  for (const auto& [key, value] : xattrs_) {
-    inode.mutable_xattrs()->insert({key, value});
-  }
+  return std::move(attr_);
 }
 
 InodeCache::InodeCache()
@@ -401,11 +211,11 @@ InodeCache::InodeCache()
 
 InodeCache::~InodeCache() {}  // NOLINT
 
-void InodeCache::PutInode(uint64_t ino, InodeSPtr inode) { cache_.Put(ino, inode); }
+void InodeCache::PutInode(Ino ino, InodeSPtr inode) { cache_.Put(ino, inode); }
 
-void InodeCache::DeleteInode(uint64_t ino) { cache_.Remove(ino); };
+void InodeCache::DeleteInode(Ino ino) { cache_.Remove(ino); };
 
-InodeSPtr InodeCache::GetInode(uint64_t ino) {
+InodeSPtr InodeCache::GetInode(Ino ino) {
   InodeSPtr inode;
   if (!cache_.Get(ino, &inode)) {
     DINGO_LOG(INFO) << fmt::format("inode({}) not found.", ino);

@@ -18,15 +18,11 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <map>
 #include <memory>
-#include <set>
 #include <string>
-#include <vector>
 
+#include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/inode.h"
-#include "utils/concurrent/concurrent.h"
-#include "utils/lru_cache.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -44,9 +40,6 @@ class Dentry {
   Dentry(const Dentry& dentry, InodeSPtr inode);
   ~Dentry();
 
-  // Dentry(const Dentry& other);
-  // Dentry& operator=(const Dentry& other);
-
   const std::string& Name() const { return name_; }
   uint32_t FsId() const { return fs_id_; }
   uint64_t Ino() const { return ino_; }
@@ -54,9 +47,9 @@ class Dentry {
   pb::mdsv2::FileType Type() const { return type_; }
   uint32_t Flag() const { return flag_; }
 
-  InodeSPtr Inode() const { return inode_; }
+  InodeSPtr Inode() const { return inode_.lock(); }
 
-  pb::mdsv2::Dentry CopyTo();
+  DentryType CopyTo() const;
 
  private:
   std::string name_;
@@ -67,7 +60,7 @@ class Dentry {
   uint32_t flag_;
 
   // maybe null, just inode shortcut
-  InodeSPtr inode_;
+  InodeWPtr inode_;
 };
 
 }  // namespace mdsv2

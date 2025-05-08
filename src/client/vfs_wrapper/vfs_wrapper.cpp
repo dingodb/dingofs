@@ -601,8 +601,9 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
           << " uid: " << uid << " gid: " << gid << " mode: " << mode;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("mkdir (%d,%s,%s:0%04o): %s %s", parent, name,
-                           StrMode(mode), mode, s.ToString(), StrAttr(attr));
+    return absl::StrFormat("mkdir (%d,%s,%s:0%04o,%d,%d): %s %s", parent, name,
+                           StrMode(mode), mode, uid, gid, s.ToString(),
+                           StrAttr(attr));
   });
 
   ClientOpMetricGuard op_metric(

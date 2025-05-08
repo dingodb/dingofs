@@ -37,19 +37,19 @@ DEFINE_uint32(fs_stats_duration_s, 60, "get per seconds fs stats duration.");
 const uint64_t kNsPerSecond = 1000 * 1000 * 1000;
 
 Status FsStats::UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsStatsData& stats) {
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   uint64_t now_ns = Helper::TimestampNs();
-  std::string key = MetaDataCodec::EncodeFsStatsKey(fs_id, now_ns);
+  std::string key = MetaCodec::EncodeFsStatsKey(fs_id, now_ns);
 
   Status status;
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
-    txn->Put(key, MetaDataCodec::EncodeFsStatsValue(stats));
+    txn->Put(key, MetaCodec::EncodeFsStatsValue(stats));
 
     status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -57,8 +57,7 @@ Status FsStats::UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsSt
 
   } while (retry < FLAGS_txn_max_retry_times);
 
-  trace_txn.txn_id = fs_id;
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return status;
 }
@@ -75,10 +74,10 @@ static void SumFsStats(const pb::mdsv2::FsStatsData& src_stats, pb::mdsv2::FsSta
 }
 
 Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& stats) {
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   Range range;
-  MetaDataCodec::GetFsStatsRange(fs_id, range.start_key, range.end_key);
+  MetaCodec::GetFsStatsRange(fs_id, range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -89,7 +88,7 @@ Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& 
   }
 
   uint64_t mart_time_ns = Helper::TimestampNs() - FLAGS_fs_stats_duration_s * kNsPerSecond;
-  std::string mark_key = MetaDataCodec::EncodeFsStatsKey(fs_id, mart_time_ns);
+  std::string mark_key = MetaCodec::EncodeFsStatsKey(fs_id, mart_time_ns);
   pb::mdsv2::FsStatsData compact_stats;
   bool compacted = false;
   for (auto& kv : kvs) {
@@ -103,31 +102,31 @@ Status FsStats::GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& 
     }
 
     // sum all stats
-    SumFsStats(MetaDataCodec::DecodeFsStatsValue(kv.value), stats);
+    SumFsStats(MetaCodec::DecodeFsStatsValue(kv.value), stats);
   }
 
   // put compact stats
-  txn->Put(mark_key, MetaDataCodec::EncodeFsStatsValue(compact_stats));
+  txn->Put(mark_key, MetaCodec::EncodeFsStatsValue(compact_stats));
 
   status = txn->Commit();
-  trace_txn = txn->GetTrace();
+  trace.AddTxn(txn->GetTrace());
   if (!status.ok()) {
     DINGO_LOG(WARNING) << fmt::format("[fsstat.{}] commit fs stats fail, {}.", fs_id, status.error_str());
   }
 
-  trace_txn.txn_id = fs_id;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }
 
 Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
                                     std::map<uint64_t, pb::mdsv2::FsStatsData>& stats_per_second) {
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   Range range;
-  MetaDataCodec::GetFsStatsRange(fs_id, range.start_key, range.end_key);
+  MetaCodec::GetFsStatsRange(fs_id, range.start_key, range.end_key);
   uint64_t start_time_s = Helper::Timestamp() - FLAGS_fs_stats_duration_s;
-  range.start_key = MetaDataCodec::EncodeFsStatsKey(fs_id, start_time_s * kNsPerSecond);
+  range.start_key = MetaCodec::EncodeFsStatsKey(fs_id, start_time_s * kNsPerSecond);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -143,25 +142,25 @@ Status FsStats::GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
   for (auto& kv : kvs) {
     uint32_t fs_id = 0;
     uint64_t time_ns = 0;
-    MetaDataCodec::DecodeFsStatsKey(kv.key, fs_id, time_ns);
+    MetaCodec::DecodeFsStatsKey(kv.key, fs_id, time_ns);
     uint64_t time_s = time_ns / kNsPerSecond;
     if (time_s == mark_time_s) {
-      SumFsStats(MetaDataCodec::DecodeFsStatsValue(kv.value), sum_stats);
+      SumFsStats(MetaCodec::DecodeFsStatsValue(kv.value), sum_stats);
 
     } else if (time_s > mark_time_s) {
       stats_per_second.insert(std::make_pair(mark_time_s, sum_stats));
       mark_time_s = time_s;
-      sum_stats = MetaDataCodec::DecodeFsStatsValue(kv.value);
+      sum_stats = MetaCodec::DecodeFsStatsValue(kv.value);
     }
   }
 
   status = txn->Commit();
-  trace_txn = txn->GetTrace();
+  trace.AddTxn(txn->GetTrace());
   if (!status.ok()) {
     DINGO_LOG(WARNING) << fmt::format("[fsstat.{}] commit fs stats fail, {}.", fs_id, status.error_str());
   }
 
-  trace_txn.txn_id = fs_id;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }

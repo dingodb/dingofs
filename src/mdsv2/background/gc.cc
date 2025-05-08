@@ -53,7 +53,7 @@ void CleanDeletedSliceTask::Run() {
 
 Status CleanDeletedSliceTask::CleanDeletedSlice(const std::string& key, const std::string& value) {
   // delete data from s3
-  auto trash_slice_list = MetaDataCodec::DecodeTrashChunkValue(value);
+  auto trash_slice_list = MetaCodec::DecodeTrashChunkValue(value);
   for (const auto& slice : trash_slice_list.slices()) {
     DINGO_LOG(INFO) << fmt::format("[gc] clean deleted slice {}/{}/{}/{}.", slice.fs_id(), slice.ino(),
                                    slice.chunk_index(), slice.slice_id());
@@ -85,7 +85,7 @@ void CleanDeletedFileTask::Run() {
   }
 }
 
-Status CleanDeletedFileTask::CleanDeletedFile(const pb::mdsv2::Inode& inode) {
+Status CleanDeletedFileTask::CleanDeletedFile(const AttrType& inode) {
   // delete data from s3
   for (const auto& [_, chunk] : inode.chunks()) {
     DINGO_LOG(INFO) << fmt::format("[gc] clean deleted file {}/{}/{}/{}.", inode.fs_id(), inode.ino(), chunk.index(),
@@ -103,7 +103,7 @@ Status CleanDeletedFileTask::CleanDeletedFile(const pb::mdsv2::Inode& inode) {
   }
 
   // delete inode
-  auto status = kv_storage_->Delete(MetaDataCodec::EncodeDelFileKey(inode.fs_id(), inode.ino()));
+  auto status = kv_storage_->Delete(MetaCodec::EncodeDelFileKey(inode.fs_id(), inode.ino()));
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[gc] clean del file fail, {}", status.error_str());
   }
@@ -159,7 +159,7 @@ void GcProcessor::Execute(TaskRunnablePtr task) {
 
 void GcProcessor::ScanDeletedSlice() {
   Range range;
-  MetaDataCodec::GetTrashChunkTableRange(range.start_key, range.end_key);
+  MetaCodec::GetTrashChunkTableRange(range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -180,7 +180,7 @@ void GcProcessor::ScanDeletedSlice() {
 
 void GcProcessor::ScanDeletedFile() {
   Range range;
-  MetaDataCodec::GetDelFileTableRange(range.start_key, range.end_key);
+  MetaCodec::GetDelFileTableRange(range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -193,18 +193,18 @@ void GcProcessor::ScanDeletedFile() {
     }
 
     for (auto& kv : kvs) {
-      auto pb_inode = MetaDataCodec::DecodeDelFileValue(kv.value);
-      if (ShouldDeleteFile(pb_inode)) {
-        Execute(CleanDeletedFileTask::New(kv_storage_, data_accessor_, pb_inode));
+      auto attr = MetaCodec::DecodeDelFileValue(kv.value);
+      if (ShouldDeleteFile(attr)) {
+        Execute(CleanDeletedFileTask::New(kv_storage_, data_accessor_, attr));
       }
     }
 
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 }
 
-bool GcProcessor::ShouldDeleteFile(const pb::mdsv2::Inode& inode) {
+bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   uint64_t now_s = Helper::Timestamp();
-  return (inode.ctime() / 1000000000 + FLAGS_gc_del_file_reserve_time_s) < now_s;
+  return (attr.ctime() / 1000000000 + FLAGS_gc_del_file_reserve_time_s) < now_s;
 }
 
 }  // namespace mdsv2

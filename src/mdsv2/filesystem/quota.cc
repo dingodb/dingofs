@@ -95,19 +95,19 @@ QuotaProcessorSPtr QuotaProcessor::GetSelfPtr() {
 }
 
 Status QuotaProcessor::SetFsQuota(Context& ctx, uint32_t fs_id, const Quota& quota) {
-  const std::string key = MetaDataCodec::EncodeFsQuotaKey(fs_id);
+  const std::string key = MetaCodec::EncodeFsQuotaKey(fs_id);
 
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 
     KVStorage::WriteOption option;
-    txn->Put(key, MetaDataCodec::EncodeFsQuotaValue(quota));
+    txn->Put(key, MetaCodec::EncodeFsQuotaValue(quota));
 
     auto status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -115,15 +115,15 @@ Status QuotaProcessor::SetFsQuota(Context& ctx, uint32_t fs_id, const Quota& quo
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }
 
 Status QuotaProcessor::GetFsQuota(Context& ctx, uint32_t fs_id, Quota& quota) {
-  const std::string key = MetaDataCodec::EncodeFsQuotaKey(fs_id);
+  const std::string key = MetaCodec::EncodeFsQuotaKey(fs_id);
 
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   auto txn = kv_storage_->NewTxn();
 
@@ -134,20 +134,22 @@ Status QuotaProcessor::GetFsQuota(Context& ctx, uint32_t fs_id, Quota& quota) {
   }
 
   status = txn->Commit();
-  trace_txn = txn->GetTrace();
+  trace.AddTxn(txn->GetTrace());
   if (!status.ok()) {
     return status;
   }
 
-  quota = MetaDataCodec::DecodeFsQuotaValue(value);
+  trace.RecordElapsedTime("store_operate");
+
+  quota = MetaCodec::DecodeFsQuotaValue(value);
 
   return Status::OK();
 }
 
 Status QuotaProcessor::FlushFsUsage(Context& ctx, uint32_t fs_id, const Usage& usage) {
-  const std::string key = MetaDataCodec::EncodeFsQuotaKey(fs_id);
+  const std::string key = MetaCodec::EncodeFsQuotaKey(fs_id);
 
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   do {
@@ -159,14 +161,14 @@ Status QuotaProcessor::FlushFsUsage(Context& ctx, uint32_t fs_id, const Usage& u
       return status;
     }
 
-    Quota quota = MetaDataCodec::DecodeFsQuotaValue(value);
+    Quota quota = MetaCodec::DecodeFsQuotaValue(value);
     quota.set_used_bytes(quota.used_bytes() + usage.bytes());
     quota.set_used_inodes(quota.used_inodes() + usage.inodes());
 
-    txn->Put(key, MetaDataCodec::EncodeFsQuotaValue(quota));
+    txn->Put(key, MetaCodec::EncodeFsQuotaValue(quota));
 
     status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -174,15 +176,15 @@ Status QuotaProcessor::FlushFsUsage(Context& ctx, uint32_t fs_id, const Usage& u
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }
 
 Status QuotaProcessor::DeleteFsQuota(Context& ctx, uint32_t fs_id) {
-  const std::string key = MetaDataCodec::EncodeFsQuotaKey(fs_id);
+  const std::string key = MetaCodec::EncodeFsQuotaKey(fs_id);
 
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   do {
@@ -191,7 +193,7 @@ Status QuotaProcessor::DeleteFsQuota(Context& ctx, uint32_t fs_id) {
     txn->Delete(key);
 
     auto status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -199,23 +201,23 @@ Status QuotaProcessor::DeleteFsQuota(Context& ctx, uint32_t fs_id) {
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }
 
 Status QuotaProcessor::SetDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino, const Quota& quota) {
-  const std::string key = MetaDataCodec::EncodeDirQuotaKey(fs_id, ino);
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  const std::string key = MetaCodec::EncodeDirQuotaKey(fs_id, ino);
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   do {
     auto txn = kv_storage_->NewTxn();
 
-    txn->Put(key, MetaDataCodec::EncodeDirQuotaValue(quota));
+    txn->Put(key, MetaCodec::EncodeDirQuotaValue(quota));
 
     auto status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -224,12 +226,14 @@ Status QuotaProcessor::SetDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino, c
 
   } while (retry < FLAGS_txn_max_retry_times);
 
+  trace.RecordElapsedTime("store_operate");
+
   return Status::OK();
 }
 
 Status QuotaProcessor::GetDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino, Quota& quota) {
-  const std::string key = MetaDataCodec::EncodeDirQuotaKey(fs_id, ino);
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  const std::string key = MetaCodec::EncodeDirQuotaKey(fs_id, ino);
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   auto txn = kv_storage_->NewTxn();
@@ -241,20 +245,22 @@ Status QuotaProcessor::GetDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino, Q
   }
 
   status = txn->Commit();
-  trace_txn = txn->GetTrace();
+  trace.AddTxn(txn->GetTrace());
   if (!status.ok()) {
     return status;
   }
 
-  quota = MetaDataCodec::DecodeDirQuotaValue(value);
+  trace.RecordElapsedTime("store_operate");
+
+  quota = MetaCodec::DecodeDirQuotaValue(value);
 
   return Status::OK();
 }
 
 Status QuotaProcessor::DeleteDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino) {
-  const std::string key = MetaDataCodec::EncodeDirQuotaKey(fs_id, ino);
+  const std::string key = MetaCodec::EncodeDirQuotaKey(fs_id, ino);
 
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   int retry = 0;
   do {
@@ -263,7 +269,7 @@ Status QuotaProcessor::DeleteDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino
     txn->Delete(key);
 
     auto status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -271,16 +277,16 @@ Status QuotaProcessor::DeleteDirQuota(Context& ctx, uint32_t fs_id, uint64_t ino
     ++retry;
   } while (retry < FLAGS_txn_max_retry_times);
 
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }
 
 Status QuotaProcessor::LoadDirQuotas(Context& ctx, uint32_t fs_id, std::map<uint64_t, Quota>& quotas) {
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   Range range;
-  MetaDataCodec::GetDirQuotaRange(fs_id, range.start_key, range.end_key);
+  MetaCodec::GetDirQuotaRange(fs_id, range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -295,27 +301,29 @@ Status QuotaProcessor::LoadDirQuotas(Context& ctx, uint32_t fs_id, std::map<uint
     for (auto& kv : kvs) {
       uint32_t fs_id;
       uint64_t ino;
-      MetaDataCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
+      MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
 
-      Quota quota = MetaDataCodec::DecodeDirQuotaValue(kv.value);
+      Quota quota = MetaCodec::DecodeDirQuotaValue(kv.value);
       quotas[ino] = quota;
     }
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   auto status = txn->Commit();
-  trace_txn = txn->GetTrace();
+  trace.AddTxn(txn->GetTrace());
+
+  trace.RecordElapsedTime("store_operate");
 
   return status;
 }
 
 Status QuotaProcessor::FlushDirUsages(Context& ctx, uint32_t fs_id, const std::map<uint64_t, Usage>& usages) {
-  auto& trace_txn = ctx.GetTrace().GetTxn();
+  auto& trace = ctx.GetTrace();
 
   // generate all keys
   std::vector<std::string> keys;
   keys.reserve(usages.size());
   for (const auto& [ino, usage] : usages) {
-    keys.push_back(MetaDataCodec::EncodeDirQuotaKey(fs_id, ino));
+    keys.push_back(MetaCodec::EncodeDirQuotaKey(fs_id, ino));
   }
 
   int retry = 0;
@@ -331,29 +339,27 @@ Status QuotaProcessor::FlushDirUsages(Context& ctx, uint32_t fs_id, const std::m
     for (auto& kv : kvs) {
       uint32_t fs_id;
       uint64_t ino;
-      MetaDataCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
+      MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
 
-      Quota quota = MetaDataCodec::DecodeDirQuotaValue(kv.value);
+      Quota quota = MetaCodec::DecodeDirQuotaValue(kv.value);
       auto it = usages.find(ino);
       if (it != usages.end()) {
         quota.set_used_bytes(quota.used_bytes() + it->second.bytes());
         quota.set_used_inodes(quota.used_inodes() + it->second.inodes());
 
-        txn->Put(kv.key, MetaDataCodec::EncodeDirQuotaValue(quota));
+        txn->Put(kv.key, MetaCodec::EncodeDirQuotaValue(quota));
       }
     }
 
     status = txn->Commit();
-    trace_txn = txn->GetTrace();
+    trace.AddTxn(txn->GetTrace());
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
 
-    ++retry;
+  } while (++retry < FLAGS_txn_max_retry_times);
 
-  } while (retry < FLAGS_txn_max_retry_times);
-
-  trace_txn.retry = retry;
+  trace.RecordElapsedTime("store_operate");
 
   return Status::OK();
 }

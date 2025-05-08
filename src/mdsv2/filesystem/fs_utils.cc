@@ -17,12 +17,12 @@
 #include <fmt/format.h>
 
 #include <cstdint>
+#include <map>
 
 #include "fmt/core.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
-#include "mdsv2/storage/dingodb_storage.h"
 #include "nlohmann/json.hpp"
 
 namespace dingofs {
@@ -42,51 +42,12 @@ void FreeFsTree(FsTreeNode* root) {
   delete root;
 }
 
-// generate file inode map by scan file inode table
-static bool GenFileInodeMap(KVStorageSPtr kv_storage, uint32_t fs_id,
-                            std::map<uint64_t, pb::mdsv2::Inode>& file_inode_map) {
-  Range range;
-  MetaDataCodec::GetFileInodeTableRange(fs_id, range.start_key, range.end_key);
-
-  auto txn = kv_storage->NewTxn();
-  std::vector<KeyValue> kvs;
-
-  do {
-    kvs.clear();
-    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("scan file inode table fail, {}.", status.error_str());
-      return false;
-    }
-
-    for (const auto& kv : kvs) {
-      uint64_t ino = 0;
-      uint32_t fs_id;
-      MetaDataCodec::DecodeInodeKey(kv.key, fs_id, ino);
-      pb::mdsv2::Inode inode = MetaDataCodec::DecodeInodeValue(kv.value);
-
-      file_inode_map.insert({inode.ino(), inode});
-    }
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  DINGO_LOG(INFO) << fmt::format("scan file inode table kv num({}).", file_inode_map.size());
-
-  return true;
-}
-
 static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
-                                   std::map<uint64_t, FsTreeNode*>& inode_map) {
-  // get all file inode
-  std::map<uint64_t, pb::mdsv2::Inode> file_inode_map;
-  if (!GenFileInodeMap(kv_storage, fs_id, file_inode_map)) {
-    return nullptr;
-  }
-
+                                   std::multimap<uint64_t, FsTreeNode*>& node_map) {
   Range range;
-  MetaDataCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
+  MetaCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
 
-  // scan dentry table
+  // scan dentry/attr table
   auto txn = kv_storage->NewTxn();
   std::vector<KeyValue> kvs;
   uint64_t count = 0;
@@ -102,49 +63,42 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
       uint32_t fs_id = 0;
       uint64_t ino = 0;
 
-      if (kv.key.size() == MetaDataCodec::InodeKeyLength()) {
-        // dir inode
-        MetaDataCodec::DecodeInodeKey(kv.key, fs_id, ino);
-        pb::mdsv2::Inode inode = MetaDataCodec::DecodeInodeValue(kv.value);
+      if (kv.key.size() == MetaCodec::InodeKeyLength()) {
+        MetaCodec::DecodeInodeKey(kv.key, fs_id, ino);
+        const AttrType attr = MetaCodec::DecodeInodeValue(kv.value);
 
-        DINGO_LOG(INFO) << fmt::format("dir inode({}).", inode.ShortDebugString());
-        auto it = inode_map.find(ino);
-        if (it != inode_map.end()) {
-          it->second->inode = inode;
-        } else {
-          inode_map.insert({ino, new FsTreeNode{.inode = inode}});
+        DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
+        auto it = node_map.find(ino);
+        if (it == node_map.end()) {
+          node_map.insert({ino, new FsTreeNode{.attr = attr}});
+        }
+        while (it != node_map.end() && it->first == ino) {
+          it->second->attr = attr;
+          ++it;
         }
 
       } else {
         // dentry
         uint64_t parent_ino = 0;
         std::string name;
-        MetaDataCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
-        pb::mdsv2::Dentry dentry = MetaDataCodec::DecodeDentryValue(kv.value);
+        MetaCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
+        pb::mdsv2::Dentry dentry = MetaCodec::DecodeDentryValue(kv.value);
 
         DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
 
-        FsTreeNode* item = nullptr;
-        auto it = inode_map.find(dentry.ino());
-        if (it != inode_map.end()) {
-          item = it->second;
-          item->dentry = dentry;
-        } else {
-          item = new FsTreeNode{.dentry = dentry};
-          inode_map.insert({dentry.ino(), item});
-        }
-
-        if (dentry.type() == pb::mdsv2::FileType::FILE || dentry.type() == pb::mdsv2::FileType::SYM_LINK) {
-          auto it = file_inode_map.find(dentry.ino());
-          if (it != file_inode_map.end()) {
-            item->inode = it->second;
-          } else {
-            DINGO_LOG(ERROR) << fmt::format("not found file inode({}) for dentry({}/{})", dentry.ino(), fs_id, name);
+        FsTreeNode* item = new FsTreeNode{.dentry = dentry};
+        auto it = node_map.find(dentry.ino());
+        if (it != node_map.end()) {
+          item->attr = it->second->attr;
+          if (it->second->dentry.name().empty()) {
+            delete it->second;
+            node_map.erase(it);
           }
         }
+        node_map.insert({dentry.ino(), item});
 
-        it = inode_map.find(parent_ino);
-        if (it != inode_map.end()) {
+        it = node_map.find(parent_ino);
+        if (it != node_map.end()) {
           it->second->children.push_back(item);
         } else {
           if (parent_ino != 0) {
@@ -159,8 +113,8 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
 
   DINGO_LOG(INFO) << fmt::format("scan dentry table kv num({}).", count);
 
-  auto it = inode_map.find(1);
-  if (it == inode_map.end()) {
+  auto it = node_map.find(1);
+  if (it == node_map.end()) {
     DINGO_LOG(ERROR) << "not found root node.";
     return nullptr;
   }
@@ -180,11 +134,13 @@ static void LabeledOrphan(FsTreeNode* node) {
   }
 }
 
-static void FreeOrphan(std::map<uint64_t, FsTreeNode*>& inode_map) {
-  for (auto it = inode_map.begin(); it != inode_map.end();) {
+static void FreeOrphan(std::multimap<uint64_t, FsTreeNode*>& node_map) {
+  for (auto it = node_map.begin(); it != node_map.end();) {
     if (it->second->is_orphan) {
+      DINGO_LOG(INFO) << fmt::format("free orphan dentry({}) attr({}).", it->second->dentry.ShortDebugString(),
+                                     it->second->attr.ShortDebugString());
       delete it->second;
-      it = inode_map.erase(it);
+      it = node_map.erase(it);
     } else {
       ++it;
     }
@@ -192,12 +148,12 @@ static void FreeOrphan(std::map<uint64_t, FsTreeNode*>& inode_map) {
 }
 
 FsTreeNode* FsUtils::GenFsTree(uint32_t fs_id) {
-  std::map<uint64_t, FsTreeNode*> inode_map;
-  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, inode_map);
+  std::multimap<uint64_t, FsTreeNode*> node_map;
+  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, node_map);
 
   LabeledOrphan(root);
 
-  FreeOrphan(inode_map);
+  FreeOrphan(node_map);
 
   return root;
 }
@@ -209,11 +165,11 @@ void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
   doc["name"] = node->dentry.name();
   doc["type"] = node->dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
   // mode,nlink,uid,gid,size,ctime,mtime,atime
-  auto& inode = node->inode;
+  auto& attr = node->attr;
   doc["description"] =
-      fmt::format("{},{}/{},{},{},{},{},{},{},{}", inode.version(), inode.mode(), Helper::FsModeToString(inode.mode()),
-                  inode.nlink(), inode.uid(), inode.gid(), inode.length(), FormatTime(inode.ctime()),
-                  FormatTime(inode.mtime()), FormatTime(inode.atime()));
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+                  attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
+                  FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
   nlohmann::json children;
   for (FsTreeNode* child : node->children) {
@@ -226,8 +182,8 @@ void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
 }
 
 std::string FsUtils::GenFsTreeJsonString(uint32_t fs_id) {
-  std::map<uint64_t, FsTreeNode*> inode_map;
-  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, inode_map);
+  std::multimap<uint64_t, FsTreeNode*> node_map;
+  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, node_map);
 
   nlohmann::json doc;
   GenFsTreeJson(root, doc);

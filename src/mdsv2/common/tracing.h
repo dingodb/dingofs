@@ -16,6 +16,9 @@
 #define DINGOFS_MDSV2_COMMON_TRACING_H_
 
 #include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "mdsv2/common/helper.h"
 
@@ -24,11 +27,12 @@ namespace mdsv2 {
 
 class Trace {
  public:
-  Trace() = default;
+  Trace() { last_time_us_ = Helper::TimestampUs(); }
+
+  using ElapsedTime = std::pair<std::string, uint32_t>;
 
   struct Time {
-    uint64_t file_pending_time_us{0};
-    uint64_t pending_time_us{0};
+    std::vector<ElapsedTime> elapsed_times;
   };
 
   struct Cache {
@@ -43,33 +47,23 @@ class Trace {
     bool is_conflict{false};
     uint64_t read_time_us{0};
     uint64_t write_time_us{0};
-    uint32_t retry{0};
   };
 
   Time& GetTime() { return time_; }
   const Time& GetTime() const { return time_; }
   Cache& GetCache() { return cache_; }
   const Cache& GetCache() const { return cache_; }
-  Txn& GetTxn() { return txn_; }
-  const Txn& GetTxn() const { return txn_; }
-
-  Txn& GetFileTxn() { return file_txn_; }
-  const Txn& GetFileTxn() const { return file_txn_; }
+  void AddTxn(const Txn& txn) { txns_.push_back(txn); }
+  const std::vector<Txn>& GetTxns() const { return txns_; }
 
   void SetHitPartition() { cache_.is_hit_partition = true; }
   void SetHitDentry() { cache_.is_hit_dentry = true; }
   void SetHitInode() { cache_.is_hit_inode = true; }
 
-  void UpdateLastTime() { last_time_us_ = Helper::TimestampUs(); }
-
-  void SetPendingTime(bool is_file_txn) {
-    uint64_t now_us = Helper::TimestampUs();
-    if (is_file_txn) {
-      time_.file_pending_time_us = now_us - last_time_us_;
-    } else {
-      time_.pending_time_us = now_us - last_time_us_;
-    }
-    last_time_us_ = now_us;
+  void RecordElapsedTime(const std::string& name) {
+    uint64_t time_us = Helper::TimestampUs();
+    time_.elapsed_times.emplace_back(name, time_us - last_time_us_);
+    last_time_us_ = time_us;
   }
 
  private:
@@ -77,8 +71,7 @@ class Trace {
 
   Time time_;
   Cache cache_;
-  Txn txn_;
-  Txn file_txn_;
+  std::vector<Txn> txns_;
 };
 
 }  // namespace mdsv2

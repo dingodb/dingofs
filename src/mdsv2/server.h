@@ -55,7 +55,7 @@ class Server {
 
   bool InitRenamer();
 
-  bool InitMutationMerger();
+  bool InitOperationProcessor();
 
   bool InitFileSystem();
 
@@ -81,7 +81,7 @@ class Server {
   CoordinatorClientSPtr GetCoordinatorClient() { return coordinator_client_; }
   FileSystemSetSPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorSPtr GetMDSMonitor() { return mds_monitor_; }
-  MutationProcessorSPtr GetMutationProcessor() { return mutation_processor_; }
+  OperationProcessorSPtr GetOperationProcessor() { return operation_processor_; }
   GcProcessorSPtr GetGcProcessor() { return gc_processor_; }
 
   void Run();
@@ -120,7 +120,7 @@ class Server {
   RenamerPtr renamer_;
 
   // mutation merger
-  MutationProcessorSPtr mutation_processor_;
+  OperationProcessorSPtr operation_processor_;
 
   // filesystem
   FileSystemSetSPtr file_system_set_;

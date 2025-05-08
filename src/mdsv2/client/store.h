@@ -28,6 +28,7 @@ class StoreClient {
   bool Init(const std::string& coor_addr);
 
   bool CreateLockTable(const std::string& name);
+  bool CreateAutoIncrementTable(const std::string& name);
   bool CreateHeartbeatTable(const std::string& name);
   bool CreateFsTable(const std::string& name);
   bool CreateFsQuotaTable(const std::string& name);

@@ -17,10 +17,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "bthread/types.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
+#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -32,7 +34,8 @@ class IdGenerator {
 
   virtual bool Init() = 0;
 
-  virtual bool GenID(int64_t& id) = 0;
+  virtual bool GenID(uint32_t num, uint64_t& id) = 0;
+  virtual bool GenID(uint32_t num, uint64_t min_slice_id,  uint64_t& id) = 0;
 };
 
 using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
@@ -40,34 +43,67 @@ using IdGeneratorSPtr = std::shared_ptr<IdGenerator>;
 
 class AutoIncrementIdGenerator : public IdGenerator {
  public:
-  AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size);
+  AutoIncrementIdGenerator(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size);
   ~AutoIncrementIdGenerator() override;
 
-  static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, int64_t start_id, int batch_size) {
+  static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size) {
     return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
 
   bool Init() override;
-  bool GenID(int64_t& id) override;
+  bool GenID(uint32_t num, uint64_t& id) override;
+  bool GenID(uint32_t num,uint64_t min_slice_id,  uint64_t& id) override;
 
  private:
   Status IsExistAutoIncrement();
   Status CreateAutoIncrement();
 
-  Status TakeBundleIdFromCoordinator();
+  Status AllocateIds(uint32_t num);
 
   int64_t table_id_{0};
-  int64_t start_id_{0};
-  const int batch_size_{0};
+  uint64_t start_id_{0};
+  const uint32_t batch_size_{0};
 
   CoordinatorClientSPtr client_;
 
   bthread_mutex_t mutex_;
 
   // [bundle, bundle_end)
-  int64_t bundle_{0};
-  int64_t bundle_end_{0};
-  int64_t next_id_{0};
+  uint64_t bundle_{0};
+  uint64_t bundle_end_{0};
+  uint64_t next_id_{0};
+};
+
+class StoreAutoIncrementIdGenerator : public IdGenerator {
+ public:
+  StoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size);
+  ~StoreAutoIncrementIdGenerator() override;
+
+  static IdGeneratorUPtr New(KVStorageSPtr kv_storage, const std::string& name, int64_t start_id, int batch_size) {
+    return std::make_unique<StoreAutoIncrementIdGenerator>(kv_storage, name, start_id, batch_size);
+  }
+
+  bool Init() override;
+  bool GenID(uint32_t num, uint64_t& id) override;
+  bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
+
+ private:
+  Status GetOrPutAllocId(uint64_t& alloc_id);
+  Status AllocateIds(uint32_t bundle_size);
+
+  KVStorageSPtr kv_storage_;
+
+  bthread_mutex_t mutex_;
+
+  // the key of id
+  std::string key_;
+
+  // the next id can be allocated in this bunlde
+  uint64_t next_id_;
+  // the last id can be allocated in this bunlde
+  uint64_t last_alloc_id_;
+  // get the numnber of id at a time
+  uint32_t batch_size_;
 };
 
 }  // namespace mdsv2

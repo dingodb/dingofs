@@ -20,6 +20,7 @@
 #include <string>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -31,13 +32,15 @@ using FsInfoUPtr = std::unique_ptr<FsInfo>;
 
 class FsInfo {
  public:
-  explicit FsInfo(const pb::mdsv2::FsInfo& fs_info) : fs_info_(fs_info) {}
+  using DataType = FsInfoType;
+
+  explicit FsInfo(const DataType& fs_info) : fs_info_(fs_info) {}
   ~FsInfo() = default;
 
-  static FsInfoPtr New(const pb::mdsv2::FsInfo& fs_info) { return std::make_shared<FsInfo>(fs_info); }
-  static FsInfoUPtr NewUnique(const pb::mdsv2::FsInfo& fs_info) { return std::make_unique<FsInfo>(fs_info); }
+  static FsInfoPtr New(const DataType& fs_info) { return std::make_shared<FsInfo>(fs_info); }
+  static FsInfoUPtr NewUnique(const DataType& fs_info) { return std::make_unique<FsInfo>(fs_info); }
 
-  pb::mdsv2::FsInfo Get() {
+  DataType Get() {
     utils::ReadLockGuard lock(lock_);
 
     return fs_info_;
@@ -101,7 +104,7 @@ class FsInfo {
     return fs_info_.ShortDebugString();
   }
 
-  void Update(const pb::mdsv2::FsInfo& fs_info) {
+  void Update(const DataType& fs_info) {
     utils::WriteLockGuard lock(lock_);
 
     if (fs_info.last_update_time_ns() > fs_info_.last_update_time_ns()) {
@@ -111,7 +114,7 @@ class FsInfo {
 
  private:
   utils::RWLock lock_;
-  pb::mdsv2::FsInfo fs_info_;
+  DataType fs_info_;
 };
 
 }  // namespace mdsv2

@@ -14,11 +14,7 @@
 
 #include "mdsv2/filesystem/dentry.h"
 
-#include <glog/logging.h>
-
 #include <cstdint>
-
-#include "bthread/mutex.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -47,8 +43,8 @@ Dentry::Dentry(const Dentry& dentry, InodeSPtr inode)
 
 Dentry::~Dentry() {}  // NOLINT
 
-pb::mdsv2::Dentry Dentry::CopyTo() {
-  pb::mdsv2::Dentry dentry;
+DentryType Dentry::CopyTo() const {
+  DentryType dentry;
 
   dentry.set_fs_id(fs_id_);
   dentry.set_ino(ino_);

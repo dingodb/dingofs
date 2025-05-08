@@ -264,7 +264,7 @@ Status MDSMonitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
   };
 
   for (const auto& fs : fs_set) {
-    auto fs_info = fs->FsInfo();
+    auto fs_info = fs->GetFsInfo();
     const auto& partition_policy = fs_info.partition_policy();
     if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
       if (is_offline_func(partition_policy.mono().mds_id())) {

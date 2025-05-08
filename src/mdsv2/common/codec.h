@@ -19,13 +19,16 @@
 #include <string>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-class MetaDataCodec {
+class MetaCodec {
  public:
   static void GetLockTableRange(std::string& start_key, std::string& end_key);
+
+  static void GetAutoIncrementTableRange(std::string& start_key, std::string& end_key);
 
   static void GetHeartbeatTableRange(std::string& start_key, std::string& end_key);
   static void GetHeartbeatMdsRange(std::string& start_key, std::string& end_key);
@@ -33,7 +36,7 @@ class MetaDataCodec {
 
   static void GetFsTableRange(std::string& start_key, std::string& end_key);
   static void GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetFileInodeTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetDentryTableRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key);
 
   static void GetQuotaTableRange(std::string& start_key, std::string& end_key);
   static void GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
@@ -58,6 +61,13 @@ class MetaDataCodec {
   static void DecodeLockKey(const std::string& key, std::string& name);
   static std::string EncodeLockValue(int64_t mds_id, uint64_t expire_time_ms);
   static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ms);
+
+  // auto increment id
+  // format: [$prefix, $type, $name]
+  static std::string EncodeAutoIncrementKey(const std::string& name);
+  static void DecodeAutoIncrementKey(const std::string& key, std::string& name);
+  static std::string EncodeAutoIncrementValue(uint64_t id);
+  static void DecodeAutoIncrementValue(const std::string& value, uint64_t& id);
 
   // heartbeat
   // format: [$prefix, $type, $role, $mds_id]
@@ -92,8 +102,8 @@ class MetaDataCodec {
   static uint32_t InodeKeyLength();
   static std::string EncodeInodeKey(uint32_t fs_id, uint64_t ino);
   static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeInodeValue(const pb::mdsv2::Inode& inode);
-  static pb::mdsv2::Inode DecodeInodeValue(const std::string& value);
+  static std::string EncodeInodeValue(const AttrType& attr);
+  static AttrType DecodeInodeValue(const std::string& value);
 
   // quota encode/decode
   // fs format: [$prefix, $type, $fs_id]
@@ -134,8 +144,8 @@ class MetaDataCodec {
   // format: [$prefix, $type, $fs_id, $ino]
   static std::string EncodeDelFileKey(uint32_t fs_id, uint64_t ino);
   static void DecodeDelFileKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeDelFileValue(const pb::mdsv2::Inode& inode);
-  static pb::mdsv2::Inode DecodeDelFileValue(const std::string& value);
+  static std::string EncodeDelFileValue(const AttrType& attr);
+  static AttrType DecodeDelFileValue(const std::string& value);
 };
 
 }  // namespace mdsv2

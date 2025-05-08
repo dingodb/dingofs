@@ -23,6 +23,7 @@
 #include "mdsv2/common/distribution_lock.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/type.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -39,17 +40,13 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStorageSPtr kv_storage,
-                        dataaccess::DataAccesserPtr data_accessor,
-                        const KeyValue& kv)
+  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor, const KeyValue& kv)
       : kv_storage_(kv_storage), data_accessor_(data_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(
-      KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
-      const KeyValue& kv) {
-    return std::make_shared<CleanDeletedSliceTask>(kv_storage, data_accessor,
-                                                   kv);
+  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
+                                       const KeyValue& kv) {
+    return std::make_shared<CleanDeletedSliceTask>(kv_storage, data_accessor, kv);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -68,13 +65,12 @@ class CleanDeletedSliceTask : public TaskRunnable {
 
 class CleanDeletedFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
-                       const pb::mdsv2::Inode& inode)
+  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor, const AttrType& inode)
       : kv_storage_(kv_storage), data_accessor_(data_accessor), inode_(inode) {}
   ~CleanDeletedFileTask() override = default;
 
   static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::DataAccesserPtr data_accessor,
-                                      const pb::mdsv2::Inode& inode) {
+                                      const AttrType& inode) {
     return std::make_shared<CleanDeletedFileTask>(kv_storage, data_accessor, inode);
   }
 
@@ -83,9 +79,9 @@ class CleanDeletedFileTask : public TaskRunnable {
   void Run() override;
 
  private:
-  Status CleanDeletedFile(const pb::mdsv2::Inode& inode);
+  Status CleanDeletedFile(const AttrType& inode);
 
-  pb::mdsv2::Inode inode_;
+  AttrType inode_;
 
   KVStorageSPtr kv_storage_;
 
@@ -99,8 +95,7 @@ class GcProcessor {
       : kv_storage_(kv_storage), dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
-  static GcProcessorSPtr New(KVStorageSPtr kv_storage,
-                             DistributionLockPtr dist_lock) {
+  static GcProcessorSPtr New(KVStorageSPtr kv_storage, DistributionLockPtr dist_lock) {
     return std::make_shared<GcProcessor>(kv_storage, dist_lock);
   }
 
@@ -117,7 +112,7 @@ class GcProcessor {
   void ScanDeletedSlice();
   void ScanDeletedFile();
 
-  static bool ShouldDeleteFile(const pb::mdsv2::Inode& inode);
+  static bool ShouldDeleteFile(const AttrType& attr);
 
   std::atomic<bool> is_running_{false};
 

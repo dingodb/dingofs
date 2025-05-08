@@ -168,8 +168,8 @@ void ServiceClosure<T, U>::Run() {
   uint64_t elapsed_time_us = Helper::TimestampUs() - start_time_us;
 
   auto* mut_time = response_->mutable_info()->mutable_time();
-  mut_time->set_total_rpc_time_us(elapsed_time_us);
-  mut_time->set_service_queue_wait_time_us(queue_wait_time_us);
+  mut_time->set_total_time_us(elapsed_time_us);
+  mut_time->set_queue_wait_time_us(queue_wait_time_us);
 
   if (response_->error().errcode() != 0) {
     LOG(ERROR) << fmt::format("[service.{}][request_id({})][{}us] Request fail, request({}) response({})", method_name_,

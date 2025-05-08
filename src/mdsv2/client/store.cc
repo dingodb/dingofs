@@ -49,7 +49,7 @@ bool StoreClient::Init(const std::string& coor_addr) {
 bool StoreClient::CreateLockTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetLockTableRange(option.start_key, option.end_key);
+  MetaCodec::GetLockTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create lock table fail, error: {}.", status.error_str());
@@ -62,10 +62,26 @@ bool StoreClient::CreateLockTable(const std::string& name) {
   return true;
 }
 
+bool StoreClient::CreateAutoIncrementTable(const std::string& name) {
+  int64_t table_id = 0;
+  KVStorage::TableOption option;
+  MetaCodec::GetAutoIncrementTableRange(option.start_key, option.end_key);
+  auto status = kv_storage_->CreateTable(name, option, table_id);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("create autoincrement table fail, error: {}.", status.error_str());
+    return false;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("create autoincrement table success, start_key({}), end_key({}).",
+                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
+
+  return true;
+}
+
 bool StoreClient::CreateHeartbeatTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetHeartbeatTableRange(option.start_key, option.end_key);
+  MetaCodec::GetHeartbeatTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create heartbeat table fail, error: {}.", status.error_str());
@@ -81,7 +97,7 @@ bool StoreClient::CreateHeartbeatTable(const std::string& name) {
 bool StoreClient::CreateFsTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetFsTableRange(option.start_key, option.end_key);
+  MetaCodec::GetFsTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create fs table fail, error: {}.", status.error_str());
@@ -97,7 +113,7 @@ bool StoreClient::CreateFsTable(const std::string& name) {
 bool StoreClient::CreateFsQuotaTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetQuotaTableRange(option.start_key, option.end_key);
+  MetaCodec::GetQuotaTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create fs quota table fail, error: {}.", status.error_str());
@@ -113,7 +129,7 @@ bool StoreClient::CreateFsQuotaTable(const std::string& name) {
 bool StoreClient::CreateFsStatsTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetFsStatsTableRange(option.start_key, option.end_key);
+  MetaCodec::GetFsStatsTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create fs stats table fail, error: {}.", status.error_str());
@@ -129,7 +145,7 @@ bool StoreClient::CreateFsStatsTable(const std::string& name) {
 bool StoreClient::CreateFileSessionTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetFileSessionTableRange(option.start_key, option.end_key);
+  MetaCodec::GetFileSessionTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create file session table fail, error: {}.", status.error_str());
@@ -145,7 +161,7 @@ bool StoreClient::CreateFileSessionTable(const std::string& name) {
 bool StoreClient::CreateTrashChunkTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetTrashChunkTableRange(option.start_key, option.end_key);
+  MetaCodec::GetTrashChunkTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create trash chunk table fail, error: {}.", status.error_str());
@@ -161,7 +177,7 @@ bool StoreClient::CreateTrashChunkTable(const std::string& name) {
 bool StoreClient::CreateDelFileTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaDataCodec::GetDelFileTableRange(option.start_key, option.end_key);
+  MetaCodec::GetDelFileTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create del file table fail, error: {}.", status.error_str());
@@ -184,12 +200,12 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
   }
 
   auto& dentry = item->dentry;
-  auto& inode = item->inode;
+  auto& attr = item->attr;
 
   std::cout << fmt::format("{} [{},{},{}/{},{},{},{},{},{},{},{}]\n", dentry.name(), dentry.ino(),
-                           pb::mdsv2::FileType_Name(inode.type()), inode.mode(), Helper::FsModeToString(inode.mode()),
-                           inode.nlink(), inode.uid(), inode.gid(), inode.length(), FormatTime(inode.ctime()),
-                           FormatTime(inode.mtime()), FormatTime(inode.atime()));
+                           pb::mdsv2::FileType_Name(attr.type()), attr.mode(), Helper::FsModeToString(attr.mode()),
+                           attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
+                           FormatTime(attr.mtime()), FormatTime(attr.atime()));
 
   if (dentry.type() == pb::mdsv2::FileType::DIRECTORY) {
     for (auto* child : item->children) {

@@ -428,7 +428,7 @@ Status StoreDistributionLock::RenewLease() {
   do {
     auto txn = kv_storage_->NewTxn();
 
-    const std::string key = MetaDataCodec::EncodeLockKey(name_);
+    const std::string key = MetaCodec::EncodeLockKey(name_);
     std::string value;
     status = txn->Get(key, value);
     if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
@@ -440,7 +440,7 @@ Status StoreDistributionLock::RenewLease() {
     uint64_t expire_time_ms = 0;
     if (status.ok()) {
       // already exist lock owner
-      MetaDataCodec::DecodeLockValue(value, owner_mds_id, expire_time_ms);
+      MetaCodec::DecodeLockValue(value, owner_mds_id, expire_time_ms);
 
       // self is lock owner
       if (owner_mds_id == mds_id_) {
@@ -470,7 +470,7 @@ Status StoreDistributionLock::RenewLease() {
       state = "NotExistLockOwner";
     }
 
-    txn->Put(key, MetaDataCodec::EncodeLockValue(mds_id_, expire_time_ms));
+    txn->Put(key, MetaCodec::EncodeLockValue(mds_id_, expire_time_ms));
     status = txn->Commit();
     if (status.ok()) {
       is_locked_.store(true);

@@ -1,0 +1,574 @@
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef DINGOFS_MDV2_FILESYSTEM_STORE_OPERATION_H_
+#define DINGOFS_MDV2_FILESYSTEM_STORE_OPERATION_H_
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "bthread/countdown_event.h"
+#include "butil/containers/mpsc_queue.h"
+#include "dingofs/error.pb.h"
+#include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
+#include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/dentry.h"
+#include "mdsv2/filesystem/inode.h"
+#include "mdsv2/storage/storage.h"
+
+namespace dingofs {
+namespace mdsv2 {
+
+class Operation {
+ public:
+  Operation(Trace& trace) : trace_(trace) { time_ns_ = Helper::TimestampNs(); }
+  virtual ~Operation() = default;
+
+  enum class OpType {
+    kMountFs = 0,
+    kUmountFs = 1,
+    kDeleteFs = 2,
+    kCreateRoot = 10,
+    kMkDir = 11,
+    kMkNod = 12,
+    kHardLink = 13,
+    kSmyLink = 14,
+    kUpdateAttr = 15,
+    kUpdateXAttr = 16,
+    kUpdateChunk = 17,
+    kRmDir = 20,
+    kUnlink = 21,
+    kRename = 22,
+    kCompactChunk = 23,
+  };
+
+  struct Result {
+    Status status;
+    AttrType attr;
+  };
+
+  bool IsCreateType() const {
+    switch (GetOpType()) {
+      case OpType::kMkDir:
+      case OpType::kMkNod:
+      case OpType::kSmyLink:
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  bool IsSetAttrType() const {
+    switch (GetOpType()) {
+      case OpType::kUpdateAttr:
+      case OpType::kUpdateXAttr:
+      case OpType::kUpdateChunk:
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  bool IsBatchRun() const {
+    switch (GetOpType()) {
+      case OpType::kMkDir:
+      case OpType::kMkNod:
+      case OpType::kSmyLink:
+      case OpType::kUpdateAttr:
+      case OpType::kUpdateXAttr:
+      case OpType::kUpdateChunk:
+        return true;
+
+      default:
+        return false;
+    }
+  }
+
+  virtual OpType GetOpType() const = 0;
+
+  virtual uint32_t GetFsId() const = 0;
+  virtual uint64_t GetIno() const = 0;
+  virtual uint64_t GetTime() const { return time_ns_; }
+
+  void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
+  void NotifyEvent() {
+    if (event_) {
+      event_->signal();
+    }
+  }
+
+  virtual Status RunInBatch(TxnUPtr&, AttrType&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
+  virtual Status Run(TxnUPtr&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
+
+  void SetStatus(const Status& status) { result_.status = status; }
+  void SetAttr(const AttrType& attr) { result_.attr = attr; }
+
+  virtual Result& GetResult() { return result_; }
+
+  Trace& GetTrace() { return trace_; }
+
+ private:
+  uint64_t time_ns_{0};
+
+  Result result_;
+
+  bthread::CountdownEvent* event_{nullptr};
+  Trace& trace_;
+};
+
+class MountFsOperation : public Operation {
+ public:
+  MountFsOperation(Trace& trace, std::string fs_name, pb::mdsv2::MountPoint mount_point)
+      : Operation(trace), fs_name_(fs_name), mount_point_(mount_point) {};
+  ~MountFsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kMountFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  uint64_t GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string fs_name_;
+  pb::mdsv2::MountPoint mount_point_;
+};
+
+class UmountFsOperation : public Operation {
+ public:
+  UmountFsOperation(Trace& trace, std::string fs_name, pb::mdsv2::MountPoint mount_point)
+      : Operation(trace), fs_name_(fs_name), mount_point_(mount_point) {};
+  ~UmountFsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUmountFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  uint64_t GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string fs_name_;
+  pb::mdsv2::MountPoint mount_point_;
+};
+
+class DeleteFsOperation : public Operation {
+ public:
+  DeleteFsOperation(Trace& trace, std::string fs_name, bool is_force)
+      : Operation(trace), fs_name_(fs_name), is_force_(is_force) {};
+  ~DeleteFsOperation() override = default;
+
+  struct Result : public Operation::Result {
+    FsInfoType fs_info;
+  };
+
+  OpType GetOpType() const override { return OpType::kDeleteFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  uint64_t GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  std::string fs_name_;
+  bool is_force_{false};
+
+  Result result_;
+};
+
+class CreateRootOperation : public Operation {
+ public:
+  CreateRootOperation(Trace& trace, const Dentry& dentry, const AttrType& attr)
+      : Operation(trace), dentry_(dentry), attr_(attr) {};
+  ~CreateRootOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCreateRoot; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  uint64_t GetIno() const override { return dentry_.Ino(); }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  const Dentry& dentry_;
+  AttrType attr_;
+};
+
+class MkDirOperation : public Operation {
+ public:
+  MkDirOperation(Trace& trace, Dentry dentry, const AttrType& attr) : Operation(trace), dentry_(dentry), attr_(attr) {};
+  ~MkDirOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kMkDir; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+
+ private:
+  const Dentry dentry_;
+  AttrType attr_;
+};
+
+class MkNodOperation : public Operation {
+ public:
+  MkNodOperation(Trace& trace, Dentry dentry, const AttrType& attr) : Operation(trace), dentry_(dentry), attr_(attr) {};
+  ~MkNodOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kMkNod; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+
+ private:
+  const Dentry dentry_;
+  AttrType attr_;
+};
+
+class HardLinkOperation : public Operation {
+ public:
+  HardLinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
+  ~HardLinkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    AttrType child_attr;
+  };
+
+  OpType GetOpType() const override { return OpType::kHardLink; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const Dentry& dentry_;
+  Result result_;
+};
+
+class SmyLinkOperation : public Operation {
+ public:
+  SmyLinkOperation(Trace& trace, const Dentry& dentry, const AttrType& attr)
+      : Operation(trace), dentry_(dentry), attr_(attr) {};
+  ~SmyLinkOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kSmyLink; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+
+ private:
+  const Dentry& dentry_;
+  AttrType attr_;
+};
+
+class UpdateAttrOperation : public Operation {
+ public:
+  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrType& attr)
+      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr) {};
+  ~UpdateAttrOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateAttr; }
+
+  uint32_t GetFsId() const override { return attr_.fs_id(); }
+  uint64_t GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+
+ private:
+  uint64_t ino_;
+  const uint32_t to_set_;
+  const AttrType& attr_;
+};
+
+class UpdateXAttrOperation : public Operation {
+ public:
+  UpdateXAttrOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const Inode::XAttrMap& xattrs)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), xattrs_(xattrs) {};
+  ~UpdateXAttrOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateXAttr; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  uint64_t GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  const Inode::XAttrMap& xattrs_;
+};
+
+class UpdateChunkOperation : public Operation {
+ public:
+  UpdateChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint64_t index, uint64_t size,
+                       std::vector<pb::mdsv2::Slice> slices)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(index), chunk_size_(size), slices_(slices) {};
+  ~UpdateChunkOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  uint64_t GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  const uint64_t chunk_index_;
+  const uint64_t chunk_size_;
+  std::vector<pb::mdsv2::Slice> slices_;
+};
+
+class RmDirOperation : public Operation {
+ public:
+  RmDirOperation(Trace& trace, Dentry dentry) : Operation(trace), dentry_(dentry) {};
+  ~RmDirOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kRmDir; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const Dentry dentry_;
+};
+
+class UnlinkOperation : public Operation {
+ public:
+  UnlinkOperation(Trace& trace, const Dentry& dentry) : Operation(trace), dentry_(dentry) {};
+  ~UnlinkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    AttrType child_attr;
+  };
+
+  OpType GetOpType() const override { return OpType::kUnlink; }
+
+  uint32_t GetFsId() const override { return dentry_.FsId(); }
+  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const Dentry& dentry_;
+  Result result_;
+};
+
+class RenameOperation : public Operation {
+ public:
+  RenameOperation(Trace& trace, uint32_t fs_id, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
+                  const std::string& new_name)
+      : Operation(trace),
+        fs_id_(fs_id),
+        old_parent_ino_(old_parent_ino),
+        old_name_(old_name),
+        new_parent_ino_(new_parent_ino),
+        new_name_(new_name) {};
+  ~RenameOperation() override = default;
+
+  struct Result : public Operation::Result {
+    AttrType old_parent_attr;
+    AttrType new_parent_attr;
+    DentryType old_dentry;
+    DentryType prev_new_dentry;
+    AttrType prev_new_attr;
+    DentryType new_dentry;
+    AttrType old_attr;
+
+    bool is_same_parent{false};
+    bool is_exist_new_dentry{false};
+  };
+
+  OpType GetOpType() const override { return OpType::kRename; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  uint64_t GetIno() const override { return new_parent_ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_{0};
+
+  Ino old_parent_ino_{0};
+  std::string old_name_;
+
+  Ino new_parent_ino_{0};
+  std::string new_name_;
+
+  Result result_;
+};
+
+class CompactChunkOperation : public Operation {
+ public:
+  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t file_length,
+                        Inode::ChunkMap&& chunks)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), file_length_(file_length), chunks_(chunks) {};
+  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info) : Operation(trace), fs_info_(fs_info) {};
+  ~CompactChunkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<pb::mdsv2::TrashSlice> trash_slices;
+    uint64_t checked_count{0};
+    uint64_t compacted_count{0};
+  };
+
+  OpType GetOpType() const override { return OpType::kCompactChunk; }
+
+  uint32_t GetFsId() const override { return fs_info_.fs_id(); }
+  uint64_t GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  std::vector<pb::mdsv2::TrashSlice> GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk);
+  static void UpdateChunk(ChunkType& chunk, const std::vector<pb::mdsv2::TrashSlice>& trash_slices);
+  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(Ino ino, uint64_t file_length, ChunkType& chunk);
+  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
+                                                    ChunkType& chunk);
+  std::vector<pb::mdsv2::TrashSlice> CompactChunks(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
+                                                   Inode::ChunkMap& chunks);
+  void CompactAll(TxnUPtr& txn, uint64_t& checked_count, uint64_t& compacted_count);
+
+  FsInfoType fs_info_;
+  uint64_t ino_;
+  uint64_t file_length_;
+  Inode::ChunkMap chunks_;
+  Result result_;
+};
+
+struct BatchOperation {
+  uint32_t fs_id{0};
+  uint64_t ino{0};
+
+  // set attr/xattr/chunk
+  std::vector<Operation*> setattr_operations;
+  // mkdir/mknod/symlink/hardlink
+  std::vector<Operation*> create_operations;
+};
+
+class OperationProcessor;
+using OperationProcessorSPtr = std::shared_ptr<OperationProcessor>;
+
+class OperationProcessor {
+ public:
+  OperationProcessor(KVStorageSPtr kv_storage);
+  ~OperationProcessor();
+
+  static OperationProcessorSPtr New(KVStorageSPtr kv_storage) {
+    return std::make_shared<OperationProcessor>(kv_storage);
+  }
+
+  struct Key {
+    uint32_t fs_id{0};
+    uint64_t ino{0};
+
+    bool operator<(const Key& other) const {
+      if (fs_id != other.fs_id) {
+        return fs_id < other.fs_id;
+      }
+
+      return ino < other.ino;
+    }
+  };
+
+  bool Init();
+  bool Destroy();
+
+  bool RunBatched(Operation* operation);
+  Status RunAlone(Operation* operation);
+
+ private:
+  static std::map<OperationProcessor::Key, BatchOperation> Grouping(std::vector<Operation*>& operations);
+  void ProcessOperation();
+  void LaunchExecuteBatchOperation(const BatchOperation& batch_operation);
+  void ExecuteBatchOperation(BatchOperation& batch_operation);
+
+  bthread_t tid_{0};
+  bthread_mutex_t mutex_;
+  bthread_cond_t cond_;
+
+  std::atomic<bool> is_stop_{false};
+
+  butil::MPSCQueue<Operation*> operations_;
+
+  // persistence store
+  KVStorageSPtr kv_storage_;
+};
+
+}  // namespace mdsv2
+}  // namespace dingofs
+
+#endif  // DINGOFS_MDV2_FILESYSTEM_STORE_OPERATION_H_
