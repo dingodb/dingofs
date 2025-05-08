@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(test_mds_codec
-    codec_test.cpp)
-target_link_libraries(test_mds_codec
-    PROTO_OBJS
-    mds_codec
-    protobuf::libprotobuf
-    ${TEST_DEPS}
+add_library(rados_accesser
+    rados_accesser.cpp
 )
-set_target_properties(test_mds_codec PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+
+target_link_libraries(rados_accesser
+    ceph::rados
+    brpc::brpc
+    absl::cleanup
+    glog::glog
 )

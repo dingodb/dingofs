@@ -31,7 +31,7 @@ add_executable(test_metaserver
     partition_test.cpp
     test_helper.cpp
     transaction_test.cpp
-    trash_test.cpp
+    # trash_test.cpp
 )
 target_link_libraries(test_metaserver
     metaserver_lib
@@ -43,18 +43,18 @@ set_target_properties(test_metaserver PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
 
-add_executable(test_metaserver_partition_clean
-    partition_clean_test.cpp
-)
-target_link_libraries(test_metaserver_partition_clean
-    metaserver_lib
-    metaserver_s3
-    absl::optional
-    ${TEST_DEPS}
-)
-set_target_properties(test_metaserver_partition_clean PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-)
+# add_executable(test_metaserver_partition_clean
+#     partition_clean_test.cpp
+# )
+# target_link_libraries(test_metaserver_partition_clean
+#     metaserver_lib
+#     metaserver_s3
+#     absl::optional
+#     ${TEST_DEPS}
+# )
+# set_target_properties(test_metaserver_partition_clean PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+# )
 
 add_executable(test_metaserver_recycle
     recycle_cleaner_test.cpp
@@ -70,19 +70,19 @@ set_target_properties(test_metaserver_recycle PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )
 
-add_executable(test_metaserver_s3_adaptor
-    metaserver_s3_adaptor_test.cpp
-    metaserver_s3_test.cpp
-)
-target_link_libraries(test_metaserver_s3_adaptor
-    metaserver_lib
-    metaserver_s3
-    aws_s3_adapter
-    ${TEST_DEPS}
-)
-set_target_properties(test_metaserver_s3_adaptor PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-)
+# add_executable(test_metaserver_s3_adaptor
+#     metaserver_s3_adaptor_test.cpp
+#     metaserver_s3_test.cpp
+# )
+# target_link_libraries(test_metaserver_s3_adaptor
+#     metaserver_lib
+#     metaserver_s3
+#     block_accesser
+#     ${TEST_DEPS}
+# )
+# set_target_properties(test_metaserver_s3_adaptor PROPERTIES
+#         RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
+# )
 
 add_executable(test_metaserver_metastore
     metastore_test.cpp

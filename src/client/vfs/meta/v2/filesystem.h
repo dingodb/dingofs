@@ -99,8 +99,6 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   Status GetFsInfo(FsInfo* fs_info) override;
 
-  Status GetS3Info(S3Info* s3_info) override;
-
   Status StatFs(Ino ino, FsStat* fs_stat) override;
 
   Status Lookup(Ino parent, const std::string& name, Attr* out_attr) override;

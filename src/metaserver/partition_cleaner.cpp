@@ -23,6 +23,7 @@
 
 #include <list>
 
+#include "common/config_mapper.h"
 #include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/meta_operator.h"
 
@@ -65,7 +66,7 @@ bool PartitionCleaner::ScanPartition() {
                    << inode.ShortDebugString();
       continue;
     }
-    usleep(inodeDeletePeriodMs_);
+    usleep(partition_clean_option_.inodeDeletePeriodMs);
   }
 
   uint32_t partition_id = partition_->GetPartitionId();
@@ -87,12 +88,13 @@ bool PartitionCleaner::ScanPartition() {
 }
 
 MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
-  // TODO(cw123) : consider FsFileType::TYPE_FILE
-  if (pb::metaserver::FsFileType::TYPE_S3 == inode.type()) {
-    // get s3info from mds
+  {
+    // delete inode related block
+
     FsInfo fs_info;
     if (fsInfoMap_.find(inode.fsid()) == fsInfoMap_.end()) {
-      auto ret = mdsClient_->GetFsInfo(inode.fsid(), &fs_info);
+      auto ret =
+          partition_clean_option_.mdsClient->GetFsInfo(inode.fsid(), &fs_info);
       if (ret != FSStatusCode::OK) {
         if (FSStatusCode::NOT_FOUND == ret) {
           LOG(ERROR) << "The fsName not exist, fsId = " << inode.fsid();
@@ -108,20 +110,33 @@ MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
     } else {
       fs_info = fsInfoMap_.find(inode.fsid())->second;
     }
-    const auto& s3_info = fs_info.detail().s3info();
-    // reinit s3 adaptor
-    S3ClientAdaptorOption client_adaptor_option;
-    s3Adaptor_->GetS3ClientAdaptorOption(&client_adaptor_option);
-    client_adaptor_option.blockSize = s3_info.blocksize();
-    client_adaptor_option.chunkSize = s3_info.chunksize();
-    client_adaptor_option.objectPrefix = s3_info.objectprefix();
-    s3Adaptor_->Reinit(client_adaptor_option, s3_info.ak(), s3_info.sk(),
-                       s3_info.endpoint(), s3_info.bucketname());
-    int ret_val = s3Adaptor_->Delete(inode);
-    if (ret_val != 0) {
-      LOG(ERROR) << "S3ClientAdaptor delete s3 data failed"
-                 << ", ret = " << ret_val << ", fsId = " << inode.fsid()
-                 << ", inodeId = " << inode.inodeid();
+
+    S3ClientAdaptorOption client_adaptor_option =
+        partition_clean_option_.s3_client_adaptor_option;
+    client_adaptor_option.blockSize = fs_info.block_size();
+    client_adaptor_option.chunkSize = fs_info.chunk_size();
+    client_adaptor_option.block_accesser_factory =
+        partition_clean_option_.block_accesser_factory;
+
+    dataaccess::BlockAccessOptions block_access_options =
+        partition_clean_option_.block_access_options;
+    FillBlockAccessOption(fs_info.storage_info(), &block_access_options);
+
+    auto client_aptaptor = std::make_unique<S3ClientAdaptorImpl>();
+    Status s =
+        client_aptaptor->Init(client_adaptor_option, block_access_options);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail init S3ClientAdaptor, fs_id: " << inode.fsid()
+                 << ", ino: " << inode.inodeid()
+                 << ", status: " << s.ToString();
+      return MetaStatusCode::PARAM_ERROR;
+    }
+
+    s = client_aptaptor->Delete(inode);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail delete inode data, fs_id: " << inode.fsid()
+                 << ", ino: " << inode.inodeid()
+                 << ", status: " << s.ToString();
       return MetaStatusCode::S3_DELETE_ERR;
     }
   }

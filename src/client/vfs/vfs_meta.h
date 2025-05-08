@@ -162,20 +162,33 @@ inline std::string StoreType2Str(const StoreType& store_type) {
   }
 }
 
-struct FsInfo {
-  std::string name;
-  uint32_t id;
-  uint64_t chunk_size;
-  uint64_t block_size;
-  StoreType store_type;
-  std::string uuid;
-};
-
 struct S3Info {
   std::string ak;
   std::string sk;
   std::string endpoint;
   std::string bucket;
+};
+
+struct RadosIno {
+  std::string user_name;
+  std::string key;
+  std::string mon_host;
+  std::string pool_name;
+};
+
+struct StorageInfo {
+  StoreType store_type;
+  S3Info s3_info;
+  RadosIno rados_info;
+};
+
+struct FsInfo {
+  std::string name;
+  uint32_t id;
+  uint64_t chunk_size;
+  uint64_t block_size;
+  std::string uuid;
+  StorageInfo storage_info;
 };
 
 }  // namespace vfs

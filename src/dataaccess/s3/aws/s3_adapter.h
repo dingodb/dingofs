@@ -31,8 +31,8 @@
 #include <string>
 
 #include "dataaccess/accesser_common.h"
-#include "dataaccess/s3/aws/aws_s3_common.h"
 #include "dataaccess/s3/aws/client/aws_s3_client.h"
+#include "dataaccess/s3/s3_common.h"
 #include "utils/configuration.h"
 #include "utils/throttle.h"
 
@@ -47,11 +47,11 @@ class S3Adapter {
   virtual ~S3Adapter() = default;
 
   // 初始化S3Adapter
-  virtual void Init(const S3AdapterOption& option);
+  virtual void Init(const S3Options& options);
 
   static void Shutdown();
 
-  virtual void Reinit(const S3AdapterOption& option);
+  virtual void Reinit(const S3Options& options);
 
   virtual std::string GetS3Ak();
   virtual std::string GetS3Sk();
@@ -100,6 +100,8 @@ class S3Adapter {
     std::condition_variable cond_;
   };
 
+  AwsSdkConfig aws_sdk_config_; 
+  S3Options s3_options_;
   std::string bucket_;
   std::unique_ptr<AwsS3Client> s3_client_{nullptr};
   std::unique_ptr<utils::Throttle> throttle_{nullptr};

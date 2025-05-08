@@ -46,7 +46,7 @@
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/task_thread_pool.h"
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
@@ -290,12 +290,12 @@ class WarmupManagerS3Impl : public WarmupManager {
       std::shared_ptr<pb::mds::FsInfo> fs_info,
       std::shared_ptr<S3ClientAdaptor> s3_adaptor,
       std::shared_ptr<KVClientManager> kv_client_manager, vfs::VFS* vfs,
-      std::shared_ptr<dataaccess::DataAccesser> data_accesser)
+      dataaccess::BlockAccesser* block_accesser)
       : WarmupManager(std::move(meta_client), std::move(inode_manager),
                       std::move(dentry_manager), std::move(fs_info),
                       std::move(kv_client_manager), vfs),
         s3Adaptor_(std::move(s3_adaptor)),
-        data_accesser_(std::move(data_accesser)) {}
+        block_accesser_(block_accesser) {}
 
   bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) override;
   bool AddWarmupFile(Ino key, const std::string& path,
@@ -437,7 +437,7 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   dingofs::stub::metric::WarmupManagerS3Metric warmupS3Metric_;
 
-  dataaccess::DataAccesserPtr data_accesser_;
+  dataaccess::BlockAccesser* block_accesser_;
 };
 
 }  // namespace warmup

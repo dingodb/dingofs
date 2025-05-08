@@ -430,7 +430,7 @@ bool MetaCache::UpdateCopysetInfoFromMDS(
     return false;
   }
 
-  UpdateCopysetInfo(groupID, metaServerInfos[0]);
+UpdateCopysetInfo(groupID, metaServerInfos[0]);
   *targetInfo = metaServerInfos[0];
 
   return true;

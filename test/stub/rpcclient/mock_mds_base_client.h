@@ -97,23 +97,6 @@ class MockMDSBaseClient : public MDSBaseClient {
                     pb::mds::RefreshSessionResponse* response,
                     brpc::Controller* cntl, brpc::Channel* channel));
 
-  MOCK_METHOD6(AllocateVolumeBlockGroup,
-               void(uint32_t fsId, uint32_t count, const std::string& owner,
-                    pb::mds::space::AllocateBlockGroupResponse* response,
-                    brpc::Controller* cntl, brpc::Channel* channel));
-
-  MOCK_METHOD6(AcquireVolumeBlockGroup,
-               void(uint32_t fsId, uint64_t blockGroupOffset,
-                    const std::string& owner,
-                    pb::mds::space::AcquireBlockGroupResponse* response,
-                    brpc::Controller* cntl, brpc::Channel* channel));
-
-  MOCK_METHOD6(ReleaseVolumeBlockGroup,
-               void(uint32_t fsId, const std::string& owner,
-                    const std::vector<pb::mds::space::BlockGroup>& blockGroups,
-                    pb::mds::space::ReleaseBlockGroupResponse* response,
-                    brpc::Controller* cntl, brpc::Channel* channel));
-
   MOCK_METHOD4(
       AllocOrGetMemcacheCluster,
       void(uint32_t fsId,

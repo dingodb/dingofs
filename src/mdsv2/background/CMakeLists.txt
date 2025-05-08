@@ -25,7 +25,7 @@ target_link_libraries(mdsv2_background
     PROTO_OBJS
     
     mdsv2_service
-    s3_accesser
+    block_accesser
     stub_metric
 
     protobuf::libprotobuf

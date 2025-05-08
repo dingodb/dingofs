@@ -28,6 +28,8 @@
 #include <memory>
 #include <unordered_map>
 
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser_factory.h"
 #include "metaserver/inode_storage.h"
 #include "metaserver/s3/metaserver_s3_adaptor.h"
 #include "stub/rpcclient/mds_client.h"
@@ -47,13 +49,12 @@ struct TrashItem {
 struct TrashOption {
   uint32_t scanPeriodSec;
   uint32_t expiredAfterSec;
-  std::shared_ptr<S3ClientAdaptor> s3Adaptor;
+  dataaccess::BlockAccessOptions block_access_options;
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
+  S3ClientAdaptorOption s3_client_adaptor_option;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient;
-  TrashOption()
-      : scanPeriodSec(0),
-        expiredAfterSec(0),
-        s3Adaptor(nullptr),
-        mdsClient(nullptr) {}
+
+  TrashOption() : scanPeriodSec(0), expiredAfterSec(0), mdsClient(nullptr) {}
 
   void InitTrashOptionFromConf(std::shared_ptr<utils::Configuration> conf);
 };
@@ -102,16 +103,15 @@ class TrashImpl : public Trash {
 
   uint64_t GetFsRecycleTimeHour(uint32_t fsId);
 
+  TrashOption options_;
+
   std::shared_ptr<InodeStorage> inodeStorage_;
-  std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   std::unordered_map<uint32_t, pb::mds::FsInfo> fsInfoMap_;
 
   std::list<TrashItem> trashItems_;
 
   mutable utils::Mutex itemsMutex_;
-
-  TrashOption options_;
 
   mutable utils::Mutex scanMutex_;
 

@@ -49,7 +49,8 @@ target_link_libraries(mds_lib
     dingofs_common
     dynamic_vlog
     dingofs_utils
-    aws_s3_adapter
+    block_accesser
+
     dingofs_concurrent
     stub_common
     brpc::brpc

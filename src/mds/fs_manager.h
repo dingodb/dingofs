@@ -29,7 +29,9 @@
 #include <utility>
 #include <vector>
 
-#include "dataaccess/s3/aws/aws_s3_common.h"
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser_factory.h"
+#include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
 #include "mds/common/types.h"
@@ -48,7 +50,8 @@ struct FsManagerOption {
   uint32_t backEndThreadRunInterSec;
   uint32_t spaceReloadConcurrency = 10;
   uint32_t clientTimeoutSec = 20;
-  dataaccess::aws::S3AdapterOption s3AdapterOption;
+  dataaccess::BlockAccessOptions block_access_option;
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
 };
 
 class FsManager {
@@ -189,10 +192,9 @@ class FsManager {
 
  private:
   // return 0: ExactlySame; 1: uncomplete, -1: neither
-  int IsExactlySameOrCreateUnComplete(const std::string& fs_name,
-                                      pb::common::FSType fs_type,
-                                      uint64_t blocksize,
-                                      const pb::mds::FsDetail& detail);
+  int IsExactlySameOrCreateUnComplete(
+      const std::string& fs_name, uint64_t block_size, uint64_t chunk_size,
+      const pb::common::StorageInfo& storage_info);
 
   // send request to metaserver to DeletePartition, if response returns
   // FSStatusCode::OK or FSStatusCode::UNDER_DELETING, returns true;

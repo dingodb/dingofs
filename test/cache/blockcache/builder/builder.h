@@ -128,16 +128,17 @@ class BlockCacheBuilder {
     std::string root_dir = GetRootDir();
     system(("mkdir -p " + root_dir).c_str());
 
-    auto block_cache = std::make_shared<BlockCacheImpl>(
-        option_, std::make_shared<dataaccess::MockDataAccesser>());
+    block_accesser_ = std::make_shared<dataaccess::MockBlockAccesser>();
+    auto block_cache =
+        std::make_shared<BlockCacheImpl>(option_, block_accesser_.get());
 
     return block_cache;
   }
 
   void Cleanup() const { system(("rm -r " + GetRootDir()).c_str()); }
 
-  std::shared_ptr<dataaccess::MockDataAccesser> GetDataAccesser() {
-    return data_accesser_;
+  std::shared_ptr<dataaccess::MockBlockAccesser> GetBlockAccesser() {
+    return block_accesser_;
   }
 
   std::string GetRootDir() const {
@@ -146,7 +147,7 @@ class BlockCacheBuilder {
 
  private:
   BlockCacheOption option_;
-  std::shared_ptr<dataaccess::MockDataAccesser> data_accesser_;
+  std::shared_ptr<dataaccess::MockBlockAccesser> block_accesser_;
 };
 
 }  // namespace blockcache

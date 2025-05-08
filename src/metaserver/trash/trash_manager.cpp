@@ -20,7 +20,7 @@
  * Author: xuchaojie
  */
 
-#include "metaserver/trash_manager.h"
+#include "metaserver/trash/trash_manager.h"
 
 #include <list>
 

@@ -57,7 +57,6 @@ using pb::mds::FSStatusCode;
 using pb::mds::GetLatestTxIdRequest;
 using pb::mds::GetLatestTxIdResponse;
 using pb::mds::Mountpoint;
-using pb::mds::space::SpaceErrCode;
 using pb::mds::topology::Copyset;
 using pb::mds::topology::PartitionTxId;
 using pb::mds::topology::TopoStatusCode;
@@ -193,22 +192,22 @@ TEST_F(MdsClientImplTest, test_MountFs) {
   pb::mds::FsInfo out;
 
   pb::mds::MountFsResponse response;
-  auto fsinfo = new pb::mds::FsInfo();
+  auto* fsinfo = new pb::mds::FsInfo();
   fsinfo->set_fsid(1);
   fsinfo->set_fsname(fsName);
   fsinfo->set_rootinodeid(1);
   fsinfo->set_capacity(10 * 1024 * 1024L);
-  fsinfo->set_blocksize(4 * 1024);
-  auto vresp = new pb::common::Volume();
-  vresp->set_volumesize(10 * 1024 * 1024L);
-  vresp->set_blocksize(4 * 1024);
-  vresp->set_volumename("test1");
-  vresp->set_user("test");
-  vresp->set_password("test");
-  auto detail = new pb::mds::FsDetail();
-  detail->set_allocated_volume(vresp);
-  fsinfo->set_allocated_detail(detail);
+  fsinfo->set_block_size(4 * 1024);
+  fsinfo->set_chunk_size(16 * 1024);
   fsinfo->set_mountnum(1);
+  auto* storage_info = fsinfo->mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   pb::mds::Mountpoint mountPoint;
   mountPoint.set_hostname("0.0.0.0");
   mountPoint.set_port(9000);
@@ -274,22 +273,22 @@ TEST_F(MdsClientImplTest, test_GetFsInfo_by_fsname) {
   FsInfo out;
 
   pb::mds::GetFsInfoResponse response;
-  auto fsinfo = new pb::mds::FsInfo();
+  auto* fsinfo = new pb::mds::FsInfo();
   fsinfo->set_fsid(1);
   fsinfo->set_fsname(fsName);
   fsinfo->set_rootinodeid(1);
   fsinfo->set_capacity(10 * 1024 * 1024L);
-  fsinfo->set_blocksize(4 * 1024);
-  auto vresp = new pb::common::Volume();
-  vresp->set_volumesize(10 * 1024 * 1024L);
-  vresp->set_blocksize(4 * 1024);
-  vresp->set_volumename("test1");
-  vresp->set_user("test");
-  vresp->set_password("test");
-  auto detail = new pb::mds::FsDetail();
-  detail->set_allocated_volume(vresp);
-  fsinfo->set_allocated_detail(detail);
+  fsinfo->set_block_size(4 * 1024);
+  fsinfo->set_chunk_size(16 * 1024);
   fsinfo->set_mountnum(1);
+  auto* storage_info = fsinfo->mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   Mountpoint mountPoint;
   mountPoint.set_hostname("0.0.0.0");
   mountPoint.set_port(9000);
@@ -326,22 +325,22 @@ TEST_F(MdsClientImplTest, test_GetFsInfo_by_fsid) {
   FsInfo out;
 
   pb::mds::GetFsInfoResponse response;
-  auto fsinfo = new pb::mds::FsInfo();
+  auto* fsinfo = new pb::mds::FsInfo();
   fsinfo->set_fsid(1);
   fsinfo->set_fsname("test1");
   fsinfo->set_rootinodeid(1);
   fsinfo->set_capacity(10 * 1024 * 1024L);
-  fsinfo->set_blocksize(4 * 1024);
-  auto vresp = new pb::common::Volume();
-  vresp->set_volumesize(10 * 1024 * 1024L);
-  vresp->set_blocksize(4 * 1024);
-  vresp->set_volumename("test1");
-  vresp->set_user("test");
-  vresp->set_password("test");
-  auto detail = new pb::mds::FsDetail();
-  detail->set_allocated_volume(vresp);
-  fsinfo->set_allocated_detail(detail);
+  fsinfo->set_block_size(4 * 1024);
+  fsinfo->set_chunk_size(16 * 1024);
   fsinfo->set_mountnum(1);
+  auto* storage_info = fsinfo->mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   Mountpoint mountPoint;
   mountPoint.set_hostname("0.0.0.0");
   mountPoint.set_port(9000);
@@ -854,8 +853,7 @@ TEST_F(MdsClientImplTest, RefreshSession) {
     response.set_statuscode(FSStatusCode::OK);
     EXPECT_CALL(mockmdsbasecli_, RefreshSession(_, _, _, _))
         .WillOnce(SetArgPointee<1>(response));
-    ASSERT_FALSE(mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint,
-                                           enableSumInDir));
+    ASSERT_FALSE(mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint));
     ASSERT_TRUE(out.empty());
   }
 
@@ -865,8 +863,7 @@ TEST_F(MdsClientImplTest, RefreshSession) {
     *response.mutable_latesttxidlist() = {txIds.begin(), txIds.end()};
     EXPECT_CALL(mockmdsbasecli_, RefreshSession(_, _, _, _))
         .WillOnce(SetArgPointee<1>(response));
-    ASSERT_FALSE(mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint,
-                                           enableSumInDir));
+    ASSERT_FALSE(mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint));
     ASSERT_EQ(1, out.size());
     ASSERT_TRUE(google::protobuf::util::MessageDifferencer::Equals(out[0], tmp))
         << "out:\n"
@@ -881,136 +878,7 @@ TEST_F(MdsClientImplTest, RefreshSession) {
     EXPECT_CALL(mockmdsbasecli_, RefreshSession(_, _, _, _))
         .WillRepeatedly(Invoke(RefreshSessionRpcFailed));
     ASSERT_EQ(FSStatusCode::RPC_ERROR,
-              mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint,
-                                        enableSumInDir));
-  }
-}
-
-TEST_F(MdsClientImplTest, TestAllocateVolumeBlockGroup) {
-  // rpc error
-  {
-    EXPECT_CALL(mockmdsbasecli_, AllocateVolumeBlockGroup(_, _, _, _, _, _))
-        .WillRepeatedly(Invoke([](uint32_t, uint32_t, const std::string&,
-                                  pb::mds::space::AllocateBlockGroupResponse*,
-                                  brpc::Controller* cntl, brpc::Channel*) {
-          cntl->SetFailed(ENOENT, "Not Found");
-        }));
-
-    std::vector<pb::mds::space::BlockGroup> groups;
-
-    ASSERT_EQ(pb::mds::space::SpaceErrCode::SpaceErrUnknown,
-              mdsclient_.AllocateVolumeBlockGroup(1, 1, "hello", &groups));
-  }
-
-  // response error
-  {
-    pb::mds::space::AllocateBlockGroupResponse response;
-    response.set_status(pb::mds::space::SpaceErrCode::SpaceErrNoSpace);
-
-    EXPECT_CALL(mockmdsbasecli_, AllocateVolumeBlockGroup(_, _, _, _, _, _))
-        .WillOnce(SetArgPointee<3>(response));
-
-    std::vector<pb::mds::space::BlockGroup> groups;
-
-    ASSERT_EQ(SpaceErrCode::SpaceErrNoSpace,
-              mdsclient_.AllocateVolumeBlockGroup(1, 1, "hello", &groups));
-  }
-
-  // no block groups
-  {
-    pb::mds::space::AllocateBlockGroupResponse response;
-    response.set_status(SpaceErrCode::SpaceOk);
-
-    EXPECT_CALL(mockmdsbasecli_, AllocateVolumeBlockGroup(_, _, _, _, _, _))
-        .WillOnce(SetArgPointee<3>(response));
-
-    std::vector<pb::mds::space::BlockGroup> groups;
-
-    ASSERT_EQ(SpaceErrCode::SpaceErrNoSpace,
-              mdsclient_.AllocateVolumeBlockGroup(1, 1, "hello", &groups));
-  }
-
-  // success
-  {
-    pb::mds::space::AllocateBlockGroupResponse response;
-    response.set_status(SpaceErrCode::SpaceOk);
-
-    auto blockgroup = dingofs::test::GenerateAnDefaultInitializedMessage(
-        "dingofs.mds.space.BlockGroup");
-    *response.add_blockgroups() =
-        static_cast<pb::mds::space::BlockGroup&>(*blockgroup);
-
-    EXPECT_CALL(mockmdsbasecli_, AllocateVolumeBlockGroup(_, _, _, _, _, _))
-        .WillOnce(SetArgPointee<3>(response));
-
-    std::vector<pb::mds::space::BlockGroup> groups;
-
-    ASSERT_EQ(SpaceErrCode::SpaceOk,
-              mdsclient_.AllocateVolumeBlockGroup(1, 1, "hello", &groups));
-    ASSERT_EQ(1, groups.size());
-  }
-}
-
-TEST_F(MdsClientImplTest, TestAcquireVolumeBlockGroup) {
-  // rpc error
-  {
-    EXPECT_CALL(mockmdsbasecli_, AcquireVolumeBlockGroup(_, _, _, _, _, _))
-        .WillRepeatedly(Invoke([](uint32_t, uint64_t, const std::string&,
-                                  pb::mds::space::AcquireBlockGroupResponse*,
-                                  brpc::Controller* cntl, brpc::Channel*) {
-          cntl->SetFailed(ENOENT, "Not Found");
-        }));
-
-    pb::mds::space::BlockGroup blockGroup;
-
-    ASSERT_EQ(SpaceErrCode::SpaceErrUnknown,
-              mdsclient_.AcquireVolumeBlockGroup(1, 1, "hello", &blockGroup));
-  }
-
-  // response error
-  {
-    pb::mds::space::AcquireBlockGroupResponse response;
-    response.set_status(SpaceErrCode::SpaceErrNotFound);
-    EXPECT_CALL(mockmdsbasecli_, AcquireVolumeBlockGroup(_, _, _, _, _, _))
-        .WillOnce(SetArgPointee<3>(response));
-
-    pb::mds::space::BlockGroup blockGroup;
-
-    ASSERT_EQ(SpaceErrCode::SpaceErrNotFound,
-              mdsclient_.AcquireVolumeBlockGroup(1, 1, "hello", &blockGroup));
-  }
-}
-
-TEST_F(MdsClientImplTest, TestReleaseVolumeBlockGroup) {
-  // rpc error
-  {
-    EXPECT_CALL(mockmdsbasecli_, ReleaseVolumeBlockGroup(_, _, _, _, _, _))
-        .WillRepeatedly(
-            Invoke([](uint32_t, const std::string&,
-                      const std::vector<pb::mds::space::BlockGroup>&,
-                      pb::mds::space::ReleaseBlockGroupResponse*,
-                      brpc::Controller* cntl, brpc::Channel*) {
-              cntl->SetFailed(ENOENT, "Not Found");
-            }));
-
-    std::vector<pb::mds::space::BlockGroup> blockGroups;
-
-    ASSERT_EQ(SpaceErrCode::SpaceErrUnknown,
-              mdsclient_.ReleaseVolumeBlockGroup(1, "hello", blockGroups));
-  }
-
-  {
-    for (auto err : {SpaceErrCode::SpaceOk, SpaceErrCode::SpaceErrNoSpace}) {
-      pb::mds::space::ReleaseBlockGroupResponse response;
-      response.set_status(err);
-      EXPECT_CALL(mockmdsbasecli_, ReleaseVolumeBlockGroup(_, _, _, _, _, _))
-          .WillOnce(SetArgPointee<3>(response));
-
-      std::vector<pb::mds::space::BlockGroup> blockGroups;
-
-      ASSERT_EQ(err,
-                mdsclient_.ReleaseVolumeBlockGroup(1, "hello", blockGroups));
-    }
+              mdsclient_.RefreshSession(txIds, &out, fsName, mountpoint));
   }
 }
 

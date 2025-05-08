@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "dingofs/common.pb.h"
-#include "metaserver/s3infocache.h"
+#include "metaserver/compaction/fs_info_cache.h"
 
 using ::testing::Invoke;
 using ::testing::Return;

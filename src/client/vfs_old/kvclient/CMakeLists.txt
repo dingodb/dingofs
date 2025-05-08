@@ -22,7 +22,7 @@ target_link_libraries(client_memcached_client
     PROTO_OBJS
     stub_metric
     dingofs_utils
-    aws_s3_adapter
+    block_accesser
     absl::strings
     glog::glog
     brpc::brpc

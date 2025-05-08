@@ -31,19 +31,21 @@
 #include <unistd.h>
 
 #include <utility>
+#include <vector>
 
 #include "absl/memory/memory.h"
+#include "dataaccess/accesser_common.h"
 #include "dataaccess/s3/aws/s3_adapter.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
+#include "metaserver/compaction/s3compact_manager.h"
 #include "metaserver/copyset/copyset_service.h"
 #include "metaserver/metaserver_service.h"
 #include "metaserver/register.h"
 #include "metaserver/resource_statistic.h"
-#include "metaserver/s3compact_manager.h"
 #include "metaserver/storage/rocksdb_options.h"
 #include "metaserver/storage/rocksdb_perf.h"
-#include "metaserver/trash_manager.h"
+#include "metaserver/trash/trash_manager.h"
 #include "utils/crc32.h"
 #include "utils/dingo_version.h"
 #include "utils/string_util.h"
@@ -150,17 +152,13 @@ void InitS3Option(const std::shared_ptr<Configuration>& conf,
                                     &s3Opt->enableDeleteObjects));
 }
 
-void Metaserver::InitPartitionOption(
-    std::shared_ptr<S3ClientAdaptor> s3Adaptor,
-    std::shared_ptr<MdsClient> mdsClient,
-    PartitionCleanOption* partitionCleanOption) {
+void Metaserver::InitPartitionOptionFromConf(
+    PartitionCleanOption* partion_clean_option) {
   LOG_IF(FATAL, !conf_->GetUInt32Value("partition.clean.scanPeriodSec",
-                                       &partitionCleanOption->scanPeriodSec));
+                                       &partion_clean_option->scanPeriodSec));
   LOG_IF(FATAL,
          !conf_->GetUInt32Value("partition.clean.inodeDeletePeriodMs",
-                                &partitionCleanOption->inodeDeletePeriodMs));
-  partitionCleanOption->s3Adaptor = s3Adaptor;
-  partitionCleanOption->mdsClient = mdsClient;
+                                &partion_clean_option->inodeDeletePeriodMs));
 }
 
 void Metaserver::InitRecycleManagerOption(
@@ -210,27 +208,9 @@ void InitMetaCacheOption(const std::shared_ptr<Configuration>& conf,
                             &opts->metacacheGetLeaderRPCTimeOutMS);
 }
 
-namespace {
-
-std::shared_ptr<S3ClientAdaptorImpl> CreateS3Adaptor(
-    const dataaccess::aws::S3AdapterOption& o1,
-    const S3ClientAdaptorOption& o2) {
-  // s3_client
-  auto* s3_client = new S3ClientImpl;
-  s3_client->SetAdaptor(std::make_shared<dataaccess::aws::S3Adapter>());
-  s3_client->Init(o1);
-
-  // s3_adaptor: s3_client will be freed when s3_adaptor destruct
-  auto s3_adaptor = std::make_shared<S3ClientAdaptorImpl>();
-  s3_adaptor->Init(o2, s3_client);
-  return s3_adaptor;
-}
-
-};  // namespace
-
 void Metaserver::Init() {
-  TrashOption trashOption;
-  trashOption.InitTrashOptionFromConf(conf_);
+  TrashOption trash_option;
+  trash_option.InitTrashOptionFromConf(conf_);
 
   // init mds client
   mdsBase_ = new MDSBaseClient();
@@ -241,16 +221,25 @@ void Metaserver::Init() {
   // init metaserver client for recycle
   InitMetaClient();
 
+  block_accesser_factory_ =
+      std::make_shared<dataaccess::BlockAccesserFactory>();
+
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
-  dataaccess::aws::S3AdapterOption s3_adapter_option;
-  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(conf_.get(),
-                                                         &s3_adapter_option);
 
-  trashOption.s3Adaptor =
-      CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option);
-  trashOption.mdsClient = mdsClient_;
-  TrashManager::GetInstance().Init(trashOption);
+  // read aws sdk relate param from conf file
+  dataaccess::BlockAccessOptions block_access_options;
+  dataaccess::InitAwsSdkConfig(conf_.get(),
+                               &block_access_options.s3_options.aws_sdk_config);
+
+  {
+    //  related to trash
+    trash_option.block_access_options = block_access_options;
+    trash_option.block_accesser_factory = block_accesser_factory_;
+    trash_option.s3_client_adaptor_option = s3_client_adaptor_option;
+    trash_option.mdsClient = mdsClient_;
+    TrashManager::GetInstance().Init(trash_option);
+  }
 
   RecycleManagerOption recycleManagerOption;
   InitRecycleManagerOption(&recycleManagerOption);
@@ -270,11 +259,17 @@ void Metaserver::Init() {
 
   S3CompactManager::GetInstance().Init(conf_);
 
-  PartitionCleanOption partitionCleanOption;
-  InitPartitionOption(
-      CreateS3Adaptor(s3_adapter_option, s3_client_adaptor_option), mdsClient_,
-      &partitionCleanOption);
-  PartitionCleanManager::GetInstance().Init(partitionCleanOption);
+  {
+    // related to partition clean
+    PartitionCleanOption partition_clean_option;
+    InitPartitionOptionFromConf(&partition_clean_option);
+    partition_clean_option.block_access_options = block_access_options;
+    partition_clean_option.block_accesser_factory = block_accesser_factory_;
+    partition_clean_option.s3_client_adaptor_option = s3_client_adaptor_option;
+    partition_clean_option.mdsClient = mdsClient_;
+
+    PartitionCleanManager::GetInstance().Init(partition_clean_option);
+  }
 
   conf_->ExposeMetric("dingofs_metaserver_config");
   inited_ = true;

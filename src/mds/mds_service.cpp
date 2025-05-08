@@ -22,8 +22,11 @@
 
 #include "mds/mds_service.h"
 
-#include <vector>
+#include <libunwind-x86_64.h>
 
+#include <cstdint>
+
+#include "dingofs/common.pb.h"
 #include "mds/metric/metric.h"
 
 namespace dingofs {
@@ -36,68 +39,56 @@ void MdsServiceImpl::CreateFs(::google::protobuf::RpcController* controller,
                               pb::mds::CreateFsResponse* response,
                               ::google::protobuf::Closure* done) {
   (void)controller;
-  brpc::ClosureGuard doneGuard(done);
-  const std::string& fsName = request->fsname();
-  uint64_t blockSize = request->blocksize();
-  pb::common::FSType type = request->fstype();
-  bool enableSumInDir = request->enablesumindir();
+  brpc::ClosureGuard guard(done);
 
-  // set response statuscode default value is ok
-  response->set_statuscode(FSStatusCode::OK);
+  const std::string& fs_name = request->fsname();
 
   LOG(INFO) << "CreateFs request: " << request->ShortDebugString();
 
-  // create s3 fs
-  auto createS3Fs = [&]() {
-    if (!request->fsdetail().has_s3info()) {
-      response->set_statuscode(FSStatusCode::PARAM_ERROR);
-      LOG(ERROR) << "CreateFs request, type is s3, but has no s3info"
-                 << ", fsName = " << fsName;
-      return;
-    }
-    const auto& s3Info = request->fsdetail().s3info();
-    FSStatusCode status =
-        fsManager_->CreateFs(request, response->mutable_fsinfo());
-
-    if (status != FSStatusCode::OK) {
-      response->clear_fsinfo();
-      response->set_statuscode(status);
-      LOG(ERROR) << "CreateFs fail, fsName = " << fsName
-                 << ", blockSize = " << blockSize
-                 << ", s3Info.bucketname = " << s3Info.bucketname()
-                 << ", enableSumInDir = " << enableSumInDir
-                 << ", owner = " << request->owner()
-                 << ", capacity = " << request->capacity()
-                 << ", errCode = " << FSStatusCode_Name(status);
-      return;
-    }
-  };
-
-  switch (type) {
-    case pb::common::FSType::TYPE_VOLUME:
-      CHECK(false) << "CreateFs TYPE_VOLUME is not supported";
+  pb::common::StorageType storage_type = request->storage_info().type();
+  switch (storage_type) {
+    case pb::common::StorageType::TYPE_RADOS:
+      if (!request->storage_info().has_rados_info()) {
+        response->set_statuscode(FSStatusCode::PARAM_ERROR);
+        LOG(ERROR) << "CreateFs request, type is rados, but has no rados_info"
+                   << ", fsName = " << fs_name
+                   << ", request: " << request->ShortDebugString();
+        return;
+      }
       break;
-    case pb::common::FSType::TYPE_S3:
-      createS3Fs();
-      break;
-    case pb::common::FSType::TYPE_HYBRID:
-      CHECK(false) << "CreateFs TYPE_HYBRID is not supported";
+    case pb::common::StorageType::TYPE_S3:
+      if (!request->storage_info().has_s3_info()) {
+        response->set_statuscode(FSStatusCode::PARAM_ERROR);
+        LOG(ERROR) << "CreateFs request, type is s3, but has no s3info"
+                   << ", fsName = " << fs_name
+                   << ", request: " << request->ShortDebugString();
+        return;
+      }
       break;
     default:
       response->set_statuscode(FSStatusCode::PARAM_ERROR);
       LOG(ERROR) << "CreateFs fail, fs type is invalid"
-                 << ", fsName = " << fsName << ", blockSize = " << blockSize
-                 << ", fsType = " << type << ", errCode = "
-                 << FSStatusCode_Name(FSStatusCode::PARAM_ERROR);
-      break;
+                 << ", fsName = " << fs_name
+                 << ", request: " << request->ShortDebugString();
+      return;
   }
 
-  if (response->statuscode() != FSStatusCode::OK) {
+  FSStatusCode status =
+      fsManager_->CreateFs(request, response->mutable_fsinfo());
+
+  if (status != FSStatusCode::OK) {
+    response->clear_fsinfo();
+    response->set_statuscode(status);
+    LOG(ERROR) << "CreateFs fail, fsName = " << fs_name
+               << ", errCode = " << FSStatusCode_Name(status)
+               << ", request: " << request->ShortDebugString();
     return;
   }
-  LOG(INFO) << "CreateFs success, fsName = " << fsName
-            << ", blockSize = " << blockSize << ", owner = " << request->owner()
-            << ", capacity = " << request->capacity();
+
+  response->set_statuscode(FSStatusCode::OK);
+
+  LOG(INFO) << "CreateFs success, fsName = " << fs_name
+            << ", request: " << request->ShortDebugString();
 }
 
 void MdsServiceImpl::MountFs(::google::protobuf::RpcController* controller,

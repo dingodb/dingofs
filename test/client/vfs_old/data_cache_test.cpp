@@ -29,24 +29,18 @@
 
 namespace dingofs {
 namespace client {
-using ::testing::_;
-using ::testing::DoAll;
-using ::testing::Invoke;
-using ::testing::Return;
-using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
-using ::testing::WithArg;
 
 class DataCacheTest : public testing::Test {
- protected:
-  DataCacheTest() {}
+ public:
+  DataCacheTest() = default;
+
   ~DataCacheTest() override = default;
+
   void SetUp() override {
     common::S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
-    option.objectPrefix = 0;
     option.pageSize = 64 * 1024;
     option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;

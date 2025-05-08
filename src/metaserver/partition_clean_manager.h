@@ -26,40 +26,26 @@
 #include <memory>
 
 #include "metaserver/partition_cleaner.h"
-#include "stub/rpcclient/mds_client.h"
+#include "metaserver/partition_cleaner_common.h"
 
 namespace dingofs {
 namespace metaserver {
 
-struct PartitionCleanOption {
-  uint32_t scanPeriodSec;
-  uint32_t inodeDeletePeriodMs;
-  std::shared_ptr<S3ClientAdaptor> s3Adaptor;
-  std::shared_ptr<stub::rpcclient::MdsClient> mdsClient;
-};
-
 class PartitionCleanManager {
  public:
-  PartitionCleanManager() {
-    isStop_ = true;
-    inProcessingCleaner_ = nullptr;
-    LOG(INFO) << "PartitionCleanManager constructor.";
-  }
+  PartitionCleanManager() { LOG(INFO) << "PartitionCleanManager constructor."; }
 
   static PartitionCleanManager& GetInstance() {
-    static PartitionCleanManager instance_;
-    return instance_;
+    static PartitionCleanManager instance;
+    return instance;
   }
 
-  void Add(uint32_t partitionId,
+  void Add(uint32_t partition_id,
            const std::shared_ptr<PartitionCleaner>& cleaner,
-           copyset::CopysetNode* copysetNode);
+           copyset::CopysetNode* copyset_node);
 
   void Init(const PartitionCleanOption& option) {
-    scanPeriodSec_ = option.scanPeriodSec;
-    inodeDeletePeriodMs_ = option.inodeDeletePeriodMs;
-    S3ClientAdaptor_ = option.s3Adaptor;
-    mdsClient_ = option.mdsClient;
+    option_ = option;
     partitionCleanerCount.expose_as("partition_clean_manager_", "cleaner");
   }
 
@@ -69,18 +55,17 @@ class PartitionCleanManager {
 
   void ScanLoop();
 
-  void Remove(uint32_t partitionId);
+  void Remove(uint32_t partition_id);
 
   uint32_t GetCleanerCount() { return partitionCleanerCount.get_value(); }
 
  private:
+  PartitionCleanOption option_;
+
   std::list<std::shared_ptr<PartitionCleaner>> partitonCleanerList_;
-  std::shared_ptr<PartitionCleaner> inProcessingCleaner_;
-  std::shared_ptr<S3ClientAdaptor> S3ClientAdaptor_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
-  uint32_t scanPeriodSec_;
-  uint32_t inodeDeletePeriodMs_;
-  utils::Atomic<bool> isStop_;
+  std::shared_ptr<PartitionCleaner> inProcessingCleaner_{nullptr};
+
+  utils::Atomic<bool> isStop_{true};
   utils::Thread thread_;
   utils::InterruptibleSleeper sleeper_;
   dingofs::utils::RWLock rwLock_;

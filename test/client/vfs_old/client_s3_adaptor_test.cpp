@@ -70,7 +70,6 @@ class ClientS3AdaptorTest : public testing::Test {
     option.readCacheMaxByte = 104857600;
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
-    option.objectPrefix = 0;
     kvClientManager_ = nullptr;
     s3ClientAdaptor_->Init(option, nullptr, mockInodeManager_, mockMdsClient_,
                            mockFsCacheManager_, nullptr, nullptr,

@@ -23,11 +23,15 @@
 #ifndef DINGOFS_SRC_METASERVER_S3_METASERVER_S3_ADAPTOR_H_
 #define DINGOFS_SRC_METASERVER_S3_METASERVER_S3_ADAPTOR_H_
 
+#include <atomic>
 #include <list>
+#include <memory>
 #include <string>
 
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser.h"
+#include "dataaccess/block_accesser_factory.h"
 #include "dingofs/metaserver.pb.h"
-#include "metaserver/s3/metaserver_s3.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -36,11 +40,11 @@ using pb::metaserver::S3ChunkInfo;
 using pb::metaserver::S3ChunkInfoList;
 
 struct S3ClientAdaptorOption {
-  uint64_t blockSize;
-  uint64_t chunkSize;
-  uint64_t batchSize;
-  uint32_t objectPrefix;
-  bool enableDeleteObjects;
+  uint64_t blockSize; // from fs info
+  uint64_t chunkSize; // from fs info
+  uint64_t batchSize; // from config
+  bool enableDeleteObjects; // from config
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
 };
 
 class S3ClientAdaptor {
@@ -48,19 +52,8 @@ class S3ClientAdaptor {
   S3ClientAdaptor() = default;
   virtual ~S3ClientAdaptor() = default;
 
-  /**
-   * @brief Initialize s3 client
-   * @param[in] options the options for s3 client
-   */
-  virtual void Init(const S3ClientAdaptorOption& option, S3Client* client) = 0;
-  /**
-   * @brief Reinitialize s3 client
-   */
-  virtual void Reinit(const S3ClientAdaptorOption& option,
-                      const std::string& ak, const std::string& sk,
-                      const std::string& endpoint,
-                      const std::string& bucket_name) = 0;
-
+  virtual Status Init(const S3ClientAdaptorOption& option,
+                      dataaccess::BlockAccessOptions block_access_option) = 0;
   /**
    * @brief delete inode from s3
    * @param inode
@@ -71,39 +64,22 @@ class S3ClientAdaptor {
    * Step.1 get indoe' s3chunkInfoList
    * Step.2 delete chunk from s3 client
    */
-  virtual int Delete(const pb::metaserver::Inode& inode) = 0;
-
-  /**
-   * @brief get S3ClientAdaptorOption
-   *
-   * @param option return value
-   * @details
-   */
-  virtual void GetS3ClientAdaptorOption(S3ClientAdaptorOption* option) = 0;
+  virtual Status Delete(const pb::metaserver::Inode& inode) = 0;
 };
 
 class S3ClientAdaptorImpl : public S3ClientAdaptor {
  public:
   S3ClientAdaptorImpl() = default;
+
   ~S3ClientAdaptorImpl() override {
-    if (client_ != nullptr) {
-      delete client_;
-      client_ = nullptr;
+    if (block_accesser_ != nullptr) {
+      block_accesser_->Destroy();
+      block_accesser_ = nullptr;
     }
   }
 
-  /**
-   * @brief Initialize s3 client
-   * @param[in] options the options for s3 client
-   */
-  void Init(const S3ClientAdaptorOption& option, S3Client* client) override;
-
-  /**
-   * @brief Reinitialize s3 client
-   */
-  void Reinit(const S3ClientAdaptorOption& option, const std::string& ak,
-              const std::string& sk, const std::string& endpoint,
-              const std::string& bucket_name) override;
+  Status Init(const S3ClientAdaptorOption& option,
+              dataaccess::BlockAccessOptions block_access_option) override;
 
   /**
    * @brief delete inode from s3
@@ -113,15 +89,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    * Step.1 get indoe' s3chunkInfoList
    * Step.2 delete chunk from s3 client
    */
-  int Delete(const pb::metaserver::Inode& inode) override;
-
-  /**
-   * @brief get S3ClientAdaptorOption
-   *
-   * @param option return value
-   * @details
-   */
-  void GetS3ClientAdaptorOption(S3ClientAdaptorOption* option) override;
+  Status Delete(const pb::metaserver::Inode& inode) override;
 
  private:
   /**
@@ -131,15 +99,15 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    *  -1  : some objects delete fail
    * @param[in] options the options for s3 client
    */
-  int DeleteChunk(uint64_t fs_id, uint64_t inode_id, uint64_t chunk_id,
-                  uint64_t compaction, uint64_t chunk_pos, uint64_t length);
+  Status DeleteChunk(uint64_t fs_id, uint64_t inode_id, uint64_t chunk_id,
+                     uint64_t compaction, uint64_t chunk_pos, uint64_t length);
 
-  int DeleteInodeByDeleteSingleChunk(const pb::metaserver::Inode& inode);
+  Status DeleteInodeByDeleteSingleChunk(const pb::metaserver::Inode& inode);
 
-  int DeleteInodeByDeleteBatchChunk(const pb::metaserver::Inode& inode);
+  Status DeleteInodeByDeleteBatchChunk(const pb::metaserver::Inode& inode);
 
-  int DeleteS3ChunkInfoList(uint32_t fs_id, uint64_t inode_id,
-                            const S3ChunkInfoList& s3_chunk_infolist);
+  Status DeleteS3ChunkInfoList(uint32_t fs_id, uint64_t inode_id,
+                               const S3ChunkInfoList& s3_chunk_infolist);
 
   void GenObjNameListForChunkInfoList(uint32_t fs_id, uint64_t inode_id,
                                       const S3ChunkInfoList& s3_chunk_infolist,
@@ -149,12 +117,15 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
                                   const S3ChunkInfo& chunk_info,
                                   std::list<std::string>* obj_list);
 
-  S3Client* client_;
   uint64_t blockSize_;
   uint64_t chunkSize_;
   uint64_t batchSize_;
-  uint32_t objectPrefix_;
   bool enableDeleteObjects_;
+
+  std::atomic_bool is_inited_{false};
+  S3ClientAdaptorOption adaptor_option_;
+  dataaccess::BlockAccessOptions block_access_option_;
+  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_{nullptr};
 };
 }  // namespace metaserver
 }  // namespace dingofs

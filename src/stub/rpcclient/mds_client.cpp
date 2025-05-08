@@ -29,7 +29,6 @@
 
 #include "common/metric_utils.h"
 #include "dingofs/cachegroup.pb.h"
-#include "dingofs/space.pb.h"
 #include "stub/common/config.h"
 
 namespace dingofs {
@@ -48,8 +47,6 @@ using pb::mds::SetFsStatsRequest;
 using pb::mds::SetFsStatsResponse;
 using pb::mds::cachegroup::CacheGroupErrCode;
 using pb::mds::cachegroup::CacheGroupErrCode_Name;
-using pb::mds::space::SpaceErrCode;
-using pb::mds::space::SpaceErrCode_Name;
 using pb::mds::topology::Copyset;
 using pb::mds::topology::MemcacheClusterInfo;
 using pb::mds::topology::TopoStatusCode;
@@ -253,7 +250,7 @@ FSStatusCode MdsClientImpl::MountFs(const std::string& fsName,
     // mount fs metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
+    MetricListGuard mds_guard(
         &is_ok, {&mdsClientMetric_.mountFs, &mdsClientMetric_.getAllOperation},
         start);
 
@@ -739,8 +736,7 @@ FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
 FSStatusCode MdsClientImpl::RefreshSession(
     const std::vector<pb::mds::topology::PartitionTxId>& txIds,
     std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-    const std::string& fsName, const Mountpoint& mountpoint,
-    std::atomic<bool>* enableSumInDir) {
+    const std::string& fs_name, const Mountpoint& mountpoint) {
   auto task = RPCTask {
     (void)addrindex;
     (void)rpctimeoutMS;
@@ -755,7 +751,7 @@ FSStatusCode MdsClientImpl::RefreshSession(
     pb::mds::RefreshSessionRequest request;
     pb::mds::RefreshSessionResponse response;
     *request.mutable_txids() = {txIds.begin(), txIds.end()};
-    request.set_fsname(fsName);
+    request.set_fsname(fs_name);
     *request.mutable_mountpoint() = mountpoint;
     mdsbasecli_->RefreshSession(request, &response, cntl, channel);
     if (cntl->Failed()) {
@@ -775,10 +771,6 @@ FSStatusCode MdsClientImpl::RefreshSession(
                          response.latesttxidlist().end()};
       LOG(INFO) << "RefreshSession need update partition txid list: "
                 << response.DebugString();
-    }
-    if (enableSumInDir->load() && !response.enablesumindir()) {
-      enableSumInDir->store(response.enablesumindir());
-      LOG(INFO) << "update enableSumInDir to " << response.enablesumindir();
     }
 
     return ret;
@@ -930,14 +922,6 @@ FSStatusCode MdsClientImpl::ReturnError(int retcode) {
   return static_cast<FSStatusCode>(retcode);
 }
 
-static SpaceErrCode ToSpaceErrCode(int err) {
-  if (err < 0) {
-    return SpaceErrCode::SpaceErrUnknown;
-  }
-
-  return static_cast<SpaceErrCode>(err);
-}
-
 static CacheGroupErrCode ToCacheGroupErrCode(int err) {
   if (err < 0) {
     return CacheGroupErrCode::CacheGroupErrUnknown;
@@ -954,89 +938,6 @@ static CacheGroupErrCode ToCacheGroupErrCode(int err) {
       return -cntl->ErrorCode();                                     \
     }                                                                \
   } while (0)
-
-SpaceErrCode MdsClientImpl::AllocateVolumeBlockGroup(
-    uint32_t fsId, uint32_t count, const std::string& owner,
-    std::vector<dingofs::pb::mds::space::BlockGroup>* groups) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    pb::mds::space::AllocateBlockGroupResponse response;
-    mdsbasecli_->AllocateVolumeBlockGroup(fsId, count, owner, &response, cntl,
-                                          channel);
-
-    CHECK_RPC_AND_RETRY_IF_ERROR("AllocateVolumeBlockGroup");
-
-    auto status = response.status();
-    if (status != SpaceErrCode::SpaceOk) {
-      LOG(WARNING) << "Allocate volume block group failed, err: "
-                   << SpaceErrCode_Name(status);
-    } else if (response.blockgroups_size() == 0) {
-      LOG(WARNING) << "Allocate volume block group failed, no block "
-                      "group allcoated";
-      return SpaceErrCode::SpaceErrNoSpace;
-    } else {
-      VLOG(9) << "AllocateVolumeBlockGroup, response: "
-              << response.ShortDebugString();
-      groups->reserve(response.blockgroups_size());
-      std::move(response.mutable_blockgroups()->begin(),
-                response.mutable_blockgroups()->end(),
-                std::back_inserter(*groups));
-    }
-
-    return status;
-  };
-
-  return ToSpaceErrCode(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
-}
-
-SpaceErrCode MdsClientImpl::AcquireVolumeBlockGroup(
-    uint32_t fsId, uint64_t blockGroupOffset, const std::string& owner,
-    dingofs::pb::mds::space::BlockGroup* groups) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    pb::mds::space::AcquireBlockGroupResponse response;
-    mdsbasecli_->AcquireVolumeBlockGroup(fsId, blockGroupOffset, owner,
-                                         &response, cntl, channel);
-
-    CHECK_RPC_AND_RETRY_IF_ERROR("AcquireVolumeBlockGroup");
-
-    auto status = response.status();
-    if (status != SpaceErrCode::SpaceOk) {
-      LOG(WARNING) << "Acquire volume block group failed, err: "
-                   << SpaceErrCode_Name(status);
-    } else {
-      groups->Swap(response.mutable_blockgroups());
-    }
-
-    return status;
-  };
-
-  return ToSpaceErrCode(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
-}
-
-SpaceErrCode MdsClientImpl::ReleaseVolumeBlockGroup(
-    uint32_t fsId, const std::string& owner,
-    const std::vector<dingofs::pb::mds::space::BlockGroup>& blockGroups) {
-  auto task = RPCTask {
-    (void)addrindex;
-    (void)rpctimeoutMS;
-    pb::mds::space::ReleaseBlockGroupResponse response;
-    mdsbasecli_->ReleaseVolumeBlockGroup(fsId, owner, blockGroups, &response,
-                                         cntl, channel);
-
-    CHECK_RPC_AND_RETRY_IF_ERROR("ReleaseVolumeBlockGroup");
-
-    LOG_IF(WARNING, SpaceErrCode::SpaceOk != response.status())
-        << "Release volume block group failed, err: "
-        << SpaceErrCode_Name(response.status());
-
-    return response.status();
-  };
-
-  return ToSpaceErrCode(rpcexcutor_.DoRPCTask(task, mdsOpt_.mdsMaxRetryMS));
-}
 
 FSStatusCode MdsClientImpl::SetFsStats(
     const std::string& fsname, const pb::mds::FsStatsData& fs_stat_data) {

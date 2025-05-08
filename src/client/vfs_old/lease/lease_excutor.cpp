@@ -79,7 +79,7 @@ bool LeaseExecutor::RefreshLease() {
   // refresh from mds
   std::vector<PartitionTxId> latestTxIdList;
   pb::mds::FSStatusCode ret = mdsCli_->RefreshSession(
-      txIds, &latestTxIdList, fsName_, mountpoint_, enableSumInDir_);
+      txIds, &latestTxIdList, fsName_, mountpoint_);
   if (ret != pb::mds::FSStatusCode::OK) {
     LOG(ERROR) << "LeaseExecutor refresh session fail, ret = " << ret
                << ", errorName = " << FSStatusCode_Name(ret);

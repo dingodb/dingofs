@@ -37,20 +37,22 @@
 #include "cache/common/common.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/phase_timer.h"
+#include "dataaccess/block_accesser.h"
 #include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
+using dataaccess::BlockAccesser;
 using dingofs::cache::utils::LogGuard;
 using dingofs::cache::utils::Phase;
 using dingofs::cache::utils::PhaseTimer;
 
 BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
-                               DataAccesserPtr data_accesser)
+                               BlockAccesser* block_accesser)
     : option_(option),
-      data_accesser_(data_accesser),
+      block_accesser_(block_accesser),
       running_(false),
       stage_count_(std::make_shared<Countdown>()),
       throttle_(std::make_unique<BlockCacheThrottle>()) {
@@ -60,8 +62,8 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options());
   }
 
-  uploader_ =
-      std::make_shared<BlockCacheUploader>(data_accesser, store_, stage_count_);
+  uploader_ = std::make_shared<BlockCacheUploader>(block_accesser_, store_,
+                                                   stage_count_);
   prefetcher_ = std::make_unique<BlockPrefetcherImpl>();
   metric_ = std::make_unique<BlockCacheMetric>(
       option, BlockCacheMetric::AuxMember(uploader_, throttle_));
@@ -133,7 +135,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
 
   // TODO(@Wine93): Cache the block which put to storage directly
   timer.NextPhase(Phase::kS3Put);
-  status = data_accesser_->Put(key.StoreKey(), block.data, block.size);
+  status = block_accesser_->Put(key.StoreKey(), block.data, block.size);
   return status;
 }
 
@@ -160,7 +162,7 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
 
   timer.NextPhase(Phase::kS3Range);
   if (retrive) {
-    status = data_accesser_->Get(key.StoreKey(), offset, length, buffer);
+    status = block_accesser_->Get(key.StoreKey(), offset, length, buffer);
   }
   return status;
 }
@@ -203,7 +205,7 @@ Status BlockCacheImpl::DoPrefetch(const BlockKey& key, size_t length) {
 
   timer.NextPhase(Phase::kS3Range);
   std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
-  status = data_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
+  status = block_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
   if (status.ok()) {
     timer.NextPhase(Phase::kCacheBlock);
     Block block(buffer.get(), length);

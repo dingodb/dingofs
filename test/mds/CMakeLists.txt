@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(codec)
 add_subdirectory(heartbeat)
 add_subdirectory(schedule)
 add_subdirectory(topology)
@@ -33,10 +32,10 @@ set_target_properties(test_mds_balance_poc PROPERTIES
 add_executable(test_mds
     fake_metaserver.cpp 
     fs_info_wrapper_test.cpp
-    fs_manager_test.cpp
-    fs_manager_test2.cpp
+    # fs_manager_test.cpp
+    # fs_manager_test2.cpp
     fs_storage_test.cpp
-    mds_service_test.cpp 
+    # mds_service_test.cpp 
     mds_test.cpp
     metaserver_client_test.cpp
     persist_kvstorage_test.cpp

@@ -22,11 +22,12 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
-#include "common/status.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
+#include "dataaccess/block_accesser.h"
 
 namespace dingofs {
 namespace client {
@@ -49,11 +50,9 @@ class VFSHub {
 
   virtual cache::blockcache::BlockCache* GetBlockCache() = 0;
 
-  virtual std::shared_ptr<dataaccess::DataAccesser> GetDataAccesser() = 0;
+  virtual dataaccess::BlockAccesser* GetBlockAccesser() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
-
-  virtual S3Info GetS3Info() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -73,11 +72,9 @@ class VFSHubImpl : public VFSHub {
 
   cache::blockcache::BlockCache* GetBlockCache() override;
 
-  std::shared_ptr<dataaccess::DataAccesser> GetDataAccesser() override;
+  dataaccess::BlockAccesser* GetBlockAccesser() override;
 
   FsInfo GetFsInfo() override;
-
-  S3Info GetS3Info() override;
 
  private:
   std::atomic_bool started_{false};
@@ -87,7 +84,7 @@ class VFSHubImpl : public VFSHub {
   S3Info s3_info_;
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
-  std::shared_ptr<dataaccess::DataAccesser> data_accesser_;
+  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_;
   std::unique_ptr<cache::blockcache::BlockCache> block_cache_;
 };
 

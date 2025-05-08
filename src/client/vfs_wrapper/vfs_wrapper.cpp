@@ -69,14 +69,6 @@ Status InitLog() {
   return Status::OK();
 }
 
-static Status InitConfig(utils::Configuration& conf,
-                         common::ClientOption& fuse_client_option) {
-  // init fuse client option
-  common::InitClientOption(&conf, &fuse_client_option);
-
-  return Status::OK();
-}
-
 Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   VLOG(1) << "VFSStart argv0: " << argv0;
 

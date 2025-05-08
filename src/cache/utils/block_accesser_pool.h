@@ -27,7 +27,7 @@
 #include <unordered_map>
 
 #include "cache/common/common.h"
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -35,34 +35,34 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-using dingofs::dataaccess::DataAccesserPtr;
-using dingofs::stub::rpcclient::MdsClient;
-using dingofs::utils::RWLock;
-
-class DataAccesserPool {
+class BlockAccesserPool {
  public:
-  virtual ~DataAccesserPool() = default;
+  virtual ~BlockAccesserPool() = default;
 
-  virtual Status Get(uint32_t fs_id, DataAccesserPtr& data_accesser) = 0;
+  virtual Status Get(uint32_t fs_id,
+                     dataaccess::BlockAccesserPtr& block_accesser) = 0;
 };
 
-class DataAccesserPoolImpl : public DataAccesserPool {
+class BlockAccesserPoolImpl : public BlockAccesserPool {
  public:
-  explicit DataAccesserPoolImpl(std::shared_ptr<MdsClient> mds_client);
+  explicit BlockAccesserPoolImpl(
+      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
 
-  Status Get(uint32_t fs_id, DataAccesserPtr& data_accesser) override;
-
- private:
-  Status DoGet(uint32_t fs_id, DataAccesserPtr& data_accesser);
-
-  void DoInsert(uint32_t fs_id, DataAccesserPtr data_accesser);
-
-  bool NewDataAccesser(uint32_t fs_id, DataAccesserPtr& data_accesser);
+  Status Get(uint32_t fs_id,
+             dataaccess::BlockAccesserPtr& block_accesser) override;
 
  private:
-  RWLock rwlock_;
-  std::shared_ptr<MdsClient> mds_client_;
-  std::unordered_map<uint32_t, DataAccesserPtr> data_accessers_;
+  Status DoGet(uint32_t fs_id, dataaccess::BlockAccesserPtr& block_accesser);
+
+  void DoInsert(uint32_t fs_id, dataaccess::BlockAccesserPtr block_accesser);
+
+  bool NewBlockAccesser(uint32_t fs_id,
+                       dataaccess::BlockAccesserPtr& block_accesser);
+
+ private:
+  dingofs::utils::RWLock rwlock_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  std::unordered_map<uint32_t, dataaccess::BlockAccesserPtr> block_accessers_;
 };
 
 }  // namespace utils

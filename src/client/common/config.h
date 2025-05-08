@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "dataaccess/s3/aws/aws_s3_common.h"
+#include "dataaccess/accesser_common.h"
 #include "dingofs/common.pb.h"
 #include "options/cache/app.h"
 #include "options/cache/block_cache.h"
@@ -100,12 +100,6 @@ struct S3ClientAdaptorOption {
   uint32_t baseSleepUs;
   uint32_t maxReadRetryIntervalMs;
   uint32_t readRetryIntervalMs;
-  uint32_t objectPrefix;
-};
-
-struct S3Option {
-  S3ClientAdaptorOption s3ClientAdaptorOpt;
-  dataaccess::aws::S3AdapterOption s3AdaptrOpt;
 };
 
 struct RefreshDataOption {
@@ -193,7 +187,8 @@ struct ClientOption {
   stub::common::MetaCacheOpt metaCacheOpt;
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
-  S3Option s3Opt;
+  S3ClientAdaptorOption s3_client_adaptor_opt;      // from config
+  dataaccess::BlockAccessOptions block_access_opt;  // from config
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
@@ -211,12 +206,6 @@ struct ClientOption {
 };
 
 void InitClientOption(utils::Configuration* conf, ClientOption* client_option);
-
-void SetClientS3Option(ClientOption* client_option,
-                       const dataaccess::aws::S3InfoOption& fs_s3_opt);
-
-void S3Info2FsS3Option(const pb::common::S3Info& s3,
-                       dataaccess::aws::S3InfoOption* fs_s3_opt);
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
 

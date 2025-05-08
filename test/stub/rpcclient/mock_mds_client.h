@@ -56,14 +56,14 @@ using pb::mds::FsInfo;
 using pb::mds::FSStatusCode;
 using pb::mds::Mountpoint;
 using pb::mds::cachegroup::CacheGroupErrCode;
-using pb::mds::space::SpaceErrCode;
 using pb::mds::topology::Copyset;
 using pb::mds::topology::PartitionTxId;
 
 class MockMdsClient : public MdsClient {
  public:
-  MockMdsClient() {}
-  ~MockMdsClient() {}
+  MockMdsClient() = default;
+
+  ~MockMdsClient() override = default;
 
   MOCK_METHOD2(Init, FSStatusCode(const MdsOption& mdsOpt,
                                   MDSBaseClient* baseclient));
@@ -119,24 +119,12 @@ class MockMdsClient : public MdsClient {
   MOCK_METHOD2(ListPartition,
                bool(uint32_t fsID, std::vector<PartitionInfo>* partitionInfos));
 
-  MOCK_METHOD5(RefreshSession,
-               FSStatusCode(const std::vector<PartitionTxId>& txIds,
-                            std::vector<PartitionTxId>* latestTxIdList,
-                            const std::string& fsName,
-                            const Mountpoint& mountpoint,
-                            std::atomic<bool>* enableSumInDir));
-
-  MOCK_METHOD4(AllocateVolumeBlockGroup,
-               SpaceErrCode(uint32_t, uint32_t, const std::string&,
-                            std::vector<pb::mds::space::BlockGroup>*));
-
-  MOCK_METHOD4(AcquireVolumeBlockGroup,
-               SpaceErrCode(uint32_t, uint64_t, const std::string&,
-                            pb::mds::space::BlockGroup*));
-
-  MOCK_METHOD3(ReleaseVolumeBlockGroup,
-               SpaceErrCode(uint32_t, const std::string&,
-                            const std::vector<pb::mds::space::BlockGroup>&));
+  MOCK_METHOD(pb::mds::FSStatusCode, RefreshSession,
+              (const std::vector<pb::mds::topology::PartitionTxId>& txIds,
+               std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
+               const std::string& fsName,
+               const pb::mds::Mountpoint& mountpoint),
+              (override));
 
   MOCK_METHOD2(AllocOrGetMemcacheCluster,
                bool(uint32_t, pb::mds::topology::MemcacheClusterInfo*));

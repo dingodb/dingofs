@@ -20,6 +20,7 @@
 #include <aws/s3/S3ServiceClientModel.h>
 
 #include "dataaccess/s3/aws/aws_s3_common.h"
+#include "dataaccess/s3/s3_common.h"
 
 namespace dingofs {
 namespace dataaccess {
@@ -31,7 +32,7 @@ class AwsS3Client {
 
   virtual ~AwsS3Client() = default;
 
-  virtual void Init(const S3AdapterOption& option) = 0;
+  virtual void Init(const S3Options& options) = 0;
 
   virtual std::string GetAk() = 0;
   virtual std::string GetSk() = 0;

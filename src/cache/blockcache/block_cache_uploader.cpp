@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/blockcache/disk_cache_manager.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/local_filesystem.h"
 #include "cache/utils/phase_timer.h"
@@ -38,15 +39,17 @@ namespace cache {
 namespace blockcache {
 
 using dingofs::cache::utils::LogIt;
+using dingofs::utils::TaskThreadPool;
+using dingofs::cache::utils::LogIt;
 using dingofs::cache::utils::Phase;
-using dingofs::options::cache::AppOption;
+using dingofs::cache::utils::PhaseTimer;
 using dingofs::utils::TaskThreadPool;
 
-BlockCacheUploader::BlockCacheUploader(DataAccesserPtr data_accesser,
-                                       std::shared_ptr<CacheStore> store,
-                                       std::shared_ptr<Countdown> stage_count)
+BlockCacheUploader::BlockCacheUploader(
+    dataaccess::BlockAccesser* block_accesser,
+    std::shared_ptr<CacheStore> store, std::shared_ptr<Countdown> stage_count)
     : running_(false),
-      data_accesser_(data_accesser),
+      block_accesser_(block_accesser),
       store_(store),
       stage_count_(stage_count) {
   scan_stage_thread_pool_ =
@@ -199,8 +202,8 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
     Log(stage_block, length, Status::OK(), timer);
     return false;
   };
-  data_accesser_->AsyncPut(stage_block.key.StoreKey(), buffer.get(), length,
-                           retry_cb);
+  block_accesser_->AsyncPut(stage_block.key.StoreKey(), buffer.get(), length,
+                            retry_cb);
 }
 
 void BlockCacheUploader::RemoveBlock(const StageBlock& stage_block) {

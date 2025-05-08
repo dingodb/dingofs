@@ -35,23 +35,6 @@ using ::google::protobuf::util::MessageDifferencer;
 using pb::mds::FsInfo;
 using pb::mds::Mountpoint;
 
-TEST(FsInfoWrapperTest, volumeTest) {
-  FsInfo fsinfo;
-
-  fsinfo.set_fsid(1);
-  fsinfo.set_fsname("hello");
-  fsinfo.set_status(pb::mds::FsStatus::INITED);
-  fsinfo.set_rootinodeid(1);
-  fsinfo.set_capacity(8192);
-  fsinfo.set_blocksize(4096);
-  fsinfo.set_mountnum(0);
-  fsinfo.set_fstype(pb::common::FSType::TYPE_VOLUME);
-
-  FsInfoWrapper wrapper(fsinfo);
-
-  EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
-}
-
 TEST(FsInfoWrapperTest, s3Test) {
   FsInfo fsinfo;
 
@@ -60,26 +43,17 @@ TEST(FsInfoWrapperTest, s3Test) {
   fsinfo.set_status(pb::mds::FsStatus::INITED);
   fsinfo.set_rootinodeid(1);
   fsinfo.set_capacity(8192);
-  fsinfo.set_blocksize(4096);
+  fsinfo.set_block_size(4096);
+  fsinfo.set_chunk_size(16384);
   fsinfo.set_mountnum(0);
-  fsinfo.set_fstype(pb::common::FSType::TYPE_S3);
 
-  FsInfoWrapper wrapper(fsinfo);
-
-  EXPECT_TRUE(MessageDifferencer::Equals(wrapper.ProtoFsInfo(), fsinfo));
-}
-
-TEST(FsInfoWrapperTest, hybridTest) {
-  FsInfo fsinfo;
-
-  fsinfo.set_fsid(3);
-  fsinfo.set_fsname("hello");
-  fsinfo.set_status(pb::mds::FsStatus::INITED);
-  fsinfo.set_rootinodeid(1);
-  fsinfo.set_capacity(8192);
-  fsinfo.set_blocksize(4096);
-  fsinfo.set_mountnum(0);
-  fsinfo.set_fstype(pb::common::FSType::TYPE_HYBRID);
+  auto* storage_info = fsinfo.mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
 
   FsInfoWrapper wrapper(fsinfo);
 
@@ -94,9 +68,18 @@ TEST(FsInfoWrapperTest, mpconflictTest_disablecto) {
   fsinfo.set_status(pb::mds::FsStatus::INITED);
   fsinfo.set_rootinodeid(1);
   fsinfo.set_capacity(8192);
-  fsinfo.set_blocksize(4096);
+  fsinfo.set_block_size(4096);
+  fsinfo.set_chunk_size(16384);
   fsinfo.set_mountnum(0);
-  fsinfo.set_fstype(pb::common::FSType::TYPE_S3);
+
+  auto* storage_info = fsinfo.mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   Mountpoint mp;
   mp.set_hostname("0.0.0.0");
   mp.set_port(9000);
@@ -127,9 +110,18 @@ TEST(FsInfoWrapperTest, mpconflictTest_enablecto) {
   fsinfo.set_status(pb::mds::FsStatus::INITED);
   fsinfo.set_rootinodeid(1);
   fsinfo.set_capacity(8192);
-  fsinfo.set_blocksize(4096);
+  fsinfo.set_block_size(4096);
+  fsinfo.set_chunk_size(16384);
   fsinfo.set_mountnum(0);
-  fsinfo.set_fstype(pb::common::FSType::TYPE_S3);
+
+  auto* storage_info = fsinfo.mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   Mountpoint mp;
   mp.set_hostname("0.0.0.0");
   mp.set_port(9000);

@@ -63,7 +63,7 @@ class RecycleCleaner {
   uint32_t GetRecycleTime() {
     return fsInfo_.has_recycletimehour() ? fsInfo_.recycletimehour() : 0;
   }
-  bool GetEnableSumInDir() { return fsInfo_.enablesumindir(); }
+
   // delete dir and all files in dir recursively
   bool DeleteDirRecursive(const pb::metaserver::Dentry& dentry);
   // update fs info every time it's called to get lastest recycle time

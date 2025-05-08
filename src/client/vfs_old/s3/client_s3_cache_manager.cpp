@@ -573,7 +573,7 @@ Status FileCacheManager::ReadKVRequestFromS3(const std::string& name,
                                              char* databuf, uint64_t offset,
                                              uint64_t length) {
   auto status =
-      s3ClientAdaptor_->GetDataAccesser()->Get(name, offset, length, databuf);
+      s3ClientAdaptor_->GetBlockAccesser()->Get(name, offset, length, databuf);
   if (!status.ok()) {
     LOG(ERROR) << "Object " << name << " read from s3 failed"
                << ", rc=" << status.ToString();
@@ -708,7 +708,6 @@ void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
                                         uint64_t chunk_size,
                                         uint64_t start_block_index) {
   uint32_t prefetch_blocks = s3ClientAdaptor_->GetPrefetchBlocks();
-  uint32_t object_prefix = s3ClientAdaptor_->GetObjectPrefix();
 
   std::vector<std::pair<BlockKey, uint64_t>> prefetch_objs;
 
@@ -2271,7 +2270,6 @@ DINGOFS_ERROR DataCache::PrepareFlushTasks(
 
   // generate flush task
   uint64_t blockSize = s3ClientAdaptor_->GetBlockSize();
-  uint32_t objectPrefix = s3ClientAdaptor_->GetObjectPrefix();
   uint64_t blockPos = chunkPos_ % blockSize;
   uint64_t blockIndex = chunkPos_ / blockSize;
   uint64_t remainLen = len_;

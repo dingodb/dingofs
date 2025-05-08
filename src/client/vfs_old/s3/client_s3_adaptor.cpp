@@ -32,6 +32,7 @@
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
+#include "dataaccess/block_accesser.h"
 
 namespace dingofs {
 
@@ -43,6 +44,7 @@ using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;
 using utils::Thread;
+using dataaccess::BlockAccesserPtr;
 
 using pb::mds::FSStatusCode;
 using pb::metaserver::S3ChunkInfo;
@@ -50,7 +52,7 @@ using pb::metaserver::S3ChunkInfoList;
 
 DINGOFS_ERROR
 S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
-                          DataAccesserPtr data_accesser,
+                          dataaccess::BlockAccesser* block_accesser,
                           std::shared_ptr<InodeCacheManager> inodeManager,
                           std::shared_ptr<MdsClient> mdsClient,
                           std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -73,8 +75,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
   flushIntervalSec_ = option.flushIntervalSec;
   maxReadRetryIntervalMs_ = option.maxReadRetryIntervalMs;
   readRetryIntervalMs_ = option.readRetryIntervalMs;
-  objectPrefix_ = option.objectPrefix;
-  data_accesser_ = data_accesser;
+  block_accesser_ = block_accesser;
   inodeManager_ = inodeManager;
   mdsClient_ = mdsClient;
   fsCacheManager_ = fsCacheManager;

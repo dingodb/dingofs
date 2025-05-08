@@ -159,25 +159,20 @@ TEST_F(BaseClientTest, test_GetFsInfo_by_fsName) {
   fsinfo->set_status(FsStatus::NEW);
   fsinfo->set_rootinodeid(1);
   fsinfo->set_capacity(10 * 1024 * 1024L);
-  fsinfo->set_blocksize(4 * 1024);
+  fsinfo->set_block_size(4 * 1024);
+  fsinfo->set_chunk_size(16 * 1024);
   fsinfo->set_mountnum(1);
-  fsinfo->set_enablesumindir(false);
-  fsinfo->set_fstype(pb::common::FSType::TYPE_VOLUME);
   fsinfo->set_owner("test");
   fsinfo->set_txsequence(0);
   fsinfo->set_txowner("owner");
-  auto* vresp = new pb::common::Volume();
-  vresp->set_blocksize(4 * 1024);
-  vresp->set_volumename("test1");
-  vresp->set_user("test");
-  vresp->set_password("test");
-  vresp->set_blockgroupsize(128ULL * 1024 * 1024);
-  vresp->set_bitmaplocation(pb::common::BitmapLocation::AtStart);
-  vresp->set_slicesize(1ULL * 1024 * 1024 * 1024);
-  vresp->set_autoextend(false);
-  auto* detail = new pb::mds::FsDetail();
-  detail->set_allocated_volume(vresp);
-  fsinfo->set_allocated_detail(detail);
+  auto* storage_info = fsinfo->mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   response.set_allocated_fsinfo(fsinfo);
   response.set_statuscode(pb::mds::FSStatusCode::OK);
   EXPECT_CALL(mockMdsService_, GetFsInfo(_, _, _, _))
@@ -210,26 +205,22 @@ TEST_F(BaseClientTest, test_GetFsInfo_by_fsId) {
   fsinfo->set_status(FsStatus::NEW);
   fsinfo->set_rootinodeid(1);
   fsinfo->set_capacity(10 * 1024 * 1024L);
-  fsinfo->set_blocksize(4 * 1024);
+  fsinfo->set_block_size(4 * 1024);
+  fsinfo->set_chunk_size(16 * 1024);
   fsinfo->set_mountnum(1);
-  fsinfo->set_enablesumindir(false);
-  fsinfo->set_fstype(pb::common::FSType::TYPE_VOLUME);
   fsinfo->set_owner("test");
   fsinfo->set_txsequence(0);
   fsinfo->set_txowner("owner");
-  auto* vresp = new pb::common::Volume();
-  vresp->set_blocksize(4 * 1024);
-  vresp->set_volumename("test1");
-  vresp->set_user("test");
-  vresp->set_password("test");
-  vresp->set_blockgroupsize(128ULL * 1024 * 1024);
-  vresp->set_bitmaplocation(pb::common::BitmapLocation::AtStart);
-  vresp->set_slicesize(1ULL * 1024 * 1024 * 1024);
-  vresp->set_autoextend(false);
-  auto* detail = new pb::mds::FsDetail();
-  detail->set_allocated_volume(vresp);
-  fsinfo->set_allocated_detail(detail);
   fsinfo->set_mountnum(1);
+
+  auto* storage_info = fsinfo->mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   response.set_allocated_fsinfo(fsinfo);
   response.set_statuscode(pb::mds::FSStatusCode::OK);
   EXPECT_CALL(mockMdsService_, GetFsInfo(_, _, _, _))

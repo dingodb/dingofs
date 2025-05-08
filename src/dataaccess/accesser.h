@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_ACCESSER_H_
-#define DINGOFS_DATA_ACCESS_ACCESSER_H_
+#ifndef DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_
+#define DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_
 
 #include <functional>
 #include <memory>
@@ -27,12 +27,12 @@
 namespace dingofs {
 namespace dataaccess {
 
-// DataAccesser is a class that provides a way to access data from a data
+// Accesser is a class that provides a way to access data from a data
 // source. It is a base class for all data access classes.
-class DataAccesser {
+class Accesser {
  public:
-  DataAccesser() = default;
-  virtual ~DataAccesser() = default;
+  Accesser() = default;
+  virtual ~Accesser() = default;
 
   using RetryCallback = std::function<bool(int code)>;
 
@@ -40,22 +40,28 @@ class DataAccesser {
 
   virtual bool Destroy() = 0;
 
+  virtual bool ContainerExist() = 0;
+
   virtual Status Put(const std::string& key, const char* buffer,
                      size_t length) = 0;
-  virtual void AsyncPut(const std::string& key, const char* buffer,
-                        size_t length, RetryCallback retry_cb) = 0;
+
   virtual void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) = 0;
+
+  virtual Status Get(const std::string& key, std::string* data) = 0;
 
   virtual Status Get(const std::string& key, off_t offset, size_t length,
                      char* buffer) = 0;
+
   virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
 
-  virtual Status Delete(const std::string& key) = 0;
-};
+  virtual bool BlockExist(const std::string& key) = 0;
 
-using DataAccesserPtr = std::shared_ptr<DataAccesser>;
+  virtual Status Delete(const std::string& key) = 0;
+
+  virtual Status BatchDelete(const std::list<std::string>& keys) = 0;
+};
 
 }  // namespace dataaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_ACCESSER_H_
+#endif  // DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_

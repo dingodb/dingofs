@@ -31,13 +31,12 @@ using stub::metric::S3Metric;
 
 bool S3Accesser::Init() {
   LOG(INFO) << fmt::format(
-      "[accesser] init s3 accesser, endpoint({}) bucket({}) ak({}) sk({}) "
-      "region({}).",
-      option_.s3Address, option_.bucketName, option_.ak, option_.sk,
-      option_.region);
+      "[accesser] init s3 accesser, endpoint({}) bucket({}) ak({}) sk({}).",
+      options_.s3_info.endpoint, options_.s3_info.bucket_name,
+      options_.s3_info.ak, options_.s3_info.sk);
 
   client_ = std::make_unique<dataaccess::aws::S3Adapter>();
-  client_->Init(option_);
+  client_->Init(options_);
 
   return true;
 }
@@ -47,6 +46,8 @@ bool S3Accesser::Destroy() { return true; }
 Aws::String S3Accesser::S3Key(const std::string& key) {
   return Aws::String(key.c_str(), key.size());
 }
+
+bool S3Accesser::ContainerExist() { return client_->BucketExist(); }
 
 Status S3Accesser::Put(const std::string& key, const char* buffer,
                        size_t length) {
@@ -65,34 +66,43 @@ Status S3Accesser::Put(const std::string& key, const char* buffer,
   return Status::OK();
 }
 
-void S3Accesser::AsyncPut(const std::string& key, const char* buffer,
-                          size_t length, RetryCallback retry_cb) {
-  auto put_obj_ctx = std::make_shared<PutObjectAsyncContext>();
-  put_obj_ctx->key = key;
-  put_obj_ctx->buffer = buffer;
-  put_obj_ctx->buffer_size = length;
-  put_obj_ctx->start_time = butil::cpuwide_time_us();
-  put_obj_ctx->cb =
-      [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-        MetricGuard guard(&ctx->ret_code, &S3Metric::GetInstance().write_s3,
-                          ctx->buffer_size, ctx->start_time);
-
-        if (retry_cb(ctx->ret_code)) {
-          client_->PutObjectAsync(ctx);
-        }
-      };
-
-  client_->PutObjectAsync(put_obj_ctx);
+void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
+  auto origin_cb = context->cb;
+  auto start_time = butil::cpuwide_time_us();
+  context->cb = [&, start_time,
+                 origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
+    MetricGuard guard(&ctx->ret_code, &S3Metric::GetInstance().write_s3,
+                      ctx->buffer_size, start_time);
+    ctx->cb = origin_cb;
+    ctx->cb(ctx);
+  };
+  client_->PutObjectAsync(context);
 }
 
-void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
-  client_->PutObjectAsync(context);
+Status S3Accesser::Get(const std::string& key, std::string* data) {
+  int rc;  // read s3 metrics
+  auto start = butil::cpuwide_time_us();
+  MetricGuard guard(&rc, &S3Metric::GetInstance().read_s3, data->length(),
+                    start);
+
+  rc = client_->GetObject(S3Key(key), data);
+  if (rc < 0) {
+    if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
+      LOG(WARNING) << fmt::format("[accesser] object({}) not found.", key);
+      return Status::NotFound("object not found");
+    }
+
+    LOG(ERROR) << fmt::format("[accesser] get object({}) fail, ret_code: {}.",
+                              key, rc);
+    return Status::IoError("get object fail");
+  }
+
+  return Status::OK();
 }
 
 Status S3Accesser::Get(const std::string& key, off_t offset, size_t length,
                        char* buffer) {
-  int rc;
-  // read s3 metrics
+  int rc;  // read s3 metrics
   auto start = butil::cpuwide_time_us();
   MetricGuard guard(&rc, &S3Metric::GetInstance().read_s3, length, start);
 
@@ -112,7 +122,20 @@ Status S3Accesser::Get(const std::string& key, off_t offset, size_t length,
 }
 
 void S3Accesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
+  auto origin_cb = context->cb;
+  auto start_time = butil::cpuwide_time_us();
+  context->cb = [&, start_time,
+                 origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+    MetricGuard guard(&ctx->ret_code, &S3Metric::GetInstance().read_s3,
+                      ctx->len, start_time);
+    ctx->cb = origin_cb;
+    ctx->cb(ctx);
+  };
   client_->GetObjectAsync(context);
+}
+
+bool S3Accesser::BlockExist(const std::string& key) {
+  return client_->ObjectExist(key);
 }
 
 Status S3Accesser::Delete(const std::string& key) {
@@ -121,6 +144,18 @@ Status S3Accesser::Delete(const std::string& key) {
     LOG(ERROR) << fmt::format(
         "[accesser] delete object({}) fail, ret_code: {}.", key, rc);
     return Status::IoError("delete object fail");
+  }
+
+  return Status::OK();
+}
+
+Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
+  int rc = client_->DeleteObjects(keys);
+  if (rc < 0) {
+    LOG(ERROR) << fmt::format(
+        "[accesser] batch delete object fail, count:{}, ret: {}.", keys.size(),
+        rc);
+    return Status::IoError("batch delete object fail");
   }
 
   return Status::OK();

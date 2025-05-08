@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "metaserver/s3compact_worker.h"
+#include "metaserver/compaction/s3compact_worker.h"
 
 #include <gtest/gtest.h>
 
@@ -33,8 +33,8 @@
 
 #include "dingofs/common.pb.h"
 #include "metaserver/inode_manager.h"
-#include "metaserver/s3compact.h"
-#include "metaserver/s3compact_manager.h"
+#include "metaserver/compaction/s3compact.h"
+#include "metaserver/compaction/s3compact_manager.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/iterator.h"
 #include "metaserver/storage/status.h"

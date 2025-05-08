@@ -48,7 +48,6 @@ class ChunkCacheManagerTest : public testing::Test {
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
-    option.objectPrefix = 0;
     option.pageSize = 64 * 1024;
     option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;

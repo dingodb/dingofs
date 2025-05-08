@@ -26,48 +26,63 @@
 
 #include <algorithm>
 #include <list>
+#include <memory>
 
 #include "common/s3util.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace metaserver {
-void S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
-                               S3Client* client) {
+
+Status S3ClientAdaptorImpl::Init(
+    const S3ClientAdaptorOption& option,
+    dataaccess::BlockAccessOptions block_access_option) {
   blockSize_ = option.blockSize;
   chunkSize_ = option.chunkSize;
   batchSize_ = option.batchSize;
   enableDeleteObjects_ = option.enableDeleteObjects;
-  objectPrefix_ = option.objectPrefix;
-  client_ = client;
-}
 
-void S3ClientAdaptorImpl::Reinit(const S3ClientAdaptorOption& option,
-                                 const std::string& ak, const std::string& sk,
-                                 const std::string& endpoint,
-                                 const std::string& bucket_name) {
-  blockSize_ = option.blockSize;
-  chunkSize_ = option.chunkSize;
-  batchSize_ = option.batchSize;
-  enableDeleteObjects_ = option.enableDeleteObjects;
-  objectPrefix_ = option.objectPrefix;
-  client_->Reinit(ak, sk, endpoint, bucket_name);
-}
+  adaptor_option_ = option;
+  block_access_option_ = block_access_option;
 
-int S3ClientAdaptorImpl::Delete(const pb::metaserver::Inode& inode) {
-  if (enableDeleteObjects_) {
-    return DeleteInodeByDeleteBatchChunk(inode);
+  block_accesser_ = adaptor_option_.block_accesser_factory->NewBlockAccesser(
+      block_access_option);
+  Status s = block_accesser_->Init();
+  if (!s.ok()) {
+    LOG(ERROR) << "Fail init block accesser: " << s.ToString();
   } else {
-    return DeleteInodeByDeleteSingleChunk(inode);
+    is_inited_.store(true);
+    VLOG(3) << "S3ClientAdaptorImpl init success";
   }
+
+  return s;
 }
 
-int S3ClientAdaptorImpl::DeleteInodeByDeleteSingleChunk(
+Status S3ClientAdaptorImpl::Delete(const pb::metaserver::Inode& inode) {
+  if (!is_inited_.load()) {
+    LOG(ERROR) << "Fail to delete because S3ClientAdaptorImpl not init, ino: "
+               << inode.inodeid();
+    return Status::Internal("S3ClientAdaptorImpl not init");
+  }
+
+  Status s;
+  if (enableDeleteObjects_) {
+    s = DeleteInodeByDeleteBatchChunk(inode);
+  } else {
+    s = DeleteInodeByDeleteSingleChunk(inode);
+  }
+
+  return s;
+}
+
+Status S3ClientAdaptorImpl::DeleteInodeByDeleteSingleChunk(
     const pb::metaserver::Inode& inode) {
   auto s3_chunk_info_map = inode.s3chunkinfomap();
   LOG(INFO) << "delete data, inode id: " << inode.inodeid()
             << ", len:" << inode.length()
             << ", chunk info map size: " << s3_chunk_info_map.size();
-  int ret = 0;
+  Status s;
+
   auto iter = s3_chunk_info_map.begin();
   for (; iter != s3_chunk_info_map.end(); iter++) {
     S3ChunkInfoList& s3_chunk_infolist = iter->second;
@@ -81,100 +96,107 @@ int S3ClientAdaptorImpl::DeleteInodeByDeleteSingleChunk(
       uint64_t compaction = chunk_info.compaction();
       uint64_t chunk_pos = chunk_info.offset() % chunkSize_;
       uint64_t length = chunk_info.len();
-      int del_stat =
+      Status tmp =
           DeleteChunk(fs_id, inode_id, chunk_id, compaction, chunk_pos, length);
-      if (del_stat < 0) {
-        LOG(ERROR) << "delete chunk failed, status code is: " << del_stat
-                   << " , chunkId is " << chunk_id;
-        ret = -1;
+      if (!tmp.ok()) {
+        LOG(ERROR) << "Fail delete chunk: " << chunk_id << ", fs_id: " << fs_id
+                   << ", inode_id: " << inode_id
+                   << ", status: " << tmp.ToString();
+        s = tmp;
       }
     }
   }
+
   LOG(INFO) << "delete data, inode id: " << inode.inodeid()
             << ", len:" << inode.length() << " success";
 
-  return ret;
+  return s;
 }
 
-int S3ClientAdaptorImpl::DeleteChunk(uint64_t fs_id, uint64_t inode_id,
-                                     uint64_t chunk_id, uint64_t compaction,
-                                     uint64_t chunk_pos, uint64_t length) {
+Status S3ClientAdaptorImpl::DeleteChunk(uint64_t fs_id, uint64_t inode_id,
+                                        uint64_t chunk_id, uint64_t compaction,
+                                        uint64_t chunk_pos, uint64_t length) {
   uint64_t block_index = chunk_pos / blockSize_;
   uint64_t block_pos = chunk_pos % blockSize_;
   int count = 0;  // blocks' number
   int ret = 0;
+
+  Status s;
   while (length > blockSize_ * count - block_pos || count == 0) {
     // divide chunks to blocks, and delete these blocks
     std::string object_name = dingofs::common::s3util::GenObjName(
-        chunk_id, block_index, compaction, fs_id, inode_id, objectPrefix_);
-    int del_stat = client_->Delete(object_name);
-    if (del_stat < 0) {
-      // fail
-      LOG(ERROR) << "delete object fail. object: " << object_name;
-      ret = -1;
-    } else if (del_stat > 0) {  // delSat == 1
-      // object is not exist
-      // 1. overwrite，the object is delete by others
-      // 2. last delete failed
-      // 3. others
-      ret = 1;
+        chunk_id, block_index, compaction, fs_id, inode_id);
+
+    Status tmp = block_accesser_->Delete(object_name);
+    if (!tmp.ok()) {
+      LOG(ERROR) << "delete block fail. block: " << object_name
+                 << ", status: " << tmp.ToString();
+      s = tmp;
     }
 
     ++block_index;
     ++count;
   }
 
-  return ret;
+  return s;
 }
 
-int S3ClientAdaptorImpl::DeleteInodeByDeleteBatchChunk(
+Status S3ClientAdaptorImpl::DeleteInodeByDeleteBatchChunk(
     const pb::metaserver::Inode& inode) {
   auto s3_chunk_info_map = inode.s3chunkinfomap();
   LOG(INFO) << "delete data, inode id: " << inode.inodeid()
             << ", len:" << inode.length()
             << ", chunk info map size: " << s3_chunk_info_map.size();
-  int return_code = 0;
+
+  Status s;
+
   auto iter = s3_chunk_info_map.begin();
   while (iter != s3_chunk_info_map.end()) {
-    int ret =
+    Status tmp =
         DeleteS3ChunkInfoList(inode.fsid(), inode.inodeid(), iter->second);
-    if (ret != 0) {
-      LOG(ERROR) << "delete chunk failed, ret = " << ret << " , chunk index is "
-                 << iter->first;
-      return_code = -1;
+    if (!tmp.ok()) {
+      LOG(ERROR) << "Fail delete chunk, chunk index is " << iter->first
+                 << ", fs_id: " << inode.fsid()
+                 << ", inode_id: " << inode.inodeid()
+                 << ", status: " << tmp.ToString();
+      s = tmp;
       iter++;
     } else {
       iter = s3_chunk_info_map.erase(iter);
     }
   }
-  LOG(INFO) << "delete data, inode id: " << inode.inodeid()
-            << ", len:" << inode.length() << " , ret = " << return_code;
 
-  return return_code;
+  LOG(INFO) << "delete data, inode id: " << inode.inodeid()
+            << ", len:" << inode.length() << " , status: " << s.ToString();
+
+  return s;
 }
 
-int S3ClientAdaptorImpl::DeleteS3ChunkInfoList(
+// TOOD: the fail operation maybe need to process
+Status S3ClientAdaptorImpl::DeleteS3ChunkInfoList(
     uint32_t fs_id, uint64_t inode_id,
     const S3ChunkInfoList& s3_chunk_infolist) {
   std::list<std::string> obj_list;
 
   GenObjNameListForChunkInfoList(fs_id, inode_id, s3_chunk_infolist, &obj_list);
 
+  Status s;
   while (obj_list.size() != 0) {
     std::list<std::string> temp_obj_list;
     auto begin = obj_list.begin();
     auto end = obj_list.begin();
     std::advance(end, std::min(batchSize_, obj_list.size()));
     temp_obj_list.splice(temp_obj_list.begin(), obj_list, begin, end);
-    int ret = client_->DeleteBatch(temp_obj_list);
-    if (ret != 0) {
-      LOG(ERROR) << "DeleteS3ChunkInfoList failed, fsId = " << fs_id
-                 << ", inodeId =  " << inode_id << ", status code = " << ret;
-      return -1;
+    Status tmp = block_accesser_->BatchDelete(temp_obj_list);
+    if (!tmp.ok()) {
+      LOG(ERROR) << "Fail batch delete in DeleteS3ChunkInfoList fs_id: "
+                 << fs_id << ", inodeId =  " << inode_id
+                 << ", status: " << tmp.ToString();
+      s = tmp;
     }
   }
 
-  return 0;
+  return s;
 }
 
 void S3ClientAdaptorImpl::GenObjNameListForChunkInfoList(
@@ -206,21 +228,12 @@ void S3ClientAdaptorImpl::GenObjNameListForChunkInfo(
   for (int i = 0; i < count; i++) {
     // divide chunks to blocks, and delete these blocks
     std::string object_name = dingofs::common::s3util::GenObjName(
-        chunk_id, block_index, compaction, fs_id, inode_id, objectPrefix_);
+        chunk_id, block_index, compaction, fs_id, inode_id);
     obj_list->push_back(object_name);
     VLOG(9) << "gen object name: " << object_name;
 
     ++block_index;
   }
-}
-
-void S3ClientAdaptorImpl::GetS3ClientAdaptorOption(
-    S3ClientAdaptorOption* option) {
-  option->blockSize = blockSize_;
-  option->chunkSize = chunkSize_;
-  option->batchSize = batchSize_;
-  option->enableDeleteObjects = enableDeleteObjects_;
-  option->objectPrefix = objectPrefix_;
 }
 
 }  // namespace metaserver

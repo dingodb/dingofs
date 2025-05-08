@@ -17,13 +17,40 @@
 #ifndef DINGOFS_DATA_ACCESS_ACCESSER_COMMON_H_
 #define DINGOFS_DATA_ACCESS_ACCESSER_COMMON_H_
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 
+#include "dataaccess/rados/rados_common.h"
+#include "dataaccess/s3/s3_common.h"
+
 namespace dingofs {
 namespace dataaccess {
 
+enum AccesserType : uint8_t {
+  kS3 = 0,
+  kRados = 1,
+};
+
+inline std::string AccesserType2Str(const AccesserType& type) {
+  switch (type) {
+    case kS3:
+      return "S3";
+    case kRados:
+      return "Rados";
+    default:
+      return "Unknown";
+  }
+}
+
+struct BlockAccessOptions {
+  AccesserType type;
+  S3Options s3_options;
+  RadosOptions rados_options;
+};
+
+// TODO: refact this use one struct
 struct GetObjectAsyncContext;
 struct PutObjectAsyncContext;
 

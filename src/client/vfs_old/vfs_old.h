@@ -33,6 +33,7 @@
 #include "client/vfs_old/lease/lease_excutor.h"
 #include "client/vfs_old/service/inode_objects_service.h"
 #include "client/vfs_old/warmup/warmup_manager.h"
+#include "dataaccess/block_accesser.h"
 #include "dingofs/mds.pb.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/throttle.h"
@@ -171,9 +172,6 @@ class VFSOld : public VFS {
   // filesystem
   std::shared_ptr<filesystem::FileSystem> fs_;
 
-  // enable record summary info in dir inode xattr
-  std::atomic<bool> enable_sum_in_dir_{false};
-
   // mds client
   std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
@@ -198,7 +196,7 @@ class VFSOld : public VFS {
   // s3 adaptor
   std::shared_ptr<S3ClientAdaptor> s3_adapter_;
 
-  DataAccesserPtr data_accesser_;
+  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_{nullptr};
 
   brpc::Server server_;
   InodeObjectsService inode_object_service_;

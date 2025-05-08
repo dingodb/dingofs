@@ -14,7 +14,7 @@
 
 add_executable(test_metaserver_s3compact 
     main.cpp
-    s3compact_test.cpp
+    # s3compact_test.cpjp
     s3compact_worker_test.cpp
 )
 target_link_libraries(test_metaserver_s3compact

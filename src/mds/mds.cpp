@@ -28,6 +28,7 @@
 
 #include <utility>
 
+#include "dataaccess/block_accesser_factory.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 #include "mds/cachegroup/cache_group_member_service.h"
 #include "mds/cachegroup/config.h"
@@ -179,19 +180,21 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
          "default value: "
       << fs_manager_option->spaceReloadConcurrency;
 
-  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(
-      conf_.get(), &fs_manager_option->s3AdapterOption);
+  dataaccess::InitAwsSdkConfig(
+      conf_.get(),
+      &fs_manager_option->block_access_option.s3_options.aws_sdk_config);
 }
 
 void MDS::Init() {
   LOG(INFO) << "Init MDS start";
-
   InitEtcdClient();
 
   fsStorage_ = std::make_shared<PersisKVStorage>(etcdClient_);
   metaserverClient_ =
       std::make_shared<MetaserverClient>(options_.metaserverOptions);
   auto dlock = std::make_shared<DLock>(options_.dLockOptions, etcdClient_);
+
+  block_accesser_factory_ = std::make_shared<dataaccess::BlockAccesserFactory>();
 
   // init topology
   InitTopology(options_.topologyOptions);
@@ -200,8 +203,10 @@ void MDS::Init() {
   InitCoordinator();
   InitHeartbeatManager();
   InitCacheGroup();
+
   FsManagerOption fs_manager_option;
   InitFsManagerOptions(&fs_manager_option);
+  fs_manager_option.block_accesser_factory = block_accesser_factory_;
 
   fsManager_ =
       std::make_shared<FsManager>(fsStorage_, metaserverClient_,

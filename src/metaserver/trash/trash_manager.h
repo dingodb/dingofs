@@ -27,7 +27,7 @@
 #include <map>
 #include <memory>
 
-#include "metaserver/trash.h"
+#include "metaserver/trash/trash.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/interruptible_sleeper.h"
 

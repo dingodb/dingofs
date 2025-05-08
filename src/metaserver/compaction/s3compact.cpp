@@ -20,7 +20,7 @@
  * Author: wuhanqing
  */
 
-#include "metaserver/s3compact.h"
+#include "metaserver/compaction/s3compact.h"
 
 #include <memory>
 

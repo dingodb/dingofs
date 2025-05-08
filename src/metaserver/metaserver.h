@@ -28,6 +28,7 @@
 #include <memory>
 #include <string>
 
+#include "dataaccess/block_accesser_factory.h"
 #include "fs/local_filesystem.h"
 #include "metaserver/copyset/config.h"
 #include "metaserver/copyset/copyset_service.h"
@@ -75,10 +76,7 @@ class Metaserver {
   void InitMetaClient();
   void InitRegisterOptions();
   void InitBRaftFlags(const std::shared_ptr<utils::Configuration>& conf);
-  void InitPartitionOption(
-      std::shared_ptr<S3ClientAdaptor> s3Adaptor,
-      std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
-      PartitionCleanOption* partitionCleanOption);
+  void InitPartitionOptionFromConf(PartitionCleanOption* partion_clean_option);
   void InitRecycleManagerOption(RecycleManagerOption* recycleManagerOption);
   void GetMetaserverDataByLoadOrRegister();
   int PersistMetaserverMeta(std::string path,
@@ -98,6 +96,8 @@ class Metaserver {
   bool inited_ = false;
   // running as the main MDS or not
   bool running_ = false;
+
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory_;
 
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient_;

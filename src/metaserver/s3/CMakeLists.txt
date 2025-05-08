@@ -15,13 +15,12 @@
 
 add_library(metaserver_s3 
     metaserver_s3_adaptor.cpp
-    metaserver_s3.cpp
 )
 
 target_link_libraries(metaserver_s3
     PROTO_OBJS
     dingofs_common
-    aws_s3_adapter
+    block_accesser
     gflags::gflags
     glog::glog
 )

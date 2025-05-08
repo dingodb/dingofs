@@ -26,14 +26,17 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <sys/stat.h>
 
+#include <cstdint>
 #include <list>
 #include <regex>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
+#include "common/config_mapper.h"
 #include "common/define.h"
-#include "dataaccess/s3/aws/s3_adapter.h"
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
@@ -140,11 +143,6 @@ void FsManager::ScanFs(const FsInfoWrapper& wrapper) {
   if (partition_list.empty()) {
     LOG(INFO) << "fs has no partition, delete fs record, fsName = "
               << wrapper.GetFsName() << ", fsId = " << wrapper.GetFsId();
-
-    if (wrapper.GetFsType() == pb::common::FSType::TYPE_VOLUME) {
-      LOG(FATAL) << "delete FSType::TYPE_VOLUME space not supported";
-      return;
-    }
 
     FSStatusCode ret = fsStorage_->Delete(wrapper.GetFsName());
     if (ret != FSStatusCode::OK) {
@@ -253,9 +251,11 @@ bool FsManager::CheckFsName(const std::string& fs_name) {
 FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
                                  pb::mds::FsInfo* fs_info) {
   const auto& fs_name = request->fsname();
-  const auto& block_size = request->blocksize();
-  const auto& fs_type = request->fstype();
-  const auto& detail = request->fsdetail();
+  const auto& block_size = request->block_size();
+  const auto& chunk_size = request->chunk_size();
+
+  const auto& storage_type = request->storage_info().type();
+  const auto& storage_info = request->storage_info();
 
   NameLockGuard lock(nameLock_, fs_name);
   FsInfoWrapper wrapper;
@@ -264,13 +264,14 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   // query fs
   // TODO(cw123): if fs status is FsStatus::New, here need more consideration
   if (fsStorage_->Exist(fs_name)) {
-    int exist_ret =
-        IsExactlySameOrCreateUnComplete(fs_name, fs_type, block_size, detail);
+    int exist_ret = IsExactlySameOrCreateUnComplete(fs_name, block_size,
+                                                    chunk_size, storage_info);
     if (exist_ret == 0) {
       LOG(INFO) << "CreateFs success, fs exist, fsName = " << fs_name
-                << ", fstype = " << FSType_Name(fs_type)
+                << ", storage_type = " << StorageType_Name(storage_type)
                 << ", blocksize = " << block_size
-                << ", detail = " << detail.ShortDebugString();
+                << ", chunk_size = " << chunk_size
+                << ", storage_info = " << storage_info.ShortDebugString();
       fsStorage_->Get(fs_name, &wrapper);
       *fs_info = wrapper.ProtoFsInfo();
       return FSStatusCode::OK;
@@ -279,9 +280,10 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
     if (exist_ret == 1) {
       LOG(INFO) << "CreateFs found previous create operation uncompleted"
                 << ", fsName = " << fs_name
-                << ", fstype = " << FSType_Name(fs_type)
+                << ", storage_type = " << StorageType_Name(storage_type)
                 << ", blocksize = " << block_size
-                << ", detail = " << detail.ShortDebugString();
+                << ", chunk_size = " << chunk_size
+                << ", storage_info = " << storage_info.ShortDebugString();
       skip_create_new_fs = true;
     } else {
       return FSStatusCode::FS_EXIST;
@@ -294,27 +296,27 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   }
 
   // check s3info
-  if (!skip_create_new_fs && detail.has_s3info()) {
-    const auto& s3_info = detail.s3info();
 
-    dataaccess::aws::S3AdapterOption s3_adapter_option =
-        option_.s3AdapterOption;
-    s3_adapter_option.ak = s3_info.ak();
-    s3_adapter_option.sk = s3_info.sk();
-    s3_adapter_option.s3Address = s3_info.endpoint();
-    s3_adapter_option.bucketName = s3_info.bucketname();
+  if (!skip_create_new_fs) {
+    dataaccess::BlockAccessOptions block_access_opt =
+        option_.block_access_option;
+    FillBlockAccessOption(storage_info, &block_access_opt);
 
-    auto s3_adapter = std::make_shared<dataaccess::aws::S3Adapter>();
-    s3_adapter->Init(s3_adapter_option);
+    std::unique_ptr<dataaccess::BlockAccesser> block_accesser =
+        option_.block_accesser_factory->NewBlockAccesser(block_access_opt);
+    Status s = block_accesser->Init();
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail CreateFs " << fs_name
+                 << " because of block accesser init error: " << s.ToString();
+      return FSStatusCode::S3_INFO_ERROR;
+    }
 
-    if (!s3_adapter->BucketExist()) {
-      LOG(ERROR) << "CreateFs " << fs_name
-                 << " error, s3info is not available!";
+    if (!block_accesser->ContainerExist()) {
+      LOG(ERROR) << "Fail CreateFs " << fs_name
+                 << " because of container not exist";
       return FSStatusCode::S3_INFO_ERROR;
     }
   }
-
-  CHECK(!detail.has_volume()) << "not supported volumn";
 
   if (!skip_create_new_fs) {
     uint64_t fs_id = fsStorage_->NextFsId();
@@ -603,12 +605,6 @@ FSStatusCode FsManager::MountFs(const std::string& fs_name,
     return FSStatusCode::MOUNT_POINT_CONFLICT;
   }
 
-  // If this is the first mountpoint, init space,
-  if (wrapper.GetFsType() == pb::common::FSType::TYPE_VOLUME &&
-      wrapper.IsMountPointEmpty()) {
-    LOG(FATAL) << "MountFs fail, FSType::TYPE_VOLUME init space not supported";
-  }
-
   // insert mountpoint
   wrapper.AddMountPoint(mountpoint);
   // for persistence consider
@@ -662,12 +658,6 @@ FSStatusCode FsManager::UmountFs(const std::string& fs_name,
   std::string mountpath;
   MountPoint2Str(mountpoint, &mountpath);
   DeleteClientAliveTime(mountpath);
-
-  // 3. if no mount point exist, uninit space
-  if (wrapper.GetFsType() == pb::common::FSType::TYPE_VOLUME &&
-      wrapper.IsMountPointEmpty()) {
-    LOG(FATAL) << "UmountFs fail, FSType::TYPE_VOLUME not supported";
-  }
 
   // 4. update fs info
   // for persistence consider
@@ -735,34 +725,21 @@ FSStatusCode FsManager::GetFsInfo(const std::string& fs_name, uint32_t fs_id,
 }
 
 int FsManager::IsExactlySameOrCreateUnComplete(
-    const std::string& fs_name, pb::common::FSType fs_type, uint64_t blocksize,
-    const pb::mds::FsDetail& detail) {
+    const std::string& fs_name, uint64_t block_size, uint64_t chunk_size,
+    const pb::common::StorageInfo& storage_info) {
   FsInfoWrapper exist_fs;
 
-  auto volume_info_comparator = [](pb::common::Volume lhs,
-                                   pb::common::Volume rhs) {
-    // only compare required fields
-    // 1. clear `volumeSize` and `extendAlignment`
-    // 2. if `autoExtend` is true, `extendFactor` must be equal too
-    lhs.clear_volumesize();
-    lhs.clear_extendalignment();
-    rhs.clear_volumesize();
-    rhs.clear_extendalignment();
-
-    return google::protobuf::util::MessageDifferencer::Equals(lhs, rhs);
-  };
-
-  auto check_fs_info = [fs_type, volume_info_comparator](
-                           const pb::mds::FsDetail& lhs,
-                           const pb::mds::FsDetail& rhs) {
-    switch (fs_type) {
-      case pb::common::FSType::TYPE_S3:
-        return MessageDifferencer::Equals(lhs.s3info(), rhs.s3info());
-      case pb::common::FSType::TYPE_VOLUME:
-        return volume_info_comparator(lhs.volume(), rhs.volume());
-      case pb::common::FSType::TYPE_HYBRID:
-        return MessageDifferencer::Equals(lhs.s3info(), rhs.s3info()) &&
-               volume_info_comparator(lhs.volume(), rhs.volume());
+  const auto& storage_type = storage_info.type();
+  auto check_fs_info = [storage_type](const pb::common::StorageInfo& lhs,
+                                      const pb::common::StorageInfo& rhs) {
+    switch (storage_type) {
+      case pb::common::StorageType::TYPE_S3:
+        return MessageDifferencer::Equals(lhs.s3_info(), rhs.s3_info());
+      case pb::common::StorageType::TYPE_RADOS:
+        return MessageDifferencer::Equals(lhs.rados_info(), rhs.rados_info());
+      default:
+        LOG(ERROR) << "unknown storage type: " << storage_type;
+        return false;
     }
 
     return false;
@@ -770,9 +747,11 @@ int FsManager::IsExactlySameOrCreateUnComplete(
 
   // assume fsname exists
   fsStorage_->Get(fs_name, &exist_fs);
-  if (fs_name == exist_fs.GetFsName() && fs_type == exist_fs.GetFsType() &&
-      blocksize == exist_fs.GetBlockSize() &&
-      check_fs_info(detail, exist_fs.GetFsDetail())) {
+  if (fs_name == exist_fs.GetFsName() &&
+      storage_type == exist_fs.GetStorageType() &&
+      block_size == exist_fs.GetBlockSize() &&
+      chunk_size == exist_fs.GetChunkSize() &&
+      check_fs_info(storage_info, exist_fs.GetStorageInfo())) {
     if (pb::mds::FsStatus::NEW == exist_fs.GetStatus()) {
       return 1;
     } else if (pb::mds::FsStatus::INITED == exist_fs.GetStatus()) {
@@ -817,7 +796,6 @@ void FsManager::RefreshSession(const pb::mds::RefreshSessionRequest* request,
   }
 
   auto fs_info = wrapper.ProtoFsInfo();
-  response->set_enablesumindir(fs_info.enablesumindir());
   // update mount_count metrics
   FsMetric::GetInstance().OnUpdateMountCount(fs_info.fsname(),
                                              fs_info.mountnum());

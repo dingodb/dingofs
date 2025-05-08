@@ -38,28 +38,33 @@ bool operator==(const FsInfoWrapper& lhs, const FsInfoWrapper& rhs) {
 
 class FSStorageTest : public ::testing::Test {
  protected:
-  void SetUp() override { return; }
+  void SetUp() override { }
 
-  void TearDown() override { return; }
+  void TearDown() override { }
 };
 
 TEST_F(FSStorageTest, test1) {
   MemoryFsStorage storage;
-  pb::common::Volume volume;
   uint32_t fsId = 1;
   uint64_t rootInodeId = 1;
   uint64_t blockSize = 4096;
 
-  pb::mds::FsDetail detail;
-  detail.set_allocated_volume(new pb::common::Volume(volume));
+
   pb::mds::CreateFsRequest req;
   req.set_fsname("name1");
-  req.set_blocksize(blockSize);
-  req.set_fstype(pb::common::FSType::TYPE_VOLUME);
-  req.set_allocated_fsdetail(new pb::mds::FsDetail(detail));
-  req.set_enablesumindir(false);
+  req.set_block_size(blockSize);
+  req.set_chunk_size(16384);
   req.set_owner("test");
   req.set_capacity((uint64_t)100 * 1024 * 1024 * 1024);
+
+  auto* storage_info = req.mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("a");
+  s3_info->set_sk("b");
+  s3_info->set_endpoint("http://127.0.1:9000");
+  s3_info->set_bucketname("test");
+
   FsInfoWrapper fs1 =
       FsInfoWrapper(&req, fsId, pb::mds::INSERT_ROOT_INODE_ERROR);
   // test insert

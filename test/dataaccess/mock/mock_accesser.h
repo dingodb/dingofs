@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -37,29 +37,50 @@ using ::testing::Return;
 namespace dingofs {
 namespace dataaccess {
 
-class MockDataAccesser : public DataAccesser {
+class MockBlockAccesser : public BlockAccesser {
  public:
-  MockDataAccesser() = default;
+  MockBlockAccesser() = default;
 
-  ~MockDataAccesser() override = default;
+  ~MockBlockAccesser() override = default;
 
-  MOCK_METHOD0(Init, bool());
+  MOCK_METHOD(Status, Init, (), (override));
 
-  MOCK_METHOD0(Destroy, bool());
+  MOCK_METHOD(Status, Destroy, (), (override));
 
-  MOCK_METHOD3(Put, Status(const std::string& key, const char* buffer,
-                           size_t length));
-  MOCK_METHOD4(AsyncPut, void(const std::string& key, const char* buffer,
-                              size_t length, RetryCallback callback));
+  MOCK_METHOD(bool, ContainerExist, (), (override));
 
-  MOCK_METHOD1(AsyncPut, void(std::shared_ptr<PutObjectAsyncContext> context));
+  MOCK_METHOD(Status, Put, (const std::string& key, const std::string& data),
+              (override));
 
-  MOCK_METHOD4(Get, Status(const std::string& key, off_t offset, size_t length,
-                           char* buffer));
+  MOCK_METHOD(Status, Put,
+              (const std::string& key, const char* buffer, size_t length),
+              (override));
 
-  MOCK_METHOD1(AsyncGet, void(std::shared_ptr<GetObjectAsyncContext> context));
+  MOCK_METHOD(void, AsyncPut,
+              (const std::string& key, const char* buffer, size_t length,
+               RetryCallback retry_cb),
+              (override));
 
-  MOCK_METHOD1(Delete, Status(const std::string& key));
+  MOCK_METHOD(void, AsyncPut, (std::shared_ptr<PutObjectAsyncContext> context),
+              (override));
+
+  MOCK_METHOD(Status, Get, (const std::string& key, std::string* data),
+              (override));
+
+  MOCK_METHOD(Status, Get,
+              (const std::string& key, off_t offset, size_t length,
+               char* buffer),
+              (override));
+
+  MOCK_METHOD(void, AsyncGet, (std::shared_ptr<GetObjectAsyncContext> context),
+              (override));
+
+  MOCK_METHOD(bool, BlockExist, (const std::string& key), (override));
+
+  MOCK_METHOD(Status, Delete, (const std::string& key), (override));
+
+  MOCK_METHOD(Status, BatchDelete, (const std::list<std::string>& keys),
+              (override));
 };
 
 }  // namespace dataaccess

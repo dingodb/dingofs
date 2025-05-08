@@ -41,9 +41,10 @@ FsInfoWrapper::FsInfoWrapper(const pb::mds::CreateFsRequest* request,
   fs_info.set_fsid(fs_id);
   fs_info.set_status(pb::mds::FsStatus::NEW);
   fs_info.set_rootinodeid(root_inode_id);
-  fs_info.set_blocksize(request->blocksize());
+  fs_info.set_capacity(request->capacity());
+  fs_info.set_block_size(request->block_size());
+  fs_info.set_chunk_size(request->chunk_size());
   fs_info.set_mountnum(0);
-  fs_info.set_enablesumindir(request->enablesumindir());
   fs_info.set_txsequence(0);
   fs_info.set_txowner("");
   fs_info.set_uuid(GenUuid());
@@ -51,25 +52,8 @@ FsInfoWrapper::FsInfoWrapper(const pb::mds::CreateFsRequest* request,
     fs_info.set_recycletimehour(request->recycletimehour());
   }
 
-  const auto& detail = request->fsdetail();
-  fs_info.set_allocated_detail(new pb::mds::FsDetail(detail));
-
-  switch (request->fstype()) {
-    case pb::common::FSType::TYPE_S3:
-      fs_info.set_fstype(pb::common::FSType::TYPE_S3);
-      fs_info.set_capacity(request->capacity());
-      break;
-    case pb::common::FSType::TYPE_VOLUME:
-      fs_info.set_fstype(pb::common::FSType::TYPE_VOLUME);
-      fs_info.set_capacity(detail.volume().volumesize());
-      break;
-    case pb::common::FSType::TYPE_HYBRID:
-      fs_info.set_fstype(pb::common::FSType::TYPE_HYBRID);
-      // TODO(huyao): set capacity for hybrid fs
-      fs_info.set_capacity(
-          std::min(detail.volume().volumesize(), request->capacity()));
-      break;
-  }
+  auto* storage_info = fs_info.mutable_storage_info();
+  *storage_info = request->storage_info();
 
   fs_info.set_owner(request->owner());
   fsInfo_ = std::move(fs_info);
@@ -110,10 +94,6 @@ void FsInfoWrapper::AddMountPoint(const pb::mds::Mountpoint& mp) {
   *p = mp;
 
   fsInfo_.set_mountnum(fsInfo_.mountnum() + 1);
-
-  if (fsInfo_.enablesumindir() && fsInfo_.mountnum() > 1) {
-    fsInfo_.set_enablesumindir(false);
-  }
 }
 
 pb::mds::FSStatusCode FsInfoWrapper::DeleteMountPoint(
@@ -142,10 +122,6 @@ std::vector<pb::mds::Mountpoint> FsInfoWrapper::MountPoints() const {
   }
 
   return {fsInfo_.mountpoints().begin(), fsInfo_.mountpoints().end()};
-}
-
-void FsInfoWrapper::SetVolumeSize(uint64_t size) {
-  fsInfo_.mutable_detail()->mutable_volume()->set_volumesize(size);
 }
 
 }  // namespace mds

@@ -31,8 +31,7 @@ target_link_libraries(cache_utils
     brpc::brpc
 
     rpcclient
-    aws_s3_adapter
-    s3_accesser
+    block_accesser
     stub_common
     stub_metric
     dingofs_base_lib

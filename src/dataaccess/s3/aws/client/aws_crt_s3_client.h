@@ -37,21 +37,21 @@ class AwsCrtS3Client : public AwsS3Client {
 
   ~AwsCrtS3Client() override = default;
 
-  void Init(const S3AdapterOption& option) override;
+  void Init(const S3Options& options) override;
 
   std::string GetAk() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.ak;
+    return s3_options_.s3_info.ak;
   }
 
   std::string GetSk() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.sk;
+    return s3_options_.s3_info.sk;
   }
 
   std::string GetEndpoint() override {
     DCHECK(initialized_.load(std::memory_order_relaxed));
-    return option_.s3Address;
+    return s3_options_.s3_info.endpoint;
   }
 
   bool BucketExist(std::string bucket) override;
@@ -82,7 +82,7 @@ class AwsCrtS3Client : public AwsS3Client {
 
  private:
   std::atomic<bool> initialized_{false};
-  S3AdapterOption option_;
+  S3Options s3_options_;
 
   std::unique_ptr<Aws::S3Crt::S3CrtClientConfiguration> cfg_{nullptr};
   std::unique_ptr<Aws::S3Crt::S3CrtClient> client_{nullptr};

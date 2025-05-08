@@ -24,42 +24,22 @@
 #define DINGOFS_SRC_METASERVER_S3COMPACT_MANAGER_H_
 
 #include <memory>
-#include <mutex>
 #include <string>
-#include <utility>
 #include <vector>
 
-#include "metaserver/s3compact.h"
-#include "metaserver/s3compact_worker.h"
-#include "metaserver/s3infocache.h"
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser_factory.h"
+#include "metaserver/compaction/s3compact.h"
+#include "metaserver/compaction/s3compact_worker.h"
+#include "metaserver/compaction/fs_info_cache.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
 namespace metaserver {
 
-class S3AdapterManager {
- private:
-  std::mutex mtx_;
-  bool inited_;
-  uint64_t size_;  // same size as worker thread count
-  std::vector<std::unique_ptr<dataaccess::aws::S3Adapter>> s3adapters_;
-  std::vector<bool> used_;
-  dataaccess::aws::S3AdapterOption opts_;
-
- public:
-  explicit S3AdapterManager(uint64_t size,
-                            const dataaccess::aws::S3AdapterOption& opts)
-      : inited_(false), size_(size), opts_(opts) {}
-  virtual ~S3AdapterManager() = default;
-  virtual void Init();
-  virtual void Deinit();
-  virtual std::pair<uint64_t, dataaccess::aws::S3Adapter*> GetS3Adapter();
-  virtual void ReleaseS3Adapter(uint64_t index);
-  virtual dataaccess::aws::S3AdapterOption GetBasicS3AdapterOption();
-};
-
 struct S3CompactWorkQueueOption {
-  dataaccess::aws::S3AdapterOption s3opts;
+  dataaccess::BlockAccessOptions block_access_opts;
+
   bool enable;
   uint64_t threadNum;
   uint64_t fragmentThreshold;
@@ -68,7 +48,7 @@ struct S3CompactWorkQueueOption {
   std::vector<std::string> mdsAddrs;
   std::string metaserverIpStr;
   uint64_t metaserverPort;
-  uint64_t s3infocacheSize;
+  uint64_t fs_info_cache_size;
   uint64_t s3ReadMaxRetry;
   uint64_t s3ReadRetryInterval;
 
@@ -76,33 +56,37 @@ struct S3CompactWorkQueueOption {
 };
 
 class S3CompactManager {
+ public:
+  static S3CompactManager& GetInstance() {
+    static S3CompactManager instance;
+    return instance;
+  }
+
+  void Init(std::shared_ptr<utils::Configuration> conf);
+
+  void Register(S3Compact s3compact);
+
+  void Cancel(uint32_t partition_id);
+
+  int Run();
+
+  void Stop();
+
  private:
+  S3CompactManager() = default;
+  ~S3CompactManager() = default;
+
   S3CompactWorkQueueOption opts_;
-  std::unique_ptr<S3InfoCache> s3infoCache_;
-  std::unique_ptr<S3AdapterManager> s3adapterManager_;
+  std::unique_ptr<FsInfoCache> fs_info_cache_;
 
   S3CompactWorkerContext workerContext_;
   S3CompactWorkerOptions workerOptions_;
 
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory_; 
+
   std::vector<std::unique_ptr<S3CompactWorker>> workers_;
 
   bool inited_{false};
-
-  S3CompactManager() = default;
-  ~S3CompactManager() = default;
-
- public:
-  static S3CompactManager& GetInstance() {
-    static S3CompactManager instance_;
-    return instance_;
-  }
-
-  void Init(std::shared_ptr<utils::Configuration> conf);
-  void Register(S3Compact s3compact);
-  void Cancel(uint32_t partitionId);
-
-  int Run();
-  void Stop();
 };
 
 }  // namespace metaserver

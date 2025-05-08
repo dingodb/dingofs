@@ -20,89 +20,38 @@
  * @Author: majie1
  */
 
-#include "metaserver/s3compact_manager.h"
+#include "metaserver/compaction/s3compact_manager.h"
 
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <mutex>
 
 #include "absl/memory/memory.h"
-#include "metaserver/partition.h"
-#include "metaserver/s3compact_worker.h"
+#include "dataaccess/block_accesser_factory.h"
+#include "dataaccess/s3/s3_common.h"
+#include "metaserver/compaction/fs_info_cache.h"
+#include "metaserver/compaction/s3compact_worker.h"
 #include "utils/string_util.h"
 
 namespace dingofs {
 namespace metaserver {
 
-using dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption;
-using dataaccess::aws::S3Adapter;
-using dataaccess::aws::S3AdapterOption;
-using pb::common::S3Info;
 using utils::Configuration;
-using utils::InterruptibleSleeper;
 using utils::ReadLockGuard;
 using utils::RWLock;
-using utils::TaskThreadPool;
 using utils::WriteLockGuard;
 
-void S3AdapterManager::Init() {
-  std::lock_guard<std::mutex> lock(mtx_);
-  if (inited_) return;
-  used_.resize(size_);
-  for (uint64_t i = 0; i < size_; i++) {
-    s3adapters_.emplace_back(new S3Adapter());
-  }
-  for (auto& s3adapter : s3adapters_) {
-    s3adapter->Init(opts_);
-  }
-  inited_ = true;
-}
-
-void S3AdapterManager::Deinit() {
-  {
-    std::lock_guard<std::mutex> lock(mtx_);
-    if (inited_)
-      inited_ = false;
-    else
-      return;
-  }
-}
-
-std::pair<uint64_t, S3Adapter*> S3AdapterManager::GetS3Adapter() {
-  std::lock_guard<std::mutex> lock(mtx_);
-  if (!inited_) return std::make_pair(size_, nullptr);
-  uint64_t i = 0;
-  for (; i < size_; i++) {
-    if (!used_[i]) {
-      used_[i] = true;
-      return std::make_pair(i, s3adapters_[i].get());
-    }
-  }
-  return std::make_pair(size_, nullptr);
-}
-
-void S3AdapterManager::ReleaseS3Adapter(uint64_t index) {
-  std::lock_guard<std::mutex> lock(mtx_);
-  if (!inited_) return;
-  assert(index < used_.size());
-  assert(used_[index] == true);
-  used_[index] = false;
-}
-
-S3AdapterOption S3AdapterManager::GetBasicS3AdapterOption() { return opts_; }
-
 void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
-  std::string mdsAddrsStr;
-  conf->GetValueFatalIfFail("mds.listen.addr", &mdsAddrsStr);
-  dingofs::utils::SplitString(mdsAddrsStr, ",", &mdsAddrs);
+  std::string mds_addrs_str;
+  conf->GetValueFatalIfFail("mds.listen.addr", &mds_addrs_str);
+  dingofs::utils::SplitString(mds_addrs_str, ",", &mdsAddrs);
   conf->GetValueFatalIfFail("global.ip", &metaserverIpStr);
   conf->GetValueFatalIfFail("global.port", &metaserverPort);
-  // leave ak,sk,addr,bucket,chunksize,blocksize blank
-  s3opts.ak = "";
-  s3opts.sk = "";
-  s3opts.s3Address = "";
-  s3opts.bucketName = "";
-  InitS3AdaptorOptionExceptS3InfoOption(conf.get(), &s3opts);
+
+  dataaccess::InitAwsSdkConfig(conf.get(),
+                               &block_access_opts.s3_options.aws_sdk_config);
+
   conf->GetValueFatalIfFail("s3compactwq.enable", &enable);
   conf->GetValueFatalIfFail("s3compactwq.thread_num", &threadNum);
   conf->GetValueFatalIfFail("s3compactwq.fragment_threshold",
@@ -110,7 +59,14 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
   conf->GetValueFatalIfFail("s3compactwq.max_chunks_per_compact",
                             &maxChunksPerCompact);
   conf->GetValueFatalIfFail("s3compactwq.enqueue_sleep_ms", &enqueueSleepMS);
-  conf->GetValueFatalIfFail("s3compactwq.s3infocache_size", &s3infocacheSize);
+
+  if (!conf->GetUInt64Value("s3compactwq.fs_info_cache_size",
+                            &fs_info_cache_size)) {
+    fs_info_cache_size = 100;
+    LOG(INFO)
+        << "Not found `s3compactwq.fs_info_cache_size` in conf, default to 100";
+  }
+
   conf->GetValueFatalIfFail("s3compactwq.s3_read_max_retry", &s3ReadMaxRetry);
   conf->GetValueFatalIfFail("s3compactwq.s3_read_retry_interval",
                             &s3ReadRetryInterval);
@@ -120,21 +76,24 @@ void S3CompactManager::Init(std::shared_ptr<Configuration> conf) {
   opts_.Init(conf);
   if (opts_.enable) {
     LOG(INFO) << "s3compact: enabled.";
-    butil::ip_t metaserverIp;
-    if (butil::str2ip(opts_.metaserverIpStr.c_str(), &metaserverIp) < 0) {
+
+    butil::ip_t metaserver_ip;
+    if (butil::str2ip(opts_.metaserverIpStr.c_str(), &metaserver_ip) < 0) {
       LOG(FATAL) << "Invalid Metaserver IP provided: " << opts_.metaserverIpStr;
     }
-    butil::EndPoint metaserverAddr_(metaserverIp, opts_.metaserverPort);
+
+    butil::EndPoint metaserver_addr(metaserver_ip, opts_.metaserverPort);
     LOG(INFO) << "Metaserver address: " << opts_.metaserverIpStr << ":"
               << opts_.metaserverPort;
-    s3infoCache_ = absl::make_unique<S3InfoCache>(
-        opts_.s3infocacheSize, opts_.mdsAddrs, metaserverAddr_);
-    s3adapterManager_ =
-        absl::make_unique<S3AdapterManager>(opts_.threadNum, opts_.s3opts);
-    s3adapterManager_->Init();
 
-    workerOptions_.s3adapterManager = s3adapterManager_.get();
-    workerOptions_.s3infoCache = s3infoCache_.get();
+    block_accesser_factory_ =
+        std::make_shared<dataaccess::BlockAccesserFactory>();
+    fs_info_cache_ = std::make_unique<FsInfoCache>(
+        opts_.fs_info_cache_size, opts_.mdsAddrs, metaserver_addr);
+
+    workerOptions_.block_accesser_factory = block_accesser_factory_;
+    workerOptions_.block_access_opts = opts_.block_access_opts;
+    workerOptions_.fs_info_cache = fs_info_cache_.get();
     workerOptions_.maxChunksPerCompact = opts_.maxChunksPerCompact;
     workerOptions_.fragmentThreshold = opts_.fragmentThreshold;
     workerOptions_.s3ReadMaxRetry = opts_.s3ReadMaxRetry;
@@ -156,25 +115,25 @@ void S3CompactManager::Register(S3Compact s3compact) {
   workerContext_.cond.notify_one();
 }
 
-void S3CompactManager::Cancel(uint32_t partitionId) {
+void S3CompactManager::Cancel(uint32_t partition_id) {
   std::lock_guard<std::mutex> lock(workerContext_.mtx);
-  auto it = workerContext_.compacting.find(partitionId);
+  auto it = workerContext_.compacting.find(partition_id);
   if (it != workerContext_.compacting.end()) {
-    it->second->Cancel(partitionId);
-    LOG(INFO) << "Canceled s3 compaction, partition: " << partitionId;
+    it->second->Cancel(partition_id);
+    LOG(INFO) << "Canceled s3 compaction, partition: " << partition_id;
     return;
   }
 
   for (auto comp = workerContext_.s3compacts.begin();
        comp != workerContext_.s3compacts.end(); ++comp) {
-    if (comp->partitionInfo.partitionid() == partitionId) {
+    if (comp->partitionInfo.partitionid() == partition_id) {
       workerContext_.s3compacts.erase(comp);
-      LOG(INFO) << "Canceled s3 compaction, partitionid: " << partitionId;
+      LOG(INFO) << "Canceled s3 compaction, partitionid: " << partition_id;
       return;
     }
   }
 
-  LOG(WARNING) << "Fail to find s3 compaction for partition: " << partitionId;
+  LOG(WARNING) << "Fail to find s3 compaction for partition: " << partition_id;
 }
 
 int S3CompactManager::Run() {
@@ -203,8 +162,6 @@ void S3CompactManager::Stop() {
   for (auto& worker : workers_) {
     worker->Stop();
   }
-
-  s3adapterManager_->Deinit();
 }
 
 }  // namespace metaserver

@@ -59,9 +59,7 @@ TEST_F(LeaseExecutorTest, test_start) {
   {
     LOG(INFO) << "### case1: invalid lease time ###";
     opt_.leaseTimeUs = 0;
-    std::atomic<bool> enableSumInDir;
-    enableSumInDir.store(true);
-    LeaseExecutor exec(opt_, metaCache_, mdsCli_, &enableSumInDir);
+    LeaseExecutor exec(opt_, metaCache_, mdsCli_);
     ASSERT_FALSE(exec.Start());
   }
 
@@ -69,9 +67,7 @@ TEST_F(LeaseExecutorTest, test_start) {
     LOG(INFO) << "### case2: invalid refresh times per lease ###";
     opt_.refreshTimesPerLease = 0;
     opt_.leaseTimeUs = 20;
-    std::atomic<bool> enableSumInDir;
-    enableSumInDir.store(true);
-    LeaseExecutor exec(opt_, metaCache_, mdsCli_, &enableSumInDir);
+    LeaseExecutor exec(opt_, metaCache_, mdsCli_);
     ASSERT_FALSE(exec.Start());
   }
 }
@@ -88,16 +84,14 @@ TEST_F(LeaseExecutorTest, test_start_stop) {
   EXPECT_CALL(*metaCache_, GetAllTxIds(_))
       .WillOnce(SetArgPointee<0>(std::vector<PartitionTxId>{}))
       .WillRepeatedly(SetArgPointee<0>(txIds));
-  EXPECT_CALL(*mdsCli_, RefreshSession(_, _, _, _, _))
+  EXPECT_CALL(*mdsCli_, RefreshSession(_, _, _, _))
       .WillOnce(Return(pb::mds::FSStatusCode::UNKNOWN_ERROR))
       .WillRepeatedly(testing::DoAll(SetArgPointee<1>(txIds),
                                      Return(pb::mds::FSStatusCode::OK)));
   EXPECT_CALL(*metaCache_, SetTxId(1, 2)).Times(AtLeast(1));
 
   // lease executor start
-  std::atomic<bool> enableSumInDir;
-  enableSumInDir.store(true);
-  LeaseExecutor exec(opt_, metaCache_, mdsCli_, &enableSumInDir);
+  LeaseExecutor exec(opt_, metaCache_, mdsCli_);
   ASSERT_TRUE(exec.Start());
 
   std::this_thread::sleep_for(std::chrono::milliseconds(200));

@@ -17,7 +17,7 @@
 #include <iostream>
 #include <memory>
 
-#include "client/vfs_old/mock_mds_client.h"
+#include "stub/rpcclient/mock_mds_client.h"
 #include "client/vfs_old/mock_timer.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

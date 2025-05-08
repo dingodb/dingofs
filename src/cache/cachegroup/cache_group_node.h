@@ -38,7 +38,7 @@
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
-#include "cache/utils/data_accesser_pool.h"
+#include "cache/utils/block_accesser_pool.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
@@ -48,7 +48,7 @@ namespace cachegroup {
 using dingofs::cache::blockcache::Block;
 using dingofs::cache::blockcache::BlockCache;
 using dingofs::cache::blockcache::BlockKey;
-using dingofs::cache::utils::DataAccesserPool;
+using dingofs::cache::utils::BlockAccesserPool;
 using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClient;
 
@@ -104,7 +104,7 @@ class CacheGroupNodeImpl : public CacheGroupNode {
   std::shared_ptr<MDSBaseClient> mds_base_;
   std::shared_ptr<MdsClient> mds_client_;
   std::shared_ptr<BlockCache> block_cache_;  // inited by later
-  std::unique_ptr<DataAccesserPool> data_accesser_pool_;
+  std::unique_ptr<BlockAccesserPool> block_accesser_pool_;
   std::unique_ptr<AsyncCache> async_cache_;  // inited by later
   std::shared_ptr<CacheGroupNodeMember> member_;
   std::shared_ptr<CacheGroupNodeMetric> metric_;

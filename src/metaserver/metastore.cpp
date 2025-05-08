@@ -41,7 +41,7 @@
 #include "metaserver/storage/memory_storage.h"
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
-#include "metaserver/trash_manager.h"
+#include "metaserver/trash/trash_manager.h"
 
 namespace dingofs {
 namespace metaserver {

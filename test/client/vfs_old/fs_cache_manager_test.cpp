@@ -23,25 +23,24 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "client/vfs_old/s3/client_s3_adaptor.h"
-#include "utils/concurrent/count_down_event.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
+#include "client/vfs_old/s3/client_s3_adaptor.h"
+#include "client/vfs_old/s3/client_s3_cache_manager.h"
+#include "utils/concurrent/count_down_event.h"
 
 namespace dingofs {
 namespace client {
+
 using ::testing::_;
-using ::testing::DoAll;
 using ::testing::Invoke;
 using ::testing::Return;
-using ::testing::SetArgPointee;
-using ::testing::SetArgReferee;
-using ::testing::WithArg;
 
 class FsCacheManagerTest : public testing::Test {
- protected:
-  FsCacheManagerTest() {}
-  ~FsCacheManagerTest() {}
+ public:
+  FsCacheManagerTest() = default;
+
+  ~FsCacheManagerTest() override = default;
+
   void SetUp() override {
     maxReadCacheByte_ = 16ull * 1024 * 1024;  // 16MiB
     uint64_t maxWriteCacheByte = maxReadCacheByte_;
@@ -49,7 +48,6 @@ class FsCacheManagerTest : public testing::Test {
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
-    option.objectPrefix = 0;
     option.pageSize = 64 * 1024;
     option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;

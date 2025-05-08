@@ -20,69 +20,42 @@
 #include "common/status.h"
 #include "dataaccess/accesser.h"
 #include "dataaccess/s3/aws/s3_adapter.h"
+#include "dataaccess/s3/s3_common.h"
 
 namespace dingofs {
 namespace dataaccess {
-
-struct S3Option {
-  std::string ak;
-  std::string sk;
-  std::string s3Address;
-  std::string bucketName;
-  std::string region;
-  int loglevel;
-  std::string logPrefix;
-  bool verifySsl;
-  int maxConnections;
-  int connectTimeout;
-  int requestTimeout;
-  int asyncThreadNum;
-  uint64_t maxAsyncRequestInflightBytes;
-  uint64_t iopsTotalLimit;
-  uint64_t iopsReadLimit;
-  uint64_t iopsWriteLimit;
-  uint64_t bpsTotalMB;
-  uint64_t bpsReadMB;
-  uint64_t bpsWriteMB;
-  bool useVirtualAddressing;
-  bool enableTelemetry;
-};
-
-class S3Accesser;
-using S3AccesserPtr = std::shared_ptr<S3Accesser>;
-
 // S3Accesser is a class that provides a way to access data from a S3 data
 // source. It is a derived class of DataAccesser.
 // use aws-sdk-cpp implement
-class S3Accesser : public DataAccesser {
+class S3Accesser : public Accesser {
  public:
-  S3Accesser(const aws::S3AdapterOption& option) : option_(option) {}
+  S3Accesser(const S3Options& options) : options_(options) {}
   ~S3Accesser() override = default;
-
-  static S3AccesserPtr New(const aws::S3AdapterOption& option) {
-    return std::make_shared<S3Accesser>(option);
-  }
 
   bool Init() override;
 
   bool Destroy() override;
 
+  bool ContainerExist() override;
+
   Status Put(const std::string& key, const char* buffer,
              size_t length) override;
-  void AsyncPut(const std::string& key, const char* buffer, size_t length,
-                RetryCallback retry_cb) override;
   void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
 
+  Status Get(const std::string& key, std::string* data) override;
   Status Get(const std::string& key, off_t offset, size_t length,
              char* buffer) override;
   void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
 
+  bool BlockExist(const std::string& key) override;
+
   Status Delete(const std::string& key) override;
+
+  Status BatchDelete(const std::list<std::string>& keys) override;
 
  private:
   static Aws::String S3Key(const std::string& key);
-
-  const aws::S3AdapterOption option_;
+  const S3Options options_;
 
   std::unique_ptr<dataaccess::aws::S3Adapter> client_;
 };

@@ -28,7 +28,7 @@
 
 #include "dingofs/common.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "metaserver/s3compact_inode.h"
+#include "metaserver/compaction/s3compact_inode.h"
 
 using dingofs::metaserver::copyset::CopysetNode;
 using dingofs::pb::common::PartitionInfo;

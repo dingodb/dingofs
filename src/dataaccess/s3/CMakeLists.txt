@@ -21,8 +21,9 @@ add_library(s3_accesser
 target_link_libraries(s3_accesser
     dingofs_utils
     dingofs_status
-    ${AWSSDK_LIBRARIES}
     aws_s3_adapter
+    stub_metric
+    ${AWSSDK_LIBRARIES}
     glog::glog
     spdlog::spdlog
     absl::str_format

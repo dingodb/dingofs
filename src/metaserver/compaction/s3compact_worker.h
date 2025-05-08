@@ -27,11 +27,14 @@
 #include <condition_variable>
 #include <list>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <thread>
 
 #include "absl/types/optional.h"
-#include "metaserver/s3compact.h"
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/block_accesser_factory.h"
+#include "metaserver/compaction/s3compact.h"
 #include "utils/interruptible_sleeper.h"
 
 namespace dingofs {
@@ -41,10 +44,9 @@ namespace copyset {
 class CopysetNode;
 }  // namespace copyset
 
-class S3AdapterManager;
 class S3CompactManager;
 class S3CompactWorker;
-class S3InfoCache;
+class FsInfoCache;
 
 struct S3CompactWorkerContext {
   std::atomic<bool> running{false};
@@ -58,8 +60,10 @@ struct S3CompactWorkerContext {
 };
 
 struct S3CompactWorkerOptions {
-  S3AdapterManager* s3adapterManager;
-  S3InfoCache* s3infoCache;
+  dataaccess::BlockAccessOptions block_access_opts;
+  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
+
+  FsInfoCache* fs_info_cache;
 
   uint64_t maxChunksPerCompact;
   uint64_t fragmentThreshold;
@@ -81,7 +85,7 @@ class S3CompactWorker {
   void Stop();
 
   // Cancel current compaction job
-  void Cancel(uint32_t partitionId);
+  void Cancel(uint32_t partition_id);
 
  private:
   // Worker function

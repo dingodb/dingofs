@@ -21,7 +21,10 @@ file(GLOB DINGOFS_METASERVER_SRCS
     "storage/*.cpp"
     "superpartition/*.cpp"
     "streaming/*.cpp"
+    "compaction/*.cpp"
+    "trash/*.cpp"
 )
+
 list(REMOVE_ITEM DINGOFS_METASERVER_SRCS
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )

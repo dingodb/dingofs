@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,3 +13,15 @@
 # limitations under the License.
 
 add_subdirectory(s3)
+add_subdirectory(rados)
+
+add_library(block_accesser
+    block_accesser.cpp
+    block_accesser_factory.cpp
+)
+
+target_link_libraries(block_accesser
+    s3_accesser
+    rados_accesser
+    dingofs_status
+)

@@ -29,10 +29,10 @@
 #include <utility>
 
 #include "dingofs/metaserver.pb.h"
-#include "metaserver/s3compact.h"
-#include "metaserver/s3compact_manager.h"
+#include "metaserver/compaction/s3compact.h"
+#include "metaserver/compaction/s3compact_manager.h"
 #include "metaserver/storage/converter.h"
-#include "metaserver/trash_manager.h"
+#include "metaserver/trash/trash_manager.h"
 
 namespace dingofs {
 namespace metaserver {

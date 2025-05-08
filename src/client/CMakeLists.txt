@@ -27,7 +27,7 @@ target_link_libraries(fuse_client_lib
     PROTO_OBJS
     vfs_old_lib
     vfs_lib
-    s3_accesser
+    block_accesser
     jsoncpp
     ${FUSE3_LIBRARY}
 )

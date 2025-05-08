@@ -29,39 +29,40 @@ namespace metaserver {
 using utils::Thread;
 
 void PartitionCleanManager::Add(
-    uint32_t partitionId, const std::shared_ptr<PartitionCleaner>& cleaner,
-    copyset::CopysetNode* copysetNode) {
-  dingofs::utils::WriteLockGuard lockGuard(rwLock_);
+    uint32_t partition_id, const std::shared_ptr<PartitionCleaner>& cleaner,
+    copyset::CopysetNode* copyset_node) {
   LOG(INFO) << "Add partition to partition clean mananager, partititonId = "
-            << partitionId;
-  cleaner->SetS3Aapter(S3ClientAdaptor_);
-  cleaner->SetCopysetNode(copysetNode);
-  cleaner->SetIndoDeletePeriod(inodeDeletePeriodMs_);
-  cleaner->SetMdsClient(mdsClient_);
-  partitonCleanerList_.push_back(cleaner);
+            << partition_id;
+  cleaner->Init(option_, copyset_node);
+
+  {
+    dingofs::utils::WriteLockGuard lock_guard(rwLock_);
+    partitonCleanerList_.push_back(cleaner);
+  }
+
   partitionCleanerCount << 1;
 }
 
-void PartitionCleanManager::Remove(uint32_t partitionId) {
-  dingofs::utils::WriteLockGuard lockGuard(rwLock_);
+void PartitionCleanManager::Remove(uint32_t partition_id) {
+  dingofs::utils::WriteLockGuard lock_guard(rwLock_);
   // 1. first check inProcessingCleaner
   if (inProcessingCleaner_ != nullptr &&
-      inProcessingCleaner_->GetPartitionId() == partitionId) {
+      inProcessingCleaner_->GetPartitionId() == partition_id) {
     inProcessingCleaner_->Stop();
     LOG(INFO) << "remove partition from PartitionCleanManager, partition is"
-              << " in processing, stop this cleaner, partitionId = "
-              << partitionId;
+              << " in processing, stop this cleaner, partititonId = "
+              << partition_id;
     return;
   }
 
   // 2. then check partitonCleanerList
   for (auto it = partitonCleanerList_.begin(); it != partitonCleanerList_.end();
        it++) {
-    if ((*it)->GetPartitionId() == partitionId) {
+    if ((*it)->GetPartitionId() == partition_id) {
       partitonCleanerList_.erase(it);
       partitionCleanerCount << -1;
       LOG(INFO) << "remove partition from PartitionCleanManager, "
-                << "partitionId = " << partitionId;
+                << "partitionId = " << partition_id;
       return;
     }
   }
@@ -84,17 +85,16 @@ void PartitionCleanManager::Fini() {
     thread_.join();
     partitonCleanerList_.clear();
     inProcessingCleaner_ = nullptr;
-    S3ClientAdaptor_ = nullptr;
   }
   LOG(INFO) << "stop PartitionCleanManager manager ok.";
 }
 
 void PartitionCleanManager::ScanLoop() {
   LOG(INFO) << "PartitionCleanManager start scan thread, scanPeriodSec = "
-            << scanPeriodSec_;
-  while (sleeper_.wait_for(std::chrono::seconds(scanPeriodSec_))) {
+            << option_.scanPeriodSec;
+  while (sleeper_.wait_for(std::chrono::seconds(option_.scanPeriodSec))) {
     {
-      dingofs::utils::WriteLockGuard lockGuard(rwLock_);
+      dingofs::utils::WriteLockGuard lock_guard(rwLock_);
       if (partitonCleanerList_.empty()) {
         continue;
       }
@@ -103,21 +103,21 @@ void PartitionCleanManager::ScanLoop() {
       partitonCleanerList_.pop_front();
     }
 
-    uint32_t partitionId = inProcessingCleaner_->GetPartitionId();
-    LOG(INFO) << "scan partition, partitionId = " << partitionId;
-    bool deleteRecord = inProcessingCleaner_->ScanPartition();
-    if (deleteRecord) {
+    uint32_t partition_id = inProcessingCleaner_->GetPartitionId();
+    LOG(INFO) << "scan partition, partitionId = " << partition_id;
+    bool delete_record = inProcessingCleaner_->ScanPartition();
+    if (delete_record) {
       LOG(INFO) << "scan partition, partition is empty"
                 << ", delete record from clean manager, partitionId = "
-                << partitionId;
+                << partition_id;
       partitionCleanerCount << -1;
     } else {
-      dingofs::utils::WriteLockGuard lockGuard(rwLock_);
+      dingofs::utils::WriteLockGuard lock_guard(rwLock_);
       if (!inProcessingCleaner_->IsStop()) {
         partitonCleanerList_.push_back(inProcessingCleaner_);
       } else {
         LOG(INFO) << "scan partition, cleaner is mark stoped, remove it"
-                  << ", partitionId = " << partitionId;
+                  << ", partitionId = " << partition_id;
       }
     }
     inProcessingCleaner_ = nullptr;

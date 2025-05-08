@@ -54,44 +54,46 @@ static std::once_flag s3_init_flag;
 static std::once_flag s3_shutdown_flag;
 static Aws::SDKOptions aws_sdk_options;
 
-void S3Adapter::Init(const S3AdapterOption& option) {
+void S3Adapter::Init(const S3Options& options) {
   // TODO: refact this
   auto init_sdk = [&]() {
     aws_sdk_options.loggingOptions.logLevel =
-        Aws::Utils::Logging::LogLevel(option.loglevel);
-    aws_sdk_options.loggingOptions.defaultLogPrefix = option.logPrefix.c_str();
+        Aws::Utils::Logging::LogLevel(options.aws_sdk_config.loglevel);
+    aws_sdk_options.loggingOptions.defaultLogPrefix =
+        options.aws_sdk_config.logPrefix.c_str();
     Aws::InitAPI(aws_sdk_options);
   };
   std::call_once(s3_init_flag, init_sdk);
 
-  bucket_ = option.bucketName;
+  s3_options_ = options;
+  bucket_ = options.s3_info.bucket_name;
 
-  if (option.use_crt_client) {
+  if (options.aws_sdk_config.use_crt_client) {
     s3_client_ = std::make_unique<AwsCrtS3Client>();
   } else {
     // init aws s3 client
     s3_client_ = std::make_unique<AwsLegacyS3Client>();
   }
 
-  s3_client_->Init(option);
+  s3_client_->Init(s3_options_);
 
   {
     utils::ReadWriteThrottleParams params;
-    params.iopsTotal.limit = option.iopsTotalLimit;
-    params.iopsRead.limit = option.iopsReadLimit;
-    params.iopsWrite.limit = option.iopsWriteLimit;
-    params.bpsTotal.limit = option.bpsTotalMB * kMB;
-    params.bpsRead.limit = option.bpsReadMB * kMB;
-    params.bpsWrite.limit = option.bpsWriteMB * kMB;
+    params.iopsTotal.limit = options.aws_sdk_config.iopsTotalLimit;
+    params.iopsRead.limit = options.aws_sdk_config.iopsReadLimit;
+    params.iopsWrite.limit = options.aws_sdk_config.iopsWriteLimit;
+    params.bpsTotal.limit = options.aws_sdk_config.bpsTotalMB * kMB;
+    params.bpsRead.limit = options.aws_sdk_config.bpsReadMB * kMB;
+    params.bpsWrite.limit = options.aws_sdk_config.bpsWriteMB * kMB;
 
     throttle_ = std::make_unique<utils::Throttle>();
     throttle_->UpdateThrottleParams(params);
 
     inflightBytesThrottle_ =
         std::make_unique<AsyncRequestInflightBytesThrottle>(
-            option.maxAsyncRequestInflightBytes == 0
+            options.aws_sdk_config.maxAsyncRequestInflightBytes == 0
                 ? UINT64_MAX
-                : option.maxAsyncRequestInflightBytes);
+                : options.aws_sdk_config.maxAsyncRequestInflightBytes);
   }
 }
 
@@ -101,7 +103,9 @@ void S3Adapter::Shutdown() {
   std::call_once(s3_shutdown_flag, shutdown_sdk);
 }
 
-void S3Adapter::Reinit(const S3AdapterOption& option) { Init(option); }
+void S3Adapter::Reinit(const S3Options& options) {
+  Init(options);
+}
 
 std::string S3Adapter::GetS3Ak() { return s3_client_->GetAk(); }
 

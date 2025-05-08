@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+ * Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,23 +31,19 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/countdown.h"
 #include "cache/utils/phase_timer.h"
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::cache::utils::PhaseTimer;
-using dingofs::dataaccess::DataAccesserPtr;
-using dingofs::utils::TaskThreadPool;
-
 // How it works:
 //               add                   scan                     put
 // [stage block]----> [pending queue] -----> [uploading queue] ----> [s3]
 class BlockCacheUploader {
  public:
-  BlockCacheUploader(DataAccesserPtr data_accesser,
+  BlockCacheUploader(dataaccess::BlockAccesser* block_accesser,
                      std::shared_ptr<CacheStore> store,
                      std::shared_ptr<Countdown> stage_count);
 
@@ -78,7 +74,7 @@ class BlockCacheUploader {
                           std::shared_ptr<char>& buffer, size_t* length);
 
   void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
-                   size_t length, PhaseTimer timer);
+                   size_t length, utils::PhaseTimer timer);
 
   void RemoveBlock(const StageBlock& stage_block);
 
@@ -91,13 +87,13 @@ class BlockCacheUploader {
  private:
   std::mutex mutex_;
   std::atomic<bool> running_;
-  DataAccesserPtr data_accesser_;
+  dataaccess::BlockAccesser* block_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<PendingQueue> pending_queue_;
   std::shared_ptr<UploadingQueue> uploading_queue_;
-  std::unique_ptr<TaskThreadPool<>> scan_stage_thread_pool_;
-  std::unique_ptr<TaskThreadPool<>> upload_stage_thread_pool_;
+  std::unique_ptr<dingofs::utils::TaskThreadPool<>> scan_stage_thread_pool_;
+  std::unique_ptr<dingofs::utils::TaskThreadPool<>> upload_stage_thread_pool_;
 };
 
 }  // namespace blockcache

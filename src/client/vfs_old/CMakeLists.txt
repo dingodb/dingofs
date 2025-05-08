@@ -36,7 +36,7 @@ target_link_libraries(vfs_old_lib
     client_datastream
     cache_blockcache
     dingofs_utils
-    aws_s3_adapter
+    block_accesser
     dingofs_threading
     stub_common
     gflags::gflags

@@ -30,7 +30,6 @@
 
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
-#include "dingofs/space.pb.h"
 #include "dingofs/topology.pb.h"
 #include "stub/common/config.h"
 #include "stub/common/metacache_struct.h"
@@ -154,8 +153,8 @@ class RPCExcutorRetryPolicy {
 
 class MdsClient {
  public:
-  MdsClient() {}
-  virtual ~MdsClient() {}
+  MdsClient() = default;
+  virtual ~MdsClient() = default;
 
   virtual pb::mds::FSStatusCode Init(const common::MdsOption& mdsOpt,
                                      MDSBaseClient* baseclient) = 0;
@@ -203,8 +202,7 @@ class MdsClient {
   virtual pb::mds::FSStatusCode RefreshSession(
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-      const std::string& fsName, const pb::mds::Mountpoint& mountpoint,
-      std::atomic<bool>* enableSumInDir) = 0;
+      const std::string& fsName, const pb::mds::Mountpoint& mountpoint) = 0;
 
   virtual pb::mds::FSStatusCode GetLatestTxId(
       uint32_t fsId, std::vector<pb::mds::topology::PartitionTxId>* txIds) = 0;
@@ -221,21 +219,6 @@ class MdsClient {
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       const std::string& fsName, const std::string& uuid,
       uint64_t sequence) = 0;
-
-  // allocate block group
-  virtual pb::mds::space::SpaceErrCode AllocateVolumeBlockGroup(
-      uint32_t fsId, uint32_t count, const std::string& owner,
-      std::vector<pb::mds::space::BlockGroup>* groups) = 0;
-
-  // acquire block group
-  virtual pb::mds::space::SpaceErrCode AcquireVolumeBlockGroup(
-      uint32_t fsId, uint64_t blockGroupOffset, const std::string& owner,
-      pb::mds::space::BlockGroup* groups) = 0;
-
-  // release block group
-  virtual pb::mds::space::SpaceErrCode ReleaseVolumeBlockGroup(
-      uint32_t fsId, const std::string& owner,
-      const std::vector<pb::mds::space::BlockGroup>& blockGroups) = 0;
 
   // set filesystem runtime statistics
   virtual pb::mds::FSStatusCode SetFsStats(
@@ -311,8 +294,7 @@ class MdsClientImpl : public MdsClient {
   pb::mds::FSStatusCode RefreshSession(
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-      const std::string& fsName, const pb::mds::Mountpoint& mountpoint,
-      std::atomic<bool>* enableSumInDir) override;
+      const std::string& fsName, const pb::mds::Mountpoint& mountpoint) override;
 
   pb::mds::FSStatusCode GetLatestTxId(
       uint32_t fsId,
@@ -330,21 +312,6 @@ class MdsClientImpl : public MdsClient {
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       const std::string& fsName, const std::string& uuid,
       uint64_t sequence) override;
-
-  // allocate block group
-  pb::mds::space::SpaceErrCode AllocateVolumeBlockGroup(
-      uint32_t fsId, uint32_t size, const std::string& owner,
-      std::vector<pb::mds::space::BlockGroup>* groups) override;
-
-  // acquire block group
-  pb::mds::space::SpaceErrCode AcquireVolumeBlockGroup(
-      uint32_t fsId, uint64_t blockGroupOffset, const std::string& owner,
-      pb::mds::space::BlockGroup* groups) override;
-
-  // release block group
-  pb::mds::space::SpaceErrCode ReleaseVolumeBlockGroup(
-      uint32_t fsId, const std::string& owner,
-      const std::vector<pb::mds::space::BlockGroup>& blockGroups) override;
 
   // set filesystem runtime statistics
   pb::mds::FSStatusCode SetFsStats(

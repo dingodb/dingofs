@@ -32,26 +32,31 @@
 #include <utility>
 #include <vector>
 
+#include "dataaccess/block_accesser.h"
+#include "metaserver/compaction/s3compact_worker.h"
 #include "metaserver/copyset/copyset_node.h"
-#include "metaserver/s3compact_worker.h"
 #include "metaserver/storage/converter.h"
+
 namespace dingofs {
 namespace metaserver {
 
 class CopysetNodeWrapper {
  public:
-  explicit CopysetNodeWrapper(copyset::CopysetNode* copysetNode)
-      : copysetNode_(copysetNode) {}
+  explicit CopysetNodeWrapper(copyset::CopysetNode* copyset_node)
+      : copyset_node_(copyset_node) {}
 
   virtual ~CopysetNodeWrapper() = default;
+
   virtual bool IsLeaderTerm() {
-    return copysetNode_ != nullptr && copysetNode_->IsLeaderTerm();
+    return copyset_node_ != nullptr && copyset_node_->IsLeaderTerm();
   }
-  virtual bool IsValid() { return copysetNode_ != nullptr; }
-  copyset::CopysetNode* Get() { return copysetNode_; }
+
+  virtual bool IsValid() { return copyset_node_ != nullptr; }
+
+  copyset::CopysetNode* Get() { return copyset_node_; }
 
  private:
-  copyset::CopysetNode* copysetNode_;
+  copyset::CopysetNode* copyset_node_;
 };
 
 struct S3CompactionWorkerOptions;
@@ -61,9 +66,6 @@ class CompactInodeJob {
   explicit CompactInodeJob(const S3CompactWorkerOptions* opts) : opts_(opts) {}
 
   virtual ~CompactInodeJob() = default;
-
-  const S3CompactWorkerOptions* opts_;
-  copyset::CopysetNodeManager* copysetNodeMgr_;
 
   // compact task for one inode
   struct S3CompactTask {
@@ -79,31 +81,29 @@ class CompactInodeJob {
     pb::common::PartitionInfo pinfo;
     uint64_t blockSize;
     uint64_t chunkSize;
-    uint64_t s3adapterIndex;
-    uint32_t objectPrefix;
-    dataaccess::aws::S3Adapter* s3adapter;
+    dataaccess::BlockAccesser* block_accesser;
   };
 
   struct S3NewChunkInfo {
-    uint64_t newChunkId;
-    uint64_t newOff;
-    uint64_t newCompaction;
+    uint64_t new_chunk_id;
+    uint64_t new_off;
+    uint64_t new_compaction;
   };
 
   struct S3Request {
-    uint64_t reqIndex;
+    uint64_t req_index;
     bool zero;
-    std::string objName;
+    std::string obj_name;
     uint64_t off;
     uint64_t len;
 
-    S3Request(uint64_t reqIndex, bool zero, std::string objName, uint64_t off,
-              uint64_t len)
-        : reqIndex(reqIndex),
-          zero(zero),
-          objName(std::move(objName)),
-          off(off),
-          len(len) {}
+    S3Request(uint64_t p_req_index, bool p_zero, std::string p_obj_name,
+              uint64_t p_off, uint64_t p_len)
+        : req_index(p_req_index),
+          zero(p_zero),
+          obj_name(std::move(p_obj_name)),
+          off(p_off),
+          len(p_len) {}
   };
 
   // node for building valid list
@@ -147,48 +147,54 @@ class CompactInodeJob {
   };
 
   std::vector<uint64_t> GetNeedCompact(
-      const ::google::protobuf::Map<uint64_t, S3ChunkInfoList>& s3chunkinfoMap,
-      uint64_t inodeLen, uint64_t chunkSize);
+      const ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&
+          s3_chunk_info_map,
+      uint64_t inode_len, uint64_t chunk_size);
+
   bool CompactPrecheck(const struct S3CompactTask& task,
                        pb::metaserver::Inode* inode);
-  dataaccess::aws::S3Adapter* SetupS3Adapter(uint64_t fsid,
-                                             uint64_t* s3adapterIndex,
-                                             uint64_t* blockSize,
-                                             uint64_t* chunkSize,
-                                             uint32_t* objectPrefix);
-  void DeleteObjs(const std::vector<std::string>& objsAdded,
-                  dataaccess::aws::S3Adapter* s3adapter);
+
   std::list<struct Node> BuildValidList(const S3ChunkInfoList& s3chunkinfolist,
-                                        uint64_t inodeLen, uint64_t index,
-                                        uint64_t chunkSize);
-  void GenS3ReadRequests(const struct S3CompactCtx& ctx,
-                         const std::list<struct Node>& validList,
-                         std::vector<struct S3Request>* reqs,
-                         struct S3NewChunkInfo* newChunkInfo);
+                                        uint64_t inode_len, uint64_t index,
+                                        uint64_t chunk_size);
+
+  static void GenS3ReadRequests(const struct S3CompactCtx& ctx,
+                                const std::list<struct Node>& valid_list,
+                                std::vector<struct S3Request>* reqs,
+                                struct S3NewChunkInfo* new_chunk_info);
+
   int ReadFullChunk(const struct S3CompactCtx& ctx,
-                    const std::list<struct Node>& validList,
-                    std::string* fullChunk,
-                    struct S3NewChunkInfo* newChunkInfo);
+                    const std::list<struct Node>& valid_list,
+                    std::string* full_chunk,
+                    struct S3NewChunkInfo* new_chunk_info);
+
   virtual pb::metaserver::MetaStatusCode UpdateInode(
-      copyset::CopysetNode* copysetNode, const pb::common::PartitionInfo& pinfo,
-      uint64_t inodeId,
-      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3ChunkInfoAdd,
-      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3ChunkInfoRemove);
-  int WriteFullChunk(const struct S3CompactCtx& ctx,
-                     const struct S3NewChunkInfo& newChunkInfo,
-                     const std::string& fullChunk,
-                     std::vector<std::string>* objsAdded);
+      copyset::CopysetNode* copyset_node,
+      const pb::common::PartitionInfo& pinfo, uint64_t inode_id,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&& s3_chunk_info_add,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>&&
+          s3_chunk_info_remove);
+
+  Status WriteFullChunk(const struct S3CompactCtx& ctx,
+                        const struct S3NewChunkInfo& new_chunk_info,
+                        const std::string& full_chunk,
+                        std::vector<std::string>* block_added);
+
   void CompactChunk(
-      const struct S3CompactCtx& compactCtx, uint64_t index,
+      const struct S3CompactCtx& compact_ctx, uint64_t index,
       const pb::metaserver::Inode& inode,
-      std::unordered_map<uint64_t, std::vector<std::string>>* objsAddedMap,
-      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>* s3ChunkInfoAdd,
-      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>* s3ChunkInfoRemove);
+      std::unordered_map<uint64_t, std::vector<std::string>>* objs_added_map,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>* s3_chunk_info_add,
+      ::google::protobuf::Map<uint64_t, S3ChunkInfoList>* s3_chunk_info_remove);
 
   void DeleteObjsOfS3ChunkInfoList(const struct S3CompactCtx& ctx,
                                    const S3ChunkInfoList& s3chunkinfolist);
   // func bind with task
   void CompactChunks(const S3CompactTask& task);
+
+ private:
+  const S3CompactWorkerOptions* opts_;
+  copyset::CopysetNodeManager* copysetNodeMgr_;
 };
 
 }  // namespace metaserver

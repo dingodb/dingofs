@@ -39,7 +39,6 @@
 #include <unordered_map>
 
 #include "base/string/string.h"
-#include "client/fuse/fuse_common.h"
 #include "common/define.h"
 
 using ::dingofs::base::string::StrFormat;

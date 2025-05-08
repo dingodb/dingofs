@@ -24,11 +24,11 @@
 #ifndef DINGOFS_SRC_MDS_FS_INFO_WRAPPER_H_
 #define DINGOFS_SRC_MDS_FS_INFO_WRAPPER_H_
 
-#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 
 namespace dingofs {
@@ -55,8 +55,6 @@ class FsInfoWrapper {
   FsInfoWrapper(FsInfoWrapper&& other) noexcept = default;
   FsInfoWrapper& operator=(FsInfoWrapper&& other) noexcept = default;
 
-  void SetFsType(pb::common::FSType type) { fsInfo_.set_fstype(type); }
-
   void SetStatus(pb::mds::FsStatus status) { fsInfo_.set_status(status); }
 
   void SetFsName(const std::string& name) { fsInfo_.set_fsname(name); }
@@ -65,15 +63,15 @@ class FsInfoWrapper {
 
   void SetOwner(const std::string& owner) { fsInfo_.set_owner(owner); }
 
-  pb::common::FSType GetFsType() const { return fsInfo_.fstype(); }
-
   pb::mds::FsStatus GetStatus() const { return fsInfo_.status(); }
 
   std::string GetFsName() const { return fsInfo_.fsname(); }
 
   uint64_t GetFsId() const { return fsInfo_.fsid(); }
 
-  uint64_t GetBlockSize() const { return fsInfo_.blocksize(); }
+  uint64_t GetBlockSize() const { return fsInfo_.block_size(); }
+
+  uint64_t GetChunkSize() const { return fsInfo_.chunk_size(); }
 
   uint64_t GetCapacity() const { return fsInfo_.capacity(); }
 
@@ -95,9 +93,17 @@ class FsInfoWrapper {
 
   pb::mds::FsInfo ProtoFsInfo() && { return std::move(fsInfo_); }
 
-  const pb::mds::FsDetail& GetFsDetail() const { return fsInfo_.detail(); }
+  void SetStorageType(pb::common::StorageType type) {
+    fsInfo_.mutable_storage_info()->set_type(type);
+  }
 
-  bool GetEnableSumInDir() const { return fsInfo_.enablesumindir(); }
+  pb::common::StorageType GetStorageType() const {
+    return fsInfo_.storage_info().type();
+  }
+
+  const pb::common::StorageInfo& GetStorageInfo() const {
+    return fsInfo_.storage_info();
+  }
 
   uint64_t IncreaseFsTxSequence(const std::string& owner) {
     if (!fsInfo_.has_txowner() || fsInfo_.txowner() != owner) {
@@ -114,8 +120,6 @@ class FsInfoWrapper {
   uint64_t GetFsTxSequence() {
     return fsInfo_.has_txsequence() ? fsInfo_.txsequence() : 0;
   }
-
-  void SetVolumeSize(uint64_t size);
 
  private:
   pb::mds::FsInfo fsInfo_;

@@ -31,7 +31,6 @@
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "dingofs/space.pb.h"
 #include "dingofs/topology.pb.h"
 #include "stub/common/common.h"
 
@@ -121,22 +120,6 @@ class MDSBaseClient {
   virtual void CommitTx(const pb::mds::CommitTxRequest& request,
                         pb::mds::CommitTxResponse* response,
                         brpc::Controller* cntl, brpc::Channel* channel);
-
-  virtual void AllocateVolumeBlockGroup(
-      uint32_t fsId, uint32_t count, const std::string& owner,
-      pb::mds::space::AllocateBlockGroupResponse* response,
-      brpc::Controller* cntl, brpc::Channel* channel);
-
-  virtual void AcquireVolumeBlockGroup(
-      uint32_t fsId, uint64_t blockGroupOffset, const std::string& owner,
-      pb::mds::space::AcquireBlockGroupResponse* response,
-      brpc::Controller* cntl, brpc::Channel* channel);
-
-  virtual void ReleaseVolumeBlockGroup(
-      uint32_t fsId, const std::string& owner,
-      const std::vector<dingofs::pb::mds::space::BlockGroup>& blockGroups,
-      pb::mds::space::ReleaseBlockGroupResponse* response,
-      brpc::Controller* cntl, brpc::Channel* channel);
 
   virtual void AllocOrGetMemcacheCluster(
       uint32_t fsId,

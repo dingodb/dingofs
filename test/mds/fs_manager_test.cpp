@@ -28,6 +28,8 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
+#include <cstdint>
+
 #include "aws/mock_s3_adapter.h"
 #include "common/define.h"
 #include "dingofs/common.pb.h"
@@ -53,10 +55,7 @@ using ::dingofs::mds::topology::TopoStatusCode;
 using ::dingofs::metaserver::MockMetaserverService;
 using ::dingofs::metaserver::copyset::MockCliService2;
 
-using ::dingofs::pb::common::FSType;
 using ::dingofs::pb::common::S3Info;
-using ::dingofs::pb::common::Volume;
-using ::dingofs::pb::mds::FsDetail;
 using ::dingofs::pb::mds::FsInfo;
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FsStatus;
@@ -126,20 +125,6 @@ class FSManagerTest : public ::testing::Test {
     fsManager_->Uninit();
   }
 
-  static bool CompareVolume(const Volume& first, const Volume& second) {
-    return MessageDifferencer::Equals(first, second);
-  }
-
-  static bool CompareVolumeFs(const FsInfo& first, const FsInfo& second) {
-    return first.fsid() == second.fsid() && first.fsname() == second.fsname() &&
-           first.rootinodeid() == second.rootinodeid() &&
-           first.capacity() == second.capacity() &&
-           first.blocksize() == second.blocksize() &&
-           first.fstype() == second.fstype() && first.detail().has_volume() &&
-           second.detail().has_volume() &&
-           CompareVolume(first.detail().volume(), second.detail().volume());
-  }
-
   static bool CompareS3Info(const S3Info& first, const S3Info& second) {
     return MessageDifferencer::Equals(first, second);
   }
@@ -148,10 +133,13 @@ class FSManagerTest : public ::testing::Test {
     return first.fsid() == second.fsid() && first.fsname() == second.fsname() &&
            first.rootinodeid() == second.rootinodeid() &&
            first.capacity() == second.capacity() &&
-           first.blocksize() == second.blocksize() &&
-           first.fstype() == second.fstype() && first.detail().has_s3info() &&
-           second.detail().has_s3info() &&
-           CompareS3Info(first.detail().s3info(), second.detail().s3info());
+           first.block_size() == second.block_size() &&
+           first.chunk_size() == second.chunk_size() &&
+           first.storage_info().type() == second.storage_info().type() &&
+           first.storage_info().has_s3_info() &&
+           second.storage_info().has_s3_info() &&
+           CompareS3Info(first.storage_info().s3_info(),
+                         second.storage_info().s3_info());
     return MessageDifferencer::Equals(first, second);
   }
 
@@ -194,14 +182,8 @@ TEST_F(FSManagerTest, background_thread_deletefs_test) {
   std::string addr = addr_;
   std::string leader = addr_ + ":0";
   FSStatusCode ret;
-  uint64_t blockSize = 4096;
-  bool enableSumInDir = false;
-
-  pb::mds::CreateFsRequest req;
-  req.set_blocksize(blockSize);
-  req.set_enablesumindir(enableSumInDir);
-  req.set_owner("test");
-  req.set_capacity((uint64_t)100 * 1024 * 1024 * 1024);
+  uint64_t block_size = 4096;
+  uint64_t chunk_size = 4 * block_size;
 
   // create volume fs ok
   std::set<std::string> addrs;
@@ -209,17 +191,20 @@ TEST_F(FSManagerTest, background_thread_deletefs_test) {
 
   // create s3 test
   std::string fsName2 = "fs2";
-  dingofs::pb::common::S3Info s3Info;
-  FsInfo s3FsInfo;
-  s3Info.set_ak("ak");
-  s3Info.set_sk("sk");
-  s3Info.set_endpoint("endpoint");
-  s3Info.set_bucketname("bucketname");
-  s3Info.set_blocksize(4096);
-  s3Info.set_chunksize(4096);
-  CreateRootInodeResponse response2;
-  FsDetail detail2;
-  detail2.set_allocated_s3info(new S3Info(s3Info));
+
+  pb::mds::CreateFsRequest req;
+  req.set_block_size(block_size);
+  req.set_chunk_size(chunk_size);
+  req.set_owner("test");
+  req.set_capacity((uint64_t)100 * 1024 * 1024 * 1024);
+  req.set_fsname(fsName2);
+  auto* storage_info = req.mutable_storage_info();
+  storage_info->set_type(pb::common::StorageType::TYPE_S3);
+  auto* s3_info = storage_info->mutable_s3_info();
+  s3_info->set_ak("ak");
+  s3_info->set_sk("sk");
+  s3_info->set_endpoint("endpoint");
+  s3_info->set_bucketname("bucketname");
 
   // create s3 fs ok
   GetLeaderResponse2 getLeaderResponse;
@@ -243,19 +228,18 @@ TEST_F(FSManagerTest, background_thread_deletefs_test) {
           Invoke(RpcService<CreateRootInodeRequest, CreateRootInodeResponse>)));
   EXPECT_CALL(*s3Adapter_, BucketExist()).WillOnce(Return(true));
 
-  req.set_fsname(fsName2);
-  req.set_fstype(FSType::TYPE_S3);
-  req.set_allocated_fsdetail(new FsDetail(detail2));
+  FsInfo s3FsInfo;
   ret = fsManager_->CreateFs(&req, &s3FsInfo);
   ASSERT_EQ(ret, FSStatusCode::OK);
   ASSERT_EQ(s3FsInfo.fsid(), 0);
   ASSERT_EQ(s3FsInfo.fsname(), fsName2);
   ASSERT_EQ(s3FsInfo.status(), FsStatus::INITED);
   ASSERT_EQ(s3FsInfo.rootinodeid(), ROOTINODEID);
-  ASSERT_EQ(s3FsInfo.capacity(), (uint64_t)100 * 1024 * 1024 * 1024);
-  ASSERT_EQ(s3FsInfo.blocksize(), blockSize);
+  ASSERT_EQ(s3FsInfo.capacity(), req.capacity());
+  ASSERT_EQ(s3FsInfo.block_size(), block_size);
+  ASSERT_EQ(s3FsInfo.chunk_size(), chunk_size);
   ASSERT_EQ(s3FsInfo.mountnum(), 0);
-  ASSERT_EQ(s3FsInfo.fstype(), FSType::TYPE_S3);
+  ASSERT_EQ(s3FsInfo.storage_info().type(), pb::common::StorageType::TYPE_S3);
 
   // TEST GetFsInfo
   FsInfo fsInfo2;

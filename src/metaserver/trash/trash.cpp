@@ -20,8 +20,11 @@
  * Author: xuchaojie
  */
 
-#include "metaserver/trash.h"
+#include "metaserver/trash/trash.h"
 
+#include <memory>
+
+#include "common/config_mapper.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "metaserver/storage/converter.h"
@@ -34,7 +37,6 @@ namespace metaserver {
 
 using pb::mds::FsInfo;
 using pb::mds::FSStatusCode;
-using pb::metaserver::FsFileType;
 using pb::metaserver::Inode;
 using pb::metaserver::MetaStatusCode;
 using storage::Key4Inode;
@@ -48,7 +50,6 @@ void TrashOption::InitTrashOptionFromConf(std::shared_ptr<Configuration> conf) {
 
 void TrashImpl::Init(const TrashOption& option) {
   options_ = option;
-  s3Adaptor_ = option.s3Adaptor;
   mdsClient_ = option.mdsClient;
   isStop_ = false;
 }
@@ -180,9 +181,7 @@ MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
     return ret;
   }
 
-  if (FsFileType::TYPE_FILE == inode.type()) {
-    // TODO(xuchaojie) : delete on volume
-  } else if (FsFileType::TYPE_S3 == inode.type()) {
+  {
     // get s3info from mds
     FsInfo fsInfo;
     if (fsInfoMap_.find(item.fsId) == fsInfoMap_.end()) {
@@ -202,15 +201,7 @@ MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
     } else {
       fsInfo = fsInfoMap_.find(item.fsId)->second;
     }
-    const auto& s3Info = fsInfo.detail().s3info();
-    // reinit s3 adaptor
-    S3ClientAdaptorOption clientAdaptorOption;
-    s3Adaptor_->GetS3ClientAdaptorOption(&clientAdaptorOption);
-    clientAdaptorOption.blockSize = s3Info.blocksize();
-    clientAdaptorOption.chunkSize = s3Info.chunksize();
-    clientAdaptorOption.objectPrefix = s3Info.objectprefix();
-    s3Adaptor_->Reinit(clientAdaptorOption, s3Info.ak(), s3Info.sk(),
-                       s3Info.endpoint(), s3Info.bucketname());
+
     ret = inodeStorage_->PaddingInodeS3ChunkInfo(
         item.fsId, item.inodeId, inode.mutable_s3chunkinfomap());
     if (ret != MetaStatusCode::OK) {
@@ -219,20 +210,43 @@ MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
                  << ", retCode = " << MetaStatusCode_Name(ret);
       return ret;
     }
+
     if (inode.s3chunkinfomap().empty()) {
       LOG(WARNING) << "GetInode chunklist empty, fsId = " << item.fsId
                    << ", inodeId = " << item.inodeId;
       return MetaStatusCode::NOT_FOUND;
     }
-    VLOG(9) << "DeleteInodeAndData, inode: " << inode.ShortDebugString();
-    int retVal = s3Adaptor_->Delete(inode);
-    if (retVal != 0) {
-      LOG(ERROR) << "S3ClientAdaptor delete s3 data failed"
-                 << ", ret = " << retVal << ", fsId = " << item.fsId
-                 << ", inodeId = " << item.inodeId;
+
+    VLOG(9) << "Try DeleteInodeAndData, inode: " << inode.ShortDebugString();
+
+    S3ClientAdaptorOption client_adaptor_option =
+        options_.s3_client_adaptor_option;
+    client_adaptor_option.blockSize = fsInfo.block_size();
+    client_adaptor_option.chunkSize = fsInfo.chunk_size();
+    client_adaptor_option.block_accesser_factory =
+        options_.block_accesser_factory;
+
+    dataaccess::BlockAccessOptions block_access_options =
+        options_.block_access_options;
+    FillBlockAccessOption(fsInfo.storage_info(), &block_access_options);
+
+    auto client_aptaptor = std::make_unique<S3ClientAdaptorImpl>();
+    Status s =
+        client_aptaptor->Init(client_adaptor_option, block_access_options);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail init S3ClientAdaptor, fs_id: " << item.fsId
+                 << ", ino: " << item.inodeId << ", status: " << s.ToString();
+      return MetaStatusCode::PARAM_ERROR;
+    }
+
+    s = client_aptaptor->Delete(inode);
+    if (!s.ok()) {
+      LOG(ERROR) << "Fail delete inode data, fs_id: " << item.fsId
+                 << ", ino: " << item.inodeId << ", status: " << s.ToString();
       return MetaStatusCode::S3_DELETE_ERR;
     }
   }
+
   ret = inodeStorage_->Delete(Key4Inode(item.fsId, item.inodeId));
   if (ret != MetaStatusCode::OK && ret != MetaStatusCode::NOT_FOUND) {
     LOG(ERROR) << "Delete Inode fail, fsId = " << item.fsId

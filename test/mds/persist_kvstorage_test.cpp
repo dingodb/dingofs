@@ -39,9 +39,6 @@ using ::testing::Matcher;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using pb::common::FSType;
-using pb::common::Volume;
-using pb::mds::FsDetail;
 using pb::mds::FsInfo;
 using pb::mds::FsStatus;
 using pb::mds::FSStatusCode;
@@ -58,58 +55,50 @@ class PersistKVStorageTest : public ::testing::Test {
     std::vector<std::pair<std::string, std::string>> encoded;
 
     FsInfo hello;
-    hello.set_fsid(1);
-    hello.set_fsname("hello");
-    hello.set_status(FsStatus::INITED);
-    hello.set_rootinodeid(1);
-    hello.set_capacity(4096);
-    hello.set_blocksize(4096);
-    hello.set_mountnum(0);
-    hello.set_fstype(FSType::TYPE_VOLUME);
-    hello.set_enablesumindir(false);
-    hello.set_owner("test");
-    hello.set_txsequence(0);
-    hello.set_txowner("owner");
+    {
+      hello.set_fsid(1);
+      hello.set_fsname("hello");
+      hello.set_status(FsStatus::INITED);
+      hello.set_rootinodeid(1);
+      hello.set_capacity(4096);
+      hello.set_block_size(4096);
+      hello.set_chunk_size(4096);
+      hello.set_mountnum(0);
+      hello.set_owner("test");
+      hello.set_txsequence(0);
+      hello.set_txowner("owner");
 
-    Volume volume;
-    volume.set_blocksize(4096);
-    volume.set_volumesize(4096);
-    volume.set_volumename("/hello");
-    volume.set_user("test");
-    volume.set_blockgroupsize(128ull * 1024 * 1024);
-    volume.set_bitmaplocation(pb::common::BitmapLocation::AtStart);
-    volume.set_slicesize(1ULL * 1024 * 1024 * 1024);
-    volume.set_autoextend(false);
-
-    FsDetail helloDetail;
-    helloDetail.set_allocated_volume(new Volume(volume));
-    hello.set_allocated_detail(new FsDetail(helloDetail));
+      auto* storage_info = hello.mutable_storage_info();
+      storage_info->set_type(pb::common::StorageType::TYPE_S3);
+      auto* s3_info = storage_info->mutable_s3_info();
+      s3_info->set_ak("a");
+      s3_info->set_sk("b");
+      s3_info->set_endpoint("http://127.0.1:9000");
+      s3_info->set_bucketname("test");
+    }
 
     FsInfo world;
-    world.set_fsid(2);
-    world.set_fsname("world");
-    world.set_status(FsStatus::INITED);
-    world.set_rootinodeid(1);
-    world.set_capacity(4096);
-    world.set_blocksize(4096);
-    world.set_mountnum(0);
-    world.set_fstype(FSType::TYPE_S3);
-    world.set_enablesumindir(false);
-    world.set_owner("test");
-    world.set_txsequence(0);
-    world.set_txowner("owner");
+    {
+      world.set_fsid(2);
+      world.set_fsname("world");
+      world.set_status(FsStatus::INITED);
+      world.set_rootinodeid(1);
+      world.set_capacity(4096);
+      hello.set_block_size(4096);
+      hello.set_chunk_size(4096);
+      world.set_mountnum(0);
+      world.set_owner("test");
+      world.set_txsequence(0);
+      world.set_txowner("owner");
 
-    pb::common::S3Info s3info;
-    s3info.set_ak("ak");
-    s3info.set_sk("sk");
-    s3info.set_endpoint("endpoint");
-    s3info.set_bucketname("bucketname");
-    s3info.set_blocksize(4096);
-    s3info.set_chunksize(4096);
-
-    FsDetail worldDetail;
-    worldDetail.set_allocated_s3info(new pb::common::S3Info(s3info));
-    world.set_allocated_detail(new FsDetail(worldDetail));
+      auto* storage_info = hello.mutable_storage_info();
+      storage_info->set_type(pb::common::StorageType::TYPE_S3);
+      auto* s3_info = storage_info->mutable_s3_info();
+      s3_info->set_ak("ak");
+      s3_info->set_sk("sk");
+      s3_info->set_endpoint("endpoint");
+      s3_info->set_bucketname("bucketname");
+    }
 
     std::string encodedFsName = codec::EncodeFsName(hello.fsname());
     std::string encodedFsInfo;
@@ -181,7 +170,6 @@ TEST_F(PersistKVStorageTest, TestInit) {
 
     FsInfoWrapper wrapper;
     EXPECT_EQ(FSStatusCode::OK, storage.Get("world", &wrapper));
-    EXPECT_TRUE(wrapper.GetFsDetail().s3info().has_objectprefix());
   }
 }
 

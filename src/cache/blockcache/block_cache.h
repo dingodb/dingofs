@@ -33,13 +33,11 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/countdown.h"
 #include "cache/common/common.h"
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using dingofs::dataaccess::DataAccesserPtr;
 
 enum class StoreType : uint8_t {
   kNone = 0,
@@ -74,7 +72,7 @@ class BlockCache {
 class BlockCacheImpl : public BlockCache {
  public:
   explicit BlockCacheImpl(BlockCacheOption option,
-                          DataAccesserPtr data_accesser);
+                          dataaccess::BlockAccesser* block_accesser);
 
   ~BlockCacheImpl() override = default;
 
@@ -107,7 +105,7 @@ class BlockCacheImpl : public BlockCache {
  private:
   BlockCacheOption option_;
   std::atomic<bool> running_;
-  DataAccesserPtr data_accesser_;
+  dataaccess::BlockAccesser* block_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<BlockCacheThrottle> throttle_;

@@ -56,20 +56,23 @@ class FileCacheManagerTest : public testing::Test {
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
-    option.objectPrefix = 0;
     option.pageSize = 64 * 1024;
     option.intervalMs = 5000 * 1000;
     option.flushIntervalSec = 5000;
     option.readCacheMaxByte = 104857600;
     option.writeCacheMaxByte = 10485760000;
     option.readCacheThreads = 5;
+
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
+
     auto fsCacheManager = std::make_shared<FsCacheManager>(
         s3ClientAdaptor_, option.readCacheMaxByte, option.writeCacheMaxByte,
         option.readCacheThreads, nullptr);
+
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
-    mockDataAccesser_ = std::make_shared<dataaccess::MockDataAccesser>();
-    s3ClientAdaptor_->Init(option, mockDataAccesser_, mockInodeManager_,
+    mockBlockAccesser_ = std::make_shared<dataaccess::MockBlockAccesser>();
+
+    s3ClientAdaptor_->Init(option, mockBlockAccesser_.get(), mockInodeManager_,
                            nullptr, fsCacheManager, nullptr, nullptr, nullptr);
     s3ClientAdaptor_->SetFsId(fsId);
 
@@ -92,7 +95,7 @@ class FileCacheManagerTest : public testing::Test {
   std::shared_ptr<FileCacheManager> fileCacheManager_;
   std::shared_ptr<MockChunkCacheManager> mockChunkCacheManager_;
   std::shared_ptr<MockInodeCacheManager> mockInodeManager_;
-  std::shared_ptr<dataaccess::MockDataAccesser> mockDataAccesser_;
+  std::shared_ptr<dataaccess::MockBlockAccesser> mockBlockAccesser_;
   std::shared_ptr<KVClientManager> kvClientManager_;
   std::shared_ptr<TaskThreadPool<>> threadPool_ =
       std::make_shared<TaskThreadPool<>>();
@@ -252,7 +255,7 @@ TEST_F(FileCacheManagerTest, test_read_s3) {
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)))
       .WillOnce(
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)));
-  EXPECT_CALL(*mockDataAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(*mockBlockAccesser_, Get(_, _, _, _))
       .WillOnce(DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(Status::OK())))
       .WillOnce(Return(Status::IoError("")));
 

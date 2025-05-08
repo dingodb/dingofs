@@ -36,7 +36,6 @@
 #include "base/filepath/filepath.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/concurrent.h"
@@ -533,7 +532,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
 
         LOG(WARNING) << "Get Object failed, key: " << context->key
                      << ", offset: " << context->offset;
-        data_accesser_->AsyncGet(context);
+        block_accesser_->AsyncGet(context);
       };
 
   pending_req.fetch_add(prefetch_objs.size(), std::memory_order_seq_cst);
@@ -566,7 +565,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
       context->len = read_len;
       context->cb = cb;
       context->retry = 0;
-      data_accesser_->AsyncGet(context);
+      block_accesser_->AsyncGet(context);
     }
 
     if (pending_req.load()) cond.Wait();

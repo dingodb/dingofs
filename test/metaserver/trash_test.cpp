@@ -28,7 +28,7 @@
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
 #include "metaserver/storage/test_utils.h"
-#include "metaserver/trash_manager.h"
+#include "metaserver/trash/trash_manager.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
 

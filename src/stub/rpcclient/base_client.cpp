@@ -59,13 +59,6 @@ using pb::mds::cachegroup::RegisterMemberRequest;
 using pb::mds::cachegroup::RegisterMemberResponse;
 using pb::mds::cachegroup::ReweightMemberRequest;
 using pb::mds::cachegroup::ReweightMemberResponse;
-using pb::mds::space::AcquireBlockGroupRequest;
-using pb::mds::space::AcquireBlockGroupResponse;
-using pb::mds::space::AllocateBlockGroupRequest;
-using pb::mds::space::AllocateBlockGroupResponse;
-using pb::mds::space::ReleaseBlockGroupRequest;
-using pb::mds::space::ReleaseBlockGroupResponse;
-using pb::mds::space::SpaceService_Stub;
 using pb::mds::topology::AllocOrGetMemcacheClusterRequest;
 using pb::mds::topology::AllocOrGetMemcacheClusterResponse;
 using pb::mds::topology::CreatePartitionRequest;
@@ -217,54 +210,6 @@ void MDSBaseClient::CommitTx(const CommitTxRequest& request,
                              brpc::Channel* channel) {
   dingofs::pb::mds::MdsService_Stub stub(channel);
   stub.CommitTx(cntl, &request, response, nullptr);
-}
-
-// TODO(all): do we really need pass `fsId` all the time?
-//            each dingo-fuse process only mount one filesystem
-void MDSBaseClient::AllocateVolumeBlockGroup(
-    uint32_t fsId, uint32_t count, const std::string& owner,
-    AllocateBlockGroupResponse* response, brpc::Controller* cntl,
-    brpc::Channel* channel) {
-  AllocateBlockGroupRequest request;
-  request.set_fsid(fsId);
-  request.set_count(count);
-  request.set_owner(owner);
-
-  SpaceService_Stub stub(channel);
-  stub.AllocateBlockGroup(cntl, &request, response, nullptr);
-}
-
-void MDSBaseClient::AcquireVolumeBlockGroup(uint32_t fsId,
-                                            uint64_t blockGroupOffset,
-                                            const std::string& owner,
-                                            AcquireBlockGroupResponse* response,
-                                            brpc::Controller* cntl,
-                                            brpc::Channel* channel) {
-  AcquireBlockGroupRequest request;
-  request.set_fsid(fsId);
-  request.set_owner(owner);
-  request.set_blockgroupoffset(blockGroupOffset);
-
-  SpaceService_Stub stub(channel);
-  stub.AcquireBlockGroup(cntl, &request, response, nullptr);
-}
-
-void MDSBaseClient::ReleaseVolumeBlockGroup(
-    uint32_t fsId, const std::string& owner,
-    const std::vector<dingofs::pb::mds::space::BlockGroup>& blockGroups,
-    ReleaseBlockGroupResponse* response, brpc::Controller* cntl,
-    brpc::Channel* channel) {
-  ReleaseBlockGroupRequest request;
-  request.set_fsid(fsId);
-  request.set_owner(owner);
-
-  google::protobuf::RepeatedPtrField<dingofs::pb::mds::space::BlockGroup>
-      groups(blockGroups.begin(), blockGroups.end());
-
-  request.mutable_blockgroups()->Swap(&groups);
-
-  SpaceService_Stub stub(channel);
-  stub.ReleaseBlockGroup(cntl, &request, response, nullptr);
 }
 
 void MDSBaseClient::AllocOrGetMemcacheCluster(

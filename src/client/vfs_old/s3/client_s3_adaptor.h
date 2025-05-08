@@ -23,6 +23,7 @@
 #define DINGOFS_SRC_CLIENT_S3_CLIENT_S3_ADAPTOR_H_
 
 #include <bthread/execution_queue.h>
+#include <glog/logging.h>
 
 #include <memory>
 #include <string>
@@ -35,7 +36,7 @@
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "dataaccess/accesser.h"
+#include "dataaccess/block_accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/wait_interval.h"
 
@@ -48,7 +49,6 @@ struct FlushChunkCacheContext;
 
 using cache::blockcache::BlockCache;
 using cache::blockcache::StoreType;
-using dataaccess::DataAccesserPtr;
 
 class S3ClientAdaptor {
  public:
@@ -60,7 +60,7 @@ class S3ClientAdaptor {
    */
   virtual DINGOFS_ERROR Init(
       const common::S3ClientAdaptorOption& option,
-      DataAccesserPtr data_accesser,
+      dataaccess::BlockAccesser* block_accesser,
       std::shared_ptr<InodeCacheManager> inodeManager,
       std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
       std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -85,10 +85,9 @@ class S3ClientAdaptor {
   virtual pb::mds::FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
                                                uint64_t* chunkId) = 0;
   virtual void SetFsId(uint32_t fsId) = 0;
-  virtual DataAccesserPtr GetDataAccesser() = 0;
+  virtual dataaccess::BlockAccesser* GetBlockAccesser() = 0;
   virtual uint64_t GetBlockSize() = 0;
   virtual uint64_t GetChunkSize() = 0;
-  virtual uint32_t GetObjectPrefix() = 0;
   virtual std::shared_ptr<BlockCache> GetBlockCache() = 0;
   virtual bool HasDiskCache() = 0;
   virtual std::shared_ptr<IntimeWarmUpManager> GetIntimeWarmUpManager() = 0;
@@ -116,7 +115,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    */
   DINGOFS_ERROR
   Init(const common::S3ClientAdaptorOption& option,
-       DataAccesserPtr data_accesser,
+       dataaccess::BlockAccesser* block_accesser,
        std::shared_ptr<InodeCacheManager> inodeManager,
        std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
        std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -143,13 +142,17 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
 
   uint64_t GetBlockSize() override { return blockSize_; }
   uint64_t GetChunkSize() override { return chunkSize_; }
-  uint32_t GetObjectPrefix() override { return objectPrefix_; }
 
   std::shared_ptr<FsCacheManager> GetFsCacheManager() {
     return fsCacheManager_;
   }
   uint32_t GetFlushInterval() const { return flushIntervalSec_; }
-  DataAccesserPtr GetDataAccesser() override { return data_accesser_; }
+
+  dataaccess::BlockAccesser* GetBlockAccesser() override {
+    CHECK_NOTNULL(block_accesser_);
+    return block_accesser_;
+  }
+
   uint32_t GetPrefetchBlocks() const { return prefetchBlocks_; }
 
   bool HasDiskCache() override {
@@ -217,7 +220,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   void Enqueue(std::shared_ptr<FlushChunkCacheContext> context);
 
  private:
-  DataAccesserPtr data_accesser_;
+  dataaccess::BlockAccesser* block_accesser_{nullptr};
   uint64_t blockSize_;
   uint64_t chunkSize_;
   uint32_t prefetchBlocks_;
@@ -228,7 +231,6 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   uint32_t throttleBaseSleepUs_;
   uint32_t maxReadRetryIntervalMs_;
   uint32_t readRetryIntervalMs_;
-  uint32_t objectPrefix_;
   utils::Thread bgFlushThread_;
   std::atomic<bool> toStop_;
   std::mutex mtx_;

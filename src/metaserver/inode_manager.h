@@ -31,7 +31,7 @@
 #include "absl/types/optional.h"
 #include "dingofs/metaserver.pb.h"
 #include "metaserver/inode_storage.h"
-#include "metaserver/trash.h"
+#include "metaserver/trash/trash.h"
 #include "utils/concurrent/name_lock.h"
 
 namespace dingofs {

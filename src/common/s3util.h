@@ -36,7 +36,7 @@ using cache::blockcache::BlockKey;
 
 inline std::string GenObjName(uint64_t chunkid, uint64_t index,
                               uint64_t compaction, uint64_t fsid,
-                              uint64_t inodeid, uint32_t objectPrefix) {
+                              uint64_t inodeid) {
   BlockKey key(fsid, inodeid, chunkid, index, compaction);
   return key.StoreKey();
 }

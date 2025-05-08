@@ -136,12 +136,8 @@ class LeaseExecutor : public LeaseExecutorBase {
  public:
   LeaseExecutor(const common::LeaseOpt& opt,
                 std::shared_ptr<stub::rpcclient::MetaCache> metaCache,
-                std::shared_ptr<stub::rpcclient::MdsClient> mdsCli,
-                std::atomic<bool>* enableSumInDir)
-      : opt_(opt),
-        metaCache_(metaCache),
-        mdsCli_(mdsCli),
-        enableSumInDir_(enableSumInDir) {}
+                std::shared_ptr<stub::rpcclient::MdsClient> mdsCli)
+      : opt_(opt), metaCache_(metaCache), mdsCli_(mdsCli) {}
 
   ~LeaseExecutor() override;
 
@@ -165,7 +161,6 @@ class LeaseExecutor : public LeaseExecutorBase {
   std::unique_ptr<RefreshSessionTask> task_;
   std::string fsName_;
   pb::mds::Mountpoint mountpoint_;
-  std::atomic<bool>* enableSumInDir_;
 };
 
 }  // namespace client

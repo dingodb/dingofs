@@ -28,6 +28,8 @@
 #include "base/math/math.h"
 #include "base/string/string.h"
 #include "client/common/dynamic_config.h"
+#include "dataaccess/accesser_common.h"
+#include "dataaccess/s3/s3_common.h"
 #include "gflags/gflags.h"
 #include "options/cache/block_cache.h"
 #include "utils/gflags_helper.h"
@@ -44,7 +46,6 @@ namespace common {
 using ::dingofs::base::filepath::PathJoin;
 using ::dingofs::base::math::kMiB;
 using ::dingofs::base::string::Str2Int;
-using ::dingofs::dataaccess::aws::S3InfoOption;
 using ::dingofs::utils::Configuration;
 
 using ::dingofs::base::string::StrSplit;
@@ -92,34 +93,33 @@ static void InitExcutorOption(Configuration* conf, ExcutorOpt* opts,
                             &opts->enableRenameParallel);
 }
 
-static void InitS3Option(Configuration* conf, S3Option* s3_opt) {
+static void InitS3ClientAdaptorOption(
+    Configuration* conf, S3ClientAdaptorOption* s3_client_adaptor_opt) {
   conf->GetValueFatalIfFail("s3.fakeS3", &FLAGS_useFakeS3);
   conf->GetValueFatalIfFail("data_stream.page.size",
-                            &s3_opt->s3ClientAdaptorOpt.pageSize);
+                            &s3_client_adaptor_opt->pageSize);
   conf->GetValueFatalIfFail("s3.prefetchBlocks",
-                            &s3_opt->s3ClientAdaptorOpt.prefetchBlocks);
+                            &s3_client_adaptor_opt->prefetchBlocks);
   conf->GetValueFatalIfFail("s3.prefetchExecQueueNum",
-                            &s3_opt->s3ClientAdaptorOpt.prefetchExecQueueNum);
+                            &s3_client_adaptor_opt->prefetchExecQueueNum);
   conf->GetValueFatalIfFail("data_stream.background_flush.interval_ms",
-                            &s3_opt->s3ClientAdaptorOpt.intervalMs);
+                            &s3_client_adaptor_opt->intervalMs);
   conf->GetValueFatalIfFail("data_stream.slice.stay_in_memory_max_second",
-                            &s3_opt->s3ClientAdaptorOpt.flushIntervalSec);
+                            &s3_client_adaptor_opt->flushIntervalSec);
   conf->GetValueFatalIfFail("s3.writeCacheMaxByte",
-                            &s3_opt->s3ClientAdaptorOpt.writeCacheMaxByte);
+                            &s3_client_adaptor_opt->writeCacheMaxByte);
   conf->GetValueFatalIfFail("s3.readCacheMaxByte",
-                            &s3_opt->s3ClientAdaptorOpt.readCacheMaxByte);
+                            &s3_client_adaptor_opt->readCacheMaxByte);
   conf->GetValueFatalIfFail("s3.readCacheThreads",
-                            &s3_opt->s3ClientAdaptorOpt.readCacheThreads);
+                            &s3_client_adaptor_opt->readCacheThreads);
   conf->GetValueFatalIfFail("s3.nearfullRatio",
-                            &s3_opt->s3ClientAdaptorOpt.nearfullRatio);
+                            &s3_client_adaptor_opt->nearfullRatio);
   conf->GetValueFatalIfFail("s3.baseSleepUs",
-                            &s3_opt->s3ClientAdaptorOpt.baseSleepUs);
+                            &s3_client_adaptor_opt->baseSleepUs);
   conf->GetValueFatalIfFail("s3.maxReadRetryIntervalMs",
-                            &s3_opt->s3ClientAdaptorOpt.maxReadRetryIntervalMs);
+                            &s3_client_adaptor_opt->maxReadRetryIntervalMs);
   conf->GetValueFatalIfFail("s3.readRetryIntervalMs",
-                            &s3_opt->s3ClientAdaptorOpt.readRetryIntervalMs);
-  dataaccess::aws::InitS3AdaptorOptionExceptS3InfoOption(conf,
-                                                         &s3_opt->s3AdaptrOpt);
+                            &s3_client_adaptor_opt->readRetryIntervalMs);
 }
 
 static void InitLeaseOpt(Configuration* conf, LeaseOpt* lease_opt) {
@@ -372,7 +372,9 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   InitMetaCacheOption(conf, &client_option->metaCacheOpt);
   InitExcutorOption(conf, &client_option->excutorOpt, false);
   InitExcutorOption(conf, &client_option->excutorInternalOpt, true);
-  InitS3Option(conf, &client_option->s3Opt);
+  InitS3ClientAdaptorOption(conf, &client_option->s3_client_adaptor_opt);
+  dataaccess::InitAwsSdkConfig(
+      conf, &client_option->block_access_opt.s3_options.aws_sdk_config);
   InitLeaseOpt(conf, &client_option->leaseOpt);
   InitRefreshDataOpt(conf, &client_option->refreshDataOption);
   InitKVClientManagerOpt(conf, &client_option->kvClientManagerOpt);
@@ -434,27 +436,6 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   conf->GetValueFatalIfFail("fuseClient.throttle.burstReadIopsSecs",
                             &FLAGS_fuseClientBurstReadIopsSecs);
   SetBrpcOpt(conf);
-}
-
-void SetClientS3Option(ClientOption* client_option,
-                       const S3InfoOption& fs_s3_opt) {
-  client_option->s3Opt.s3ClientAdaptorOpt.blockSize = fs_s3_opt.blockSize;
-  client_option->s3Opt.s3ClientAdaptorOpt.chunkSize = fs_s3_opt.chunkSize;
-  client_option->s3Opt.s3ClientAdaptorOpt.objectPrefix = fs_s3_opt.objectPrefix;
-  client_option->s3Opt.s3AdaptrOpt.s3Address = fs_s3_opt.s3Address;
-  client_option->s3Opt.s3AdaptrOpt.ak = fs_s3_opt.ak;
-  client_option->s3Opt.s3AdaptrOpt.sk = fs_s3_opt.sk;
-  client_option->s3Opt.s3AdaptrOpt.bucketName = fs_s3_opt.bucketName;
-}
-
-void S3Info2FsS3Option(const pb::common::S3Info& s3, S3InfoOption* fs_s3_opt) {
-  fs_s3_opt->ak = s3.ak();
-  fs_s3_opt->sk = s3.sk();
-  fs_s3_opt->s3Address = s3.endpoint();
-  fs_s3_opt->bucketName = s3.bucketname();
-  fs_s3_opt->blockSize = s3.blocksize();
-  fs_s3_opt->chunkSize = s3.chunksize();
-  fs_s3_opt->objectPrefix = s3.has_objectprefix() ? s3.objectprefix() : 0;
 }
 
 void RewriteCacheDir(BlockCacheOption* option, std::string uuid) {

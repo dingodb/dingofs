@@ -797,25 +797,28 @@ static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
   }
 }
 
+static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
+  S3Info ret;
+  ret.ak = s3_info.ak();
+  ret.sk = s3_info.sk();
+  ret.endpoint = s3_info.endpoint();
+  ret.bucket = s3_info.bucketname();
+  return ret;
+}
+
 Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
   fs_info->name = kDefaultFsName;
   fs_info->id = fs_info_.fs_id();
   fs_info->chunk_size = fs_info_.chunk_size();
   fs_info->block_size = fs_info_.block_size();
-
-  fs_info->store_type = ToStoreType(fs_info_.fs_type());
   fs_info->uuid = fs_info_.uuid();
 
-  return Status::OK();
-}
-
-Status DummyFileSystem::GetS3Info(S3Info* s3_info) {
-  auto temp_s3_info = fs_info_.extra().s3_info();
-
-  s3_info->ak = temp_s3_info.ak();
-  s3_info->sk = temp_s3_info.sk();
-  s3_info->endpoint = temp_s3_info.endpoint();
-  s3_info->bucket = temp_s3_info.bucketname();
+  fs_info->storage_info.store_type = ToStoreType(fs_info_.fs_type());
+  if (fs_info->storage_info.store_type == StoreType::kS3) {
+    CHECK(fs_info_.extra().has_s3_info())
+        << "fs type is S3, but s3 info is not set";
+    fs_info->storage_info.s3_info = ToS3Info(fs_info_.extra().s3_info());
+  }
 
   return Status::OK();
 }

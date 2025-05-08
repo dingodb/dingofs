@@ -38,29 +38,29 @@ namespace dingofs {
 namespace dataaccess {
 namespace aws {
 
-void AwsCrtS3Client::Init(const S3AdapterOption& option) {
+void AwsCrtS3Client::Init(const S3Options& options) {
   CHECK(!initialized_.load()) << "AwsCrtS3Client already initialized";
-  LOG(INFO) << "AwsCrtS3Client init ak: " << option.ak << " sk: " << option.sk
-            << " s3_address: " << option.s3Address
-            << " bucket_name: " << option.bucketName;
+  LOG(INFO) << "AwsCrtS3Client init ak: " << options.s3_info.ak
+            << " sk: " << options.s3_info.sk
+            << " s3_endpoint: " << options.s3_info.endpoint;
 
-  option_ = option;
+  s3_options_ = options;
 
   {
     auto config = std::make_unique<Aws::S3Crt::S3CrtClientConfiguration>();
-    // config->scheme = Aws::Http::Scheme(option.scheme);
-    config->verifySSL = option.verifySsl;
-    config->region = option.region;
-    config->maxConnections = option.maxConnections;
-    config->connectTimeoutMs = option.connectTimeout;
-    config->requestTimeoutMs = option.requestTimeout;
-    config->endpointOverride = option.s3Address;
-    config->useVirtualAddressing = option.useVirtualAddressing;
+    config->endpointOverride = options.s3_info.endpoint;
+    // config->scheme = Aws::Http::Scheme(options.s3_info.scheme);
+    config->verifySSL = options.aws_sdk_config.verifySsl;
+    config->region = options.aws_sdk_config.region;
+    config->maxConnections = options.aws_sdk_config.maxConnections;
+    config->connectTimeoutMs = options.aws_sdk_config.connectTimeout;
+    config->requestTimeoutMs = options.aws_sdk_config.requestTimeout;
+    config->useVirtualAddressing = options.aws_sdk_config.useVirtualAddressing;
 
     // TODO : to support
     // config.throughputTargetGbps = throughput_target_gbps;
 
-    if (option.enableTelemetry) {
+    if (options.aws_sdk_config.enableTelemetry) {
       LOG(INFO) << "Enable telemetry for aws s3 adapter";
       ::opentelemetry::exporter::otlp::OtlpHttpExporterOptions opts;
       auto span_exporter =
@@ -81,8 +81,8 @@ void AwsCrtS3Client::Init(const S3AdapterOption& option) {
   }
 
   client_ = std::make_unique<Aws::S3Crt::S3CrtClient>(
-      Aws::Auth::AWSCredentials(option_.ak, option_.sk), *cfg_,
-      Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never);
+      Aws::Auth::AWSCredentials(s3_options_.s3_info.ak, s3_options_.s3_info.sk),
+      *cfg_, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never);
 
   initialized_.store(true);
 }

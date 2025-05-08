@@ -24,12 +24,12 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
-#include "common/status.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/v2/filesystem.h"
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
-#include "dataaccess/s3/s3_accesser.h"
+#include "common/status.h"
+#include "dataaccess/block_accesser.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -75,33 +75,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(&fs_info_));
 
-  if (fs_info_.store_type == StoreType::kS3) {
-    DINGOFS_RETURN_NOT_OK(meta_system_->GetS3Info(&s3_info_));
-  } else {
-    CHECK(false) << "upexpected store type";
-  }
+  block_accesser_ = std::make_unique<dataaccess::BlockAccesserImpl>(
+      client_option_.block_access_opt);
+  DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
   handle_manager_ = std::make_unique<HandleManager>();
-
-  {
-    // TODO: refact this
-    dataaccess::aws::S3InfoOption s3_info_option;
-    {
-      s3_info_option.ak = s3_info_.ak;
-      s3_info_option.sk = s3_info_.sk;
-      s3_info_option.s3Address = s3_info_.endpoint;
-      s3_info_option.bucketName = s3_info_.bucket;
-      s3_info_option.blockSize = fs_info_.block_size;
-      s3_info_option.chunkSize = fs_info_.chunk_size;
-    }
-
-    common::SetClientS3Option(&client_option_, s3_info_option);
-
-    // init blockcache s3 client
-    data_accesser_ =
-        dataaccess::S3Accesser::New(client_option_.s3Opt.s3AdaptrOpt);
-    data_accesser_->Init();
-  }
 
   {
     // related to block cache
@@ -111,7 +89,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     common::RewriteCacheDir(&block_cache_option, uuid);
 
     block_cache_ = std::make_unique<cache::blockcache::BlockCacheImpl>(
-        block_cache_option, data_accesser_);
+        block_cache_option, block_accesser_.get());
 
     DINGOFS_RETURN_NOT_OK(block_cache_->Init());
   }
@@ -147,20 +125,14 @@ cache::blockcache::BlockCache* VFSHubImpl::GetBlockCache() {
   return block_cache_.get();
 }
 
-std::shared_ptr<dataaccess::DataAccesser> VFSHubImpl::GetDataAccesser() {
-  CHECK_NOTNULL(data_accesser_);
-  return data_accesser_;
+dataaccess::BlockAccesser* VFSHubImpl::GetBlockAccesser() {
+  CHECK_NOTNULL(block_accesser_);
+  return block_accesser_.get();
 }
 
 FsInfo VFSHubImpl::GetFsInfo() {
   CHECK(started_.load(std::memory_order_relaxed)) << "not started";
   return fs_info_;
-}
-
-S3Info VFSHubImpl::GetS3Info() {
-  CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-  CHECK(fs_info_.store_type == StoreType::kS3) << "not s3 store type";
-  return s3_info_;
 }
 
 }  // namespace vfs

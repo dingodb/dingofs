@@ -42,11 +42,11 @@
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/service/metrics_dumper.h"
 #include "client/vfs_old/tools.h"
+#include "common/config_mapper.h"
 #include "common/define.h"
 #include "common/status.h"
-#include "dataaccess/accesser.h"
-#include "dataaccess/s3/aws/s3_adapter.h"
-#include "dataaccess/s3/s3_accesser.h"
+#include "dataaccess/block_accesser.h"
+#include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/filesystem/xattr.h"
@@ -312,8 +312,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
   {
     lease_executor_ = absl::make_unique<LeaseExecutor>(
-        fuse_client_option_.leaseOpt, meta_cache, mds_client_,
-        &enable_sum_in_dir_);
+        fuse_client_option_.leaseOpt, meta_cache, mds_client_);
     lease_executor_->SetFsName(vfs_conf.fs_name);
     lease_executor_->SetMountPoint(mount_point_);
     if (!lease_executor_->Start()) {
@@ -323,16 +322,12 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   }
 
   {
-    // fill fuse client option s3 option use fs s3 info
-    const auto& s3info = fs_info_->detail().s3info();
-    dataaccess::aws::S3InfoOption fs_s3_option;
-    common::S3Info2FsS3Option(s3info, &fs_s3_option);
-    SetClientS3Option(&fuse_client_option_, fs_s3_option);
+    const auto& storage_info = fs_info_->storage_info();
+    FillBlockAccessOption(storage_info, &fuse_client_option_.block_access_opt);
 
-    // init blockcache s3 client
-    data_accesser_ =
-        dataaccess::S3Accesser::New(fuse_client_option_.s3Opt.s3AdaptrOpt);
-    data_accesser_->Init();
+    block_accesser_ = std::make_unique<dataaccess::BlockAccesserImpl>(
+        fuse_client_option_.block_access_opt);
+    DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 
   // data stream
@@ -342,13 +337,21 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   }
 
   {
+    {
+      // NOTE: block and chunk size from fs info
+      fuse_client_option_.s3_client_adaptor_opt.blockSize =
+          fs_info_->block_size();
+      fuse_client_option_.s3_client_adaptor_opt.chunkSize =
+          fs_info_->chunk_size();
+    }
+
     auto page_option = fuse_client_option_.data_stream_option.page_option;
     auto max_memory_size = page_option.total_size;
     auto fs_cache_manager = std::make_shared<FsCacheManager>(
         dynamic_cast<S3ClientAdaptorImpl*>(s3_adapter_.get()),
-        fuse_client_option_.s3Opt.s3ClientAdaptorOpt.readCacheMaxByte,
+        fuse_client_option_.s3_client_adaptor_opt.readCacheMaxByte,
         max_memory_size,
-        fuse_client_option_.s3Opt.s3ClientAdaptorOpt.readCacheThreads, nullptr);
+        fuse_client_option_.s3_client_adaptor_opt.readCacheThreads, nullptr);
 
     // block cache
     auto block_cache_option = fuse_client_option_.block_cache_option;
@@ -357,14 +360,15 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     if (fs_info_->has_uuid()) {
       uuid = fs_info_->uuid();
     }
-    RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache =
-        std::make_shared<BlockCacheImpl>(block_cache_option, data_accesser_);
 
-    if (s3_adapter_->Init(fuse_client_option_.s3Opt.s3ClientAdaptorOpt,
-                          data_accesser_, inode_cache_manager_, mds_client_,
-                          fs_cache_manager, fs_, block_cache, nullptr,
-                          true) != DINGOFS_ERROR::OK) {
+    RewriteCacheDir(&block_cache_option, uuid);
+    auto block_cache = std::make_shared<BlockCacheImpl>(block_cache_option,
+                                                        block_accesser_.get());
+
+    if (s3_adapter_->Init(fuse_client_option_.s3_client_adaptor_opt,
+                          block_accesser_.get(), inode_cache_manager_,
+                          mds_client_, fs_cache_manager, fs_, block_cache,
+                          nullptr, true) != DINGOFS_ERROR::OK) {
       LOG(ERROR) << "s3_adapter_ init failed";
       return Status::Internal("s3_adapter_ init failed");
     }
@@ -373,7 +377,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   {
     warmup_manager_ = std::make_shared<warmup::WarmupManagerS3Impl>(
         metaserver_client_, inode_cache_manager_, dentry_cache_manager_,
-        fs_info_, s3_adapter_, nullptr, this, data_accesser_);
+        fs_info_, s3_adapter_, nullptr, this, block_accesser_.get());
     warmup_manager_->Init(fuse_client_option_);
     warmup_manager_->SetFsInfo(fs_info_);
     warmup_manager_->SetMounted(true);
@@ -439,7 +443,7 @@ Status VFSOld::Stop() {
   }
 
   s3_adapter_->Stop();
-  data_accesser_->Destroy();
+  block_accesser_->Destroy();
   datastream::DataStream::GetInstance().Shutdown();
 
   return Status::OK();
@@ -1678,8 +1682,9 @@ Status VFSOld::AddWarmupTask(common::WarmupType type, Ino key,
 // warmup format: op_type\nwarmup_type\npath\nstorage_type
 Status VFSOld::Warmup(Ino key, const std::string& name,
                       const std::string& value) {
-  CHECK(fs_info_->fstype() == pb::common::FSType::TYPE_S3)
-      << "warmup only support s3";
+  CHECK(fs_info_->storage_info().type() == pb::common::StorageType::TYPE_S3 ||
+        fs_info_->storage_info().type() == pb::common::StorageType::TYPE_RADOS)
+      << "warmup only support s3 or rados";
 
   std::vector<std::string> op_type_path;
   dingofs::utils::SplitString(value, "\n", &op_type_path);
@@ -1795,8 +1800,6 @@ Status VFSOld::GetXattr(Ino ino, const std::string& name, std::string* value) {
   }
 
   if (stub::filesystem::IsWarmupXAttr(name)) {
-    CHECK(fs_info_->fstype() == pb::common::FSType::TYPE_S3)
-        << "warmup only support s3";
     QueryWarmupTask(ino, value);
     return Status::OK();
   }

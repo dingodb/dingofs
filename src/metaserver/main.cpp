@@ -28,6 +28,7 @@
 #include "common/process.h"
 #include "common/threading.h"
 #include "dataaccess/s3/aws/s3_access_log.h"
+#include "dataaccess/s3/aws/s3_adapter.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "stub/common/version.h"

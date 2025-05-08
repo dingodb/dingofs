@@ -44,11 +44,10 @@
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
 #include "cache/common/common.h"
-#include "cache/utils/data_accesser_pool.h"
+#include "cache/utils/block_accesser_pool.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/local_filesystem.h"
 #include "common/status.h"
-#include "dataaccess/accesser.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "options/client/rpc.h"
@@ -65,8 +64,8 @@ using dingofs::base::math::kKiB;
 using dingofs::base::string::StrFormat;
 using dingofs::cache::blockcache::BlockCacheImpl;
 using dingofs::cache::blockcache::BlockKey;
-using dingofs::cache::utils::DataAccesserPoolImpl;
-using dingofs::dataaccess::DataAccesserPtr;
+using dingofs::cache::utils::BlockAccesserPoolImpl;
+using dingofs::dataaccess::BlockAccesserPtr;
 using dingofs::stub::common::MdsOption;
 using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClientImpl;
@@ -77,7 +76,7 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
     : running_(false), option_(option) {
   mds_base_ = std::make_shared<MDSBaseClient>();
   mds_client_ = std::make_shared<MdsClientImpl>();
-  data_accesser_pool_ = std::make_unique<DataAccesserPoolImpl>(mds_client_);
+  block_accesser_pool_ = std::make_unique<BlockAccesserPoolImpl>(mds_client_);
   member_ = std::make_shared<CacheGroupNodeMemberImpl>(option, mds_client_);
   metric_ = std::make_shared<CacheGroupNodeMetric>();
   heartbeat_ = std::make_unique<CacheGroupNodeHeartbeatImpl>(
@@ -187,8 +186,8 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
                                              size_t block_size, off_t offset,
                                              size_t length,
                                              butil::IOBuf* buffer) {
-  DataAccesserPtr data_accesser;
-  auto status = data_accesser_pool_->Get(block_key.fs_id, data_accesser);
+  BlockAccesserPtr block_accesser;
+  auto status = block_accesser_pool_->Get(block_key.fs_id, block_accesser);
   if (!status.ok()) {
     return status;
   }
@@ -196,7 +195,7 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
   // retrive range of block
   if (length <= option_.max_range_size_kb() * kKiB) {
     char* data = new char[length];
-    status = data_accesser->Get(block_key.StoreKey(), offset, length, data);
+    status = block_accesser->Get(block_key.StoreKey(), offset, length, data);
     if (!status.ok()) {
       delete[] data;
     } else {
@@ -207,7 +206,7 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
 
   // retrive the whole block
   char* data = new char[block_size];
-  status = data_accesser->Get(block_key.StoreKey(), offset, length, data);
+  status = block_accesser->Get(block_key.StoreKey(), offset, length, data);
   if (!status.ok()) {
     delete[] data;
     return status;

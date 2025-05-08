@@ -20,7 +20,7 @@ add_executable(test_uitls ${UTILS_TEST_SRCS})
 target_link_libraries(test_uitls
     dingofs_utils
     dingofs_auth
-    aws_s3_adapter
+    block_accesser
     protobuf::libprotobuf
     ${TEST_DEPS}
 )

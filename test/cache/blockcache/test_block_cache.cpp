@@ -81,7 +81,7 @@ TEST_F(BlockCacheTest, Range) {
   });
 
   auto key = BlockKeyBuilder().Build(100);
-  EXPECT_CALL(*builder.GetDataAccesser(), Get(_, _, _, _))
+  EXPECT_CALL(*builder.GetBlockAccesser(), Get(_, _, _, _))
       .WillOnce(Return(Status::OK()));
   ASSERT_EQ(block_cache->Range(key, 0, 0, nullptr, true), Status::OK());
 }
