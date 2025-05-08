@@ -439,6 +439,7 @@ S3Adapter* CompactInodeJob::SetupS3Adapter(uint64_t fsId,
             << ", bucket: " << s3info.bucketname();
   } else {
     LOG(WARNING) << "s3compact: fail to get s3info of " << fsId;
+    opts_->s3adapterManager->ReleaseS3Adapter(*s3adapterIndex);
     return nullptr;
   }
   VLOG(6) << "s3compact: set s3adapter " << s3info.ak() << ", " << s3info.sk()
