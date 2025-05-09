@@ -40,7 +40,6 @@ add_subdirectory(fs)
 add_subdirectory(stub)
 add_subdirectory(utils)
 
-add_subdirectory(tools)
 add_subdirectory(mds)
 add_subdirectory(metaserver)
 add_subdirectory(cache)
