@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,19 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(dataaccess)
-add_subdirectory(utils)
-add_subdirectory(utils/concurrent)
-add_subdirectory(base)
-add_subdirectory(common)
-add_subdirectory(options)
-add_subdirectory(fs)
-add_subdirectory(stub)
+file(GLOB DINGOFS_OPTIONS_LIB_SRCS
+    "options.cpp"
+)
 
-add_subdirectory(mds)
-add_subdirectory(metaserver)
-add_subdirectory(cache)
-add_subdirectory(client)
-add_subdirectory(tools)
+add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
 
-add_subdirectory(mdsv2)
+target_link_libraries(dingofs_options
+    toml11::toml11
+    gflags::gflags
+    glog::glog
+)

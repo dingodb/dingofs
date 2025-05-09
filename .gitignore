@@ -84,5 +84,6 @@ thirdparties/etcdclient/*.h
 build/
 docker/rocky9/dingofs
 
-.cache
 dist/
+.cache
+.playground
