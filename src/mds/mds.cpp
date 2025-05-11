@@ -459,7 +459,7 @@ void MDS::InitCacheGroup() {
 
   cache_group_member_manager_ =
       std::make_shared<CacheGroupMemberManagerImpl>(option, etcdClient_);
-  LOG_IF(FATAL, cache_group_member_manager_->Init())
+  LOG_IF(FATAL, !cache_group_member_manager_->Init())
       << "Init cache group member failed.";
 }
 
