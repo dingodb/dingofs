@@ -22,7 +22,7 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_state_machine.h"
 #include "cache/common/common.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 
 namespace dingofs {
 namespace cache {

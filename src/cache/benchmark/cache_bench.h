@@ -23,11 +23,51 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_CACHE_BENCH_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_CACHE_BENCH_H_
 
-#include <mutex>
+#include <butil/iobuf.h>
+
+#include <memory>
+
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/common.h"
+#include "cache/remotecache/remote_block_cache.h"
 
 namespace dingofs {
 namespace cache {
-namespace benchmark {}  // namespace benchmark
+namespace benchmark {
+
+using dingofs::cache::blockcache::BlockKey;
+using dingofs::cache::remotecache::RemoteBlockCache;
+
+class CacheBench {
+ public:
+  virtual ~CacheBench() = default;
+
+  virtual Status Init() = 0;
+
+  virtual void Run() = 0;
+};
+
+class CacheBenchImpl : public CacheBench {
+ public:
+  explicit CacheBenchImpl(RemoteBlockCacheOption option);
+
+  Status Init() override;
+
+  void Run() override;
+
+ private:
+  Status RangeBlock(const BlockKey& block_key, size_t block_size, off_t offset,
+                    size_t length);
+
+  void DumpBlock(const std::string& filepath, butil::IOBuf* buffer,
+                 size_t length);
+
+ private:
+  RemoteBlockCacheOption option_;
+  std::unique_ptr<RemoteBlockCache> remote_block_cache_;
+};
+
+}  // namespace benchmark
 }  // namespace cache
 }  // namespace dingofs
 

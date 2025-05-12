@@ -79,20 +79,22 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   auto status = fs.ReadFile(filepath, buffer, &length);
   if (status.IsNotFound()) {
     *member_id = 0;
+    LOG(INFO) << "Cache group node metadata file not found, filepath = "
+              << filepath;
     return Status::OK();
   } else if (!status.ok()) {
-    LOG(ERROR) << "Read cache group node meta file (" << filepath
+    LOG(ERROR) << "Read cache group node metadata file (" << filepath
                << ") failed: " << status.ToString();
     return status;
   } else if (!meta.ParseFromString(buffer.get())) {
-    LOG(ERROR) << "Cache group node meta file maybe broken, filepath = "
+    LOG(ERROR) << "Cache group node metadata file maybe broken, filepath = "
                << filepath;
-    return Status::Internal("parse cache group node meta file failed");
+    return Status::Internal("parse cache group node metadata file failed");
   }
 
   *member_id = meta.member_id();
-  LOG(INFO) << "Load cache group node(id=" << meta.member_id() << ",birth_time"
-            << meta.birth_time() << ") meta success.";
+  LOG(INFO) << "Load cache group node(id=" << meta.member_id()
+            << ",birth_time=" << meta.birth_time() << ") metadata success.";
   return Status::OK();
 }
 
@@ -114,6 +116,8 @@ Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
                << "filepath = " << filepath
                << ", status = " << status.ToString();
   }
+
+  LOG(INFO) << "Save cachegroup node meta to file(" << filepath << ") success.";
   return status;
 }
 
@@ -121,7 +125,7 @@ Status CacheGroupNodeMemberImpl::RegisterMember(uint64_t old_id,
                                                 uint64_t* member_id) {
   auto rc = mds_client_->RegisterCacheGroupMember(old_id, member_id);
   if (rc != CacheGroupOk) {
-    LOG(ERROR) << "Register member(" << old_id
+    LOG(ERROR) << "Register member(member_id=" << old_id
                << ") failed, rc = " << CacheGroupErrCode_Name(rc);
     return Status::Internal("register cache group member failed");
   }
@@ -140,14 +144,16 @@ Status CacheGroupNodeMemberImpl::AddMember2Group(const std::string& group_name,
 
   auto rc = mds_client_->AddCacheGroupMember(group_name, member);
   if (rc != CacheGroupOk) {
-    LOG(ERROR) << "Add member(" << member_id_ << "," << option_.group_weight()
-               << ") to group(" << group_name
+    LOG(ERROR) << "Add member(id=" << member_id_
+               << ", weight=" << option_.group_weight()
+               << ") to group(name=" << group_name
                << ") failed, rc = " << CacheGroupErrCode_Name(rc);
     return Status::Internal("add cache group member failed");
   }
 
-  LOG(INFO) << "Add member(" << member_id_ << "," << option_.group_weight()
-            << ") to group(" << group_name << ") success.";
+  LOG(INFO) << "Add member(id=" << member_id_
+            << ",weight=" << option_.group_weight()
+            << ") to group(name=" << group_name << ") success.";
   return Status::OK();
 }
 

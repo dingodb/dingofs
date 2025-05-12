@@ -45,8 +45,6 @@ namespace cachegroup {
       ::dingofs::pb::mds::cachegroup::method##Response* response,     \
       ::google::protobuf::Closure* done)
 
-using ::dingofs::mds::cachegroup::CacheGroupMemberStorage;
-
 class CacheGroupMemberServiceImpl
     : public ::dingofs::pb::mds::cachegroup::CacheGroupMemberService {
  public:

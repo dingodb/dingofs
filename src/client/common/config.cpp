@@ -29,7 +29,7 @@
 #include "base/string/string.h"
 #include "client/common/dynamic_config.h"
 #include "gflags/gflags.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 #include "utils/gflags_helper.h"
 
 namespace brpc {

@@ -36,7 +36,7 @@
 #include <queue>
 
 #include "cache/utils/aio.h"
-#include "cache/utils/utils.h"
+#include "cache/utils/helper.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {

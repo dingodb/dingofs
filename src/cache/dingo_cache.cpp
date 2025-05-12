@@ -20,24 +20,36 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include <iostream>
 #include <memory>
 
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/cachegroup/cache_group_node_server.h"
 #include "cache/common/common.h"
+#include "options/cache/app.h"
 
-using dingofs::cache::CacheGroupNodeOption;
-using dingofs::cache::cachegroup::CacheGroupNodeImpl;
+DEFINE_string(conf, "", "dingo-cache configure file");
+
+using dingofs::cache::AppOption;
 using dingofs::cache::cachegroup::CacheGroupNodeServerImpl;
 
-int main(int /*argc*/, char** /*argv*/) {
-  CacheGroupNodeOption option;
-  auto node = std::make_shared<CacheGroupNodeImpl>(option);
+int main(int argc, char** argv) {
+  google::ParseCommandLineFlags(&argc, &argv, false);
 
-  CacheGroupNodeServerImpl server(node);
-  server.Serve();  // Start server and wait CTRL+C to quit
+  AppOption option;
+  if (!FLAGS_conf.empty() && !option.Parse(FLAGS_conf)) {
+    std::cerr << "Parse configure file failed: conf_path=" << FLAGS_conf
+              << std::endl;
+    return -1;
+  }
+
+  CacheGroupNodeServerImpl server(option);
+  CHECK(server.Init().ok());  // Install signal and init logger
+  CHECK(server.Run().ok());   // Start server and wait CTRL+C to quit
+
   server.Shutdown();
   return 0;
 }

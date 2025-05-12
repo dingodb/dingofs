@@ -36,12 +36,38 @@
 #include <thread>
 
 #include "cache/utils/aio.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/phase_timer.h"
-#include "cache/utils/utils.h"
 
 namespace dingofs {
 namespace cache {
 namespace utils {
+
+class ThrottleQueue {
+ public:
+  ThrottleQueue(uint32_t capacity) : capacity_(capacity) {}
+
+  void PushOne() {
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    while (size_ == capacity_) {
+      cv_.wait(lk);
+    }
+    size_++;
+  }
+
+  void PopOne() {
+    std::unique_lock<bthread::Mutex> lk(mutex_);
+    CHECK(size_ > 0);
+    size_--;
+    cv_.notify_one();
+  }
+
+ private:
+  uint32_t size_{0};
+  uint32_t capacity_;
+  bthread::Mutex mutex_;
+  bthread::ConditionVariable cv_;
+};
 
 class AioQueueImpl : public AioQueue {
   struct BthreadArg {

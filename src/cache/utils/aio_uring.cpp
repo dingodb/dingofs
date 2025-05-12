@@ -31,7 +31,7 @@
 #include <cstring>
 
 #include "cache/utils/aio.h"
-#include "cache/utils/utils.h"
+#include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {

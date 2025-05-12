@@ -17,7 +17,6 @@ add_subdirectory(utils)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
-add_subdirectory(benchmark)
 
 add_executable(dingo-cache dingo_cache.cpp)
 target_link_libraries(dingo-cache

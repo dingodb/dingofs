@@ -30,6 +30,7 @@ namespace dataaccess {
 namespace aws {
 
 extern std::shared_ptr<spdlog::logger> s3_logger;
+extern bool initialized;
 
 bool InitS3AccessLog(const std::string& prefix);
 
@@ -40,8 +41,10 @@ struct S3AccessLogGuard {
       : start_us(p_start_us), handler(handler) {}
 
   ~S3AccessLogGuard() {
-    s3_logger->info("{0} <{1:.6f}>", handler(),
-                    (butil::cpuwide_time_us() - start_us) / 1e6);
+    if (initialized) {
+      s3_logger->info("{0} <{1:.6f}>", handler(),
+                      (butil::cpuwide_time_us() - start_us) / 1e6);
+    }
   }
 
   MessageHandler handler;

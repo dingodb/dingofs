@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 
 #include <brpc/reloadable_flags.h>
 #include <gflags/gflags.h>

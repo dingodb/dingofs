@@ -36,7 +36,7 @@
 #include "cache/blockcache/disk_cache.h"
 #include "cache/utils/access_log.h"
 #include "dataaccess/mock/mock_accesser.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 
 namespace dingofs {
 namespace cache {

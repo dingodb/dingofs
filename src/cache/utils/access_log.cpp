@@ -40,7 +40,7 @@ using MessageHandler = std::function<std::string()>;
 static std::shared_ptr<spdlog::logger> logger;
 static bool initialized = false;
 
-bool InitAccessLog(const std::string& prefix) {
+bool InitCacheAccessLog(const std::string& prefix) {
   if (!initialized) {
     std::string filename =
         StrFormat("%s/cache_access_%d.log", prefix, getpid());
@@ -51,7 +51,7 @@ bool InitAccessLog(const std::string& prefix) {
   return initialized;
 }
 
-void ShutdownTraceLog() {
+void ShutdownCacheAccessLog() {
   if (initialized) {
     spdlog::shutdown();
     initialized = false;

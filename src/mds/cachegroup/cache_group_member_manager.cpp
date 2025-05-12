@@ -22,6 +22,8 @@
 
 #include "mds/cachegroup/cache_group_member_manager.h"
 
+#include "mds/cachegroup/errno.h"
+
 namespace dingofs {
 namespace mds {
 namespace cachegroup {
@@ -55,9 +57,26 @@ Errno CacheGroupMemberManagerImpl::AddMember(const std::string& group_name,
   auto rc = storage_->GetGroupId(group_name, &group_id);
   if (rc == Errno::kNotFound) {
     rc = storage_->RegisterGroup(group_name, &group_id);
-    if (rc == Errno::kOk) {
-      rc = storage_->AddMember(group_id, member);
+    if (rc != Errno::kOk) {
+      LOG(ERROR) << "Register group(name=" << group_name
+                 << ") failed: " << StrErr(rc);
+      return rc;
     }
+    LOG(INFO) << "Register group(name=" << group_name
+              << ") success: group_id = " << group_id;
+  }
+
+  // rc == Errno::kOk
+  rc = storage_->AddMember(group_id, member);
+  if (rc == Errno::kOk) {
+    LOG(INFO) << "Add member(id=" << member.id()
+              << ",weight=" << member.weight()
+              << ") to group(name=" << group_name << ") success.";
+  } else {
+    LOG(ERROR) << "Add member(id=" << member.id()
+               << ",weight=" << member.weight()
+               << ") to group(name=" << group_name
+               << ") failed: " << StrErr(rc);
   }
   return rc;
 }

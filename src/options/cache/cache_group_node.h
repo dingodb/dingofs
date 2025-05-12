@@ -20,10 +20,10 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_
-#define DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_
+#ifndef DINGOFS_SRC_OPTIONS_CACHE_CACHE_GROUP_NODE_H_
+#define DINGOFS_SRC_OPTIONS_CACHE_CACHE_GROUP_NODE_H_
 
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 #include "options/client/rpc.h"
 #include "options/options.h"
 
@@ -48,4 +48,4 @@ class CacheGroupNodeOption : public BaseOption {
 }  // namespace options
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CACHE_CACHEGROUP_H_
+#endif  // DINGOFS_SRC_OPTIONS_CACHE_CACHE_GROUP_NODE_H_

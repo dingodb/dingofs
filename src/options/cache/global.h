@@ -14,28 +14,30 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/aws/s3_access_log.h"
+/*
+ * Project: DingoFS
+ * Created Date: 2025-05-12
+ * Author: Jingli Chen (Wine93)
+ */
 
-#include <absl/strings/str_format.h>
+#ifndef DINGOFS_SRC_OPTIONS_CACHE_GLOBAL_H_
+#define DINGOFS_SRC_OPTIONS_CACHE_GLOBAL_H_
+
+#include "options/options.h"
 
 namespace dingofs {
-namespace dataaccess {
-namespace aws {
+namespace options {
+namespace cache {
 
-std::shared_ptr<spdlog::logger> s3_logger;
-bool initialized = false;
+class GlobalOption : public BaseOption {
+  BIND_string(log_dir, "/tmp", "");
+  BIND_int32(log_level, 0, "");
+  BIND_bool(block_cache_access_logging, true, "");
+  BIND_bool(s3_access_logging, true, "");
+};
 
-bool InitS3AccessLog(const std::string& prefix) {
-  if (!initialized) {
-    std::string filename =
-        absl::StrFormat("%s/s3_access_%d.log", prefix, getpid());
-    s3_logger = spdlog::daily_logger_mt("s3_access", filename, 0, 0);
-    spdlog::flush_every(std::chrono::seconds(1));
-    initialized = true;
-  }
-  return true;
-}
-
-}  // namespace aws
-}  // namespace dataaccess
+}  // namespace cache
+}  // namespace options
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_OPTIONS_CACHE_GLOBAL_H_

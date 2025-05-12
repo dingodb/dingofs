@@ -29,13 +29,13 @@
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
-#include "options/cache/blockcache.h"
-#include "options/cache/cachegroup.h"
-#include "stub/common/config.h"
+#include "options/cache/block_cache.h"
+#include "options/cache/cache_group_node.h"
 
 namespace dingofs {
 namespace cache {
 
+using dingofs::options::cache::AppOption;               // NOLINT
 using dingofs::options::cache::BlockCacheOption;        // NOLINT
 using dingofs::options::cache::CacheGroupNodeOption;    // NOLINT
 using dingofs::options::cache::DiskCacheOption;         // NOLINT
@@ -71,8 +71,7 @@ using dingofs::pb::cache::blockcache::BlockCacheErrNotFound;   // NOLINT
 using dingofs::pb::cache::blockcache::BlockCacheErrUnknown;    // NOLINT
 using dingofs::pb::cache::blockcache::BlockCacheOk;            // NOLINT
 
-using dingofs::pb::mds::FSStatusCode;    // NOLINT
-using dingofs::stub::common::MdsOption;  // NOLINT
+using dingofs::pb::mds::FSStatusCode;  // NOLINT
 
 BlockCacheErrCode PbErr(Status status);
 

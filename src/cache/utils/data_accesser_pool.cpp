@@ -100,7 +100,15 @@ bool DataAccesserPoolImpl::NewDataAccesser(uint32_t fs_id,
   option.bucketName = s3_info.bucketname();
 
   data_accesser = dataaccess::S3Accesser::New(option);
-  return data_accesser->Init();
+  bool succ = data_accesser->Init();
+  if (succ) {
+    LOG(INFO) << "New data accesser for filesystem(fs_id=" << fs_id
+              << ") success.";
+  } else {
+    LOG(ERROR) << "New data accesser for filesystem(fs_id=" << fs_id
+               << ") failed.";
+  }
+  return succ;
 }
 
 }  // namespace utils

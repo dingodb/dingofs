@@ -27,19 +27,35 @@
 #include <memory>
 
 #include "cache/remotecache/remote_node_group.h"
+#include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
 namespace remotecache {
 
-RemoteBlockCacheImpl::RemoteBlockCacheImpl(
-    RemoteBlockCacheOption option, std::shared_ptr<MdsClient> mds_client)
+using dingofs::stub::common::MdsOption;
+using dingofs::stub::rpcclient::MdsClientImpl;
+
+RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option)
     : inited_(false),
       option_(option),
-      mds_client_(mds_client),
-      node_group_(std::make_unique<RemoteNodeGroupImpl>(option, mds_client)) {}
+      mds_base_(std::make_shared<MDSBaseClient>()),
+      mds_client_(std::make_shared<MdsClientImpl>()),
+      node_group_(std::make_unique<RemoteNodeGroupImpl>(option, mds_client_)) {}
 
-Status RemoteBlockCacheImpl::Init() { return node_group_->Start(); }
+Status RemoteBlockCacheImpl::Init() {
+  if (!inited_.exchange(true)) {
+    MdsOption mds_option;  // FIXME(Wine93): use new version options
+    mds_option.rpcRetryOpt.addrs = option_.mds_rpc_option().addrs();
+    auto rc = mds_client_->Init(mds_option, mds_base_.get());
+    if (rc != FSStatusCode::OK) {
+      return Status::Internal("init mds client failed");
+    }
+
+    return node_group_->Start();
+  }
+  return Status::OK();
+}
 
 void RemoteBlockCacheImpl::Shutdown() {}
 

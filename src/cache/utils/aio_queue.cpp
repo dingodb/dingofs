@@ -34,8 +34,8 @@
 #include "base/string/string.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/aio.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/phase_timer.h"
-#include "cache/utils/utils.h"
 
 namespace dingofs {
 namespace cache {

@@ -30,6 +30,7 @@
 #include "base/hash/con_hash.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/remotecache/remote_node_group.h"
+#include "stub/rpcclient/base_client.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
@@ -37,7 +38,7 @@ namespace cache {
 namespace remotecache {
 
 using dingofs::cache::blockcache::BlockKey;
-using dingofs::stub::rpcclient::MdsClient;
+using dingofs::stub::rpcclient::MDSBaseClient;
 
 class RemoteBlockCache {
  public:
@@ -53,8 +54,7 @@ class RemoteBlockCache {
 
 class RemoteBlockCacheImpl : public RemoteBlockCache {
  public:
-  RemoteBlockCacheImpl(RemoteBlockCacheOption option,
-                       std::shared_ptr<MdsClient> mds_client);
+  explicit RemoteBlockCacheImpl(RemoteBlockCacheOption option);
 
   Status Init() override;
 
@@ -66,6 +66,7 @@ class RemoteBlockCacheImpl : public RemoteBlockCache {
  private:
   std::atomic<bool> inited_;
   RemoteBlockCacheOption option_;
+  std::shared_ptr<MDSBaseClient> mds_base_;
   std::shared_ptr<MdsClient> mds_client_;
   std::unique_ptr<RemoteNodeGroup> node_group_;
 };

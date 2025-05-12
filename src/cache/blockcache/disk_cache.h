@@ -37,7 +37,7 @@
 #include "cache/utils/aio_queue.h"
 #include "cache/utils/local_filesystem.h"
 #include "options/cache/app.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 
 namespace dingofs {
 namespace cache {

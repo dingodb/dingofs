@@ -60,7 +60,7 @@ Status InitLog() {
   // Todo: remove InitMetaAccessLog when vfs is ready,  used by vfs old and old
   // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
-              dingofs::cache::utils::InitAccessLog(FLAGS_log_dir) &&
+              dingofs::cache::utils::InitCacheAccessLog(FLAGS_log_dir) &&
               dataaccess::aws::InitS3AccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);

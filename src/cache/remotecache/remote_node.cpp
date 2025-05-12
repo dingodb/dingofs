@@ -69,8 +69,8 @@ bool RemoteNodeImpl::InitChannel(const std::string& listen_ip,
     return false;
   }
 
-  LOG(INFO) << "Create channel for " << listen_ip << ":" << listen_port
-            << " success.";
+  LOG(INFO) << "Create channel for address(" << listen_ip << ":" << listen_port
+            << ") success.";
   return true;
 }
 

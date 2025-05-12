@@ -23,7 +23,7 @@
 #ifndef DINGOFS_SRC_OPTIONS_CLIENT_APP_H_
 #define DINGOFS_SRC_OPTIONS_CLIENT_APP_H_
 
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 #include "options/client/data.h"
 #include "options/client/fuse.h"
 #include "options/client/global.h"

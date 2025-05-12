@@ -147,7 +147,7 @@ void RemoteNodeGroupImpl::CommitChange(const CacheGroupMembers& members) {
   local_members_ = members;
   chash_ = chash;
   nodes_ = nodes;
-  LOG(INFO) << "remote node group changed.";
+  LOG(INFO) << "Remote node group has changed.";
 }
 
 std::vector<uint64_t> RemoteNodeGroupImpl::CalcWeights(
@@ -192,7 +192,7 @@ std::shared_ptr<RemoteNodeGroupImpl::NodesT> RemoteNodeGroupImpl::CreateNodes(
         std::make_shared<RemoteNodeImpl>(member, option_.remote_node_option());
 
     auto status = node->Init();
-    if (status.ok()) {  // NOTE: only throw warning
+    if (!status.ok()) {  // NOTE: only throw warning
       LOG(ERROR) << "Init remote node failed, id = " << member.id()
                  << ", status = " << status.ToString();
     }

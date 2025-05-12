@@ -29,7 +29,7 @@
 #include "dataaccess/s3/aws/aws_s3_common.h"
 #include "dingofs/common.pb.h"
 #include "options/cache/app.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
 

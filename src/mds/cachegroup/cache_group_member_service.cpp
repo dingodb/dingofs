@@ -40,7 +40,7 @@ DEFINE_RPC_METHOD(CacheGroupMemberServiceImpl, RegisterMember) {
 
   uint64_t member_id;
   uint64_t old_id = request->has_old_id() ? request->old_id() : 0;
-  auto rc = member_manager_->RegisterMember(request->old_id(), &member_id);
+  auto rc = member_manager_->RegisterMember(old_id, &member_id);
   response->set_status(PbErr(rc));
   response->set_member_id(member_id);
 }

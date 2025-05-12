@@ -16,37 +16,34 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-05-07
+ * Created Date: 2025-05-09
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CACHE_APP_H_
-#define DINGOFS_SRC_OPTIONS_CACHE_APP_H_
+#ifndef DINGOFS_SRC_OPTIONS_CACHE_REMOTE_BLOCK_CACHE_H_
+#define DINGOFS_SRC_OPTIONS_CACHE_REMOTE_BLOCK_CACHE_H_
 
-#include "options/cache/block_cache.h"
-#include "options/cache/cache_group_node.h"
-#include "options/cache/global.h"
-#include "options/cache/remote_block_cache.h"
-
-// options level:
-//   app -> { global , cache_group_node, remote_cache }
-//   cache_group_node -> block_cache -> disk_cache -> disk_state
-//   remote_block_cache -> remote_node
+#include "options/client/rpc.h"
+#include "options/options.h"
 
 namespace dingofs {
 namespace options {
 namespace cache {
 
-class AppOption : public BaseOption {
-  BIND_suboption(global_option, "global", GlobalOption);
-  BIND_suboption(cache_group_node_option, "cache_group_node",
-                 CacheGroupNodeOption);
-  BIND_suboption(remote_block_cache_option, "remote_block_cache",
-                 RemoteBlockCacheOption);
+class RemoteNodeOption : public BaseOption {
+  BIND_uint32(rpc_timeout_ms, 3000, "");
+};
+
+class RemoteBlockCacheOption : public BaseOption {
+  BIND_string(group_name, "", "");
+  BIND_uint32(load_members_interval_ms, 1000, "");
+
+  BIND_suboption(remote_node_option, "remote_node", RemoteNodeOption);
+  BIND_suboption(mds_rpc_option, "mds_rpc", client::MDSRPCOption);
 };
 
 }  // namespace cache
 }  // namespace options
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CACHE_APP_H_
+#endif  // DINGOFS_SRC_OPTIONS_CACHE_REMOTE_BLOCK_CACHE_H_

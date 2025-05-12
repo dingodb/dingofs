@@ -34,9 +34,9 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-bool InitAccessLog(const std::string& prefix);
+bool InitCacheAccessLog(const std::string& prefix);
 
-void ShutdownAccessLog();
+void ShutdownCacheAccessLog();
 
 class LogGuard {
  public:

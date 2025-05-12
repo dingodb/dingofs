@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CACHE_BLOCKCACHE_H_
-#define DINGOFS_SRC_OPTIONS_CACHE_BLOCKCACHE_H_
+#ifndef DINGOFS_SRC_OPTIONS_CACHE_BLOCK_CACHE_H_
+#define DINGOFS_SRC_OPTIONS_CACHE_BLOCK_CACHE_H_
 
 #include <gflags/gflags_declare.h>
 
@@ -107,4 +107,4 @@ class BlockCacheOption : public BaseOption {
 }  // namespace options
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CACHE_BLOCKCACHE_H_
+#endif  // DINGOFS_SRC_OPTIONS_CACHE_BLOCK_CACHE_H_

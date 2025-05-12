@@ -30,7 +30,7 @@
 #include "base/math/math.h"
 #include "base/string/string.h"
 #include "cache/common/common.h"
-#include "options/cache/blockcache.h"
+#include "options/cache/block_cache.h"
 #include "stub/metric/metric.h"
 #include "utils/dingo_define.h"
 

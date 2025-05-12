@@ -25,40 +25,53 @@
 
 #include <brpc/server.h>
 
+#include <csignal>
 #include <cstdlib>
 #include <memory>
 #include <string>
 
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/cachegroup/cache_group_node_service.h"
+#include "options/cache/app.h"
 
 namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
+using options::cache::AppOption;
+
 class CacheGroupNodeServer {
  public:
   virtual ~CacheGroupNodeServer() = default;
 
-  virtual Status Serve() = 0;
+  virtual Status Init() = 0;
+
+  virtual Status Run() = 0;
 
   virtual void Shutdown() = 0;
 };
 
 class CacheGroupNodeServerImpl : public CacheGroupNodeServer {
  public:
-  explicit CacheGroupNodeServerImpl(std::shared_ptr<CacheGroupNode> node);
+  explicit CacheGroupNodeServerImpl(AppOption option);
 
   ~CacheGroupNodeServerImpl() override = default;
 
-  Status Serve() override;
+  Status Init() override;
+
+  Status Run() override;
 
   void Shutdown() override;
 
  private:
-  bool StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
+  void InstallSignal();
+
+  Status InitLogger();
+
+  Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
 
  private:
+  AppOption option_;
   std::shared_ptr<CacheGroupNode> node_;
   std::unique_ptr<BlockCacheService> service_;
   std::unique_ptr<::brpc::Server> server_;

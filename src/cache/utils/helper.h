@@ -16,32 +16,38 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-05-09
+ * Created Date: 2025-04-12
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CACHE_REMOTECACHE_H_
-#define DINGOFS_SRC_OPTIONS_CACHE_REMOTECACHE_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_HELPER_H_
+#define DINGOFS_SRC_CACHE_UTILS_HELPER_H_
 
-#include "options/options.h"
+#include <absl/strings/str_format.h>
+
+#include <cstring>
+#include <memory>
+#include <sstream>
+#include <string>
 
 namespace dingofs {
-namespace options {
 namespace cache {
+namespace utils {
 
-class RemoteNodeOption : public BaseOption {
-  BIND_uint32(rpc_timeout_ms, 3000, "");
-};
+template <typename... Args>
+inline std::string Errorf(int code, const char* format, const Args&... args) {
+  std::ostringstream message;
+  message << absl::StrFormat(format, args...) << ": " << ::strerror(code);
+  return message.str();
+}
 
-class RemoteBlockCacheOption : public BaseOption {
-  BIND_string(group_name, "", "");
-  BIND_uint32(load_members_interval_ms, 1000, "");
+template <typename... Args>
+inline std::string Errorf(const char* format, const Args&... args) {
+  return Errorf(errno, format, args...);
+}
 
-  BIND_suboption(remote_node_option, "remote_node", RemoteNodeOption);
-};
-
+}  // namespace utils
 }  // namespace cache
-}  // namespace options
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CACHE_REMOTECACHE_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_HELPER_H_

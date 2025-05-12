@@ -103,7 +103,7 @@ class CacheGroupNodeImpl : public CacheGroupNode {
   CacheGroupNodeOption option_;
   std::shared_ptr<MDSBaseClient> mds_base_;
   std::shared_ptr<MdsClient> mds_client_;
-  std::unique_ptr<BlockCache> block_cache_;  // inited by later
+  std::shared_ptr<BlockCache> block_cache_;  // inited by later
   std::unique_ptr<DataAccesserPool> data_accesser_pool_;
   std::unique_ptr<AsyncCache> async_cache_;  // inited by later
   std::shared_ptr<CacheGroupNodeMember> member_;

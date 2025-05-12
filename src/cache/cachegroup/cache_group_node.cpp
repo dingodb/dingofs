@@ -40,15 +40,19 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
+#include "cache/cachegroup/async_cache.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
 #include "cache/common/common.h"
 #include "cache/utils/data_accesser_pool.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/local_filesystem.h"
 #include "common/status.h"
 #include "dataaccess/accesser.h"
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
+#include "options/client/rpc.h"
+#include "stub/common/config.h"
 #include "stub/rpcclient/base_client.h"
 #include "stub/rpcclient/mds_client.h"
 
@@ -63,6 +67,8 @@ using dingofs::cache::blockcache::BlockCacheImpl;
 using dingofs::cache::blockcache::BlockKey;
 using dingofs::cache::utils::DataAccesserPoolImpl;
 using dingofs::dataaccess::DataAccesserPtr;
+using dingofs::stub::common::MdsOption;
+using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClientImpl;
 
 static void BufferDeleter(void* ptr) { delete[] static_cast<char*>(ptr); }
@@ -80,22 +86,23 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
 
 Status CacheGroupNodeImpl::Start() {
   if (!running_.exchange(true)) {
-    MdsOption option;  // FIXME(Wine93): use new version options
-    option.rpcRetryOpt.addrs = option_.mds_rpc_option().addrs();
-    auto rc = mds_client_->Init(option, mds_base_.get());
+    MdsOption mds_option;  // FIXME(Wine93): use new version options
+    mds_option.rpcRetryOpt.addrs = option_.mds_rpc_option().addrs();
+    auto rc = mds_client_->Init(mds_option, mds_base_.get());
     if (rc != FSStatusCode::OK) {
       return Status::Internal("init mds client failed");
     }
 
-    auto status = InitBlockCache();
+    Status status = member_->JoinGroup();
     if (!status.ok()) {
       return status;
     }
 
-    status = member_->JoinGroup();
+    status = InitBlockCache();
     if (!status.ok()) {
       return status;
     }
+
     heartbeat_->Start();
   }
   return Status::OK();
@@ -138,8 +145,10 @@ void CacheGroupNodeImpl::RewriteCacheDir() {
 
 Status CacheGroupNodeImpl::InitBlockCache() {
   RewriteCacheDir();
-  block_cache_ = std::make_unique<BlockCacheImpl>(
+  block_cache_ = std::make_shared<BlockCacheImpl>(
       option_.block_cache_option(), nullptr);  // FIXME(Wine93): maybe crash?
+  async_cache_ = std::make_unique<AsyncCacheImpl>(block_cache_);
+
   Status status = block_cache_->Init();
   if (status.ok()) {
     status = async_cache_->Start();

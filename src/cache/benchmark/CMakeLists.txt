@@ -17,8 +17,9 @@ file(GLOB BENCHMARK_LIB_SRCS
     "*.cpp"
 )
 
-add_library(cache_bench ${BENCHMARK_LIB_SRCS})
-
+add_executable(cache_bench cache_bench.cpp)
 target_link_libraries(cache_bench
+    cache_common
+    cache_utils
     cache_remotecache
 )

@@ -1,3 +1,9 @@
+[global]
+log_dir = "/tmp"
+log_level = 0
+cache_access_logging = true
+s3_access_logging = true
+
 [cache_group_node]
 group_name = ""
 listen_ip = "127.0.0.1"
@@ -18,7 +24,7 @@ normal_retry_times_before_trigger_wait = 3
 wait_sleep_ms = 1000
 
 [cache_group_node.block_cache]
-logging = true
+logging = true  # TODO(Wine93): remove it
 cache_store = "disk"
 stage = true
 stage_bandwidth_throttle_enable = false
@@ -52,3 +58,6 @@ load_members_interval_ms = 1000
 
 [remote_block_cache.remote_node]
 rpc_timeout_ms = 3000
+
+[remote_block_cache.mds_rpc]
+addrs = [ "127.0.0.1:6700" ]

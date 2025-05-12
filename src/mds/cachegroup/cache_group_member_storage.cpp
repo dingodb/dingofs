@@ -163,7 +163,7 @@ Errno CacheGroupMemberStorageImpl::GetGroupId(const std::string& group_name,
   ReadLockGuard lk(rwlock_);
   auto iter = group_names_.find(group_name);
   if (iter == group_names_.end()) {
-    return Errno::kInvalidGroupName;
+    return Errno::kNotFound;
   }
   *id = iter->second;
   return Errno::kOk;
@@ -171,8 +171,8 @@ Errno CacheGroupMemberStorageImpl::GetGroupId(const std::string& group_name,
 
 Errno CacheGroupMemberStorageImpl::RegisterMember(uint64_t* member_id) {
   WriteLockGuard lk(rwlock_);
-  bool succ = member_id_generator_->GenId(1, member_id);
-  return succ ? Errno::kOk : Errno::kFail;
+  int rc = member_id_generator_->GenId(1, member_id);
+  return rc == 0 ? Errno::kOk : Errno::kFail;
 }
 
 Errno CacheGroupMemberStorageImpl::RegisterGroup(const std::string& group_name,
@@ -183,10 +183,9 @@ Errno CacheGroupMemberStorageImpl::RegisterGroup(const std::string& group_name,
     return Errno::kOk;
   }
 
-  bool succ = member_id_generator_->GenId(1, group_id);
-  if (succ) {
-    succ = StoreGroupName(*group_id, group_name);
-    if (succ) {
+  int rc = member_id_generator_->GenId(1, group_id);
+  if (rc == 0) {
+    if (StoreGroupName(*group_id, group_name)) {
       group_names_[group_name] = *group_id;
       return Errno::kOk;
     }

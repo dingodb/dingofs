@@ -32,9 +32,9 @@
 #include "base/file/file.h"
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 #include "cache/utils/sys_conf.h"
-#include "cache/utils/utils.h"
 
 namespace dingofs {
 namespace cache {
