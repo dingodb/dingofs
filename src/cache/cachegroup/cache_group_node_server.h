@@ -38,8 +38,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using options::cache::AppOption;
-
 class CacheGroupNodeServer {
  public:
   virtual ~CacheGroupNodeServer() = default;
@@ -53,7 +51,7 @@ class CacheGroupNodeServer {
 
 class CacheGroupNodeServerImpl : public CacheGroupNodeServer {
  public:
-  explicit CacheGroupNodeServerImpl(AppOption option);
+  explicit CacheGroupNodeServerImpl(options::cache::AppOption option);
 
   ~CacheGroupNodeServerImpl() override = default;
 
@@ -70,7 +68,6 @@ class CacheGroupNodeServerImpl : public CacheGroupNodeServer {
 
   Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
 
- private:
   AppOption option_;
   std::shared_ptr<CacheGroupNode> node_;
   std::unique_ptr<BlockCacheService> service_;

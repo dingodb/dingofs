@@ -23,9 +23,10 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 
+#include <bthread/mutex.h>
+
 #include <atomic>
 #include <memory>
-#include <mutex>
 
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
@@ -38,60 +39,46 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::cache::utils::PhaseTimer;
-using dingofs::dataaccess::DataAccesserPtr;
-using dingofs::utils::TaskThreadPool;
-
 // How it works:
 //               add                   scan                     put
 // [stage block]----> [pending queue] -----> [uploading queue] ----> [s3]
 class BlockCacheUploader {
  public:
-  BlockCacheUploader(DataAccesserPtr data_accesser,
+  BlockCacheUploader(dataaccess::DataAccesserPtr data_accesser,
                      std::shared_ptr<CacheStore> store,
                      std::shared_ptr<Countdown> stage_count);
-
   virtual ~BlockCacheUploader();
 
   void Init(uint64_t upload_workers, uint64_t upload_queue_size);
-
   void Shutdown();
 
   void AddStageBlock(const BlockKey& key, const std::string& stage_path,
                      BlockContext ctx);
-
   void WaitAllUploaded();
 
  private:
   friend class BlockCacheMetricHelper;
 
- private:
   bool CanUpload(const std::vector<StageBlock>& blocks);
 
   void ScaningWorker();
-
   void UploadingWorker();
 
   void UploadStageBlock(const StageBlock& stage_block);
-
   static Status ReadBlock(const StageBlock& stage_block,
                           std::shared_ptr<char>& buffer, size_t* length);
-
   void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
-                   size_t length, PhaseTimer timer);
-
+                   size_t length, utils::PhaseTimer timer);
   void RemoveBlock(const StageBlock& stage_block);
 
   void Staging(const StageBlock& stage_block);
-
   void Uploaded(const StageBlock& stage_block, bool success);
-
   static bool NeedCount(const StageBlock& stage_block);
 
  private:
-  std::mutex mutex_;
+  bthread::Mutex mutex_;
   std::atomic<bool> running_;
-  DataAccesserPtr data_accesser_;
+  dataaccess::DataAccesserPtr data_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<PendingQueue> pending_queue_;

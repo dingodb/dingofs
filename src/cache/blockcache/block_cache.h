@@ -33,13 +33,13 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/countdown.h"
 #include "cache/common/common.h"
+#include "cache/storage/buffer.h"
+#include "cache/storage/storage.h"
 #include "dataaccess/accesser.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using dingofs::dataaccess::DataAccesserPtr;
 
 enum class StoreType : uint8_t {
   kNone = 0,
@@ -48,21 +48,47 @@ enum class StoreType : uint8_t {
 
 class BlockCache {
  public:
+  struct PutOption {
+    PutOption() : writeback(false) {}
+    PutOption(BlockContext ctx) : ctx(ctx), writeback(false) {}
+
+    BlockContext ctx;
+    bool writeback;
+  };
+
+  struct RangeOption {
+    RangeOption() : retive(true){};
+    RangeOption(bool retive) : retive(retive){};
+
+    bool retive;
+  };
+
+  struct CacheOption {
+    CacheOption() = default;
+  };
+
+  struct FlushOption {
+    FlushOption() = default;
+  };
+
   virtual ~BlockCache() = default;
 
   virtual Status Init() = 0;
 
   virtual Status Shutdown() = 0;
 
-  virtual Status Put(const BlockKey& key, const Block& block,
-                     BlockContext ctx) = 0;
+  virtual Status Put(PutOption option, const BlockKey& key,
+                     const Block& block) = 0;
 
-  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
-                       char* buffer, bool retrive = true) = 0;
+  virtual Status Range(RangeOption option, const BlockKey& key, off_t offset,
+                       size_t length, storage::IOBuffer* buffer) = 0;
 
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
+  virtual Status Cache(CacheOption option, const BlockKey& key,
+                       const Block& block) = 0;
 
-  virtual Status Flush(uint64_t ino) = 0;
+  virtual Status Flush(FlushOption option, uint64_t ino) = 0;
+
+  virtual void RunInBthread(std::function<void(BlockCache*)>);
 
   virtual void SubmitPrefetch(const BlockKey& key, size_t length) = 0;
 
@@ -74,7 +100,7 @@ class BlockCache {
 class BlockCacheImpl : public BlockCache {
  public:
   explicit BlockCacheImpl(BlockCacheOption option,
-                          DataAccesserPtr data_accesser);
+                          dataaccess::DataAccesserPtr data_accesser);
 
   ~BlockCacheImpl() override = default;
 
@@ -82,15 +108,18 @@ class BlockCacheImpl : public BlockCache {
 
   Status Shutdown() override;
 
-  Status Put(const BlockKey& key, const Block& block,
-             BlockContext ctx) override;
+  Status Put(PutOption option, const BlockKey& key,
+             const Block& block) override;
 
-  Status Range(const BlockKey& key, off_t offset, size_t length, char* buffer,
-               bool retrive = true) override;
+  Status Range(RangeOption option, const BlockKey& key, off_t offset,
+               size_t length, storage::IOBuffer* buffer) override;
 
-  Status Cache(const BlockKey& key, const Block& block) override;
+  Status Cache(CacheOption option, const BlockKey& key,
+               const Block& block) override;
 
-  Status Flush(uint64_t ino) override;
+  Status Flush(FlushOption option, uint64_t ino) override;
+
+  void RunInBthread(std::function<void(BlockCache*)>) override;
 
   void SubmitPrefetch(const BlockKey& key, size_t length) override;
 
@@ -99,15 +128,21 @@ class BlockCacheImpl : public BlockCache {
   StoreType GetStoreType() override;
 
  private:
+  struct FuncArg {
+    FuncArg(BlockCache* block_cache, std::function<void(BlockCache*)> func)
+        : block_cache(block_cache), func(func) {}
+
+    BlockCache* block_cache;
+    std::function<void(BlockCache*)> func;
+  };
+
   Status DoPrefetch(const BlockKey& key, size_t length);
 
- private:
   friend class BlockCacheBuilder;
 
- private:
   BlockCacheOption option_;
   std::atomic<bool> running_;
-  DataAccesserPtr data_accesser_;
+  std::shared_ptr<storage::Storage> storage_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<BlockCacheThrottle> throttle_;

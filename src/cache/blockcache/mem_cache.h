@@ -23,13 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_MEM_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_MEM_CACHE_H_
 
+#include <sys/types.h>
+
 #include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using UploadFunc = CacheStore::UploadFunc;
 
 class MemCache : public CacheStore {
  public:
@@ -41,19 +41,20 @@ class MemCache : public CacheStore {
 
   Status Shutdown() override { return Status::OK(); }
 
-  Status Stage(const BlockKey&, const Block&, BlockContext) override {
+  Status Stage(StageOption, const BlockKey&, const Block&) override {
     return Status::NotSupport("not support");
   }
 
-  Status RemoveStage(const BlockKey&, BlockContext) override {
+  Status RemoveStage(RemoveStageOption, const BlockKey&) override {
     return Status::NotSupport("not support");
   }
 
-  Status Cache(const BlockKey&, const Block&) override {
+  Status Cache(CacheOption, const BlockKey&, const Block&) override {
     return Status::NotSupport("not support");
   }
 
-  Status Load(const BlockKey&, std::shared_ptr<BlockReader>&) override {
+  Status Load(LoadOption, const BlockKey&, off_t, size_t,
+              storage::IOBuffer*) override {
     return Status::NotSupport("not support");
   }
 

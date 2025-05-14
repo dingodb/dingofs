@@ -61,13 +61,11 @@ std::string StrPhase(Phase phase) {
 
       // aio
       {Phase::kQueued, "queued"},
-      {Phase::kCheckIo, "check"},
+      {Phase::kCheckIO, "check"},
       {Phase::kEnqueue, "enqueue"},
-      {Phase::kPrepareIo, "prepare"},
-      {Phase::kSubmitIo, "submit"},
-      {Phase::kExecuteIo, "execute"},
-      {Phase::kMemcpy, "memcpy"},
-      {Phase::kRunClosure, "clousre"},
+      {Phase::kPrepareIO, "prepare"},
+      {Phase::kSubmitIO, "submit"},
+      {Phase::kExecuteIO, "execute"},
   };
 
   auto it = kPhases.find(phase);

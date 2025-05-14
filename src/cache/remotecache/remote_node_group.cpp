@@ -29,6 +29,7 @@
 
 #include "base/hash/con_hash.h"
 #include "base/hash/ketama_con_hash.h"
+#include "cache/remotecache/remote_block_cache.h"
 #include "cache/remotecache/remote_node.h"
 #include "common/status.h"
 #include "dingofs/cachegroup.pb.h"
@@ -55,7 +56,7 @@ RemoteNodeGroupImpl::RemoteNodeGroupImpl(RemoteBlockCacheOption option,
     : running_(false),
       option_(option),
       mds_client_(mds_client),
-      timer_(std::make_unique<TimerImpl>()),
+      timer_(std::make_unique<base::timer::TimerImpl>()),
       chash_(std::make_shared<KetamaConHash>()),
       nodes_(std::make_shared<NodesT>()) {}
 
@@ -166,7 +167,7 @@ std::vector<uint64_t> RemoteNodeGroupImpl::CalcWeights(
   return weights;
 }
 
-std::shared_ptr<ConHash> RemoteNodeGroupImpl::BuildHash(
+std::shared_ptr<base::hash::ConHash> RemoteNodeGroupImpl::BuildHash(
     const CacheGroupMembers& members) {
   auto weights = CalcWeights(members);
   CHECK_EQ(members.size(), weights.size());

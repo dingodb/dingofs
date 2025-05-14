@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/block_cache.h"
 
+#include <bthread/bthread.h>
 #include <glog/logging.h>
 
 #include <cassert>
@@ -35,6 +36,8 @@
 #include "cache/blockcache/disk_cache_group.h"
 #include "cache/blockcache/mem_cache.h"
 #include "cache/common/common.h"
+#include "cache/storage/buffer.h"
+#include "cache/storage/storage.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/phase_timer.h"
 #include "utils/dingo_define.h"
@@ -48,9 +51,9 @@ using dingofs::cache::utils::Phase;
 using dingofs::cache::utils::PhaseTimer;
 
 BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
-                               DataAccesserPtr data_accesser)
+                               dataaccess::DataAccesserPtr data_accesser)
     : option_(option),
-      data_accesser_(data_accesser),
+      storage_(std::make_shared<storage::StorageImpl>(data_accesser)),
       running_(false),
       stage_count_(std::make_shared<Countdown>()),
       throttle_(std::make_unique<BlockCacheThrottle>()) {
@@ -107,8 +110,8 @@ Status BlockCacheImpl::Shutdown() {
   return Status::OK();
 }
 
-Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
-                           BlockContext ctx) {
+Status BlockCacheImpl::Put(PutOption option, const BlockKey& key,
+                           const Block& block) {
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
@@ -116,10 +119,16 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
                      status.ToString(), timer.ToString());
   });
 
+  if (!option.writeback) {
+    timer.NextPhase(Phase::kS3Put);
+    status = storage_->Put(key.StoreKey(), block.buffer);
+    return status;
+  }
+
   auto wait = throttle_->Add(block.size);  // stage throttle
   if (option_.stage() && !wait) {
     timer.NextPhase(Phase::kStageBlock);
-    status = store_->Stage(key, block, ctx);
+    status = store_->Stage(CacheStore::StageOption(option.ctx), key, block);
     if (status.ok()) {
       return status;
     } else if (status.IsCacheFull()) {
@@ -131,14 +140,14 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
     }
   }
 
-  // TODO(@Wine93): Cache the block which put to storage directly
   timer.NextPhase(Phase::kS3Put);
-  status = data_accesser_->Put(key.StoreKey(), block.data, block.size);
+  status = storage_->Put(key.StoreKey(), block.buffer);
   return status;
 }
 
-Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
-                             char* buffer, bool retrive) {
+Status BlockCacheImpl::Range(RangeOption option, const BlockKey& key,
+                             off_t offset, size_t length,
+                             storage::IOBuffer* buffer) {
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
@@ -147,42 +156,52 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
   });
 
   timer.NextPhase(Phase::kLoadBlock);
-  std::shared_ptr<BlockReader> reader;
-  status = store_->Load(key, reader);
-  if (status.ok()) {
-    timer.NextPhase(Phase::kReadBlock);
-    auto defer = absl::MakeCleanup([reader]() { reader->Close(); });
-    status = reader->ReadAt(offset, length, buffer);
-    if (status.ok()) {
-      return status;
-    }
-  }
-
-  timer.NextPhase(Phase::kS3Range);
-  if (retrive) {
-    status = data_accesser_->Get(key.StoreKey(), offset, length, buffer);
+  status = store_->Load(CacheStore::LoadOption(), key, offset, length, buffer);
+  if (!status.ok() && option.retive) {
+    timer.NextPhase(Phase::kS3Range);
+    status = storage_->Get(key.StoreKey(), offset, length, buffer);
   }
   return status;
 }
 
-Status BlockCacheImpl::Cache(const BlockKey& key, const Block& block) {
+Status BlockCacheImpl::Cache(CacheOption /*option*/, const BlockKey& key,
+                             const Block& block) {
   Status status;
   LogGuard log([&]() {
     return StrFormat("cache(%s,%d): %s", key.Filename(), block.size,
                      status.ToString());
   });
 
-  status = store_->Cache(key, block);
+  status = store_->Cache(CacheStore::CacheOption(), key, block);
   return status;
 }
 
-Status BlockCacheImpl::Flush(uint64_t ino) {
+Status BlockCacheImpl::Flush(FlushOption /*option*/, uint64_t ino) {
   Status status;
   LogGuard log(
       [&]() { return StrFormat("flush(%d): %s", ino, status.ToString()); });
 
   status = stage_count_->Wait(ino);
   return status;
+}
+
+void BlockCacheImpl::RunInBthread(std::function<void(BlockCache*)> func) {
+  bthread_t tid;
+  const bthread_attr_t attr = BTHREAD_ATTR_NORMAL;
+  auto arg = FuncArg(this, func);
+  int rc = bthread_start_background(
+      &tid, &attr,
+      [](void* arg) -> void* {
+        FuncArg* raw_arg = reinterpret_cast<FuncArg*>(arg);
+        raw_arg->func(raw_arg->block_cache);
+        return nullptr;
+      },
+      &arg);
+
+  if (rc != 0) {
+    LOG(ERROR) << "Start bthread for block cache task failed: rc = " << rc;
+    func(this);
+  }
 }
 
 void BlockCacheImpl::SubmitPrefetch(const BlockKey& key, size_t length) {
@@ -202,12 +221,12 @@ Status BlockCacheImpl::DoPrefetch(const BlockKey& key, size_t length) {
   }
 
   timer.NextPhase(Phase::kS3Range);
-  std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
-  status = data_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
+  storage::IOBuffer buffer;
+  status = storage_->Get(key.StoreKey(), 0, length, &buffer);
   if (status.ok()) {
     timer.NextPhase(Phase::kCacheBlock);
-    Block block(buffer.get(), length);
-    status = store_->Cache(key, block);
+    Block block(&buffer);
+    status = store_->Cache(CacheStore::CacheOption(), key, block);
   }
   return status;
 }

@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/disk_cache_manager.h"
 
+#include <bthread/mutex.h>
 #include <butil/time.h>
 
 #include <chrono>
@@ -38,14 +39,12 @@ namespace cache {
 namespace blockcache {
 
 using butil::Timer;
-using dingofs::base::math::kMiB;
 using dingofs::base::string::StrFormat;
 using dingofs::base::time::TimeNow;
-using dingofs::utils::LockGuard;
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    std::shared_ptr<DiskCacheLayout> layout,
-                                   std::shared_ptr<LocalFileSystem> fs,
+                                   std::shared_ptr<utils::LocalFileSystem> fs,
                                    std::shared_ptr<DiskCacheMetric> metric)
     : used_bytes_(0),
       capacity_(capacity),
@@ -56,7 +55,8 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
       fs_(fs),
       lru_(std::make_unique<LRUCache>()),
       metric_(metric),
-      task_pool_(std::make_unique<TaskThreadPool<>>("disk_cache_manager")) {
+      task_pool_(std::make_unique<dingofs::utils::TaskThreadPool<>>(
+          "disk_cache_manager")) {
   mq_ = std::make_unique<MessageQueueType>("delete_block_queue", 10);
   mq_->Subscribe([&](MessageType message) {
     DeleteBlocks(message.first, message.second);
@@ -92,7 +92,7 @@ void DiskCacheManager::Stop() {
 
 void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
                            BlockPhase phase) {
-  LockGuard lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   if (phase == BlockPhase::kStaging) {
     staging_.emplace(key.Filename(), value);
     UpdateUsage(1, value.size);
@@ -114,7 +114,7 @@ void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
 }
 
 void DiskCacheManager::Delete(const CacheKey& key) {
-  LockGuard lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   CacheValue value;
   if (lru_->Delete(key, &value)) {  // exist
     UpdateUsage(-1, -value.size);
@@ -122,7 +122,7 @@ void DiskCacheManager::Delete(const CacheKey& key) {
 }
 
 bool DiskCacheManager::Exist(const BlockKey& key) {
-  LockGuard lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   CacheValue value;
   return lru_->Get(key, &value) ||
          staging_.find(key.Filename()) != staging_.end();
@@ -138,7 +138,7 @@ bool DiskCacheManager::CacheFull() const {
 
 void DiskCacheManager::CheckFreeSpace() {
   uint64_t goal_bytes, goal_files;
-  struct LocalFileSystem::StatDisk stat;
+  struct utils::LocalFileSystem::StatDisk stat;
   std::string root_dir = layout_->GetRootDir();
 
   while (running_.load(std::memory_order_relaxed)) {
@@ -169,7 +169,7 @@ void DiskCacheManager::CheckFreeSpace() {
           root_dir, watermark * 100, (1.0 - br) * 100, (1.0 - fr) * 100,
           cache_full ? 'Y' : 'N', stage_full ? 'Y' : 'N');
 
-      LockGuard lk(mutex_);
+      std::lock_guard<bthread::Mutex> lk(mutex_);
       goal_bytes = stat.total_bytes * watermark;
       goal_files = stat.total_files * watermark;
       CleanupFull(goal_bytes, goal_files);
@@ -204,7 +204,7 @@ void DiskCacheManager::CleanupExpire() {
     }
 
     {
-      LockGuard lk(mutex_);
+      std::lock_guard<bthread::Mutex> lk(mutex_);
       to_del = lru_->Evict([&](const CacheValue& value) {
         if (++num_checks > 1e3) {
           return FilterStatus::kFinish;

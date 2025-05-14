@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
+#include <bthread/mutex.h>
+
 #include <atomic>
 #include <memory>
 #include <string>
@@ -42,11 +44,6 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::queue::MessageQueue;
-using dingofs::cache::blockcache::LRUCache;
-using dingofs::utils::Mutex;
-using dingofs::utils::TaskThreadPool;
-
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {
   kStaging = 0,
@@ -56,17 +53,9 @@ enum class BlockPhase : uint8_t {
 
 // Manage cache items and its capacity
 class DiskCacheManager {
-  enum class DeleteFrom : uint8_t {
-    kCacheFull,
-    kCacheExpired,
-  };
-
-  using MessageType = std::pair<CacheItems, DeleteFrom>;
-  using MessageQueueType = MessageQueue<MessageType>;
-
  public:
   DiskCacheManager(uint64_t capacity, std::shared_ptr<DiskCacheLayout> layout,
-                   std::shared_ptr<LocalFileSystem> fs,
+                   std::shared_ptr<utils::LocalFileSystem> fs,
                    std::shared_ptr<DiskCacheMetric> metric);
 
   virtual ~DiskCacheManager() = default;
@@ -87,34 +76,36 @@ class DiskCacheManager {
   virtual bool CacheFull() const;
 
  private:
+  enum class DeleteFrom : uint8_t {
+    kCacheFull,
+    kCacheExpired,
+  };
+
+  using MessageType = std::pair<CacheItems, DeleteFrom>;
+  using MessageQueueType = base::queue::MessageQueue<MessageType>;
+
   void CheckFreeSpace();
-
   void CleanupFull(uint64_t goal_bytes, uint64_t goal_files);
-
   void CleanupExpire();
-
   void DeleteBlocks(const CacheItems& to_del, DeleteFrom);
-
   void UpdateUsage(int64_t n, int64_t bytes);
 
   std::string GetCachePath(const CacheKey& key);
-
   static std::string StrFrom(DeleteFrom from);
 
- private:
-  Mutex mutex_;
+  bthread::Mutex mutex_;
   uint64_t used_bytes_;
   uint64_t capacity_;
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheLayout> layout_;
-  std::shared_ptr<LocalFileSystem> fs_;
+  std::shared_ptr<utils::LocalFileSystem> fs_;
   std::unique_ptr<LRUCache> lru_;                        // store cache block
   std::unordered_map<std::string, CacheValue> staging_;  // store stage block
   std::unique_ptr<MessageQueueType> mq_;
   std::shared_ptr<DiskCacheMetric> metric_;
-  std::unique_ptr<TaskThreadPool<>> task_pool_;
+  std::unique_ptr<dingofs::utils::TaskThreadPool<>> task_pool_;
 };
 
 }  // namespace blockcache

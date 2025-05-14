@@ -40,7 +40,7 @@ using dingofs::base::filepath::HasSuffix;
 using dingofs::base::filepath::PathJoin;
 
 DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
-                                 std::shared_ptr<LocalFileSystem> fs,
+                                 std::shared_ptr<utils::LocalFileSystem> fs,
                                  std::shared_ptr<DiskCacheManager> manager,
                                  std::shared_ptr<DiskCacheMetric> metric)
     : running_(false),
@@ -48,7 +48,8 @@ DiskCacheLoader::DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
       fs_(fs),
       manager_(manager),
       metric_(metric),
-      task_pool_(absl::make_unique<TaskThreadPool<>>("disk_cache_loader")) {}
+      task_pool_(absl::make_unique<dingofs::utils::TaskThreadPool<>>(
+          "disk_cache_loader")) {}
 
 void DiskCacheLoader::Start(const std::string& disk_id,
                             CacheStore::UploadFunc uploader) {

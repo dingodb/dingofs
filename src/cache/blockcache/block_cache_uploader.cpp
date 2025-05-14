@@ -39,12 +39,11 @@ namespace blockcache {
 
 using dingofs::cache::utils::LogIt;
 using dingofs::cache::utils::Phase;
-using dingofs::options::cache::AppOption;
-using dingofs::utils::TaskThreadPool;
+using dingofs::cache::utils::PhaseTimer;
 
-BlockCacheUploader::BlockCacheUploader(DataAccesserPtr data_accesser,
-                                       std::shared_ptr<CacheStore> store,
-                                       std::shared_ptr<Countdown> stage_count)
+BlockCacheUploader::BlockCacheUploader(
+    dataaccess::DataAccesserPtr data_accesser,
+    std::shared_ptr<CacheStore> store, std::shared_ptr<Countdown> stage_count)
     : running_(false),
       data_accesser_(data_accesser),
       store_(store),
@@ -170,7 +169,7 @@ Status BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
                                      std::shared_ptr<char>& buffer,
                                      size_t* length) {
   auto stage_path = stage_block.stage_path;
-  auto fs = LocalFileSystem();
+  auto fs = utils::LocalFileSystem();
   auto status =
       fs.ReadFile(stage_path, buffer, length, FLAGS_disk_cache_drop_page_cache);
   if (status.IsNotFound()) {
@@ -185,7 +184,7 @@ Status BlockCacheUploader::ReadBlock(const StageBlock& stage_block,
 
 void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
                                      std::shared_ptr<char> buffer,
-                                     size_t length, PhaseTimer timer) {
+                                     size_t length, utils::PhaseTimer timer) {
   auto retry_cb = [stage_block, buffer, length, timer, this](int code) {
     auto key = stage_block.key;
     if (code != 0) {
@@ -204,7 +203,8 @@ void BlockCacheUploader::UploadBlock(const StageBlock& stage_block,
 }
 
 void BlockCacheUploader::RemoveBlock(const StageBlock& stage_block) {
-  auto status = store_->RemoveStage(stage_block.key, stage_block.ctx);
+  auto status = store_->RemoveStage(
+      CacheStore::RemoveStageOption(stage_block.ctx), stage_block.key);
   if (!status.ok()) {
     LOG(WARNING) << "Remove stage block (path=" << stage_block.stage_path
                  << ") after upload failed: " << status.ToString();

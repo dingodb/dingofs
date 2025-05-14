@@ -38,9 +38,6 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::hash::ConHash;
-using UploadFunc = CacheStore::UploadFunc;
-
 class DiskCacheGroup : public CacheStore {
  public:
   ~DiskCacheGroup() override = default;
@@ -51,15 +48,16 @@ class DiskCacheGroup : public CacheStore {
 
   Status Shutdown() override;
 
-  Status Stage(const BlockKey& key, const Block& block,
-               BlockContext ctx) override;
+  Status Stage(StageOption option, const BlockKey& key,
+               const Block& block) override;
 
-  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
+  Status RemoveStage(RemoveStageOption option, const BlockKey& key) override;
 
-  Status Cache(const BlockKey& key, const Block& block) override;
+  Status Cache(CacheOption option, const BlockKey& key,
+               const Block& block) override;
 
-  Status Load(const BlockKey& key,
-              std::shared_ptr<BlockReader>& reader) override;
+  Status Load(LoadOption option, const BlockKey& key, off_t offset,
+              size_t length, storage::IOBuffer* buffer) override;
 
   bool IsCached(const BlockKey& key) override;
 
@@ -68,12 +66,10 @@ class DiskCacheGroup : public CacheStore {
  private:
   static std::vector<uint64_t> CalcWeights(
       std::vector<DiskCacheOption> options);
-
   std::shared_ptr<DiskCache> GetStore(const BlockKey& key);
 
- private:
   std::vector<DiskCacheOption> options_;
-  std::unique_ptr<ConHash> chash_;
+  std::unique_ptr<base::hash::ConHash> chash_;
   std::unordered_map<std::string, std::shared_ptr<DiskCache>> stores_;
   std::unique_ptr<DiskCacheWatcher> watcher_;
 };

@@ -27,7 +27,7 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::timer::TimerImpl;
+using dingofs::utils::WriteLockGuard;
 
 void NormalDiskState::IOErr() {
   io_error_count_.fetch_add(1);
@@ -60,7 +60,7 @@ DiskStateMachineImpl::DiskStateMachineImpl(
     : state_(std::make_unique<BaseDiskState>(this)), metric_(metric) {}
 
 bool DiskStateMachineImpl::Start() {
-  dingofs::utils::WriteLockGuard lk(rw_lock_);
+  WriteLockGuard lk(rw_lock_);
 
   if (running_) {
     return true;
@@ -78,7 +78,7 @@ bool DiskStateMachineImpl::Start() {
     return false;
   }
 
-  timer_ = std::make_unique<TimerImpl>();
+  timer_ = std::make_unique<base::timer::TimerImpl>();
   CHECK(timer_->Start());
 
   running_ = true;
@@ -91,7 +91,7 @@ bool DiskStateMachineImpl::Start() {
 }
 
 bool DiskStateMachineImpl::Stop() {
-  dingofs::utils::WriteLockGuard lk(rw_lock_);
+  WriteLockGuard lk(rw_lock_);
 
   if (!running_) {
     return true;
@@ -119,7 +119,7 @@ bool DiskStateMachineImpl::Stop() {
 }
 
 void DiskStateMachineImpl::TickTock() {
-  dingofs::utils::WriteLockGuard lk(rw_lock_);
+  WriteLockGuard lk(rw_lock_);
 
   if (!running_) {
     return;
@@ -151,7 +151,7 @@ int DiskStateMachineImpl::EventThread(
 }
 
 void DiskStateMachineImpl::ProcessEvent(DiskStateEvent event) {
-  dingofs::utils::WriteLockGuard lk(rw_lock_);
+  WriteLockGuard lk(rw_lock_);
 
   LOG(INFO) << "ProcessEvent event: " << DiskStateEventToString(event)
             << " in state:" << DiskStateToString(state_->GetDiskState());

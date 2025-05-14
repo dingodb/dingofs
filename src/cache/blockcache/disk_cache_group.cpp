@@ -32,19 +32,18 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_cache_watcher.h"
+#include "cache/storage/buffer.h"
 #include "cache/utils/local_filesystem.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using base::hash::ConNode;
-using base::hash::KetamaConHash;
 using DiskCacheTotalMetric = ::dingofs::stub::metric::DiskCacheMetric;
 
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
     : options_(options),
-      chash_(std::make_unique<KetamaConHash>()),
+      chash_(std::make_unique<base::hash::KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()) {}
 
 Status DiskCacheGroup::Init(UploadFunc uploader) {
@@ -79,16 +78,17 @@ Status DiskCacheGroup::Shutdown() {
   return Status::OK();
 }
 
-Status DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
-                             BlockContext ctx) {
+Status DiskCacheGroup::Stage(StageOption option, const BlockKey& key,
+                             const Block& block) {
   Status status;
   DiskCacheMetricGuard guard(
       &status, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
-  status = GetStore(key)->Stage(key, block, ctx);
+  status = GetStore(key)->Stage(option, key, block);
   return status;
 }
 
-Status DiskCacheGroup::RemoveStage(const BlockKey& key, BlockContext ctx) {
+Status DiskCacheGroup::RemoveStage(RemoveStageOption option,
+                                   const BlockKey& key) {
   auto store = GetStore(key);
 
   // We should pass the request to specified store if |ctx.store_id|
@@ -96,24 +96,27 @@ Status DiskCacheGroup::RemoveStage(const BlockKey& key, BlockContext ctx) {
   // changed. so when we restart the store after add/delete some stores, the
   // stage block will be reloaded by one store to upload, but the RemoveStage
   // request maybe pass to another store to handle after upload success.
+  auto ctx = option.ctx;
   if (!ctx.store_id.empty()) {
     store = stores_[ctx.store_id];
     CHECK(store != nullptr);
   }
-  return store->RemoveStage(key, ctx);
+  return store->RemoveStage(option, key);
 }
 
-Status DiskCacheGroup::Cache(const BlockKey& key, const Block& block) {
+Status DiskCacheGroup::Cache(CacheOption option, const BlockKey& key,
+                             const Block& block) {
   Status status;
   DiskCacheMetricGuard guard(
       &status, &DiskCacheTotalMetric::GetInstance().write_disk, block.size);
-  status = GetStore(key)->Cache(key, block);
+  status = GetStore(key)->Cache(option, key, block);
   return status;
 }
 
-Status DiskCacheGroup::Load(const BlockKey& key,
-                            std::shared_ptr<BlockReader>& reader) {
-  return GetStore(key)->Load(key, reader);
+Status DiskCacheGroup::Load(LoadOption option, const BlockKey& key,
+                            off_t offset, size_t length,
+                            storage::IOBuffer* buffer) {
+  return GetStore(key)->Load(option, key, offset, length, buffer);
 }
 
 bool DiskCacheGroup::IsCached(const BlockKey& key) {
@@ -139,7 +142,7 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
 }
 
 std::shared_ptr<DiskCache> DiskCacheGroup::GetStore(const BlockKey& key) {
-  ConNode node;
+  base::hash::ConNode node;
   bool find = chash_->Lookup(std::to_string(key.id), node);
   assert(find);
 

@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_H_
 
 #include <brpc/channel.h>
+#include <bthread/mutex.h>
 #include <butil/iobuf.h>
 
 #include "cache/blockcache/block_cache.h"
@@ -35,16 +36,13 @@ namespace dingofs {
 namespace cache {
 namespace remotecache {
 
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::utils::Mutex;
-
 class RemoteNode {
  public:
   virtual ~RemoteNode() = default;
 
   virtual Status Init() = 0;
 
-  virtual Status Range(const BlockKey& block_key, size_t block_size,
+  virtual Status Range(const blockcache::BlockKey& block_key, size_t block_size,
                        off_t offset, size_t length, butil::IOBuf* buffer) = 0;
 };
 
@@ -57,8 +55,8 @@ class RemoteNodeImpl : public RemoteNode {
 
   Status Init() override;
 
-  Status Range(const BlockKey& block_key, size_t block_size, off_t offset,
-               size_t length, butil::IOBuf* buffer) override;
+  Status Range(const blockcache::BlockKey& block_key, size_t block_size,
+               off_t offset, size_t length, butil::IOBuf* buffer) override;
 
  private:
   bool InitChannel(const std::string& listen_ip, uint32_t listen_port);
@@ -66,7 +64,7 @@ class RemoteNodeImpl : public RemoteNode {
   void ResetChannel();
 
  private:
-  Mutex mutex_;  // for channel init
+  bthread::Mutex mutex_;  // for channel init
   pb::mds::cachegroup::CacheGroupMember member_;
   RemoteNodeOption option_;
   std::unique_ptr<brpc::Channel> channel_;

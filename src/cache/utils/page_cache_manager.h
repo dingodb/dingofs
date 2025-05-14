@@ -20,45 +20,46 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_COMMON_PAGE_CACHE_MANAGER_H_
-#define DINGOFS_SRC_CACHE_COMMON_PAGE_CACHE_MANAGER_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_PAGE_CACHE_MANAGER_H_
+#define DINGOFS_SRC_CACHE_UTILS_PAGE_CACHE_MANAGER_H_
 
 #include <bthread/execution_queue.h>
 #include <sys/types.h>
 
+#include "cache/common/common.h"
+
 namespace dingofs {
 namespace cache {
-namespace blockcache {
+namespace utils {
 
 class PageCacheManager {
-  struct DropTask {
-    DropTask(int fd, uint64_t offset, uint64_t length)
-        : fd(fd), offset(offset), length(length) {}
-
-    int fd;
-    uint64_t offset;
-    uint64_t length;
-  };
-
  public:
   PageCacheManager();
 
-  bool Start();
+  Status Start();
 
-  bool Stop();
+  Status Stop();
 
-  void DropPageCache(int fd, uint64_t offset, uint64_t length);
+  void DropPageCache(int fd, off_t offset, size_t length);
 
  private:
+  struct DropTask {
+    DropTask(int fd, off_t offset, size_t length)
+        : fd(fd), offset(offset), length(length) {}
+
+    int fd;
+    off_t offset;
+    size_t length;
+  };
+
   static int DoDrop(void* meta, bthread::TaskIterator<DropTask>& iter);
 
- private:
   std::atomic<bool> running_;
   bthread::ExecutionQueueId<DropTask> drop_page_cache_queue_id_;
 };
 
-}  // namespace blockcache
+}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_COMMON_PAGE_CACHE_MANAGER_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_PAGE_CACHE_MANAGER_H_

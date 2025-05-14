@@ -36,10 +36,10 @@ namespace cachegroup {
 using dingofs::base::time::TimeNow;
 using dingofs::cache::utils::LocalFileSystem;
 using dingofs::pb::mds::cachegroup::CacheGroupNodeMeta;
-using dingofs::pb::mds::cachegroup::CacheGroupOk;
 
 CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(
-    CacheGroupNodeOption option, std::shared_ptr<MdsClient> mds_client)
+    CacheGroupNodeOption option,
+    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
     : member_id_(0), option_(option), mds_client_(mds_client) {}
 
 Status CacheGroupNodeMemberImpl::JoinGroup() {

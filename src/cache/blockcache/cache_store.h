@@ -29,8 +29,8 @@
 #include <string>
 
 #include "base/string/string.h"
-#include "cache/blockcache/block_reader.h"
 #include "cache/common/common.h"
+#include "cache/storage/buffer.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
@@ -87,9 +87,9 @@ struct BlockKey {
 };
 
 struct Block {
-  Block(const char* data, size_t size) : data(data), size(size) {}
+  Block(storage::IOBuffer* buffer) : buffer(buffer), size(buffer->Size()) {}
 
-  const char* data;
+  storage::IOBuffer* buffer;
   size_t size;
 };
 
@@ -118,28 +118,45 @@ struct BlockContext {
 
 class CacheStore {
  public:
+  struct StageOption {
+    StageOption() = default;
+    StageOption(BlockContext ctx) : ctx(ctx) {}
+
+    BlockContext ctx;
+  };
+
+  struct RemoveStageOption {
+    RemoveStageOption() = default;
+    RemoveStageOption(BlockContext ctx) : ctx(ctx) {}
+
+    BlockContext ctx;
+  };
+
+  struct CacheOption {
+    CacheOption() = default;
+  };
+
+  struct LoadOption {
+    LoadOption() = default;
+  };
+
   using UploadFunc = std::function<void(
       const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
 
- public:
   virtual ~CacheStore() = default;
 
   virtual Status Init(UploadFunc uploader) = 0;
-
   virtual Status Shutdown() = 0;
 
-  virtual Status Stage(const BlockKey& key, const Block& block,
-                       BlockContext ctx) = 0;
-
-  virtual Status RemoveStage(const BlockKey& key, BlockContext ctx) = 0;
-
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
-
-  virtual Status Load(const BlockKey& key,
-                      std::shared_ptr<BlockReader>& reader) = 0;
+  virtual Status Stage(StageOption option, const BlockKey& key,
+                       const Block& block) = 0;
+  virtual Status RemoveStage(RemoveStageOption option, const BlockKey& key) = 0;
+  virtual Status Cache(CacheOption option, const BlockKey& key,
+                       const Block& block) = 0;
+  virtual Status Load(LoadOption option, const BlockKey& key, off_t offset,
+                      size_t length, storage::IOBuffer* buffer) = 0;
 
   virtual bool IsCached(const BlockKey& key) = 0;
-
   virtual std::string Id() = 0;
 };
 

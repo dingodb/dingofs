@@ -46,6 +46,8 @@ inline std::string Errorf(const char* format, const Args&... args) {
   return Errorf(errno, format, args...);
 }
 
+inline bool IsAligned(uint64_t n, uint64_t m) { return n % m == 0; }
+
 }  // namespace utils
 }  // namespace cache
 }  // namespace dingofs

@@ -25,6 +25,7 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/vfs.h>
 
 #include <functional>
@@ -50,9 +51,13 @@ class Posix {
 
   static Status CloseDir(::DIR* dir);
 
-  static Status Create(const std::string& path, int* fd, bool use_direct);
-
   static Status Open(const std::string& path, int flags, int* fd);
+
+  static Status Open(const std::string& path, int flags, mode_t mode, int* fd);
+
+  static Status Creat(const std::string& path, mode_t mode, int* fd);
+
+  static Status Create(const std::string& path, int* fd, bool use_direct);
 
   static Status LSeek(int fd, off_t offset, int whence);
 
@@ -75,7 +80,7 @@ class Posix {
   static Status MMap(void* addr, size_t length, int port, int flags, int fd,
                      off_t offset, void** addr_out);
 
-  static Status MUnmap(void* addr, size_t length);
+  static Status MUnMap(void* addr, size_t length);
 
  private:
   template <typename... Args>

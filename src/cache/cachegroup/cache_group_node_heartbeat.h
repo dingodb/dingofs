@@ -36,9 +36,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::base::timer::Timer;
-using dingofs::stub::rpcclient::MdsClient;
-
 class CacheGroupNodeHeartbeat {
  public:
   virtual ~CacheGroupNodeHeartbeat() = default;
@@ -50,10 +47,10 @@ class CacheGroupNodeHeartbeat {
 
 class CacheGroupNodeHeartbeatImpl : public CacheGroupNodeHeartbeat {
  public:
-  CacheGroupNodeHeartbeatImpl(CacheGroupNodeOption option,
-                              std::shared_ptr<CacheGroupNodeMember> member,
-                              std::shared_ptr<CacheGroupNodeMetric> metric,
-                              std::shared_ptr<MdsClient> mds_client);
+  CacheGroupNodeHeartbeatImpl(
+      CacheGroupNodeOption option, std::shared_ptr<CacheGroupNodeMember> member,
+      std::shared_ptr<CacheGroupNodeMetric> metric,
+      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
 
   void Start() override;
 
@@ -67,8 +64,8 @@ class CacheGroupNodeHeartbeatImpl : public CacheGroupNodeHeartbeat {
   CacheGroupNodeOption option_;
   std::shared_ptr<CacheGroupNodeMember> member_;
   std::shared_ptr<CacheGroupNodeMetric> metric_;
-  std::shared_ptr<MdsClient> mds_client_;
-  std::unique_ptr<Timer> timer_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  std::unique_ptr<base::timer::Timer> timer_;
 };
 
 }  // namespace cachegroup

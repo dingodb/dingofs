@@ -39,7 +39,7 @@ using dingofs::stub::rpcclient::MdsClientImpl;
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option)
     : inited_(false),
       option_(option),
-      mds_base_(std::make_shared<MDSBaseClient>()),
+      mds_base_(std::make_shared<stub::rpcclient::MDSBaseClient>()),
       mds_client_(std::make_shared<MdsClientImpl>()),
       node_group_(std::make_unique<RemoteNodeGroupImpl>(option, mds_client_)) {}
 
@@ -59,9 +59,9 @@ Status RemoteBlockCacheImpl::Init() {
 
 void RemoteBlockCacheImpl::Shutdown() {}
 
-Status RemoteBlockCacheImpl::Range(const BlockKey& block_key, size_t block_size,
-                                   off_t offset, size_t length,
-                                   butil::IOBuf* buffer) {
+Status RemoteBlockCacheImpl::Range(const blockcache::BlockKey& block_key,
+                                   size_t block_size, off_t offset,
+                                   size_t length, butil::IOBuf* buffer) {
   auto node = node_group_->Get(block_key.Filename());
   return node->Range(block_key, block_size, offset, length, buffer);
 }

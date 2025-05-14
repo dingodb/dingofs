@@ -38,6 +38,7 @@
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
+#include "cache/storage/buffer.h"
 #include "cache/utils/data_accesser_pool.h"
 #include "stub/rpcclient/mds_client.h"
 
@@ -45,66 +46,54 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::cache::blockcache::Block;
-using dingofs::cache::blockcache::BlockCache;
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::cache::utils::DataAccesserPool;
-using dingofs::stub::rpcclient::MDSBaseClient;
-using dingofs::stub::rpcclient::MdsClient;
-
 class CacheGroupNode {
  public:
   virtual ~CacheGroupNode() = default;
 
   virtual Status Start() = 0;
-
   virtual Status Stop() = 0;
 
   virtual std::string GetListenIp() = 0;
-
   virtual uint32_t GetListenPort() = 0;
 
-  virtual Status HandleRangeRequest(const BlockKey& block_key,
+  virtual Status HandleRangeRequest(const blockcache::BlockKey& block_key,
                                     size_t block_size, off_t offset,
-                                    size_t length, butil::IOBuf* buffer) = 0;
+                                    size_t length,
+                                    storage::IOBuffer* buffer) = 0;
 };
 
 class CacheGroupNodeImpl : public CacheGroupNode {
  public:
   explicit CacheGroupNodeImpl(CacheGroupNodeOption option);
-
   ~CacheGroupNodeImpl() override = default;
 
   Status Start() override;
-
   Status Stop() override;
 
   std::string GetListenIp() override;
-
   uint32_t GetListenPort() override;
 
-  Status HandleRangeRequest(const BlockKey& block_key, size_t block_size,
-                            off_t offset, size_t length,
-                            butil::IOBuf* buffer) override;
+  Status HandleRangeRequest(const blockcache::BlockKey& block_key,
+                            size_t block_size, off_t offset, size_t length,
+                            storage::IOBuffer* buffer) override;
 
  private:
   void RewriteCacheDir();
-
   Status InitBlockCache();
 
-  Status HandleBlockCached(const BlockKey& block_key, off_t offset,
-                           size_t length, butil::IOBuf* buffer);
-
-  Status HandleBlockMissed(const BlockKey& block_key, size_t block_size,
-                           off_t offset, size_t length, butil::IOBuf* buffer);
+  Status HandleBlockCached(const blockcache::BlockKey& block_key, off_t offset,
+                           size_t length, storage::IOBuffer* buffer);
+  Status HandleBlockMissed(const blockcache::BlockKey& block_key,
+                           size_t block_size, off_t offset, size_t length,
+                           storage::IOBuffer* buffer);
 
  private:
   std::atomic<bool> running_;
   CacheGroupNodeOption option_;
-  std::shared_ptr<MDSBaseClient> mds_base_;
-  std::shared_ptr<MdsClient> mds_client_;
-  std::shared_ptr<BlockCache> block_cache_;  // inited by later
-  std::unique_ptr<DataAccesserPool> data_accesser_pool_;
+  std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  std::shared_ptr<blockcache::BlockCache> block_cache_;  // inited by later
+  std::unique_ptr<utils::DataAccesserPool> data_accesser_pool_;
   std::unique_ptr<AsyncCache> async_cache_;  // inited by later
   std::shared_ptr<CacheGroupNodeMember> member_;
   std::shared_ptr<CacheGroupNodeMetric> metric_;

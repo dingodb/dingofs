@@ -23,9 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_COUNTDOWN_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_COUNTDOWN_H_
 
+#include <bthread/condition_variable.h>
+#include <bthread/mutex.h>
+
 #include <condition_variable>
 #include <memory>
-#include <mutex>
 #include <unordered_map>
 
 #include "cache/common/common.h"
@@ -35,14 +37,14 @@ namespace cache {
 namespace blockcache {
 
 class Countdown {
+ public:
   struct Counter {
-    Counter() : cond(std::make_shared<std::condition_variable>()) {}
+    Counter() : cond(std::make_shared<bthread::ConditionVariable>()) {}
 
     int64_t count{0};
-    std::shared_ptr<std::condition_variable> cond;
+    std::shared_ptr<bthread::ConditionVariable> cond;
   };
 
- public:
   Countdown() = default;
 
   void Add(uint64_t key, int64_t n, bool has_error = false);
@@ -52,7 +54,7 @@ class Countdown {
   size_t Size();
 
  private:
-  std::mutex mutex_;
+  bthread::Mutex mutex_;
   std::unordered_map<uint64_t, Counter> counters_;
   std::unordered_map<uint64_t, bool> has_error_;
 };

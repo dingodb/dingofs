@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_loader.h"
 #include "cache/blockcache/disk_state_machine_impl.h"
@@ -37,6 +38,18 @@ namespace cache {
 namespace blockcache {
 
 class DiskCacheWatcher {
+ public:
+  DiskCacheWatcher();
+
+  virtual ~DiskCacheWatcher() = default;
+
+  void Add(const std::string& root_dir, std::shared_ptr<DiskCache> store);
+
+  void Start(CacheStore::UploadFunc uploader);
+
+  void Stop();
+
+ private:
   enum class CacheStatus : uint8_t {
     kUP = 0,
     kDOWN = 1,
@@ -48,18 +61,6 @@ class DiskCacheWatcher {
     CacheStatus status;
   };
 
- public:
-  DiskCacheWatcher();
-
-  virtual ~DiskCacheWatcher() = default;
-
-  void Add(const std::string& root_dir, std::shared_ptr<DiskCache> store);
-
-  void Start(UploadFunc uploader);
-
-  void Stop();
-
- private:
   void WatchingWorker();
 
   void CheckLockFile(WatchStore* watch_store);
@@ -71,10 +72,10 @@ class DiskCacheWatcher {
   void Restart(WatchStore* watch_store);
 
  private:
-  UploadFunc uploader_;
+  CacheStore::UploadFunc uploader_;
   std::atomic<bool> running_;
   std::vector<WatchStore> watch_stores_;
-  std::unique_ptr<TaskThreadPool<>> task_pool_;
+  std::unique_ptr<dingofs::utils::TaskThreadPool<>> task_pool_;
 };
 
 }  // namespace blockcache

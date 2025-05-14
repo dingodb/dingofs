@@ -35,9 +35,6 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::cache::NewLRUCache;
-using dingofs::base::time::TimeNow;
-
 static void FreeNode(const std::string_view&, void* value) {
   ListNode* node = reinterpret_cast<ListNode*>(value);
   delete node;
@@ -45,7 +42,7 @@ static void FreeNode(const std::string_view&, void* value) {
 
 LRUCache::LRUCache() {
   // naming hash? yeah, it manage kv mapping and value's life cycle
-  hash_ = NewLRUCache(1 << 30);  // large enough
+  hash_ = base::cache::NewLRUCache(1 << 30);  // large enough
   ListInit(&inactive_);
   ListInit(&active_);
 }
@@ -70,7 +67,7 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
 
   ListRemove(node);
   ListAddFront(&active_, node);
-  node->value.atime = TimeNow();  // update access time
+  node->value.atime = base::time::TimeNow();  // update access time
   *value = node->value;
   return true;
 }

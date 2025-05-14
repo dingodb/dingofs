@@ -29,14 +29,14 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/common.h"
+#include "cache/storage/buffer.h"
 
 namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::cache::blockcache::Block;
-
-AsyncCacheImpl::AsyncCacheImpl(std::shared_ptr<BlockCache> block_cache)
+AsyncCacheImpl::AsyncCacheImpl(
+    std::shared_ptr<blockcache::BlockCache> block_cache)
     : running_(false), block_cache_(block_cache) {}
 
 Status AsyncCacheImpl::Start() {
@@ -63,7 +63,7 @@ Status AsyncCacheImpl::Stop() {
   return Status::OK();
 }
 
-void AsyncCacheImpl::Cache(const BlockKey& block_key,
+void AsyncCacheImpl::Cache(const blockcache::BlockKey& block_key,
                            const butil::IOBuf& block) {
   CacheTask task(block_key, block);
   CHECK_EQ(0, bthread::execution_queue_execute(async_cache_queue_id_, task));
@@ -79,8 +79,10 @@ int AsyncCacheImpl::DoCache(void* meta,
   for (; iter; iter++) {
     auto& task = *iter;
     // TODO(Wine93): user async interface
-    Block block((char*)task.block.fetch1(), task.block.length());
-    auto status = async_cache->block_cache_->Cache(task.block_key, block);
+    auto buffer = storage::IOBuffer(task.block);
+    blockcache::Block block(&buffer);
+    auto status = async_cache->block_cache_->Cache(
+        blockcache::BlockCache::CacheOption(), task.block_key, block);
     if (!status.ok()) {
       LOG(ERROR) << "Async cache block(" << task.block_key.Filename()
                  << ") failed, status=" << status.ToString();

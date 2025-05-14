@@ -15,6 +15,8 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_STATE_HEALTH_CHECKER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_STATE_HEALTH_CHECKER_H_
 
+#include <bthread/mutex.h>
+
 #include <memory>
 #include <shared_mutex>
 
@@ -27,8 +29,6 @@
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using dingofs::base::timer::TimerImpl;
 
 class DiskStateHealthChecker {
  public:
@@ -46,11 +46,11 @@ class DiskStateHealthChecker {
 
   void ProbeDisk();
 
-  std::shared_mutex rw_lock_;
+  bthread::Mutex mutex_;
   bool running_{false};
   std::shared_ptr<DiskCacheLayout> layout_;
   std::shared_ptr<DiskStateMachine> disk_state_machine_;
-  std::unique_ptr<TimerImpl> timer_;
+  std::unique_ptr<base::timer::TimerImpl> timer_;
 };
 
 }  // namespace blockcache

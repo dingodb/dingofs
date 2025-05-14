@@ -27,6 +27,7 @@
 #include <unordered_map>
 
 #include "cache/common/common.h"
+#include "cache/common/types.h"
 #include "dataaccess/accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/concurrent/concurrent.h"
@@ -35,19 +36,17 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-using dingofs::dataaccess::DataAccesserPtr;
-using dingofs::stub::rpcclient::MdsClient;
-using dingofs::utils::RWLock;
-
 class DataAccesserPool {
  public:
+  using DataAccesserPtr = dingofs::dataaccess::DataAccesserPtr;
+  using MdsClient = dingofs::stub::rpcclient::MdsClient;
+
   virtual ~DataAccesserPool() = default;
 
   virtual Status Get(uint32_t fs_id, DataAccesserPtr& data_accesser) = 0;
 };
 
 class DataAccesserPoolImpl : public DataAccesserPool {
- public:
   explicit DataAccesserPoolImpl(std::shared_ptr<MdsClient> mds_client);
 
   Status Get(uint32_t fs_id, DataAccesserPtr& data_accesser) override;
@@ -59,8 +58,7 @@ class DataAccesserPoolImpl : public DataAccesserPool {
 
   bool NewDataAccesser(uint32_t fs_id, DataAccesserPtr& data_accesser);
 
- private:
-  RWLock rwlock_;
+  BthreadRWLock rwlock_;
   std::shared_ptr<MdsClient> mds_client_;
   std::unordered_map<uint32_t, DataAccesserPtr> data_accessers_;
 };

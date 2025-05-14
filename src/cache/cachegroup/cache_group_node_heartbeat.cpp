@@ -30,18 +30,15 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::base::timer::TimerImpl;
-using dingofs::pb::mds::cachegroup::CacheGroupOk;
-
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
     CacheGroupNodeOption option, std::shared_ptr<CacheGroupNodeMember> member,
     std::shared_ptr<CacheGroupNodeMetric> metric,
-    std::shared_ptr<MdsClient> mds_client)
+    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
     : option_(option),
       member_(member),
       metric_(metric),
       mds_client_(mds_client),
-      timer_(std::make_unique<TimerImpl>()) {}
+      timer_(std::make_unique<base::timer::TimerImpl>()) {}
 
 void CacheGroupNodeHeartbeatImpl::Start() {
   if (!running_.exchange(true)) {

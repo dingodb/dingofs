@@ -103,6 +103,23 @@ Status S3Accesser::Get(const std::string& key, off_t offset, size_t length,
   return Status::OK();
 }
 
+void S3Accesser::AsyncGet(const std::string& key, off_t offset, size_t length,
+                          char* buffer, RetryCallback retry_cb) {
+  auto get_obj_ctx = std::make_shared<GetObjectAsyncContext>();
+  get_obj_ctx->key = key;
+  get_obj_ctx->buf = buffer;
+  get_obj_ctx->offset = offset;
+  get_obj_ctx->len = length;
+  get_obj_ctx->cb =
+      [&, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+        if (retry_cb(ctx->ret_code)) {
+          client_->GetObjectAsync(ctx);
+        }
+      };
+
+  client_->GetObjectAsync(get_obj_ctx);
+}
+
 void S3Accesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
   client_->GetObjectAsync(context);
 }

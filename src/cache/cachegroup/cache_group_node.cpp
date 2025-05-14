@@ -44,6 +44,7 @@
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
 #include "cache/common/common.h"
+#include "cache/storage/buffer.h"
 #include "cache/utils/data_accesser_pool.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/local_filesystem.h"
@@ -66,7 +67,6 @@ using dingofs::base::string::StrFormat;
 using dingofs::cache::blockcache::BlockCacheImpl;
 using dingofs::cache::blockcache::BlockKey;
 using dingofs::cache::utils::DataAccesserPoolImpl;
-using dingofs::dataaccess::DataAccesserPtr;
 using dingofs::stub::common::MdsOption;
 using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClientImpl;
@@ -77,7 +77,7 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
     : running_(false), option_(option) {
   mds_base_ = std::make_shared<MDSBaseClient>();
   mds_client_ = std::make_shared<MdsClientImpl>();
-  data_accesser_pool_ = std::make_unique<DataAccesserPoolImpl>(mds_client_);
+  // data_accesser_pool_ = std::make_unique<DataAccesserPoolImpl>(mds_client_);
   member_ = std::make_shared<CacheGroupNodeMemberImpl>(option, mds_client_);
   metric_ = std::make_shared<CacheGroupNodeMetric>();
   heartbeat_ = std::make_unique<CacheGroupNodeHeartbeatImpl>(
@@ -159,7 +159,7 @@ Status CacheGroupNodeImpl::InitBlockCache() {
 Status CacheGroupNodeImpl::HandleRangeRequest(const BlockKey& block_key,
                                               size_t block_size, off_t offset,
                                               size_t length,
-                                              butil::IOBuf* buffer) {
+                                              storage::IOBuffer* buffer) {
   auto status = HandleBlockCached(block_key, offset, length, buffer);
   if (status.ok()) {
     metric_->AddCacheHit();
@@ -172,35 +172,32 @@ Status CacheGroupNodeImpl::HandleRangeRequest(const BlockKey& block_key,
 
 Status CacheGroupNodeImpl::HandleBlockCached(const BlockKey& block_key,
                                              off_t offset, size_t length,
-                                             butil::IOBuf* buffer) {
-  char* data = new char[length];
-  Status status = block_cache_->Range(block_key, offset, length, data, false);
-  if (!status.ok()) {
-    delete[] data;
-  } else {
-    buffer->append_user_data(data, length, BufferDeleter);
-  }
-  return status;
+                                             storage::IOBuffer* buffer) {
+  return block_cache_->Range(blockcache::BlockCache::RangeOption(), block_key,
+                             offset, length, buffer);
 }
 
 Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
                                              size_t block_size, off_t offset,
                                              size_t length,
-                                             butil::IOBuf* buffer) {
-  DataAccesserPtr data_accesser;
+                                             storage::IOBuffer* buffer) {
+  dataaccess::DataAccesserPtr data_accesser;
   auto status = data_accesser_pool_->Get(block_key.fs_id, data_accesser);
   if (!status.ok()) {
     return status;
   }
 
   // retrive range of block
+
+  butil::IOBuf buf_out;
   if (length <= option_.max_range_size_kb() * kKiB) {
     char* data = new char[length];
     status = data_accesser->Get(block_key.StoreKey(), offset, length, data);
     if (!status.ok()) {
       delete[] data;
     } else {
-      buffer->append_user_data(data, length, BufferDeleter);
+      buf_out.append_user_data(data, length, BufferDeleter);
+      *buffer = storage::IOBuffer(buf_out);
     }
     return status;
   }
@@ -216,7 +213,8 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
   butil::IOBuf block;
   block.append_user_data(data, block_size, BufferDeleter);
   async_cache_->Cache(block_key, block);  // FIXME(Wine93): maybe buffer freed?
-  block.append_to(buffer, length, offset);
+  block.append_to(&buf_out, length, offset);
+  *buffer = storage::IOBuffer(buf_out);
   return status;
 }
 

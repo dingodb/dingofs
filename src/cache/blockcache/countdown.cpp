@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/countdown.h"
 
+#include <bthread/mutex.h>
 #include <glog/logging.h>
 
 #include <cassert>
@@ -33,7 +34,7 @@ namespace cache {
 namespace blockcache {
 
 void Countdown::Add(uint64_t key, int64_t n, bool has_error) {
-  std::unique_lock<std::mutex> lk(mutex_);
+  std::unique_lock<bthread::Mutex> lk(mutex_);
   auto it = counters_.find(key);
   if (it == counters_.end()) {
     counters_.emplace(key, Counter());
@@ -53,7 +54,7 @@ void Countdown::Add(uint64_t key, int64_t n, bool has_error) {
 }
 
 Status Countdown::Wait(uint64_t key) {
-  std::unique_lock<std::mutex> lk(mutex_);
+  std::unique_lock<bthread::Mutex> lk(mutex_);
   while (true) {
     auto it = counters_.find(key);
     if (it == counters_.end()) {
@@ -74,7 +75,7 @@ Status Countdown::Wait(uint64_t key) {
 }
 
 size_t Countdown::Size() {
-  std::unique_lock<std::mutex> lk(mutex_);
+  std::unique_lock<bthread::Mutex> lk(mutex_);
   return counters_.size();
 }
 

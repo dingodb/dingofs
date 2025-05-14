@@ -59,6 +59,10 @@ class MockDataAccesser : public DataAccesser {
 
   MOCK_METHOD1(AsyncGet, void(std::shared_ptr<GetObjectAsyncContext> context));
 
+  MOCK_METHOD5(AsyncGet,
+               void(const std::string& key, off_t offset, size_t length,
+                    char* buffer, RetryCallback retry_cb));
+
   MOCK_METHOD1(Delete, Status(const std::string& key));
 };
 

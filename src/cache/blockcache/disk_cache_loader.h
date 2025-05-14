@@ -37,31 +37,30 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::utils::TaskThreadPool;
-using FileInfo = LocalFileSystem::FileInfo;
-using UploadFunc = CacheStore::UploadFunc;
-
 class DiskCacheLoader {
-  enum class BlockType : uint8_t {
-    kStageBlock = 0,
-    kCacheBlock = 1,
-  };
-
  public:
   DiskCacheLoader(std::shared_ptr<DiskCacheLayout> layout,
-                  std::shared_ptr<LocalFileSystem> fs,
+                  std::shared_ptr<utils::LocalFileSystem> fs,
                   std::shared_ptr<DiskCacheManager> manager,
                   std::shared_ptr<DiskCacheMetric> metric);
 
   virtual ~DiskCacheLoader() = default;
 
-  virtual void Start(const std::string& disk_id, UploadFunc uploader);
+  virtual void Start(const std::string& disk_id,
+                     CacheStore::UploadFunc uploader);
 
   virtual void Stop();
 
   virtual bool IsLoading();
 
  private:
+  enum class BlockType : uint8_t {
+    kStageBlock = 0,
+    kCacheBlock = 1,
+  };
+
+  using FileInfo = utils::LocalFileSystem::FileInfo;
+
   void LoadAllBlocks(const std::string& root, BlockType type);
 
   bool LoadOneBlock(const std::string& prefix, const FileInfo& file,
@@ -69,15 +68,14 @@ class DiskCacheLoader {
 
   static std::string StrType(BlockType type);
 
- private:
   std::string disk_id_;
-  UploadFunc uploader_;
+  CacheStore::UploadFunc uploader_;
   std::atomic<bool> running_;
   std::shared_ptr<DiskCacheLayout> layout_;
-  std::shared_ptr<LocalFileSystem> fs_;
+  std::shared_ptr<utils::LocalFileSystem> fs_;
   std::shared_ptr<DiskCacheManager> manager_;
   std::shared_ptr<DiskCacheMetric> metric_;
-  std::unique_ptr<TaskThreadPool<>> task_pool_;
+  std::unique_ptr<dingofs::utils::TaskThreadPool<>> task_pool_;
 };
 
 }  // namespace blockcache

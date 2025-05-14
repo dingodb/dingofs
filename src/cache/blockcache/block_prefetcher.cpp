@@ -22,9 +22,11 @@
 
 #include "cache/blockcache/block_prefetcher.h"
 
+#include <bthread/mutex.h>
 #include <glog/logging.h>
 
 #include <cassert>
+#include <mutex>
 
 #include "cache/common/common.h"
 #include "utils/concurrent/task_thread_pool.h"
@@ -32,8 +34,6 @@
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using dingofs::utils::LockGuard;
 
 BlockPrefetcherImpl::BlockPrefetcherImpl()
     : running_(false),
@@ -101,7 +101,7 @@ int BlockPrefetcherImpl::BatchSubmit(void* meta,
 
 void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
   {
-    LockGuard lk(mutex_);
+    std::unique_lock<bthread::Mutex> lk(mutex_);
     if (busy_.find(key.Filename()) != busy_.end()) {  // on prefetching
       return;
     }
@@ -115,7 +115,7 @@ void BlockPrefetcherImpl::Prefetch(const BlockKey& key, size_t length) {
   }
 
   {
-    LockGuard lk(mutex_);
+    std::unique_lock<bthread::Mutex> lk(mutex_);
     busy_.erase(key.Filename());
   }
 }

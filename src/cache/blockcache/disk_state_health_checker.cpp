@@ -14,8 +14,9 @@
 
 #include "cache/blockcache/disk_state_health_checker.h"
 
+#include <bthread/mutex.h>
+
 #include <memory>
-#include <mutex>
 #include <shared_mutex>
 
 #include "absl/cleanup/cleanup.h"
@@ -29,7 +30,6 @@ namespace cache {
 namespace blockcache {
 
 using dingofs::base::filepath::PathJoin;
-using dingofs::base::timer::TimerImpl;
 
 DiskStateHealthChecker::DiskStateHealthChecker(
     std::shared_ptr<DiskCacheLayout> layout,
@@ -37,12 +37,12 @@ DiskStateHealthChecker::DiskStateHealthChecker(
     : layout_(layout), disk_state_machine_(disk_state_machine) {}
 
 bool DiskStateHealthChecker::Start() {
-  std::unique_lock<std::shared_mutex> w(rw_lock_);
+  std::unique_lock<bthread::Mutex> lk(mutex_);
   if (running_) {
     return true;
   }
 
-  timer_ = std::make_unique<TimerImpl>();
+  timer_ = std::make_unique<base::timer::TimerImpl>();
   CHECK(timer_->Start());
 
   running_ = true;
@@ -54,23 +54,24 @@ bool DiskStateHealthChecker::Start() {
 }
 
 bool DiskStateHealthChecker::Stop() {
-  std::unique_lock<std::shared_mutex> w(rw_lock_);
-  if (!running_) {
-    return true;
+  std::unique_lock<bthread::Mutex> lk(mutex_);
+  if (running_) {
+    if (!running_) {
+      return true;
+    }
+
+    LOG(INFO) << "Try to stop DiskStateHealthChecker";
+
+    running_ = false;
+
+    timer_->Stop();
   }
-
-  LOG(INFO) << "Try to stop DiskStateHealthChecker";
-
-  running_ = false;
-
-  timer_->Stop();
-
   return true;
 }
 
 void DiskStateHealthChecker::RunCheck() {
   {
-    std::shared_lock<std::shared_mutex> r(rw_lock_);
+    std::unique_lock<bthread::Mutex> lk(mutex_);
     if (!running_) {
       return;
     }
@@ -81,7 +82,7 @@ void DiskStateHealthChecker::RunCheck() {
 }
 
 void DiskStateHealthChecker::ProbeDisk() {
-  auto fs = LocalFileSystem();
+  auto fs = utils::LocalFileSystem();
   std::unique_ptr<char[]> buffer(new (std::nothrow) char[8192]);
   std::string path = PathJoin({layout_->GetProbeDir(), "probe"});
   auto defer = absl::MakeCleanup([&]() {
