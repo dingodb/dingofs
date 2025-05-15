@@ -24,7 +24,6 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
 
 #include <condition_variable>
-#include <mutex>
 #include <unordered_map>
 
 #include "cache/blockcache/cache_store.h"

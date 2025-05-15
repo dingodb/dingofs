@@ -28,7 +28,6 @@ namespace cache {
 namespace blockcache {
 
 using namespace std::chrono;
-using base::timer::TimerImpl;
 
 class DiskStateMachine;
 
@@ -152,12 +151,12 @@ class DiskStateMachineImpl final : public DiskStateMachine {
 
   void TickTock();
 
-  mutable dingofs::utils::BthreadRWLock rw_lock_;
+  mutable BthreadRWLock rw_lock_;
   std::unique_ptr<BaseDiskState> state_;
   bool running_{false};
 
   bthread::ExecutionQueueId<DiskStateEvent> disk_event_queue_id_;
-  std::unique_ptr<TimerImpl> timer_;
+  std::unique_ptr<base::timer::TimerImpl> timer_;
   std::shared_ptr<DiskCacheMetric> metric_;
 };
 

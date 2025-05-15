@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_UTILS_AIO_QUEUE_H_
-#define DINGOFS_SRC_CACHE_UTILS_AIO_QUEUE_H_
+#ifndef DINGOFS_SRC_CACHE_STORAGE_AIO_AIO_QUEUE_H_
+#define DINGOFS_SRC_CACHE_STORAGE_AIO_AIO_QUEUE_H_
 
 #include <bthread/condition_variable.h>
 #include <bthread/execution_queue.h>
@@ -35,19 +35,20 @@
 #include <mutex>
 #include <thread>
 
-#include "cache/utils/aio.h"
+#include "base/math/math.h"
+#include "cache/storage/aio/aio.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/phase_timer.h"
 
 namespace dingofs {
 namespace cache {
-namespace utils {
+namespace storage {
 
 class ThrottleQueue {
  public:
-  ThrottleQueue(uint32_t capacity) : capacity_(capacity) {}
+  ThrottleQueue(uint32_t capacity) : size_(0), capacity_(capacity) {}
 
-  void PushOne() {
+  void AddOne() {
     std::unique_lock<bthread::Mutex> lk(mutex_);
     while (size_ == capacity_) {
       cv_.wait(lk);
@@ -55,7 +56,7 @@ class ThrottleQueue {
     size_++;
   }
 
-  void PopOne() {
+  void SubOne() {
     std::unique_lock<bthread::Mutex> lk(mutex_);
     CHECK(size_ > 0);
     size_--;
@@ -63,52 +64,43 @@ class ThrottleQueue {
   }
 
  private:
-  uint32_t size_{0};
+  uint32_t size_;
   uint32_t capacity_;
   bthread::Mutex mutex_;
   bthread::ConditionVariable cv_;
 };
 
 class AioQueueImpl : public AioQueue {
-  struct BthreadArg {
-    BthreadArg(AioQueueImpl* queue, Aio* aio) : queue(queue), aio(aio) {}
-
-    AioQueueImpl* queue;
-    Aio* aio;
-  };
-
  public:
-  explicit AioQueueImpl(const std::shared_ptr<IoRing>& io_ring);
+  explicit AioQueueImpl(std::shared_ptr<IORing> io_ring);
 
-  Status Init(uint32_t iodepth) override;
-
+  Status Init() override;
   Status Shutdown() override;
 
-  void Submit(Aio* aio) override;
+  void Submit(AioClosure* aio) override;
 
  private:
-  static void EnterPhase(Aio* aio, Phase phase);
-  static void BatchEnterPhase(Aio* aios[], int n, Phase phase);
+  static void EnterPhase(AioClosure* aio, utils::Phase phase);
+  static void BatchEnterPhase(AioClosure* aios[], int n, utils::Phase phase);
 
-  void CheckIo(Aio* aio);
-  static int PrepareIo(void* meta, bthread::TaskIterator<Aio*>& iter);
-  void BatchSubmitIo(Aio* aios[], int n);
+  void CheckIO(AioClosure* aio);
+  static int PrepareIO(void* meta, bthread::TaskIterator<AioClosure*>& iter);
+  void BatchSubmitIO(AioClosure* aios[], int n);
   void BackgroundWait();
-  void RunClosureInBthread(Aio* aio);
-  static void* RunClosure(void* arg);
-  static Status GetStatus(Aio* aio);
 
- private:
+  void RunClosure(AioClosure* aio);
+  static Status GetStatus(AioClosure* aio);
+
   std::atomic<bool> running_;
-  std::shared_ptr<IoRing> ioring_;
-  bthread::ExecutionQueueId<Aio*> prep_io_queue_id_;
-  std::thread bg_thread_;
-  std::unique_ptr<ThrottleQueue> queued_;
+  std::shared_ptr<IORing> ioring_;
+  bthread::ExecutionQueueId<AioClosure*> prep_io_queue_id_;
+  std::thread bg_wait_thread_;
+  ThrottleQueue queued_;
   static constexpr uint32_t kSubmitBatchSize{16};
 };
 
-}  // namespace utils
+}  // namespace storage
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_UTILS_AIO_QUEUE_H_
+#endif  // DINGOFS_SRC_CACHE_STORAGE_AIO_AIO_QUEUE_H_

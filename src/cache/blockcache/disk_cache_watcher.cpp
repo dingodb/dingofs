@@ -29,16 +29,19 @@
 #include <thread>
 
 #include "base/string/string.h"
+#include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_group.h"
 #include "cache/common/common.h"
 #include "cache/utils/local_filesystem.h"
+#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
 using dingofs::base::string::TrimSpace;
+using dingofs::utils::TaskThreadPool;
 
 DiskCacheWatcher::DiskCacheWatcher()
     : running_(false),
@@ -49,7 +52,7 @@ void DiskCacheWatcher::Add(const std::string& root_dir,
   watch_stores_.emplace_back(WatchStore{root_dir, store, CacheStatus::kUP});
 }
 
-void DiskCacheWatcher::Start(UploadFunc uploader) {
+void DiskCacheWatcher::Start(CacheStore::UploadFunc uploader) {
   if (!running_.exchange(true)) {
     uploader_ = uploader;
     CHECK(task_pool_->Start(1) == 0);
@@ -73,7 +76,7 @@ void DiskCacheWatcher::WatchingWorker() {
 }
 
 void DiskCacheWatcher::CheckLockFile(WatchStore* watch_store) {
-  auto fs = LocalFileSystem();
+  auto fs = utils::LocalFileSystem();
   auto root_dir = watch_store->root_dir;
   auto layout = DiskCacheLayout(root_dir);
   std::string lock_path = layout.GetLockPath();
@@ -94,7 +97,7 @@ bool DiskCacheWatcher::CheckUuId(const std::string& lock_path,
                                  const std::string& uuid) {
   size_t length;
   std::shared_ptr<char> buffer;
-  auto fs = LocalFileSystem();
+  auto fs = utils::LocalFileSystem();
   auto status = fs.ReadFile(lock_path, buffer, &length);
   if (!status.ok()) {
     LOG(ERROR) << "Read lock file (" << lock_path

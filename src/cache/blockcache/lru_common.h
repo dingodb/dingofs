@@ -33,18 +33,16 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::cache::Cache;
-using dingofs::base::time::TimeSpec;
-
 using CacheKey = BlockKey;
 
 struct CacheValue {
   CacheValue() = default;
 
-  CacheValue(size_t size, TimeSpec atime) : size(size), atime(atime) {}
+  CacheValue(size_t size, base::time::TimeSpec atime)
+      : size(size), atime(atime) {}
 
   size_t size;
-  TimeSpec atime;  // access time
+  base::time::TimeSpec atime;  // access time
 };
 
 struct CacheItem {
@@ -63,7 +61,7 @@ struct ListNode {
       : value(value), handle(nullptr), prev(nullptr), next(nullptr) {}
 
   CacheValue value;
-  Cache::Handle* handle;
+  base::cache::Cache::Handle* handle;
   struct ListNode* prev;
   struct ListNode* next;
 };

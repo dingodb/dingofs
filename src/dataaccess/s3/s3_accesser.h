@@ -75,6 +75,8 @@ class S3Accesser : public DataAccesser {
 
   Status Get(const std::string& key, off_t offset, size_t length,
              char* buffer) override;
+  void AsyncGet(const std::string& key, off_t offset, size_t length,
+                char* buffer, RetryCallback retry_cb) override;
   void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
 
   Status Delete(const std::string& key) override;

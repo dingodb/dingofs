@@ -34,7 +34,9 @@
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_state_health_checker.h"
 #include "cache/blockcache/disk_state_machine.h"
-#include "cache/utils/aio_queue.h"
+#include "cache/storage/aio/aio_queue.h"
+#include "cache/storage/buffer.h"
+#include "cache/storage/filesystem.h"
 #include "cache/utils/local_filesystem.h"
 #include "options/cache/app.h"
 #include "options/cache/block_cache.h"
@@ -43,65 +45,48 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::cache::utils::AioQueueImpl;
-
 class DiskCache : public CacheStore {
-  enum : std::int8_t {
-    kWantExec = 1,
-    kWantStage = 2,
-    kWantCache = 4,
-  };
-
  public:
   ~DiskCache() override = default;
 
   explicit DiskCache(DiskCacheOption option);
 
   Status Init(UploadFunc uploader) override;
-
   Status Shutdown() override;
 
-  Status Stage(const BlockKey& key, const Block& block,
-               BlockContext ctx) override;
-
-  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
-
-  Status Cache(const BlockKey& key, const Block& block) override;
-
-  Status Load(const BlockKey& key,
-              std::shared_ptr<BlockReader>& reader) override;
+  Status Stage(StageOption option, const BlockKey& key,
+               const Block& block) override;
+  Status RemoveStage(RemoveStageOption option, const BlockKey& key) override;
+  Status Cache(CacheOption option, const BlockKey& key,
+               const Block& block) override;
+  Status Load(LoadOption option, const BlockKey& key, off_t offset,
+              size_t length, storage::IOBuffer* buffer) override;
 
   bool IsCached(const BlockKey& key) override;
-
   std::string Id() override;
 
  private:
+  enum : std::int8_t {
+    kWantExec = 1,
+    kWantStage = 2,
+    kWantCache = 4,
+  };
+
   // for init
   Status CreateDirs();
-
   Status LoadLockFile();
-
   void DetectDirectIO();
-
-  // for read
-  Status NewBlockReader(const BlockKey& key,
-                        std::shared_ptr<BlockReader>& reader);
 
   // check running status, disk healthy and disk free space
   Status Check(uint8_t want);
-
   bool IsLoading() const;
-
   bool IsHealthy() const;
-
   bool StageFull() const;
-
   bool CacheFull() const;
 
+  // layout
   std::string GetRootDir() const;
-
   std::string GetStagePath(const BlockKey& key) const;
-
   std::string GetCachePath(const BlockKey& key) const;
 
  private:
@@ -114,10 +99,10 @@ class DiskCache : public CacheStore {
   std::shared_ptr<DiskCacheLayout> layout_;
   std::shared_ptr<DiskStateMachine> disk_state_machine_;
   std::unique_ptr<DiskStateHealthChecker> disk_state_health_checker_;
-  std::shared_ptr<LocalFileSystem> fs_;
+  std::shared_ptr<utils::LocalFileSystem> local_fs_;  // TODO(Wine93): remote it
   std::shared_ptr<DiskCacheManager> manager_;
   std::unique_ptr<DiskCacheLoader> loader_;
-  std::shared_ptr<AioQueueImpl> aio_queue_;
+  std::unique_ptr<storage::FileSystem> fs_;
 };
 
 }  // namespace blockcache

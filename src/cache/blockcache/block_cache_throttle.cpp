@@ -22,8 +22,9 @@
 
 #include "cache/blockcache/block_cache_throttle.h"
 
+#include <bthread/mutex.h>
+
 #include <memory>
-#include <mutex>
 
 #include "base/math/math.h"
 #include "cache/common/common.h"
@@ -33,14 +34,12 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::math::kMiB;
-
 BlockCacheThrottle::BlockCacheThrottle()
     : current_bandwidth_throttle_mb_(
           FLAGS_block_cache_stage_bandwidth_throttle_mb),
       waiting_(false),
-      throttle_(std::make_unique<LeakyBucket>()),
-      timer_(std::make_unique<TimerImpl>()) {
+      throttle_(std::make_unique<dingofs::utils::LeakyBucket>()),
+      timer_(std::make_unique<base::timer::TimerImpl>()) {
   throttle_->SetLimit(current_bandwidth_throttle_mb_ * kMiB, 0, 0);
 }
 
@@ -56,7 +55,7 @@ bool BlockCacheThrottle::Add(uint64_t stage_bytes) {
     return false;
   }
 
-  std::lock_guard<std::mutex> lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   if (waiting_) {
     return true;
   }
@@ -68,7 +67,7 @@ bool BlockCacheThrottle::Add(uint64_t stage_bytes) {
 }
 
 void BlockCacheThrottle::Reset() {
-  std::lock_guard<std::mutex> lk(mutex_);
+  std::lock_guard<bthread::Mutex> lk(mutex_);
   waiting_ = false;
 }
 
@@ -78,7 +77,7 @@ void BlockCacheThrottle::UpdateThrottleParam() {
     current_bandwidth_throttle_mb_ =
         FLAGS_block_cache_stage_bandwidth_throttle_mb;
 
-    std::lock_guard<std::mutex> lk(mutex_);
+    std::lock_guard<bthread::Mutex> lk(mutex_);
     throttle_->SetLimit(current_bandwidth_throttle_mb_ * kMiB, 0, 0);
   }
   timer_->Add([this] { UpdateThrottleParam(); }, 100);

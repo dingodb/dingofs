@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 
+#include <bthread/mutex.h>
+
 #include <memory>
 
 #include "base/timer/timer_impl.h"
@@ -33,39 +35,31 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::timer::TimerImpl;
-using dingofs::utils::LeakyBucket;
-
 class BlockCacheMetricHelper;
 class BlockCacheThrottleClosure;
 
 class BlockCacheThrottle {
  public:
   BlockCacheThrottle();
-
   virtual ~BlockCacheThrottle() = default;
 
   void Start();
-
   void Stop();
 
   bool Add(uint64_t stage_bytes);
 
  private:
   void Reset();
-
   void UpdateThrottleParam();
 
- private:
   friend class BlockCacheMetricHelper;
   friend class BlockCacheThrottleClosure;
 
- private:
-  std::mutex mutex_;
+  bthread::Mutex mutex_;
   uint64_t current_bandwidth_throttle_mb_;
   bool waiting_;
-  std::unique_ptr<LeakyBucket> throttle_;
-  std::unique_ptr<TimerImpl> timer_;
+  std::unique_ptr<dingofs::utils::LeakyBucket> throttle_;
+  std::unique_ptr<base::timer::TimerImpl> timer_;
 };
 
 class BlockCacheThrottleClosure : public ::google::protobuf::Closure {

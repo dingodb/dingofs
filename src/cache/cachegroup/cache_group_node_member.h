@@ -34,8 +34,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::stub::rpcclient::MdsClient;
-
 class CacheGroupNodeMember {
  public:
   virtual ~CacheGroupNodeMember() = default;
@@ -51,8 +49,9 @@ class CacheGroupNodeMember {
 
 class CacheGroupNodeMemberImpl : public CacheGroupNodeMember {
  public:
-  CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
-                           std::shared_ptr<MdsClient> mds_client);
+  CacheGroupNodeMemberImpl(
+      CacheGroupNodeOption option,
+      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
 
   ~CacheGroupNodeMemberImpl() override = default;
 
@@ -76,7 +75,7 @@ class CacheGroupNodeMemberImpl : public CacheGroupNodeMember {
  private:
   uint64_t member_id_;
   CacheGroupNodeOption option_;
-  std::shared_ptr<MdsClient> mds_client_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
 };
 
 }  // namespace cachegroup

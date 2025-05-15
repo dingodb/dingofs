@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/blockcache/page_cache_manager.h"
+#include "cache/utils/page_cache_manager.h"
 
 #include "cache/common/common.h"
 #include "cache/utils/posix.h"
@@ -28,36 +28,39 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
+namespace utils {
 
 using dingofs::cache::utils::Posix;
 
 PageCacheManager::PageCacheManager() : running_(false) {}
 
-bool PageCacheManager::Start() {
+Status PageCacheManager::Start() {
   if (!running_.exchange(true)) {
-    return true;
     bthread::ExecutionQueueOptions queue_options;
     queue_options.use_pthread = true;
     int rc = bthread::execution_queue_start(&drop_page_cache_queue_id_,
                                             &queue_options, DoDrop, this);
     if (rc != 0) {
-      LOG(ERROR) << "execution_queue_start() failed, rc=" << rc;
+      LOG(ERROR) << "Start page cache manager queue failed: rc = " << rc;
+      return Status::Internal("Start page cache manager queue failed");
     }
-    return rc == 0;
   }
-  return true;
+  return Status::OK();
 }
 
-bool PageCacheManager::Stop() {
+Status PageCacheManager::Stop() {
   if (running_.exchange(false)) {
     bthread::execution_queue_stop(drop_page_cache_queue_id_);
-    return bthread::execution_queue_join(drop_page_cache_queue_id_) == 0;
+    int rc = bthread::execution_queue_join(drop_page_cache_queue_id_);
+    if (rc != 0) {
+      LOG(ERROR) << "Stop page cache manager queue failed: rc = " << rc;
+      return Status::Internal("Stop page cache manager queue failed");
+    }
   }
-  return true;
+  return Status::OK();
 }
 
-void PageCacheManager::DropPageCache(int fd, uint64_t offset, uint64_t length) {
+void PageCacheManager::DropPageCache(int fd, off_t offset, size_t length) {
   DropTask task(fd, offset, length);
   CHECK_EQ(0,
            bthread::execution_queue_execute(drop_page_cache_queue_id_, task));
@@ -65,6 +68,10 @@ void PageCacheManager::DropPageCache(int fd, uint64_t offset, uint64_t length) {
 
 int PageCacheManager::DoDrop(void* /*meta*/,
                              bthread::TaskIterator<DropTask>& iter) {
+  if (iter.is_queue_stopped()) {
+    return 0;
+  }
+
   for (; iter; iter++) {
     auto& task = *iter;
     auto status = Posix::PosixFAdvise(task.fd, task.offset, task.length,
@@ -77,6 +84,6 @@ int PageCacheManager::DoDrop(void* /*meta*/,
   return 0;
 }
 
-}  // namespace blockcache
+}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs

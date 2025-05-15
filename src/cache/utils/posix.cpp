@@ -24,7 +24,6 @@
 
 #include <fcntl.h>
 #include <glog/logging.h>
-#include <sys/mman.h>
 #include <sys/vfs.h>
 #include <unistd.h>
 
@@ -113,6 +112,26 @@ Status Posix::CloseDir(::DIR* dir) {
   return Status::OK();
 }
 
+Status Posix::Open(const std::string& path, int flags, int* fd) {
+  *fd = ::open(path.c_str(), flags);
+  if (*fd < 0) {
+    return PosixError(errno, "open(%s,%#x)", path, flags);
+  }
+  return Status::OK();
+}
+
+Status Posix::Open(const std::string& path, int flags, mode_t mode, int* fd) {
+  *fd = ::open(path.c_str(), flags, mode);
+  if (*fd < 0) {
+    return PosixError(errno, "open(%s,%#x,%s)", path, flags, StrMode(mode));
+  }
+  return Status::OK();
+}
+
+Status Posix::Creat(const std::string& path, mode_t mode, int* fd) {
+  return Open(path, O_CREAT | O_WRONLY | O_TRUNC, mode, fd);
+}
+
 Status Posix::Create(const std::string& path, int* fd, bool use_direct) {
   int flags = O_TRUNC | O_WRONLY | O_CREAT;
   if (use_direct) {
@@ -121,14 +140,6 @@ Status Posix::Create(const std::string& path, int* fd, bool use_direct) {
   *fd = ::open(path.c_str(), flags, 0644);
   if (*fd < 0) {
     return PosixError(errno, "open(%s,%#x,0644)", path, flags);
-  }
-  return Status::OK();
-}
-
-Status Posix::Open(const std::string& path, int flags, int* fd) {
-  *fd = ::open(path.c_str(), flags);
-  if (*fd < 0) {
-    return PosixError(errno, "open(%s,%#x)", path, flags);
   }
   return Status::OK();
 }
@@ -223,7 +234,7 @@ Status Posix::MMap(void* addr, size_t length, int port, int flags, int fd,
   return Status::OK();
 }
 
-Status Posix::MUnmap(void* addr, size_t length) {
+Status Posix::MUnMap(void* addr, size_t length) {
   if (::munmap(addr, length) != 0) {
     return PosixError(errno, "munmap(%p,%d)", addr, length);
   }

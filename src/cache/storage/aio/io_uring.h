@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_UTILS_AIO_URING_H_
-#define DINGOFS_SRC_CACHE_UTILS_AIO_URING_H_
+#ifndef DINGOFS_SRC_CACHE_STORAGE_AIO_IO_URING_H_
+#define DINGOFS_SRC_CACHE_STORAGE_AIO_IO_URING_H_
 
 #include <butil/iobuf.h>
 #include <liburing.h>
@@ -31,40 +31,40 @@
 
 #include <cstdint>
 
-#include "cache/utils/aio.h"
+#include "cache/storage/aio/aio.h"
 
 namespace dingofs {
 namespace cache {
-namespace utils {
+namespace storage {
 
-class LinuxIoUring : public IoRing {
+class LinuxIOUring : public IORing {
  public:
-  LinuxIoUring();
+  LinuxIOUring(uint32_t io_depth);
 
-  Status Init(uint32_t io_depth) override;
+  uint32_t GetIODepth() override;
 
-  void Shutdown() override;
+  Status Init() override;
+  Status Shutdown() override;
 
-  Status PrepareIo(Aio* aio) override;
-
-  Status SubmitIo() override;
-
-  Status WaitIo(uint32_t timeout_ms, std::vector<Aio*>* aios) override;
-
-  void PostIo(Aio* aio) override;
+  Status PrepareIO(AioClosure* aio) override;
+  Status SubmitIO() override;
+  Status WaitIO(uint32_t timeout_ms, Aios* aios) override;
 
  private:
   static bool Supported();
 
- private:
+  void PrepWrite(io_uring_sqe* sqe, AioClosure* aio);
+  void PrepRead(io_uring_sqe* sqe, AioClosure* aio);
+  void OnCompleted(AioClosure* aio, int retcode);
+
   std::atomic<bool> running_;
   uint32_t io_depth_;
   struct io_uring io_uring_;
   int epoll_fd_;
 };
 
-}  // namespace utils
+}  // namespace storage
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_UTILS_AIO_URING_H_
+#endif  // DINGOFS_SRC_CACHE_STORAGE_AIO_IO_URING_H_

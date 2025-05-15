@@ -28,6 +28,7 @@
 
 #include "base/hash/con_hash.h"
 #include "cache/common/common.h"
+#include "cache/common/types.h"
 #include "cache/remotecache/remote_node.h"
 #include "dingofs/cachegroup.pb.h"
 #include "stub/rpcclient/mds_client.h"
@@ -36,12 +37,6 @@
 namespace dingofs {
 namespace cache {
 namespace remotecache {
-
-using dingofs::base::hash::ConHash;
-using dingofs::base::timer::TimerImpl;
-using dingofs::pb::mds::cachegroup::CacheGroupMember;
-using dingofs::stub::rpcclient::MdsClient;
-using dingofs::utils::RWLock;
 
 class RemoteNodeGroup {
  public:
@@ -55,45 +50,39 @@ class RemoteNodeGroup {
 };
 
 class RemoteNodeGroupImpl : public RemoteNodeGroup {
+ public:
+  using MdsClient = dingofs::stub::rpcclient::MdsClient;
   using NodesT = std::unordered_map<std::string, std::shared_ptr<RemoteNode>>;
   using CacheGroupMembers = std::vector<CacheGroupMember>;
 
- public:
   RemoteNodeGroupImpl(RemoteBlockCacheOption option,
                       std::shared_ptr<MdsClient> mds_client);
-
   ~RemoteNodeGroupImpl() override = default;
 
   Status Start() override;
-
   void Stop() override;
 
   RemoteNodePtr Get(const std::string& key) override;
 
  private:
   Status RefreshMembers();
-
   Status LoadMembers(CacheGroupMembers* members);
-
   static bool IsSame(const CacheGroupMembers& local_members,
                      const CacheGroupMembers& remote_members);
-
   void CommitChange(const CacheGroupMembers& members);
 
   std::vector<uint64_t> CalcWeights(const CacheGroupMembers& members);
-
-  std::shared_ptr<ConHash> BuildHash(const CacheGroupMembers& members);
-
+  std::shared_ptr<base::hash::ConHash> BuildHash(
+      const CacheGroupMembers& members);
   std::shared_ptr<NodesT> CreateNodes(const CacheGroupMembers& members);
 
- private:
-  RWLock rwlock_;  // for chash_ & nodes_
+  BthreadRWLock rwlock_;  // for chash_ & nodes_
   std::atomic<bool> running_;
   RemoteBlockCacheOption option_;
   std::shared_ptr<MdsClient> mds_client_;
   CacheGroupMembers local_members_;
-  std::unique_ptr<TimerImpl> timer_;
-  std::shared_ptr<ConHash> chash_;
+  std::unique_ptr<base::timer::TimerImpl> timer_;
+  std::shared_ptr<base::hash::ConHash> chash_;
   std::shared_ptr<NodesT> nodes_;
 };
 

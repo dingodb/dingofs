@@ -38,11 +38,6 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::math::kMiB;
-using dingofs::base::string::StrFormat;
-using dingofs::options::cache::DiskCacheOption;
-using dingofs::stub::metric::InterfaceMetric;
-
 constexpr const char* kLoadStopped = "STOP";  // load status
 constexpr const char* kOnLoading = "LOADING";
 constexpr const char* kLoadFinised = "FINISH";
@@ -53,8 +48,8 @@ class DiskCacheMetric {
  public:
   explicit DiskCacheMetric(DiskCacheOption option)
       : option_(option),
-        metric_(StrFormat("dingofs_block_cache.disk_caches_%d",
-                          option.cache_index())) {}
+        metric_(base::string::StrFormat("dingofs_block_cache.disk_caches_%d",
+                                        option.cache_index())) {}
 
   virtual ~DiskCacheMetric() = default;
 
@@ -170,7 +165,8 @@ class DiskCacheMetric {
 };
 
 struct DiskCacheMetricGuard {
-  explicit DiskCacheMetricGuard(Status* status, InterfaceMetric* metric,
+  explicit DiskCacheMetricGuard(Status* status,
+                                stub::metric::InterfaceMetric* metric,
                                 size_t count)
       : status(status), metric(metric), count(count) {
     start = butil::cpuwide_time_us();
@@ -189,7 +185,7 @@ struct DiskCacheMetricGuard {
   }
 
   Status* status;
-  InterfaceMetric* metric;
+  stub::metric::InterfaceMetric* metric;
   size_t count;
   uint64_t start;
 };

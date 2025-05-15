@@ -56,13 +56,11 @@ enum class Phase : uint8_t {
 
   // aio
   kQueued = 30,
-  kCheckIo = 31,
+  kCheckIO = 31,
   kEnqueue = 32,
-  kPrepareIo = 33,
-  kSubmitIo = 34,
-  kExecuteIo = 35,
-  kMemcpy = 36,
-  kRunClosure = 37,
+  kPrepareIO = 33,
+  kSubmitIO = 34,
+  kExecuteIO = 35,
 };
 
 std::string StrPhase(Phase phase);

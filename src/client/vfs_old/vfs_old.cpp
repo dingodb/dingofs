@@ -361,6 +361,10 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     auto block_cache =
         std::make_shared<BlockCacheImpl>(block_cache_option, data_accesser_);
 
+    block_cache->Submit([](BlockCache* cache) {
+      cache->DoPrefetch();
+    });
+
     if (s3_adapter_->Init(fuse_client_option_.s3Opt.s3ClientAdaptorOpt,
                           data_accesser_, inode_cache_manager_, mds_client_,
                           fs_cache_manager, fs_, block_cache, nullptr,

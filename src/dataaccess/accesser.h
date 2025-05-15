@@ -48,6 +48,8 @@ class DataAccesser {
 
   virtual Status Get(const std::string& key, off_t offset, size_t length,
                      char* buffer) = 0;
+  virtual void AsyncGet(const std::string& key, off_t offset, size_t length,
+                        char* buffer, RetryCallback retry_cb) = 0;
   virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
 
   virtual Status Delete(const std::string& key) = 0;

@@ -35,9 +35,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::cache::blockcache::BlockCache;
-using dingofs::cache::blockcache::BlockKey;
-
 class AsyncCache {
  public:
   virtual ~AsyncCache() = default;
@@ -46,33 +43,35 @@ class AsyncCache {
 
   virtual Status Stop() = 0;
 
-  virtual void Cache(const BlockKey& block_key, const butil::IOBuf& block) = 0;
+  virtual void Cache(const blockcache::BlockKey& block_key,
+                     const butil::IOBuf& block) = 0;
 };
 
 class AsyncCacheImpl : public AsyncCache {
   struct CacheTask {
-    CacheTask(const BlockKey block_key, const butil::IOBuf& block)
+    CacheTask(const blockcache::BlockKey block_key, const butil::IOBuf& block)
         : block_key(block_key), block(block) {}
 
-    BlockKey block_key;
+    blockcache::BlockKey block_key;
     butil::IOBuf block;
   };
 
  public:
-  explicit AsyncCacheImpl(std::shared_ptr<BlockCache> block_cache);
+  explicit AsyncCacheImpl(std::shared_ptr<blockcache::BlockCache> block_cache);
 
   Status Start() override;
 
   Status Stop() override;
 
-  void Cache(const BlockKey& block_key, const butil::IOBuf& block) override;
+  void Cache(const blockcache::BlockKey& block_key,
+             const butil::IOBuf& block) override;
 
  private:
   static int DoCache(void* meta, bthread::TaskIterator<CacheTask>& iter);
 
  private:
   std::atomic<bool> running_;
-  std::shared_ptr<BlockCache> block_cache_;
+  std::shared_ptr<blockcache::BlockCache> block_cache_;
   bthread::ExecutionQueueId<CacheTask> async_cache_queue_id_;
 };
 

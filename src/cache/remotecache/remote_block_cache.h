@@ -37,9 +37,6 @@ namespace dingofs {
 namespace cache {
 namespace remotecache {
 
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::stub::rpcclient::MDSBaseClient;
-
 class RemoteBlockCache {
  public:
   virtual ~RemoteBlockCache() = default;
@@ -48,7 +45,7 @@ class RemoteBlockCache {
 
   virtual void Shutdown() = 0;
 
-  virtual Status Range(const BlockKey& block_key, size_t block_size,
+  virtual Status Range(const blockcache::BlockKey& block_key, size_t block_size,
                        off_t offset, size_t length, butil::IOBuf* buffer) = 0;
 };
 
@@ -60,14 +57,14 @@ class RemoteBlockCacheImpl : public RemoteBlockCache {
 
   void Shutdown() override;
 
-  Status Range(const BlockKey& block_key, size_t block_size, off_t offset,
-               size_t length, butil::IOBuf* buffer) override;
+  Status Range(const blockcache::BlockKey& block_key, size_t block_size,
+               off_t offset, size_t length, butil::IOBuf* buffer) override;
 
  private:
   std::atomic<bool> inited_;
   RemoteBlockCacheOption option_;
-  std::shared_ptr<MDSBaseClient> mds_base_;
-  std::shared_ptr<MdsClient> mds_client_;
+  std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
   std::unique_ptr<RemoteNodeGroup> node_group_;
 };
 

@@ -28,6 +28,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/storage/buffer.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
@@ -44,14 +45,14 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
   brpc::ClosureGuard done_guard(done);
   auto* cntl = static_cast<brpc::Controller*>(controller);
 
-  butil::IOBuf buffer;
+  storage::IOBuffer buffer;
   BlockKey block_key(request->block_key());
   auto status =
       node_->HandleRangeRequest(block_key, request->block_size(),
                                 request->offset(), request->length(), &buffer);
   response->set_status(PbErr(status));
   if (status.ok()) {
-    cntl->response_attachment().append(buffer);
+    cntl->response_attachment().append(buffer.IOBuf());
   }
 }
 

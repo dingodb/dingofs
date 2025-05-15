@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CLIENT_BLOCK_PREFETCHER_H_
 
 #include <bthread/execution_queue.h>
+#include <bthread/mutex.h>
 
 #include <memory>
 
@@ -35,6 +36,8 @@
 namespace dingofs {
 namespace cache {
 namespace blockcache {
+
+bthread::Mutex mutex;
 
 using dingofs::utils::Mutex;
 using dingofs::utils::TaskThreadPool;
@@ -80,7 +83,7 @@ class BlockPrefetcherImpl : public BlockPrefetcher {
   void Prefetch(const BlockKey& key, size_t length);
 
  private:
-  Mutex mutex_;
+  bthread::Mutex mutex_;
   PrefetchFunc prefetch_func_;
   std::atomic<bool> running_;
   std::unordered_map<std::string, bool> busy_;

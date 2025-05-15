@@ -22,6 +22,7 @@
 
 #include "cache/remotecache/remote_node.h"
 
+#include <bthread/mutex.h>
 #include <butil/endpoint.h>
 
 #include <memory>
@@ -75,14 +76,14 @@ bool RemoteNodeImpl::InitChannel(const std::string& listen_ip,
 }
 
 void RemoteNodeImpl::ResetChannel() {
-  std::lock_guard<Mutex> mutex(mutex_);
+  std::lock_guard<bthread::Mutex> mutex(mutex_);
   if (channel_->CheckHealth() != 0) {
     InitChannel(member_.ip(), member_.port());
   }
 }
 
-Status RemoteNodeImpl::Range(const BlockKey& block_key, size_t block_size,
-                             off_t offset, size_t length,
+Status RemoteNodeImpl::Range(const blockcache::BlockKey& block_key,
+                             size_t block_size, off_t offset, size_t length,
                              butil::IOBuf* buffer) {
   brpc::Controller cntl;
   pb::cache::blockcache::RangeRequest request;

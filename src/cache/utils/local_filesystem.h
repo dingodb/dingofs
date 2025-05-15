@@ -38,11 +38,11 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-using dingofs::base::time::TimeSpec;
-
 // The local filesystem with high-level utilities for block cache
 class LocalFileSystem {
  public:
+  using TimeSpec = dingofs::base::time::TimeSpec;
+
   struct StatDisk {
     StatDisk() = default;
 

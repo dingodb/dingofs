@@ -16,28 +16,40 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-05-10
+ * Created Date: 2025-05-13
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/common/common.h"
+#include "cache/storage/buffer.h"
 
-#include "common/status.h"
-#include "dingofs/blockcache.pb.h"
+#include <butil/iobuf.h>
 
 namespace dingofs {
 namespace cache {
+namespace storage {
 
-BlockCacheErrCode PbErr(Status status) {
-  if (status.ok()) {
-    return BlockCacheOk;
-  } else if (status.IsIoError()) {
-    return BlockCacheErrIOError;
-  } else if (status.IsNotFound()) {
-    return BlockCacheErrNotFound;
+IOBuffer::IOBuffer(butil::IOBuf iobuf) : iobuf_(iobuf) {}
+
+butil::IOBuf& IOBuffer::IOBuf() { return iobuf_; }
+
+BufferVec IOBuffer::Buffers() {
+  std::string::value_type* c;
+
+  BufferVec bufvec;
+  for (int i = 0; i < iobuf_.block_count(); i++) {
+    const auto& string_piece = iobuf_.backing_block(i);
+
+    char* data = (char*)string_piece.data();
+    size_t size = string_piece.length();
+    bufvec.emplace_back(RawBuffer(data, size));
   }
-  return BlockCacheErrFailure;
+  return bufvec;
 }
 
+void IOBuffer::CopyTo(char* buffer) { iobuf_.copy_to(buffer); }
+
+size_t IOBuffer::Size() { return iobuf_.length(); }
+
+}  // namespace storage
 }  // namespace cache
 }  // namespace dingofs
