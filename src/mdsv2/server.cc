@@ -256,8 +256,8 @@ bool Server::InitMDSMonitor() {
   CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
-  // auto dist_lock = CoorDistributionLock::New(coordinator_client_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
+  CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   mds_monitor_ = MDSMonitor::New(file_system_set_, dist_lock);
   CHECK(mds_monitor_ != nullptr) << "new MDSMonitor fail.";
@@ -271,6 +271,7 @@ bool Server::InitGcProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, mds_meta_.ID());
+  CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
   gc_processor_ = GcProcessor::New(kv_storage_, dist_lock);
 

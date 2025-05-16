@@ -109,7 +109,7 @@ void MetaCodec::GetDentryTableRange(uint32_t fs_id, std::string& start_key, std:
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
-void MetaCodec::GetDentryTableRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+void MetaCodec::GetDentryTableRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeDentryOrInode);
   SerialHelper::WriteInt(fs_id, start_key);
@@ -175,16 +175,16 @@ void MetaCodec::GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, st
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
-void MetaCodec::GetFileSessionRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+void MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeFileSession);
   SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteLong(ino, start_key);
+  SerialHelper::WriteULong(ino, start_key);
 
   end_key = kPrefix;
   end_key.push_back(kTypeFileSession);
   SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteLong(ino + 1, end_key);
+  SerialHelper::WriteULong(ino + 1, end_key);
 }
 
 void MetaCodec::GetTrashChunkTableRange(std::string& start_key, std::string& end_key) {
@@ -195,30 +195,30 @@ void MetaCodec::GetTrashChunkTableRange(std::string& start_key, std::string& end
   end_key.push_back(kTypeTrashChunk + 1);
 }
 
-void MetaCodec::GetTrashChunkRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+void MetaCodec::GetTrashChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeTrashChunk);
   SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteLong(ino, start_key);
+  SerialHelper::WriteULong(ino, start_key);
 
   end_key = kPrefix;
   end_key.push_back(kTypeTrashChunk);
   SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteLong(ino + 1, end_key);
+  SerialHelper::WriteULong(ino + 1, end_key);
 }
 
-void MetaCodec::GetTrashChunkRange(uint32_t fs_id, uint64_t ino, uint64_t chunk_index, std::string& start_key,
+void MetaCodec::GetTrashChunkRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
                                    std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeTrashChunk);
   SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteLong(ino, start_key);
+  SerialHelper::WriteULong(ino, start_key);
   SerialHelper::WriteULong(chunk_index, start_key);
 
   end_key = kPrefix;
   end_key.push_back(kTypeTrashChunk);
   SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteLong(ino, end_key);
+  SerialHelper::WriteULong(ino, end_key);
   SerialHelper::WriteULong(chunk_index + 1, end_key);
 }
 
@@ -228,6 +228,16 @@ void MetaCodec::GetDelFileTableRange(std::string& start_key, std::string& end_ke
 
   end_key = kPrefix;
   end_key.push_back(kTypeDelFile + 1);
+}
+
+void MetaCodec::GetDelFileTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeDelFile);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeDelFile);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
 // format: [$prefix, $type, $name]
@@ -385,7 +395,7 @@ pb::mdsv2::FsInfo MetaCodec::DecodeFSValue(const std::string& value) {
 }
 
 // format: [$prefix, $type, $fs_id, $ino, $name]
-std::string MetaCodec::EncodeDentryKey(uint32_t fs_id, uint64_t ino, const std::string& name) {
+std::string MetaCodec::EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -418,7 +428,7 @@ pb::mdsv2::Dentry MetaCodec::DecodeDentryValue(const std::string& value) {
   return dentry;
 }
 
-void MetaCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string& start_key, std::string& end_key) {
+void MetaCodec::EncodeDentryRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
   CHECK(ino > 0) << fmt::format("invalid ino {}.", ino);
 
@@ -439,7 +449,7 @@ void MetaCodec::EncodeDentryRange(uint32_t fs_id, uint64_t ino, std::string& sta
 
 uint32_t MetaCodec::InodeKeyLength() { return kPrefixSize + 13; }
 
-static std::string EncodeInodeKeyImpl(int fs_id, uint64_t ino, KeyType type) {
+static std::string EncodeInodeKeyImpl(int fs_id, Ino ino, KeyType type) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -448,12 +458,12 @@ static std::string EncodeInodeKeyImpl(int fs_id, uint64_t ino, KeyType type) {
   key.append(kPrefix);
   key.push_back(type);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
 
   return key;
 }
 
-std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, uint64_t ino) {
+std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, Ino ino) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -462,7 +472,7 @@ std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, uint64_t ino) {
   key.append(kPrefix);
   key.push_back(KeyType::kTypeDentryOrInode);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
 
   return key;
 }
@@ -512,7 +522,7 @@ pb::mdsv2::Quota MetaCodec::DecodeFsQuotaValue(const std::string& value) {
 }
 
 // dir format: [$prefix, $type, $fs_id, $ino]
-std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, uint64_t ino) {
+std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
   CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
 
   std::string key;
@@ -521,7 +531,7 @@ std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, uint64_t ino) {
   key.append(kPrefix);
   key.push_back(KeyType::kTypeDirQuota);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
 
   return key;
 }
@@ -551,7 +561,7 @@ std::string MetaCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns) {
   key.append(kPrefix);
   key.push_back(KeyType::kTypeFsStats);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(time_ns, key);
+  SerialHelper::WriteULong(time_ns, key);
 
   return key;
 }
@@ -572,14 +582,14 @@ pb::mdsv2::FsStatsData MetaCodec::DecodeFsStatsValue(const std::string& value) {
   return std::move(stats);
 }
 
-std::string MetaCodec::EncodeFileSessionKey(uint32_t fs_id, uint64_t ino, const std::string& session_id) {
+std::string MetaCodec::EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::string& session_id) {
   std::string key;
   key.reserve(kPrefixSize + 32 + session_id.size());
 
   key.append(kPrefix);
   key.push_back(KeyType::kTypeFileSession);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
   ;
   key.append(session_id);
 
@@ -606,7 +616,7 @@ pb::mdsv2::FileSession MetaCodec::DecodeFileSessionValue(const std::string& valu
   return std::move(file_session);
 }
 
-std::string MetaCodec::EncodeTrashChunkKey(uint32_t fs_id, uint64_t ino, uint64_t chunk_index, uint64_t time_ns) {
+std::string MetaCodec::EncodeTrashChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns) {
   std::string key;
   key.reserve(kPrefixSize + 32);
 
@@ -640,14 +650,14 @@ pb::mdsv2::TrashSliceList MetaCodec::DecodeTrashChunkValue(const std::string& va
   return std::move(slice_list);
 }
 
-std::string MetaCodec::EncodeDelFileKey(uint32_t fs_id, uint64_t ino) {
+std::string MetaCodec::EncodeDelFileKey(uint32_t fs_id, Ino ino) {
   std::string key;
   key.reserve(kPrefixSize + 32);
 
   key.append(kPrefix);
   key.push_back(KeyType::kTypeDelFile);
   SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteLong(ino, key);
+  SerialHelper::WriteULong(ino, key);
 
   return std::move(key);
 }

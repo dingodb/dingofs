@@ -42,7 +42,7 @@ class DistributionLock : public std::enable_shared_from_this<DistributionLock> {
   virtual bool IsLocked() = 0;
 };
 
-using DistributionLockPtr = std::shared_ptr<DistributionLock>;
+using DistributionLockSPtr = std::shared_ptr<DistributionLock>;
 
 class CoorDistributionLock;
 using CoorDistributionLockSPtr = std::shared_ptr<CoorDistributionLock>;

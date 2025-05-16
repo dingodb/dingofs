@@ -181,6 +181,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
 
+  // get deleted file
+  Status GetDelFiles(std::vector<AttrType>& delfiles);
+
  private:
   friend class DebugServiceImpl;
   friend class FsStatServiceImpl;
@@ -213,6 +216,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   std::map<uint64_t, InodeSPtr> GetAllInodesFromCache();
   Status GetInodeFromStore(Ino ino, const std::string& reason, InodeSPtr& out_inode);
   Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
+
+  Status GetDelFileFromStore(Ino ino, AttrType& out_attr);
 
   // delete inode from cache
   void DeleteInodeFromCache(Ino ino);

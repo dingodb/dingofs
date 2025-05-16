@@ -403,6 +403,18 @@ Status FileSystem::BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vect
   return Status::OK();
 }
 
+Status FileSystem::GetDelFileFromStore(Ino ino, AttrType& out_attr) {
+  std::string key = MetaCodec::EncodeDelFileKey(fs_id_, ino);
+  std::string value;
+  auto status = kv_storage_->Get(key, value);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found inode({}), {}", ino, status.error_str()));
+  }
+  out_attr = MetaCodec::DecodeDelFileValue(value);
+
+  return Status::OK();
+}
+
 void FileSystem::DeleteInodeFromCache(Ino ino) { inode_cache_.DeleteInode(ino); }
 
 Status FileSystem::DestoryInode(uint32_t fs_id, Ino ino) {
@@ -980,16 +992,16 @@ Status FileSystem::UnLink(Context& ctx, Ino parent_ino, const std::string& name)
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] unlink {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 parent_ino, name, status.error_str());
+  auto& result = operation.GetResult();
+  auto& parent_attr = result.attr;
+  auto& child_attr = result.child_attr;
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_,
+                                 ElapsedTimeUs(time_ns), parent_ino, name, child_attr.nlink(), status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
   }
-
-  auto& result = operation.GetResult();
-  auto& parent_attr = result.attr;
-  auto& child_attr = result.child_attr;
 
   partition->DeleteChild(name);
   partition->ParentInode()->UpdateIf(std::move(parent_attr));
@@ -1392,7 +1404,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
   uint64_t time_ns = Helper::TimestampNs();
 
   // update backend store
-  UpdateChunkOperation operation(trace, fs_id_, ino, chunk_index, fs_info_->GetChunkSize(), slices);
+  UpdateChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, slices);
 
   status = RunOperation(&operation);
 
@@ -1411,7 +1423,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
 
   // check whether need to compact chunk
   for (const auto& [_, chunk] : attr.chunks()) {
-    if (chunk.size() > FLAGS_compact_slice_threshold_num) {
+    if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
       DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
     }
   }
@@ -1820,6 +1832,35 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   fs_info_->Update(fs_info);
 
   return Status::OK();
+}
+
+Status FileSystem::GetDelFiles(std::vector<AttrType>& delfiles) {
+  Range range;
+  MetaCodec::GetDelFileTableRange(fs_id_, range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::vector<KeyValue> kvs;
+  Status status;
+  uint32_t count = 0;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      delfiles.push_back(MetaCodec::DecodeDelFileValue(kv.value));
+    }
+
+    count += kvs.size();
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] get delfiles count({}), status({}).", fs_id_, count, status.error_str());
+
+  return status;
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,

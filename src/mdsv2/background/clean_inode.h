@@ -34,7 +34,7 @@ class CleanInode {
 
   FileSystemSetSPtr fs_set_;
 
-  DistributionLockPtr dist_lock_;
+  DistributionLockSPtr dist_lock_;
 };
 
 }  // namespace mdsv2

@@ -343,23 +343,22 @@ class UpdateXAttrOperation : public Operation {
 
 class UpdateChunkOperation : public Operation {
  public:
-  UpdateChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint64_t index, uint64_t size,
+  UpdateChunkOperation(Trace& trace, const FsInfoType fs_info, uint64_t ino, uint64_t index,
                        std::vector<pb::mdsv2::Slice> slices)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(index), chunk_size_(size), slices_(slices) {};
+      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(index), slices_(slices) {};
   ~UpdateChunkOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateChunk; }
 
-  uint32_t GetFsId() const override { return fs_id_; }
+  uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   uint64_t GetIno() const override { return ino_; }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
 
  private:
-  uint32_t fs_id_;
+  const FsInfoType fs_info_;
   uint64_t ino_;
-  const uint64_t chunk_index_;
-  const uint64_t chunk_size_;
+  uint64_t chunk_index_{0};
   std::vector<pb::mdsv2::Slice> slices_;
 };
 

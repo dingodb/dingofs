@@ -366,7 +366,8 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
   if (it == inode.chunks().end()) {
     pb::mdsv2::Chunk chunk;
     chunk.set_index(chunk_index_);
-    chunk.set_size(chunk_size_);
+    chunk.set_chunk_size(fs_info_.chunk_size());
+    chunk.set_block_size(fs_info_.block_size());
     chunk.set_version(0);
     Helper::VectorToPbRepeated(slices_, chunk.mutable_slices());
 

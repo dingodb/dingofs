@@ -67,7 +67,7 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
         MetaCodec::DecodeInodeKey(kv.key, fs_id, ino);
         const AttrType attr = MetaCodec::DecodeInodeValue(kv.value);
 
-        DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
+        // DINGO_LOG(INFO) << fmt::format("attr({}).", attr.ShortDebugString());
         auto it = node_map.find(ino);
         if (it == node_map.end()) {
           node_map.insert({ino, new FsTreeNode{.attr = attr}});
@@ -84,7 +84,7 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
         MetaCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
         pb::mdsv2::Dentry dentry = MetaCodec::DecodeDentryValue(kv.value);
 
-        DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
+        // DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
 
         FsTreeNode* item = new FsTreeNode{.dentry = dentry};
         auto it = node_map.find(dentry.ino());

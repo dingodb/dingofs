@@ -15,15 +15,17 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_GC_H_
 #define DINGOFS_MDSV2_BACKGROUND_GC_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
 #include "dataaccess/block_accesser.h"
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/distribution_lock.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -38,50 +40,44 @@ using CleanDeletedFileTaskSPtr = std::shared_ptr<CleanDeletedFileTask>;
 class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
+// clean trash slice corresponding to s3 object
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStorageSPtr kv_storage,
-                        dataaccess::BlockAccesser* block_accesser,
-                        const KeyValue& kv)
-      : kv_storage_(kv_storage), block_accesser_(block_accesser), kv_(kv) {}
+  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor, const KeyValue& kv)
+      : kv_storage_(kv_storage), data_accessor_(block_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(
-      KVStorageSPtr kv_storage, dataaccess::BlockAccesser* block_accesser,
-      const KeyValue& kv) {
-    return std::make_shared<CleanDeletedSliceTask>(kv_storage, block_accesser,
-                                                   kv);
+  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor,
+                                       const KeyValue& kv) {
+    return std::make_shared<CleanDeletedSliceTask>(kv_storage, block_accessor, kv);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
   void Run() override;
 
  private:
-  Status CleanDeletedSlice(const std::string& key, const std::string& value);
+  friend class GcProcessor;
+
+  Status CleanDeletedSlice();
 
   KeyValue kv_;
 
   KVStorageSPtr kv_storage_;
 
   // data accessor for s3
-  dataaccess::BlockAccesser* block_accesser_{nullptr};
+  dataaccess::BlockAccesserPtr data_accessor_;
 };
 
+// clen delete file corresponding to s3 object
 class CleanDeletedFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask(KVStorageSPtr kv_storage,
-                       dataaccess::BlockAccesser* block_accesser,
-                       const AttrType& inode)
-      : kv_storage_(kv_storage),
-        block_accesser_(block_accesser),
-        inode_(inode) {}
+  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor, const AttrType& attr)
+      : kv_storage_(kv_storage), data_accessor_(block_accessor), attr_(attr) {}
   ~CleanDeletedFileTask() override = default;
 
-  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage,
-                       dataaccess::BlockAccesser* block_accesser,
-                                      const AttrType& inode) {
-    return std::make_shared<CleanDeletedFileTask>(kv_storage, block_accesser,
-                                                  inode);
+  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor,
+                                      const AttrType& attr) {
+    return std::make_shared<CleanDeletedFileTask>(kv_storage, block_accessor, attr);
   }
 
   std::string Type() override { return "CLEAN_DELETED_FILE"; }
@@ -89,25 +85,27 @@ class CleanDeletedFileTask : public TaskRunnable {
   void Run() override;
 
  private:
-  Status CleanDeletedFile(const AttrType& inode);
+  friend class GcProcessor;
 
-  AttrType inode_;
+  Status CleanDeletedFile(const AttrType& attr);
+
+  AttrType attr_;
 
   KVStorageSPtr kv_storage_;
 
   // data accessor for s3
-  dataaccess::BlockAccesser* block_accesser_{nullptr};
+  dataaccess::BlockAccesserPtr data_accessor_;
 };
 
 class GcProcessor {
  public:
-  GcProcessor(KVStorageSPtr kv_storage, DistributionLockPtr dist_lock)
-      : kv_storage_(kv_storage), dist_lock_(dist_lock) {}
+  GcProcessor(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage, DistributionLockSPtr dist_lock)
+      : file_system_set_(file_system_set), kv_storage_(kv_storage), dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
-  static GcProcessorSPtr New(KVStorageSPtr kv_storage,
-                             DistributionLockPtr dist_lock) {
-    return std::make_shared<GcProcessor>(kv_storage, dist_lock);
+  static GcProcessorSPtr New(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage,
+                             DistributionLockSPtr dist_lock) {
+    return std::make_shared<GcProcessor>(file_system_set, kv_storage, dist_lock);
   }
 
   bool Init();
@@ -115,24 +113,32 @@ class GcProcessor {
 
   void Run();
 
-  Status LaunchGc();
+  Status ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index);
+  Status ManualCleanDeletedFile(Trace& trace, uint32_t fs_id, Ino ino);
 
  private:
+  Status LaunchGc();
+
   void Execute(TaskRunnablePtr task);
+  void Execute(int64_t id, TaskRunnablePtr task);
 
   void ScanDeletedSlice();
   void ScanDeletedFile();
 
   static bool ShouldDeleteFile(const AttrType& attr);
 
+  dataaccess::BlockAccesserPtr GetOrCreateDataAccesser(uint32_t fs_id);
+
   std::atomic<bool> is_running_{false};
 
-  DistributionLockPtr dist_lock_;
+  DistributionLockSPtr dist_lock_;
 
   KVStorageSPtr kv_storage_;
 
-  // data accessor for s3
-  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_;
+  // fs_id -> data accessor
+  std::map<uint32_t, dataaccess::BlockAccesserPtr> block_accessers_;
+
+  FileSystemSetSPtr file_system_set_;
 
   WorkerSetSPtr worker_set_;
 };
