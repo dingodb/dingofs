@@ -14,6 +14,11 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Remove .git directory
+      run: |
+        echo "Remove .git directory"
+        rm -rf .git
     
     - name: Download branch name file
       uses: actions/download-artifact@v4
@@ -106,7 +111,7 @@ jobs:
 
     - name: Extract artifact
       if: steps.check-event.outputs.continue == 'true'
-      run: tar -xzvf dingofs.tar.gz -C docker/rocky9
+      run: tar -xzvf dingofs.tar.gz -C docker/rocky9 && rm -f dingofs.tar.gz
 
     - name: Set up Docker Buildx
       if: steps.check-event.outputs.continue == 'true'

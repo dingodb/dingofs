@@ -28,18 +28,6 @@ jobs:
       run: |
         echo "THIRD_PARTY_INSTALL_PATH: $THIRD_PARTY_INSTALL_PATH"
         echo "DINGOSDK_INSTALL_PATH: $DINGOSDK_INSTALL_PATH"
-    
-    #- name: Checkout dingo-sdk
-    #  run: |
-    #    git clone https://github.com/dingodb/dingo-sdk.git /tmp/dingo-sdk
-  
-    #- name: Build dingo-sdk
-    #  run: |
-    #    cd /tmp/dingo-sdk
-    #    git submodule sync --recursive
-    #    git submodule update --init --recursive
-    #    mkdir build && cd build && cmake -DTHIRD_PARTY_INSTALL_PATH=/root/.local/dingo-eureka -DCMAKE_INSTALL_PREFIX=/root/.local/dingo-sdk ..
-    #    make -j $(nproc) && make install 
 
     - name: Record event type
       run: |
@@ -108,6 +96,11 @@ jobs:
     - name: Install dingofs
       run: |
         make file_deploy_config 
+
+    - name: Remove .git directory
+      run: |
+        echo "Remove .git directory"
+        rm -rf .git
 
     - name: Archive the dingofs directory
       run: |
