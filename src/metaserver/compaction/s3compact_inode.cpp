@@ -622,12 +622,9 @@ void CompactInodeJob::CompactChunks(const S3CompactTask& task) {
                          inode_id, std::move(s3_chunk_info_add),
                          std::move(s3_chunk_info_remove));
   if (ret != MetaStatusCode::OK) {
-    LOG(WARNING) << "s3compact: UpdateInode failed, inodeKey = "
-                 << compact_ctx.fsId << "," << compact_ctx.inodeId
-                 << ", ret = " << MetaStatusCode_Name(ret);
-    for (const auto& item : objs_added_map) {
-      DeleteObjs(item.second, block_accesser.get());
-    }
+    LOG(ERROR) << "s3compact: UpdateInode failed, inodeKey = "
+               << compact_ctx.fsId << "," << compact_ctx.inodeId
+               << ", ret = " << MetaStatusCode_Name(ret);
 
     return;
   }
