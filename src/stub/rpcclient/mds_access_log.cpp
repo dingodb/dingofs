@@ -14,25 +14,36 @@
  * limitations under the License.
  */
 
-#include "client/vfs_wrapper/access_log.h"
+#include "stub/rpcclient/mds_access_log.h"
+
+#include <absl/strings/str_format.h>
+#include <gflags/gflags.h>
 
 namespace dingofs {
-namespace client {
+namespace stub {
+
 namespace {
+bool PassBool(const char*, bool) { return true; }
 bool PassInt64(const char*, int64_t) { return true; }
 };  // namespace
 
-DEFINE_int64(access_log_threshold_us, 0, "client ccess log threshold");
-DEFINE_validator(access_log_threshold_us, &PassInt64);
+DEFINE_bool(mds_access_logging, true, "enable mds access log");
+DEFINE_validator(mds_access_logging, &PassBool);
 
-std::shared_ptr<spdlog::logger> logger;
+DEFINE_int64(mds_access_log_threshold_us, 10 * 1000,
+             "mds access log threshold in us");
+DEFINE_validator(mds_access_log_threshold_us, &PassInt64);
 
-bool InitAccessLog(const std::string& prefix) {
-  std::string filename = absl::StrFormat("%s/access_%d.log", prefix, getpid());
-  logger = spdlog::daily_logger_mt("fuse_access", filename, 0, 0);
+std::shared_ptr<spdlog::logger> mds_access_logger;
+
+bool InitMdsAccessLog(const std::string& prefix) {
+  std::string filename =
+      absl::StrFormat("%s/mds_access_%d.log", prefix, getpid());
+  mds_access_logger = spdlog::daily_logger_mt("mds_access", filename, 0, 0);
   spdlog::flush_every(std::chrono::seconds(1));
   return true;
 }
 
-}  // namespace client
+}  // namespace stub
+
 }  // namespace dingofs

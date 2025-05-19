@@ -18,6 +18,7 @@
 #define DINGODB_SRC_STUB_RPCCLIENT_META_ACCESS_LOG_H_
 
 #include <butil/time.h>
+#include <gflags/gflags.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
@@ -27,6 +28,9 @@
 
 namespace dingofs {
 namespace stub {
+
+DECLARE_bool(meta_access_logging);
+DECLARE_int64(meta_access_log_threshold_us);
 
 extern std::shared_ptr<spdlog::logger> meta_access_logger;
 
@@ -39,14 +43,21 @@ struct MetaAccessLogGuard {
       : start_us(p_start_us), handler(handler) {}
 
   ~MetaAccessLogGuard() {
-    meta_access_logger->info("{0} <{1:.6f}>", handler(), (butil::cpuwide_time_us() - start_us) / 1e6);
+    if (!FLAGS_meta_access_logging) {
+      return;
+    }
+
+    int64_t duration_us = butil::cpuwide_time_us() - start_us;
+    if (duration_us > FLAGS_meta_access_log_threshold_us) {
+      meta_access_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
+    }
   }
 
   MessageHandler handler;
   int64_t start_us = 0;
 };
 
-}
+}  // namespace stub
 }  // namespace dingofs
 
 #endif  // DINGODB_SRC_STUB_RPCCLIENT_META_ACCESS_LOG_H_

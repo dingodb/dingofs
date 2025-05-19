@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
-#define DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
+#ifndef DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_
+#define DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_
 
 #include <butil/time.h>
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
@@ -27,29 +28,30 @@
 #include <string>
 
 namespace dingofs {
-namespace aws {
+namespace stub {
 
-DECLARE_bool(s3_access_logging);
-DECLARE_int64(s3_access_log_threshold_us);
+DECLARE_bool(mds_access_logging);
+DECLARE_int64(mds_access_log_threshold_us);
 
-extern std::shared_ptr<spdlog::logger> s3_logger;
+extern std::shared_ptr<spdlog::logger> mds_access_logger;
 
-bool InitS3AccessLog(const std::string& prefix);
+bool InitMdsAccessLog(const std::string& prefix);
 
-struct S3AccessLogGuard {
+struct MdsAccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
-  explicit S3AccessLogGuard(int64_t p_start_us, MessageHandler handler)
+  explicit MdsAccessLogGuard(int64_t p_start_us, MessageHandler handler)
       : start_us(p_start_us), handler(handler) {}
 
-  ~S3AccessLogGuard() {
-    if (!FLAGS_s3_access_logging) {
+  ~MdsAccessLogGuard() {
+    if (!FLAGS_mds_access_logging) {
       return;
     }
 
     int64_t duration_us = butil::cpuwide_time_us() - start_us;
-    if (duration_us > FLAGS_s3_access_log_threshold_us) {
-      s3_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
+    if (duration_us > FLAGS_mds_access_log_threshold_us) {
+      mds_access_logger->info("{0} <{1:.6f}>", handler(),
+                              (duration_us) / 1e6);
     }
   }
 
@@ -57,7 +59,7 @@ struct S3AccessLogGuard {
   int64_t start_us = 0;
 };
 
-}  // namespace aws
+}  // namespace stub
 }  // namespace dingofs
 
-#endif  // DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
+#endif  // DINGODB_SRC_STUB_RPCCLIENT_MDS_ACCESS_LOG_H_

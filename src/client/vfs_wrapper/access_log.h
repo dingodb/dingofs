@@ -30,12 +30,15 @@
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
+#include <cstdint>
 #include <string>
 
 #include "client/common/dynamic_config.h"
 
 namespace dingofs {
 namespace client {
+
+DECLARE_int64(access_log_threshold_us);
 
 extern std::shared_ptr<spdlog::logger> logger;
 
@@ -59,7 +62,11 @@ struct AccessLogGuard {
     }
 
     timer.stop();
-    logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+    int64_t duration = timer.u_elapsed();
+
+    if (duration > FLAGS_access_log_threshold_us) {
+      logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
+    }
   }
 
   bool enable;

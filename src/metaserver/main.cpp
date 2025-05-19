@@ -31,6 +31,7 @@
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "stub/common/version.h"
+#include "stub/rpcclient/mds_access_log.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
@@ -107,6 +108,22 @@ void LoadConfigFromCmdline(Configuration* conf) {
   if (GetCommandLineFlagInfo("v", &info) && !info.is_default) {
     conf->SetIntValue("metaserver.loglevel", FLAGS_v);
   }
+
+  // access logging
+  conf->GetBoolValue("mds_access_logging",
+                     &dingofs::stub::FLAGS_mds_access_logging);
+  conf->GetInt64Value("mds_access_log_threshold_us",
+                      &dingofs::stub::FLAGS_mds_access_log_threshold_us);
+
+  conf->GetBoolValue("meta_access_logging",
+                     &dingofs::stub::FLAGS_meta_access_logging);
+  conf->GetInt64Value("meta_access_log_threshold_us",
+                      &dingofs::stub::FLAGS_meta_access_log_threshold_us);
+
+  conf->GetBoolValue("s3_access_logging",
+                     &dingofs::aws::FLAGS_s3_access_logging);
+  conf->GetInt64Value("s3_access_log_threshold_us",
+                      &dingofs::aws::FLAGS_s3_access_log_threshold_us);
 }
 
 }  // namespace
@@ -148,9 +165,8 @@ int main(int argc, char** argv) {
   LOG_IF(FATAL, !InitAccessLog(FLAGS_log_dir))
       << "Init access log failed, log dir = " << FLAGS_log_dir;
 
-  // init s3 access log
   dingofs::aws::InitS3AccessLog(FLAGS_log_dir);
-
+  dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
   dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
   dingofs::metaserver::Metaserver metaserver;

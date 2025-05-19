@@ -22,6 +22,7 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+
 #include <csignal>
 
 #include "aws/s3_access_log.h"
@@ -71,6 +72,12 @@ int main(int argc, char** argv) {
                    << ", will log to /tmp";
     }
   }
+
+  // logging
+  conf->GetBoolValue("s3_access_logging",
+                     &dingofs::aws::FLAGS_s3_access_logging);
+  conf->GetInt64Value("s3_access_log_threshold_us",
+                      &dingofs::aws::FLAGS_s3_access_log_threshold_us);
 
   InstallSigHandler();
 

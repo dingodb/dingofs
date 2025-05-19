@@ -21,6 +21,17 @@
 namespace dingofs {
 namespace stub {
 
+namespace {
+bool PassBool(const char*, bool) { return true; }
+bool PassInt64(const char*, int64_t) { return true; }
+};  // namespace
+
+DEFINE_bool(meta_access_logging, true, "enable meta access log");
+DEFINE_validator(meta_access_logging, &PassBool);
+
+DEFINE_int64(meta_access_log_threshold_us, 0, "meta access log threshold");
+DEFINE_validator(meta_access_log_threshold_us, &PassInt64);
+
 std::shared_ptr<spdlog::logger> meta_access_logger;
 
 bool InitMetaAccessLog(const std::string& prefix) {

@@ -34,6 +34,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "stub/metric/metric.h"
+#include "stub/rpcclient/mds_access_log.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
@@ -63,7 +64,8 @@ Status InitLog() {
               dingofs::client::blockcache::InitBlockCacheLog(FLAGS_log_dir) &&
               dingofs::aws::InitS3AccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
-              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
+              dingofs::stub::InitMetaAccessLog(FLAGS_log_dir) &&
+              dingofs::stub::InitMdsAccessLog(FLAGS_log_dir);
 
   CHECK(succ) << "Init log failed, unexpected!";
   return Status::OK();

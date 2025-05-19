@@ -21,6 +21,7 @@ target_link_libraries(aws_s3_adapter
     dingofs_utils
     ${AWSSDK_LIBRARIES}
     glog::glog
+    gflags::gflags
     brpc::brpc
     spdlog::spdlog
     absl::str_format
