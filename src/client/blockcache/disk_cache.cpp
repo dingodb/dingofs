@@ -164,14 +164,14 @@ BCACHE_ERROR DiskCache::Stage(const BlockKey& key, const Block& block,
 
   timer.NextPhase(Phase::LINK);
   rc = fs_->HardLink(stage_path, cache_path);
-  if (rc == BCACHE_ERROR::OK) {
-    timer.NextPhase(Phase::CACHE_ADD);
-    manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
-  } else {
+  if (rc != BCACHE_ERROR::OK) {
     LOG(WARNING) << "Link " << stage_path << " to " << cache_path
                  << " failed: " << StrErr(rc);
     rc = BCACHE_ERROR::OK;  // ignore link error
   }
+
+  timer.NextPhase(Phase::CACHE_ADD);
+  manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
 
   timer.NextPhase(Phase::ENQUEUE_UPLOAD);
   uploader_(key, stage_path, ctx);
