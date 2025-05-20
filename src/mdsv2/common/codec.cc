@@ -195,6 +195,16 @@ void MetaCodec::GetTrashChunkTableRange(std::string& start_key, std::string& end
   end_key.push_back(kTypeTrashChunk + 1);
 }
 
+void MetaCodec::GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeTrashChunk);
+  SerialHelper::WriteInt(fs_id, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeTrashChunk);
+  SerialHelper::WriteInt(fs_id + 1, end_key);
+}
+
 void MetaCodec::GetTrashChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeTrashChunk);

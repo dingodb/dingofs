@@ -38,12 +38,12 @@ DECLARE_uint32(mds_offline_period_time_ms);
 static std::string RenderHead() {
   butil::IOBufBuilder os;
 
-  os << "<head>\n"
-     << brpc::gridtable_style() << "<script src=\"/js/sorttable\"></script>\n"
-     << "<script language=\"javascript\" type=\"text/javascript\" src=\"/js/jquery_min\"></script>\n"
-     << brpc::TabsHead();
+  os << fmt::format(R"(<head>{})", brpc::gridtable_style());
+  os << fmt::format(R"(<script src="/js/sorttable"></script>)");
+  os << fmt::format(R"(<script language="javascript" type="text/javascript" src="/js/jquery_min"></script>)");
+  os << brpc::TabsHead();
 
-  os << R"(<meta charset="UTF-8">"
+  os << R"(<meta charset="UTF-8">
      <meta name="viewport" content="width=device-width, initial-scale=1.0">
      <style>
        body {
@@ -74,8 +74,8 @@ static std::string RenderHead() {
 static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
   butil::IOBufBuilder os;
 
-  os << "<div style=\"margin: 12px;\">";
-  os << "<table class=\"gridtable sortable\" border=\"1\">\n";
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
   os << "<th>Addr</th>";
@@ -83,7 +83,7 @@ static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
   os << "<th>Register Time</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
-  os << "</tr>\n";
+  os << "</tr>";
 
   int64_t now_ms = Helper::TimestampMs();
 
@@ -100,10 +100,10 @@ static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
       os << "<td>YES</td>";
     }
 
-    os << "</tr>\n";
+    os << "</tr>";
   }
 
-  os << "</table>\n";
+  os << "</table>";
   os << "</div>";
 
   butil::IOBuf buf;
@@ -124,7 +124,7 @@ void MdsStatServiceImpl::default_method(::google::protobuf::RpcController* contr
 
   auto file_system_set = Server::GetInstance().GetFileSystemSet();
 
-  os << "<!DOCTYPE html><html>\n";
+  os << "<!DOCTYPE html><html>";
 
   os << "<head>";
   os << RenderHead();

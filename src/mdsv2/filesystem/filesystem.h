@@ -157,9 +157,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // compact
   Status CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
-  Status CompactFile(Context& ctx, Ino ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
-  Status CompactAll(Context& ctx, uint64_t& checked_count, uint64_t& compacted_count);
-  Status CleanTrashFileData(Context& ctx, Ino ino);
+  Status CleanTrashSlice(Context& ctx, Ino ino, uint64_t chunk_index) const;
+  Status CleanDelFile(Context& ctx, Ino ino) const;
 
   // dentry/inode
   Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
@@ -183,6 +182,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // get deleted file
   Status GetDelFiles(std::vector<AttrType>& delfiles);
+  Status GetDelSlices(std::vector<TrashSliceList>& delslices);
 
  private:
   friend class DebugServiceImpl;

@@ -18,8 +18,10 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <string>
 
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -29,6 +31,27 @@ using AttrType = pb::mdsv2::Inode;
 using DentryType = pb::mdsv2::Dentry;
 using ChunkType = pb::mdsv2::Chunk;
 using FsInfoType = pb::mdsv2::FsInfo;
+using TrashSliceList = pb::mdsv2::TrashSliceList;
+
+inline std::string DescribeAttr(const AttrType& attr) {
+  auto parent_inos_func = [](const auto& parent_inos) {
+    std::string result;
+    for (const auto& parent_ino : parent_inos) {
+      if (!result.empty()) {
+        result += ",";
+      }
+      result += std::to_string(parent_ino);
+    }
+    return result;
+  };
+
+  return fmt::format(
+      "fs_id:{} ino:{} length:{} ctime:{} mtime:{} atime:{} uid:{} gid:{} mode:{} nlink:{} type:{} parent_inos:{} "
+      "version:{}",
+      attr.fs_id(), attr.ino(), attr.length(), attr.ctime(), attr.mtime(), attr.atime(), attr.uid(), attr.gid(),
+      attr.mode(), attr.nlink(), pb::mdsv2::FileType_Name(attr.type()), parent_inos_func(attr.parent_inos()),
+      attr.version());
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs

@@ -178,7 +178,7 @@ WorkerSet::WorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_
       pending_task_count_metrics_(fmt::format("dingo_worker_set_{}_pending_task_count", name)),
       queue_wait_metrics_(fmt::format("dingo_worker_set_{}_queue_wait_latency", name)),
       queue_run_metrics_(fmt::format("dingo_worker_set_{}_queue_run_latency", name)),
-      is_inplace_run(is_inplace_run){};
+      is_inplace_run(is_inplace_run) {};
 
 bool ExecqWorkerSet::Init() {
   for (uint32_t i = 0; i < WorkerNum(); ++i) {
@@ -237,7 +237,7 @@ bool ExecqWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) {
   return ret;
 }
 
-bool ExecqWorkerSet::ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr task) {
+bool ExecqWorkerSet::ExecuteHash(int64_t id, TaskRunnablePtr task) {
   int64_t max_pending_task_count = MaxPendingTaskCount();
   int64_t pending_task_count = PendingTaskCount();
 
@@ -247,7 +247,7 @@ bool ExecqWorkerSet::ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr ta
     return false;
   }
 
-  auto ret = workers_[region_id % WorkerNum()]->Execute(task);
+  auto ret = workers_[id % WorkerNum()]->Execute(task);
   if (ret) {
     IncPendingTaskCount();
     IncTotalTaskCount();
@@ -419,7 +419,7 @@ bool SimpleWorkerSet::ExecuteRR(TaskRunnablePtr task) { return Execute(task); }
 
 bool SimpleWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) { return Execute(task); }
 
-bool SimpleWorkerSet::ExecuteHashByRegionId(int64_t /*region_id*/, TaskRunnablePtr task) { return Execute(task); }
+bool SimpleWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) { return Execute(task); }
 
 PriorWorkerSet::PriorWorkerSet(std::string name, uint32_t worker_num, int64_t max_pending_task_count, bool use_pthread,
                                bool is_inplace_run)
@@ -557,7 +557,7 @@ bool PriorWorkerSet::ExecuteRR(TaskRunnablePtr task) { return Execute(task); }
 
 bool PriorWorkerSet::ExecuteLeastQueue(TaskRunnablePtr task) { return Execute(task); }
 
-bool PriorWorkerSet::ExecuteHashByRegionId(int64_t /*region_id*/, TaskRunnablePtr task) { return Execute(task); }
+bool PriorWorkerSet::ExecuteHash(int64_t /*id*/, TaskRunnablePtr task) { return Execute(task); }
 
 }  // namespace mdsv2
 

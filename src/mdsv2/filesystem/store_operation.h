@@ -463,16 +463,12 @@ class RenameOperation : public Operation {
 
 class CompactChunkOperation : public Operation {
  public:
-  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t file_length,
-                        Inode::ChunkMap&& chunks)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), file_length_(file_length), chunks_(chunks) {};
-  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info) : Operation(trace), fs_info_(fs_info) {};
+  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index) {};
   ~CompactChunkOperation() override = default;
 
   struct Result : public Operation::Result {
-    std::vector<pb::mdsv2::TrashSlice> trash_slices;
-    uint64_t checked_count{0};
-    uint64_t compacted_count{0};
+    TrashSliceList trash_slice_list;
   };
 
   OpType GetOpType() const override { return OpType::kCompactChunk; }
@@ -492,19 +488,15 @@ class CompactChunkOperation : public Operation {
   }
 
  private:
-  std::vector<pb::mdsv2::TrashSlice> GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk);
-  static void UpdateChunk(ChunkType& chunk, const std::vector<pb::mdsv2::TrashSlice>& trash_slices);
-  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(Ino ino, uint64_t file_length, ChunkType& chunk);
-  std::vector<pb::mdsv2::TrashSlice> DoCompactChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
-                                                    ChunkType& chunk);
-  std::vector<pb::mdsv2::TrashSlice> CompactChunks(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length,
-                                                   Inode::ChunkMap& chunks);
-  void CompactAll(TxnUPtr& txn, uint64_t& checked_count, uint64_t& compacted_count);
+  TrashSliceList GenTrashSlices(Ino ino, uint64_t file_length, const ChunkType& chunk);
+  static void UpdateChunk(ChunkType& chunk, const TrashSliceList& trash_slices);
+  TrashSliceList DoCompactChunk(Ino ino, uint64_t file_length, ChunkType& chunk);
+  TrashSliceList CompactChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length, ChunkType& chunk);
+  TrashSliceList CompactChunks(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t file_length, Inode::ChunkMap& chunks);
 
   FsInfoType fs_info_;
   uint64_t ino_;
-  uint64_t file_length_;
-  Inode::ChunkMap chunks_;
+  uint64_t chunk_index_{0};
   Result result_;
 };
 

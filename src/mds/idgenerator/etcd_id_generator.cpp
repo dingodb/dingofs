@@ -82,6 +82,7 @@ std::string EtcdIdGenerator::EncodeID(uint64_t value) {
 }
 
 bool EtcdIdGenerator::AllocateIds(uint64_t bundle_size) {
+  uint64_t prev_last_alloc_id = last_alloc_id_;
   int retry = 0;
   do {
     std::string prev_value = EncodeID(last_alloc_id_);
@@ -90,6 +91,9 @@ bool EtcdIdGenerator::AllocateIds(uint64_t bundle_size) {
     if (ret == EtcdErrCode::EtcdOK) {
       LOG(INFO) << fmt::format("[idalloc.{}] allocate id range [{}, {}).", key_,
                                last_alloc_id_, new_alloc_id);
+      if (last_alloc_id_ != prev_last_alloc_id) {
+        next_id_ = last_alloc_id_;
+      }
       last_alloc_id_ = new_alloc_id;
       return true;
 

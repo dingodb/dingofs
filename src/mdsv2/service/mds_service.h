@@ -129,13 +129,12 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                  pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) override;
 
   // compact interface
-  void Compact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
-               pb::mdsv2::CompactResponse* response, google::protobuf::Closure* done) override;
-  void CompactAll(google::protobuf::RpcController* controller, const pb::mdsv2::CompactAllRequest* request,
-                  pb::mdsv2::CompactAllResponse* response, google::protobuf::Closure* done) override;
-  void CleanTrashFileData(google::protobuf::RpcController* controller,
-                          const pb::mdsv2::CleanTrashFileDataRequest* request,
-                          pb::mdsv2::CleanTrashFileDataResponse* response, google::protobuf::Closure* done) override;
+  void CompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
+                    pb::mdsv2::CompactChunkResponse* response, google::protobuf::Closure* done) override;
+  void CleanTrashSlice(google::protobuf::RpcController* controller, const pb::mdsv2::CleanTrashSliceRequest* request,
+                       pb::mdsv2::CleanTrashSliceResponse* response, google::protobuf::Closure* done) override;
+  void CleanDelFile(google::protobuf::RpcController* controller, const pb::mdsv2::CleanDelFileRequest* request,
+                    pb::mdsv2::CleanDelFileResponse* response, google::protobuf::Closure* done) override;
 
   // quota interface
   void SetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,
@@ -268,13 +267,12 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                    pb::mdsv2::ReadSliceResponse* response, TraceClosure* done);
 
-  void DoCompact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
-                 pb::mdsv2::CompactResponse* response, TraceClosure* done);
-  void DoCompactAll(google::protobuf::RpcController* controller, const pb::mdsv2::CompactAllRequest* request,
-                    pb::mdsv2::CompactAllResponse* response, TraceClosure* done);
-  void DoCleanTrashFileData(google::protobuf::RpcController* controller,
-                            const pb::mdsv2::CleanTrashFileDataRequest* request,
-                            pb::mdsv2::CleanTrashFileDataResponse* response, TraceClosure* done);
+  void DoCompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
+                      pb::mdsv2::CompactChunkResponse* response, TraceClosure* done);
+  void DoCleanTrashSlice(google::protobuf::RpcController* controller, const pb::mdsv2::CleanTrashSliceRequest* request,
+                         pb::mdsv2::CleanTrashSliceResponse* response, TraceClosure* done);
+  void DoCleanDelFile(google::protobuf::RpcController* controller, const pb::mdsv2::CleanDelFileRequest* request,
+                      pb::mdsv2::CleanDelFileResponse* response, TraceClosure* done);
 
   void DoRefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
                       pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done);

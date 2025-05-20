@@ -1648,8 +1648,9 @@ void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::DoCompact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
-                               pb::mdsv2::CompactResponse* response, TraceClosure* done) {
+void MDSServiceImpl::DoCompactChunk(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::CompactChunkRequest* request,
+                                    pb::mdsv2::CompactChunkResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
@@ -1661,13 +1662,11 @@ void MDSServiceImpl::DoCompact(google::protobuf::RpcController* controller, cons
 
   // validate request
   auto validate_fn = [&]() -> Status {
-    auto status = ValidateRequest(request, file_system);
-
     if (request->ino() == 0) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
     }
 
-    return status;
+    return Status::OK();
   };
 
   auto status = validate_fn();
@@ -1691,13 +1690,14 @@ void MDSServiceImpl::DoCompact(google::protobuf::RpcController* controller, cons
   }
 }
 
-void MDSServiceImpl::Compact(google::protobuf::RpcController* controller, const pb::mdsv2::CompactRequest* request,
-                             pb::mdsv2::CompactResponse* response, google::protobuf::Closure* done) {
+void MDSServiceImpl::CompactChunk(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::CompactChunkRequest* request,
+                                  pb::mdsv2::CompactChunkResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoCompact(controller, request, response, svr_done); });
+      [this, controller, request, response, svr_done]() { DoCompactChunk(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
@@ -1707,94 +1707,112 @@ void MDSServiceImpl::Compact(google::protobuf::RpcController* controller, const 
   }
 }
 
-void MDSServiceImpl::DoCompactAll(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::CompactAllRequest* request, pb::mdsv2::CompactAllResponse* response,
-                                  TraceClosure* done) {
+void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController* controller,
+                                       const pb::mdsv2::CleanTrashSliceRequest* request,
+                                       pb::mdsv2::CleanTrashSliceResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   auto file_system = GetFileSystem(request->fs_id());
   if (file_system == nullptr) {
     return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
   }
 
-  auto status = ValidateRequest(request, file_system);
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  uint64_t checked_count, compacted_count;
-  status = file_system->CompactAll(ctx, checked_count, compacted_count);
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-
-  response->set_checked_count(checked_count);
-  response->set_compacted_count(compacted_count);
-
+  status = file_system->CleanTrashSlice(ctx, request->ino(), request->chunk_index());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
-}
-
-void MDSServiceImpl::CompactAll(google::protobuf::RpcController* controller,
-                                const pb::mdsv2::CompactAllRequest* request, pb::mdsv2::CompactAllResponse* response,
-                                google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-
-  // Run in queue.
-  auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoCompactAll(controller, request, response, svr_done); });
-
-  bool ret = write_worker_set_->Execute(task);
-  if (BAIDU_UNLIKELY(!ret)) {
-    brpc::ClosureGuard done_guard(svr_done);
-    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
-                            "WorkerSet queue is full, please wait and retry");
-  }
-}
-
-void MDSServiceImpl::DoCleanTrashFileData(google::protobuf::RpcController* controller,
-                                          const pb::mdsv2::CleanTrashFileDataRequest* request,
-                                          pb::mdsv2::CleanTrashFileDataResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-  done->SetQueueWaitTime();
-
-  auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
-  auto status = ValidateRequest(request, file_system);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
-
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
-
-  std::vector<pb::mdsv2::TrashSlice> trash_slices;
-  status = file_system->CleanTrashFileData(ctx, request->ino());
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
 }
 
-void MDSServiceImpl::CleanTrashFileData(google::protobuf::RpcController* controller,
-                                        const pb::mdsv2::CleanTrashFileDataRequest* request,
-                                        pb::mdsv2::CleanTrashFileDataResponse* response,
-                                        google::protobuf::Closure* done) {
+void MDSServiceImpl::CleanTrashSlice(google::protobuf::RpcController* controller,
+                                     const pb::mdsv2::CleanTrashSliceRequest* request,
+                                     pb::mdsv2::CleanTrashSliceResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>([this, controller, request, response, svr_done]() {
-    DoCleanTrashFileData(controller, request, response, svr_done);
+    DoCleanTrashSlice(controller, request, response, svr_done);
   });
+
+  bool ret = write_worker_set_->Execute(task);
+  if (BAIDU_UNLIKELY(!ret)) {
+    brpc::ClosureGuard done_guard(svr_done);
+    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
+                            "WorkerSet queue is full, please wait and retry");
+  }
+}
+
+void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController* controller,
+                                    const pb::mdsv2::CleanDelFileRequest* request,
+                                    pb::mdsv2::CleanDelFileResponse* response, TraceClosure* done) {
+  brpc::Controller* cntl = (brpc::Controller*)controller;
+  brpc::ClosureGuard done_guard(done);
+  done->SetQueueWaitTime();
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+
+  const auto& req_ctx = request->context();
+  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  status = file_system->CleanDelFile(ctx, request->ino());
+  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
+}
+
+void MDSServiceImpl::CleanDelFile(google::protobuf::RpcController* controller,
+                                  const pb::mdsv2::CleanDelFileRequest* request,
+                                  pb::mdsv2::CleanDelFileResponse* response, google::protobuf::Closure* done) {
+  auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // Run in queue.
+  auto task = std::make_shared<ServiceTask>(
+      [this, controller, request, response, svr_done]() { DoCleanDelFile(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {

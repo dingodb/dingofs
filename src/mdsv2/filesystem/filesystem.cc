@@ -45,6 +45,7 @@
 #include "mdsv2/filesystem/inode.h"
 #include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/server.h"
 #include "mdsv2/service/service_access.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/uuid.h"
@@ -1480,109 +1481,45 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   auto& trace = ctx.GetTrace();
   uint64_t time_ns = Helper::TimestampNs();
 
-  pb::mdsv2::Chunk chunk;
-  if (!inode->Chunk(chunk_index, chunk)) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found chunk({})", chunk_index));
-  }
-
-  Inode::ChunkMap chunks;
-  chunks.insert({chunk_index, chunk});
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, inode->Length(), std::move(chunks));
+  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index);
 
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  trash_slices = std::move(result.trash_slices);
+  auto& attr = result.attr;
+  trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
                                  ElapsedTimeUs(time_ns), ino, chunk_index, trash_slices.size(), status.error_str());
-
-  return status;
-}
-
-Status FileSystem::CompactFile(Context& ctx, Ino ino, std::vector<pb::mdsv2::TrashSlice>& trash_slices) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactfile ino({}).", fs_id_, ino);
-
-  if (!CanServe()) {
-    return Status(pb::error::ENOT_SERVE, "can not serve");
-  }
-
-  InodeSPtr inode;
-  auto status = GetInode(ctx, ino, inode);
   if (!status.ok()) {
     return status;
   }
 
-  auto& trace = ctx.GetTrace();
-
-  uint64_t time_ns = Helper::TimestampNs();
-  auto chunks = inode->Chunks();
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, inode->Length(), std::move(chunks));
-
-  status = RunOperation(&operation);
-
-  auto& result = operation.GetResult();
-  trash_slices = std::move(result.trash_slices);
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactfile {} finish, trash_slices({}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), ino, trash_slices.size(), status.error_str());
-
-  return status;
-}
-
-Status FileSystem::CompactAll(Context& ctx, uint64_t& checked_count, uint64_t& compacted_count) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] compactall.", fs_id_);
-
-  checked_count = 0;
-  compacted_count = 0;
-
-  auto& trace = ctx.GetTrace();
-
-  uint64_t time_ns = Helper::TimestampNs();
-
-  CompactChunkOperation operation(trace, GetFsInfo());
-
-  auto status = RunOperation(&operation);
-
-  auto& result = operation.GetResult();
-  checked_count = result.checked_count;
-  compacted_count = result.compacted_count;
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactall finish, checked({}) compacted({}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), checked_count, compacted_count, status.error_str());
-
-  return status;
-}
-
-Status FileSystem::CleanTrashFileData(Context& ctx, Ino ino) {
-  // auto trace = ctx.GetTrace();
-  // auto& trace_txn = trace.GetTxn();
-
-  // Range range;
-  // MetaCodec::GetTrashChunkRange(fs_id_, ino, range.start_key, range.end_key);
-
-  // auto txn = kv_storage_->NewTxn();
-  // std::vector<KeyValue> kvs;
-  // do {
-  //   kvs.clear();
-  //   auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-  //   if (!status.ok()) {
-  //     return status;
-  //   }
-
-  //   for (const auto& kv : kvs) {
-  //     pb::mdsv2::TrashSlice trash_slice = MetaCodec::DecodeTrashChunkValue(kv.value);
-
-  //     auto status = data_accessor_->Delete("");
-  //     if (!status.ok()) {
-  //       DINGO_LOG(ERROR) << fmt::format("[fs.{}] delete trash slice({}) fail, {}", fs_id_,
-  //                                       trash_slice.ShortDebugString(), status.ToString());
-  //     }
-  //   }
-
-  // } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+  inode->UpdateIf(std::move(attr));
 
   return Status::OK();
+}
+
+Status FileSystem::CleanTrashSlice(Context& ctx, Ino ino, uint64_t chunk_index) const {
+  auto& trace = ctx.GetTrace();
+
+  auto gc_processor = Server::GetInstance().GetGcProcessor();
+  if (gc_processor == nullptr) {
+    return Status(pb::error::EINTERNAL, "gc processor is null");
+  }
+
+  return gc_processor->ManualCleanDeletedSlice(trace, fs_id_, ino, chunk_index);
+}
+
+Status FileSystem::CleanDelFile(Context& ctx, Ino ino) const {
+  auto& trace = ctx.GetTrace();
+
+  auto gc_processor = Server::GetInstance().GetGcProcessor();
+  if (gc_processor == nullptr) {
+    return Status(pb::error::EINTERNAL, "gc processor is null");
+  }
+
+  return gc_processor->ManualCleanDeletedFile(trace, fs_id_, ino);
 }
 
 Status FileSystem::GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry) {
@@ -1859,6 +1796,35 @@ Status FileSystem::GetDelFiles(std::vector<AttrType>& delfiles) {
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] get delfiles count({}), status({}).", fs_id_, count, status.error_str());
+
+  return status;
+}
+
+Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
+  Range range;
+  MetaCodec::GetTrashChunkRange(fs_id_, range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::vector<KeyValue> kvs;
+  Status status;
+  uint32_t count = 0;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      delslices.push_back(MetaCodec::DecodeTrashChunkValue(kv.value));
+    }
+
+    count += kvs.size();
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] get delslice count({}), status({}).", fs_id_, count, status.error_str());
 
   return status;
 }

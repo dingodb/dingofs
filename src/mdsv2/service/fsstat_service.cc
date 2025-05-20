@@ -17,6 +17,7 @@
 #include <sys/types.h>
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -41,12 +42,12 @@ namespace mdsv2 {
 static std::string RenderHead() {
   butil::IOBufBuilder os;
 
-  os << "<head>\n"
-     << brpc::gridtable_style() << "<script src=\"/js/sorttable\"></script>\n"
-     << "<script language=\"javascript\" type=\"text/javascript\" src=\"/js/jquery_min\"></script>\n"
-     << brpc::TabsHead();
+  os << fmt::format(R"(<head>{})", brpc::gridtable_style());
+  os << fmt::format(R"(<script src="/js/sorttable"></script>)");
+  os << fmt::format(R"(<script language="javascript" type="text/javascript" src="/js/jquery_min"></script>)");
+  os << brpc::TabsHead();
 
-  os << R"(<meta charset="UTF-8">"
+  os << R"(<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   body {
@@ -141,51 +142,79 @@ static std::string PartitionTypeName(pb::mdsv2::PartitionType partition_type) {
 }
 
 static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
+  auto render_size_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
+    std::string result;
+    result += "<div>";
+    result += fmt::format("chunk size: {}", fs_info.chunk_size() / (1024 * 1024));
+    result += "<br>";
+    result += fmt::format("block size: {}", fs_info.block_size() / (1024 * 1024));
+    result += "<br>";
+    result += fmt::format("capacity: {}", fs_info.capacity() / (1024 * 1024));
+    result += "</div>";
+    return result;
+  };
+
+  auto render_time_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
+    std::string result;
+    result += "<div>";
+    result += fmt::format("update time: {}", Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
+    result += "<br>";
+    result += fmt::format("create time: {}", Helper::FormatTime(fs_info.create_time_s()));
+    result += "</div>";
+    return result;
+  };
+
+  auto render_trash_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
+    std::string result;
+    result += "<div>";
+    result += fmt::format(R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)", fs_info.fs_id());
+    result += "<br>";
+    result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
+    result += "</div>";
+    return result;
+  };
+
   butil::IOBufBuilder os;
 
-  os << "<div style=\"margin: 12px;font-size:smaller\">";
-  os << "<table class=\"gridtable sortable\" border=\"1\">\n";
+  os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
   os << "<th>Name</th>";
   os << "<th>Type</th>";
   os << "<th>PartitionType</th>";
   os << "<th>PartitionPolicy</th>";
-  os << "<th>ChunkSize(MB)</th>";
-  os << "<th>BlockSize(MB)</th>";
-  os << "<th>Capacity(MB)</th>";
+  os << "<th>Size(MB)</th>";
   os << "<th>Owner</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
   os << "<th>S3</th>";
-  os << "<th>UpdateTime</th>";
-  os << "<th>CreateTime</th>";
+  os << "<th>Time</th>";
   os << "<th>Details</th>";
-  os << "<th>DelFiles</th>";
+  os << "<th>Trash</th>";
   os << "</tr>";
 
   for (const auto& fs_info : fs_infoes) {
     const auto& partition_policy = fs_info.partition_policy();
 
     os << "<tr>";
-
-    os << "<td><a href=\"FsStatService/" << fs_info.fs_id() << R"(" target="_blank">)" << fs_info.fs_id()
-       << "</a></td>";
+    os << "<td>"
+       << fmt::format(R"(<a href="FsStatService/{}" target="_blank">{}</a>)", fs_info.fs_id(), fs_info.fs_id())
+       << "</td>";
     os << "<td>" << fs_info.fs_name() << "</td>";
     os << "<td>" << pb::mdsv2::FsType_Name(fs_info.fs_type()) << "</td>";
     os << "<td>" << PartitionTypeName(partition_policy.type()) << "</td>";
     os << "<td>" << RenderPartitionPolicy(partition_policy) << "</td>";
-    os << "<td>" << fs_info.chunk_size() / (1024 * 1024) << "</td>";
-    os << "<td>" << fs_info.block_size() / (1024 * 1024) << "</td>";
-    os << "<td>" << fs_info.capacity() / (1024 * 1024) << "</td>";
+    os << "<td>" << render_size_func(fs_info) << "</td>";
+
     os << "<td>" << fs_info.owner() << "</td>";
     os << "<td>" << fs_info.recycle_time_hour() << "</td>";
     os << "<td>" << RenderMountpoint(fs_info) << "</td>";
     os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
-    os << "<td>" << Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000) << "</td>";
-    os << "<td>" << Helper::FormatTime(fs_info.create_time_s()) << "</td>";
-    os << "<td><a href=\"FsStatService/details/" << fs_info.fs_id() << R"(" target="_blank">details</a></td>)";
-    os << "<td><a href=\"FsStatService/delfiles/" << fs_info.fs_id() << R"(" target="_blank">delfiles</a></td>)";
+    os << "<td>" << render_time_func(fs_info) << "</td>";
+    os << "<td>" << fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id())
+       << "</td>";
+    os << "<td>" << render_trash_func(fs_info) << "</td>";
     os << "</tr>";
   }
 
@@ -502,11 +531,9 @@ void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
 }
 
 void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
-  os << "<!DOCTYPE html><html>\n";
+  os << "<!DOCTYPE html><html>";
 
-  os << "<head>";
-  os << RenderHead();
-  os << "</head>";
+  os << "<head>" << RenderHead() << "</head>";
   os << "<body>";
 
   std::vector<AttrType> delfiles;
@@ -516,8 +543,8 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
     return;
   }
 
-  os << "<div style=\"margin: 12px;font-size:smaller\">";
-  os << "<table class=\"gridtable sortable\" border=\"1\">\n";
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>Ino</th>";
   os << "<th>Length(byte)</th>";
@@ -533,10 +560,68 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
     os << "<td>" << delfile.length() << "</td>";
     os << "<td>" << Helper::FormatTime(delfile.ctime() / 1000000000) << "</td>";
     os << "<td>" << delfile.version() << "</td>";
+
     os << "</tr>";
   }
 
-  os << "</table>\n";
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
+void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+  auto render_range_func = [](const pb::mdsv2::TrashSlice& slice) -> std::string {
+    std::string result;
+    for (size_t i = 0; i < slice.ranges_size(); ++i) {
+      const auto& range = slice.ranges().at(i);
+      if (i + 1 < slice.ranges_size()) {
+        result += fmt::format("[{},{}),", range.offset(), range.offset() + range.len());
+      } else {
+        result += fmt::format("[{},{})", range.offset(), range.offset() + range.len());
+      }
+
+      result += "<br>";
+    }
+    return result;
+  };
+
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead() << "</head>";
+  os << "<body>";
+
+  std::vector<TrashSliceList> delslices;
+  auto status = filesystem->GetDelSlices(delslices);
+  if (!status.ok()) {
+    os << "Get delslice fail: " << status.error_str();
+    return;
+  }
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>FsId</th>";
+  os << "<th>Ino</th>";
+  os << "<th>ChunkIndex</th>";
+  os << "<th>SliceId</th>";
+  os << "<th>IsPartial</th>";
+  os << "<th>Ranges</th>";
+  os << "</tr>";
+
+  for (const auto& delslice : delslices) {
+    for (const auto& slice : delslice.slices()) {
+      os << "<tr>";
+      os << "<td>" << slice.fs_id() << "</td>";
+      os << "<td>" << slice.ino() << "</td>";
+      os << "<td>" << slice.chunk_index() << "</td>";
+      os << "<td>" << slice.slice_id() << "</td>";
+      os << "<td>" << (slice.is_partial() ? "true" : "false") << "</td>";
+      os << "<td>" << render_range_func(slice) << "</td>";
+      os << "</tr>";
+    }
+  }
+
+  os << "</table>";
   os << "</div>";
   os << "</body>";
 }
@@ -617,6 +702,18 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
       } else {
         os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());
       }
+
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
+  } else if (params.size() == 2 && params[0] == "delslices") {
+    // /FsStatService/delslices/{fs_id}
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      RenderDelslicePage(file_system, os);
 
     } else {
       os << fmt::format("Not found file system {}.", fs_id);

@@ -139,7 +139,7 @@ class WorkerSet {
   virtual bool Execute(TaskRunnablePtr task) = 0;
   virtual bool ExecuteRR(TaskRunnablePtr task) = 0;
   virtual bool ExecuteLeastQueue(TaskRunnablePtr task) = 0;
-  virtual bool ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr task) = 0;
+  virtual bool ExecuteHash(int64_t id, TaskRunnablePtr task) = 0;
 
   std::string Name() const { return name_; }
   std::string GenWorkerName() { return name_ + "_" + std::to_string(GenWorkerNo()); }
@@ -235,7 +235,7 @@ class ExecqWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override { return ExecuteLeastQueue(task); };
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
 
   std::vector<std::vector<std::string>> GetPendingTaskTrace() override;
 
@@ -265,7 +265,7 @@ class SimpleWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
 
  private:
   bthread_mutex_t mutex_;
@@ -295,7 +295,7 @@ class PriorWorkerSet : public WorkerSet {
   bool Execute(TaskRunnablePtr task) override;
   bool ExecuteRR(TaskRunnablePtr task) override;
   bool ExecuteLeastQueue(TaskRunnablePtr task) override;
-  bool ExecuteHashByRegionId(int64_t region_id, TaskRunnablePtr task) override;
+  bool ExecuteHash(int64_t region_id, TaskRunnablePtr task) override;
 
  private:
   bthread_mutex_t mutex_;

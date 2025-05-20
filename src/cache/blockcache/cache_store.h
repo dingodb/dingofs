@@ -56,7 +56,8 @@ struct BlockKey {
         version(pb.version()) {}
 
   std::string Filename() const {
-    return StrFormat("%d_%d_%d_%d_%d", fs_id, ino, id, index, version);
+    return StrFormat("%llu_%llu_%llu_%llu_%llu", fs_id, ino, id, index,
+                     version);
   }
 
   std::string StoreKey() const {

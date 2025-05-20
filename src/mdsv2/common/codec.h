@@ -49,6 +49,7 @@ class MetaCodec {
   static void GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
 
   static void GetTrashChunkTableRange(std::string& start_key, std::string& end_key);
+  static void GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetTrashChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
   static void GetTrashChunkRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
                                  std::string& end_key);
