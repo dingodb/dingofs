@@ -10,8 +10,8 @@ g_util_dir="$(dirname $(realpath $0))" # /path/to/project/build-scripts
 g_dingo_dir="$(dirname $g_util_dir)" # /path/to/project
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
 g_build_release=0
-tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/latest/dingo"
-tools_v2_daemo_file="https://github.com/dingodb/dingofs-tools/releases/download/latest/daemon"
+tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/v4.0/dingo"
+tools_v2_daemo_file="https://github.com/dingodb/dingofs-tools/releases/download/v4.0/daemon"
 
 g_color_yellow=`printf '\033[33m'`
 g_color_red=`printf '\033[31m'`
