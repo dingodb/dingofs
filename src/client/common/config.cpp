@@ -375,6 +375,8 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   InitS3ClientAdaptorOption(conf, &client_option->s3_client_adaptor_opt);
   dataaccess::InitAwsSdkConfig(
       conf, &client_option->block_access_opt.s3_options.aws_sdk_config);
+  dataaccess::InitBlockAccesserThrottleOptions(
+      conf, &client_option->block_access_opt.throttle_options);
   InitLeaseOpt(conf, &client_option->leaseOpt);
   InitRefreshDataOpt(conf, &client_option->refreshDataOption);
   InitKVClientManagerOpt(conf, &client_option->kvClientManagerOpt);

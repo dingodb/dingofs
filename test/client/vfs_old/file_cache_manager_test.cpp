@@ -24,11 +24,11 @@
 #include <gtest/gtest.h>
 
 #include "client/common/dynamic_config.h"
-#include "common/status.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
+#include "common/status.h"
 #include "dataaccess/mock/mock_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -255,7 +255,7 @@ TEST_F(FileCacheManagerTest, test_read_s3) {
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)))
       .WillOnce(
           DoAll(SetArgReferee<1>(inodeWrapper), Return(DINGOFS_ERROR::OK)));
-  EXPECT_CALL(*mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(*mockBlockAccesser_, Range(_, _, _, _))
       .WillOnce(DoAll(SetArgPointee<3>(*tmpBuf.data()), Return(Status::OK())))
       .WillOnce(Return(Status::IoError("")));
 

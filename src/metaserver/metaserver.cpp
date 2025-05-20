@@ -231,6 +231,8 @@ void Metaserver::Init() {
   dataaccess::BlockAccessOptions block_access_options;
   dataaccess::InitAwsSdkConfig(conf_.get(),
                                &block_access_options.s3_options.aws_sdk_config);
+  dataaccess::InitBlockAccesserThrottleOptions(
+      conf_.get(), &block_access_options.throttle_options);
 
   {
     //  related to trash

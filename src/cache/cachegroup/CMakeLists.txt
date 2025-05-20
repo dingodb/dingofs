@@ -22,4 +22,5 @@ target_link_libraries(cache_cachegroup
     cache_common
     cache_utils
     cache_blockcache
+    block_accesser
 )

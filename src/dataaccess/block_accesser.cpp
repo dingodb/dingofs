@@ -16,21 +16,36 @@
 
 #include "dataaccess/block_accesser.h"
 
+#include <absl/cleanup/cleanup.h>
+#include <absl/strings/str_format.h>
+
 #include <memory>
 
 #include "common/status.h"
+#include "dataaccess/block_access_log.h"
 #include "dataaccess/rados/rados_accesser.h"
 #include "dataaccess/s3/s3_accesser.h"
+#include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace dataaccess {
+
+static bvar::Adder<uint64_t> block_put_async_num("block_put_async_num");
+static bvar::Adder<uint64_t> block_put_sync_num("block_put_sync_num");
+static bvar::Adder<uint64_t> block_get_async_num("block_get_async_num");
+static bvar::Adder<uint64_t> block_get_sync_num("block_get_sync_num");
+
+using dingofs::utils::kMB;
 
 Status BlockAccesserImpl::Init() {
   if (options_.type == AccesserType::kS3) {
     data_accesser_ = std::make_unique<S3Accesser>(options_.s3_options);
     data_accesser_->Init();
+
+    container_name_ = options_.s3_options.s3_info.bucket_name;
   } else if (options_.type == AccesserType::kRados) {
     data_accesser_ = std::make_unique<RadosAccesser>(options_.rados_options);
+    container_name_ = options_.rados_options.pool_name;
   } else {
     LOG(ERROR) << "Unsupported accesser type: " << options_.type;
     return Status::InvalidParam("Unsupported accesser type");
@@ -38,6 +53,25 @@ Status BlockAccesserImpl::Init() {
 
   if (!data_accesser_->Init()) {
     return Status::Internal("Failed to initialize data accesser");
+  }
+
+  {
+    utils::ReadWriteThrottleParams params;
+    params.iopsTotal.limit = options_.throttle_options.iopsTotalLimit;
+    params.iopsRead.limit = options_.throttle_options.iopsReadLimit;
+    params.iopsWrite.limit = options_.throttle_options.iopsWriteLimit;
+    params.bpsTotal.limit = options_.throttle_options.bpsTotalMB * kMB;
+    params.bpsRead.limit = options_.throttle_options.bpsReadMB * kMB;
+    params.bpsWrite.limit = options_.throttle_options.bpsWriteMB * kMB;
+
+    throttle_ = std::make_unique<utils::Throttle>();
+    throttle_->UpdateThrottleParams(params);
+
+    inflight_bytes_throttle_ =
+        std::make_unique<AsyncRequestInflightBytesThrottle>(
+            options_.throttle_options.maxAsyncRequestInflightBytes == 0
+                ? UINT64_MAX
+                : options_.throttle_options.maxAsyncRequestInflightBytes);
   }
 
   return Status::OK();
@@ -52,20 +86,67 @@ Status BlockAccesserImpl::Destroy() {
 }
 
 bool BlockAccesserImpl::ContainerExist() {
-  return data_accesser_->ContainerExist();
+  bool ok = false;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("container_exist (%s) : %s", container_name_,
+                           (ok ? "ok" : "fail"));
+  });
+  ok = data_accesser_->ContainerExist();
+  return ok;
 }
 
 Status BlockAccesserImpl::Put(const std::string& key, const std::string& data) {
-  return data_accesser_->Put(key, data.data(), data.size());
+  return Put(key, data.data(), data.size());
 }
 
 Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
                               size_t length) {
-  return data_accesser_->Put(key, buffer, length);
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("put_block (%s, %d) : %s", key, length,
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  block_put_sync_num << 1;
+
+  auto dec = ::absl::MakeCleanup([&]() { block_put_sync_num << -1; });
+
+  if (throttle_) {
+    throttle_->Add(false, length);
+  }
+
+  s = data_accesser_->Put(key, buffer, length);
+  return s;
 }
 
 void BlockAccesserImpl::AsyncPut(
     std::shared_ptr<PutObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+  block_put_async_num << 1;
+
+  auto origin_cb = context->cb;
+
+  context->cb = [this, start_us,
+                 origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
+    BlockAccessLogGuard log(start_us, [&]() {
+      return absl::StrFormat("async_put_block (%s, %d) : %d", ctx->key,
+                             ctx->buffer_size, ctx->ret_code);
+    });
+
+    block_put_async_num << -1;
+    inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
+
+    // for return
+    ctx->cb = origin_cb;
+    ctx->cb(ctx);
+  };
+
+  if (throttle_) {
+    throttle_->Add(false, context->buffer_size);
+  }
+
+  inflight_bytes_throttle_->OnStart(context->buffer_size);
+
   data_accesser_->AsyncPut(context);
 }
 
@@ -87,33 +168,105 @@ void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
 }
 
 Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
-  return data_accesser_->Get(key, data);
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("get_block (%s) : %s", key,
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  block_get_sync_num << 1;
+  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
+
+  if (throttle_) {
+    throttle_->Add(true, 1);
+  }
+
+  s = data_accesser_->Get(key, data);
+  return s;
 }
 
-Status BlockAccesserImpl::Get(const std::string& key, off_t offset,
-                              size_t length, char* buffer) {
-  return data_accesser_->Get(key, offset, length, buffer);
+Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
+                                size_t length, char* buffer) {
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("range_block (%s, %d, %d) : %s", key, offset, length,
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  block_get_sync_num << 1;
+  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
+
+  if (throttle_) {
+    throttle_->Add(true, length);
+  }
+
+  s = data_accesser_->Range(key, offset, length, buffer);
+  return s;
 }
 
 void BlockAccesserImpl::AsyncGet(
     std::shared_ptr<GetObjectAsyncContext> context) {
+  int64_t start_us = butil::cpuwide_time_us();
+  block_get_async_num << 1;
+
+  auto origin_cb = context->cb;
+
+  context->cb = [this, start_us,
+                 origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+    BlockAccessLogGuard log(start_us, [&]() {
+      return absl::StrFormat("async_get_block (%s, %d, %d) : %d", ctx->key,
+                             ctx->offset, ctx->len, ctx->ret_code);
+    });
+
+    block_get_async_num << -1;
+    inflight_bytes_throttle_->OnComplete(ctx->len);
+
+    // for return
+    ctx->cb = origin_cb;
+    ctx->cb(ctx);
+  };
+
+  if (throttle_) {
+    throttle_->Add(true, context->len);
+  }
+
+  inflight_bytes_throttle_->OnStart(context->len);
+
   data_accesser_->AsyncGet(context);
 }
 
 bool BlockAccesserImpl::BlockExist(const std::string& key) {
-  return data_accesser_->BlockExist(key);
+  bool ok = false;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("block_exist (%s) : %s", key, (ok ? "ok" : "fail"));
+  });
+
+  return (ok = data_accesser_->BlockExist(key));
 }
 
 Status BlockAccesserImpl::Delete(const std::string& key) {
-  Status s = data_accesser_->Delete(key);
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("delete_block (%s) : %s", key,
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  s = data_accesser_->Delete(key);
   if (s.ok() || !BlockExist(key)) {
-    return s;
+    s = Status::OK();
   }
+
   return s;
 }
 
 Status BlockAccesserImpl::BatchDelete(const std::list<std::string>& keys) {
-  return data_accesser_->BatchDelete(keys);
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("delete_objects (%d) : %s", keys.size(),
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  return (s = data_accesser_->BatchDelete(keys));
 }
 
 }  // namespace dataaccess

@@ -27,23 +27,22 @@
 
 namespace dingofs {
 namespace dataaccess {
-namespace aws {
 
-extern std::shared_ptr<spdlog::logger> s3_logger;
+extern std::shared_ptr<spdlog::logger> block_access_logger;
 extern bool initialized;
 
-bool InitS3AccessLog(const std::string& prefix);
+bool InitBlockAccessLog(const std::string& prefix);
 
-struct S3AccessLogGuard {
+struct BlockAccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
-  explicit S3AccessLogGuard(int64_t p_start_us, MessageHandler handler)
+  explicit BlockAccessLogGuard(int64_t p_start_us, MessageHandler handler)
       : start_us(p_start_us), handler(handler) {}
 
-  ~S3AccessLogGuard() {
+  ~BlockAccessLogGuard() {
     if (initialized) {
-      s3_logger->info("{0} <{1:.6f}>", handler(),
-                      (butil::cpuwide_time_us() - start_us) / 1e6);
+      block_access_logger->info("{0} <{1:.6f}>", handler(),
+                                (butil::cpuwide_time_us() - start_us) / 1e6);
     }
   }
 
@@ -51,7 +50,6 @@ struct S3AccessLogGuard {
   int64_t start_us = 0;
 };
 
-}  // namespace aws
 }  // namespace dataaccess
 }  // namespace dingofs
 

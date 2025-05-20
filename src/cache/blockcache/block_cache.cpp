@@ -162,7 +162,7 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
 
   timer.NextPhase(Phase::kS3Range);
   if (retrive) {
-    status = block_accesser_->Get(key.StoreKey(), offset, length, buffer);
+    status = block_accesser_->Range(key.StoreKey(), offset, length, buffer);
   }
   return status;
 }
@@ -205,7 +205,7 @@ Status BlockCacheImpl::DoPrefetch(const BlockKey& key, size_t length) {
 
   timer.NextPhase(Phase::kS3Range);
   std::unique_ptr<char[]> buffer(new (std::nothrow) char[length]);
-  status = block_accesser_->Get(key.StoreKey(), 0, length, buffer.get());
+  status = block_accesser_->Range(key.StoreKey(), 0, length, buffer.get());
   if (status.ok()) {
     timer.NextPhase(Phase::kCacheBlock);
     Block block(buffer.get(), length);

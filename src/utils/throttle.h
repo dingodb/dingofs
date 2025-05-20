@@ -25,7 +25,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "utils/leaky_bucket.h"
@@ -44,7 +43,7 @@ struct ReadWriteThrottleParams {
 
 class Throttle {
  public:
-  enum class Type {
+  enum class Type : uint8_t {
     IOPS_TOTAL,
     IOPS_READ,
     IOPS_WRITE,

@@ -572,8 +572,8 @@ bool FileCacheManager::ReadKVRequestFromRemoteCache(const std::string& name,
 Status FileCacheManager::ReadKVRequestFromS3(const std::string& name,
                                              char* databuf, uint64_t offset,
                                              uint64_t length) {
-  auto status =
-      s3ClientAdaptor_->GetBlockAccesser()->Get(name, offset, length, databuf);
+  auto status = s3ClientAdaptor_->GetBlockAccesser()->Range(name, offset,
+                                                            length, databuf);
   if (!status.ok()) {
     LOG(ERROR) << "Object " << name << " read from s3 failed"
                << ", rc=" << status.ToString();

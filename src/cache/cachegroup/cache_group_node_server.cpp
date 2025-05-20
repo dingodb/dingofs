@@ -32,7 +32,7 @@
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/utils/access_log.h"
 #include "common/status.h"
-#include "dataaccess/s3/aws/s3_access_log.h"
+#include "dataaccess/block_access_log.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -43,7 +43,7 @@ namespace cache {
 namespace cachegroup {
 
 using dingofs::cache::utils::InitCacheAccessLog;
-using dingofs::dataaccess::aws::InitS3AccessLog;
+using dingofs::dataaccess::InitBlockAccessLog;
 
 CacheGroupNodeServerImpl::CacheGroupNodeServerImpl(AppOption option)
     : option_(option),
@@ -73,7 +73,7 @@ Status CacheGroupNodeServerImpl::InitLogger() {
   if (option.block_cache_access_logging() &&
       !InitCacheAccessLog(FLAGS_log_dir)) {
     return Status::Internal("Init cache access logging failed");
-  } else if (option.s3_access_logging() && !InitS3AccessLog(FLAGS_log_dir)) {
+  } else if (option.s3_access_logging() && !InitBlockAccessLog(FLAGS_log_dir)) {
     return Status::Internal("Init s3 access logging failed");
   }
 

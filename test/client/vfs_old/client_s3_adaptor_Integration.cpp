@@ -60,11 +60,11 @@ using ::testing::SetArgReferee;
 using ::testing::SetArrayArgument;
 using ::testing::WithArg;
 
-using dingofs::stub::rpcclient::MockMdsClient;
-using dingofs::stub::rpcclient::MockMetaServerService;
 using dingofs::pb::mds::FSStatusCode;
 using dingofs::pb::metaserver::S3ChunkInfo;
 using dingofs::pb::metaserver::S3ChunkInfoList;
+using dingofs::stub::rpcclient::MockMdsClient;
+using dingofs::stub::rpcclient::MockMetaServerService;
 
 template <typename RpcRequestType, typename RpcResponseType,
           bool RpcFailed = false>
@@ -382,7 +382,7 @@ TEST_F(ClientS3IntegrationTest, test_read_one_chunk) {
   char* tmpbuf = new char[len];
   memset(tmpbuf, 'a', len);
 
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillOnce(DoAll(SetArgPointee<3>(*tmpbuf), Return(Status::OK())))
       .WillOnce(Return(Status::IoError("")));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
@@ -412,7 +412,7 @@ TEST_F(ClientS3IntegrationTest, test_read_overlap_block1) {
   char* buf = new char[len];
   memset(buf, 'a', len);
 
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
 
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -458,7 +458,7 @@ TEST_F(ClientS3IntegrationTest, test_read_overlap_block2) {
   char* buf = new char[len];
   memset(buf, 'a', len);
 
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
 
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -505,7 +505,7 @@ TEST_F(ClientS3IntegrationTest, test_read_overlap_block3) {
   char* buf = new char[len];
   memset(buf, 'a', len);
 
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
 
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -563,7 +563,7 @@ TEST_F(ClientS3IntegrationTest, test_read_overlap_block4) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
 
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -621,7 +621,7 @@ TEST_F(ClientS3IntegrationTest, test_read_overlap_block5) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
 
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
@@ -675,7 +675,7 @@ TEST_F(ClientS3IntegrationTest, test_read_hole1) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)))
@@ -721,7 +721,7 @@ TEST_F(ClientS3IntegrationTest, test_read_hole2) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -762,7 +762,7 @@ TEST_F(ClientS3IntegrationTest, test_read_hole3) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -803,7 +803,7 @@ TEST_F(ClientS3IntegrationTest, test_read_hole4) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -852,7 +852,7 @@ TEST_F(ClientS3IntegrationTest, test_read_more_write) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
@@ -903,7 +903,7 @@ TEST_F(ClientS3IntegrationTest, test_read_more_write2) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
   inode->SetLength(offset + len);
@@ -947,7 +947,7 @@ TEST_F(ClientS3IntegrationTest, test_read_more_chunks) {
 
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   s3ClientAdaptor_->Write(inode->GetInodeId(), offset, len, buf);
   inode->SetLength(offset + len);
@@ -1072,7 +1072,7 @@ TEST_F(ClientS3IntegrationTest, test_truncate_small3) {
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -1643,7 +1643,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read1) {
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -1724,7 +1724,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read2) {
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -1808,7 +1808,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read3) {
           DoAll(SetArgPointee<2>(chunkId), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -1913,7 +1913,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read4) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId1), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -1993,7 +1993,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read5) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId1), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2087,7 +2087,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read6) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId1), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2180,7 +2180,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read7) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId2), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2276,7 +2276,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read8) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId2), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2370,7 +2370,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read9) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId2), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2472,7 +2472,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read10) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId6), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2585,7 +2585,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read11) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId1), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2669,7 +2669,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read12) {
       .WillOnce(DoAll(SetArgPointee<2>(chunkId1), Return(FSStatusCode::OK)));
   EXPECT_CALL(mockBlockAccesser_, Put(_, _, _))
       .WillRepeatedly(Invoke(S3Upload));
-  EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+  EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
       .WillRepeatedly(Invoke(S3Download));
   EXPECT_CALL(mockInodeManager_, GetInode(_, _))
       .WillRepeatedly(
@@ -2927,7 +2927,7 @@ TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
     EXPECT_CALL(mockInodeManager_, GetInode(_, _))
         .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
     EXPECT_CALL(mockKVClient_, Get(_, _, 0, len, _)).WillOnce(Return(false));
-    EXPECT_CALL(mockBlockAccesser_, Get(_, _, _, _))
+    EXPECT_CALL(mockBlockAccesser_, Range(_, _, _, _))
         .WillOnce(
             DoAll(SetArrayArgument<3>(buf, buf + len), Return(Status::OK())));
     int readLen = s3ClientAdaptor_->Read(inodeId, offset_0, len, readBuf);

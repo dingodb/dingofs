@@ -183,6 +183,8 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
   dataaccess::InitAwsSdkConfig(
       conf_.get(),
       &fs_manager_option->block_access_option.s3_options.aws_sdk_config);
+  dataaccess::InitBlockAccesserThrottleOptions(
+      conf_.get(), &fs_manager_option->block_access_option.throttle_options);
 }
 
 void MDS::Init() {
@@ -194,7 +196,8 @@ void MDS::Init() {
       std::make_shared<MetaserverClient>(options_.metaserverOptions);
   auto dlock = std::make_shared<DLock>(options_.dLockOptions, etcdClient_);
 
-  block_accesser_factory_ = std::make_shared<dataaccess::BlockAccesserFactory>();
+  block_accesser_factory_ =
+      std::make_shared<dataaccess::BlockAccesserFactory>();
 
   // init topology
   InitTopology(options_.topologyOptions);

@@ -14,7 +14,6 @@
 
 add_library(aws_s3_adapter
     s3_adapter.cpp
-    s3_access_log.cpp
     client/aws_crt_s3_client.cpp
     client/aws_legacy_s3_client.cpp
 )

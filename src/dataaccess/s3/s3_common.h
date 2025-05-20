@@ -43,13 +43,6 @@ struct AwsSdkConfig {
   bool use_crt_client{false};
   bool use_thread_pool{true};  // this only work when use_crt_client is false
   int asyncThreadNum{16};      // this only work when use_crt_client is false
-  uint64_t maxAsyncRequestInflightBytes{0};
-  uint64_t iopsTotalLimit{0};
-  uint64_t iopsReadLimit{0};
-  uint64_t iopsWriteLimit{0};
-  uint64_t bpsTotalMB{0};
-  uint64_t bpsReadMB{0};
-  uint64_t bpsWriteMB{0};
   bool useVirtualAddressing{false};
   bool enableTelemetry{false};
 };
@@ -93,27 +86,9 @@ inline void InitAwsSdkConfig(utils::Configuration* conf,
         << aws_sdk_config->asyncThreadNum;
   }
 
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
-                                      &aws_sdk_config->iopsTotalLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
-                                      &aws_sdk_config->iopsReadLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsWriteLimit",
-                                      &aws_sdk_config->iopsWriteLimit));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsTotalMB",
-                                      &aws_sdk_config->bpsTotalMB));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsReadMB",
-                                      &aws_sdk_config->bpsReadMB));
-  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.bpsWriteMB",
-                                      &aws_sdk_config->bpsWriteMB));
   LOG_IF(FATAL, !conf->GetBoolValue("s3.useVirtualAddressing",
                                     &aws_sdk_config->useVirtualAddressing));
   LOG_IF(FATAL, !conf->GetStringValue("s3.region", &aws_sdk_config->region));
-
-  if (!conf->GetUInt64Value("s3.maxAsyncRequestInflightBytes",
-                            &aws_sdk_config->maxAsyncRequestInflightBytes)) {
-    LOG(WARNING) << "Not found s3.maxAsyncRequestInflightBytes in conf";
-    aws_sdk_config->maxAsyncRequestInflightBytes = 0;
-  }
   if (!conf->GetBoolValue("s3.enableTelemetry",
                           &aws_sdk_config->enableTelemetry)) {
     LOG(WARNING) << "Not found s3.enableTelemetry in conf,default to false";

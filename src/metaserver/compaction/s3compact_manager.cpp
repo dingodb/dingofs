@@ -51,6 +51,8 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
 
   dataaccess::InitAwsSdkConfig(conf.get(),
                                &block_access_opts.s3_options.aws_sdk_config);
+  dataaccess::InitBlockAccesserThrottleOptions(
+      conf.get(), &block_access_opts.throttle_options);
 
   conf->GetValueFatalIfFail("s3compactwq.enable", &enable);
   conf->GetValueFatalIfFail("s3compactwq.thread_num", &threadNum);

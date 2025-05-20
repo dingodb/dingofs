@@ -195,7 +195,7 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
   // retrive range of block
   if (length <= option_.max_range_size_kb() * kKiB) {
     char* data = new char[length];
-    status = block_accesser->Get(block_key.StoreKey(), offset, length, data);
+    status = block_accesser->Range(block_key.StoreKey(), offset, length, data);
     if (!status.ok()) {
       delete[] data;
     } else {
@@ -206,7 +206,7 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
 
   // retrive the whole block
   char* data = new char[block_size];
-  status = block_accesser->Get(block_key.StoreKey(), offset, length, data);
+  status = block_accesser->Range(block_key.StoreKey(), offset, length, data);
   if (!status.ok()) {
     delete[] data;
     return status;

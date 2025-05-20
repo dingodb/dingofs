@@ -32,7 +32,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
-#include "dataaccess/s3/aws/s3_access_log.h"
+#include "dataaccess/block_access_log.h"
 #include "stub/metric/metric.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
@@ -61,7 +61,7 @@ Status InitLog() {
   // metaserver
   bool succ = dingofs::client::InitAccessLog(FLAGS_log_dir) &&
               dingofs::cache::utils::InitCacheAccessLog(FLAGS_log_dir) &&
-              dataaccess::aws::InitS3AccessLog(FLAGS_log_dir) &&
+              dataaccess::InitBlockAccessLog(FLAGS_log_dir) &&
               dingofs::client::vfs::InitMetaLog(FLAGS_log_dir) &&
               dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 

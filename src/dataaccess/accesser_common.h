@@ -28,6 +28,38 @@
 namespace dingofs {
 namespace dataaccess {
 
+struct BlockAccesserThrottleOptions {
+  uint64_t maxAsyncRequestInflightBytes{0};
+  uint64_t iopsTotalLimit{0};
+  uint64_t iopsReadLimit{0};
+  uint64_t iopsWriteLimit{0};
+  uint64_t bpsTotalMB{0};
+  uint64_t bpsReadMB{0};
+  uint64_t bpsWriteMB{0};
+};
+
+inline void InitBlockAccesserThrottleOptions(
+    utils::Configuration* conf, BlockAccesserThrottleOptions* options) {
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsTotalLimit",
+                                      &options->iopsTotalLimit));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsReadLimit",
+                                      &options->iopsReadLimit));
+  LOG_IF(FATAL, !conf->GetUInt64Value("s3.throttle.iopsWriteLimit",
+                                      &options->iopsWriteLimit));
+  LOG_IF(FATAL,
+         !conf->GetUInt64Value("s3.throttle.bpsTotalMB", &options->bpsTotalMB));
+  LOG_IF(FATAL,
+         !conf->GetUInt64Value("s3.throttle.bpsReadMB", &options->bpsReadMB));
+  LOG_IF(FATAL,
+         !conf->GetUInt64Value("s3.throttle.bpsWriteMB", &options->bpsWriteMB));
+
+  if (!conf->GetUInt64Value("s3.maxAsyncRequestInflightBytes",
+                            &options->maxAsyncRequestInflightBytes)) {
+    LOG(WARNING) << "Not found s3.maxAsyncRequestInflightBytes in conf";
+    options->maxAsyncRequestInflightBytes = 0;
+  }
+}
+
 enum AccesserType : uint8_t {
   kS3 = 0,
   kRados = 1,
@@ -48,6 +80,7 @@ struct BlockAccessOptions {
   AccesserType type;
   S3Options s3_options;
   RadosOptions rados_options;
+  BlockAccesserThrottleOptions throttle_options;
 };
 
 // TODO: refact this use one struct

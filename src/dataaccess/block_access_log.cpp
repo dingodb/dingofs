@@ -14,28 +14,27 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/aws/s3_access_log.h"
+#include "dataaccess/block_access_log.h"
 
 #include <absl/strings/str_format.h>
 
 namespace dingofs {
 namespace dataaccess {
-namespace aws {
 
-std::shared_ptr<spdlog::logger> s3_logger;
+std::shared_ptr<spdlog::logger> block_access_logger;
 bool initialized = false;
 
-bool InitS3AccessLog(const std::string& prefix) {
+bool InitBlockAccessLog(const std::string& prefix) {
   if (!initialized) {
     std::string filename =
-        absl::StrFormat("%s/s3_access_%d.log", prefix, getpid());
-    s3_logger = spdlog::daily_logger_mt("s3_access", filename, 0, 0);
+        absl::StrFormat("%s/block_access_%d.log", prefix, getpid());
+    block_access_logger =
+        spdlog::daily_logger_mt("block_access", filename, 0, 0);
     spdlog::flush_every(std::chrono::seconds(1));
     initialized = true;
   }
   return true;
 }
 
-}  // namespace aws
 }  // namespace dataaccess
 }  // namespace dingofs

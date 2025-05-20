@@ -68,7 +68,7 @@ class RadosAccesser : public Accesser {
   void AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) override;
 
   Status Get(const std::string& key, std::string* data) override;
-  Status Get(const std::string& key, off_t offset, size_t length,
+  Status Range(const std::string& key, off_t offset, size_t length,
              char* buffer) override;
   void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
 

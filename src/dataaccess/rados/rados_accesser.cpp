@@ -186,15 +186,15 @@ Status RadosAccesser::Get(const std::string& key, std::string* data) {
 
   auto buffer = std::make_unique<char[]>(stat.size);
 
-  Status s = Get(key, 0, stat.size, buffer.get());
+  Status s = Range(key, 0, stat.size, buffer.get());
   if (s.ok()) {
     *data = std::string(buffer.get(), stat.size);
   }
   return s;
 }
 
-Status RadosAccesser::Get(const std::string& key, off_t offset, size_t length,
-                          char* buffer) {
+Status RadosAccesser::Range(const std::string& key, off_t offset, size_t length,
+                            char* buffer) {
   return ExecuteSyncOp(key, [&](rados_ioctx_t ioctx) {
     int err = rados_read(ioctx, key.c_str(), buffer, length, offset);
     if (err < 0) {

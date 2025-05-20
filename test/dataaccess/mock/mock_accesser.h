@@ -67,7 +67,7 @@ class MockBlockAccesser : public BlockAccesser {
   MOCK_METHOD(Status, Get, (const std::string& key, std::string* data),
               (override));
 
-  MOCK_METHOD(Status, Get,
+  MOCK_METHOD(Status, Range,
               (const std::string& key, off_t offset, size_t length,
                char* buffer),
               (override));

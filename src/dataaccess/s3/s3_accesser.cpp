@@ -100,13 +100,13 @@ Status S3Accesser::Get(const std::string& key, std::string* data) {
   return Status::OK();
 }
 
-Status S3Accesser::Get(const std::string& key, off_t offset, size_t length,
-                       char* buffer) {
+Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
+                         char* buffer) {
   int rc;  // read s3 metrics
   auto start = butil::cpuwide_time_us();
   MetricGuard guard(&rc, &S3Metric::GetInstance().read_s3, length, start);
 
-  rc = client_->GetObject(S3Key(key), buffer, offset, length);
+  rc = client_->RangeObject(S3Key(key), buffer, offset, length);
   if (rc < 0) {
     if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
       LOG(WARNING) << fmt::format("[accesser] object({}) not found.", key);
@@ -150,7 +150,7 @@ Status S3Accesser::Delete(const std::string& key) {
 }
 
 Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
-  int rc = client_->DeleteObjects(keys);
+  int rc = client_->BatchDeleteObject(keys);
   if (rc < 0) {
     LOG(ERROR) << fmt::format(
         "[accesser] batch delete object fail, count:{}, ret: {}.", keys.size(),

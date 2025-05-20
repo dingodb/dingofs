@@ -27,7 +27,7 @@
 #include "common/dynamic_vlog.h"
 #include "common/process.h"
 #include "common/threading.h"
-#include "dataaccess/s3/aws/s3_access_log.h"
+#include "dataaccess/block_access_log.h"
 #include "dataaccess/s3/aws/s3_adapter.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
@@ -149,8 +149,8 @@ int main(int argc, char** argv) {
   LOG_IF(FATAL, !InitAccessLog(FLAGS_log_dir))
       << "Init access log failed, log dir = " << FLAGS_log_dir;
 
-  // init s3 access log
-  dingofs::dataaccess::aws::InitS3AccessLog(FLAGS_log_dir);
+  // init block access log
+  dingofs::dataaccess::InitBlockAccessLog(FLAGS_log_dir);
 
   dingofs::stub::InitMetaAccessLog(FLAGS_log_dir);
 
@@ -168,6 +168,7 @@ int main(int argc, char** argv) {
   // stop server and background threads
   metaserver.Stop();
 
+  // Ugly shutdown
   dingofs::dataaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
