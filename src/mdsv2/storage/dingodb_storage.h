@@ -67,6 +67,8 @@ class DingodbTxn : public Txn {
   DingodbTxn(SdkTxnUPtr txn) : txn_(std::move(txn)) {};
   ~DingodbTxn() override = default;
 
+  int64_t ID() const override;
+
   Status Put(const std::string& key, const std::string& value) override;
   Status PutIfAbsent(const std::string& key, const std::string& value) override;
   Status Delete(const std::string& key) override;

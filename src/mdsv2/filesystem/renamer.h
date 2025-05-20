@@ -21,6 +21,7 @@
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -32,13 +33,13 @@ using RenameCbFunc = std::function<void(Status)>;
 
 class RenameTask : public TaskRunnable {
  public:
-  RenameTask(FileSystemSPtr fs, Context* ctx, uint64_t old_parent_ino, const std::string& old_name,
-             uint64_t new_parent_ino, const std::string& new_name, RenameCbFunc cb)
+  RenameTask(FileSystemSPtr fs, Context* ctx, Ino old_parent, const std::string& old_name, Ino new_parent_ino,
+             const std::string& new_name, RenameCbFunc cb)
       : fs_(fs),
         ctx_(ctx),
-        old_parent_ino_(old_parent_ino),
+        old_parent_(old_parent),
         old_name_(old_name),
-        new_parent_ino_(new_parent_ino),
+        new_parent_(new_parent_ino),
         new_name_(new_name),
         cb_(cb) {
     if (cb == nullptr) {
@@ -71,9 +72,9 @@ class RenameTask : public TaskRunnable {
   // not delete at here
   Context* ctx_{nullptr};
 
-  uint64_t old_parent_ino_;
+  Ino old_parent_;
   std::string old_name_;
-  uint64_t new_parent_ino_;
+  Ino new_parent_;
   std::string new_name_;
 
   BthreadCondPtr cond_{nullptr};
@@ -101,9 +102,8 @@ class Renamer {
   bool Init();
   bool Destroy();
 
-  Status Execute(FileSystemSPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
-                 uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
-                 uint64_t& new_parent_version);
+  Status Execute(FileSystemSPtr fs, Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent_ino,
+                 const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
 
  private:
   bool Execute(TaskRunnablePtr task);

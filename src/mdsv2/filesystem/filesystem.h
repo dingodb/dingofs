@@ -90,7 +90,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status CreateRoot();
 
   // lookup dentry
-  Status Lookup(Context& ctx, Ino parent_ino, const std::string& name, EntryOut& entry_out);
+  Status Lookup(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out);
 
   // file
   struct MkNodParam {
@@ -99,7 +99,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    Ino parent_ino{0};
+    Ino parent{0};
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
@@ -113,21 +113,21 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint32_t uid{0};
     uint32_t gid{0};
     uint32_t mode{0};
-    Ino parent_ino{0};
+    Ino parent{0};
     uint64_t rdev{0};
   };
   Status MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out);
-  Status RmDir(Context& ctx, Ino parent_ino, const std::string& name);
+  Status RmDir(Context& ctx, Ino parent, const std::string& name);
   Status ReadDir(Context& ctx, Ino ino, const std::string& last_name, uint limit, bool with_attr,
                  std::vector<EntryOut>& entry_outs);
 
   // create hard link
-  Status Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::string& new_name, EntryOut& entry_out);
+  Status Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out);
   // delete link
-  Status UnLink(Context& ctx, Ino parent_ino, const std::string& name);
+  Status UnLink(Context& ctx, Ino parent, const std::string& name);
   // create symbolic link
-  Status Symlink(Context& ctx, const std::string& symlink, Ino new_parent_ino, const std::string& new_name,
-                 uint32_t uid, uint32_t gid, EntryOut& entry_out);
+  Status Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name, uint32_t uid,
+                 uint32_t gid, EntryOut& entry_out);
   // read symbolic link
   Status ReadLink(Context& ctx, Ino ino, std::string& link);
 
@@ -146,9 +146,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs);
 
   // rename
-  Status Rename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
-                const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
-  Status CommitRename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
+  Status Rename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent, const std::string& new_name,
+                uint64_t& old_parent_version, uint64_t& new_parent_version);
+  Status CommitRename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
                       const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
 
   // slice
@@ -198,9 +198,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // get partition
   Status GetPartition(Context& ctx, Ino parent, PartitionPtr& out_partition);
   Status GetPartition(Context& ctx, uint64_t version, Ino parent, PartitionPtr& out_partition);
-  PartitionPtr GetPartitionFromCache(Ino parent_ino);
+  PartitionPtr GetPartitionFromCache(Ino parent);
   std::map<uint64_t, PartitionPtr> GetAllPartitionsFromCache();
-  Status GetPartitionFromStore(Ino parent_ino, const std::string& reason, PartitionPtr& out_partition);
+  Status GetPartitionFromStore(Ino parent, const std::string& reason, PartitionPtr& out_partition);
 
   // get dentry
   Status GetDentryFromStore(Ino parent, const std::string& name, Dentry& dentry);

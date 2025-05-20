@@ -57,6 +57,57 @@ class Operation {
     kCompactChunk = 23,
   };
 
+  const char* OpName() const {
+    switch (GetOpType()) {
+      case OpType::kMountFs:
+        return "MountFs";
+
+      case OpType::kUmountFs:
+        return "UmountFs";
+
+      case OpType::kDeleteFs:
+        return "DeleteFs";
+
+      case OpType::kCreateRoot:
+        return "CreateRoot";
+
+      case OpType::kMkDir:
+        return "MkDir";
+
+      case OpType::kMkNod:
+        return "MkNod";
+
+      case OpType::kHardLink:
+        return "HardLink";
+
+      case OpType::kSmyLink:
+        return "SmyLink";
+
+      case OpType::kUpdateAttr:
+        return "UpdateAttr";
+
+      case OpType::kUpdateXAttr:
+        return "UpdateXAttr";
+
+      case OpType::kUpdateChunk:
+        return "UpdateChunk";
+
+      case OpType::kRmDir:
+        return "RmDir";
+
+      case OpType::kUnlink:
+        return "Unlink";
+
+      case OpType::kRename:
+        return "Rename";
+
+      case OpType::kCompactChunk:
+        return "CompactChunk";
+    }
+
+    return nullptr;
+  }
+
   struct Result {
     Status status;
     AttrType attr;
@@ -104,7 +155,7 @@ class Operation {
   virtual OpType GetOpType() const = 0;
 
   virtual uint32_t GetFsId() const = 0;
-  virtual uint64_t GetIno() const = 0;
+  virtual Ino GetIno() const = 0;
   virtual uint64_t GetTime() const { return time_ns_; }
 
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
@@ -142,7 +193,7 @@ class MountFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kMountFs; }
 
   uint32_t GetFsId() const override { return 0; }
-  uint64_t GetIno() const override { return 0; }
+  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -160,7 +211,7 @@ class UmountFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUmountFs; }
 
   uint32_t GetFsId() const override { return 0; }
-  uint64_t GetIno() const override { return 0; }
+  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -182,7 +233,7 @@ class DeleteFsOperation : public Operation {
   OpType GetOpType() const override { return OpType::kDeleteFs; }
 
   uint32_t GetFsId() const override { return 0; }
-  uint64_t GetIno() const override { return 0; }
+  Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -211,7 +262,7 @@ class CreateRootOperation : public Operation {
   OpType GetOpType() const override { return OpType::kCreateRoot; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  uint64_t GetIno() const override { return dentry_.Ino(); }
+  Ino GetIno() const override { return dentry_.INo(); }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -229,7 +280,7 @@ class MkDirOperation : public Operation {
   OpType GetOpType() const override { return OpType::kMkDir; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
 
@@ -246,7 +297,7 @@ class MkNodOperation : public Operation {
   OpType GetOpType() const override { return OpType::kMkNod; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
 
@@ -267,7 +318,7 @@ class HardLinkOperation : public Operation {
   OpType GetOpType() const override { return OpType::kHardLink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   template <int size = 0>
   Result& GetResult() {
@@ -294,7 +345,7 @@ class SmyLinkOperation : public Operation {
   OpType GetOpType() const override { return OpType::kSmyLink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
 
@@ -312,7 +363,7 @@ class UpdateAttrOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
 
   uint32_t GetFsId() const override { return attr_.fs_id(); }
-  uint64_t GetIno() const override { return ino_; }
+  Ino GetIno() const override { return ino_; }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
@@ -331,7 +382,7 @@ class UpdateXAttrOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUpdateXAttr; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  uint64_t GetIno() const override { return ino_; }
+  Ino GetIno() const override { return ino_; }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
@@ -351,7 +402,7 @@ class UpdateChunkOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUpdateChunk; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
-  uint64_t GetIno() const override { return ino_; }
+  Ino GetIno() const override { return ino_; }
 
   Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
 
@@ -370,7 +421,7 @@ class RmDirOperation : public Operation {
   OpType GetOpType() const override { return OpType::kRmDir; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -390,7 +441,7 @@ class UnlinkOperation : public Operation {
   OpType GetOpType() const override { return OpType::kUnlink; }
 
   uint32_t GetFsId() const override { return dentry_.FsId(); }
-  uint64_t GetIno() const override { return dentry_.ParentIno(); }
+  Ino GetIno() const override { return dentry_.ParentIno(); }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -410,13 +461,13 @@ class UnlinkOperation : public Operation {
 
 class RenameOperation : public Operation {
  public:
-  RenameOperation(Trace& trace, uint32_t fs_id, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
+  RenameOperation(Trace& trace, uint32_t fs_id, Ino old_parent, const std::string& old_name, Ino new_parent_ino,
                   const std::string& new_name)
       : Operation(trace),
         fs_id_(fs_id),
-        old_parent_ino_(old_parent_ino),
+        old_parent_(old_parent),
         old_name_(old_name),
-        new_parent_ino_(new_parent_ino),
+        new_parent_(new_parent_ino),
         new_name_(new_name) {};
   ~RenameOperation() override = default;
 
@@ -436,7 +487,7 @@ class RenameOperation : public Operation {
   OpType GetOpType() const override { return OpType::kRename; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  uint64_t GetIno() const override { return new_parent_ino_; }
+  Ino GetIno() const override { return new_parent_; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -452,10 +503,10 @@ class RenameOperation : public Operation {
  private:
   uint32_t fs_id_{0};
 
-  Ino old_parent_ino_{0};
+  Ino old_parent_{0};
   std::string old_name_;
 
-  Ino new_parent_ino_{0};
+  Ino new_parent_{0};
   std::string new_name_;
 
   Result result_;
@@ -474,7 +525,7 @@ class CompactChunkOperation : public Operation {
   OpType GetOpType() const override { return OpType::kCompactChunk; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
-  uint64_t GetIno() const override { return ino_; }
+  Ino GetIno() const override { return ino_; }
 
   Status Run(TxnUPtr& txn) override;
 

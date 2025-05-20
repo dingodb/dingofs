@@ -748,7 +748,7 @@ void MDSServiceImpl::DoLookup(google::protobuf::RpcController* controller, const
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   EntryOut entry_out;
-  status = file_system->Lookup(ctx, request->parent_ino(), request->name(), entry_out);
+  status = file_system->Lookup(ctx, request->parent(), request->name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -790,7 +790,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
   }
 
   FileSystem::MkNodParam param;
-  param.parent_ino = request->parent_ino();
+  param.parent = request->parent();
   param.name = request->name();
   param.mode = request->mode();
   param.uid = request->uid();
@@ -843,7 +843,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
   }
 
   FileSystem::MkDirParam param;
-  param.parent_ino = request->parent_ino();
+  param.parent = request->parent();
   param.name = request->name();
   param.mode = request->mode();
   param.uid = request->uid();
@@ -898,7 +898,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->RmDir(ctx, request->parent_ino(), request->name());
+  status = file_system->RmDir(ctx, request->parent(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
@@ -1080,7 +1080,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   EntryOut entry_out;
-  status = file_system->Link(ctx, request->ino(), request->new_parent_ino(), request->new_name(), entry_out);
+  status = file_system->Link(ctx, request->ino(), request->new_parent(), request->new_name(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1124,7 +1124,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->UnLink(ctx, request->parent_ino(), request->name());
+  status = file_system->UnLink(ctx, request->parent(), request->name());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1167,7 +1167,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   EntryOut entry_out;
-  status = file_system->Symlink(ctx, request->symlink(), request->new_parent_ino(), request->new_name(), request->uid(),
+  status = file_system->Symlink(ctx, request->symlink(), request->new_parent(), request->new_name(), request->uid(),
                                 request->gid(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (!status.ok()) {
@@ -1491,7 +1491,7 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
 
   uint64_t old_parent_version, new_parent_version;
   auto status =
-      file_system->CommitRename(ctx, request->old_parent_ino(), request->old_name(), request->new_parent_ino(),
+      file_system->CommitRename(ctx, request->old_parent(), request->old_name(), request->new_parent(),
                                 request->new_name(), old_parent_version, new_parent_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {

@@ -67,9 +67,10 @@ class DummyStorage : public KVStorage {
 
 class DummyTxn : public Txn {
  public:
-  DummyTxn(DummyStorage* storage) : storage_(storage) {}
+  DummyTxn(DummyStorage* storage);
   ~DummyTxn() override = default;
 
+  int64_t ID() const override;
   Status Put(const std::string& key, const std::string& value) override;
 
   Status PutIfAbsent(const std::string& key, const std::string& value) override;
@@ -84,6 +85,7 @@ class DummyTxn : public Txn {
   Trace::Txn GetTrace() override;
 
  private:
+  int64_t txn_id_{0};
   DummyStorage* storage_{nullptr};
 };
 

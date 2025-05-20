@@ -43,11 +43,11 @@ using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 // clean trash slice corresponding to s3 object
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor, const KeyValue& kv)
+  CleanDeletedSliceTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserSPtr block_accessor, const KeyValue& kv)
       : kv_storage_(kv_storage), data_accessor_(block_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor,
+  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserSPtr block_accessor,
                                        const KeyValue& kv) {
     return std::make_shared<CleanDeletedSliceTask>(kv_storage, block_accessor, kv);
   }
@@ -65,17 +65,17 @@ class CleanDeletedSliceTask : public TaskRunnable {
   KVStorageSPtr kv_storage_;
 
   // data accessor for s3
-  dataaccess::BlockAccesserPtr data_accessor_;
+  dataaccess::BlockAccesserSPtr data_accessor_;
 };
 
 // clen delete file corresponding to s3 object
 class CleanDeletedFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor, const AttrType& attr)
+  CleanDeletedFileTask(KVStorageSPtr kv_storage, dataaccess::BlockAccesserSPtr block_accessor, const AttrType& attr)
       : kv_storage_(kv_storage), data_accessor_(block_accessor), attr_(attr) {}
   ~CleanDeletedFileTask() override = default;
 
-  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserPtr block_accessor,
+  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, dataaccess::BlockAccesserSPtr block_accessor,
                                       const AttrType& attr) {
     return std::make_shared<CleanDeletedFileTask>(kv_storage, block_accessor, attr);
   }
@@ -94,7 +94,7 @@ class CleanDeletedFileTask : public TaskRunnable {
   KVStorageSPtr kv_storage_;
 
   // data accessor for s3
-  dataaccess::BlockAccesserPtr data_accessor_;
+  dataaccess::BlockAccesserSPtr data_accessor_;
 };
 
 class GcProcessor {
@@ -127,7 +127,7 @@ class GcProcessor {
 
   static bool ShouldDeleteFile(const AttrType& attr);
 
-  dataaccess::BlockAccesserPtr GetOrCreateDataAccesser(uint32_t fs_id);
+  dataaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);
 
   std::atomic<bool> is_running_{false};
 
@@ -136,7 +136,7 @@ class GcProcessor {
   KVStorageSPtr kv_storage_;
 
   // fs_id -> data accessor
-  std::map<uint32_t, dataaccess::BlockAccesserPtr> block_accessers_;
+  std::map<uint32_t, dataaccess::BlockAccesserSPtr> block_accessers_;
 
   FileSystemSetSPtr file_system_set_;
 

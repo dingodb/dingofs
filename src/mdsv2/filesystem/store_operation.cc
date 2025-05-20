@@ -39,17 +39,17 @@ DEFINE_uint32(merge_operation_delay_us, 0, "merge operation delay us.");
 
 DECLARE_int32(fs_scan_batch_size);
 
-static void AddParentIno(AttrType& attr, uint64_t parent_ino) {
-  auto it = std::find(attr.parent_inos().begin(), attr.parent_inos().end(), parent_ino);
-  if (it == attr.parent_inos().end()) {
-    attr.add_parent_inos(parent_ino);
+static void AddParentIno(AttrType& attr, Ino parent) {
+  auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
+  if (it == attr.parents().end()) {
+    attr.add_parents(parent);
   }
 }
 
-static void DelParentIno(AttrType& attr, uint64_t parent_ino) {
-  auto it = std::find(attr.parent_inos().begin(), attr.parent_inos().end(), parent_ino);
-  if (it != attr.parent_inos().end()) {
-    attr.mutable_parent_inos()->erase(it);
+static void DelParentIno(AttrType& attr, Ino parent) {
+  auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
+  if (it != attr.parents().end()) {
+    attr.mutable_parents()->erase(it);
   }
 }
 
@@ -203,14 +203,13 @@ Status CreateRootOperation::Run(TxnUPtr& txn) {
 
 Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const uint32_t fs_id = parent_attr.fs_id();
-  const uint64_t parent_ino = parent_attr.ino();
+  const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()),
-           MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
 
   // create inode
-  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino()), MetaCodec::EncodeInodeValue(attr_));
+  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
   parent_attr.set_nlink(parent_attr.nlink() + 1);
@@ -222,14 +221,13 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
 
 Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const uint32_t fs_id = parent_attr.fs_id();
-  const uint64_t parent_ino = parent_attr.ino();
+  const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()),
-           MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
 
   // create inode
-  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino()), MetaCodec::EncodeInodeValue(attr_));
+  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -240,11 +238,11 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
 
 Status HardLinkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = dentry_.FsId();
-  const uint64_t parent_ino = dentry_.ParentIno();
+  const Ino parent = dentry_.ParentIno();
 
   // get parent/child attr
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent_ino);
-  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino());
+  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
+  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet({parent_key, key}, kvs);
@@ -263,7 +261,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
       attr = MetaCodec::DecodeInodeValue(kv.value);
     } else {
       DINGO_LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                      dentry_.Ino(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
+                                      dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
                                       Helper::StringToHex(key));
     }
   }
@@ -277,13 +275,12 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   attr.set_nlink(attr.nlink() + 1);
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
-  AddParentIno(attr, parent_ino);
+  AddParentIno(attr, parent);
   attr.set_version(attr.version() + 1);
   txn->Put(key, MetaCodec::EncodeInodeValue(attr));
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()),
-           MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
 
   SetAttr(parent_attr);
   result_.child_attr = attr;
@@ -293,14 +290,13 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
 
 Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const uint32_t fs_id = parent_attr.fs_id();
-  const uint64_t parent_ino = parent_attr.ino();
+  const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()),
-           MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
 
   // create inode
-  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino()), MetaCodec::EncodeInodeValue(attr_));
+  txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
 
   // update parent attr
   parent_attr.set_mtime(std::max(parent_attr.mtime(), GetTime()));
@@ -411,22 +407,22 @@ static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is
 
 Status RmDirOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = dentry_.FsId();
-  const uint64_t parent_ino = dentry_.ParentIno();
+  const Ino parent = dentry_.ParentIno();
 
   // check dentry empty
   bool is_empty = false;
-  auto status = CheckDirEmpty(txn, fs_id, dentry_.Ino(), is_empty);
+  auto status = CheckDirEmpty(txn, fs_id, dentry_.INo(), is_empty);
   if (!status.ok()) {
     return status;
   }
 
   if (!is_empty) {
-    return Status(pb::error::ENOT_EMPTY, fmt::format("directory({}) is not empty.", dentry_.Ino()));
+    return Status(pb::error::ENOT_EMPTY, fmt::format("directory({}) is not empty.", dentry_.INo()));
   }
 
   // update parent attr
   std::string value;
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent_ino);
+  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
   status = txn->Get(parent_key, value);
   if (!status.ok()) {
     return status;
@@ -441,10 +437,10 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
   txn->Put(parent_key, MetaCodec::EncodeInodeValue(parent_attr));
 
   // delete inode
-  txn->Delete(MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino()));
+  txn->Delete(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()));
 
   // delete dentry
-  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()));
+  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
 
   SetAttr(parent_attr);
 
@@ -453,11 +449,11 @@ Status RmDirOperation::Run(TxnUPtr& txn) {
 
 Status UnlinkOperation::Run(TxnUPtr& txn) {
   const uint32_t fs_id = dentry_.FsId();
-  const uint64_t parent_ino = dentry_.ParentIno();
+  const Ino parent = dentry_.ParentIno();
 
   // get parent/child attr
-  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent_ino);
-  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.Ino());
+  std::string parent_key = MetaCodec::EncodeInodeKey(fs_id, parent);
+  std::string key = MetaCodec::EncodeInodeKey(fs_id, dentry_.INo());
 
   std::vector<KeyValue> kvs;
   auto status = txn->BatchGet({parent_key, key}, kvs);
@@ -478,7 +474,7 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
 
     } else {
       DINGO_LOG(FATAL) << fmt::format("[operation.{}.{}] invalid key({}), parent_key({}), child_key({}).", fs_id,
-                                      dentry_.Ino(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
+                                      dentry_.INo(), Helper::StringToHex(kv.key), Helper::StringToHex(parent_key),
                                       Helper::StringToHex(key));
     }
   }
@@ -498,14 +494,14 @@ Status UnlinkOperation::Run(TxnUPtr& txn) {
     // delete inode
     txn->Delete(key);
     // save delete file info
-    txn->Put(MetaCodec::EncodeDelFileKey(fs_id, dentry_.Ino()), MetaCodec::EncodeDelFileValue(attr));
+    txn->Put(MetaCodec::EncodeDelFileKey(fs_id, dentry_.INo()), MetaCodec::EncodeDelFileValue(attr));
 
   } else {
     txn->Put(key, MetaCodec::EncodeInodeValue(attr));
   }
 
   // delete dentry
-  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent_ino, dentry_.Name()));
+  txn->Delete(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()));
 
   SetAttr(parent_attr);
   result_.child_attr = attr;
@@ -517,15 +513,15 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   uint64_t time_ns = GetTime();
 
   DINGO_LOG(INFO) << fmt::format(
-      "[operation.{}] rename old_parent_ino({}), old_name({}), new_parent_ino({}), new_name({}).", fs_id_,
-      old_parent_ino_, old_name_, new_parent_ino_, new_name_);
+      "[operation.{}] rename old_parent({}), old_name({}), new_parent_ino({}), new_name({}).", fs_id_, old_parent_,
+      old_name_, new_parent_, new_name_);
 
-  bool is_same_parent = (old_parent_ino_ == new_parent_ino_);
+  bool is_same_parent = (old_parent_ == new_parent_);
   // batch get old parent attr/child dentry and new parentattr/child dentry
-  std::string old_parent_key = MetaCodec::EncodeInodeKey(fs_id_, old_parent_ino_);
-  std::string old_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, old_parent_ino_, old_name_);
-  std::string new_parent_key = MetaCodec::EncodeInodeKey(fs_id_, new_parent_ino_);
-  std::string new_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, new_parent_ino_, new_name_);
+  std::string old_parent_key = MetaCodec::EncodeInodeKey(fs_id_, old_parent_);
+  std::string old_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, old_parent_, old_name_);
+  std::string new_parent_key = MetaCodec::EncodeInodeKey(fs_id_, new_parent_);
+  std::string new_dentry_key = MetaCodec::EncodeDentryKey(fs_id_, new_parent_, new_name_);
 
   std::vector<std::string> keys = {old_parent_key, old_dentry_key, new_dentry_key};
   if (!is_same_parent) keys.push_back(new_parent_key);
@@ -598,8 +594,7 @@ Status RenameOperation::Run(TxnUPtr& txn) {
         return status;
       }
       if (!is_empty) {
-        return Status(pb::error::ENOT_EMPTY,
-                      fmt::format("new dentry({}/{}) is not empty.", new_parent_ino_, new_name_));
+        return Status(pb::error::ENOT_EMPTY, fmt::format("new dentry({}/{}) is not empty.", new_parent_, new_name_));
       }
 
       // delete exist new inode
@@ -634,14 +629,14 @@ Status RenameOperation::Run(TxnUPtr& txn) {
   new_dentry.set_name(new_name_);
   new_dentry.set_ino(old_dentry.ino());
   new_dentry.set_type(old_dentry.type());
-  new_dentry.set_parent_ino(new_parent_ino_);
+  new_dentry.set_parent(new_parent_);
 
   txn->Put(new_dentry_key, MetaCodec::EncodeDentryValue(new_dentry));
 
   // update old inode attr
   old_attr.set_ctime(std::max(old_attr.ctime(), time_ns));
-  AddParentIno(old_attr, new_parent_ino_);
-  DelParentIno(old_attr, old_parent_ino_);
+  AddParentIno(old_attr, new_parent_);
+  DelParentIno(old_attr, old_parent_);
   old_attr.set_version(old_attr.version() + 1);
 
   txn->Put(old_inode_key, MetaCodec::EncodeInodeValue(old_attr));
@@ -1029,8 +1024,11 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   auto& trace = operation->GetTrace();
   Status status;
   int retry = 0;
+  int64_t txn_id = 0;
+  bool is_one_pc = false;
   do {
     auto txn = kv_storage_->NewTxn();
+    txn_id = txn->ID();
 
     status = operation->Run(txn);
     if (!status.ok()) {
@@ -1038,7 +1036,9 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     }
 
     status = txn->Commit();
-    trace.AddTxn(txn->GetTrace());
+    auto txn_trace = txn->GetTrace();
+    is_one_pc = txn_trace.is_one_pc;
+    trace.AddTxn(txn_trace);
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -1047,9 +1047,9 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
   trace.RecordElapsedTime("store_operate");
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}us] alone run finish, retry({}) status({}).",
-                                 operation->GetFsId(), operation->GetIno(), Helper::TimestampUs() - time_us, retry,
-                                 status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, onepc({}) retry({}) status({}).",
+                                 operation->GetFsId(), operation->GetIno(), txn_id, Helper::TimestampUs() - time_us,
+                                 operation->OpName(), is_one_pc, retry, status.error_str());
 
   if (!status.ok()) {
     operation->SetStatus(status);
@@ -1167,8 +1167,11 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   Status status;
   int retry = 0;
   int count = 0;
+  int64_t txn_id = 0;
+  bool is_one_pc = false;
   do {
     auto txn = kv_storage_->NewTxn();
+    txn_id = txn->ID();
 
     std::string value;
     status = txn->Get(key, value);
@@ -1194,7 +1197,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     txn->Put(key, MetaCodec::EncodeInodeValue(attr));
 
     status = txn->Commit();
-    SetTrace(batch_operation, txn->GetTrace());
+    auto txn_trace = txn->GetTrace();
+    is_one_pc = txn_trace.is_one_pc;
+    SetTrace(batch_operation, txn_trace);
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -1203,9 +1208,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
   SetElapsedTime(batch_operation, "store_operate");
 
-  DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}us] batch run finish, count({}) retry({}) status({}) attr({}).",
-                                 fs_id, ino, Helper::TimestampUs() - time_us, count, retry, status.error_str(),
-                                 DescribeAttr(attr));
+  DINGO_LOG(INFO) << fmt::format(
+      "[operation.{}.{}][{}][{}us] batch run finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id, ino,
+      txn_id, Helper::TimestampUs() - time_us, count, is_one_pc, retry, status.error_str(), DescribeAttr(attr));
 
   if (status.ok()) {
     SetAttr(batch_operation, attr);

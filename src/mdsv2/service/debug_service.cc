@@ -72,7 +72,7 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
   }
 
   // get all partition
-  if (request->parent_ino() == 0) {
+  if (request->parent() == 0) {
     auto partition_map = fs->GetAllPartitionsFromCache();
     for (auto& [_, partition] : partition_map) {
       auto* pb_partition = response->add_partitions();
@@ -84,7 +84,7 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
 
   Context ctx(false, 0);
   PartitionPtr partition;
-  auto status = fs->GetPartition(ctx, request->parent_ino(), partition);
+  auto status = fs->GetPartition(ctx, request->parent(), partition);
   if (!status.ok()) {
     return ServiceHelper::SetError(response->mutable_error(), status);
   }

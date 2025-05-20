@@ -29,7 +29,9 @@ class BlockAccesserFactory {
  public:
   virtual ~BlockAccesserFactory() = default;
 
-  virtual std::unique_ptr<dataaccess::BlockAccesser> NewBlockAccesser(
+  virtual BlockAccesserUPtr NewBlockAccesser(const BlockAccessOptions& options);
+
+  virtual BlockAccesserSPtr NewShareBlockAccesser(
       const BlockAccessOptions& options);
 };
 

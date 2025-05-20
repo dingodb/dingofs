@@ -24,8 +24,11 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
-#include "dataaccess/s3/s3_accesser.h"
+#include "dataaccess/block_accesser_factory.h"
+#include "dataaccess/rados/rados_common.h"
+#include "dataaccess/s3/s3_common.h"
 #include "dingofs/error.pb.h"
+#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
@@ -345,7 +348,7 @@ bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   return (attr.ctime() / 1000000000 + FLAGS_gc_delfile_reserve_time_s) < now_s;
 }
 
-dataaccess::BlockAccesserPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
+dataaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
   auto it = block_accessers_.find(fs_id);
   if (it != block_accessers_.end()) {
     return it->second;
@@ -358,22 +361,41 @@ dataaccess::BlockAccesserPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id
   }
 
   auto fs_info = fs->GetFsInfo();
-  const auto& s3_info = fs_info.extra().s3_info();
-  if (s3_info.ak().empty() || s3_info.sk().empty() || s3_info.endpoint().empty() || s3_info.bucketname().empty()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] get s3 info fail, fs_id({}) s3_info({}).", fs_id, s3_info.ShortDebugString());
-    return nullptr;
+
+  dataaccess::BlockAccessOptions options;
+  if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
+    const auto& s3_info = fs_info.extra().s3_info();
+    if (s3_info.ak().empty() || s3_info.sk().empty() || s3_info.endpoint().empty() || s3_info.bucketname().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[gc] get s3 info fail, fs_id({}) s3_info({}).", fs_id,
+                                      s3_info.ShortDebugString());
+      return nullptr;
+    }
+
+    options.type = dataaccess::AccesserType::kS3;
+    options.s3_options.s3_info = dataaccess::S3Info{
+        .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
+  } else {
+    const auto& rados_info = fs_info.extra().rados_info();
+    if (rados_info.mon_host().empty() || rados_info.user_name().empty() || rados_info.key().empty() ||
+        rados_info.pool_name().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[gc] get rados info fail, fs_id({}) rados_info({}).", fs_id,
+                                      rados_info.ShortDebugString());
+      return nullptr;
+    }
+
+    options.type = dataaccess::AccesserType::kRados;
+    options.rados_options = dataaccess::RadosOptions{.mon_host = rados_info.mon_host(),
+                                                     .user_name = rados_info.user_name(),
+                                                     .key = rados_info.key(),
+                                                     .pool_name = rados_info.pool_name(),
+                                                     .cluster_name = rados_info.cluster_name()};
   }
 
-  dataaccess::aws::S3AdapterOption option;
-  option.ak = s3_info.ak();
-  option.sk = s3_info.sk();
-  option.s3Address = s3_info.endpoint();
-  option.bucketName = s3_info.bucketname();
-  option.loglevel = 1;
-
-  auto block_accessor = dataaccess::S3Accesser::New(option);
-  if (!block_accessor->Init()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc] init data accesser fail, s3_info({}).", s3_info.ShortDebugString());
+  dataaccess::BlockAccesserFactory factory;
+  auto block_accessor = factory.NewShareBlockAccesser(options);
+  auto status = block_accessor->Init();
+  if (!status.IsOK()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc] init block accesser fail, status({}).", status.ToString());
     return nullptr;
   }
 

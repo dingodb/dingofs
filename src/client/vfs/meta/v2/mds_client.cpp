@@ -163,10 +163,10 @@ EndPoint MDSClient::GetEndPointByIno(int64_t ino) {
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
-EndPoint MDSClient::GetEndPointByParentIno(int64_t parent_ino) {
-  auto mds_meta = mds_router_->GetMDSByParentIno(parent_ino);
+EndPoint MDSClient::GetEndPointByParentIno(int64_t parent) {
+  auto mds_meta = mds_router_->GetMDSByParentIno(parent);
   DINGO_LOG(INFO) << fmt::format("query target mds({}:{}) for parent({}).",
-                                 mds_meta.Host(), mds_meta.Port(), parent_ino);
+                                 mds_meta.Host(), mds_meta.Port(), parent);
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
@@ -176,19 +176,19 @@ uint64_t MDSClient::GetInodeVersion(int64_t ino) {
   return version;
 }
 
-Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
+Status MDSClient::Lookup(uint64_t parent, const std::string& name,
                          Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::LookupRequest request;
   pb::mdsv2::LookupResponse response;
 
-  request.mutable_context()->set_inode_version(GetInodeVersion(parent_ino));
+  request.mutable_context()->set_inode_version(GetInodeVersion(parent));
 
   request.set_fs_id(fs_id_);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
 
   auto status =
@@ -198,7 +198,7 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
   }
 
   // save ino to parent mapping
-  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+  parent_cache_->Upsert(response.inode().ino(), parent,
                         response.inode().version());
 
   out_attr = ToAttr(response.inode());
@@ -206,17 +206,16 @@ Status MDSClient::Lookup(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
-                        uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        Attr& out_attr) {
+Status MDSClient::MkNod(uint64_t parent, const std::string& name, uint32_t uid,
+                        uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::MkNodRequest request;
   pb::mdsv2::MkNodResponse response;
 
   request.set_fs_id(fs_id_);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
   request.set_mode(mode);
   request.set_uid(uid);
@@ -230,7 +229,7 @@ Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+  parent_cache_->Upsert(response.inode().ino(), parent,
                         response.inode().version());
 
   out_attr = ToAttr(response.inode());
@@ -238,18 +237,17 @@ Status MDSClient::MkNod(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
-                        uint32_t uid, uint32_t gid, mode_t mode, dev_t rdev,
-                        Attr& out_attr) {
+Status MDSClient::MkDir(uint64_t parent, const std::string& name, uint32_t uid,
+                        uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::MkDirRequest request;
   pb::mdsv2::MkDirResponse response;
 
   request.set_fs_id(fs_id_);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
   request.set_mode(mode);
   request.set_uid(uid);
@@ -263,7 +261,7 @@ Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+  parent_cache_->Upsert(response.inode().ino(), parent,
                         response.inode().version());
 
   out_attr = ToAttr(response.inode());
@@ -271,16 +269,16 @@ Status MDSClient::MkDir(uint64_t parent_ino, const std::string& name,
   return Status::OK();
 }
 
-Status MDSClient::RmDir(uint64_t parent_ino, const std::string& name) {
+Status MDSClient::RmDir(uint64_t parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::RmDirRequest request;
   pb::mdsv2::RmDirResponse response;
 
   request.set_fs_id(fs_id_);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
 
   auto status = SendRequest(endpoint, "MDSService", "RmDir", request, response);
@@ -367,18 +365,18 @@ Status MDSClient::Release(uint64_t ino, const std::string& session_id) {
   return Status::OK();
 }
 
-Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
+Status MDSClient::Link(uint64_t ino, uint64_t new_parent,
                        const std::string& new_name, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(new_parent_ino);
+  auto endpoint = GetEndPointByParentIno(new_parent);
 
   pb::mdsv2::LinkRequest request;
   pb::mdsv2::LinkResponse response;
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
-  request.set_new_parent_ino(new_parent_ino);
+  request.set_new_parent(new_parent);
   request.set_new_name(new_name);
 
   auto status = SendRequest(endpoint, "MDSService", "Link", request, response);
@@ -386,7 +384,7 @@ Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), new_parent_ino,
+  parent_cache_->Upsert(response.inode().ino(), new_parent,
                         response.inode().version());
 
   out_attr = ToAttr(response.inode());
@@ -394,16 +392,16 @@ Status MDSClient::Link(uint64_t ino, uint64_t new_parent_ino,
   return Status::OK();
 }
 
-Status MDSClient::UnLink(uint64_t parent_ino, const std::string& name) {
+Status MDSClient::UnLink(uint64_t parent, const std::string& name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::UnLinkRequest request;
   pb::mdsv2::UnLinkResponse response;
 
   request.set_fs_id(fs_id_);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
 
   auto status =
@@ -414,12 +412,12 @@ Status MDSClient::UnLink(uint64_t parent_ino, const std::string& name) {
   return Status::OK();
 }
 
-Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
+Status MDSClient::Symlink(uint64_t parent, const std::string& name,
                           uint32_t uid, uint32_t gid,
                           const std::string& symlink, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(parent_ino);
+  auto endpoint = GetEndPointByParentIno(parent);
 
   pb::mdsv2::SymlinkRequest request;
   pb::mdsv2::SymlinkResponse response;
@@ -427,7 +425,7 @@ Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
   request.set_fs_id(fs_id_);
   request.set_symlink(symlink);
 
-  request.set_new_parent_ino(parent_ino);
+  request.set_new_parent(parent);
   request.set_new_name(name);
   request.set_uid(uid);
   request.set_gid(gid);
@@ -438,7 +436,7 @@ Status MDSClient::Symlink(uint64_t parent_ino, const std::string& name,
     return status;
   }
 
-  parent_cache_->Upsert(response.inode().ino(), parent_ino,
+  parent_cache_->Upsert(response.inode().ino(), parent,
                         response.inode().version());
 
   out_attr = ToAttr(response.inode());
@@ -642,19 +640,19 @@ Status MDSClient::ListXAttr(uint64_t ino,
   return Status::OK();
 }
 
-Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
-                         uint64_t new_parent_ino, const std::string& new_name) {
+Status MDSClient::Rename(uint64_t old_parent, const std::string& old_name,
+                         uint64_t new_parent, const std::string& new_name) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint = GetEndPointByParentIno(new_parent_ino);
+  auto endpoint = GetEndPointByParentIno(new_parent);
 
   pb::mdsv2::RenameRequest request;
   pb::mdsv2::RenameResponse response;
 
   request.set_fs_id(fs_id_);
-  request.set_old_parent_ino(old_parent_ino);
+  request.set_old_parent(old_parent);
   request.set_old_name(old_name);
-  request.set_new_parent_ino(new_parent_ino);
+  request.set_new_parent(new_parent);
   request.set_new_name(new_name);
 
   auto status =
@@ -663,8 +661,8 @@ Status MDSClient::Rename(uint64_t old_parent_ino, const std::string& old_name,
     return status;
   }
 
-  parent_cache_->Upsert(old_parent_ino, response.old_parent_version());
-  parent_cache_->Upsert(new_parent_ino, response.new_parent_version());
+  parent_cache_->Upsert(old_parent, response.old_parent_version());
+  parent_cache_->Upsert(new_parent, response.new_parent_version());
 
   return Status::OK();
 }

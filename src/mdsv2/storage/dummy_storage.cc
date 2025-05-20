@@ -16,6 +16,7 @@
 
 #include "bthread/mutex.h"
 #include "dingofs/error.pb.h"
+#include "mdsv2/common/helper.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -160,6 +161,10 @@ Status DummyStorage::Delete(const std::vector<std::string>& keys) {
 }
 
 TxnUPtr DummyStorage::NewTxn() { return std::make_unique<DummyTxn>(this); }
+
+DummyTxn::DummyTxn(DummyStorage* storage) : storage_(storage) { txn_id_ = Helper::TimestampNs(); }
+
+int64_t DummyTxn::ID() const { return txn_id_; }
 
 Status DummyTxn::Put(const std::string& key, const std::string& value) {
   return storage_->Put(KVStorage::WriteOption{}, key, value);

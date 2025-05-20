@@ -140,7 +140,8 @@ class BlockAccesserImpl : public BlockAccesser {
   std::unique_ptr<AsyncRequestInflightBytesThrottle> inflight_bytes_throttle_;
 };
 
-using BlockAccesserPtr = std::shared_ptr<BlockAccesser>;
+using BlockAccesserSPtr = std::shared_ptr<BlockAccesser>;
+using BlockAccesserUPtr = std::unique_ptr<BlockAccesser>;
 
 }  // namespace dataaccess
 }  // namespace dingofs

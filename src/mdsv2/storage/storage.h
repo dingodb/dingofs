@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDV2_STORAGE_H_
 #define DINGOFS_MDV2_STORAGE_H_
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -97,6 +98,7 @@ class Txn {
  public:
   virtual ~Txn() = default;
 
+  virtual int64_t ID() const = 0;
   virtual Status Put(const std::string& key, const std::string& value) = 0;
   virtual Status PutIfAbsent(const std::string& key, const std::string& value) = 0;
   virtual Status Delete(const std::string& key) = 0;

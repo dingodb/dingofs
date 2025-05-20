@@ -15,8 +15,10 @@
 #include "mdsv2/client/mds.h"
 
 #include <fcntl.h>
+#include <sys/types.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -35,38 +37,58 @@ bool MDSClient::Init(const std::string& mds_addr) {
   return interaction_->Init(mds_addr);
 }
 
-void MDSClient::GetMdsList() {
-  pb::mdsv2::GetMDSListRequest request;
-  pb::mdsv2::GetMDSListResponse response;
+HeartbeatResponse MDSClient::Heartbeat(uint32_t mds_id) {
+  HeartbeatRequest request;
+  HeartbeatResponse response;
+
+  request.set_role(pb::mdsv2::Role::ROLE_MDS);
+  auto* mds = request.mutable_mds();
+  mds->set_id(mds_id);
+  mds->mutable_location()->set_host("127.0.0.1");
+  mds->mutable_location()->set_port(10000);
+  mds->set_state(pb::mdsv2::MDS::NORMAL);
+  mds->set_register_time_ms(Helper::TimestampMs());
+  mds->set_last_online_time_ms(Helper::TimestampMs());
+
+  interaction_->SendRequest("MDSService", "Heartbeat", request, response);
+
+  return response;
+}
+
+GetMDSListResponse MDSClient::GetMdsList() {
+  GetMDSListRequest request;
+  GetMDSListResponse response;
 
   interaction_->SendRequest("MDSService", "GetMDSList", request, response);
   for (const auto& mds : response.mdses()) {
     DINGO_LOG(INFO) << "mds: " << mds.ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::CreateFs(const std::string& fs_name, const CreateFsParams& params) {
+CreateFsResponse MDSClient::CreateFs(const std::string& fs_name, const CreateFsParams& params) {
+  CreateFsRequest request;
+  CreateFsResponse response;
+
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
-    return;
+    return response;
   }
 
   if (params.s3_endpoint.empty() || params.s3_ak.empty() || params.s3_sk.empty() || params.s3_bucketname.empty()) {
     DINGO_LOG(ERROR) << "s3 info is empty";
-    return;
+    return response;
   }
 
   if (params.chunk_size == 0) {
     DINGO_LOG(ERROR) << "chunk_size is 0";
-    return;
+    return response;
   }
   if (params.block_size == 0) {
     DINGO_LOG(ERROR) << "block_size is 0";
-    return;
+    return response;
   }
-
-  pb::mdsv2::CreateFsRequest request;
-  pb::mdsv2::CreateFsResponse response;
 
   request.set_fs_name(fs_name);
   request.set_block_size(params.block_size);
@@ -103,16 +125,70 @@ void MDSClient::CreateFs(const std::string& fs_name, const CreateFsParams& param
       DINGO_LOG(ERROR) << "CreateFs fail, error: " << response.ShortDebugString();
     }
   }
+
+  return response;
 }
 
-void MDSClient::DeleteFs(const std::string& fs_name, bool is_force) {
-  if (fs_name.empty()) {
-    DINGO_LOG(ERROR) << "fs_name is empty";
-    return;
+// message MountPoint {
+//   string client_id = 1;
+//   string hostname = 2;
+//   uint32 port = 3;
+//   string path = 4;
+//   bool cto = 5;
+// }
+
+MountFsResponse MDSClient::MountFs(const std::string& fs_name, const std::string& client_id) {
+  MountFsRequest request;
+  MountFsResponse response;
+
+  request.set_fs_name(fs_name);
+  auto* mountpoint = request.mutable_mount_point();
+  mountpoint->set_client_id(client_id);
+  mountpoint->set_hostname("127.0.0.1");
+  mountpoint->set_port(10000);
+  mountpoint->set_path("/mnt/dingo");
+
+  interaction_->SendRequest("MDSService", "MountFs", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "MountFs success";
+  } else {
+    DINGO_LOG(ERROR) << "MountFs fail, error: " << response.ShortDebugString();
   }
 
-  pb::mdsv2::DeleteFsRequest request;
-  pb::mdsv2::DeleteFsResponse response;
+  return response;
+}
+
+UmountFsResponse MDSClient::UmountFs(const std::string& fs_name, const std::string& client_id) {
+  UmountFsRequest request;
+  UmountFsResponse response;
+
+  request.set_fs_name(fs_name);
+  auto* mountpoint = request.mutable_mount_point();
+  mountpoint->set_client_id(client_id);
+  mountpoint->set_hostname("127.0.0.1");
+  mountpoint->set_port(10000);
+  mountpoint->set_path("/mnt/dingo");
+
+  interaction_->SendRequest("MDSService", "UmountFs", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "MountFs success";
+  } else {
+    DINGO_LOG(ERROR) << "MountFs fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+DeleteFsResponse MDSClient::DeleteFs(const std::string& fs_name, bool is_force) {
+  DeleteFsRequest request;
+  DeleteFsResponse response;
+
+  if (fs_name.empty()) {
+    DINGO_LOG(ERROR) << "fs_name is empty";
+    return response;
+  }
 
   request.set_fs_name(fs_name);
   request.set_is_force(is_force);
@@ -122,11 +198,13 @@ void MDSClient::DeleteFs(const std::string& fs_name, bool is_force) {
   interaction_->SendRequest("MDSService", "DeleteFs", request, response);
 
   DINGO_LOG(INFO) << "DeleteFs response: " << response.ShortDebugString();
+
+  return response;
 }
 
-void MDSClient::UpdateFs(const std::string& fs_name) {
-  pb::mdsv2::UpdateFsInfoRequest request;
-  pb::mdsv2::UpdateFsInfoResponse response;
+UpdateFsInfoResponse MDSClient::UpdateFs(const std::string& fs_name) {
+  UpdateFsInfoRequest request;
+  UpdateFsInfoResponse response;
 
   request.set_fs_name(fs_name);
 
@@ -135,16 +213,18 @@ void MDSClient::UpdateFs(const std::string& fs_name) {
   request.mutable_fs_info()->CopyFrom(fs_info);
 
   interaction_->SendRequest("MDSService", "UpdateFsInfo", request, response);
+
+  return response;
 }
 
-void MDSClient::GetFs(const std::string& fs_name) {
+GetFsInfoResponse MDSClient::GetFs(const std::string& fs_name) {
   if (fs_name.empty()) {
     DINGO_LOG(ERROR) << "fs_name is empty";
-    return;
+    return {};
   }
 
-  pb::mdsv2::GetFsInfoRequest request;
-  pb::mdsv2::GetFsInfoResponse response;
+  GetFsInfoRequest request;
+  GetFsInfoResponse response;
 
   request.set_fs_name(fs_name);
 
@@ -153,25 +233,46 @@ void MDSClient::GetFs(const std::string& fs_name) {
   interaction_->SendRequest("MDSService", "GetFsInfo", request, response);
 
   DINGO_LOG(INFO) << "GetFsInfo response: " << response.ShortDebugString();
+
+  return response;
 }
 
-void MDSClient::ListFs() {
-  pb::mdsv2::ListFsInfoRequest request;
-  pb::mdsv2::ListFsInfoResponse response;
+ListFsInfoResponse MDSClient::ListFs() {
+  ListFsInfoRequest request;
+  ListFsInfoResponse response;
 
   interaction_->SendRequest("MDSService", "ListFsInfo", request, response);
 
   for (const auto& fs_info : response.fs_infos()) {
     DINGO_LOG(INFO) << "fs_info: " << fs_info.ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::MkDir(uint32_t fs_id, uint64_t parent, const std::string& name) {
-  pb::mdsv2::MkDirRequest request;
-  pb::mdsv2::MkDirResponse response;
+RefreshFsInfoResponse MDSClient::RefreshFsInfo(const std::string& fs_name) {
+  RefreshFsInfoRequest request;
+  RefreshFsInfoResponse response;
+
+  request.set_fs_name(fs_name);
+
+  interaction_->SendRequest("MDSService", "RefreshFsInfo", request, response);
+
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "RefreshFsInfo success";
+  } else {
+    DINGO_LOG(ERROR) << "RefreshFsInfo fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+MkDirResponse MDSClient::MkDir(uint32_t fs_id, Ino parent, const std::string& name) {
+  MkDirRequest request;
+  MkDirResponse response;
 
   request.set_fs_id(fs_id);
-  request.set_parent_ino(parent);
+  request.set_parent(parent);
   request.set_name(name);
   request.set_length(4096);
   request.set_uid(0);
@@ -186,6 +287,8 @@ void MDSClient::MkDir(uint32_t fs_id, uint64_t parent, const std::string& name) 
   } else {
     DINGO_LOG(ERROR) << "MkDir fail, error: " << response.ShortDebugString();
   }
+
+  return response;
 }
 
 void MDSClient::BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
@@ -197,12 +300,41 @@ void MDSClient::BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, 
   }
 }
 
-void MDSClient::MkNod(uint32_t fs_id, uint64_t parent_ino, const std::string& name) {
-  pb::mdsv2::MkNodRequest request;
-  pb::mdsv2::MkNodResponse response;
+RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
+  RmDirRequest request;
+  RmDirResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  request.set_name(name);
+
+  interaction_->SendRequest("MDSService", "RmDir", request, response);
+
+  return response;
+}
+
+ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool with_attr, bool is_refresh) {
+  ReadDirRequest request;
+  ReadDirResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_last_name(last_name);
+  request.set_limit(100);
+  request.set_with_attr(with_attr);
+  request.set_is_refresh(is_refresh);
+
+  interaction_->SendRequest("MDSService", "ReadDir", request, response);
+
+  return response;
+}
+
+MkNodResponse MDSClient::MkNod(uint32_t fs_id, Ino parent, const std::string& name) {
+  MkNodRequest request;
+  MkNodResponse response;
 
   request.set_fs_id(fs_id);
-  request.set_parent_ino(parent_ino);
+  request.set_parent(parent);
   request.set_name(name);
   request.set_length(0);
   request.set_uid(0);
@@ -217,6 +349,8 @@ void MDSClient::MkNod(uint32_t fs_id, uint64_t parent_ino, const std::string& na
   } else {
     DINGO_LOG(ERROR) << "MkNode fail, error: " << response.ShortDebugString();
   }
+
+  return response;
 }
 
 void MDSClient::BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
@@ -228,9 +362,9 @@ void MDSClient::BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, 
   }
 }
 
-void MDSClient::GetDentry(uint32_t fs_id, uint64_t parent, const std::string& name) {
-  pb::mdsv2::GetDentryRequest request;
-  pb::mdsv2::GetDentryResponse response;
+GetDentryResponse MDSClient::GetDentry(uint32_t fs_id, Ino parent, const std::string& name) {
+  GetDentryRequest request;
+  GetDentryResponse response;
 
   request.set_fs_id(fs_id);
   request.set_parent(parent);
@@ -241,11 +375,13 @@ void MDSClient::GetDentry(uint32_t fs_id, uint64_t parent, const std::string& na
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     DINGO_LOG(INFO) << "dentry: " << response.dentry().ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::ListDentry(uint32_t fs_id, uint64_t parent, bool is_only_dir) {
-  pb::mdsv2::ListDentryRequest request;
-  pb::mdsv2::ListDentryResponse response;
+ListDentryResponse MDSClient::ListDentry(uint32_t fs_id, Ino parent, bool is_only_dir) {
+  ListDentryRequest request;
+  ListDentryResponse response;
 
   request.set_fs_id(fs_id);
   request.set_parent(parent);
@@ -256,11 +392,13 @@ void MDSClient::ListDentry(uint32_t fs_id, uint64_t parent, bool is_only_dir) {
   for (const auto& dentry : response.dentries()) {
     DINGO_LOG(INFO) << "dentry: " << dentry.ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::GetInode(uint32_t fs_id, uint64_t ino) {
-  pb::mdsv2::GetInodeRequest request;
-  pb::mdsv2::GetInodeResponse response;
+GetInodeResponse MDSClient::GetInode(uint32_t fs_id, Ino ino) {
+  GetInodeRequest request;
+  GetInodeResponse response;
 
   request.set_fs_id(fs_id);
   request.set_ino(ino);
@@ -270,11 +408,13 @@ void MDSClient::GetInode(uint32_t fs_id, uint64_t ino) {
   if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
     DINGO_LOG(INFO) << "inode: " << response.inode().ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos) {
-  pb::mdsv2::BatchGetInodeRequest request;
-  pb::mdsv2::BatchGetInodeResponse response;
+BatchGetInodeResponse MDSClient::BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos) {
+  BatchGetInodeRequest request;
+  BatchGetInodeResponse response;
 
   request.set_fs_id(fs_id);
   for (auto ino : inos) {
@@ -286,11 +426,13 @@ void MDSClient::BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos) 
   for (const auto& inode : response.inodes()) {
     DINGO_LOG(INFO) << "inode: " << inode.ShortDebugString();
   }
+
+  return response;
 }
 
-void MDSClient::BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos) {
-  pb::mdsv2::BatchGetXAttrRequest request;
-  pb::mdsv2::BatchGetXAttrResponse response;
+BatchGetXAttrResponse MDSClient::BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos) {
+  BatchGetXAttrRequest request;
+  BatchGetXAttrResponse response;
 
   request.set_fs_id(fs_id);
   for (auto ino : inos) {
@@ -302,6 +444,8 @@ void MDSClient::BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos) 
   for (const auto& xattr : response.xattrs()) {
     DINGO_LOG(INFO) << "xattr: " << xattr.ShortDebugString();
   }
+
+  return response;
 }
 
 void MDSClient::SetFsStats(const std::string& fs_name) {
@@ -364,6 +508,146 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
   for (const auto& [time_s, stats] : sorted_stats) {
     DINGO_LOG(INFO) << fmt::format("time: {} stats: {}.", Helper::FormatTime(time_s), stats.ShortDebugString());
   }
+}
+
+LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
+  LookupRequest request;
+  LookupResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  request.set_name(name);
+
+  interaction_->SendRequest("MDSService", "Lookup", request, response);
+
+  return response;
+}
+
+OpenResponse MDSClient::Open(Ino ino) {
+  OpenRequest request;
+  OpenResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_flags(O_RDWR);
+
+  interaction_->SendRequest("MDSService", "Open", request, response);
+
+  return response;
+}
+
+ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
+  ReleaseRequest request;
+  ReleaseResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_session_id(session_id);
+
+  interaction_->SendRequest("MDSService", "Release", request, response);
+
+  return response;
+}
+
+LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name) {
+  LinkRequest request;
+  LinkResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_new_parent(new_parent);
+  request.set_new_name(new_name);
+
+  interaction_->SendRequest("MDSService", "Link", request, response);
+
+  return response;
+}
+
+UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
+  UnLinkRequest request;
+  UnLinkResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_parent(parent);
+  request.set_name(name);
+
+  interaction_->SendRequest("MDSService", "UnLink", request, response);
+
+  return response;
+}
+
+SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const std::string& symlink) {
+  SymlinkRequest request;
+  SymlinkResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_new_parent(parent);
+  request.set_new_name(name);
+  request.set_symlink(symlink);
+  request.set_uid(0);
+  request.set_gid(0);
+
+  interaction_->SendRequest("MDSService", "Symlink", request, response);
+  return response;
+}
+
+ReadLinkResponse MDSClient::ReadLink(Ino ino) {
+  ReadLinkRequest request;
+  ReadLinkResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+
+  interaction_->SendRequest("MDSService", "ReadLink", request, response);
+
+  return response;
+}
+
+AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id) {
+  AllocSliceIdRequest request;
+  AllocSliceIdResponse response;
+
+  request.set_alloc_num(alloc_num);
+  request.set_min_slice_id(min_slice_id);
+
+  interaction_->SendRequest("MDSService", "AllocSliceId", request, response);
+
+  return response;
+}
+
+WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
+  WriteSliceRequest request;
+  WriteSliceResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_chunk_index(chunk_index);
+
+  const uint64_t len = 1024;
+  for (int i = 0; i < 10; i++) {
+    auto* slice = request.add_slices();
+    slice->set_id(i + 100000);
+    slice->set_offset(i * len);
+    slice->set_len(len);
+    slice->set_size(len);
+  }
+
+  interaction_->SendRequest("MDSService", "WriteSlice", request, response);
+
+  return response;
+}
+
+ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
+  ReadSliceRequest request;
+  ReadSliceResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_chunk_index(chunk_index);
+
+  interaction_->SendRequest("MDSService", "ReadSlice", request, response);
+
+  return response;
 }
 
 }  // namespace client

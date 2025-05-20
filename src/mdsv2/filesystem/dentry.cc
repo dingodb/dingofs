@@ -19,15 +19,15 @@
 namespace dingofs {
 namespace mdsv2 {
 
-Dentry::Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type,
-               uint32_t flag, InodeSPtr inode)
-    : fs_id_(fs_id), name_(name), parent_ino_(parent_ino), ino_(ino), type_(type), flag_(flag), inode_(inode) {}
+Dentry::Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mdsv2::FileType type, uint32_t flag,
+               InodeSPtr inode)
+    : fs_id_(fs_id), name_(name), parent_(parent), ino_(ino), type_(type), flag_(flag), inode_(inode) {}
 
 Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodeSPtr inode)
     : name_(dentry.name()),
       fs_id_(dentry.fs_id()),
       ino_(dentry.ino()),
-      parent_ino_(dentry.parent_ino()),
+      parent_(dentry.parent()),
       type_(dentry.type()),
       flag_(dentry.flag()),
       inode_(inode) {}
@@ -35,8 +35,8 @@ Dentry::Dentry(const pb::mdsv2::Dentry& dentry, InodeSPtr inode)
 Dentry::Dentry(const Dentry& dentry, InodeSPtr inode)
     : name_(dentry.Name()),
       fs_id_(dentry.FsId()),
-      ino_(dentry.Ino()),
-      parent_ino_(dentry.ParentIno()),
+      ino_(dentry.INo()),
+      parent_(dentry.ParentIno()),
       type_(dentry.Type()),
       flag_(dentry.Flag()),
       inode_(inode) {}
@@ -48,7 +48,7 @@ DentryType Dentry::CopyTo() const {
 
   dentry.set_fs_id(fs_id_);
   dentry.set_ino(ino_);
-  dentry.set_parent_ino(parent_ino_);
+  dentry.set_parent(parent_);
   dentry.set_name(name_);
   dentry.set_type(type_);
   dentry.set_flag(flag_);

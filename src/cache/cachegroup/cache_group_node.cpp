@@ -65,7 +65,7 @@ using dingofs::base::string::StrFormat;
 using dingofs::cache::blockcache::BlockCacheImpl;
 using dingofs::cache::blockcache::BlockKey;
 using dingofs::cache::utils::BlockAccesserPoolImpl;
-using dingofs::dataaccess::BlockAccesserPtr;
+using dingofs::dataaccess::BlockAccesserSPtr;
 using dingofs::stub::common::MdsOption;
 using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClientImpl;
@@ -186,7 +186,7 @@ Status CacheGroupNodeImpl::HandleBlockMissed(const BlockKey& block_key,
                                              size_t block_size, off_t offset,
                                              size_t length,
                                              butil::IOBuf* buffer) {
-  BlockAccesserPtr block_accesser;
+  BlockAccesserSPtr block_accesser;
   auto status = block_accesser_pool_->Get(block_key.fs_id, block_accesser);
   if (!status.ok()) {
     return status;

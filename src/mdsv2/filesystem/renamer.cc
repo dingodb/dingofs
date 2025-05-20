@@ -26,8 +26,8 @@ namespace mdsv2 {
 void RenameTask::Run() {
   uint64_t old_parent_version;
   uint64_t new_parent_version;
-  auto status = fs_->Rename(*ctx_, old_parent_ino_, old_name_, new_parent_ino_, new_name_, old_parent_version,
-                            new_parent_version);
+  auto status =
+      fs_->Rename(*ctx_, old_parent_, old_name_, new_parent_, new_name_, old_parent_version, new_parent_version);
 
   if (cb_ != nullptr) {
     cb_(status);
@@ -52,10 +52,10 @@ bool Renamer::Destroy() {
   return true;
 }
 
-Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, uint64_t old_parent_ino, const std::string& old_name,
+Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, uint64_t old_parent, const std::string& old_name,
                         uint64_t new_parent_ino, const std::string& new_name, uint64_t& old_parent_version,
                         uint64_t& new_parent_version) {
-  auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent_ino, old_name, new_parent_ino, new_name, nullptr);
+  auto task = std::make_shared<RenameTask>(fs, &ctx, old_parent, old_name, new_parent_ino, new_name, nullptr);
   bool ret = Execute(task);
   if (!ret) {
     return Status(pb::error::EINTERNAL, "commit task fail");

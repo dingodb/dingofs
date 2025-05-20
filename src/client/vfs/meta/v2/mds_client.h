@@ -66,13 +66,13 @@ class MDSClient {
   Status UmountFs(const std::string& name,
                   const pb::mdsv2::MountPoint& mount_point);
 
-  Status Lookup(uint64_t parent_ino, const std::string& name, Attr& out_attr);
+  Status Lookup(uint64_t parent, const std::string& name, Attr& out_attr);
 
-  Status MkNod(uint64_t parent_ino, const std::string& name, uint32_t uid,
+  Status MkNod(uint64_t parent, const std::string& name, uint32_t uid,
                uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
-  Status MkDir(uint64_t parent_ino, const std::string& name, uint32_t uid,
+  Status MkDir(uint64_t parent, const std::string& name, uint32_t uid,
                uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
-  Status RmDir(uint64_t parent_ino, const std::string& name);
+  Status RmDir(uint64_t parent, const std::string& name);
 
   Status ReadDir(uint64_t ino, const std::string& last_name, uint32_t limit,
                  bool with_attr, std::vector<DirEntry>& entries);
@@ -80,10 +80,10 @@ class MDSClient {
   Status Open(uint64_t ino, int flags, std::string& session_id);
   Status Release(uint64_t ino, const std::string& session_id);
 
-  Status Link(uint64_t ino, uint64_t new_parent_ino,
-              const std::string& new_name, Attr& out_attr);
-  Status UnLink(uint64_t parent_ino, const std::string& name);
-  Status Symlink(uint64_t parent_ino, const std::string& name, uint32_t uid,
+  Status Link(uint64_t ino, uint64_t new_parent, const std::string& new_name,
+              Attr& out_attr);
+  Status UnLink(uint64_t parent, const std::string& name);
+  Status Symlink(uint64_t parent, const std::string& name, uint32_t uid,
                  uint32_t gid, const std::string& symlink, Attr& out_attr);
   Status ReadLink(uint64_t ino, std::string& symlink);
 
@@ -94,8 +94,8 @@ class MDSClient {
                   const std::string& value);
   Status ListXAttr(uint64_t ino, std::map<std::string, std::string>& xattrs);
 
-  Status Rename(uint64_t old_parent_ino, const std::string& old_name,
-                uint64_t new_parent_ino, const std::string& new_name);
+  Status Rename(uint64_t old_parent, const std::string& old_name,
+                uint64_t new_parent, const std::string& new_name);
 
   Status NewSliceId(uint64_t* id);
   Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
@@ -103,7 +103,7 @@ class MDSClient {
 
  private:
   EndPoint GetEndPointByIno(int64_t ino);
-  EndPoint GetEndPointByParentIno(int64_t parent_ino);
+  EndPoint GetEndPointByParentIno(int64_t parent);
 
   uint64_t GetInodeVersion(int64_t ino);
 

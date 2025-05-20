@@ -79,9 +79,9 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
 
       } else {
         // dentry
-        uint64_t parent_ino = 0;
+        uint64_t parent = 0;
         std::string name;
-        MetaCodec::DecodeDentryKey(kv.key, fs_id, parent_ino, name);
+        MetaCodec::DecodeDentryKey(kv.key, fs_id, parent, name);
         pb::mdsv2::Dentry dentry = MetaCodec::DecodeDentryValue(kv.value);
 
         // DINGO_LOG(INFO) << fmt::format("dentry({}).", dentry.ShortDebugString());
@@ -97,12 +97,12 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
         }
         node_map.insert({dentry.ino(), item});
 
-        it = node_map.find(parent_ino);
+        it = node_map.find(parent);
         if (it != node_map.end()) {
           it->second->children.push_back(item);
         } else {
-          if (parent_ino != 0) {
-            DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent_ino, fs_id, name);
+          if (parent != 0) {
+            DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent, fs_id, name);
           }
         }
       }

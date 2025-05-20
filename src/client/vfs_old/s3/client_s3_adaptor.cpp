@@ -40,11 +40,11 @@ namespace client {
 
 using cache::blockcache::BlockCache;
 using common::S3ClientAdaptorOption;
+using dataaccess::BlockAccesserSPtr;
 using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;
 using utils::Thread;
-using dataaccess::BlockAccesserPtr;
 
 using pb::mds::FSStatusCode;
 using pb::metaserver::S3ChunkInfo;

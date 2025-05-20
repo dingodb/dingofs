@@ -34,16 +34,16 @@ using DentrySetSPtr = std::shared_ptr<DentrySet>;
 class Dentry {
  public:
   Dentry() = default;
-  Dentry(uint32_t fs_id, const std::string& name, uint64_t parent_ino, uint64_t ino, pb::mdsv2::FileType type,
-         uint32_t flag, InodeSPtr inode = nullptr);
+  Dentry(uint32_t fs_id, const std::string& name, Ino parent, Ino ino, pb::mdsv2::FileType type, uint32_t flag,
+         InodeSPtr inode = nullptr);
   Dentry(const pb::mdsv2::Dentry& dentry, InodeSPtr inode = nullptr);
   Dentry(const Dentry& dentry, InodeSPtr inode);
   ~Dentry();
 
   const std::string& Name() const { return name_; }
   uint32_t FsId() const { return fs_id_; }
-  uint64_t Ino() const { return ino_; }
-  uint64_t ParentIno() const { return parent_ino_; }
+  Ino INo() const { return ino_; }
+  Ino ParentIno() const { return parent_; }
   pb::mdsv2::FileType Type() const { return type_; }
   uint32_t Flag() const { return flag_; }
 
@@ -54,8 +54,8 @@ class Dentry {
  private:
   std::string name_;
   uint32_t fs_id_;
-  uint64_t ino_;
-  uint64_t parent_ino_;
+  Ino ino_;
+  Ino parent_;
   pb::mdsv2::FileType type_;
   uint32_t flag_;
 

@@ -38,7 +38,7 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-using dingofs::dataaccess::BlockAccesserPtr;
+using dingofs::dataaccess::BlockAccesserSPtr;
 using dingofs::pb::mds::FSStatusCode;
 using dingofs::stub::rpcclient::MdsClient;
 using dingofs::utils::ReadLockGuard;
@@ -50,7 +50,7 @@ BlockAccesserPoolImpl::BlockAccesserPoolImpl(
     : mds_client_(mds_client) {}
 
 Status BlockAccesserPoolImpl::Get(uint32_t fs_id,
-                                  BlockAccesserPtr& block_accesser) {
+                                  BlockAccesserSPtr& block_accesser) {
   auto status = DoGet(fs_id, block_accesser);
   if (status.ok()) {
     return status;
@@ -64,7 +64,7 @@ Status BlockAccesserPoolImpl::Get(uint32_t fs_id,
 }
 
 Status BlockAccesserPoolImpl::DoGet(uint32_t fs_id,
-                                    BlockAccesserPtr& block_accesser) {
+                                    BlockAccesserSPtr& block_accesser) {
   ReadLockGuard lk(rwlock_);
   auto iter = block_accessers_.find(fs_id);
   if (iter != block_accessers_.end()) {
@@ -75,13 +75,13 @@ Status BlockAccesserPoolImpl::DoGet(uint32_t fs_id,
 }
 
 void BlockAccesserPoolImpl::DoInsert(uint32_t fs_id,
-                                     BlockAccesserPtr data_accesser) {
+                                     BlockAccesserSPtr data_accesser) {
   WriteLockGuard lk(rwlock_);
   block_accessers_.emplace(fs_id, data_accesser);
 }
 
-bool BlockAccesserPoolImpl::NewBlockAccesser(uint32_t fs_id,
-                                             BlockAccesserPtr& block_accesser) {
+bool BlockAccesserPoolImpl::NewBlockAccesser(
+    uint32_t fs_id, BlockAccesserSPtr& block_accesser) {
   pb::mds::FsInfo fs_info;
   FSStatusCode code = mds_client_->GetFsInfo(fs_id, &fs_info);
   if (code != FSStatusCode::OK) {
@@ -99,7 +99,8 @@ bool BlockAccesserPoolImpl::NewBlockAccesser(uint32_t fs_id,
   const auto& storage_info = fs_info.storage_info();
   FillBlockAccessOption(storage_info, &block_access_opt);
 
-  auto accesser = std::make_unique<dataaccess::BlockAccesserImpl>(block_access_opt);
+  auto accesser =
+      std::make_unique<dataaccess::BlockAccesserImpl>(block_access_opt);
   Status s = accesser->Init();
   if (s.ok()) {
     block_accesser = std::move(accesser);

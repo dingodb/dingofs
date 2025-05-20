@@ -23,9 +23,14 @@
 namespace dingofs {
 namespace dataaccess {
 
-std::unique_ptr<dataaccess::BlockAccesser>
-BlockAccesserFactory::NewBlockAccesser(const BlockAccessOptions& options) {
+BlockAccesserUPtr BlockAccesserFactory::NewBlockAccesser(
+    const BlockAccessOptions& options) {
   return std::make_unique<dataaccess::BlockAccesserImpl>(options);
+}
+
+BlockAccesserSPtr BlockAccesserFactory::NewShareBlockAccesser(
+    const BlockAccessOptions& options) {
+  return std::make_shared<dataaccess::BlockAccesserImpl>(options);
 }
 
 }  // namespace dataaccess

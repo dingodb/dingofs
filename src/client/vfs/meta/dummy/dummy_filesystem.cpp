@@ -318,7 +318,7 @@ static DummyFileSystem::PBDentry GenDentry(uint32_t fs_id, uint64_t parent_ino,
   DummyFileSystem::PBDentry dentry;
   dentry.set_ino(ino);
   dentry.set_name(name);
-  dentry.set_parent_ino(parent_ino);
+  dentry.set_parent(parent_ino);
   dentry.set_fs_id(fs_id);
   dentry.set_type(type);
 

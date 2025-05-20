@@ -192,14 +192,14 @@ Status FileSystem::GetPartition(Context& ctx, uint64_t version, Ino parent, Part
   return Status::OK();
 }
 
-PartitionPtr FileSystem::GetPartitionFromCache(Ino parent_ino) { return partition_cache_.Get(parent_ino); }
+PartitionPtr FileSystem::GetPartitionFromCache(Ino parent) { return partition_cache_.Get(parent); }
 
 std::map<uint64_t, PartitionPtr> FileSystem::GetAllPartitionsFromCache() { return partition_cache_.GetAll(); }
 
-Status FileSystem::GetPartitionFromStore(Ino parent_ino, const std::string& reason, PartitionPtr& out_partition) {
+Status FileSystem::GetPartitionFromStore(Ino parent, const std::string& reason, PartitionPtr& out_partition) {
   // scan dentry from store
   Range range;
-  MetaCodec::EncodeDentryRange(fs_id_, parent_ino, range.start_key, range.end_key);
+  MetaCodec::EncodeDentryRange(fs_id_, parent, range.start_key, range.end_key);
 
   std::vector<KeyValue> kvs;
   auto status = kv_storage_->Scan(range, kvs);
@@ -226,12 +226,12 @@ Status FileSystem::GetPartitionFromStore(Ino parent_ino, const std::string& reas
     partition->PutChild(dentry);
   }
 
-  partition_cache_.Put(parent_ino, partition);
-  inode_cache_.PutInode(parent_ino, parent_inode);
+  partition_cache_.Put(parent, partition);
+  inode_cache_.PutInode(parent, parent_inode);
 
   out_partition = partition;
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch partition({}), reason({}).", fs_id_, parent_ino, reason);
+  DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch partition({}), reason({}).", fs_id_, parent, reason);
 
   return Status::OK();
 }
@@ -299,23 +299,23 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, Part
   Status status;
   do {
     if (bypass_cache) {
-      status = GetInodeFromStore(dentry.Ino(), "Bypass", out_inode);
+      status = GetInodeFromStore(dentry.INo(), "Bypass", out_inode);
       is_fetch = true;
       break;
     }
 
     auto inode = dentry.Inode();
     if (inode == nullptr) {
-      inode = GetInodeFromCache(dentry.Ino());
+      inode = GetInodeFromCache(dentry.INo());
       if (inode == nullptr) {
-        status = GetInodeFromStore(dentry.Ino(), "CacheMiss", out_inode);
+        status = GetInodeFromStore(dentry.INo(), "CacheMiss", out_inode);
         is_fetch = true;
         break;
       }
     }
 
     if (inode->Version() < version) {
-      status = GetInodeFromStore(dentry.Ino(), "OutOfDate", out_inode);
+      status = GetInodeFromStore(dentry.INo(), "OutOfDate", out_inode);
       is_fetch = true;
       break;
     }
@@ -492,13 +492,13 @@ Status FileSystem::CreateRoot() {
   }
 
   inode_cache_.PutInode(inode->Ino(), inode);
-  partition_cache_.Put(dentry.Ino(), Partition::New(inode));
+  partition_cache_.Put(dentry.INo(), Partition::New(inode));
 
   return Status::OK();
 }
 
-Status FileSystem::Lookup(Context& ctx, Ino parent_ino, const std::string& name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] lookup parent_ino({}), name({}).", fs_id_, parent_ino, name);
+Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] lookup parent({}), name({}).", fs_id_, parent, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -507,7 +507,7 @@ Status FileSystem::Lookup(Context& ctx, Ino parent_ino, const std::string& name,
   uint64_t time_ns = Helper::TimestampNs();
 
   PartitionPtr partition;
-  auto status = GetPartition(ctx, parent_ino, partition);
+  auto status = GetPartition(ctx, parent, partition);
   if (!status.ok()) {
     return status;
   }
@@ -525,9 +525,8 @@ Status FileSystem::Lookup(Context& ctx, Ino parent_ino, const std::string& name,
 
   entry_out.attr = inode->Copy();
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] lookup parent_ino({}), name({}) version({}) ptr({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), parent_ino, name, entry_out.attr.version(),
-                                 (void*)inode.get());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] lookup parent({}), name({}) version({}) ptr({}).", fs_id_,
+                                 ElapsedTimeUs(time_ns), parent, name, entry_out.attr.version(), (void*)inode.get());
 
   return Status::OK();
 }
@@ -558,7 +557,7 @@ uint64_t FileSystem::GetMdsIdByIno(Ino ino) {
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mknod parent_ino({}), name({}).", fs_id_, param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mknod parent({}), name({}).", fs_id_, param.parent, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -566,20 +565,20 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
 
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
-  Ino parent_ino = param.parent_ino;
+  Ino parent = param.parent;
 
   // check request
   if (param.name.empty()) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty");
   }
 
-  if (param.parent_ino == 0) {
+  if (param.parent == 0) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id");
   }
 
   // get dentry set
   PartitionPtr partition;
-  auto status = GetPartition(ctx, parent_ino, partition);
+  auto status = GetPartition(ctx, parent, partition);
   if (!status.ok()) {
     return status;
   }
@@ -608,12 +607,12 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   attr.set_nlink(1);
   attr.set_type(pb::mdsv2::FileType::FILE);
   attr.set_rdev(param.rdev);
-  attr.add_parent_inos(parent_ino);
+  attr.add_parents(parent);
 
   auto inode = Inode::New(attr);
 
   // build dentry
-  Dentry dentry(fs_id_, param.name, parent_ino, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent, ino, pb::mdsv2::FileType::FILE, param.flag, inode);
 
   // update backend store
   MkNodOperation operation(trace, dentry, attr);
@@ -710,7 +709,7 @@ Status FileSystem::Release(Context&, Ino ino, const std::string& session_id) {
 // 1. create inode
 // 2. create dentry and update parent inode(nlink/mtime/ctime)
 Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mkdir parent_ino({}), name({}).", fs_id_, param.parent_ino, param.name);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] mkdir parent({}), name({}).", fs_id_, param.parent, param.name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -718,20 +717,20 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
-  Ino parent_ino = param.parent_ino;
+  Ino parent = param.parent;
 
   // check request
   if (param.name.empty()) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "name is empty.");
   }
 
-  if (param.parent_ino == 0) {
+  if (param.parent == 0) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "invalid parent inode id.");
   }
 
   // get parent dentry
   PartitionPtr partition;
-  auto status = GetPartition(ctx, parent_ino, partition);
+  auto status = GetPartition(ctx, parent, partition);
   if (!status.ok()) {
     return status;
   }
@@ -760,12 +759,12 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   attr.set_nlink(kEmptyDirMinLinkNum);
   attr.set_type(pb::mdsv2::FileType::DIRECTORY);
   attr.set_rdev(param.rdev);
-  attr.add_parent_inos(parent_ino);
+  attr.add_parents(parent);
 
   auto inode = Inode::New(attr);
 
   // build dentry
-  Dentry dentry(fs_id_, param.name, parent_ino, ino, pb::mdsv2::FileType::DIRECTORY, param.flag, inode);
+  Dentry dentry(fs_id_, param.name, parent, ino, pb::mdsv2::FileType::DIRECTORY, param.flag, inode);
 
   // update backend store
   MkDirOperation operation(trace, dentry, attr);
@@ -793,8 +792,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::RmDir(Context& ctx, Ino parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] rmdir parent_ino({}), name({}).", fs_id_, parent_ino, name);
+Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] rmdir parent({}), name({}).", fs_id_, parent, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -804,7 +803,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent_ino, const std::string& name) 
   const bool bypass_cache = ctx.IsBypassCache();
 
   PartitionPtr parent_partition;
-  auto status = GetPartition(ctx, parent_ino, parent_partition);
+  auto status = GetPartition(ctx, parent, parent_partition);
   if (!status.ok()) {
     return status;
   }
@@ -814,19 +813,19 @@ Status FileSystem::RmDir(Context& ctx, Ino parent_ino, const std::string& name) 
     return Status(pb::error::ENOT_FOUND, fmt::format("child dentry({}) not found.", name));
   }
 
-  PartitionPtr partition = GetPartitionFromCache(dentry.Ino());
+  PartitionPtr partition = GetPartitionFromCache(dentry.INo());
   if (partition != nullptr) {
     InodeSPtr inode = partition->ParentInode();
     if (inode->Nlink() > kEmptyDirMinLinkNum) {
       return Status(pb::error::ENOT_EMPTY,
-                    fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, inode->Nlink()));
+                    fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, inode->Nlink()));
     }
   }
 
   // check directory is empty
   if (partition->HasChild()) {
     return Status(pb::error::ENOT_EMPTY,
-                  fmt::format("dir({}/{}) is not empty, nlink({}).", parent_ino, name, dentry.Inode()->Nlink()));
+                  fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, dentry.Inode()->Nlink()));
   }
 
   uint64_t time_ns = Helper::TimestampNs();
@@ -848,7 +847,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent_ino, const std::string& name) 
   // update cache
   parent_partition->DeleteChild(name);
   parent_partition->ParentInode()->UpdateIf(std::move(parent_attr));
-  partition_cache_.Delete(dentry.Ino());
+  partition_cache_.Delete(dentry.INo());
 
   return Status::OK();
 }
@@ -873,7 +872,7 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
   for (auto& dentry : dentries) {
     EntryOut entry_out;
     entry_out.name = dentry.Name();
-    entry_out.attr.set_ino(dentry.Ino());
+    entry_out.attr.set_ino(dentry.INo());
 
     if (with_attr) {
       // need inode attr
@@ -895,9 +894,9 @@ Status FileSystem::ReadDir(Context& ctx, Ino ino, const std::string& last_name, 
 // create hard link for file
 // 1. create dentry and update parent inode(nlink/mtime/ctime)
 // 2. update inode(mtime/ctime/nlink)
-Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::string& new_name, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] link ino({}), new_parent_ino({}), new_name({}).", fs_id_, ino,
-                                  new_parent_ino, new_name);
+Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string& new_name, EntryOut& entry_out) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] link ino({}), new_parent({}), new_name({}).", fs_id_, ino, new_parent,
+                                  new_name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -906,7 +905,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::st
   auto& trace = ctx.GetTrace();
 
   PartitionPtr partition;
-  auto status = GetPartition(ctx, new_parent_ino, partition);
+  auto status = GetPartition(ctx, new_parent, partition);
   if (!status.ok()) {
     return status;
   }
@@ -922,7 +921,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::st
   uint32_t fs_id = inode->FsId();
 
   // build dentry
-  Dentry dentry(fs_id, new_name, new_parent_ino, ino, pb::mdsv2::FileType::FILE, 0, inode);
+  Dentry dentry(fs_id, new_name, new_parent, ino, pb::mdsv2::FileType::FILE, 0, inode);
 
   // update backend store
   uint64_t time_ns = Helper::TimestampNs();
@@ -931,7 +930,7 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::st
   status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] link {} -> {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 ino, new_parent_ino, new_name, status.error_str());
+                                 ino, new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -956,8 +955,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent_ino, const std::st
 // delete hard link for file
 // 1. delete dentry and update parent inode(nlink/mtime/ctime)
 // 3. update inode(nlink/mtime/ctime)
-Status FileSystem::UnLink(Context& ctx, Ino parent_ino, const std::string& name) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] unLink parent_ino({}), name({}).", fs_id_, parent_ino, name);
+Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] unLink parent({}), name({}).", fs_id_, parent, name);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
@@ -966,14 +965,14 @@ Status FileSystem::UnLink(Context& ctx, Ino parent_ino, const std::string& name)
   auto& trace = ctx.GetTrace();
 
   PartitionPtr partition;
-  auto status = GetPartition(ctx, parent_ino, partition);
+  auto status = GetPartition(ctx, parent, partition);
   if (!status.ok()) {
     return status;
   }
 
   Dentry dentry;
   if (!partition->GetChild(name, dentry)) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent_ino, name));
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found dentry({}/{})", parent, name));
   }
 
   InodeSPtr inode;
@@ -998,7 +997,7 @@ Status FileSystem::UnLink(Context& ctx, Ino parent_ino, const std::string& name)
   auto& child_attr = result.child_attr;
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] unlink {}/{} finish, nlink({}) status({}).", fs_id_,
-                                 ElapsedTimeUs(time_ns), parent_ino, name, child_attr.nlink(), status.error_str());
+                                 ElapsedTimeUs(time_ns), parent, name, child_attr.nlink(), status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1016,17 +1015,17 @@ Status FileSystem::UnLink(Context& ctx, Ino parent_ino, const std::string& name)
 // 1. create inode
 // 2. create dentry
 // 3. update parent inode mtime/ctime/nlink
-Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_parent_ino, const std::string& new_name,
+Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_parent, const std::string& new_name,
                            uint32_t uid, uint32_t gid, EntryOut& entry_out) {
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] symlink new_parent_ino({}), new_name({}) symlink({}).", fs_id_,
-                                  new_parent_ino, new_name, symlink);
+  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] symlink new_parent({}), new_name({}) symlink({}).", fs_id_, new_parent,
+                                  new_name, symlink);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  if (new_parent_ino == 0) {
-    return Status(pb::error::EILLEGAL_PARAMTETER, "Invalid parent_ino param.");
+  if (new_parent == 0) {
+    return Status(pb::error::EILLEGAL_PARAMTETER, "Invalid parent param.");
   }
   if (IsInvalidName(new_name)) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "Invalid name param.");
@@ -1035,7 +1034,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   auto& trace = ctx.GetTrace();
 
   PartitionPtr partition;
-  auto status = GetPartition(ctx, new_parent_ino, partition);
+  auto status = GetPartition(ctx, new_parent, partition);
   if (!status.ok()) {
     return status;
   }
@@ -1064,12 +1063,12 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   attr.set_nlink(1);
   attr.set_type(pb::mdsv2::FileType::SYM_LINK);
   attr.set_rdev(1);
-  attr.add_parent_inos(new_parent_ino);
+  attr.add_parents(new_parent);
 
   auto inode = Inode::New(attr);
 
   // build dentry
-  Dentry dentry(fs_id_, new_name, new_parent_ino, ino, pb::mdsv2::FileType::SYM_LINK, 0, inode);
+  Dentry dentry(fs_id_, new_name, new_parent, ino, pb::mdsv2::FileType::SYM_LINK, 0, inode);
 
   // update backend store
   SmyLinkOperation operation(trace, dentry, attr);
@@ -1077,7 +1076,7 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] symlink {}/{} finish,  status({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 new_parent_ino, new_name, status.error_str());
+                                 new_parent, new_name, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
@@ -1269,10 +1268,9 @@ void FileSystem::SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::ve
   }
 }
 
-Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
+Status FileSystem::Rename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
                           const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version) {
-  DINGO_LOG(INFO) << fmt::format("fs.{}] rename {}/{} to {}/{}.", fs_id_, old_parent_ino, old_name, new_parent_ino,
-                                 new_name);
+  DINGO_LOG(INFO) << fmt::format("fs.{}] rename {}/{} to {}/{}.", fs_id_, old_parent, old_name, new_parent, new_name);
 
   auto& trace = ctx.GetTrace();
   const bool bypass_cache = ctx.IsBypassCache();
@@ -1284,11 +1282,11 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
     return Status(pb::error::EILLEGAL_PARAMTETER, "new name is too long.");
   }
 
-  if (old_parent_ino == new_parent_ino && old_name == new_name) {
+  if (old_parent == new_parent && old_name == new_name) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "not allow same name");
   }
 
-  RenameOperation operation(trace, fs_id_, old_parent_ino, old_name, new_parent_ino, new_name);
+  RenameOperation operation(trace, fs_id_, old_parent, old_name, new_parent, new_name);
 
   auto status = RunOperation(&operation);
 
@@ -1304,7 +1302,7 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
   bool is_exist_new_dentry = result.is_exist_new_dentry;
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] rename {}/{} -> {}/{} finish, state({},{}) version({},{}) status({}).",
-                                 fs_id_, ElapsedTimeUs(time_ns), old_parent_ino, old_name, new_parent_ino, new_name,
+                                 fs_id_, ElapsedTimeUs(time_ns), old_parent, old_name, new_parent, new_name,
                                  is_same_parent, is_exist_new_dentry, old_parent_attr.version(),
                                  new_parent_attr.version(), status.error_str());
 
@@ -1318,7 +1316,7 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
   if (IsMonoPartition()) {
     // update cache
     PartitionPtr old_parent_partition;
-    auto status = GetPartition(ctx, old_parent_ino, old_parent_partition);
+    auto status = GetPartition(ctx, old_parent, old_parent_partition);
     if (status.ok()) {
       // delete old dentry
       old_parent_partition->DeleteChild(old_name);
@@ -1331,7 +1329,7 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
 
     // check new parent dentry/inode
     PartitionPtr new_parent_partition;
-    status = GetPartition(ctx, new_parent_ino, new_parent_partition);
+    status = GetPartition(ctx, new_parent, new_parent_partition);
     if (status.ok()) {
       // update new parent attr
       new_parent_partition->ParentInode()->UpdateIf(new_parent_attr);
@@ -1340,7 +1338,7 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
       if (is_exist_new_dentry) new_parent_partition->DeleteChild(new_name);
 
       // add new dentry
-      Dentry new_dentry(fs_id_, new_name, new_parent_ino, old_dentry.ino(), old_dentry.type(), 0,
+      Dentry new_dentry(fs_id_, new_name, new_parent, old_dentry.ino(), old_dentry.type(), 0,
                         GetInodeFromCache(old_dentry.ino()));
       new_parent_partition->PutChild(new_dentry);
     }
@@ -1362,26 +1360,26 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent_ino, const std::string& o
 
   } else {
     // notify mds(old_parent and new_parent) to update cache
-    uint64_t old_mds_id = GetMdsIdByIno(old_parent_ino);
-    uint64_t new_mds_id = GetMdsIdByIno(new_parent_ino);
+    uint64_t old_mds_id = GetMdsIdByIno(old_parent);
+    uint64_t new_mds_id = GetMdsIdByIno(new_parent);
     if (old_mds_id == new_mds_id) {
-      SendRefreshInode(old_mds_id, fs_id_, {old_parent_ino, new_parent_ino});
+      SendRefreshInode(old_mds_id, fs_id_, {old_parent, new_parent});
     } else {
-      SendRefreshInode(old_mds_id, fs_id_, {old_parent_ino});
-      SendRefreshInode(new_mds_id, fs_id_, {new_parent_ino});
+      SendRefreshInode(old_mds_id, fs_id_, {old_parent});
+      SendRefreshInode(new_mds_id, fs_id_, {new_parent});
     }
   }
 
   return Status::OK();
 }
 
-Status FileSystem::CommitRename(Context& ctx, Ino old_parent_ino, const std::string& old_name, Ino new_parent_ino,
+Status FileSystem::CommitRename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
                                 const std::string& new_name, Ino& old_parent_version, uint64_t& new_parent_version) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  return renamer_->Execute(GetSelfPtr(), ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version,
+  return renamer_->Execute(GetSelfPtr(), ctx, old_parent, old_name, new_parent, new_name, old_parent_version,
                            new_parent_version);
 }
 

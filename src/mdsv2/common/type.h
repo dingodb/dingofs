@@ -34,23 +34,21 @@ using FsInfoType = pb::mdsv2::FsInfo;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
 
 inline std::string DescribeAttr(const AttrType& attr) {
-  auto parent_inos_func = [](const auto& parent_inos) {
+  auto parents_func = [](const auto& parents) {
     std::string result;
-    for (const auto& parent_ino : parent_inos) {
+    for (const auto& parent : parents) {
       if (!result.empty()) {
         result += ",";
       }
-      result += std::to_string(parent_ino);
+      result += std::to_string(parent);
     }
     return result;
   };
 
-  return fmt::format(
-      "fs_id:{} ino:{} length:{} ctime:{} mtime:{} atime:{} uid:{} gid:{} mode:{} nlink:{} type:{} parent_inos:{} "
-      "version:{}",
-      attr.fs_id(), attr.ino(), attr.length(), attr.ctime(), attr.mtime(), attr.atime(), attr.uid(), attr.gid(),
-      attr.mode(), attr.nlink(), pb::mdsv2::FileType_Name(attr.type()), parent_inos_func(attr.parent_inos()),
-      attr.version());
+  return fmt::format("{}:{}:{}:{}:{}:{}:{}:{} v{} p{} t{}:{}:{}", attr.fs_id(), attr.ino(),
+                     pb::mdsv2::FileType_Name(attr.type()), attr.nlink(), attr.mode(), attr.uid(), attr.gid(),
+                     attr.length(), attr.version(), parents_func(attr.parents()), attr.ctime(), attr.mtime(),
+                     attr.atime());
 }
 
 }  // namespace mdsv2
