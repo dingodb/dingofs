@@ -120,13 +120,13 @@ MetaStatusCode MetaServerClientImpl::Init(
 
 #define RPCTask                                                         \
   [&](LogicPoolID poolID, CopysetID copysetID, PartitionID partitionID, \
-      uint64_t txId, uint64_t applyIndex, brpc::Channel * channel,      \
-      brpc::Controller * cntl, TaskExecutorDone * taskExecutorDone) -> int
+      uint64_t txId, uint64_t applyIndex, brpc::Channel* channel,       \
+      brpc::Controller* cntl, TaskExecutorDone* taskExecutorDone) -> int
 
 #define AsyncRPCTask                                                    \
   [=](LogicPoolID poolID, CopysetID copysetID, PartitionID partitionID, \
-      uint64_t txId, uint64_t applyIndex, brpc::Channel * channel,      \
-      brpc::Controller * cntl, TaskExecutorDone * taskExecutorDone) -> int
+      uint64_t txId, uint64_t applyIndex, brpc::Channel* channel,       \
+      brpc::Controller* cntl, TaskExecutorDone* taskExecutorDone) -> int
 
 class MetaServerClientRpcDoneBase : public google::protobuf::Closure {
  public:
@@ -189,7 +189,8 @@ MetaStatusCode MetaServerClientImpl::GetDentry(uint32_t fs_id, uint64_t inodeid,
     stub.GetDentry(cntl, &request, &response, nullptr);
 
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetDentry Failed, errorcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "Fail GetDentry ino: " << inodeid << ", fs_id: " << fs_id
+                   << ", errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
@@ -571,7 +572,8 @@ MetaStatusCode MetaServerClientImpl::GetInode(uint32_t fs_id, uint64_t inodeid,
     stub.GetInode(cntl, &request, &response, nullptr);
 
     if (cntl->Failed()) {
-      LOG(WARNING) << "GetInode Failed, errorcode = " << cntl->ErrorCode()
+      LOG(WARNING) << "Fail GetInode ino: " << inodeid << ", fsid: " << fs_id
+                   << ", errorcode = " << cntl->ErrorCode()
                    << ", error content:" << cntl->ErrorText()
                    << ", log id = " << cntl->log_id();
       is_ok = false;
@@ -771,7 +773,8 @@ MetaStatusCode MetaServerClientImpl::BatchGetInodeAttr(
         LOG(WARNING) << "BatchGetInodeAttr Failed, errorcode = "
                      << cntl->ErrorCode()
                      << ", error content:" << cntl->ErrorText()
-                     << ", log id = " << cntl->log_id();
+                     << ", log id = " << cntl->log_id()
+                     << ", request: " << request.ShortDebugString();
         is_ok = false;
         return -cntl->ErrorCode();
       }
