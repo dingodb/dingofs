@@ -27,11 +27,10 @@
 #include <cstdint>
 #include <string>
 
+#include "common/dynamic_config.h"
+
 namespace dingofs {
 namespace stub {
-
-DECLARE_bool(mds_access_logging);
-DECLARE_int64(mds_access_log_threshold_us);
 
 extern std::shared_ptr<spdlog::logger> mds_access_logger;
 
@@ -44,14 +43,13 @@ struct MdsAccessLogGuard {
       : start_us(p_start_us), handler(handler) {}
 
   ~MdsAccessLogGuard() {
-    if (!FLAGS_mds_access_logging) {
+    if (!dingofs::common::FLAGS_mds_access_logging) {
       return;
     }
 
     int64_t duration_us = butil::cpuwide_time_us() - start_us;
-    if (duration_us > FLAGS_mds_access_log_threshold_us) {
-      mds_access_logger->info("{0} <{1:.6f}>", handler(),
-                              (duration_us) / 1e6);
+    if (duration_us > dingofs::common::FLAGS_mds_access_log_threshold_us) {
+      mds_access_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
     }
   }
 

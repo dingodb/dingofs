@@ -30,8 +30,8 @@
 #include <memory>
 #include <string>
 
-#include "dingofs/metaserver.pb.h"
 #include "common/rpc_stream.h"
+#include "dingofs/metaserver.pb.h"
 #include "metaserver/copyset/snapshot_closure.h"
 #include "metaserver/metastore_fstream.h"
 #include "metaserver/partition.h"
@@ -103,7 +103,7 @@ class MetaStore {
   virtual bool GetPartitionInfoList(
       std::list<pb::common::PartitionInfo>* partitionInfoList) = 0;
 
-  virtual std::shared_ptr<common::StreamServer> GetStreamServer() = 0;
+  virtual std::shared_ptr<dingofs::common::StreamServer> GetStreamServer() = 0;
 
   // dentry
   virtual pb::metaserver::MetaStatusCode CreateDentry(
@@ -165,7 +165,7 @@ class MetaStore {
       std::shared_ptr<storage::Iterator>* iterator) = 0;
 
   virtual pb::metaserver::MetaStatusCode SendS3ChunkInfoByStream(
-      std::shared_ptr<common::StreamConnection> connection,
+      std::shared_ptr<dingofs::common::StreamConnection> connection,
       std::shared_ptr<storage::Iterator> iterator) = 0;
 
   virtual pb::metaserver::MetaStatusCode GetVolumeExtent(
@@ -234,7 +234,7 @@ class MetaStoreImpl : public MetaStore {
   bool GetPartitionInfoList(
       std::list<pb::common::PartitionInfo>* partitionInfoList) override;
 
-  std::shared_ptr<common::StreamServer> GetStreamServer() override;
+  std::shared_ptr<dingofs::common::StreamServer> GetStreamServer() override;
 
   // dentry
   pb::metaserver::MetaStatusCode CreateDentry(
@@ -298,7 +298,7 @@ class MetaStoreImpl : public MetaStore {
       std::shared_ptr<storage::Iterator>* iterator) override;
 
   pb::metaserver::MetaStatusCode SendS3ChunkInfoByStream(
-      std::shared_ptr<common::StreamConnection> connection,
+      std::shared_ptr<dingofs::common::StreamConnection> connection,
       std::shared_ptr<storage::Iterator> iterator) override;
 
   pb::metaserver::MetaStatusCode GetVolumeExtent(
@@ -347,7 +347,7 @@ class MetaStoreImpl : public MetaStore {
 
   copyset::CopysetNode* copysetNode_;
 
-  std::shared_ptr<common::StreamServer> streamServer_;
+  std::shared_ptr<dingofs::common::StreamServer> streamServer_;
 
   storage::StorageOptions storageOptions_;
 };

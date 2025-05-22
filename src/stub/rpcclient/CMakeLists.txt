@@ -30,6 +30,7 @@ target_link_libraries(rpcclient
     stub_metric
     dingofs_utils
     dingofs_common
+    dingofs_dynamic_config
     brpc::brpc
     gflags::gflags
     glog::glog

@@ -24,15 +24,12 @@
 
 #include <string>
 
-#include "aws/s3_access_log.h"
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
 #include "client/common/dynamic_config.h"
-#include "client/vfs_wrapper/access_log.h"
+#include "common/dynamic_config.h"
 #include "gflags/gflags.h"
-#include "stub/rpcclient/mds_access_log.h"
-#include "stub/rpcclient/meta_access_log.h"
 #include "utils/gflags_helper.h"
 
 namespace brpc {
@@ -447,17 +444,20 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   conf->GetInt64Value("access_log_threshold_us",
                       &FLAGS_access_log_threshold_us);
 
-  conf->GetBoolValue("mds_access_logging", &stub::FLAGS_mds_access_logging);
+  conf->GetBoolValue("mds_access_logging",
+                     &dingofs::common::FLAGS_mds_access_logging);
   conf->GetInt64Value("mds_access_log_threshold_us",
-                      &stub::FLAGS_mds_access_log_threshold_us);
+                      &dingofs::common::FLAGS_mds_access_log_threshold_us);
 
-  conf->GetBoolValue("meta_access_logging", &stub::FLAGS_meta_access_logging);
+  conf->GetBoolValue("meta_access_logging",
+                     &dingofs::common::FLAGS_meta_access_logging);
   conf->GetInt64Value("meta_access_log_threshold_us",
-                      &stub::FLAGS_meta_access_log_threshold_us);
+                      &dingofs::common::FLAGS_meta_access_log_threshold_us);
 
-  conf->GetBoolValue("s3_access_logging", &aws::FLAGS_s3_access_logging);
+  conf->GetBoolValue("s3_access_logging",
+                     &dingofs::common::FLAGS_s3_access_logging);
   conf->GetInt64Value("s3_access_log_threshold_us",
-                      &aws::FLAGS_s3_access_log_threshold_us);
+                      &dingofs::common::FLAGS_s3_access_log_threshold_us);
 
   SetBrpcOpt(conf);
 }

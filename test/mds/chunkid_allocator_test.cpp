@@ -20,7 +20,7 @@
  * @Author: chengyi
  */
 
-#include "mds/chunkid_allocator.h"
+#include "mds/idgenerator/chunkid_allocator.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

@@ -31,6 +31,7 @@ namespace common {
 
 namespace {
 bool PassDouble(const char*, double) { return true; }
+bool PassInt64(const char*, int64_t) { return true; }
 bool PassUint64(const char*, uint64_t) { return true; }
 bool PassInt32(const char*, int32_t) { return true; }
 bool PassUint32(const char*, uint32_t) { return true; }
@@ -40,6 +41,8 @@ bool PassBool(const char*, bool) { return true; }
 // access log
 DEFINE_bool(access_logging, true, "enable access log");
 DEFINE_validator(access_logging, &PassBool);
+DEFINE_int64(access_log_threshold_us, 0, "client ccess log threshold");
+DEFINE_validator(access_log_threshold_us, &PassInt64);
 
 // fuse module
 DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");

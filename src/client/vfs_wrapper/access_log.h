@@ -38,8 +38,6 @@
 namespace dingofs {
 namespace client {
 
-DECLARE_int64(access_log_threshold_us);
-
 extern std::shared_ptr<spdlog::logger> logger;
 
 bool InitAccessLog(const std::string& prefix);
@@ -64,7 +62,7 @@ struct AccessLogGuard {
     timer.stop();
     int64_t duration = timer.u_elapsed();
 
-    if (duration > FLAGS_access_log_threshold_us) {
+    if (duration > common::FLAGS_access_log_threshold_us) {
       logger->info("{0} <{1:.6f}>", handler(), timer.u_elapsed() / 1e6);
     }
   }

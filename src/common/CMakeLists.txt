@@ -23,10 +23,10 @@ target_link_libraries(dingofs_common
     glog::glog
 )
 
-add_library(dynamic_vlog
-    dynamic_vlog.cpp
+add_library(dingofs_dynamic_config
+    dynamic_config.cpp
 )
-target_link_libraries(dynamic_vlog
+target_link_libraries(dingofs_dynamic_config
     brpc::brpc
     gflags::gflags
     glog::glog

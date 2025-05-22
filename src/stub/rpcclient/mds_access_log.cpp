@@ -22,18 +22,6 @@
 namespace dingofs {
 namespace stub {
 
-namespace {
-bool PassBool(const char*, bool) { return true; }
-bool PassInt64(const char*, int64_t) { return true; }
-};  // namespace
-
-DEFINE_bool(mds_access_logging, true, "enable mds access log");
-DEFINE_validator(mds_access_logging, &PassBool);
-
-DEFINE_int64(mds_access_log_threshold_us, 10 * 1000,
-             "mds access log threshold in us");
-DEFINE_validator(mds_access_log_threshold_us, &PassInt64);
-
 std::shared_ptr<spdlog::logger> mds_access_logger;
 
 bool InitMdsAccessLog(const std::string& prefix) {

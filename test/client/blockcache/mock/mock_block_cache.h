@@ -58,6 +58,8 @@ class MockBlockCache : public BlockCache {
   MOCK_METHOD1(IsCached, bool(const BlockKey& key));
 
   MOCK_METHOD0(GetStoreType, StoreType());
+
+  MOCK_METHOD(void, SubmitPreFetch, (const BlockKey& key, size_t length));
 };
 
 }  // namespace blockcache

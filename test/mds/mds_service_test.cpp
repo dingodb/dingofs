@@ -30,14 +30,14 @@
 
 #include <string>
 
-#include "dingofs/mds.pb.h"
-#include "mds/topology/topology_storage_codec.h"
-#include "mds/topology/topology_storge_etcd.h"
 #include "aws/mock_s3_adapter.h"
+#include "dingofs/mds.pb.h"
 #include "mds/fake_metaserver.h"
 #include "mds/mock/mock_cli2.h"
 #include "mds/mock/mock_kvstorage_client.h"
 #include "mds/mock/mock_topology.h"
+#include "mds/topology/topology_storage_codec.h"
+#include "mds/topology/topology_storge_etcd.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;
@@ -105,7 +105,7 @@ class MdsServiceTest : public ::testing::Test {
     s3_adapter = std::make_shared<MockS3Adapter>();
     fs_manager =
         std::make_shared<FsManager>(fs_storage, metaserver_client, topo_manager,
-                                    s3_adapter, nullptr, fs_manager_option);
+                                    nullptr, fs_manager_option);
     ASSERT_TRUE(fs_manager->Init());
   }
 

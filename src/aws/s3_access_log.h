@@ -26,11 +26,10 @@
 #include <cstdint>
 #include <string>
 
+#include "common/dynamic_config.h"
+
 namespace dingofs {
 namespace aws {
-
-DECLARE_bool(s3_access_logging);
-DECLARE_int64(s3_access_log_threshold_us);
 
 extern std::shared_ptr<spdlog::logger> s3_logger;
 
@@ -43,12 +42,12 @@ struct S3AccessLogGuard {
       : start_us(p_start_us), handler(handler) {}
 
   ~S3AccessLogGuard() {
-    if (!FLAGS_s3_access_logging) {
+    if (!common::FLAGS_s3_access_logging) {
       return;
     }
 
     int64_t duration_us = butil::cpuwide_time_us() - start_us;
-    if (duration_us > FLAGS_s3_access_log_threshold_us) {
+    if (duration_us > common::FLAGS_s3_access_log_threshold_us) {
       s3_logger->info("{0} <{1:.6f}>", handler(), (duration_us) / 1e6);
     }
   }

@@ -134,8 +134,9 @@ TEST_F(S3ChunkHolerTest, Init) {
     chunk_info.set_zero(false);
     chunk_info.set_compaction(0);
 
+    uint64_t chunk_size = 16;
     uint64_t block_size = 4;
-    S3ChunkHoler holer(chunk_info, block_size);
+    S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
     const auto& offset_to_block = holer.GetOffsetToBlock();
 
@@ -164,8 +165,9 @@ TEST_F(S3ChunkHolerTest, Init) {
     chunk_info.set_zero(false);
     chunk_info.set_compaction(0);
 
+    uint64_t chunk_size = 16;
     uint64_t block_size = 4;
-    S3ChunkHoler holer(chunk_info, block_size);
+    S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
     const auto& offset_to_block = holer.GetOffsetToBlock();
 
@@ -194,8 +196,9 @@ TEST_F(S3ChunkHolerTest, Init) {
     chunk_info.set_zero(false);
     chunk_info.set_compaction(0);
 
+    uint64_t chunk_size = 16;
     uint64_t block_size = 4;
-    S3ChunkHoler holer(chunk_info, block_size);
+    S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
     LOG(INFO) << holer.ToString();
 
@@ -229,8 +232,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjOne) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   FlatFileSlice slice = {0, 8, chunk_id};  //  file_offset, len, chunk_id
   std::vector<BlockObj> block_objs = holer.GetBlockObj(slice);
@@ -258,8 +262,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjTwo) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   LOG(INFO) << holer.ToString();
 
@@ -289,8 +294,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjThree) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   FlatFileSlice slice = {3, 11, chunk_id};  // file_offset, len, chunk_id
   std::vector<BlockObj> block_objs = holer.GetBlockObj(slice);
@@ -328,8 +334,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjSliceOne) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   FlatFileSlice slice = {0, 8, chunk_id};  //  file_offset, len, chunk_id
   std::vector<BlockObjSlice> obj_slices = holer.GetBlockObjSlice(slice);
@@ -361,8 +368,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjSliceTwo) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   FlatFileSlice slice = {2, 6, chunk_id};  // file_offset, len, chunk_id
 
@@ -395,8 +403,9 @@ TEST_F(S3ChunkHolerTest, GetBlockObjSliceThree) {
   chunk_info.set_zero(false);
   chunk_info.set_compaction(0);
 
+  uint64_t chunk_size = 16;
   uint64_t block_size = 4;
-  S3ChunkHoler holer(chunk_info, block_size);
+  S3ChunkHoler holer(chunk_info, block_size, chunk_size);
 
   LOG(INFO) << holer.ToString();
 

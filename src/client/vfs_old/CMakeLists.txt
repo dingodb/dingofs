@@ -32,7 +32,7 @@ target_link_libraries(vfs_old_lib
     dingofs_common
     client_lease
     client_memcached_client
-    dynamic_vlog
+    dingofs_dynamic_config
     client_datastream
     client_blockcache
     dingofs_utils

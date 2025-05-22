@@ -45,7 +45,7 @@ target_link_libraries(mds_lib
     mds_kvstorage_client
     dingofs_base_lib
     dingofs_common
-    dynamic_vlog
+    dingofs_dynamic_config
     dingofs_utils
     aws_s3_adapter
     dingofs_concurrent

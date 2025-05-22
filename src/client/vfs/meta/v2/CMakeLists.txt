@@ -27,7 +27,7 @@ target_link_libraries(vfs_meta_v2_lib
     mdsv2_mds
 
     dingofs_common
-    dynamic_vlog
+    dingofs_dynamic_config
     dingofs_utils
 
     stub_common

@@ -30,13 +30,13 @@
 
 #include "aws/mock_s3_adapter.h"
 #include "common/define.h"
+#include "dingofs/common.pb.h"
+#include "dingofs/mds.pb.h"
 #include "mds/mock/mock_cli2.h"
 #include "mds/mock/mock_metaserver.h"
 #include "mds/mock/mock_topology.h"
 #include "mds/topology/topology_storage_codec.h"
 #include "mds/topology/topology_storge_etcd.h"
-#include "dingofs/common.pb.h"
-#include "dingofs/mds.pb.h"
 
 using ::dingofs::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;
@@ -108,9 +108,8 @@ class FSManagerTest : public ::testing::Test {
     fsManagerOption.backEndThreadRunInterSec = 1;
     fsManagerOption.clientTimeoutSec = 1;
     s3Adapter_ = std::make_shared<MockS3Adapter>();
-    fsManager_ =
-        std::make_shared<FsManager>(fsStorage_, metaserverClient_, topoManager_,
-                                    s3Adapter_, nullptr, fsManagerOption);
+    fsManager_ = std::make_shared<FsManager>(
+        fsStorage_, metaserverClient_, topoManager_, nullptr, fsManagerOption);
     ASSERT_TRUE(fsManager_->Init());
 
     ASSERT_EQ(0, server_.AddService(&mockMetaserverService_,

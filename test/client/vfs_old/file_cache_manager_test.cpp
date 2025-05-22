@@ -24,7 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "client/blockcache/error.h"
-#include "client/vfs_old/common/dynamic_config.h"
+#include "client/common/dynamic_config.h"
 #include "client/vfs_old/mock_client_s3.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"

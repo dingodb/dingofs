@@ -39,6 +39,7 @@ namespace common {
 
 // access log
 DECLARE_bool(access_logging);
+DECLARE_int64(access_log_threshold_us);
 
 // fuse module
 DECLARE_bool(fuse_file_info_direct_io);

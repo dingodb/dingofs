@@ -20,16 +20,6 @@
 
 namespace dingofs {
 namespace aws {
-namespace {
-bool PassBool(const char*, bool) { return true; }
-bool PassInt64(const char*, int64_t) { return true; }
-};  // namespace
-
-DEFINE_bool(s3_access_logging, true, "enable s3 access log");
-DEFINE_validator(s3_access_logging, &PassBool);
-
-DEFINE_int64(s3_access_log_threshold_us, 0, "s3 access log threshold");
-DEFINE_validator(s3_access_log_threshold_us, &PassInt64);
 
 std::shared_ptr<spdlog::logger> s3_logger;
 

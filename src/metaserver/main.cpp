@@ -25,7 +25,7 @@
 #include <glog/logging.h>
 
 #include "aws/s3_access_log.h"
-#include "common/dynamic_vlog.h"
+#include "common/dynamic_config.h"
 #include "common/process.h"
 #include "common/threading.h"
 #include "metaserver/metaserver.h"
@@ -111,19 +111,19 @@ void LoadConfigFromCmdline(Configuration* conf) {
 
   // access logging
   conf->GetBoolValue("mds_access_logging",
-                     &dingofs::stub::FLAGS_mds_access_logging);
+                     &dingofs::common::FLAGS_mds_access_logging);
   conf->GetInt64Value("mds_access_log_threshold_us",
-                      &dingofs::stub::FLAGS_mds_access_log_threshold_us);
+                      &dingofs::common::FLAGS_mds_access_log_threshold_us);
 
   conf->GetBoolValue("meta_access_logging",
-                     &dingofs::stub::FLAGS_meta_access_logging);
+                     &dingofs::common::FLAGS_meta_access_logging);
   conf->GetInt64Value("meta_access_log_threshold_us",
-                      &dingofs::stub::FLAGS_meta_access_log_threshold_us);
+                      &dingofs::common::FLAGS_meta_access_log_threshold_us);
 
   conf->GetBoolValue("s3_access_logging",
-                     &dingofs::aws::FLAGS_s3_access_logging);
+                     &dingofs::common::FLAGS_s3_access_logging);
   conf->GetInt64Value("s3_access_log_threshold_us",
-                      &dingofs::aws::FLAGS_s3_access_log_threshold_us);
+                      &dingofs::common::FLAGS_s3_access_log_threshold_us);
 }
 
 }  // namespace

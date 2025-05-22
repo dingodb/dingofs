@@ -19,6 +19,7 @@ add_library(aws_s3_adapter
 
 target_link_libraries(aws_s3_adapter
     dingofs_utils
+    dingofs_dynamic_config
     ${AWSSDK_LIBRARIES}
     glog::glog
     gflags::gflags

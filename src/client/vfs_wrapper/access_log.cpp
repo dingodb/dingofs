@@ -18,12 +18,6 @@
 
 namespace dingofs {
 namespace client {
-namespace {
-bool PassInt64(const char*, int64_t) { return true; }
-};  // namespace
-
-DEFINE_int64(access_log_threshold_us, 0, "client ccess log threshold");
-DEFINE_validator(access_log_threshold_us, &PassInt64);
 
 std::shared_ptr<spdlog::logger> logger;
 

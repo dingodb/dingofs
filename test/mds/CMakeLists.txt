@@ -17,19 +17,6 @@ add_subdirectory(heartbeat)
 add_subdirectory(schedule)
 add_subdirectory(topology)
 
-add_executable(test_mds_chunkid_allocator 
-    chunkid_allocator_test.cpp
-)
-target_link_libraries(test_mds_chunkid_allocator
-    PROTO_OBJS
-    mds_lib
-    dingofs_utils
-    ${TEST_DEPS}
-)
-set_target_properties(test_mds_chunkid_allocator PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-)
-
 add_executable(test_mds_balance_poc 
     metaserver_balance_poc.cpp
 )

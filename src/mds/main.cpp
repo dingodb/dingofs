@@ -26,7 +26,7 @@
 #include <csignal>
 
 #include "aws/s3_access_log.h"
-#include "common/dynamic_vlog.h"
+#include "common/dynamic_config.h"
 #include "mds/mds.h"
 #include "stub/common/version.h"
 #include "utils/configuration.h"
@@ -75,9 +75,9 @@ int main(int argc, char** argv) {
 
   // logging
   conf->GetBoolValue("s3_access_logging",
-                     &dingofs::aws::FLAGS_s3_access_logging);
+                     &dingofs::common::FLAGS_s3_access_logging);
   conf->GetInt64Value("s3_access_log_threshold_us",
-                      &dingofs::aws::FLAGS_s3_access_log_threshold_us);
+                      &dingofs::common::FLAGS_s3_access_log_threshold_us);
 
   InstallSigHandler();
 

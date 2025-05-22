@@ -15,6 +15,7 @@
 set(BLOCKCACHE_TEST_DEPS
     fuse_client_lib
     client_blockcache
+    dingofs_dynamic_config
     ${TEST_DEPS}
 )
 

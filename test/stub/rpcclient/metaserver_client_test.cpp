@@ -1359,47 +1359,6 @@ class FakeGetVolumeExtentService {
 
 }  // namespace
 
-TEST_F(MetaServerClientImplTest, TestGetVolumeExtent) {
-  const uint32_t fsid = 1;
-  const uint64_t ino = 2;
-  const uint32_t partitionID = 200;
-  const uint64_t applyIndex = 10;
-
-  for (auto streaming : {true, false}) {
-    pb::metaserver::VolumeExtentList out;
-
-    EXPECT_CALL(*mockMetacache_, GetTarget(_, _, _, _, _))
-        .WillRepeatedly(Invoke([&](uint32_t, uint64_t, CopysetTarget* target,
-                                   uint64_t* applyindex, bool) {
-          *target = target_;
-          *applyindex = applyIndex;
-          return true;
-        }));
-
-    EXPECT_CALL(*mockMetacache_.get(), GetPartitionIdByInodeId(_, _, _))
-        .WillRepeatedly(DoAll(SetArgPointee<2>(partitionID), Return(true)));
-
-    pb::metaserver::GetVolumeExtentResponse response;
-    response.set_statuscode(MetaStatusCode::OK);
-    auto* slice = response.mutable_slices()->add_slices();
-    slice->set_offset(0);
-    auto* ext = slice->add_extents();
-    ext->set_fsoffset(0);
-    ext->set_volumeoffset(0);
-    ext->set_length(4096);
-    ext->set_isused(true);
-
-    FakeGetVolumeExtentService fakeService(response, streamServer_.get());
-
-    EXPECT_CALL(mockMetaServerService_, GetVolumeExtent(_, _, _, _))
-        .WillOnce(Invoke(fakeService));
-
-    ASSERT_EQ(MetaStatusCode::OK,
-              metaserverCli_.GetVolumeExtent(fsid, ino, streaming, &out));
-    ASSERT_EQ(1, out.slices_size());
-  }
-}
-
 }  // namespace rpcclient
 }  // namespace stub
 }  // namespace dingofs

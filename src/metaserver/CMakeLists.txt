@@ -35,7 +35,7 @@ target_link_libraries(metaserver_lib
     metaserver_common
     dingofs_utils
     rpcclient
-    dynamic_vlog
+    dingofs_dynamic_config
     local_fs
     dingofs_threading
     metaserver_s3
