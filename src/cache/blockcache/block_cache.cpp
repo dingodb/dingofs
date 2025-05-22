@@ -37,14 +37,14 @@
 #include "cache/common/common.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/phase_timer.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dataaccess::BlockAccesser;
+using blockaccess::BlockAccesser;
 using dingofs::cache::utils::LogGuard;
 using dingofs::cache::utils::Phase;
 using dingofs::cache::utils::PhaseTimer;

@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_S3_ACCESSER_H_
-#define DINGOFS_DATA_ACCESS_S3_ACCESSER_H_
+#ifndef DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_
+#define DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_
 
 #include "common/status.h"
-#include "dataaccess/accesser.h"
-#include "dataaccess/s3/aws/s3_adapter.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/accesser.h"
+#include "blockaccess/s3/aws/s3_adapter.h"
+#include "blockaccess/s3/s3_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 // S3Accesser is a class that provides a way to access data from a S3 data
 // source. It is a derived class of DataAccesser.
 // use aws-sdk-cpp implement
@@ -57,10 +57,10 @@ class S3Accesser : public Accesser {
   static Aws::String S3Key(const std::string& key);
   const S3Options options_;
 
-  std::unique_ptr<dataaccess::aws::S3Adapter> client_;
+  std::unique_ptr<blockaccess::aws::S3Adapter> client_;
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_S3_ACCESSER_H_
+#endif  // DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_

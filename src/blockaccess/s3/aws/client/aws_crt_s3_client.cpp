@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/aws/client/aws_crt_s3_client.h"
+#include "blockaccess/s3/aws/client/aws_crt_s3_client.h"
 
 #include <aws/s3-crt/model/BucketLocationConstraint.h>
 #include <aws/s3-crt/model/DeleteObjectRequest.h>
@@ -32,10 +32,10 @@
 
 #include <memory>
 
-#include "dataaccess/s3/aws/aws_s3_common.h"
+#include "blockaccess/s3/aws/aws_s3_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 void AwsCrtS3Client::Init(const S3Options& options) {
@@ -313,5 +313,5 @@ bool AwsCrtS3Client::ObjectExist(std::string bucket, const std::string& key) {
 }
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

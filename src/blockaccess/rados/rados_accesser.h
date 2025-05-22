@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_RADOS_ACCESSER_H_
-#define DINGOFS_DATA_ACCESS_RADOS_ACCESSER_H_
+#ifndef DINGOFS_BLOCK_ACCESS_RADOS_ACCESSER_H_
+#define DINGOFS_BLOCK_ACCESS_RADOS_ACCESSER_H_
 
 #include <glog/logging.h>
 #include <rados/librados.h>
@@ -24,11 +24,11 @@
 #include <string>
 #include <variant>
 
-#include "dataaccess/accesser.h"
-#include "dataaccess/rados/rados_common.h"
+#include "blockaccess/accesser.h"
+#include "blockaccess/rados/rados_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 using AsyncContext = std::variant<std::shared_ptr<GetObjectAsyncContext>,
                                   std::shared_ptr<PutObjectAsyncContext>>;
@@ -99,8 +99,8 @@ class RadosAccesser : public Accesser {
   rados_t cluster_{nullptr};
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_RADOS_ACCESSER_H_
+#endif  // DINGOFS_BLOCK_ACCESS_RADOS_ACCESSER_H_

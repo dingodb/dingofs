@@ -43,7 +43,7 @@ class ClientS3Test : public testing::Test {
   ClientS3Test() {}
   ~ClientS3Test() override = default;
   void SetUp() override {
-    s3Adapter_ = std::make_shared<dingofs::dataaccess::aws::MockS3Adapter>();
+    s3Adapter_ = std::make_shared<dingofs::blockaccess::aws::MockS3Adapter>();
     s3Client_ = new S3ClientImpl();
     s3Client_->SetAdaptor(s3Adapter_);
   }
@@ -54,7 +54,7 @@ class ClientS3Test : public testing::Test {
   }
 
  protected:
-  std::shared_ptr<dingofs::dataaccess::aws::MockS3Adapter> s3Adapter_;
+  std::shared_ptr<dingofs::blockaccess::aws::MockS3Adapter> s3Adapter_;
   S3ClientImpl* s3Client_;
 };
 

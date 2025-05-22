@@ -26,7 +26,7 @@
 #include <cstdint>
 #include <string>
 
-#include "dataaccess/accesser_common.h"
+#include "blockaccess/accesser_common.h"
 #include "dingofs/common.pb.h"
 #include "options/cache/app.h"
 #include "options/cache/block_cache.h"
@@ -188,7 +188,7 @@ struct ClientOption {
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
   S3ClientAdaptorOption s3_client_adaptor_opt;      // from config
-  dataaccess::BlockAccessOptions block_access_opt;  // from config
+  blockaccess::BlockAccessOptions block_access_opt;  // from config
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;

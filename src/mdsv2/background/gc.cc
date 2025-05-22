@@ -24,9 +24,9 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
-#include "dataaccess/block_accesser_factory.h"
-#include "dataaccess/rados/rados_common.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/block_accesser_factory.h"
+#include "blockaccess/rados/rados_common.h"
+#include "blockaccess/s3/s3_common.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/codec.h"
@@ -348,7 +348,7 @@ bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   return (attr.ctime() / 1000000000 + FLAGS_gc_delfile_reserve_time_s) < now_s;
 }
 
-dataaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
+blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
   auto it = block_accessers_.find(fs_id);
   if (it != block_accessers_.end()) {
     return it->second;
@@ -362,7 +362,7 @@ dataaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_i
 
   auto fs_info = fs->GetFsInfo();
 
-  dataaccess::BlockAccessOptions options;
+  blockaccess::BlockAccessOptions options;
   if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
     const auto& s3_info = fs_info.extra().s3_info();
     if (s3_info.ak().empty() || s3_info.sk().empty() || s3_info.endpoint().empty() || s3_info.bucketname().empty()) {
@@ -371,8 +371,8 @@ dataaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_i
       return nullptr;
     }
 
-    options.type = dataaccess::AccesserType::kS3;
-    options.s3_options.s3_info = dataaccess::S3Info{
+    options.type = blockaccess::AccesserType::kS3;
+    options.s3_options.s3_info = blockaccess::S3Info{
         .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
   } else {
     const auto& rados_info = fs_info.extra().rados_info();
@@ -383,15 +383,15 @@ dataaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_i
       return nullptr;
     }
 
-    options.type = dataaccess::AccesserType::kRados;
-    options.rados_options = dataaccess::RadosOptions{.mon_host = rados_info.mon_host(),
+    options.type = blockaccess::AccesserType::kRados;
+    options.rados_options = blockaccess::RadosOptions{.mon_host = rados_info.mon_host(),
                                                      .user_name = rados_info.user_name(),
                                                      .key = rados_info.key(),
                                                      .pool_name = rados_info.pool_name(),
                                                      .cluster_name = rados_info.cluster_name()};
   }
 
-  dataaccess::BlockAccesserFactory factory;
+  blockaccess::BlockAccesserFactory factory;
   auto block_accessor = factory.NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {

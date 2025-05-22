@@ -23,12 +23,12 @@
 #include <atomic>
 #include <memory>
 
-#include "dataaccess/s3/aws/aws_s3_common.h"
-#include "dataaccess/s3/aws/client/aws_s3_client.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/s3/aws/aws_s3_common.h"
+#include "blockaccess/s3/aws/client/aws_s3_client.h"
+#include "blockaccess/s3/s3_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 class AwsLegacyS3Client : public AwsS3Client {
@@ -89,7 +89,7 @@ class AwsLegacyS3Client : public AwsS3Client {
 };
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
 #endif  // SRC_AWS_S3_CLIENT_AWS_LEGACY_S3_CLIENT_H_

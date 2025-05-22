@@ -45,7 +45,7 @@
 #include "common/config_mapper.h"
 #include "common/define.h"
 #include "common/status.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -325,7 +325,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     const auto& storage_info = fs_info_->storage_info();
     FillBlockAccessOption(storage_info, &fuse_client_option_.block_access_opt);
 
-    block_accesser_ = std::make_unique<dataaccess::BlockAccesserImpl>(
+    block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
         fuse_client_option_.block_access_opt);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }

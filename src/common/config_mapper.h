@@ -17,20 +17,20 @@
 #ifndef DINGOFS_COMMON_CONFIG_MAPPER_H_
 #define DINGOFS_COMMON_CONFIG_MAPPER_H_
 
-#include "dataaccess/accesser_common.h"
+#include "blockaccess/accesser_common.h"
 #include "dingofs/common.pb.h"
 
 namespace dingofs {
 
 static inline void FillBlockAccessOption(
     const pb::common::StorageInfo& storage_info,
-    dataaccess::BlockAccessOptions* block_access_opt) {
+    blockaccess::BlockAccessOptions* block_access_opt) {
   if (storage_info.type() == pb::common::StorageType::TYPE_S3) {
     CHECK(storage_info.has_s3_info())
         << "ilegall storage_info, S3 info not set";
     const auto& s3_info = storage_info.s3_info();
 
-    block_access_opt->type = dataaccess::AccesserType::kS3;
+    block_access_opt->type = blockaccess::AccesserType::kS3;
     block_access_opt->s3_options.s3_info.ak = s3_info.ak();
     block_access_opt->s3_options.s3_info.sk = s3_info.sk();
     block_access_opt->s3_options.s3_info.endpoint = s3_info.endpoint();
@@ -41,7 +41,7 @@ static inline void FillBlockAccessOption(
         << "ilegall storage_info, RADOS info not set";
     const auto& rados_info = storage_info.rados_info();
 
-    block_access_opt->type = dataaccess::AccesserType::kRados;
+    block_access_opt->type = blockaccess::AccesserType::kRados;
     block_access_opt->rados_options.mon_host = rados_info.mon_host();
     block_access_opt->rados_options.user_name = rados_info.user_name();
     block_access_opt->rados_options.key = rados_info.key();

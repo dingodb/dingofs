@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/aws/client/aws_legacy_s3_client.h"
+#include "blockaccess/s3/aws/client/aws_legacy_s3_client.h"
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
@@ -53,7 +53,7 @@
 #include <utility>
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 void AwsLegacyS3Client::Init(const S3Options& options) {
@@ -342,5 +342,5 @@ bool AwsLegacyS3Client::ObjectExist(std::string bucket,
 }
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

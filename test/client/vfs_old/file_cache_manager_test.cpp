@@ -29,7 +29,7 @@
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
 #include "common/status.h"
-#include "dataaccess/mock/mock_accesser.h"
+#include "blockaccess/mock/mock_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -70,7 +70,7 @@ class FileCacheManagerTest : public testing::Test {
         option.readCacheThreads, nullptr);
 
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
-    mockBlockAccesser_ = std::make_shared<dataaccess::MockBlockAccesser>();
+    mockBlockAccesser_ = std::make_shared<blockaccess::MockBlockAccesser>();
 
     s3ClientAdaptor_->Init(option, mockBlockAccesser_.get(), mockInodeManager_,
                            nullptr, fsCacheManager, nullptr, nullptr, nullptr);
@@ -95,7 +95,7 @@ class FileCacheManagerTest : public testing::Test {
   std::shared_ptr<FileCacheManager> fileCacheManager_;
   std::shared_ptr<MockChunkCacheManager> mockChunkCacheManager_;
   std::shared_ptr<MockInodeCacheManager> mockInodeManager_;
-  std::shared_ptr<dataaccess::MockBlockAccesser> mockBlockAccesser_;
+  std::shared_ptr<blockaccess::MockBlockAccesser> mockBlockAccesser_;
   std::shared_ptr<KVClientManager> kvClientManager_;
   std::shared_ptr<TaskThreadPool<>> threadPool_ =
       std::make_shared<TaskThreadPool<>>();

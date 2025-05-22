@@ -28,7 +28,7 @@
 
 #include <utility>
 
-#include "dataaccess/block_accesser_factory.h"
+#include "blockaccess/block_accesser_factory.h"
 #include "mds/cachegroup/cache_group_member_manager.h"
 #include "mds/cachegroup/cache_group_member_service.h"
 #include "mds/cachegroup/config.h"
@@ -180,10 +180,10 @@ void MDS::InitFsManagerOptions(FsManagerOption* fs_manager_option) {
          "default value: "
       << fs_manager_option->spaceReloadConcurrency;
 
-  dataaccess::InitAwsSdkConfig(
+  blockaccess::InitAwsSdkConfig(
       conf_.get(),
       &fs_manager_option->block_access_option.s3_options.aws_sdk_config);
-  dataaccess::InitBlockAccesserThrottleOptions(
+  blockaccess::InitBlockAccesserThrottleOptions(
       conf_.get(), &fs_manager_option->block_access_option.throttle_options);
 }
 
@@ -197,7 +197,7 @@ void MDS::Init() {
   auto dlock = std::make_shared<DLock>(options_.dLockOptions, etcdClient_);
 
   block_accesser_factory_ =
-      std::make_shared<dataaccess::BlockAccesserFactory>();
+      std::make_shared<blockaccess::BlockAccesserFactory>();
 
   // init topology
   InitTopology(options_.topologyOptions);

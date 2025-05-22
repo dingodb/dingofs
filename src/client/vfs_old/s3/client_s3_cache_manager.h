@@ -121,11 +121,11 @@ class DataCache : public std::enable_shared_from_this<DataCache> {
  public:
   struct FlushBlock {
     FlushBlock(BlockKey key,
-               std::shared_ptr<dataaccess::PutObjectAsyncContext> context)
+               std::shared_ptr<blockaccess::PutObjectAsyncContext> context)
         : key(key), context(context) {}
 
     BlockKey key;
-    std::shared_ptr<dataaccess::PutObjectAsyncContext> context;
+    std::shared_ptr<blockaccess::PutObjectAsyncContext> context;
   };
 
  public:

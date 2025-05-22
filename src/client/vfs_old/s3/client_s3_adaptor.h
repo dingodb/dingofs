@@ -36,7 +36,7 @@
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/wait_interval.h"
 
@@ -60,7 +60,7 @@ class S3ClientAdaptor {
    */
   virtual DINGOFS_ERROR Init(
       const common::S3ClientAdaptorOption& option,
-      dataaccess::BlockAccesser* block_accesser,
+      blockaccess::BlockAccesser* block_accesser,
       std::shared_ptr<InodeCacheManager> inodeManager,
       std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
       std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -85,7 +85,7 @@ class S3ClientAdaptor {
   virtual pb::mds::FSStatusCode AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
                                                uint64_t* chunkId) = 0;
   virtual void SetFsId(uint32_t fsId) = 0;
-  virtual dataaccess::BlockAccesser* GetBlockAccesser() = 0;
+  virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
   virtual uint64_t GetBlockSize() = 0;
   virtual uint64_t GetChunkSize() = 0;
   virtual std::shared_ptr<BlockCache> GetBlockCache() = 0;
@@ -115,7 +115,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    */
   DINGOFS_ERROR
   Init(const common::S3ClientAdaptorOption& option,
-       dataaccess::BlockAccesser* block_accesser,
+       blockaccess::BlockAccesser* block_accesser,
        std::shared_ptr<InodeCacheManager> inodeManager,
        std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
        std::shared_ptr<FsCacheManager> fsCacheManager,
@@ -148,7 +148,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   }
   uint32_t GetFlushInterval() const { return flushIntervalSec_; }
 
-  dataaccess::BlockAccesser* GetBlockAccesser() override {
+  blockaccess::BlockAccesser* GetBlockAccesser() override {
     CHECK_NOTNULL(block_accesser_);
     return block_accesser_;
   }
@@ -220,7 +220,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   void Enqueue(std::shared_ptr<FlushChunkCacheContext> context);
 
  private:
-  dataaccess::BlockAccesser* block_accesser_{nullptr};
+  blockaccess::BlockAccesser* block_accesser_{nullptr};
   uint64_t blockSize_;
   uint64_t chunkSize_;
   uint32_t prefetchBlocks_;

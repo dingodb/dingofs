@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
-#define DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
+#ifndef DINGOFS_BLOCK_ACCESS_ACCESS_LOG_H_
+#define DINGOFS_BLOCK_ACCESS_ACCESS_LOG_H_
 
 #include <butil/time.h>
 #include <spdlog/sinks/daily_file_sink.h>
@@ -26,7 +26,7 @@
 #include <string>
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 extern std::shared_ptr<spdlog::logger> block_access_logger;
 extern bool initialized;
@@ -50,7 +50,7 @@ struct BlockAccessLogGuard {
   int64_t start_us = 0;
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGODB_SRC_AWS_S3_ACCESS_LOG_H_
+#endif  // DINGOFS_BLOCK_ACCESS_ACCESS_LOG_H_

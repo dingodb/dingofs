@@ -226,7 +226,7 @@ MetaStatusCode TrashImpl::DeleteInodeAndData(const TrashItem& item) {
     client_adaptor_option.block_accesser_factory =
         options_.block_accesser_factory;
 
-    dataaccess::BlockAccessOptions block_access_options =
+    blockaccess::BlockAccessOptions block_access_options =
         options_.block_access_options;
     FillBlockAccessOption(fsInfo.storage_info(), &block_access_options);
 

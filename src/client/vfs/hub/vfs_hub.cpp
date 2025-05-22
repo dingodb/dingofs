@@ -29,7 +29,7 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -75,7 +75,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(&fs_info_));
 
-  block_accesser_ = std::make_unique<dataaccess::BlockAccesserImpl>(
+  block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
       client_option_.block_access_opt);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
@@ -125,7 +125,7 @@ cache::blockcache::BlockCache* VFSHubImpl::GetBlockCache() {
   return block_cache_.get();
 }
 
-dataaccess::BlockAccesser* VFSHubImpl::GetBlockAccesser() {
+blockaccess::BlockAccesser* VFSHubImpl::GetBlockAccesser() {
   CHECK_NOTNULL(block_accesser_);
   return block_accesser_.get();
 }

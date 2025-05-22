@@ -32,7 +32,7 @@
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 
 namespace dingofs {
 
@@ -40,7 +40,7 @@ namespace client {
 
 using cache::blockcache::BlockCache;
 using common::S3ClientAdaptorOption;
-using dataaccess::BlockAccesserSPtr;
+using blockaccess::BlockAccesserSPtr;
 using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;
@@ -52,7 +52,7 @@ using pb::metaserver::S3ChunkInfoList;
 
 DINGOFS_ERROR
 S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
-                          dataaccess::BlockAccesser* block_accesser,
+                          blockaccess::BlockAccesser* block_accesser,
                           std::shared_ptr<InodeCacheManager> inodeManager,
                           std::shared_ptr<MdsClient> mdsClient,
                           std::shared_ptr<FsCacheManager> fsCacheManager,

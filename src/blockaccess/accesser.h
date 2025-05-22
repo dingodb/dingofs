@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_
-#define DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_
+#ifndef DINGOFS_BLOCK_ACCESS_DATA_ACCESSER_H_
+#define DINGOFS_BLOCK_ACCESS_DATA_ACCESSER_H_
 
 #include <functional>
 #include <memory>
 #include <string>
 
 #include "common/status.h"
-#include "dataaccess/accesser_common.h"
+#include "blockaccess/accesser_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 // Accesser is a class that provides a way to access data from a data
 // source. It is a base class for all data access classes.
@@ -61,7 +61,7 @@ class Accesser {
   virtual Status BatchDelete(const std::list<std::string>& keys) = 0;
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_DATA_ACCESSER_H_
+#endif  // DINGOFS_BLOCK_ACCESS_DATA_ACCESSER_H_

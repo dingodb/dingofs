@@ -36,7 +36,7 @@
 #include "absl/cleanup/cleanup.h"
 #include "common/config_mapper.h"
 #include "common/s3util.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -54,7 +54,7 @@ using pb::metaserver::MetaStatusCode;
 
 namespace {
 
-std::unique_ptr<dataaccess::BlockAccesser> SetupS3Adapter(
+std::unique_ptr<blockaccess::BlockAccesser> SetupS3Adapter(
     const S3CompactWorkerOptions* opts, uint64_t fs_id, uint64_t* block_size,
     uint64_t* chunk_size) {
   FsInfo fs_info;
@@ -69,7 +69,7 @@ std::unique_ptr<dataaccess::BlockAccesser> SetupS3Adapter(
   *block_size = fs_info.block_size();
   *chunk_size = fs_info.chunk_size();
 
-  dataaccess::BlockAccessOptions block_access_opts = opts->block_access_opts;
+  blockaccess::BlockAccessOptions block_access_opts = opts->block_access_opts;
   FillBlockAccessOption(fs_info.storage_info(), &block_access_opts);
 
   auto block_accesser =
@@ -89,7 +89,7 @@ std::unique_ptr<dataaccess::BlockAccesser> SetupS3Adapter(
 }
 
 void DeleteObjs(const std::vector<std::string>& objs,
-                dataaccess::BlockAccesser* block_accesser) {
+                blockaccess::BlockAccesser* block_accesser) {
   for (const auto& obj : objs) {
     VLOG(9) << "s3compact: delete block: " << obj;
     Status s = block_accesser->Delete(obj);
@@ -567,7 +567,7 @@ void CompactInodeJob::CompactChunks(const S3CompactTask& task) {
 
   uint64_t block_size;
   uint64_t chunk_size;
-  std::unique_ptr<dataaccess::BlockAccesser> block_accesser =
+  std::unique_ptr<blockaccess::BlockAccesser> block_accesser =
       SetupS3Adapter(opts_, fs_id, &block_size, &chunk_size);
 
   if (block_accesser == nullptr) return;

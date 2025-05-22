@@ -28,8 +28,8 @@
 #include <mutex>
 
 #include "absl/memory/memory.h"
-#include "dataaccess/block_accesser_factory.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/block_accesser_factory.h"
+#include "blockaccess/s3/s3_common.h"
 #include "metaserver/compaction/fs_info_cache.h"
 #include "metaserver/compaction/s3compact_worker.h"
 #include "utils/string_util.h"
@@ -49,9 +49,9 @@ void S3CompactWorkQueueOption::Init(std::shared_ptr<Configuration> conf) {
   conf->GetValueFatalIfFail("global.ip", &metaserverIpStr);
   conf->GetValueFatalIfFail("global.port", &metaserverPort);
 
-  dataaccess::InitAwsSdkConfig(conf.get(),
+  blockaccess::InitAwsSdkConfig(conf.get(),
                                &block_access_opts.s3_options.aws_sdk_config);
-  dataaccess::InitBlockAccesserThrottleOptions(
+  blockaccess::InitBlockAccesserThrottleOptions(
       conf.get(), &block_access_opts.throttle_options);
 
   conf->GetValueFatalIfFail("s3compactwq.enable", &enable);
@@ -89,7 +89,7 @@ void S3CompactManager::Init(std::shared_ptr<Configuration> conf) {
               << opts_.metaserverPort;
 
     block_accesser_factory_ =
-        std::make_shared<dataaccess::BlockAccesserFactory>();
+        std::make_shared<blockaccess::BlockAccesserFactory>();
     fs_info_cache_ = std::make_unique<FsInfoCache>(
         opts_.fs_info_cache_size, opts_.mdsAddrs, metaserver_addr);
 

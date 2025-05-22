@@ -35,7 +35,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/utils/access_log.h"
-#include "dataaccess/mock/mock_accesser.h"
+#include "blockaccess/mock/mock_accesser.h"
 #include "options/cache/block_cache.h"
 
 namespace dingofs {
@@ -128,7 +128,7 @@ class BlockCacheBuilder {
     std::string root_dir = GetRootDir();
     system(("mkdir -p " + root_dir).c_str());
 
-    block_accesser_ = std::make_shared<dataaccess::MockBlockAccesser>();
+    block_accesser_ = std::make_shared<blockaccess::MockBlockAccesser>();
     auto block_cache =
         std::make_shared<BlockCacheImpl>(option_, block_accesser_.get());
 
@@ -137,7 +137,7 @@ class BlockCacheBuilder {
 
   void Cleanup() const { system(("rm -r " + GetRootDir()).c_str()); }
 
-  std::shared_ptr<dataaccess::MockBlockAccesser> GetBlockAccesser() {
+  std::shared_ptr<blockaccess::MockBlockAccesser> GetBlockAccesser() {
     return block_accesser_;
   }
 
@@ -147,7 +147,7 @@ class BlockCacheBuilder {
 
  private:
   BlockCacheOption option_;
-  std::shared_ptr<dataaccess::MockBlockAccesser> block_accesser_;
+  std::shared_ptr<blockaccess::MockBlockAccesser> block_accesser_;
 };
 
 }  // namespace blockcache

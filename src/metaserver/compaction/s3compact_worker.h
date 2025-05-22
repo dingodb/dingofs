@@ -32,8 +32,8 @@
 #include <thread>
 
 #include "absl/types/optional.h"
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser_factory.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/block_accesser_factory.h"
 #include "metaserver/compaction/s3compact.h"
 #include "utils/interruptible_sleeper.h"
 
@@ -60,8 +60,8 @@ struct S3CompactWorkerContext {
 };
 
 struct S3CompactWorkerOptions {
-  dataaccess::BlockAccessOptions block_access_opts;
-  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
+  blockaccess::BlockAccessOptions block_access_opts;
+  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
 
   FsInfoCache* fs_info_cache;
 

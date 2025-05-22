@@ -35,8 +35,8 @@
 
 #include "common/config_mapper.h"
 #include "common/define.h"
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "mds/common/types.h"
@@ -298,11 +298,11 @@ FSStatusCode FsManager::CreateFs(const pb::mds::CreateFsRequest* request,
   // check s3info
 
   if (!skip_create_new_fs) {
-    dataaccess::BlockAccessOptions block_access_opt =
+    blockaccess::BlockAccessOptions block_access_opt =
         option_.block_access_option;
     FillBlockAccessOption(storage_info, &block_access_opt);
 
-    std::unique_ptr<dataaccess::BlockAccesser> block_accesser =
+    std::unique_ptr<blockaccess::BlockAccesser> block_accesser =
         option_.block_accesser_factory->NewBlockAccesser(block_access_opt);
     Status s = block_accesser->Init();
     if (!s.ok()) {

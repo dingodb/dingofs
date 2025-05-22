@@ -19,8 +19,8 @@
 
 #include <memory>
 
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser_factory.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/block_accesser_factory.h"
 #include "metaserver/s3/metaserver_s3_adaptor.h"
 #include "stub/rpcclient/mds_client.h"
 
@@ -30,8 +30,8 @@ namespace metaserver {
 struct PartitionCleanOption {
   uint32_t scanPeriodSec;
   uint32_t inodeDeletePeriodMs;
-  dataaccess::BlockAccessOptions block_access_options;
-  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
+  blockaccess::BlockAccessOptions block_access_options;
+  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
   S3ClientAdaptorOption s3_client_adaptor_option;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient;
 };

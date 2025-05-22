@@ -65,7 +65,7 @@ using dingofs::base::string::StrFormat;
 using dingofs::cache::blockcache::BlockCacheImpl;
 using dingofs::cache::blockcache::BlockKey;
 using dingofs::cache::utils::BlockAccesserPoolImpl;
-using dingofs::dataaccess::BlockAccesserSPtr;
+using dingofs::blockaccess::BlockAccesserSPtr;
 using dingofs::stub::common::MdsOption;
 using dingofs::stub::rpcclient::MDSBaseClient;
 using dingofs::stub::rpcclient::MdsClientImpl;

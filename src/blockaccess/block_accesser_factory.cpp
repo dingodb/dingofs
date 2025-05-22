@@ -14,28 +14,24 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_FACTORY_H_
-#define DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_FACTORY_H_
+#include "blockaccess/block_accesser_factory.h"
 
 #include <memory>
 
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
-class BlockAccesserFactory {
- public:
-  virtual ~BlockAccesserFactory() = default;
+BlockAccesserUPtr BlockAccesserFactory::NewBlockAccesser(
+    const BlockAccessOptions& options) {
+  return std::make_unique<blockaccess::BlockAccesserImpl>(options);
+}
 
-  virtual BlockAccesserUPtr NewBlockAccesser(const BlockAccessOptions& options);
+BlockAccesserSPtr BlockAccesserFactory::NewShareBlockAccesser(
+    const BlockAccessOptions& options) {
+  return std::make_shared<blockaccess::BlockAccesserImpl>(options);
+}
 
-  virtual BlockAccesserSPtr NewShareBlockAccesser(
-      const BlockAccessOptions& options);
-};
-
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
-
-#endif  // DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_FACTORY_H_

@@ -23,14 +23,14 @@
 
 #include <string>
 
-#include "dataaccess/accesser_common.h"
+#include "blockaccess/accesser_common.h"
 #include "utils/configuration.h"
 #include "utils/macros.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 struct AwsGetObjectAsyncContext;
@@ -80,7 +80,7 @@ inline Aws::String GetObjectRequestRange(uint64_t offset, uint64_t len) {
 }
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
 #endif  // DATA_ACCESS_AWS_S3_COMMON_H

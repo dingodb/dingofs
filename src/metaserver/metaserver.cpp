@@ -34,8 +34,8 @@
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/s3/aws/s3_adapter.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/s3/aws/s3_adapter.h"
 #include "metaserver/common/dynamic_config.h"
 #include "metaserver/common/types.h"
 #include "metaserver/compaction/s3compact_manager.h"
@@ -222,16 +222,16 @@ void Metaserver::Init() {
   InitMetaClient();
 
   block_accesser_factory_ =
-      std::make_shared<dataaccess::BlockAccesserFactory>();
+      std::make_shared<blockaccess::BlockAccesserFactory>();
 
   S3ClientAdaptorOption s3_client_adaptor_option;
   InitS3Option(conf_, &s3_client_adaptor_option);
 
   // read aws sdk relate param from conf file
-  dataaccess::BlockAccessOptions block_access_options;
-  dataaccess::InitAwsSdkConfig(conf_.get(),
+  blockaccess::BlockAccessOptions block_access_options;
+  blockaccess::InitAwsSdkConfig(conf_.get(),
                                &block_access_options.s3_options.aws_sdk_config);
-  dataaccess::InitBlockAccesserThrottleOptions(
+  blockaccess::InitBlockAccesserThrottleOptions(
       conf_.get(), &block_access_options.throttle_options);
 
   {

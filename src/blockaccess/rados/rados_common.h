@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_RADOS_COMMON_H_
-#define DINGOFS_DATA_ACCESS_RADOS_COMMON_H_
+#ifndef DINGOFS_BLOCK_ACCESS_RADOS_COMMON_H_
+#define DINGOFS_BLOCK_ACCESS_RADOS_COMMON_H_
 
 #include <string>
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 struct RadosOptions {
   std::string mon_host;
@@ -30,6 +30,6 @@ struct RadosOptions {
   std::string cluster_name{"ceph"};
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
-#endif  // DINGOFS_DATA_ACCESS_RADOS_COMMON_H_
+#endif  // DINGOFS_BLOCK_ACCESS_RADOS_COMMON_H_

@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_
-#define DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_
+#ifndef DINGOFS_TEST_CLIENT_BLOCKACCESS_MOCK_ACCESSER_H_
+#define DINGOFS_TEST_CLIENT_BLOCKACCESS_MOCK_ACCESSER_H_
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -29,13 +29,13 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 
 using ::testing::_;
 using ::testing::Return;
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 class MockBlockAccesser : public BlockAccesser {
  public:
@@ -83,7 +83,7 @@ class MockBlockAccesser : public BlockAccesser {
               (override));
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_DATAACCESS_MOCK_ACCESSER_H_
+#endif  // DINGOFS_TEST_CLIENT_BLOCKACCESS_MOCK_ACCESSER_H_

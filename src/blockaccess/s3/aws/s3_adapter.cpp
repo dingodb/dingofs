@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/aws/s3_adapter.h"
+#include "blockaccess/s3/aws/s3_adapter.h"
 
 #include <aws/core/Aws.h>
 
-#include "dataaccess/s3/aws/client/aws_crt_s3_client.h"
-#include "dataaccess/s3/aws/client/aws_legacy_s3_client.h"
+#include "blockaccess/s3/aws/client/aws_crt_s3_client.h"
+#include "blockaccess/s3/aws/client/aws_legacy_s3_client.h"
 
 #define AWS_ALLOCATE_TAG __FILE__ ":" STRINGIFY(__LINE__)
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 static std::once_flag s3_init_flag;
@@ -119,5 +119,5 @@ bool S3Adapter::ObjectExist(const std::string& key) {
 }
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

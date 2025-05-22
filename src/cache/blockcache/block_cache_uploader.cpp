@@ -46,7 +46,7 @@ using dingofs::cache::utils::PhaseTimer;
 using dingofs::utils::TaskThreadPool;
 
 BlockCacheUploader::BlockCacheUploader(
-    dataaccess::BlockAccesser* block_accesser,
+    blockaccess::BlockAccesser* block_accesser,
     std::shared_ptr<CacheStore> store, std::shared_ptr<Countdown> stage_count)
     : running_(false),
       block_accesser_(block_accesser),

@@ -29,7 +29,7 @@
 #include <ostream>
 
 #include "common/config_mapper.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "dingofs/mds.pb.h"
 #include "stub/metric/metric.h"
 #include "utils/concurrent/concurrent.h"
@@ -38,7 +38,7 @@ namespace dingofs {
 namespace cache {
 namespace utils {
 
-using dingofs::dataaccess::BlockAccesserSPtr;
+using dingofs::blockaccess::BlockAccesserSPtr;
 using dingofs::pb::mds::FSStatusCode;
 using dingofs::stub::rpcclient::MdsClient;
 using dingofs::utils::ReadLockGuard;
@@ -95,12 +95,12 @@ bool BlockAccesserPoolImpl::NewBlockAccesser(
     return false;
   }
 
-  dataaccess::BlockAccessOptions block_access_opt;
+  blockaccess::BlockAccessOptions block_access_opt;
   const auto& storage_info = fs_info.storage_info();
   FillBlockAccessOption(storage_info, &block_access_opt);
 
   auto accesser =
-      std::make_unique<dataaccess::BlockAccesserImpl>(block_access_opt);
+      std::make_unique<blockaccess::BlockAccesserImpl>(block_access_opt);
   Status s = accesser->Init();
   if (s.ok()) {
     block_accesser = std::move(accesser);

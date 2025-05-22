@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 
 #include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
@@ -22,13 +22,13 @@
 #include <memory>
 
 #include "common/status.h"
-#include "dataaccess/block_access_log.h"
-#include "dataaccess/rados/rados_accesser.h"
-#include "dataaccess/s3/s3_accesser.h"
+#include "blockaccess/block_access_log.h"
+#include "blockaccess/rados/rados_accesser.h"
+#include "blockaccess/s3/s3_accesser.h"
 #include "utils/dingo_define.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 static bvar::Adder<uint64_t> block_put_async_num("block_put_async_num");
 static bvar::Adder<uint64_t> block_put_sync_num("block_put_sync_num");
@@ -269,5 +269,5 @@ Status BlockAccesserImpl::BatchDelete(const std::list<std::string>& keys) {
   return (s = data_accesser_->BatchDelete(keys));
 }
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

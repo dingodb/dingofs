@@ -36,7 +36,7 @@ namespace metaserver {
 
 Status S3ClientAdaptorImpl::Init(
     const S3ClientAdaptorOption& option,
-    dataaccess::BlockAccessOptions block_access_option) {
+    blockaccess::BlockAccessOptions block_access_option) {
   blockSize_ = option.blockSize;
   chunkSize_ = option.chunkSize;
   batchSize_ = option.batchSize;

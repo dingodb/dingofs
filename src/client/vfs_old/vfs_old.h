@@ -33,7 +33,7 @@
 #include "client/vfs_old/lease/lease_excutor.h"
 #include "client/vfs_old/service/inode_objects_service.h"
 #include "client/vfs_old/warmup/warmup_manager.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "dingofs/mds.pb.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/throttle.h"
@@ -196,7 +196,7 @@ class VFSOld : public VFS {
   // s3 adaptor
   std::shared_ptr<S3ClientAdaptor> s3_adapter_;
 
-  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_{nullptr};
+  std::unique_ptr<blockaccess::BlockAccesser> block_accesser_{nullptr};
 
   brpc::Server server_;
   InodeObjectsService inode_object_service_;

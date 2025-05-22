@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "dataaccess/block_access_log.h"
+#include "blockaccess/block_access_log.h"
 
 #include <absl/strings/str_format.h>
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 std::shared_ptr<spdlog::logger> block_access_logger;
 bool initialized = false;
@@ -36,5 +36,5 @@ bool InitBlockAccessLog(const std::string& prefix) {
   return true;
 }
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

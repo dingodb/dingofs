@@ -50,9 +50,9 @@ static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
 namespace dingofs {
 namespace client {
 
-using dataaccess::GetObjectAsyncCallBack;
-using dataaccess::PutObjectAsyncCallBack;
-using dataaccess::PutObjectAsyncContext;
+using blockaccess::GetObjectAsyncCallBack;
+using blockaccess::PutObjectAsyncCallBack;
+using blockaccess::PutObjectAsyncContext;
 
 using cache::blockcache::Block;
 using cache::blockcache::BlockContext;

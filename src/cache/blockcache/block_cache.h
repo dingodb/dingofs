@@ -33,7 +33,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/countdown.h"
 #include "cache/common/common.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 
 namespace dingofs {
 namespace cache {
@@ -72,7 +72,7 @@ class BlockCache {
 class BlockCacheImpl : public BlockCache {
  public:
   explicit BlockCacheImpl(BlockCacheOption option,
-                          dataaccess::BlockAccesser* block_accesser);
+                          blockaccess::BlockAccesser* block_accesser);
 
   ~BlockCacheImpl() override = default;
 
@@ -105,7 +105,7 @@ class BlockCacheImpl : public BlockCache {
  private:
   BlockCacheOption option_;
   std::atomic<bool> running_;
-  dataaccess::BlockAccesser* block_accesser_;
+  blockaccess::BlockAccesser* block_accesser_;
   std::shared_ptr<CacheStore> store_;
   std::shared_ptr<Countdown> stage_count_;
   std::shared_ptr<BlockCacheThrottle> throttle_;

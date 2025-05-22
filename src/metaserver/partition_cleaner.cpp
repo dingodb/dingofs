@@ -118,7 +118,7 @@ MetaStatusCode PartitionCleaner::CleanDataAndDeleteInode(const Inode& inode) {
     client_adaptor_option.block_accesser_factory =
         partition_clean_option_.block_accesser_factory;
 
-    dataaccess::BlockAccessOptions block_access_options =
+    blockaccess::BlockAccessOptions block_access_options =
         partition_clean_option_.block_access_options;
     FillBlockAccessOption(fs_info.storage_info(), &block_access_options);
 

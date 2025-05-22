@@ -26,8 +26,8 @@
 #include <csignal>
 
 #include "common/dynamic_vlog.h"
-#include "dataaccess/block_access_log.h"
-#include "dataaccess/s3/aws/s3_adapter.h"
+#include "blockaccess/block_access_log.h"
+#include "blockaccess/s3/aws/s3_adapter.h"
 #include "mds/mds.h"
 #include "stub/common/version.h"
 #include "utils/configuration.h"
@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
 
   dingofs::stub::common::LogVerion();
 
-  dingofs::dataaccess::InitBlockAccessLog(FLAGS_log_dir);
+  dingofs::blockaccess::InitBlockAccessLog(FLAGS_log_dir);
 
   conf->PrintConfig();
 
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
   mds.Stop();
 
   // Ugly shutdown
-  dingofs::dataaccess::aws::S3Adapter::Shutdown();
+  dingofs::blockaccess::aws::S3Adapter::Shutdown();
   google::ShutdownGoogleLogging();
   return 0;
 }

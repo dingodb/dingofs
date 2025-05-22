@@ -27,7 +27,7 @@
 #include <unordered_map>
 
 #include "cache/common/common.h"
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -40,7 +40,7 @@ class BlockAccesserPool {
   virtual ~BlockAccesserPool() = default;
 
   virtual Status Get(uint32_t fs_id,
-                     dataaccess::BlockAccesserSPtr& block_accesser) = 0;
+                     blockaccess::BlockAccesserSPtr& block_accesser) = 0;
 };
 
 class BlockAccesserPoolImpl : public BlockAccesserPool {
@@ -49,20 +49,20 @@ class BlockAccesserPoolImpl : public BlockAccesserPool {
       std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
 
   Status Get(uint32_t fs_id,
-             dataaccess::BlockAccesserSPtr& block_accesser) override;
+             blockaccess::BlockAccesserSPtr& block_accesser) override;
 
  private:
-  Status DoGet(uint32_t fs_id, dataaccess::BlockAccesserSPtr& block_accesser);
+  Status DoGet(uint32_t fs_id, blockaccess::BlockAccesserSPtr& block_accesser);
 
-  void DoInsert(uint32_t fs_id, dataaccess::BlockAccesserSPtr block_accesser);
+  void DoInsert(uint32_t fs_id, blockaccess::BlockAccesserSPtr block_accesser);
 
   bool NewBlockAccesser(uint32_t fs_id,
-                        dataaccess::BlockAccesserSPtr& block_accesser);
+                        blockaccess::BlockAccesserSPtr& block_accesser);
 
  private:
   dingofs::utils::RWLock rwlock_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
-  std::unordered_map<uint32_t, dataaccess::BlockAccesserSPtr> block_accessers_;
+  std::unordered_map<uint32_t, blockaccess::BlockAccesserSPtr> block_accessers_;
 };
 
 }  // namespace utils

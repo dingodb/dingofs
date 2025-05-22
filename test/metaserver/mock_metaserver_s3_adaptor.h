@@ -39,7 +39,7 @@ class MockS3ClientAdaptor : public S3ClientAdaptor {
 
   MOCK_METHOD(Status, Init,
               (const S3ClientAdaptorOption& option,
-               dataaccess::BlockAccessOptions block_access_option),
+               blockaccess::BlockAccessOptions block_access_option),
               (override));
 
   MOCK_METHOD(Status, Delete, (const pb::metaserver::Inode& inode), (override));

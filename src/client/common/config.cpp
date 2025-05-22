@@ -28,8 +28,8 @@
 #include "base/math/math.h"
 #include "base/string/string.h"
 #include "client/common/dynamic_config.h"
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/s3/s3_common.h"
 #include "gflags/gflags.h"
 #include "options/cache/block_cache.h"
 #include "utils/gflags_helper.h"
@@ -373,9 +373,9 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   InitExcutorOption(conf, &client_option->excutorOpt, false);
   InitExcutorOption(conf, &client_option->excutorInternalOpt, true);
   InitS3ClientAdaptorOption(conf, &client_option->s3_client_adaptor_opt);
-  dataaccess::InitAwsSdkConfig(
+  blockaccess::InitAwsSdkConfig(
       conf, &client_option->block_access_opt.s3_options.aws_sdk_config);
-  dataaccess::InitBlockAccesserThrottleOptions(
+  blockaccess::InitBlockAccesserThrottleOptions(
       conf, &client_option->block_access_opt.throttle_options);
   InitLeaseOpt(conf, &client_option->leaseOpt);
   InitRefreshDataOpt(conf, &client_option->refreshDataOption);

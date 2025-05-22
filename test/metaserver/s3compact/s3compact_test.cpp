@@ -72,7 +72,7 @@ class S3CompactTest : public ::testing::Test {
     opts_.s3ReadMaxRetry = 2;
     opts_.s3ReadRetryInterval = 1;
     uint64_t s3adapterSize = 10;
-    dataaccess::aws::S3AdapterOption opts;
+    blockaccess::aws::S3AdapterOption opts;
     s3adapterManager_ =
         std::make_shared<MockS3AdapterManager>(s3adapterSize, opts);
     s3adapter_ = std::make_shared<MockS3Adapter>();
@@ -179,7 +179,7 @@ TEST_F(S3CompactTest, test_S3InfoCache) {
 }
 
 TEST_F(S3CompactTest, test_S3AdapterManager) {
-  dataaccess::aws::S3AdapterOption opt;
+  blockaccess::aws::S3AdapterOption opt;
   opt.loglevel = 0;
   opt.s3Address = "";
   opt.ak = "";

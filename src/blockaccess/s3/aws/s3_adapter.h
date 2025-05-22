@@ -17,12 +17,12 @@
 #ifndef DINGOFS_DATAACCESS_AWS_S3_ADAPTER_H_
 #define DINGOFS_DATAACCESS_AWS_S3_ADAPTER_H_
 
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/s3/aws/client/aws_s3_client.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/s3/aws/client/aws_s3_client.h"
+#include "blockaccess/s3/s3_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 namespace aws {
 
 class S3Adapter {
@@ -64,7 +64,7 @@ class S3Adapter {
 };
 
 }  // namespace aws
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
 #endif  // DINGOFS_DATAACCESS_AWS_S3_ADAPTER_H_

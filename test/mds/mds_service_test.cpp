@@ -39,7 +39,7 @@
 #include "mds/topology/topology_storage_codec.h"
 #include "mds/topology/topology_storge_etcd.h"
 
-using ::dingofs::dataaccess::aws::MockS3Adapter;
+using ::dingofs::blockaccess::aws::MockS3Adapter;
 using ::dingofs::mds::topology::DefaultIdGenerator;
 using ::dingofs::mds::topology::DefaultTokenGenerator;
 using ::dingofs::mds::topology::MockEtcdClient;
@@ -69,7 +69,7 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using ::dingofs::dataaccess::aws::MockS3Adapter;
+using ::dingofs::blockaccess::aws::MockS3Adapter;
 using ::google::protobuf::util::MessageDifferencer;
 
 namespace dingofs {

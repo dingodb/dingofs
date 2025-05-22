@@ -33,7 +33,7 @@
 #include "client/vfs_old/mock_kvclient.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/status.h"
-#include "dataaccess/mock/mock_accesser.h"
+#include "blockaccess/mock/mock_accesser.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
@@ -149,7 +149,7 @@ class ClientS3IntegrationTest : public testing::Test {
 
     std::shared_ptr<MockInodeCacheManager> mockInodeManager(&mockInodeManager_);
     std::shared_ptr<MockMdsClient> mockMdsClient(&mockMdsClient_);
-    std::shared_ptr<dataaccess::MockBlockAccesser> mockBlockAccesser(
+    std::shared_ptr<blockaccess::MockBlockAccesser> mockBlockAccesser(
         &mockBlockAccesser_);
     s3ClientAdaptor_ = new S3ClientAdaptorImpl();
     auto fsCacheManager = std::make_shared<FsCacheManager>(
@@ -179,7 +179,7 @@ class ClientS3IntegrationTest : public testing::Test {
  protected:
   S3ClientAdaptorImpl* s3ClientAdaptor_;
   MockMetaServerService mockMetaServerService_;
-  dataaccess::MockBlockAccesser mockBlockAccesser_;
+  blockaccess::MockBlockAccesser mockBlockAccesser_;
   MockInodeCacheManager mockInodeManager_;
   MockMdsClient mockMdsClient_;
   MockKVClient mockKVClient_;
@@ -1079,7 +1079,7 @@ TEST_F(ClientS3IntegrationTest, test_truncate_small3) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -1344,7 +1344,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_first_write) {
 
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             context->ret_code = 0;
             context->cb(context);
@@ -1406,7 +1406,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_overlap_write) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             context->ret_code = 0;
             context->cb(context);
@@ -1461,7 +1461,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_overlap_write2) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             context->ret_code = 0;
             context->cb(context);
@@ -1521,7 +1521,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_hole_write) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             context->ret_code = 0;
             context->cb(context);
@@ -1581,7 +1581,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_more_chunk) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             context->ret_code = 0;
             context->cb(context);
@@ -1650,7 +1650,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read1) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -1731,7 +1731,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read2) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -1815,7 +1815,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read3) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -1920,7 +1920,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read4) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2000,7 +2000,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read5) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2094,7 +2094,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read6) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2187,7 +2187,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read7) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2283,7 +2283,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read8) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2377,7 +2377,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read9) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2479,7 +2479,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read10) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2592,7 +2592,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read11) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2676,7 +2676,7 @@ TEST_F(ClientS3IntegrationTest, test_flush_write_and_read12) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2756,7 +2756,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_success_and_fail) {
           DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::NOTEXIST)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2814,7 +2814,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_overlap_write) {
       .WillOnce(DoAll(SetArgReferee<1>(inode), Return(DINGOFS_ERROR::OK)));
   EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
       .WillRepeatedly(
-          Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+          Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                          context) {
             S3Data& tmp = gObjectDataMaps[context->key];
             tmp.len = context->buffer_size;
@@ -2861,7 +2861,7 @@ TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
     EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
         .Times(2)
         .WillRepeatedly(
-            Invoke([&](const std::shared_ptr<dataaccess::PutObjectAsyncContext>&
+            Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
                            context) {
               context->ret_code = 0;
               context->cb(context);

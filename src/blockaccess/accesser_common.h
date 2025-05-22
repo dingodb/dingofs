@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_ACCESSER_COMMON_H_
-#define DINGOFS_DATA_ACCESS_ACCESSER_COMMON_H_
+#ifndef DINGOFS_BLOCK_ACCESS_ACCESSER_COMMON_H_
+#define DINGOFS_BLOCK_ACCESS_ACCESSER_COMMON_H_
 
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 
-#include "dataaccess/rados/rados_common.h"
-#include "dataaccess/s3/s3_common.h"
+#include "blockaccess/rados/rados_common.h"
+#include "blockaccess/s3/s3_common.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 struct BlockAccesserThrottleOptions {
   uint64_t maxAsyncRequestInflightBytes{0};
@@ -115,7 +115,7 @@ struct GetObjectAsyncContext {
   GetObjectAsyncCallBack cb;
 };
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_ACCESSER_COMMON_H_
+#endif  // DINGOFS_BLOCK_ACCESS_ACCESSER_COMMON_H_

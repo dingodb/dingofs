@@ -497,8 +497,8 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   dingofs::utils::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
   // callback function
-  dataaccess::GetObjectAsyncCallBack cb =
-      [&](const std::shared_ptr<dataaccess::GetObjectAsyncContext>& context) {
+  blockaccess::GetObjectAsyncCallBack cb =
+      [&](const std::shared_ptr<blockaccess::GetObjectAsyncContext>& context) {
         // metrics for async get data from s3
         MetricGuard guard(&context->ret_code, &S3Metric::GetInstance().read_s3,
                           context->len, start);
@@ -558,7 +558,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
 
       char* cache_s3 = new char[read_len];
       memset(cache_s3, 0, read_len);
-      auto context = std::make_shared<dataaccess::GetObjectAsyncContext>();
+      auto context = std::make_shared<blockaccess::GetObjectAsyncContext>();
       context->key = name;
       context->buf = cache_s3;
       context->offset = 0;
@@ -713,7 +713,7 @@ void WarmupManagerS3Impl::AddFetchS3objectsTask(Ino key,
 
 void WarmupManagerS3Impl::PutObjectToCache(
     Ino ino,
-    const std::shared_ptr<dataaccess::GetObjectAsyncContext>& context) {
+    const std::shared_ptr<blockaccess::GetObjectAsyncContext>& context) {
   ReadLockGuard lock(inode2ProgressMutex_);
   auto iter = FindWarmupProgressByKeyLocked(ino);
   if (iter == inode2Progress_.end()) {

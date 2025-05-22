@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "dataaccess/block_accesser.h"
+#include "blockaccess/block_accesser.h"
 #include "metaserver/compaction/s3compact_worker.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/storage/converter.h"
@@ -81,7 +81,7 @@ class CompactInodeJob {
     pb::common::PartitionInfo pinfo;
     uint64_t blockSize;
     uint64_t chunkSize;
-    dataaccess::BlockAccesser* block_accesser;
+    blockaccess::BlockAccesser* block_accesser;
   };
 
   struct S3NewChunkInfo {

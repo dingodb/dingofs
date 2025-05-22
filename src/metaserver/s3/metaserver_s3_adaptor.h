@@ -28,9 +28,9 @@
 #include <memory>
 #include <string>
 
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser.h"
-#include "dataaccess/block_accesser_factory.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/block_accesser.h"
+#include "blockaccess/block_accesser_factory.h"
 #include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
@@ -44,7 +44,7 @@ struct S3ClientAdaptorOption {
   uint64_t chunkSize; // from fs info
   uint64_t batchSize; // from config
   bool enableDeleteObjects; // from config
-  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory;
+  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory;
 };
 
 class S3ClientAdaptor {
@@ -53,7 +53,7 @@ class S3ClientAdaptor {
   virtual ~S3ClientAdaptor() = default;
 
   virtual Status Init(const S3ClientAdaptorOption& option,
-                      dataaccess::BlockAccessOptions block_access_option) = 0;
+                      blockaccess::BlockAccessOptions block_access_option) = 0;
   /**
    * @brief delete inode from s3
    * @param inode
@@ -79,7 +79,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   }
 
   Status Init(const S3ClientAdaptorOption& option,
-              dataaccess::BlockAccessOptions block_access_option) override;
+              blockaccess::BlockAccessOptions block_access_option) override;
 
   /**
    * @brief delete inode from s3
@@ -124,8 +124,8 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
 
   std::atomic_bool is_inited_{false};
   S3ClientAdaptorOption adaptor_option_;
-  dataaccess::BlockAccessOptions block_access_option_;
-  std::unique_ptr<dataaccess::BlockAccesser> block_accesser_{nullptr};
+  blockaccess::BlockAccessOptions block_access_option_;
+  std::unique_ptr<blockaccess::BlockAccesser> block_accesser_{nullptr};
 };
 }  // namespace metaserver
 }  // namespace dingofs

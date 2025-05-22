@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/s3/s3_accesser.h"
+#include "blockaccess/s3/s3_accesser.h"
 
 #include <glog/logging.h>
 
@@ -24,7 +24,7 @@
 #include "stub/metric/metric.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
@@ -35,7 +35,7 @@ bool S3Accesser::Init() {
       options_.s3_info.endpoint, options_.s3_info.bucket_name,
       options_.s3_info.ak, options_.s3_info.sk);
 
-  client_ = std::make_unique<dataaccess::aws::S3Adapter>();
+  client_ = std::make_unique<blockaccess::aws::S3Adapter>();
   client_->Init(options_);
 
   return true;
@@ -161,5 +161,5 @@ Status S3Accesser::BatchDelete(const std::list<std::string>& keys) {
   return Status::OK();
 }
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

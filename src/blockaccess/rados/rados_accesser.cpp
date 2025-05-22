@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "dataaccess/rados/rados_accesser.h"
+#include "blockaccess/rados/rados_accesser.h"
 
 #include <absl/cleanup/cleanup.h>
 #include <butil/time.h>
@@ -30,7 +30,7 @@
 #include "common/status.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 namespace {
 
@@ -325,5 +325,5 @@ void RadosAccesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
   });
 }
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs

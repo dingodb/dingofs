@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_H_
-#define DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_H_
+#ifndef DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
+#define DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
 
 #include <condition_variable>
 #include <functional>
@@ -23,12 +23,12 @@
 #include <string>
 
 #include "common/status.h"
-#include "dataaccess/accesser.h"
-#include "dataaccess/accesser_common.h"
+#include "blockaccess/accesser.h"
+#include "blockaccess/accesser_common.h"
 #include "utils/throttle.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 using RetryCallback = std::function<bool(int code)>;
 
@@ -143,7 +143,7 @@ class BlockAccesserImpl : public BlockAccesser {
 using BlockAccesserSPtr = std::shared_ptr<BlockAccesser>;
 using BlockAccesserUPtr = std::unique_ptr<BlockAccesser>;
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_BLOCK_ACCESSER_H_
+#endif  // DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_

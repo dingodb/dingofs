@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_DATA_ACCESS_S3_COMMON_H_
-#define DINGOFS_DATA_ACCESS_S3_COMMON_H_
+#ifndef DINGOFS_BLOCK_ACCESS_S3_COMMON_H_
+#define DINGOFS_BLOCK_ACCESS_S3_COMMON_H_
 
 #include <string>
 
 #include "utils/configuration.h"
 
 namespace dingofs {
-namespace dataaccess {
+namespace blockaccess {
 
 struct S3Info {
   // should get from mds
@@ -96,7 +96,7 @@ inline void InitAwsSdkConfig(utils::Configuration* conf,
   }
 }
 
-}  // namespace dataaccess
+}  // namespace blockaccess
 }  // namespace dingofs
 
-#endif  // DINGOFS_DATA_ACCESS_S3_COMMON_H_
+#endif  // DINGOFS_BLOCK_ACCESS_S3_COMMON_H_

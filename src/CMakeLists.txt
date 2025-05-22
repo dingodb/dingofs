@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(dataaccess)
+add_subdirectory(blockaccess)
 add_subdirectory(utils)
 add_subdirectory(utils/concurrent)
 add_subdirectory(base)

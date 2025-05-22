@@ -27,8 +27,8 @@
 #include <string>
 #include <vector>
 
-#include "dataaccess/accesser_common.h"
-#include "dataaccess/block_accesser_factory.h"
+#include "blockaccess/accesser_common.h"
+#include "blockaccess/block_accesser_factory.h"
 #include "metaserver/compaction/s3compact.h"
 #include "metaserver/compaction/s3compact_worker.h"
 #include "metaserver/compaction/fs_info_cache.h"
@@ -38,7 +38,7 @@ namespace dingofs {
 namespace metaserver {
 
 struct S3CompactWorkQueueOption {
-  dataaccess::BlockAccessOptions block_access_opts;
+  blockaccess::BlockAccessOptions block_access_opts;
 
   bool enable;
   uint64_t threadNum;
@@ -82,7 +82,7 @@ class S3CompactManager {
   S3CompactWorkerContext workerContext_;
   S3CompactWorkerOptions workerOptions_;
 
-  std::shared_ptr<dataaccess::BlockAccesserFactory> block_accesser_factory_; 
+  std::shared_ptr<blockaccess::BlockAccesserFactory> block_accesser_factory_; 
 
   std::vector<std::unique_ptr<S3CompactWorker>> workers_;
 
