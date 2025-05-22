@@ -83,7 +83,7 @@ class FileSystemSetTest : public testing::Test {
 
     auto mds_meta_map = MDSMetaMap::New();
     fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), std::move(slice_id_generator),
-                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor);
+                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -347,7 +347,7 @@ TEST_F(FileSystemTest, MkNod) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "mkdir_file";
   param.mode = 0777;
   param.uid = 1;
@@ -359,13 +359,13 @@ TEST_F(FileSystemTest, MkNod) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  auto partition = partition_cache.Get(param.parent_ino);
+  auto partition = partition_cache.Get(param.parent);
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
   ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+  ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
   ASSERT_TRUE(dentry.Inode() != nullptr) << "inode is nullptr.";
 
   InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
@@ -386,7 +386,7 @@ TEST_F(FileSystemTest, MkDir) {
   Context ctx;
 
   FileSystem::MkDirParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "mkdir_dir";
   param.mode = 0777;
   param.uid = 1;
@@ -398,13 +398,13 @@ TEST_F(FileSystemTest, MkDir) {
   ASSERT_TRUE(status.ok()) << "create file fail, error: " << status.error_str();
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
 
-  auto partition = partition_cache.Get(param.parent_ino);
+  auto partition = partition_cache.Get(param.parent);
   ASSERT_TRUE(partition != nullptr) << "get partition fail.";
 
   Dentry dentry;
   ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+  ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
   InodeSPtr inode = inode_cache.GetInode(entry_out.attr.ino());
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
@@ -425,7 +425,7 @@ TEST_F(FileSystemTest, RmDir) {
   Context ctx;
 
   FileSystem::MkDirParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "rmdir_dir";
   param.mode = 0777;
   param.uid = 1;
@@ -438,20 +438,20 @@ TEST_F(FileSystemTest, RmDir) {
   ASSERT_GT(entry_out.attr.ino(), 0) << "ino is invalid.";
   int64_t ino = entry_out.attr.ino();
 
-  auto partition = partition_cache.Get(param.parent_ino);
+  auto partition = partition_cache.Get(param.parent);
   ASSERT_TRUE(partition != nullptr) << "get dentry fail.";
 
   Dentry dentry;
   ASSERT_TRUE(partition->GetChild(param.name, dentry)) << "get child fail.";
   ASSERT_EQ(param.name, dentry.Name()) << "dentry name not equal.";
-  ASSERT_EQ(param.parent_ino, dentry.ParentIno()) << "dentry parent ino not equal.";
+  ASSERT_EQ(param.parent, dentry.ParentIno()) << "dentry parent ino not equal.";
 
   InodeSPtr inode = inode_cache.GetInode(ino);
   ASSERT_TRUE(status.ok()) << "get inode fail, error: " << status.error_str();
   ASSERT_TRUE(inode != nullptr) << "get inode fail.";
 
   {
-    status = fs->RmDir(ctx, param.parent_ino, param.name);
+    status = fs->RmDir(ctx, param.parent, param.name);
     ASSERT_TRUE(status.ok()) << "remove dir fail, error: " << status.error_str();
 
     auto partition = partition_cache.Get(ino);
@@ -470,7 +470,7 @@ TEST_F(FileSystemTest, Link) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "link_file";
   param.mode = 0777;
   param.uid = 1;
@@ -502,7 +502,7 @@ TEST_F(FileSystemTest, UnLink) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "unlink_file";
   param.mode = 0777;
   param.uid = 1;
@@ -538,7 +538,7 @@ TEST_F(FileSystemTest, SymlinkWithFile) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "symlink_with_file";
   param.mode = 0777;
   param.uid = 1;
@@ -577,7 +577,7 @@ TEST_F(FileSystemTest, SymlinkWithDir) {
   Context ctx;
 
   FileSystem::MkDirParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "symlink_with_dir";
   param.mode = 0777;
   param.uid = 1;
@@ -616,7 +616,7 @@ TEST_F(FileSystemTest, ReadLink) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "readlink_file";
   param.mode = 0777;
   param.uid = 1;
@@ -655,7 +655,7 @@ TEST_F(FileSystemTest, SetXAttr) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "set_xattr_file";
   param.mode = 0777;
   param.uid = 1;
@@ -685,7 +685,7 @@ TEST_F(FileSystemTest, GetXAttr) {
   Context ctx;
 
   FileSystem::MkNodParam param;
-  param.parent_ino = kRootIno;
+  param.parent = kRootIno;
   param.name = "get_xattr_file";
   param.mode = 0777;
   param.uid = 1;
@@ -736,7 +736,7 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   std::string old_name = "rename1_file1";
   {
     FileSystem::MkDirParam param;
-    param.parent_ino = kRootIno;
+    param.parent = kRootIno;
     param.name = "rename1_dir1";
     param.mode = 0777;
     param.uid = 1;
@@ -753,7 +753,7 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
 
   {
     FileSystem::MkNodParam param;
-    param.parent_ino = old_parent_ino;
+    param.parent = old_parent_ino;
     param.name = old_name;
     param.mode = 0777;
     param.uid = 1;
@@ -802,7 +802,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   std::string old_name = "rename2_file01";
   {
     FileSystem::MkDirParam param;
-    param.parent_ino = kRootIno;
+    param.parent = kRootIno;
     param.name = "rename2_dir1";
     param.mode = 0777;
     param.uid = 1;
@@ -819,7 +819,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
 
   {
     FileSystem::MkNodParam param;
-    param.parent_ino = old_parent_ino;
+    param.parent = old_parent_ino;
     param.name = old_name;
     param.mode = 0777;
     param.uid = 1;
@@ -835,7 +835,7 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   uint64_t new_parent_ino;
   {
     FileSystem::MkDirParam param;
-    param.parent_ino = kRootIno;
+    param.parent = kRootIno;
     param.name = "rename2_dir2";
     param.mode = 0777;
     param.uid = 1;

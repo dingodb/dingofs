@@ -1490,9 +1490,8 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   uint64_t old_parent_version, new_parent_version;
-  auto status =
-      file_system->CommitRename(ctx, request->old_parent(), request->old_name(), request->new_parent(),
-                                request->new_name(), old_parent_version, new_parent_version);
+  auto status = file_system->CommitRename(ctx, request->old_parent(), request->old_name(), request->new_parent(),
+                                          request->new_name(), old_parent_version, new_parent_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1732,15 +1731,10 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController* controll
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->CleanTrashSlice(ctx, request->ino(), request->chunk_index());
+  status = file_system_set_->CleanTrashSlice(ctx, request->fs_id(), request->ino(), request->chunk_index());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1790,15 +1784,10 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
-
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->CleanDelFile(ctx, request->ino());
+  status = file_system_set_->CleanDelFile(ctx, request->fs_id(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

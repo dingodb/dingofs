@@ -202,6 +202,8 @@ bool Server::InitFileSystem() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+  CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
 
   auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
@@ -212,8 +214,9 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
-                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, operation_processor_);
+  file_system_set_ =
+      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator), kv_storage_,
+                         mds_meta_, mds_meta_map_, renamer_, operation_processor_, gc_processor_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();

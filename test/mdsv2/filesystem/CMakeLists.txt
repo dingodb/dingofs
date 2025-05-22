@@ -27,6 +27,7 @@ target_link_libraries(test_mdsv2_filesystem
   mdsv2_common
   mdsv2_filesystem
   mdsv2_storage
+  mdsv2_background
   
   
   protobuf::libprotobuf
