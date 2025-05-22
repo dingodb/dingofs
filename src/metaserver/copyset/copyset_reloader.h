@@ -24,13 +24,14 @@
 #define DINGOFS_SRC_METASERVER_COPYSET_COPYSET_RELOADER_H_
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <string>
 
+#include "fs/local_filesystem.h"
 #include "metaserver/common/types.h"
 #include "metaserver/copyset/copyset_node.h"
 #include "utils/concurrent/task_thread_pool.h"
-#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -59,7 +60,7 @@ class CopysetReloader {
 
   bool CheckCopysetUntilLoadFinished(CopysetNode* node);
 
-  void WaitLoadFinish();
+  bool WaitLoadFinish();
 
  private:
   CopysetNodeManager* nodeManager_;
@@ -67,6 +68,7 @@ class CopysetReloader {
 
   std::unique_ptr<dingofs::utils::TaskThreadPool<>> taskPool_;
   std::atomic<bool> running_;
+  std::atomic<uint32_t> load_copyset_errors_{0};
 };
 
 }  // namespace copyset

@@ -27,12 +27,12 @@
 #include <iostream>
 #include <ostream>
 
+#include "fs/local_filesystem.h"
 #include "metaserver/storage/converter.h"
 #include "metaserver/storage/rocksdb_options.h"
 #include "metaserver/storage/rocksdb_perf.h"
 #include "metaserver/storage/storage.h"
 #include "rocksdb/utilities/checkpoint.h"
-#include "fs/local_filesystem.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -108,7 +108,7 @@ bool RocksDBStorage::Open() {
       TransactionDB::Open(dbOptions_, dbTransOptions_, options_.dataDir,
                           dbCfDescriptors_, &handles_, &txnDB_);
   if (!s.ok()) {
-    LOG(ERROR) << "Open rocksdb database at `" << options_.dataDir
+    LOG(FATAL) << "Open rocksdb database at `" << options_.dataDir
                << "` failed, status = " << s.ToString();
     return false;
   }
