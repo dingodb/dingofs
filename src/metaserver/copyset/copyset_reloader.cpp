@@ -92,7 +92,10 @@ bool CopysetReloader::ReloadCopysets() {
     }
   }
 
-  WaitLoadFinish();
+  if (!WaitLoadFinish()) {
+    LOG(ERROR) << "Load copysets under '" << dataDir << "' failed";
+    return false;
+  }
 
   LOG(INFO) << "Load copysets under '" << dataDir << "' success";
 
@@ -130,6 +133,7 @@ void CopysetReloader::LoadCopyset(PoolId poolId, CopysetId copysetId) {
   if (!success) {
     LOG(WARNING) << "Failed to create copyset "
                  << ToGroupIdString(poolId, copysetId);
+    load_copyset_errors_.fetch_add(1, std::memory_order_relaxed);
     return;
   }
 
@@ -204,7 +208,7 @@ bool CopysetReloader::CheckCopysetUntilLoadFinished(CopysetNode* node) {
   return false;
 }
 
-void CopysetReloader::WaitLoadFinish() {
+bool CopysetReloader::WaitLoadFinish() {
   while (running_.load(std::memory_order_relaxed) &&
          taskPool_->QueueSize() != 0) {
     ::sleep(1);
@@ -212,6 +216,8 @@ void CopysetReloader::WaitLoadFinish() {
 
   taskPool_->Stop();
   taskPool_.reset();
+
+  return load_copyset_errors_.load(std::memory_order_relaxed) <= 0;
 }
 
 }  // namespace copyset
