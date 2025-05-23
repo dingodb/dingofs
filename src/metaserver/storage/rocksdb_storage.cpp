@@ -187,6 +187,8 @@ std::string RocksDBStorage::ToUserKey(const std::string& ikey) {
 Status RocksDBStorage::Get(const std::string& name, const std::string& key,
                            ValueType* value, bool ordered) {
   if (!inited_) {
+    LOG(ERROR) << "Get data failed, database is not opened, name = " << name
+               << ", key = " << key;
     return Status::DBClosed();
   }
 
@@ -200,7 +202,13 @@ Status RocksDBStorage::Get(const std::string& name, const std::string& key,
                        : db_->Get(dbReadOptions_, handle, ikey, &svalue);
   }
   if (s.ok() && !value->ParseFromString(svalue)) {
+    LOG(ERROR) << "Parse failed = " << name << ", key = " << key
+               << ", status = " << s.ToString();
     return Status::ParsedFailed();
+  }
+  if (!s.ok()) {
+    LOG(ERROR) << "Get data failed, name = " << name << ", key = " << key
+               << ", status = " << s.ToString();
   }
   return ToStorageStatus(s);
 }
@@ -209,8 +217,12 @@ Status RocksDBStorage::Set(const std::string& name, const std::string& key,
                            const ValueType& value, bool ordered) {
   std::string svalue;
   if (!inited_) {
+    LOG(ERROR) << "Set data failed, database is not opened, name = " << name
+               << ", key = " << key << ", value " << value.DebugString();
     return Status::DBClosed();
   } else if (!value.SerializeToString(&svalue)) {
+    LOG(ERROR) << "SerializeToString failed = " << name << ", key = " << key
+               << ", value " << value.DebugString();
     return Status::SerializedFailed();
   }
 
@@ -220,12 +232,19 @@ Status RocksDBStorage::Set(const std::string& name, const std::string& key,
   ROCKSDB_NAMESPACE::Status s =
       InTransaction_ ? txn_->Put(handle, ikey, svalue)
                      : db_->Put(dbWriteOptions_, handle, ikey, svalue);
+  if (!s.ok()) {
+    LOG(ERROR) << "Set data failed, name = " << name << ", key = " << key
+               << ", value " << value.DebugString() << ", ordered = " << ordered
+               << ", status = " << s.ToString();
+  }
   return ToStorageStatus(s);
 }
 
 Status RocksDBStorage::Del(const std::string& name, const std::string& key,
                            bool ordered) {
   if (!inited_) {
+    LOG(ERROR) << "Delete data failed, database is not opened, name = " << name
+               << ", key = " << key << ", ordered = " << ordered;
     return Status::DBClosed();
   }
 
@@ -235,6 +254,10 @@ Status RocksDBStorage::Del(const std::string& name, const std::string& key,
   ROCKSDB_NAMESPACE::Status s =
       InTransaction_ ? txn_->Delete(handle, ikey)
                      : db_->Delete(dbWriteOptions_, handle, ikey);
+  if (!s.ok()) {
+    LOG(ERROR) << "Delete data failed, name = " << name << ", key = " << key
+               << ", ordered = " << ordered << ", status = " << s.ToString();
+  }
   return ToStorageStatus(s);
 }
 
@@ -268,8 +291,12 @@ size_t RocksDBStorage::Size(const std::string& name, bool ordered) {
 
 Status RocksDBStorage::Clear(const std::string& name, bool ordered) {
   if (!inited_) {
+    LOG(ERROR) << "Clear data failed, database is not opened, name = " << name
+               << ", ordered = " << ordered;
     return Status::DBClosed();
   } else if (InTransaction_) {
+    LOG(ERROR) << "Clear operation is not supported, name = " << name
+               << ", ordered = " << ordered;
     return Status::NotSupported();
   }
 
@@ -287,6 +314,10 @@ Status RocksDBStorage::Clear(const std::string& name, bool ordered) {
       db_->DeleteRange(dbWriteOptions_, handle, lower, upper);
   LOG(INFO) << "Clear(), tablename = " << name << ", ordered = " << ordered
             << ", lower key = " << lower << ", upper key = " << upper;
+  if (!s.ok()) {
+    LOG(ERROR) << "Clear data failed, name = " << name
+               << ", ordered = " << ordered << ", status = " << s.ToString();
+  }
   return ToStorageStatus(s);
 }
 
@@ -295,6 +326,7 @@ std::shared_ptr<StorageTransaction> RocksDBStorage::BeginTransaction() {
   ROCKSDB_NAMESPACE::Transaction* txn =
       txnDB_->BeginTransaction(dbWriteOptions_);
   if (nullptr == txn) {
+    LOG(ERROR) << "Begin transaction failed";
     return nullptr;
   }
   return std::make_shared<RocksDBStorage>(*this, txn);
@@ -302,6 +334,7 @@ std::shared_ptr<StorageTransaction> RocksDBStorage::BeginTransaction() {
 
 Status RocksDBStorage::Commit() {
   if (!InTransaction_ || nullptr == txn_) {
+    LOG(ERROR) << "Commit transaction failed, unsupported transaction";
     return Status::NotSupported();
   }
 
@@ -317,6 +350,8 @@ Status RocksDBStorage::Commit() {
 
 Status RocksDBStorage::Rollback() {
   if (!InTransaction_ || nullptr == txn_) {
+    LOG(ERROR) << "RocksDBStorage rollback transaction failed, unsupported "
+                  "transaction";
     return Status::NotSupported();
   }
 
