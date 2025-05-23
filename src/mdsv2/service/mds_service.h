@@ -30,7 +30,7 @@ namespace mdsv2 {
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
   MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set, FileSystemSetSPtr file_system,
-                 QuotaProcessorSPtr quota_processor, FsStatsUPtr fs_stat);
+                 QuotaProcessorSPtr quota_processor, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat);
 
   // mds
   void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
@@ -309,6 +309,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   // quota processor
   QuotaProcessorSPtr quota_processor_;
+
+  // gc
+  GcProcessorSPtr gc_processor_;
 
   // fs stats
   FsStatsUPtr fs_stat_;

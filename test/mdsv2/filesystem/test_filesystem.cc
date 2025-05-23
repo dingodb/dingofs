@@ -83,7 +83,7 @@ class FileSystemSetTest : public testing::Test {
 
     auto mds_meta_map = MDSMetaMap::New();
     fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), std::move(slice_id_generator),
-                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor, nullptr);
+                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 

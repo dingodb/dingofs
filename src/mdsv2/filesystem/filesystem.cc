@@ -14,8 +14,6 @@
 
 #include "mdsv2/filesystem/filesystem.h"
 
-#include <bthread/bthread.h>
-#include <gflags/gflags_declare.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -32,7 +30,6 @@
 #include "fmt/format.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
-#include "mdsv2/background/gc.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
@@ -1808,7 +1805,7 @@ Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
-                             OperationProcessorSPtr operation_processor, GcProcessorSPtr gc_processor)
+                             OperationProcessorSPtr operation_processor)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(fs_id_generator)),
       slice_id_generator_(std::move(slice_id_generator)),
@@ -1816,8 +1813,7 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
       renamer_(renamer),
-      operation_processor_(operation_processor),
-      gc_processor_(gc_processor) {}
+      operation_processor_(operation_processor) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
@@ -2193,18 +2189,6 @@ Status FileSystemSet::AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t
   }
 
   return Status::OK();
-}
-
-Status FileSystemSet::CleanTrashSlice(Context& ctx, uint32_t fs_id, Ino ino, uint64_t chunk_index) const {
-  auto& trace = ctx.GetTrace();
-
-  return gc_processor_->ManualCleanDeletedSlice(trace, fs_id, ino, chunk_index);
-}
-
-Status FileSystemSet::CleanDelFile(Context& ctx, uint32_t fs_id, Ino ino) const {
-  auto& trace = ctx.GetTrace();
-
-  return gc_processor_->ManualCleanDeletedFile(trace, fs_id, ino);
 }
 
 bool FileSystemSet::AddFileSystem(FileSystemSPtr fs, bool is_force) {

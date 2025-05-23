@@ -39,6 +39,8 @@ DEFINE_uint32(merge_operation_delay_us, 0, "merge operation delay us.");
 
 DECLARE_int32(fs_scan_batch_size);
 
+static const uint32_t kOpNameBufInitSize = 128;
+
 static void AddParentIno(AttrType& attr, Ino parent) {
   auto it = std::find(attr.parents().begin(), attr.parents().end(), parent);
   if (it == attr.parents().end()) {
@@ -1169,6 +1171,8 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   int count = 0;
   int64_t txn_id = 0;
   bool is_one_pc = false;
+  std::string op_names;
+  op_names.reserve(kOpNameBufInitSize);
   do {
     auto txn = kv_storage_->NewTxn();
     txn_id = txn->ID();
@@ -1183,12 +1187,14 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
+      op_names += fmt::format("{},", operation->OpName());
       operation->RunInBatch(txn, attr);
       ++count;
     }
 
     // run create operations
     for (auto* operation : batch_operation.create_operations) {
+      op_names += fmt::format("{},", operation->OpName());
       operation->RunInBatch(txn, attr);
       ++count;
     }
@@ -1209,8 +1215,9 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
   SetElapsedTime(batch_operation, "store_operate");
 
   DINGO_LOG(INFO) << fmt::format(
-      "[operation.{}.{}][{}][{}us] batch run finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id, ino,
-      txn_id, Helper::TimestampUs() - time_us, count, is_one_pc, retry, status.error_str(), DescribeAttr(attr));
+      "[operation.{}.{}][{}][{}us] batch run ({}) finish, count({}) onepc({}) retry({}) status({}) attr({}).", fs_id,
+      ino, txn_id, Helper::TimestampUs() - time_us, op_names, count, is_one_pc, retry, status.error_str(),
+      DescribeAttr(attr));
 
   if (status.ok()) {
     SetAttr(batch_operation, attr);

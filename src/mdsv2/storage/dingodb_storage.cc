@@ -346,7 +346,7 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
 
 TxnUPtr DingodbStorage::NewTxn() { return std::make_unique<DingodbTxn>(NewSdkTxn()); }
 
-int64_t DingodbTxn::ID() const { return 0; }
+int64_t DingodbTxn::ID() const { return txn_->ID(); }
 
 Status DingodbTxn::Put(const std::string& key, const std::string& value) {
   auto status = txn_->Put(key, value);

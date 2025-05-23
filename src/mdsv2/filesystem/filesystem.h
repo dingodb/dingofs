@@ -266,17 +266,16 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, OperationProcessorSPtr operation_processor,
-                GcProcessorSPtr gc_processor);
+                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, OperationProcessorSPtr operation_processor);
   ~FileSystemSet();
 
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
-                               OperationProcessorSPtr operation_processor, GcProcessorSPtr gc_processor) {
+                               OperationProcessorSPtr operation_processor) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           renamer, operation_processor, gc_processor);
+                                           renamer, operation_processor);
   }
 
   bool Init();
@@ -306,9 +305,6 @@ class FileSystemSet {
   Status RefreshFsInfo(uint32_t fs_id);
 
   Status AllocSliceId(uint32_t num, uint64_t min_slice_id, uint64_t& slice_id);
-
-  Status CleanTrashSlice(Context& ctx, uint32_t fs_id, Ino ino, uint64_t chunk_index) const;
-  Status CleanDelFile(Context& ctx, uint32_t fs_id, Ino ino) const;
 
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(const std::string& fs_name);
@@ -345,8 +341,6 @@ class FileSystemSet {
 
   MDSMeta self_mds_meta_;
   MDSMetaMapSPtr mds_meta_map_;
-
-  GcProcessorSPtr gc_processor_;
 
   // protect fs_map_
   utils::RWLock lock_;

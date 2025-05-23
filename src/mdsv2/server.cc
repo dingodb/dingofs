@@ -203,7 +203,6 @@ bool Server::InitFileSystem() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
-  CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
 
   auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
@@ -214,9 +213,8 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ =
-      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator), kv_storage_,
-                         mds_meta_, mds_meta_map_, renamer_, operation_processor_, gc_processor_);
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
+                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, operation_processor_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -354,11 +352,12 @@ void Server::Run() {
   CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
   CHECK(quota_processor_ != nullptr) << "quota processor is nullptr.";
+  CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
 
   auto fs_stats = FsStats::New(kv_storage_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_,
+  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_, gc_processor_,
                              std::move(fs_stats));
   CHECK(brpc_server_.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 

@@ -49,11 +49,12 @@ static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
 
 MDSServiceImpl::MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set,
                                FileSystemSetSPtr file_system_set, QuotaProcessorSPtr quota_processor,
-                               FsStatsUPtr fs_stat)
+                               GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
     : read_worker_set_(read_worker_set),
       write_worker_set_(write_worker_set),
       file_system_set_(file_system_set),
       quota_processor_(quota_processor),
+      gc_processor_(gc_processor),
       fs_stat_(std::move(fs_stat)) {}
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
@@ -1733,8 +1734,9 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController* controll
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  auto& trace = ctx.GetTrace();
 
-  status = file_system_set_->CleanTrashSlice(ctx, request->fs_id(), request->ino(), request->chunk_index());
+  status = gc_processor_->ManualCleanDeletedSlice(trace, request->fs_id(), request->ino(), request->chunk_index());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1786,8 +1788,9 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController* controller,
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  auto& trace = ctx.GetTrace();
 
-  status = file_system_set_->CleanDelFile(ctx, request->fs_id(), request->ino());
+  status = gc_processor_->ManualCleanDeletedFile(trace, request->fs_id(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
