@@ -15,3 +15,7 @@
 add_library(vfs_handle 
     handle_manager.cpp
 )
+
+target_link_libraries(vfs_handle
+    PROTO_OBJS
+)

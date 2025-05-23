@@ -27,13 +27,13 @@
 
 #include <memory>
 
+#include "blockaccess/mock/mock_accesser.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
 #include "client/vfs_old/mock_kvclient.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
 #include "common/status.h"
-#include "blockaccess/mock/mock_accesser.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
@@ -172,7 +172,7 @@ class ClientS3IntegrationTest : public testing::Test {
     kvClientManager_ = std::make_shared<KVClientManager>();
 
     common::KVClientManagerOpt opt;
-    std::shared_ptr<MockKVClient> mockKVClient(&mockKVClient_);
+    auto mockKVClient = std::make_shared<MockKVClient>();
     kvClientManager_->Init(opt, mockKVClient);
   }
 
@@ -2860,9 +2860,9 @@ TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
   {
     EXPECT_CALL(mockBlockAccesser_, AsyncPut(_))
         .Times(2)
-        .WillRepeatedly(
-            Invoke([&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
-                           context) {
+        .WillRepeatedly(Invoke(
+            [&](const std::shared_ptr<blockaccess::PutObjectAsyncContext>&
+                    context) {
               context->ret_code = 0;
               context->cb(context);
             }));

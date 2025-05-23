@@ -51,7 +51,7 @@ TEST(RaftLogCodecTest, EncodeTest_RequestSerializeFailed) {
   request.set_txid(1);
 
   // NOTE: serialize will check whether message's size is bigger than INT_MAX
-  auto usedSize = request.ByteSize();
+  auto usedSize = request.ByteSizeLong();
   request.set_allocated_name(
       new std::string(static_cast<uint64_t>(INT_MAX) - usedSize + 1, 'x'));
 

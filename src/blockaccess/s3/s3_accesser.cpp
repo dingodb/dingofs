@@ -30,10 +30,16 @@ using stub::metric::MetricGuard;
 using stub::metric::S3Metric;
 
 bool S3Accesser::Init() {
+  const auto& s3_info = options_.s3_info;
   LOG(INFO) << fmt::format(
       "[accesser] init s3 accesser, endpoint({}) bucket({}) ak({}) sk({}).",
-      options_.s3_info.endpoint, options_.s3_info.bucket_name,
-      options_.s3_info.ak, options_.s3_info.sk);
+      s3_info.endpoint, s3_info.bucket_name, s3_info.ak, options_.s3_info.sk);
+
+  if (s3_info.endpoint.empty() || s3_info.bucket_name.empty() ||
+      s3_info.ak.empty() || s3_info.sk.empty()) {
+    LOG(ERROR) << "[accesser] param endpoint/bucket/ak/sk is empty.";
+    return false;
+  }
 
   client_ = std::make_unique<blockaccess::aws::S3Adapter>();
   client_->Init(options_);

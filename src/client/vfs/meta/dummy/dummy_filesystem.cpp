@@ -802,8 +802,18 @@ static S3Info ToS3Info(const pb::mdsv2::S3Info& s3_info) {
   ret.ak = s3_info.ak();
   ret.sk = s3_info.sk();
   ret.endpoint = s3_info.endpoint();
-  ret.bucket = s3_info.bucketname();
+  ret.bucket_name = s3_info.bucketname();
   return ret;
+}
+
+static RadosInfo ToRadosInfo(const pb::mdsv2::RadosInfo& rados_info) {
+  RadosInfo result;
+  result.user_name = rados_info.user_name();
+  result.key = rados_info.key();
+  result.mon_host = rados_info.mon_host();
+  result.pool_name = rados_info.pool_name();
+  result.cluster_name = rados_info.cluster_name();
+  return result;
 }
 
 Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
@@ -818,6 +828,19 @@ Status DummyFileSystem::GetFsInfo(FsInfo* fs_info) {
     CHECK(fs_info_.extra().has_s3_info())
         << "fs type is S3, but s3 info is not set";
     fs_info->storage_info.s3_info = ToS3Info(fs_info_.extra().s3_info());
+
+  } else if (fs_info->storage_info.store_type == StoreType::kRados) {
+    CHECK(fs_info_.extra().has_rados_info())
+        << "fs type is Rados, but rados info is not set";
+
+    fs_info->storage_info.rados_info =
+        ToRadosInfo(fs_info_.extra().rados_info());
+
+  } else {
+    LOG(ERROR) << fmt::format("unknown fs type: {}.",
+                              pb::mdsv2::FsType_Name(fs_info_.fs_type()));
+
+    return Status::InvalidParam("unknown fs type");
   }
 
   return Status::OK();

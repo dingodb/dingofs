@@ -15,6 +15,7 @@
 #include "mdsv2/filesystem/fs_utils.h"
 
 #include <fmt/format.h>
+#include <glog/logging.h>
 
 #include <cstdint>
 #include <map>
@@ -23,6 +24,7 @@
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/status.h"
 #include "nlohmann/json.hpp"
 
 namespace dingofs {
@@ -42,6 +44,12 @@ void FreeFsTree(FsTreeNode* root) {
   delete root;
 }
 
+void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
+  for (auto [_, node] : node_map) {
+    delete node;
+  }
+}
+
 static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
                                    std::multimap<uint64_t, FsTreeNode*>& node_map) {
   Range range;
@@ -50,13 +58,14 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
   // scan dentry/attr table
   auto txn = kv_storage->NewTxn();
   std::vector<KeyValue> kvs;
+  Status status;
   uint64_t count = 0;
   do {
     kvs.clear();
-    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
     if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("scan dentry table fail, {}.", status.error_str());
-      return nullptr;
+      DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
+      break;
     }
 
     for (const auto& kv : kvs) {
@@ -102,7 +111,7 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
           it->second->children.push_back(item);
         } else {
           if (parent != 0) {
-            DINGO_LOG(ERROR) << fmt::format("not found parent({}) for dentry({}/{})", parent, fs_id, name);
+            DINGO_LOG(ERROR) << fmt::format("[fsutils] not found parent({}) for dentry({}/{})", parent, fs_id, name);
           }
         }
       }
@@ -111,11 +120,16 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
     count += kvs.size();
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
-  DINGO_LOG(INFO) << fmt::format("scan dentry table kv num({}).", count);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
+    return nullptr;
+  }
+
+  DINGO_LOG(INFO) << fmt::format("[fsutils] scan dentry table kv num({}).", count);
 
   auto it = node_map.find(1);
   if (it == node_map.end()) {
-    DINGO_LOG(ERROR) << "not found root node.";
+    DINGO_LOG(ERROR) << "[fsutils] not found root node.";
     return nullptr;
   }
 
@@ -161,6 +175,8 @@ FsTreeNode* FsUtils::GenFsTree(uint32_t fs_id) {
 static std::string FormatTime(uint64_t time_ns) { return Helper::FormatTime(time_ns / 1000000000, "%H:%M:%S"); }
 
 void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
+  CHECK(node != nullptr) << "node is null";
+
   doc["ino"] = node->dentry.ino();
   doc["name"] = node->dentry.name();
   doc["type"] = node->dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
@@ -184,9 +200,15 @@ void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
 std::string FsUtils::GenFsTreeJsonString(uint32_t fs_id) {
   std::multimap<uint64_t, FsTreeNode*> node_map;
   FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, node_map);
+  if (root == nullptr) {
+    FreeMap(node_map);
+    return "gen fs tree struct fail";
+  }
 
   nlohmann::json doc;
   GenFsTreeJson(root, doc);
+
+  FreeMap(node_map);
 
   return doc.dump();
 }

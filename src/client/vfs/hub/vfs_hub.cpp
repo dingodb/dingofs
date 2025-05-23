@@ -22,6 +22,9 @@
 #include <atomic>
 #include <memory>
 
+#include "blockaccess/block_accesser.h"
+#include "blockaccess/block_accesser_factory.h"
+#include "blockaccess/rados/rados_common.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
@@ -29,7 +32,6 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
-#include "blockaccess/block_accesser.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -75,8 +77,29 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   DINGOFS_RETURN_NOT_OK(meta_system_->GetFsInfo(&fs_info_));
 
-  block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
-      client_option_.block_access_opt);
+  // set s3/rados config info
+  if (fs_info_.storage_info.store_type == StoreType::kS3) {
+    auto s3_info = fs_info_.storage_info.s3_info;
+    client_option_.block_access_opt.type = blockaccess::AccesserType::kS3;
+    client_option_.block_access_opt.s3_options.s3_info =
+        blockaccess::S3Info{.ak = s3_info.ak,
+                            .sk = s3_info.sk,
+                            .endpoint = s3_info.endpoint,
+                            .bucket_name = s3_info.bucket_name};
+
+  } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
+    auto rados_info = fs_info_.storage_info.rados_info;
+    client_option_.block_access_opt.type = blockaccess::AccesserType::kRados;
+    client_option_.block_access_opt.rados_options =
+        blockaccess::RadosOptions{.mon_host = rados_info.mon_host,
+                                  .user_name = rados_info.user_name,
+                                  .key = rados_info.key,
+                                  .pool_name = rados_info.pool_name,
+                                  .cluster_name = rados_info.cluster_name};
+  }
+
+  blockaccess::BlockAccesserFactory factory;
+  block_accesser_ = factory.NewBlockAccesser(client_option_.block_access_opt);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
   handle_manager_ = std::make_unique<HandleManager>();

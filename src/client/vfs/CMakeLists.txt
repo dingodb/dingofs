@@ -23,6 +23,7 @@ add_library(vfs_lib
 )
 
 target_link_libraries(vfs_lib
+    PROTO_OBJS
     client_common
     dingofs_common
     dingofs_options

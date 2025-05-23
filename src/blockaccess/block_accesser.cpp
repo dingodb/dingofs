@@ -21,10 +21,10 @@
 
 #include <memory>
 
-#include "common/status.h"
 #include "blockaccess/block_access_log.h"
 #include "blockaccess/rados/rados_accesser.h"
 #include "blockaccess/s3/s3_accesser.h"
+#include "common/status.h"
 #include "utils/dingo_define.h"
 
 namespace dingofs {
@@ -40,19 +40,18 @@ using dingofs::utils::kMB;
 Status BlockAccesserImpl::Init() {
   if (options_.type == AccesserType::kS3) {
     data_accesser_ = std::make_unique<S3Accesser>(options_.s3_options);
-    data_accesser_->Init();
-
     container_name_ = options_.s3_options.s3_info.bucket_name;
+
   } else if (options_.type == AccesserType::kRados) {
     data_accesser_ = std::make_unique<RadosAccesser>(options_.rados_options);
     container_name_ = options_.rados_options.pool_name;
+
   } else {
-    LOG(ERROR) << "Unsupported accesser type: " << options_.type;
     return Status::InvalidParam("Unsupported accesser type");
   }
 
   if (!data_accesser_->Init()) {
-    return Status::Internal("Failed to initialize data accesser");
+    return Status::Internal("init data accesser fail");
   }
 
   {

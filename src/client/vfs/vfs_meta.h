@@ -166,20 +166,21 @@ struct S3Info {
   std::string ak;
   std::string sk;
   std::string endpoint;
-  std::string bucket;
+  std::string bucket_name;
 };
 
-struct RadosIno {
+struct RadosInfo {
   std::string user_name;
   std::string key;
   std::string mon_host;
   std::string pool_name;
+  std::string cluster_name;
 };
 
 struct StorageInfo {
   StoreType store_type;
   S3Info s3_info;
-  RadosIno rados_info;
+  RadosInfo rados_info;
 };
 
 struct FsInfo {

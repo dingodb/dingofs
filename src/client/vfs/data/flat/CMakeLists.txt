@@ -19,5 +19,6 @@ add_library(vfs_data_flat
 )
 
 target_link_libraries(vfs_data_flat
+    PROTO_OBJS
     glog::glog
 )

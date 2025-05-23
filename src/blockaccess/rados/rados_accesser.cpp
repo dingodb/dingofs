@@ -75,6 +75,14 @@ static void CompleteCallback(rados_completion_t cb, void* arg) {
 }
 
 bool RadosAccesser::Init() {
+  if (options_.cluster_name.empty() || options_.user_name.empty() ||
+      options_.mon_host.empty() || options_.key.empty() ||
+      options_.pool_name.empty()) {
+    LOG(ERROR)
+        << "param cluster_name/user_name/mon_host/key/pool_name is empty.";
+    return false;
+  }
+
   uint64_t flags = 0;
   int err = rados_create2(&cluster_, options_.cluster_name.c_str(),
                           options_.user_name.c_str(), flags);
