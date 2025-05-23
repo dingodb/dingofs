@@ -15,6 +15,7 @@ tools_v2_daemo_file="https://github.com/dingodb/dingofs-tools/releases/download/
 
 g_color_yellow=`printf '\033[33m'`
 g_color_red=`printf '\033[31m'`
+g_color_orange_red=`printf '\033[38;5;202m'`
 g_color_normal=`printf '\033[0m'`
 
 ############################  BASIC FUNCTIONS
@@ -28,7 +29,12 @@ success() {
 
 die() {
     msg "$g_color_red[✘]$g_color_normal [$g_project_name] ${1}${2}"
+    rm -rf $g_prefix
     exit 1
+}
+
+warn() {
+    msg "$g_color_orange_red[!]$g_color_normal [$g_project_name] ${1}${2}"
 }
 
 
@@ -150,7 +156,8 @@ install_dingofs() {
     do
         local regex_target="build/bin/(dingo-([^/]+))"
         if [[ ! $target =~ $regex_target ]]; then
-            die "unknown target: $target\n"
+            warn "unknown target: $target\n"
+            continue
         fi
         # echo "Full match: ${BASH_REMATCH[1]}, Extracted: ${BASH_REMATCH[2]}"
         local project_bin_filename=${BASH_REMATCH[1]}  # ex: dingo_metaserver

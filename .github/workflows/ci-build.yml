@@ -53,11 +53,17 @@ jobs:
 
         make file_dep
         make file_build only=//src/* release=1
-        make file_deploy_config
-
+        # check if the build is successful
         if [ $? -ne 0 ]
         then
             echo "build failed"
+            exit -1
+        fi
+        make file_deploy_config
+        # check install is successful
+        if [ $? -ne 0 ]
+        then
+            echo "install failed"
             exit -1
         fi
 
