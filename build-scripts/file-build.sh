@@ -17,6 +17,7 @@ g_build_opts=(
 )
 
 g_os="rocky9"
+g_unit_tests=ON
 
 ############################  BASIC FUNCTIONS
 get_version() {
@@ -74,7 +75,7 @@ _EOC_
 }
 
 get_options() {
-    local args=`getopt -o ldorh --long stor:,list,dep:,only:,os:,release:,build_rocksdb: -n "$0" -- "$@"`
+    local args=`getopt -o ldorh --long stor:,list,dep:,only:,os:,release:,build_rocksdb,unit_tests: -n "$0" -- "$@"`
     eval set -- "${args}"
     while true
     do
@@ -107,6 +108,10 @@ get_options() {
                 g_build_rocksdb=$2
                 shift 2
                 ;;
+            --unit_tests)
+                g_unit_tests=$2
+                shift 2
+                ;;
             -h)
                 usage
                 exit 1
@@ -123,7 +128,7 @@ get_options() {
 }
 
 build_target() {
-    (rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_UNIT_TESTS=ON .. && make -j $(nproc))
+    (rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBUILD_UNIT_TESTS=${g_unit_tests} .. && make -j $(nproc))
 
     if [ $? -eq 0 ]; then
         success "build dingofs success\n"
