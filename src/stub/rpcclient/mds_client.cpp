@@ -658,7 +658,7 @@ bool MdsClientImpl::CreatePartition(
                            (ok ? "ok" : "failed"));
   });
 
-  ok = CreatePartition(fs_id, count, partition_infos);
+  ok = DoCreatePartition(fs_id, count, partition_infos);
   return ok;
 }
 
