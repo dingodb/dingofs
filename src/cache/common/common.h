@@ -25,6 +25,7 @@
 
 #include <options/cache/app.h>
 
+#include "common/io_buffer.h"
 #include "common/status.h"
 #include "dingofs/blockcache.pb.h"
 #include "dingofs/cachegroup.pb.h"
@@ -34,6 +35,8 @@
 
 namespace dingofs {
 namespace cache {
+
+using IOBuffer = dingofs::common::IOBuffer;
 
 using dingofs::options::cache::AppOption;               // NOLINT
 using dingofs::options::cache::BlockCacheOption;        // NOLINT

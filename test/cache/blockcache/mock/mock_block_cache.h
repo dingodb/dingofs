@@ -28,6 +28,8 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/common/common.h"
+#include "gmock/gmock.h"
 
 namespace dingofs {
 namespace cache {
@@ -54,6 +56,26 @@ class MockBlockCache : public BlockCache {
   MOCK_METHOD2(Cache, Status(const BlockKey& key, const Block& block));
 
   MOCK_METHOD1(Flush, Status(uint64_t ino));
+
+  MOCK_METHOD(void, AsyncPut,
+              (PutOption option, const BlockKey& key, const Block& block,
+               AsyncCallback callback),
+              (override));
+
+  MOCK_METHOD(void, AsyncRange,
+              (RangeOption option, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer, AsyncCallback callback),
+              (override));
+
+  MOCK_METHOD(void, AsyncCache,
+              (CacheOption option, const BlockKey& key, const Block& block,
+               AsyncCallback callback),
+              (override));
+
+  MOCK_METHOD(void, AsyncPrefetch,
+              (PrefetchOption option, const BlockKey& key, size_t length,
+               AsyncCallback callback),
+              (override));
 
   MOCK_METHOD1(IsCached, bool(const BlockKey& key));
 

@@ -31,6 +31,8 @@
 #include "base/string/string.h"
 #include "cache/blockcache/block_reader.h"
 #include "cache/common/common.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
@@ -89,6 +91,7 @@ struct BlockKey {
 
 struct Block {
   Block(const char* data, size_t size) : data(data), size(size) {}
+  Block(common::IOBuffer* /*buffer*/) {}  // TODO(Wine93): implement this
 
   const char* data;
   size_t size;
