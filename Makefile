@@ -51,7 +51,7 @@ list:
 	@bash build-scripts/build.sh --stor=fs --list
 
 file_build:
-	@bash build-scripts/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os)
+	@bash build-scripts/file-build.sh --only=$(only) --dep=$(dep) --release=$(release) --os=$(os) --unit_tests=${unit_tests}
 
 file_dep:
 	@bash build-scripts/file-build.sh --only="" --dep=1

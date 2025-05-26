@@ -52,7 +52,7 @@ jobs:
         git config --global --add safe.directory /opt/dingofs
 
         make file_dep
-        make file_build only=//src/* release=1
+        make file_build only=//src/* release=1 unit_tests=ON
         # check if the build is successful
         if [ $? -ne 0 ]
         then
