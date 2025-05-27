@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(executor)
+
 add_library(dingofs_auth
     authenticator.cpp
 )
 target_link_libraries(dingofs_auth
-    dingofs_concurrent
     brpc::brpc
     glog::glog
 )
@@ -33,8 +34,8 @@ add_library(dingofs_utils
     wait_interval.cpp
     bitmap.cpp
 )
+
 target_link_libraries(dingofs_utils
-    dingofs_concurrent
     uuid_static
     brpc::brpc
     glog::glog

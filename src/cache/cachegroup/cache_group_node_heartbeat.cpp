@@ -30,7 +30,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::base::timer::TimerImpl;
 using dingofs::pb::mds::cachegroup::CacheGroupOk;
 
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(

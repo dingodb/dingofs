@@ -14,7 +14,6 @@
 
 add_subdirectory(blockaccess)
 add_subdirectory(utils)
-add_subdirectory(utils/concurrent)
 add_subdirectory(base)
 add_subdirectory(common)
 add_subdirectory(options)

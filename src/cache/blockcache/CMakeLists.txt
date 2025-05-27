@@ -22,4 +22,5 @@ target_link_libraries(cache_blockcache
     cache_common
     cache_utils
     block_accesser
+    dingofs_executor
 )

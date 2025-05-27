@@ -15,6 +15,3 @@
 add_library(metaserver_common 
     dynamic_config.cpp
 )
-target_link_libraries(metaserver_common
-    dingofs_concurrent
-)

@@ -25,7 +25,7 @@
 
 #include <memory>
 
-#include "base/timer/timer_impl.h"
+#include "utils/executor/timer_impl.h"
 #include "utils/leaky_bucket.h"
 #include "utils/throttle.h"
 
@@ -33,7 +33,6 @@ namespace dingofs {
 namespace cache {
 namespace blockcache {
 
-using dingofs::base::timer::TimerImpl;
 using dingofs::utils::LeakyBucket;
 
 class BlockCacheMetricHelper;

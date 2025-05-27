@@ -18,14 +18,13 @@
 #include <atomic>
 #include <memory>
 
-#include "base/timer/timer.h"
+#include "utils/executor/timer.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::timer::Timer;
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::stub::rpcclient::MdsClient;
 

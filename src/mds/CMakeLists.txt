@@ -51,7 +51,6 @@ target_link_libraries(mds_lib
     dingofs_utils
     block_accesser
 
-    dingofs_concurrent
     stub_common
     brpc::brpc
     gflags::gflags

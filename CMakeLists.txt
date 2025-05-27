@@ -17,6 +17,7 @@
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(dingofs C CXX)
 
+option(BUILD_WITH_BTHREAD "Build dingofs with bthread instead pthread" ON)
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -73,7 +74,6 @@ link_directories(BEFORE ${DINGOSDK_INSTALL_PATH}/lib)
 include_directories(${THIRD_PARTY_INSTALL_PATH}/include)
 include_directories(${PROJECT_SOURCE_DIR}/thirdparties/etcdclient)
 include_directories(${DINGOSDK_INSTALL_PATH}/include)
-
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 message("CMAKE_MODULE_PATH: ${CMAKE_MODULE_PATH}")

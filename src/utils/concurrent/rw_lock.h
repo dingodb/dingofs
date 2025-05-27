@@ -35,6 +35,8 @@ namespace utils {
 
 class RWLockBase : public Uncopyable {
  public:
+  virtual ~RWLockBase() = default;
+
   virtual void WRLock() = 0;
   virtual int TryWRLock() = 0;
   virtual void RDLock() = 0;
@@ -43,11 +45,12 @@ class RWLockBase : public Uncopyable {
 
  protected:
   RWLockBase() = default;
-  virtual ~RWLockBase() = default;
 };
 
 class PthreadRWLockBase : public RWLockBase {
  public:
+  ~PthreadRWLockBase() override = default;
+
   void WRLock() override {
     int ret = pthread_rwlock_wrlock(&rwlock_);
     CHECK(0 == ret) << "wlock failed: " << ret << ", " << strerror(ret);
@@ -66,7 +69,6 @@ class PthreadRWLockBase : public RWLockBase {
 
  protected:
   PthreadRWLockBase() = default;
-  virtual ~PthreadRWLockBase() override = default;
 
   pthread_rwlock_t rwlock_;
   pthread_rwlockattr_t rwlockAttr_;

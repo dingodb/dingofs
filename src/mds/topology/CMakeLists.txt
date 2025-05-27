@@ -26,7 +26,6 @@ target_link_libraries(mds_topology
     mds_metaserverclient
     mds_kvstorage_client
     dingofs_utils
-    dingofs_concurrent
     glog::glog
     jsoncpp
     brpc::brpc

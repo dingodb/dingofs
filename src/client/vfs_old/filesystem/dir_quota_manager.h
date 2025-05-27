@@ -21,7 +21,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "base/timer/timer.h"
+#include "utils/executor/timer.h"
 #include "client/vfs_old/filesystem/dir_parent_watcher.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "stub/rpcclient/metaserver_client.h"
@@ -67,7 +67,7 @@ class DirQuotaManager {
       uint32_t fs_id,
       std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client,
       std::shared_ptr<DirParentWatcher> dir_parent_watcher,
-      std::shared_ptr<base::timer::Timer> timer)
+      std::shared_ptr<Timer> timer)
       : fs_id_(fs_id),
         meta_client_(std::move(meta_client)),
         dir_parent_watcher_(std::move(dir_parent_watcher)),
@@ -97,7 +97,7 @@ class DirQuotaManager {
   uint32_t fs_id_;
   std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client_;
   std::shared_ptr<DirParentWatcher> dir_parent_watcher_;
-  std::shared_ptr<base::timer::Timer> timer_;
+  std::shared_ptr<Timer> timer_;
 
   std::atomic<bool> running_{false};
   utils::RWLock rwock_;

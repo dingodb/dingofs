@@ -26,7 +26,6 @@
 #include <memory>
 
 #include "base/string/string.h"
-#include "base/timer/timer_impl.h"
 #include "client/common/dynamic_config.h"
 #include "client/common/share_var.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
@@ -35,6 +34,7 @@
 #include "client/vfs_old/filesystem/fs_stat_manager.h"
 #include "client/vfs_old/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
+#include "utils/executor/timer_impl.h"
 
 #define FD_STATE_PATH "/tmp/dingo-fuse-state.json.%d"
 
@@ -43,7 +43,6 @@ namespace client {
 namespace filesystem {
 
 using base::time::TimeSpec;
-using base::timer::TimerImpl;
 using common::FileSystemOption;
 
 using pb::metaserver::InodeAttr;
@@ -75,8 +74,7 @@ void FileSystem::Run() {
   dir_parent_watcher_ =
       std::make_shared<DirParentWatcherImpl>(member.inodeManager);
 
-  stat_timer_ =
-      std::make_shared<base::timer::TimerImpl>(FLAGS_stat_timer_thread_num);
+  stat_timer_ = std::make_shared<TimerImpl>(FLAGS_stat_timer_thread_num);
   fs_stat_manager_ =
       std::make_shared<FsStatManager>(fs_id_, member.meta_client, stat_timer_);
   dir_quota_manager_ = std::make_shared<DirQuotaManager>(

@@ -16,7 +16,7 @@
 
 #include <memory>
 
-#include "base/timer/timer_impl.h"
+#include "utils/executor/timer_impl.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 
@@ -39,15 +39,6 @@ TEST_F(TimerImplTest, BaseTest) {
   EXPECT_TRUE(timer->Stop());
 
   EXPECT_FALSE(timer->Stop());
-}
-
-TEST_F(TimerImplTest, BGThreadNum) {
-  int bg_num = 2;
-  auto timer = std::make_unique<TimerImpl>(bg_num);
-  EXPECT_EQ(timer->GetBgBthreadNum(), bg_num);
-
-  timer = std::make_unique<TimerImpl>();
-  EXPECT_EQ(timer->GetBgBthreadNum(), FLAGS_timer_bg_bthread_default_num);
 }
 
 TEST_F(TimerImplTest, Add) {

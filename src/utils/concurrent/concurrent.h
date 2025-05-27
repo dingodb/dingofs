@@ -32,7 +32,6 @@
 #include "utils/concurrent/spinlock.h"
 #include "utils/concurrent/task_queue.h"
 #include "utils/concurrent/task_thread_pool.h"
-#include "utils/concurrent/thread_pool.h"
 
 namespace dingofs {
 namespace utils {
@@ -54,7 +53,6 @@ using WriteLockGuard = WriteLockGuard;
 
 // dingo内部定义的线程组件
 using TaskQueue = TaskQueue;
-using ThreadPool = ThreadPool;
 
 }  // namespace utils
 }  // namespace dingofs

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,32 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_BASE_TIMER_TIMER_H_
-#define DINGOFS_SRC_BASE_TIMER_TIMER_H_
+#ifndef DINGOFS_UTILS_EXECUTOR_H_
+#define DINGOFS_UTILS_EXECUTOR_H_
 
 #include <functional>
+#include <string>
 
 namespace dingofs {
-namespace base {
-namespace timer {
 
-class Timer {
+class Executor {
  public:
-  Timer() = default;
+  virtual ~Executor() = default;
 
-  virtual ~Timer() = default;
-
-  virtual bool Start() = 0;
+  virtual bool Start(int thread_num) = 0;
 
   virtual bool Stop() = 0;
 
-  virtual bool Add(std::function<void()> func, int delay_ms) = 0;
+  virtual bool Execute(std::function<void()> func) = 0;
 
-  virtual bool IsStopped() = 0;
+  virtual bool Schedule(std::function<void()> func, int delay_ms) = 0;
+
+  virtual int ThreadNum() const = 0;
+
+  virtual std::string Name() const = 0;
 };
 
-}  // namespace timer
-}  // namespace base
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_BASE_TIMER_TIMER_H_
+#endif  // DINGOFS_UTILS_EXECUTOR_H_

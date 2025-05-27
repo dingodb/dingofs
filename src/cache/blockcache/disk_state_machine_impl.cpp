@@ -20,14 +20,12 @@
 #include <memory>
 
 #include "base/time/time.h"
-#include "base/timer/timer_impl.h"
+#include "utils/executor/timer_impl.h"
 #include "cache/blockcache/disk_state_machine.h"
 
 namespace dingofs {
 namespace cache {
 namespace blockcache {
-
-using base::timer::TimerImpl;
 
 void NormalDiskState::IOErr() {
   io_error_count_.fetch_add(1);

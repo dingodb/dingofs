@@ -38,7 +38,6 @@ namespace cache {
 namespace remotecache {
 
 using dingofs::base::hash::ConHash;
-using dingofs::base::timer::TimerImpl;
 using dingofs::pb::mds::cachegroup::CacheGroupMember;
 using dingofs::stub::rpcclient::MdsClient;
 using dingofs::utils::RWLock;

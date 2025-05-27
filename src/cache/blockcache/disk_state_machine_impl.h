@@ -17,7 +17,7 @@
 
 #include <memory>
 
-#include "base/timer/timer_impl.h"
+#include "utils/executor/timer_impl.h"
 #include "bthread/execution_queue.h"
 #include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_state_machine.h"
@@ -28,7 +28,6 @@ namespace cache {
 namespace blockcache {
 
 using namespace std::chrono;
-using base::timer::TimerImpl;
 
 class DiskStateMachine;
 

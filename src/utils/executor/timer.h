@@ -1,4 +1,4 @@
-// Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <gmock/gmock.h>
+#ifndef DINGOFS_UTILS_TIMER_TIMER_H_
+#define DINGOFS_UTILS_TIMER_TIMER_H_
 
-#include "utils/executor/timer.h"
+#include <functional>
 
 namespace dingofs {
-namespace base {
-namespace timer {
 
-class MockTimer : public Timer {
+class Timer {
  public:
-  MOCK_METHOD(bool, Start, (), (override));
-  MOCK_METHOD(bool, Stop, (), (override));
-  MOCK_METHOD(bool, Add, (std::function<void()> func, int delay_ms),
-              (override));
-  MOCK_METHOD(bool, IsStopped, (), (override));
+  Timer() = default;
+
+  virtual ~Timer() = default;
+
+  virtual bool Start() = 0;
+
+  virtual bool Stop() = 0;
+
+  virtual bool Add(std::function<void()> func, int delay_ms) = 0;
+
+  virtual bool IsStopped() = 0;
 };
 
-}  // namespace timer
-}  // namespace base
-
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_BASE_TIMER_TIMER_H_

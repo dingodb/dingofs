@@ -29,7 +29,7 @@
 #include <memory>
 #include <string>
 
-#include "base/timer/timer.h"
+#include "utils/executor/timer.h"
 #include "client/common/config.h"
 #include "client/vfs_old/filesystem/attr_watcher.h"
 #include "client/vfs_old/filesystem/defer_sync.h"
@@ -164,7 +164,7 @@ class FileSystem {
   std::shared_ptr<DirParentWatcher> dir_parent_watcher_;
   // NOTE: filesytem own this timer, when destroy or stop, first stop
   // stat_timer_, then stop fs_stat_manager_  and dir_quota_manager_
-  std::shared_ptr<base::timer::Timer> stat_timer_;
+  std::shared_ptr<Timer> stat_timer_;
   std::shared_ptr<FsStatManager> fs_stat_manager_;
   std::shared_ptr<DirQuotaManager> dir_quota_manager_;
   std::unique_ptr<FsPushMetricManager> fs_push_metrics_manager_;

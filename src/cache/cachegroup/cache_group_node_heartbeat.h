@@ -26,7 +26,7 @@
 #include <cstdlib>
 #include <memory>
 
-#include "base/timer/timer_impl.h"
+#include "utils/executor/timer_impl.h"
 #include "cache/cachegroup/cache_group_node_member.h"
 #include "cache/cachegroup/cache_group_node_metric.h"
 #include "cache/common/common.h"
@@ -36,7 +36,6 @@ namespace dingofs {
 namespace cache {
 namespace cachegroup {
 
-using dingofs::base::timer::Timer;
 using dingofs::stub::rpcclient::MdsClient;
 
 class CacheGroupNodeHeartbeat {

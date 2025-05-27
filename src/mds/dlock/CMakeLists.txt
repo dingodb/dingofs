@@ -19,7 +19,6 @@ add_library(mds_dlock
 target_link_libraries(mds_dlock
     mds_kvstorage_client
     dingofs_utils
-    dingofs_concurrent
     PROTO_OBJS
     protobuf::libprotobuf
 )

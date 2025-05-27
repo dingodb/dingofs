@@ -25,7 +25,6 @@ target_link_libraries(mds_heartbeat
     mds_schedule
     mds_topology
     dingofs_utils
-    dingofs_concurrent
     brpc::brpc
     gflags::gflags
     glog::glog

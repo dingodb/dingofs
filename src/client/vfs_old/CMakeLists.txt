@@ -28,6 +28,7 @@ add_library(vfs_old_lib ${VFS_OLD_SRC_LIB})
 target_link_libraries(vfs_old_lib
     PROTO_OBJS
     dingofs_base_lib
+    dingofs_executor
     rpcclient
     dingofs_common
     client_lease

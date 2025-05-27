@@ -1,4 +1,4 @@
-// Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,20 +20,23 @@
 #include <queue>
 #include <thread>
 
-#include "base/timer/timer.h"
 #include "gflags/gflags_declare.h"
+#include "utils/executor/thread_pool.h"
+#include "utils/executor/timer.h"
 
-DECLARE_int32(timer_bg_bthread_default_num);
+DECLARE_int32(timer_bg_thread_default_num);
 
 namespace dingofs {
-namespace base {
-namespace timer {
 
 class TimerImpl : public Timer {
  public:
   TimerImpl();
 
-  TimerImpl(int bg_bthread_num);
+  // timer own the thread pool, this will create a thread pool
+  TimerImpl(int bg_thread_num);
+
+  // caller owns the thread pool
+  TimerImpl(ThreadPool* thread_pool);
 
   ~TimerImpl() override;
 
@@ -44,8 +47,6 @@ class TimerImpl : public Timer {
   bool Add(std::function<void()> func, int delay_ms) override;
 
   bool IsStopped() override;
-
-  int GetBgBthreadNum() const { return bg_bthread_num_; }
 
  private:
   void Run();
@@ -67,18 +68,15 @@ class TimerImpl : public Timer {
 
   std::mutex mutex_;
   std::condition_variable cv_;
-  std::unique_ptr<std::thread> thread_;
+  std::unique_ptr<std::thread> thread_{nullptr};
   std::priority_queue<FunctionInfo, std::vector<FunctionInfo>, RunTimeOrder>
       heap_;
-  bool running_;
+  bool running_{false};
 
-  int bg_bthread_num_;
-  class BThreadPool;
-  std::unique_ptr<BThreadPool> thread_pool_;
+  const bool own_thread_pool_;
+  std::unique_ptr<ThreadPool> thread_pool_;
 };
 
-}  // namespace timer
-}  // namespace base
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_BASE_TIMER_TIMER_IMPL_H_
