@@ -111,14 +111,15 @@ class MetaCodec {
   // fs format: [$prefix, $type, $fs_id]
   static std::string EncodeFsQuotaKey(uint32_t fs_id);
   static void DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id);
-  static std::string EncodeFsQuotaValue(const pb::mdsv2::Quota& quota);
-  static pb::mdsv2::Quota DecodeFsQuotaValue(const std::string& value);
+  static std::string EncodeFsQuotaValue(const QuotaEntry& quota);
+  static QuotaEntry DecodeFsQuotaValue(const std::string& value);
 
   // dir format: [$prefix, $type, $fs_id, $ino]
+  static uint32_t DirQuotaKeyLength();
   static std::string EncodeDirQuotaKey(uint32_t fs_id, Ino ino);
   static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeDirQuotaValue(const pb::mdsv2::Quota& quota);
-  static pb::mdsv2::Quota DecodeDirQuotaValue(const std::string& value);
+  static std::string EncodeDirQuotaValue(const QuotaEntry& quota);
+  static QuotaEntry DecodeDirQuotaValue(const std::string& value);
 
   // fs stats
   // format: [$prefix, $type, $fs_id, $time_ns]

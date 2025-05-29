@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -55,6 +56,16 @@ class Operation {
     kUnlink = 21,
     kRename = 22,
     kCompactChunk = 23,
+
+    kSetFsQuota = 30,
+    kGetFsQuota = 31,
+    kFlushFsUsage = 32,
+    kDeleteFsQuota = 33,
+
+    kSetDirQuota = 35,
+    kDeleteDirQuota = 36,
+    kLoadDirQuotas = 37,
+    kFlushDirUsages = 38,
   };
 
   const char* OpName() const {
@@ -103,6 +114,33 @@ class Operation {
 
       case OpType::kCompactChunk:
         return "CompactChunk";
+
+      case OpType::kSetFsQuota:
+        return "SetFsQuota";
+
+      case OpType::kGetFsQuota:
+        return "GetFsQuota";
+
+      case OpType::kFlushFsUsage:
+        return "FlushFsUsage";
+
+      case OpType::kDeleteFsQuota:
+        return "DeleteFsQuota";
+
+      case OpType::kSetDirQuota:
+        return "SetDirQuota";
+
+      case OpType::kDeleteDirQuota:
+        return "DeleteDirQuota";
+
+      case OpType::kLoadDirQuotas:
+        return "LoadDirQuotas";
+
+      case OpType::kFlushDirUsages:
+        return "FlushDirUsages";
+
+      default:
+        return "UnknownOperation";
     }
 
     return nullptr;
@@ -399,6 +437,10 @@ class UpdateChunkOperation : public Operation {
       : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(index), slices_(slices) {};
   ~UpdateChunkOperation() override = default;
 
+  struct Result : public Operation::Result {
+    int64_t length_delta{0};
+  };
+
   OpType GetOpType() const override { return OpType::kUpdateChunk; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
@@ -406,11 +448,22 @@ class UpdateChunkOperation : public Operation {
 
   Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
 
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
  private:
   const FsInfoType fs_info_;
   uint64_t ino_;
   uint64_t chunk_index_{0};
   std::vector<pb::mdsv2::Slice> slices_;
+
+  Result result_;
 };
 
 class RmDirOperation : public Operation {
@@ -548,6 +601,232 @@ class CompactChunkOperation : public Operation {
   FsInfoType fs_info_;
   uint64_t ino_;
   uint64_t chunk_index_{0};
+  Result result_;
+};
+
+class SetFsQuotaOperation : public Operation {
+ public:
+  SetFsQuotaOperation(Trace& trace, uint32_t fs_id, const QuotaEntry& quota)
+      : Operation(trace), fs_id_(fs_id), quota_(quota) {};
+  ~SetFsQuotaOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kSetFsQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  QuotaEntry quota_;
+};
+
+class GetFsQuotaOperation : public Operation {
+ public:
+  GetFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  ~GetFsQuotaOperation() override = default;
+
+  struct Result : public Operation::Result {
+    QuotaEntry quota;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetFsQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  Result result_;
+};
+
+class FlushFsUsageOperation : public Operation {
+ public:
+  FlushFsUsageOperation(Trace& trace, uint32_t fs_id, const UsageEntry& usage)
+      : Operation(trace), fs_id_(fs_id), usage_(usage) {};
+  ~FlushFsUsageOperation() override = default;
+
+  struct Result : public Operation::Result {
+    QuotaEntry quota;
+  };
+
+  OpType GetOpType() const override { return OpType::kFlushFsUsage; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  UsageEntry usage_;
+  Result result_;
+};
+
+class DeleteFsQuotaOperation : public Operation {
+ public:
+  DeleteFsQuotaOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  ~DeleteFsQuotaOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteFsQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+};
+
+class SetDirQuotaOperation : public Operation {
+ public:
+  SetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const QuotaEntry& quota)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), quota_(quota) {};
+  ~SetDirQuotaOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kSetDirQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  QuotaEntry quota_;
+};
+
+class GetDirQuotaOperation : public Operation {
+ public:
+  GetDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~GetDirQuotaOperation() override = default;
+
+  struct Result : public Operation::Result {
+    QuotaEntry quota;
+  };
+
+  OpType GetOpType() const override { return OpType::kSetDirQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  Result result_;
+};
+
+class DeleteDirQuotaOperation : public Operation {
+ public:
+  DeleteDirQuotaOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~DeleteDirQuotaOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteDirQuota; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+};
+
+class LoadDirQuotasOperation : public Operation {
+ public:
+  LoadDirQuotasOperation(Trace& trace, uint32_t fs_id) : Operation(trace), fs_id_(fs_id) {};
+  ~LoadDirQuotasOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::unordered_map<Ino, QuotaEntry> quotas;
+  };
+
+  OpType GetOpType() const override { return OpType::kLoadDirQuotas; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  Result result_;
+};
+
+class FlushDirUsagesOperation : public Operation {
+ public:
+  FlushDirUsagesOperation(Trace& trace, uint32_t fs_id, const std::map<uint64_t, UsageEntry>& usages)
+      : Operation(trace), fs_id_(fs_id), usages_(usages) {};
+  ~FlushDirUsagesOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::map<uint64_t, QuotaEntry> quotas;
+  };
+
+  OpType GetOpType() const override { return OpType::kFlushDirUsages; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  std::map<uint64_t, UsageEntry> usages_;
+
   Result result_;
 };
 

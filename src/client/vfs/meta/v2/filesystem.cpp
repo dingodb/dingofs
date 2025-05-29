@@ -257,13 +257,18 @@ bool MDSV2FileSystem::UnmountFs() {
   return true;
 }
 
-Status MDSV2FileSystem::StatFs(Ino ino, FsStat* fs_stat) {  // NOLINT
-  fs_stat->max_bytes = 500 * 1000 * 1000 * 1000ul;
-  fs_stat->used_bytes = 20 * 1000 * 1000 * 1000ul;
-  fs_stat->used_inodes = 100;
-  fs_stat->max_inodes = 10000;
+Status MDSV2FileSystem::StatFs(Ino ino, FsStat* fs_stat) {
+  auto status = mds_client_->GetFsQuota(*fs_stat);
 
-  return Status::OK();
+  if (fs_stat->max_bytes == 0) {
+    fs_stat->max_bytes = UINT64_MAX;
+  }
+
+  if (fs_stat->max_inodes == 0) {
+    fs_stat->max_inodes = UINT64_MAX;
+  }
+
+  return status;
 };
 
 Status MDSV2FileSystem::Lookup(Ino parent, const std::string& name,

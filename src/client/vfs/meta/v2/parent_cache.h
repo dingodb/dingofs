@@ -19,7 +19,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
+#include "client/vfs/vfs_meta.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -42,12 +44,14 @@ class ParentCache {
 
   static ParentCachePtr New() { return std::make_shared<ParentCache>(); }
 
-  bool GetParent(int64_t ino, int64_t& parent);
-  bool GetVersion(int64_t ino, uint64_t& version);
-  void Upsert(int64_t ino, int64_t parent);
-  void Upsert(int64_t ino, uint64_t version);
-  void Upsert(int64_t ino, int64_t parent, uint64_t version);
-  void Delete(int64_t ino);
+  bool GetParent(Ino ino, int64_t& parent);
+  bool GetVersion(Ino ino, uint64_t& version);
+  std::vector<uint64_t> GetAncestors(uint64_t ino);
+
+  void Upsert(Ino ino, int64_t parent);
+  void Upsert(Ino ino, uint64_t version);
+  void Upsert(Ino ino, int64_t parent, uint64_t version);
+  void Delete(Ino ino);
 
  private:
   utils::RWLock lock_;

@@ -40,6 +40,7 @@ namespace mdsv2 {
 DEFINE_int32(heartbeat_interval_s, 5, "heartbeat interval seconds");
 DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
 DEFINE_int32(mdsmonitor_interval_s, 5, "mds monitor interval seconds");
+DEFINE_int32(quota_sync_interval_s, 6, "quota sync interval seconds");
 DEFINE_int32(gc_interval_s, 60, "gc interval seconds");
 
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
@@ -173,13 +174,6 @@ bool Server::InitStorage(const std::string& store_url) {
   return kv_storage_->Init(store_addrs);
 }
 
-bool Server::InitQuotaProcessor() {
-  quota_processor_ = QuotaProcessor::New(kv_storage_);
-  CHECK(quota_processor_ != nullptr) << "new QuotaProcessor fail.";
-
-  return quota_processor_->Init();
-}
-
 bool Server::InitRenamer() {
   renamer_ = Renamer::New();
   CHECK(renamer_ != nullptr) << "new Renamer fail.";
@@ -268,6 +262,15 @@ bool Server::InitMDSMonitor() {
   return true;
 }
 
+bool Server::InitQuotaSynchronizer() {
+  CHECK(file_system_set_ != nullptr) << "file_system_set is nullptr.";
+
+  quota_synchronizer_ = QuotaSynchronizer::New(file_system_set_);
+  CHECK(quota_synchronizer_ != nullptr) << "new QuotaSynchronizer fail.";
+
+  return true;
+}
+
 bool Server::InitGcProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
@@ -307,6 +310,14 @@ bool Server::InitCrontab() {
       FLAGS_mdsmonitor_interval_s * 1000,
       true,
       [](void*) { Server::GetInstance().GetMDSMonitor()->Run(); },
+  });
+
+  // Add quota sync crontab
+  crontab_configs_.push_back({
+      "QUOTA_SYNC",
+      FLAGS_quota_sync_interval_s * 1000,
+      true,
+      [](void*) { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -351,14 +362,12 @@ void Server::Run() {
   CHECK(read_worker_set_ != nullptr) << "read worker set is nullptr.";
   CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
-  CHECK(quota_processor_ != nullptr) << "quota processor is nullptr.";
   CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
 
   auto fs_stats = FsStats::New(kv_storage_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, quota_processor_, gc_processor_,
-                             std::move(fs_stats));
+  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, gc_processor_, std::move(fs_stats));
   CHECK(brpc_server_.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
   DebugServiceImpl debug_service(file_system_set_);
@@ -388,7 +397,6 @@ void Server::Stop() {
 
   brpc_server_.Stop(0);
   brpc_server_.Join();
-  quota_processor_->Destroy();
   renamer_->Destroy();
   operation_processor_->Destroy();
   heartbeat_->Destroy();

@@ -18,6 +18,7 @@
 #include <cstdint>
 
 #include "mdsv2/common/tracing.h"
+#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -35,12 +36,17 @@ class Context {
   const std::string& ClientId() const { return client_id_; }
   Trace& GetTrace() { return trace_; }
 
+  void SetAncestors(std::vector<Ino>&& ancestors) { ancestors_ = std::move(ancestors); }
+  const std::vector<Ino>& GetAncestors() const { return ancestors_; }
+
  private:
   bool is_bypass_cache_{false};
 
   uint64_t inode_version_{0};
 
   std::string client_id_;
+
+  std::vector<Ino> ancestors_;
 
   Trace trace_;
 };

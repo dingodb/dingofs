@@ -48,12 +48,10 @@ static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
 }
 
 MDSServiceImpl::MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set,
-                               FileSystemSetSPtr file_system_set, QuotaProcessorSPtr quota_processor,
-                               GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
+                               FileSystemSetSPtr file_system_set, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
     : read_worker_set_(read_worker_set),
       write_worker_set_(write_worker_set),
       file_system_set_(file_system_set),
-      quota_processor_(quota_processor),
       gc_processor_(gc_processor),
       fs_stat_(std::move(fs_stat)) {}
 
@@ -800,6 +798,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   EntryOut entry_out;
   status = file_system->MkNod(ctx, param, entry_out);
@@ -853,6 +852,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   EntryOut entry_out;
   status = file_system->MkDir(ctx, param, entry_out);
@@ -898,6 +898,7 @@ void MDSServiceImpl::DoRmDir(google::protobuf::RpcController* controller, const 
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   status = file_system->RmDir(ctx, request->parent(), request->name());
   if (BAIDU_UNLIKELY(!status.ok())) {
@@ -1079,6 +1080,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   EntryOut entry_out;
   status = file_system->Link(ctx, request->ino(), request->new_parent(), request->new_name(), entry_out);
@@ -1124,6 +1126,7 @@ void MDSServiceImpl::DoUnLink(google::protobuf::RpcController* controller, const
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   status = file_system->UnLink(ctx, request->parent(), request->name());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
@@ -1166,6 +1169,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
 
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  ctx.SetAncestors(Helper::PbRepeatedToVector(request->context().ancestors()));
 
   EntryOut entry_out;
   status = file_system->Symlink(ctx, request->symlink(), request->new_parent(), request->new_name(), request->uid(),
@@ -1490,9 +1494,16 @@ void MDSServiceImpl::DoRename(google::protobuf::RpcController* controller, const
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
+  FileSystem::RenameParam param;
+  param.old_parent = request->old_parent();
+  param.old_name = request->old_name();
+  param.new_parent = request->new_parent();
+  param.new_name = request->new_name();
+  param.old_ancestors = Helper::PbRepeatedToVector(request->old_ancestors());
+  param.new_ancestors = Helper::PbRepeatedToVector(request->new_ancestors());
+
   uint64_t old_parent_version, new_parent_version;
-  auto status = file_system->CommitRename(ctx, request->old_parent(), request->old_name(), request->new_parent(),
-                                          request->new_name(), old_parent_version, new_parent_version);
+  auto status = file_system->CommitRename(ctx, param, old_parent_version, new_parent_version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1821,10 +1832,16 @@ void MDSServiceImpl::DoSetFsQuota(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_processor_->SetFsQuota(ctx, request->fs_id(), request->quota());
+  auto status = quota_manager.SetFsQuota(ctx.GetTrace(), request->quota());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1856,11 +1873,17 @@ void MDSServiceImpl::DoGetFsQuota(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   pb::mdsv2::Quota quota;
-  auto status = quota_processor_->GetFsQuota(ctx, request->fs_id(), quota);
+  auto status = quota_manager.GetFsQuota(ctx.GetTrace(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1893,14 +1916,20 @@ void MDSServiceImpl::DoFlushFsUsage(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  //   auto file_system = GetFileSystem(request->fs_id());
+  // if (file_system == nullptr) {
+  //   return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  // }
+  // auto& quota_manager = file_system->GetQuotaManager();
 
-  auto status = quota_processor_->FlushFsUsage(ctx, request->fs_id(), request->usage());
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
+  // const auto& req_ctx = request->context();
+  // Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+
+  // auto status = quota_manager->FlushFsUsage(ctx, request->fs_id(), request->usage());
+  // ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  // if (BAIDU_UNLIKELY(!status.ok())) {
+  //   return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  // }
 }
 
 void MDSServiceImpl::FlushFsUsage(google::protobuf::RpcController* controller,
@@ -1927,10 +1956,16 @@ void MDSServiceImpl::DoSetDirQuota(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_processor_->SetDirQuota(ctx, request->fs_id(), request->ino(), request->quota());
+  auto status = quota_manager.SetDirQuota(ctx.GetTrace(), request->ino(), request->quota());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1961,11 +1996,17 @@ void MDSServiceImpl::DoGetDirQuota(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   pb::mdsv2::Quota quota;
-  auto status = quota_processor_->GetDirQuota(ctx, request->fs_id(), request->ino(), quota);
+  auto status = quota_manager.GetDirQuota(ctx.GetTrace(), request->ino(), quota);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1998,10 +2039,16 @@ void MDSServiceImpl::DoDeleteDirQuota(google::protobuf::RpcController* controlle
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  auto status = quota_processor_->DeleteDirQuota(ctx, request->fs_id(), request->ino());
+  auto status = quota_manager.DeleteDirQuota(ctx.GetTrace(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2032,11 +2079,17 @@ void MDSServiceImpl::DoLoadDirQuotas(google::protobuf::RpcController* controller
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
+  auto file_system = GetFileSystem(request->fs_id());
+  if (file_system == nullptr) {
+    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+  }
+  auto& quota_manager = file_system->GetQuotaManager();
+
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::map<uint64_t, pb::mdsv2::Quota> quotas;
-  auto status = quota_processor_->LoadDirQuotas(ctx, request->fs_id(), quotas);
+  auto status = quota_manager.LoadDirQuotas(ctx.GetTrace(), quotas);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2071,19 +2124,19 @@ void MDSServiceImpl::DoFlushDirUsages(google::protobuf::RpcController* controlle
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+  // const auto& req_ctx = request->context();
+  // Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  std::map<uint64_t, pb::mdsv2::Usage> usages;
-  for (const auto& [ino, usage] : request->usages()) {
-    usages[ino] = usage;
-  }
+  // std::map<uint64_t, pb::mdsv2::Usage> usages;
+  // for (const auto& [ino, usage] : request->usages()) {
+  //   usages[ino] = usage;
+  // }
 
-  auto status = quota_processor_->FlushDirUsages(ctx, request->fs_id(), usages);
-  ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
+  // auto status = quota_processor_->FlushDirUsages(ctx, request->fs_id(), usages);
+  // ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
+  // if (BAIDU_UNLIKELY(!status.ok())) {
+  //   return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  // }
 }
 
 void MDSServiceImpl::FlushDirUsages(google::protobuf::RpcController* controller,

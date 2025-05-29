@@ -13,22 +13,17 @@
 # limitations under the License.
 
 
-file(GLOB DINGOFS_MDSV2_FILESYSTEM_SRCS
+file(GLOB DINGOFS_MDSV2_QUOTA_SRCS
     "*.cc"
 )
 
-add_library(mdsv2_filesystem
-    ${DINGOFS_MDSV2_FILESYSTEM_SRCS}
+add_library(mdsv2_quota
+    ${DINGOFS_MDSV2_QUOTA_SRCS}
 )
 
-target_link_libraries(mdsv2_filesystem
-    client_common
-    mdsv2_common
-    mdsv2_service
-    mdsv2_background
-    mdsv2_quota
-
+target_link_libraries(mdsv2_quota
     PROTO_OBJS
-    protobuf::libprotobuf
-    nlohmann_json
+    
+    mdsv2_common
+    mdsv2_filesystem
 )

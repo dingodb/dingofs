@@ -20,7 +20,6 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/filesystem/filesystem.h"
-#include "mdsv2/filesystem/quota.h"
 #include "mdsv2/service/service_helper.h"
 #include "mdsv2/statistics/fs_stat.h"
 
@@ -30,7 +29,7 @@ namespace mdsv2 {
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
   MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set, FileSystemSetSPtr file_system,
-                 QuotaProcessorSPtr quota_processor, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat);
+                 GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat);
 
   // mds
   void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
@@ -306,9 +305,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
 
   // file system set
   FileSystemSetSPtr file_system_set_;
-
-  // quota processor
-  QuotaProcessorSPtr quota_processor_;
 
   // gc
   GcProcessorSPtr gc_processor_;

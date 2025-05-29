@@ -66,40 +66,41 @@ class MDSClient {
   Status UmountFs(const std::string& name,
                   const pb::mdsv2::MountPoint& mount_point);
 
-  Status Lookup(uint64_t parent, const std::string& name, Attr& out_attr);
+  Status Lookup(Ino parent, const std::string& name, Attr& out_attr);
 
-  Status MkNod(uint64_t parent, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
-  Status MkDir(uint64_t parent, const std::string& name, uint32_t uid,
-               uint32_t gid, mode_t mode, dev_t rdev, Attr& out_attr);
-  Status RmDir(uint64_t parent, const std::string& name);
+  Status MkNod(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+               mode_t mode, dev_t rdev, Attr& out_attr);
+  Status MkDir(Ino parent, const std::string& name, uint32_t uid, uint32_t gid,
+               mode_t mode, dev_t rdev, Attr& out_attr);
+  Status RmDir(Ino parent, const std::string& name);
 
-  Status ReadDir(uint64_t ino, const std::string& last_name, uint32_t limit,
+  Status ReadDir(Ino ino, const std::string& last_name, uint32_t limit,
                  bool with_attr, std::vector<DirEntry>& entries);
 
-  Status Open(uint64_t ino, int flags, std::string& session_id);
-  Status Release(uint64_t ino, const std::string& session_id);
+  Status Open(Ino ino, int flags, std::string& session_id);
+  Status Release(Ino ino, const std::string& session_id);
 
-  Status Link(uint64_t ino, uint64_t new_parent, const std::string& new_name,
+  Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr& out_attr);
-  Status UnLink(uint64_t parent, const std::string& name);
-  Status Symlink(uint64_t parent, const std::string& name, uint32_t uid,
+  Status UnLink(Ino parent, const std::string& name);
+  Status Symlink(Ino parent, const std::string& name, uint32_t uid,
                  uint32_t gid, const std::string& symlink, Attr& out_attr);
-  Status ReadLink(uint64_t ino, std::string& symlink);
+  Status ReadLink(Ino ino, std::string& symlink);
 
-  Status GetAttr(uint64_t ino, Attr& out_attr);
-  Status SetAttr(uint64_t ino, const Attr& attr, int to_set, Attr& out_attr);
-  Status GetXAttr(uint64_t ino, const std::string& name, std::string& value);
-  Status SetXAttr(uint64_t ino, const std::string& name,
-                  const std::string& value);
-  Status ListXAttr(uint64_t ino, std::map<std::string, std::string>& xattrs);
+  Status GetAttr(Ino ino, Attr& out_attr);
+  Status SetAttr(Ino ino, const Attr& attr, int to_set, Attr& out_attr);
+  Status GetXAttr(Ino ino, const std::string& name, std::string& value);
+  Status SetXAttr(Ino ino, const std::string& name, const std::string& value);
+  Status ListXAttr(Ino ino, std::map<std::string, std::string>& xattrs);
 
-  Status Rename(uint64_t old_parent, const std::string& old_name,
-                uint64_t new_parent, const std::string& new_name);
+  Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
+                const std::string& new_name);
 
   Status NewSliceId(uint64_t* id);
   Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
   Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
+
+  Status GetFsQuota(FsStat& fs_stat);
 
  private:
   EndPoint GetEndPointByIno(int64_t ino);
@@ -112,6 +113,9 @@ class MDSClient {
   bool ProcessEpochChange();
   bool ProcessNotServe();
   bool ProcessNetError(EndPoint& endpoint);
+
+  template <typename Request>
+  void SetAncestorInContext(Request& request, Ino ino);
 
   template <typename Request, typename Response>
   Status SendRequest(EndPoint& endpoint, const std::string& service_name,
@@ -132,6 +136,18 @@ class MDSClient {
 
   RPCPtr rpc_;
 };
+
+template <typename Request>
+void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
+  if (fs_info_->IsMonoPartition()) {
+    return;
+  }
+
+  auto ancestors = parent_cache_->GetAncestors(ino);
+  for (auto& ancestor : ancestors) {
+    request.mutable_context()->add_ancestors(ancestor);
+  }
+}
 
 template <typename Request, typename Response>
 Status MDSClient::SendRequest(EndPoint& endpoint,

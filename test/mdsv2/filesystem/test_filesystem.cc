@@ -108,7 +108,6 @@ class FileSystemTest : public testing::Test {
     ASSERT_TRUE(coordinator_client->Init("")) << "init coordinator client fail.";
 
     auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client, kInodeTableId, 1000000, 8);
-    ASSERT_TRUE(fs_id_generator->Init()) << "init fs id generator fail.";
 
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";

@@ -237,7 +237,6 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
   CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";
-  CHECK(server.InitQuotaProcessor()) << "init quota processor error.";
   CHECK(server.InitRenamer()) << "init renamer error.";
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
   CHECK(server.InitFileSystem()) << "init file system set error.";
@@ -246,6 +245,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitMDSMonitor()) << "init mds monitor error.";
   CHECK(server.InitGcProcessor()) << "init gc error.";
+  CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
 
   DINGO_LOG(INFO) << "##################### init finish ######################";

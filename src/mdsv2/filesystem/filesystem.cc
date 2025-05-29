@@ -82,7 +82,7 @@ static inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
 static inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
 
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-                       RenamerPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map)
+                       RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
@@ -90,13 +90,34 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       kv_storage_(kv_storage),
       renamer_(renamer),
       operation_processor_(operation_processor),
-      mds_meta_map_(mds_meta_map) {
+      mds_meta_map_(mds_meta_map),
+      quota_manager_(fs_id_, kv_storage, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
+  parent_memo_ = ParentMemo::New(fs_id_);
 };
 
+FileSystem::~FileSystem() {
+  // destroy
+  quota_manager_.Destroy();
+}
+
 FileSystemSPtr FileSystem::GetSelfPtr() { return std::dynamic_pointer_cast<FileSystem>(shared_from_this()); }
+
+bool FileSystem::Init() {
+  if (!id_generator_->Init()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs.{}] init generator fail.", fs_id_);
+    return false;
+  }
+
+  if (!quota_manager_.Init()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs.{}] init quota manager fail.", fs_id_);
+    return false;
+  }
+
+  return true;
+}
 
 uint64_t FileSystem::Epoch() const {
   auto partition_policy = fs_info_->GetPartitionPolicy();
@@ -494,6 +515,22 @@ Status FileSystem::CreateRoot() {
   return Status::OK();
 }
 
+Status FileSystem::CreateQuota() {
+  Trace trace;
+  QuotaEntry quota_entry;
+  quota_entry.set_max_inodes(UINT64_MAX);
+  quota_entry.set_max_bytes(UINT64_MAX);
+  quota_entry.set_used_inodes(1);
+
+  auto status = quota_manager_.SetFsQuota(trace, quota_entry);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs.{}] create quota fail, status({}).", fs_id_, status.error_str());
+    return Status(pb::error::EBACKEND_STORE, fmt::format("create quota fail, {}", status.error_str()));
+  }
+
+  return Status::OK();
+}
+
 Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] lookup parent({}), name({}).", fs_id_, parent, name);
 
@@ -519,6 +556,8 @@ Status FileSystem::Lookup(Context& ctx, Ino parent, const std::string& name, Ent
   if (!status.ok()) {
     return status;
   }
+
+  parent_memo_->Remeber(inode->Ino(), parent);
 
   entry_out.attr = inode->Copy();
 
@@ -588,6 +627,14 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
     return status;
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_.CheckQuota(param.parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
   uint64_t time_ns = Helper::TimestampNs();
 
   // build inode
@@ -629,6 +676,12 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
   parent_inode->UpdateIf(std::move(parent_attr));
+
+  // update quota
+  quota_manager_.UpdateFsUsage(0, 1);
+  quota_manager_.UpdateDirUsage(param.parent, 0, 1);
+
+  parent_memo_->Remeber(attr.ino(), param.parent);
 
   entry_out.attr.Swap(&attr);
 
@@ -740,6 +793,14 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
     return status;
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_.CheckQuota(param.parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
   // build inode
   uint64_t time_ns = Helper::TimestampNs();
 
@@ -784,6 +845,12 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   parent_inode->UpdateIf(std::move(parent_attr));
   partition_cache_.Put(ino, Partition::New(inode));
 
+  // update quota
+  quota_manager_.UpdateFsUsage(0, 1);
+  quota_manager_.UpdateDirUsage(param.parent, 0, 1);
+
+  parent_memo_->Remeber(attr.ino(), param.parent);
+
   entry_out.attr.Swap(&attr);
 
   return Status::OK();
@@ -825,6 +892,9 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
                   fmt::format("dir({}/{}) is not empty, nlink({}).", parent, name, dentry.Inode()->Nlink()));
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
   uint64_t time_ns = Helper::TimestampNs();
 
   // update backend store
@@ -845,6 +915,12 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   parent_partition->DeleteChild(name);
   parent_partition->ParentInode()->UpdateIf(std::move(parent_attr));
   partition_cache_.Delete(dentry.INo());
+
+  // update quota
+  quota_manager_.UpdateFsUsage(0, -1);
+  quota_manager_.UpdateDirUsage(parent, 0, -1);
+
+  parent_memo_->Forget(dentry.INo());
 
   return Status::OK();
 }
@@ -915,6 +991,14 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
     return status;
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_.CheckQuota(new_parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
   uint32_t fs_id = inode->FsId();
 
   // build dentry
@@ -943,6 +1027,9 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
 
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
+
+  // update quota
+  quota_manager_.UpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr = inode->Copy();
 
@@ -982,6 +1069,9 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
     return Status(pb::error::ENOT_FILE, "directory not allow unlink");
   }
 
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
   uint64_t time_ns = Helper::TimestampNs();
 
   // update backend store
@@ -1000,10 +1090,18 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
   }
 
+  // update cache
   partition->DeleteChild(name);
   partition->ParentInode()->UpdateIf(std::move(parent_attr));
 
   inode->UpdateIf(std::move(child_attr));
+
+  // update quota
+  int64_t byte_delta = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
+  if (child_attr.nlink() == 0) {
+    quota_manager_.UpdateFsUsage(-byte_delta, -1);
+  }
+  quota_manager_.UpdateDirUsage(parent, -byte_delta, 1);
 
   return Status::OK();
 }
@@ -1041,6 +1139,14 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   status = GenFileIno(ino);
   if (!status.ok()) {
     return status;
+  }
+
+  // update parent memo
+  UpdateParentMemo(ctx.GetAncestors());
+
+  // check quota
+  if (!quota_manager_.CheckQuota(new_parent, 0, 1)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
   }
 
   // build inode
@@ -1086,6 +1192,10 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
   partition->ParentInode()->UpdateIf(std::move(parent_attr));
+
+  // update quota
+  quota_manager_.UpdateFsUsage(0, 1);
+  quota_manager_.UpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr.Swap(&attr);
 
@@ -1265,8 +1375,25 @@ void FileSystem::SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::ve
   }
 }
 
-Status FileSystem::Rename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
-                          const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version) {
+void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
+  if (IsParentHashPartition()) {
+    for (size_t i = 1; i < ancestors.size(); ++i) {
+      const Ino& ino = ancestors[i - 1];
+      const Ino& parent = ancestors[i];
+
+      // update parent memo
+      parent_memo_->Remeber(ino, parent);
+    }
+  }
+}
+
+Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
+                          uint64_t& new_parent_version) {
+  Ino old_parent = param.old_parent;
+  const std::string& old_name = param.old_name;
+  Ino new_parent = param.new_parent;
+  const std::string& new_name = param.new_name;
+
   DINGO_LOG(INFO) << fmt::format("fs.{}] rename {}/{} to {}/{}.", fs_id_, old_parent, old_name, new_parent, new_name);
 
   auto& trace = ctx.GetTrace();
@@ -1281,6 +1408,19 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent, const std::string& old_n
 
   if (old_parent == new_parent && old_name == new_name) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "not allow same name");
+  }
+
+  // update parent memo
+  UpdateParentMemo(param.old_ancestors);
+  UpdateParentMemo(param.new_ancestors);
+
+  // check quota
+  auto old_quota = quota_manager_.GetNearestDirQuota(old_parent);
+  auto new_quota = quota_manager_.GetNearestDirQuota(new_parent);
+  bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
+                    (old_quota != nullptr && new_quota != nullptr && old_quota->GetIno() == new_quota->GetIno());
+  if (!can_rename) {
+    return Status(pb::error::EQUOTA_ILLEGAL, "quota not match, can not rename");
   }
 
   RenameOperation operation(trace, fs_id_, old_parent, old_name, new_parent, new_name);
@@ -1355,6 +1495,13 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent, const std::string& old_n
       }
     }
 
+    // update quota
+    if (is_exist_new_dentry) {
+      quota_manager_.UpdateFsUsage(0, -1);
+      int64_t byte_delta = old_attr.type() != pb::mdsv2::SYM_LINK ? old_attr.length() : 0;
+      quota_manager_.UpdateDirUsage(old_parent, byte_delta, -1);
+    }
+
   } else {
     // notify mds(old_parent and new_parent) to update cache
     uint64_t old_mds_id = GetMdsIdByIno(old_parent);
@@ -1370,14 +1517,24 @@ Status FileSystem::Rename(Context& ctx, Ino old_parent, const std::string& old_n
   return Status::OK();
 }
 
-Status FileSystem::CommitRename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
-                                const std::string& new_name, Ino& old_parent_version, uint64_t& new_parent_version) {
+Status FileSystem::CommitRename(Context& ctx, const RenameParam& param, Ino& old_parent_version,
+                                uint64_t& new_parent_version) {
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  return renamer_->Execute(GetSelfPtr(), ctx, old_parent, old_name, new_parent, new_name, old_parent_version,
-                           new_parent_version);
+  return renamer_->Execute<RenameParam>(GetSelfPtr(), ctx, param, old_parent_version, new_parent_version);
+}
+
+static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv2::Slice>& slices) {
+  uint64_t temp_length = length;
+  for (const auto& slice : slices) {
+    if (temp_length < slice.offset() + slice.len()) {
+      temp_length = slice.offset() + slice.len();
+    }
+  }
+
+  return temp_length - length;
 }
 
 Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
@@ -1399,6 +1556,12 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
 
   uint64_t time_ns = Helper::TimestampNs();
 
+  // check quota
+  uint64_t byte_delta = CalculateDeltaLength(inode->Length(), slices);
+  if (!quota_manager_.CheckQuota(ino, static_cast<int64_t>(byte_delta), 0)) {
+    return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+  }
+
   // update backend store
   UpdateChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, slices);
 
@@ -1413,6 +1576,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
+  int64_t length_delta = result.length_delta;
 
   // update cache
   inode->UpdateIf(attr);
@@ -1423,6 +1587,9 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
       DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
     }
   }
+
+  // update quota
+  quota_manager_.UpdateFsUsage(length_delta, 0);
 
   return Status::OK();
 }
@@ -1804,7 +1971,7 @@ Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                             MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
+                             MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer,
                              OperationProcessorSPtr operation_processor)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(fs_id_generator)),
@@ -1957,7 +2124,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   }
 
   // when create fs fail, clean up
-  auto cleanup = [&](int64_t dentry_table_id, const std::string& fs_key) {
+  auto cleanup = [&](int64_t dentry_table_id, const std::string& fs_key, const std::string& quota_key) {
     // clean dentry table
     if (dentry_table_id > 0) {
       auto status = kv_storage_->DropTable(dentry_table_id);
@@ -1972,6 +2139,14 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
       auto status = kv_storage_->Delete(fs_key);
       if (!status.ok()) {
         LOG(ERROR) << fmt::format("[fsset] clean fs info fail, error: {}", status.error_str());
+      }
+    }
+
+    // clean quota
+    if (!quota_key.empty()) {
+      auto status = kv_storage_->Delete(quota_key);
+      if (!status.ok()) {
+        LOG(ERROR) << fmt::format("[fsset] clean quota info fail, error: {}", status.error_str());
       }
     }
   };
@@ -2008,26 +2183,36 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   KVStorage::WriteOption option;
   status = kv_storage_->Put(option, fs_key, MetaCodec::EncodeFSValue(fs_info));
   if (!status.ok()) {
-    cleanup(dentry_table_id, "");
+    cleanup(dentry_table_id, "", "");
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
 
   // create FileSystem instance
   auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
   CHECK(id_generator != nullptr) << "new id generator fail.";
-  CHECK(id_generator->Init()) << "init id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
                             renamer_, operation_processor_, mds_meta_map_);
+  if (!fs->Init()) {
+    cleanup(dentry_table_id, fs_key, "");
+    return Status(pb::error::EINTERNAL, "init FileSystem fail");
+  }
+
+  // set quota
+  status = fs->CreateQuota();
+  if (!status.ok()) {
+    cleanup(dentry_table_id, fs_key, "");
+    return Status(pb::error::EINTERNAL, fmt::format("create quota fail, {}", status.error_str()));
+  }
 
   // create root inode
   status = fs->CreateRoot();
   if (!status.ok()) {
-    cleanup(dentry_table_id, fs_key);
+    cleanup(dentry_table_id, fs_key, MetaCodec::EncodeFsQuotaKey(fs_id));
     return Status(pb::error::EINTERNAL, fmt::format("create root fail, {}", status.error_str()));
   }
 
-  CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
+  CHECK(AddFileSystem(fs, false)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
   return Status::OK();
 }
@@ -2270,16 +2455,21 @@ bool FileSystemSet::LoadFileSystems() {
     CHECK(id_generator != nullptr) << "new id generator fail.";
 
     auto fs_info = MetaCodec::DecodeFSValue(kv.value);
-    auto file_system = GetFileSystem(fs_info.fs_id());
-    if (file_system == nullptr) {
+    auto fs = GetFileSystem(fs_info.fs_id());
+    if (fs == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
 
-      file_system = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
-                                    kv_storage_, renamer_, operation_processor_, mds_meta_map_);
-      AddFileSystem(file_system);
+      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
+                           renamer_, operation_processor_, mds_meta_map_);
+      if (!fs->Init()) {
+        DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
+        continue;
+      }
+
+      CHECK(AddFileSystem(fs)) << fmt::format("add FileSystem({}) fail.", fs->FsId());
 
     } else {
-      file_system->RefreshFsInfo(fs_info);
+      fs->RefreshFsInfo(fs_info);
     }
   }
 

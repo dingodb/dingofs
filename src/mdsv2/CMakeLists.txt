@@ -21,6 +21,7 @@ add_subdirectory(service)
 add_subdirectory(storage)
 add_subdirectory(background)
 add_subdirectory(statistics)
+add_subdirectory(quota)
 add_subdirectory(client)
 
 add_library(mdsv2_lib

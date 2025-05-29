@@ -12,12 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/background/clean_inode.h"
+#include "mdsv2/filesystem/parent_memo.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-void CleanInode::Clean() {}
+void ParentMemo::Remeber(Ino ino, Ino parent) {
+  utils::WriteLockGuard lk(rwlock_);
+
+  auto it = parent_map_.find(ino);
+  if (it == parent_map_.end()) {
+    parent_map_.emplace(ino, parent);
+  } else {
+    it->second = parent;
+  }
+}
+
+void ParentMemo::Forget(Ino ino) {
+  utils::WriteLockGuard lk(rwlock_);
+
+  parent_map_.erase(ino);
+}
+
+bool ParentMemo::GetParent(Ino ino, Ino& parent) {
+  utils::ReadLockGuard lk(rwlock_);
+
+  auto it = parent_map_.find(ino);
+  if (it == parent_map_.end()) {
+    return false;
+  }
+
+  parent = it->second;
+  return true;
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs

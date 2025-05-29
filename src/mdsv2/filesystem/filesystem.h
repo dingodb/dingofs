@@ -32,10 +32,12 @@
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/parent_memo.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/quota/quota.h"
 #include "mdsv2/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -64,17 +66,19 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-             RenamerPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map);
-  ~FileSystem() = default;
+             RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map);
+  ~FileSystem();
 
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
-                            KVStorageSPtr kv_storage, RenamerPtr renamer, OperationProcessorSPtr operation_processor,
+                            KVStorageSPtr kv_storage, RenamerSPtr renamer, OperationProcessorSPtr operation_processor,
                             MDSMetaMapSPtr mds_meta_map) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
                                         operation_processor, mds_meta_map);
   }
 
   FileSystemSPtr GetSelfPtr();
+
+  bool Init();
 
   uint32_t FsId() const { return fs_id_; }
   std::string FsName() const { return fs_info_->GetName(); }
@@ -91,6 +95,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // create root directory
   Status CreateRoot();
+
+  Status CreateQuota();
 
   // lookup dentry
   Status Lookup(Context& ctx, Ino parent, const std::string& name, EntryOut& entry_out);
@@ -149,10 +155,18 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs);
 
   // rename
-  Status Rename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent, const std::string& new_name,
-                uint64_t& old_parent_version, uint64_t& new_parent_version);
-  Status CommitRename(Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent,
-                      const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
+  struct RenameParam {
+    Ino old_parent{0};
+    std::string old_name;
+    Ino new_parent{0};
+    std::string new_name;
+
+    std::vector<Ino> old_ancestors;
+    std::vector<Ino> new_ancestors;
+  };
+  Status Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version, uint64_t& new_parent_version);
+  Status CommitRename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
+                      uint64_t& new_parent_version);
 
   // slice
   Status WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index, const std::vector<pb::mdsv2::Slice>& slices);
@@ -180,6 +194,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   PartitionCache& GetPartitionCache() { return partition_cache_; }
   InodeCache& GetInodeCache() { return inode_cache_; }
+
+  quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
 
   // get deleted file
   Status GetDelFiles(std::vector<AttrType>& delfiles);
@@ -230,6 +246,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes);
 
+  void UpdateParentMemo(const std::vector<Ino>& ancestors);
+
   uint64_t self_mds_id_;
 
   // filesystem info
@@ -256,7 +274,13 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // mds meta map
   MDSMetaMapSPtr mds_meta_map_;
 
-  RenamerPtr renamer_;
+  // parent memo
+  ParentMemoSPtr parent_memo_;
+
+  // quota
+  quota::QuotaManager quota_manager_;
+
+  RenamerSPtr renamer_;
 
   OperationProcessorSPtr operation_processor_;
 };
@@ -266,12 +290,12 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer, OperationProcessorSPtr operation_processor);
+                MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer, OperationProcessorSPtr operation_processor);
   ~FileSystemSet();
 
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                               MDSMetaMapSPtr mds_meta_map, RenamerPtr renamer,
+                               MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer,
                                OperationProcessorSPtr operation_processor) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
@@ -335,7 +359,7 @@ class FileSystemSet {
 
   KVStorageSPtr kv_storage_;
 
-  RenamerPtr renamer_;
+  RenamerSPtr renamer_;
 
   OperationProcessorSPtr operation_processor_;
 

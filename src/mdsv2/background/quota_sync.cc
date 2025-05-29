@@ -12,32 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_
-#define DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_
-
-#include "mdsv2/common/distribution_lock.h"
-#include "mdsv2/common/status.h"
-#include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/background/quota_sync.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-class CleanInode {
- public:
-  CleanInode() = default;
-  ~CleanInode() = default;
+void QuotaSynchronizer::Run() {
+  bool running = false;
+  if (!is_running_.compare_exchange_strong(running, true)) {
+    return;
+  }
+  DEFER(is_running_.store(false));
 
-  void Clean();
+  SyncFsQuota();
+}
 
- private:
-  std::atomic<bool> is_running_{false};
+void QuotaSynchronizer::SyncFsQuota() {
+  auto fses = fs_set_->GetAllFileSystem();
+  for (auto& fs : fses) {
+    auto& quota_manager = fs->GetQuotaManager();
 
-  FileSystemSetSPtr fs_set_;
+    // load fs and dir quota
+    quota_manager.LoadQuota();
 
-  DistributionLockSPtr dist_lock_;
-};
+    // flush fs and dir usage
+    quota_manager.FlushUsage();
+  }
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs
-
-#endif  // DINGOFS_MDSV2_BACKGROUND_CLEAN_INODE_H_

@@ -39,8 +39,7 @@ enum KeyType : unsigned char {
   kTypeHeartbeat = 5,
   kTypeFS = 7,
   kTypeDentryOrInode = 9,
-  kTypeFsQuota = 11,
-  kTypeDirQuota = 13,
+  kTypeQuota = 11,
   kTypeFsStats = 15,
   kTypeFileSession = 17,
   kTypeTrashChunk = 19,
@@ -123,19 +122,19 @@ void MetaCodec::GetDentryTableRange(uint32_t fs_id, Ino ino, std::string& start_
 
 void MetaCodec::GetQuotaTableRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeFsQuota);
+  start_key.push_back(kTypeQuota);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeFsQuota + 1);
+  end_key.push_back(kTypeQuota + 1);
 }
 
 void MetaCodec::GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeDirQuota);
+  start_key.push_back(kTypeQuota);
   SerialHelper::WriteInt(fs_id, start_key);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeDirQuota);
+  end_key.push_back(kTypeQuota);
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
@@ -510,7 +509,7 @@ std::string MetaCodec::EncodeFsQuotaKey(uint32_t fs_id) {
   key.reserve(kPrefixSize + 32);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeFsQuota);
+  key.push_back(KeyType::kTypeQuota);
   SerialHelper::WriteInt(fs_id, key);
 
   return key;
@@ -518,17 +517,21 @@ std::string MetaCodec::EncodeFsQuotaKey(uint32_t fs_id) {
 
 void MetaCodec::DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id) {
   CHECK(key.size() == (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeFsQuota) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeQuota) << "key type is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
 }
 
-std::string MetaCodec::EncodeFsQuotaValue(const pb::mdsv2::Quota& quota) { return quota.SerializeAsString(); }
+std::string MetaCodec::EncodeFsQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
 
-pb::mdsv2::Quota MetaCodec::DecodeFsQuotaValue(const std::string& value) {
-  pb::mdsv2::Quota quota;
+QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
+  QuotaEntry quota;
   CHECK(quota.ParseFromString(value)) << "parse quota fail.";
   return quota;
+}
+
+uint32_t MetaCodec::DirQuotaKeyLength() {
+  return kPrefixSize + 13;  // prefix + type + fs_id + ino
 }
 
 // dir format: [$prefix, $type, $fs_id, $ino]
@@ -539,7 +542,7 @@ std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
   key.reserve(kPrefixSize + 32);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeDirQuota);
+  key.push_back(KeyType::kTypeQuota);
   SerialHelper::WriteInt(fs_id, key);
   SerialHelper::WriteULong(ino, key);
 
@@ -548,16 +551,16 @@ std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
 
 void MetaCodec::DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
   CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeDirQuota) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeQuota) << "key type is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
   ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
 }
 
-std::string MetaCodec::EncodeDirQuotaValue(const pb::mdsv2::Quota& quota) { return quota.SerializeAsString(); }
+std::string MetaCodec::EncodeDirQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
 
-pb::mdsv2::Quota MetaCodec::DecodeDirQuotaValue(const std::string& value) {
-  pb::mdsv2::Quota quota;
+QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
+  QuotaEntry quota;
   CHECK(quota.ParseFromString(value)) << "parse quota fail.";
   return std::move(quota);
 }

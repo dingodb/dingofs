@@ -76,6 +76,18 @@ class FsInfo {
     return fs_info_.partition_policy().type();
   }
 
+  bool IsMonoPartition() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.partition_policy().type() == pb::mdsv2::MONOLITHIC_PARTITION;
+  }
+
+  bool IsHashPartition() {
+    utils::ReadLockGuard lock(lock_);
+
+    return fs_info_.partition_policy().type() == pb::mdsv2::PARENT_ID_HASH_PARTITION;
+  }
+
   pb::mdsv2::PartitionPolicy GetPartitionPolicy() {
     utils::ReadLockGuard lock(lock_);
 

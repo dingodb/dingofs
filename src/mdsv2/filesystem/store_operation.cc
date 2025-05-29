@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
@@ -379,11 +380,13 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
   }
 
   // update length
+  uint64_t length = inode.length();
   for (auto& slice : slices_) {
     if (inode.length() < slice.offset() + slice.len()) {
       inode.set_length(slice.offset() + slice.len());
     }
   }
+  result_.length_delta = inode.length() - length;
 
   // update attr
   inode.set_ctime(std::max(inode.ctime(), GetTime()));
@@ -952,6 +955,168 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
+  QuotaEntry fs_quota;
+  std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
+    return status;
+  }
+
+  if (!value.empty()) {
+    fs_quota = MetaCodec::DecodeFsQuotaValue(value);
+  }
+
+  fs_quota.set_max_bytes(quota_.max_bytes() > 0 ? quota_.max_bytes() : UINT64_MAX);
+  fs_quota.set_max_inodes(quota_.max_inodes() > 0 ? quota_.max_inodes() : UINT64_MAX);
+  if (quota_.used_inodes() > 0 && fs_quota.used_inodes() == 0) {
+    fs_quota.set_used_inodes(quota_.used_inodes());
+  }
+
+  txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
+
+  return Status::OK();
+}
+
+Status GetFsQuotaOperation::Run(TxnUPtr& txn) {
+  std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  result_.quota = MetaCodec::DecodeFsQuotaValue(value);
+
+  return Status::OK();
+}
+
+Status FlushFsUsageOperation::Run(TxnUPtr& txn) {
+  std::string key = MetaCodec::EncodeFsQuotaKey(fs_id_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto fs_quota = MetaCodec::DecodeFsQuotaValue(value);
+
+  fs_quota.set_used_bytes(fs_quota.used_bytes() + usage_.bytes());
+  fs_quota.set_used_inodes(fs_quota.used_inodes() + usage_.inodes());
+
+  txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
+
+  result_.quota = fs_quota;
+
+  return Status::OK();
+}
+
+Status DeleteFsQuotaOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeFsQuotaKey(fs_id_));
+
+  return Status::OK();
+}
+
+Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
+  std::string key = MetaCodec::EncodeDirQuotaKey(fs_id_, ino_);
+  std::string value;
+  auto status = txn->Get(key, value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+
+  dir_quota.set_max_bytes(quota_.max_bytes());
+  dir_quota.set_max_inodes(quota_.max_inodes());
+
+  txn->Put(key, MetaCodec::EncodeDirQuotaValue(dir_quota));
+
+  return Status::OK();
+}
+
+Status GetDirQuotaOperation::Run(TxnUPtr& txn) {
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_), value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  if (!value.empty()) {
+    auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+    result_.quota = dir_quota;
+  }
+
+  return Status::OK();
+}
+
+Status DeleteDirQuotaOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeDirQuotaKey(fs_id_, ino_));
+
+  return Status::OK();
+}
+
+Status LoadDirQuotasOperation::Run(TxnUPtr& txn) {
+  Range range;
+  MetaCodec::GetDirQuotaRange(fs_id_, range.start_key, range.end_key);
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (auto& kv : kvs) {
+    if (kv.key.size() != MetaCodec::DirQuotaKeyLength()) {
+      continue;
+    }
+
+    uint32_t fs_id;
+    uint64_t ino;
+    MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
+
+    auto quota = MetaCodec::DecodeDirQuotaValue(kv.value);
+    result_.quotas[ino] = quota;
+  }
+
+  return Status::OK();
+}
+
+Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
+  // generate all keys
+  std::vector<std::string> keys;
+  keys.reserve(usages_.size());
+  for (const auto& [ino, usage] : usages_) {
+    keys.push_back(MetaCodec::EncodeDirQuotaKey(fs_id_, ino));
+  }
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->BatchGet(keys, kvs);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (auto& kv : kvs) {
+    uint32_t fs_id;
+    uint64_t ino;
+    MetaCodec::DecodeDirQuotaKey(kv.key, fs_id, ino);
+
+    auto quota = MetaCodec::DecodeDirQuotaValue(kv.value);
+    auto it = usages_.find(ino);
+    if (it != usages_.end()) {
+      quota.set_used_bytes(quota.used_bytes() + it->second.bytes());
+      quota.set_used_inodes(quota.used_inodes() + it->second.inodes());
+
+      txn->Put(kv.key, MetaCodec::EncodeDirQuotaValue(quota));
+
+      result_.quotas[ino] = quota;
+    }
+  }
+
+  return Status::OK();
+}
+
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);
@@ -1038,9 +1203,11 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     }
 
     status = txn->Commit();
+
     auto txn_trace = txn->GetTrace();
     is_one_pc = txn_trace.is_one_pc;
     trace.AddTxn(txn_trace);
+
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
@@ -1203,9 +1370,11 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     txn->Put(key, MetaCodec::EncodeInodeValue(attr));
 
     status = txn->Commit();
+
     auto txn_trace = txn->GetTrace();
     is_one_pc = txn_trace.is_one_pc;
     SetTrace(batch_operation, txn_trace);
+
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }

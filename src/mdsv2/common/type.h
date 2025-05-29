@@ -32,6 +32,8 @@ using DentryType = pb::mdsv2::Dentry;
 using ChunkType = pb::mdsv2::Chunk;
 using FsInfoType = pb::mdsv2::FsInfo;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
+using QuotaEntry = pb::mdsv2::Quota;
+using UsageEntry = pb::mdsv2::Usage;
 
 inline std::string DescribeAttr(const AttrType& attr) {
   auto parents_func = [](const auto& parents) {

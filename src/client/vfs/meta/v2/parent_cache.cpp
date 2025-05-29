@@ -27,7 +27,7 @@ ParentCache::ParentCache() {
   ino_map_.insert({1, Entry{1, 0}});
 }
 
-bool ParentCache::GetParent(int64_t ino, int64_t& parent) {
+bool ParentCache::GetParent(Ino ino, int64_t& parent) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -43,7 +43,7 @@ bool ParentCache::GetParent(int64_t ino, int64_t& parent) {
   return true;
 }
 
-bool ParentCache::GetVersion(int64_t ino, uint64_t& version) {
+bool ParentCache::GetVersion(Ino ino, uint64_t& version) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -55,7 +55,33 @@ bool ParentCache::GetVersion(int64_t ino, uint64_t& version) {
   return true;
 }
 
-void ParentCache::Upsert(int64_t ino, int64_t parent) {
+std::vector<uint64_t> ParentCache::GetAncestors(uint64_t ino) {
+  utils::ReadLockGuard lk(lock_);
+
+  std::vector<uint64_t> ancestors;
+  ancestors.reserve(32);
+  ancestors.push_back(ino);
+
+  do {
+    auto it = ino_map_.find(ino);
+    if (it == ino_map_.end()) {
+      break;
+    }
+    auto& entry = it->second;
+
+    ancestors.push_back(entry.parent);
+
+    if (entry.parent == 1) {
+      break;
+    }
+
+    ino = entry.parent;
+  } while (true);
+
+  return ancestors;
+}
+
+void ParentCache::Upsert(Ino ino, int64_t parent) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -66,7 +92,7 @@ void ParentCache::Upsert(int64_t ino, int64_t parent) {
   }
 }
 
-void ParentCache::Upsert(int64_t ino, uint64_t version) {
+void ParentCache::Upsert(Ino ino, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -77,7 +103,7 @@ void ParentCache::Upsert(int64_t ino, uint64_t version) {
   }
 }
 
-void ParentCache::Upsert(int64_t ino, int64_t parent, uint64_t version) {
+void ParentCache::Upsert(Ino ino, int64_t parent, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -91,7 +117,7 @@ void ParentCache::Upsert(int64_t ino, int64_t parent, uint64_t version) {
   }
 }
 
-void ParentCache::Delete(int64_t ino) {
+void ParentCache::Delete(Ino ino) {
   utils::WriteLockGuard lk(lock_);
 
   ino_map_.erase(ino);

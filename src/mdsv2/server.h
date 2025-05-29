@@ -23,10 +23,10 @@
 #include "mdsv2/background/gc.h"
 #include "mdsv2/background/heartbeat.h"
 #include "mdsv2/background/mds_monitor.h"
+#include "mdsv2/background/quota_sync.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
-#include "mdsv2/filesystem/quota.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
@@ -51,8 +51,6 @@ class Server {
 
   bool InitStorage(const std::string& store_url);
 
-  bool InitQuotaProcessor();
-
   bool InitRenamer();
 
   bool InitOperationProcessor();
@@ -66,6 +64,8 @@ class Server {
   bool InitWorkerSet();
 
   bool InitMDSMonitor();
+
+  bool InitQuotaSynchronizer();
 
   bool InitGcProcessor();
 
@@ -82,6 +82,7 @@ class Server {
   FileSystemSetSPtr GetFileSystemSet() { return file_system_set_; }
   MDSMonitorSPtr GetMDSMonitor() { return mds_monitor_; }
   OperationProcessorSPtr GetOperationProcessor() { return operation_processor_; }
+  QuotaSynchronizerSPtr GetQuotaSynchronizer() { return quota_synchronizer_; }
   GcProcessorSPtr GetGcProcessor() { return gc_processor_; }
 
   void Run();
@@ -113,11 +114,8 @@ class Server {
   // backend kv storage
   KVStorageSPtr kv_storage_;
 
-  // quota processor
-  QuotaProcessorSPtr quota_processor_;
-
   // renamer
-  RenamerPtr renamer_;
+  RenamerSPtr renamer_;
 
   // mutation merger
   OperationProcessorSPtr operation_processor_;
@@ -133,6 +131,9 @@ class Server {
 
   // mds monitor
   MDSMonitorSPtr mds_monitor_;
+
+  // quota synchronizer
+  QuotaSynchronizerSPtr quota_synchronizer_;
 
   // gc
   GcProcessorSPtr gc_processor_;

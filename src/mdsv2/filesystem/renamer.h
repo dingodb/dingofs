@@ -21,7 +21,6 @@
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -31,17 +30,11 @@ using FileSystemSPtr = std::shared_ptr<FileSystem>;
 
 using RenameCbFunc = std::function<void(Status)>;
 
+template <typename T>
 class RenameTask : public TaskRunnable {
  public:
-  RenameTask(FileSystemSPtr fs, Context* ctx, Ino old_parent, const std::string& old_name, Ino new_parent_ino,
-             const std::string& new_name, RenameCbFunc cb)
-      : fs_(fs),
-        ctx_(ctx),
-        old_parent_(old_parent),
-        old_name_(old_name),
-        new_parent_(new_parent_ino),
-        new_name_(new_name),
-        cb_(cb) {
+  RenameTask(FileSystemSPtr fs, Context* ctx, const T& param, RenameCbFunc cb)
+      : fs_(fs), ctx_(ctx), param_(param), cb_(cb) {
     if (cb == nullptr) {
       cond_ = std::make_shared<BthreadCond>();
     }
@@ -72,10 +65,7 @@ class RenameTask : public TaskRunnable {
   // not delete at here
   Context* ctx_{nullptr};
 
-  Ino old_parent_;
-  std::string old_name_;
-  Ino new_parent_;
-  std::string new_name_;
+  T param_;
 
   BthreadCondPtr cond_{nullptr};
   Status status_;
@@ -87,7 +77,7 @@ class RenameTask : public TaskRunnable {
 };
 
 class Renamer;
-using RenamerPtr = std::shared_ptr<Renamer>;
+using RenamerSPtr = std::shared_ptr<Renamer>;
 
 class Renamer {
  public:
@@ -97,19 +87,37 @@ class Renamer {
   Renamer(const Renamer&) = delete;
   Renamer& operator=(const Renamer&) = delete;
 
-  static RenamerPtr New() { return std::make_shared<Renamer>(); }
+  static RenamerSPtr New() { return std::make_shared<Renamer>(); }
 
   bool Init();
   bool Destroy();
 
-  Status Execute(FileSystemSPtr fs, Context& ctx, Ino old_parent, const std::string& old_name, Ino new_parent_ino,
-                 const std::string& new_name, uint64_t& old_parent_version, uint64_t& new_parent_version);
+  template <typename T>
+  Status Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_t& old_parent_version,
+                 uint64_t& new_parent_version);
 
  private:
   bool Execute(TaskRunnablePtr task);
 
   WorkerSPtr worker_;
 };
+
+template <typename T>
+Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_t& old_parent_version,
+                        uint64_t& new_parent_version) {
+  auto task = std::make_shared<RenameTask<T> >(fs, &ctx, param, nullptr);
+  bool ret = Execute(task);
+  if (!ret) {
+    return Status(pb::error::EINTERNAL, "commit task fail");
+  }
+
+  task->Wait();
+
+  old_parent_version = task->GetOldParentVersion();
+  new_parent_version = task->GetNewParentVersion();
+
+  return task->GetStatus();
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs
