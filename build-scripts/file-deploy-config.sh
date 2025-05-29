@@ -25,8 +25,9 @@ function tmpl() {
     dsv=$1
     src=$2
     dst=$3
+    
     regex="^([^$dsv]+$dsv[[:space:]]*)(.+)__DINGOADM_TEMPLATE__[[:space:]]+(.+)[[:space:]]+__DINGOADM_TEMPLATE__(.*)$"
-    while IFS= read -r line; do
+    while IFS= read -r line || [ -n "$line" ]; do
         if [[ ! $line =~ $regex ]]; then
             echo "$line"
         else
@@ -88,8 +89,19 @@ cp thirdparties/etcdclient/libetcdclient.so $prefix/etcd/lib/
 # Add build-image parameter check with default value 'false'
 build_image=${3:-0}
 g_docker="${DINGO_DOCKER:=docker}"
-if [ $build_image -eq 1 ]; then
-    ${g_docker} pull $g_image_base:$1
-    ${g_docker} build --no-cache -t "$2" "$docker_prefix"
-    success "build $2 success\n"
-fi
+
+case "$build_image" in
+    1)
+        ${g_docker} pull $g_image_base:$1
+        ${g_docker} build --no-cache -t "$2" "$docker_prefix"
+        success "build $2 success\n"
+        ;;
+    2)
+        ${g_docker} pull $g_image_base:$1
+        ${g_docker} build --no-cache -t "$2" -f "$docker_prefix/Dockerfile-v2" "$docker_prefix"
+        success "build $2 success\n"
+        ;;
+    *)
+        msg "skip build image\n"
+        ;;
+esac

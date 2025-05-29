@@ -9,6 +9,7 @@ g_etcd_version="v3.4.10"
 g_util_dir="$(dirname $(realpath $0))" # /path/to/project/build-scripts
 g_dingo_dir="$(dirname $g_util_dir)" # /path/to/project
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
+g_deploy_script_dir="$g_dingo_dir/deploy-scripts" # /path/to/project/deploy-scripts
 g_build_release=0
 tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/main/dingo"
 tools_v2_daemo_file="https://github.com/dingodb/dingofs-tools/releases/download/main/daemon"
@@ -119,6 +120,15 @@ copy_file() {
     fi
 }
 
+copy_dir() {
+    cp -rf "$1"/* "$2"
+    if [ $? -eq 0 ]; then
+        success "copy directory $1 to $2 success\n"
+    else
+        die "copy directory $1 to $2 failed\n"
+    fi
+}
+
 
 get_targets() {
     #if [ "$g_stor" == "fs" ]; then
@@ -189,6 +199,10 @@ install_dingofs() {
         #     $project_bin_filename \
         #     '--confPath=$g_conf_file' \
         #     "$project_prefix/sbin"
+
+        # copy the binary file from build/bin directory
+        mkdir -p "$g_prefix/build/bin"
+        copy_file "$binary" "$g_prefix/build/bin"
 
         success "install $project_name success\n"
     done
@@ -274,6 +288,14 @@ install_tools-v2() {
     copy_file "conf/dingo.yaml" "$g_prefix/conf"
 }
 
+install_scripts() {
+    local script_prefix="$g_prefix/scripts"
+    mkdir -p $script_prefix
+    copy_dir "$g_deploy_script_dir" "$script_prefix"
+    chmod +x "$script_prefix"/*.sh
+    success "install scripts success\n"
+}
+
 main() {
     get_options "$@"
     get_build_mode
@@ -285,6 +307,7 @@ main() {
     else
         install_dingofs
         install_tools-v2
+        install_scripts
     fi
 }
 

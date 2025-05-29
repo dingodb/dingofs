@@ -157,3 +157,22 @@ jobs:
         file: ./docker/rocky9/Dockerfile
         push: true
         tags: ${{ steps.meta.outputs.tags }}
+
+    - name: Docker meta mdsv2
+      if: steps.check-event.outputs.continue == 'true'
+      id: meta-v2
+      uses: docker/metadata-action@v5
+      with:
+        images: dingodatabase/dingofs
+        tags: |
+          type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
+          type=sha,prefix=mdsv2-,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
+
+    - name: Build and push mdsv2
+      if: steps.check-event.outputs.continue == 'true'
+      uses: docker/build-push-action@v6
+      with:
+        context: ./docker/rocky9
+        file: ./docker/rocky9/Dockerfile-v2
+        push: true
+        tags: ${{ steps.meta-v2.outputs.tags }}
