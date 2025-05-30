@@ -1,0 +1,212 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/operation/quota_basic_operations.md:1
+#: b37a897e511c440794452c59ac0e59a3
+msgid "Quota Basic Operations"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:2
+#: 77f41b106fd84ef28c07c58f288cb3ff
+msgid ""
+"Supports setting, querying, and deleting Quota at the file system level "
+"and directory level using the dingo tool."
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:3
+#: b7974fcdb0ab4bcb906d7327cc85cbf9
+msgid "Filesystem level: The set quota takes effect on the whole filesystem;"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:4
+#: 878ca5c7e3494e5a814a0ac57ecbc1b1
+msgid ""
+"Directory level: Quota can be set for each folder directory individually,"
+" and the set quota will take effect for that directory."
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:5
+#: 8545b28d0f2c47c0a9530422ec91996e
+msgid "1.Setting Quota"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:6
+#: ../../source/operation/quota_basic_operations.md:28
+#: ../../source/operation/quota_basic_operations.md:51
+#: ../../source/operation/quota_basic_operations.md:74
+#: 036c3208c59d4ce282007eb5754fc758 2758347302d743d2973e8d441b4d8c5a
+#: 68c20340b0534076ae8e095422eab284 7ab6122ea4a04e3cafdf469fa16319a8
+msgid "File System Level"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:11
+#: b4faf4c0cb7849aa88d10cf170f52ff0
+msgid ""
+"Parameter Description  fsid: the corresponding id of the file system to "
+"be set, you can use the dingo tool to query the id of the file system  "
+"fsname: the corresponding name of the file system to be set, you can use "
+"the dingo tool to query the name of the file system  capacity: the "
+"maximum space to be used by the file system, unit GBzho  inodes: the "
+"maximum number of files in the file system"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:17
+#: ../../source/operation/quota_basic_operations.md:38
+#: ../../source/operation/quota_basic_operations.md:63
+#: ../../source/operation/quota_basic_operations.md:85
+#: 121b9edfb8a144ab84be9d81f5a0a766 1caad812cd514c2c9b164d343c9311fb
+#: 90df3ae291d64b2b962bd59eec8f1557 a02c88c72d4449b5af51b30246981188
+msgid "Catalog Level"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:21
+#: 1229b1e438b44e7cbfd880cbf00a9d57
+msgid ""
+"Parameters  fsid: the corresponding id of the file system to be set, you "
+"can use the dingo tool to query the corresponding id of the file system  "
+"path: the path of the folder where you need to set up the quota, it is a "
+"relative path, and \"/\" stands for the root directory of the file system"
+"  capacity: the maximum space of the directory to be used, the unit is GB"
+"  inodes: the maximum number of files in the directory"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:27
+#: 9bd63093c25c49a1964239d3d167493f
+msgid "2.Query Quota"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:33
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"Parameter Description  fsid: the corresponding id of the file system to "
+"be queried, you can use the dingo tool to query the file system id  "
+"fsname: the corresponding name of the file system to be queried, you can "
+"use the dingo tool to query the file system name"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:36
+#: 94bbd292fff8473692ec756e94f6981f
+msgid "Query Result: ![alt text](../../images/quota_query_result.png)"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:36
+#: ../../source/operation/quota_basic_operations.md:47
+#: ../../source/operation/quota_basic_operations.md:79
+#: ../../source/operation/quota_basic_operations.md:94
+#: 022d6115912a4ea3ba622a072169c8a7 02ce4bff4fcb42b6914bc1242ee31088
+#: 19f915e5b72649c7acaa450523ce1033 683aa58e19b14b4987f26969843d4f3c
+#: 92f9cecd56cb45bb8dd75d860c833181
+msgid "alt text"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:43
+#: 078a75752dac4f2fb17e89d8b3ad8440
+msgid ""
+"Parameters  fsid: the corresponding id of the file system to be queried, "
+"you can use dingo tool to query the id of the file system  fsname: the "
+"corresponding name of the file system to be queried, you can use dingo "
+"tool to query the name of the file system  path: the path of the "
+"directory of the folder to be queried, it is a relative path, and \"/\" "
+"stands for the root directory of the file system."
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:47
+#: d5830c85d92043ceb23112c9ea9a18f3
+msgid "Query Result ![alt text](../../images/quota_query_result2.png)"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:50
+#: 1a9ced6824ef43e585b647de71f21c54
+msgid "3.Delete Quota"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:52
+#: 94dd21a554024ea0be7bef8058d4cb6b
+msgid "将capacity以及inodes设置为0，即为无限制。"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:57
+#: 70467107e3d14840b84c44611f59a8d9
+msgid ""
+"Parameter Description  fsid: the file system corresponding to the id of "
+"the file system that needs to delete quota, you can use the dingo tool to"
+" query the file system id  fsname: the file system corresponding to the "
+"name of the file system that needs to be deleted, you can use the dingo "
+"tool to query the name of the file system  capacity: the maximum space of"
+" the file system to be used in GB, 0 is unlimited  inodes: the maximum "
+"number of files in the file system, 0 is unlimited maximum number of "
+"files, 0 is unlimited"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:64
+#: 15ce3894ad334ab59697ce9222e107e9
+msgid "Set capacity and inodes to 0, i.e., no limit."
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:68
+#: a32bc55aa8774151a1b6391404a31baf
+msgid ""
+"Parameter description  fsid: the corresponding id of the file system "
+"where quota needs to be deleted, you can use dingo tool to query the id "
+"of the file system  path: the path of the folder directory where quota "
+"needs to be deleted, it's a relative path, and \"/\" stands for the root "
+"directory of the file system  capacity: the maximal space of the file "
+"system, unit is GB, and 0 is unlimited  inodes: the maximal number of "
+"files of file system, and 0 is unlimited inodes: the maximal number of "
+"files of file system, and 0 is unlimited maximum number of files, 0 is "
+"unlimited"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:73
+#: 11eb517e873c4be1ab5424d83af9b2ec
+msgid "4.Calibrate Quota"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:79
+#: 782e6676eedb4d928c403e548bcdaf47
+msgid ""
+"Parameters  fsid: the corresponding id of the file system to be set, you "
+"can use the dingo tool to query the corresponding id of the file system  "
+"path: the path of the folder where you need to set up the quota, it is a "
+"relative path, and \"/\" stands for the root directory of the file system"
+"  capacity: the maximum space of the directory to be used, the unit is GB"
+"  inodes: the maximum number of files in the directory ![alt "
+"text](../../images/quota_query_result3.png)"
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:90
+#: 076b49f5fb434c269d66bf67beedd9ca
+msgid ""
+"Parameter description: fsid: The ID of the file system to be verified. "
+"This can be queried using the dingo tool. Path: The directory path of the"
+" quota to be verified. This is a relative path, where \"/\" represents "
+"the file system root directory. repair: If the quota check fails, use the"
+" repair parameter to try to synchronise the quota usage."
+msgstr ""
+
+#: ../../source/operation/quota_basic_operations.md:94
+#: 92fc2fe26c444b149d7f4ad7839cfa07
+msgid ""
+"Verification results: Successfully verified ![alt "
+"text](../../images/quota_query_result4.png) Failed ![alt "
+"text](../../images/quota_query_result5.png)"
+msgstr ""
+

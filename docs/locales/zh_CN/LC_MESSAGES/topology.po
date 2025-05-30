@@ -1,0 +1,526 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/topology.md:1 9dde0cb0d4644fe6b6a5bb822efb2bfc
+msgid "Cluster Topology File"
+msgstr ""
+
+#: ../../source/topology.md:4 25a8ed1e714f422482905d9a06ac3afc
+msgid "Introduction"
+msgstr ""
+
+#: ../../source/topology.md:7 8caf0335916942028326591e6cd5134d
+msgid ""
+"The cluster topology file is used to describe which services are deployed"
+" on which machines, as well as the configuration of each service "
+"instance."
+msgstr ""
+
+#: ../../source/topology.md ../../source/topology.md:9
+#: ../../source/topology.md:263 02e9df5900774078ac08d3e55e55eb1f
+#: 1a06d695d0e247a1aba2ee48d683f548 3428a7dec0644f0daad37d3b8829cb32
+msgid "Example"
+msgstr ""
+
+#: ../../source/topology.md:52 3d3ac284aa9547919b0ec748cd31d509
+msgid "Features"
+msgstr ""
+
+#: ../../source/topology.md:55 25f1f793a4224724902c21e4eeb047b1
+msgid ""
+"To make topology file configuration more flexible and concise, we have "
+"added the following features to the topology file:"
+msgstr ""
+
+#: ../../source/topology.md:57 60e21623d78b43f4a1d8fee0a4bf817c
+msgid "[Hierarchy](#Hierarchy)"
+msgstr ""
+
+#: ../../source/topology.md:58 ../../source/topology.md:326
+#: 07424bc4b3154f55af9ffd64964f7ee1 aca292dfe2474885a97625e15224eddf
+msgid "[Variables](#Variables)"
+msgstr ""
+
+#: ../../source/topology.md:59 432ce459dad84a3ca7a64b43c075c462
+msgid "[Replica](#Replica)"
+msgstr ""
+
+#: ../../source/topology.md:61 0c49e25e3a3c4d30839452510612d51f
+msgid "Hierarchy"
+msgstr ""
+
+#: ../../source/topology.md:63 decf99b6c35e41efbbdad14e707f8cd6
+msgid ""
+"The configuration in the topology file is divided into the following 3 "
+"levels:"
+msgstr ""
+
+#: ../../source/topology.md:64 9c44a345922946189a946dd0ba82149c
+msgid ""
+"Global configuration: Applies to all service instances in the topology "
+"file"
+msgstr ""
+
+#: ../../source/topology.md:65 1b095f2d6f784fb98ffe51b1172b1f71
+msgid ""
+"Service configuration: Applies to all service instances under the same "
+"role"
+msgstr ""
+
+#: ../../source/topology.md:66 e3774388a79b4e4a8fa51d09919caa55
+msgid "Instance configuration: Applies to a single service instance"
+msgstr ""
+
+#: ../../source/topology.md:68 c5da6984e7774b45ac7cbb69241b4cdf
+msgid ""
+"The configuration priority is: `Instance configuration` > `Service "
+"configuration` > `Global configuration`."
+msgstr ""
+
+#: ../../source/topology.md:70 e5803f59c72c449889644a6d27b261b1
+msgid "<img src=“image/topology_level2.jpg” style=“zoom: 40%”>"
+msgstr ""
+
+#: ../../source/topology.md:72 2988005bc2e443fcb85bb45cbb9a9694
+msgid "Example: Simplifying topology files using configuration levels"
+msgstr ""
+
+#: ../../source/topology.md:74 14522c8accfa40c0b93e8f4f6e7b76ad
+msgid ""
+"The following are two different configuration files, but they have the "
+"same configuration effect:"
+msgstr ""
+
+#: ../../source/topology.md:101 1bf97733903b4563b205f229379c0b92
+msgid "Variables"
+msgstr ""
+
+#: ../../source/topology.md:103 5fa36e8c57124b9bae26635d59cb0eb5
+msgid ""
+"To reduce repetitive configuration and simplify the topology file, we "
+"have built-in the following variables, which have different values in "
+"different contexts and can be used to fill in the topology file "
+"configuration:"
+msgstr ""
+
+#: ../../source/topology.md a96f841abcdf49299360e18f68e0f49a
+msgid "Variable Name"
+msgstr ""
+
+#: ../../source/topology.md bee573f5a8cb4e4bbe89d4c95dcc87a0
+#: cb4683b31a894873ba19cea93c8571c3 e337c9ff72274389acf935cdd5b19428
+msgid "Description"
+msgstr ""
+
+#: ../../source/topology.md 07a9b61fa32c42b69163ac416dfaa502
+#, python-brace-format
+msgid "`${service_host}`"
+msgstr ""
+
+#: ../../source/topology.md ddaea3cacbca4d48ac3b8d850187e26b
+msgid ""
+"Service host address. This variable has different values when deploying "
+"services on different hosts. For example, when deploying services on host"
+" `server-host1`, the variable value is the address corresponding to host "
+"`server-host1`, i.e., `10.0.1.1`. When deploying services on host "
+"`server-host2`, the value of this variable is `10.0.1.2`. For more "
+"details, see [Host Module](hosts)"
+msgstr ""
+
+#: ../../source/topology.md 6f34df8f59f24d57ae6d88e200aab007
+msgid "`10.0.1.1`"
+msgstr ""
+
+#: ../../source/topology.md f56c3ddcd08e46d3a65dd984e48f955c
+#, python-brace-format
+msgid "`${service_role}`"
+msgstr ""
+
+#: ../../source/topology.md b57b74fabd234a7c8adb59759160aae5
+msgid ""
+"Service role name. When deploying different types of services, they have "
+"different role names. For example, when deploying the etcd service, the "
+"variable value is etcd, and when deploying the mds service, the variable "
+"value is mds"
+msgstr ""
+
+#: ../../source/topology.md 0d388d49696d45a49bdf62be463f58ea
+msgid "`etcd`, `mds`, `chunkserver`, `snapshotclone`, `metaserver`"
+msgstr ""
+
+#: ../../source/topology.md cb6db13f0be348b2a93517b827948f53
+#, python-brace-format
+msgid "`${service_host_sequence}`"
+msgstr ""
+
+#: ../../source/topology.md 4c2d66ed778f414e9ac5af6f00f79a7a
+msgid ""
+"Service host sequence number. When deploying services of the same type, "
+"based on the `deploy` list, the sequence number is 0 when deploying the "
+"service on the first host, 1 when deploying on the second host, and so "
+"on."
+msgstr ""
+
+#: ../../source/topology.md 0f6ceb71c22b4315b1d3d8fc8de6bc13
+#: 56d1e8dcda1c466381b1d6a4bf184a4a
+msgid "`0`, `1`, `2`"
+msgstr ""
+
+#: ../../source/topology.md d34498da260e4706b20be65c58b3bd5c
+#, python-brace-format
+msgid "`${service_replicas_sequence}`"
+msgstr ""
+
+#: ../../source/topology.md 82cb1ebc32fd4068b3131711c79fb1db
+msgid ""
+"Service replica sequence number. When deploying multiple replica "
+"instances of the same service type on the same host, the sequence number "
+"is 0 for the first replica, 1 for the second replica, and so on."
+msgstr ""
+
+#: ../../source/topology.md e56600749c1545dfb178ba8788fe5f28
+#, python-brace-format
+msgid "`${format_replicas_sequence}`"
+msgstr ""
+
+#: ../../source/topology.md 613fe9c3f0b54a3b853e506c82177cae
+#, python-brace-format
+msgid ""
+"Formatted service replica sequence number. Its value is equivalent to the"
+" `${service_replicas_sequence}` variable, but the sequence number is "
+"prefixed with 0"
+msgstr ""
+
+#: ../../source/topology.md e07929a6bb444bc6bed9dddb63fce952
+msgid "`00`, `01`, `02`"
+msgstr ""
+
+#: ../../source/topology.md ab04d40d02644f8c86e0836c6dfaf98b
+#, python-brace-format
+msgid "`${random_uuid}`"
+msgstr ""
+
+#: ../../source/topology.md 62016a76e47f44f9a6c2244c62905cf5
+msgid "Random UUID"
+msgstr ""
+
+#: ../../source/topology.md 49687c4145df4051a4f55f10b5833542
+msgid "`6fa8f01c411d7655d0354125c36847bb`"
+msgstr ""
+
+#: ../../source/topology.md:115 25562caf7a8e4d5fae960ba88742717c
+msgid ""
+"Currently, in addition to built-in variables, users can also define "
+"custom variables by adding them to the `variable` block:"
+msgstr ""
+
+#: ../../source/topology.md:124 82410110dce64164b34961a358091652
+msgid ""
+"Below, we will demonstrate the application of variables through three "
+"examples. Each example has two different configurations, but they all "
+"achieve the same configuration effect:"
+msgstr ""
+
+#: ../../source/topology.md:126 8626f2bf9bc644a0a76654d722174a5d
+#, python-brace-format
+msgid ""
+"We assume that the addresses corresponding to server-host{1,2,3} are "
+"10.0.1.{1,2,3}, and they have been submitted via the [Host Module][hosts]"
+msgstr ""
+
+#: ../../source/topology.md:128 66e9084ad3e9475d982ad275a134876a
+msgid "Example 1: Deploying an etcd instance on each host"
+msgstr ""
+
+#: ../../source/topology.md:155 41eb59133b2241529347557f3bfebd8b
+msgid "Example 2: Deploying multiple chunkserver instances on the same host"
+msgstr ""
+
+#: ../../source/topology.md:184 5b7ec6e1cf5847759d4ba374a1881258
+msgid "Example 3: Custom variables"
+msgstr ""
+
+#: ../../source/topology.md:220 be06a871b8cd4ba2919a51f632310e56
+msgid "replicas"
+msgstr ""
+
+#: ../../source/topology.md:223 ec793238651b4e6fa9b4a8ee5eb942bd
+msgid ":bulb: **Reminder:**"
+msgstr ""
+
+#: ../../source/topology.md:225 7b014bc4f4154f398edebef181de81a0
+msgid ""
+"The replicas here do not represent the number of storage pool replicas, "
+"but rather the number of instances of the same type of process deployed "
+"on the node, such as the number of chunkserver processes."
+msgstr ""
+
+#: ../../source/topology.md:227 f9a09dc1f9f641e78da2664308d44956
+msgid ""
+"When we need to deploy multiple instances of the same type of service on "
+"a single machine, we can use the `replicas` feature to simplify our "
+"topology file:"
+msgstr ""
+
+#: ../../source/topology.md:248 b88df8f67f4b4b54a23d59963edd67f0
+#, python-brace-format
+msgid ""
+"The values of the variables `${servicce_host_sequence}` and "
+"`${service_replicas_sequence}` are described in the previous section "
+"[Variables](#Variables)."
+msgstr ""
+
+#: ../../source/topology.md:251 61c75ad8f40040e19d6f1ca822f7879e
+msgid "DingoFS Cluster Topology"
+msgstr ""
+
+#: ../../source/topology.md:254 6b8f260b3f3b41889a5c370bc5a34518
+msgid "The DingoFS cluster topology file consists of the following 4 blocks:"
+msgstr ""
+
+#: ../../source/topology.md 404f395545a34ea1a2b746025e8f7ace
+msgid "Block"
+msgstr ""
+
+#: ../../source/topology.md 78bdfbea09384038958000df084ff280
+msgid "Service Overview"
+msgstr ""
+
+#: ../../source/topology.md f4b60c2750864053acf101e3ec8cf947
+msgid "global"
+msgstr ""
+
+#: ../../source/topology.md c575cd790129421ab4e135e2b988baa7
+msgid "Global Configuration"
+msgstr ""
+
+#: ../../source/topology.md a0ad0c6ebf25462b9889f482d58c6852
+msgid "etcd_services"
+msgstr ""
+
+#: ../../source/topology.md 8066a44595c6412d84447d76326c6282
+msgid "etcd Service Block"
+msgstr ""
+
+#: ../../source/topology.md e14c5bb6fd1447b5bacc53e4e2e62d0d
+msgid "Used to store metadata"
+msgstr ""
+
+#: ../../source/topology.md 5111dd5a242644b0b50de53045784a88
+msgid "mds_services"
+msgstr ""
+
+#: ../../source/topology.md 5510bd98f658443ba577fb2a67b75683
+msgid "mds Service Block"
+msgstr ""
+
+#: ../../source/topology.md 64ebec0657044cf994787fcbb6b63107
+msgid "Metadata Management Service"
+msgstr ""
+
+#: ../../source/topology.md 979108ebc2334b7ca64f6645d871af64
+msgid "metaserver_services"
+msgstr ""
+
+#: ../../source/topology.md 6736956e99184eda919815eac10cfecf
+msgid "Metaserver service block"
+msgstr ""
+
+#: ../../source/topology.md 14a3dd6f371b42c8b9a12fca146097ba
+msgid ""
+"Distributed metadata management system. Provides metadata services to "
+"clients."
+msgstr ""
+
+#: ../../source/topology.md:311 cb65b85bfb644d6ca0b678775a4854fb
+msgid ""
+"To make it easier for users to prepare topology files, we have prepared "
+"different topology file templates based on common scenarios. Users can "
+"choose the appropriate template based on their needs and make adjustments"
+" as needed:"
+msgstr ""
+
+#: ../../source/topology.md:314 a365f676a771496db23928c523feefb7
+msgid "[Single-machine deployment][dingofs-stand-alone-topology]"
+msgstr ""
+
+#: ../../source/topology.md:316 740374bd0822435abdce388ae246f863
+msgid ""
+"All services run on a single host, typically used for testing or "
+"evaluation."
+msgstr ""
+
+#: ../../source/topology.md:318 41aab64c48b949ba8543c408cf2081fd
+msgid "[Multi-node deployment][dingofs-cluster-topology]"
+msgstr ""
+
+#: ../../source/topology.md:320 83379d0b40f94dbd96d33749728c3937
+msgid ""
+"A generic multi-machine deployment template suitable for production "
+"environments or testing."
+msgstr ""
+
+#: ../../source/topology.md:322 2a703d2c50d647e39c100d28518df290
+msgid ":bulb: **Note:**"
+msgstr ""
+
+#: ../../source/topology.md:324 c6b869434d424c6db1b99fda30e08eee
+msgid ""
+"For details on configuration levels and variables in topology files, see "
+"the previous section:"
+msgstr ""
+
+#: ../../source/topology.md:325 1d698f6a38b24bfcbca3e3f6739e7c17
+msgid "[Levels](#Levels)"
+msgstr ""
+
+#: ../../source/topology.md:328 8a7d5fdffb244d1aa664269c60274f67
+msgid "Important DingoFS Configuration Items"
+msgstr ""
+
+#: ../../source/topology.md 8c47da4f4b4a4d8389ddbfa8de5d70f3
+msgid "Configuration Item"
+msgstr ""
+
+#: ../../source/topology.md 0c0420abee194b4d91ba05df864a50f0
+msgid "Required"
+msgstr ""
+
+#: ../../source/topology.md adeea05729234ee8857ee23ea31c62fd
+msgid "Default Value"
+msgstr ""
+
+#: ../../source/topology.md 09eefb1b411047d49be64dea52447bee
+msgid "kind"
+msgstr ""
+
+#: ../../source/topology.md 5a5528db202e41fe83142035f9118f91
+msgid "Y"
+msgstr ""
+
+#: ../../source/topology.md 9cc97632461a4b8bb81b303244f9842d
+msgid "Topology file type. Must be `dingofs`"
+msgstr ""
+
+#: ../../source/topology.md 7cd9879127ba468b97fac78417a501de
+msgid "container_image"
+msgstr ""
+
+#: ../../source/topology.md f85cf1fa434943a980b5b076bc2b7ebf
+msgid "dingodatabase/dingofs:latest"
+msgstr ""
+
+#: ../../source/topology.md f54c4afe1ce54edfa1bb1db5328d13bb
+msgid ""
+"Container image. The default value is our latest stable version. You can "
+"also visit the [DingoFS public Docker repository][dingofs-dockerhub] to "
+"select your own"
+msgstr ""
+
+#: ../../source/topology.md 2e664ece1e1146b395b071bba4abb58b
+msgid "log_dir"
+msgstr ""
+
+#: ../../source/topology.md c41803b16b064b14b105f1998903dbbc
+msgid ""
+"Directory where service logs are stored. If this option is not "
+"configured, logs are stored by default in the specified directory within "
+"the container. Once the container is cleaned up, the logs will be deleted"
+msgstr ""
+
+#: ../../source/topology.md af26061855d3430cb02ecf802521ab8a
+msgid "data_dir"
+msgstr ""
+
+#: ../../source/topology.md e5cde348b8344f958d684860dd16e4c8
+msgid ""
+"Directory where service data is stored. If this option is not configured,"
+" data is stored by default in the specified directory within the "
+"container. Once the container is cleaned up, the data will be lost"
+msgstr ""
+
+#: ../../source/topology.md a3dfc75cc434453e9d53e17e4ba27944
+msgid "s3.ak"
+msgstr ""
+
+#: ../../source/topology.md dbbbe66ef9ba4efeb160b84c8dc0df25
+msgid ""
+"S3 service Access Key. Used for uploading actual data. Required only when"
+" using the S3 storage engine and creating a file system."
+msgstr ""
+
+#: ../../source/topology.md db0bb72e55c344e1b9a66f1c5b07a368
+msgid "s3.sk"
+msgstr ""
+
+#: ../../source/topology.md c128490cdfa1401ab93950cc04b68c0b
+msgid ""
+"S3 service Secret Key. Used for uploading actual data. Required only when"
+" using the S3 storage engine and creating a file system."
+msgstr ""
+
+#: ../../source/topology.md 03caac42915c4853b0f589ebc55d9342
+msgid "s3.endpoint"
+msgstr ""
+
+#: ../../source/topology.md a40e61595b954784bf4851adafe26329
+msgid ""
+"S3 service address. Used for uploading actual data. Required only when "
+"using the S3 storage engine and creating a file system."
+msgstr ""
+
+#: ../../source/topology.md 272478a08882461685f17dca309e62ce
+msgid "s3.bucket_name"
+msgstr ""
+
+#: ../../source/topology.md a188ac302162436da4803e5b0ca1c8f2
+msgid ""
+"S3 service bucket name. Used for uploading actual data. Required only "
+"when using the S3 storage engine and creating a file system."
+msgstr ""
+
+#: ../../source/topology.md 59d3b8b374fe47cdabc1b285aa76dfb5
+msgid "variable"
+msgstr ""
+
+#: ../../source/topology.md b24dd3d74d094152ab2f4b420f167927
+msgid "Variable block. Custom variables can be entered in this block."
+msgstr ""
+
+#: ../../source/topology.md:342 2d5f679272c14f5ca53f310d05a0abbe
+msgid ""
+"All configuration items not specified in the topology file will use "
+"default values. You can view the configuration items and default values "
+"for each service by clicking the following links:"
+msgstr ""
+
+#: ../../source/topology.md:344 1df74e82c3054166bc2164f9a36ecc6f
+msgid "[etcd.conf][dingofs-etcd-conf]"
+msgstr ""
+
+#: ../../source/topology.md:345 ba9fdd2d1775403a8d6e3fcc2d924b88
+msgid "[mds.conf][dingofs-mds-conf]"
+msgstr ""
+
+#: ../../source/topology.md:346 0632e4a0ac2c4c768b03fb26387900d7
+msgid "[metaserver.conf][dingofs-metaserver-conf]"
+msgstr ""
+

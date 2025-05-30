@@ -1,0 +1,242 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/dingoadm/summary.md:1 837389a8ec7d42f590aae3e75eba8692
+msgid "DingoAdm Overview"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:4 854ab1f58e214ca48de940e94b725755
+msgid ""
+"DingoAdm is primarily used for rapid deployment and operation and "
+"maintenance of [DingoFS](https://github.com/dingodb/dingofs) clusters."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:6 27d317e4e82142eea5c1bba44159f202
+msgid "Key Features"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:9 3db9593583de409493d6403d0a290f7c
+msgid "Rapid deployment of DingoFS clusters"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:11 c7da60f7415e432bb2cd295adcdd400f
+msgid ""
+"Users can deploy the entire cluster with a single click once the cluster "
+"topology file is ready."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:14 c0b6837cb71a4b2289d0f2778a2b6343
+msgid "Containerized services"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:16 df241d4bc8f048baa84826e982cedfb0
+msgid ""
+"All components run within Docker containers, addressing compatibility "
+"issues across different Linux distributions."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:19 e371dc87043841f69bf7d31e3b4b9416
+msgid "Manage DingoFS clusters"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:21 f7b3c63c812845b5bdf0bdd7da534808
+msgid ""
+"Supports common management operations, including one-click service "
+"upgrades and cluster scaling."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:24 c32962893ee14f148d1dab5b47510c41
+msgid "Manage multiple clusters simultaneously"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:26 e8f29b4d51b946899578610d2fa6be36
+msgid ""
+"Users can manage multiple DingoFS clusters simultaneously and switch "
+"between them as needed."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:29 7ac7e2d5b8544dbbbf1717bd699a2642
+msgid "Precise error localization"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:31 746093513b384a47a2d789b7f580d717
+msgid ""
+"We assign a unique error code to each error that occurs during "
+"deployment, and provide detailed explanations and solutions for each "
+"error code. Users can look up related error codes online via the [Error "
+"Code List][errno] page."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:34 7c99fba2d6164604923eac2c0096422d
+msgid "Overall Design"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:37 37a3a42d6d744cf3a6d13f703078704d
+msgid "Installation Directory"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:40 64895ffd787a4d4c8916568dbf570aab
+msgid ""
+"To enable multi-user management, DingoAdm is installed by default in the "
+"`.dingoadm` directory under the current user's home directory, with all "
+"files stored in this directory, including:"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md d399cc706e684e51aab01a921a8c91a0
+msgid "File"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md b1ee6677dab44ee3afc5fa45b2d1b296
+msgid "Description"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 738c6d943ade4fb496bbfaa4ba91b46e
+msgid "bin/dingoadm"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md d68572873836454298892909590b9901
+msgid "Binary file"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 4dd193f97dce4b32803af13293945c8f
+msgid "dingoadm.cfg"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md ebf8e4aa6c9d4c45b40626c6c061c708
+msgid ""
+"DingoAdm configuration file, configurable for log levels, SSH connection "
+"timeout, sudo permissions, etc."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 2391c24948114e3a9b1293604697ce55
+msgid "CHANGELOG"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 5482fa60cb794e01b7f6d0d4f094ea53
+msgid "Update log for the current version"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 8337ce57c0484d88b740adc4a5b50be9
+msgid "data/dingoadm.db"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 8fb0b087869e401d925405b9f6dcb9f6
+msgid ""
+"[SQLite][sqlite] database file, where all persistent data is stored, "
+"including cluster name, cluster topology, container IDs for each service,"
+" etc."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md ca425f2e75854234bf031945018bb6bf
+msgid "logs"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 5fda3c5e798242469161e8c299672ca9
+msgid ""
+"Log directory, where a log file is generated and stored each time a "
+"command is executed"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md 6c5d94d982e24a3884157a505261625b
+msgid "temp"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md b1da051855dd449e8a39639bcb623f65
+msgid "Temporary file directory"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:65 3a57f38a93414a1b962fbb64df76771f
+msgid "Data Storage"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:68 33233760cd924a8683907ead4baa1e06
+msgid ""
+"All data in DingoAdm that needs to be persisted is stored in an SQLite "
+"database. [SQLite][sqlite] is a self-contained, serverless, zero-"
+"configuration, transactional SQL database. A complete SQLite database is "
+"a single file."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:72 3b68476c89784fd1aced3b78a2f6dfbf
+msgid "The database primarily stores the following four types of data:"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:73 7bbafac986324eab9a980bff6723c0e7
+msgid ""
+"Host information: including host addresses, SSH ports, private key paths,"
+" etc."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:74 0727b466205c44008f3fb96e90302962
+msgid ""
+"Cluster information: including cluster names, cluster UUIDs, and the "
+"topology corresponding to each cluster"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:75 a740c72e9a0649b7bbd621522dc592f8
+msgid ""
+"Service information: service IDs and container IDs corresponding to "
+"services"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:76 4d049811bc5541678d79f8855c19db82
+msgid "Client information: client IDs and container IDs corresponding to clients"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:78 5834ab9791fb4c51bdbe9b0505bc4f5f
+msgid ":bulb: **Note:**"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:80 3e88e7fa4d2747a698bf125969ac9923
+msgid ""
+"Service IDs are generated based on the cluster topology. Given a fixed "
+"cluster topology, we generate a unique ID for each service in the "
+"topology according to a fixed set of rules, meaning that service IDs are "
+"also fixed."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:82 ff18d3139b0443d0a948f19198d1a3d0
+msgid ""
+"Based on the service ID, the corresponding container ID can be queried in"
+" the database. The host module also stores information such as the host "
+"and SSH private key path for each service deployment. Using this "
+"information, we can manage the containers corresponding to the services."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:84 3f76effc891947b78680f8c1cd1219a1
+msgid "Service Management"
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:87 cb31342c9d4e4be8ac83ada67bcc2bae
+msgid ""
+"To address component runtime dependency issues, all components in DingoFS"
+" run within Docker containers. We package all components, dependencies, "
+"and necessary tools for each version into a single image and publish it "
+"to the Docker public repository."
+msgstr ""
+
+#: ../../source/dingoadm/summary.md:89 be3a433174a84fc1bce683907064afc2
+msgid ""
+"DingoAdm connects to the remote server via an SSH client to execute "
+"deployment or management commands, and uses the Docker client [Docker CLI"
+"][docker-cli] to manage service containers."
+msgstr ""
+

@@ -1,0 +1,372 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/operation/file_system_management.md:1
+#: a6ebcaeb21704d80a502edbdbd6cefc4
+msgid "File System Management"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:2
+#: 975be2d26e1f496584a7574bb768501c
+msgid "1.Create Client Configuration File"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:3
+#: 1504f97676dc481388a00e939cbb310a
+msgid "create client.yaml"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:33
+#: 1f7a64d260f347f8bcc9189ce8f9097b
+msgid ""
+"The configuration items in the client configuration file have the same "
+"meaning as the configuration items in the cluster topology file, see "
+"DingoFS Important Configuration Items for details. For all configuration "
+"items that do not appear on the client configuration file, we will use "
+"the default configuration values. You can click on the client "
+"configuration file to view each configuration item and the associated "
+"default values."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:36
+#: 60bbf0a0dbe84597a6a9189f1a3345c1
+msgid ""
+"💡 About the mdsOpt.rpcRetryOpt.addrs Configuration Item  Since all the "
+"routing information exists in the MDS service, the client only needs to "
+"know the address of the MDS service in the cluster in order to read and "
+"write to the IO normally. The mdsOpt.rpcRetryOpt.addrs configuration item"
+" in the configuration file needs to be filled in with the address of the "
+"MDS service in the cluster. You can check the address of the MDS service "
+"in the cluster via dingoadm status after you have deployed the DingoFS "
+"cluster:"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:49
+#: 2eebe08f092d4065bb85632fe35bc0fa
+msgid ""
+"📢 Note:  users must configure the data_dir configuration if they want to "
+"enable local disk caching."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:52
+#: 1e7dfa1a36904989b9a682f1047a05f9
+msgid ""
+"📢 Note:  dingofs supports multiple s3s, one fs corresponds to one s3 "
+"backend. All s3 information (ak, sk, endpoint, and bucket_name) is stored"
+" in mds, and other components get it from mds. The s3 information in the "
+"mds is specified when the fs is created. Therefore, the s3 information in"
+" client.yaml is required and will be synchronized to the configuration "
+"file of the fs creation tool. If the fs have already been created, please"
+" keep the same information, otherwise the mount will fail; if the fs have"
+" not been created yet, please make sure the s3 information is available, "
+"otherwise the mount will fail."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:55
+#: a8fd359b218440d1b4233ad39a013df2
+msgid "2.Create a File System"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:56
+#: 20d48cf9365347c1afb4994f72da485c
+msgid ""
+"Use dingo tool to create DingoFS file system by specifying the "
+"configuration file, you can choose to specify the file system parameters "
+"on the command line, or you can configure the parameters into the dingo "
+"tool's configuration file dingo.yaml."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:58
+#: d3cb48eeedb740e685ddf57d4cf39218
+msgid ""
+"[download "
+"dingo.yaml](https://github.com/dingodb/dingofs/blob/main/conf/dingo.yaml)"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:80
+#: 18730d491cde4cf1966bfd226b25f968
+msgid ""
+"Configure the following fields\\ mdsAddr: metadata service address\\ ak: "
+"access key for the s3 service\\ sk: secret key for the s3 service\\ "
+"endpoint: address of the s3 service\\ bucketname: bucketname used in the "
+"s3 service (supplied by the deployer)"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:86
+#: c7dd341ea0b6443582d363f957e0bc17
+msgid ""
+"Execute the following statement to add the configuration file to the "
+"environment variables"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:90
+#: af04ee967324407dbebf449451efe17b
+msgid "or"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:94
+#: 26d276251dc64483962f8b967a2eff14
+msgid "Execute the create file system statement"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:98
+#: bf96051e827d476c8d30f0d08d1054cc
+msgid ""
+"Using the create statement to create a file system\\ You can also create "
+"a file system directly by adding parameters directly to the create "
+"statement."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:103
+#: 3491a03006dd45c5980f6c2e991d7437
+msgid ""
+"Parameter description\\ fsname: file system, user-defined, but must be a "
+"combination of lowercase letters, numbers, hyphens, i.e., to satisfy the "
+"regular expression ^([a-z0-9]+\\\\-?) +$\\ fstype: storage service type\\"
+" s3.ak: access key of s3 service\\ s3.sk: s3 service's secret key\\ "
+"s3.endpoint: s3 service address\\ s3.bucketname: bucketname used in the "
+"s3 service (provided by the deployer)\\ mdsaddr: metadata service "
+"address\\ 💡 More dingo tool features, see dingo tool for details"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:113
+#: 5b232f23e5d14eddbfec959efefd196f
+msgid "3.Mount the Filesystem"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:114
+#: 3d22b18ba62947b39d1986b9da958787
+msgid ""
+"Use the dingoadm tool to mount the filesystem. if dinofs-name already "
+"exists. then first create the filesystem and mount it to the specified "
+"directory."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:118
+#: 312f566251cc4b2bbbef388c4a49e882
+msgid ""
+"Parameter description\\ dingofs-name: filesystem name, user-defined, but "
+"must be a combination of lowercase letters, numbers, hyphens, i.e., meet "
+"the regular expression ^([a-z0-9]+\\\\-?) +$\\ mount-point: mount path, "
+"user-defined, but must be an absolute path. --host: mount the volume to "
+"the specified host, user-defined, please make sure the host has been "
+"imported\\ -c: dingofs-name does not exist, use this configuration file "
+"to create the filesystem\\ If the filesystem is mounted successfully, you"
+" can query the corresponding DingoFS filesystem mount entry on the "
+"corresponding host:"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:127
+#: ec089c35c3b14f32b9ce969890562da8
+msgid ""
+"On the center machine (i.e., the machine where dingoadm is located, users"
+" can operate the dingofs service on other machines via the dingoadm "
+"command), users can also view the status of all clients:"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:131
+#: c4fd3643b93446c7ba1138c6cecb55c6
+msgid ""
+"📢 Note:  If dingofs needs to use multiple s3 functions, modify the "
+"configuration of the s3 information in client.yaml for different fs."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:133
+#: d08ebdad75ae4f9ab77bdbc3d101439f
+msgid "Example:"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:137
+#: 9cc63269afa34e9a98c73ee5726a34f4
+msgid "4.Querying Filesystems"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:138
+#: 3dd1da37505c448faecf7e2b50075e34
+msgid ""
+"Use the dingo tool to query existing filesystems. dingo list fs ![list "
+"fs](../../images/dingo_list_fs.png)"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:138
+#: 581c74c4cd4947b4ba15abcf327c869b
+msgid "list fs"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:142
+#: 8815d10749ee4a1cab12651156a3d7e4
+msgid "5.Deleting a File System"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:143
+#: 6bfcc555d9b3407fa2d2c59430c67774
+msgid "Use the dingo tool to delete an existing file system."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:150
+#: ebf37a76d3fb41c39f2882e4736e2d74
+msgid ""
+"Parameter Description \\ fsname: The name of the file system to be "
+"deleted. After execution, you need to input the file system name again to"
+" confirm the deletion, to prevent deleting the file system by mistake."
+msgstr ""
+
+#: ../../source/operation/file_system_management.md:153
+#: 16d49299d50d4e81aae7bdecf67d6851
+msgid "Appendix: Important DingoFS Configuration Items"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 9e5c56d376f64820814f65d07335baa8
+msgid "Configuration Items"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 65652e9ecb4c4e3d8da65278375e0174
+msgid "Is Required"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: a67ef68b84b14549bb62533e8602fc73
+msgid "Default"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 6e0b680a353a47f981307a699239c3bc
+msgid "Description"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: debc1461158e48fbaee19748b243be45
+msgid "kind"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 4561e1f0fa9f47519539f634fa8dc256
+msgid "Y"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 850076acd6494aa48cd1dfcd7c215fc8
+msgid "Topology File Type. Must be dingofs"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 4045089e5bed422b85743edc5a769ad2
+msgid "container_image"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 2ad48ac5e3524d9cb39181ea81b2dde7
+msgid "Dingodatabase/dingofs:latest"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: bee4cae4a30b49ce958f36eabe326dad
+msgid ""
+"container image. The default is our latest stable version, or you can "
+"visit the DingoFS public docker repository to choose your own"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 5d6393bd64e5444c83bf24ef1171df27
+msgid "log_dir"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 63a95792e7934e52aa53c6eacd0d754d
+msgid ""
+"directory where service logs are kept. If this option is not configured, "
+"the logs are stored in the specified directory within the container and "
+"will be deleted once the container is cleaned up"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 591de2e2b0184004a889f06e7fafc1cd
+msgid "data_dir"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: a862563cf930491f9d8d47ea94f557af
+msgid ""
+"the directory where the service data is stored. If this option is not "
+"configured, the data is saved in the specified directory within the "
+"container by default and will be lost if the container is purged"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 47d8c7dd778f4f0d9797763836ce9fe0
+msgid "s3.ak"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 2dc903cc04ee4a87b42323d2f2cd3921
+msgid ""
+"The Access Key for the S3 service. used to upload the actual data. "
+"Required only when using the S3 Storage Engine and creating a file system"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 8c5832ca6dac4bd1a60e79b9b5d86b83
+msgid "s3.sk"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 3e68ad920b6d4db496ab7c7ae3db7d3c
+msgid ""
+"S3 service's Secret Key. Used to upload the actual data. Required only "
+"when using the S3 Storage Engine and creating a file system"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 49033c765ee143e3b944d0d3532426b2
+msgid "s3.endpoint"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 8eb49e5780e84147b82a60de6ce97a79
+msgid ""
+"S3 Service Address. Used to upload the actual data. Required only if you "
+"are using the S3 Storage Engine and creating a file system"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 5cb1cc47e9d9411290bb57f9115ed71f
+msgid "s3.bucket_name"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 5ff7399a8f094a22ac128854f58ea2c7
+msgid ""
+"S3 service bucket name. Used to upload the actual data. Required only if "
+"using S3 Storage Engine and creating a file system"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: 57da7e2ed9834eafa236bb185a9a0aa5
+msgid "variable"
+msgstr ""
+
+#: ../../source/operation/file_system_management.md
+#: ca75667e933941d7acc09f1254d5ca6e
+msgid "Variable block. Custom variables can be populated in the block"
+msgstr ""
+

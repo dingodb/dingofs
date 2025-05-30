@@ -1,0 +1,372 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/architecture/dingofs-architecture.md:1
+#: 9e04b06df86b4116a4302f6341e45840
+msgid "DingoFS Architecture"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:3
+#: 113b9f164cff44cc820d4bbe97899865
+msgid ""
+"DingoFS is a POSIX-compliant distributed file storage system to better "
+"support cloud-native scenarios."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:5
+#: 7a48cd5474b34343b86097579a8f394c
+msgid "1.Overall Architecture"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:9
+#: 11f75de2563c4b2d962d072249e59358
+msgid "DingoFS consists of three parts:"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:10
+#: 85421da7a25f44db86aadffd71f03443
+msgid "`dingo-fuse` is a fuse-based file system client."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:11
+#: fbbd03d908b44f5c95002afb3c59cef7
+msgid ""
+"It receives and handles fuse requests, interacts with `fs-meta cluster` "
+"for metadata additions, deletions, and modifications, and interacts with "
+"`fs-data cluster` for data additions, deletions, and modifications;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:12
+#: 7cee787e67de4ad79b640a15087e1093
+msgid "Provides metadata caching and data caching to improve performance;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:13
+#: 96282939667e43e0951ef6f81500763d
+msgid "Users can access different file system instances through the client."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:14
+#: a0a0118d8c574bc5a23c9980828e1ac9
+msgid "`fs-meta cluster` is the metadata service cluster of DingoFS."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:15
+#: e94efff7826c4dcabeb1e7208f511c03
+msgid ""
+"Its architecture consists of two parts: MDS and Metaserver, which are "
+"highly scalable and highly available;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:16
+#: bc03161916f742a68a6b57ba62d5f36a
+msgid ""
+"mds is used to manage cluster topology, cluster scheduling, file system "
+"instances, and file metadata slice management; based on etcd, it stores "
+"cluster topology, user and file system information; based on etcd, it "
+"realizes the high availability of mds."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:17
+#: 7851d549017d45f6b27c7b4f8459708b
+msgid ""
+"The metaserver is used to store the metadata (inode and dentry) of the "
+"files, and achieves high availability and high reliability through multi-"
+"raft. Each raft replica group manages multiple sets of metadata slices. "
+"3."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:18
+#: 02842ce3732c458489dd4efaaf4abf6f
+msgid "`fs-data cluster` is the data service cluster of DingoFS."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:19
+#: f5ff8fa529ac4f59ac87246f14280b07
+msgid "It currently supports object storage with S3 standard interface;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:20
+#: eaf45d4a9a0940a0ae0d65dd7a716b27
+msgid "Users can configure it flexibly according to performance scenarios;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:21
+#: 1e325b2df50043189a3b51beab1a288f
+msgid ""
+"Because it supports multiple storage clusters, DingoFS metadata is "
+"managed in a separate cluster."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:23
+#: 044a816cdc674b449bb05870471e1a8a
+msgid "2.Metadata Cluster"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:25
+#: 746d2bdc0ac046d1a5f16aac4bb800e9
+msgid "The metadata cluster `fs-meta cluster` is as follows:"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:29
+#: d1f5bd9802ac42ed8fa74a410e88b8b7
+msgid "**Management Topology**"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:31
+#: 6ac754f191924fa68a8c73dbbba1a3b7
+msgid ""
+"MDS manages the topology of the meta data cluster as follows:  <img "
+"src=\"../../images/fs_topo.png\" alt=\"dingofs_topo.png\" width=\"900\">"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:34
+#: 0d65717c5e7946e6a18c15d4ca39dc1d
+msgid ""
+"`pool` A physical pool that physically isolates machine resources. A "
+"`server` cannot interact across a `pool`;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:36
+#: aace0f3576054ca1b6cf0190e458dd29
+msgid ""
+"`zone` The basic unit of fault isolation, where machines belonging to "
+"different `zones` are deployed in different racks and `server` is "
+"attributed to a `zone`;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:38
+#: ed0d224b987d4faa8e05dd5da9840edc
+msgid "`server` Physical server, `metaserver` is attributed to a `zone`;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:40
+#: 3879ff380aa04cff8a51f2074afdafe0
+msgid "The `metaserver` minimal service unit, which manages a physical disk."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:43
+#: c69a49188e9b440da626908a7aa31efd
+msgid "**Examples of managed document systems**"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:45
+#: f0d68b8d825a44f79366ca7c6f7b409e
+msgid ""
+"MDS manages the distribution of file system instances and file system "
+"metadata."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:46
+#: 8eebacce9811427a8e6ffd3f2ee92ba5
+msgid "A file system instance consists of multiple metadata `partitions`."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:47
+#: 469f54bab7374dddadcfb0fd09b18489
+msgid ""
+"Each `partition` manages a specified range of inodes, with the inode in "
+"the root directory of the file system fixed at 1."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:48
+#: 7b2c51efbc624ffebf96728eba47bcb0
+msgid ""
+"Each `partition` manages a specified range of inodes. The inode of the "
+"root directory is fixed at 1."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:49
+#: b55f73ae84b146caa15da2092a43f64e
+msgid "For the file /A/B"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:50
+#: 83e6646eb4134d98943c0faf65f5864e
+msgid ""
+"For files /A/B, first find the metadata slice of the root directory and "
+"query dentry(/A) on that metadata slice;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:51
+#: 0bbc99ae22c149f59d9a3853872c1b46
+msgid ""
+"Get the inodeid of /A from dentry(/A), get the corresponding metadata "
+"slice according to the inodeid and query dentry(/A/B);"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:52
+#: a63a07d9fc3344f9af9c9fd1550a71cf
+msgid ""
+"Get the inodeid of /A/B from dentry(/A/B), so as to locate the metadata "
+"partition and get the inode information of /A/B."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:53
+#: bc46550447d7404492e98db74e64c0a6
+msgid ""
+"The `partition` is managed by `copyset`, which is the craft replication "
+"group"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:54
+#: 98c61c42e85c42a68f18210be63982eb
+msgid "`copyset` and `partition` have a one-to-many relationship;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:55
+#: 77dd4ff947bd488cbaaf24966249db63
+msgid ""
+"Both `copyset` and `partition` are dynamically created and can be "
+"elastically scaled. The current creation strategy is relatively simple: "
+"under the premise that multiple copies of `copyset` are in different "
+"`servers`, the `metaserver` is selected according to the remaining "
+"capacity of the `metaserver`'s management disks; the `partition` is "
+"similarly selected according to the remaining capacity of the "
+"`metaserver` where the `copyset` is located;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:57
+#: 318186efecdb446aaa6042fed8141e87
+msgid "**MDS High Availability**"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:59
+#: 6f0904bced134d24b8c323bcfeadd7ca
+msgid ""
+"MDS high availability is implemented based on etcd, allowing some "
+"instances to be exceptionally available, as shown in the following "
+"figure:"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:63
+#: 991ebff291e14362be91fb1ff4eb0d55
+msgid ""
+"MDS registers with etcd, while only one MDS provides service, the backup "
+"MDS listens. When the primary MDS hangs up, the backup MDS starts to "
+"provide service."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:65
+#: 56069ef21c684b3a917edf563be30523
+msgid "**Metaserver High Availability**"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:67
+#: c933a70fadfc42529f5dde2f38dbb270
+msgid ""
+"Metaserver high availability is based on raft implementation, 2N+1 "
+"replicas allow N replicas exception."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:70
+#: dea85497fdd1446aa56158caffda3402
+msgid "3.Data organization form"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:71
+#: 6cd5607f48424e3c8fdab024b2a54a79
+msgid ""
+"`fs-data cluster` stores the actual data of the file, it can be an object"
+" storage cluster that supports S3 standard protocol, and we will dock "
+"more clusters according to the scenario requirements."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:73
+#: 0965327a4a7d446692141b4886f04056
+msgid "Docking S3"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:74
+#: 91e393a13bd9441b8af63ed746f72956
+msgid ""
+"For a file in the file system, the correspondence between the address "
+"space and the S3 object is shown below:"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:78
+#: 00856b4e989c451585a03ed84b841eae
+msgid ""
+"On the `dingo-fuse` side, a file's address space consists of multiple "
+"fixed-size `chunks`, each of which consists of multiple `datacache`s of "
+"variable length;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:79
+#: 7c3f5e3bfeae4f65a3d33a6152262ade
+msgid ""
+"The `datacache` is split according to the granularity of the `block` and "
+"uploaded to S3;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:80
+#: 444d6f5e01bc430c8b4aaa0a80abb726
+#, python-brace-format
+msgid ""
+"Each datacache is represented by { chunkid, offset, len, size } in inode,"
+" and the key of each datacache in S3 is represented by { fsid, inodeid, "
+"chunkid, blockindex }. According to the record of data position in inode,"
+" we can calculate the number of data blocks in S3 corresponding to this "
+"part of data and the key of each data block by the size of `chunk` and "
+"`block`."
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:82
+#: 27b6ef7df8e142f09e287f96f054a4b1
+msgid "4.System Features"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:83
+#: b910dd7d8b7b448f86b2ed938e6e6222
+msgid ""
+"Multi-storage system support. Data is supported to be stored both to the "
+"public cloud and to local storage systems; it supports free flow of data "
+"between different storage systems and active/passive data lifecycle "
+"management;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:84
+#: ab940ac609b747aa8073d25a4607f352
+msgid ""
+"metadata clusters and data clusters are highly available, highly "
+"scalable, and highly reliable;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:85
+#: 7687e75fb8054ffd9f73543aa8213247
+msgid ""
+"support for cache, the client has two levels of memory and disk cache "
+"acceleration; support for multi-level cache, BS clusters can be used as a"
+" persistent cache layer ;)"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:86
+#: f85bc35dd67d40d8b8ec69e359ace64b
+msgid ""
+"POSIX-compatible, used like a local file system, business can be "
+"seamlessly accessed;"
+msgstr ""
+
+#: ../../source/architecture/dingofs-architecture.md:87
+#: a58856e534164b4ab89e3ae9c0976d45
+msgid "Easy operation and maintenance , common exceptions can be self-healing."
+msgstr ""
+

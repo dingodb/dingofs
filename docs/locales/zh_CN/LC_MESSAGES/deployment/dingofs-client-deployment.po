@@ -1,0 +1,248 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/deployment/dingofs-client-deployment.md:1
+#: 488702c7c7bd4431ad534c3d89b89d98
+msgid "Deploying the DingoFS client"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:4
+#: f2707cdb8bf345ec9c8179e0c6fd4bdc
+msgid "Step 1: Environment Preparation"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:7
+#: 9bd69961615d4582badbeab0da7807b9
+msgid ""
+"[Hardware and software requirements](install-dingoadm#Hardware and "
+"software requirements)"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:8
+#: c7ce3c5b55b544bf8bf78c470e73b4e0
+msgid "[Install Dependencies](install-dingoadm#Install Dependencies)"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:10
+#: 76d8bf9c91c242f5b7f4a8dbc567fc49
+msgid "Step 2: Import the host"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:13
+#: 11a3faaf271f4498b01989b4bd7b59f2
+msgid ""
+"Users need to import the list of hosts required for the client, if you "
+"have already imported the client hosts while deploying the cluster, you "
+"can skip this step directly. Please make sure that the hosts specified in"
+" the subsequent mount/unmount are imported, see [Host Management][hosts] "
+"for details."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:16
+#: dc82f0baaab24ab1837ea072c4de7ed3
+msgid "1. Prepare the list of hosts"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:39
+#: 255386ca94604328abe35847ed1860ff
+msgid "2. import hosts list"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:44
+#: 43b0efb3c3f04f8ca95c601b37f64dc6
+msgid "Step 3: Deploy Minio (optional)"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:47
+#: b5bd9406d7aa480fa99ed1acb952df19
+msgid "This step is optional."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:49
+#: 0d008e79f641459d90d6a54c4511b85c
+msgid ""
+"So you need to deploy an S3 storage or use a public cloud object storage "
+"such as Amazon S3, AliCloud OSS, Tencent Cloud OSS, etc. The following "
+"will show if you can quickly deploy a [Minio][minio] for S3 backend "
+"storage using Docker:"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:61
+#: ../../source/deployment/dingofs-client-deployment.md:132
+#: ../../source/deployment/dingofs-client-deployment.md:175
+#: 5220fe0db9ea4527b5ccec038b11d4b5 bba0f8a6ba0a4a4c9f94530cd789ea58
+#: e46cfc3974ae4a79867e1482ee56a61f
+msgid "📢 **Note:**"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:63
+#: b25b10bbcabe4843b7ae821de9a53419
+msgid ""
+"minio-data in the run parameter is a local path, you need to create this "
+"directory in advance before running the minio You need to create this "
+"directory in advance before running the container"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:65
+#: d2a35c217c9d4947b0bafead3eab9fd3
+msgid ":bulb: **REMINDER:**"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:67
+#: 58eddb5cadd24ea28a0bbbe2fac305a0
+msgid ""
+"The following information will be used to fill in the [S3-related-config"
+"][important-config] in the client configuration file in step 4:"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:68
+#: bb775799e63d4f20ace4508b1e513eb6
+msgid ""
+"The default `Access Key` and `Secret Key` for the root user are both "
+"`minioadmin`"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:69
+#: 3a099e60a9ba47ac8c393a42367c7f3b
+msgid ""
+"The S3 service access address is `http://$IP:9000`, and you need to "
+"access `http://$IP:9000` from your browser to create a bucket"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:70
+#: 9616c8090ad04ac5a17e71d1cdf3a382
+msgid ""
+"For more details on deployment, you can refer to [deploy-minio-standalone"
+"][deploy-minio-standalone]."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:72
+#: fb3bfb5c9472462fb2f151f876683aba
+msgid "Step 4: Prepare the client configuration file"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:107
+#: 5f62744d16af49dfb179d978479a6bff
+msgid ""
+"Configuration entries in the client configuration file have the same "
+"meaning as those in the cluster topology file, see [DingoFS important-"
+"config][important-config]."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:109
+#: 41703b3cd89445c18978fbb5d4604762
+msgid ""
+"For all configuration items that do not appear in the client "
+"configuration file, we will use the default configuration values.  You "
+"can view the configuration items and their associated default values by "
+"clicking [client configuration file][dingofs-client-conf]."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:112
+#: 25b4c4d6db9f427fa970a23b466e3655
+msgid ":bulb: About the `mdsOpt.rpcRetryOpt.addrs` configuration item"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:114
+#: bb0241d4104747d6a80398cc7f4de74b
+msgid ""
+"Since all the routing information exists in the MDS service, the client "
+"only needs to know the address of the MDS service in the cluster in order"
+" to perform IO reads and writes normally."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:116
+#: 543f5952a7c64950a78cf7dca785bc9e
+msgid ""
+"The `mdsOpt.rpcRetryOpt.addrs` configuration item in the configuration "
+"file needs to be filled with the address of the MDS service in the "
+"cluster. After deploying the DingoFS cluster,  You can check the address "
+"of the MDS service in the cluster via `dingoadm status`:"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:134
+#: 09446196d2354ea4b698be3a59a22b3d
+msgid ""
+"dingofs supports multiple s3, one fs corresponds to one s3 backend. All "
+"s3 information (ak, sk, endpoint, and bucket_name) is stored in mds, and "
+"other components get it from mds. And the s3 information in the mds is "
+"specified when the fs is created. Therefore, the s3 information in "
+"client.yaml is required and will be synchronized to the configuration "
+"file of the fs creation tool. If the fs have already been created, please"
+" keep the same information, otherwise the mount will fail;  If the fs "
+"have not been created yet, please make sure the s3 information is "
+"available, otherwise the mount will fail."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:141
+#: a04b1f3a0782483892f02a922b46ed00
+msgid "Step 5: Mount the DingoFS file system"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:148
+#: 235f80dbcdd540219e73c96bd8ae56fa
+msgid ""
+"``<dingofs-name>`‘’: filesystem name, user-defined, but must be a "
+"combination of **lowercase letters, numbers, and hyphens**, i.e., satisfy"
+" the regular expression `^([a-z0-9]+\\\\-?) +$`"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:149
+#: 715917d0380848e79a69517fa08c398f
+msgid "`<mount-point>`: mount path, user-defined, but must be **absolute path**."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:150
+#: 7be22e041a744ffe88d384a0107bc203
+msgid ""
+"`--host`: Mount the volume to the specified host, user can choose, please"
+" make sure the host has been imported."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:152
+#: 28626c72e3b242ca9bdaff980b9b7b17
+msgid ""
+"If the file system is mounted successfully, you can query the "
+"corresponding DingoFS file system on **the corresponding host**:"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:158
+#: a90c3ab96a7e41c4aebffa1103183ba0
+msgid "The user can also check the status of all clients on the central console:"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:177
+#: 2ff8be64c28e49caba353cb208525218
+msgid ""
+"If dingofs needs to use multiple s3 functions, just modify the "
+"configuration of the s3 information in client.yaml for different fs."
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:179
+#: 7c71d25915004291afeca9821286610e
+msgid "Example"
+msgstr ""
+
+#: ../../source/deployment/dingofs-client-deployment.md:184
+#: c7e99d81cff4488a8dd1b7dbc6fa1467
+msgid "Other: unmount the filesystem"
+msgstr ""
+

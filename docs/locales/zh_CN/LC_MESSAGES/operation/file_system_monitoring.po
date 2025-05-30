@@ -1,0 +1,134 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/operation/file_system_monitoring.md:1
+#: d109157ada4949f5a4b9ce7a60dddc2a
+msgid "File System Real-time Monitoring"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:2
+#: 02920c0657804946b8ade41a98f9097c
+msgid "1. Real-time Monitoring"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:3
+#: 85d71bfc0ed04d05ad71af451989de1a
+msgid ""
+"Use the dingo tool to monitor mounted filesystems in real time, and print"
+" out metrics data at regular intervals."
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:7
+#: 51abb5346d1e4a26af6611de2d378234
+msgid ""
+"Parameter Description \\ mount-point: Path where the file system is "
+"mounted.\\ The stats command has the following options: schema The "
+"default value is ufmsbo, which stands for: u: usage, f: fuse, m: "
+"metaserver,s: mds, b: blockcache, o: object"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:11
+#: d2d3e3ff210d44ad877958f9cc973045
+msgid "Example: show only fuse metrics"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:15
+#: e513250dfdf94c28aae22010a1dc197c
+msgid ""
+"--interval duration , the default value is 1s, and the minimum value is "
+"also 1s, which means how often the indicator data will be output to show "
+"on the screen.\\ Example: output indicator data every two seconds"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:20
+#: a414571b3f4e4e06a93b7ed3cbbd85a0
+msgid ""
+"--verbose , show more detailed information. \\ Example: show detailed "
+"data of s3"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:26
+#: e2f48fb4de6745959ce7138125ed07b2
+msgid "2. Monitoring Results"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:27
+#: bd877e81d66646598c660d2355214f44
+msgid "! [alt text](../../images/monitoring_results.png)"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:28
+#: e5534940b13047ffbc4eac4081592968
+msgid "3. Monitoring Metrics in Detail"
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:29
+#: 9e3f49237bc64b89ac088ec4d908c441
+msgid ""
+"usage\\ cpu: client program CPU usage in percentage. \\ mem: client "
+"program physical memory usage. \\ wbuf: size of data write buffer already"
+" used by the client program."
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:33
+#: 38ee7c33d4dc43218154a37e0a165d21
+msgid ""
+"fuse\\ opt/lat : Number of requests per second processed through the fuse"
+" interface and their average latency in milliseconds. Note: A file may be"
+" created multiple times by oops, e.g., open, write, flush, close, etc. "
+"The file may be created by a number of oops. \\ read/write: read/write "
+"bandwidth processed per second through the fuse interface."
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:36
+#: de15687de4634ea380fcd8b01998e5e5
+msgid ""
+"metaserver\\ opt/lat : The number of metadata requests processed by the "
+"metaserver per second and its average latency in milliseconds. Main "
+"operations createdentry, listDentry, deleteDentry, etc."
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:38
+#: b61da7b398f54f6e86d99ea77863ac63
+msgid ""
+"blockcache\\ Currently blockcache mainly refers to the disk cache read "
+"and write situation, if the disk cache is enabled, the data will be read "
+"and written from the disk cache first, if the data is not in the disk "
+"cache or the data has been invalidated, it will be read and written from "
+"the object store. If the blockcache read/write traffic is much larger "
+"than the get and put traffic in the object, it means the data is cached. "
+"read/write: the client's local disk cache read/write traffic per second."
+msgstr ""
+
+#: ../../source/operation/file_system_monitoring.md:41
+#: 5e86ec3df3374ebe8a98bacf9b0448de
+msgid ""
+"object\\ object represents a metric related to the object store. In the "
+"presence of a disk cache scenario, a read request penetrating into the "
+"object store will significantly reduce read performance, which can be "
+"used to determine whether the data is fully cached. \\ get/ops/lat: the "
+"value of the bandwidth of the object store to process read requests per "
+"second, the number of interface requests and their average latency (in "
+"milliseconds). \\ put/ops/lat: the value of the bandwidth per second that"
+" the object store processes write requests, the number of interface "
+"requests and their average latency (in milliseconds)."
+msgstr ""
+

@@ -30,53 +30,6 @@ Combines local SSD-level low latency with object storage-level high throughput, 
 
 Implements a 3-tier cache hierarchy (memory, local SSD, distributed cluster) with dynamic data path optimization to provide high-throughput, low-latency I/O acceleration for compute-intensive AI workloads.
 
-**7.Intelligent multi-dimensional system monitoring**
-
-Real-time performance metric collection and anomaly detection with alerting. Offers visual dashboards to aid in rapid troubleshooting. Includes proactive disk health monitoring to ensure system stability.
-
-**8.Hot-Swappable Disks**
-
-Allows replacement of faulty disks during system operation without service interruption.
-
-**9.Cache Expiry & Eviction Mechanism**
-
-Supports dynamic cache TTL configuration to prevent cold data from occupying cache storage, improving cache hit rates.
-
-**10.Online Rolling Upgrades**
-
-Enables seamless version upgrades without interrupting service. Includes robust rollback mechanisms to ensure business continuity and minimize upgrade risk.
-
-## Main Technical Specification
-
-**1.Large Model Inference - Model Loading Latency**
-
-Using twenty 4GB files as a test dataset, system performance is benchmarked under three scenarios:
-- Prefetch
-- In-Time Warmup
-- Warmup
-
-![Model Loading Latency](../../images/model_loading_latency_total.png)
-
-![Model Loading Latency](../../images/model_loading_latency_average.png)
-
-Performance data under each of these conditions reflects DingoFS's ability to minimize latency during model loading for inference.
-
-**2.Checkpoint Write Efficiency**
-
-- Tested on a 9GB file in a single-threaded environment.
-
-![Model Loading Latency](../../images/single_threaded.png)
-
-- In a multi-threaded environment, a total of 480G files were written, with an average file size of 2~3G.
-
-![Model Loading Latency](../../images/multi_threaded.png)
-
-**3.Concurrent test for reading and writing of many small files**
-
-In this test, 5 million small files with a total size of 500 GB were written to DingoFS. The files were organized into multiple directories, with 10,000 files per directory. Subsequently, 8 threads were used to perform concurrent read operations on the dataset.
-
-![Model Loading Latency](../../images/small_files.png)
-
 ## Use Cases
 
 **Enabling AI Model Training**
