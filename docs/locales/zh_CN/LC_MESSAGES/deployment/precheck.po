@@ -1,0 +1,179 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/deployment/precheck.md:1 12d2d054c1a946b59cd94966b05facf0
+msgid "Deployment Precheck"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:4 fc73c78ac3e245e298dca053a6dca0c9
+msgid "Precheck Overview"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:7 1651aa62d86e400ea5282f665e32c2fc
+msgid ""
+"The precheck module is used to detect factors that may cause deployment "
+"failure in advance, thereby improving the success rate of user "
+"deployments."
+msgstr ""
+
+#: ../../source/deployment/precheck.md:10 4c3fe0f43f3147d89350d0cc7606d8d0
+msgid ":bulb: **Note:**"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:12 d9f42837f3194d52820dfab4b1398e53
+msgid ""
+"We run the precheck function by default when executing deployment. Users "
+"can also skip the precheck during deployment by using the `-k` option, "
+"but we strongly advise against doing so."
+msgstr ""
+
+#: ../../source/deployment/precheck.md:15 96bfd3e96f4a444cbec8e754ca55d852
+msgid "Executing Precheck"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:22 e4b1df2b70394dd8adea2ea704f1914c
+msgid ""
+"Currently, the following 6 pre-check items are executed by default: "
+"`topology`, `SSH`, `permissions`, `kernel`, `network`, `time`, and "
+"`services`. Users can skip specific pre-check items using the `skip` "
+"option after ensuring there are no issues:"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:28 3a019e794b2749e69aacae4d15501f55
+msgid "Pre-check item description"
+msgstr ""
+
+#: ../../source/deployment/precheck.md b5915c9ea9b047a4a169f8363726f352
+msgid "Check item"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 4c0aee64c4a5482e8c47119052abef93
+msgid "Skip option"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 47ef3036658a426ea7d4cfad6900990e
+msgid "Description"
+msgstr ""
+
+#: ../../source/deployment/precheck.md ae777e2d61e04bfc876db07d79f43243
+msgid "Topology"
+msgstr ""
+
+#: ../../source/deployment/precheck.md c510b1a4bca94219a9eb89221442c860
+msgid "topology"
+msgstr ""
+
+#: ../../source/deployment/precheck.md e03f7bc3bee94dacab7f9d7ee7c893cf
+msgid "Check the validity of the cluster topology"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 942aca5c9ef343cdb89ec3ef032f8988
+msgid "SSH"
+msgstr ""
+
+#: ../../source/deployment/precheck.md a800ef2aba084709b1c59b0a9b053eaf
+msgid "ssh"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 7eccc328550b4b5d80e8469c5231a80f
+msgid "Check SSH connectivity"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 59f9eb27a58c44b6ba5b8820e0b7c2fb
+msgid "Permissions"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 40d8c9388b5548bdab82a7f0de735c55
+msgid "permission"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 41c864454ffc41f4b32ffd01807880f2
+msgid ""
+"Check the current user's permissions to execute docker, create "
+"directories, etc."
+msgstr ""
+
+#: ../../source/deployment/precheck.md 456c30fce4c34a6eb817a9d86b4bd6b4
+msgid "Kernel"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 401071a8b0f14fc4ac5669bdd45c2da9
+msgid "kernel"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 65c6621e20534995aca455e51b21283a
+msgid "Check whether the kernel version and kernel modules meet the requirements"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 90757dcaf098431aadf9168815b5b25f
+msgid "Network"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 7d033b4859e044eab2678f9bf6370ee6
+msgid "network"
+msgstr ""
+
+#: ../../source/deployment/precheck.md b7a3d88a5c3141159811c3b2fe8de86d
+msgid "Check network connectivity, firewall, etc."
+msgstr ""
+
+#: ../../source/deployment/precheck.md fe992760a5f944dc9f893fecb5000e45
+msgid "Time"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 87ba77d541d64b5baffe56e65d8829b9
+msgid "date"
+msgstr ""
+
+#: ../../source/deployment/precheck.md c186d70ed5a14ac890459840369abf83
+msgid "Check whether the time difference between hosts is too large"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 56b0998a3ef34c92a88bc7637c216358
+msgid "Service"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 899e9f73d32344d49b5033bd3935d5aa
+msgid "service"
+msgstr ""
+
+#: ../../source/deployment/precheck.md 3c59258f9ec94af19b24152022849900
+msgid ""
+"Check the number of services, chunkfile pool, S3 configuration validity, "
+"etc."
+msgstr ""
+
+#: ../../source/deployment/precheck.md:40 28ff9f2588684373992cc0e8e757ffcb
+msgid ":bulb: **Reminder:**"
+msgstr ""
+
+#: ../../source/deployment/precheck.md:42 f843999692464309a5e9cd6d01c2d612
+msgid ""
+"When pre-checks fail, we strongly recommend that users troubleshoot the "
+"issue step by step based on the reported [error code][errno] and the "
+"provided solutions, and ultimately pass all pre-checks. We strongly "
+"advise against skipping the check item when a pre-check fails, as this "
+"may leave potential issues for subsequent actual deployments, leading to "
+"deployment failures. We ensure that every pre-check item is essential for"
+" deployment. Please ensure all pre-check items are passed before "
+"deployment."
+msgstr ""
+

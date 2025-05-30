@@ -1,0 +1,774 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/contributing/contributing.md:19
+#: b2d8744c50e043fb93cfa17f0070c8dc
+msgid "Contributing"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:21
+#: 70d82092a64b47e0afbacc2559e64761
+msgid ""
+"Contributions are welcome and are greatly appreciated! Every little bit "
+"helps, and credit will always be given."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:24
+#: f1cef6256e004fd9ab885d2c5df77e25
+msgid "Table of Contents"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:26
+#: e1ca905824694fe5998a443e5ec22321
+msgid "[Contributing](#contributing)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:27
+#: 2153ffc0f01d49f98fd830622511f409
+msgid "[Table of Contents](#table-of-contents)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:28
+#: f90b1bca4f4147d191b66d3ffa25e170
+msgid "[Types of Contributions](#types-of-contributions)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:29
+#: caa9ddb110104965932dcdb7d2587cad
+msgid "[Report Bug](#report-bug)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:30
+#: 1f636b55559d48e688838ec34b2e93f7
+msgid "[Submit Ideas or Feature Requests](#submit-ideas-or-feature-requests)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:31
+#: a9d530dc051345879d71ebbbe6925d72
+msgid "[Fix Bugs](#fix-bugs)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:32
+#: 852a79ed491143fcbdc9ce44a74ddbc7
+msgid "[Implement Features](#implement-features)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:33
+#: aea44267d38741f682ea4342678bcf59
+msgid "[Improve Documentation](#improve-documentation)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:34
+#: da53a8c0ec0d433681fc427f3880d346
+msgid "[Ask Questions](#ask-questions)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:35
+#: 1dc8052a0c0544a891281c813a62e07e
+msgid "[Pull Request Guidelines](#pull-request-guidelines)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:36
+#: 6de40b65b13c42b894e4c22b5c3dde09
+msgid "[Protocol](#protocol)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:37
+#: c4cd47c321c747da902d9c863faeb446
+msgid "[Authoring](#authoring)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:38
+#: d926cf2ea220400bb493e71789571d57
+msgid "[Reviewing](#reviewing)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:39
+#: 7d9a5bdb7ba44edd902f259e6122a5d4
+msgid "[Merging](#merging)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:40
+#: 021df407f02e422aa27d1dbb88e397b4
+msgid "[Post-merge Responsibility](#post-merge-responsibility)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:41
+#: f11f324865624d818fa0a799225c04fb
+msgid "[Managing Issues and PRs](#managing-issues-and-prs)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:42
+#: b2504b27823f40d28205987443690674
+msgid ""
+"[Setup Local Environment for Development](#setup-local-environment-for-"
+"development)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:44
+#: aabe65577080489d82bc127b5af4c290
+msgid "Types of Contributions"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:46
+#: 808be845b5f94c368a7b75ae2f1d98bd
+msgid "Report Bug"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:48
+#: 09effea9d8ab450daae7bb8173cd2d64
+msgid ""
+"The best way to report a bug is to file an issue on GitHub. Please "
+"include:"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:50
+#: 563dc136341c4f429a687f3db5e0f8e5
+msgid "Your operating system name and version."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:51
+#: d61bfad0aa51421ca6ee02c2d9bf863c
+msgid "Dingofs version."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:52
+#: 4e200809d8454b03a0c81ad4469a12f0
+msgid "Detailed steps to reproduce the bug."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:53
+#: b2f86ac7f5094f58b6183e803ed1d51b
+msgid ""
+"Any details about your local setup that might be helpful in "
+"troubleshooting."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:55
+#: 31d818a32fc849b8a5cc454ccf4a02aa
+msgid "Submit Ideas or Feature Requests"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:57
+#: e3e0b575295e4e6b9802af78b272bc77
+msgid "The best way is to file an issue on GitHub:"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:59
+#: 9503aed9be0b43ffac006f166fdff520
+msgid "Explain in detail how it would work."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:60
+#: d2f04eb7a96b4ad9ad75f013bd529b32
+msgid "Keep the scope as narrow as possible, to make it easier to implement."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:61
+#: 315ee5288457429c918a70338fa59a42
+msgid ""
+"Remember that this is a volunteer-driven project, and that contributions "
+"are welcome :)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:63
+#: 87251878cdfd43dab004c9b66fe18d89
+msgid ""
+"For large features or major changes to codebase, please create **dingofs "
+"Improvement Proposal (DIP)**. See template from "
+"[DIP-0](https://github.com/dingodb/dingofs/issues)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:65
+#: bba137d3a3ad4ceebe74a6d1d6f4a955
+msgid "Fix Bugs"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:67
+#: 38ed012a212d4914a4be6443cccd0d84
+msgid ""
+"Look through the GitHub issues. Issues tagged with `#bug` are open to "
+"whoever wants to implement them."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:70
+#: d8fbf4d23bdf4d7b8e12561aca173ad3
+msgid "Implement Features"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:72
+#: e3aff8957d474898bdb4509e9909b951
+msgid ""
+"Look through the GitHub issues. Issues tagged with `#feature` is open to "
+"whoever wants to implement it."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:75
+#: cd128281cc9448c790686060ff4799d9
+msgid "Ask Questions"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:77
+#: 0cec68694ed047ad85dd89b72a0fbd77
+msgid ""
+"There is a dedicated on [Mailing list](mailto:dingofs@zetyun.com). Please"
+" use it when asking questions."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:79
+#: b46e9585fc0f45079d219f21a76460fa
+msgid "Pull Request Guidelines"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:81
+#: 6380e4d3f8d547f5b9bb3b745bc28b74
+msgid "A philosophy we would like to strongly encourage is"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:83
+#: 0c3d17647b8c439ba0a9d3f7b503d6e7
+msgid "Before creating a PR, create an issue."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:85
+#: 40f2220e73a445dcbcef3ddd623f980e
+msgid "The purpose is to separate problem from possible solutions."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:87
+#: e2c6c50d63964aa7b0f1f491a27f99a2
+msgid ""
+"**Bug fixes:** If you’re only fixing a small bug, it’s fine to submit a "
+"pull request right away but we highly recommend to file an issue "
+"detailing what you’re fixing. This is helpful in case we don’t accept "
+"that specific fix but want to keep track of the issue. Please keep in "
+"mind that the project maintainers reserve the rights to accept or reject "
+"incoming PRs, so it is better to separate the issue and the code to fix "
+"it from each other. In some cases, project maintainers may request you to"
+" create a separate issue from PR before proceeding."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:89
+#: 8c0e7fdee1a7494ba84bf53ce16a7350
+msgid ""
+"**Refactor:** For small refactors, it can be a standalone PR itself "
+"detailing what you are refactoring and why. If there are concerns, "
+"project maintainers may request you to create a `#DIP` for the PR before "
+"proceeding."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:91
+#: 7049e4898fca4eb1899f884ed4af965a
+msgid ""
+"**Feature/Large changes:** If you intend to change the public API, or "
+"make any non-trivial changes to the implementation, we require you to "
+"file a new issue as `#DIP` (dingofs Improvement Proposal). This lets us "
+"reach an agreement on your proposal before you put significant effort "
+"into it. You are welcome to submit a PR along with the DIP (sometimes "
+"necessary for demonstration), but we will not review/merge the code until"
+" the DIP is approved."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:93
+#: b7c6ae8a63714fbfa42f6a36c13b7a0f
+msgid ""
+"In general, small PRs are always easier to review than large PRs. The "
+"best practice is to break your work into smaller independent PRs and "
+"refer to the same issue. This will greatly reduce turnaround time."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:95
+#: 59a22bc4a3b746eeb38de7af51b19ba5
+msgid ""
+"If you wish to share your work which is not ready to merge yet, create a "
+"[Draft PR](https://github.blog/2019-02-14-introducing-draft-pull-"
+"requests/). This will enable maintainers and the CI runner to prioritize "
+"mature PR's."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:97
+#: b5bc9390127c4c60bf93c17efb681a9d
+msgid ""
+"Finally, never submit a PR that will put master branch in broken state. "
+"If the PR is part of multiple PRs to complete a large feature and cannot "
+"work on its own, you can create a feature branch and merge all related "
+"PRs into the feature branch before creating a PR from feature branch to "
+"master."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:99
+#: 6705798a43ae43c482e8d0ee65583efe
+msgid "Protocol"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:101
+#: cea96e093e4b42f29942ef8af7831f44
+msgid "Authoring"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:103
+#: af04ceeec53f4f2ba2f1f4196cb6b6e0
+msgid "Fill in all sections of the PR template."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:104
+#: a1690663053b41dd87a15ef8abe966d9
+msgid ""
+"Title the PR with one of the following semantic prefixes (inspired by "
+"[Karma](http://karma-runner.github.io/0.10/dev/git-commit-msg.html])):"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:106
+#: 5ce09a9efa3d43e9849b15f32a47be09
+msgid "`feat` (new feature)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:107
+#: 19f81e76663b4d9ba31842a40f2ee0e6
+msgid "`fix` (bug fix)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:108
+#: df045e1cac924e50bf4166e82c37ad4d
+msgid "`docs` (changes to the documentation)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:109
+#: bc559f4561e7475e88a0748169d76b8f
+msgid ""
+"`style` (formatting, missing semi colons, etc; no application logic "
+"change)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:110
+#: feb77db8a16b439194503022386a15b9
+msgid "`refactor` (refactoring code)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:111
+#: 89b55a4c4420462b8166f9ec5fd256d4
+msgid ""
+"`test` (adding missing tests, refactoring tests; no application logic "
+"change)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:112
+#: 5be5ca5c2f9e43d5be855410a7c314da
+msgid "`chore` (updating tasks etc; no application logic change)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:113
+#: dde9a599303d4ceda446c57311106acb
+msgid "`perf` (performance-related change)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:114
+#: 96d8f1ce21f346f09f3dace348eaefb4
+msgid "`build` (build tooling, Docker configuration change)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:115
+#: 2543789752824801aadfb23df36ea857
+msgid "`ci` (test runner, Github Actions workflow changes)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:116
+#: bc8a6c6165d743efb1c0920612e9e3a2
+msgid "`other` (changes that don't correspond to the above -- should be rare!)"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:117
+#: cae7566e8e79432c90b4d345b14b40e4
+msgid "Examples:"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:118
+#: b155b5197fda48479db25ea059b56809
+msgid "`feat: export charts as ZIP files`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:119
+#: 1e406ba8c16c495aa4784ad163e20bac
+msgid "`perf(api): improve API info performance`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:120
+#: d76eaafaba5d439185ad83405e36895b
+msgid "`fix(chart-api): cached-indicator always shows value is cached`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:122
+#: f364c341829d4ebfa14a36cbb6f2d97d
+msgid ""
+"Add prefix `[WIP]` to title if not ready for review (WIP = work-in-"
+"progress). We recommend creating a PR with `[WIP]` first and remove it "
+"once you have passed CI test and read through your code changes at least "
+"once."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:123
+#: 08da07ab3e6f4240aaabf2f27cee8a73
+msgid ""
+"If you believe your PR contributes a potentially breaking change, put a "
+"`!` after the semantic prefix but before the colon in the PR title, like "
+"so: `feat!: Added foo functionality to bar`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:124
+#: 2a7e90704953459285ca8df19d517673
+msgid ""
+"**Screenshots/GIFs:** Changes to user interface require before/after "
+"screenshots, or GIF for interactions"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:125
+#: 676eb8deacbb48f3914188f9c7a594e8
+msgid ""
+"Recommended capture tools ([Kap](https://getkap.co/), "
+"[LICEcap](https://www.cockos.com/licecap/), "
+"[Skitch](https://download.cnet.com/Skitch/3000-13455_4-189876.html))"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:126
+#: 841adf6f35d946b99cb43d609210c032
+msgid ""
+"If no screenshot is provided, the committers will mark the PR with "
+"`need:screenshot` label and will not review until screenshot is provided."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:127
+#: 0c61626b128042d088fe6561248a8b4a
+msgid ""
+"**Dependencies:** Be careful about adding new dependency and avoid "
+"unnecessary dependencies."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:128
+#: 7a11e48df6ee4f9db83c00666e74115a
+msgid ""
+"**Tests:** The pull request should include tests, either as doctests, "
+"unit tests, or both. Make sure to resolve all errors and test failures."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:129
+#: 3b7efbb194914661aebe5c03f62751b1
+msgid ""
+"**Documentation:** If the pull request adds functionality, the docs "
+"should be updated as part of the same PR."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:130
+#: 08135028f61c43debc60b599943e50a1
+msgid ""
+"**CI:** Reviewers will not review the code until all CI tests are passed."
+" Sometimes there can be flaky tests. You can close and open PR to re-run "
+"CI test. Please report if the issue persists. After the CI fix has been "
+"deployed to `master`, please rebase your PR."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:131
+#: 6d346779dd4349b7bdd05b5ee1f92052
+msgid "**Code coverage:** Please ensure that code coverage does not decrease."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:132
+#: bfb8b33a975a4d64bfc3a9ec187e79ed
+msgid ""
+"Remove `[WIP]` when ready for review. Please note that it may be merged "
+"soon after approved so please make sure the PR is ready to merge and do "
+"not expect more time for post-approval edits."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:133
+#: 4dc1896867df4754a03dabfefec5982c
+msgid ""
+"If the PR was not ready for review and inactive for > 30 days, we will "
+"close it due to inactivity. The author is welcome to re-open and update."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:135
+#: 36674082566b4f62bd88578d0efccf20
+msgid "Reviewing"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:137
+#: 42b98feea8c548dfa2d2029fefedcde1
+msgid "Use constructive tone when writing reviews."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:138
+#: 56a4535422784f70b6cfb6429bd5d037
+msgid ""
+"If there are changes required, state clearly what needs to be done before"
+" the PR can be approved."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:139
+#: c55def434a4f45ed8e5eb1f1b61d70aa
+msgid ""
+"If you are asked to update your pull request with some changes there's no"
+" need to create a new one. Push your changes to the same branch."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:140
+#: 3902bac841164858b0dfbc86c9c6788d
+msgid ""
+"The committers reserve the right to reject any PR and in some cases may "
+"request the author to file an issue."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:142
+#: 27f2dbf61b7c40259be6a62b6594f9f8
+msgid "Merging"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:144
+#: fd44559997604596a6b1964b779e1c5b
+msgid "At least one approval is required for merging a PR."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:145
+#: 35ee554fdb094b978d3b7d97d468cdda
+msgid "PR is usually left open for at least 24 hours before merging."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:146
+#: 25bd8135a94e4a20bae48d29b19a063c
+msgid ""
+"After the PR is merged, [close the corresponding "
+"issue(s)](https://help.github.com/articles/closing-issues-using-"
+"keywords/)."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:148
+#: f3e8dce7f6cd4dce9df1db56b3187a7e
+msgid "Post-merge Responsibility"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:150
+#: 3c5ec5922a534621853dbfd4d6dcacd5
+msgid ""
+"Project maintainers may contact the PR author if new issues are "
+"introduced by the PR."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:151
+#: a303e43b4fdd408c9f157b0d52ddb1c3
+msgid ""
+"Project maintainers may revert your changes if a critical issue is found,"
+" such as breaking master branch CI."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:153
+#: 10272112db434e7e9e9fe3e14fe12437
+msgid "Managing Issues and PRs"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:155
+#: 02490c4e3fbf41b98ceb84ed0652d112
+msgid ""
+"To handle issues and PRs that are coming in, committers read issues/PRs "
+"and flag them with labels to categorize and help contributors spot where "
+"to take actions, as contributors usually have different expertises."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:157
+#: 20365113f03f4906a8c141700c1a6460
+msgid "Triaging goals"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:159
+#: 9ffa1d865a0e4069ba4c350320296c72
+msgid ""
+"**For issues:** Categorize, screen issues, flag required actions from "
+"authors."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:160
+#: 576d822925ef40898ad72ec9a66ba60f
+msgid ""
+"**For PRs:** Categorize, flag required actions from authors. If PR is "
+"ready for review, flag required actions from reviewers."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:162
+#: 07732171fd184cf4a946e2c6ec93ab0f
+msgid ""
+"First, add **Category labels (a.k.a. hash labels)**. Every issue/PR must "
+"have one hash label (except spam entry). Labels that begin with `#` "
+"defines issue/PR type:"
+msgstr ""
+
+#: ../../source/contributing/contributing.md b48bcc167764422cac8021c9659da58e
+msgid "Label"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 68c76273920d44fc8080b42f644c7130
+msgid "for Issue"
+msgstr ""
+
+#: ../../source/contributing/contributing.md bbc40c9d9cfd41a4bf980f8b959b1ac5
+msgid "for PR"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 2b9ea4eca7e2447ea5cdb2bbb209d618
+msgid "`#bug`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 62994403c5b343b3a2ef218dd6fc0e7b
+msgid "Bug report"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 7051624dde394b2a91d0f2865ded1e85
+msgid "Bug fix"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 0099aee8e35843ae85b05effd43688fb
+msgid "`#code-quality`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md a0d3a421bdcf4d70b4c976c65e3da520
+msgid "Describe problem with code, architecture or productivity"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 6840a7aa50514202ab3f5cf42d8e8071
+msgid "Refactor, tests, tooling"
+msgstr ""
+
+#: ../../source/contributing/contributing.md df18fc2c411147b59f44f23289f6f055
+msgid "`#feature`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 74078873f8db4f8a9ec1300b985305ab
+msgid "New feature request"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 7036cc939a284f2680f147d9cb29957b
+msgid "New feature implementation"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 2c9b9b4b03ee42debbb65577178a948c
+msgid "`#refine`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 8541206eebf942bdbb6f91e0186abb8e
+msgid ""
+"Propose improvement that does not provide new features and is also not a "
+"bug fix nor refactor, such as adjust padding, refine UI style."
+msgstr ""
+
+#: ../../source/contributing/contributing.md 3d238ae048ef4770b02fa9dd42001001
+msgid ""
+"Implementation of improvement that does not provide new features and is "
+"also not a bug fix nor refactor, such as adjust padding, refine UI style."
+msgstr ""
+
+#: ../../source/contributing/contributing.md d8d9e7cf52ee49969e370483173f6d18
+msgid "`#doc`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md a89495185913447eae425b6c19780607
+#: fe427ee42d56477590d7198189d9acbd
+msgid "Documentation"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 29fca0ae0775427f863974a5db442acf
+msgid "`#question`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 5685128c9ea1487ba2faecfd136dda4e
+msgid ""
+"Troubleshooting: Installation, Running locally, Ask how to do something. "
+"Can be changed to `#bug` later."
+msgstr ""
+
+#: ../../source/contributing/contributing.md cf2075d8b1b74caca41648936d713f08
+#: f7e53f8f8d7942dca76f3ccfb6787b25
+msgid "N/A"
+msgstr ""
+
+#: ../../source/contributing/contributing.md 91ee758bb5c64dbda20b6948b36d7ab0
+msgid "`#DIP`"
+msgstr ""
+
+#: ../../source/contributing/contributing.md c5db4f4688434bc49c240efdd8188d0b
+msgid "dingofs Improvement Proposal"
+msgstr ""
+
+#: ../../source/contributing/contributing.md:174
+#: 36dab7a4541f4ce4a516f33d4ff43a92
+msgid "Then add other types of labels as appropriate."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:176
+#: 74bc4ca83b3b47b2b6c92b1f5b6f0e82
+msgid ""
+"**Need labels:** These labels have pattern `need:xxx`, which describe the"
+" work required to progress, such as `need:rebase`, `need:update`, "
+"`need:screenshot`."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:177
+#: a98c1b1aa0bc4b69b6d26aea79bd3f49
+msgid ""
+"**Risk labels:** These labels have pattern `risk:xxx`, which describe the"
+" potential risk on adopting the work, such as `risk:db-migration`. The "
+"intention was to better understand the impact and create awareness for "
+"PRs that need more rigorous testing."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:178
+#: 0b279f2e38634f64919dab0049c66f04
+msgid ""
+"**Status labels:** These labels describe the status (`abandoned`, "
+"`wontfix`, `cant-reproduce`, etc.) Issue/PRs that are rejected or closed "
+"without completion should have one or more status labels."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:179
+#: 04e8f7da9fb04eb0b5bd397ffb7dc366
+msgid ""
+"**Version labels:** These have the pattern `vx.x` such as `v0.28`. "
+"Version labels on issues describe the version the bug was reported on. "
+"Version labels on PR describe the first release that will include the PR."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:181
+#: 356e6fe472044664b8bea3ac3d265db9
+msgid ""
+"Committers may also update title to reflect the issue/PR content if the "
+"author-provided title is not descriptive enough."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:183
+#: 91a94c95e70f473a92ab424c5e42ed8a
+msgid ""
+"If the PR passes CI tests and does not have any `need:` labels, it is "
+"ready for review, add label `review` and/or `design-review`."
+msgstr ""
+
+#: ../../source/contributing/contributing.md:185
+#: 202756a30076474ca379baad33d0abd8
+msgid ""
+"If an issue/PR has been inactive for >=30 days, it will be closed. If it "
+"does not have any status label, add `inactive`."
+msgstr ""
+

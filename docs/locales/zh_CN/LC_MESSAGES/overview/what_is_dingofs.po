@@ -6,19 +6,18 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS\n"
+"Project-Id-Version:  DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-26 11:44+0800\n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
 "PO-Revision-Date: 2025-05-26 14:15+0800\n"
 "Last-Translator: \n"
-"Language-Team: zh_CN <LL@li.org>\n"
 "Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
-"X-Generator: Poedit 3.6\n"
 
 #: ../../source/overview/what_is_dingofs.md:1 9ae9948631344a83b90d1669c4b85d11
 msgid "What is DingoFS"
@@ -30,15 +29,20 @@ msgstr "产品简介"
 
 #: ../../source/overview/what_is_dingofs.md:5 45ea065e97c04117a5bd6a4c3f1e3b51
 msgid ""
-"[DingoFS](https://github.com/dingodb/dingofs) is an open source, cloud-native, high-performance distributed file system developed by "
-"[DataCanvas](https://www.datacanvas.com/), featuring elasticity, multi-cloud adaptability, multi-protocol compatibility, and high throughput. "
-"It leverages a multi-layer, multi-type, and high-speed distributed caching system to accelerate data I/O in AI workflows, effectively "
-"addressing burst I/O demands in AI scenarios. Additionally, it provides local caching capabilities to support full-lifecycle storage "
-"requirements for large AI models."
+"[DingoFS](https://github.com/dingodb/dingofs) is an open source, cloud-"
+"native, high-performance distributed file system developed by "
+"[DataCanvas](https://www.datacanvas.com/), featuring elasticity, multi-"
+"cloud adaptability, multi-protocol compatibility, and high throughput. It"
+" leverages a multi-layer, multi-type, and high-speed distributed caching "
+"system to accelerate data I/O in AI workflows, effectively addressing "
+"burst I/O demands in AI scenarios. Additionally, it provides local "
+"caching capabilities to support full-lifecycle storage requirements for "
+"large AI models."
 msgstr ""
-"[DingoFS](https://github.com/dingodb/dingofs) 是[DataCanvas](https://www.datacanvas.com/)公司设计开发的云原生分布式高速文件存储系统，具备弹性、"
-"多云、多协议融合、高性能等特征，DingoFS 通过多层次、多类型、高性能的分布式多级缓存体系进行AI业务流程的数据I/O加速，能够有效解决 AI 场景中瞬时 "
-"Burst I/O 的需求，同时也提供Local Cache存储能力，满足大模型的全生命周期存储需求。"
+"[DingoFS](https://github.com/dingodb/dingofs) "
+"是[DataCanvas](https://www.datacanvas.com/)公司设计开发的云原生分布式高速文件存储系统，具备弹性、多云、多协议融合、高性能等特征，DingoFS"
+" 通过多层次、多类型、高性能的分布式多级缓存体系进行AI业务流程的数据I/O加速，能够有效解决 AI 场景中瞬时 Burst I/O "
+"的需求，同时也提供Local Cache存储能力，满足大模型的全生命周期存储需求。"
 
 #: ../../source/overview/what_is_dingofs.md:7 6a7add0477024f1d9c9f9b6c252e65ff
 msgid "Key Features"
@@ -49,7 +53,9 @@ msgid "**1.POSIX Compliance**"
 msgstr "**1.POSIX兼容性**"
 
 #: ../../source/overview/what_is_dingofs.md:11 0f7676b2cd8b44a4a6023b3ebdedeb4e
-msgid "Offers a local file system-like user experience to enable seamless system integration."
+msgid ""
+"Offers a local file system-like user experience to enable seamless system"
+" integration."
 msgstr "提供与本地文件系统一致的操作体验，实现无缝系统集成。"
 
 #: ../../source/overview/what_is_dingofs.md:13 6f214095dc544210ae767154e007aa5a
@@ -58,7 +64,8 @@ msgstr "**2.AI原生架构**"
 
 #: ../../source/overview/what_is_dingofs.md:15 3c10f936811245dfbe15ffa63d738e12
 msgid ""
-"Deeply optimized for large language model (LLM) workflows, enabling efficient handling of massive training datasets and checkpoint workloads."
+"Deeply optimized for large language model (LLM) workflows, enabling "
+"efficient handling of massive training datasets and checkpoint workloads."
 msgstr "深度优化大语言模型工作流，高效管理海量训练数据集与检查点工作负载。"
 
 #: ../../source/overview/what_is_dingofs.md:17 8e078bec62174191acdc712142b6cca5
@@ -66,7 +73,9 @@ msgid "**3.S3 Protocol Compatibility**"
 msgstr "**3.S3协议兼容**"
 
 #: ../../source/overview/what_is_dingofs.md:19 a65da73a7b984c1ab41a465b52998853
-msgid "Supports the standard S3 interface protocol for easy access to file system namespaces."
+msgid ""
+"Supports the standard S3 interface protocol for easy access to file "
+"system namespaces."
 msgstr "支持标准S3接口协议，实现对文件系统命名空间的便捷访问。"
 
 #: ../../source/overview/what_is_dingofs.md:21 3ad3b456a1ae4daab2bb1deef6464bbb
@@ -74,7 +83,9 @@ msgid "**4.Fully Distributed Architecture**"
 msgstr "**4.全分布式架构**"
 
 #: ../../source/overview/what_is_dingofs.md:23 8d3dbcaa331c4fe0ac1a0c2bb812df28
-msgid "The Metadata Service (MDS), data storage layer, caching system, and client components all support linear scaling."
+msgid ""
+"The Metadata Service (MDS), data storage layer, caching system, and "
+"client components all support linear scaling."
 msgstr "元数据服务(MDS)、数据存储层、缓存系统及客户端组件均支持线性扩展。"
 
 #: ../../source/overview/what_is_dingofs.md:25 6fa67aaf54b44faa992b48eb39d344d9
@@ -83,8 +94,9 @@ msgstr "**5.卓越性能表现**"
 
 #: ../../source/overview/what_is_dingofs.md:27 a55a8804a0f84c609974d40a0bc6cb5d
 msgid ""
-"Combines local SSD-level low latency with object storage-level high throughput, meeting the needs of both high-performance computing and large-"
-"capacity storage."
+"Combines local SSD-level low latency with object storage-level high "
+"throughput, meeting the needs of both high-performance computing and "
+"large-capacity storage."
 msgstr "提供兼具本地SSD的低延迟访问性能，同时具备对象存储级的高吞吐能力，满足高性能计算与大容量存储需求。"
 
 #: ../../source/overview/what_is_dingofs.md:29 04eaa03145a74389aa8c4ab8c4a09445
@@ -93,159 +105,168 @@ msgstr "**6.智能缓存加速体系**"
 
 #: ../../source/overview/what_is_dingofs.md:31 723ef5b8e40b403aa23d0e62b23e2dac
 msgid ""
-"Implements a 3-tier cache hierarchy (memory, local SSD, distributed cluster) with dynamic data path optimization to provide high-throughput, "
+"Implements a 3-tier cache hierarchy (memory, local SSD, distributed "
+"cluster) with dynamic data path optimization to provide high-throughput, "
 "low-latency I/O acceleration for compute-intensive AI workloads."
 msgstr "构建内存、本地SSD和分布式集群三级缓存拓扑，动态优化数据访问路径，为AI等高负载场景提供高吞吐、低延迟的I/O加速。"
 
-#: ../../source/overview/what_is_dingofs.md:33 b61546deac724b59b7f1b8b47678aea4
-msgid "**7.Intelligent multi-dimensional system monitoring**"
-msgstr "**7.智能多维系统监控**"
-
-#: ../../source/overview/what_is_dingofs.md:35 f17ad2ed386c4bb0af41e3fd39245423
-msgid ""
-"Real-time performance metric collection and anomaly detection with alerting. Offers visual dashboards to aid in rapid troubleshooting. Includes "
-"proactive disk health monitoring to ensure system stability."
-msgstr "实时采集性能指标，智能分析异常并告警，支持可视化看板，辅助故障快速定位；提供主动检测机制，实时监控磁盘状态，保障系统稳定运行。"
-
-#: ../../source/overview/what_is_dingofs.md:37 5718239554564f9798001f17c272afee
-msgid "**8.Hot-Swappable Disks**"
-msgstr "**8.在线更换磁盘**"
-
-#: ../../source/overview/what_is_dingofs.md:39 a62bfa8c3bf54101b4f2c3655d4c7d33
-msgid "Allows replacement of faulty disks during system operation without service interruption."
-msgstr "允许用户在系统运行时更换故障磁盘，无需中断系统服务即可进行磁盘更换操作。"
-
-#: ../../source/overview/what_is_dingofs.md:41 d9aaa96ad3304f9bb6395598fbec7d84
-msgid "**9.Cache Expiry & Eviction Mechanism**"
-msgstr "**9.磁盘缓存过期淘汰机制**"
-
-#: ../../source/overview/what_is_dingofs.md:43 e5ef29b2c43c4bbb979c1432e40573a4
-msgid "Supports dynamic cache TTL configuration to prevent cold data from occupying cache storage, improving cache hit rates."
-msgstr "支持动态配置缓存淘汰时长，防止冷数据长期霸占缓存盘，提升缓存命中率。"
-
-#: ../../source/overview/what_is_dingofs.md:45 7bd5597ed8094302a7b1c2c3b9adaa3f
-msgid "**10.Online Rolling Upgrades**"
-msgstr "**10.系统热升级**"
-
-#: ../../source/overview/what_is_dingofs.md:47 8f892fd52c9b44ec98f60c38531b3640
-msgid ""
-"Enables seamless version upgrades without interrupting service. Includes robust rollback mechanisms to ensure business continuity and minimize "
-"upgrade risk."
-msgstr "支持服务不中断的在线更新，实现平滑版本切换，确保业务连续性，具备完善的回滚机制，降低升级风险。"
-
-#: ../../source/overview/what_is_dingofs.md:49 66ad4c83e3fa4b19bb236af33ca831d7
-msgid "Main Technical Specification"
-msgstr "主要技术参数"
-
-#: ../../source/overview/what_is_dingofs.md:51 4aeefdb4056c40e6b254e4dc1b880cf8
-msgid "**1.Large Model Inference - Model Loading Latency**"
-msgstr "**1.大模型推理过程加载模型耗时统计**"
-
-#: ../../source/overview/what_is_dingofs.md:53 e5e25052cf5149d4bba2b15ae1979952
-msgid "Using twenty 4GB files as a test dataset, system performance is benchmarked under three scenarios:"
-msgstr "使用 20 个 4GB 文件作为测试数据集，在三种情况下对系统性能进行了基准测试："
-
-#: ../../source/overview/what_is_dingofs.md:54 222adfb1774247718ba07b8b660e528c
-msgid "Prefetch"
-msgstr "预取"
-
-#: ../../source/overview/what_is_dingofs.md:55 89fa678fafb941d4ab42b3224ca62caa
-msgid "In-Time Warmup"
-msgstr "及时预热"
-
-#: ../../source/overview/what_is_dingofs.md:56 4178e449dc894752a8a1d24e09379fd8
-msgid "Warmup"
-msgstr "预热"
-
-#: ../../source/overview/what_is_dingofs.md:58 057deb80e72e455986da6882b6cd34dc
-msgid "![Model Loading Latency](../../images/model_loading_latency_total.png)"
-msgstr ""
-
-#: ../../source/overview/what_is_dingofs.md:58 ../../source/overview/what_is_dingofs.md:60 ../../source/overview/what_is_dingofs.md:68
-#: ../../source/overview/what_is_dingofs.md:72 ../../source/overview/what_is_dingofs.md:78 174287eff8934fdca36ee51aaa2bd2ad
-#: 97033c2cc1404e259d621f7c2fffe0a3 ea716f47f8c84e89b44db7e82c9c1a7f ed24f158b8314578971757d9e40f98aa fa5f943c32c24108959b9ed6e14a6688
-msgid "Model Loading Latency"
-msgstr "加载模型耗时"
-
-#: ../../source/overview/what_is_dingofs.md:60 e2397d9e3eb943ccaec2c2d15f07f721
-msgid "![Model Loading Latency](../../images/model_loading_latency_average.png)"
-msgstr ""
-
-#: ../../source/overview/what_is_dingofs.md:62 cbb04b0d1b1e4dddb614077e1535efd6
-msgid "Performance data under each of these conditions reflects DingoFS's ability to minimize latency during model loading for inference."
-msgstr "这些条件下的性能数据反映了 DingoFS 在加载模型进行推理时最大限度减少延迟的能力。"
-
-#: ../../source/overview/what_is_dingofs.md:64 1d7659f8939f459c9890822fe05fa4e5
-msgid "**2.Checkpoint Write Efficiency**"
-msgstr "**2.Checkpoint写入效率**"
-
-#: ../../source/overview/what_is_dingofs.md:66 14b716c052044c06a6370df990e7136f
-msgid "Tested on a 9GB file in a single-threaded environment."
-msgstr "单线程环境下，对 9GB文件 进行测试。"
-
-#: ../../source/overview/what_is_dingofs.md:68 c94382e053c14c7e999fd5943cf78340
-msgid "![Model Loading Latency](../../images/single_threaded.png)"
-msgstr ""
-
-#: ../../source/overview/what_is_dingofs.md:70 225d750799f34ddda4855a9ffaad6f7b
-msgid "In a multi-threaded environment, a total of 480G files were written, with an average file size of 2~3G."
-msgstr "多线程环境下，对共计写入480G文，平均每个文件大小为2~3G 进行测试。"
-
-#: ../../source/overview/what_is_dingofs.md:72 0f7767078a0c464d82eeea2643039847
-msgid "![Model Loading Latency](../../images/multi_threaded.png)"
-msgstr ""
-
-#: ../../source/overview/what_is_dingofs.md:74 0a7ea569cf3a4177a7b7196749e38072
-msgid "**3.Concurrent test for reading and writing of many small files**"
-msgstr "**3.小文件并发读写**"
-
-#: ../../source/overview/what_is_dingofs.md:76 a0777b43dc9c48f0b18618796d25a197
-msgid ""
-"In this test, 5 million small files with a total size of 500 GB were written to DingoFS. The files were organized into multiple directories, "
-"with 10,000 files per directory. Subsequently, 8 threads were used to perform concurrent read operations on the dataset."
-msgstr "本次测试500万文件，总大小为500G写入到DingoFS中，再由分别由8个线程并发读，分多个目录存放，每个目录存1w文件。"
-
-#: ../../source/overview/what_is_dingofs.md:78 e14320915abc4fb99bcdf25a8a9e9d4a
-msgid "![Model Loading Latency](../../images/small_files.png)"
-msgstr ""
-
-#: ../../source/overview/what_is_dingofs.md:80 e2aba4f89e1244828d4b82311298fb38
+#: ../../source/overview/what_is_dingofs.md:33 e2aba4f89e1244828d4b82311298fb38
 msgid "Use Cases"
 msgstr "应用场景"
 
-#: ../../source/overview/what_is_dingofs.md:82 842b8a7b14b84b09a7c62f61bae6bb8b
+#: ../../source/overview/what_is_dingofs.md:35 842b8a7b14b84b09a7c62f61bae6bb8b
 msgid "**Enabling AI Model Training**"
 msgstr "**赋能AI模型训练**"
 
-#: ../../source/overview/what_is_dingofs.md:84 ab365dceb74044d99b5d6fc474e424b1
+#: ../../source/overview/what_is_dingofs.md:37 ab365dceb74044d99b5d6fc474e424b1
 msgid ""
-"In AI/training scenarios, distributed file systems need to efficiently manage massive training data (e.g., images, text, audio, etc.) and "
-"provide high-throughput, low-latency access.DingoFS accelerates small-file reads and reduces data-processing den waiting time through optimized "
-"metadata management and data distribution strategies. Meanwhile, its POSIX-compatible interface significantly reduces the complexity of data "
+"In AI/training scenarios, distributed file systems need to efficiently "
+"manage massive training data (e.g., images, text, audio, etc.) and "
+"provide high-throughput, low-latency access.DingoFS accelerates small-"
+"file reads and reduces data-processing den waiting time through optimized"
+" metadata management and data distribution strategies. Meanwhile, its "
+"POSIX-compatible interface significantly reduces the complexity of data "
 "preprocessing and loading."
-msgstr ""
-"在AI/训练场景中，分布式文件系统需要高效管理海量训练数据（如图像、文本、音频等），并提供高吞吐、低延迟的访问能力。DingoFS通过优化的元数据管理和数"
-"据分布策略，加速小文件读取，减少数据处理等待时间。同时，其兼容POSIX接口的特性，显著降低了数据预处理和加载的复杂度。"
+msgstr "在AI/训练场景中，分布式文件系统需要高效管理海量训练数据（如图像、文本、音频等），并提供高吞吐、低延迟的访问能力。DingoFS通过优化的元数据管理和数据分布策略，加速小文件读取，减少数据处理等待时间。同时，其兼容POSIX接口的特性，显著降低了数据预处理和加载的复杂度。"
 
-#: ../../source/overview/what_is_dingofs.md:86 af7feae1ac5e41e6b109e896b40aefaa
+#: ../../source/overview/what_is_dingofs.md:39 af7feae1ac5e41e6b109e896b40aefaa
 msgid "**High Performance Computing (HPC)**"
 msgstr "**高性能计算**"
 
-#: ../../source/overview/what_is_dingofs.md:88 67a5b6b74f934dfb827638bbe96cb26a
+#: ../../source/overview/what_is_dingofs.md:41 67a5b6b74f934dfb827638bbe96cb26a
 msgid ""
-"Distributed file systems provide highly aggregated bandwidth and low-latency access in scenarios where the return of computation results is "
-"critical. DingoFS improves read and write performance of large files through data sharding and parallel I/O optimization, and its elastic "
-"scalability dynamically adjusts storage resources with the size of the computing cluster to meet the high load demands of today's market."
-msgstr ""
-"分布式文件系统对计算结果返回要求极高场景中提供高聚合带宽和低延迟访问。DingoFS通过数据分片和并行I/O优化，提升大文件的读写性能，其弹性扩展能力可随"
-"计算集群规模动态调整存储资源，满足当今市场的高负载需求。"
+"Distributed file systems provide highly aggregated bandwidth and low-"
+"latency access in scenarios where the return of computation results is "
+"critical. DingoFS improves read and write performance of large files "
+"through data sharding and parallel I/O optimization, and its elastic "
+"scalability dynamically adjusts storage resources with the size of the "
+"computing cluster to meet the high load demands of today's market."
+msgstr "分布式文件系统对计算结果返回要求极高场景中提供高聚合带宽和低延迟访问。DingoFS通过数据分片和并行I/O优化，提升大文件的读写性能，其弹性扩展能力可随计算集群规模动态调整存储资源，满足当今市场的高负载需求。"
 
-#: ../../source/overview/what_is_dingofs.md:90 217a9e1eafe8435090cd15ca310b009d
+#: ../../source/overview/what_is_dingofs.md:43 217a9e1eafe8435090cd15ca310b009d
 msgid "**High-Frequency Data Analytics**"
 msgstr "**数据高频分析**"
 
-#: ../../source/overview/what_is_dingofs.md:92 3d62a3ee40a4486f9105eb5c8a6b6f3c
+#: ../../source/overview/what_is_dingofs.md:45 3d62a3ee40a4486f9105eb5c8a6b6f3c
 msgid ""
-"In use cases such as quantitative trading and risk modeling, DingoFS leverages in-memory caching to enable microsecond-level data access. It "
-"supports real-time processing of massive market datasets, ensuring zero-latency response for high-frequency trading systems."
+"In use cases such as quantitative trading and risk modeling, DingoFS "
+"leverages in-memory caching to enable microsecond-level data access. It "
+"supports real-time processing of massive market datasets, ensuring zero-"
+"latency response for high-frequency trading systems."
 msgstr "在量化交易、风险建模等场景中，DingoFS通过内存缓存优化实现微秒级数据访问，支持实时处理海量行情数据，确保高频交易系统零延迟响应。"
+
+#~ msgid "**7.Intelligent multi-dimensional system monitoring**"
+#~ msgstr "**7.智能多维系统监控**"
+
+#~ msgid ""
+#~ "Real-time performance metric collection "
+#~ "and anomaly detection with alerting. "
+#~ "Offers visual dashboards to aid in "
+#~ "rapid troubleshooting. Includes proactive disk"
+#~ " health monitoring to ensure system "
+#~ "stability."
+#~ msgstr "实时采集性能指标，智能分析异常并告警，支持可视化看板，辅助故障快速定位；提供主动检测机制，实时监控磁盘状态，保障系统稳定运行。"
+
+#~ msgid "**8.Hot-Swappable Disks**"
+#~ msgstr "**8.在线更换磁盘**"
+
+#~ msgid ""
+#~ "Allows replacement of faulty disks "
+#~ "during system operation without service "
+#~ "interruption."
+#~ msgstr "允许用户在系统运行时更换故障磁盘，无需中断系统服务即可进行磁盘更换操作。"
+
+#~ msgid "**9.Cache Expiry & Eviction Mechanism**"
+#~ msgstr "**9.磁盘缓存过期淘汰机制**"
+
+#~ msgid ""
+#~ "Supports dynamic cache TTL configuration "
+#~ "to prevent cold data from occupying "
+#~ "cache storage, improving cache hit "
+#~ "rates."
+#~ msgstr "支持动态配置缓存淘汰时长，防止冷数据长期霸占缓存盘，提升缓存命中率。"
+
+#~ msgid "**10.Online Rolling Upgrades**"
+#~ msgstr "**10.系统热升级**"
+
+#~ msgid ""
+#~ "Enables seamless version upgrades without "
+#~ "interrupting service. Includes robust rollback"
+#~ " mechanisms to ensure business continuity"
+#~ " and minimize upgrade risk."
+#~ msgstr "支持服务不中断的在线更新，实现平滑版本切换，确保业务连续性，具备完善的回滚机制，降低升级风险。"
+
+#~ msgid "Main Technical Specification"
+#~ msgstr "主要技术参数"
+
+#~ msgid "**1.Large Model Inference - Model Loading Latency**"
+#~ msgstr "**1.大模型推理过程加载模型耗时统计**"
+
+#~ msgid ""
+#~ "Using twenty 4GB files as a test"
+#~ " dataset, system performance is benchmarked"
+#~ " under three scenarios:"
+#~ msgstr "使用 20 个 4GB 文件作为测试数据集，在三种情况下对系统性能进行了基准测试："
+
+#~ msgid "Prefetch"
+#~ msgstr "预取"
+
+#~ msgid "In-Time Warmup"
+#~ msgstr "及时预热"
+
+#~ msgid "Warmup"
+#~ msgstr "预热"
+
+#~ msgid "![Model Loading Latency](../../images/model_loading_latency_total.png)"
+#~ msgstr ""
+
+#~ msgid "Model Loading Latency"
+#~ msgstr "加载模型耗时"
+
+#~ msgid ""
+#~ "![Model Loading "
+#~ "Latency](../../images/model_loading_latency_average.png)"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Performance data under each of these "
+#~ "conditions reflects DingoFS's ability to "
+#~ "minimize latency during model loading "
+#~ "for inference."
+#~ msgstr "这些条件下的性能数据反映了 DingoFS 在加载模型进行推理时最大限度减少延迟的能力。"
+
+#~ msgid "**2.Checkpoint Write Efficiency**"
+#~ msgstr "**2.Checkpoint写入效率**"
+
+#~ msgid "Tested on a 9GB file in a single-threaded environment."
+#~ msgstr "单线程环境下，对 9GB文件 进行测试。"
+
+#~ msgid "![Model Loading Latency](../../images/single_threaded.png)"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "In a multi-threaded environment, a "
+#~ "total of 480G files were written, "
+#~ "with an average file size of 2~3G."
+#~ msgstr "多线程环境下，对共计写入480G文，平均每个文件大小为2~3G 进行测试。"
+
+#~ msgid "![Model Loading Latency](../../images/multi_threaded.png)"
+#~ msgstr ""
+
+#~ msgid "**3.Concurrent test for reading and writing of many small files**"
+#~ msgstr "**3.小文件并发读写**"
+
+#~ msgid ""
+#~ "In this test, 5 million small "
+#~ "files with a total size of 500 "
+#~ "GB were written to DingoFS. The "
+#~ "files were organized into multiple "
+#~ "directories, with 10,000 files per "
+#~ "directory. Subsequently, 8 threads were "
+#~ "used to perform concurrent read "
+#~ "operations on the dataset."
+#~ msgstr "本次测试500万文件，总大小为500G写入到DingoFS中，再由分别由8个线程并发读，分多个目录存放，每个目录存1w文件。"
+
+#~ msgid "![Model Loading Latency](../../images/small_files.png)"
+#~ msgstr ""
+

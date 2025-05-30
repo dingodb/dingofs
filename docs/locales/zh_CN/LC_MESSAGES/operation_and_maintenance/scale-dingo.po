@@ -1,0 +1,86 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-05-30 10:29+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:1
+#: 49fdd021ed134cff931d0a837c6702f5
+msgid "Expansion Cluster"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:4
+#: 0fdb5f520cea462386f3d67e933a4249
+msgid "Step 1: Commit host list"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:7
+#: ae3c864f3207419db165201c338ff026
+msgid "1. Add new machines to the host list"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:34
+#: 21a04ff647a74168af578ef9bdeedbbf
+msgid "2. Submit the list of hosts"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:40
+#: 6002277565a24b66be3f7e47fbeba7ae
+msgid "Step 2: Modify the cluster topology"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:43
+#: c627af97a72048d8a766822c2e78d720
+msgid "Add the list of expanded services to the topology file:"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:76
+#: 7d33a51829f14d27ac7ec6c98399a3c3
+msgid ":warning: **Warning:**"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:78
+#: bbf10f5fbcb6472e8433d7d248e2e9f5
+msgid "You can only scale services with the same role"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:79
+#: 4340fee08f2b4b2799a74ffbaaa1c365
+msgid ""
+"For the metaserver service, a new logical pool is created every time you "
+"scale up, and the new services are located in this pool."
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:81
+#: 0abe7cf8274c4d779eb0aa9e34cfba11
+msgid "Step 3: Expand the cluster"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:88
+#: 46908b3f801142678b27ea557d83f660
+msgid ":bulb: **REMINDER:**"
+msgstr ""
+
+#: ../../source/operation_and_maintenance/scale-dingo.md:90
+#: 8e0a794792a3424283741bbb7f3fdc49
+msgid ""
+"The scale-out operation is an idempotent operation, so the user can "
+"repeat the operation if it fails, so don't worry about the service "
+"residual problem."
+msgstr ""
+
