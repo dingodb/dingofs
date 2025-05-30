@@ -30,7 +30,6 @@
 #include "mdsv2/service/debug_service.h"
 #include "mdsv2/service/fsstat_service.h"
 #include "mdsv2/service/mds_service.h"
-#include "mdsv2/service/mdsstat_service.h"
 #include "mdsv2/statistics/fs_stat.h"
 #include "mdsv2/storage/dingodb_storage.h"
 
@@ -293,7 +292,7 @@ bool Server::InitCrontab() {
       "HEARTBEA",
       FLAGS_heartbeat_interval_s * 1000,
       true,
-      [](void*) { Heartbeat::TriggerHeartbeat(); },
+      [](void*) { Server::GetInstance().GetHeartbeat()->Run(); },
   });
 
   // Add fs info sync crontab
@@ -415,10 +414,6 @@ void Server::Run() {
 
   DebugServiceImpl debug_service(file_system_set_);
   CHECK(brpc_server_.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
-
-  MdsStatServiceImpl mds_stat_service;
-  CHECK(brpc_server_.AddService(&mds_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
-      << "add mdsstat service error.";
 
   FsStatServiceImpl fs_stat_service;
   CHECK(brpc_server_.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";

@@ -39,6 +39,9 @@
 namespace dingofs {
 namespace mdsv2 {
 
+DECLARE_uint32(mds_offline_period_time_ms);
+DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period time ms");
+
 static std::string RenderHead() {
   butil::IOBufBuilder os;
 
@@ -177,6 +180,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   butil::IOBufBuilder os;
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<h3>FS</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -227,6 +231,86 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   return buf.to_string();
 }
 
+static std::string RenderMdsList(const std::vector<pb::mdsv2::MDS>& mdses) {
+  butil::IOBufBuilder os;
+
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>MDS</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>ID</th>";
+  os << "<th>Addr</th>";
+  os << "<th>State</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Online</th>";
+  os << "</tr>";
+
+  int64_t now_ms = Helper::TimestampMs();
+
+  for (const auto& mds : mdses) {
+    os << "<tr>";
+    os << "<td>" << mds.id() << "</td>";
+    os << "<td>" << fmt::format("{}:{}", mds.location().host(), mds.location().port()) << "</td>";
+    os << "<td>" << pb::mdsv2::MDS::State_Name(mds.state()) << "</td>";
+    os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
+    if (mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) {
+      os << "<td style=\"color:red\">NO</td>";
+    } else {
+      os << "<td>YES</td>";
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+
+  butil::IOBuf buf;
+  os.move_to(buf);
+
+  return buf.to_string();
+}
+
+static std::string RenderClientList(const std::vector<pb::mdsv2::Client>& clients) {
+  butil::IOBufBuilder os;
+
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>Client</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>ID</th>";
+  os << "<th>Host</th>";
+  os << "<th>MountPoint</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Online</th>";
+  os << "</tr>";
+
+  int64_t now_ms = Helper::TimestampMs();
+
+  for (const auto& client : clients) {
+    os << "<tr>";
+    os << "<td>" << client.id() << "</td>";
+    os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port()) << "</td>";
+    os << "<td>" << client.mountpoint() << "</td>";
+    os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
+    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms < now_ms) {
+      os << R"(<td style="color:red">NO</td>)";
+    } else {
+      os << "<td>YES</td>";
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+
+  butil::IOBuf buf;
+  os.move_to(buf);
+
+  return buf.to_string();
+}
+
 static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
@@ -237,14 +321,50 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
   os << "<body>";
   server->PrintTabsBody(os, "fsstat");
 
+  // fs stats
   Context ctx;
   std::vector<pb::mdsv2::FsInfo> fs_infoes;
-  file_system_set->GetAllFsInfo(ctx, fs_infoes);
-  // sort by fs_id
-  sort(fs_infoes.begin(), fs_infoes.end(),
-       [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
+  auto status = file_system_set->GetAllFsInfo(ctx, fs_infoes);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get fs list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get fs list fail, error({}).</div>)", status.error_str());
 
-  os << RenderFsInfo(fs_infoes);
+  } else {
+    sort(fs_infoes.begin(), fs_infoes.end(),
+         [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
+
+    os << RenderFsInfo(fs_infoes);
+  }
+
+  // mds stats
+  auto heartbeat = Server::GetInstance().GetHeartbeat();
+  std::vector<pb::mdsv2::MDS> mdses;
+  status = heartbeat->GetMDSList(mdses);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());
+
+  } else {
+    sort(mdses.begin(), mdses.end(), [](const pb::mdsv2::MDS& a, const pb::mdsv2::MDS& b) { return a.id() < b.id(); });
+    os << RenderMdsList(mdses);
+  }
+
+  // client stats
+  // auto heartbeat = Server::GetInstance().GetHeartbeat();
+  std::vector<pb::mdsv2::Client> clients;
+  status = heartbeat->GetClientList(clients);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get client list fail, error({}).</div>)", status.error_str());
+
+  } else {
+    // sort by last_online_time
+    sort(clients.begin(), clients.end(), [](const pb::mdsv2::Client& a, const pb::mdsv2::Client& b) {
+      return a.last_online_time_ms() > b.last_online_time_ms();
+    });
+
+    os << RenderClientList(clients);
+  }
 
   os << "</body>";
 }
@@ -750,7 +870,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
 void FsStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {
   brpc::TabInfo* tab = tab_list->add();
-  tab->tab_name = "fs";
+  tab->tab_name = "dingofs";
   tab->path = "/FsStatService";
 }
 
