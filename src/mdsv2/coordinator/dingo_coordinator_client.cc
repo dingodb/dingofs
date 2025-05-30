@@ -48,7 +48,6 @@ static dingodb::sdk::MDS MDSMeta2SdkMDS(const MDSMeta& mds_meta) {
   mds.location.host = mds_meta.Host();
   mds.location.port = mds_meta.Port();
   mds.state = MDSMetaStateToSdkState(mds_meta.GetState());
-  mds.register_time_ms = mds_meta.RegisterTimeMs();
   mds.last_online_time_ms = mds_meta.LastOnlineTimeMs();
 
   return mds;
@@ -61,7 +60,6 @@ static MDSMeta SdkMDS2MDSMeta(const dingodb::sdk::MDS& sdk_mds) {
   mds.SetHost(sdk_mds.location.host);
   mds.SetPort(sdk_mds.location.port);
   mds.SetState(static_cast<MDSMeta::State>(sdk_mds.state));
-  mds.SetRegisterTimeMs(sdk_mds.register_time_ms);
   mds.SetLastOnlineTimeMs(sdk_mds.last_online_time_ms);
 
   return mds;

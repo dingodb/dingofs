@@ -75,9 +75,11 @@ class MetaCodec {
   // format: [$prefix, $type, $role, $mds_id]
   // or format: [$prefix, $type, $role, $client_mountpoint]
   static std::string EncodeHeartbeatKey(int64_t mds_id);
-  static std::string EncodeHeartbeatKey(const std::string& client_mountpoint);
+  static std::string EncodeHeartbeatKey(const std::string& client_id);
+  static bool IsMdsHeartbeatKey(const std::string& key);
+  static bool IsClientHeartbeatKey(const std::string& key);
   static void DecodeHeartbeatKey(const std::string& key, int64_t& mds_id);
-  static void DecodeHeartbeatKey(const std::string& key, std::string& client_mountpoint);
+  static void DecodeHeartbeatKey(const std::string& key, std::string& client_id);
   static std::string EncodeHeartbeatValue(const pb::mdsv2::MDS& mds);
   static std::string EncodeHeartbeatValue(const pb::mdsv2::Client& client);
   static void DecodeHeartbeatValue(const std::string& value, pb::mdsv2::MDS& mds);

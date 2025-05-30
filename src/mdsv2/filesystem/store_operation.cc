@@ -106,9 +106,9 @@ static void SetElapsedTime(BatchOperation& batch_operation, const std::string& n
   }
 }
 
-static bool IsExistMountPoint(const FsInfoType& fs_info, const pb::mdsv2::MountPoint& mount_point) {
+static bool IsExistMountPoint(const FsInfoType& fs_info, const pb::mdsv2::MountPoint& mountpoint) {
   for (const auto& mp : fs_info.mount_points()) {
-    if (mp.client_id() == mount_point.client_id()) {
+    if (mp.client_id() == mountpoint.client_id()) {
       return true;
     }
   }
@@ -138,9 +138,9 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-static void RemoveMountPoint(FsInfoType& fs_info, const pb::mdsv2::MountPoint& mount_point) {
+static void RemoveMountPoint(FsInfoType& fs_info, const pb::mdsv2::MountPoint& mountpoint) {
   for (int i = 0; i < fs_info.mount_points_size(); i++) {
-    if (fs_info.mount_points(i).client_id() == mount_point.client_id()) {
+    if (fs_info.mount_points(i).client_id() == mountpoint.client_id()) {
       fs_info.mutable_mount_points()->SwapElements(i, fs_info.mount_points_size() - 1);
       fs_info.mutable_mount_points()->RemoveLast();
       return;

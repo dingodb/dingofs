@@ -73,21 +73,21 @@ void MetaCodec::GetHeartbeatTableRange(std::string& start_key, std::string& end_
 void MetaCodec::GetHeartbeatMdsRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeHeartbeat);
-  start_key.push_back(pb::mdsv2::ROLE_MDS);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS, start_key);
 
   end_key = kPrefix;
   end_key.push_back(kTypeHeartbeat);
-  end_key.push_back(pb::mdsv2::ROLE_MDS + 1);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS + 1, end_key);
 }
 
 void MetaCodec::GetHeartbeatClientRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
   start_key.push_back(kTypeHeartbeat);
-  start_key.push_back(pb::mdsv2::ROLE_CLIENT);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT, start_key);
 
   end_key = kPrefix;
   end_key.push_back(kTypeHeartbeat);
-  end_key.push_back(pb::mdsv2::ROLE_CLIENT + 1);
+  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT + 1, end_key);
 }
 
 void MetaCodec::GetFsTableRange(std::string& start_key, std::string& end_key) {
@@ -335,16 +335,32 @@ std::string MetaCodec::EncodeHeartbeatKey(int64_t mds_id) {
 }
 
 // or format: [$prefix, $type, $role, $client_mountpoint]
-std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_mountpoint) {
+std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
   std::string key;
-  key.reserve(kPrefixSize + 32 + client_mountpoint.size());
+  key.reserve(kPrefixSize + 32 + client_id.size());
 
   key.append(kPrefix);
   key.push_back(KeyType::kTypeHeartbeat);
   SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT, key);
-  key.append(client_mountpoint);
+  key.append(client_id);
 
   return key;
+}
+
+bool MetaCodec::IsMdsHeartbeatKey(const std::string& key) {
+  CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+
+  auto role = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
+  return role == pb::mdsv2::ROLE_MDS;
+}
+
+bool MetaCodec::IsClientHeartbeatKey(const std::string& key) {
+  CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+
+  auto role = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
+  return role == pb::mdsv2::ROLE_CLIENT;
 }
 
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
@@ -354,11 +370,11 @@ void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
   mds_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
 }
 
-void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_mountpoint) {
+void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_id) {
   CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
   CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
 
-  client_mountpoint = key.substr(kPrefixSize + 5);
+  client_id = key.substr(kPrefixSize + 5);
 }
 
 std::string MetaCodec::EncodeHeartbeatValue(const pb::mdsv2::MDS& mds) { return mds.SerializeAsString(); }

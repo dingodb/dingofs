@@ -47,7 +47,6 @@ HeartbeatResponse MDSClient::Heartbeat(uint32_t mds_id) {
   mds->mutable_location()->set_host("127.0.0.1");
   mds->mutable_location()->set_port(10000);
   mds->set_state(pb::mdsv2::MDS::NORMAL);
-  mds->set_register_time_ms(Helper::TimestampMs());
   mds->set_last_online_time_ms(Helper::TimestampMs());
 
   interaction_->SendRequest("MDSService", "Heartbeat", request, response);

@@ -152,7 +152,9 @@ void CrontabManager::Destroy() {
   BAIDU_SCOPED_LOCK(mutex_);
 
   for (auto it = crontabs_.begin(); it != crontabs_.end();) {
-    bthread_timer_del(it->second->timer_id);
+    while (bthread_timer_del(it->second->timer_id) == 1) {
+      bthread_usleep(1000L);  // Wait for timer to be deleted
+    }
 
     it = crontabs_.erase(it);
   }

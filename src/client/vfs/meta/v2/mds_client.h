@@ -61,6 +61,9 @@ class MDSClient {
 
   static Status GetFsInfo(RPCPtr rpc, const std::string& name,
                           pb::mdsv2::FsInfo& fs_info);
+
+  Status Heartbeat();
+
   Status MountFs(const std::string& name,
                  const pb::mdsv2::MountPoint& mount_point);
   Status UmountFs(const std::string& name,

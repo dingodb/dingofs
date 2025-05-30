@@ -2217,32 +2217,32 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   return Status::OK();
 }
 
-Status FileSystemSet::MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point) {
+Status FileSystemSet::MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint) {
   CHECK(!fs_name.empty()) << "fs name is empty.";
 
   auto& trace = ctx.GetTrace();
 
-  MountFsOperation operation(trace, fs_name, mount_point);
+  MountFsOperation operation(trace, fs_name, mountpoint);
 
   auto status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fsset] mount fs({}) to {} finish, status({}).", fs_name,
-                                 mount_point.ShortDebugString(), status.error_str());
+                                 mountpoint.ShortDebugString(), status.error_str());
 
   return status;
 }
 
-Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point) {
+Status FileSystemSet::UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint) {
   CHECK(!fs_name.empty()) << "fs name is empty.";
 
   auto& trace = ctx.GetTrace();
 
-  UmountFsOperation operation(trace, fs_name, mount_point);
+  UmountFsOperation operation(trace, fs_name, mountpoint);
 
   auto status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fsset] umount fs({}) to {} finish, status({}).", fs_name,
-                                 mount_point.ShortDebugString(), status.error_str());
+                                 mountpoint.ShortDebugString(), status.error_str());
 
   return status;
 }

@@ -358,6 +358,49 @@ KVStorageSPtr Server::GetKVStorage() {
   return kv_storage_;
 }
 
+HeartbeatSPtr Server::GetHeartbeat() {
+  CHECK(heartbeat_ != nullptr) << "heartbeat is nullptr.";
+
+  return heartbeat_;
+}
+
+FsInfoSync& Server::GetFsInfoSync() { return fs_info_sync_; }
+
+CoordinatorClientSPtr Server::GetCoordinatorClient() {
+  CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
+
+  return coordinator_client_;
+}
+
+FileSystemSetSPtr Server::GetFileSystemSet() {
+  CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
+
+  return file_system_set_;
+}
+
+MDSMonitorSPtr Server::GetMDSMonitor() {
+  CHECK(mds_monitor_ != nullptr) << "mds_monitor is nullptr.";
+
+  return mds_monitor_;
+}
+
+OperationProcessorSPtr Server::GetOperationProcessor() {
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+  return operation_processor_;
+}
+
+QuotaSynchronizerSPtr Server::GetQuotaSynchronizer() {
+  CHECK(quota_synchronizer_ != nullptr) << "quota_synchronizer is nullptr.";
+
+  return quota_synchronizer_;
+}
+
+GcProcessorSPtr Server::GetGcProcessor() {
+  CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
+
+  return gc_processor_;
+}
+
 void Server::Run() {
   CHECK(read_worker_set_ != nullptr) << "read worker set is nullptr.";
   CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";

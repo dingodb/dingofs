@@ -25,6 +25,7 @@
 #include "brpc/controller.h"
 #include "brpc/server.h"
 #include "butil/iobuf.h"
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/mds/mds_meta.h"
@@ -34,6 +35,8 @@ namespace dingofs {
 namespace mdsv2 {
 
 DECLARE_uint32(mds_offline_period_time_ms);
+
+DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period time ms");
 
 static std::string RenderHead() {
   butil::IOBufBuilder os;
@@ -75,12 +78,12 @@ static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
   butil::IOBufBuilder os;
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
+  os << R"(<h3>MDS</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
   os << "<th>Addr</th>";
   os << "<th>State</th>";
-  os << "<th>Register Time</th>";
   os << "<th>Last Online Time</th>";
   os << "<th>Online</th>";
   os << "</tr>";
@@ -92,10 +95,49 @@ static std::string RenderMdsList(const std::vector<MDSMeta>& mds_metas) {
     os << "<td>" << mds_meta.ID() << "</td>";
     os << "<td>" << fmt::format("{}:{}", mds_meta.Host(), mds_meta.Port()) << "</td>";
     os << "<td>" << MDSMeta::StateName(mds_meta.GetState()) << "</td>";
-    os << "<td>" << Helper::FormatMsTime(mds_meta.RegisterTimeMs()) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds_meta.LastOnlineTimeMs()) << "</td>";
     if (mds_meta.LastOnlineTimeMs() + FLAGS_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
+    } else {
+      os << "<td>YES</td>";
+    }
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+
+  butil::IOBuf buf;
+  os.move_to(buf);
+
+  return buf.to_string();
+}
+
+static std::string RenderClientList(const std::vector<pb::mdsv2::Client>& clients) {
+  butil::IOBufBuilder os;
+
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>Client</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>ID</th>";
+  os << "<th>Host</th>";
+  os << "<th>MountPoint</th>";
+  os << "<th>Last Online Time</th>";
+  os << "<th>Online</th>";
+  os << "</tr>";
+
+  int64_t now_ms = Helper::TimestampMs();
+
+  for (const auto& client : clients) {
+    os << "<tr>";
+    os << "<td>" << client.id() << "</td>";
+    os << "<td>" << fmt::format("{}:{}", client.hostname(), client.port()) << "</td>";
+    os << "<td>" << client.mountpoint() << "</td>";
+    os << "<td>" << Helper::FormatMsTime(client.last_online_time_ms()) << "</td>";
+    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms < now_ms) {
+      os << R"(<td style="color:red">NO</td>)";
     } else {
       os << "<td>YES</td>";
     }
@@ -141,6 +183,22 @@ void MdsStatServiceImpl::default_method(::google::protobuf::RpcController* contr
 
   os << RenderMdsList(mds_metas);
 
+  // Render client list
+  auto heartbeat = Server::GetInstance().GetHeartbeat();
+  std::vector<pb::mdsv2::Client> clients;
+  auto status = heartbeat->GetClientList(clients);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get client list fail, error({}).</div>)", status.error_str());
+  } else {
+    // sort by last_online_time
+    sort(clients.begin(), clients.end(), [](const pb::mdsv2::Client& a, const pb::mdsv2::Client& b) {
+      return a.last_online_time_ms() > b.last_online_time_ms();
+    });
+
+    os << RenderClientList(clients);
+  }
+
   os << "</body>";
 
   os.move_to(cntl->response_attachment());
@@ -149,7 +207,7 @@ void MdsStatServiceImpl::default_method(::google::protobuf::RpcController* contr
 
 void MdsStatServiceImpl::GetTabInfo(brpc::TabInfoList* tab_list) const {
   brpc::TabInfo* tab = tab_list->add();
-  tab->tab_name = "mds";
+  tab->tab_name = "node";
   tab->path = "/MdsStatService";
 }
 

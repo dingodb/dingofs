@@ -34,6 +34,8 @@ using FsInfoType = pb::mdsv2::FsInfo;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
 using QuotaEntry = pb::mdsv2::Quota;
 using UsageEntry = pb::mdsv2::Usage;
+using MdsEntry = pb::mdsv2::MDS;
+using ClientEntry = pb::mdsv2::Client;
 
 inline std::string DescribeAttr(const AttrType& attr) {
   auto parents_func = [](const auto& parents) {

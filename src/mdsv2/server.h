@@ -76,14 +76,14 @@ class Server {
   MDSMeta& GetMDSMeta();
   MDSMetaMapSPtr GetMDSMetaMap();
   KVStorageSPtr GetKVStorage();
-  HeartbeatSPtr GetHeartbeat() { return heartbeat_; }
-  FsInfoSync& GetFsInfoSync() { return fs_info_sync_; }
-  CoordinatorClientSPtr GetCoordinatorClient() { return coordinator_client_; }
-  FileSystemSetSPtr GetFileSystemSet() { return file_system_set_; }
-  MDSMonitorSPtr GetMDSMonitor() { return mds_monitor_; }
-  OperationProcessorSPtr GetOperationProcessor() { return operation_processor_; }
-  QuotaSynchronizerSPtr GetQuotaSynchronizer() { return quota_synchronizer_; }
-  GcProcessorSPtr GetGcProcessor() { return gc_processor_; }
+  HeartbeatSPtr GetHeartbeat();
+  FsInfoSync& GetFsInfoSync();
+  CoordinatorClientSPtr GetCoordinatorClient();
+  FileSystemSetSPtr GetFileSystemSet();
+  MDSMonitorSPtr GetMDSMonitor();
+  OperationProcessorSPtr GetOperationProcessor();
+  QuotaSynchronizerSPtr GetQuotaSynchronizer();
+  GcProcessorSPtr GetGcProcessor();
 
   void Run();
 

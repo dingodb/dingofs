@@ -39,10 +39,12 @@ const uint32_t kMaxHostNameLength = 255;
 const uint32_t kMaxXAttrNameLength = 255;
 const uint32_t kMaxXAttrValueLength = 64 * 1024;
 
+const uint32_t kHeartbeatIntervalS = 5;  // seconds
+
 const std::set<std::string> kXAttrBlackList = {
     "system.posix_acl_access", "system.posix_acl_default", "system.nfs4_acl"};
 
-DEFINE_uint32(read_dir_batch_size, 1024, "Read dir batch size.");
+DEFINE_uint32(read_dir_batch_size, 1024, "read dir batch size.");
 
 std::string GetHostName() {
   char hostname[kMaxHostNameLength];
@@ -147,12 +149,20 @@ Status MDSV2FileSystem::Init() {
     return Status::MountFailed("mount fs fail");
   }
 
+  // init crontab
+  if (!InitCrontab()) {
+    LOG(ERROR) << fmt::format("[meta.{}] init crontab fail.", name_);
+    return Status::Internal("init crontab fail");
+  }
+
   return Status::OK();
 }
 
 void MDSV2FileSystem::UnInit() {
   // unmount fs
   UnmountFs();
+
+  crontab_manager_.Destroy();
 }
 
 static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
@@ -253,6 +263,28 @@ bool MDSV2FileSystem::UnmountFs() {
                               name_, client_id_.Mountpoint());
     return false;
   }
+
+  return true;
+}
+
+void MDSV2FileSystem::Heartbeat() {
+  auto status = mds_client_->Heartbeat();
+  if (!status.IsOK()) {
+    LOG(ERROR) << fmt::format("[meta.{}] heartbeat fail, error: {}.", name_,
+                              status.ToString());
+  }
+}
+
+bool MDSV2FileSystem::InitCrontab() {
+  // Add heartbeat crontab
+  crontab_configs_.push_back({
+      "HEARTBEA",
+      kHeartbeatIntervalS * 1000,
+      true,
+      [this](void*) { this->Heartbeat(); },
+  });
+
+  crontab_manager_.AddCrontab(crontab_configs_);
 
   return true;
 }

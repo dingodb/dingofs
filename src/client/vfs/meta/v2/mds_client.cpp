@@ -122,6 +122,25 @@ Status MDSClient::GetFsInfo(RPCPtr rpc, const std::string& name,
   return Status::OK();
 }
 
+Status MDSClient::Heartbeat() {
+  pb::mdsv2::HeartbeatRequest request;
+  pb::mdsv2::HeartbeatResponse response;
+
+  request.set_role(pb::mdsv2::ROLE_CLIENT);
+  auto* client = request.mutable_client();
+  client->set_id(client_id_.ID());
+  client->set_hostname(client_id_.Hostname());
+  client->set_port(client_id_.Port());
+  client->set_mountpoint(client_id_.Mountpoint());
+
+  auto status = rpc_->SendRequest("MDSService", "Heartbeat", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  return Status::OK();
+}
+
 Status MDSClient::MountFs(const std::string& name,
                           const pb::mdsv2::MountPoint& mount_point) {
   pb::mdsv2::MountFsRequest request;

@@ -319,8 +319,8 @@ class FileSystemSet {
   };
 
   Status CreateFs(const CreateFsParam& param, FsInfoType& fs_info);
-  Status MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
-  Status UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mount_point);
+  Status MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint);
+  Status UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint);
   Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
   Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info);
   Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info);

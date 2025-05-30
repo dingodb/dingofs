@@ -33,8 +33,6 @@ namespace mdsv2 {
 
 DECLARE_int32(fs_scan_batch_size);
 
-void HeartbeatTask::Run() { heartbeat_->SendHeartbeat(); }
-
 bool Heartbeat::Init() {
   worker_ = Worker::New();
   return worker_->Init();
@@ -48,17 +46,15 @@ bool Heartbeat::Destroy() {
   return true;
 }
 
-bool Heartbeat::Execute(TaskRunnablePtr task) {
-  if (worker_ == nullptr) {
-    DINGO_LOG(ERROR) << "[heartbeat] worker is nullptr.";
-    return false;
+void Heartbeat::Run() {
+  bool running = false;
+  if (!is_running_.compare_exchange_strong(running, true)) {
+    DINGO_LOG(INFO) << "[heartbeat] heartbeat already running......";
+    return;
   }
-  return worker_->Execute(task);
-}
+  DEFER(is_running_.store(false));
 
-void Heartbeat::TriggerHeartbeat() {
-  auto task = std::make_shared<HeartbeatTask>(Server::GetInstance().GetHeartbeat());
-  Server::GetInstance().GetHeartbeat()->Execute(task);
+  SendHeartbeat();
 }
 
 void Heartbeat::SendHeartbeat() {
@@ -89,9 +85,8 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::Client& client) {
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
 
   KVStorage::WriteOption option;
-  std::string mountpoint = fmt::format("{}:{}:{}", client.hostname(), client.port(), client.path());
   auto status =
-      kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(mountpoint), MetaCodec::EncodeHeartbeatValue(client));
+      kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(client.id()), MetaCodec::EncodeHeartbeatValue(client));
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, client({}) error({}).", client.ShortDebugString(),
                                     status.error_str());
@@ -101,11 +96,10 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::Client& client) {
 }
 
 Status Heartbeat::GetMDSList(std::vector<pb::mdsv2::MDS>& mdses) {
-  auto txn = kv_storage_->NewTxn();
-
   Range range;
   MetaCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
 
+  auto txn = kv_storage_->NewTxn();
   Status status;
   std::vector<KeyValue> kvs;
   do {
@@ -115,9 +109,9 @@ Status Heartbeat::GetMDSList(std::vector<pb::mdsv2::MDS>& mdses) {
       break;
     }
 
-    DINGO_LOG(INFO) << fmt::format("[heartbeat] get mds list, size({}).", kvs.size());
-
     for (auto& kv : kvs) {
+      if (!MetaCodec::IsMdsHeartbeatKey(kv.key)) continue;
+
       pb::mdsv2::MDS mds;
       MetaCodec::DecodeHeartbeatValue(kv.value, mds);
       mdses.push_back(mds);
@@ -140,6 +134,33 @@ Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
   }
 
   return Status::OK();
+}
+
+Status Heartbeat::GetClientList(std::vector<pb::mdsv2::Client>& clients) {
+  Range range;
+  MetaCodec::GetHeartbeatClientRange(range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      if (!MetaCodec::IsClientHeartbeatKey(kv.key)) continue;
+
+      pb::mdsv2::Client client;
+      MetaCodec::DecodeHeartbeatValue(kv.value, client);
+      clients.push_back(client);
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  return status;
 }
 
 }  // namespace mdsv2

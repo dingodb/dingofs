@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 #define DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 
+#include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/mds/mds_meta.h"
@@ -26,19 +27,6 @@ namespace mdsv2 {
 class Heartbeat;
 using HeartbeatSPtr = std::shared_ptr<Heartbeat>;
 
-class HeartbeatTask : public TaskRunnable {
- public:
-  HeartbeatTask(HeartbeatSPtr heartbeat) : heartbeat_(heartbeat) {}
-  ~HeartbeatTask() override = default;
-
-  std::string Type() override { return "HEARTBEAT"; }
-
-  void Run() override;
-
- private:
-  HeartbeatSPtr heartbeat_;
-};
-
 class Heartbeat {
  public:
   Heartbeat(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {};
@@ -49,7 +37,7 @@ class Heartbeat {
   bool Init();
   bool Destroy();
 
-  static void TriggerHeartbeat();
+  void Run();
 
   void SendHeartbeat();
   Status SendHeartbeat(pb::mdsv2::MDS& mds);
@@ -58,8 +46,10 @@ class Heartbeat {
   Status GetMDSList(std::vector<pb::mdsv2::MDS>& mdses);
   Status GetMDSList(std::vector<MDSMeta>& mdses);
 
+  Status GetClientList(std::vector<pb::mdsv2::Client>& clients);
+
  private:
-  bool Execute(TaskRunnablePtr task);
+  std::atomic<bool> is_running_{false};
 
   KVStorageSPtr kv_storage_;
 

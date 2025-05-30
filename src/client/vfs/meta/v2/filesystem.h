@@ -27,6 +27,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/crontab.h"
 
 namespace dingofs {
 namespace client {
@@ -152,6 +153,10 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   bool MountFs();
   bool UnmountFs();
 
+  void Heartbeat();
+
+  bool InitCrontab();
+
   const std::string name_;
   const ClientId client_id_;
 
@@ -162,6 +167,11 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   MDSClientPtr mds_client_;
 
   FileSessionMap file_session_map_;
+
+  // Crontab config
+  std::vector<mdsv2::CrontabConfig> crontab_configs_;
+  // This is manage crontab, like heartbeat.
+  mdsv2::CrontabManager crontab_manager_;
 };
 
 }  // namespace v2
