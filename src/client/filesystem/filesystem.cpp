@@ -367,19 +367,20 @@ DINGOFS_ERROR FileSystem::Open(Request req, Ino ino, FileInfo* fi) {
     return rc;
   }
 
-  TimeSpec mtime;
-  yes = attrWatcher_->GetMtime(ino, &mtime);
-  if (!yes) {
-    // It is rare which only arise when attribute evited for attr-watcher.
-    LOG(WARNING) << "open(" << ino << "): stale file handler"
-                 << ": attribute not found in wacther";
-    return DINGOFS_ERROR::STALE;
-  } else if (mtime != InodeMtime(inode)) {
-    LOG(WARNING) << "open(" << ino << "): stale file handler"
-                 << ", cache(" << mtime << ") vs remote(" << InodeMtime(inode)
-                 << ")";
-    return DINGOFS_ERROR::STALE;
-  }
+  // TimeSpec mtime;
+  // yes = attrWatcher_->GetMtime(ino, &mtime);
+  // if (!yes) {
+  //   // It is rare which only arise when attribute evited for attr-watcher.
+  //   LOG(WARNING) << "open(" << ino << "): stale file handler"
+  //                << ": attribute not found in wacther";
+  //   return DINGOFS_ERROR::STALE;
+  // } else if (mtime != InodeMtime(inode)) {
+  //   LOG(WARNING) << "open(" << ino << "): stale file handler"
+  //                << ", cache(" << mtime << ") vs remote(" <<
+  //                InodeMtime(inode)
+  //                << ")";
+  //   return DINGOFS_ERROR::STALE;
+  // }
 
   openFiles_->Open(ino, inode);
   FillFileInfo(fi);
