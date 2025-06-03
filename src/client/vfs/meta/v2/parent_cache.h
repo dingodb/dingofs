@@ -38,19 +38,19 @@ class ParentCache {
   ~ParentCache() = default;
 
   struct Entry {
-    int64_t parent;
+    Ino parent;
     uint64_t version;
   };
 
   static ParentCachePtr New() { return std::make_shared<ParentCache>(); }
 
-  bool GetParent(Ino ino, int64_t& parent);
+  bool GetParent(Ino ino, Ino& parent);
   bool GetVersion(Ino ino, uint64_t& version);
   std::vector<uint64_t> GetAncestors(uint64_t ino);
 
-  void Upsert(Ino ino, int64_t parent);
-  void Upsert(Ino ino, uint64_t version);
-  void Upsert(Ino ino, int64_t parent, uint64_t version);
+  void Upsert(Ino ino, Ino parent);
+  void UpsertVersion(Ino ino, uint64_t version);
+  void Upsert(Ino ino, Ino parent, uint64_t version);
   void Delete(Ino ino);
 
  private:

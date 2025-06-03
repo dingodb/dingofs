@@ -109,9 +109,24 @@ using pb::mdsv2::WriteSliceResponse;
 using pb::mdsv2::ReadSliceRequest;
 using pb::mdsv2::ReadSliceResponse;
 
+using pb::mdsv2::SetFsQuotaRequest;
+using pb::mdsv2::SetFsQuotaResponse;
+
+using pb::mdsv2::GetFsQuotaRequest;
+using pb::mdsv2::GetFsQuotaResponse;
+
+using pb::mdsv2::SetDirQuotaRequest;
+using pb::mdsv2::SetDirQuotaResponse;
+
+using pb::mdsv2::GetDirQuotaRequest;
+using pb::mdsv2::GetDirQuotaResponse;
+
+using pb::mdsv2::DeleteDirQuotaRequest;
+using pb::mdsv2::DeleteDirQuotaResponse;
+
 class MDSClient {
  public:
-  MDSClient() = default;
+  MDSClient(uint32_t fs_id) : fs_id_(fs_id) {}
   ~MDSClient() = default;
 
   bool Init(const std::string& mds_addr);
@@ -140,19 +155,19 @@ class MDSClient {
   ListFsInfoResponse ListFs();
   RefreshFsInfoResponse RefreshFsInfo(const std::string& fs_name);
 
-  MkDirResponse MkDir(uint32_t fs_id, Ino parent, const std::string& name);
-  void BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+  MkDirResponse MkDir(Ino parent, const std::string& name);
+  void BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
   RmDirResponse RmDir(Ino parent, const std::string& name);
   ReadDirResponse ReadDir(Ino ino, const std::string& last_name, bool with_attr, bool is_refresh);
 
-  MkNodResponse MkNod(uint32_t fs_id, Ino parent, const std::string& name);
-  void BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
+  MkNodResponse MkNod(Ino parent, const std::string& name);
+  void BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num);
 
-  GetDentryResponse GetDentry(uint32_t fs_id, Ino parent, const std::string& name);
-  ListDentryResponse ListDentry(uint32_t fs_id, Ino parent, bool is_only_dir);
-  GetInodeResponse GetInode(uint32_t fs_id, Ino ino);
-  BatchGetInodeResponse BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos);
-  BatchGetXAttrResponse BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos);
+  GetDentryResponse GetDentry(Ino parent, const std::string& name);
+  ListDentryResponse ListDentry(Ino parent, bool is_only_dir);
+  GetInodeResponse GetInode(Ino ino);
+  BatchGetInodeResponse BatchGetInode(const std::vector<int64_t>& inos);
+  BatchGetXAttrResponse BatchGetXattr(const std::vector<int64_t>& inos);
 
   void SetFsStats(const std::string& fs_name);
   void ContinueSetFsStats(const std::string& fs_name);
@@ -172,6 +187,13 @@ class MDSClient {
   AllocSliceIdResponse AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id);
   WriteSliceResponse WriteSlice(Ino ino, int64_t chunk_index);
   ReadSliceResponse ReadSlice(Ino ino, int64_t chunk_index);
+
+  // quota operations
+  SetFsQuotaResponse SetFsQuota(const QuotaEntry& quota);
+  GetFsQuotaResponse GetFsQuota();
+  SetDirQuotaResponse SetDirQuota(Ino ino, const QuotaEntry& quota);
+  GetDirQuotaResponse GetDirQuota(Ino ino);
+  DeleteDirQuotaResponse DeleteDirQuota(Ino ino);
 
  private:
   uint32_t fs_id_;

@@ -15,6 +15,7 @@
 #include "mdsv2/client/mds.h"
 
 #include <fcntl.h>
+#include <glog/logging.h>
 #include <sys/types.h>
 
 #include <cstddef>
@@ -266,11 +267,13 @@ RefreshFsInfoResponse MDSClient::RefreshFsInfo(const std::string& fs_name) {
   return response;
 }
 
-MkDirResponse MDSClient::MkDir(uint32_t fs_id, Ino parent, const std::string& name) {
+MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   MkDirRequest request;
   MkDirResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
   request.set_length(4096);
@@ -290,16 +293,18 @@ MkDirResponse MDSClient::MkDir(uint32_t fs_id, Ino parent, const std::string& na
   return response;
 }
 
-void MDSClient::BatchMkDir(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+void MDSClient::BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
       std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
-      MkDir(fs_id, parent, name);
+      MkDir(parent, name);
     }
   }
 }
 
 RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   RmDirRequest request;
   RmDirResponse response;
 
@@ -313,6 +318,7 @@ RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
 }
 
 ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool with_attr, bool is_refresh) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
   ReadDirRequest request;
   ReadDirResponse response;
 
@@ -328,11 +334,13 @@ ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool w
   return response;
 }
 
-MkNodResponse MDSClient::MkNod(uint32_t fs_id, Ino parent, const std::string& name) {
+MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   MkNodRequest request;
   MkNodResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
   request.set_length(0);
@@ -352,20 +360,22 @@ MkNodResponse MDSClient::MkNod(uint32_t fs_id, Ino parent, const std::string& na
   return response;
 }
 
-void MDSClient::BatchMkNod(uint32_t fs_id, const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
+void MDSClient::BatchMkNod(const std::vector<int64_t>& parents, const std::string& prefix, size_t num) {
   for (size_t i = 0; i < num; i++) {
     for (auto parent : parents) {
       std::string name = fmt::format("{}_{}", prefix, Helper::TimestampNs());
-      MkNod(fs_id, parent, name);
+      MkNod(parent, name);
     }
   }
 }
 
-GetDentryResponse MDSClient::GetDentry(uint32_t fs_id, Ino parent, const std::string& name) {
+GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   GetDentryRequest request;
   GetDentryResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
 
@@ -378,11 +388,13 @@ GetDentryResponse MDSClient::GetDentry(uint32_t fs_id, Ino parent, const std::st
   return response;
 }
 
-ListDentryResponse MDSClient::ListDentry(uint32_t fs_id, Ino parent, bool is_only_dir) {
+ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   ListDentryRequest request;
   ListDentryResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_is_only_dir(is_only_dir);
 
@@ -395,11 +407,13 @@ ListDentryResponse MDSClient::ListDentry(uint32_t fs_id, Ino parent, bool is_onl
   return response;
 }
 
-GetInodeResponse MDSClient::GetInode(uint32_t fs_id, Ino ino) {
+GetInodeResponse MDSClient::GetInode(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   GetInodeRequest request;
   GetInodeResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
   interaction_->SendRequest("MDSService", "GetInode", request, response);
@@ -411,11 +425,13 @@ GetInodeResponse MDSClient::GetInode(uint32_t fs_id, Ino ino) {
   return response;
 }
 
-BatchGetInodeResponse MDSClient::BatchGetInode(uint32_t fs_id, const std::vector<int64_t>& inos) {
+BatchGetInodeResponse MDSClient::BatchGetInode(const std::vector<int64_t>& inos) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   BatchGetInodeRequest request;
   BatchGetInodeResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   for (auto ino : inos) {
     request.add_inoes(ino);
   }
@@ -429,11 +445,13 @@ BatchGetInodeResponse MDSClient::BatchGetInode(uint32_t fs_id, const std::vector
   return response;
 }
 
-BatchGetXAttrResponse MDSClient::BatchGetXattr(uint32_t fs_id, const std::vector<int64_t>& inos) {
+BatchGetXAttrResponse MDSClient::BatchGetXattr(const std::vector<int64_t>& inos) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   BatchGetXAttrRequest request;
   BatchGetXAttrResponse response;
 
-  request.set_fs_id(fs_id);
+  request.set_fs_id(fs_id_);
   for (auto ino : inos) {
     request.add_inoes(ino);
   }
@@ -510,6 +528,8 @@ void MDSClient::GetFsPerSecondStats(const std::string& fs_name) {
 }
 
 LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   LookupRequest request;
   LookupResponse response;
 
@@ -523,6 +543,8 @@ LookupResponse MDSClient::Lookup(Ino parent, const std::string& name) {
 }
 
 OpenResponse MDSClient::Open(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   OpenRequest request;
   OpenResponse response;
 
@@ -536,6 +558,8 @@ OpenResponse MDSClient::Open(Ino ino) {
 }
 
 ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   ReleaseRequest request;
   ReleaseResponse response;
 
@@ -549,6 +573,8 @@ ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
 }
 
 LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   LinkRequest request;
   LinkResponse response;
 
@@ -563,6 +589,8 @@ LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_nam
 }
 
 UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   UnLinkRequest request;
   UnLinkResponse response;
 
@@ -576,6 +604,8 @@ UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
 }
 
 SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const std::string& symlink) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   SymlinkRequest request;
   SymlinkResponse response;
 
@@ -591,6 +621,8 @@ SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const st
 }
 
 ReadLinkResponse MDSClient::ReadLink(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   ReadLinkRequest request;
   ReadLinkResponse response;
 
@@ -615,6 +647,8 @@ AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_sl
 }
 
 WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   WriteSliceRequest request;
   WriteSliceResponse response;
 
@@ -637,6 +671,8 @@ WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
 }
 
 ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
   ReadSliceRequest request;
   ReadSliceResponse response;
 
@@ -645,6 +681,103 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
   request.set_chunk_index(chunk_index);
 
   interaction_->SendRequest("MDSService", "ReadSlice", request, response);
+
+  return response;
+}
+
+SetFsQuotaResponse MDSClient::SetFsQuota(const QuotaEntry& quota) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
+  SetFsQuotaRequest request;
+  SetFsQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.mutable_quota()->CopyFrom(quota);
+  interaction_->SendRequest("MDSService", "SetFsQuota", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "SetFsQuota success";
+  } else {
+    DINGO_LOG(ERROR) << "SetFsQuota fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+GetFsQuotaResponse MDSClient::GetFsQuota() {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+
+  GetFsQuotaRequest request;
+  GetFsQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+
+  interaction_->SendRequest("MDSService", "GetFsQuota", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "GetFsQuota success, quota: " << response.quota().ShortDebugString();
+  } else {
+    DINGO_LOG(ERROR) << "GetFsQuota fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+SetDirQuotaResponse MDSClient::SetDirQuota(Ino ino, const QuotaEntry& quota) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
+
+  SetDirQuotaRequest request;
+  SetDirQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.mutable_quota()->CopyFrom(quota);
+
+  interaction_->SendRequest("MDSService", "SetDirQuota", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "SetDirQuota success";
+  } else {
+    DINGO_LOG(ERROR) << "SetDirQuota fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+GetDirQuotaResponse MDSClient::GetDirQuota(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
+
+  GetDirQuotaRequest request;
+  GetDirQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+
+  interaction_->SendRequest("MDSService", "GetDirQuota", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "GetDirQuota success, quota: " << response.quota().ShortDebugString();
+  } else {
+    DINGO_LOG(ERROR) << "GetDirQuota fail, error: " << response.ShortDebugString();
+  }
+
+  return response;
+}
+
+DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
+  CHECK(fs_id_ > 0) << "fs_id_ is zero";
+  CHECK(ino > 0) << "ino is zero";
+
+  DeleteDirQuotaRequest request;
+  DeleteDirQuotaResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+
+  interaction_->SendRequest("MDSService", "DeleteDirQuota", request, response);
+  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
+    DINGO_LOG(INFO) << "DeleteDirQuota success";
+  } else {
+    DINGO_LOG(ERROR) << "DeleteDirQuota fail, error: " << response.ShortDebugString();
+  }
 
   return response;
 }

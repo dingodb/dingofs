@@ -768,8 +768,14 @@ TEST_F(FileSystemTest, RenameWithSameDir) {
   std::string new_name = "rename1_file2";
   uint64_t old_parent_version;
   uint64_t new_parent_version;
-  auto status =
-      fs->Rename(ctx, old_parent_ino, old_name, old_parent_ino, new_name, old_parent_version, new_parent_version);
+
+  FileSystem::RenameParam param;
+  param.old_parent = old_parent_ino;
+  param.old_name = old_name;
+  param.new_parent = old_parent_ino;
+  param.new_name = new_name;
+
+  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   auto partition = partition_cache.Get(old_parent_ino);
@@ -852,8 +858,14 @@ TEST_F(FileSystemTest, RenameWithDiffDir) {
   uint64_t old_parent_version;
   uint64_t new_parent_version;
   const std::string& new_name = old_name;
-  auto status =
-      fs->Rename(ctx, old_parent_ino, old_name, new_parent_ino, new_name, old_parent_version, new_parent_version);
+
+  FileSystem::RenameParam param;
+  param.old_parent = old_parent_ino;
+  param.old_name = old_name;
+  param.new_parent = old_parent_ino;
+  param.new_name = new_name;
+
+  auto status = fs->Rename(ctx, param, old_parent_version, new_parent_version);
   ASSERT_TRUE(status.ok()) << "rename fail, error: " << status.error_str();
 
   {

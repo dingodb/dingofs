@@ -27,7 +27,7 @@ ParentCache::ParentCache() {
   ino_map_.insert({1, Entry{1, 0}});
 }
 
-bool ParentCache::GetParent(Ino ino, int64_t& parent) {
+bool ParentCache::GetParent(Ino ino, Ino& parent) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -81,7 +81,7 @@ std::vector<uint64_t> ParentCache::GetAncestors(uint64_t ino) {
   return ancestors;
 }
 
-void ParentCache::Upsert(Ino ino, int64_t parent) {
+void ParentCache::Upsert(Ino ino, Ino parent) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -92,7 +92,7 @@ void ParentCache::Upsert(Ino ino, int64_t parent) {
   }
 }
 
-void ParentCache::Upsert(Ino ino, uint64_t version) {
+void ParentCache::UpsertVersion(Ino ino, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -103,7 +103,7 @@ void ParentCache::Upsert(Ino ino, uint64_t version) {
   }
 }
 
-void ParentCache::Upsert(Ino ino, int64_t parent, uint64_t version) {
+void ParentCache::Upsert(Ino ino, Ino parent, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);

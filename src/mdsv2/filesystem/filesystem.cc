@@ -91,11 +91,11 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       renamer_(renamer),
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
-      quota_manager_(fs_id_, kv_storage, operation_processor) {
+      parent_memo_(ParentMemo::New(fs_id_)),
+      quota_manager_(fs_id_, parent_memo_, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
-  parent_memo_ = ParentMemo::New(fs_id_);
 };
 
 FileSystem::~FileSystem() {
@@ -1090,18 +1090,18 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode/dentry fail, {}", status.error_str()));
   }
 
-  // update cache
-  partition->DeleteChild(name);
-  partition->ParentInode()->UpdateIf(std::move(parent_attr));
-
-  inode->UpdateIf(std::move(child_attr));
-
   // update quota
   int64_t byte_delta = child_attr.type() != pb::mdsv2::SYM_LINK ? child_attr.length() : 0;
   if (child_attr.nlink() == 0) {
     quota_manager_.UpdateFsUsage(-byte_delta, -1);
   }
-  quota_manager_.UpdateDirUsage(parent, -byte_delta, 1);
+  quota_manager_.UpdateDirUsage(parent, -byte_delta, -1);
+
+  // update cache
+  partition->DeleteChild(name);
+  partition->ParentInode()->UpdateIf(std::move(parent_attr));
+
+  inode->UpdateIf(std::move(child_attr));
 
   return Status::OK();
 }
@@ -1537,7 +1537,7 @@ static uint64_t CalculateDeltaLength(uint64_t length, const std::vector<pb::mdsv
   return temp_length - length;
 }
 
-Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
+Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_index,
                               const std::vector<pb::mdsv2::Slice>& slices) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] writeslice ino({}), chunk_index({}), slice_list.size({}).", fs_id_, ino,
                                   chunk_index, slices.size());
@@ -1590,6 +1590,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index,
 
   // update quota
   quota_manager_.UpdateFsUsage(length_delta, 0);
+  quota_manager_.UpdateDirUsage(parent, length_delta, 0);
 
   return Status::OK();
 }

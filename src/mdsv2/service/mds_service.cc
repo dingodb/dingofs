@@ -365,9 +365,19 @@ void MDSServiceImpl::DoGetFsInfo(google::protobuf::RpcController* controller,
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
 
+  std::string fs_name = request->fs_name();
+  if (request->fs_id() > 0) {
+    auto file_system = GetFileSystem(request->fs_id());
+    if (file_system == nullptr) {
+      return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+    }
+
+    fs_name = file_system->FsName();
+  }
+
   Context ctx;
   pb::mdsv2::FsInfo fs_info;
-  auto status = file_system_set_->GetFsInfo(ctx, request->fs_name(), fs_info);
+  auto status = file_system_set_->GetFsInfo(ctx, fs_name, fs_info);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -382,8 +392,8 @@ void MDSServiceImpl::GetFsInfo(google::protobuf::RpcController* controller, cons
 
   // validate request
   auto validate_fn = [&]() -> Status {
-    if (request->fs_name().empty()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
+    if (request->fs_name().empty() && request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_name or fs_id is empty");
     }
 
     return Status::OK();
@@ -1587,7 +1597,7 @@ void MDSServiceImpl::DoWriteSlice(google::protobuf::RpcController* controller,
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  status = file_system->WriteSlice(ctx, request->ino(), request->chunk_index(),
+  status = file_system->WriteSlice(ctx, request->parent(), request->ino(), request->chunk_index(),
                                    Helper::PbRepeatedToVector(request->slices()));
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1600,6 +1610,30 @@ void MDSServiceImpl::WriteSlice(google::protobuf::RpcController* controller,
                                 const pb::mdsv2::WriteSliceRequest* request, pb::mdsv2::WriteSliceResponse* response,
                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->parent() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "parent is 0");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+    if (request->chunk_index() < 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_index is negative");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -1646,6 +1680,27 @@ void MDSServiceImpl::DoReadSlice(google::protobuf::RpcController* controller,
 void MDSServiceImpl::ReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                                pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->ino() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "ino is 0");
+    }
+    if (request->chunk_index() < 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "chunk_index is negative");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(

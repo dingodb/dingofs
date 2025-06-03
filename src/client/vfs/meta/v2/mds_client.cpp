@@ -700,8 +700,8 @@ Status MDSClient::Rename(Ino old_parent, const std::string& old_name,
     return status;
   }
 
-  parent_cache_->Upsert(old_parent, response.old_parent_version());
-  parent_cache_->Upsert(new_parent, response.new_parent_version());
+  parent_cache_->UpsertVersion(old_parent, response.old_parent_version());
+  parent_cache_->UpsertVersion(new_parent, response.new_parent_version());
 
   return Status::OK();
 }
@@ -787,7 +787,14 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
   pb::mdsv2::WriteSliceRequest request;
   pb::mdsv2::WriteSliceResponse response;
 
+  SetAncestorInContext(request, ino);
+
+  Ino parent = 0;
+  CHECK(parent_cache_->GetParent(ino, parent))
+      << "get parent fail from parent cache.";
+
   request.set_fs_id(fs_id_);
+  request.set_parent(parent);
   request.set_ino(ino);
   request.set_chunk_index(index);
 

@@ -35,8 +35,8 @@ class MDSRouter {
 
   virtual bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
 
-  virtual mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) = 0;
-  virtual mdsv2::MDSMeta GetMDSByIno(int64_t ino) = 0;
+  virtual mdsv2::MDSMeta GetMDSByParentIno(Ino parent) = 0;
+  virtual mdsv2::MDSMeta GetMDSByIno(Ino ino) = 0;
 
   virtual bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
@@ -50,7 +50,7 @@ using MonoMDSRouterPtr = std::shared_ptr<MonoMDSRouter>;
 class MonoMDSRouter : public MDSRouter {
  public:
   MonoMDSRouter(MDSDiscoveryPtr mds_discovery)
-      : mds_discovery_(mds_discovery){};
+      : mds_discovery_(mds_discovery) {};
   ~MonoMDSRouter() override = default;
 
   static MonoMDSRouterPtr New(MDSDiscoveryPtr mds_discovery) {
@@ -59,9 +59,9 @@ class MonoMDSRouter : public MDSRouter {
 
   bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
-  mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) override;
+  mdsv2::MDSMeta GetMDSByParentIno(Ino parent) override;
 
-  mdsv2::MDSMeta GetMDSByIno(int64_t ino) override;
+  mdsv2::MDSMeta GetMDSByIno(Ino ino) override;
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;
@@ -92,9 +92,9 @@ class ParentHashMDSRouter : public MDSRouter {
 
   bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
-  mdsv2::MDSMeta GetMDSByParentIno(int64_t parent_ino) override;
+  mdsv2::MDSMeta GetMDSByParentIno(Ino parent) override;
 
-  mdsv2::MDSMeta GetMDSByIno(int64_t ino) override;
+  mdsv2::MDSMeta GetMDSByIno(Ino ino) override;
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;

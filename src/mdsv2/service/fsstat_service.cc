@@ -160,16 +160,24 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   auto render_time_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
-    result += fmt::format("update time: {}", Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
+    result += "update time:";
     result += "<br>";
-    result += fmt::format("create time: {}", Helper::FormatTime(fs_info.create_time_s()));
+    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.last_update_time_ns() / 1000000000));
+    result += "<br>";
+    result += "create time:";
+    result += "<br>";
+    result += fmt::format("<span>{}</span>", Helper::FormatTime(fs_info.create_time_s()));
     result += "</div>";
     return result;
   };
 
-  auto render_trash_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
+  auto render_navigation_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
+    result += fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id());
+    result += "<br>";
+    result += fmt::format(R"(<a href="FsStatService/quota/{}" target="_blank">quota</a>)", fs_info.fs_id());
+    result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delfiles/{}" target="_blank">delfiles</a>)", fs_info.fs_id());
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/delslices/{}" target="_blank">delslices</a>)", fs_info.fs_id());
@@ -190,12 +198,11 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   os << "<th>PartitionPolicy</th>";
   os << "<th>Size(MB)</th>";
   os << "<th>Owner</th>";
+  os << "<th>Navigation</th>";
+  os << "<th>Time</th>";
   os << "<th>RecycleTime</th>";
   os << "<th>MountPoint</th>";
   os << "<th>S3</th>";
-  os << "<th>Time</th>";
-  os << "<th>Details</th>";
-  os << "<th>Trash</th>";
   os << "</tr>";
 
   for (const auto& fs_info : fs_infoes) {
@@ -212,13 +219,11 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
     os << "<td>" << render_size_func(fs_info) << "</td>";
 
     os << "<td>" << fs_info.owner() << "</td>";
+    os << "<td>" << render_navigation_func(fs_info) << "</td>";
+    os << "<td>" << render_time_func(fs_info) << "</td>";
     os << "<td>" << fs_info.recycle_time_hour() << "</td>";
     os << "<td>" << RenderMountpoint(fs_info) << "</td>";
     os << "<td>" << RenderS3Info(fs_info.extra().s3_info()) << "</td>";
-    os << "<td>" << render_time_func(fs_info) << "</td>";
-    os << "<td>" << fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id())
-       << "</td>";
-    os << "<td>" << render_trash_func(fs_info) << "</td>";
     os << "</tr>";
   }
 
@@ -250,7 +255,8 @@ static std::string RenderMdsList(const std::vector<MdsEntry>& mdses) {
   for (const auto& mds : mdses) {
     os << "<tr>";
     os << "<td>" << mds.id() << "</td>";
-    os << "<td>" << fmt::format("{}:{}", mds.location().host(), mds.location().port()) << "</td>";
+    os << fmt::format(R"(<td><a href="http://{}:{}/FsStatService" target="_blank">{}:{} </a></td>)",
+                      mds.location().host(), mds.location().port(), mds.location().host(), mds.location().port());
     os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
     if (mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) {
@@ -320,6 +326,7 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 
   os << "<body>";
   server->PrintTabsBody(os, "fsstat");
+  os << R"(<h1 style="text-align:center;">dingofs dashboard</h1>)";
 
   // fs stats
   Context ctx;
@@ -366,6 +373,101 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
   }
 
   os << "</body>";
+  os << "</html>";
+}
+
+static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
+  auto render_bytes_func = [](uint64_t bytes, const std::string& unit) -> std::string {
+    if (bytes == UINT64_MAX) {
+      return "unlimited";
+    }
+    if (unit == "GB") {
+      return fmt::format("{:.2f}", static_cast<double>(bytes) / (1024 * 1024 * 1024));
+    } else if (unit == "MB") {
+      return fmt::format("{:.2f}", static_cast<double>(bytes) / (1024 * 1024));
+    } else if (unit == "KB") {
+      return fmt::format("{:.2f}", static_cast<double>(bytes) / 1024);
+    } else {
+      return fmt::format("{:.2f}", static_cast<double>(bytes));
+    }
+  };
+
+  auto render_inode_func = [](uint64_t inodes) -> std::string {
+    if (inodes == UINT64_MAX) {
+      return "unlimited";
+    }
+    return fmt::format("{}", inodes);
+  };
+
+  os << "<!DOCTYPE html><html>\n";
+
+  os << "<head>";
+  os << RenderHead();
+  os << "</head>";
+
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;" >Quota</h1>)";
+  auto& quota_manager = fs->GetQuotaManager();
+
+  // fs quota
+  Trace trace;
+  QuotaEntry quota;
+  auto status = quota_manager.GetFsQuota(trace, quota);
+
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>FS Quota</h3>)";
+  if (status.ok()) {
+    os << "<div>";
+    os << fmt::format(R"(Max Bytes: {} GB)", render_bytes_func(quota.max_bytes(), "GB"));
+    os << "<br>";
+    os << fmt::format(R"(Used Bytes: {} KB)", render_bytes_func(quota.used_bytes(), "KB"));
+    os << "<br>";
+    os << fmt::format(R"(Max Inode: {})", render_inode_func(quota.max_inodes()));
+    os << "<br>";
+    os << fmt::format(R"(Used Inode: {})", render_inode_func(quota.used_inodes()));
+    os << "</div>";
+  } else {
+    os << fmt::format(R"(<span class="red-text">Get fs quota fail, status({}).</span>)", status.error_str());
+  }
+
+  os << "</div>";
+
+  // dir quota
+  std::map<Ino, QuotaEntry> dir_quota_entry_map;
+  status = quota_manager.LoadDirQuotas(trace, dir_quota_entry_map);
+
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>Dir Quota</h3>)";
+  if (status.ok()) {
+    os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+    os << "<tr>";
+    os << "<th>Ino</th>";
+    os << "<th>MaxBytes(GB)</th>";
+    os << "<th>MaxInodes</th>";
+    os << "<th>UsedBytes(KB)</th>";
+    os << "<th>UsedInodes</th>";
+    os << "</tr>";
+
+    for (const auto& [ino, quota_entry] : dir_quota_entry_map) {
+      os << "<tr>";
+
+      os << fmt::format(R"(<td>{}</td>)", ino);
+      os << fmt::format(R"(<td>{}</td>)", render_bytes_func(quota_entry.max_bytes(), "GB"));
+      os << fmt::format(R"(<td>{}</td>)", render_inode_func(quota_entry.max_inodes()));
+      os << fmt::format(R"(<td>{}</td>)", render_bytes_func(quota_entry.used_bytes(), "KB"));
+      os << fmt::format(R"(<td>{}</td>)", render_inode_func(quota_entry.used_inodes()));
+
+      os << "</tr>";
+    }
+
+    os << "</table>";
+  } else {
+    os << fmt::format(R"(<span class="red-text">Load dir quota fail, status({}).</span>)", status.error_str());
+  }
+  os << "</div>";
+
+  os << "</body>";
+  os << "</html>";
 }
 
 static void RenderFsTreePage(FsUtils& fs_utils, uint32_t fs_id, butil::IOBufBuilder& os) {
@@ -381,7 +483,7 @@ static void RenderFsTreePage(FsUtils& fs_utils, uint32_t fs_id, butil::IOBufBuil
   os << R"(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>File System Directory Tree</title>
+<title>FileSystem Directory Tree</title>
 <style>
 body {
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -446,7 +548,7 @@ body {
   os << "</head>";
 
   os << "<body>";
-  os << "<h1>File System Directory Tree</h1>";
+  os << "<h1>FileSystem Directory Tree</h1>";
   os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,length,ctime,mtime,atime]</p>";
   os << R"(
 <div class="controls">
@@ -643,7 +745,7 @@ void RenderJsonPage(const std::string& header, const std::string& json, butil::I
 }
 
 void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
-  std::string header = fmt::format("File System {}({})", fs_info.fs_name(), fs_info.fs_id());
+  std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
   Helper::ProtoToJson(fs_info, json);
   RenderJsonPage(header, json, os);
@@ -654,6 +756,7 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
 
   os << "<head>" << RenderHead() << "</head>";
   os << "<body>";
+  os << R"(<h1 style="text-align:center;">Deleted File</h1>)";
 
   std::vector<AttrType> delfiles;
   auto status = filesystem->GetDelFiles(delfiles);
@@ -663,6 +766,7 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << R"(<h3>DelFile</h3>)";
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>Ino</th>";
@@ -708,6 +812,7 @@ void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
 
   os << "<head>" << RenderHead() << "</head>";
   os << "<body>";
+  os << R"(<h1 style="text-align:center;">Deleted Slice</h1>)";
 
   std::vector<TrashSliceList> delslices;
   auto status = filesystem->GetDelSlices(delslices);
@@ -717,6 +822,7 @@ void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << R"(<h3>DelSlice</h3>)";
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>FsId</th>";
@@ -786,6 +892,19 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       RenderFsDetailsPage(file_system->GetFsInfo(), os);
+
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
+  } else if (params.size() == 2 && params[0] == "quota") {
+    // /FsStatService/quota/{fs_id}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      RenderQuotaPage(file_system, os);
 
     } else {
       os << fmt::format("Not found file system {}.", fs_id);

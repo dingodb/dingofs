@@ -27,7 +27,6 @@
 #include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/parent_memo.h"
 #include "mdsv2/filesystem/store_operation.h"
-#include "mdsv2/storage/storage.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -36,7 +35,7 @@ namespace quota {
 
 class Quota {
  public:
-  Quota() = default;
+  Quota(Ino ino, QuotaEntry quota) : ino_(ino), quota_(quota) {}
   ~Quota() = default;
 
   using QuotaEntry = pb::mdsv2::Quota;
@@ -44,10 +43,7 @@ class Quota {
 
   Ino GetIno() const { return ino_; }
 
-  void UpdateUsage(int64_t byte_delta, int64_t inode_delta) {
-    byte_delta_.fetch_add(byte_delta, std::memory_order_relaxed);
-    inode_delta_.fetch_add(inode_delta, std::memory_order_relaxed);
-  }
+  void UpdateUsage(int64_t byte_delta, int64_t inode_delta);
 
   bool Check(int64_t byte_delta, int64_t inode_delta);
 
@@ -58,7 +54,7 @@ class Quota {
   void Refresh(const QuotaEntry& quota, const UsageEntry& minus_usage);
 
  private:
-  Ino ino_;
+  Ino ino_{0};
 
   std::atomic<int64_t> byte_delta_{0};
   std::atomic<int64_t> inode_delta_{0};
@@ -70,8 +66,10 @@ using QuotaSPtr = std::shared_ptr<Quota>;
 
 class DirQuotaMap {
  public:
-  DirQuotaMap() = default;
+  DirQuotaMap(ParentMemoSPtr parent_memo) : parent_memo_(parent_memo) {}
   ~DirQuotaMap() = default;
+
+  void InsertQuota(Ino ino, const QuotaEntry& quota);
 
   void UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta);
 
@@ -90,15 +88,18 @@ class DirQuotaMap {
 
   utils::RWLock rwlock_;
   // ino -> Quota
-  std::unordered_map<Ino, QuotaSPtr> quotas_;
+  std::unordered_map<Ino, QuotaSPtr> quota_map_;
 };
 
 // manages filesystem and directory quotas
 // include cache and store
 class QuotaManager {
  public:
-  QuotaManager(uint32_t fs_id, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor)
-      : fs_id_(fs_id), kv_storage_(std::move(kv_storage)), operation_processor_(std::move(operation_processor)) {}
+  QuotaManager(uint32_t fs_id, ParentMemoSPtr parent_memo, OperationProcessorSPtr operation_processor)
+      : fs_id_(fs_id),
+        fs_quota_(0, {}),
+        dir_quota_map_(parent_memo),
+        operation_processor_(std::move(operation_processor)) {}
   ~QuotaManager() = default;
 
   bool Init();
@@ -114,7 +115,7 @@ class QuotaManager {
   Status LoadDirQuotas(Trace& trace, std::map<Ino, QuotaEntry>& quota_entry_map);
 
   void UpdateFsUsage(int64_t byte_delta, int64_t inode_delta);
-  void UpdateDirUsage(Ino ino, int64_t byte_delta, int64_t inode_delta);
+  void UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta);
 
   bool CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta);
   QuotaSPtr GetNearestDirQuota(Ino ino);
@@ -136,8 +137,6 @@ class QuotaManager {
   Quota fs_quota_;
 
   DirQuotaMap dir_quota_map_;
-
-  KVStorageSPtr kv_storage_;
 
   OperationProcessorSPtr operation_processor_;
 };

@@ -380,13 +380,13 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
   }
 
   // update length
-  uint64_t length = inode.length();
+  uint64_t prev_length = inode.length();
   for (auto& slice : slices_) {
     if (inode.length() < slice.offset() + slice.len()) {
       inode.set_length(slice.offset() + slice.len());
     }
   }
-  result_.length_delta = inode.length() - length;
+  result_.length_delta = inode.length() - prev_length;
 
   // update attr
   inode.set_ctime(std::max(inode.ctime(), GetTime()));
@@ -1022,11 +1022,14 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
   std::string key = MetaCodec::EncodeDirQuotaKey(fs_id_, ino_);
   std::string value;
   auto status = txn->Get(key, value);
-  if (!status.ok()) {
+  if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
     return status;
   }
 
-  auto dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+  QuotaEntry dir_quota;
+  if (!value.empty()) {
+    dir_quota = MetaCodec::DecodeDirQuotaValue(value);
+  }
 
   dir_quota.set_max_bytes(quota_.max_bytes());
   dir_quota.set_max_inodes(quota_.max_inodes());

@@ -169,7 +169,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                       uint64_t& new_parent_version);
 
   // slice
-  Status WriteSlice(Context& ctx, Ino ino, uint64_t chunk_index, const std::vector<pb::mdsv2::Slice>& slices);
+  Status WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_index,
+                    const std::vector<pb::mdsv2::Slice>& slices);
   Status ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices);
 
   // compact

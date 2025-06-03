@@ -23,6 +23,14 @@ namespace dingofs {
 namespace mdsv2 {
 namespace quota {
 
+void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta) {
+  byte_delta_.fetch_add(byte_delta, std::memory_order_relaxed);
+  inode_delta_.fetch_add(inode_delta, std::memory_order_relaxed);
+
+  DINGO_LOG(INFO) << fmt::format("[quota] update usage, ino({}), byte_delta({}), inode_delta({}).", ino_, byte_delta,
+                                 inode_delta);
+}
+
 bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
   utils::ReadLockGuard lk(rwlock_);
 
@@ -68,15 +76,44 @@ QuotaEntry Quota::GetQuotaAndDelta() {
 void Quota::Refresh(const QuotaEntry& quota, const UsageEntry& minus_usage) {
   utils::WriteLockGuard lk(rwlock_);
 
-  byte_delta_.fetch_sub(minus_usage.bytes(), std::memory_order_relaxed);
-  inode_delta_.fetch_sub(minus_usage.inodes(), std::memory_order_relaxed);
+  if (minus_usage.bytes() != 0) {
+    byte_delta_.fetch_sub(minus_usage.bytes(), std::memory_order_relaxed);
+  }
+  if (minus_usage.inodes() != 0) {
+    inode_delta_.fetch_sub(minus_usage.inodes(), std::memory_order_relaxed);
+  }
+
   quota_ = quota;
 }
 
+void DirQuotaMap::InsertQuota(Ino ino, const QuotaEntry& quota) {
+  utils::WriteLockGuard lk(rwlock_);
+
+  auto it = quota_map_.find(ino);
+  if (it == quota_map_.end()) {
+    quota_map_[ino] = std::make_shared<Quota>(ino, quota);
+  }
+}
+
 void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) {
-  auto quota = GetNearestQuota(ino);
-  if (quota != nullptr) {
-    quota->UpdateUsage(byte_delta, inode_delta);
+  Ino curr_ino = ino;
+  while (true) {
+    auto quota = GetQuota(curr_ino);
+    if (quota != nullptr) {
+      quota->UpdateUsage(byte_delta, inode_delta);
+    }
+
+    if (curr_ino == 1) {
+      break;
+    }
+
+    Ino parent;
+    if (!parent_memo_->GetParent(curr_ino, parent)) {
+      DINGO_LOG(WARNING) << fmt::format("[quota] not found parent, ino({}).", curr_ino);
+      break;
+    }
+
+    curr_ino = parent;
   }
 }
 
@@ -118,8 +155,8 @@ std::vector<QuotaSPtr> DirQuotaMap::GetAllQuota() {
   utils::ReadLockGuard lk(rwlock_);
 
   std::vector<QuotaSPtr> quotas;
-  quotas.reserve(quotas_.size());
-  for (const auto& [_, quota] : quotas_) {
+  quotas.reserve(quota_map_.size());
+  for (const auto& [_, quota] : quota_map_) {
     quotas.push_back(quota);
   }
 
@@ -129,16 +166,25 @@ std::vector<QuotaSPtr> DirQuotaMap::GetAllQuota() {
 void DirQuotaMap::RefreshAll(const std::unordered_map<Ino, QuotaEntry>& quota_map) {
   utils::WriteLockGuard lk(rwlock_);
 
-  for (auto it = quotas_.begin(); it != quotas_.end();) {
+  for (auto it = quota_map_.begin(); it != quota_map_.end();) {
     const auto& ino = it->first;
 
     auto new_it = quota_map.find(ino);
     if (new_it == quota_map.end()) {
-      it = quotas_.erase(it);
+      // delete not exist quota
+      it = quota_map_.erase(it);
     } else {
+      // update existing quota
       it->second->Refresh(new_it->second, {});
 
       ++it;
+    }
+  }
+
+  // add new quotas
+  for (const auto& [ino, quota_entry] : quota_map) {
+    if (quota_map_.find(ino) == quota_map_.end()) {
+      quota_map_[ino] = std::make_shared<Quota>(ino, quota_entry);
     }
   }
 }
@@ -146,8 +192,8 @@ void DirQuotaMap::RefreshAll(const std::unordered_map<Ino, QuotaEntry>& quota_ma
 QuotaSPtr DirQuotaMap::GetQuota(Ino ino) {
   utils::ReadLockGuard lk(rwlock_);
 
-  auto it = quotas_.find(ino);
-  return (it != quotas_.end()) ? it->second : nullptr;
+  auto it = quota_map_.find(ino);
+  return (it != quota_map_.end()) ? it->second : nullptr;
 }
 
 bool QuotaManager::Init() {
@@ -173,8 +219,8 @@ void QuotaManager::UpdateFsUsage(int64_t byte_delta, int64_t inode_delta) {
   fs_quota_.UpdateUsage(byte_delta, inode_delta);
 }
 
-void QuotaManager::UpdateDirUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) {
-  dir_quota_map_.UpdateUsage(ino, byte_delta, inode_delta);
+void QuotaManager::UpdateDirUsage(Ino parent, int64_t byte_delta, int64_t inode_delta) {
+  dir_quota_map_.UpdateUsage(parent, byte_delta, inode_delta);
 }
 
 bool QuotaManager::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
@@ -225,6 +271,8 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota)
     DINGO_LOG(ERROR) << fmt::format("[quota] set dir quota fail, status({}).", status.error_str());
     return status;
   }
+
+  dir_quota_map_.InsertQuota(ino, quota);
 
   return Status::OK();
 }

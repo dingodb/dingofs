@@ -28,6 +28,7 @@
 #include "brpc/channel.h"
 #include "brpc/controller.h"
 #include "common/status.h"
+#include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "utils/concurrent/concurrent.h"
@@ -109,6 +110,16 @@ class RPC {
   EndPoint default_endpoint_;
 };
 
+inline Status TransformError(const pb::error::Error& error) {
+  switch (error.errcode()) {
+    case pb::error::EQUOTA_EXCEED:
+      return Status::NoSpace(error.errcode(), error.errmsg());
+
+    default:
+      return Status::Internal(error.errcode(), error.errmsg());
+  }
+}
+
 template <typename Request, typename Response>
 Status RPC::SendRequest(const EndPoint& endpoint,
                         const std::string& service_name,
@@ -170,8 +181,7 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
   } while (retry_count < FLAGS_rpc_retry_times);
 
-  return Status::Internal(response.error().errcode(),
-                          response.error().errmsg());
+  return TransformError(response.error());
 }
 
 }  // namespace v2

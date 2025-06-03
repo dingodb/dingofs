@@ -21,6 +21,7 @@
 #include "mdsv2/client/store.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/type.h"
 
 DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
 DEFINE_string(mds_addr, "", "mds address");
@@ -42,6 +43,7 @@ DEFINE_uint32(block_size, 4 * 1024 * 1024, "block size");
 DEFINE_string(name, "", "name");
 DEFINE_string(prefix, "", "prefix");
 
+DEFINE_uint64(ino, 0, "ino");
 DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
@@ -56,27 +58,37 @@ DEFINE_string(filesession_table_name, "dingofs-filesession", "file session table
 DEFINE_string(trash_chunk_table_name, "dingofs-trashchunk", "trash chunk table name");
 DEFINE_string(del_file_table_name, "dingofs-delfile", "del file table name");
 
+DEFINE_uint32(max_bytes, 1024 * 1024 * 1024, "max bytes");
+DEFINE_uint32(max_inodes, 1000000, "max inodes");
+
 DEFINE_bool(is_force, false, "is force");
 
-std::set<std::string> g_mds_cmd = {"getmdslist",
-                                   "createfs",
-                                   "deletefs",
-                                   "updatefs",
-                                   "getfs",
-                                   "listfs",
-                                   "mkdir",
-                                   "batchmkdir",
-                                   "mknod",
-                                   "batchmknod",
-                                   "getdentry",
-                                   "listdentry",
-                                   "getinode",
-                                   "batchgetinode",
-                                   "batchgetxattr",
-                                   "setfsstats",
-                                   "continuesetfsstats",
-                                   "getfsstats",
-                                   "getfspersecondstats"};
+std::set<std::string> g_mds_cmd = {
+    "getmdslist",
+    "createfs",
+    "deletefs",
+    "updatefs",
+    "getfs",
+    "listfs",
+    "mkdir",
+    "batchmkdir",
+    "mknod",
+    "batchmknod",
+    "getdentry",
+    "listdentry",
+    "getinode",
+    "batchgetinode",
+    "batchgetxattr",
+    "setfsstats",
+    "continuesetfsstats",
+    "getfsstats",
+    "getfspersecondstats",
+    "setfsquota",
+    "getfsquota",
+    "setdirquota",
+    "getdirquota",
+    "deletedirquota",
+};
 
 std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
@@ -115,7 +127,7 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    dingofs::mdsv2::client::MDSClient mds_client;
+    dingofs::mdsv2::client::MDSClient mds_client(FLAGS_fs_id);
     if (!mds_client.Init(FLAGS_mds_addr)) {
       std::cout << "init interaction fail." << '\n';
       return -1;
@@ -149,39 +161,39 @@ int main(int argc, char* argv[]) {
       mds_client.ListFs();
 
     } else if (lower_cmd == Helper::ToLowerCase("MkDir")) {
-      mds_client.MkDir(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+      mds_client.MkDir(FLAGS_parent, FLAGS_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("BatchMkDir")) {
       std::vector<int64_t> parents;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
-      mds_client.BatchMkDir(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
+      mds_client.BatchMkDir(parents, FLAGS_prefix, FLAGS_num);
 
     } else if (lower_cmd == Helper::ToLowerCase("MkNod")) {
-      mds_client.MkNod(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+      mds_client.MkNod(FLAGS_parent, FLAGS_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("BatchMkNod")) {
       std::vector<int64_t> parents;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
-      mds_client.BatchMkNod(FLAGS_fs_id, parents, FLAGS_prefix, FLAGS_num);
+      mds_client.BatchMkNod(parents, FLAGS_prefix, FLAGS_num);
 
     } else if (lower_cmd == Helper::ToLowerCase("GetDentry")) {
-      mds_client.GetDentry(FLAGS_fs_id, FLAGS_parent, FLAGS_name);
+      mds_client.GetDentry(FLAGS_parent, FLAGS_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("ListDentry")) {
-      mds_client.ListDentry(FLAGS_fs_id, FLAGS_parent, false);
+      mds_client.ListDentry(FLAGS_parent, false);
 
     } else if (lower_cmd == Helper::ToLowerCase("GetInode")) {
-      mds_client.GetInode(FLAGS_fs_id, FLAGS_parent);
+      mds_client.GetInode(FLAGS_parent);
 
     } else if (lower_cmd == Helper::ToLowerCase("BatchGetInode")) {
       std::vector<int64_t> inos;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
-      mds_client.BatchGetInode(FLAGS_fs_id, inos);
+      mds_client.BatchGetInode(inos);
 
     } else if (lower_cmd == Helper::ToLowerCase("BatchGetXattr")) {
       std::vector<int64_t> inos;
       dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
-      mds_client.BatchGetXattr(FLAGS_fs_id, inos);
+      mds_client.BatchGetXattr(inos);
 
     } else if (lower_cmd == Helper::ToLowerCase("SetFsStats")) {
       mds_client.SetFsStats(FLAGS_fs_name);
@@ -194,6 +206,45 @@ int main(int argc, char* argv[]) {
 
     } else if (lower_cmd == Helper::ToLowerCase("GetFsPerSecondStats")) {
       mds_client.GetFsPerSecondStats(FLAGS_fs_name);
+
+    } else if (lower_cmd == Helper::ToLowerCase("SetFsQuota")) {
+      dingofs::mdsv2::QuotaEntry quota;
+      quota.set_max_bytes(FLAGS_max_bytes);
+      quota.set_max_inodes(FLAGS_max_inodes);
+
+      mds_client.SetFsQuota(quota);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetFsQuota")) {
+      auto response = mds_client.GetFsQuota();
+      std::cout << "fs quota: " << response.quota().ShortDebugString() << '\n';
+
+    } else if (lower_cmd == Helper::ToLowerCase("SetDirQuota")) {
+      if (FLAGS_ino == 0) {
+        std::cout << "ino is empty." << '\n';
+        return -1;
+      }
+
+      dingofs::mdsv2::QuotaEntry quota;
+      quota.set_max_bytes(FLAGS_max_bytes);
+      quota.set_max_inodes(FLAGS_max_inodes);
+
+      mds_client.SetDirQuota(FLAGS_ino, quota);
+
+    } else if (lower_cmd == Helper::ToLowerCase("GetDirQuota")) {
+      if (FLAGS_ino == 0) {
+        std::cout << "ino is empty." << '\n';
+        return -1;
+      }
+
+      auto response = mds_client.GetDirQuota(FLAGS_ino);
+      std::cout << "dir quota: " << response.quota().ShortDebugString() << '\n';
+
+    } else if (lower_cmd == Helper::ToLowerCase("DeleteDirQuota")) {
+      if (FLAGS_ino == 0) {
+        std::cout << "ino is empty." << '\n';
+        return -1;
+      }
+      mds_client.DeleteDirQuota(FLAGS_ino);
 
     } else {
       std::cout << "Invalid command: " << lower_cmd;

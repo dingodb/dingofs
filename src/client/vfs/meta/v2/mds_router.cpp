@@ -50,13 +50,13 @@ bool MonoMDSRouter::Init(const pb::mdsv2::PartitionPolicy& partition_policy) {
   return UpdateMds(partition_policy.mono().mds_id());
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDSByParentIno(int64_t parent_ino) {  // NOLINT
+mdsv2::MDSMeta MonoMDSRouter::GetMDSByParentIno(Ino parent) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
 
   return mds_meta_;
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDSByIno(int64_t ino) {  // NOLINT
+mdsv2::MDSMeta MonoMDSRouter::GetMDSByIno(Ino ino) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
 
   return mds_meta_;
@@ -99,30 +99,30 @@ bool ParentHashMDSRouter::Init(
   return true;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParentIno(int64_t parent_ino) {
+mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParentIno(Ino parent) {
   utils::ReadLockGuard lk(lock_);
 
-  int64_t bucket_id = parent_ino % hash_partition_.bucket_num();
+  int64_t bucket_id = parent % hash_partition_.bucket_num();
   auto it = mdses_.find(bucket_id);
   CHECK(it != mdses_.end())
-      << fmt::format("not found mds by parent_ino({}).", parent_ino);
+      << fmt::format("not found mds by parent_ino({}).", parent);
 
   return it->second;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(int64_t ino) {
-  int64_t parent_ino = 1;
+mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(Ino ino) {
+  Ino parent = 1;
   if (ino != 1) {
-    CHECK(parent_cache_->GetParent(ino, parent_ino))
+    CHECK(parent_cache_->GetParent(ino, parent))
         << fmt::format("not found parent_ino by ino({}).", ino);
   }
 
   utils::ReadLockGuard lk(lock_);
 
-  int64_t bucket_id = parent_ino % hash_partition_.bucket_num();
+  int64_t bucket_id = parent % hash_partition_.bucket_num();
   auto it = mdses_.find(bucket_id);
   CHECK(it != mdses_.end())
-      << fmt::format("not found mds by parent_ino({}).", parent_ino);
+      << fmt::format("not found mds by parent_ino({}).", parent);
 
   return it->second;
 }
