@@ -22,7 +22,7 @@
 #include "mdsv2/background/fsinfo_sync.h"
 #include "mdsv2/background/gc.h"
 #include "mdsv2/background/heartbeat.h"
-#include "mdsv2/background/mds_monitor.h"
+#include "mdsv2/background/monitor.h"
 #include "mdsv2/background/quota_sync.h"
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
@@ -63,7 +63,7 @@ class Server {
 
   bool InitWorkerSet();
 
-  bool InitMDSMonitor();
+  bool InitMonitor();
 
   bool InitQuotaSynchronizer();
 
@@ -80,7 +80,7 @@ class Server {
   FsInfoSync& GetFsInfoSync();
   CoordinatorClientSPtr GetCoordinatorClient();
   FileSystemSetSPtr GetFileSystemSet();
-  MDSMonitorSPtr GetMDSMonitor();
+  MonitorSPtr GetMonitor();
   OperationProcessorSPtr GetOperationProcessor();
   QuotaSynchronizerSPtr GetQuotaSynchronizer();
   GcProcessorSPtr GetGcProcessor();
@@ -130,7 +130,7 @@ class Server {
   FsInfoSync fs_info_sync_;
 
   // mds monitor
-  MDSMonitorSPtr mds_monitor_;
+  MonitorSPtr monitor_;
 
   // quota synchronizer
   QuotaSynchronizerSPtr quota_synchronizer_;

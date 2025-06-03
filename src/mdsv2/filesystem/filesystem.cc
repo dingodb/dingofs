@@ -2426,6 +2426,21 @@ uint32_t FileSystemSet::GetFsId(const std::string& fs_name) {
   return 0;
 }
 
+std::string FileSystemSet::GetFsName(const std::string& client_id) {
+  utils::ReadLockGuard lk(lock_);
+
+  for (auto& [fs_id, fs] : fs_map_) {
+    auto fs_info = fs->GetFsInfo();
+    for (const auto& mountpoint : fs_info.mount_points()) {
+      if (mountpoint.client_id() == client_id) {
+        return fs->FsName();
+      }
+    }
+  }
+
+  return "";  // not found
+}
+
 std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() {
   utils::ReadLockGuard lk(lock_);
 

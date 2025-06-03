@@ -215,9 +215,9 @@ bool Server::InitFileSystem() {
 
 bool Server::InitHeartbeat() {
   DINGO_LOG(INFO) << "init heartbeat.";
-  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
 
-  heartbeat_ = Heartbeat::New(kv_storage_);
+  heartbeat_ = Heartbeat::New(operation_processor_);
   return heartbeat_->Init();
 }
 
@@ -245,7 +245,7 @@ bool Server::InitWorkerSet() {
   return true;
 }
 
-bool Server::InitMDSMonitor() {
+bool Server::InitMonitor() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
   CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
@@ -253,10 +253,10 @@ bool Server::InitMDSMonitor() {
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
-  mds_monitor_ = MDSMonitor::New(file_system_set_, dist_lock);
-  CHECK(mds_monitor_ != nullptr) << "new MDSMonitor fail.";
+  monitor_ = Monitor::New(file_system_set_, dist_lock);
+  CHECK(monitor_ != nullptr) << "new MDSMonitor fail.";
 
-  CHECK(mds_monitor_->Init()) << "init MDSMonitor fail.";
+  CHECK(monitor_->Init()) << "init MDSMonitor fail.";
 
   return true;
 }
@@ -308,7 +308,7 @@ bool Server::InitCrontab() {
       "MDS_MONITOR",
       FLAGS_mdsmonitor_interval_s * 1000,
       true,
-      [](void*) { Server::GetInstance().GetMDSMonitor()->Run(); },
+      [](void*) { Server::GetInstance().GetMonitor()->Run(); },
   });
 
   // Add quota sync crontab
@@ -377,10 +377,10 @@ FileSystemSetSPtr Server::GetFileSystemSet() {
   return file_system_set_;
 }
 
-MDSMonitorSPtr Server::GetMDSMonitor() {
-  CHECK(mds_monitor_ != nullptr) << "mds_monitor is nullptr.";
+MonitorSPtr Server::GetMonitor() {
+  CHECK(monitor_ != nullptr) << "mds_monitor is nullptr.";
 
-  return mds_monitor_;
+  return monitor_;
 }
 
 OperationProcessorSPtr Server::GetOperationProcessor() {
@@ -441,7 +441,7 @@ void Server::Stop() {
   crontab_manager_.Destroy();
   read_worker_set_->Destroy();
   write_worker_set_->Destroy();
-  mds_monitor_->Destroy();
+  monitor_->Destroy();
 }
 
 }  // namespace mdsv2

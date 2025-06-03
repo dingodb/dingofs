@@ -14,19 +14,17 @@
 
 #include "mdsv2/background/heartbeat.h"
 
-#include <fmt/format.h>
-
 #include <string>
 #include <vector>
 
-#include "fmt/core.h"
-#include "mdsv2/common/codec.h"
+#include "fmt/format.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/server.h"
-#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -64,13 +62,15 @@ void Heartbeat::SendHeartbeat() {
   SendHeartbeat(mds);
 }
 
-Status Heartbeat::SendHeartbeat(pb::mdsv2::MDS& mds) {
+Status Heartbeat::SendHeartbeat(MdsEntry& mds) {
   mds.set_last_online_time_ms(Helper::TimestampMs());
 
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] mds {}.", mds.ShortDebugString());
 
-  KVStorage::WriteOption option;
-  auto status = kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(mds.id()), MetaCodec::EncodeHeartbeatValue(mds));
+  Trace trace;
+  UpsertMdsOperation operation(trace, mds);
+
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, mds({}) error({}).", mds.ShortDebugString(),
                                     status.error_str());
@@ -79,14 +79,15 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::MDS& mds) {
   return status;
 }
 
-Status Heartbeat::SendHeartbeat(pb::mdsv2::Client& client) {
+Status Heartbeat::SendHeartbeat(ClientEntry& client) {
   client.set_last_online_time_ms(Helper::TimestampMs());
 
   DINGO_LOG(DEBUG) << fmt::format("[heartbeat] client {}.", client.ShortDebugString());
 
-  KVStorage::WriteOption option;
-  auto status =
-      kv_storage_->Put(option, MetaCodec::EncodeHeartbeatKey(client.id()), MetaCodec::EncodeHeartbeatValue(client));
+  Trace trace;
+  UpsertClientOperation operation(trace, client);
+
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[heartbeat] send fail, client({}) error({}).", client.ShortDebugString(),
                                     status.error_str());
@@ -95,35 +96,24 @@ Status Heartbeat::SendHeartbeat(pb::mdsv2::Client& client) {
   return status;
 }
 
-Status Heartbeat::GetMDSList(std::vector<pb::mdsv2::MDS>& mdses) {
-  Range range;
-  MetaCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
+Status Heartbeat::GetMDSList(std::vector<MdsEntry>& mdses) {
+  Trace trace;
+  ScanMdsOperation operation(trace);
 
-  auto txn = kv_storage_->NewTxn();
-  Status status;
-  std::vector<KeyValue> kvs;
-  do {
-    kvs.clear();
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get mds list fail, error({}).", status.error_str());
+    return status;
+  }
 
-    for (auto& kv : kvs) {
-      if (!MetaCodec::IsMdsHeartbeatKey(kv.key)) continue;
+  auto& result = operation.GetResult();
+  mdses = std::move(result.mds_entries);
 
-      pb::mdsv2::MDS mds;
-      MetaCodec::DecodeHeartbeatValue(kv.value, mds);
-      mdses.push_back(mds);
-    }
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  return status;
+  return Status::OK();
 }
 
 Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
-  std::vector<pb::mdsv2::MDS> pb_mdses;
+  std::vector<MdsEntry> pb_mdses;
   auto status = GetMDSList(pb_mdses);
   if (!status.ok()) {
     return status;
@@ -136,31 +126,27 @@ Status Heartbeat::GetMDSList(std::vector<MDSMeta>& mdses) {
   return Status::OK();
 }
 
-Status Heartbeat::GetClientList(std::vector<pb::mdsv2::Client>& clients) {
-  Range range;
-  MetaCodec::GetHeartbeatClientRange(range.start_key, range.end_key);
+Status Heartbeat::GetClientList(std::vector<ClientEntry>& clients) {
+  Trace trace;
+  ScanClientOperation operation(trace);
 
-  auto txn = kv_storage_->NewTxn();
-  Status status;
-  std::vector<KeyValue> kvs;
-  do {
-    kvs.clear();
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[heartbeat] get client list fail, error({}).", status.error_str());
+    return status;
+  }
 
-    for (auto& kv : kvs) {
-      if (!MetaCodec::IsClientHeartbeatKey(kv.key)) continue;
+  auto& result = operation.GetResult();
+  clients = std::move(result.client_entries);
 
-      pb::mdsv2::Client client;
-      MetaCodec::DecodeHeartbeatValue(kv.value, client);
-      clients.push_back(client);
-    }
+  return Status::OK();
+}
 
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+Status Heartbeat::CleanClient(const std::string& client_id) {
+  Trace trace;
+  DeleteClientOperation operation(trace, client_id);
 
-  return status;
+  return operation_processor_->RunAlone(&operation);
 }
 
 }  // namespace mdsv2

@@ -24,7 +24,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-static pb::mdsv2::MDS::State ToPbMdsState(MDSMeta::State state) {
+static MdsEntry::State ToPbMdsState(MDSMeta::State state) {
   switch (state) {
     case MDSMeta::State::kInit:
       return pb::mdsv2::MDS_State_INIT;
@@ -40,7 +40,7 @@ static pb::mdsv2::MDS::State ToPbMdsState(MDSMeta::State state) {
   return pb::mdsv2::MDS_State_INIT;
 }
 
-static MDSMeta::State ToMdsState(pb::mdsv2::MDS::State state) {
+static MDSMeta::State ToMdsState(MdsEntry::State state) {
   switch (state) {
     case pb::mdsv2::MDS_State_INIT:
       return MDSMeta::State::kInit;
@@ -56,7 +56,7 @@ static MDSMeta::State ToMdsState(pb::mdsv2::MDS::State state) {
   return MDSMeta::State::kInit;
 }
 
-MDSMeta::MDSMeta(const pb::mdsv2::MDS& pb_mds) {
+MDSMeta::MDSMeta(const MdsEntry& pb_mds) {
   id_ = pb_mds.id();
   host_ = pb_mds.location().host();
   port_ = pb_mds.location().port();
@@ -77,8 +77,8 @@ std::string MDSMeta::ToString() const {
                      static_cast<int>(state_), last_online_time_ms_);
 }
 
-pb::mdsv2::MDS MDSMeta::ToProto() const {
-  pb::mdsv2::MDS pb_mds;
+MdsEntry MDSMeta::ToProto() const {
+  MdsEntry pb_mds;
   pb_mds.set_id(id_);
   pb_mds.mutable_location()->set_host(host_);
   pb_mds.mutable_location()->set_port(port_);

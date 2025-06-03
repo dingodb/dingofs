@@ -1117,6 +1117,82 @@ Status FlushDirUsagesOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status UpsertMdsOperation::Run(TxnUPtr& txn) {
+  txn->Put(MetaCodec::EncodeHeartbeatKey(mds_meta_.id()), MetaCodec::EncodeHeartbeatValue(mds_meta_));
+
+  return Status::OK();
+}
+
+Status DeleteMdsOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeHeartbeatKey(mds_id_));
+
+  return Status::OK();
+}
+
+Status ScanMdsOperation::Run(TxnUPtr& txn) {
+  Range range;
+  MetaCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
+
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      if (!MetaCodec::IsMdsHeartbeatKey(kv.key)) continue;
+
+      MdsEntry mds;
+      MetaCodec::DecodeHeartbeatValue(kv.value, mds);
+      result_.mds_entries.push_back(mds);
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  return status;
+}
+
+Status UpsertClientOperation::Run(TxnUPtr& txn) {
+  txn->Put(MetaCodec::EncodeHeartbeatKey(client_.id()), MetaCodec::EncodeHeartbeatValue(client_));
+
+  return Status::OK();
+}
+
+Status DeleteClientOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeHeartbeatKey(client_id_));
+
+  return Status::OK();
+}
+
+Status ScanClientOperation::Run(TxnUPtr& txn) {
+  Range range;
+  MetaCodec::GetHeartbeatClientRange(range.start_key, range.end_key);
+
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      if (!MetaCodec::IsClientHeartbeatKey(kv.key)) continue;
+
+      ClientEntry client;
+      MetaCodec::DecodeHeartbeatValue(kv.value, client);
+      result_.client_entries.push_back(client);
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  return status;
+}
+
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {
   bthread_mutex_init(&mutex_, nullptr);
   bthread_cond_init(&cond_, nullptr);

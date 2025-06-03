@@ -80,10 +80,10 @@ class MetaCodec {
   static bool IsClientHeartbeatKey(const std::string& key);
   static void DecodeHeartbeatKey(const std::string& key, int64_t& mds_id);
   static void DecodeHeartbeatKey(const std::string& key, std::string& client_id);
-  static std::string EncodeHeartbeatValue(const pb::mdsv2::MDS& mds);
-  static std::string EncodeHeartbeatValue(const pb::mdsv2::Client& client);
-  static void DecodeHeartbeatValue(const std::string& value, pb::mdsv2::MDS& mds);
-  static void DecodeHeartbeatValue(const std::string& value, pb::mdsv2::Client& client);
+  static std::string EncodeHeartbeatValue(const MdsEntry& mds);
+  static std::string EncodeHeartbeatValue(const ClientEntry& client);
+  static void DecodeHeartbeatValue(const std::string& value, MdsEntry& mds);
+  static void DecodeHeartbeatValue(const std::string& value, ClientEntry& client);
 
   // fs
   // format: [$prefix, $type, $name]

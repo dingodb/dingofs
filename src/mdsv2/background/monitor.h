@@ -25,16 +25,16 @@
 namespace dingofs {
 namespace mdsv2 {
 
-class MDSMonitor;
-using MDSMonitorSPtr = std::shared_ptr<MDSMonitor>;
+class Monitor;
+using MonitorSPtr = std::shared_ptr<Monitor>;
 
-class MDSMonitor {
+class Monitor {
  public:
-  MDSMonitor(FileSystemSetSPtr fs_set, DistributionLockSPtr dist_lock) : fs_set_(fs_set), dist_lock_(dist_lock) {}
-  ~MDSMonitor() = default;
+  Monitor(FileSystemSetSPtr fs_set, DistributionLockSPtr dist_lock) : fs_set_(fs_set), dist_lock_(dist_lock) {}
+  ~Monitor() = default;
 
-  static MDSMonitorSPtr New(FileSystemSetSPtr fs_set, DistributionLockSPtr dist_lock) {
-    return std::make_shared<MDSMonitor>(fs_set, dist_lock);
+  static MonitorSPtr New(FileSystemSetSPtr fs_set, DistributionLockSPtr dist_lock) {
+    return std::make_shared<Monitor>(fs_set, dist_lock);
   }
 
   bool Init();
@@ -48,14 +48,14 @@ class MDSMonitor {
   static void NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name);
   static void NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name);
 
+  Status MonitorClient();
+
   std::atomic<bool> is_running_{false};
 
   FileSystemSetSPtr fs_set_;
 
   DistributionLockSPtr dist_lock_;
 };
-
-using MDSMonitorSPtr = std::shared_ptr<MDSMonitor>;
 
 }  // namespace mdsv2
 }  // namespace dingofs

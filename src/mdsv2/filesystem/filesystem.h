@@ -333,6 +333,7 @@ class FileSystemSet {
   FileSystemSPtr GetFileSystem(uint32_t fs_id);
   FileSystemSPtr GetFileSystem(const std::string& fs_name);
   uint32_t GetFsId(const std::string& fs_name);
+  std::string GetFsName(const std::string& client_id);
   std::vector<FileSystemSPtr> GetAllFileSystem();
 
   // load already exist filesystem

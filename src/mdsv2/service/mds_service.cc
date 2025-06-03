@@ -112,7 +112,7 @@ void MDSServiceImpl::DoGetMDSList(google::protobuf::RpcController* controller, c
     return ServiceHelper::SetError(response->mutable_error(), pb::error::EINTERNAL, "heartbeat is nullptr");
   }
 
-  std::vector<pb::mdsv2::MDS> mdses;
+  std::vector<MdsEntry> mdses;
   auto status = heartbeat->GetMDSList(mdses);
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

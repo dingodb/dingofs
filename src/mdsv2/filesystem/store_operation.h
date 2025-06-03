@@ -66,6 +66,13 @@ class Operation {
     kDeleteDirQuota = 36,
     kLoadDirQuotas = 37,
     kFlushDirUsages = 38,
+
+    kUpsertMds = 40,
+    kDeleteMds = 41,
+    kScanMds = 42,
+    kUpsertClient = 43,
+    kDeleteClient = 44,
+    kScanClient = 45,
   };
 
   const char* OpName() const {
@@ -138,6 +145,24 @@ class Operation {
 
       case OpType::kFlushDirUsages:
         return "FlushDirUsages";
+
+      case OpType::kUpsertMds:
+        return "UpsertMds";
+
+      case OpType::kDeleteMds:
+        return "DeleteMds";
+
+      case OpType::kScanMds:
+        return "ScanMds";
+
+      case OpType::kUpsertClient:
+        return "UpsertClient";
+
+      case OpType::kDeleteClient:
+        return "DeleteClient";
+
+      case OpType::kScanClient:
+        return "ScanClient";
 
       default:
         return "UnknownOperation";
@@ -827,6 +852,128 @@ class FlushDirUsagesOperation : public Operation {
   uint32_t fs_id_;
   std::map<uint64_t, UsageEntry> usages_;
 
+  Result result_;
+};
+
+class UpsertMdsOperation : public Operation {
+ public:
+  UpsertMdsOperation(Trace& trace, const MdsEntry& mds_meta) : Operation(trace), mds_meta_(mds_meta) {};
+  ~UpsertMdsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpsertMds; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  MdsEntry mds_meta_;
+};
+
+class DeleteMdsOperation : public Operation {
+ public:
+  DeleteMdsOperation(Trace& trace, uint64_t mds_id) : Operation(trace), mds_id_(mds_id) {};
+  ~DeleteMdsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteMds; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint64_t mds_id_;
+};
+
+class ScanMdsOperation : public Operation {
+ public:
+  ScanMdsOperation(Trace& trace) : Operation(trace) {};
+  ~ScanMdsOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<MdsEntry> mds_entries;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanMds; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  Result result_;
+};
+
+class UpsertClientOperation : public Operation {
+ public:
+  UpsertClientOperation(Trace& trace, const ClientEntry& client) : Operation(trace), client_(client) {};
+  ~UpsertClientOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpsertClient; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  ClientEntry client_;
+};
+
+class DeleteClientOperation : public Operation {
+ public:
+  DeleteClientOperation(Trace& trace, const std::string& client_id) : Operation(trace), client_id_(client_id) {};
+  ~DeleteClientOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteClient; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string client_id_;
+};
+
+class ScanClientOperation : public Operation {
+ public:
+  ScanClientOperation(Trace& trace) : Operation(trace) {};
+  ~ScanClientOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<ClientEntry> client_entries;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanClient; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
   Result result_;
 };
 

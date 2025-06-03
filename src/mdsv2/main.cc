@@ -243,7 +243,7 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitWorkerSet()) << "init worker set error.";
   CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
-  CHECK(server.InitMDSMonitor()) << "init mds monitor error.";
+  CHECK(server.InitMonitor()) << "init mds monitor error.";
   CHECK(server.InitGcProcessor()) << "init gc error.";
   CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";
   CHECK(server.InitCrontab()) << "init crontab error.";

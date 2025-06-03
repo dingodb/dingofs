@@ -15,11 +15,10 @@
 #ifndef DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 #define DINGOFS_MDSV2_BACKGROUND_HEARTBEAT_H_
 
-#include "common/status.h"
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/runnable.h"
+#include "mdsv2/common/status.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/mds/mds_meta.h"
-#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -29,10 +28,12 @@ using HeartbeatSPtr = std::shared_ptr<Heartbeat>;
 
 class Heartbeat {
  public:
-  Heartbeat(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {};
+  Heartbeat(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {};
   ~Heartbeat() = default;
 
-  static HeartbeatSPtr New(KVStorageSPtr kv_storage) { return std::make_shared<Heartbeat>(kv_storage); }
+  static HeartbeatSPtr New(OperationProcessorSPtr operation_processor) {
+    return std::make_shared<Heartbeat>(operation_processor);
+  }
 
   bool Init();
   bool Destroy();
@@ -40,18 +41,20 @@ class Heartbeat {
   void Run();
 
   void SendHeartbeat();
-  Status SendHeartbeat(pb::mdsv2::MDS& mds);
-  Status SendHeartbeat(pb::mdsv2::Client& client);
+  Status SendHeartbeat(MdsEntry& mds);
+  Status SendHeartbeat(ClientEntry& client);
 
-  Status GetMDSList(std::vector<pb::mdsv2::MDS>& mdses);
+  Status GetMDSList(std::vector<MdsEntry>& mdses);
   Status GetMDSList(std::vector<MDSMeta>& mdses);
 
-  Status GetClientList(std::vector<pb::mdsv2::Client>& clients);
+  Status GetClientList(std::vector<ClientEntry>& clients);
+
+  Status CleanClient(const std::string& client_id);
 
  private:
   std::atomic<bool> is_running_{false};
 
-  KVStorageSPtr kv_storage_;
+  OperationProcessorSPtr operation_processor_;
 
   WorkerSPtr worker_;
 };

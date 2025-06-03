@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/type.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -35,7 +35,7 @@ class MDSMeta {
   MDSMeta() = default;
   ~MDSMeta() = default;
 
-  MDSMeta(const pb::mdsv2::MDS& pb_mds);
+  MDSMeta(const MdsEntry& pb_mds);
   MDSMeta(const MDSMeta& mds_meta);
   MDSMeta& operator=(const MDSMeta& mds_meta) = default;
 
@@ -74,7 +74,7 @@ class MDSMeta {
   void SetLastOnlineTimeMs(uint64_t time_ms) { last_online_time_ms_ = time_ms; }
 
   std::string ToString() const;
-  pb::mdsv2::MDS ToProto() const;
+  MdsEntry ToProto() const;
 
  private:
   int64_t id_{0};

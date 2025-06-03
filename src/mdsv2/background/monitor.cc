@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "mdsv2/background/mds_monitor.h"
+#include "mdsv2/background/monitor.h"
 
 #include <atomic>
 #include <cstdint>
@@ -35,6 +35,10 @@ namespace dingofs {
 namespace mdsv2 {
 
 DEFINE_uint32(mds_offline_period_time_ms, 30 * 1000, "mds offline period time ms");
+
+DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period time ms");
+
+DEFINE_uint32(client_clean_period_time_s, 600, "client clean period time s");
 
 void GetOfflineMDS(const std::vector<MDSMeta>& mdses, std::vector<MDSMeta>& online_mdses,
                    std::vector<MDSMeta>& offline_mdses) {
@@ -135,17 +139,26 @@ static std::map<uint64_t, BucketSet> AdjustParentHashDistribution(const std::map
   return new_distributions;
 }
 
-bool MDSMonitor::Init() { return dist_lock_->Init(); }
+bool Monitor::Init() { return dist_lock_->Init(); }
 
-void MDSMonitor::Destroy() { dist_lock_->Destroy(); }
+void Monitor::Destroy() { dist_lock_->Destroy(); }
 
-void MDSMonitor::Run() {
-  DINGO_LOG(INFO) << "[monitor] monitor mds start......";
+void Monitor::Run() {
+  bool running = false;
+  if (!is_running_.compare_exchange_strong(running, true)) {
+    DINGO_LOG(INFO) << "[monitor] already running......";
+    return;
+  }
+  DEFER(is_running_.store(false));
+
   auto status = MonitorMDS();
   DINGO_LOG(INFO) << fmt::format("[monitor] monitor mds finish, {}.", status.error_str());
+
+  status = MonitorClient();
+  DINGO_LOG(INFO) << fmt::format("[monitor] monitor client finish, {}.", status.error_str());
 }
 
-void MDSMonitor::NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name) {
+void Monitor::NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name) {
   butil::EndPoint endpoint;
   butil::str2endpoint(mds.Host().c_str(), mds.Port(), &endpoint);
   auto status = ServiceAccess::RefreshFsInfo(endpoint, fs_name);
@@ -154,7 +167,7 @@ void MDSMonitor::NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name)
   }
 }
 
-void MDSMonitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name) {
+void Monitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name) {
   for (const auto& mds : mdses) {
     NotifyRefreshFs(mds, fs_name);
   }
@@ -182,17 +195,10 @@ void CheckMdsAlive(std::vector<MDSMeta>& offline_mdses, std::vector<MDSMeta>& on
 // 3. get fs info
 // 4. eliminate dead mds, add new mds
 // 5. notify new mds
-Status MDSMonitor::MonitorMDS() {
-  bool running = false;
-  if (!is_running_.compare_exchange_strong(running, true)) {
-    DINGO_LOG(INFO) << "[monitor] mds already running......";
-    return Status::OK();
-  }
-  DEFER(is_running_.store(false));
-
+Status Monitor::MonitorMDS() {
   auto& server = Server::GetInstance();
   auto heartbeat = server.GetHeartbeat();
-  auto mds_meta_map = Server::GetInstance().GetMDSMetaMap();
+  auto mds_meta_map = server.GetMDSMetaMap();
 
   // get all mds meta
   std::vector<MDSMeta> mdses;
@@ -218,7 +224,7 @@ Status MDSMonitor::MonitorMDS() {
   return ProcessFaultMDS(mdses);
 }
 
-Status MDSMonitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
+Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
   auto fs_set = fs_set_->GetAllFileSystem();
   if (fs_set.empty()) {
     return Status::OK();
@@ -293,6 +299,55 @@ Status MDSMonitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
         // notify new mds to start serve partition
         auto mds_metas = GetMdsMetas(mdses, GetMdsIds(new_distributions));
         NotifyRefreshFs(mds_metas, fs->FsName());
+      }
+    }
+  }
+
+  return Status::OK();
+}
+
+Status Monitor::MonitorClient() {
+  auto& server = Server::GetInstance();
+  auto heartbeat = server.GetHeartbeat();
+
+  std::vector<ClientEntry> clients;
+  auto status = heartbeat->GetClientList(clients);
+  if (!status.ok()) {
+    return Status(status.error_code(), fmt::format("get client list fail, {}", status.error_str()));
+  }
+
+  uint64_t now_ms = Helper::TimestampMs();
+
+  // umount all offline clients
+  for (const auto& client : clients) {
+    if (client.last_online_time_ms() + FLAGS_client_offline_period_time_ms > now_ms) {
+      // client is online
+      continue;
+    }
+
+    // client is offline, umount client
+    auto fs_name = fs_set_->GetFsName(client.id());
+    if (!fs_name.empty()) {
+      // umount fs from client
+      Context ctx;
+      pb::mdsv2::MountPoint mountpoint;
+      mountpoint.set_client_id(client.id());
+      mountpoint.set_hostname(client.hostname());
+      mountpoint.set_port(client.port());
+      mountpoint.set_path(client.mountpoint());
+
+      auto status = fs_set_->UmountFs(ctx, fs_name, mountpoint);
+      if (!status.ok()) {
+        DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client.id(),
+                                        status.error_str());
+      }
+
+    } else {
+      // clean client
+      if (client.last_online_time_ms() + FLAGS_client_clean_period_time_s * 1000 < now_ms) {
+        auto status = heartbeat->CleanClient(client.id());
+        DINGO_LOG(INFO) << fmt::format("[monitor] clean client({}) finish, status({}).", client.id(),
+                                       status.error_str());
       }
     }
   }

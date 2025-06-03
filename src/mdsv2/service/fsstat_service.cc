@@ -40,7 +40,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 DECLARE_uint32(mds_offline_period_time_ms);
-DEFINE_uint32(client_offline_period_time_ms, 30 * 1000, "client offline period time ms");
+DECLARE_uint32(client_offline_period_time_ms);
 
 static std::string RenderHead() {
   butil::IOBufBuilder os;
@@ -231,7 +231,7 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
   return buf.to_string();
 }
 
-static std::string RenderMdsList(const std::vector<pb::mdsv2::MDS>& mdses) {
+static std::string RenderMdsList(const std::vector<MdsEntry>& mdses) {
   butil::IOBufBuilder os;
 
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
@@ -251,7 +251,7 @@ static std::string RenderMdsList(const std::vector<pb::mdsv2::MDS>& mdses) {
     os << "<tr>";
     os << "<td>" << mds.id() << "</td>";
     os << "<td>" << fmt::format("{}:{}", mds.location().host(), mds.location().port()) << "</td>";
-    os << "<td>" << pb::mdsv2::MDS::State_Name(mds.state()) << "</td>";
+    os << "<td>" << MdsEntry::State_Name(mds.state()) << "</td>";
     os << "<td>" << Helper::FormatMsTime(mds.last_online_time_ms()) << "</td>";
     if (mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) {
       os << "<td style=\"color:red\">NO</td>";
@@ -271,7 +271,7 @@ static std::string RenderMdsList(const std::vector<pb::mdsv2::MDS>& mdses) {
   return buf.to_string();
 }
 
-static std::string RenderClientList(const std::vector<pb::mdsv2::Client>& clients) {
+static std::string RenderClientList(const std::vector<ClientEntry>& clients) {
   butil::IOBufBuilder os;
 
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
@@ -338,20 +338,20 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 
   // mds stats
   auto heartbeat = Server::GetInstance().GetHeartbeat();
-  std::vector<pb::mdsv2::MDS> mdses;
+  std::vector<MdsEntry> mdses;
   status = heartbeat->GetMDSList(mdses);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[mdsstat] get mds list fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get mds list fail, error({}).</div>)", status.error_str());
 
   } else {
-    sort(mdses.begin(), mdses.end(), [](const pb::mdsv2::MDS& a, const pb::mdsv2::MDS& b) { return a.id() < b.id(); });
+    sort(mdses.begin(), mdses.end(), [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
     os << RenderMdsList(mdses);
   }
 
   // client stats
   // auto heartbeat = Server::GetInstance().GetHeartbeat();
-  std::vector<pb::mdsv2::Client> clients;
+  std::vector<ClientEntry> clients;
   status = heartbeat->GetClientList(clients);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[mdsstat] get client list fail, error({}).", status.error_str());
@@ -359,9 +359,8 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 
   } else {
     // sort by last_online_time
-    sort(clients.begin(), clients.end(), [](const pb::mdsv2::Client& a, const pb::mdsv2::Client& b) {
-      return a.last_online_time_ms() > b.last_online_time_ms();
-    });
+    sort(clients.begin(), clients.end(),
+         [](const ClientEntry& a, const ClientEntry& b) { return a.last_online_time_ms() > b.last_online_time_ms(); });
 
     os << RenderClientList(clients);
   }

@@ -377,15 +377,15 @@ void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_i
   client_id = key.substr(kPrefixSize + 5);
 }
 
-std::string MetaCodec::EncodeHeartbeatValue(const pb::mdsv2::MDS& mds) { return mds.SerializeAsString(); }
+std::string MetaCodec::EncodeHeartbeatValue(const MdsEntry& mds) { return mds.SerializeAsString(); }
 
-std::string MetaCodec::EncodeHeartbeatValue(const pb::mdsv2::Client& client) { return client.SerializeAsString(); }
+std::string MetaCodec::EncodeHeartbeatValue(const ClientEntry& client) { return client.SerializeAsString(); }
 
-void MetaCodec::DecodeHeartbeatValue(const std::string& value, pb::mdsv2::MDS& mds) {
+void MetaCodec::DecodeHeartbeatValue(const std::string& value, MdsEntry& mds) {
   CHECK(mds.ParseFromString(value)) << "parse mds fail.";
 }
 
-void MetaCodec::DecodeHeartbeatValue(const std::string& value, pb::mdsv2::Client& client) {
+void MetaCodec::DecodeHeartbeatValue(const std::string& value, ClientEntry& client) {
   CHECK(client.ParseFromString(value)) << "parse client fail.";
 }
 
