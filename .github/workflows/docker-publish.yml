@@ -159,7 +159,7 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
 
     - name: Docker meta mdsv2
-      if: steps.check-event.outputs.continue == 'true'
+      if: ${{ steps.check-event.outputs.continue == 'true' && env.BRANCH_NAME == 'main' }}
       id: meta-v2
       uses: docker/metadata-action@v5
       with:
@@ -169,7 +169,7 @@ jobs:
           type=sha,prefix=mdsv2-,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
 
     - name: Build and push mdsv2
-      if: steps.check-event.outputs.continue == 'true'
+      if: ${{ steps.check-event.outputs.continue == 'true' && env.BRANCH_NAME == 'main' }}
       uses: docker/build-push-action@v6
       with:
         context: ./docker/rocky9
