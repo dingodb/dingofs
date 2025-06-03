@@ -15,6 +15,52 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Remove .git directory
+      run: |
+        echo "Remove .git directory"
+        rm -rf .git
+
+    - name: Configure Docker data-root
+      run: |
+        sudo systemctl stop docker
+        sudo systemctl stop docker.socket
+        sudo mkdir -p /mnt/docker
+        echo '{ "data-root": "/mnt/docker" }' | sudo tee /etc/docker/daemon.json
+        if [ -d /var/lib/docker ]; then
+          sudo mv /var/lib/docker /mnt/docker || true
+        fi
+        sudo systemctl start docker.socket
+        sudo systemctl start docker
+        docker info | grep "Docker Root Dir"
+    
+    - name: Download branch name file
+      uses: actions/download-artifact@v4
+      with:
+        name: branch_name
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GH_TOKEN }}
+        path: ./
+
+    - name: Config trigger branch env
+      run: |
+        if [ -f branch_name.txt ]; then
+          echo "BRANCH_NAME=$(cat branch_name.txt)" >> $GITHUB_ENV
+        fi
+
+    - name: Download commit id file
+      uses: actions/download-artifact@v4
+      with:
+        name: commit_id
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GH_TOKEN }}
+        path: ./
+
+    - name: Config commit id env
+      run: |
+        if [ -f commit_id.txt ]; then
+          echo "COMMIT_ID=$(cat commit_id.txt)" >> $GITHUB_ENV
+        fi
+
     - name: Download event type file
       uses: actions/download-artifact@v4
       with:
@@ -65,6 +111,12 @@ jobs:
         if [ -n "${{ env.TAG_NAME }}" ]; then
           echo "tag name is ${{ env.TAG_NAME }}, need to publish image."
         fi
+        if [ -n "${{ env.BRANCH_NAME }}" ]; then
+          echo "branch name is ${{ env.BRANCH_NAME }}"
+        fi
+        if [ -n "${{ env.COMMIT_ID }}" ]; then
+          echo "commit id is ${{ env.COMMIT_ID }}"
+        fi
 
     - name: List directory contents after download
       if: steps.check-event.outputs.continue == 'true'
@@ -72,7 +124,7 @@ jobs:
 
     - name: Extract artifact
       if: steps.check-event.outputs.continue == 'true'
-      run: tar -xzvf dingofs.tar.gz -C docker/rocky9
+      run: tar -xzvf dingofs.tar.gz -C docker/rocky9 && rm -f dingofs.tar.gz
 
     - name: Set up Docker Buildx
       if: steps.check-event.outputs.continue == 'true'
@@ -93,8 +145,9 @@ jobs:
         images: dingodatabase/dingofs
         tags: |
           type=raw,enable=${{ env.EVENT == 'tag' }},value=${{ env.TAG_NAME }}
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=sha,prefix=,format=long
+          type=raw,value=latest,enable=${{ env.BRANCH_NAME == 'main' && env.EVENT != 'tag'}}
+          type=sha,prefix=,format=short,enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME == 'main' }}
+          type=raw,prefix=${{ env.BRANCH_NAME }}-,value=${{ env.COMMIT_ID }},enable=${{ env.EVENT != 'tag' && env.BRANCH_NAME != 'main' }}
 
     - name: Build and push
       if: steps.check-event.outputs.continue == 'true'

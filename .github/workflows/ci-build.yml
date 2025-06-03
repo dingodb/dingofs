@@ -2,29 +2,88 @@ name: CI Build
 
 on:
   push:
-    branches: [ "main", "v3.0" ]
+    branches: [ "**" ]
     tags:
       - '*'
   pull_request:
-    branches: [ "main", "v3.0" ]
+    branches: [ "**" ]
 
 env:
   BUILD_TYPE: Release
 
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/heads/gh-readonly-queue/') }}
     runs-on: ubuntu-latest
-    container: dingodatabase/dingo-eureka:rocky9
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Check environment
+    - name: Copy dingofs repository
       run: |
-        echo "THIRD_PARTY_INSTALL_PATH: $THIRD_PARTY_INSTALL_PATH"
+        echo "Move dingofs repository"
+        sudo cp -r /home/runner/work/dingofs/dingofs /mnt/
+        sudo chown $USER:$USER /mnt/dingofs
+
+    - name: Configure Docker data-root
+      run: |
+        sudo systemctl stop docker
+        sudo systemctl stop docker.socket
+        sudo mkdir -p /mnt/docker
+        echo '{ "data-root": "/mnt/docker" }' | sudo tee /etc/docker/daemon.json
+        if [ -d /var/lib/docker ]; then
+          sudo mv /var/lib/docker /mnt/docker || true
+        fi
+        sudo systemctl start docker.socket
+        sudo systemctl start docker
+        docker info | grep "Docker Root Dir"
+
+    - name: Pull dingodatabase/dingo-eureka:rocky9-fs
+      run: |
+        docker pull dingodatabase/dingo-eureka:rocky9-fs
+
+    - name: Init build script
+      run: |
+        cat <<EOF > /mnt/dingofs/build.sh
+        #!/bin/bash
+        set -x
+
+        cd /opt/dingofs/
+        git config --global --add safe.directory /opt/dingofs
+
+        make file_dep
+        make file_build only=//src/* release=1 unit_tests=ON
+        # check if the build is successful
+        if [ $? -ne 0 ]
+        then
+            echo "build failed"
+            exit -1
+        fi
+        make file_deploy_config
+        # check install is successful
+        if [ $? -ne 0 ]
+        then
+            echo "install failed"
+            exit -1
+        fi
+
+        tar -czvf dingofs.tar.gz -C docker/rocky9 dingofs
+
+        echo "DingoFS Build finished"
+        EOF
+        chmod +x /mnt/dingofs/build.sh
 
     - name: Record event type
       run: |
+        branchName=$(echo "${{ github.ref_name }}")
+        echo "branch name is: $branchName"
+        echo "$branchName" > branch_name.txt
+
+        commitId="${{ github.sha }}"
+        shortCommitId=${commitId:0:7}
+        echo "commit id is: $shortCommitId"
+        echo "$shortCommitId" > commit_id.txt
+
         echo "hello dingofs" > event.txt
         if [ "${{ github.event_name }}" == "pull_request" ]; then
           echo "pull_request" > event.txt
@@ -54,34 +113,36 @@ jobs:
         name: tag_name
         path: tag_name.txt
         compression-level: 0
+    
+    - name: Save branch name info
+      uses: actions/upload-artifact@v4
+      with:
+        name: branch_name
+        path: branch_name.txt
+        compression-level: 0
 
-    - name: Set Safe Dir
-      run: git config --global --add safe.directory $PWD
+    - name: Save commit id info
+      uses: actions/upload-artifact@v4
+      with:
+        name: commit_id
+        path: commit_id.txt
+        compression-level: 0
 
-    - name: Build dependencies
-      run: make file_dep
- 
-    - name: Build dingofs
-      run: make file_build only=//src/* release=1
-
-    - name: Install dingofs
+    - name: Build DingoFS
       run: |
-        make file_deploy_config 
-
-    - name: Archive the dingofs directory
-      run: |
-        tar -czvf dingofs.tar.gz -C docker/rocky9 dingofs
+        echo "Build DingoFS"
+        docker run --name release-dingofs --rm -v /mnt/dingofs:/opt/dingofs/ dingodatabase/dingo-eureka:rocky9-fs /opt/dingofs/build.sh
 
     - name: Copy artifactory to another workflow
       uses: actions/upload-artifact@v4
       with:
           name: dingofs
-          path: ./dingofs.tar.gz
+          path: /mnt/dingofs/dingofs.tar.gz
           compression-level: 0
 
     - name: Release
       uses: softprops/action-gh-release@v2
-      if: ${{ github.event_name == 'push'}}
+      if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
       with:
         files: dingofs.tar.gz
         name: ${{ env.TAG_NAME }}
