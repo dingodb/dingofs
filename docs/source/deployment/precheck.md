@@ -7,7 +7,7 @@ Precheck Overview
 The precheck module is used to detect factors that may cause deployment failure in advance, thereby improving the success rate of user deployments.
 
 
-> :bulb: **Note:**
+> 💡 **Note:**
 >
 > We run the precheck function by default when executing deployment. Users can also skip the precheck during deployment by using the `-k` option,
 > but we strongly advise against doing so.
@@ -37,7 +37,7 @@ $ dingoadm precheck --skip <item>
 | Time   | date       | Check whether the time difference between hosts is too large                  |
 | Service | service | Check the number of services, chunkfile pool, S3 configuration validity, etc. |
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > When pre-checks fail, we strongly recommend that users troubleshoot the issue step by step based on the reported [error code][errno] and the provided solutions,
 > and ultimately pass all pre-checks. We strongly advise against skipping the check item when a pre-check fails,

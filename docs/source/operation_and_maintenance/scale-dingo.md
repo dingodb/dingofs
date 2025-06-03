@@ -1,4 +1,4 @@
-Expansion Cluster 
+Expansion Cluster
 ===
 
 Step 1: Commit host list
@@ -73,7 +73,7 @@ mds_services:
     - host: ${machine6} # Add new service 
 ```
 
-> :warning: **Warning:** 
+> ⚠️ **Warning:** 
 > 
 > * You can only scale services with the same role 
 > * For the metaserver service, a new logical pool is created every time you scale up, and the new services are located in this pool.
@@ -85,6 +85,6 @@ Step 3: Expand the cluster
 $ dingoadm scale-out topology.yaml 
 ```
 
-> :bulb: **REMINDER:** 
+> 💡 **REMINDER:** 
 > 
 > The scale-out operation is an idempotent operation, so the user can repeat the operation if it fails, so don't worry about the service residual problem.

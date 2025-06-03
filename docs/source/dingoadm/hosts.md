@@ -48,11 +48,12 @@ hosts:
 Manage Hosts
 ---
 
-* [Import Host List](#Import Host List)
-* [View Host List](#View Host List)
-* [Display Host Configuration](#Display Host Configuration)
-* [Login to Host](#Login to Host)
+* [Import Host List](#Import_Host_List)
+* [View Host List](#View_Host_List)
+* [Display Host Configuration](#Display_Host_Configuration)
+* [Login to Host](#Login_to_Host)
 
+<a id="Import_Host_List"></a>
 ### Import Host List
 
 #### Step 1: Prepare the host list
@@ -88,7 +89,8 @@ hosts:
 $ dingoadm hosts commit hosts.yaml
 ```
 
-### View the host list
+<a id="View_Host_List"></a>
+### View Host List
 
 ```shell
 $ dingoadm hosts ls
@@ -107,7 +109,8 @@ client-host   10.0.1.4  dingo  22    /home/dingo/.ssh/id_rsa  Y              adm
 
 * To view the list of hosts with a specific tag, specify the `-l` parameter.
 
-### Display host configuration
+<a id="Display_Host_Configuration"></a>
+### Display Host Configuration
 
 ```shell
 $ dingoadm hosts show
@@ -133,8 +136,8 @@ hosts:
     labels:
       - client
 ```
-
-### Logging in to the host
+<a id="Login_to_Host"></a>
+### Login to Host
 
 ```shell
 $ dingoadm ssh <host>

@@ -15,7 +15,7 @@ dingodatabase/dingofs latest ac55b3c269f7 11 days ago 3.2GB
 
 # Package the image 
 $ sudo docker save -o dingofs_v2.4.tar ac55b3c269f7 
-````
+```
 - Copy image to local repository node 
 ```bash 
 $ scp dingofs_v2.4.tar ${desthost}:/path/to/save/image 
@@ -85,7 +85,7 @@ $ export PATH=~/.dingoadm/bin:$PATH
 
 Configure a list of servers to be used by the DingoFS cluster and submit the list to DingoAdm for management. The host configuration process is relatively simple, just add the actual hostname and ip to `hosts.yaml` and submit it.
 
-Refer to the documentation for specific configuration: [host management](../hosts.md)
+Refer to the documentation for specific configuration: [host management](../dingoadm/hosts.md)
 
 ### DingoFS server-side deployment
 
@@ -99,10 +99,10 @@ global:
 For other configuration items, please refer to the documentation [DingoFS cluster deployment](./dingofs-cluster-deployment.md)
 ### Client-side deployment 
 You need to modify the image in `client.yaml` to be the local image address, example is as follows: 
-`` `` yaml 
+```
 kind: dingofs 
 global: 
  container_image: 127.0.0.1:5000/dingofs:v2.4_local ## Modify to be the local mirror 
-`` `` ``
+```
 
 For other configuration items, please refer to the documentation [Deploying DingoFS Client](./dingofs-client-deployment.md).

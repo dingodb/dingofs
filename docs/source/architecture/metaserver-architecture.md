@@ -7,7 +7,7 @@ In the overall design, a single MetaServer runs on the host as a user process, a
 
 At the metadata management level, file system metadata is managed in slices to avoid the performance bottleneck caused by a single Raft Group maintaining a file system metadata. Each slice of metadata is called a Partition, and the correspondence between Copyset and Partition can be one-to-one or one-to-many. In the one-to-many case, a Copyset can maintain multiple Partitions. in the one-to-many case, the file system metadata management is shown in the following figure:
 
-! [copyset-partition](../../images/fs-copyset-partition.png)
+![copyset-partition](../../images/fs-copyset-partition.png)
 
 There are two Copysets in the figure, and three copies are placed on three machines.P1/P2/P3/P4 denote the metadata partitions of the file system, where P1/P3 belongs to one file system and P2/P4 belongs to one file system.
 
@@ -15,7 +15,7 @@ There are two Copysets in the figure, and three copies are placed on three machi
 
 The overall architecture of MetaServer is shown below, which can be roughly divided into three parts: Service Layer, Core Business Layer and MetaStore, which collaborate with each other to efficiently handle various requests and tasks from external components. The following is a detailed description of each module.
 
-! [metaserver-arch](../../images/fs-metaserver-arch.png)
+![metaserver-arch](../../images/fs-metaserver-arch.png)
 
 ### Service Layer
 

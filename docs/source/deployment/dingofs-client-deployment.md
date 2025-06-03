@@ -3,15 +3,14 @@ Deploying the DingoFS client
 
 Step 1: Environment Preparation
 ----
-
-* [Hardware and software requirements](install-dingoadm#Hardware and software requirements)
-* [Install Dependencies](install-dingoadm#Install Dependencies)
+* [Hardware and software requirements](../dingoadm/install.md#software-and-hardware-environment-requirements)
+* [Installing Dependencies](../dingoadm/install.md#installing-dependencies)
 
 Step 2: Import the host
 ---
 
 Users need to import the list of hosts required for the client, if you have already imported the client hosts while deploying the cluster, you can skip this step directly.
-Please make sure that the hosts specified in the subsequent mount/unmount are imported, see [Host Management][hosts] for details.
+Please make sure that the hosts specified in the subsequent mount/unmount are imported, see [host management](../dingoadm/hosts.md) for details.
 
 ### 1. Prepare the list of hosts
 
@@ -62,9 +61,9 @@ minio/minio server /data --console-address ":9900"
 > 
 > minio-data in the run parameter is a local path, you need to create this directory in advance before running the minio You need to create this directory in advance before running the container
 
-> :bulb: **REMINDER:** 
+> 💡 **Reminder:**
 > 
-> The following information will be used to fill in the [S3-related-config][important-config] in the client configuration file in step 4: 
+> The following information will be used to fill in the [S3-related-config](../dingoadm/topology#important-dingofs-configuration-items) in the client configuration file in step 4: 
 > * The default `Access Key` and `Secret Key` for the root user are both `minioadmin` 
 > * The S3 service access address is `http://$IP:9000`, and you need to access `http://$IP:9000` from your browser to create a bucket 
 > * For more details on deployment, you can refer to [deploy-minio-standalone][deploy-minio-standalone].
@@ -104,12 +103,12 @@ quota.capacity: 10
 quota.inodes: 1000 
 ```
 
-Configuration entries in the client configuration file have the same meaning as those in the cluster topology file, see [DingoFS important-config][important-config].
+Configuration entries in the client configuration file have the same meaning as those in the cluster topology file, see [DingoFS important-config](../dingoadm/topology.md#important-dingofs-configuration-items).
 
 For all configuration items that do not appear in the client configuration file, we will use the default configuration values. 
 You can view the configuration items and their associated default values by clicking [client configuration file][dingofs-client-conf].
 
-> :bulb: About the `mdsOpt.rpcRetryOpt.addrs` configuration item 
+> 💡 About the `mdsOpt.rpcRetryOpt.addrs` configuration item 
 > 
 > Since all the routing information exists in the MDS service, the client only needs to know the address of the MDS service in the cluster in order to perform IO reads and writes normally.
 > 
@@ -125,6 +124,7 @@ You can view the configuration items and their associated default values by clic
 > cluster mds addr: 10.0.1.1:6700,10.0.1.2:6700,10.0.1.3:6700 
 > cluster mds leader: 10.0.1.1:6700 / 505da008b59c 
 > ...
+
 > 📢 **Note:** 
 > 
 > Please make sure to configure the data_dir configuration item if users need to enable local disk caching.
@@ -139,13 +139,13 @@ You can view the configuration items and their associated default values by clic
 > If the fs have not been created yet, please make sure the s3 information is available, otherwise the mount will fail.
 
 Step 5: Mount the DingoFS file system
---- - - - - - - - - - - - - - - - - - - - - - -
+---
 
-```shell 
-$ dingoadm mount <dingofs-name> <mount-point> --host <host> -c client.yaml 
+```shell
+$ dingoadm mount <dingofs-name> <mount-point> --host <host> -c client.yaml
 ```
-
-* ``<dingofs-name>`‘’: filesystem name, user-defined, but must be a combination of **lowercase letters, numbers, and hyphens**, i.e., satisfy the regular expression `^([a-z0-9]+\\-?) +$`
+```
+* `<dingofs-name>`: filesystem name, user-defined, but must be a combination of **lowercase letters, numbers, and hyphens**, i.e., satisfy the regular expression `^([a-z0-9]+\\-?) +$`
 * `<mount-point>`: mount path, user-defined, but must be **absolute path**.
 * `--host`: Mount the volume to the specified host, user can choose, please make sure the host has been imported.
 

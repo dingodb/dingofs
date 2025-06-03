@@ -4,20 +4,20 @@ Deploying a DingoFS cluster using DingoAdm
 Step 1: Prepare the environment
 ---
 
-* [Hardware and software requirements](install-dingoadm#Hardware-and-software-requirements)
-* [Install dependencies](install-dingoadm#Install-dependencies)
+* [Hardware and software requirements](../dingoadm/install.md#software-and-hardware-environment-requirements)
+* [Install dependencies](../dingoadm/install.md#installing-dependencies)
 
 Step 2: Install DingoAdm on the control machine
 ---
 
-* [Install DingoAdm](install-dingoadm#install-dingoadm)
+* [Install DingoAdm](../dingoadm/install.md)
 
 
 Step 3: Import the host list
 ---
 
 Users need to import the list of machines required for deploying the cluster and clients so that they can fill in the hostnames of the deployed services in various configuration files later.
-Please ensure that all hostnames appearing in various configuration files later have been imported. For details, see [Host Management][hosts].
+Please ensure that all hostnames appearing in various configuration files later have been imported. For details, see [Host Management](../dingoadm/hosts.md).
 
 ### 1. Prepare the host list
 
@@ -61,7 +61,7 @@ All services run on a single host, typically used for testing or evaluation.
 
   A generic multi-node deployment template suitable for production environments or testing
 
-For details on the configuration options in the topology file, please refer to [DingoFS Cluster Topology][dingofs-topology]
+For details on the configuration options in the topology file, please refer to [DingoFS Cluster Topology](../dingoadm/topology.md)
 
 ```shell
 $ vim topology.yaml
@@ -193,11 +193,11 @@ $ dingofs_tool status
 
 If the cluster is healthy, the output will include the message `cluster is healthy` at the end.
 
-[hosts]: ../hosts.md
-[important-config]: ../topology.md
+[hosts]: ../dingoadm/hosts.md
+[important-config]: ../dingoadm/topology.md
 [dingofs-stand-alone-topology]: ./stand-alone-topology.yaml
 [dingofs-cluster-topology]: ./cluster-topology.yaml
-[dingofs-topology]: ../topology.md
+[dingofs-topology]: ../dingoadm/topology.md
 [precheck]: ./precheck.md
 [errno]: ../errno.md
-[replicas]: ../topology#replicas
+[replicas]: ../dingoadm/topology#replica

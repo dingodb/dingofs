@@ -58,6 +58,7 @@ To make topology file configuration more flexible and concise, we have added the
 * [Variables](#Variables)
 * [Replica](#Replica)
 
+<a id="Hierarchy"></a>
 ### Hierarchy
 
 The configuration in the topology file is divided into the following 3 levels:
@@ -67,7 +68,7 @@ The configuration in the topology file is divided into the following 3 levels:
 
 The configuration priority is: `Instance configuration` > `Service configuration` > `Global configuration`.
 
-<img src=“image/topology_level2.jpg” style=“zoom: 40%”>
+![topology_level2](../../images/topology_level2.jpg)
 
 #### Example: Simplifying topology files using configuration levels
 
@@ -98,6 +99,7 @@ mds_services:
     - host: server-host3
 ```
 
+<a id="Variables"></a>
 ### Variables
 
 To reduce repetitive configuration and simplify the topology file, we have built-in the following variables,
@@ -217,10 +219,10 @@ mds_services:
     - host: ${machine3}
 ```
 
-### replicas
+<a id="Replica"></a>
+### Replica
 
-
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > The replicas here do not represent the number of storage pool replicas, but rather the number of instances of the same type of process deployed on the node, such as the number of chunkserver processes.
 
@@ -245,8 +247,7 @@ chunkserver_services:
       replicas: 3
 ```
 
-The values of the variables `${servicce_host_sequence}` and `${service_replicas_sequence}` are described in the previous section [Variables](#Variables).
-
+The values of the variables `${servicce_host_sequence}` and `${service_replicas_sequence}` are described in the previous section [Variables](#Variables)
 
 DingoFS Cluster Topology
 ---
@@ -319,10 +320,10 @@ All services run on a single host, typically used for testing or evaluation.
 
 A generic multi-machine deployment template suitable for production environments or testing.
 
-> :bulb: **Note:**
+> 💡 **Note:**
 >
 > For details on configuration levels and variables in topology files, see the previous section:
-> * [Levels](#Levels)
+> * [Hierarchy](#Hierarchy)
 > * [Variables](#Variables)
 
 ### Important DingoFS Configuration Items

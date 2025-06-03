@@ -8,7 +8,7 @@ Key Features
 
 * Rapid deployment of DingoFS clusters
 
-Users can deploy the entire cluster with a single click once the cluster topology file is ready.
+  Users can deploy the entire cluster with a single click once the cluster topology file is ready.
 
 
 * Containerized services
@@ -18,12 +18,12 @@ Users can deploy the entire cluster with a single click once the cluster topolog
 
 * Manage DingoFS clusters
 
-Supports common management operations, including one-click service upgrades and cluster scaling.
+  Supports common management operations, including one-click service upgrades and cluster scaling.
 
 
 * Manage multiple clusters simultaneously
 
-Users can manage multiple DingoFS clusters simultaneously and switch between them as needed.
+  Users can manage multiple DingoFS clusters simultaneously and switch between them as needed.
 
 
 * Precise error localization
@@ -75,8 +75,8 @@ The database primarily stores the following four types of data:
   * Service information: service IDs and container IDs corresponding to services
   * Client information: client IDs and container IDs corresponding to clients
 
-> :bulb: **Note:**  
->  
+> 💡 **Note:**
+>
 >  Service IDs are generated based on the cluster topology. Given a fixed cluster topology, we generate a unique ID for each service in the topology according to a fixed set of rules, meaning that service IDs are also fixed.
 >
 > Based on the service ID, the corresponding container ID can be queried in the database. The host module also stores information such as the host and SSH private key path for each service deployment. Using this information, we can manage the containers corresponding to the services.

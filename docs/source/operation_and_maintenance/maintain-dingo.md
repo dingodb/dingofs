@@ -28,7 +28,7 @@ After switching clusters, when you look at the cluster list again, a `*` icon wi
 Add Cluster
 ---
 
-Users can specify the cluster topology file while adding a cluster, or they can add a cluster first and then submit the cluster topology by [Modify Cluster Topology](#Modify Cluster Topology):
+Users can specify the cluster topology file while adding a cluster, or they can add a cluster first and then submit the cluster topology by [Modify Cluster Topology](#Modify_Cluster_Topology):
 
 ```shell
 $ dingoadm cluster add < cluster-name> [-f topology.yaml]
@@ -38,7 +38,7 @@ Delete Cluster
 ---
 
 ```shell
-$ dingoadm cluster rm < cluster-name>
+$ dingoadm cluster rm <cluster-name>
 ```
 
 > :warning: **Warning:**
@@ -49,14 +49,14 @@ Export Cluster
 ---
 
 We can save the current cluster information as a local file, usually we need to export the cluster in the following 2 cases:
-  *  Cluster information needs to be backed up on a regular basis to prevent its loss
-  *  Sharing cluster information with other users for other users to operate the cluster
+*  Cluster information needs to be backed up on a regular basis to prevent its loss
+*  Sharing cluster information with other users for other users to operate the cluster
 
 ```shell
-$ dingoadm cluster export < cluster-name> [-o database-file-path]
+$ dingoadm cluster export <cluster-name> [-o database-file-path]
 ```
 
-> :bulb: **Hint:**
+> 💡 **Reminder:**
 >
 > The exported cluster file is keyed by the cluster `UUID`, which is globally unique, and the value holds the following 2 types of information:
 > *  Cluster service configuration, i.e., cluster topology
@@ -72,7 +72,7 @@ $ dingoadm cluster import < cluster-name> [-f database-file-path]
 > 📢 **Note:**
 > *  The cluster name specified when importing a cluster must not duplicate an existing cluster name, otherwise the import will fail
 > *  Importing a cluster imports the cluster topology intact, so some configuration items may be invalidated, such as the SSH private key path configuration item `private_key_path`.
-> In this case, users can modify the cluster topology and [commit](#Commit Cluster Topology) to operate the cluster normally.
+> In this case, users can modify the cluster topology and commit to operate the cluster normally.
 
 Viewing Cluster Topology
 ---
@@ -81,13 +81,14 @@ Viewing Cluster Topology
 $ dingoadm config show
 ```
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > When the local topology file is lost, we can recover it by saving the current cluster topology:
 > ```shell
 > $ dingoadm config show > topology.yaml
 > ```
 
+<a id="Modify_Cluster_Topology"></a>
 Modifying the Cluster Topology
 ---
 
@@ -103,7 +104,7 @@ Once we have modified our local topology file, we need to submit our changes to 
 $ dingoadm config commit < topology.yaml>
 ```
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > When submitting the local cluster topology, the terminal will display the difference between the local cluster topology and the current cluster topology, so please compare carefully to prevent incorrect submission.
 
@@ -165,9 +166,9 @@ DingoAdm starts all services in the cluster by default. If you want to start a s
 *  `--host`: Starts all services on the specified host.
 *  `--role`: Starts all services in the specified role.
 
-The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#View cluster status).
+The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#Client_Status).
 
-#### Example 1: Starting service with id `c9570c0d0252
+#### Example 1: Starting service with id `c9570c0d0252`
 
 ```shell
 $ dingoadm start --id c9570c0d0252
@@ -177,7 +178,7 @@ $ dingoadm start --id c9570c0d0252
 ```shell
 $ dingoadm start --host 10.0.1.1 --role mds
 ```
-
+<a id="Discontinuation"></a>
 Discontinuation of services
 ---
 
@@ -191,9 +192,9 @@ DingoAdm stops all services in the cluster by default, if you want to stop a spe
 *  `--host`: Stop all services on the specified host.
 *  `--role`: stops all services for the specified role
 
-The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#View cluster status).
+The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#Client_Status).
 
-#### Example 1: Stopping a service with id `c9570c0d0252
+#### Example 1: Stopping a service with id `c9570c0d0252`
 
 ```shell
 $ dingoadm stop --id c9570c0d0252
@@ -204,11 +205,12 @@ $ dingoadm stop --id c9570c0d0252
 $ dingoadm stop --host 10.0.1.1 --role mds
 ```
 
-> :warning: **Warning:**
+> ⚠️ **Warning:**
 >
 > Stopping the service may cause an unhealthy cluster and result in client IO failures, so please proceed with caution.
 
-restart sth.
+<a id="Restart"></a>
+Restart sth.
 ---
 
 ```shell
@@ -221,9 +223,9 @@ DingoAdm restarts all services in the cluster by default. If you want to restart
 *  `--host`: Restarts all services on the specified host.
 *  `--role`: restarts all services for the specified role
 
-The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#View cluster status).
+The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#Client_Status).
 
-#### Example 1: Restarting a service with id `c9570c0d0252
+#### Example 1: Restarting a service with id `c9570c0d0252`
 
 ```shell
 $ dingoadm restart --id c9570c0d0252
@@ -245,7 +247,7 @@ During cluster operation, we may need to modify the configuration of the service
 $ vim topology.yaml
 ```
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > When the local topology file is lost, we can recover it by saving the current cluster topology:
 > ```shell
@@ -269,9 +271,9 @@ DingoAdm reloads all services in the cluster by default, if you want to reload a
 *  `--host`: Reloads all services on the specified host.
 *  `--role`: Reloads all services for the specified role
 
-The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#View cluster status).
+The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#Client_Status).
 
-#### Example 1: Reloading the service with id `c9570c0d0252
+#### Example 1: Reloading the service with id `c9570c0d0252`
 
 ```shell
 $ dingoadm reload --id c9570c0d0252
@@ -282,9 +284,9 @@ $ dingoadm reload --id c9570c0d0252
 $ dingoadm reload --host 10.0.1.1 --role mds
 ```
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
-> The difference between the command [restart](#restart the service) and `reload` is that the
+> The difference between the command [restart](#Restart) and `reload` is that the
 > `reload` modifies the configuration of the corresponding service based on the current cluster topology changes, and then restarts the service.
 > `restart` simply restarts the service.
 
@@ -297,9 +299,9 @@ We can remotely go inside the service container and view information about the s
 $ dingoadm enter < id>
 ```
 
-The `id` corresponding to a service can be viewed via [dingoadm status](#View cluster status).
+The `id` corresponding to a service can be viewed via [dingoadm status](#Client_Status).
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > DingoAdm defaults to the root directory of the service. The service root directory contains all the files required by the service and has the following directory structure:
 >
@@ -328,7 +330,7 @@ DingoAdm cleans up all objects of all services in the cluster by default. If you
 *  `--role`: cleans up the services corresponding to the specified role
 *  `--only`: clean up the specified objects (`log`: log, `data`: data, `container`: container)
 
-The above 4 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#View cluster status).
+The above 4 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the service can be viewed via [dingoadm status](#Client_Status).
 
 #### Example 1: Cleaning up all objects with id `c9570c0d0252` service
 
@@ -350,8 +352,9 @@ $ dingoadm clean --host 10.0.1.1 --role mds
 
 > 📢 **Note:**
 >
-> When cleaning up a service container, make sure that the corresponding service is stopped; you can use the [stop](#stop service) command to stop the specified service.
+> When cleaning up a service container, make sure that the corresponding service is stopped; you can use the [stop](#Discontinuation) command to stop the specified service.
 
+<a id="Client_Status"></a>
 Viewing Client Status
 ---
 
@@ -381,9 +384,9 @@ We can remotely go inside the service container and view information about clien
 $ dingoadm client < id>
 ```
 
-The corresponding `id` of the client can be viewed via [dingoadm client status](#View client status).
+The corresponding `id` of the client can be viewed via [dingoadm client status](#Client_Status).
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > DingoAdm defaults to the root directory of this client. The client root directory contains all the files required by the service and has the following directory structure:
 >

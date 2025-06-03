@@ -4,7 +4,7 @@ DingoFS is a POSIX-compliant distributed file storage system to better support c
 
 ## 1.Overall Architecture
 
-<img src="../../images/architecture.png" alt="dingofs_architecture.png" width="900">
+![dingofs_architecture](../../images/architecture.png)
 
 DingoFS consists of three parts: 
 - `dingo-fuse` is a fuse-based file system client.
@@ -24,12 +24,12 @@ DingoFS consists of three parts:
 
 The metadata cluster `fs-meta cluster` is as follows:
 
-<img src="../../images/fs_meta_cluster.png" alt="dingofs_meta_cluster.png" width="600">
+![fs_meta_cluster](../../images/fs_meta_cluster.png)
 
 **Management Topology**
 
 MDS manages the topology of the meta data cluster as follows: 
-<img src="../../images/fs_topo.png" alt="dingofs_topo.png" width="900">
+![fs_topo](../../images/fs_topo.png)
 
 - `pool` A physical pool that physically isolates machine resources. A `server` cannot interact across a `pool`;
 
@@ -58,7 +58,7 @@ MDS manages the distribution of file system instances and file system metadata.
 
 MDS high availability is implemented based on etcd, allowing some instances to be exceptionally available, as shown in the following figure:
 
-<img src="../../images/fs_mds_high_availability.png" alt="dingofs_mds_high_availability.png" width="600">
+![fs_mds_high_availability](../../images/fs_mds_high_availability.png)
 
 MDS registers with etcd, while only one MDS provides service, the backup MDS listens. When the primary MDS hangs up, the backup MDS starts to provide service.
 
@@ -73,7 +73,7 @@ Metaserver high availability is based on raft implementation, 2N+1 replicas allo
 ### Docking S3 
 For a file in the file system, the correspondence between the address space and the S3 object is shown below:
 
-<img src="../../images/fs_data_s3.png" alt="dingofs_data_s3.png" width="700">
+![dingofs_data_s3](../../images/fs_data_s3.png)
 
 - On the `dingo-fuse` side, a file's address space consists of multiple fixed-size `chunks`, each of which consists of multiple `datacache`s of variable length;
 - The `datacache` is split according to the granularity of the `block` and uploaded to S3;

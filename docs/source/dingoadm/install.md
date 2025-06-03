@@ -1,6 +1,5 @@
 Software and Hardware Environment Requirements
 ===
-
 Linux Operating System Version Requirements
 ---
 
@@ -37,7 +36,7 @@ Installing DingoAdm
 
 The default installation path is the `.dingoadm` directory under the current user's home directory, i.e., `~/.dingoadm`.
 
-> :bulb: **Reminder:**
+> 💡 **Reminder:**
 >
 > DingoAdm includes command completion functionality. Execute the following command and follow the prompts to enable completion:
 > ```shell

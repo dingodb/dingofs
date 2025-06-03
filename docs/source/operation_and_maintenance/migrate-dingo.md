@@ -30,7 +30,7 @@ mds_services:
     - host: ${machine4} # Change ${machine3} to ${machine4} 
 ```
 
-> :warning: **Warning:** 
+> ⚠️ **Warning:** 
 > 
 > * You can only migrate services with the same role at a time 
 > * You can only migrate services with the same host at a time
@@ -42,6 +42,6 @@ Step 2: Migrate Services
 $ dingoadm migrate topology.yaml 
 ```
 
-> :bulb: **REMINDER:** 
+> 💡 **REMINDER:** 
 > 
 > The migration operation is an idempotent operation, users can repeat the operation after it fails, don't worry about the service residual problem!

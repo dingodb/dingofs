@@ -4,27 +4,28 @@ Use the dingo tool to monitor mounted filesystems in real time, and print out me
 ```
 dingo stats <mount-point>
 ```
-- Parameter Description \
-mount-point: Path where the file system is mounted.\
+#### Parameter Description
+- mount-point: Path where the file system is mounted.\
+\
 The stats command has the following options:
-schema The default value is ufmsbo, which stands for: u: usage, f: fuse, m: metaserver,s: mds, b: blockcache, o: object
-- Example: show only fuse metrics
+- --schema: The default value is ufmsbo, which stands for: u: usage, f: fuse, m: metaserver,s: mds, b: blockcache, o: object. 
+Example: show only fuse metrics
 ```
 dingo fs stats /mnt/dingofs --schema f
 ```
---interval duration , the default value is 1s, and the minimum value is also 1s, which means how often the indicator data will be output to show on the screen.\
+- --interval duration: the default value is 1s, and the minimum value is also 1s, which means how often the indicator data will be output to show on the screen.\
 Example: output indicator data every two seconds
 ```
 dingo fs stats /mnt/dingofs  --interval 2s
 ```
---verbose , show more detailed information. \
+- --verbose:show more detailed information. \
 Example: show detailed data of s3
 ```
 dingo fs stats /mnt/dingofs  --schema o --verbose
 ```
 
 ## 2. Monitoring Results 
-! [alt text](../../images/monitoring_results.png)
+![alt text](../../images/monitoring_results.png)
 ## 3. Monitoring Metrics in Detail
 - usage\
 cpu: client program CPU usage in percentage. \

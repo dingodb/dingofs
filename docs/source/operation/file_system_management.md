@@ -77,13 +77,15 @@ dingofs:
     blocksize: 4 mib
     chunksize: 64 mib
 ```
-- Configure the following fields\
-mdsAddr: metadata service address\
-ak: access key for the s3 service\
-sk: secret key for the s3 service\
-endpoint: address of the s3 service\
-bucketname: bucketname used in the s3 service (supplied by the deployer)
-- Execute the following statement to add the configuration file to the environment variables
+
+Configure the following fields
+- mdsAddr: metadata service address\
+- ak: access key for the s3 service\
+- sk: secret key for the s3 service\
+- endpoint: address of the s3 service\
+- bucketname: bucketname used in the s3 service (supplied by the deployer)
+
+Execute the following statement to add the configuration file to the environment variables
 ```
 mv dingo.yaml ~/.dingo/dingo.yaml
 ```
@@ -100,14 +102,14 @@ You can also create a file system directly by adding parameters directly to the 
 ```
 dingo create fs --fsname myfs --fstype s3 --s3.ak access_key --s3.sk secret_key --s3.endpoint http://127.0.0.1:8000 --s3.bucketname test-bucket  --mdsaddr 127.0.0.1:6700,127.0.0.1:6701,127.0.0.1:6702
 ```
-- Parameter description\
-fsname: file system, user-defined, but must be a combination of lowercase letters, numbers, hyphens, i.e., to satisfy the regular expression ^([a-z0-9]+\\-?) +$\
-fstype: storage service type\
-s3.ak: access key of s3 service\
-s3.sk: s3 service's secret key\
-s3.endpoint: s3 service address\
-s3.bucketname: bucketname used in the s3 service (provided by the deployer)\
-mdsaddr: metadata service address\
+Parameter description
+- fsname: file system, user-defined, but must be a combination of lowercase letters, numbers, hyphens, i.e., to satisfy the regular expression ^([a-z0-9]+\\-?) +$\
+- fstype: storage service type\
+- s3.ak: access key of s3 service\
+- s3.sk: s3 service's secret key\
+- s3.endpoint: s3 service address\
+- s3.bucketname: bucketname used in the s3 service (provided by the deployer)\
+- mdsaddr: metadata service address\
 💡 More dingo tool features, see dingo tool for details
 
 ## 3.Mount the Filesystem 
@@ -115,11 +117,11 @@ Use the dingoadm tool to mount the filesystem. if dinofs-name already exists. th
 ```
 $ dingoadm mount <dingofs-name> <mount-point> --host <host> -c client.yaml
 ```
-- Parameter description\
-dingofs-name: filesystem name, user-defined, but must be a combination of lowercase letters, numbers, hyphens, i.e., meet the regular expression ^([a-z0-9]+\\-?) +$\
-mount-point: mount path, user-defined, but must be an absolute path.
---host: mount the volume to the specified host, user-defined, please make sure the host has been imported\
--c: dingofs-name does not exist, use this configuration file to create the filesystem\
+Parameter description
+- dingofs-name: filesystem name, user-defined, but must be a combination of lowercase letters, numbers, hyphens, i.e., meet the regular expression ^([a-z0-9]+\\-?) +$\
+- mount-point: mount path, user-defined, but must be an absolute path.
+- --host: mount the volume to the specified host, user-defined, please make sure the host has been imported\
+- -c: dingofs-name does not exist, use this configuration file to create the filesystem\
 If the filesystem is mounted successfully, you can query the corresponding DingoFS filesystem mount entry on the corresponding host:
 ```
 $ mount | grep <mount-point>
@@ -147,8 +149,8 @@ WARNING:Are you sure to delete fs test1?
 please input `test1` to confirm: test1
 ```
 
-- Parameter Description \
-fsname: The name of the file system to be deleted. After execution, you need to input the file system name again to confirm the deletion, to prevent deleting the file system by mistake.
+#### Parameter Description
+- fsname: The name of the file system to be deleted. After execution, you need to input the file system name again to confirm the deletion, to prevent deleting the file system by mistake.
 
 ## Appendix: Important DingoFS Configuration Items 
 |Configuration Items |Is Required |Default |Description | 

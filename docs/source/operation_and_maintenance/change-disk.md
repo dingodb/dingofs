@@ -19,7 +19,7 @@ disk.
   - /dev/sdc:/data/chunkserver2:90 # Replacement disk 
 ```
 
-> :warning: **WARNING:** 
+> ⚠️ **WARNING:** 
 > 
 > The `format.yaml` file should only be filled with the list of disks on the added machines, **DO NOT** fill it with the list of disks that are already in service on the cluster, to avoid irreparable damage.
 

@@ -37,11 +37,11 @@ DingoAdm upgrades all services in the cluster by default. To upgrade a specific 
 * `--host`: Upgrade all services on the specified host.
 * `--role`: Upgrade all services for the specified role.
 
-The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the services can be viewed via [dingoadm status](#View cluster status).
+The above 3 options can be used in any combination, and the corresponding `id`, `host`, and `role` of the services can be viewed via [dingoadm status](./maintain-dingo#viewing-cluster-status).
 
-#### Example 1: Upgrading a service with id `c9570c0d0252
+#### Example 1: Upgrading a service with id `c9570c0d0252`
 
-``` shell 
+``` shell
 $ dingoadm upgrade --id c9570c0d0252 
 ```
 
@@ -50,7 +50,7 @@ $ dingoadm upgrade --id c9570c0d0252
 $ dingoadm upgrade --host 10.0.1.1 --role mds 
 ``
 
-> :bulb: **REMINDER:** 
+> 💡 **REMINDER:** 
 > 
 > `upgrade` upgrades each service specified on a rolling basis by default. Users 
 > need to go into the container to determine if the cluster is healthy after upgrading each service. If you want to perform the upgrade in one go, you can add the `-f` option to force the upgrade.
