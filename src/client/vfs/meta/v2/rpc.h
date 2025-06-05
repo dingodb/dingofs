@@ -115,6 +115,10 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::EQUOTA_EXCEED:
       return Status::NoSpace(error.errcode(), error.errmsg());
 
+    case pb::error::ENOT_SUPPORT:
+    case pb::error::EQUOTA_ILLEGAL:
+      return Status::NotSupport(error.errcode(), error.errmsg());
+
     default:
       return Status::Internal(error.errcode(), error.errmsg());
   }

@@ -337,7 +337,8 @@ class CreateRootOperation : public Operation {
 
 class MkDirOperation : public Operation {
  public:
-  MkDirOperation(Trace& trace, Dentry dentry, const AttrType& attr) : Operation(trace), dentry_(dentry), attr_(attr) {};
+  MkDirOperation(Trace& trace, const Dentry& dentry, const AttrType& attr)
+      : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkDirOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMkDir; }
@@ -354,7 +355,8 @@ class MkDirOperation : public Operation {
 
 class MkNodOperation : public Operation {
  public:
-  MkNodOperation(Trace& trace, Dentry dentry, const AttrType& attr) : Operation(trace), dentry_(dentry), attr_(attr) {};
+  MkNodOperation(Trace& trace, const Dentry& dentry, const AttrType& attr)
+      : Operation(trace), dentry_(dentry), attr_(attr) {};
   ~MkNodOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kMkNod; }

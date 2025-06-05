@@ -38,9 +38,9 @@ class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
 
-class MdsV2DirIterator : public DirIterator {
+class DirIteratorImpl : public DirIterator {
  public:
-  MdsV2DirIterator(MDSClientPtr mds_client, Ino ino)
+  DirIteratorImpl(MDSClientPtr mds_client, Ino ino)
       : mds_client_(mds_client), ino_(ino) {}
 
   Status Seek() override;
@@ -115,7 +115,7 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   Status ReadSlice(Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;
-  Status NewSliceId(uint64_t* id) override;
+  Status NewSliceId(Ino ino, uint64_t* id) override;
   Status WriteSlice(Ino ino, uint64_t index,
                     const std::vector<Slice>& slices) override;
 

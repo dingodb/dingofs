@@ -818,6 +818,7 @@ void MDSServiceImpl::DoMkNod(google::protobuf::RpcController* controller, const 
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::MkNod(google::protobuf::RpcController* controller, const pb::mdsv2::MkNodRequest* request,
@@ -872,6 +873,7 @@ void MDSServiceImpl::DoMkDir(google::protobuf::RpcController* controller, const 
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::MkDir(google::protobuf::RpcController* controller, const pb::mdsv2::MkDirRequest* request,
@@ -1100,6 +1102,7 @@ void MDSServiceImpl::DoLink(google::protobuf::RpcController* controller, const p
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::Link(google::protobuf::RpcController* controller, const pb::mdsv2::LinkRequest* request,
@@ -1190,6 +1193,7 @@ void MDSServiceImpl::DoSymlink(google::protobuf::RpcController* controller, cons
   }
 
   response->mutable_inode()->Swap(&entry_out.attr);
+  response->set_parent_version(entry_out.parent_version);
 }
 
 void MDSServiceImpl::Symlink(google::protobuf::RpcController* controller, const pb::mdsv2::SymlinkRequest* request,

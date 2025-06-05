@@ -57,7 +57,7 @@ std::string GetHostName() {
   return std::string(hostname);
 }
 
-Status MdsV2DirIterator::Seek() {
+Status DirIteratorImpl::Seek() {
   std::vector<DirEntry> entries;
   auto status = mds_client_->ReadDir(ino_, last_name_,
                                      FLAGS_read_dir_batch_size, true, entries);
@@ -74,16 +74,16 @@ Status MdsV2DirIterator::Seek() {
   return Status::OK();
 }
 
-bool MdsV2DirIterator::Valid() { return offset_ < entries_.size(); }
+bool DirIteratorImpl::Valid() { return offset_ < entries_.size(); }
 
-DirEntry MdsV2DirIterator::GetValue(bool with_attr) {
+DirEntry DirIteratorImpl::GetValue(bool with_attr) {
   CHECK(offset_ < entries_.size()) << "offset out of range";
 
   with_attr_ = with_attr;
   return entries_[offset_];
 }
 
-void MdsV2DirIterator::Next() {
+void DirIteratorImpl::Next() {
   if (++offset_ < entries_.size()) {
     return;
   }
@@ -385,8 +385,8 @@ Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
-Status MDSV2FileSystem::NewSliceId(uint64_t* id) {
-  auto status = mds_client_->NewSliceId(id);
+Status MDSV2FileSystem::NewSliceId(Ino ino, uint64_t* id) {
+  auto status = mds_client_->NewSliceId(ino, id);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format("[meta.{}] NewSliceId fail, error: {}.", name_,
                               status.ToString());
@@ -438,7 +438,7 @@ Status MDSV2FileSystem::OpenDir(Ino ino) {
 }
 
 DirIterator* MDSV2FileSystem::NewDirIterator(Ino ino) {
-  return new MdsV2DirIterator(mds_client_, ino);
+  return new DirIteratorImpl(mds_client_, ino);
 }
 
 Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
@@ -610,7 +610,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   }
 
   // parent cache
-  auto parent_cache = ParentCache::New();
+  auto parent_memo = ParentMemo::New();
 
   // mds router
   MDSRouterPtr mds_router;
@@ -620,7 +620,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   } else if (pb_fs_info.partition_policy().type() ==
              dingofs::pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
-    mds_router = ParentHashMDSRouter::New(mds_discovery, parent_cache);
+    mds_router = ParentHashMDSRouter::New(mds_discovery, parent_memo);
 
   } else {
     LOG(ERROR) << fmt::format(
@@ -638,7 +638,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
   auto fs_info = mdsv2::FsInfo::New(pb_fs_info);
 
   // create mds client
-  auto mds_client = MDSClient::New(client_id, fs_info, parent_cache,
+  auto mds_client = MDSClient::New(client_id, fs_info, parent_memo,
                                    mds_discovery, mds_router, rpc);
   if (!mds_client->Init()) {
     LOG(INFO) << fmt::format("[meta.{}] MDSClient init fail.", fs_name);

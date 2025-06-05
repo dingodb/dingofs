@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <map>
 
+#include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
@@ -48,6 +49,19 @@ void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
   for (auto [_, node] : node_map) {
     delete node;
   }
+}
+
+static Status GetFsInfo(KVStorageSPtr kv_storage, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info) {
+  std::string fs_key = MetaCodec::EncodeFSKey(fs_name);
+  std::string value;
+  Status status = kv_storage->Get(fs_key, value);
+  if (!status.ok()) {
+    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
+  }
+
+  fs_info = MetaCodec::DecodeFSValue(value);
+
+  return Status::OK();
 }
 
 static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
@@ -174,14 +188,22 @@ FsTreeNode* FsUtils::GenFsTree(uint32_t fs_id) {
 
 static std::string FormatTime(uint64_t time_ns) { return Helper::FormatTime(time_ns / 1000000000, "%H:%M:%S"); }
 
-void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
+void FsUtils::GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
   CHECK(node != nullptr) << "node is null";
 
-  doc["ino"] = node->dentry.ino();
-  doc["name"] = node->dentry.name();
-  doc["type"] = node->dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
-  // mode,nlink,uid,gid,size,ctime,mtime,atime
+  const auto& dentry = node->dentry;
   auto& attr = node->attr;
+  doc["ino"] = attr.ino();
+  doc["name"] = dentry.name();
+  doc["type"] = dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
+  if (fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    doc["node"] = fs_info_.partition_policy().mono().mds_id();
+  } else {
+    doc["node"] = (dentry.type() == pb::mdsv2::FileType::DIRECTORY) ? hash_router_->GetMDS(attr.ino())
+                                                                    : hash_router_->GetMDS(dentry.parent());
+  }
+
+  // mode,nlink,uid,gid,size,ctime,mtime,atime
   doc["description"] =
       fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
                   attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
@@ -197,9 +219,11 @@ void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc) {
   doc["children"] = children;
 }
 
-std::string FsUtils::GenFsTreeJsonString(uint32_t fs_id) {
+std::string FsUtils::GenFsTreeJsonString() {
+  CHECK(!fs_info_.fs_name().empty()) << "fs_info is empty";
+
   std::multimap<uint64_t, FsTreeNode*> node_map;
-  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_id, node_map);
+  FsTreeNode* root = GenFsTreeStruct(kv_storage_, fs_info_.fs_id(), node_map);
   if (root == nullptr) {
     FreeMap(node_map);
     return "gen fs tree struct fail";

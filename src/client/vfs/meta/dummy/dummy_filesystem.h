@@ -190,7 +190,7 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status ReadSlice(Ino ino, uint64_t index,
                    std::vector<Slice>* slices) override;
-  Status NewSliceId(uint64_t* id) override;
+  Status NewSliceId(Ino ino, uint64_t* id) override;
   Status WriteSlice(Ino ino, uint64_t index,
                     const std::vector<Slice>& slices) override;
 

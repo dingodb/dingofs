@@ -50,13 +50,13 @@ bool MonoMDSRouter::Init(const pb::mdsv2::PartitionPolicy& partition_policy) {
   return UpdateMds(partition_policy.mono().mds_id());
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDSByParentIno(Ino parent) {  // NOLINT
+mdsv2::MDSMeta MonoMDSRouter::GetMDSByParent(Ino parent) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
 
   return mds_meta_;
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDSByIno(Ino ino) {  // NOLINT
+mdsv2::MDSMeta MonoMDSRouter::GetMDS(Ino ino) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
 
   return mds_meta_;
@@ -81,7 +81,7 @@ void ParentHashMDSRouter::UpdateMDSes(
         << fmt::format("not found mds by mds_id({}).", mds_id);
 
     for (const auto& bucket_id : bucket_set.bucket_ids()) {
-      mdses_[bucket_id] = mds_meta;
+      mds_map_[bucket_id] = mds_meta;
     }
   }
 
@@ -99,30 +99,30 @@ bool ParentHashMDSRouter::Init(
   return true;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParentIno(Ino parent) {
+mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParent(Ino parent) {
   utils::ReadLockGuard lk(lock_);
 
   int64_t bucket_id = parent % hash_partition_.bucket_num();
-  auto it = mdses_.find(bucket_id);
-  CHECK(it != mdses_.end())
-      << fmt::format("not found mds by parent_ino({}).", parent);
+  auto it = mds_map_.find(bucket_id);
+  CHECK(it != mds_map_.end())
+      << fmt::format("not found mds by parent({}).", parent);
 
   return it->second;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByIno(Ino ino) {
+mdsv2::MDSMeta ParentHashMDSRouter::GetMDS(Ino ino) {
   Ino parent = 1;
   if (ino != 1) {
-    CHECK(parent_cache_->GetParent(ino, parent))
-        << fmt::format("not found parent_ino by ino({}).", ino);
+    CHECK(parent_memo_->GetParent(ino, parent))
+        << fmt::format("not found parent by ino({}).", ino);
   }
 
   utils::ReadLockGuard lk(lock_);
 
   int64_t bucket_id = parent % hash_partition_.bucket_num();
-  auto it = mdses_.find(bucket_id);
-  CHECK(it != mdses_.end())
-      << fmt::format("not found mds by parent_ino({}).", parent);
+  auto it = mds_map_.find(bucket_id);
+  CHECK(it != mds_map_.end())
+      << fmt::format("not found mds by parent({}).", parent);
 
   return it->second;
 }

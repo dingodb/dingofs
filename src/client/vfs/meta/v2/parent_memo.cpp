@@ -12,22 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "client/vfs/meta/v2/parent_cache.h"
+#include "client/vfs/meta/v2/parent_memo.h"
 
 #include "fmt/core.h"
-#include "mdsv2/common/logging.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
 
-ParentCache::ParentCache() {
+ParentMemo::ParentMemo() {
   // root ino is its own parent
   ino_map_.insert({1, Entry{1, 0}});
 }
 
-bool ParentCache::GetParent(Ino ino, Ino& parent) {
+bool ParentMemo::GetParent(Ino ino, Ino& parent) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -43,7 +42,7 @@ bool ParentCache::GetParent(Ino ino, Ino& parent) {
   return true;
 }
 
-bool ParentCache::GetVersion(Ino ino, uint64_t& version) {
+bool ParentMemo::GetVersion(Ino ino, uint64_t& version) {
   utils::ReadLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -55,7 +54,7 @@ bool ParentCache::GetVersion(Ino ino, uint64_t& version) {
   return true;
 }
 
-std::vector<uint64_t> ParentCache::GetAncestors(uint64_t ino) {
+std::vector<uint64_t> ParentMemo::GetAncestors(uint64_t ino) {
   utils::ReadLockGuard lk(lock_);
 
   std::vector<uint64_t> ancestors;
@@ -81,7 +80,7 @@ std::vector<uint64_t> ParentCache::GetAncestors(uint64_t ino) {
   return ancestors;
 }
 
-void ParentCache::Upsert(Ino ino, Ino parent) {
+void ParentMemo::Upsert(Ino ino, Ino parent) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -92,18 +91,21 @@ void ParentCache::Upsert(Ino ino, Ino parent) {
   }
 }
 
-void ParentCache::UpsertVersion(Ino ino, uint64_t version) {
+void ParentMemo::UpsertVersion(Ino ino, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
   if (it != ino_map_.end()) {
-    it->second.version = version;
+    if (it->second.version < version) {
+      it->second.version = version;
+    }
+
   } else {
     ino_map_[ino] = Entry{.parent = 0, .version = version};
   }
 }
 
-void ParentCache::Upsert(Ino ino, Ino parent, uint64_t version) {
+void ParentMemo::Upsert(Ino ino, Ino parent, uint64_t version) {
   utils::WriteLockGuard lk(lock_);
 
   auto it = ino_map_.find(ino);
@@ -117,7 +119,7 @@ void ParentCache::Upsert(Ino ino, Ino parent, uint64_t version) {
   }
 }
 
-void ParentCache::Delete(Ino ino) {
+void ParentMemo::Delete(Ino ino) {
   utils::WriteLockGuard lk(lock_);
 
   ino_map_.erase(ino);

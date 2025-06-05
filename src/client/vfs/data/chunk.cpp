@@ -21,12 +21,12 @@
 #include <cstdint>
 
 #include "cache/blockcache/cache_store.h"
-#include "common/status.h"
 #include "client/common/utils.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -50,7 +50,7 @@ Status Chunk::WriteToBlockCache(const BlockKey& key, const Block& block,
 }
 
 Status Chunk::AllockChunkId(uint64_t* chunk_id) {
-  return hub_->GetMetaSystem()->NewSliceId(chunk_id);
+  return hub_->GetMetaSystem()->NewSliceId(ino_, chunk_id);
 }
 
 Status Chunk::CommitSlices(const std::vector<Slice>& slices) {

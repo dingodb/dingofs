@@ -215,6 +215,11 @@ static void TraversePrint(FsTreeNode* item, bool is_details, int level) {
 }
 
 void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
+  if (fs_id == 0) {
+    std::cout << "fs_id is invalid." << std::endl;
+    return;
+  }
+
   FsUtils fs_utils(kv_storage_);
 
   FsTreeNode* root = fs_utils.GenFsTree(fs_id);

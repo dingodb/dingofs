@@ -77,10 +77,6 @@ bool IsReserveName(const std::string& name) { return name == kStatsName || name 
 
 bool IsInvalidName(const std::string& name) { return name.empty() || name.size() > FLAGS_filesystem_name_max_size; }
 
-static inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
-
-static inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
-
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
                        RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map)
     : self_mds_id_(self_mds_id),
@@ -672,6 +668,8 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
 
+  entry_out.parent_version = parent_attr.version();
+
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
@@ -838,6 +836,8 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
+
+  entry_out.parent_version = parent_attr.version();
 
   // update cache
   inode_cache_.PutInode(ino, inode);
@@ -1021,6 +1021,8 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& parent_attr = result.attr;
   auto& child_attr = result.child_attr;
 
+  entry_out.parent_version = parent_attr.version();
+
   // update cache
   inode->UpdateIf(std::move(child_attr));
   parent_inode->UpdateIf(std::move(parent_attr));
@@ -1187,6 +1189,8 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
 
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
+
+  entry_out.parent_version = parent_attr.version();
 
   // update cache
   inode_cache_.PutInode(ino, inode);
@@ -1420,7 +1424,7 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
   bool can_rename = (old_quota == nullptr && new_quota == nullptr) ||
                     (old_quota != nullptr && new_quota != nullptr && old_quota->GetIno() == new_quota->GetIno());
   if (!can_rename) {
-    return Status(pb::error::EQUOTA_ILLEGAL, "quota not match, can not rename");
+    return Status(pb::error::ENOT_SUPPORT, "not support rename between quota directory");
   }
 
   RenameOperation operation(trace, fs_id_, old_parent, old_name, new_parent, new_name);

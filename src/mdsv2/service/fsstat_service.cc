@@ -406,7 +406,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "</head>";
 
   os << "<body>";
-  os << R"(<h1 style="text-align:center;" >Quota</h1>)";
+  os << R"(<h1 style="text-align:center;">Quota</h1>)";
   auto& quota_manager = fs->GetQuotaManager();
 
   // fs quota
@@ -470,7 +470,8 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "</html>";
 }
 
-static void RenderFsTreePage(FsUtils& fs_utils, uint32_t fs_id, butil::IOBufBuilder& os) {
+static void RenderFsTreePage(FsUtils& fs_utils, const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+  const auto fs_id = fs_info.fs_id();
   if (fs_id == 0) {
     os << "Invalid fs_id";
     return;
@@ -548,8 +549,9 @@ body {
   os << "</head>";
 
   os << "<body>";
-  os << "<h1>FileSystem Directory Tree</h1>";
-  os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,length,ctime,mtime,atime]</p>";
+  os << R"(<h1 style="text-align:center;">FileSystem Directory Tree</h1>)";
+  os << fmt::format(R"(<h3>{}({})</h3>)", fs_info.fs_name(), fs_id);
+  os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,length,ctime,mtime,atime][mds]</p>";
   os << R"(
 <div class="controls">
   <button id="expandAll">Expand</button>
@@ -560,7 +562,7 @@ body {
   os << "<script>";
 
   os << "const fs_id = " << fs_id << ";";
-  os << "const fileSystem =" + fs_utils.GenFsTreeJsonString(fs_id) + ";";
+  os << "const fileSystem =" + fs_utils.GenFsTreeJsonString() + ";";
 
   os << R"(
     function generateTree(item, parentElement) {
@@ -569,7 +571,7 @@ body {
       if (item.type === 'directory') {
         const folderSpan = document.createElement('span');
         folderSpan.className = 'folder';
-        folderSpan.innerHTML = `<div><span class="icon">📁</span>${item.name} [${item.ino},${item.description}]</div>`;
+        folderSpan.innerHTML = `<div><span class="icon">📁</span>${item.name} [${item.ino},${item.description}][${item.node}]</div>`;
         folderSpan.addEventListener('click', function () {
           this.parentElement.classList.toggle('collapsed');
           if (this.parentElement.classList.contains('collapsed')) {
@@ -881,8 +883,17 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
   } else if (params.size() == 1) {
     // /FsStatService/{fs_id}
     uint32_t fs_id = Helper::StringToInt32(params[0]);
-    FsUtils fs_utils(Server::GetInstance().GetKVStorage());
-    RenderFsTreePage(fs_utils, fs_id, os);
+
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      auto fs_info = file_system->GetFsInfo();
+      FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
+
+      RenderFsTreePage(fs_utils, fs_info, os);
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
 
   } else if (params.size() == 2 && params[0] == "details") {
     // /FsStatService/details/{fs_id}

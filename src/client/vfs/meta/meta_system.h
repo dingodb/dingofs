@@ -68,7 +68,7 @@ class MetaSystem {
   virtual Status ReadSlice(Ino ino, uint64_t index,
                            std::vector<Slice>* slices) = 0;
 
-  virtual Status NewSliceId(uint64_t* id) = 0;
+  virtual Status NewSliceId(Ino ino, uint64_t* id) = 0;
 
   /**
    * Write the slices of a file meta

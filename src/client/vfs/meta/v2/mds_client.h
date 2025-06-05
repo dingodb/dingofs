@@ -42,15 +42,15 @@ using MDSClientPtr = std::shared_ptr<MDSClient>;
 class MDSClient {
  public:
   MDSClient(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
-            ParentCachePtr parent_cache, MDSDiscoveryPtr mds_discovery,
+            ParentMemoSPtr parent_memo, MDSDiscoveryPtr mds_discovery,
             MDSRouterPtr mds_router, RPCPtr rpc);
   virtual ~MDSClient() = default;
 
   static MDSClientPtr New(const ClientId& client_id, mdsv2::FsInfoPtr fs_info,
-                          ParentCachePtr parent_cache,
+                          ParentMemoSPtr parent_memo,
                           MDSDiscoveryPtr mds_discovery,
                           MDSRouterPtr mds_router, RPCPtr rpc) {
-    return std::make_shared<MDSClient>(client_id, fs_info, parent_cache,
+    return std::make_shared<MDSClient>(client_id, fs_info, parent_memo,
                                        mds_discovery, mds_router, rpc);
   }
 
@@ -99,17 +99,17 @@ class MDSClient {
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
                 const std::string& new_name);
 
-  Status NewSliceId(uint64_t* id);
+  Status NewSliceId(Ino ino, uint64_t* id);
   Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
   Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
 
   Status GetFsQuota(FsStat& fs_stat);
 
  private:
-  EndPoint GetEndPointByIno(int64_t ino);
-  EndPoint GetEndPointByParentIno(int64_t parent);
+  EndPoint GetEndpoint(Ino ino);
+  EndPoint GetEndpointByParent(int64_t parent);
 
-  uint64_t GetInodeVersion(int64_t ino);
+  uint64_t GetInodeVersion(Ino ino);
 
   bool UpdateRouter();
 
@@ -131,7 +131,7 @@ class MDSClient {
   const ClientId client_id_;
   mdsv2::FsInfoPtr fs_info_;
 
-  ParentCachePtr parent_cache_;
+  ParentMemoSPtr parent_memo_;
 
   MDSRouterPtr mds_router_;
 
@@ -146,7 +146,7 @@ void MDSClient::SetAncestorInContext(Request& request, Ino ino) {
     return;
   }
 
-  auto ancestors = parent_cache_->GetAncestors(ino);
+  auto ancestors = parent_memo_->GetAncestors(ino);
   for (auto& ancestor : ancestors) {
     request.mutable_context()->add_ancestors(ancestor);
   }

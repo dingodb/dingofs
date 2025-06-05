@@ -61,6 +61,7 @@ struct EntryOut {
 
   std::string name;
   AttrType attr;
+  uint64_t parent_version{0};
 };
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {

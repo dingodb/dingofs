@@ -461,7 +461,7 @@ Status DummyFileSystem::ReadSlice(Ino ino, uint64_t index,
   return file_chunk_map_.Read(ino, index, slices);
 }
 
-Status DummyFileSystem::NewSliceId(uint64_t* id) {
+Status DummyFileSystem::NewSliceId(Ino ino, uint64_t* id) {
   return file_chunk_map_.NewSliceId(id);
 }
 

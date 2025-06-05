@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_CACHE_H_
-#define DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_CACHE_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
+#define DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
 
 #include <sys/types.h>
 
@@ -29,20 +29,15 @@ namespace client {
 namespace vfs {
 namespace v2 {
 
-class ParentCache;
-using ParentCachePtr = std::shared_ptr<ParentCache>;
+class ParentMemo;
+using ParentMemoSPtr = std::shared_ptr<ParentMemo>;
 
-class ParentCache {
+class ParentMemo {
  public:
-  ParentCache();
-  ~ParentCache() = default;
+  ParentMemo();
+  ~ParentMemo() = default;
 
-  struct Entry {
-    Ino parent;
-    uint64_t version;
-  };
-
-  static ParentCachePtr New() { return std::make_shared<ParentCache>(); }
+  static ParentMemoSPtr New() { return std::make_shared<ParentMemo>(); }
 
   bool GetParent(Ino ino, Ino& parent);
   bool GetVersion(Ino ino, uint64_t& version);
@@ -54,9 +49,14 @@ class ParentCache {
   void Delete(Ino ino);
 
  private:
+  struct Entry {
+    Ino parent;
+    uint64_t version;
+  };
+
   utils::RWLock lock_;
   // ino -> entry
-  std::unordered_map<int64_t, Entry> ino_map_;
+  std::unordered_map<Ino, Entry> ino_map_;
 };
 
 }  // namespace v2
@@ -64,4 +64,4 @@ class ParentCache {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_CACHE_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_META_V2_PARENT_MEMO_H_
