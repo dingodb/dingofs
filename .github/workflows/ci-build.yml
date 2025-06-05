@@ -47,6 +47,7 @@ jobs:
         cat <<EOF > /mnt/dingofs/build.sh
         #!/bin/bash
         set -x
+        set -e
 
         cd /opt/dingofs/
         git config --global --add safe.directory /opt/dingofs
