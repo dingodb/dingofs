@@ -27,6 +27,7 @@
 #include "mdsv2/common/crontab.h"
 #include "mdsv2/coordinator/coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
+#include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/mds/mds_meta.h"
 #include "mdsv2/storage/storage.h"
@@ -55,6 +56,8 @@ class Server {
 
   bool InitOperationProcessor();
 
+  bool InitNotifyBuddy();
+
   bool InitFileSystem();
 
   bool InitHeartbeat();
@@ -79,6 +82,7 @@ class Server {
   HeartbeatSPtr GetHeartbeat();
   FsInfoSync& GetFsInfoSync();
   CoordinatorClientSPtr GetCoordinatorClient();
+  notify::NotifyBuddySPtr GetNotifyBuddy();
   FileSystemSetSPtr GetFileSystemSet();
   MonitorSPtr GetMonitor();
   OperationProcessorSPtr GetOperationProcessor();
@@ -128,6 +132,9 @@ class Server {
 
   // fs info sync
   FsInfoSync fs_info_sync_;
+
+  // notify buddy
+  notify::NotifyBuddySPtr notify_buddy_;
 
   // mds monitor
   MonitorSPtr monitor_;

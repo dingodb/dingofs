@@ -14,6 +14,9 @@
 
 #include "mdsv2/service/mds_service.h"
 
+#include <fmt/format.h>
+
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -25,6 +28,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/helper.h"
+#include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/inode.h"
@@ -476,46 +480,6 @@ void MDSServiceImpl::UpdateFsInfo(google::protobuf::RpcController* controller,
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
       [this, controller, request, response, svr_done]() { DoUpdateFsInfo(controller, request, response, svr_done); });
-
-  bool ret = write_worker_set_->Execute(task);
-  if (BAIDU_UNLIKELY(!ret)) {
-    brpc::ClosureGuard done_guard(svr_done);
-    ServiceHelper::SetError(response->mutable_error(), pb::error::EREQUEST_FULL,
-                            "WorkerSet queue is full, please wait and retry");
-  }
-}
-
-void MDSServiceImpl::DoRefreshFsInfo(google::protobuf::RpcController* controller,
-                                     const pb::mdsv2::RefreshFsInfoRequest* request,
-                                     pb::mdsv2::RefreshFsInfoResponse* response, TraceClosure* done) {
-  brpc::Controller* cntl = (brpc::Controller*)controller;
-  brpc::ClosureGuard done_guard(done);
-
-  Status status;
-  if (!request->fs_name().empty()) {
-    status = file_system_set_->RefreshFsInfo(request->fs_name());
-
-  } else if (request->fs_id() > 0) {
-    status = file_system_set_->RefreshFsInfo(request->fs_id());
-
-  } else {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::EILLEGAL_PARAMTETER,
-                                   "fs name or fs id is empty");
-  }
-
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
-  }
-}
-
-void MDSServiceImpl::RefreshFsInfo(google::protobuf::RpcController* controller,
-                                   const pb::mdsv2::RefreshFsInfoRequest* request,
-                                   pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done) {
-  auto* svr_done = new ServiceClosure(__func__, done, request, response);
-
-  // Run in queue.
-  auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoRefreshFsInfo(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {
@@ -2344,35 +2308,47 @@ void MDSServiceImpl::CheckAlive(google::protobuf::RpcController* controller,
   brpc::ClosureGuard done_guard(svr_done);
 }
 
-void MDSServiceImpl::DoRefreshInode(google::protobuf::RpcController* controller,
-                                    const pb::mdsv2::RefreshInodeRequest* request,
-                                    pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done) {
+void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController* controller,
+                                   const pb::mdsv2::NotifyBuddyRequest* request,
+                                   pb::mdsv2::NotifyBuddyResponse* response, TraceClosure* done) {
   brpc::Controller* cntl = (brpc::Controller*)controller;
   brpc::ClosureGuard done_guard(done);
   done->SetQueueWaitTime();
 
-  auto file_system = GetFileSystem(request->fs_id());
-  if (file_system == nullptr) {
-    return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
-  }
+  for (const auto& message : request->messages()) {
+    switch (message.type()) {
+      case pb::mdsv2::NotifyBuddyRequest::TYPE_REFRESH_FS_INFO: {
+        auto status = file_system_set_->RefreshFsInfo(message.refresh_fs_info().fs_name());
+        if (!status.ok()) {
+          DINGO_LOG(ERROR) << fmt::format("refresh fs info fail, status({})", status.error_str());
+        }
 
-  const auto& req_ctx = request->context();
-  Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
+      } break;
 
-  auto status = file_system->RefreshInode(Helper::PbRepeatedToVector(request->inoes()));
-  if (BAIDU_UNLIKELY(!status.ok())) {
-    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+      case pb::mdsv2::NotifyBuddyRequest::TYPE_REFRESH_INODE: {
+        auto file_system = GetFileSystem(message.fs_id());
+        if (file_system == nullptr) {
+          return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+        }
+
+        auto& mut_message = const_cast<pb::mdsv2::NotifyBuddyRequest::Message&>(message);
+        file_system->RefreshInode(*mut_message.mutable_refresh_inode()->mutable_inode());
+      } break;
+
+      default:
+        DINGO_LOG(FATAL) << "unknown message type: " << message.type();
+    }
   }
 }
 
-void MDSServiceImpl::RefreshInode(google::protobuf::RpcController* controller,
-                                  const pb::mdsv2::RefreshInodeRequest* request,
-                                  pb::mdsv2::RefreshInodeResponse* response, google::protobuf::Closure* done) {
+void MDSServiceImpl::NotifyBuddy(google::protobuf::RpcController* controller,
+                                 const pb::mdsv2::NotifyBuddyRequest* request, pb::mdsv2::NotifyBuddyResponse* response,
+                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
-      [this, controller, request, response, svr_done]() { DoRefreshInode(controller, request, response, svr_done); });
+      [this, controller, request, response, svr_done]() { DoNotifyBuddy(controller, request, response, svr_done); });
 
   bool ret = write_worker_set_->Execute(task);
   if (BAIDU_UNLIKELY(!ret)) {

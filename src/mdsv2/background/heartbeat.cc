@@ -31,6 +31,9 @@ namespace mdsv2 {
 
 DECLARE_int32(fs_scan_batch_size);
 
+DECLARE_uint32(mds_offline_period_time_ms);
+DECLARE_uint32(client_offline_period_time_ms);
+
 bool Heartbeat::Init() {
   worker_ = Worker::New();
   return worker_->Init();
@@ -108,6 +111,12 @@ Status Heartbeat::GetMDSList(std::vector<MdsEntry>& mdses) {
 
   auto& result = operation.GetResult();
   mdses = std::move(result.mds_entries);
+
+  // set online status
+  int64_t now_ms = Helper::TimestampMs();
+  for (auto& mds : mdses) {
+    mds.set_is_online((mds.last_online_time_ms() + FLAGS_mds_offline_period_time_ms < now_ms) ? false : true);
+  }
 
   return Status::OK();
 }

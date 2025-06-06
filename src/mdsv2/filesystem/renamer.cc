@@ -14,8 +14,6 @@
 
 #include "mdsv2/filesystem/renamer.h"
 
-#include "dingofs/error.pb.h"
-#include "mdsv2/common/context.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/filesystem/filesystem.h"
@@ -56,7 +54,7 @@ bool Renamer::Destroy() {
 
 bool Renamer::Execute(TaskRunnablePtr task) {
   if (worker_ == nullptr) {
-    DINGO_LOG(ERROR) << "Heartbeat worker is nullptr.";
+    DINGO_LOG(ERROR) << "renamer worker is nullptr.";
     return false;
   }
 

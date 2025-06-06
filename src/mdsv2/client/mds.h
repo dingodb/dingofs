@@ -49,9 +49,6 @@ using pb::mdsv2::GetFsInfoResponse;
 using pb::mdsv2::ListFsInfoRequest;
 using pb::mdsv2::ListFsInfoResponse;
 
-using pb::mdsv2::RefreshFsInfoRequest;
-using pb::mdsv2::RefreshFsInfoResponse;
-
 using pb::mdsv2::MkDirRequest;
 using pb::mdsv2::MkDirResponse;
 
@@ -153,7 +150,6 @@ class MDSClient {
   UpdateFsInfoResponse UpdateFs(const std::string& fs_name);
   GetFsInfoResponse GetFs(const std::string& fs_name);
   ListFsInfoResponse ListFs();
-  RefreshFsInfoResponse RefreshFsInfo(const std::string& fs_name);
 
   MkDirResponse MkDir(Ino parent, const std::string& name);
   void BatchMkDir(const std::vector<int64_t>& parents, const std::string& prefix, size_t num);

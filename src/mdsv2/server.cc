@@ -196,6 +196,7 @@ bool Server::InitFileSystem() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(mds_meta_map_ != nullptr) << "mds_meta_map is nullptr.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+  CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
   auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kFsTableId, kFsIdStartId, kFsIdBatchSize);
   CHECK(fs_id_generator != nullptr) << "new fs AutoIncrementIdGenerator fail.";
@@ -206,8 +207,9 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
-                                        kv_storage_, mds_meta_, mds_meta_map_, renamer_, operation_processor_);
+  file_system_set_ =
+      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator), kv_storage_,
+                         mds_meta_, mds_meta_map_, renamer_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -245,15 +247,23 @@ bool Server::InitWorkerSet() {
   return true;
 }
 
+bool Server::InitNotifyBuddy() {
+  CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";
+  notify_buddy_ = notify::NotifyBuddy::New(mds_meta_map_, mds_meta_.ID());
+
+  return notify_buddy_->Init();
+}
+
 bool Server::InitMonitor() {
   CHECK(coordinator_client_ != nullptr) << "coordinator client is nullptr.";
   CHECK(mds_meta_.ID() > 0) << "mds id is invalid.";
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+  CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
 
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_mdsmonitor_lock_name, mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
-  monitor_ = Monitor::New(file_system_set_, dist_lock);
+  monitor_ = Monitor::New(file_system_set_, dist_lock, notify_buddy_);
   CHECK(monitor_ != nullptr) << "new MDSMonitor fail.";
 
   CHECK(monitor_->Init()) << "init MDSMonitor fail.";
@@ -375,6 +385,12 @@ FileSystemSetSPtr Server::GetFileSystemSet() {
   CHECK(coordinator_client_ != nullptr) << "coordinator_client is nullptr.";
 
   return file_system_set_;
+}
+
+notify::NotifyBuddySPtr Server::GetNotifyBuddy() {
+  CHECK(notify_buddy_ != nullptr) << "notify_buddy is nullptr.";
+
+  return notify_buddy_;
 }
 
 MonitorSPtr Server::GetMonitor() {

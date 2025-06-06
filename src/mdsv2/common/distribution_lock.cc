@@ -482,8 +482,7 @@ Status StoreDistributionLock::RenewLease() {
       break;
     }
 
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
+  } while (++retry < FLAGS_txn_max_retry_times);
 
   DINGO_LOG(INFO) << fmt::format("[dlock.{}] renew lease finish, owner({}) state({}) retry({}) {}.", LockKey(),
                                  owner_mds_id, state, retry, status.error_str());

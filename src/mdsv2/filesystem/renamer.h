@@ -79,6 +79,8 @@ class RenameTask : public TaskRunnable {
 class Renamer;
 using RenamerSPtr = std::shared_ptr<Renamer>;
 
+// Renamer is used to rename file or directory in filesystem.
+// Used to execute queue run rename task
 class Renamer {
  public:
   Renamer() = default;
@@ -106,8 +108,7 @@ template <typename T>
 Status Renamer::Execute(FileSystemSPtr fs, Context& ctx, const T& param, uint64_t& old_parent_version,
                         uint64_t& new_parent_version) {
   auto task = std::make_shared<RenameTask<T> >(fs, &ctx, param, nullptr);
-  bool ret = Execute(task);
-  if (!ret) {
+  if (!Execute(task)) {
     return Status(pb::error::EINTERNAL, "commit task fail");
   }
 

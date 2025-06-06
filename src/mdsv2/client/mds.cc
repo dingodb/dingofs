@@ -250,23 +250,6 @@ ListFsInfoResponse MDSClient::ListFs() {
   return response;
 }
 
-RefreshFsInfoResponse MDSClient::RefreshFsInfo(const std::string& fs_name) {
-  RefreshFsInfoRequest request;
-  RefreshFsInfoResponse response;
-
-  request.set_fs_name(fs_name);
-
-  interaction_->SendRequest("MDSService", "RefreshFsInfo", request, response);
-
-  if (response.error().errcode() == dingofs::pb::error::Errno::OK) {
-    DINGO_LOG(INFO) << "RefreshFsInfo success";
-  } else {
-    DINGO_LOG(ERROR) << "RefreshFsInfo fail, error: " << response.ShortDebugString();
-  }
-
-  return response;
-}
-
 MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
 

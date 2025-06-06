@@ -20,6 +20,7 @@
 
 #include "brpc/channel.h"
 #include "bthread/types.h"
+#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
 
 namespace dingofs {
@@ -42,9 +43,8 @@ class ChannelPool {
 
 class ServiceAccess {
  public:
-  static Status RefreshFsInfo(const butil::EndPoint& endpoint, const std::string& fs_name);
   static Status CheckAlive(const butil::EndPoint& endpoint);
-  static Status RefreshInode(const butil::EndPoint& endpoint, uint32_t fs_id, std::vector<uint64_t> inoes);
+  static Status NotifyBuddy(const butil::EndPoint& endpoint, const pb::mdsv2::NotifyBuddyRequest& request);
 };
 
 }  // namespace mdsv2

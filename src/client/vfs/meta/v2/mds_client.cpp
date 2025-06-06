@@ -176,15 +176,15 @@ Status MDSClient::UmountFs(const std::string& name,
 
 EndPoint MDSClient::GetEndpoint(Ino ino) {
   auto mds_meta = mds_router_->GetMDS(ino);
-  DINGO_LOG(INFO) << fmt::format("query target mds({}:{}) for ino({}).",
-                                 mds_meta.Host(), mds_meta.Port(), ino);
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for ino({}).",
+                           mds_meta.Host(), mds_meta.Port(), ino);
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
 EndPoint MDSClient::GetEndpointByParent(int64_t parent) {
   auto mds_meta = mds_router_->GetMDSByParent(parent);
-  DINGO_LOG(INFO) << fmt::format("query target mds({}:{}) for parent({}).",
-                                 mds_meta.Host(), mds_meta.Port(), parent);
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for parent({}).",
+                           mds_meta.Host(), mds_meta.Port(), parent);
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
@@ -227,8 +227,8 @@ Status MDSClient::Lookup(Ino parent, const std::string& name, Attr& out_attr) {
         return Status::OK();
 
       } else {
-        DINGO_LOG(WARNING) << fmt::format(
-            "[fs.{}] lookup({}/{}) get last inode fail, error: {}.", fs_id_,
+        LOG(WARNING) << fmt::format(
+            "[meta.{}] lookup({}/{}) get last inode fail, error: {}.", fs_id_,
             parent, name, status.ToString());
       }
     }
@@ -894,17 +894,17 @@ bool MDSClient::UpdateRouter() {
 // 1. updatge fs info
 // 2. update mds router
 bool MDSClient::ProcessEpochChange() {
-  DINGO_LOG(INFO) << "process epoch change.";
+  LOG(INFO) << "[meta] process epoch change.";
   return UpdateRouter();
 }
 
 bool MDSClient::ProcessNotServe() {
-  DINGO_LOG(INFO) << "process not serve.";
+  LOG(INFO) << "[meta] process not serve.";
   return UpdateRouter();
 }
 
 bool MDSClient::ProcessNetError(EndPoint& endpoint) {
-  DINGO_LOG(INFO) << "process net error.";
+  LOG(INFO) << "[meta] process net error.";
 
   auto mdses = mds_discovery_->GetMDSByState(mdsv2::MDSMeta::State::kNormal);
   for (auto& mds : mdses) {

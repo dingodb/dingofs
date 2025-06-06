@@ -32,6 +32,7 @@
 #include "mdsv2/filesystem/fs_info.h"
 #include "mdsv2/filesystem/id_generator.h"
 #include "mdsv2/filesystem/inode.h"
+#include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/filesystem/parent_memo.h"
 #include "mdsv2/filesystem/partition.h"
 #include "mdsv2/filesystem/renamer.h"
@@ -67,14 +68,15 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-             RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map);
+             RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+             notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
                             KVStorageSPtr kv_storage, RenamerSPtr renamer, OperationProcessorSPtr operation_processor,
-                            MDSMetaMapSPtr mds_meta_map) {
+                            MDSMetaMapSPtr mds_meta_map, notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
-                                        operation_processor, mds_meta_map);
+                                        operation_processor, mds_meta_map, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -186,6 +188,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mdsv2::XAttr>& out_xattrs);
 
   Status RefreshInode(const std::vector<uint64_t>& inoes);
+  void RefreshInode(AttrType& attr);
 
   Status RefreshFsInfo();
   Status RefreshFsInfo(const std::string& name);
@@ -246,9 +249,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   uint64_t GetMdsIdByIno(Ino ino);
 
-  void SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes);
-
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
+
+  void NotifyBuddyRefreshInode(AttrType&& attr);
 
   uint64_t self_mds_id_;
 
@@ -285,6 +288,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   RenamerSPtr renamer_;
 
   OperationProcessorSPtr operation_processor_;
+
+  // notify buddy
+  notify::NotifyBuddySPtr notify_buddy_;
 };
 
 // manage all filesystem
@@ -292,16 +298,17 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer, OperationProcessorSPtr operation_processor);
+                MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer, OperationProcessorSPtr operation_processor,
+                notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer,
-                               OperationProcessorSPtr operation_processor) {
+                               OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           renamer, operation_processor);
+                                           renamer, operation_processor, notify_buddy);
   }
 
   bool Init();
@@ -365,6 +372,9 @@ class FileSystemSet {
   RenamerSPtr renamer_;
 
   OperationProcessorSPtr operation_processor_;
+
+  // notify buddy
+  notify::NotifyBuddySPtr notify_buddy_;
 
   MDSMeta self_mds_meta_;
   MDSMetaMapSPtr mds_meta_map_;

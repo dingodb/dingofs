@@ -52,8 +52,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                   pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done) override;
   void UpdateFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateFsInfoRequest* request,
                     pb::mdsv2::UpdateFsInfoResponse* response, google::protobuf::Closure* done) override;
-  void RefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
-                     pb::mdsv2::RefreshFsInfoResponse* response, google::protobuf::Closure* done) override;
 
   // dentry interface
   void GetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
@@ -170,8 +168,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void CheckAlive(google::protobuf::RpcController* controller, const pb::mdsv2::CheckAliveRequest* request,
                   pb::mdsv2::CheckAliveResponse* response, google::protobuf::Closure* done) override;
 
-  void RefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
-                    pb::mdsv2::RefreshInodeResponse* response, google::protobuf::Closure* done) override;
+  void NotifyBuddy(google::protobuf::RpcController* controller, const pb::mdsv2::NotifyBuddyRequest* request,
+                   pb::mdsv2::NotifyBuddyResponse* response, google::protobuf::Closure* done) override;
 
  private:
   Status GenFsId(int64_t& fs_id);
@@ -198,8 +196,6 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                     pb::mdsv2::ListFsInfoResponse* response, google::protobuf::Closure* done);
   void DoUpdateFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::UpdateFsInfoRequest* request,
                       pb::mdsv2::UpdateFsInfoResponse* response, google::protobuf::Closure* done);
-  void DoRefreshFsInfo(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshFsInfoRequest* request,
-                       pb::mdsv2::RefreshFsInfoResponse* response, TraceClosure* done);
 
   // dentry interface
   void DoGetDentry(google::protobuf::RpcController* controller, const pb::mdsv2::GetDentryRequest* request,
@@ -273,8 +269,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void DoCleanDelFile(google::protobuf::RpcController* controller, const pb::mdsv2::CleanDelFileRequest* request,
                       pb::mdsv2::CleanDelFileResponse* response, TraceClosure* done);
 
-  void DoRefreshInode(google::protobuf::RpcController* controller, const pb::mdsv2::RefreshInodeRequest* request,
-                      pb::mdsv2::RefreshInodeResponse* response, TraceClosure* done);
+  void DoNotifyBuddy(google::protobuf::RpcController* controller, const pb::mdsv2::NotifyBuddyRequest* request,
+                     pb::mdsv2::NotifyBuddyResponse* response, TraceClosure* done);
 
   // quota interface
   void DoSetFsQuota(google::protobuf::RpcController* controller, const pb::mdsv2::SetFsQuotaRequest* request,

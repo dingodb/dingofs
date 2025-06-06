@@ -78,7 +78,8 @@ bool IsReserveName(const std::string& name) { return name == kStatsName || name 
 bool IsInvalidName(const std::string& name) { return name.empty() || name.size() > FLAGS_filesystem_name_max_size; }
 
 FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-                       RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map)
+                       RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+                       notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
@@ -88,7 +89,8 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
       parent_memo_(ParentMemo::New(fs_id_)),
-      quota_manager_(fs_id_, parent_memo_, operation_processor) {
+      quota_manager_(fs_id_, parent_memo_, operation_processor),
+      notify_buddy_(notify_buddy) {
   can_serve_ = CanServe(self_mds_id);
 
   file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
@@ -156,6 +158,7 @@ bool FileSystem::CanServe(int64_t self_mds_id) {
   const auto& partition_policy = fs_info_->GetPartitionPolicy();
   if (partition_policy.type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
     return partition_policy.mono().mds_id() == self_mds_id;
+
   } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
     return partition_policy.parent_hash().distributions().contains(self_mds_id);
   }
@@ -668,12 +671,10 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
 
-  entry_out.parent_version = parent_attr.version();
-
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  parent_inode->UpdateIf(std::move(parent_attr));
+  parent_inode->UpdateIf(parent_attr);
 
   // update quota
   quota_manager_.UpdateFsUsage(0, 1);
@@ -682,6 +683,11 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   parent_memo_->Remeber(attr.ino(), param.parent);
 
   entry_out.attr.Swap(&attr);
+  entry_out.parent_version = parent_attr.version();
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -837,12 +843,10 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
 
-  entry_out.parent_version = parent_attr.version();
-
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  parent_inode->UpdateIf(std::move(parent_attr));
+  parent_inode->UpdateIf(parent_attr);
   partition_cache_.Put(ino, Partition::New(inode));
 
   // update quota
@@ -852,6 +856,11 @@ Status FileSystem::MkDir(Context& ctx, const MkDirParam& param, EntryOut& entry_
   parent_memo_->Remeber(attr.ino(), param.parent);
 
   entry_out.attr.Swap(&attr);
+  entry_out.parent_version = parent_attr.version();
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -913,7 +922,7 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
 
   // update cache
   parent_partition->DeleteChild(name);
-  parent_partition->ParentInode()->UpdateIf(std::move(parent_attr));
+  parent_partition->ParentInode()->UpdateIf(parent_attr);
   partition_cache_.Delete(dentry.INo());
 
   // update quota
@@ -921,6 +930,10 @@ Status FileSystem::RmDir(Context& ctx, Ino parent, const std::string& name) {
   quota_manager_.UpdateDirUsage(parent, 0, -1);
 
   parent_memo_->Forget(dentry.INo());
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -1021,11 +1034,9 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   auto& parent_attr = result.attr;
   auto& child_attr = result.child_attr;
 
-  entry_out.parent_version = parent_attr.version();
-
   // update cache
   inode->UpdateIf(std::move(child_attr));
-  parent_inode->UpdateIf(std::move(parent_attr));
+  parent_inode->UpdateIf(parent_attr);
 
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
@@ -1034,6 +1045,11 @@ Status FileSystem::Link(Context& ctx, Ino ino, Ino new_parent, const std::string
   quota_manager_.UpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr = inode->Copy();
+  entry_out.parent_version = parent_attr.version();
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -1101,9 +1117,13 @@ Status FileSystem::UnLink(Context& ctx, Ino parent, const std::string& name) {
 
   // update cache
   partition->DeleteChild(name);
-  partition->ParentInode()->UpdateIf(std::move(parent_attr));
+  partition->ParentInode()->UpdateIf(parent_attr);
 
   inode->UpdateIf(std::move(child_attr));
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -1190,18 +1210,21 @@ Status FileSystem::Symlink(Context& ctx, const std::string& symlink, Ino new_par
   auto& result = operation.GetResult();
   auto& parent_attr = result.attr;
 
-  entry_out.parent_version = parent_attr.version();
-
   // update cache
   inode_cache_.PutInode(ino, inode);
   partition->PutChild(dentry);
-  partition->ParentInode()->UpdateIf(std::move(parent_attr));
+  partition->ParentInode()->UpdateIf(parent_attr);
 
   // update quota
   quota_manager_.UpdateFsUsage(0, 1);
   quota_manager_.UpdateDirUsage(new_parent, 0, 1);
 
   entry_out.attr.Swap(&attr);
+  entry_out.parent_version = parent_attr.version();
+
+  if (IsParentHashPartition()) {
+    NotifyBuddyRefreshInode(std::move(parent_attr));
+  }
 
   return Status::OK();
 }
@@ -1360,25 +1383,6 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   return Status::OK();
 }
 
-void FileSystem::SendRefreshInode(uint64_t mds_id, uint32_t fs_id, const std::vector<uint64_t>& inoes) {
-  MDSMeta mds_meta;
-  if (!mds_meta_map_->GetMDSMeta(mds_id, mds_meta)) {
-    DINGO_LOG(WARNING) << fmt::format("[fs.{}] not found mds({}) meta.", fs_id, mds_id);
-    return;
-  }
-
-  butil::EndPoint endpoint;
-  butil::str2endpoint(mds_meta.Host().c_str(), mds_meta.Port(), &endpoint);
-
-  DINGO_LOG(DEBUG) << fmt::format("[fs.{}] refresh inode({}) mds({}) fs({}).", fs_id, Helper::VectorToString(inoes),
-                                  mds_id);
-  auto status = ServiceAccess::RefreshInode(endpoint, fs_id, inoes);
-  if (!status.ok()) {
-    DINGO_LOG(WARNING) << fmt::format("fs.{}] refresh inode({}) fail, mds({}) {}.", fs_id,
-                                      Helper::VectorToString(inoes), mds_id, status.error_str());
-  }
-}
-
 void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
   if (IsParentHashPartition()) {
     for (size_t i = 1; i < ancestors.size(); ++i) {
@@ -1389,6 +1393,19 @@ void FileSystem::UpdateParentMemo(const std::vector<Ino>& ancestors) {
       parent_memo_->Remeber(ino, parent);
     }
   }
+}
+
+void FileSystem::NotifyBuddyRefreshInode(AttrType&& attr) {
+  if (notify_buddy_ == nullptr) return;
+
+  CHECK(attr.parents_size() == 1) << fmt::format("parent size should be 1, but is {} ino({}).", attr.parents_size(),
+                                                 attr.ino());
+
+  Ino parent = attr.parents().at(0);
+  auto mds_id = GetMdsIdByIno(parent);
+  CHECK(mds_id != 0) << fmt::format("mds id should not be 0, ino({}).", parent);
+
+  notify_buddy_->AsyncNotify(notify::RefreshInodeMessage::Create(mds_id, fs_id_, std::move(attr)));
 }
 
 Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_parent_version,
@@ -1507,14 +1524,11 @@ Status FileSystem::Rename(Context& ctx, const RenameParam& param, uint64_t& old_
     }
 
   } else {
-    // notify mds(old_parent and new_parent) to update cache
-    uint64_t old_mds_id = GetMdsIdByIno(old_parent);
-    uint64_t new_mds_id = GetMdsIdByIno(new_parent);
-    if (old_mds_id == new_mds_id) {
-      SendRefreshInode(old_mds_id, fs_id_, {old_parent, new_parent});
+    if (is_same_parent) {
+      NotifyBuddyRefreshInode(std::move(old_parent_attr));
     } else {
-      SendRefreshInode(old_mds_id, fs_id_, {old_parent});
-      SendRefreshInode(new_mds_id, fs_id_, {new_parent});
+      NotifyBuddyRefreshInode(std::move(old_parent_attr));
+      NotifyBuddyRefreshInode(std::move(new_parent_attr));
     }
   }
 
@@ -1813,6 +1827,13 @@ Status FileSystem::RefreshInode(const std::vector<uint64_t>& inoes) {
   return Status::OK();
 }
 
+void FileSystem::RefreshInode(AttrType& attr) {
+  auto inode = inode_cache_.GetInode(attr.ino());
+  if (inode != nullptr) {
+    inode->UpdateIf(attr);
+  }
+}
+
 Status FileSystem::RefreshFsInfo() { return RefreshFsInfo(fs_info_->GetName()); }
 
 Status FileSystem::RefreshFsInfo(const std::string& name) {
@@ -1977,7 +1998,7 @@ Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                              IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer,
-                             OperationProcessorSPtr operation_processor)
+                             OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(fs_id_generator)),
       slice_id_generator_(std::move(slice_id_generator)),
@@ -1985,7 +2006,8 @@ FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGenerat
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
       renamer_(renamer),
-      operation_processor_(operation_processor) {}
+      operation_processor_(operation_processor),
+      notify_buddy_(notify_buddy) {}
 
 FileSystemSet::~FileSystemSet() {}  // NOLINT
 
@@ -2197,7 +2219,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   CHECK(id_generator != nullptr) << "new id generator fail.";
 
   auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                            renamer_, operation_processor_, mds_meta_map_);
+                            renamer_, operation_processor_, mds_meta_map_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(dentry_table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -2480,7 +2502,7 @@ bool FileSystemSet::LoadFileSystems() {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
 
       fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                           renamer_, operation_processor_, mds_meta_map_);
+                           renamer_, operation_processor_, mds_meta_map_, notify_buddy_);
       if (!fs->Init()) {
         DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
         continue;

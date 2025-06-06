@@ -83,7 +83,7 @@ class FileSystemSetTest : public testing::Test {
 
     auto mds_meta_map = MDSMetaMap::New();
     fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), std::move(slice_id_generator),
-                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor);
+                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -132,7 +132,7 @@ class FileSystemTest : public testing::Test {
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
     fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), kv_storage, renamer,
-                         operation_processor, nullptr);
+                         operation_processor, nullptr, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
   }

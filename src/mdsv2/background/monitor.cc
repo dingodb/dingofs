@@ -158,18 +158,13 @@ void Monitor::Run() {
   DINGO_LOG(INFO) << fmt::format("[monitor] monitor client finish, {}.", status.error_str());
 }
 
-void Monitor::NotifyRefreshFs(const MDSMeta& mds, const std::string& fs_name) {
-  butil::EndPoint endpoint;
-  butil::str2endpoint(mds.Host().c_str(), mds.Port(), &endpoint);
-  auto status = ServiceAccess::RefreshFsInfo(endpoint, fs_name);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[monitor] refresh fs info fail, fs: {}, error: {}", fs_name, status.error_str());
-  }
+void Monitor::NotifyRefreshFs(const MDSMeta& mds, const FsInfoType& fs_info) {
+  notify_buddy_->AsyncNotify(notify::RefreshFsInfoMessage::Create(mds.ID(), fs_info.fs_id(), fs_info.fs_name()));
 }
 
-void Monitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const std::string& fs_name) {
+void Monitor::NotifyRefreshFs(const std::vector<MDSMeta>& mdses, const FsInfoType& fs_info) {
   for (const auto& mds : mdses) {
-    NotifyRefreshFs(mds, fs_name);
+    NotifyRefreshFs(mds, fs_info);
   }
 }
 
@@ -285,7 +280,7 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
         DINGO_LOG(INFO) << fmt::format("[monitor] transfer fs({}) from mds({}) to mds({}) finish.", fs->FsName(),
                                        partition_policy.mono().mds_id(), new_mds.ID());
 
-        NotifyRefreshFs(new_mds, fs->FsName());
+        NotifyRefreshFs(new_mds, fs_info);
       }
 
     } else if (partition_policy.type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION) {
@@ -298,7 +293,7 @@ Status Monitor::ProcessFaultMDS(std::vector<MDSMeta>& mdses) {
 
         // notify new mds to start serve partition
         auto mds_metas = GetMdsMetas(mdses, GetMdsIds(new_distributions));
-        NotifyRefreshFs(mds_metas, fs->FsName());
+        NotifyRefreshFs(mds_metas, fs_info);
       }
     }
   }
