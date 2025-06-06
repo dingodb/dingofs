@@ -26,7 +26,7 @@ namespace mdsv2 {
 #endif
 
 #ifndef MAJOR_VERSION
-#define MAJOR_VERSION "v3.0.0"
+#define MAJOR_VERSION "v4.0"
 #endif
 
 #ifndef MINOR_VERSION
@@ -34,7 +34,7 @@ namespace mdsv2 {
 #endif
 
 #ifndef GIT_TAG_NAME
-#define GIT_TAG_NAME "v3.0.0"
+#define GIT_TAG_NAME "v4.0.0"
 #endif
 
 #ifndef GIT_COMMIT_USER

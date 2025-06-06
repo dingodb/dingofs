@@ -25,7 +25,7 @@ DECLARE_bool(show_version);
 #endif
 
 #ifndef MAJOR_VERSION
-#define MAJOR_VERSION "v3.0.0"
+#define MAJOR_VERSION "v4"
 #endif
 
 #ifndef MINOR_VERSION
@@ -33,7 +33,7 @@ DECLARE_bool(show_version);
 #endif
 
 #ifndef GIT_TAG_NAME
-#define GIT_TAG_NAME "v3.0.0"
+#define GIT_TAG_NAME "unknown"
 #endif
 
 #ifndef GIT_COMMIT_USER

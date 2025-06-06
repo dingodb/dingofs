@@ -37,7 +37,7 @@ DEFINE_string(dingofs_build_type, DINGOFS_BUILD_TYPE,
               "current dingofs build type");
 
 void ShowVerion() {
-  printf("DINGOFS VERSION:[%s-%s]\n", FLAGS_major_version.c_str(),
+  printf("DINGOFS VERSION:[%s.%s]\n", FLAGS_major_version.c_str(),
          FLAGS_minor_version.c_str());
   printf("DINGOFS GIT_TAG_VERSION:[%s]\n", FLAGS_git_tag_name.c_str());
   printf("DINGOFS GIT_COMMIT_HASH:[%s]\n", FLAGS_git_commit_hash.c_str());
@@ -45,7 +45,7 @@ void ShowVerion() {
 }
 
 void LogVerion() {
-  LOG(INFO) << "DINGOFS VERSION:[" << FLAGS_major_version << "-"
+  LOG(INFO) << "DINGOFS VERSION:[" << FLAGS_major_version << "."
             << FLAGS_minor_version << "]";
   LOG(INFO) << "DINGOFS GIT_TAG_VERSION:[" << FLAGS_git_tag_name << "]";
   LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << FLAGS_git_commit_hash << "]";

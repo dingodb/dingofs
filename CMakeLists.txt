@@ -82,7 +82,7 @@ add_definitions(-DUSE_BTHREAD_MUTEX)
 add_definitions(-DSPDLOG_FMT_EXTERNAL)
 
 execute_process(
-  COMMAND git describe --always --dirty
+  COMMAND git describe --always --dirty --tags
   OUTPUT_VARIABLE GIT_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
