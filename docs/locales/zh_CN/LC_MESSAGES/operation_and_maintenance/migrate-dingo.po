@@ -6,58 +6,59 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-06 12:02+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:1
 #: 0b89f5ee57734b54aa21cc5220fa67b6
 msgid "Migration Service"
-msgstr ""
+msgstr "迁移服务"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:3
 #: 42e92dbe51dd48238ca07f34c00eacd5
 msgid "Step 1: Modify cluster topology"
-msgstr ""
+msgstr "第 1 步：修改集群拓扑"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:6
 #: 933507e4dfc042a3b088f7f3d4bbbd31
 msgid "Modify the hosts to be migrated in the topology file:"
-msgstr ""
+msgstr "修改拓扑文件中需要迁移的主机："
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:33
 #: 9bffc7bd714b44e6bf556645bab4facf
-msgid ":warning: **Warning:**"
-msgstr ""
+msgid "⚠️ **Warning:**"
+msgstr "⚠️ **警告**"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:35
 #: d78e3503f1cd48b88f69baf92015be31
 msgid "You can only migrate services with the same role at a time"
-msgstr ""
+msgstr "每一次只能迁移同一种角色的服务"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:36
 #: b6b3e0b5769840fca93fbcb2bf5096dd
 msgid "You can only migrate services with the same host at a time"
-msgstr ""
+msgstr "每一次只能迁移同一台主机的服务"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:38
 #: 642e42bc35634e47935dbd413095e985
 msgid "Step 2: Migrate Services"
-msgstr ""
+msgstr "第 2 步：迁移服务"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:45
 #: 33429b0b20424b19b3a163197e9742f6
-msgid ":bulb: **REMINDER:**"
-msgstr ""
+msgid "💡 **REMINDER:**"
+msgstr "💡 **提醒**"
 
 #: ../../source/operation_and_maintenance/migrate-dingo.md:47
 #: fc3441db0b8d4d55bdd8d6611353176c
@@ -65,4 +66,4 @@ msgid ""
 "The migration operation is an idempotent operation, users can repeat the "
 "operation after it fails, don't worry about the service residual problem!"
 msgstr ""
-
+"迁移操作属于幂等操作，用户在执行失败后可重复执行，不用担心服务残留问题！"

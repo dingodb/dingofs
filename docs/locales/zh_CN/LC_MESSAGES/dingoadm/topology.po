@@ -1,0 +1,576 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-06-06 14:57+0800\n"
+"PO-Revision-Date: 2025-06-06 15:00+0800\n"
+"Last-Translator: \n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
+
+#: ../../source/dingoadm/topology.md:1 5e702f428f36493eadd9fe677e8777a4
+msgid "Cluster Topology File"
+msgstr "集群拓扑文件"
+
+#: ../../source/dingoadm/topology.md:4 2b780a6a092948c9a83b4acc68be683d
+msgid "Introduction"
+msgstr "简介"
+
+#: ../../source/dingoadm/topology.md:7 9b7fc7dfabb348a9865bfdb15fc02afb
+msgid ""
+"The cluster topology file is used to describe which services are deployed on "
+"which machines, as well as the configuration of each service instance."
+msgstr "集群拓扑文件用来描述哪些服务部署在哪些机器上，以及每一个服务实例的配置。"
+
+#: ../../source/dingoadm/topology.md ../../source/dingoadm/topology.md:9
+#: ../../source/dingoadm/topology.md:264 3476d915fb3344a6a775de0b46d55c5e
+#: a993d51dff524341b18d2a0086317cfc be166f8ed26b4453923c95b3a678a7d6
+msgid "Example"
+msgstr "示例"
+
+#: ../../source/dingoadm/topology.md:52 128085489ed140bf9e2b1151af0ea5bf
+msgid "Features"
+msgstr "特性"
+
+#: ../../source/dingoadm/topology.md:55 d0640de221d041f79f50ceb202552ff6
+msgid ""
+"To make topology file configuration more flexible and concise, we have added "
+"the following features to the topology file:"
+msgstr "为使拓扑文件配置更灵活、更精简，我们给拓扑文件添加了以下几个特性："
+
+#: ../../source/dingoadm/topology.md:57 ../../source/dingoadm/topology.md:326
+#: 116aaf1d4b98475e81a85d297f065707 54b8f2f486da4f8786e9e513adf452ab
+msgid "[Hierarchy](#Hierarchy)"
+msgstr "[层级](#Hierarchy)"
+
+#: ../../source/dingoadm/topology.md:58 ../../source/dingoadm/topology.md:327
+#: 87714a49adfd4d3694e581a97cc14aaf 987cce7000e148a684a8c997b2ded3c0
+msgid "[Variables](#Variables)"
+msgstr "[变量](#Variables)"
+
+#: ../../source/dingoadm/topology.md:59 074fb586a81740398ad1d820a8de4698
+msgid "[Replica](#Replica)"
+msgstr "[Replica](#Replica)"
+
+#: ../../source/dingoadm/topology.md:61 3f510342a0634ece8fd2780f1f64b6d0
+msgid "<a id=\"Hierarchy\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:62 afc51dd5ee364b78bb12c2a69924dd12
+msgid "Hierarchy"
+msgstr "层级"
+
+#: ../../source/dingoadm/topology.md:64 4ae558e8828d47c4adb3047eb948df2d
+msgid ""
+"The configuration in the topology file is divided into the following 3 levels:"
+msgstr "拓扑文件中的配置分为以下 3 个层级："
+
+#: ../../source/dingoadm/topology.md:65 b76288b3553447bf93a241ac254e1c22
+msgid ""
+"Global configuration: Applies to all service instances in the topology file"
+msgstr "全局配置：作用于拓扑文件中的全部服务实例"
+
+#: ../../source/dingoadm/topology.md:66 0e84480558204484970fad55bc84ee4c
+msgid ""
+"Service configuration: Applies to all service instances under the same role"
+msgstr "服务配置：作用于同角色下的所有服务实例"
+
+#: ../../source/dingoadm/topology.md:67 b1866d0a2732464a890b842d7b609360
+msgid "Instance configuration: Applies to a single service instance"
+msgstr "实例配置：作用于单一服务实例"
+
+#: ../../source/dingoadm/topology.md:69 8e72fdb6df404148a0f9c633c1e89f43
+msgid ""
+"The configuration priority is: `Instance configuration` > `Service "
+"configuration` > `Global configuration`."
+msgstr "配置优先级为：`实例配置` > `服务配置` > `全局配置`。"
+
+#: ../../source/dingoadm/topology.md:71 164054bd038c4b7c9f6cf835156ba04a
+msgid "![topology_level2](../../images/topology_level2.jpg)"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:71 a5d73f178b874fdc8e460a92e0203984
+msgid "topology_level2"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:73 49bf7c57f42b4061891ea896dcbe4b52
+msgid "Example: Simplifying topology files using configuration levels"
+msgstr "示例：使用配置层级简化拓扑文件"
+
+#: ../../source/dingoadm/topology.md:75 08e95e3b974c4324b70eb75f15e86b36
+msgid ""
+"The following are two different configuration files, but they have the same "
+"configuration effect:"
+msgstr "以下是 2 个不同的配置文件，但是其具备相同的配置效果："
+
+#: ../../source/dingoadm/topology.md:102 41262ab34bea4700a3d960907dc6db7b
+msgid "<a id=\"Variables\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:103 1da0986eb28e4b3a95888971b92165eb
+msgid "Variables"
+msgstr "变量"
+
+#: ../../source/dingoadm/topology.md:105 d4fd04018c8546e9a2a61c9819256142
+msgid ""
+"To reduce repetitive configuration and simplify the topology file, we have "
+"built-in the following variables, which have different values in different "
+"contexts and can be used to fill in the topology file configuration:"
+msgstr ""
+"为减少重复配置、精简拓扑文件，我们内置了以下变量，这些变量在不同的上下文中具备"
+"不同的值，可用于拓扑文件配置的填写："
+
+#: ../../source/dingoadm/topology.md 1d9e06e8400643a6a22048a24eb2c853
+msgid "Variable Name"
+msgstr "变量名"
+
+#: ../../source/dingoadm/topology.md 0f8e34fa18c24f3b8024e8055a208345
+#: 6f8ffc3914a64eddae111df7859b4196 aa1ebdf5f6174adb951d7575087845f7
+msgid "Description"
+msgstr "说明"
+
+#: ../../source/dingoadm/topology.md 2ebb6c8ddccc4921b5b4200a559ce940
+#, python-brace-format
+msgid "`${service_host}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md a414a8b47a8048a4808ff5e13c614eab
+msgid ""
+"Service host address. This variable has different values when deploying "
+"services on different hosts. For example, when deploying services on host "
+"`server-host1`, the variable value is the address corresponding to host "
+"`server-host1`, i.e., `10.0.1.1`. When deploying services on host `server-"
+"host2`, the value of this variable is `10.0.1.2`. For more details, see [Host "
+"Module](hosts)"
+msgstr ""
+"服务主机地址。在不同的主机上部署服务时该变量具备不同的值，如在主机 `server-"
+"host1` 上部署服务时，该变量值为主机 `server-host1` 对应的地址，即 `10.0.1.1`，"
+"在主机 `server-host2` 上部署服务时，则该变量值为 `10.0.1.2`，详见[主机模块]"
+"(hosts)"
+
+#: ../../source/dingoadm/topology.md c372d2f67ed84962b86de3832df8f1e6
+msgid "`10.0.1.1`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md b2a7104f28104c1dbecf405ba16284ca
+#, python-brace-format
+msgid "`${service_role}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 729f4bcd7730447b8242364b01007232
+msgid ""
+"Service role name. When deploying different types of services, they have "
+"different role names. For example, when deploying the etcd service, the "
+"variable value is etcd, and when deploying the mds service, the variable value "
+"is mds"
+msgstr ""
+"服务角色名。在部署不同类型的服务时，具备不同的角色名，如在部署 etcd 服务时，该"
+"变量值为 etcd，而在部署 mds 服务时，则该变量值为 mds"
+
+#: ../../source/dingoadm/topology.md 960955752a854267b606258584510997
+msgid "`etcd`, `mds`, `chunkserver`, `snapshotclone`, `metaserver`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 2c218d7d4fb1405babd86d606c8f2d57
+#, python-brace-format
+msgid "`${service_host_sequence}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 3ad756a508024bf3b7f81c3ebb0f9c26
+msgid ""
+"Service host sequence number. When deploying services of the same type, based "
+"on the `deploy` list, the sequence number is 0 when deploying the service on "
+"the first host, 1 when deploying on the second host, and so on."
+msgstr ""
+"服务主机序列号。部署同类型服务时，根据 `deploy` 列表，在第一台主机上部署服务"
+"时，该序列号为 0，在第二台主机上部署服务时，该序列号为 1，依此类推。"
+
+#: ../../source/dingoadm/topology.md 173b44e910c84f81b9b5aa2c4376215f
+#: 445ded2d9be3429ca77adc2b24f27b08
+msgid "`0`, `1`, `2`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 19b3bbc25b5b49afb1e2be0d3ade0400
+#, python-brace-format
+msgid "`${service_replicas_sequence}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 4c23514797fc41b585e09d3f98f99cbc
+msgid ""
+"Service replica sequence number. When deploying multiple replica instances of "
+"the same service type on the same host, the sequence number is 0 for the first "
+"replica, 1 for the second replica, and so on."
+msgstr ""
+"服务副本序列号。在将同一类型的服务在同一主机上部署多个副本实例时，部署第一个副"
+"本时，该序列号为 0，部署第二个副本时，该序列号为 1，依此类推。"
+
+#: ../../source/dingoadm/topology.md d0b189d695d14dbba5766056266c31bc
+#, python-brace-format
+msgid "`${format_replicas_sequence}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 53565ddc3351496db3b1d28baaea359a
+#, python-brace-format
+msgid ""
+"Formatted service replica sequence number. Its value is equivalent to the `$"
+"{service_replicas_sequence}` variable, but the sequence number is prefixed "
+"with 0"
+msgstr ""
+"格式化后的服务副本序列号。其值等同于 `${service_replicas_sequence}` 变量，但是"
+"该序列号加了前置 0"
+
+#: ../../source/dingoadm/topology.md accbbe4b5b4f4055af7754a27b4abc89
+msgid "`00`, `01`, `02`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 2657157630d743af80d283f1399316cb
+#, python-brace-format
+msgid "`${random_uuid}`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 9d671729545147128a0509ae1244375e
+msgid "Random UUID"
+msgstr "随机 UUID"
+
+#: ../../source/dingoadm/topology.md fde397d76f7942eabd88134d9e57691d
+msgid "`6fa8f01c411d7655d0354125c36847bb`"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:117 f22e8075698044c1b6333a05a5136d08
+msgid ""
+"Currently, in addition to built-in variables, users can also define custom "
+"variables by adding them to the `variable` block:"
+msgstr ""
+"当前，除了内置变量外，用户也可以自定义变量, 在 `variable` 区块添加相应变量即"
+"可："
+
+#: ../../source/dingoadm/topology.md:126 19501b56eeec4639b95e866f1905cb6b
+msgid ""
+"Below, we will demonstrate the application of variables through three "
+"examples. Each example has two different configurations, but they all achieve "
+"the same configuration effect:"
+msgstr ""
+"下面我们将通过 3 个示例来展示变量的应用，在每个示例中都有 2 份不同的配置，但是"
+"其都具备相同的配置效果："
+
+#: ../../source/dingoadm/topology.md:128 8d1388a6b73a4a60bd448eff1c96ef22
+#, python-brace-format
+msgid ""
+"We assume that the addresses corresponding to server-host{1,2,3} are 10.0.1."
+"{1,2,3}, and they have been submitted via the [Host Module][hosts]"
+msgstr ""
+"我们假定 server-host{1,2,3} 对应的地址分别为 10.0.1.{1,2,3}，并已通过[主机模块]"
+"[hosts]提交"
+
+#: ../../source/dingoadm/topology.md:130 a5e6b84a568c42d687e122cf9eee77be
+msgid "Example 1: Deploying an etcd instance on each host"
+msgstr "示例 1：在每台主机上部署一个 etcd 实例"
+
+#: ../../source/dingoadm/topology.md:157 2c39308f68784faa94debbb01707ca7f
+msgid "Example 2: Deploying multiple chunkserver instances on the same host"
+msgstr "示例 2：在同一台主机上部署多个 chunkserver 实例"
+
+#: ../../source/dingoadm/topology.md:186 5b123deb34174fcea6527273d3eca193
+msgid "Example 3: Custom variables"
+msgstr "示例 3：自定义变量"
+
+#: ../../source/dingoadm/topology.md:222 3c62cbad7de2419d8cc9f5ad4e01dd37
+msgid "<a id=\"Replica\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:223 9c9504e3c4f74f1ab58fda3830863b96
+msgid "Replica"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:225 e38882a6a1304dccbcf8b8ca2d412299
+msgid "💡 **Reminder:**"
+msgstr "💡 **提醒**"
+
+#: ../../source/dingoadm/topology.md:227 6ce4cf6c7ab246d89bec7248e119f802
+msgid ""
+"The replicas here do not represent the number of storage pool replicas, but "
+"rather the number of instances of the same type of process deployed on the "
+"node, such as the number of chunkserver processes."
+msgstr ""
+"这里的replicas不代表存储池的副本数，而是表示该节点上部署的同类进程的数量，比如"
+"chunkserver进程数量。"
+
+#: ../../source/dingoadm/topology.md:229 113eba553be545c295e058cf5466a6d5
+msgid ""
+"When we need to deploy multiple instances of the same type of service on a "
+"single machine, we can use the `replicas` feature to simplify our topology "
+"file:"
+msgstr ""
+"当我们需要在单台机器上部署多个同一类型的服务实例时，可利用 `replicas` 复制服务"
+"特性来简化我们的拓扑文件："
+
+#: ../../source/dingoadm/topology.md:250 38350896a62745a886ba34684e288f5f
+#, python-brace-format
+msgid ""
+"The values of the variables `${servicce_host_sequence}` and `$"
+"{service_replicas_sequence}` are described in the previous section [Variables]"
+"(#Variables)"
+msgstr ""
+"变量 `${servicce_host_sequence}` and `${service_replicas_sequence}` 的值请参考"
+"上文[变量](#Variables)"
+
+#: ../../source/dingoadm/topology.md:252 a9840c53a6f54e2798d5f676f522f70c
+msgid "DingoFS Cluster Topology"
+msgstr "DingoFS 集群拓扑"
+
+#: ../../source/dingoadm/topology.md:255 aeb9fce757df4555b4d347f10fa36cc2
+msgid "The DingoFS cluster topology file consists of the following 4 blocks:"
+msgstr "DingoFS 集群拓扑文件由以下 4 个区块组成："
+
+#: ../../source/dingoadm/topology.md c684baca214e4a81aa86fe94151680fb
+msgid "Block"
+msgstr "区块"
+
+#: ../../source/dingoadm/topology.md 521d187a925c4726be7b494aa24bf834
+msgid "Service Overview"
+msgstr "服务简介"
+
+#: ../../source/dingoadm/topology.md 309b293568f84be9b8cebf6af85f105f
+msgid "global"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md cd4e83c6a44c45bf97a528c98563c606
+msgid "Global Configuration"
+msgstr "全局配置"
+
+#: ../../source/dingoadm/topology.md 51e12a54dd914eada086c18bda3034b9
+msgid "etcd_services"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 6361aef6fda44d45a78ce0eb5e9bda7b
+msgid "etcd Service Block"
+msgstr "etcd 服务区块"
+
+#: ../../source/dingoadm/topology.md 4eb182fc933642ae95ec7b642b607eeb
+msgid "Used to store metadata"
+msgstr "用于存储元数据"
+
+#: ../../source/dingoadm/topology.md 8931c6830cde416dba498192d93477db
+msgid "mds_services"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 31981b90f7f04118a7168df9c0026351
+msgid "mds Service Block"
+msgstr "mds 服务区块"
+
+#: ../../source/dingoadm/topology.md a8f19217df6d49a5a99efc8a73684590
+msgid "Metadata Management Service"
+msgstr "元数据管理服务"
+
+#: ../../source/dingoadm/topology.md f71ea0ef6d8a46928ca5630c54a10716
+msgid "metaserver_services"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md efcaa4260251478ea09782eab68320e2
+msgid "Metaserver service block"
+msgstr "metaserver 服务区块"
+
+#: ../../source/dingoadm/topology.md 169f9a27370a4290a9b591a80b6c97cb
+msgid ""
+"Distributed metadata management system. Provides metadata services to clients."
+msgstr "分布式元数据管理系统。为客户端提供元数据服务。"
+
+#: ../../source/dingoadm/topology.md:312 352c924cd83c4a129cf93c02245f131f
+msgid ""
+"To make it easier for users to prepare topology files, we have prepared "
+"different topology file templates based on common scenarios. Users can choose "
+"the appropriate template based on their needs and make adjustments as needed:"
+msgstr ""
+"为了方便用户准备拓扑文件，我们根据常见的场景，给用户准备了不同的拓扑文件模板。"
+"用户可根据需求自行选择，并进行编辑调整："
+
+#: ../../source/dingoadm/topology.md:315 6ddfbccb4f154c6a8f8d7d7b463444d4
+msgid "[Single-machine deployment][dingofs-stand-alone-topology]"
+msgstr "[单机部署][dingofs-stand-alone-topology]"
+
+#: ../../source/dingoadm/topology.md:317 38728371069e47e583265b880cf1f12d
+msgid ""
+"All services run on a single host, typically used for testing or evaluation."
+msgstr "所有服务都运行在一台主机上，一般用于体验或测试。"
+
+#: ../../source/dingoadm/topology.md:319 640510ef5df84281b75e5f08439e5c3f
+msgid "[Multi-node deployment][dingofs-cluster-topology]"
+msgstr "[多机部署][dingofs-cluster-topology]"
+
+#: ../../source/dingoadm/topology.md:321 b17840d0bc684011bf3eff52d3c9c440
+msgid ""
+"A generic multi-machine deployment template suitable for production "
+"environments or testing."
+msgstr "通用的多机部署模板，可用于生产环境或测试。"
+
+#: ../../source/dingoadm/topology.md:323 86a5767112284cb8a79ecb58326c1dc6
+msgid "💡 **Note:**"
+msgstr "💡 **提醒**"
+
+#: ../../source/dingoadm/topology.md:325 2348dadc15e441e48e1c12ad065b846f
+msgid ""
+"For details on configuration levels and variables in topology files, see the "
+"previous section:"
+msgstr "关于拓扑文件中的配置层级及变量，详见上文："
+
+#: ../../source/dingoadm/topology.md:329 078e101e756d4ad3a37d5b016617d202
+msgid "<a id=\"important-dingofs-configuration-items\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:330 078e101e756d4ad3a37d5b016617d202
+msgid "Important DingoFS Configuration Items"
+msgstr "DingoFS 重要配置项"
+
+#: ../../source/dingoadm/topology.md 34d07f7414e14e568de7d3b95a4164e8
+msgid "Configuration Item"
+msgstr "配置项"
+
+#: ../../source/dingoadm/topology.md d260e95b694a4c54bb6ff996e3cf1995
+msgid "Required"
+msgstr "是否必填"
+
+#: ../../source/dingoadm/topology.md 8ec1d65d49c24eaab96c34cd7e5f73c4
+msgid "Default Value"
+msgstr "默认值"
+
+#: ../../source/dingoadm/topology.md f948674737614524bb052c40a858ad64
+msgid "kind"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md bb1b7e8748aa40d99b8e91f0365516d5
+msgid "Y"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md a6a88545b651497a8010f806f8392163
+msgid "Topology file type. Must be `dingofs`"
+msgstr "拓扑文件类型。必须为 `dingofs`"
+
+#: ../../source/dingoadm/topology.md fd5d8faa316048c5ae5f598f0bf47491
+msgid "container_image"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md c1e50977c9bd4328a2844b7a8a628be2
+msgid "dingodatabase/dingofs:latest"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 53d71659cb514f92a9e4723841a5ff83
+msgid ""
+"Container image. The default value is our latest stable version. You can also "
+"visit the [DingoFS public Docker repository][dingofs-dockerhub] to select your "
+"own"
+msgstr ""
+"容器镜像。默认值为我们最新稳定版本，你也可以访问 [DingoFS 公共 docker 仓库]"
+"[dingofs-dockerhub]自行选择"
+
+#: ../../source/dingoadm/topology.md e2a860e047c44734ac2de0dee5f6244f
+msgid "log_dir"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 6d43a790da4f4b2e9b64ce861e911d95
+msgid ""
+"Directory where service logs are stored. If this option is not configured, "
+"logs are stored by default in the specified directory within the container. "
+"Once the container is cleaned up, the logs will be deleted"
+msgstr ""
+"保存服务日志的目录。如果不配置该选项，日志默认保存在容器内的指定目录，一旦容器"
+"被清理，日志将会随之删除"
+
+#: ../../source/dingoadm/topology.md e7838a6f2cca45e988187eea39469a33
+msgid "data_dir"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 484289123811494292a8f52b290ef503
+msgid ""
+"Directory where service data is stored. If this option is not configured, data "
+"is stored by default in the specified directory within the container. Once the "
+"container is cleaned up, the data will be lost"
+msgstr ""
+"保存服务数据的目录。如果不配置该选项，数据默认保存在容器内的指定目录，一旦容器"
+"被清理，数据将会随之丢失"
+
+#: ../../source/dingoadm/topology.md 816f4ce28fc14472bcc70c64737eb367
+msgid "s3.ak"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md b85ff1fe70d7482782f435a8f621aafc
+msgid ""
+"S3 service Access Key. Used for uploading actual data. Required only when "
+"using the S3 storage engine and creating a file system."
+msgstr ""
+"S3 服务的 Access Key。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需"
+"要."
+
+#: ../../source/dingoadm/topology.md a55b2c9ff9154d8499abfc8b092fca57
+msgid "s3.sk"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 006df818e658468392259a75c8e7e414
+msgid ""
+"S3 service Secret Key. Used for uploading actual data. Required only when "
+"using the S3 storage engine and creating a file system."
+msgstr ""
+"S3 服务的 Secret Key。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需"
+"要。"
+
+#: ../../source/dingoadm/topology.md 10af75154d184307bf21a56c5ab54493
+msgid "s3.endpoint"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md e4652216d9324072a72dae3fc9643a21
+msgid ""
+"S3 service address. Used for uploading actual data. Required only when using "
+"the S3 storage engine and creating a file system."
+msgstr ""
+"S3 服务地址。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需要。"
+
+#: ../../source/dingoadm/topology.md 7b2d4f1e5c284230b61e56c02214cbdb
+msgid "s3.bucket_name"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md c51d788c524c40e0b679db7276648eb1
+msgid ""
+"S3 service bucket name. Used for uploading actual data. Required only when "
+"using the S3 storage engine and creating a file system."
+msgstr ""
+"S3 服务桶名。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需要。"
+
+#: ../../source/dingoadm/topology.md 4d1effca7292450e9294076600b3def7
+msgid "variable"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md 6483d77b88564b88ab0e807bc04c1569
+msgid "Variable block. Custom variables can be entered in this block."
+msgstr "变量区块。可将自定义变量填写在该区块。"
+
+#: ../../source/dingoadm/topology.md:344 86b93ff51e1540118a60316d8c7159c8
+msgid ""
+"All configuration items not specified in the topology file will use default "
+"values. You can view the configuration items and default values for each "
+"service by clicking the following links:"
+msgstr ""
+"所有未在拓扑文件上出现的配置项，我们都将使用默认配置值，你可以通过点击以下连接"
+"来查看各服务配置项及相关默认值："
+
+#: ../../source/dingoadm/topology.md:346 0fae4b570f2b43deb9991d6a2e2af39b
+msgid "[etcd.conf][dingofs-etcd-conf]"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:347 0aa1486699ad4840a10cd944a434a97d
+msgid "[mds.conf][dingofs-mds-conf]"
+msgstr ""
+
+#: ../../source/dingoadm/topology.md:348 f2e7fd03d75d4a6cb7982cc7d21e73f5
+msgid "[metaserver.conf][dingofs-metaserver-conf]"
+msgstr ""

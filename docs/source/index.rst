@@ -25,12 +25,10 @@ Here you will learn about what DingoFS is, and how to install and deploy DingoFS
 
    overview/index
    architecture/index
-   client_architecture/index
-   metaServer_architecture/index
    dingoadm/index
    deployment/index
    operation_and_maintenance/index
-   basic_operation_index
-   error_code/index
+   operation/index
+   error/index
    release_notes/index
    contributing/index

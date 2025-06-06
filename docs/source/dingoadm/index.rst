@@ -1,4 +1,4 @@
-Dingoadm
+DingoAdm
 ========================
 
 .. toctree::

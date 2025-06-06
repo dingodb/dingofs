@@ -326,6 +326,7 @@ A generic multi-machine deployment template suitable for production environments
 > * [Hierarchy](#Hierarchy)
 > * [Variables](#Variables)
 
+<a id="important-dingofs-configuration-items"></a>
 ### Important DingoFS Configuration Items
 
 | Configuration Item           | Required | Default Value                         | Description                                                                                                                                 |
@@ -347,8 +348,8 @@ All configuration items not specified in the topology file will use default valu
 * [metaserver.conf][dingofs-metaserver-conf]
 
 [hosts]: ./hosts.md
-[dingofs-stand-alone-topology]: ./deployment/stand-alone-topology.yaml
-[dingofs-cluster-topology]: ./deployment/cluster-topology.yaml
+[dingofs-stand-alone-topology]: https://github.com/dingodb/dingoadm/blob/master/configs/fs/stand-alone/topology.yaml
+[dingofs-cluster-topology]: https://github.com/dingodb/dingoadm/blob/master/configs/fs/cluster/topology.yaml
 [dingofs-dockerhub]: https://hub.docker.com/r/dingodatabase/dingofs/tags
 [dingofs-etcd-conf]: https://github.com/dingodb/dingofs/tree/main/conf/etcd.conf
 [dingofs-mds-conf]: https://github.com/dingodb/dingofs/tree/main/conf/mds.conf

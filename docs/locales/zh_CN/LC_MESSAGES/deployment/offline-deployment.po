@@ -6,151 +6,167 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-05 16:03+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/deployment/offline-deployment.md:1
 #: ae63d0443b174e3c974e7ae4814ddc2c
 msgid "Offline Deployment"
-msgstr ""
+msgstr "离线部署"
 
 #: ../../source/deployment/offline-deployment.md:2
 #: a1ae27ff4b6246e8bcb24a31c0a6f7b9
 msgid "Offline environment preparation"
-msgstr ""
+msgstr "离线环境准备"
 
 #: ../../source/deployment/offline-deployment.md:3
 #: 99368d7dc20e48cda3660fe987b48f24
 msgid "DingoFS image preparation"
-msgstr ""
+msgstr "DingoFS镜像准备"
 
 #: ../../source/deployment/offline-deployment.md:4
 #: 49725c953cfd448fb1eb8a4d95bc808b
 msgid ""
-"Download the official DingoFS image (e.g. `dingodatabase/dingofs:latest`)"
-" to the local environment (machine with access to the extranet)"
+"Download the official DingoFS image (e.g. `dingodatabase/"
+"dingofs:latest`) to the local environment (machine with access to the "
+"extranet)"
 msgstr ""
+"下载DingoFS官方镜像（如`dingodatabase/dingofs:latest`）到本地环境（可访问"
+"外网的机器）"
 
 #: ../../source/deployment/offline-deployment.md:8
 #: d441cc7548a84bffba4c39b2db198aa3
 msgid "Package the image and export it to the local repository node."
-msgstr ""
+msgstr "打包镜像并导出到本地仓库节点。"
 
 #: ../../source/deployment/offline-deployment.md:10
 #: bc2d4ca21ce14be38d397b614dd51e3c
 msgid "Package the image"
-msgstr ""
+msgstr "打包镜像"
 
 #: ../../source/deployment/offline-deployment.md:19
 #: b035f2a0d0fe4395911486104f859ef6
 msgid "Copy image to local repository node"
-msgstr ""
+msgstr "拷贝镜像到本地仓库节点"
 
 #: ../../source/deployment/offline-deployment.md:23
 #: 1556bde20fac41cf991449a4c4b5a562
 msgid "Export the image"
-msgstr ""
+msgstr "导出镜像"
 
 #: ../../source/deployment/offline-deployment.md:33
 #: 341a35f71cec4aa9beb60d3d3cf6c5d7
 msgid "Local image repository setup"
-msgstr ""
+msgstr "本地镜像仓库搭建"
 
 #: ../../source/deployment/offline-deployment.md:35
 #: 1acdd9fffcb74337b8217585c63b8eaf
 msgid ""
 "Use docker-registry to build the local repository. After building the "
-"local repository, upload the DingoFS image you downloaded in the previous"
-" steps to the local repository. There are several steps to do this:"
+"local repository, upload the DingoFS image you downloaded in the "
+"previous steps to the local repository. There are several steps to do "
+"this:"
 msgstr ""
+"使用docker-registry来进行本地仓库的搭建，搭建完本地仓库后, 把前面步骤中下"
+"载的DingoFS镜像上传到本地仓库。主要有以下几步："
 
 #: ../../source/deployment/offline-deployment.md:37
 #: c81f3e3c561644468397cd850d77d69c
 msgid "Run docker-registry"
-msgstr ""
+msgstr "运行 docker-registry"
 
 #: ../../source/deployment/offline-deployment.md:41
 #: 51b95ccff5fc4e4dbdcb949c4d3fe32f
 msgid "Marking DingoFS images"
-msgstr ""
+msgstr "标记DingoFS镜像"
 
 #: ../../source/deployment/offline-deployment.md:43
 #: e97baa3dbb564ae1a0db45e71420b753
 msgid ""
-"Mark the downloaded DingoFS image, for example, mark the downloaded image"
-" (`dingodatabase/dingofs:v2.4`) as `127.0.0.1:5000/dingofs:v2.4_local` "
-"(where `127.0.0.1` is the IP of the local repository service and `5000` "
-"is the port number of the local repository service). port number, please "
-"modify according to the actual environment)"
+"Mark the downloaded DingoFS image, for example, mark the downloaded "
+"image (`dingodatabase/dingofs:v2.4`) as `127.0.0.1:5000/"
+"dingofs:v2.4_local` (where `127.0.0.1` is the IP of the local repository "
+"service and `5000` is the port number of the local repository service). "
+"port number, please modify according to the actual environment)"
 msgstr ""
+"标记下载到的DingoFS镜像，比如把下载来的镜像（`dingodatabase/"
+"dingofs:v2.4`）标记为`127.0.0.1:5000/dingofs:v2.4_local`（其中`127.0.0.1`"
+"为本地仓库服务IP，`5000`为本地仓库服务端口号，请根据实际环境修改）"
 
 #: ../../source/deployment/offline-deployment.md:57
 #: 4d3ae84a0b2545f2aa76e308251860dc
 msgid "Upload image"
-msgstr ""
+msgstr "上传镜像"
 
 #: ../../source/deployment/offline-deployment.md:62
 #: 2a5db3724d784e8f8b31ace154dae9b2
 msgid ""
-"For more details, see [private repository "
-"build](https://yeasy.gitbook.io/docker_practice/repository/registry)"
+"For more details, see [private repository build](https://"
+"yeasy.gitbook.io/docker_practice/repository/registry)"
 msgstr ""
+"更多详情可参考[私有仓库搭建](https://yeasy.gitbook.io/docker_practice/"
+"repository/registry)"
 
 #: ../../source/deployment/offline-deployment.md:64
 #: 9997b6fec0814a1c9614db6b0bcbb11b
 msgid "Modify the mirror address"
-msgstr ""
+msgstr "修改镜像地址"
 
 #: ../../source/deployment/offline-deployment.md:65
 #: 829fbac3f6fb4ac78eab065705ec6a1b
 msgid ""
 "Modify the mirror address configuration item (`container_image`) in the "
-"client deployment configuration file `client.yaml` and the server cluster"
-" deployment configuration file `topology.yaml` to the local repository "
-"mirror address (e.g., `127.0.0.1:5000/dingofs:v2.4_ local`)"
+"client deployment configuration file `client.yaml` and the server "
+"cluster deployment configuration file `topology.yaml` to the local "
+"repository mirror address (e.g., `127.0.0.1:5000/dingofs:v2.4_ local`)"
 msgstr ""
+"修改客户端部署配置文件`client.yaml`以及服务端集群部署配置文件"
+"`topology.yaml`中的镜像地址配置项（`container_image`）为本地仓库镜像地址"
+"（如：`127.0.0.1:5000/dingofs:v2.4_local`）"
 
 #: ../../source/deployment/offline-deployment.md:67
 #: e38ebf4947834e02ab41ea4c5a85d621
 msgid "Deploy"
-msgstr ""
+msgstr "部署"
 
 #: ../../source/deployment/offline-deployment.md:68
 #: 83484fdab31b4479957c75efa0e89acf
 msgid "Install DingoAdm"
-msgstr ""
+msgstr "安装DingoAdm"
 
 #: ../../source/deployment/offline-deployment.md:69
 #: 40b2dcda70fa4519a14d69953bbd39cc
 #, python-format
 msgid ""
 "DingoAdm is a Dingofs deployment tool, machines with extranets can "
-"install it with one click, see [DingoAdm "
-"Installation](../dingoadm/install.md) for specific installation "
-"89%E8%A3%85-dingoadm)"
+"install it with one click, see [DingoAdm Installation](../dingoadm/"
+"install.md) for specific installation 89%E8%A3%85-dingoadm)"
 msgstr ""
+"DingoAdm是Dingofs部署工具，有外网的机器可以一键安装，具体安装参见"
+"[DingoAdm安装](../dingoadm/install.md)"
 
 #: ../../source/deployment/offline-deployment.md:71
 #: 6a06d73090094e199e610801c670edb3
 msgid ""
 "However, since this article is about deployment in an intranet "
 "environment, you need to follow the steps below:"
-msgstr ""
+msgstr "但由于本文是介绍内网环境的部署，所以需按如下步骤操作："
 
 #: ../../source/deployment/offline-deployment.md:72
 #: 489d008d300f49bf952401c564a14e79
 msgid "Download DingoAdm to a locally accessible extranet machine."
-msgstr ""
+msgstr "下载DingoAdm到本地可访问外网机器。"
 
 #: ../../source/deployment/offline-deployment.md:73
 #: 9a33d436da284975ab36e33dbb5e1baf
@@ -158,22 +174,22 @@ msgid ""
 "Download DingoAdm to a locally accessible machine on the extranet, and "
 "copy DingoAdm to the host machine where the DingoFS cluster is to be "
 "deployed."
-msgstr ""
+msgstr "把DingoAdm拷贝到内网安装需部署DingoFS集群的主控机。"
 
 #: ../../source/deployment/offline-deployment.md:74
 #: 346be02b74864ca7aaea20747b3847cf
 msgid "Unpack DingoAdm."
-msgstr ""
+msgstr "解压DingoAdm"
 
 #: ../../source/deployment/offline-deployment.md:75
 #: 5cf200bf2bf1440a89614a7b95c290f0
 msgid "Copy the executable and set the environment variables."
-msgstr ""
+msgstr "拷贝执行程序并设置环境变量"
 
 #: ../../source/deployment/offline-deployment.md:84
 #: 3bf3032b6c724c5897953ad364e6327e
 msgid "Host Configuration"
-msgstr ""
+msgstr "主机配置"
 
 #: ../../source/deployment/offline-deployment.md:86
 #: 7c9304b25beb46199e5a28917395235c
@@ -183,46 +199,47 @@ msgid ""
 "relatively simple, just add the actual hostname and ip to `hosts.yaml` "
 "and submit it."
 msgstr ""
+"配置DingoFS集群要使用的服务器列表，提交列表给DingoAdm管理。主机配置过程比"
+"较简单，在`hosts.yaml`中添加实际主机名和ip，然后提交就可以了。"
 
 #: ../../source/deployment/offline-deployment.md:88
 #: 4488a261616d4a2290b4d9b8bbe62faa
 msgid ""
-"Refer to the documentation for specific configuration: [host "
-"management](../hosts.md)"
-msgstr ""
+"Refer to the documentation for specific configuration: [host management]"
+"(../dingoadm/hosts.md)"
+msgstr "具体配置参考文档：[主机管理](../dingoadm/hosts.md)"
 
 #: ../../source/deployment/offline-deployment.md:90
 #: fae66a8c13b74a2eb7844fa3242bcf6e
 msgid "DingoFS server-side deployment"
-msgstr ""
+msgstr "DingoFS服务端部署"
 
 #: ../../source/deployment/offline-deployment.md:92
 #: 7ab068154246489baecd6fa0eea13824
 msgid ""
 "You need to modify the mirror in `topology.yaml` to be the local mirror "
 "address, the example is as follows:"
-msgstr ""
+msgstr "需修改`topology.yaml`中的镜像为本地镜像地址，示例如下："
 
 #: ../../source/deployment/offline-deployment.md:99
 #: 5402b8ea4f0e477c8ee03b6c26ebd4d3
 msgid ""
-"For other configuration items, please refer to the documentation [DingoFS"
-" cluster deployment](./dingofs-cluster-deployment.md)"
+"For other configuration items, please refer to the documentation "
+"[DingoFS cluster deployment](./dingofs-cluster-deployment.md)"
 msgstr ""
+"其他的配置项请参考文档 [DingoFS集群部署](./dingofs-cluster-deployment.md)"
 
 #: ../../source/deployment/offline-deployment.md:100
 #: b235de2e1fc4482a8ba06deb7668dc97
 msgid "Client-side deployment"
-msgstr ""
+msgstr "client端部署"
 
 #: ../../source/deployment/offline-deployment.md:101
 #: 286a7f6d02fc474aa95180b8520a15cf
 msgid ""
 "You need to modify the image in `client.yaml` to be the local image "
-"address, example is as follows:  `` `` yaml  kind: dingofs  global:   "
-"container_image: 127.0.0.1:5000/dingofs:v2.4_local ## Modify to be the "
-"local mirror  `` `` ``"
-msgstr ""
+"address, example is as follows:"
+msgstr "需修改`client.yaml`中的镜像为本地镜像地址，示例如下："
 
 #: ../../source/deployment/offline-deployment.md:108
 #: ee057289d420404fa2c087ffa79ea34e
@@ -230,4 +247,5 @@ msgid ""
 "For other configuration items, please refer to the documentation "
 "[Deploying DingoFS Client](./dingofs-client-deployment.md)."
 msgstr ""
-
+"其他的配置项请参考文档 [部署DingoFS客户端](./dingofs-client-"
+"deployment.md)。"

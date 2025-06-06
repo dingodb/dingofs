@@ -6,243 +6,257 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-06 14:57+0800\n"
+"PO-Revision-Date: 2025-06-06 15:02+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/deployment/dingofs-client-deployment.md:1
 #: 488702c7c7bd4431ad534c3d89b89d98
 msgid "Deploying the DingoFS client"
-msgstr ""
+msgstr "部署 DingoFS 客户端"
 
 #: ../../source/deployment/dingofs-client-deployment.md:4
 #: f2707cdb8bf345ec9c8179e0c6fd4bdc
 msgid "Step 1: Environment Preparation"
-msgstr ""
+msgstr "第 1 步：环境准备"
 
-#: ../../source/deployment/dingofs-client-deployment.md:7
+#: ../../source/deployment/dingofs-client-deployment.md:6
 #: 9bd69961615d4582badbeab0da7807b9
 msgid ""
-"[Hardware and software requirements](install-dingoadm#Hardware and "
-"software requirements)"
+"[Hardware and software requirements](../dingoadm/install.md#software-and-"
+"hardware-environment-requirements)"
 msgstr ""
+"[软硬件环境需求](../dingoadm/install.md#software-and-hardware-environment-"
+"requirements)"
 
-#: ../../source/deployment/dingofs-client-deployment.md:8
+#: ../../source/deployment/dingofs-client-deployment.md:7
 #: c7ce3c5b55b544bf8bf78c470e73b4e0
-msgid "[Install Dependencies](install-dingoadm#Install Dependencies)"
-msgstr ""
+msgid "[Installing Dependencies](../dingoadm/install.md#installing-dependencies)"
+msgstr "[安装依赖](../dingoadm/install.md#installing-dependencies)"
 
-#: ../../source/deployment/dingofs-client-deployment.md:10
+#: ../../source/deployment/dingofs-client-deployment.md:9
 #: 76d8bf9c91c242f5b7f4a8dbc567fc49
 msgid "Step 2: Import the host"
-msgstr ""
+msgstr "第 2 步：导入主机"
 
-#: ../../source/deployment/dingofs-client-deployment.md:13
+#: ../../source/deployment/dingofs-client-deployment.md:12
 #: 11a3faaf271f4498b01989b4bd7b59f2
 msgid ""
-"Users need to import the list of hosts required for the client, if you "
-"have already imported the client hosts while deploying the cluster, you "
-"can skip this step directly. Please make sure that the hosts specified in"
-" the subsequent mount/unmount are imported, see [Host Management][hosts] "
-"for details."
+"Users need to import the list of hosts required for the client, if you have "
+"already imported the client hosts while deploying the cluster, you can skip "
+"this step directly. Please make sure that the hosts specified in the "
+"subsequent mount/unmount are imported, see [host management](../dingoadm/"
+"hosts.md) for details."
 msgstr ""
+"用户需导入客户端所需的主机列表，如果你在部署集群时已将客户端主机导入，可直接跳"
+"过此步骤。请确保在之后挂载/卸载中指定的主机都已导入，详见 [主机管理](../"
+"dingoadm/hosts.md) 。"
 
-#: ../../source/deployment/dingofs-client-deployment.md:16
+#: ../../source/deployment/dingofs-client-deployment.md:15
 #: dc82f0baaab24ab1837ea072c4de7ed3
 msgid "1. Prepare the list of hosts"
-msgstr ""
+msgstr "1.准备主机列表"
 
-#: ../../source/deployment/dingofs-client-deployment.md:39
+#: ../../source/deployment/dingofs-client-deployment.md:38
 #: 255386ca94604328abe35847ed1860ff
 msgid "2. import hosts list"
-msgstr ""
+msgstr "2.导入主机列表"
 
-#: ../../source/deployment/dingofs-client-deployment.md:44
+#: ../../source/deployment/dingofs-client-deployment.md:43
 #: 43b0efb3c3f04f8ca95c601b37f64dc6
 msgid "Step 3: Deploy Minio (optional)"
-msgstr ""
+msgstr "第 3 步：部署 Minio（可选）"
 
-#: ../../source/deployment/dingofs-client-deployment.md:47
+#: ../../source/deployment/dingofs-client-deployment.md:46
 #: b5bd9406d7aa480fa99ed1acb952df19
 msgid "This step is optional."
-msgstr ""
+msgstr "该步骤为可选步骤。"
 
-#: ../../source/deployment/dingofs-client-deployment.md:49
+#: ../../source/deployment/dingofs-client-deployment.md:48
 #: 0d008e79f641459d90d6a54c4511b85c
 msgid ""
-"So you need to deploy an S3 storage or use a public cloud object storage "
-"such as Amazon S3, AliCloud OSS, Tencent Cloud OSS, etc. The following "
-"will show if you can quickly deploy a [Minio][minio] for S3 backend "
-"storage using Docker:"
+"So you need to deploy an S3 storage or use a public cloud object storage such "
+"as Amazon S3, AliCloud OSS, Tencent Cloud OSS, etc. The following will show if "
+"you can quickly deploy a [Minio][minio] for S3 backend storage using Docker:"
 msgstr ""
+"所以你需要部署一个 S3 存储或使用公有云对象存储，如亚马逊 S3、阿里云 OSS、腾讯"
+"云 OSS 等。下面将展示如果利用 Docker 快速部署一个 [Minio][minio] 来作为 S3 后端"
+"存储："
 
-#: ../../source/deployment/dingofs-client-deployment.md:61
+#: ../../source/deployment/dingofs-client-deployment.md:60
+#: ../../source/deployment/dingofs-client-deployment.md:128
 #: ../../source/deployment/dingofs-client-deployment.md:132
 #: ../../source/deployment/dingofs-client-deployment.md:175
 #: 5220fe0db9ea4527b5ccec038b11d4b5 bba0f8a6ba0a4a4c9f94530cd789ea58
 #: e46cfc3974ae4a79867e1482ee56a61f
 msgid "📢 **Note:**"
-msgstr ""
+msgstr "📢 **注意**"
 
-#: ../../source/deployment/dingofs-client-deployment.md:63
+#: ../../source/deployment/dingofs-client-deployment.md:62
 #: b25b10bbcabe4843b7ae821de9a53419
 msgid ""
 "minio-data in the run parameter is a local path, you need to create this "
 "directory in advance before running the minio You need to create this "
 "directory in advance before running the container"
 msgstr ""
+"运行参数中的 minio-data 为本地路径，你需要在运行 minio 容器之前，提前创建这个目"
+"录"
 
-#: ../../source/deployment/dingofs-client-deployment.md:65
-#: d2a35c217c9d4947b0bafead3eab9fd3
-msgid ":bulb: **REMINDER:**"
-msgstr ""
+#: ../../source/deployment/dingofs-client-deployment.md:64
+#: c28446afa3dc4f4085fac97155270cd7
+msgid "💡 **Reminder:**"
+msgstr "💡 **提醒**"
 
-#: ../../source/deployment/dingofs-client-deployment.md:67
+#: ../../source/deployment/dingofs-client-deployment.md:66
 #: 58eddb5cadd24ea28a0bbbe2fac305a0
 msgid ""
-"The following information will be used to fill in the [S3-related-config"
-"][important-config] in the client configuration file in step 4:"
+"The following information will be used to fill in the [S3-related-config](../"
+"dingoadm/topology.md#important-dingofs-configuration-items) in the client "
+"configuration file in step 4:"
 msgstr ""
+"以下这些信息将用于第 4 步的client配置文件中 [S3 相关配置项](../dingoadm/"
+"topology.md#important-dingofs-configuration-items) 的填写："
 
-#: ../../source/deployment/dingofs-client-deployment.md:68
+#: ../../source/deployment/dingofs-client-deployment.md:67
 #: bb775799e63d4f20ace4508b1e513eb6
 msgid ""
 "The default `Access Key` and `Secret Key` for the root user are both "
 "`minioadmin`"
-msgstr ""
+msgstr "root 用户默认的 `Access Key` 以及 `Secret Key` 都为 `minioadmin`"
 
-#: ../../source/deployment/dingofs-client-deployment.md:69
+#: ../../source/deployment/dingofs-client-deployment.md:68
 #: 3a099e60a9ba47ac8c393a42367c7f3b
 msgid ""
-"The S3 service access address is `http://$IP:9000`, and you need to "
-"access `http://$IP:9000` from your browser to create a bucket"
+"The S3 service access address is `http://$IP:9000`, and you need to access "
+"`http://$IP:9000` from your browser to create a bucket"
 msgstr ""
+"S3 服务的访问地址为 `http://$IP:9000`， 你需要通过浏览器访问 `http://$IP:9000` "
+"来创建一个桶"
 
-#: ../../source/deployment/dingofs-client-deployment.md:70
+#: ../../source/deployment/dingofs-client-deployment.md:69
 #: 9616c8090ad04ac5a17e71d1cdf3a382
 msgid ""
-"For more details on deployment, you can refer to [deploy-minio-standalone"
-"][deploy-minio-standalone]."
+"For more details on deployment, you can refer to [deploy-minio-standalone]"
+"[deploy-minio-standalone]."
 msgstr ""
+"关于部署的更多详细信息，你可以参考 [deploy-minio-standalone][deploy-minio-"
+"standalone]"
 
-#: ../../source/deployment/dingofs-client-deployment.md:72
+#: ../../source/deployment/dingofs-client-deployment.md:71
 #: fb3bfb5c9472462fb2f151f876683aba
 msgid "Step 4: Prepare the client configuration file"
-msgstr ""
+msgstr "第 4 步：准备客户端配置文件"
 
-#: ../../source/deployment/dingofs-client-deployment.md:107
+#: ../../source/deployment/dingofs-client-deployment.md:106
 #: 5f62744d16af49dfb179d978479a6bff
 msgid ""
-"Configuration entries in the client configuration file have the same "
-"meaning as those in the cluster topology file, see [DingoFS important-"
-"config][important-config]."
+"Configuration entries in the client configuration file have the same meaning "
+"as those in the cluster topology file, see [DingoFS important-config](../"
+"dingoadm/topology.md#important-dingofs-configuration-items)."
 msgstr ""
+"客户端配置文件中的配置项含义等同于集群拓扑文件中的配置项，详见 [DingoFS 重要配"
+"置项](../dingoadm/topology.md#important-dingofs-configuration-items)"
 
-#: ../../source/deployment/dingofs-client-deployment.md:109
+#: ../../source/deployment/dingofs-client-deployment.md:108
 #: 41703b3cd89445c18978fbb5d4604762
 msgid ""
-"For all configuration items that do not appear in the client "
-"configuration file, we will use the default configuration values.  You "
-"can view the configuration items and their associated default values by "
-"clicking [client configuration file][dingofs-client-conf]."
+"For all configuration items that do not appear in the client configuration "
+"file, we will use the default configuration values.  You can view the "
+"configuration items and their associated default values by clicking [client "
+"configuration file][dingofs-client-conf]."
 msgstr ""
+"所有未在客户端配置文件上出现的配置项，我们都将使用默认配置值，你可以通过点击 "
+"[client 配置文件][dingofs-client-conf]来查看各配置项及相关默认值。"
 
-#: ../../source/deployment/dingofs-client-deployment.md:112
+#: ../../source/deployment/dingofs-client-deployment.md:111
 #: 25b4c4d6db9f427fa970a23b466e3655
-msgid ":bulb: About the `mdsOpt.rpcRetryOpt.addrs` configuration item"
-msgstr ""
+msgid "💡 About the `mdsOpt.rpcRetryOpt.addrs` configuration item"
+msgstr "💡 关于 `mdsOpt.rpcRetryOpt.addrs` 配置项"
 
-#: ../../source/deployment/dingofs-client-deployment.md:114
+#: ../../source/deployment/dingofs-client-deployment.md:113
 #: bb0241d4104747d6a80398cc7f4de74b
 msgid ""
-"Since all the routing information exists in the MDS service, the client "
-"only needs to know the address of the MDS service in the cluster in order"
-" to perform IO reads and writes normally."
+"Since all the routing information exists in the MDS service, the client only "
+"needs to know the address of the MDS service in the cluster in order to "
+"perform IO reads and writes normally."
 msgstr ""
+"由于所有的路由信息都存在于 MDS 服务中，客户端只需知晓集群中 MDS 服务地址即可正"
+"常进行 IO 读写。"
 
-#: ../../source/deployment/dingofs-client-deployment.md:116
+#: ../../source/deployment/dingofs-client-deployment.md:115
 #: 543f5952a7c64950a78cf7dca785bc9e
 msgid ""
-"The `mdsOpt.rpcRetryOpt.addrs` configuration item in the configuration "
-"file needs to be filled with the address of the MDS service in the "
-"cluster. After deploying the DingoFS cluster,  You can check the address "
-"of the MDS service in the cluster via `dingoadm status`:"
+"The `mdsOpt.rpcRetryOpt.addrs` configuration item in the configuration file "
+"needs to be filled with the address of the MDS service in the cluster. After "
+"deploying the DingoFS cluster,  You can check the address of the MDS service "
+"in the cluster via `dingoadm status`:"
 msgstr ""
+"配置文件中的 `mdsOpt.rpcRetryOpt.addrs` 配置项需填写集群中 MDS 服务地址，用户在"
+"部署好 DingoFS 集群后，可通过 `dingoadm status` 查看集群 MDS 服务地址："
+
+#: ../../source/deployment/dingofs-client-deployment.md:130
+#: cbcc448964754d4fb57b23c3e1d5a9b7
+msgid ""
+"Please make sure to configure the data_dir configuration item if users need to "
+"enable local disk caching."
+msgstr "用户如需开启本地磁盘缓存，请务必配置 data_dir 配置项。"
 
 #: ../../source/deployment/dingofs-client-deployment.md:134
 #: 09446196d2354ea4b698be3a59a22b3d
 msgid ""
-"dingofs supports multiple s3, one fs corresponds to one s3 backend. All "
-"s3 information (ak, sk, endpoint, and bucket_name) is stored in mds, and "
-"other components get it from mds. And the s3 information in the mds is "
-"specified when the fs is created. Therefore, the s3 information in "
-"client.yaml is required and will be synchronized to the configuration "
-"file of the fs creation tool. If the fs have already been created, please"
-" keep the same information, otherwise the mount will fail;  If the fs "
-"have not been created yet, please make sure the s3 information is "
-"available, otherwise the mount will fail."
+"dingofs supports multiple s3, one fs corresponds to one s3 backend. All s3 "
+"information (ak, sk, endpoint, and bucket_name) is stored in mds, and other "
+"components get it from mds. And the s3 information in the mds is specified "
+"when the fs is created. Therefore, the s3 information in client.yaml is "
+"required and will be synchronized to the configuration file of the fs creation "
+"tool. If the fs have already been created, please keep the same information, "
+"otherwise the mount will fail;  If the fs have not been created yet, please "
+"make sure the s3 information is available, otherwise the mount will fail."
 msgstr ""
+"dingofs 支持多 s3，一个 fs 对应一个 s3 后端。\n"
+"所有的 s3 信息（ak、sk、endpoint 和 bucket_name）保存在 mds 中，其他组件从 mds "
+"中获取。\n"
+"而 mds 中的 s3 信息在创建 fs 时指定。\n"
+"因此 client.yaml 中的 s3 信息为必填项，相关信息会同步到创建 fs 工具的配置文件"
+"中。\n"
+"若 fs 已经创建请保持一致，否则挂载失败。\n"
+"若 fs 尚未创建则需保证 s3 信息可用，否则挂载失败。"
 
 #: ../../source/deployment/dingofs-client-deployment.md:141
 #: a04b1f3a0782483892f02a922b46ed00
 msgid "Step 5: Mount the DingoFS file system"
-msgstr ""
-
-#: ../../source/deployment/dingofs-client-deployment.md:148
-#: 235f80dbcdd540219e73c96bd8ae56fa
-msgid ""
-"``<dingofs-name>`‘’: filesystem name, user-defined, but must be a "
-"combination of **lowercase letters, numbers, and hyphens**, i.e., satisfy"
-" the regular expression `^([a-z0-9]+\\\\-?) +$`"
-msgstr ""
-
-#: ../../source/deployment/dingofs-client-deployment.md:149
-#: 715917d0380848e79a69517fa08c398f
-msgid "`<mount-point>`: mount path, user-defined, but must be **absolute path**."
-msgstr ""
-
-#: ../../source/deployment/dingofs-client-deployment.md:150
-#: 7be22e041a744ffe88d384a0107bc203
-msgid ""
-"`--host`: Mount the volume to the specified host, user can choose, please"
-" make sure the host has been imported."
-msgstr ""
-
-#: ../../source/deployment/dingofs-client-deployment.md:152
-#: 28626c72e3b242ca9bdaff980b9b7b17
-msgid ""
-"If the file system is mounted successfully, you can query the "
-"corresponding DingoFS file system on **the corresponding host**:"
-msgstr ""
+msgstr "第 5 步：挂载 DingoFS 文件系统"
 
 #: ../../source/deployment/dingofs-client-deployment.md:158
 #: a90c3ab96a7e41c4aebffa1103183ba0
 msgid "The user can also check the status of all clients on the central console:"
-msgstr ""
+msgstr "用户也可以在中控机上查看所有客户端的状态："
 
 #: ../../source/deployment/dingofs-client-deployment.md:177
 #: 2ff8be64c28e49caba353cb208525218
 msgid ""
-"If dingofs needs to use multiple s3 functions, just modify the "
-"configuration of the s3 information in client.yaml for different fs."
+"If dingofs needs to use multiple s3 functions, just modify the configuration "
+"of the s3 information in client.yaml for different fs."
 msgstr ""
+"若 dingofs 需要使用多 s3 功能，针对不同的 fs 修改 client.yaml 中的 s3 信息的相"
+"关配置即可。"
 
 #: ../../source/deployment/dingofs-client-deployment.md:179
 #: 7c71d25915004291afeca9821286610e
 msgid "Example"
-msgstr ""
+msgstr "示例"
 
 #: ../../source/deployment/dingofs-client-deployment.md:184
 #: c7e99d81cff4488a8dd1b7dbc6fa1467
 msgid "Other: unmount the filesystem"
-msgstr ""
-
+msgstr "其他：卸载文件系统"

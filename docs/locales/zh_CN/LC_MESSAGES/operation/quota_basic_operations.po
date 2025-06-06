@@ -6,207 +6,319 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 17:16+0800\n"
+"PO-Revision-Date: 2025-06-05 17:43+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation/quota_basic_operations.md:1
 #: b37a897e511c440794452c59ac0e59a3
 msgid "Quota Basic Operations"
-msgstr ""
+msgstr "Quota基本操作"
 
 #: ../../source/operation/quota_basic_operations.md:2
 #: 77f41b106fd84ef28c07c58f288cb3ff
 msgid ""
-"Supports setting, querying, and deleting Quota at the file system level "
-"and directory level using the dingo tool."
+"Supports setting, querying, and deleting Quota at the file system level and "
+"directory level using the dingo tool."
 msgstr ""
+"使用dingo工具，对文件系统级别以及目录级别的Quota，进行设置，查询，删除等操"
+"作。"
 
 #: ../../source/operation/quota_basic_operations.md:3
 #: b7974fcdb0ab4bcb906d7327cc85cbf9
 msgid "Filesystem level: The set quota takes effect on the whole filesystem;"
-msgstr ""
+msgstr "文件系统级别：设置的Quota对整个文件系统生效；"
 
 #: ../../source/operation/quota_basic_operations.md:4
 #: 878ca5c7e3494e5a814a0ac57ecbc1b1
 msgid ""
-"Directory level: Quota can be set for each folder directory individually,"
-" and the set quota will take effect for that directory."
-msgstr ""
+"Directory level: Quota can be set for each folder directory individually, "
+"and the set quota will take effect for that directory."
+msgstr "目录级别：每个文件夹目录可以单独设置Quota，设置的Quota对该目录生效。"
 
 #: ../../source/operation/quota_basic_operations.md:5
 #: 8545b28d0f2c47c0a9530422ec91996e
 msgid "1.Setting Quota"
-msgstr ""
+msgstr "1.设置Quota"
 
 #: ../../source/operation/quota_basic_operations.md:6
 #: ../../source/operation/quota_basic_operations.md:28
 #: ../../source/operation/quota_basic_operations.md:51
 #: ../../source/operation/quota_basic_operations.md:74
-#: 036c3208c59d4ce282007eb5754fc758 2758347302d743d2973e8d441b4d8c5a
-#: 68c20340b0534076ae8e095422eab284 7ab6122ea4a04e3cafdf469fa16319a8
+#: 036c3208c59d4ce282007eb5754fc758 68c20340b0534076ae8e095422eab284
 msgid "File System Level"
-msgstr ""
+msgstr "文件系统级别"
 
 #: ../../source/operation/quota_basic_operations.md:11
-#: b4faf4c0cb7849aa88d10cf170f52ff0
+#: ../../source/operation/quota_basic_operations.md:33
+#: ../../source/operation/quota_basic_operations.md:57
+#: 436a4d5bcedc4e3eb6a57f517f6215c8 4c5ee4ecd8d54fc3ad912bfb9524e97d
+#: 54a25daaf29941af97e5bcdf3586f8a6
+msgid "Parameter Description"
+msgstr "参数说明"
+
+#: ../../source/operation/quota_basic_operations.md:12
+#: 52fa26d3edb4446485d7121a045a6267
 msgid ""
-"Parameter Description  fsid: the corresponding id of the file system to "
-"be set, you can use the dingo tool to query the id of the file system  "
-"fsname: the corresponding name of the file system to be set, you can use "
-"the dingo tool to query the name of the file system  capacity: the "
-"maximum space to be used by the file system, unit GBzho  inodes: the "
-"maximum number of files in the file system"
-msgstr ""
+"fsid: the corresponding id of the file system to be set, you can use the "
+"dingo tool to query the id of the file system"
+msgstr "fsid: 需要设置的文件系统对应id，可以使用dingo 工具查询文件系统id"
+
+#: ../../source/operation/quota_basic_operations.md:13
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"fsname: the corresponding name of the file system to be set, you can use the "
+"dingo tool to query the name of the file system"
+msgstr "fsname：需要设置的文件系统对应名称，可以使用dingo 工具查询文件系统名称"
+
+#: ../../source/operation/quota_basic_operations.md:14
+#: acf674980be4484ca57362ede8d3f6db
+msgid "capacity: the maximum space to be used by the file system, unit GBzho"
+msgstr "capacity：文件系统最大使用空间，单位GBzho"
+
+#: ../../source/operation/quota_basic_operations.md:15
+#: e54c33500a174d3997d469cafb64938f
+msgid "inodes: the maximum number of files in the file system"
+msgstr "inodes：文件系统最大文件数量"
 
 #: ../../source/operation/quota_basic_operations.md:17
 #: ../../source/operation/quota_basic_operations.md:38
 #: ../../source/operation/quota_basic_operations.md:63
 #: ../../source/operation/quota_basic_operations.md:85
-#: 121b9edfb8a144ab84be9d81f5a0a766 1caad812cd514c2c9b164d343c9311fb
-#: 90df3ae291d64b2b962bd59eec8f1557 a02c88c72d4449b5af51b30246981188
+#: 121b9edfb8a144ab84be9d81f5a0a766
 msgid "Catalog Level"
-msgstr ""
+msgstr "目录级别"
 
 #: ../../source/operation/quota_basic_operations.md:21
-#: 1229b1e438b44e7cbfd880cbf00a9d57
+#: ../../source/operation/quota_basic_operations.md:43
+#: ../../source/operation/quota_basic_operations.md:79
+#: 1ac6a911407b4d1d9efcbe2ba79931b3 2cb4958409f241018a7b4832f5b67187
+#: cd2766ce75df4156aa4c4472929e968f
+msgid "Parameters"
+msgstr "参数说明"
+
+#: ../../source/operation/quota_basic_operations.md:22
+#: ../../source/operation/quota_basic_operations.md:80
+#: 52fa26d3edb4446485d7121a045a6267
 msgid ""
-"Parameters  fsid: the corresponding id of the file system to be set, you "
-"can use the dingo tool to query the corresponding id of the file system  "
+"fsid: the corresponding id of the file system to be set, you can use the "
+"dingo tool to query the corresponding id of the file system"
+msgstr ""
+"fsid：需要设置的文件系统对应id ，可以使用dingo 工具查询文件系统对应的id"
+
+#: ../../source/operation/quota_basic_operations.md:23
+#: ../../source/operation/quota_basic_operations.md:81
+#: 1c09d320ee3d416caaa75a713a6d9b03 e44aac3c358c41c4a3a00abfa74d54ea
+msgid ""
 "path: the path of the folder where you need to set up the quota, it is a "
 "relative path, and \"/\" stands for the root directory of the file system"
-"  capacity: the maximum space of the directory to be used, the unit is GB"
-"  inodes: the maximum number of files in the directory"
-msgstr ""
+msgstr "path：需要设置quota的文件夹路径，为相对路径，\"/\"代表文件系统根目录"
+
+#: ../../source/operation/quota_basic_operations.md:24
+#: ../../source/operation/quota_basic_operations.md:82
+#: 649e9bcd14be45859513f66df5c8281d 6702ec2983574d708ba52d4eca1f8125
+msgid "capacity: the maximum space of the directory to be used, the unit is GB"
+msgstr "capacity：该目录最大使用空间，单位GB"
+
+#: ../../source/operation/quota_basic_operations.md:25
+#: 9e17e31c88554c13b70a669042a997d1
+msgid "inodes: the maximum number of files in the directory"
+msgstr "inodes：该目录最大文件数量"
 
 #: ../../source/operation/quota_basic_operations.md:27
 #: 9bd63093c25c49a1964239d3d167493f
 msgid "2.Query Quota"
-msgstr ""
+msgstr "2.查询Quota"
 
-#: ../../source/operation/quota_basic_operations.md:33
+#: ../../source/operation/quota_basic_operations.md:34
 #: 52fa26d3edb4446485d7121a045a6267
 msgid ""
-"Parameter Description  fsid: the corresponding id of the file system to "
-"be queried, you can use the dingo tool to query the file system id  "
-"fsname: the corresponding name of the file system to be queried, you can "
-"use the dingo tool to query the file system name"
-msgstr ""
+"fsid: the corresponding id of the file system to be queried, you can use the "
+"dingo tool to query the file system id"
+msgstr "fsid：需要查询的文件系统对应id，可以使用dingo工具查询文件系统id"
+
+#: ../../source/operation/quota_basic_operations.md:35
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"fsname: the corresponding name of the file system to be queried, you can use "
+"the dingo tool to query the file system name"
+msgstr "fsname：需要查询的文件系统对应名称，可以使用dingo工具查询文件系统名称"
 
 #: ../../source/operation/quota_basic_operations.md:36
 #: 94bbd292fff8473692ec756e94f6981f
 msgid "Query Result: ![alt text](../../images/quota_query_result.png)"
-msgstr ""
+msgstr "查询结果：![alt text](../../images/quota_query_result.png)"
 
 #: ../../source/operation/quota_basic_operations.md:36
 #: ../../source/operation/quota_basic_operations.md:47
-#: ../../source/operation/quota_basic_operations.md:79
+#: ../../source/operation/quota_basic_operations.md:83
 #: ../../source/operation/quota_basic_operations.md:94
-#: 022d6115912a4ea3ba622a072169c8a7 02ce4bff4fcb42b6914bc1242ee31088
-#: 19f915e5b72649c7acaa450523ce1033 683aa58e19b14b4987f26969843d4f3c
-#: 92f9cecd56cb45bb8dd75d860c833181
+#: 19f915e5b72649c7acaa450523ce1033
 msgid "alt text"
 msgstr ""
 
-#: ../../source/operation/quota_basic_operations.md:43
+#: ../../source/operation/quota_basic_operations.md:44
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"fsid: the corresponding id of the file system to be queried, you can use "
+"dingo tool to query the id of the file system"
+msgstr "fsid：需要查询的文件系统对应id，可以使用dingo工具查询文件系统id"
+
+#: ../../source/operation/quota_basic_operations.md:45
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"fsname: the corresponding name of the file system to be queried, you can use "
+"dingo tool to query the name of the file system"
+msgstr "fsname：需要查询的文件系统对应名称，可以使用dingo工具查询文件系统名称"
+
+#: ../../source/operation/quota_basic_operations.md:46
 #: 078a75752dac4f2fb17e89d8b3ad8440
 msgid ""
-"Parameters  fsid: the corresponding id of the file system to be queried, "
-"you can use dingo tool to query the id of the file system  fsname: the "
-"corresponding name of the file system to be queried, you can use dingo "
-"tool to query the name of the file system  path: the path of the "
-"directory of the folder to be queried, it is a relative path, and \"/\" "
-"stands for the root directory of the file system."
-msgstr ""
+"path: the path of the directory of the folder to be queried, it is a "
+"relative path, and \"/\" stands for the root directory of the file system."
+msgstr "path：需要查询的文件夹目录路径，为相对路径，\"/\"代表文件系统根目录。"
 
 #: ../../source/operation/quota_basic_operations.md:47
 #: d5830c85d92043ceb23112c9ea9a18f3
 msgid "Query Result ![alt text](../../images/quota_query_result2.png)"
-msgstr ""
+msgstr "查询结果 ![alt text](../../images/quota_query_result2.png)"
 
 #: ../../source/operation/quota_basic_operations.md:50
 #: 1a9ced6824ef43e585b647de71f21c54
 msgid "3.Delete Quota"
-msgstr ""
+msgstr "3.删除Quota"
 
 #: ../../source/operation/quota_basic_operations.md:52
-#: 94dd21a554024ea0be7bef8058d4cb6b
-msgid "将capacity以及inodes设置为0，即为无限制。"
-msgstr ""
+#: 21b16d803b60443e8ef3e5d01af457bb
+msgid "Set capacity and inodes to 0 for unlimited capacity."
+msgstr "将capacity以及inodes设置为0，即为无限制。"
 
-#: ../../source/operation/quota_basic_operations.md:57
-#: 70467107e3d14840b84c44611f59a8d9
+#: ../../source/operation/quota_basic_operations.md:58
+#: 52fa26d3edb4446485d7121a045a6267
 msgid ""
-"Parameter Description  fsid: the file system corresponding to the id of "
-"the file system that needs to delete quota, you can use the dingo tool to"
-" query the file system id  fsname: the file system corresponding to the "
-"name of the file system that needs to be deleted, you can use the dingo "
-"tool to query the name of the file system  capacity: the maximum space of"
-" the file system to be used in GB, 0 is unlimited  inodes: the maximum "
-"number of files in the file system, 0 is unlimited maximum number of "
-"files, 0 is unlimited"
-msgstr ""
+"fsid: the file system corresponding to the id of the file system that needs "
+"to delete quota, you can use the dingo tool to query the file system id"
+msgstr "fsid：需要删除quota的文件系统对应id，可以使用dingo工具查询文件系统id"
+
+#: ../../source/operation/quota_basic_operations.md:59
+#: 52fa26d3edb4446485d7121a045a6267
+msgid ""
+"fsname: the file system corresponding to the name of the file system that "
+"needs to be deleted, you can use the dingo tool to query the name of the "
+"file system"
+msgstr "fsname：需要删除的文件系统对应名称，可以使用dingo工具查询文件系统名称"
+
+#: ../../source/operation/quota_basic_operations.md:60
+#: 279b8f5a1d384e3f80dacc3c5ba0aa30
+msgid ""
+"capacity: the maximum space of the file system to be used in GB, 0 is "
+"unlimited"
+msgstr "capacity：文件系统最大使用空间，单位GB，0为无限制"
+
+#: ../../source/operation/quota_basic_operations.md:61
+#: 29eaedc9b84b4320893a4afdc95f5c0b
+msgid ""
+"inodes: the maximum number of files in the file system, 0 is unlimited "
+"maximum number of files, 0 is unlimited"
+msgstr "inodes：文件系统最大文件数量，0为无限制"
 
 #: ../../source/operation/quota_basic_operations.md:64
 #: 15ce3894ad334ab59697ce9222e107e9
 msgid "Set capacity and inodes to 0, i.e., no limit."
-msgstr ""
+msgstr "将capacity以及inodes设置为0，即为无限制。"
 
 #: ../../source/operation/quota_basic_operations.md:68
-#: a32bc55aa8774151a1b6391404a31baf
+#: a6159ff440d1497895375be7c2a4139d
+msgid "Parameter description"
+msgstr "参数说明"
+
+#: ../../source/operation/quota_basic_operations.md:69
+#: 52fa26d3edb4446485d7121a045a6267
 msgid ""
-"Parameter description  fsid: the corresponding id of the file system "
-"where quota needs to be deleted, you can use dingo tool to query the id "
-"of the file system  path: the path of the folder directory where quota "
-"needs to be deleted, it's a relative path, and \"/\" stands for the root "
-"directory of the file system  capacity: the maximal space of the file "
-"system, unit is GB, and 0 is unlimited  inodes: the maximal number of "
-"files of file system, and 0 is unlimited inodes: the maximal number of "
-"files of file system, and 0 is unlimited maximum number of files, 0 is "
-"unlimited"
+"fsid: the corresponding id of the file system where quota needs to be "
+"deleted, you can use dingo tool to query the id of the file system"
+msgstr "fsid：需要删除quota的文件系统对应id，可以使用dingo工具查询文件系统id"
+
+#: ../../source/operation/quota_basic_operations.md:70
+#: 849ad7fd11134fbf96e02d788d111da8
+msgid ""
+"path: the path of the folder directory where quota needs to be deleted, it's "
+"a relative path, and \"/\" stands for the root directory of the file system"
 msgstr ""
+"path：需要删除quota的文件夹目录路径，为相对路径，\"/\"代表文件系统根目录"
+
+#: ../../source/operation/quota_basic_operations.md:71
+#: 87430c78bfa9451a90246cd22bfba5d7
+msgid ""
+"capacity: the maximal space of the file system, unit is GB, and 0 is "
+"unlimited"
+msgstr "capacity：文件系统最大使用空间，单位GB，0为无限制"
+
+#: ../../source/operation/quota_basic_operations.md:72
+#: 7f12bde4ba22467183546b1d70f1759d
+msgid ""
+"inodes: the maximal number of files of file system, and 0 is unlimited "
+"inodes: the maximal number of files of file system, and 0 is unlimited "
+"maximum number of files, 0 is unlimited"
+msgstr "inodes：文件系统最大文件数量，0为无限制"
 
 #: ../../source/operation/quota_basic_operations.md:73
 #: 11eb517e873c4be1ab5424d83af9b2ec
 msgid "4.Calibrate Quota"
-msgstr ""
+msgstr "4.校验Quota"
 
-#: ../../source/operation/quota_basic_operations.md:79
-#: 782e6676eedb4d928c403e548bcdaf47
+#: ../../source/operation/quota_basic_operations.md:83
+#: 92fc2fe26c444b149d7f4ad7839cfa07
 msgid ""
-"Parameters  fsid: the corresponding id of the file system to be set, you "
-"can use the dingo tool to query the corresponding id of the file system  "
-"path: the path of the folder where you need to set up the quota, it is a "
-"relative path, and \"/\" stands for the root directory of the file system"
-"  capacity: the maximum space of the directory to be used, the unit is GB"
-"  inodes: the maximum number of files in the directory ![alt "
-"text](../../images/quota_query_result3.png)"
+"inodes: the maximum number of files in the directory ![alt text](../../"
+"images/quota_query_result3.png)"
 msgstr ""
+"inodes：文件系统最大文件数量 ![alt text](../../images/"
+"quota_query_result3.png)"
 
 #: ../../source/operation/quota_basic_operations.md:90
+#: 9665ef7061e044aaa292cf7b3407b7db
+msgid "Parameter description:"
+msgstr "参数说明："
+
+#: ../../source/operation/quota_basic_operations.md:91
+#: f8fa39d97a264c03957cd684c0198b60
+msgid ""
+"fsid: The ID of the file system to be verified. This can be queried using "
+"the dingo tool."
+msgstr "fsid：需要校验的文件系统对应id，可以使用dingo工具查询文件系统id。"
+
+#: ../../source/operation/quota_basic_operations.md:92
 #: 076b49f5fb434c269d66bf67beedd9ca
 msgid ""
-"Parameter description: fsid: The ID of the file system to be verified. "
-"This can be queried using the dingo tool. Path: The directory path of the"
-" quota to be verified. This is a relative path, where \"/\" represents "
-"the file system root directory. repair: If the quota check fails, use the"
-" repair parameter to try to synchronise the quota usage."
+"Path: The directory path of the quota to be verified. This is a relative "
+"path, where \"/\" represents the file system root directory."
 msgstr ""
+"Path：需要校验quota的文件夹目录路径，为相对路径，\"/\"代表文件系统根目录。"
+
+#: ../../source/operation/quota_basic_operations.md:93
+#: 8a85949cd896463e99fc9433429c9c01
+msgid ""
+"repair: If the quota check fails, use the repair parameter to try to "
+"synchronise the quota usage."
+msgstr "repair：如果校验未通过，使用repair参数尝试同步quota使用量。"
 
 #: ../../source/operation/quota_basic_operations.md:94
 #: 92fc2fe26c444b149d7f4ad7839cfa07
 msgid ""
-"Verification results: Successfully verified ![alt "
-"text](../../images/quota_query_result4.png) Failed ![alt "
-"text](../../images/quota_query_result5.png)"
+"Verification results: Successfully verified ![alt text](../../images/"
+"quota_query_result4.png) Failed ![alt text](../../images/"
+"quota_query_result5.png)"
 msgstr ""
-
+"校验结果：校验成功 ![alt text](../../images/quota_query_result4.png) 校验失"
+"败 ![alt text](../../images/quota_query_result5.png)"

@@ -49,7 +49,7 @@ Parameters
 
 ## 3.Delete Quota
 ### File System Level
-将capacity以及inodes设置为0，即为无限制。
+Set capacity and inodes to 0 for unlimited capacity.
 ```
 dingo config fs --fsid 1 --capacity 0 --inodes 0
 dingo config fs --fsname dingofs --capacity 0 --inodes 0

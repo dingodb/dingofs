@@ -63,7 +63,7 @@ minio/minio server /data --console-address ":9900"
 
 > 💡 **Reminder:**
 > 
-> The following information will be used to fill in the [S3-related-config](../dingoadm/topology#important-dingofs-configuration-items) in the client configuration file in step 4: 
+> The following information will be used to fill in the [S3-related-config](../dingoadm/topology.md#important-dingofs-configuration-items) in the client configuration file in step 4: 
 > * The default `Access Key` and `Secret Key` for the root user are both `minioadmin` 
 > * The S3 service access address is `http://$IP:9000`, and you need to access `http://$IP:9000` from your browser to create a bucket 
 > * For more details on deployment, you can refer to [deploy-minio-standalone][deploy-minio-standalone].

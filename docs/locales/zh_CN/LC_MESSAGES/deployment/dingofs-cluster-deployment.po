@@ -6,223 +6,185 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-06 14:57+0800\n"
+"PO-Revision-Date: 2025-06-06 15:16+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:1
-#: c9fe28d273c34eb4821cd75d2c558182
+#: ../../source/deployment/dingofs-cluster-deployment.md:1 c9fe28d273c34eb4821cd75d2c558182
 msgid "Deploying a DingoFS cluster using DingoAdm"
-msgstr ""
+msgstr "使用 DingoAdm 部署 DingoFS 集群"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:4
-#: 440759eb259d49b6a7fe53de61a7ad49
+#: ../../source/deployment/dingofs-cluster-deployment.md:4 440759eb259d49b6a7fe53de61a7ad49
 msgid "Step 1: Prepare the environment"
-msgstr ""
+msgstr "第 1 步：环境准备"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:7
-#: aeeede4e116e4c05a02fc353340f298f
+#: ../../source/deployment/dingofs-cluster-deployment.md:7 aeeede4e116e4c05a02fc353340f298f
 msgid ""
-"[Hardware and software requirements](install-dingoadm#Hardware-and-"
-"software-requirements)"
-msgstr ""
+"[Hardware and software requirements](../dingoadm/install.md#software-and-hardware-environment-"
+"requirements)"
+msgstr "[软硬件环境需求](../dingoadm/install.md#software-and-hardware-environment-requirements)"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:8
-#: d7b013240645484ebddd4dd43c71e6ff
-msgid "[Install dependencies](install-dingoadm#Install-dependencies)"
-msgstr ""
+#: ../../source/deployment/dingofs-cluster-deployment.md:8 d7b013240645484ebddd4dd43c71e6ff
+msgid "[Install dependencies](../dingoadm/install.md#installing-dependencies)"
+msgstr "[安装依赖](../dingoadm/install.md#installing-dependencies)"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:10
-#: 866e462cfe0348e8b26c29925456ec29
+#: ../../source/deployment/dingofs-cluster-deployment.md:10 866e462cfe0348e8b26c29925456ec29
 msgid "Step 2: Install DingoAdm on the control machine"
-msgstr ""
+msgstr "第 2 步：在中控机上安装 DingoAdm"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:13
-#: f64bcec14087467985879196137db6bc
-msgid "[Install DingoAdm](install-dingoadm#install-dingoadm)"
-msgstr ""
+#: ../../source/deployment/dingofs-cluster-deployment.md:13 f64bcec14087467985879196137db6bc
+msgid "[Install DingoAdm](../dingoadm/install.md)"
+msgstr "[安装 DingoAdm](../dingoadm/install.md)"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:16
-#: eb0ab520480c421d9e3704a79b77f3fc
+#: ../../source/deployment/dingofs-cluster-deployment.md:16 eb0ab520480c421d9e3704a79b77f3fc
 msgid "Step 3: Import the host list"
-msgstr ""
+msgstr "第 3 步：导入主机列表"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:19
-#: 918e711d602d4ecfa2bc1227e9d19362
+#: ../../source/deployment/dingofs-cluster-deployment.md:19 918e711d602d4ecfa2bc1227e9d19362
 msgid ""
-"Users need to import the list of machines required for deploying the "
-"cluster and clients so that they can fill in the hostnames of the "
-"deployed services in various configuration files later. Please ensure "
-"that all hostnames appearing in various configuration files later have "
-"been imported. For details, see [Host Management][hosts]."
+"Users need to import the list of machines required for deploying the cluster and clients so that they can "
+"fill in the hostnames of the deployed services in various configuration files later. Please ensure that "
+"all hostnames appearing in various configuration files later have been imported. For details, see [Host "
+"Management](../dingoadm/hosts.md)."
 msgstr ""
+"用户需导入部署集群和客户端所需的机器列表，以便在之后的各类配置文件中填写部署服务的主机名，请确保在之后各类"
+"配置文件出现的主机名都已导入，详见[主机管理](../dingoadm/hosts.md)。"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:22
-#: 3fd516e8f1bb4316af2a54b8fb2d081b
+#: ../../source/deployment/dingofs-cluster-deployment.md:22 3fd516e8f1bb4316af2a54b8fb2d081b
 msgid "1. Prepare the host list"
-msgstr ""
+msgstr "1.准备主机列表"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:45
-#: 3c6ab254ef0d440384a7447b971dadce
+#: ../../source/deployment/dingofs-cluster-deployment.md:45 3c6ab254ef0d440384a7447b971dadce
 msgid "2. Import the host list"
-msgstr ""
+msgstr "2.导入主机列表"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:50
-#: 76afeb0cf2564addbc24bcc638c0d201
+#: ../../source/deployment/dingofs-cluster-deployment.md:50 76afeb0cf2564addbc24bcc638c0d201
 msgid "Step 4: Prepare the cluster topology file"
-msgstr ""
+msgstr "第 4 步：准备集群拓扑文件"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:53
-#: 04b07520a4f3442090b72d04884c047a
+#: ../../source/deployment/dingofs-cluster-deployment.md:53 04b07520a4f3442090b72d04884c047a
 msgid ""
-"We have prepared different topology file templates based on common "
-"scenarios. Users can select and edit them according to their needs:"
-msgstr ""
+"We have prepared different topology file templates based on common scenarios. Users can select and edit "
+"them according to their needs:"
+msgstr "我们根据常见的场景，给用户准备了不同的拓扑文件模板，用户可根据需求自行选择，并进行编辑调整："
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:55
-#: d511fefa5c3a489b96d2f47971850058
+#: ../../source/deployment/dingofs-cluster-deployment.md:55 d511fefa5c3a489b96d2f47971850058
 msgid "[Single-machine deployment][dingofs-stand-alone-topology]"
-msgstr ""
+msgstr "[单机部署][dingofs-stand-alone-topology]"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:57
-#: 7d07e1b49f0c483db4ffe3edfed80804
-msgid ""
-"All services run on a single host, typically used for testing or "
-"evaluation."
-msgstr ""
+#: ../../source/deployment/dingofs-cluster-deployment.md:57 7d07e1b49f0c483db4ffe3edfed80804
+msgid "All services run on a single host, typically used for testing or evaluation."
+msgstr "所有服务都运行在一台主机，一般用于体验或测试。"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:60
-#: 2a42647c68cb4ba683194182dd20de97
+#: ../../source/deployment/dingofs-cluster-deployment.md:60 2a42647c68cb4ba683194182dd20de97
 msgid "[Multi-node deployment][dingofs-cluster-topology]"
-msgstr ""
+msgstr "[多机部署][dingofs-cluster-topology]"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:62
-#: 2a5af29d2a964611be385979163c4948
+#: ../../source/deployment/dingofs-cluster-deployment.md:62 2a5af29d2a964611be385979163c4948
+msgid "A generic multi-node deployment template suitable for production environments or testing"
+msgstr "通用的多机部署的基础模板，可用于生产环境或测试"
+
+#: ../../source/deployment/dingofs-cluster-deployment.md:64 ed05a88f2729483f9a7066f95271c7b8
 msgid ""
-"A generic multi-node deployment template suitable for production "
-"environments or testing"
-msgstr ""
+"For details on the configuration options in the topology file, please refer to [DingoFS Cluster Topology]"
+"(../dingoadm/topology.md)"
+msgstr "关于拓扑文件中的各项配置项，请参考 [DingoFS 集群拓扑](../dingoadm/topology.md)"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:64
-#: ed05a88f2729483f9a7066f95271c7b8
-msgid ""
-"For details on the configuration options in the topology file, please "
-"refer to [DingoFS Cluster Topology][dingofs-topology]"
-msgstr ""
-
-#: ../../source/deployment/dingofs-cluster-deployment.md:116
-#: a503f492a5364b0b80f05e306c5922b1
+#: ../../source/deployment/dingofs-cluster-deployment.md:116 a503f492a5364b0b80f05e306c5922b1
 msgid "Step 5: Add a cluster and switch clusters"
-msgstr ""
+msgstr "第 5 步：添加集群并切换集群"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:119
-#: 946594a8c93e42e9bb00385c63f08d17
+#: ../../source/deployment/dingofs-cluster-deployment.md:119 946594a8c93e42e9bb00385c63f08d17
 msgid "1. Add the 'my-cluster' cluster and specify the cluster topology file"
-msgstr ""
+msgstr "1.添加 'my-cluster' 集群，并指定集群拓扑文件"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:125
-#: bc2f84085f644f1e974d537c2f4621e2
+#: ../../source/deployment/dingofs-cluster-deployment.md:125 bc2f84085f644f1e974d537c2f4621e2
 msgid "2. Switch the 'my-cluster' cluster to the current management cluster"
-msgstr ""
+msgstr "2.切换 'my-cluster' 集群为当前管理集群"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:131
-#: 912a35ce923b43e1abb14f5a5fa72835
+#: ../../source/deployment/dingofs-cluster-deployment.md:131 912a35ce923b43e1abb14f5a5fa72835
 msgid "Step 6: Deploy the cluster"
-msgstr ""
+msgstr "第 6 步：部署集群"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:138
-#: d4cca22765aa4798b5928048643a4948
+#: ../../source/deployment/dingofs-cluster-deployment.md:138 d4cca22765aa4798b5928048643a4948
 msgid ""
-"If the deployment is successful, it will output something like `Cluster "
-"'my-cluster' successfully deployed ^_^.`."
-msgstr ""
+"If the deployment is successful, it will output something like `Cluster 'my-cluster' successfully "
+"deployed ^_^.`."
+msgstr "如果部署成功，将会输出类似 `Cluster 'my-cluster' successfully deployed ^_^.` 的字样。"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:140
-#: 771999b48367459ba728a8f0d467577f
+#: ../../source/deployment/dingofs-cluster-deployment.md:140 771999b48367459ba728a8f0d467577f
 msgid "📢 **Note:**"
-msgstr ""
+msgstr "📢 **注意**"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:142
-#: 25dfa44852a4423594cc4b54cbe743bc
+#: ../../source/deployment/dingofs-cluster-deployment.md:142 25dfa44852a4423594cc4b54cbe743bc
 msgid ""
-"By default, the deployment process runs the [precheck module][precheck] "
-"to detect factors that may cause deployment failure in advance, thereby "
-"improving the success rate of deployment. If the precheck fails, users "
-"need to troubleshoot the issue step by step based on the reported [error "
-"code][errno] and the provided solutions, and ultimately pass all "
-"prechecks. Of course, users can also skip the precheck by adding the `-k`"
-" option, but we strongly discourage this, as it may leave potential "
-"issues for future deployments and create difficult-to-troubleshoot "
-"problems."
+"By default, the deployment process runs the [precheck module][precheck] to detect factors that may cause "
+"deployment failure in advance, thereby improving the success rate of deployment. If the precheck fails, "
+"users need to troubleshoot the issue step by step based on the reported [error code][errno] and the "
+"provided solutions, and ultimately pass all prechecks. Of course, users can also skip the precheck by "
+"adding the `-k` option, but we strongly discourage this, as it may leave potential issues for future "
+"deployments and create difficult-to-troubleshoot problems."
 msgstr ""
+"部署时默认会运行[预检模块][precheck]来提前检测那些可能导致用户部署失败的因素，以提高用户部署的成功率，当出"
+"现预检失败时，用户需要根据报告的[错误码][errno]以及其提供的解决方案一步步排除问题, 并最终通过所有预检。当"
+"然用户也可以通过添加 `-k` 选项跳过预检，但是这是我们极其不推介的，因为这将给之后的实际部署留下隐患，并产生"
+"难以排查的问题。"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:144
-#: a0972bef95fa4c3489bed0e3c60b031c
+#: ../../source/deployment/dingofs-cluster-deployment.md:144 a0972bef95fa4c3489bed0e3c60b031c
 msgid "Step 7: View the cluster status"
-msgstr ""
+msgstr "第 7 步：查看集群运行情况"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:151
-#: 276438cc320c4c0889f3dd58260b7fe0
+#: ../../source/deployment/dingofs-cluster-deployment.md:151 276438cc320c4c0889f3dd58260b7fe0
 msgid ""
-"DingoAdm will display the service ID, service role, host address, number "
-"of deployed replica services, container ID, and running status by "
-"default:"
-msgstr ""
+"DingoAdm will display the service ID, service role, host address, number of deployed replica services, "
+"container ID, and running status by default:"
+msgstr "DingoAdm 默认会显示服务 ID、服务角色、主机地址、已部署的副本服务数量、容器 ID、运行状态："
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:174
-#: 02dc7a54fc404cc1ba01c7cfe5589845
+#: ../../source/deployment/dingofs-cluster-deployment.md:174 02dc7a54fc404cc1ba01c7cfe5589845
 msgid ""
-"To view additional information, such as listening ports, log directories,"
-" data directories, etc., add the `-v` parameter"
-msgstr ""
+"To view additional information, such as listening ports, log directories, data directories, etc., add the "
+"`-v` parameter"
+msgstr "若想查看其余信息，如监听端口、日志目录、数据目录等，可添加 `-v` 参数"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:175
-#: aafb785b5a8340f6b9e52f6f48eaa4fc
+#: ../../source/deployment/dingofs-cluster-deployment.md:175 aafb785b5a8340f6b9e52f6f48eaa4fc
 msgid ""
-"For [replicas] services on the same host, their status is collapsed by "
-"default. Add the `-s` parameter to display each replica service"
+"For [replica] services on the same host, their status is collapsed by default. Add the `-s` parameter to "
+"display each replica service"
 msgstr ""
+"对于同一台主机上的[复制][replicas]服务来说，其状态默认是折叠的，可添加 `-s` 参数来显示每一个副本服务"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:177
-#: ce4eaf6b09c44ba5a5b9f7c6758b47ef
+#: ../../source/deployment/dingofs-cluster-deployment.md:177 ce4eaf6b09c44ba5a5b9f7c6758b47ef
 msgid "Step 8: Verify cluster health status"
-msgstr ""
+msgstr "第 8 步：验证集群健康状态"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:180
-#: be3d580a4b30484ca876fecfdca4dcdf
+#: ../../source/deployment/dingofs-cluster-deployment.md:180 be3d580a4b30484ca876fecfdca4dcdf
 msgid ""
-"A cluster service running normally does not necessarily mean the cluster "
-"is healthy, so we have built the `dingofs_tool` tool into each container."
-" This tool not only queries the cluster's health status but also provides"
-" many other features, such as displaying detailed status of each "
-"component, creating/deleting file systems, etc."
+"A cluster service running normally does not necessarily mean the cluster is healthy, so we have built the "
+"`dingofs_tool` tool into each container. This tool not only queries the cluster's health status but also "
+"provides many other features, such as displaying detailed status of each component, creating/deleting "
+"file systems, etc."
 msgstr ""
+"集群服务正常运行，并不意味着集群的健康，所以我们在每一个容器内内置了 `curvefs_tool` 工具。该工具不仅可以查"
+"询集群的健康状态，还提供了许多其他特性，如显示各组件详细状态、创建/删除文件系统等。"
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:183
-#: 8f69253811494b3081f3fdb129c3d3d1
-msgid ""
-"First, we need to enter any service container (the service ID can be "
-"viewed via `dingoadm status`):"
-msgstr ""
+#: ../../source/deployment/dingofs-cluster-deployment.md:183 8f69253811494b3081f3fdb129c3d3d1
+msgid "First, we need to enter any service container (the service ID can be viewed via `dingoadm status`):"
+msgstr "首先，我们需要进入任意一个服务容器内（服务 ID 可通过 `dingoadm status` 查看）："
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:189
-#: 5c4ed43011aa489a831c146f63f08102
+#: ../../source/deployment/dingofs-cluster-deployment.md:189 5c4ed43011aa489a831c146f63f08102
 msgid "Execute the following command within that container to check:"
-msgstr ""
+msgstr "在该容器内执行以下命令查看："
 
-#: ../../source/deployment/dingofs-cluster-deployment.md:194
-#: 3f16ad6c186349e7938af69f065e06aa
-msgid ""
-"If the cluster is healthy, the output will include the message `cluster "
-"is healthy` at the end."
-msgstr ""
-
+#: ../../source/deployment/dingofs-cluster-deployment.md:194 3f16ad6c186349e7938af69f065e06aa
+msgid "If the cluster is healthy, the output will include the message `cluster is healthy` at the end."
+msgstr "如果集群健康，在输出的最后会出现 `cluster is healthy` 的字样。"

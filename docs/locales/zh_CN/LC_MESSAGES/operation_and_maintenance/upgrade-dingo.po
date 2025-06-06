@@ -6,45 +6,46 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-05 18:35+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:1
 #: 91645f4f0f034d13b6ecab0c482acdc2
 msgid "Upgrade Service"
-msgstr ""
+msgstr "升级服务"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:4
 #: d51810bd3a1b4872b748daf95bfe957c
 msgid "Step 1: Modify the cluster topology"
-msgstr ""
+msgstr "第 1 步：修改集群拓扑"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:7
 #: f19a0e7442394dbfa351d8534efa6eb6
 msgid ""
 "Modify the mirror names in the cluster topology to the names of the "
 "mirrors to be upgraded:"
-msgstr ""
+msgstr "修改集群拓扑中的镜像名为需升级的镜像名："
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:20
 #: 9856c9bbee7848a0870f3ea096611377
 msgid "Step 2: Commit the cluster topology"
-msgstr ""
+msgstr "第 2 步：提交集群拓扑"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:27
 #: 007e436bd37c445db50072a380f81da1
 msgid "Step 3: Upgrade the specified service"
-msgstr ""
+msgstr "第 3 步：升级指定服务"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:34
 #: 5b9588c3538249d692695bbde9d3df06
@@ -52,39 +53,43 @@ msgid ""
 "DingoAdm upgrades all services in the cluster by default. To upgrade a "
 "specific service, you can add the following 3 options:"
 msgstr ""
+"DingoAdm 默认升级集群中的所有服务，如需升级指定服务，可通过添加以下 3 个"
+"选项来实现："
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:36
 #: e03de7709ec04718a9d137757645c4c9
 msgid "`--id`: Upgrade the service with the specified `id`."
-msgstr ""
+msgstr "--id: 升级指定 id 的服务。"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:37
 #: b0e08bc4dd674bf38ab538795a0f6507
 msgid "`--host`: Upgrade all services on the specified host."
-msgstr ""
+msgstr "--host: 升级指定主机的所有服务。"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:38
 #: 32e7b000fa0441e29040ef918db34c28
 msgid "`--role`: Upgrade all services for the specified role."
-msgstr ""
+msgstr "--role: 升级指定角色的所有服务。"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:40
 #: 0c5e68e2b5aa47c8be848bc587ffc07f
 msgid ""
-"The above 3 options can be used in any combination, and the corresponding"
-" `id`, `host`, and `role` of the services can be viewed via [dingoadm "
-"status](#View cluster status)."
+"The above 3 options can be used in any combination, and the "
+"corresponding `id`, `host`, and `role` of the services can be viewed via "
+"[dingoadm status](./maintain-dingo#viewing-cluster-status)."
 msgstr ""
+"以上 3 个选项可任意组合使用，服务对应的 id、host、role 可通过 [dingoadm "
+"status](./maintain-dingo#viewing-cluster-status) 来查看。"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:42
 #: 302c1c87478c4dc0ad372cc558a2a77f
-msgid "Example 1: Upgrading a service with id `c9570c0d0252"
-msgstr ""
+msgid "Example 1: Upgrading a service with id `c9570c0d0252`"
+msgstr "示例 1：升级 id 为 c9570c0d0252 的服务"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:48
 #: f6d164ea1eac4992b7d5a9f755a3f688
 msgid "Example 2: Upgrading all `MDS` services on the host `10.0.1.1`"
-msgstr ""
+msgstr "示例 2：升级 10.0.1.1 这台主机上的所有 MDS 服务"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:49
 #: 7aa52c7a69b04a62a30bce847d1ea692
@@ -93,8 +98,8 @@ msgstr ""
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:53
 #: 4c1c1bba8c4a40dea8d15693e8599c6e
-msgid ":bulb: **REMINDER:**"
-msgstr ""
+msgid "💡 **REMINDER:**"
+msgstr "💡 **提醒**"
 
 #: ../../source/operation_and_maintenance/upgrade-dingo.md:55
 #: c6dfde9ac0e4446a9a268dafa25b1f83
@@ -104,4 +109,5 @@ msgid ""
 "healthy after upgrading each service. If you want to perform the upgrade "
 "in one go, you can add the `-f` option to force the upgrade."
 msgstr ""
-
+"upgrade 默认会滚动升级指定的每一个服务，用户在升级每一个服务后 需进入容器"
+"内确定集群是否健康。若用户想一次性执行升级操作，可添加 -f 选项强制升级。"

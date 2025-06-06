@@ -172,7 +172,7 @@ ed4533e903d9  metaserver  server-host3  1/1       a35c30e3143d  Up 45 hours
 ```
 
 * To view additional information, such as listening ports, log directories, data directories, etc., add the `-v` parameter
-* For [replicas] services on the same host, their status is collapsed by default. Add the `-s` parameter to display each replica service
+* For [replica] services on the same host, their status is collapsed by default. Add the `-s` parameter to display each replica service
 
 Step 8: Verify cluster health status
 ---
@@ -195,9 +195,9 @@ If the cluster is healthy, the output will include the message `cluster is healt
 
 [hosts]: ../dingoadm/hosts.md
 [important-config]: ../dingoadm/topology.md
-[dingofs-stand-alone-topology]: ./stand-alone-topology.yaml
-[dingofs-cluster-topology]: ./cluster-topology.yaml
+[dingofs-stand-alone-topology]: https://github.com/dingodb/dingoadm/blob/master/configs/fs/stand-alone/topology.yaml
+[dingofs-cluster-topology]: https://github.com/dingodb/dingoadm/blob/master/configs/fs/cluster/topology.yaml
 [dingofs-topology]: ../dingoadm/topology.md
 [precheck]: ./precheck.md
 [errno]: ../errno.md
-[replicas]: ../dingoadm/topology#replica
+[replica]: ../dingoadm/topology.md#replica

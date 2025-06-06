@@ -6,107 +6,130 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-06 12:04+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation/file_system_monitoring.md:1
 #: d109157ada4949f5a4b9ce7a60dddc2a
 msgid "File System Real-time Monitoring"
-msgstr ""
+msgstr "文件系统实时监控"
 
 #: ../../source/operation/file_system_monitoring.md:2
 #: 02920c0657804946b8ade41a98f9097c
 msgid "1. Real-time Monitoring"
-msgstr ""
+msgstr "1.实时监控"
 
 #: ../../source/operation/file_system_monitoring.md:3
 #: 85d71bfc0ed04d05ad71af451989de1a
 msgid ""
-"Use the dingo tool to monitor mounted filesystems in real time, and print"
-" out metrics data at regular intervals."
-msgstr ""
+"Use the dingo tool to monitor mounted filesystems in real time, and "
+"print out metrics data at regular intervals."
+msgstr "使用dingo工具实时监控已挂载的文件系统，定时打印出指标数据。"
 
 #: ../../source/operation/file_system_monitoring.md:7
+#: eb540eaeca80491ab8ada1dc43a5bfe7
+msgid "Parameter Description"
+msgstr "参数说明"
+
+#: ../../source/operation/file_system_monitoring.md:8
 #: 51abb5346d1e4a26af6611de2d378234
 msgid ""
-"Parameter Description \\ mount-point: Path where the file system is "
-"mounted.\\ The stats command has the following options: schema The "
-"default value is ufmsbo, which stands for: u: usage, f: fuse, m: "
-"metaserver,s: mds, b: blockcache, o: object"
-msgstr ""
+"mount-point: Path where the file system is mounted.\\ \\ The stats "
+"command has the following options:"
+msgstr "mount-point：文件系统所挂载的路径。\\ \\ stats命令具有如下选项："
 
 #: ../../source/operation/file_system_monitoring.md:11
-#: d2d3e3ff210d44ad877958f9cc973045
-msgid "Example: show only fuse metrics"
+#: 51abb5346d1e4a26af6611de2d378234
+msgid ""
+"--schema: The default value is ufmsbo, which stands for: u: usage, f: "
+"fuse, m: metaserver,s: mds, b: blockcache, o: object.  Example: show "
+"only fuse metrics"
 msgstr ""
+"--schema：默认值为 ufmsbo ，代表含义：u: usage, f: fuse, m: "
+"metaserver,s: mds, b: blockcache, o: object。例：只显示fuse指标"
 
-#: ../../source/operation/file_system_monitoring.md:15
+#: ../../source/operation/file_system_monitoring.md:16
 #: e513250dfdf94c28aae22010a1dc197c
 msgid ""
-"--interval duration , the default value is 1s, and the minimum value is "
+"--interval duration: the default value is 1s, and the minimum value is "
 "also 1s, which means how often the indicator data will be output to show "
 "on the screen.\\ Example: output indicator data every two seconds"
 msgstr ""
+"--interval duration：默认值为1s，最小也为1s，表示每隔多久输出一次指标数据"
+"显示在屏幕上。例：每两秒输出一次指标数据"
 
-#: ../../source/operation/file_system_monitoring.md:20
+#: ../../source/operation/file_system_monitoring.md:21
 #: a414571b3f4e4e06a93b7ed3cbbd85a0
 msgid ""
-"--verbose , show more detailed information. \\ Example: show detailed "
-"data of s3"
-msgstr ""
-
-#: ../../source/operation/file_system_monitoring.md:26
-#: e2f48fb4de6745959ce7138125ed07b2
-msgid "2. Monitoring Results"
-msgstr ""
+"--verbose:show more detailed information. \\ Example: show detailed data "
+"of s3"
+msgstr "--verbose：显示更详细信息。\\例：显示s3的详细数据"
 
 #: ../../source/operation/file_system_monitoring.md:27
+#: e2f48fb4de6745959ce7138125ed07b2
+msgid "2. Monitoring Results"
+msgstr "2.监控结果"
+
+#: ../../source/operation/file_system_monitoring.md:28
 #: bd877e81d66646598c660d2355214f44
-msgid "! [alt text](../../images/monitoring_results.png)"
+msgid "![alt text](../../images/monitoring_results.png)"
 msgstr ""
 
 #: ../../source/operation/file_system_monitoring.md:28
-#: e5534940b13047ffbc4eac4081592968
-msgid "3. Monitoring Metrics in Detail"
+#: 66a6b073124f47c38bbba4ad9aaa9172
+msgid "alt text"
 msgstr ""
 
 #: ../../source/operation/file_system_monitoring.md:29
+#: e5534940b13047ffbc4eac4081592968
+msgid "3. Monitoring Metrics in Detail"
+msgstr "3.监控指标详解"
+
+#: ../../source/operation/file_system_monitoring.md:30
 #: 9e3f49237bc64b89ac088ec4d908c441
 msgid ""
 "usage\\ cpu: client program CPU usage in percentage. \\ mem: client "
-"program physical memory usage. \\ wbuf: size of data write buffer already"
-" used by the client program."
+"program physical memory usage. \\ wbuf: size of data write buffer "
+"already used by the client program."
 msgstr ""
+"usage\\ cpu：客户端程序CPU使用率，以百分比为单位。\\ mem：客户端程序物理"
+"内存使用情况。 \\ wbuf:：客户端程序已经使用的数据写缓冲区大小。"
 
-#: ../../source/operation/file_system_monitoring.md:33
+#: ../../source/operation/file_system_monitoring.md:34
 #: 38ee7c33d4dc43218154a37e0a165d21
 msgid ""
-"fuse\\ opt/lat : Number of requests per second processed through the fuse"
-" interface and their average latency in milliseconds. Note: A file may be"
-" created multiple times by oops, e.g., open, write, flush, close, etc. "
-"The file may be created by a number of oops. \\ read/write: read/write "
-"bandwidth processed per second through the fuse interface."
+"fuse\\ opt/lat : Number of requests per second processed through the "
+"fuse interface and their average latency in milliseconds. Note: A file "
+"may be created multiple times by oops, e.g., open, write, flush, close, "
+"etc. The file may be created by a number of oops. \\ read/write: read/"
+"write bandwidth processed per second through the fuse interface."
 msgstr ""
+"fuse\\ opt/lat：通过fuse接口处理的每秒请求数及其平均延迟，延迟单位为毫"
+"秒。注意:一个文件的创建可能是多次ops，譬如会经历open,write,flush,close"
+"等。\\ read/write：通过fuse接口每秒处理的读写带宽。"
 
-#: ../../source/operation/file_system_monitoring.md:36
+#: ../../source/operation/file_system_monitoring.md:37
 #: de15687de4634ea380fcd8b01998e5e5
 msgid ""
 "metaserver\\ opt/lat : The number of metadata requests processed by the "
 "metaserver per second and its average latency in milliseconds. Main "
 "operations createdentry, listDentry, deleteDentry, etc."
 msgstr ""
+"metaserver\\ opt/lat：每秒metaserver处理的元数据请求数及其平均延迟，延迟"
+"单位为毫秒。主要操作createdentry、listDentry、deleteDentry等。"
 
-#: ../../source/operation/file_system_monitoring.md:38
+#: ../../source/operation/file_system_monitoring.md:39
 #: b61da7b398f54f6e86d99ea77863ac63
 msgid ""
 "blockcache\\ Currently blockcache mainly refers to the disk cache read "
@@ -117,8 +140,12 @@ msgid ""
 "than the get and put traffic in the object, it means the data is cached. "
 "read/write: the client's local disk cache read/write traffic per second."
 msgstr ""
+"blockcache\\ 目前blockcache主要是指磁盘缓存的读写情况，如果启用了磁盘缓存"
+"的话，数据先从磁盘缓存读写，如果数据不在磁盘缓存或者数据已失效，将会从对"
+"象存储读写数据。如果blockcache读写流量远大约object中的get和put，说明数据"
+"被缓存。read/write：客户端本地磁盘缓存每秒读写流量。"
 
-#: ../../source/operation/file_system_monitoring.md:41
+#: ../../source/operation/file_system_monitoring.md:42
 #: 5e86ec3df3374ebe8a98bacf9b0448de
 msgid ""
 "object\\ object represents a metric related to the object store. In the "
@@ -127,8 +154,11 @@ msgid ""
 "used to determine whether the data is fully cached. \\ get/ops/lat: the "
 "value of the bandwidth of the object store to process read requests per "
 "second, the number of interface requests and their average latency (in "
-"milliseconds). \\ put/ops/lat: the value of the bandwidth per second that"
-" the object store processes write requests, the number of interface "
+"milliseconds). \\ put/ops/lat: the value of the bandwidth per second "
+"that the object store processes write requests, the number of interface "
 "requests and their average latency (in milliseconds)."
 msgstr ""
-
+"object\\ object 代表与对象存储相关指标，在存在磁盘缓存场景下，读请求穿透"
+"到对象存储，将会明显降低读性能，可以用该指标来断定数据是否完整缓存。\\ "
+"get/ops/lat：对象存储每秒处理读请求的带宽值，接口请求个数及其平均时延（单"
+"位为毫秒）。"

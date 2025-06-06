@@ -6,34 +6,35 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-05 16:30+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/dingoadm/install.md:1 9eecefe0f254441496604a7c69553307
 msgid "Software and Hardware Environment Requirements"
-msgstr ""
+msgstr "软硬件环境需求"
 
-#: ../../source/dingoadm/install.md:4 20ce5b2e932a496fbb80fe35cffb14ac
+#: ../../source/dingoadm/install.md:3 20ce5b2e932a496fbb80fe35cffb14ac
 msgid "Linux Operating System Version Requirements"
-msgstr ""
+msgstr "Linux 操作系统版本需求"
 
 #: ../../source/dingoadm/install.md 17d515e087c5453aab8297dfa155bd30
 msgid "Distribution"
-msgstr ""
+msgstr "发行版"
 
 #: ../../source/dingoadm/install.md c9629daae0214b268b5bed8007ba48be
 msgid "Version Requirements"
-msgstr ""
+msgstr "版本需求"
 
 #: ../../source/dingoadm/install.md 901941eb9ad44405a3e531077ed69dcd
 msgid "Debian"
@@ -41,7 +42,7 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md bfe5afdf131a422bbc7400d776daca88
 msgid "Version 9 or higher"
-msgstr ""
+msgstr "9 及以上版本"
 
 #: ../../source/dingoadm/install.md 8afdf2966ba1479dbc53200836627c99
 msgid "CentOS"
@@ -49,7 +50,7 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md c9f26333bfbb48ae8b94b99c4348eb74
 msgid "Version 7 or higher"
-msgstr ""
+msgstr "7 及以上版本"
 
 #: ../../source/dingoadm/install.md c560499c1ac04ad4b0752af04de64312
 msgid "Ubuntu"
@@ -57,103 +58,109 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md 51b516ce0c204c6abbff4adc00d27c19
 msgid "Version 20 or higher"
-msgstr ""
+msgstr "20 及以上版本"
 
-#: ../../source/dingoadm/install.md:13 929794989e2e4ff796d95ab0c62fa46c
+#: ../../source/dingoadm/install.md:12 929794989e2e4ff796d95ab0c62fa46c
 msgid "Network Requirements"
-msgstr ""
+msgstr "网络需求"
 
-#: ../../source/dingoadm/install.md:16 da79fd3b90054324ba1b60b2220ec6a1
+#: ../../source/dingoadm/install.md:15 da79fd3b90054324ba1b60b2220ec6a1
 msgid ""
-"Currently, deploying a cluster via DingoAdm has the following two network"
-" requirements:"
-msgstr ""
+"Currently, deploying a cluster via DingoAdm has the following two network "
+"requirements:"
+msgstr "目前通过 DingoAdm 部署集群有以下 2 方面网络需求："
 
-#: ../../source/dingoadm/install.md:18 f7e788fbaabb4ba1b4621175d8ea6bb3
+#: ../../source/dingoadm/install.md:17 f7e788fbaabb4ba1b4621175d8ea6bb3
 msgid ""
 "The central control machine where DingoAdm is installed must be able to "
 "connect to the deployment server via SSH"
-msgstr ""
+msgstr "安装 DingoAdm 的中控机需要通过 SSH 连接到部署服务的服务器"
 
-#: ../../source/dingoadm/install.md:19 914dcc96c3c142fb9266e05ae76579ac
+#: ../../source/dingoadm/install.md:18 914dcc96c3c142fb9266e05ae76579ac
 msgid "Each server must pull images from the Docker repository"
-msgstr ""
+msgstr "每台服务器需要从 Docker 仓库拉取镜像"
 
-#: ../../source/dingoadm/install.md:21 ee517ebc814441a1a7e5e7ea6d1abc36
+#: ../../source/dingoadm/install.md:20 ee517ebc814441a1a7e5e7ea6d1abc36
 msgid "Installing Dependencies"
-msgstr ""
+msgstr "安装依赖"
 
-#: ../../source/dingoadm/install.md:24 d3416df0f6c841438b27493e7bd8cebd
+#: ../../source/dingoadm/install.md:23 d3416df0f6c841438b27493e7bd8cebd
 msgid ""
-"All DingoFS services run in Docker containers. Users need to install "
-"Docker on each server and ensure that the Docker Daemon is running."
+"All DingoFS services run in Docker containers. Users need to install Docker "
+"on each server and ensure that the Docker Daemon is running."
 msgstr ""
+"DingoFS 所有服务都运行在 Docker 容器内，用户需要在每台服务器上安装 Docker，"
+"并确保 Docker Daemon 已经运行。"
 
-#: ../../source/dingoadm/install.md:26 16238c3ac624490a92692125bf64ea35
+#: ../../source/dingoadm/install.md:25 16238c3ac624490a92692125bf64ea35
 msgid "You can run the following command on the server to check:"
-msgstr ""
+msgstr "你可以在服务器上运行以下命令来检测："
 
-#: ../../source/dingoadm/install.md:32 558531ac9c04407b87897e004d695757
+#: ../../source/dingoadm/install.md:31 558531ac9c04407b87897e004d695757
 msgid ""
 "This command downloads a test image and runs it in a container. When the "
 "container is running, it prints a message and exits."
 msgstr ""
+"这个命令会下载一个测试映像，并在容器中运行它。当容器运行时，它打印一条消息并"
+"退出。"
 
-#: ../../source/dingoadm/install.md:35 a780fe3025e749b7a03864245b6dcd1c
+#: ../../source/dingoadm/install.md:34 a780fe3025e749b7a03864245b6dcd1c
 msgid "Installing DingoAdm"
-msgstr ""
+msgstr "安装 DingoAdm"
 
-#: ../../source/dingoadm/install.md:38 0c65f0ed8a7a41aeb6c755dc4b9fbc64
+#: ../../source/dingoadm/install.md:37 0c65f0ed8a7a41aeb6c755dc4b9fbc64
 msgid ""
 "The default installation path is the `.dingoadm` directory under the "
 "current user's home directory, i.e., `~/.dingoadm`."
-msgstr ""
+msgstr "默认安装路径为当前用户主目录下的 `.dingoadm` 目录，即 `~/.dingoadm`。"
 
-#: ../../source/dingoadm/install.md:40 07a1c0930bf74285927d4f0887e6a009
-msgid ":bulb: **Reminder:**"
-msgstr ""
+#: ../../source/dingoadm/install.md:39 07a1c0930bf74285927d4f0887e6a009
+msgid "💡 **Reminder:**"
+msgstr "💡 **提醒**"
 
-#: ../../source/dingoadm/install.md:42 077deb7812e741718d2beb5d586c27fa
+#: ../../source/dingoadm/install.md:41 077deb7812e741718d2beb5d586c27fa
 msgid ""
-"DingoAdm includes command completion functionality. Execute the following"
-" command and follow the prompts to enable completion:"
-msgstr ""
+"DingoAdm includes command completion functionality. Execute the following "
+"command and follow the prompts to enable completion:"
+msgstr "DingoAdm 内置了命令补全命令，执行以下命令并根据相应提示即可加载补全："
 
-#: ../../source/dingoadm/install.md:49 b9f5868dc20c46ffae2d4d190877d7ed
+#: ../../source/dingoadm/install.md:48 b9f5868dc20c46ffae2d4d190877d7ed
 msgid "DingoAdm Configuration File"
-msgstr ""
+msgstr "DingoAdm 配置文件"
 
-#: ../../source/dingoadm/install.md:52 56798a69f3644b46a6e83d219b83cb8a
+#: ../../source/dingoadm/install.md:51 56798a69f3644b46a6e83d219b83cb8a
 msgid ""
-"The DingoAdm configuration file is located in the installation directory "
-"as `dingoadm.cfg`, i.e., `~/.dingoadm/dingoadm.cfg`. The configuration "
-"options in the DingoAdm configuration file apply to the execution of all "
-"DingoAdm commands."
+"The DingoAdm configuration file is located in the installation directory as "
+"`dingoadm.cfg`, i.e., `~/.dingoadm/dingoadm.cfg`. The configuration options "
+"in the DingoAdm configuration file apply to the execution of all DingoAdm "
+"commands."
 msgstr ""
+"DingoAdm 配置文件为安装目录下的 `dingoadm.cfg` 文件，即 `~/.dingoadm/"
+"dingoadm.cfg`。DingoAdm 配置文件中的配置项作用于 DingoAdm 所有命令的执行。"
 
-#: ../../source/dingoadm/install.md:54 d4b05e3991294f3a83d3c7458b57bd24
+#: ../../source/dingoadm/install.md:53 d4b05e3991294f3a83d3c7458b57bd24
 msgid "Example"
-msgstr ""
+msgstr "示例"
 
-#: ../../source/dingoadm/install.md:68 3ae3ad4a6c484408a6045232ef7bae8b
+#: ../../source/dingoadm/install.md:67 3ae3ad4a6c484408a6045232ef7bae8b
 msgid "Configuration Item Description"
-msgstr ""
+msgstr "配置项说明"
 
 #: ../../source/dingoadm/install.md 768011193dcf4cc4b0092f6c4c4d227e
 msgid "Block"
-msgstr ""
+msgstr "区块"
 
 #: ../../source/dingoadm/install.md 216bcd51c7ba48a7b88dcfeb08efe0b3
 msgid "Configuration Item"
-msgstr ""
+msgstr "配置项"
 
 #: ../../source/dingoadm/install.md e1fbe528629845e3b9d25daa94d0149c
 msgid "Default Value"
-msgstr ""
+msgstr "默认值"
 
 #: ../../source/dingoadm/install.md 3165ffdba4264fbb9390b647ffe51fd4
 msgid "Description"
-msgstr ""
+msgstr "说明"
 
 #: ../../source/dingoadm/install.md a72b6874c15f48e6890354fc9f8331b6
 #: a861b5d0d8e8446e858972ef77364f22 d5245c421b604eafa637c810553c1423
@@ -170,7 +177,7 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md aa146e9452334fbe8ebe29771b385c82
 msgid "Log level. Supports four levels: `debug`, `info`, `warn`, and `error`."
-msgstr ""
+msgstr "日志等级。支持 `debug`、`info`、`warn`、`error` 4 个等级。"
 
 #: ../../source/dingoadm/install.md 1c7aa0f7820a4fc7b51402945f79d590
 msgid "sudo_alias"
@@ -182,11 +189,14 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md 0f023433673240799bfe1661f2041b48
 msgid ""
-"Sudo alias. DingoAdm requires root privileges to execute certain commands"
-" and defaults to executing them using sudo. If users wish to control this"
-" behavior, they can modify this configuration item, and commands "
-"requiring sudo execution will be replaced with `sudo_alias`"
+"Sudo alias. DingoAdm requires root privileges to execute certain commands "
+"and defaults to executing them using sudo. If users wish to control this "
+"behavior, they can modify this configuration item, and commands requiring "
+"sudo execution will be replaced with `sudo_alias`"
 msgstr ""
+"sudo 别名。DingoAdm 在执行某些命令时需要 root 权限，默认会以 sudo 方式去执"
+"行，如果用户想控制这个行为，可以修改该配置项，用户在需要 sudo 执行命令的场景"
+"下都会替换成 `sudo_alias` 去执行"
 
 #: ../../source/dingoadm/install.md 524a3cb8c2544345a99e2b4fb6aac267
 #: 93126b327100486a8b87d454655fd179
@@ -199,7 +209,7 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md 51cf123e4f524d7aa2594b985ec59345
 msgid "Command execution timeout (in seconds)"
-msgstr ""
+msgstr "执行命令超时时间（单位：秒）"
 
 #: ../../source/dingoadm/install.md 1ec1c087a63044d799e34d2d79b2af36
 #: 66910b694bda4522b1c73bbde0ee2cb7
@@ -216,7 +226,7 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md d8bcbaa5c41f4130b015f71d8c2db5e8
 msgid "Number of retries for failed SSH connections"
-msgstr ""
+msgstr "SSH 连接失败重试次数"
 
 #: ../../source/dingoadm/install.md 6023851a7fd8439a9ee9de15ab20d909
 msgid "10"
@@ -224,5 +234,4 @@ msgstr ""
 
 #: ../../source/dingoadm/install.md 347e89eb02cc4f33a154423ff8d6d223
 msgid "SSH connection timeout (in seconds)"
-msgstr ""
-
+msgstr "SSH 连接超时时间（单位：秒）"

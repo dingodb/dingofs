@@ -1,8 +1,6 @@
-DingoAdm Common Operations
-===
+# DingoAdm Common Operations
 
-Viewing the Cluster List
----
+## Viewing the Cluster List
 
 ```shell
 $ dingoadm cluster ls
@@ -14,8 +12,7 @@ To display cluster details, add the `-v` option, which displays information abou
 $ dingoadm cluster ls -v
 ```
 
-Switching clusters
----
+## Switching clusters
 
 Switches the specified cluster to the current managed cluster. After switching a cluster, all subsequent operations will work on that cluster.
 
@@ -25,8 +22,7 @@ $ dingoadm cluster checkout < cluster-name>
 
 After switching clusters, when you look at the cluster list again, a `*` icon will appear in front of the current cluster name, which we use to identify the current operating cluster.
 
-Add Cluster
----
+## Add Cluster
 
 Users can specify the cluster topology file while adding a cluster, or they can add a cluster first and then submit the cluster topology by [Modify Cluster Topology](#Modify_Cluster_Topology):
 
@@ -34,19 +30,17 @@ Users can specify the cluster topology file while adding a cluster, or they can 
 $ dingoadm cluster add < cluster-name> [-f topology.yaml]
 ```
 
-Delete Cluster
----
+## Delete Cluster
 
 ```shell
 $ dingoadm cluster rm <cluster-name>
 ```
 
-> :warning: **Warning:**
+> ⚠️ **Warning:**
 >
 > After deleting a cluster, all information related to the cluster will be erased, please be careful. `dingoadm` supports managing multiple clusters at the same time, please do not delete a cluster if it is not necessary.
 
-Export Cluster
----
+## Export Cluster
 
 We can save the current cluster information as a local file, usually we need to export the cluster in the following 2 cases:
 *  Cluster information needs to be backed up on a regular basis to prevent its loss
@@ -62,8 +56,7 @@ $ dingoadm cluster export <cluster-name> [-o database-file-path]
 > *  Cluster service configuration, i.e., cluster topology
 > *  Information about each service, including the service ID, the container ID on which the service is running, etc.
 
-Import Cluster
----
+## Import Cluster
 
 ```shell
 $ dingoadm cluster import < cluster-name> [-f database-file-path]
@@ -74,8 +67,7 @@ $ dingoadm cluster import < cluster-name> [-f database-file-path]
 > *  Importing a cluster imports the cluster topology intact, so some configuration items may be invalidated, such as the SSH private key path configuration item `private_key_path`.
 > In this case, users can modify the cluster topology and commit to operate the cluster normally.
 
-Viewing Cluster Topology
----
+## Viewing Cluster Topology
 
 ```shell
 $ dingoadm config show
@@ -88,9 +80,8 @@ $ dingoadm config show
 > $ dingoadm config show > topology.yaml
 > ```
 
+## Modifying the Cluster Topology
 <a id="Modify_Cluster_Topology"></a>
-Modifying the Cluster Topology
----
 
 Modify the local cluster topology:
 
@@ -108,8 +99,7 @@ $ dingoadm config commit < topology.yaml>
 >
 > When submitting the local cluster topology, the terminal will display the difference between the local cluster topology and the current cluster topology, so please compare carefully to prevent incorrect submission.
 
-Comparing Cluster Topologies
----
+## Comparing Cluster Topologies
 
 We can view the differences between the local cluster topology file and the current cluster topology by using the following command:
 
@@ -117,8 +107,7 @@ We can view the differences between the local cluster topology file and the curr
 $ dingoadm config diff < topology.yaml>
 ```
 
-Viewing Cluster Status
----
+## Viewing Cluster Status
 
 ```shell
 $ dingoadm status
@@ -153,8 +142,7 @@ ed4533e903d9  snapshotclone  server-host3  1/1       a35c30e3143d  Up 45 hours
 * If you want to see the rest of the information, such as listening ports, log directories, data directories, etc., you can add the `-v` parameter.
 *  For [replicas][replicas] services on the same host, the status is collapsed by default, and the `-s` parameter can be added to display each replica service
 
-Starting services
----
+## Starting services
 
 ```shell
 $ dingoadm start
@@ -178,9 +166,9 @@ $ dingoadm start --id c9570c0d0252
 ```shell
 $ dingoadm start --host 10.0.1.1 --role mds
 ```
+
+## Stop services
 <a id="Discontinuation"></a>
-Discontinuation of services
----
 
 ```shell
 $ dingoadm stop
@@ -209,9 +197,8 @@ $ dingoadm stop --host 10.0.1.1 --role mds
 >
 > Stopping the service may cause an unhealthy cluster and result in client IO failures, so please proceed with caution.
 
+## Restart services
 <a id="Restart"></a>
-Restart sth.
----
 
 ```shell
 $ dingoadm restart
@@ -236,8 +223,7 @@ $ dingoadm restart --id c9570c0d0252
 $ dingoadm restart --host 10.0.1.1 --role mds
 ```
 
-Modifying the Service Configuration
----
+## Modifying the Service Configuration
 
 During cluster operation, we may need to modify the configuration of the service and restart the service. The steps are as follows:
 
@@ -290,8 +276,7 @@ $ dingoadm reload --host 10.0.1.1 --role mds
 > `reload` modifies the configuration of the corresponding service based on the current cluster topology changes, and then restarts the service.
 > `restart` simply restarts the service.
 
-Entering the Service Container
----
+## Entering the Service Container
 
 We can remotely go inside the service container and view information about the service processes, configuration, logs, data, etc.:.
 
@@ -316,8 +301,7 @@ The `id` corresponding to a service can be viewed via [dingoadm status](#Client_
 >    ` -- dingofs-mds
 > ```
 
-Clean up the cluster
----
+## Clean up the cluster
 
 ```shell
 $ dingoadm clean
@@ -354,9 +338,8 @@ $ dingoadm clean --host 10.0.1.1 --role mds
 >
 > When cleaning up a service container, make sure that the corresponding service is stopped; you can use the [stop](#Discontinuation) command to stop the specified service.
 
+## Viewing Client Status
 <a id="Client_Status"></a>
-Viewing Client Status
----
 
 ```shell
 $ dingoadm client status
@@ -374,9 +357,7 @@ b0d56cfaad14  dingofs  server-host2  c0301eff2af0  Up 36 hours  {"user":"dingofs
 c700e1f6acab  dingofs  server-host3  52554173a54f  Up 36 hours  {"user":"dingofs","volume":"/test3"}
 ```
 
-
-Entering the Client Container
----
+## Entering the Client Container
 
 We can remotely go inside the service container and view information about client processes, configuration, logs, data, etc:.
 

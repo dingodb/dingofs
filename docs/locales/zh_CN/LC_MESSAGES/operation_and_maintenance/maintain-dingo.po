@@ -6,581 +6,659 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-06 15:11+0800\n"
+"PO-Revision-Date: 2025-06-06 15:12+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation_and_maintenance/maintain-dingo.md:1
 #: 9eabd8506f5045a18881f4b9659a1400
 msgid "DingoAdm Common Operations"
-msgstr ""
+msgstr "DingoAdm 常规操作"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:4
+#: ../../source/operation_and_maintenance/maintain-dingo.md:3
 #: 30254eceb7bd4d4c9df8ec51238d2e89
 msgid "Viewing the Cluster List"
-msgstr ""
+msgstr "查看集群列表"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:11
+#: ../../source/operation_and_maintenance/maintain-dingo.md:9
 #: b92abe6610f44df496604b4b52c81924
 msgid ""
 "To display cluster details, add the `-v` option, which displays "
 "information about the `cluster ID`, `cluster UUID`, `cluster creation "
 "time`, `cluster description`, and so on:"
 msgstr ""
+"若想显示集群详细信息，可添加 -v 选项，该选项将显示集群 ID、集群 UUID、集群"
+"创建时间、集群描述等相关信息："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:17
+#: ../../source/operation_and_maintenance/maintain-dingo.md:15
 #: 97767d80052845fd867377e2e7ee9413
 msgid "Switching clusters"
-msgstr ""
+msgstr "切换集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:20
+#: ../../source/operation_and_maintenance/maintain-dingo.md:17
 #: 9708a09980644dc2a45778f49b0b5759
 msgid ""
 "Switches the specified cluster to the current managed cluster. After "
 "switching a cluster, all subsequent operations will work on that cluster."
-msgstr ""
+msgstr "切换指定集群为当前管理集群。切换集群后，之后的操作都将作用于该集群。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:26
+#: ../../source/operation_and_maintenance/maintain-dingo.md:23
 #: abfb1168b20e43b4a7d76671761d035b
 msgid ""
 "After switching clusters, when you look at the cluster list again, a `*` "
 "icon will appear in front of the current cluster name, which we use to "
 "identify the current operating cluster."
 msgstr ""
+"切换集群后，再次查看集群列表时，当前集群名前会出现 * 样图标，我们以此来确定"
+"当前操作集群。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:28
+#: ../../source/operation_and_maintenance/maintain-dingo.md:25
 #: 4502acf609b24d12bbd1eba15a0d50ea
 msgid "Add Cluster"
-msgstr ""
+msgstr "添加集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:31
+#: ../../source/operation_and_maintenance/maintain-dingo.md:27
 #: 5d7869168cba463681f0f3a162ca9d63
 msgid ""
 "Users can specify the cluster topology file while adding a cluster, or "
 "they can add a cluster first and then submit the cluster topology by "
-"[Modify Cluster Topology](#Modify Cluster Topology):"
+"[Modify Cluster Topology](#Modify_Cluster_Topology):"
 msgstr ""
+"用户可在添加集群的同时指定集群拓扑文件，亦可先添加集群，之后再通过修改集群"
+"拓扑的方式提交集群拓扑："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:37
+#: ../../source/operation_and_maintenance/maintain-dingo.md:33
 #: 3fda7127bf3046f98e85b84150568ebc
 msgid "Delete Cluster"
-msgstr ""
+msgstr "删除集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:44
-#: ../../source/operation_and_maintenance/maintain-dingo.md:207
-#: 5887f302aea44fcbb970fbb083206221 9e41847ad51942f7b76e6f91245ad8ca
-msgid ":warning: **Warning:**"
-msgstr ""
+#: ../../source/operation_and_maintenance/maintain-dingo.md:39
+#: ../../source/operation_and_maintenance/maintain-dingo.md:196
+#: 9e41847ad51942f7b76e6f91245ad8ca
+msgid "⚠️ **Warning:**"
+msgstr "⚠️**警告**"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:46
+#: ../../source/operation_and_maintenance/maintain-dingo.md:41
 #: 0b4149ba94494f13a4c163a820c896b2
 msgid ""
 "After deleting a cluster, all information related to the cluster will be "
-"erased, please be careful. `dingoadm` supports managing multiple clusters"
-" at the same time, please do not delete a cluster if it is not necessary."
+"erased, please be careful. `dingoadm` supports managing multiple clusters "
+"at the same time, please do not delete a cluster if it is not necessary."
 msgstr ""
+"删除集群后，该集群相关信息将全部被清除，请谨慎操作。dingoadm 支持同时管理多"
+"个集群，在不必要的情况下，请勿删除集群。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:48
+#: ../../source/operation_and_maintenance/maintain-dingo.md:43
 #: d3c08f82b01a4bfd8a45e6afdf7a60eb
 msgid "Export Cluster"
-msgstr ""
+msgstr "导出集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:51
+#: ../../source/operation_and_maintenance/maintain-dingo.md:45
 #: 453e22adfb2c46659d240b7417e9334a
 msgid ""
 "We can save the current cluster information as a local file, usually we "
-"need to export the cluster in the following 2 cases:   *  Cluster "
-"information needs to be backed up on a regular basis to prevent its loss"
-"   *  Sharing cluster information with other users for other users to "
-"operate the cluster"
+"need to export the cluster in the following 2 cases:"
 msgstr ""
+"我们可将当前集群信息保存为本地文件，通常我们在以下 2 种情况下需要导出集群："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:59
-#: 9a4ab686c049445c98026e1071fb393e
-msgid ":bulb: **Hint:**"
-msgstr ""
+#: ../../source/operation_and_maintenance/maintain-dingo.md:46
+#: e0f62c2d82564ac5a75e955537900237
+msgid ""
+"Cluster information needs to be backed up on a regular basis to prevent "
+"its loss"
+msgstr "需将集群信息做定时备份，以防丢失"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:61
+#: ../../source/operation_and_maintenance/maintain-dingo.md:47
+#: ffd08805e3a24204a96c846903e74d47
+msgid ""
+"Sharing cluster information with other users for other users to operate "
+"the cluster"
+msgstr "与其他用户共享集群信息，以供其他用户操作集群"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:53
+#: ../../source/operation_and_maintenance/maintain-dingo.md:76
+#: ../../source/operation_and_maintenance/maintain-dingo.md:98
+#: ../../source/operation_and_maintenance/maintain-dingo.md:236
+#: ../../source/operation_and_maintenance/maintain-dingo.md:273
+#: ../../source/operation_and_maintenance/maintain-dingo.md:289
+#: ../../source/operation_and_maintenance/maintain-dingo.md:370
+#: f6b16f17f34243acb8bbe102966289f7
+msgid "💡 **Reminder:**"
+msgstr "💡 **警告**"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:55
 #: 6891de7bd5fa489ca11310aac52a29a8
 msgid ""
 "The exported cluster file is keyed by the cluster `UUID`, which is "
-"globally unique, and the value holds the following 2 types of "
-"information:"
+"globally unique, and the value holds the following 2 types of information:"
 msgstr ""
+"导出的集群文件以集群 UUID 为键，该 UUID 全局唯一，值则主要保存了以下 2 类信"
+"息："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:62
+#: ../../source/operation_and_maintenance/maintain-dingo.md:56
 #: 94bfe542f7544e79aabe9b969207cb88
 msgid "Cluster service configuration, i.e., cluster topology"
-msgstr ""
+msgstr "集群的服务配置，即集群拓扑"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:63
+#: ../../source/operation_and_maintenance/maintain-dingo.md:57
 #: cffbed48e40b4d0b9f31bef722b08782
 msgid ""
-"Information about each service, including the service ID, the container "
-"ID on which the service is running, etc."
-msgstr ""
+"Information about each service, including the service ID, the container ID "
+"on which the service is running, etc."
+msgstr "每个服务的相关信息，包括服务 ID、服务运行的容器 ID 等。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:65
+#: ../../source/operation_and_maintenance/maintain-dingo.md:59
 #: da0fc9ab62bc482ea8a123a3eb6a4579
 msgid "Import Cluster"
-msgstr ""
+msgstr "导入集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:72
-#: ../../source/operation_and_maintenance/maintain-dingo.md:351
-#: 4184befdad114290b8b52193214c24ff 582ddbaa09954cb9aa26a16580710186
+#: ../../source/operation_and_maintenance/maintain-dingo.md:65
+#: ../../source/operation_and_maintenance/maintain-dingo.md:337
+#: 582ddbaa09954cb9aa26a16580710186
 msgid "📢 **Note:**"
-msgstr ""
+msgstr "📢 **注意**"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:73
+#: ../../source/operation_and_maintenance/maintain-dingo.md:66
 #: e54de2efd7e3416aac0ba2de529a7c94
 msgid ""
-"The cluster name specified when importing a cluster must not duplicate an"
-" existing cluster name, otherwise the import will fail"
-msgstr ""
+"The cluster name specified when importing a cluster must not duplicate an "
+"existing cluster name, otherwise the import will fail"
+msgstr "导入集群时指定的集群名不可与已存在的集群名重复，否则将导致导入失败"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:74
+#: ../../source/operation_and_maintenance/maintain-dingo.md:67
 #: 4ec9ff68401746b3ad7a9f21adf326e9
 msgid ""
 "Importing a cluster imports the cluster topology intact, so some "
 "configuration items may be invalidated, such as the SSH private key path "
-"configuration item `private_key_path`. In this case, users can modify the"
-" cluster topology and [commit](#Commit Cluster Topology) to operate the "
-"cluster normally."
+"configuration item `private_key_path`. In this case, users can modify the "
+"cluster topology and commit to operate the cluster normally."
 msgstr ""
+"导入集群时会将集群拓扑原封不动导入，所以可能会导致某些配置项失效，如 SSH 的"
+"私钥路径配置项 private_key_path， 遇到此类情况，用户可修改集群拓扑并提交后"
+"即可正常操作集群。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:77
+#: ../../source/operation_and_maintenance/maintain-dingo.md:70
 #: bfc9d36c6b5b4c3e96e97083c67f2e0d
 msgid "Viewing Cluster Topology"
-msgstr ""
+msgstr "查看集群拓扑"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:84
-#: ../../source/operation_and_maintenance/maintain-dingo.md:106
-#: ../../source/operation_and_maintenance/maintain-dingo.md:248
-#: ../../source/operation_and_maintenance/maintain-dingo.md:285
-#: ../../source/operation_and_maintenance/maintain-dingo.md:302
-#: ../../source/operation_and_maintenance/maintain-dingo.md:386
-#: 3ca588b4494f49a3bbe58cd67def80d0 6a33ed506b58413fae15e468f0139328
-#: 7aa929c3a5d34a3290f4300d837b2084 dedb7100a42a49feadc5af32542f8247
-#: f3d7dc68e6dc44cbaf0ba9c428bf62db f6b16f17f34243acb8bbe102966289f7
-msgid ":bulb: **Reminder:**"
-msgstr ""
-
-#: ../../source/operation_and_maintenance/maintain-dingo.md:86
-#: ../../source/operation_and_maintenance/maintain-dingo.md:250
-#: a8d9e19296e249f1aa9302d95b32754e af121d178c7b49a2a82593a5a875d8b0
+#: ../../source/operation_and_maintenance/maintain-dingo.md:78
+#: ../../source/operation_and_maintenance/maintain-dingo.md:238
+#: a8d9e19296e249f1aa9302d95b32754e
 msgid ""
 "When the local topology file is lost, we can recover it by saving the "
 "current cluster topology:"
-msgstr ""
+msgstr "当本地拓扑文件丢失时，我们可以通过保存当前的集群拓扑来恢复："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:91
-#: 602ff9c0497841dd8a6c2427fbc68c73
+#: ../../source/operation_and_maintenance/maintain-dingo.md:83
+#: 3a52063f3d93495fa8b64b07e2233845
 msgid "Modifying the Cluster Topology"
-msgstr ""
+msgstr "修改本地集群拓扑"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:94
+#: ../../source/operation_and_maintenance/maintain-dingo.md:84
+#: 17e4b9f3d1b840b3a3139578f2442a8b
+msgid "<a id=\"Modify_Cluster_Topology\"></a>"
+msgstr "<a id=\"Modify_Cluster_Topology\"></a>"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:86
 #: 3a52063f3d93495fa8b64b07e2233845
 msgid "Modify the local cluster topology:"
-msgstr ""
+msgstr "修改本地集群拓扑："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:100
+#: ../../source/operation_and_maintenance/maintain-dingo.md:92
 #: e70b2b297c0e4e03a24c28f316d18c85
 msgid ""
 "Once we have modified our local topology file, we need to submit our "
 "changes to DingoAdm for the cluster topology to take effect:"
 msgstr ""
+"当我们修改了本地的拓扑文件后，需向 DingoAdm 提交我们的修改，集群拓扑才能生"
+"效："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:108
+#: ../../source/operation_and_maintenance/maintain-dingo.md:100
 #: 6a82a6f8fe3c46a2be778c2371c6729d
 msgid ""
-"When submitting the local cluster topology, the terminal will display the"
-" difference between the local cluster topology and the current cluster "
+"When submitting the local cluster topology, the terminal will display the "
+"difference between the local cluster topology and the current cluster "
 "topology, so please compare carefully to prevent incorrect submission."
 msgstr ""
+"在提交本地集群拓扑时，终端会显示本地集群拓扑与当期集群拓扑之间的差异，请仔"
+"细对比，以防错误提交。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:110
+#: ../../source/operation_and_maintenance/maintain-dingo.md:102
 #: 7f75624a400f4d69b2b48ff5598f6784
 msgid "Comparing Cluster Topologies"
-msgstr ""
+msgstr "对比集群拓扑"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:113
+#: ../../source/operation_and_maintenance/maintain-dingo.md:104
 #: 6d0d34b5d9184615b5156b0d5dc087de
 msgid ""
 "We can view the differences between the local cluster topology file and "
 "the current cluster topology by using the following command:"
-msgstr ""
+msgstr "我们可通过以下命令来查看本地集群拓扑文件与当前集群拓扑之间的差异："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:119
+#: ../../source/operation_and_maintenance/maintain-dingo.md:110
 #: 539f552223e9458da0aa0ed0bee1b8d0
 msgid "Viewing Cluster Status"
-msgstr ""
+msgstr "查看集群状态"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:126
+#: ../../source/operation_and_maintenance/maintain-dingo.md:116
 #: 19e63f1217354a7390e89ff4453d0326
 msgid ""
 "DingoAdm displays the Service ID, Service Role, Hostname, Number of "
-"Deployed Replication Services, Container ID, and Running Status by "
-"default:"
+"Deployed Replication Services, Container ID, and Running Status by default:"
 msgstr ""
+"DingoAdm 默认会显示服务 ID、服务角色、主机名、已部署的复制服务数量、容器 "
+"ID、运行状态："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:152
+#: ../../source/operation_and_maintenance/maintain-dingo.md:142
 #: 7d29b98a3e4e484190092da95bbe38f3
 msgid ""
 "If you want to see the rest of the information, such as listening ports, "
 "log directories, data directories, etc., you can add the `-v` parameter."
-msgstr ""
+msgstr "若想查看其余信息，如监听端口、日志目录、数据目录等，可添加 -v 参数。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:153
+#: ../../source/operation_and_maintenance/maintain-dingo.md:143
 #: 6e958628fedd448c9f943a55d5cd72c1
 msgid ""
 "For [replicas][replicas] services on the same host, the status is "
-"collapsed by default, and the `-s` parameter can be added to display each"
-" replica service"
+"collapsed by default, and the `-s` parameter can be added to display each "
+"replica service"
 msgstr ""
+"对于同一台主机上的[复制][replicas] 服务来说，其状态默认是折叠的，可添加 -s "
+"参数来显示每一个副本服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:155
+#: ../../source/operation_and_maintenance/maintain-dingo.md:145
 #: 824433613b9a4481b6b0d02c3b70eed0
 msgid "Starting services"
-msgstr ""
+msgstr "启动服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:162
+#: ../../source/operation_and_maintenance/maintain-dingo.md:151
 #: bb3cded17bfc459d879541f8959ac089
 msgid ""
 "DingoAdm starts all services in the cluster by default. If you want to "
-"start a specific service, you can do so by adding the following 3 "
-"options:"
+"start a specific service, you can do so by adding the following 3 options:"
 msgstr ""
+"DingoAdm 默认启动集群中的所有服务，如需启动指定服务，可通过添加以下 3 个选"
+"项来实现："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:164
+#: ../../source/operation_and_maintenance/maintain-dingo.md:153
 #: 0af630b2bdbf4b2f8c59fb948641a465
 msgid "`--id': Starts the service with the specified `id'."
-msgstr ""
+msgstr "--id: 启动指定 id 的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:165
+#: ../../source/operation_and_maintenance/maintain-dingo.md:154
 #: 9b2e0740951a4ababe20569695d350e1
 msgid "`--host`: Starts all services on the specified host."
-msgstr ""
+msgstr "--host: 启动指定主机的所有服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:166
+#: ../../source/operation_and_maintenance/maintain-dingo.md:155
 #: 51f9e9c886b64b9a9d4dfae8dfcf43dd
 msgid "`--role`: Starts all services in the specified role."
-msgstr ""
+msgstr "--role: 启动指定角色的所有服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:168
-#: ../../source/operation_and_maintenance/maintain-dingo.md:194
-#: ../../source/operation_and_maintenance/maintain-dingo.md:224
-#: ../../source/operation_and_maintenance/maintain-dingo.md:272
-#: 05ff1818e10448a79ae32bb17e703567 23caabaa67944447b3f3b38929994c96
-#: 351bfece958941098f8d789aaa2caca5 ad856c6375894ccc86d14b3b8a4b2e21
+#: ../../source/operation_and_maintenance/maintain-dingo.md:157
+#: ../../source/operation_and_maintenance/maintain-dingo.md:183
+#: ../../source/operation_and_maintenance/maintain-dingo.md:213
+#: ../../source/operation_and_maintenance/maintain-dingo.md:260
+#: ad856c6375894ccc86d14b3b8a4b2e21
 msgid ""
-"The above 3 options can be used in any combination, and the corresponding"
-" `id`, `host`, and `role` of the service can be viewed via [dingoadm "
-"status](#View cluster status)."
+"The above 3 options can be used in any combination, and the corresponding "
+"`id`, `host`, and `role` of the service can be viewed via [dingoadm status]"
+"(#Client_Status)."
 msgstr ""
+"以上 3 个选项可任意组合使用，服务对应的 id、host、role 可通过 [dingoadm "
+"status](#Client_Status) 来查看。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:170
+#: ../../source/operation_and_maintenance/maintain-dingo.md:159
 #: 6e90b57aa8bd46ccbffd727d5b2f8bd0
-msgid "Example 1: Starting service with id `c9570c0d0252"
-msgstr ""
+msgid "Example 1: Starting service with id `c9570c0d0252`"
+msgstr "示例 1： 启动 id 为 c9570c0d0252 的服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:176
+#: ../../source/operation_and_maintenance/maintain-dingo.md:165
 #: 71f563609e0e465a962e563052ecfcd0
 msgid "Example 2: Starting All `MDS` Services on the `10.0.1.1` Host"
-msgstr ""
+msgstr "示例 2： 启动 10.0.1.1 这台主机上的所有 MDS 服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:181
-#: 4b50c2a6fb794472b5635ee9f1e4cf24
-msgid "Discontinuation of services"
-msgstr ""
+#: ../../source/operation_and_maintenance/maintain-dingo.md:170
+#: e6f2c447b37d4462840eaf1123c85b85
+msgid "Stop services"
+msgstr "停止服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:188
+#: ../../source/operation_and_maintenance/maintain-dingo.md:171
+#: e6f2c447b37d4462840eaf1123c85b85
+msgid "<a id=\"Discontinuation\"></a>"
+msgstr "<a id=\"Discontinuation\"></a>"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:177
 #: 9eb314cfd8494f4a87733db6603d0982
 msgid ""
-"DingoAdm stops all services in the cluster by default, if you want to "
-"stop a specific service, you can do so by adding the following 3 options:"
+"DingoAdm stops all services in the cluster by default, if you want to stop "
+"a specific service, you can do so by adding the following 3 options:"
 msgstr ""
+"DingoAdm 默认停止集群中的所有服务，如需停止指定服务，可通过添加以下 3 个选"
+"项来实现："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:190
+#: ../../source/operation_and_maintenance/maintain-dingo.md:179
 #: 3816950fd59545ada4179497bac8554c
 msgid "`--id': Stop the service with the specified `id'."
-msgstr ""
+msgstr "--id: 停止指定 id 的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:191
+#: ../../source/operation_and_maintenance/maintain-dingo.md:180
 #: 81c81e129f964d35bc86f73daa0b34ee
 msgid "`--host`: Stop all services on the specified host."
-msgstr ""
+msgstr "--host: 停止指定主机的所有服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:192
+#: ../../source/operation_and_maintenance/maintain-dingo.md:181
 #: 34b70713f3f144eaa46da681cdb2058a
 msgid "`--role`: stops all services for the specified role"
-msgstr ""
+msgstr "--role: 停止指定角色的所有服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:196
+#: ../../source/operation_and_maintenance/maintain-dingo.md:185
 #: ebb0c0c0fa9240b789005e644a678d18
-msgid "Example 1: Stopping a service with id `c9570c0d0252"
-msgstr ""
+msgid "Example 1: Stopping a service with id `c9570c0d0252`"
+msgstr "示例 1： 停止 id 为 c9570c0d0252 的服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:202
+#: ../../source/operation_and_maintenance/maintain-dingo.md:191
 #: 572fc99c83a14bf9bcbcebb9de8f1bfe
 msgid "Example 2: Stopping All `MDS` Services on the `10.0.1.1` Host"
-msgstr ""
+msgstr "示例 2： 停止 10.0.1.1 这台主机上的所有 MDS 服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:209
+#: ../../source/operation_and_maintenance/maintain-dingo.md:198
 #: 4df5c82a37884f22b047365b4cb42f86
 msgid ""
 "Stopping the service may cause an unhealthy cluster and result in client "
 "IO failures, so please proceed with caution."
-msgstr ""
+msgstr "停止服务可能造成集群不健康，导致客户端 IO 失败，请谨慎操作。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:211
-#: 0c12e865103848a497d914fae83a73f4
-msgid "restart sth."
-msgstr ""
+#: ../../source/operation_and_maintenance/maintain-dingo.md:200
+#: a321ccb79b68455db025fcd2bbe8dac1
+msgid "Restart services"
+msgstr "重启服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:218
+#: ../../source/operation_and_maintenance/maintain-dingo.md:201
+#: a321ccb79b68455db025fcd2bbe8dac1
+msgid "<a id=\"Restart\"></a>"
+msgstr "<a id=\"Restart\"></a>"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:207
 #: dd495ab03dc64821b37347e1b083ab80
 msgid ""
 "DingoAdm restarts all services in the cluster by default. If you want to "
 "restart a specific service, you can do so by adding the following 3 "
 "options:"
 msgstr ""
+"DingoAdm 默认重启集群中的所有服务，如需重启指定服务，可通过添加以下 3 个选"
+"项来实现："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:220
+#: ../../source/operation_and_maintenance/maintain-dingo.md:209
 #: 80f09c2191b04053afdf878a2ccedc4d
 msgid "`--id': restarts the service with the specified `id'."
-msgstr ""
+msgstr "--id: 重启指定 id 的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:221
+#: ../../source/operation_and_maintenance/maintain-dingo.md:210
 #: 1be55a03d2664987a9c5a7f6df2dde2b
 msgid "`--host`: Restarts all services on the specified host."
-msgstr ""
+msgstr "--host: 重启指定主机的所有服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:222
+#: ../../source/operation_and_maintenance/maintain-dingo.md:211
 #: e72766cac46942b2b85e5d3d36d49dd9
 msgid "`--role`: restarts all services for the specified role"
-msgstr ""
+msgstr "--role: 重启指定角色的所有服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:226
+#: ../../source/operation_and_maintenance/maintain-dingo.md:215
 #: bba6d97e392b43c0899af7114622e7dc
-msgid "Example 1: Restarting a service with id `c9570c0d0252"
-msgstr ""
+msgid "Example 1: Restarting a service with id `c9570c0d0252`"
+msgstr "示例 1： 重启 id 为 c9570c0d0252 的服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:232
+#: ../../source/operation_and_maintenance/maintain-dingo.md:221
 #: 53f90a8733f7445686a9656b76680b9a
 msgid "Example 2: Restarting All `MDS` Services on the `10.0.1.1` Host"
-msgstr ""
+msgstr "示例 2： 重启 10.0.1.1 这台主机上的所有 MDS 服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:237
+#: ../../source/operation_and_maintenance/maintain-dingo.md:226
 #: ecc855b13f614ea7acd87856fe1377a3
 msgid "Modifying the Service Configuration"
-msgstr ""
+msgstr "修改服务配置"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:240
+#: ../../source/operation_and_maintenance/maintain-dingo.md:228
 #: ffd08805e3a24204a96c846903e74d47
 msgid ""
 "During cluster operation, we may need to modify the configuration of the "
 "service and restart the service. The steps are as follows:"
 msgstr ""
+"在集群运行的过程中，我们可能需要修改服务的配置，并重启服务。具体操作步骤如"
+"下："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:242
+#: ../../source/operation_and_maintenance/maintain-dingo.md:230
 #: f27eb39c3e56422180a6a5639f9b5617
 msgid ""
-"Step 1: Edit the local cluster topology file and modify the configuration"
-" entries for the corresponding services"
-msgstr ""
+"Step 1: Edit the local cluster topology file and modify the configuration "
+"entries for the corresponding services"
+msgstr "第 1 步：编辑本地集群拓扑文件，修改对应服务的配置项"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:255
+#: ../../source/operation_and_maintenance/maintain-dingo.md:243
 #: 19bbbd56554441a1bd6f26dcbeb175be
 msgid "Step 2: Submit changes"
-msgstr ""
+msgstr "第 2 步：提交修改"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:260
+#: ../../source/operation_and_maintenance/maintain-dingo.md:248
 #: 9568e832fb3e4565a2144674f2736d54
 msgid "Step 3: Reload Services"
-msgstr ""
+msgstr "第 3 步：重新加载服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:266
+#: ../../source/operation_and_maintenance/maintain-dingo.md:254
 #: 8978569aa3d44cd5bebeef470896c0a7
 msgid ""
 "DingoAdm reloads all services in the cluster by default, if you want to "
-"reload a specific service, you can do so by adding the following 3 "
-"options:"
+"reload a specific service, you can do so by adding the following 3 options:"
 msgstr ""
+"DingoAdm 默认重新加载集群中的所有服务，如需重新加载指定服务，可通过添加以"
+"下 3 个选项来实现："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:268
+#: ../../source/operation_and_maintenance/maintain-dingo.md:256
 #: b497ddbf9ca2421395059ed7f2deb694
 msgid "`--id`: Reloads the service with the specified `id`."
-msgstr ""
+msgstr "--id: 重新加载指定 id 的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:269
+#: ../../source/operation_and_maintenance/maintain-dingo.md:257
 #: df27e77770224c3f8379c9046adb2176
 msgid "`--host`: Reloads all services on the specified host."
-msgstr ""
+msgstr "--host: 重新加载指定主机的所有服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:270
+#: ../../source/operation_and_maintenance/maintain-dingo.md:258
 #: 08ced6a05556458c8a6cf762ada1711e
 msgid "`--role`: Reloads all services for the specified role"
-msgstr ""
+msgstr "--role: 重新加载指定角色的所有服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:274
+#: ../../source/operation_and_maintenance/maintain-dingo.md:262
 #: 83689dbacdad4999be83a06820f40586
-msgid "Example 1: Reloading the service with id `c9570c0d0252"
-msgstr ""
+msgid "Example 1: Reloading the service with id `c9570c0d0252`"
+msgstr "示例 1：重新加载 id 为 c9570c0d0252 的服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:280
+#: ../../source/operation_and_maintenance/maintain-dingo.md:268
 #: 9d47ed1b85034f0cb924ff0bc040c4cc
 msgid "Example 2: Reloading all `MDS` services on the `10.0.1.1` host"
-msgstr ""
+msgstr "示例 2：重新加载 10.0.1.1 这台主机上的所有 MDS 服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:287
+#: ../../source/operation_and_maintenance/maintain-dingo.md:275
 #: 54ffd8a78e5e4125897100fdc6aec473
 msgid ""
-"The difference between the command [restart](#restart the service) and "
-"`reload` is that the `reload` modifies the configuration of the "
-"corresponding service based on the current cluster topology changes, and "
-"then restarts the service. `restart` simply restarts the service."
+"The difference between the command [restart](#Restart) and `reload` is "
+"that the `reload` modifies the configuration of the corresponding service "
+"based on the current cluster topology changes, and then restarts the "
+"service. `restart` simply restarts the service."
 msgstr ""
+"命令  [restart](#Restart) 与 reload 的区别在于， reload 会根据当前集群拓扑"
+"的变更修改相应服务的配置，然后再重启服务， 而 restart 则只会简单的重启服"
+"务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:291
+#: ../../source/operation_and_maintenance/maintain-dingo.md:279
 #: 4ae3bf04747a4c65b4f2bc83056497e6
 msgid "Entering the Service Container"
-msgstr ""
+msgstr "进入服务容器"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:294
+#: ../../source/operation_and_maintenance/maintain-dingo.md:281
 #: a250cd7b91234e3695ba31cb8074e05c
 msgid ""
-"We can remotely go inside the service container and view information "
-"about the service processes, configuration, logs, data, etc.:."
-msgstr ""
+"We can remotely go inside the service container and view information about "
+"the service processes, configuration, logs, data, etc.:."
+msgstr "我们可以远程进入服务容器内，查看服务进程、配置、日志、数据等信息。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:300
+#: ../../source/operation_and_maintenance/maintain-dingo.md:287
 #: abf85963aba84251ba5f64cefe2802a2
 msgid ""
-"The `id` corresponding to a service can be viewed via [dingoadm "
-"status](#View cluster status)."
-msgstr ""
+"The `id` corresponding to a service can be viewed via [dingoadm status]"
+"(#Client_Status)."
+msgstr "服务对应的 id 可通过  [dingoadm status](#Client_Status) 来查看。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:304
+#: ../../source/operation_and_maintenance/maintain-dingo.md:291
 #: 391a80d90732428ea8a924db5ba1338b
 msgid ""
 "DingoAdm defaults to the root directory of the service. The service root "
 "directory contains all the files required by the service and has the "
 "following directory structure:"
 msgstr ""
+"DingoAdm 默认进入该服务的根目录，服务根目录包含了服务所需的所有文件，其目录"
+"结构如下："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:317
+#: ../../source/operation_and_maintenance/maintain-dingo.md:304
 #: cdde5cab6b7d40bcb5b591be7843155e
 msgid "Clean up the cluster"
-msgstr ""
+msgstr "清理集群"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:324
+#: ../../source/operation_and_maintenance/maintain-dingo.md:310
 #: bcc828f2a73d4e94b9685f48ce92cdf3
 msgid ""
-"DingoAdm cleans up all objects of all services in the cluster by default."
-" If you want to clean up a specific service or object, you can do so by "
+"DingoAdm cleans up all objects of all services in the cluster by default. "
+"If you want to clean up a specific service or object, you can do so by "
 "adding the following 4 options:"
 msgstr ""
+"DingoAdm 默认清理集群中所有服务的所有对象，如需清理指定服务或对象，可通过添"
+"加以下 4 个选项来实现："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:326
+#: ../../source/operation_and_maintenance/maintain-dingo.md:312
 #: 5bc0d285e25f41b7892828bd3e3f6591
 msgid "`--id`: Cleans up the service corresponding to the specified `id`."
-msgstr ""
+msgstr "--id: 清理指定 id 所对应的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:327
+#: ../../source/operation_and_maintenance/maintain-dingo.md:313
 #: b8271cc4ee6140fe9a49aa8417158130
 msgid "`--host`: Cleans up the services corresponding to the specified host."
-msgstr ""
+msgstr "--host: 清理指定主机所对应的服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:328
+#: ../../source/operation_and_maintenance/maintain-dingo.md:314
 #: c9d28c9461ab4da5a3c6bc152f5949b8
 msgid "`--role`: cleans up the services corresponding to the specified role"
-msgstr ""
+msgstr "--role: 清理指定角色所对应的服务"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:329
+#: ../../source/operation_and_maintenance/maintain-dingo.md:315
 #: 358e09b918b4422b9eb568989329def0
 msgid ""
 "`--only`: clean up the specified objects (`log`: log, `data`: data, "
 "`container`: container)"
-msgstr ""
+msgstr "--only: 清理指定对象 (log: 日志，data: 数据，container: 容器)"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:331
+#: ../../source/operation_and_maintenance/maintain-dingo.md:317
 #: 9c13818510444ec5a5cb0c4a2d22872b
 msgid ""
-"The above 4 options can be used in any combination, and the corresponding"
-" `id`, `host`, and `role` of the service can be viewed via [dingoadm "
-"status](#View cluster status)."
+"The above 4 options can be used in any combination, and the corresponding "
+"`id`, `host`, and `role` of the service can be viewed via [dingoadm status]"
+"(#Client_Status)."
 msgstr ""
+"以上 4 个选项可任意组合使用，服务对应的 id、host、role 可通过  [dingoadm "
+"status](#Client_Status) 来查看。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:333
+#: ../../source/operation_and_maintenance/maintain-dingo.md:319
 #: 13837a102d9f4c43ae6934f12830ca82
 msgid "Example 1: Cleaning up all objects with id `c9570c0d0252` service"
-msgstr ""
+msgstr "示例 1：清理 id 为 c9570c0d0252 服务的所有对象"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:339
+#: ../../source/operation_and_maintenance/maintain-dingo.md:325
 #: ae09bb773f834c6aa73665a8e349f507
 msgid "Example 2: Cleaning up logs and data from all MDS services"
-msgstr ""
+msgstr "示例 2：清理所有 MDS 服务的日志和数据"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:345
+#: ../../source/operation_and_maintenance/maintain-dingo.md:331
 #: 9ea6416e4d4f47c09a462da49879a599
 msgid ""
-"Example 3: Cleaning up all objects of the `MDS` service on the `10.0.1.1`"
-" host"
-msgstr ""
+"Example 3: Cleaning up all objects of the `MDS` service on the `10.0.1.1` "
+"host"
+msgstr "示例 3：清理 10.0.1.1 这台主机上 MDS 服务的所有对象"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:353
+#: ../../source/operation_and_maintenance/maintain-dingo.md:339
 #: 5b2d92b9e09c41959fa45fc7bc71299c
 msgid ""
 "When cleaning up a service container, make sure that the corresponding "
-"service is stopped; you can use the [stop](#stop service) command to stop"
-" the specified service."
+"service is stopped; you can use the [stop](#Discontinuation) command to "
+"stop the specified service."
 msgstr ""
+"当清理服务容器时，请确保相应服务已停止，你可以使用 [stop]"
+"(#Discontinuation) 命令来停止指定服务。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:355
-#: 43ba03024fe04a92a987818017ae070a
+#: ../../source/operation_and_maintenance/maintain-dingo.md:341
+#: 539f552223e9458da0aa0ed0bee1b8d0
 msgid "Viewing Client Status"
-msgstr ""
+msgstr "查看集群状态"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:362
+#: ../../source/operation_and_maintenance/maintain-dingo.md:342
+#: f2c827b66365446b9997982301a3ebcd
+msgid "<a id=\"Client_Status\"></a>"
+msgstr "<a id=\"Client_Status\"></a>"
+
+#: ../../source/operation_and_maintenance/maintain-dingo.md:348
 #: 11c22c5e267e4f489c04398ced8874a6
 msgid ""
-"DingoAdm displays the Client ID, Client Type, Host, Container ID, Running"
-" Status, and Auxiliary information by default:"
+"DingoAdm displays the Client ID, Client Type, Host, Container ID, Running "
+"Status, and Auxiliary information by default:"
 msgstr ""
+"DingoAdm 默认会显示客户端 ID、客户端类型、主机、容器 ID、运行状态、辅助信"
+"息："
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:375
+#: ../../source/operation_and_maintenance/maintain-dingo.md:360
 #: e5a35812930b40e0affeadc449621e1a
 msgid "Entering the Client Container"
-msgstr ""
+msgstr "进入客户端容器"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:378
+#: ../../source/operation_and_maintenance/maintain-dingo.md:362
 #: 31d1e3bb37d94e93aee97ade3d89bafb
 msgid ""
-"We can remotely go inside the service container and view information "
-"about client processes, configuration, logs, data, etc:."
-msgstr ""
+"We can remotely go inside the service container and view information about "
+"client processes, configuration, logs, data, etc:."
+msgstr "我们可以远程进入服务容器内，查看客户端进程、配置、日志、数据等信息。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:384
+#: ../../source/operation_and_maintenance/maintain-dingo.md:368
 #: a29aefa9da8e40f2b3002e6e529e88ce
 msgid ""
 "The corresponding `id` of the client can be viewed via [dingoadm client "
-"status](#View client status)."
+"status](#Client_Status)."
 msgstr ""
+"客户端对应的 id 可通过  [dingoadm client status](#Client_Status) 来查看。"
 
-#: ../../source/operation_and_maintenance/maintain-dingo.md:388
+#: ../../source/operation_and_maintenance/maintain-dingo.md:372
 #: b8eb7b2dec9e43cbb43ca3e7be0ca60f
 msgid ""
 "DingoAdm defaults to the root directory of this client. The client root "
 "directory contains all the files required by the service and has the "
 "following directory structure:"
 msgstr ""
+"DingoAdm 默认进入该客户端的根目录，客户端根目录包含了服务所需的所有文件，其"
+"目录结构如下："
 
+#~ msgid ":warning: **Warning:**"
+#~ msgstr "💡 **警告**"
+
+#~ msgid "Restart sth."
+#~ msgstr "重启集群"
+
+#~ msgid "Discontinuation of services"
+#~ msgstr "<a id=\"Discontinuation\"></a>"

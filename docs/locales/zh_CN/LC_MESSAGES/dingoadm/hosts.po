@@ -1,0 +1,252 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, DataCanvas
+# This file is distributed under the same license as the DingoFS package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: DingoFS\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-05 16:23+0800\n"
+"Last-Translator: \n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
+
+#: ../../source/dingoadm/hosts.md:1 02302988f22e461f83d8a35448a1c60b
+msgid "Host Management"
+msgstr "主机管理"
+
+#: ../../source/dingoadm/hosts.md:4 6b207dec84e3466287f122843345ca1c
+msgid "Module Overview"
+msgstr "模块简介"
+
+#: ../../source/dingoadm/hosts.md:7 583c44bbf504420290bd54d61d8799b3
+msgid ""
+"The host module is used to centrally manage user hosts, reducing the need for "
+"users to repeatedly enter host SSH connection configurations across various "
+"configuration files."
+msgstr ""
+"主机模块用来统一管理用户主机，以减少用户在各配置文件中重复填写主机 `SSH` 连接相"
+"关配置。"
+
+#: ../../source/dingoadm/hosts.md:9 00f333c68f8c44f8b292ae5da28606a7
+msgid "Host Configuration"
+msgstr "主机配置"
+
+#: ../../source/dingoadm/hosts.md:12 0e0448a7d800422e83e55584d218778a
+msgid "Example"
+msgstr "示例"
+
+#: ../../source/dingoadm/hosts.md:35 805fac599968410f82fad5eeea0de42f
+msgid "Host configuration items"
+msgstr "主机配置项"
+
+#: ../../source/dingoadm/hosts.md 01d17d71976147768d9482fd285463cd
+msgid "Configuration item"
+msgstr "配置项"
+
+#: ../../source/dingoadm/hosts.md 1666d1c432684797b1cbfb30f4ee8463
+msgid "Required"
+msgstr "是否必填"
+
+#: ../../source/dingoadm/hosts.md c0db74c3b882408f9d5393b5f2cb175d
+msgid "Default value"
+msgstr "默认值"
+
+#: ../../source/dingoadm/hosts.md 2a458abe43b74162aba5a8f897fae30b
+msgid "Description"
+msgstr "说明"
+
+#: ../../source/dingoadm/hosts.md d66cea5a48cf40198a742a30d6f71412
+msgid "host"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 1122b68e3afd4bd29ab735fd25635507
+#: 33df7092176a4c49bcbe6910337a30a6
+msgid "Y"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 28a6385a2ab643129bdbf0d549d38073
+msgid "Hostname"
+msgstr "主机名"
+
+#: ../../source/dingoadm/hosts.md 17dcfa869eff41d181df6747372f7ecb
+msgid "hostname"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 7354d113cb2349fcbdea23b9081c7d75
+msgid "Host address"
+msgstr "主机地址"
+
+#: ../../source/dingoadm/hosts.md 637444dd6c78482281c50b39281dc628
+msgid "user"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 9b3768a971a244e3bcc41ba2c59265df
+msgid "$USER"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md b01e64cbacd84ce99c6ecd0f3b35feaa
+msgid ""
+"User connecting to the remote host's SSH service. If no user is specified in "
+"`become_user`, the user specified in `user` will be used as the execution user "
+"for deployment operations. Ensure that the execution user has sudo privileges, "
+"as it will be used for operations such as mounting and unmounting file systems "
+"and operating the Docker CLI."
+msgstr ""
+"连接远端主机 SSH 服务的用户。若用户没有指定 `become_user`，则以 `user` 指定用户"
+"为执行用户， 用于执行部署操作。请确保执行用户拥有 sudo 权限，因为其将用于挂卸载"
+"文件系统、操作 docker cli 等操作。"
+
+#: ../../source/dingoadm/hosts.md 42f9235728d0414eac1263c46dad13ce
+msgid "ssh_port"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md c1a4b63d81d547c796275b1787f0f97d
+msgid "22"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 6f5fddd70a794b97beb5d9cfe898e0ad
+msgid "Remote host SSH service port"
+msgstr "远端主机 SSH 服务端口"
+
+#: ../../source/dingoadm/hosts.md a93be37ffa654a6aaaa7eb820319b6bc
+msgid "private_key_file"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md ee54ca868e574a598207b7cc6c0f2ce2
+msgid "/home/$USER/.ssh/id_rsa"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 477646d223a546bda123f4c761bdb7af
+msgid "Path to the private key used to connect to the remote host's SSH service."
+msgstr "用于连接远端主机 SSH 服务的私钥路径。"
+
+#: ../../source/dingoadm/hosts.md 9ab0dfdcd21c486b94f0ec30d884a42d
+msgid "forward_agent"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 3348cf232f1f4296ad810918bc767bd8
+msgid "false"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md ddc765644e954656bb8921130fa31ae2
+msgid "Whether to log in to the remote host using SSH agent forwarding."
+msgstr "是否以 SSH 代理转发方式登录远程主机。"
+
+#: ../../source/dingoadm/hosts.md 85936a6d5a624dd5a0db182a01c1d8ec
+msgid "become_user"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md 70dc44a82481408d8a5235b2fc962995
+msgid ""
+"The user who performs deployment operations. If the user does not specify "
+"`become_user`, the user specified by `user` will be used as the execution user "
+"for deployment operations. Ensure that the execution user has sudo permissions, "
+"as it will be used for operations such as mounting/unmounting file systems and "
+"operating the Docker CLI."
+msgstr ""
+"执行部署操作的用户。若用户没有指定 `become_user`，则以 `user` 指定用户为执行用"
+"户， 用于执行部署操作。请确保执行用户拥有 sudo 权限，因为其将用于挂卸载文件系"
+"统、操作 docker cli 等操作。"
+
+#: ../../source/dingoadm/hosts.md 0ecfb7bd13394b16aba02d4e721e6514
+msgid "labels"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md b3557c2f962441f9aa6f7d97ea6af67a
+msgid "Host labels. Multiple labels can be specified for a single host."
+msgstr "主机标签。单个主机可指定多个标签。"
+
+#: ../../source/dingoadm/hosts.md:48 28a0077bb83b493c9d993ec6379e96f4
+msgid "Manage Hosts"
+msgstr "管理主机"
+
+#: ../../source/dingoadm/hosts.md:51 c2a12cc8c53b41e188d306a3f6730a47
+msgid "[Import Host List](#Import_Host_List)"
+msgstr "[导入主机列表](#Import_Host_List)"
+
+#: ../../source/dingoadm/hosts.md:52 4590974604214197a7e02f550865fef4
+msgid "[View Host List](#View_Host_List)"
+msgstr "[查看主机列表](#View_Host_List)"
+
+#: ../../source/dingoadm/hosts.md:53 25c529537c6248a2bf9b84279ac5f18b
+msgid "[Display Host Configuration](#Display_Host_Configuration)"
+msgstr "[显示主机配置](#Display_Host_Configuration)"
+
+#: ../../source/dingoadm/hosts.md:54 0edb9755fc0f436396be740db27ccd35
+msgid "[Login to Host](#Login_to_Host)"
+msgstr "[登录主机](#Login_to_Host)"
+
+#: ../../source/dingoadm/hosts.md:56 2125f987ee8b42d4a50844f5d5789952
+msgid "<a id=\"Import_Host_List\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md:57 9e1f5cd8e6a0462483714044d94ed378
+msgid "Import Host List"
+msgstr "导入主机列表"
+
+#: ../../source/dingoadm/hosts.md:59 61035d784d8b4f1391e9b090d5cce337
+msgid "Step 1: Prepare the host list"
+msgstr "第 1 步：准备主机列表"
+
+#: ../../source/dingoadm/hosts.md:86 a41842f1c92a426f9b8450e992f6d826
+msgid "Step 2: Import the host list"
+msgstr "第 1 步：准备主机列表"
+
+#: ../../source/dingoadm/hosts.md:92 80e6c81a138845f78351d368052f87ab
+msgid "<a id=\"View_Host_List\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md:93 0ada4683bb404b0da75554f7798f118f
+msgid "View Host List"
+msgstr "查看主机列表"
+
+#: ../../source/dingoadm/hosts.md:99 e38a575708f74543b74f1be77520c689
+msgid "DingoAdm will display all hosts by default:"
+msgstr "DingoAdm 默认会显示所有主机："
+
+#: ../../source/dingoadm/hosts.md:110 1dde6fff3ae244fa853794effab5f704
+msgid "To view the list of hosts with a specific tag, specify the `-l` parameter."
+msgstr "若想查看指定标签的主机列表，可指定 `-l` 参数。"
+
+#: ../../source/dingoadm/hosts.md:112 e24311e48fa54fd8a206ef1f640a909b
+msgid "<a id=\"Display_Host_Configuration\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md:113 b2a5317310cd41659d642c3d1773d2c4
+msgid "Display Host Configuration"
+msgstr "显示主机配置"
+
+#: ../../source/dingoadm/hosts.md:139 1512521dd88247b29bcc73b9ef9697b6
+msgid "<a id=\"Login_to_Host\"></a>"
+msgstr ""
+
+#: ../../source/dingoadm/hosts.md:140 8550e03f37014699b702c3c8e4e126a7
+msgid "Login to Host"
+msgstr "登录主机"
+
+#: ../../source/dingoadm/hosts.md:146 818746a640604fc283d1ba2cdb760c4e
+msgid "Example: Logging in to the `server1` host"
+msgstr "示例：登录 `server1` 主机"
+
+#: ../../source/dingoadm/hosts.md:152 0e99fc8573c346ab843c85ea377e46e5
+msgid "💡 **Reminder:**"
+msgstr "💡 **提醒**"
+
+#: ../../source/dingoadm/hosts.md:154 3713ed2f0767461ca90e6340405a167e
+msgid ""
+"When encountering SSH connection issues, you can manually simulate dingoadm's "
+"connection operations locally based on the host's configuration to troubleshoot "
+"the corresponding issues:"
+msgstr ""
+"当出现 SSH 连接问题时，你可以根据主机的相应配置，在本地手动模拟 dingoadm 的连接"
+"操作，以此来排查相应问题："

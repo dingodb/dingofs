@@ -6,253 +6,358 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: DingoFS \n"
+"Project-Id-Version: DingoFS\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-30 10:29+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
+"POT-Creation-Date: 2025-06-05 12:06+0800\n"
+"PO-Revision-Date: 2025-06-05 18:17+0800\n"
+"Last-Translator: \n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
+"X-Generator: Poedit 3.6\n"
 
 #: ../../source/operation/file_system_management.md:1
 #: a6ebcaeb21704d80a502edbdbd6cefc4
 msgid "File System Management"
-msgstr ""
+msgstr "文件系统管理"
 
 #: ../../source/operation/file_system_management.md:2
 #: 975be2d26e1f496584a7574bb768501c
 msgid "1.Create Client Configuration File"
-msgstr ""
+msgstr "1.创建客户端配置文件"
 
 #: ../../source/operation/file_system_management.md:3
 #: 1504f97676dc481388a00e939cbb310a
 msgid "create client.yaml"
-msgstr ""
+msgstr "创建 client.yaml"
 
 #: ../../source/operation/file_system_management.md:33
 #: 1f7a64d260f347f8bcc9189ce8f9097b
 msgid ""
 "The configuration items in the client configuration file have the same "
-"meaning as the configuration items in the cluster topology file, see "
-"DingoFS Important Configuration Items for details. For all configuration "
-"items that do not appear on the client configuration file, we will use "
-"the default configuration values. You can click on the client "
-"configuration file to view each configuration item and the associated "
-"default values."
+"meaning as the configuration items in the cluster topology file, see DingoFS "
+"Important Configuration Items for details. For all configuration items that "
+"do not appear on the client configuration file, we will use the default "
+"configuration values. You can click on the client configuration file to view "
+"each configuration item and the associated default values."
 msgstr ""
+"客户端配置文件中的配置项含义等同于集群拓扑文件中的配置项，详见 DingoFS 重要配"
+"置项。所有未在客户端配置文件上出现的配置项，我们都将使用默认配置值， 你可以通"
+"过点击 client 配置文件来查看各配置项及相关默认值。"
 
 #: ../../source/operation/file_system_management.md:36
 #: 60bbf0a0dbe84597a6a9189f1a3345c1
 msgid ""
 "💡 About the mdsOpt.rpcRetryOpt.addrs Configuration Item  Since all the "
-"routing information exists in the MDS service, the client only needs to "
-"know the address of the MDS service in the cluster in order to read and "
-"write to the IO normally. The mdsOpt.rpcRetryOpt.addrs configuration item"
-" in the configuration file needs to be filled in with the address of the "
-"MDS service in the cluster. You can check the address of the MDS service "
-"in the cluster via dingoadm status after you have deployed the DingoFS "
-"cluster:"
+"routing information exists in the MDS service, the client only needs to know "
+"the address of the MDS service in the cluster in order to read and write to "
+"the IO normally. The mdsOpt.rpcRetryOpt.addrs configuration item in the "
+"configuration file needs to be filled in with the address of the MDS service "
+"in the cluster. You can check the address of the MDS service in the cluster "
+"via dingoadm status after you have deployed the DingoFS cluster:"
 msgstr ""
+"关于 mdsOpt.rpcRetryOpt.addrs 配置项： 由于所有的路由信息都存在于 MDS 服务中，"
+"客户端只需知晓集群中 MDS 服务地址即可正常进行 IO 读写。配置文件中"
+"的 mdsOpt.rpcRetryOpt.addrs 配置项需填写集群中 MDS 服务地址，用户在部署好 "
+"DingoFS 集群后， 可通过 dingoadm status 查看集群 MDS 服务地址："
 
 #: ../../source/operation/file_system_management.md:49
 #: 2eebe08f092d4065bb85632fe35bc0fa
 msgid ""
 "📢 Note:  users must configure the data_dir configuration if they want to "
 "enable local disk caching."
-msgstr ""
+msgstr "📢 注意：用户如需开启本地磁盘缓存，请务必配置 data_dir 配置项。"
 
 #: ../../source/operation/file_system_management.md:52
 #: 1e7dfa1a36904989b9a682f1047a05f9
 msgid ""
 "📢 Note:  dingofs supports multiple s3s, one fs corresponds to one s3 "
-"backend. All s3 information (ak, sk, endpoint, and bucket_name) is stored"
-" in mds, and other components get it from mds. The s3 information in the "
-"mds is specified when the fs is created. Therefore, the s3 information in"
-" client.yaml is required and will be synchronized to the configuration "
-"file of the fs creation tool. If the fs have already been created, please"
-" keep the same information, otherwise the mount will fail; if the fs have"
-" not been created yet, please make sure the s3 information is available, "
-"otherwise the mount will fail."
+"backend. All s3 information (ak, sk, endpoint, and bucket_name) is stored in "
+"mds, and other components get it from mds. The s3 information in the mds is "
+"specified when the fs is created. Therefore, the s3 information in "
+"client.yaml is required and will be synchronized to the configuration file of "
+"the fs creation tool. If the fs have already been created, please keep the "
+"same information, otherwise the mount will fail; if the fs have not been "
+"created yet, please make sure the s3 information is available, otherwise the "
+"mount will fail."
 msgstr ""
+"📢 注意：dingofs 支持多 s3，一个 fs 对应一个 s3 后端。 所有的 s3 信息（ak、"
+"sk、endpoint 和 bucket_name）保存在 mds 中，其他组件从 mds 中获取。 而 mds 中"
+"的 s3 信息在创建 fs 时指定。 因此 client.yaml 中的 s3 信息为必填项，相关信息会"
+"同步到创建 fs 工具的配置文件中。 若 fs 已经创建请保持一致，否则挂载失败； 若 "
+"fs 尚未创建则需保证 s3 信息可用，否则挂载失败。"
 
 #: ../../source/operation/file_system_management.md:55
 #: a8fd359b218440d1b4233ad39a013df2
 msgid "2.Create a File System"
-msgstr ""
+msgstr "2.创建文件系统"
 
 #: ../../source/operation/file_system_management.md:56
 #: 20d48cf9365347c1afb4994f72da485c
 msgid ""
-"Use dingo tool to create DingoFS file system by specifying the "
-"configuration file, you can choose to specify the file system parameters "
-"on the command line, or you can configure the parameters into the dingo "
-"tool's configuration file dingo.yaml."
+"Use dingo tool to create DingoFS file system by specifying the configuration "
+"file, you can choose to specify the file system parameters on the command "
+"line, or you can configure the parameters into the dingo tool's configuration "
+"file dingo.yaml."
 msgstr ""
+"使用dingo工具指定配置文件创建DingoFS文件系统，可以选择命令行指定文件系统参数，"
+"也可以将参数配置到dingo工具的配置文件dingo.yaml中。"
 
 #: ../../source/operation/file_system_management.md:58
 #: d3cb48eeedb740e685ddf57d4cf39218
 msgid ""
-"[download "
-"dingo.yaml](https://github.com/dingodb/dingofs/blob/main/conf/dingo.yaml)"
+"[download dingo.yaml](https://github.com/dingodb/dingofs/blob/main/conf/"
+"dingo.yaml)"
 msgstr ""
+"[下载 dingo.yaml](https://github.com/dingodb/dingofs/blob/main/conf/"
+"dingo.yaml)"
 
-#: ../../source/operation/file_system_management.md:80
-#: 18730d491cde4cf1966bfd226b25f968
-msgid ""
-"Configure the following fields\\ mdsAddr: metadata service address\\ ak: "
-"access key for the s3 service\\ sk: secret key for the s3 service\\ "
-"endpoint: address of the s3 service\\ bucketname: bucketname used in the "
-"s3 service (supplied by the deployer)"
-msgstr ""
+#: ../../source/operation/file_system_management.md:81
+#: f9c9a76d62324fe1924a1138a27c19ef
+msgid "Configure the following fields"
+msgstr "配置以下字段"
+
+#: ../../source/operation/file_system_management.md:82
+#: 60e69c56f0624a41bd8072e23e855d8b
+msgid "mdsAddr: metadata service address\\"
+msgstr "mdsAddr：元数据服务地址\\"
+
+#: ../../source/operation/file_system_management.md:83
+#: e005da0302084e0bb68df514b7bb7942
+msgid "ak: access key for the s3 service\\"
+msgstr "ak：s3服务的access key\\"
+
+#: ../../source/operation/file_system_management.md:84
+#: 3488f24cc40e41dd97c9ce07d7234df8
+msgid "sk: secret key for the s3 service\\"
+msgstr "sk：s3服务的secret key\\"
+
+#: ../../source/operation/file_system_management.md:85
+#: 8ddd0faeaae04cb799c13c07d84f6c56
+msgid "endpoint: address of the s3 service\\"
+msgstr "endpoint：s3服务地址\\"
 
 #: ../../source/operation/file_system_management.md:86
+#: 74eaa200c1ae4f029c397fa8a4b9469e
+msgid "bucketname: bucketname used in the s3 service (supplied by the deployer)"
+msgstr "bucketname：s3服务中所使用的bucketname（由部署人员提供）"
+
+#: ../../source/operation/file_system_management.md:88
 #: c7dd341ea0b6443582d363f957e0bc17
 msgid ""
 "Execute the following statement to add the configuration file to the "
 "environment variables"
-msgstr ""
+msgstr "执行以下语句，将配置文件加入到环境变量中"
 
-#: ../../source/operation/file_system_management.md:90
+#: ../../source/operation/file_system_management.md:92
 #: af04ee967324407dbebf449451efe17b
 msgid "or"
 msgstr ""
 
-#: ../../source/operation/file_system_management.md:94
+#: ../../source/operation/file_system_management.md:96
 #: 26d276251dc64483962f8b967a2eff14
 msgid "Execute the create file system statement"
-msgstr ""
+msgstr "执行创建文件系统语句"
 
-#: ../../source/operation/file_system_management.md:98
+#: ../../source/operation/file_system_management.md:100
 #: bf96051e827d476c8d30f0d08d1054cc
 msgid ""
-"Using the create statement to create a file system\\ You can also create "
-"a file system directly by adding parameters directly to the create "
-"statement."
+"Using the create statement to create a file system\\ You can also create a "
+"file system directly by adding parameters directly to the create statement."
 msgstr ""
+"使用create语句创建文件系统\\ 也可以直接在create语句中直接加入参数来创建文件系"
+"统。"
 
-#: ../../source/operation/file_system_management.md:103
-#: 3491a03006dd45c5980f6c2e991d7437
+#: ../../source/operation/file_system_management.md:105
+#: ../../source/operation/file_system_management.md:120
+#: 1bcfd154c427448eb272d43668dff9e6 799c0c3b35ff494fa15fd7f57e8d2712
+msgid "Parameter description"
+msgstr "参数说明"
+
+#: ../../source/operation/file_system_management.md:106
+#: 3612a533d81349fdb71d78a2a9047bd9
 msgid ""
-"Parameter description\\ fsname: file system, user-defined, but must be a "
-"combination of lowercase letters, numbers, hyphens, i.e., to satisfy the "
-"regular expression ^([a-z0-9]+\\\\-?) +$\\ fstype: storage service type\\"
-" s3.ak: access key of s3 service\\ s3.sk: s3 service's secret key\\ "
-"s3.endpoint: s3 service address\\ s3.bucketname: bucketname used in the "
-"s3 service (provided by the deployer)\\ mdsaddr: metadata service "
-"address\\ 💡 More dingo tool features, see dingo tool for details"
+"fsname: file system, user-defined, but must be a combination of lowercase "
+"letters, numbers, hyphens, i.e., to satisfy the regular expression ^([a-z0-9]+"
+"\\\\-?) +$\\"
 msgstr ""
+"fsname：文件系统，用户可自行定义, 但必须为小写字母、数字、连字符组合，即满足正"
+"则表达式 ^([a-z0-9]+\\\\-?) +$\\"
 
-#: ../../source/operation/file_system_management.md:113
+#: ../../source/operation/file_system_management.md:107
+#: 8c9c357752334afebfe6c72995c21fd5
+msgid "fstype: storage service type\\"
+msgstr "fstype：存储服务类型\\"
+
+#: ../../source/operation/file_system_management.md:108
+#: d13addddbc62406ca8bc0b55b7cf348f
+msgid "s3.ak: access key of s3 service\\"
+msgstr "s3.ak：s3服务的access key\\"
+
+#: ../../source/operation/file_system_management.md:109
+#: 222144bfa2d74b19813f655db5a3ce6b
+msgid "s3.sk: s3 service's secret key\\"
+msgstr "s3.sk：s3服务的secret key\\"
+
+#: ../../source/operation/file_system_management.md:110
+#: 71ffcd9b5a0d4c07bba6d839adb16a53
+msgid "s3.endpoint: s3 service address\\"
+msgstr "s3.endpoint：s3服务地址\\"
+
+#: ../../source/operation/file_system_management.md:111
+#: 27a1e0d51cfc47a39448f8940b5940f8
+msgid ""
+"s3.bucketname: bucketname used in the s3 service (provided by the deployer)\\"
+msgstr "s3.bucketname：s3服务中所使用的bucketname（由部署人员提供）\\"
+
+#: ../../source/operation/file_system_management.md:112
+#: 862925d4a06d4218bdf7b27dd0d5d336
+msgid ""
+"mdsaddr: metadata service address\\ 💡 More dingo tool features, see dingo "
+"tool for details"
+msgstr "mdsaddr：元数据服务地址\\ 💡更多dingo工具功能详见dingo tool"
+
+#: ../../source/operation/file_system_management.md:115
 #: 5b232f23e5d14eddbfec959efefd196f
 msgid "3.Mount the Filesystem"
-msgstr ""
+msgstr "3.挂载文件系统"
 
-#: ../../source/operation/file_system_management.md:114
+#: ../../source/operation/file_system_management.md:116
 #: 3d22b18ba62947b39d1986b9da958787
 msgid ""
-"Use the dingoadm tool to mount the filesystem. if dinofs-name already "
-"exists. then first create the filesystem and mount it to the specified "
-"directory."
+"Use the dingoadm tool to mount the filesystem. if dinofs-name already exists. "
+"then first create the filesystem and mount it to the specified directory."
 msgstr ""
+"使用dingoadm工具挂载文件系统，如果dinofs-name已存在，那么首先创建文件系统，然"
+"后挂载到指定目录。"
 
-#: ../../source/operation/file_system_management.md:118
+#: ../../source/operation/file_system_management.md:121
+#: 730bf7fbf97e4cffa3d96fa30ff85a25
+msgid ""
+"dingofs-name: filesystem name, user-defined, but must be a combination of "
+"lowercase letters, numbers, hyphens, i.e., meet the regular expression ^([a-"
+"z0-9]+\\\\-?) +$\\"
+msgstr ""
+"dingofs-name: 文件系统名，用户可自行定义, 但必须为小写字母、数字、连字符组合，"
+"即满足正则表达式 ^([a-z0-9]+\\\\-?)+$"
+
+#: ../../source/operation/file_system_management.md:122
+#: fa0261ef67254c92bcc1bd91ce380bce
+msgid "mount-point: mount path, user-defined, but must be an absolute path."
+msgstr "mount-point：挂载路径，用户可自行定义，但必须为绝对路径。"
+
+#: ../../source/operation/file_system_management.md:123
+#: e5ddcdddfb124283a8bc4bd50d0defa4
+msgid ""
+"--host: mount the volume to the specified host, user-defined, please make "
+"sure the host has been imported\\"
+msgstr "--host：将卷挂载到指定主机，用户可自行选择，请确保该主机已被导入\\"
+
+#: ../../source/operation/file_system_management.md:124
 #: 312f566251cc4b2bbbef388c4a49e882
 msgid ""
-"Parameter description\\ dingofs-name: filesystem name, user-defined, but "
-"must be a combination of lowercase letters, numbers, hyphens, i.e., meet "
-"the regular expression ^([a-z0-9]+\\\\-?) +$\\ mount-point: mount path, "
-"user-defined, but must be an absolute path. --host: mount the volume to "
-"the specified host, user-defined, please make sure the host has been "
-"imported\\ -c: dingofs-name does not exist, use this configuration file "
-"to create the filesystem\\ If the filesystem is mounted successfully, you"
-" can query the corresponding DingoFS filesystem mount entry on the "
-"corresponding host:"
+"-c: dingofs-name does not exist, use this configuration file to create the "
+"filesystem\\ If the filesystem is mounted successfully, you can query the "
+"corresponding DingoFS filesystem mount entry on the corresponding host:"
 msgstr ""
+"-c：dingofs-name不存在时，使用该配置文件来创建文件系统\\ 如果文件系统挂载成"
+"功，在相应的主机上即能查询到 DingoFS 文件系统对应的挂载项："
 
-#: ../../source/operation/file_system_management.md:127
+#: ../../source/operation/file_system_management.md:129
 #: ec089c35c3b14f32b9ce969890562da8
 msgid ""
-"On the center machine (i.e., the machine where dingoadm is located, users"
-" can operate the dingofs service on other machines via the dingoadm "
-"command), users can also view the status of all clients:"
+"On the center machine (i.e., the machine where dingoadm is located, users can "
+"operate the dingofs service on other machines via the dingoadm command), "
+"users can also view the status of all clients:"
 msgstr ""
+"在中控机上（即dingoadm所在的机器，用户可以通过dingoadm命令操作其他机器的"
+"dingofs服务），用户也可以查看所有客户端的状态："
 
-#: ../../source/operation/file_system_management.md:131
+#: ../../source/operation/file_system_management.md:133
 #: c4fd3643b93446c7ba1138c6cecb55c6
 msgid ""
 "📢 Note:  If dingofs needs to use multiple s3 functions, modify the "
 "configuration of the s3 information in client.yaml for different fs."
 msgstr ""
+"📢 注意：若 dingofs 需要使用多 s3 功能，针对不同的 fs 修改 client.yaml 中的 "
+"s3 信息的相关配置即可。"
 
-#: ../../source/operation/file_system_management.md:133
+#: ../../source/operation/file_system_management.md:135
 #: d08ebdad75ae4f9ab77bdbc3d101439f
 msgid "Example:"
-msgstr ""
+msgstr "示例："
 
-#: ../../source/operation/file_system_management.md:137
+#: ../../source/operation/file_system_management.md:139
 #: 9cc63269afa34e9a98c73ee5726a34f4
 msgid "4.Querying Filesystems"
-msgstr ""
+msgstr "4.查询文件系统"
 
-#: ../../source/operation/file_system_management.md:138
+#: ../../source/operation/file_system_management.md:140
 #: 3dd1da37505c448faecf7e2b50075e34
 msgid ""
-"Use the dingo tool to query existing filesystems. dingo list fs ![list "
-"fs](../../images/dingo_list_fs.png)"
+"Use the dingo tool to query existing filesystems. dingo list fs ![list fs]"
+"(../../images/dingo_list_fs.png)"
 msgstr ""
+"使用dingo工具查询已有文件系统。 ![list fs](../../images/dingo_list_fs.png)"
 
-#: ../../source/operation/file_system_management.md:138
+#: ../../source/operation/file_system_management.md:140
 #: 581c74c4cd4947b4ba15abcf327c869b
 msgid "list fs"
 msgstr ""
 
-#: ../../source/operation/file_system_management.md:142
+#: ../../source/operation/file_system_management.md:144
 #: 8815d10749ee4a1cab12651156a3d7e4
 msgid "5.Deleting a File System"
-msgstr ""
+msgstr "5.删除文件系统"
 
-#: ../../source/operation/file_system_management.md:143
+#: ../../source/operation/file_system_management.md:145
 #: 6bfcc555d9b3407fa2d2c59430c67774
 msgid "Use the dingo tool to delete an existing file system."
-msgstr ""
+msgstr "使用dingo工具删除已有文件系统。"
 
-#: ../../source/operation/file_system_management.md:150
-#: ebf37a76d3fb41c39f2882e4736e2d74
-msgid ""
-"Parameter Description \\ fsname: The name of the file system to be "
-"deleted. After execution, you need to input the file system name again to"
-" confirm the deletion, to prevent deleting the file system by mistake."
-msgstr ""
+#: ../../source/operation/file_system_management.md:152
+#: 9b0829957cc4474686c71d071adcf89e
+msgid "Parameter Description"
+msgstr "参数说明"
 
 #: ../../source/operation/file_system_management.md:153
+#: ebf37a76d3fb41c39f2882e4736e2d74
+msgid ""
+"fsname: The name of the file system to be deleted. After execution, you need "
+"to input the file system name again to confirm the deletion, to prevent "
+"deleting the file system by mistake."
+msgstr ""
+"fsname：需要删除的文件系统名，执行后需要再次输入文件系统名来确认删除，防止误删"
+"文件系统。"
+
+#: ../../source/operation/file_system_management.md:155
 #: 16d49299d50d4e81aae7bdecf67d6851
 msgid "Appendix: Important DingoFS Configuration Items"
-msgstr ""
+msgstr "附录：DingoFS重要配置项"
 
 #: ../../source/operation/file_system_management.md
 #: 9e5c56d376f64820814f65d07335baa8
 msgid "Configuration Items"
-msgstr ""
+msgstr "配置项"
 
 #: ../../source/operation/file_system_management.md
 #: 65652e9ecb4c4e3d8da65278375e0174
 msgid "Is Required"
-msgstr ""
+msgstr "是否必填"
 
 #: ../../source/operation/file_system_management.md
 #: a67ef68b84b14549bb62533e8602fc73
 msgid "Default"
-msgstr ""
+msgstr "默认值"
 
 #: ../../source/operation/file_system_management.md
 #: 6e0b680a353a47f981307a699239c3bc
 msgid "Description"
-msgstr ""
+msgstr "说明"
 
 #: ../../source/operation/file_system_management.md
 #: debc1461158e48fbaee19748b243be45
@@ -267,7 +372,7 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: 850076acd6494aa48cd1dfcd7c215fc8
 msgid "Topology File Type. Must be dingofs"
-msgstr ""
+msgstr "拓扑文件类型。必须为 dingofs"
 
 #: ../../source/operation/file_system_management.md
 #: 4045089e5bed422b85743edc5a769ad2
@@ -282,9 +387,11 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: bee4cae4a30b49ce958f36eabe326dad
 msgid ""
-"container image. The default is our latest stable version, or you can "
-"visit the DingoFS public docker repository to choose your own"
+"container image. The default is our latest stable version, or you can visit "
+"the DingoFS public docker repository to choose your own"
 msgstr ""
+"容器镜像。默认值为我们最新稳定版本，你也可以访问 DingoFS 公共 docker 仓库自行"
+"选择"
 
 #: ../../source/operation/file_system_management.md
 #: 5d6393bd64e5444c83bf24ef1171df27
@@ -294,10 +401,12 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: 63a95792e7934e52aa53c6eacd0d754d
 msgid ""
-"directory where service logs are kept. If this option is not configured, "
-"the logs are stored in the specified directory within the container and "
-"will be deleted once the container is cleaned up"
+"directory where service logs are kept. If this option is not configured, the "
+"logs are stored in the specified directory within the container and will be "
+"deleted once the container is cleaned up"
 msgstr ""
+"保存服务日志的目录。如果不配置该选项，日志默认保存在容器内的指定目录，一旦容器"
+"被清理，日志将会随之删除"
 
 #: ../../source/operation/file_system_management.md
 #: 591de2e2b0184004a889f06e7fafc1cd
@@ -308,9 +417,11 @@ msgstr ""
 #: a862563cf930491f9d8d47ea94f557af
 msgid ""
 "the directory where the service data is stored. If this option is not "
-"configured, the data is saved in the specified directory within the "
-"container by default and will be lost if the container is purged"
+"configured, the data is saved in the specified directory within the container "
+"by default and will be lost if the container is purged"
 msgstr ""
+"保存服务数据的目录。如果不配置该选项，数据默认保存在容器内的指定目录，一旦容器"
+"被清理，数据将会随之丢失"
 
 #: ../../source/operation/file_system_management.md
 #: 47d8c7dd778f4f0d9797763836ce9fe0
@@ -320,9 +431,11 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: 2dc903cc04ee4a87b42323d2f2cd3921
 msgid ""
-"The Access Key for the S3 service. used to upload the actual data. "
-"Required only when using the S3 Storage Engine and creating a file system"
+"The Access Key for the S3 service. used to upload the actual data. Required "
+"only when using the S3 Storage Engine and creating a file system"
 msgstr ""
+"S3 服务的 Access Key。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需"
+"要"
 
 #: ../../source/operation/file_system_management.md
 #: 8c5832ca6dac4bd1a60e79b9b5d86b83
@@ -332,9 +445,11 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: 3e68ad920b6d4db496ab7c7ae3db7d3c
 msgid ""
-"S3 service's Secret Key. Used to upload the actual data. Required only "
-"when using the S3 Storage Engine and creating a file system"
+"S3 service's Secret Key. Used to upload the actual data. Required only when "
+"using the S3 Storage Engine and creating a file system"
 msgstr ""
+"S3 服务的 Secret Key。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需"
+"要"
 
 #: ../../source/operation/file_system_management.md
 #: 49033c765ee143e3b944d0d3532426b2
@@ -344,9 +459,9 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: 8eb49e5780e84147b82a60de6ce97a79
 msgid ""
-"S3 Service Address. Used to upload the actual data. Required only if you "
-"are using the S3 Storage Engine and creating a file system"
-msgstr ""
+"S3 Service Address. Used to upload the actual data. Required only if you are "
+"using the S3 Storage Engine and creating a file system"
+msgstr "S3 服务地址。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需要"
 
 #: ../../source/operation/file_system_management.md
 #: 5cb1cc47e9d9411290bb57f9115ed71f
@@ -358,7 +473,7 @@ msgstr ""
 msgid ""
 "S3 service bucket name. Used to upload the actual data. Required only if "
 "using S3 Storage Engine and creating a file system"
-msgstr ""
+msgstr "S3 服务桶名。用于上传实际数据。仅在使用S3存储引擎并且创建文件系统时需要"
 
 #: ../../source/operation/file_system_management.md
 #: 57da7e2ed9834eafa236bb185a9a0aa5
@@ -368,5 +483,4 @@ msgstr ""
 #: ../../source/operation/file_system_management.md
 #: ca75667e933941d7acc09f1254d5ca6e
 msgid "Variable block. Custom variables can be populated in the block"
-msgstr ""
-
+msgstr "变量区块。可将自定义变量填写在该区块"
