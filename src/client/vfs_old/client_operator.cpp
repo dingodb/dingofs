@@ -25,9 +25,9 @@
 #include <cstdint>
 #include <list>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/filesystem/filesystem.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -392,7 +392,8 @@ void RenameOperator::UnlinkOldInode() {
   LOG(INFO) << "Unlink old inode, retCode = " << rc;
 }
 
-DINGOFS_ERROR RenameOperator::UpdateInodeParent() {
+DINGOFS_ERROR RenameOperator::UpdateInodeParent(
+    std::shared_ptr<filesystem::FileSystem>& fs) {
   std::shared_ptr<InodeWrapper> inode_wrapper;
   auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inode_wrapper);
   if (rc != DINGOFS_ERROR::OK) {
@@ -405,6 +406,8 @@ DINGOFS_ERROR RenameOperator::UpdateInodeParent() {
     LOG_ERROR("UpdateInodeParent", rc);
     return rc;
   }
+
+  fs->GetDirParentWatcher()->Remeber(srcDentry_.inodeid(), newParentId_);
 
   LOG(INFO) << "UpdateInodeParent oldParent = " << parentId_
             << ", newParent = " << newParentId_;

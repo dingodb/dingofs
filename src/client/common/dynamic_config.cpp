@@ -115,6 +115,10 @@ DEFINE_validator(flush_quota_interval_second, &PassUint32);
 DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
 DEFINE_validator(load_quota_interval_second, &PassUint32);
 
+DEFINE_uint32(max_parent_depth_for_quota_check, 2048, 
+              "max parent depth for quota check");
+DEFINE_validator(max_parent_depth_for_quota_check, &PassUint32);
+
 DEFINE_uint32(push_metric_interval_millsecond, 500,
               "push client metrics interval in millsecond");
 DEFINE_validator(push_metric_interval_millsecond, &PassUint32);

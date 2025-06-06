@@ -58,7 +58,7 @@ class RenameOperator {
   DINGOFS_ERROR CommitTx();
   DINGOFS_ERROR UnlinkSrcParentInode();
   void UnlinkOldInode();
-  DINGOFS_ERROR UpdateInodeParent();
+  DINGOFS_ERROR UpdateInodeParent(std::shared_ptr<filesystem::FileSystem>& fs);
   DINGOFS_ERROR UpdateInodeCtime();
   void UpdateCache();
 
