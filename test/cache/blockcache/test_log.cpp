@@ -28,7 +28,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using cache::utils::LogGuard;
 
@@ -43,6 +42,5 @@ TEST_F(LogTest, Basic) {
   LogGuard log([] { return "hello world"; });
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

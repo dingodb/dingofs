@@ -22,73 +22,71 @@
 
 #include "cache/cachegroup/async_cache.h"
 
-#include <sys/types.h>
-
-#include <cstdlib>
-
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
-#include "cache/common/common.h"
-
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
 
-using dingofs::cache::blockcache::Block;
-
-AsyncCacheImpl::AsyncCacheImpl(std::shared_ptr<BlockCache> block_cache)
+AsyncCacheImpl::AsyncCacheImpl(BlockCacheSPtr block_cache)
     : running_(false), block_cache_(block_cache) {}
 
 Status AsyncCacheImpl::Start() {
   if (!running_.exchange(true)) {
+    LOG(INFO) << "Async cache starting...";
+
     bthread::ExecutionQueueOptions queue_options;
     queue_options.use_pthread = true;
     int rc = bthread::execution_queue_start(&async_cache_queue_id_,
                                             &queue_options, DoCache, this);
     if (rc != 0) {
-      return Status::Internal("stop execution queue failed");
+      return Status::Internal("start async cache execution queue failed");
     }
+
+    LOG(INFO) << "Async cache started.";
   }
   return Status::OK();
 }
 
 Status AsyncCacheImpl::Stop() {
   if (running_.exchange(false)) {
-    bthread::execution_queue_stop(async_cache_queue_id_);
-    int rc = bthread::execution_queue_join(async_cache_queue_id_);
-    if (rc != 0) {
-      return Status::Internal("stop execution queue failed");
+    LOG(INFO) << "Async cache stoping...";
+
+    if (bthread::execution_queue_stop(async_cache_queue_id_) != 0) {
+      return Status::Internal("stop async cache execution queue failed");
+    } else if (bthread::execution_queue_join(async_cache_queue_id_) != 0) {
+      return Status::Internal("join async cache execution queue failed");
     }
+
+    LOG(INFO) << "Async cache stopped.";
   }
   return Status::OK();
 }
 
-void AsyncCacheImpl::Cache(const BlockKey& block_key,
-                           const butil::IOBuf& block) {
-  CacheTask task(block_key, block);
+void AsyncCacheImpl::Cache(const BlockKey& block_key, const Block& block) {
+  Task task(block_key, block);
   CHECK_EQ(0, bthread::execution_queue_execute(async_cache_queue_id_, task));
 }
 
-int AsyncCacheImpl::DoCache(void* meta,
-                            bthread::TaskIterator<CacheTask>& iter) {
+// TODO:
+// 1) MUST retrive the block which in async cache queue but not in disk
+//    instead of request storage
+// 2) add option to lock the blocks which request storage at the same time
+int AsyncCacheImpl::DoCache(void* meta, bthread::TaskIterator<Task>& iter) {
   if (iter.is_queue_stopped()) {
     return 0;
   }
 
   AsyncCacheImpl* async_cache = static_cast<AsyncCacheImpl*>(meta);
+  auto& block_cache = async_cache->block_cache_;
   for (; iter; iter++) {
     auto& task = *iter;
-    // TODO(Wine93): user async interface
-    Block block((char*)task.block.fetch1(), task.block.length());
-    auto status = async_cache->block_cache_->Cache(task.block_key, block);
-    if (!status.ok()) {
-      LOG(ERROR) << "Async cache block(" << task.block_key.Filename()
-                 << ") failed, status=" << status.ToString();
-    }
+    block_cache->AsyncCache(task.block_key, task.block, [task](Status status) {
+      if (!status.ok()) {
+        LOG(ERROR) << "Async cache block (key=" << task.block_key.Filename()
+                   << ") failed: " << status.ToString();
+      }
+    });
   }
   return 0;
 }
 
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs

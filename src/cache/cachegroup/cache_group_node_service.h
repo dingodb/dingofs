@@ -24,11 +24,10 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_SERVICE_H_
 
 #include "cache/cachegroup/cache_group_node.h"
-#include "dingofs/blockcache.pb.h"
+#include "cache/common/common.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
 
 #define DECLARE_RPC_METHOD(method)                                   \
   void method(google::protobuf::RpcController* controller,           \
@@ -43,19 +42,19 @@ namespace cachegroup {
       pb::cache::blockcache::method##Response* response,     \
       google::protobuf::Closure* done)
 
-using pb::cache::blockcache::BlockCacheService;
-
-class CacheGroupNodeServiceImpl : public BlockCacheService {
+class CacheGroupNodeServiceImpl final : public PB_BlockCacheService {
  public:
-  explicit CacheGroupNodeServiceImpl(std::shared_ptr<CacheGroupNode> node);
+  explicit CacheGroupNodeServiceImpl(CacheGroupNodeSPtr node);
 
+  DECLARE_RPC_METHOD(Put);
   DECLARE_RPC_METHOD(Range);
+  DECLARE_RPC_METHOD(Cache);
+  DECLARE_RPC_METHOD(Prefetch);
 
  private:
-  std::shared_ptr<CacheGroupNode> node_;
+  CacheGroupNodeSPtr node_;
 };
 
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs
 

@@ -21,8 +21,8 @@
 #include <memory>
 #include <string>
 
-#include "common/status.h"
 #include "blockaccess/accesser_common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace blockaccess {
@@ -50,7 +50,7 @@ class Accesser {
   virtual Status Get(const std::string& key, std::string* data) = 0;
 
   virtual Status Range(const std::string& key, off_t offset, size_t length,
-                     char* buffer) = 0;
+                       char* buffer) = 0;
 
   virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
 

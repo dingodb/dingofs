@@ -33,7 +33,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using ::absl::MakeCleanup;
 using base::math::kMiB;
@@ -98,6 +97,5 @@ TEST_F(DiskCacheManagerTest, CleanupExpire) {
   ASSERT_FALSE(disk_cache->IsCached(key));
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

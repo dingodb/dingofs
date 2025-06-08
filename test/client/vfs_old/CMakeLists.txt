@@ -39,7 +39,7 @@ set_target_properties(test_flat_file_test PROPERTIES
 set(TEST_CLIENT_DEPS
     fuse_client_lib
     client_memcached_client
-    cache_blockcache
+    cache_lib
     absl::strings
     ${PROTO_OBJS}
     ${TEST_DEPS}

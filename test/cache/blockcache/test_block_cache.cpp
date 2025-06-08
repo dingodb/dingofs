@@ -27,7 +27,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using ::absl::MakeCleanup;
 
@@ -106,6 +105,5 @@ TEST_F(BlockCacheTest, Cache) {
   ASSERT_TRUE(fs.FileExists(cache_path));
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

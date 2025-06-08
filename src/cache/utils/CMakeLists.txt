@@ -13,8 +13,6 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-option(WITH_LIBUSRBIO "Enable LIBUSRBIO feature" OFF)
-
 file(GLOB CACHE_UTILS_LIB_SRCS
     "*.cpp"
 )
@@ -23,7 +21,6 @@ add_library(cache_utils ${CACHE_UTILS_LIB_SRCS})
 target_link_libraries(cache_utils
     PROTO_OBJS
 
-    uring::uring
     glog::glog
     gflags::gflags
     spdlog::spdlog
@@ -31,23 +28,14 @@ target_link_libraries(cache_utils
     brpc::brpc
 
     rpcclient
-    block_accesser
     stub_common
     stub_metric
+    block_accesser
     dingofs_base_lib
     dingofs_utils
     dingofs_common
     dingofs_status
-    dingofs_options
-)
+    dingofs_executor
 
-# now we support 3fs usrbio only for ubuntu
-cmake_host_system_information(RESULT PRETTY_NAME QUERY DISTRIB_PRETTY_NAME)
-if(WITH_LIBUSRBIO AND ${PRETTY_NAME} MATCHES "Ubuntu")
-    find_package(usrbio REQUIRED)
-    target_compile_definitions(cache_blockcache PRIVATE WITH_LIBUSRBIO)
-    message(STATUS "LIBUSRBIO feature enabled")
-    target_link_libraries(cache_blockcache 3fs::usrbio)
-else()
-    message(STATUS "LIBUSRBIO feature disabled")
-endif()
+    cache_storage
+)

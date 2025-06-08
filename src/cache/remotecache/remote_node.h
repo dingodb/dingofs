@@ -24,19 +24,14 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_H_
 
 #include <brpc/channel.h>
-#include <butil/iobuf.h>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/common/common.h"
-#include "dingofs/cachegroup.pb.h"
-#include "utils/concurrent/concurrent.h"
+#include "cache/config/config.h"
+#include "cache/utils/state_machine.h"
 
 namespace dingofs {
 namespace cache {
-namespace remotecache {
-
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::utils::Mutex;
 
 class RemoteNode {
  public:
@@ -44,35 +39,47 @@ class RemoteNode {
 
   virtual Status Init() = 0;
 
-  virtual Status Range(const BlockKey& block_key, size_t block_size,
-                       off_t offset, size_t length, butil::IOBuf* buffer) = 0;
+  virtual Status Put(const BlockKey& key, const Block& block) = 0;
+  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
+                       IOBuffer* buffer, uint64_t block_size) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
+  virtual Status Prefetch(const BlockKey& key, size_t length) = 0;
 };
 
-using RemoteNodePtr = std::shared_ptr<RemoteNode>;
+using RemoteNodeSPtr = std::shared_ptr<RemoteNode>;
 
-class RemoteNodeImpl : public RemoteNode {
+class RemoteNodeImpl final : public RemoteNode {
  public:
-  RemoteNodeImpl(const pb::mds::cachegroup::CacheGroupMember& member,
-                 RemoteNodeOption option);
+  RemoteNodeImpl(const PB_CacheGroupMember& member, RemoteAccessOption option);
 
   Status Init() override;
 
-  Status Range(const BlockKey& block_key, size_t block_size, off_t offset,
-               size_t length, butil::IOBuf* buffer) override;
+  Status Put(const BlockKey& key, const Block& block) override;
+  Status Range(const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, size_t block_size) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
+  Status Prefetch(const BlockKey& key, size_t length) override;
 
  private:
-  bool InitChannel(const std::string& listen_ip, uint32_t listen_port);
+  Status RemotePut(const BlockKey& key, const Block& block);
+  Status RemoteRange(const BlockKey& key, off_t offset, size_t length,
+                     IOBuffer* buffer, size_t block_size);
+  Status RemoteCache(const BlockKey& key, const Block& block);
+  Status RemotePrefetch(const BlockKey& key, size_t length);
 
-  void ResetChannel();
+  Status InitChannel(const std::string& listen_ip, uint32_t listen_port);
+  Status ResetChannel();
 
- private:
-  Mutex mutex_;  // for channel init
-  pb::mds::cachegroup::CacheGroupMember member_;
-  RemoteNodeOption option_;
+  Status CheckHealth() const;
+  Status CheckStatus(Status status);
+
+  BthreadMutex mutex_;  // for channel
+  const RemoteAccessOption option_;
+  const PB_CacheGroupMember member_;
   std::unique_ptr<brpc::Channel> channel_;
+  StateMachineUPtr state_machine_;
 };
 
-}  // namespace remotecache
 }  // namespace cache
 }  // namespace dingofs
 

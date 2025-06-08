@@ -30,8 +30,6 @@ namespace client {
 
 class FlatFile;
 
-using cache::blockcache::BlockKey;
-
 struct FlatFileSlice {
   uint64_t file_offset;
   uint64_t len;
@@ -294,8 +292,8 @@ class FlatFile {
             chunk_holder.GetBlockObjSlice(flat_file_slice);
 
         for (const auto& obj_slice : obj_slices) {
-          BlockKey key(fs_id_, ino_, obj_slice.obj.chunk_id,
-                       obj_slice.obj.block_index, obj_slice.obj.version);
+          cache::BlockKey key(fs_id_, ino_, obj_slice.obj.chunk_id,
+                              obj_slice.obj.block_index, obj_slice.obj.version);
 
           uint64_t block_offset =
               obj_slice.file_offset - obj_slice.obj.file_offset;

@@ -29,7 +29,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using ::absl::MakeCleanup;
 using base::filepath::PathJoin;
@@ -167,6 +166,5 @@ TEST_F(DiskCacheTest, IsCached) {
   ASSERT_TRUE(disk_cache->IsCached(key_200));
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

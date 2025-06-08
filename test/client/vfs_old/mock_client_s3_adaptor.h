@@ -55,7 +55,7 @@ class MockS3ClientAdaptor : public S3ClientAdaptor {
                              std::shared_ptr<MdsClient> mdsClient,
                              std::shared_ptr<FsCacheManager> fsCacheManager,
                              std::shared_ptr<FileSystem> filesystem,
-                             std::shared_ptr<BlockCache> block_cache,
+                             cache::BlockCacheSPtr block_cache,
                              std::shared_ptr<KVClientManager> kvClientManager,
                              bool startBackGround));
 
@@ -76,7 +76,7 @@ class MockS3ClientAdaptor : public S3ClientAdaptor {
   MOCK_METHOD1(InitMetrics, void(const std::string& fsName));
   MOCK_METHOD3(CollectMetrics,
                void(InterfaceMetric* interface, int count, uint64_t start));
-  MOCK_METHOD0(GetBlockCache, std::shared_ptr<BlockCache>());
+  MOCK_METHOD0(GetBlockCache, cache::BlockCacheSPtr());
   MOCK_METHOD0(GetS3Client, std::shared_ptr<S3Client>());
   MOCK_METHOD0(GetBlockSize, uint64_t());
   MOCK_METHOD0(GetChunkSize, uint64_t());

@@ -27,11 +27,12 @@
 #include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/string/string.h"
-#include "client/common/dynamic_config.h"
 #include "blockaccess/accesser_common.h"
 #include "blockaccess/s3/s3_common.h"
+#include "cache/blockcache/disk_cache_layout.h"
+#include "cache/config/block_cache.h"
+#include "client/common/dynamic_config.h"
 #include "gflags/gflags.h"
-#include "options/cache/block_cache.h"
 #include "utils/gflags_helper.h"
 
 namespace brpc {
@@ -53,9 +54,6 @@ using ::dingofs::stub::common::ExcutorOpt;
 using ::dingofs::stub::common::MetaCacheOpt;
 
 using dingofs::client::common::FLAGS_in_time_warmup;
-
-using options::cache::DiskCacheOption;
-using options::cache::DiskStateOption;
 
 static void InitMetaCacheOption(Configuration* conf, MetaCacheOpt* opts) {
   conf->GetValueFatalIfFail("metaCacheOpt.metacacheGetLeaderRetry",
@@ -266,11 +264,10 @@ static void InitFuseOption(Configuration* c, FuseOption* option) {
 
 namespace {
 
-void SplitDiskCacheOption(DiskCacheOption option,
-                          std::vector<DiskCacheOption>* options) {
-  std::vector<std::string> dirs = StrSplit(option.cache_dir(), ";");
+void SplitDiskCacheOption(std::vector<cache::DiskCacheOption>* options) {
+  std::vector<std::string> dirs = StrSplit(cache::FLAGS_cache_dir, ";");
   for (size_t i = 0; i < dirs.size(); i++) {
-    uint64_t cache_size_mb = option.cache_size_mb();
+    uint64_t cache_size_mb = cache::FLAGS_cache_size_mb;
     std::vector<std::string> items = StrSplit(dirs[i], ":");
     if (items.size() > 2 ||
         (items.size() == 2 && !Str2Int(items[1], &cache_size_mb))) {
@@ -279,35 +276,30 @@ void SplitDiskCacheOption(DiskCacheOption option,
       CHECK(false) << "Cache size must greater than 0.";
     }
 
-    DiskCacheOption o = option;
-    o.cache_index() = i;
-    o.cache_dir() = items[0];
-    o.cache_size_mb() = cache_size_mb;
+    cache::DiskCacheOption o;
+    o.cache_store = cache::FLAGS_cache_store;
+    o.cache_dir = items[0];
+    o.cache_size_mb = cache_size_mb;
     options->emplace_back(o);
   }
 }
 
 }  // namespace
 
-static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
+static void InitBlockCacheOption(Configuration* c,
+                                 cache::BlockCacheOption* option) {
   {  // block cache option
-    c->GetValueFatalIfFail("block_cache.logging", &option->logging());
-    c->GetValueFatalIfFail("block_cache.cache_store", &option->cache_store());
-    c->GetValueFatalIfFail("block_cache.stage", &option->stage());
-    c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_enable",
-                           &option->stage_bandwidth_throttle_enable());
-    c->GetValueFatalIfFail("block_cache.stage_bandwidth_throttle_mb",
-                           &option->stage_bandwidth_throttle_mb());
-    c->GetValueFatalIfFail("block_cache.upload_stage_workers",
-                           &option->upload_stage_workers());
-    c->GetValueFatalIfFail("block_cache.upload_stage_queue_size",
-                           &option->upload_stage_queue_size());
-    c->GetValueFatalIfFail("block_cache.prefetch_workers",
-                           &option->prefetch_workers());
-    c->GetValueFatalIfFail("block_cache.prefetch_queue_size",
-                           &option->prefetch_queue_size());
 
-    std::string cache_store = option->cache_store();
+    c->GetValue("block_cache.logging", &cache::FLAGS_cache_access_logging);
+    c->GetValue("block_cache.cache_store", &cache::FLAGS_cache_store);
+    c->GetValue("block_cache.upload_stage_throttle_bandwidth_enable",
+                &cache::FLAGS_upload_stage_throttle_enable);
+    c->GetValue("block_cache.upload_stage_throttle_bandwidth_mb",
+                &cache::FLAGS_upload_stage_throttle_bandwidth_mb);
+    c->GetValue("block_cache.prefecth_max_inflights",
+                &cache::FLAGS_prefetch_max_inflights);
+
+    std::string cache_store = option->cache_store;
     if (cache_store != "none" && cache_store != "disk" &&
         cache_store != "3fs") {
       CHECK(false) << "Only support none, disk or 3fs cache store.";
@@ -315,46 +307,38 @@ static void InitBlockCacheOption(Configuration* c, BlockCacheOption* option) {
   }
 
   {  // disk cache option
-    DiskCacheOption& o = option->disk_cache_option();
-    c->GetValueFatalIfFail("disk_cache.cache_dir", &o.cache_dir());
-    c->GetValueFatalIfFail("disk_cache.cache_size_mb", &o.cache_size_mb());
-    c->GetValueFatalIfFail("disk_cache.free_space_ratio",
-                           &o.free_space_ratio());
-    c->GetValueFatalIfFail("disk_cache.cache_expire_second",
-                           &o.cache_expire_s());
-    c->GetValueFatalIfFail("disk_cache.cleanup_expire_interval_millsecond",
-                           &o.cleanup_expire_interval_ms());
-    c->GetValueFatalIfFail("disk_cache.drop_page_cache", &o.drop_page_cache());
-    if (!c->GetUInt32Value("disk_cache.ioring_iodepth", &o.ioring_iodepth())) {
-      o.ioring_iodepth() = 128;
-    }
-    if (!c->GetUInt32Value("disk_cache.ioring_blksize", &o.ioring_blksize())) {
-      o.ioring_blksize() = 1048576;
-    }
-    o.ioring_prefetch() = c->GetBoolValue("disk_cache.ioring_prefetch", true);
+    c->GetValue("disk_cache.cache_dir", &cache::FLAGS_cache_dir);
+    c->GetValue("disk_cache.cache_size_mb", &cache::FLAGS_cache_size_mb);
+    c->GetValue("disk_cache.free_space_ratio", &cache::FLAGS_free_space_ratio);
+    c->GetValue("disk_cache.cache_expire_second", &cache::FLAGS_cache_expire_s);
+    c->GetValue("disk_cache.cleanup_expire_interval_millsecond",
+                &cache::FLAGS_cleanup_expire_interval_ms);
+    c->GetValue("disk_cache.drop_page_cache", &cache::FLAGS_drop_page_cache);
+
+    c->GetValue("disk_cache.ioring_iodepth", &cache::FLAGS_ioring_iodepth);
+    c->GetValue("disk_cache.ioring_blksize", &cache::FLAGS_ioring_blksize);
+    c->GetValue("disk_cache.ioring_prefetch", &cache::FLAGS_ioring_prefetch);
   }
 
   {  // disk state option
 
-    DiskStateOption& o = option->disk_cache_option().disk_state_option();
-    c->GetValueFatalIfFail("disk_state.tick_duration_second",
-                           &o.tick_duration_s());
-    c->GetValueFatalIfFail("disk_state.normal2unstable_io_error_num",
-                           &o.normal2unstable_io_error_num());
-    c->GetValueFatalIfFail("disk_state.unstable2normal_io_succ_num",
-                           &o.unstable2normal_io_succ_num());
-    c->GetValueFatalIfFail("disk_state.unstable2down_second",
-                           &o.unstable2down_s());
-    c->GetValueFatalIfFail("disk_state.disk_check_duration_millsecond",
-                           &o.disk_check_duration_ms());
+    c->GetValue("disk_state.tick_duration_second",
+                &cache::FLAGS_state_tick_duration_s);
+    c->GetValue("disk_state.normal2unstable_io_error_num",
+                &cache::FLAGS_state_normal2unstable_io_error_num);
+    c->GetValue("disk_state.unstable2normal_io_succ_num",
+                &cache::FLAGS_state_unstable2normal_io_succ_num);
+    c->GetValue("disk_state.unstable2down_second",
+                &cache::FLAGS_state_unstable2down_s);
+    c->GetValue("disk_state.disk_check_duration_millsecond",
+                &cache::FLAGS_check_disk_state_duration_ms);
   }
 
   // rewrite disk cache options
   {
-    DiskCacheOption& o = option->disk_cache_option();
-    if (option->cache_store() == "disk" || option->cache_store() == "3fs") {
-      o.filesystem_type() = (option->cache_store() == "3fs") ? "3fs" : "local";
-      SplitDiskCacheOption(o, &option->disk_cache_options());
+    auto cache_store = cache::FLAGS_cache_store;
+    if (cache_store == "disk" || cache_store == "3fs") {
+      SplitDiskCacheOption(&option->disk_cache_options);
     }
   }
 }
@@ -406,8 +390,8 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   if (!conf->GetIntValue("fuseClient.bthread_worker_num",
                          &FLAGS_bthread_worker_num)) {
     FLAGS_bthread_worker_num = 0;
-    LOG(INFO)
-        << "Not found `fuseClient.bthread_worker_num` in conf, default to 0";
+    LOG(INFO) << "Not found `fuseClient.bthread_worker_num` in conf, "
+                 "default to 0";
   }
 
   conf->GetValueFatalIfFail("fuseClient.throttle.avgWriteBytes",
@@ -440,11 +424,11 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   SetBrpcOpt(conf);
 }
 
-void RewriteCacheDir(BlockCacheOption* option, std::string uuid) {
-  auto& disk_cache_options = option->disk_cache_options();
+void RewriteCacheDir(cache::BlockCacheOption* option, std::string uuid) {
+  auto& disk_cache_options = option->disk_cache_options;
   for (auto& disk_cache_option : disk_cache_options) {
-    std::string cache_dir = disk_cache_option.cache_dir();
-    disk_cache_option.cache_dir() = PathJoin({cache_dir, uuid});
+    std::string cache_dir = disk_cache_option.cache_dir;
+    disk_cache_option.cache_dir = cache::RealCacheDir(cache_dir, uuid);
   }
 }
 

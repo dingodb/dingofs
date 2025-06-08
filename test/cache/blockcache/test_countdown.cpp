@@ -26,7 +26,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class CountdownTest : public ::testing::Test {
  protected:
@@ -62,6 +61,5 @@ TEST_F(CountdownTest, Add) {
   ASSERT_EQ(count.Size(), 0);
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

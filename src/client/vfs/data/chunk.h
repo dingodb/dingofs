@@ -20,9 +20,10 @@
 #include <cstdint>
 #include <mutex>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "common/status.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace client {
@@ -47,9 +48,8 @@ class Chunk {
   std::uint64_t End() const { return chunk_end_; }
 
  private:
-  Status WriteToBlockCache(const cache::blockcache::BlockKey& key,
-                           const cache::blockcache::Block& block,
-                           cache::blockcache::BlockContext ctx);
+  Status WriteToBlockCache(const cache::BlockKey& key,
+                           const cache::Block& block, cache::PutOption option);
 
   Status AllockChunkId(uint64_t* chunk_id);
 

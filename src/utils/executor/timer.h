@@ -16,6 +16,7 @@
 #define DINGOFS_UTILS_TIMER_TIMER_H_
 
 #include <functional>
+#include <memory>
 
 namespace dingofs {
 
@@ -33,6 +34,8 @@ class Timer {
 
   virtual bool IsStopped() = 0;
 };
+
+using TimerUPtr = std::unique_ptr<Timer>;
 
 }  // namespace dingofs
 

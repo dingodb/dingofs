@@ -158,7 +158,7 @@ void BlockAccesserImpl::AsyncPut(const std::string& key, const char* buffer,
   put_obj_ctx->start_time = butil::cpuwide_time_us();
   put_obj_ctx->cb =
       [&, retry_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-        if (retry_cb(ctx->ret_code)) {
+        if (retry_cb(ctx->ret_code) == RetryStrategy::kRetry) {
           AsyncPut(ctx);
         }
       };
@@ -181,25 +181,6 @@ Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
   }
 
   s = data_accesser_->Get(key, data);
-  return s;
-}
-
-Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
-                                size_t length, char* buffer) {
-  Status s;
-  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
-    return absl::StrFormat("range_block (%s, %d, %d) : %s", key, offset, length,
-                           (s.ok() ? "ok" : "fail"));
-  });
-
-  block_get_sync_num << 1;
-  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
-
-  if (throttle_) {
-    throttle_->Add(true, length);
-  }
-
-  s = data_accesser_->Range(key, offset, length, buffer);
   return s;
 }
 
@@ -232,6 +213,43 @@ void BlockAccesserImpl::AsyncGet(
   inflight_bytes_throttle_->OnStart(context->len);
 
   data_accesser_->AsyncGet(context);
+}
+
+Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
+                                size_t length, char* buffer) {
+  Status s;
+  BlockAccessLogGuard log(butil::cpuwide_time_us(), [&]() {
+    return absl::StrFormat("range_block (%s, %d, %d) : %s", key, offset, length,
+                           (s.ok() ? "ok" : "fail"));
+  });
+
+  block_get_sync_num << 1;
+  auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
+
+  if (throttle_) {
+    throttle_->Add(true, length);
+  }
+
+  s = data_accesser_->Range(key, offset, length, buffer);
+  return s;
+}
+
+void BlockAccesserImpl::AsyncRange(const std::string& key, off_t offset,
+                                   size_t length, char* buffer,
+                                   RetryCallback retry_cb) {
+  auto get_obj_ctx = std::make_shared<GetObjectAsyncContext>();
+  get_obj_ctx->key = key;
+  get_obj_ctx->buf = buffer;
+  get_obj_ctx->offset = offset;
+  get_obj_ctx->len = length;
+  get_obj_ctx->cb =
+      [&, retry_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
+        if (retry_cb(ctx->ret_code) == RetryStrategy::kRetry) {
+          AsyncGet(ctx);
+        }
+      };
+
+  AsyncGet(get_obj_ctx);
 }
 
 bool BlockAccesserImpl::BlockExist(const std::string& key) {

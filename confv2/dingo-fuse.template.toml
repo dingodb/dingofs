@@ -1,9 +1,9 @@
-# global
+################################################# global
 [global]
 access_logging = true
 bthread_worker_num = 0
 
-# fuse
+################################################# fuse
 [fuse]
 
 [fuse.conn_info]
@@ -16,7 +16,7 @@ want_auto_inval_data=true
 direct_io=false
 keep_cache=true
 
-# vfs
+################################################# vfs
 [vfs]
 cto = true
 nocto_suffix = ""
@@ -54,7 +54,7 @@ avg_read_iops = 0
 burst_read_iops = 0
 burst_read_iops_s = 180
 
-# data
+################################################# meta
 [meta]
 
 [meta.v1.mds]
@@ -66,7 +66,7 @@ rpc_timeout_ms = 2000
 rpc_retry_times = 3
 client_send_request_retry_times = 3
 
-# data
+################################################# data
 [data]
 
 [data.background_flush]
@@ -91,7 +91,56 @@ size = 65536
 total_size_mb = 1024
 use_pool = true
 
-# rpc
+################################################# block cache
+# { local block cache
+[block_cache]
+access_logging = true
+cache_store = "disk"
+stage_enable = false
+cache_enable = false
+upload_stage_throttle_enable = true
+upload_stage_throttle_bandwidth_mb = 256
+upload_stage_throttle_iops = 100
+prefetch_max_inflights = 64
+
+[block_cache.disk_cache]
+# for cache management
+cache_dirs = [ '/var/run/dingofs' ]
+cache_size_mb = 10240
+free_space_ratio = 0.1
+cache_expire_s = 259200
+cleanup_expire_interval_ms = 1000
+
+# for IO
+ioring_blksize = 1048576
+ioring_iodepth = 128
+ioring_prefetch = true
+drop_page_cache = true
+
+# for disk state
+disk_state_tick_duration_s = 60
+disk_state_normal2unstable_io_error_num = 3
+disk_state_unstable2normal_io_succ_num = 10
+disk_state_unstable2down_s = 1800
+disk_state_disk_check_duration_ms = 3000
+# }
+
+# { remote block cache
+[remote_block_cache]
+group_name = ""
+mds_addrs = [ "127.0.0.1:6700" ]
+load_members_interval_ms = 1000
+
+[remote_block_cache.local_access]
+ioring_blksize = 1048576
+ioring_iodepth = 128
+ioring_prefetch = true
+
+[remote_block_cache.remote_access]
+rpc_timeout_ms = 3000
+# }
+
+################################################# s3
 [rpc]
 defer_close_s = 1
 health_check_interval_s = 0
@@ -109,7 +158,7 @@ rpc_timeout_ms = 1000
 rpc_stream_idle_timeout_ms = 500
 batch_inode_attr_limit = 10000
 
-# s3
+################################################# s3
 [s3]
 
 [s3.global]

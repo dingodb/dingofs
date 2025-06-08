@@ -29,8 +29,6 @@
 namespace dingofs {
 namespace client {
 
-using cache::blockcache::BlockKey;
-
 int IntimeWarmUpManager::Consume(void* meta,
                                  bthread::TaskIterator<InodeWarmUpTask>& iter) {
   if (iter.is_queue_stopped()) {
@@ -134,10 +132,16 @@ void IntimeWarmUpManager::Prefetch(
   }
 
   for (auto& obj : block_obj) {
-    BlockKey key(fs_id, inode_id, obj.chunk_id, obj.block_index, obj.version);
+    cache::BlockKey key(fs_id, inode_id, obj.chunk_id, obj.block_index,
+                        obj.version);
     VLOG(3) << "try to prefetch inodeId=" << inode_id
             << " block: " << key.StoreKey() << " len: " << obj.obj_len;
-    block_cache_->SubmitPrefetch(key, obj.obj_len);
+    block_cache_->AsyncPrefetch(key, obj.obj_len, [key](Status status) {
+      if (!status.ok()) {
+        LOG(WARNING) << "Failed to prefetch block (key=" << key.Filename()
+                     << "): " << status.ToString();
+      }
+    });
   }
 }
 

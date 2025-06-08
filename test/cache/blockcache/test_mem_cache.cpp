@@ -29,7 +29,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class MemCacheTest : public ::testing::Test {
  protected:
@@ -55,6 +54,5 @@ TEST_F(MemCacheTest, Basic) {
   ASSERT_EQ(store->Id(), "memory_cache");
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

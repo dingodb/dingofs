@@ -34,13 +34,15 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/synchronization/blocking_counter.h"
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/utils/sys_conf.h"
+#include "cache/utils/helper.h"
 #include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/meta.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
 #include "client/vfs_old/s3/client_s3_adaptor.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 #include "stub/metric/metric.h"
 
@@ -53,12 +55,6 @@ namespace client {
 using blockaccess::GetObjectAsyncCallBack;
 using blockaccess::PutObjectAsyncCallBack;
 using blockaccess::PutObjectAsyncContext;
-
-using cache::blockcache::Block;
-using cache::blockcache::BlockContext;
-using cache::blockcache::BlockFrom;
-using cache::blockcache::BlockKey;
-using cache::utils::SysConf;
 
 using datastream::DataStream;
 using filesystem::Ino;
@@ -529,7 +525,7 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
   return actual_read_len;
 }
 
-bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
+bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
                                                    char* buffer,
                                                    uint64_t offset,
                                                    uint64_t len) {
@@ -539,7 +535,9 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const BlockKey& key,
       return false;
     }
 
-    auto status = block_cache->Range(key, offset, len, buffer, false);
+    IOBuffer buffer;
+    auto status = block_cache->Range(key, offset, len, &buffer,
+                                     cache::RangeOption(false));
     if (!status.ok()) {
       LOG(WARNING) << "Object " << key.Filename() << " not cached in disk.";
       return false;
@@ -653,8 +651,8 @@ Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
     current_read_len =
         length + block_pos > block_size ? block_size - block_pos : length;
     assert(block_pos >= object_offset);
-    BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
-                 req.compaction);
+    cache::BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
+                        req.compaction);
     char* current_buf = data_buf + req.readOffset + read_buf_offset;
 
     // read from localcache -> remotecache -> s3
@@ -709,12 +707,12 @@ void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
                                         uint64_t start_block_index) {
   uint32_t prefetch_blocks = s3ClientAdaptor_->GetPrefetchBlocks();
 
-  std::vector<std::pair<BlockKey, uint64_t>> prefetch_objs;
+  std::vector<std::pair<cache::BlockKey, uint64_t>> prefetch_objs;
 
   uint64_t block_index = start_block_index;
   for (uint32_t i = 0; i < prefetch_blocks; i++) {
-    BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
-                 req.compaction);
+    cache::BlockKey key(req.fsId, req.inodeId, req.chunkId, block_index,
+                        req.compaction);
     uint64_t max_read_len = (block_index + 1) * block_size;
     uint64_t need_read_len = max_read_len > file_len
                                  ? file_len - (block_index * block_size)
@@ -732,14 +730,20 @@ void FileCacheManager::PrefetchForBlock(const S3ReadRequest& req,
 }
 
 void FileCacheManager::PrefetchS3Objs(
-    const std::vector<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
+    const std::vector<std::pair<cache::BlockKey, uint64_t>>& prefetch_objs) {
   for (const auto& obj : prefetch_objs) {
-    BlockKey key = obj.first;
+    cache::BlockKey key = obj.first;
     std::string name = key.StoreKey();
     uint64_t read_len = obj.second;
     VLOG(3) << "try to prefetch s3 obj inodeId=" << key.ino
             << " block: " << name << ", read len: " << read_len;
-    s3ClientAdaptor_->GetBlockCache()->SubmitPrefetch(key, read_len);
+    s3ClientAdaptor_->GetBlockCache()->AsyncPrefetch(
+        key, read_len, [key](Status status) {
+          if (!status.ok()) {
+            LOG(WARNING) << "Prefetch block (key=" << key.Filename()
+                         << ") failed: " << status.ToString();
+          }
+        });
   }
 }
 
@@ -2215,8 +2219,8 @@ DINGOFS_ERROR DataCache::Flush(uint64_t inodeId, bool toS3) {
   // generate flush task
   std::vector<FlushBlock> s3Tasks;
   std::vector<std::shared_ptr<SetKVCacheTask>> kvCacheTasks;
-  char* data =
-      reinterpret_cast<char*>(memalign(SysConf::GetAlignedBlockSize(), len_));
+  char* data = reinterpret_cast<char*>(
+      memalign(cache::Helper::GetIOAlignedBlockSize(), len_));
   if (!data) {
     LOG(ERROR) << "new data failed.";
     return DINGOFS_ERROR::INTERNAL;
@@ -2278,7 +2282,7 @@ DINGOFS_ERROR DataCache::PrepareFlushTasks(
         blockPos + remainLen > blockSize ? blockSize - blockPos : remainLen;
 
     // generate flush to disk or s3 task
-    BlockKey key(fsId, inodeId, *chunkId, blockIndex, 0);
+    cache::BlockKey key(fsId, inodeId, *chunkId, blockIndex, 0);
     auto context = std::make_shared<PutObjectAsyncContext>();
     context->key = key.StoreKey();
     context->buffer = data + (*writeOffset);
@@ -2336,16 +2340,13 @@ void DataCache::FlushTaskExecute(
   if (s3PendingTaskCal.load()) {
     for (const auto& fblock : s3Tasks) {
       auto context = fblock.context;
-      BlockKey key = fblock.key;
-      Block block(context->buffer, context->buffer_size);
-      auto from = entry_watcher->ShouldWriteback(key.ino)
-                      ? BlockFrom::kNoctoFlush
-                      : BlockFrom::kCtoFlush;
-      BlockContext ctx(from);
+      cache::BlockKey key = fblock.key;
+      cache::Block block(context->buffer, context->buffer_size);
+      bool writeback = entry_watcher->ShouldWriteback(key.ino);
       DataStream::GetInstance().EnterFlushSliceQueue(
-          [&, key, block, ctx, callback]() {
+          [&, key, block, writeback, callback]() {
             for (;;) {
-              auto status = block_cache->Put(key, block, ctx);
+              auto status = block_cache->Put(key, block);
               if (status.ok()) {
                 callback(context);
                 break;

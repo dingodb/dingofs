@@ -16,42 +16,36 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_STATE_HEALTH_CHECKER_H_
 
 #include <memory>
-#include <shared_mutex>
 
-#include "utils/executor/timer_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
-#include "cache/blockcache/disk_state_machine.h"
-#include "cache/common/common.h"
-#include "options/cache/block_cache.h"
+#include "cache/utils/state_machine.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class DiskStateHealthChecker {
  public:
-  DiskStateHealthChecker(std::shared_ptr<DiskCacheLayout> layout,
-                         std::shared_ptr<DiskStateMachine> disk_state_machine);
-
+  DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
+                         StateMachineSPtr state_machine);
   virtual ~DiskStateHealthChecker() = default;
 
-  virtual bool Start();
-
-  virtual bool Stop();
+  virtual void Start();
+  virtual void Stop();
 
  private:
   void RunCheck();
-
   void ProbeDisk();
+  std::string GetProbeFilepath() const;
 
-  std::shared_mutex rw_lock_;
-  bool running_{false};
-  std::shared_ptr<DiskCacheLayout> layout_;
-  std::shared_ptr<DiskStateMachine> disk_state_machine_;
-  std::unique_ptr<TimerImpl> timer_;
+  std::atomic<bool> running_;
+  DiskCacheLayoutSPtr layout_;
+  StateMachineSPtr state_machine_;
+  TimerUPtr timer_;
 };
 
-}  // namespace blockcache
+using DiskStateHealthCheckerUPtr = std::unique_ptr<DiskStateHealthChecker>;
+
 }  // namespace cache
 }  // namespace dingofs
 

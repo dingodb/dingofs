@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
 #include "client/vfs_old/filesystem/error.h"
@@ -36,7 +37,6 @@
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/inode_cache_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "blockaccess/block_accesser.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/wait_interval.h"
 
@@ -46,9 +46,6 @@ namespace client {
 class DiskCacheManagerImpl;
 class ChunkCacheManager;
 struct FlushChunkCacheContext;
-
-using cache::blockcache::BlockCache;
-using cache::blockcache::StoreType;
 
 class S3ClientAdaptor {
  public:
@@ -65,7 +62,7 @@ class S3ClientAdaptor {
       std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
       std::shared_ptr<FsCacheManager> fsCacheManager,
       std::shared_ptr<filesystem::FileSystem> filesystem,
-      std::shared_ptr<BlockCache> block_cache,
+      cache::BlockCacheSPtr block_cache,
       std::shared_ptr<KVClientManager> kvClientManager,
       bool startBackGround = false) = 0;
   /**
@@ -88,7 +85,7 @@ class S3ClientAdaptor {
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
   virtual uint64_t GetBlockSize() = 0;
   virtual uint64_t GetChunkSize() = 0;
-  virtual std::shared_ptr<BlockCache> GetBlockCache() = 0;
+  virtual cache::BlockCacheSPtr GetBlockCache() = 0;
   virtual bool HasDiskCache() = 0;
   virtual std::shared_ptr<IntimeWarmUpManager> GetIntimeWarmUpManager() = 0;
 };
@@ -120,7 +117,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
        std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
        std::shared_ptr<FsCacheManager> fsCacheManager,
        std::shared_ptr<filesystem::FileSystem> filesystem,
-       std::shared_ptr<BlockCache> block_cache,
+       cache::BlockCacheSPtr block_cache,
        std::shared_ptr<KVClientManager> kvClientManager,
        bool startBackGround = false) override;
   /**
@@ -156,7 +153,8 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   uint32_t GetPrefetchBlocks() const { return prefetchBlocks_; }
 
   bool HasDiskCache() override {
-    return block_cache_->GetStoreType() == StoreType::kDisk;
+    // return block_cache_->GetStoreType() == StoreType::kDisk;
+    return true;
   }
 
   std::shared_ptr<InodeCacheManager> GetInodeCacheManager() {
@@ -167,7 +165,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
     return filesystem_;
   }
 
-  std::shared_ptr<BlockCache> GetBlockCache() override { return block_cache_; }
+  cache::BlockCacheSPtr GetBlockCache() override { return block_cache_; }
 
   std::shared_ptr<IntimeWarmUpManager> GetIntimeWarmUpManager() override {
     return in_time_warmup_manager_;
@@ -240,7 +238,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
   std::shared_ptr<FsCacheManager> fsCacheManager_;
   std::shared_ptr<InodeCacheManager> inodeManager_;
   std::shared_ptr<filesystem::FileSystem> filesystem_;
-  std::shared_ptr<BlockCache> block_cache_;
+  cache::BlockCacheSPtr block_cache_;
   std::shared_ptr<IntimeWarmUpManager> in_time_warmup_manager_;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsClient_;
   uint32_t fsId_;

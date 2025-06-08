@@ -35,11 +35,11 @@
 #include <vector>
 
 #include "cache/blockcache/cache_store.h"
-#include "common/status.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/error.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/kvclient/kvclient_manager.h"
+#include "common/status.h"
 #include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -55,7 +55,6 @@ using FileCacheManagerPtr = std::shared_ptr<FileCacheManager>;
 using ChunkCacheManagerPtr = std::shared_ptr<ChunkCacheManager>;
 using DataCachePtr = std::shared_ptr<DataCache>;
 using WeakDataCachePtr = std::weak_ptr<DataCache>;
-using cache::blockcache::BlockKey;
 
 enum CacheType { Write = 1, Read = 2 };
 
@@ -120,11 +119,11 @@ enum DataCacheStatus {
 class DataCache : public std::enable_shared_from_this<DataCache> {
  public:
   struct FlushBlock {
-    FlushBlock(BlockKey key,
+    FlushBlock(cache::BlockKey key,
                std::shared_ptr<blockaccess::PutObjectAsyncContext> context)
         : key(key), context(context) {}
 
-    BlockKey key;
+    cache::BlockKey key;
     std::shared_ptr<blockaccess::PutObjectAsyncContext> context;
   };
 
@@ -359,7 +358,7 @@ class FileCacheManager {
                          uint64_t fsId, uint64_t inodeId);
 
   void PrefetchS3Objs(
-      const std::vector<std::pair<BlockKey, uint64_t>>& prefetch_objs);
+      const std::vector<std::pair<cache::BlockKey, uint64_t>>& prefetch_objs);
 
   void HandleReadRequest(const ReadRequest& request,
                          const pb::metaserver::S3ChunkInfo& s3ChunkInfo,
@@ -415,7 +414,7 @@ class FileCacheManager {
                           uint64_t file_len);
 
   // read kv request from local disk cache
-  bool ReadKVRequestFromLocalCache(const BlockKey& key, char* buffer,
+  bool ReadKVRequestFromLocalCache(const cache::BlockKey& key, char* buffer,
                                    uint64_t offset, uint64_t length);
 
   // read kv request from remote cache like memcached

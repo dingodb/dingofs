@@ -25,26 +25,23 @@
 
 #include <vector>
 
-#include "base/cache/cache.h"
 #include "base/time/time.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/cache.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
-
-using dingofs::base::cache::Cache;
-using dingofs::base::time::TimeSpec;
 
 using CacheKey = BlockKey;
 
 struct CacheValue {
   CacheValue() = default;
 
-  CacheValue(size_t size, TimeSpec atime) : size(size), atime(atime) {}
+  CacheValue(size_t size, base::time::TimeSpec atime)
+      : size(size), atime(atime) {}
 
   size_t size;
-  TimeSpec atime;  // access time
+  base::time::TimeSpec atime;  // access time
 };
 
 struct CacheItem {
@@ -85,7 +82,6 @@ inline void ListRemove(ListNode* node) {
   node->prev->next = node->next;
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

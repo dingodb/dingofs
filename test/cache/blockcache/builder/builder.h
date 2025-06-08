@@ -31,20 +31,19 @@
 
 #include "base/filepath/filepath.h"
 #include "base/string/string.h"
+#include "blockaccess/mock/mock_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/utils/access_log.h"
-#include "blockaccess/mock/mock_accesser.h"
 #include "options/cache/block_cache.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using base::string::GenUuid;
-using options::cache::BlockCacheOption;
-using options::cache::DiskCacheOption;
+using cache::BlockCacheOption;
+using cache::DiskCacheOption;
 
 class BlockKeyBuilder {
  public:
@@ -150,7 +149,6 @@ class BlockCacheBuilder {
   std::shared_ptr<blockaccess::MockBlockAccesser> block_accesser_;
 };
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

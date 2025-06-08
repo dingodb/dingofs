@@ -17,10 +17,10 @@
 #ifndef DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_
 #define DINGOFS_BLOCK_ACCESS_S3_ACCESSER_H_
 
-#include "common/status.h"
 #include "blockaccess/accesser.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
 #include "blockaccess/s3/s3_common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace blockaccess {

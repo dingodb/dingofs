@@ -22,139 +22,167 @@
 
 #include "cache/blockcache/disk_cache.h"
 
-#include <fcntl.h>
-#include <glog/logging.h>
-
-#include <memory>
-
-#include "absl/cleanup/cleanup.h"
-#include "base/math/math.h"
-#include "base/string/string.h"
-#include "base/time/time.h"
-#include "cache/blockcache/block_reader.h"
-#include "cache/blockcache/disk_cache_layout.h"
-#include "cache/blockcache/disk_cache_manager.h"
-#include "cache/blockcache/disk_cache_metric.h"
-#include "cache/blockcache/disk_state_machine_impl.h"
-#include "cache/common/common.h"
+#include "cache/storage/hf3fs.h"
+#include "cache/storage/local_filesystem.h"
 #include "cache/utils/access_log.h"
-#include "cache/utils/aio.h"
-#include "cache/utils/aio_queue.h"
-#include "cache/utils/aio_uring.h"
-#include "cache/utils/aio_usrbio.h"
-#include "cache/utils/local_filesystem.h"
-#include "cache/utils/phase_timer.h"
+#include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
-#include "stub/metric/metric.h"
+#include "cache/utils/state_machine_impl.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::base::math::kMiB;
 using dingofs::base::string::GenUuid;
 using dingofs::base::string::TrimSpace;
 using dingofs::base::time::TimeNow;
-using dingofs::cache::utils::IoRing;
-using dingofs::cache::utils::LinuxIoUring;
-using dingofs::cache::utils::LogGuard;
-using dingofs::cache::utils::Phase;
-using dingofs::cache::utils::PhaseTimer;
-using dingofs::cache::utils::Posix;
-using dingofs::cache::utils::Usrbio;
 
-DiskCache::DiskCache(DiskCacheOption option)
-    : option_(option), use_direct_write_(false), running_(false) {
-  metric_ = std::make_shared<DiskCacheMetric>(option);
-  layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir());
-  disk_state_machine_ = std::make_shared<DiskStateMachineImpl>(metric_);
+DiskCache::DiskCache(DiskCacheOption option) : running_(false) {
+  // layout
+  layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
+
+  // health checker
+  state_machine_ = std::make_shared<StateMachineImpl>([](State) {});
   disk_state_health_checker_ =
-      std::make_unique<DiskStateHealthChecker>(layout_, disk_state_machine_);
-  fs_ = std::make_shared<LocalFileSystem>([&](Status status) {
+      std::make_unique<DiskStateHealthChecker>(layout_, state_machine_);
+
+  // filesystem
+  auto check_status_func = [&](Status status) {
     if (status.ok()) {
-      disk_state_machine_->IOSucc();
-    } else {
-      disk_state_machine_->IOErr();
+      state_machine_->Success();
+    } else if (status.IsIoError()) {
+      state_machine_->Error();
     }
     return status;
-  });
-  manager_ = std::make_shared<DiskCacheManager>(option.cache_size_mb() * kMiB,
-                                                layout_, fs_, metric_);
-  loader_ = std::make_unique<DiskCacheLoader>(layout_, fs_, manager_, metric_);
-
-  std::shared_ptr<IoRing> io_ring;
-  if (option_.filesystem_type() == "3fs") {
-    io_ring =
-        std::make_shared<Usrbio>(option_.cache_dir(), option_.ioring_blksize());
+  };
+  if (option.cache_store == "3fs") {
+    fs_ = std::make_shared<HF3FS>(option.cache_dir, check_status_func);
   } else {
-    io_ring = std::make_shared<LinuxIoUring>();
+    fs_ = std::make_shared<LocalFileSystem>(check_status_func);
   }
-  aio_queue_ = std::make_shared<AioQueueImpl>(io_ring);
+
+  // manager & loader
+  manager_ =
+      std::make_shared<DiskCacheManager>(option.cache_size_mb * kMiB, layout_);
+  loader_ = std::make_unique<DiskCacheLoader>(layout_, manager_);
 }
 
 Status DiskCache::Init(UploadFunc uploader) {
-  if (running_.exchange(true)) {
-    return Status::OK();  // already running
-  }
+  if (!running_.exchange(true, std::memory_order_acq_rel)) {
+    LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") starting...";
 
-  Status status = aio_queue_->Init(option_.ioring_iodepth());
-  if (status.ok()) {
-    status = CreateDirs();
+    uploader_ = uploader;
+
+    // create directories and load disk id
+    auto status = CreateDirs();
     if (status.ok()) {
-      status = LoadLockFile();
+      status = LoadOrCreateLockFile();
     }
-  }
-  if (!status.ok()) {
-    return status;
+
+    if (!status.ok()) {
+      return status;
+    }
+
+    // start disk healther checker
+    disk_state_health_checker_->Start();  // probe disk health
+
+    // init filesystem which will perform IO operations
+    status = fs_->Init();
+    if (!status.ok()) {
+      return status;
+    }
+
+    // start manager and loader
+    manager_->Start();                // manage disk capacity, cache expire
+    loader_->Start(uuid_, uploader);  // load stage and cache block
+
+    LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is up.";
   }
 
-  uploader_ = uploader;
-  metric_->Init();   // for restart
-  DetectDirectIO();  // detect filesystem whether support direct IO, filesystem
-                     // like tmpfs (/dev/shm) will not support it.
-  disk_state_machine_->Start();         // monitor disk state
-  disk_state_health_checker_->Start();  // probe disk health
-  manager_->Start();                    // manage disk capacity, cache expire
-  loader_->Start(uuid_, uploader);      // load stage and cache block
-  metric_->SetUuid(uuid_);
-  metric_->SetRunningStatus(kCacheUp);
-
-  LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is up.";
   return Status::OK();
 }
 
 Status DiskCache::Shutdown() {
-  if (!running_.exchange(false)) {
-    return Status::OK();
+  if (running_.exchange(false, std::memory_order_acq_rel)) {
+    LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is shutting down...";
+
+    // stop manager and loader
+    loader_->Stop();
+    manager_->Stop();
+
+    // destroy filesystem
+    auto status = fs_->Destroy();
+    if (!status.ok()) {
+      return status;
+    }
+
+    // stop disk healther checker
+    disk_state_health_checker_->Stop();
+
+    LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
   }
 
-  LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is shutting down...";
-
-  loader_->Stop();
-  manager_->Stop();
-  disk_state_health_checker_->Stop();
-  disk_state_machine_->Stop();
-  aio_queue_->Shutdown();
-  metric_->SetRunningStatus(kCacheDown);
-
-  LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
   return Status::OK();
 }
 
+Status DiskCache::CreateDirs() {
+  std::vector<std::string> dirs{
+      GetRootDir(),
+      GetStageDir(),
+      GetCacheDir(),
+      GetProbeDir(),
+  };
+
+  for (const auto& dir : dirs) {
+    auto status = Helper::MkDirs(dir);
+    if (!status.ok()) {
+      return status;
+    }
+  }
+  return Status::OK();
+}
+
+Status DiskCache::LoadOrCreateLockFile() {
+  std::string content;
+  auto lock_path = GetLockPath();
+  auto status = Helper::ReadFile(lock_path, &content);
+  if (status.ok()) {
+    uuid_ = TrimSpace(content);
+  } else if (status.IsNotFound()) {
+    uuid_ = GenUuid();
+    status = Helper::WriteFile(lock_path, content);
+  }
+  return status;
+}
+
+// Detect filesystem whether support direct IO, filesystem
+// like tmpfs (/dev/shm) will not support it.
+bool DiskCache::DetectDirectIO() {
+  int fd;
+  int flags = O_CREAT | O_WRONLY | O_TRUNC | O_DIRECT;
+  auto filepath = GetDetectPath();
+  auto status = Posix::Open(filepath, flags, 0644, &fd);
+  Posix::Close(fd);
+  Posix::Unlink(filepath);
+
+  if (status.ok()) {
+    LOG(INFO) << "The filesystem of disk cache (dir=" << GetRootDir()
+              << ") supports direct IO.";
+    return true;
+  }
+
+  LOG(INFO) << "The filesystem of disk cache (dir=" << GetRootDir()
+            << ") not support direct IO, using buffer IO, detect rc = "
+            << status.ToString();
+  return false;
+}
+
 Status DiskCache::Stage(const BlockKey& key, const Block& block,
-                        BlockContext ctx) {
+                        StageOption option) {
   Status status;
   PhaseTimer timer;
-  auto metric_guard = ::absl::MakeCleanup([&] {
-    if (status.ok()) {
-      metric_->AddStageBlock(1);
-    } else {
-      metric_->AddStageSkip();
-    }
-  });
   LogGuard log([&]() {
-    return StrFormat("stage(%s,%d): %s%s", key.Filename(), block.size,
-                     status.ToString(), timer.ToString());
+    return absl::StrFormat("stage(%s,%zu): %s%s", key.Filename(), block.size,
+                           status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec | kWantStage);
@@ -165,52 +193,57 @@ Status DiskCache::Stage(const BlockKey& key, const Block& block,
   timer.NextPhase(Phase::kWriteFile);
   std::string stage_path(GetStagePath(key));
   std::string cache_path(GetCachePath(key));
-  status =
-      fs_->WriteFile(stage_path, block.data, block.size, use_direct_write_);
+  status = fs_->WriteFile(stage_path, block.buffer);
   if (!status.ok()) {
     return status;
   }
 
-  timer.NextPhase(Phase::kLink);
-  status = fs_->HardLink(stage_path, cache_path);
-  if (status.ok()) {
-    timer.NextPhase(Phase::kCacheAdd);
-    manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
-  } else {
+  // FIXME: link error maybe cause:
+  //   1) disk capacity managment inaccurate
+  //   2) io error: block which created by writeback will not founded
+  timer.NextPhase(Phase::kLinkFile);
+  status = fs_->Link(stage_path, cache_path);
+  if (!status.ok()) {
     LOG(WARNING) << "Link " << stage_path << " to " << cache_path
                  << " failed: " << status.ToString();
     status = Status::OK();  // ignore link error
   }
 
-  timer.NextPhase(Phase::kEnqueueUpload);
-  uploader_(key, stage_path, ctx);
+  timer.NextPhase(Phase::kCacheAdd);
+  manager_->Add(key, CacheValue(block.size, TimeNow()), BlockPhase::kStaging);
+
+  timer.NextPhase(Phase::kEnterUploadQueue);
+  uploader_(key, block.size, option.ctx);
   return status;
 }
 
-Status DiskCache::RemoveStage(const BlockKey& key, BlockContext /*ctx*/) {
+Status DiskCache::RemoveStage(const BlockKey& key,
+                              RemoveStageOption /*option*/) {
   Status status;
-  auto metric_guard = ::absl::MakeCleanup([&] {
-    if (status.ok()) {
-      metric_->AddStageBlock(-1);
-    }
-  });
+  PhaseTimer timer;
   LogGuard log([&]() {
-    return StrFormat("removestage(%s): %s", key.Filename(), status.ToString());
+    return absl::StrFormat("removestage(%s): %s", key.Filename(),
+                           status.ToString());
   });
 
   // NOTE: we will try to delete stage file even if the disk cache
   //       is down or unhealthy, so we remove the Check(...) here.
+  // status = Check(...);
+
+  timer.NextPhase(Phase::kRemoveFile);
   status = fs_->RemoveFile(GetStagePath(key));
+
   manager_->Add(key, CacheValue(), BlockPhase::kUploaded);
   return status;
 }
 
-Status DiskCache::Cache(const BlockKey& key, const Block& block) {
+Status DiskCache::Cache(const BlockKey& key, const Block& block,
+                        CacheOption /*option*/) {
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return StrFormat("cache(%s,%d): %s%s", key.Filename(), block.size,
-                     status.ToString(), timer.ToString());
+    return absl::StrFormat("cache(%s,%zu): %s%s", key.Filename(), block.size,
+                           status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec | kWantCache);
@@ -219,7 +252,7 @@ Status DiskCache::Cache(const BlockKey& key, const Block& block) {
   }
 
   timer.NextPhase(Phase::kWriteFile);
-  status = fs_->WriteFile(GetCachePath(key), block.data, block.size);
+  status = fs_->WriteFile(GetCachePath(key), block.buffer, WriteOption(true));
   if (!status.ok()) {
     return status;
   }
@@ -229,20 +262,13 @@ Status DiskCache::Cache(const BlockKey& key, const Block& block) {
   return status;
 }
 
-Status DiskCache::Load(const BlockKey& key,
-                       std::shared_ptr<BlockReader>& reader) {
+Status DiskCache::Load(const BlockKey& key, off_t offset, size_t length,
+                       IOBuffer* buffer, LoadOption /*option*/) {
   Status status;
   PhaseTimer timer;
-  auto metric_guard = ::absl::MakeCleanup([&] {
-    if (status.ok()) {
-      metric_->AddCacheHit();
-    } else {
-      metric_->AddCacheMiss();
-    }
-  });
   LogGuard log([&]() {
-    return StrFormat("load(%s): %s%s", key.Filename(), status.ToString(),
-                     timer.ToString());
+    return absl::StrFormat("load(%s,%lld,%zu): %s%s", key.Filename(), offset,
+                           length, status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec);
@@ -252,107 +278,39 @@ Status DiskCache::Load(const BlockKey& key,
     return Status::NotFound("cache not found");
   }
 
-  timer.NextPhase(Phase::kOpenFile);
-  status = NewBlockReader(key, reader);
+  timer.NextPhase(Phase::kReadFile);
+  status = fs_->ReadFile(GetCachePath(key), offset, length, buffer);
 
-  // Delete corresponding key of block which maybe already deleted by accident.
+  // Delete the block which maybe already deleted by accident.
   if (status.IsNotFound()) {
     manager_->Delete(key);
   }
+
   return status;
 }
 
-Status DiskCache::NewBlockReader(const BlockKey& key,
-                                 std::shared_ptr<BlockReader>& reader) {
-  return fs_->Do([&]() {
-    int fd;
-    auto status = Posix::Open(GetCachePath(key), O_RDONLY, &fd);
-    if (!status.ok()) {
-      return status;
-    }
+std::string DiskCache::Id() const { return uuid_; }
 
-    if (option_.filesystem_type() == "3fs") {
-      reader = std::make_shared<RemoteBlockReader>(fd, option_.ioring_blksize(),
-                                                   fs_, aio_queue_);
-    } else {
-      reader = std::make_shared<LocalBlockReader>(fd, fs_);
-    }
-    return status;
-  });
+bool DiskCache::IsRunning() const {
+  return running_.load(std::memory_order_acquire);
 }
 
-bool DiskCache::IsCached(const BlockKey& key) {
+bool DiskCache::IsCached(const BlockKey& key) const {
   std::string cache_path = GetCachePath(key);
   if (manager_->Exist(key)) {
     return true;
-  } else if (loader_->IsLoading() && fs_->FileExists(cache_path)) {
+  } else if (IsLoading() && fs_->FileExists(cache_path)) {
     return true;
   }
   return false;
-}
-
-std::string DiskCache::Id() { return uuid_; }
-
-Status DiskCache::CreateDirs() {
-  std::vector<std::string> dirs{
-      layout_->GetRootDir(),
-      layout_->GetStageDir(),
-      layout_->GetCacheDir(),
-      layout_->GetProbeDir(),
-  };
-
-  for (const auto& dir : dirs) {
-    auto status = fs_->MkDirs(dir);
-    if (!status.ok()) {
-      return status;
-    }
-  }
-  return Status::OK();
-}
-
-Status DiskCache::LoadLockFile() {
-  size_t length;
-  std::shared_ptr<char> buffer;
-  auto lock_path = layout_->GetLockPath();
-  auto status = fs_->ReadFile(lock_path, buffer, &length);
-  if (status.ok()) {
-    uuid_ = TrimSpace(std::string(buffer.get(), length));
-  } else if (status.IsNotFound()) {
-    uuid_ = GenUuid();
-    status = fs_->WriteFile(lock_path, uuid_.c_str(), uuid_.size());
-  }
-  return status;
-}
-
-void DiskCache::DetectDirectIO() {
-  std::string filepath = layout_->GetDetectPath();
-  auto status = fs_->Do([filepath]() {
-    int fd;
-    auto status = Posix::Create(filepath, &fd, true);
-    Posix::Close(fd);
-    Posix::Unlink(filepath);
-    return status;
-  });
-
-  if (status.ok()) {
-    use_direct_write_ = true;
-    LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
-              << ") supports direct IO.";
-  } else {
-    use_direct_write_ = false;
-    LOG(INFO) << "The filesystem of disk cache (dir=" << layout_->GetRootDir()
-              << ") not support direct IO, using buffer IO, detect rc = "
-              << status.ToString();
-  }
-  metric_->SetUseDirectWrite(use_direct_write_);
 }
 
 // Check cache status:
 //   1. check running status (UP/DOWN)
 //   2. check disk healthy (HEALTHY/UNHEALTHY)
 //   3. check disk free space (FULL or NOT)
-Status DiskCache::Check(uint8_t want) {
-  if (!running_.load(std::memory_order_relaxed)) {
+Status DiskCache::Check(uint8_t want) const {
+  if (!running_.load(std::memory_order_acquire)) {
     return Status::CacheDown("disk cache is down");
   }
 
@@ -366,17 +324,27 @@ Status DiskCache::Check(uint8_t want) {
   return Status::OK();
 }
 
+// disk cache status
 bool DiskCache::IsLoading() const { return loader_->IsLoading(); }
 
 bool DiskCache::IsHealthy() const {
-  return disk_state_machine_->GetDiskState() == DiskState::kDiskStateNormal;
+  return state_machine_->GetState() == State::kStateNormal;
 }
 
 bool DiskCache::StageFull() const { return manager_->StageFull(); }
-
 bool DiskCache::CacheFull() const { return manager_->CacheFull(); }
 
+// utility
 std::string DiskCache::GetRootDir() const { return layout_->GetRootDir(); }
+std::string DiskCache::GetStageDir() const { return layout_->GetStageDir(); }
+std::string DiskCache::GetCacheDir() const { return layout_->GetCacheDir(); }
+std::string DiskCache::GetProbeDir() const { return layout_->GetProbeDir(); }
+
+std::string DiskCache::GetDetectPath() const {
+  return layout_->GetDetectPath();
+}
+
+std::string DiskCache::GetLockPath() const { return layout_->GetLockPath(); }
 
 std::string DiskCache::GetStagePath(const BlockKey& key) const {
   return layout_->GetStagePath(key);
@@ -386,6 +354,5 @@ std::string DiskCache::GetCachePath(const BlockKey& key) const {
   return layout_->GetCachePath(key);
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

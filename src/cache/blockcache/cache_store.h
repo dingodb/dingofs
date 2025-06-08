@@ -23,26 +23,23 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 
-#include <glog/logging.h>
-
-#include <functional>
-#include <string>
+#include <mutex>
 
 #include "base/string/string.h"
-#include "cache/blockcache/block_reader.h"
 #include "cache/common/common.h"
-#include "common/io_buffer.h"
-#include "common/status.h"
 #include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::base::string::StrFormat;
-using dingofs::base::string::Strs2Ints;
-using dingofs::base::string::StrSplit;
+// store type
+enum class StoreType : uint8_t {
+  kNone = 0,
+  kDisk = 1,
+  k3FS = 2,
+};
 
+// block key
 struct BlockKey {
   BlockKey() : fs_id(0), ino(0), id(0), index(0), version(0) {}
 
@@ -58,16 +55,16 @@ struct BlockKey {
         version(pb.version()) {}
 
   std::string Filename() const {
-    return StrFormat("%llu_%llu_%llu_%llu_%llu", fs_id, ino, id, index,
-                     version);
+    return absl::StrFormat("%llu_%llu_%llu_%llu_%llu", fs_id, ino, id, index,
+                           version);
   }
 
   std::string StoreKey() const {
-    return StrFormat("blocks/%d/%d/%s", id / 1000 / 1000, id / 1000,
-                     Filename());
+    return base::string::StrFormat("blocks/%llu/%llu/%s", id / 1000 / 1000,
+                                   id / 1000, Filename());
   }
 
-  pb::cache::blockcache::BlockKey ToPb() const {
+  pb::cache::blockcache::BlockKey ToPB() const {
     pb::cache::blockcache::BlockKey pb;
     pb.set_fs_id(fs_id);
     pb.set_ino(ino);
@@ -78,8 +75,8 @@ struct BlockKey {
   }
 
   bool ParseFilename(const std::string_view& filename) {
-    auto strs = StrSplit(filename, "_");
-    return Strs2Ints(strs, {&fs_id, &ino, &id, &index, &version});
+    auto strs = base::string::StrSplit(filename, "_");
+    return base::string::Strs2Ints(strs, {&fs_id, &ino, &id, &index, &version});
   }
 
   uint64_t fs_id;    // filesystem id
@@ -89,25 +86,26 @@ struct BlockKey {
   uint64_t version;  // compaction version
 };
 
+// block
 struct Block {
-  Block(const char* data, size_t size) : data(data), size(size) {}
-  Block(common::IOBuffer* /*buffer*/) {}  // TODO(Wine93): implement this
+  Block(IOBuffer buffer) : buffer(buffer), size(buffer.Size()) {}
+  Block(const char* data, size_t size) : buffer(data, size), size(size) {}
 
-  const char* data;
+  IOBuffer buffer;
   size_t size;
 };
 
 enum class BlockFrom : uint8_t {
-  kCtoFlush = 0,
-  kNoctoFlush = 1,
-  kReload = 2,
-  kUnknown = 3,
+  kWriteback = 0,
+  kReload = 1,
+  kUnknown = 2,
 };
 
+// block context
 struct BlockContext {
-  BlockContext() : from(BlockFrom::kUnknown) {}
+  BlockContext() : from(BlockFrom::kUnknown), store_id("") {}
 
-  BlockContext(BlockFrom from) : from(from) {}
+  BlockContext(BlockFrom from) : from(from), store_id("") {}
 
   BlockContext(BlockFrom from, const std::string& store_id)
       : from(from), store_id(store_id) {
@@ -117,37 +115,63 @@ struct BlockContext {
   }
 
   BlockFrom from;
-  std::string store_id;
+  std::string store_id;  // specified store id which this block real stored in
+                         // (for disk cache group changed)
 };
 
+// cache store
 class CacheStore {
  public:
-  using UploadFunc = std::function<void(
-      const BlockKey& key, const std::string& stage_path, BlockContext ctx)>;
+  struct StageOption {
+    StageOption() = default;
+    StageOption(BlockContext ctx) : ctx(ctx) {}
 
- public:
+    BlockContext ctx;
+  };
+
+  struct RemoveStageOption {
+    RemoveStageOption() = default;
+    RemoveStageOption(BlockContext ctx) : ctx(ctx) {}
+
+    BlockContext ctx;
+  };
+
+  struct CacheOption {
+    CacheOption() = default;
+  };
+
+  struct LoadOption {
+    LoadOption() = default;
+    LoadOption(BlockContext ctx) : ctx(ctx) {}
+
+    BlockContext ctx;
+  };
+
+  using UploadFunc =
+      std::function<void(const BlockKey& key, size_t length, BlockContext ctx)>;
+
   virtual ~CacheStore() = default;
 
   virtual Status Init(UploadFunc uploader) = 0;
-
   virtual Status Shutdown() = 0;
 
   virtual Status Stage(const BlockKey& key, const Block& block,
-                       BlockContext ctx) = 0;
+                       StageOption option = StageOption()) = 0;
+  virtual Status RemoveStage(
+      const BlockKey& key, RemoveStageOption option = RemoveStageOption()) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block,
+                       CacheOption option = CacheOption()) = 0;
+  virtual Status Load(const BlockKey& key, off_t offset, size_t length,
+                      IOBuffer* buffer, LoadOption option = LoadOption()) = 0;
 
-  virtual Status RemoveStage(const BlockKey& key, BlockContext ctx) = 0;
-
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
-
-  virtual Status Load(const BlockKey& key,
-                      std::shared_ptr<BlockReader>& reader) = 0;
-
-  virtual bool IsCached(const BlockKey& key) = 0;
-
-  virtual std::string Id() = 0;
+  virtual std::string Id() const = 0;
+  virtual bool IsRunning() const = 0;
+  virtual bool IsCached(const BlockKey& key) const = 0;
 };
 
-}  // namespace blockcache
+using CacheStoreSPtr = std::shared_ptr<CacheStore>;
+using CacheStoreUPtr = std::unique_ptr<CacheStore>;
+
 }  // namespace cache
 }  // namespace dingofs
 

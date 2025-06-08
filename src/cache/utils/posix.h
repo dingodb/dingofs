@@ -25,19 +25,21 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <sys/vfs.h>
 
 #include <functional>
 #include <memory>
 #include <string>
 
-#include "base/time/time.h"
 #include "cache/common/common.h"
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
+// Wrapper for POSIX interface which does:
+//  1. convert system error code to Status
+//  2. add logging
 class Posix {
  public:
   static Status Stat(const std::string& path, struct stat* stat);
@@ -50,9 +52,11 @@ class Posix {
 
   static Status CloseDir(::DIR* dir);
 
-  static Status Create(const std::string& path, int* fd, bool use_direct);
-
   static Status Open(const std::string& path, int flags, int* fd);
+
+  static Status Open(const std::string& path, int flags, mode_t mode, int* fd);
+
+  static Status Creat(const std::string& path, mode_t mode, int* fd);
 
   static Status LSeek(int fd, off_t offset, int whence);
 
@@ -64,7 +68,7 @@ class Posix {
 
   static Status Unlink(const std::string& path);
 
-  static Status Link(const std::string& oldpath, const std::string& newpath);
+  static Status Link(const std::string& from, const std::string& to);
 
   static Status Rename(const std::string& oldpath, const std::string& newpath);
 
@@ -75,14 +79,13 @@ class Posix {
   static Status MMap(void* addr, size_t length, int port, int flags, int fd,
                      off_t offset, void** addr_out);
 
-  static Status MUnmap(void* addr, size_t length);
+  static Status MUnMap(void* addr, size_t length);
 
  private:
   template <typename... Args>
   static Status PosixError(int code, const char* format, const Args&... args);
 };
 
-}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs
 

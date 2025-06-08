@@ -31,7 +31,6 @@
 #include <string>
 
 namespace dingofs {
-namespace common {
 
 // for block { put,range,cache... }:
 //
@@ -60,19 +59,18 @@ class IOBuffer {
  public:
   IOBuffer() = default;
   explicit IOBuffer(butil::IOBuf iobuf);
-  explicit IOBuffer(const char* data, size_t size);
+  IOBuffer(const char* data, size_t size);
 
-  const butil::IOBuf& RawBuffer();
+  butil::IOBuf& IOBuf();
   std::vector<iovec> Fetch();
   void CopyTo(char* dest);
 
-  size_t Size();
+  size_t Size() const;
 
  private:
   butil::IOBuf iobuf_;
 };
 
-}  // namespace common
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_COMMON_IO_BUFFER_H_

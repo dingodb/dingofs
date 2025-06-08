@@ -16,13 +16,12 @@
 file(GLOB CACHE_COMMON_LIB_SRCS
     "*.cpp"
 )
-add_library(cache_common ${CACHE_COMMON_LIB_SRCS})
 
+add_library(cache_common ${CACHE_COMMON_LIB_SRCS})
 target_link_libraries(cache_common
     PROTO_OBJS
 
-    dingofs_options
-    dingofs_common
-    dingofs_status
     stub_common
+    dingofs_status
+    dingofs_common
 )

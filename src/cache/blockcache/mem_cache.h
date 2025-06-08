@@ -23,46 +23,42 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_MEM_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_MEM_CACHE_H_
 
+#include <sys/types.h>
+
 #include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using UploadFunc = CacheStore::UploadFunc;
-
-class MemCache : public CacheStore {
+class MemCache final : public CacheStore {
  public:
   MemCache() = default;
-
   ~MemCache() override = default;
 
   Status Init(UploadFunc) override { return Status::OK(); }
-
   Status Shutdown() override { return Status::OK(); }
 
-  Status Stage(const BlockKey&, const Block&, BlockContext) override {
+  Status Stage(const BlockKey&, const Block&, StageOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status RemoveStage(const BlockKey&, BlockContext) override {
+  Status RemoveStage(const BlockKey&, RemoveStageOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status Cache(const BlockKey&, const Block&) override {
+  Status Cache(const BlockKey&, const Block&, CacheOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status Load(const BlockKey&, std::shared_ptr<BlockReader>&) override {
+  Status Load(const BlockKey&, off_t, size_t, IOBuffer*, LoadOption) override {
     return Status::NotSupport("not support");
   }
 
-  bool IsCached(const BlockKey&) override { return false; }
-
-  std::string Id() override { return "memory_cache"; }
+  std::string Id() const override { return "memory_cache"; }
+  bool IsRunning() const override { return false; }
+  bool IsCached(const BlockKey&) const override { return false; }
 };
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

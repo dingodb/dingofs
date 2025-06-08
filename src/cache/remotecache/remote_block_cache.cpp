@@ -22,50 +22,114 @@
 
 #include "cache/remotecache/remote_block_cache.h"
 
-#include <butil/iobuf.h>
-
-#include <memory>
-
-#include "cache/remotecache/remote_node_group.h"
-#include "cache/utils/helper.h"
+#include "cache/utils/bthread.h"
 
 namespace dingofs {
 namespace cache {
-namespace remotecache {
 
-using dingofs::stub::common::MdsOption;
-using dingofs::stub::rpcclient::MdsClientImpl;
-
-RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option)
-    : inited_(false),
+RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
+                                           StorageSPtr storage)
+    : running_(false),
       option_(option),
-      mds_base_(std::make_shared<MDSBaseClient>()),
-      mds_client_(std::make_shared<MdsClientImpl>()),
-      node_group_(std::make_unique<RemoteNodeGroupImpl>(option, mds_client_)) {}
+      node_manager_(std::make_unique<RemoteNodeManagerImpl>(option)),
+      storage_(storage) {}
 
 Status RemoteBlockCacheImpl::Init() {
-  if (!inited_.exchange(true)) {
-    MdsOption mds_option;  // FIXME(Wine93): use new version options
-    mds_option.rpcRetryOpt.addrs = option_.mds_rpc_option().addrs();
-    auto rc = mds_client_->Init(mds_option, mds_base_.get());
-    if (rc != FSStatusCode::OK) {
-      return Status::Internal("init mds client failed");
-    }
-
-    return node_group_->Start();
+  if (!running_.exchange(true)) {
+    return node_manager_->Start();
   }
   return Status::OK();
 }
 
-void RemoteBlockCacheImpl::Shutdown() {}
-
-Status RemoteBlockCacheImpl::Range(const BlockKey& block_key, size_t block_size,
-                                   off_t offset, size_t length,
-                                   butil::IOBuf* buffer) {
-  auto node = node_group_->Get(block_key.Filename());
-  return node->Range(block_key, block_size, offset, length, buffer);
+Status RemoteBlockCacheImpl::Shutdown() {
+  if (running_.exchange(false)) {
+    node_manager_->Stop();
+  }
+  return Status::OK();
 }
 
-}  // namespace remotecache
+Status RemoteBlockCacheImpl::Put(const BlockKey& key, const Block& block,
+                                 PutOption /*option*/) {
+  auto node = node_manager_->GetNode(key.Filename());
+  auto status = node->Put(key, block);
+  if (!status.ok()) {
+    status = storage_->Put(key.StoreKey(), block.buffer);
+  }
+  return status;
+}
+
+Status RemoteBlockCacheImpl::Range(const BlockKey& key, off_t offset,
+                                   size_t length, IOBuffer* buffer,
+                                   RangeOption option) {
+  auto node = node_manager_->GetNode(key.Filename());
+  auto status = node->Range(key, offset, length, buffer, option.block_size);
+  if (!status.ok()) {
+    status = storage_->Range(key.StoreKey(), offset, length, buffer);
+  }
+  return status;
+}
+
+Status RemoteBlockCacheImpl::Cache(const BlockKey& key, const Block& block,
+                                   CacheOption /*option*/) {
+  auto node = node_manager_->GetNode(key.Filename());
+  return node->Cache(key, block);
+}
+
+Status RemoteBlockCacheImpl::Prefetch(const BlockKey& key, size_t length,
+                                      PrefetchOption /*option*/) {
+  auto node = node_manager_->GetNode(key.Filename());
+  return node->Prefetch(key, length);
+}
+
+void RemoteBlockCacheImpl::AsyncPut(const BlockKey& key, const Block& block,
+                                    AsyncCallback cb, PutOption option) {
+  auto self = GetSelfSPtr();
+  RunInBthread([self, key, block, cb, option]() {
+    Status status = self->Put(key, block, option);
+    if (cb) {
+      cb(status);
+    }
+  });
+}
+
+void RemoteBlockCacheImpl::AsyncRange(const BlockKey& key, off_t offset,
+                                      size_t length, IOBuffer* buffer,
+                                      AsyncCallback cb, RangeOption option) {
+  auto self = GetSelfSPtr();
+  RunInBthread([self, key, offset, length, buffer, cb, option]() {
+    Status status = self->Range(key, offset, length, buffer, option);
+    if (cb) {
+      cb(status);
+    }
+  });
+}
+
+void RemoteBlockCacheImpl::AsyncCache(const BlockKey& key, const Block& block,
+                                      AsyncCallback cb, CacheOption option) {
+  auto self = GetSelfSPtr();
+  RunInBthread([self, option, key, block, cb]() {
+    Status status = self->Cache(key, block, option);
+    if (cb) {
+      cb(status);
+    }
+  });
+}
+
+void RemoteBlockCacheImpl::AsyncPrefetch(const BlockKey& key, size_t length,
+                                         AsyncCallback cb,
+                                         PrefetchOption option) {
+  auto self = GetSelfSPtr();
+  RunInBthread([self, option, key, length, cb]() {
+    Status status = self->Prefetch(key, length, option);
+    if (cb) {
+      cb(status);
+    }
+  });
+}
+
+bool RemoteBlockCacheImpl::IsCached(const BlockKey& /*key*/) const {
+  return true;
+}
+
 }  // namespace cache
 }  // namespace dingofs

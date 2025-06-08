@@ -22,28 +22,23 @@
 
 #include "cache/utils/access_log.h"
 
-#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
-#include <unistd.h>
 
-#include "absl/strings/str_format.h"
-#include "cache/common/common.h"
+#include "cache/config/config.h"
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
-using absl::StrFormat;
 using MessageHandler = std::function<std::string()>;
 
 static std::shared_ptr<spdlog::logger> logger;
 static bool initialized = false;
 
-bool InitCacheAccessLog(const std::string& prefix) {
+bool InitCacheAccessLog(const std::string& log_dir) {
   if (!initialized) {
     std::string filename =
-        StrFormat("%s/cache_access_%d.log", prefix, getpid());
+        absl::StrFormat("%s/cache_access_%d.log", log_dir, getpid());
     logger = spdlog::daily_logger_mt("access", filename, 0, 0);
     spdlog::flush_every(std::chrono::seconds(1));
     initialized = true;
@@ -59,8 +54,8 @@ void ShutdownCacheAccessLog() {
 }
 
 LogGuard::LogGuard(MessageHandler handler)
-    : enable_(FLAGS_block_cache_logging), handler_(handler) {
-  if (!enable_ || !initialized) {
+    : enable_(FLAGS_cache_access_logging), handler_(handler) {
+  if (!initialized || !enable_) {
     return;
   }
 
@@ -68,7 +63,7 @@ LogGuard::LogGuard(MessageHandler handler)
 }
 
 LogGuard::~LogGuard() {
-  if (!enable_ || !initialized) {
+  if (!initialized || !enable_) {
     return;
   }
 
@@ -77,11 +72,10 @@ LogGuard::~LogGuard() {
 }
 
 void LogIt(const std::string& message) {
-  if (FLAGS_block_cache_logging) {
+  if (initialized && FLAGS_cache_access_logging) {
     logger->info(message);
   }
 }
 
-}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs

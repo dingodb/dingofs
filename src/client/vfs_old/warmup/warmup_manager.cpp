@@ -46,8 +46,6 @@ namespace client {
 namespace warmup {
 
 using base::filepath::PathSplit;
-using cache::blockcache::Block;
-using cache::blockcache::BlockKey;
 using common::ClientOption;
 using common::WarmupStorageType;
 using stub::metric::MetricGuard;
@@ -385,7 +383,7 @@ void WarmupManagerS3Impl::TravelChunks(
           << ", size: " << s3_chunk_info_map.size();
   for (auto const& info_iter : s3_chunk_info_map) {
     VLOG(9) << "travel chunk: " << info_iter.first;
-    std::list<std::pair<BlockKey, uint64_t>> prefetch_objs;
+    std::list<std::pair<cache::BlockKey, uint64_t>> prefetch_objs;
     TravelChunk(ino, info_iter.second, &prefetch_objs);
     {
       ReadLockGuard lock(inode2ProgressMutex_);
@@ -423,7 +421,7 @@ void WarmupManagerS3Impl::TravelChunk(
     uint64_t block_index_begin = chunk_pos / block_size;
 
     if (len < block_size) {  // just one block
-      BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
+      cache::BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
       prefetch_objs->push_back(std::make_pair(key, len));
     } else {
       // the offset in the block
@@ -454,7 +452,7 @@ void WarmupManagerS3Impl::TravelChunk(
       // of the obj is blockSize. Otherwise, the value is special.
       if (!first_block_full) {
         travel_start_index = block_index_begin + 1;
-        BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
+        cache::BlockKey key(fs_id, ino, chunkid, block_index_begin, compaction);
         prefetch_objs->push_back(std::make_pair(key, first_block_size));
       } else {
         travel_start_index = block_index_begin;
@@ -464,7 +462,7 @@ void WarmupManagerS3Impl::TravelChunk(
         travel_end_index = (block_index_end == block_index_begin)
                                ? block_index_end
                                : block_index_end - 1;
-        BlockKey key(fs_id, ino, chunkid, block_index_end, compaction);
+        cache::BlockKey key(fs_id, ino, chunkid, block_index_end, compaction);
         // there is no need to care about the order
         // in which objects are downloaded
         prefetch_objs->push_back(std::make_pair(key, last_block_size));
@@ -482,7 +480,7 @@ void WarmupManagerS3Impl::TravelChunk(
               << ", blockPos: " << block_pos << ", chunkPos: " << chunk_pos;
       for (auto block_index = travel_start_index;
            block_index <= travel_end_index; block_index++) {
-        BlockKey key(fs_id, ino, chunkid, block_index, compaction);
+        cache::BlockKey key(fs_id, ino, chunkid, block_index, compaction);
         prefetch_objs->push_back(std::make_pair(key, block_size));
       }
     }
@@ -492,7 +490,8 @@ void WarmupManagerS3Impl::TravelChunk(
 // TODO(hzwuhongsong): These logics are very similar to other place,
 // try to merge it
 void WarmupManagerS3Impl::WarmUpAllObjs(
-    Ino ino, const std::list<std::pair<BlockKey, uint64_t>>& prefetch_objs) {
+    Ino ino,
+    const std::list<std::pair<cache::BlockKey, uint64_t>>& prefetch_objs) {
   std::atomic<uint64_t> pending_req(0);
   dingofs::utils::CountDownEvent cond(1);
   uint64_t start = butil::cpuwide_time_us();
@@ -539,7 +538,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   if (pending_req.load(std::memory_order_seq_cst)) {
     VLOG(9) << "wait for pendingReq";
     for (auto iter : prefetch_objs) {
-      BlockKey bkey = iter.first;
+      cache::BlockKey bkey = iter.first;
       std::string name = bkey.StoreKey();
       uint64_t read_len = iter.second;
       VLOG(9) << "download start: " << name;
@@ -724,8 +723,8 @@ void WarmupManagerS3Impl::PutObjectToCache(
   iter->second.FinishedPlusOne();
   switch (iter->second.GetStorageType()) {
     case dingofs::client::common::WarmupStorageType::kWarmupStorageTypeDisk: {
-      BlockKey key;
-      Block block(context->buf, context->len);
+      cache::BlockKey key;
+      cache::Block block(context->buf, context->len);
       auto items = PathSplit(context->key);
       CHECK_GT(items.size(), 0);
       CHECK(key.ParseFilename(items.back()));

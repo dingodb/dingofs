@@ -29,9 +29,8 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-enum class FilterStatus : std::int8_t {
+enum class FilterStatus : uint8_t {
   kEvictIt,
   kSkip,
   kFinish,
@@ -41,46 +40,38 @@ enum class FilterStatus : std::int8_t {
 //  hash table: using base::Cache
 //  lru policy: manage inactive and active list
 class LRUCache {
+ public:
   using FilterFunc = std::function<FilterStatus(const CacheValue& value)>;
 
- public:
   LRUCache();
 
   virtual ~LRUCache();
 
   virtual void Add(const CacheKey& key, const CacheValue& value);
-
   virtual bool Get(const CacheKey& key, CacheValue* value);
-
   virtual bool Delete(const CacheKey& key, CacheValue* deleted);
-
   virtual CacheItems Evict(FilterFunc filter);
 
   virtual size_t Size();
-
   virtual void Clear();
 
  private:
   void HashInsert(const std::string& key, ListNode* node);
-
   bool HashLookup(const std::string& key, ListNode** node);
-
   void HashDelete(ListNode* node);
 
   CacheItem KV(ListNode* node);
-
   // return true if should continue to evict
   bool EvictNode(ListNode* list, FilterFunc filter, CacheItems* evicted);
-
   void EvictAllNodes(ListNode* list);
 
- private:
   Cache* hash_;  // mapping: CacheKey -> ListNode*
   ListNode active_;
   ListNode inactive_;
 };
 
-}  // namespace blockcache
+using LRUCacheUPtr = std::unique_ptr<LRUCache>;
+
 }  // namespace cache
 }  // namespace dingofs
 

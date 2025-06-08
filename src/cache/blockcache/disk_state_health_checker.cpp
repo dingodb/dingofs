@@ -14,97 +14,73 @@
 
 #include "cache/blockcache/disk_state_health_checker.h"
 
-#include <memory>
-#include <mutex>
-#include <shared_mutex>
-
-#include "absl/cleanup/cleanup.h"
-#include "base/filepath/filepath.h"
-#include "utils/executor/timer_impl.h"
-#include "cache/blockcache/disk_state_machine.h"
-#include "cache/utils/local_filesystem.h"
+#include "cache/config/config.h"
+#include "cache/utils/filepath.h"
+#include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::base::filepath::PathJoin;
+DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
+                                               StateMachineSPtr state_machine)
+    : running_(false),
+      layout_(layout),
+      state_machine_(state_machine),
+      timer_(std::make_unique<TimerImpl>()) {}
 
-DiskStateHealthChecker::DiskStateHealthChecker(
-    std::shared_ptr<DiskCacheLayout> layout,
-    std::shared_ptr<DiskStateMachine> disk_state_machine)
-    : layout_(layout), disk_state_machine_(disk_state_machine) {}
+void DiskStateHealthChecker::Start() {
+  if (!running_.exchange(true, std::memory_order_acq_rel)) {
+    LOG(INFO) << "Disk state health checker starting...";
 
-bool DiskStateHealthChecker::Start() {
-  std::unique_lock<std::shared_mutex> w(rw_lock_);
-  if (running_) {
-    return true;
+    CHECK(state_machine_->Start());
+    CHECK(timer_->Start());
+    timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
+
+    LOG(INFO) << "Disk state health checker started.";
   }
-
-  timer_ = std::make_unique<TimerImpl>();
-  CHECK(timer_->Start());
-
-  running_ = true;
-
-  timer_->Add([this] { RunCheck(); }, FLAGS_disk_state_disk_check_duration_ms);
-
-  LOG(INFO) << "DiskStateHealthChecker start";
-  return true;
 }
 
-bool DiskStateHealthChecker::Stop() {
-  std::unique_lock<std::shared_mutex> w(rw_lock_);
-  if (!running_) {
-    return true;
+void DiskStateHealthChecker::Stop() {
+  if (running_.exchange(false, std::memory_order_acq_rel)) {
+    LOG(INFO) << "Disk state health checker stopping...";
+
+    timer_->Stop();
+    state_machine_->Stop();
+
+    LOG(INFO) << "Disk state health checker stopped.";
   }
-
-  LOG(INFO) << "Try to stop DiskStateHealthChecker";
-
-  running_ = false;
-
-  timer_->Stop();
-
-  return true;
 }
 
 void DiskStateHealthChecker::RunCheck() {
-  {
-    std::shared_lock<std::shared_mutex> r(rw_lock_);
-    if (!running_) {
-      return;
-    }
+  if (running_.load(std::memory_order_acquire)) {
+    ProbeDisk();
+    timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
   }
-
-  ProbeDisk();
-  timer_->Add([this] { RunCheck(); }, FLAGS_disk_state_disk_check_duration_ms);
 }
 
 void DiskStateHealthChecker::ProbeDisk() {
-  auto fs = LocalFileSystem();
-  std::unique_ptr<char[]> buffer(new (std::nothrow) char[8192]);
-  std::string path = PathJoin({layout_->GetProbeDir(), "probe"});
-  auto defer = absl::MakeCleanup([&]() {
-    auto status = fs.RemoveFile(path);
-    if (!status.ok()) {
-      LOG(WARNING) << "Remove file " << path
-                   << " failed: " << status.ToString();
-    }
-  });
+  std::string out;
+  std::string content(100, '0');
+  std::string filepath = GetProbeFilepath();
 
-  auto status = fs.WriteFile(path, buffer.get(), sizeof(buffer));
+  auto status = Helper::WriteFile(filepath, content);
   if (status.ok()) {
-    size_t length;
-    std::shared_ptr<char> output;
-    status = fs.ReadFile(path, output, &length);
+    status = Helper::ReadFile(filepath, &out);
   }
 
   if (!status.ok()) {
-    disk_state_machine_->IOErr();
+    LOG(ERROR) << "Probe disk failed: status = " << status.ToString();
+    state_machine_->Error();
   } else {
-    disk_state_machine_->IOSucc();
+    state_machine_->Success();
   }
+
+  Helper::RemoveFile(filepath);
 }
 
-}  // namespace blockcache
+std::string DiskStateHealthChecker::GetProbeFilepath() const {
+  return FilePath::PathJoin({layout_->GetProbeDir(), "probe"});
+}
+
 }  // namespace cache
 }  // namespace dingofs

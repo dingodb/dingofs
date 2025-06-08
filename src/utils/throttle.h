@@ -130,6 +130,8 @@ class Throttle {
   std::vector<InternalThrottle> throttles_;
 };
 
+using ThrottleUPtr = std::unique_ptr<Throttle>;
+
 }  // namespace utils
 }  // namespace dingofs
 

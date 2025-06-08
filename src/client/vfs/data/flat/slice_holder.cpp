@@ -127,8 +127,8 @@ void SliceHolder::GetFileSlices(const SliceRange& slice_range,
     uint64_t end_offset = std::min(slice_range.End(), block.End());
     uint64_t len = end_offset - start_offset;
 
-    cache::blockcache::BlockKey key(fs_id_, ino_, block.slice_id, block.index,
-                                    block.version);
+    cache::BlockKey key(fs_id_, ino_, block.slice_id, block.index,
+                        block.version);
     FileSlice file_slice = {
         .file_offset = start_offset,
         .len = len,

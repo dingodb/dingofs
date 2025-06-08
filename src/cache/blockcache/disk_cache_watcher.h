@@ -23,61 +23,58 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_WATCHER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_WATCHER_H_
 
-#include <memory>
-#include <string>
-#include <vector>
-
 #include "cache/blockcache/disk_cache.h"
-#include "cache/blockcache/disk_cache_loader.h"
-#include "cache/blockcache/disk_state_machine_impl.h"
-#include "utils/concurrent/task_thread_pool.h"
+#include "utils/executor/timer.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
+
+struct Target {  // watched target
+  Target(DiskCacheSPtr store, CacheStore::UploadFunc uploader)
+      : store(store), uploader(uploader) {}
+
+  std::string Id() const { return store->Id(); }
+  std::string GetRootDir() const { return store->GetRootDir(); }
+  std::string GetLockPath() const { return store->GetLockPath(); }
+  bool IsRunning() const { return store->IsRunning(); }
+  Status Shutdown() { return store->Shutdown(); }
+  Status Restart(CacheStore::UploadFunc) { return store->Init(uploader); }
+
+  CacheStore::UploadFunc uploader;
+  DiskCacheSPtr store;
+};
 
 class DiskCacheWatcher {
-  enum class CacheStatus : uint8_t {
-    kUP = 0,
-    kDOWN = 1,
-  };
-
-  struct WatchStore {
-    std::string root_dir;
-    std::shared_ptr<DiskCache> store;
-    CacheStatus status;
-  };
-
  public:
   DiskCacheWatcher();
-
   virtual ~DiskCacheWatcher() = default;
 
-  void Add(const std::string& root_dir, std::shared_ptr<DiskCache> store);
-
-  void Start(UploadFunc uploader);
-
+  void Add(DiskCacheSPtr store, CacheStore::UploadFunc uploader);
+  void Start();
   void Stop();
 
  private:
+  enum class Should : uint8_t {
+    kDoNothing = 0,
+    kRestart = 1,
+    kShutdown = 2,
+  };
+
   void WatchingWorker();
 
-  void CheckLockFile(WatchStore* watch_store);
+  Should CheckTarget(Target* target);
+  static bool CheckUuid(const std::string& lock_path, const std::string& uuid);
 
-  static bool CheckUuId(const std::string& lock_path, const std::string& uuid);
+  static void Shutdown(Target* target);
+  void Restart(Target* target);
 
-  static void Shutdown(WatchStore* watch_store);
-
-  void Restart(WatchStore* watch_store);
-
- private:
-  UploadFunc uploader_;
   std::atomic<bool> running_;
-  std::vector<WatchStore> watch_stores_;
-  std::unique_ptr<TaskThreadPool<>> task_pool_;
+  std::vector<Target> targets_;
+  TimerUPtr timer_;
 };
 
-}  // namespace blockcache
+using DiskCacheWatcherUPtr = std::unique_ptr<DiskCacheWatcher>;
+
 }  // namespace cache
 }  // namespace dingofs
 

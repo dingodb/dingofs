@@ -24,37 +24,72 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
-#include <butil/iobuf.h>
-
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
-#include "dingofs/blockcache.pb.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
 
-using dingofs::cache::blockcache::BlockKey;
-
-CacheGroupNodeServiceImpl::CacheGroupNodeServiceImpl(
-    std::shared_ptr<CacheGroupNode> node)
+CacheGroupNodeServiceImpl::CacheGroupNodeServiceImpl(CacheGroupNodeSPtr node)
     : node_(node) {}
+
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Put) {
+  brpc::ClosureGuard done_guard(done);
+
+  auto* cntl = static_cast<brpc::Controller*>(controller);
+  BlockKey block_key(request->block_key());
+  IOBuffer buffer(cntl->request_attachment());
+
+  Status status;
+  if (request->block_size() != buffer.Size()) {
+    status = Status::InvalidParam("request block body size mismatch");
+  } else {
+    status = node_->Put(block_key, Block(buffer));
+  }
+
+  response->set_status(PBErr(status));
+}
 
 DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
   brpc::ClosureGuard done_guard(done);
+
+  IOBuffer buffer;
+  BlockKey block_key(request->block_key());
   auto* cntl = static_cast<brpc::Controller*>(controller);
 
-  butil::IOBuf buffer;
-  BlockKey block_key(request->block_key());
-  auto status =
-      node_->HandleRangeRequest(block_key, request->block_size(),
-                                request->offset(), request->length(), &buffer);
-  response->set_status(PbErr(status));
+  auto status = node_->Range(block_key, request->offset(), request->length(),
+                             &buffer, request->block_size());
   if (status.ok()) {
-    cntl->response_attachment().append(buffer);
+    cntl->response_attachment().append(buffer.IOBuf());
   }
+
+  response->set_status(PBErr(status));
 }
 
-}  // namespace cachegroup
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {
+  brpc::ClosureGuard done_guard(done);
+
+  auto* cntl = static_cast<brpc::Controller*>(controller);
+  BlockKey block_key(request->block_key());
+  IOBuffer buffer(cntl->request_attachment());
+
+  Status status;
+  if (request->block_size() != buffer.Size()) {
+    status = Status::InvalidParam("request block body size mismatch");
+  } else {
+    status = node_->Cache(block_key, Block(buffer));
+  }
+
+  response->set_status(PBErr(status));
+}
+
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Prefetch) {  // NOLINT
+  brpc::ClosureGuard done_guard(done);
+
+  BlockKey block_key(request->block_key());
+
+  auto status = node_->Prefetch(block_key, request->block_size());
+
+  response->set_status(PBErr(status));
+}
+
 }  // namespace cache
 }  // namespace dingofs
