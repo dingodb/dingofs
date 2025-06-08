@@ -12,15 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(dingofs_common 
+add_library(dingofs_common
     process.cpp
     rpc_stream.cpp
     wrap_posix.cpp
+    io_buffer.cpp
 )
 target_link_libraries(dingofs_common
     dingofs_utils
     gflags::gflags
     glog::glog
+)
+
+add_library(dingofs_options
+    options.cpp
+)
+target_link_libraries(dingofs_options
+    glog::glog
+    gflags::gflags
+    toml11::toml11
 )
 
 add_library(dynamic_vlog

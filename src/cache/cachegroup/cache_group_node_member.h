@@ -23,63 +23,61 @@
 #ifndef DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 
-#include <memory>
-#include <string>
-
 #include "cache/common/common.h"
-#include "common/status.h"
+#include "cache/config/config.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
-
-using dingofs::stub::rpcclient::MdsClient;
 
 class CacheGroupNodeMember {
  public:
   virtual ~CacheGroupNodeMember() = default;
 
   virtual Status JoinGroup() = 0;
-
   virtual Status LeaveGroup() = 0;
 
-  virtual std::string GetGroupName() = 0;
-
-  virtual uint64_t GetMemberId() = 0;
+  virtual std::string GetGroupName() const = 0;
+  virtual uint64_t GetMemberId() const = 0;
+  virtual std::string GetMemberUuid() const = 0;
 };
 
-class CacheGroupNodeMemberImpl : public CacheGroupNodeMember {
+using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
+
+class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
  public:
-  CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
-                           std::shared_ptr<MdsClient> mds_client);
+  CacheGroupNodeMemberImpl(
+      CacheGroupNodeOption option,
+      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
 
   ~CacheGroupNodeMemberImpl() override = default;
 
   Status JoinGroup() override;
-
   Status LeaveGroup() override;
 
-  std::string GetGroupName() override;
-
-  uint64_t GetMemberId() override;
+  std::string GetGroupName() const override;
+  uint64_t GetMemberId() const override;
+  std::string GetMemberUuid() const override;
 
  private:
   Status LoadMemberId(uint64_t* member_id);
-
+  Status RegisterMember(uint64_t old_id, uint64_t* member_id);
+  Status AddMember2Group(const std::string& group_name, uint64_t member_id);
   Status SaveMemberId(uint64_t member_id);
 
-  Status RegisterMember(uint64_t old_id, uint64_t* member_id);
+  std::string GenMemberUuid();
 
-  Status AddMember2Group(const std::string& group_name, uint64_t member_id);
+  // TODO: support local access
+  // void SetLocalAccessOption(
+  //     dingofs::pb::mds::cachegroup::LocalAccessOption* option,
+  //     uint64_t member_id);
 
- private:
-  uint64_t member_id_;
-  CacheGroupNodeOption option_;
-  std::shared_ptr<MdsClient> mds_client_;
+  uint64_t member_id_;       // allocated by mds
+  std::string member_uuid_;  // allocated by local, for directory name
+  const CacheGroupNodeOption option_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
 };
 
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs
 

@@ -26,7 +26,9 @@
 #include <memory>
 #include <vector>
 
-#include "cache/blockcache/block_cache.h"
+#include "blockaccess/block_accesser.h"
+#include "cache/blockcache/block_cache_impl.h"
+#include "cache/storage/storage_impl.h"
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
@@ -45,7 +47,6 @@
 #include "common/config_mapper.h"
 #include "common/define.h"
 #include "common/status.h"
-#include "blockaccess/block_accesser.h"
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -73,7 +74,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-using cache::blockcache::BlockCacheImpl;
 using client::common::RewriteCacheDir;
 
 static void OnThrottleTimer(void* arg) {
@@ -325,7 +325,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     const auto& storage_info = fs_info_->storage_info();
     FillBlockAccessOption(storage_info, &fuse_client_option_.block_access_opt);
 
-    block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
+    block_accesser_ = std::make_shared<blockaccess::BlockAccesserImpl>(
         fuse_client_option_.block_access_opt);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
@@ -362,8 +362,9 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     }
 
     RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache = std::make_shared<BlockCacheImpl>(block_cache_option,
-                                                        block_accesser_.get());
+    auto block_cache = std::make_shared<cache::BlockCacheImpl>(
+        block_cache_option,
+        std::make_shared<cache::StorageImpl>(block_accesser_));
 
     if (s3_adapter_->Init(fuse_client_option_.s3_client_adaptor_opt,
                           block_accesser_.get(), inode_cache_manager_,

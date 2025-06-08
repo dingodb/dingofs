@@ -30,6 +30,7 @@
 #include <string>
 
 #include "blockaccess/block_accesser.h"
+#include "gmock/gmock.h"
 
 using ::testing::_;
 using ::testing::Return;
@@ -67,12 +68,17 @@ class MockBlockAccesser : public BlockAccesser {
   MOCK_METHOD(Status, Get, (const std::string& key, std::string* data),
               (override));
 
+  MOCK_METHOD(void, AsyncGet, (std::shared_ptr<GetObjectAsyncContext> context),
+              (override));
+
   MOCK_METHOD(Status, Range,
               (const std::string& key, off_t offset, size_t length,
                char* buffer),
               (override));
 
-  MOCK_METHOD(void, AsyncGet, (std::shared_ptr<GetObjectAsyncContext> context),
+  MOCK_METHOD(void, AsyncRange,
+              (const std::string& key, off_t offset, size_t length,
+               char* buffer, RetryCallback retry_cb),
               (override));
 
   MOCK_METHOD(bool, BlockExist, (const std::string& key), (override));
@@ -81,6 +87,9 @@ class MockBlockAccesser : public BlockAccesser {
 
   MOCK_METHOD(Status, BatchDelete, (const std::list<std::string>& keys),
               (override));
+  MOCK_METHOD5(AsyncGet,
+               void(const std::string& key, off_t offset, size_t length,
+                    char* buffer, RetryCallback retry_cb));
 };
 
 }  // namespace blockaccess

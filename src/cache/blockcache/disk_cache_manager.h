@@ -23,29 +23,14 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
-#include <atomic>
-#include <memory>
-#include <string>
-
-#include "base/cache/cache.h"
 #include "base/queue/message_queue.h"
-#include "base/time/time.h"
-#include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
-#include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/lru_cache.h"
-#include "cache/utils/local_filesystem.h"
-#include "utils/concurrent/concurrent.h"
-#include "utils/concurrent/task_thread_pool.h"
+#include "cache/blockcache/lru_common.h"
+#include "cache/storage/filesystem.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
-
-using dingofs::base::queue::MessageQueue;
-using dingofs::cache::blockcache::LRUCache;
-using dingofs::utils::Mutex;
-using dingofs::utils::TaskThreadPool;
 
 // phase: staging -> uploaded -> cached
 enum class BlockPhase : uint8_t {
@@ -56,68 +41,59 @@ enum class BlockPhase : uint8_t {
 
 // Manage cache items and its capacity
 class DiskCacheManager {
-  enum class DeleteFrom : uint8_t {
+ public:
+  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
+  virtual ~DiskCacheManager() = default;
+
+  virtual void Start();
+  virtual void Stop();
+
+  virtual void Add(const CacheKey& key, const CacheValue& value,
+                   BlockPhase phase);
+  virtual void Delete(const CacheKey& key);
+  virtual bool Exist(const CacheKey& key);
+
+  virtual bool StageFull() const;
+  virtual bool CacheFull() const;
+
+ private:
+  enum class DeletionReason : uint8_t {
     kCacheFull,
     kCacheExpired,
   };
 
-  using MessageType = std::pair<CacheItems, DeleteFrom>;
-  using MessageQueueType = MessageQueue<MessageType>;
+  using MessageType = std::pair<CacheItems, DeletionReason>;
+  using MessageQueueType = base::queue::MessageQueue<MessageType>;
+  using MessageQueueUPtr = std::unique_ptr<MessageQueueType>;
 
- public:
-  DiskCacheManager(uint64_t capacity, std::shared_ptr<DiskCacheLayout> layout,
-                   std::shared_ptr<LocalFileSystem> fs,
-                   std::shared_ptr<DiskCacheMetric> metric);
-
-  virtual ~DiskCacheManager() = default;
-
-  virtual void Start();
-
-  virtual void Stop();
-
-  virtual void Add(const BlockKey& key, const CacheValue& value,
-                   BlockPhase phase);
-
-  virtual void Delete(const BlockKey& key);
-
-  virtual bool Exist(const BlockKey& key);
-
-  virtual bool StageFull() const;
-
-  virtual bool CacheFull() const;
-
- private:
   void CheckFreeSpace();
-
   void CleanupFull(uint64_t goal_bytes, uint64_t goal_files);
-
   void CleanupExpire();
+  void DeleteBlocks(const CacheItems& to_del, DeletionReason);
+  void UpdateUsage(int64_t n, int64_t used_bytes);
 
-  void DeleteBlocks(const CacheItems& to_del, DeleteFrom);
+  std::string GetRootDir() const;
+  std::string GetCachePath(const CacheKey& key) const;
+  std::string ToString(DeletionReason reason) const;
 
-  void UpdateUsage(int64_t n, int64_t bytes);
-
-  std::string GetCachePath(const CacheKey& key);
-
-  static std::string StrFrom(DeleteFrom from);
-
- private:
-  Mutex mutex_;
+  std::atomic<bool> running_;
+  BthreadMutex mutex_;
   uint64_t used_bytes_;
-  uint64_t capacity_;
+  const uint64_t capacity_bytes_;
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
-  std::atomic<bool> running_;
-  std::shared_ptr<DiskCacheLayout> layout_;
-  std::shared_ptr<LocalFileSystem> fs_;
-  std::unique_ptr<LRUCache> lru_;                        // store cache block
-  std::unordered_map<std::string, CacheValue> staging_;  // store stage block
-  std::unique_ptr<MessageQueueType> mq_;
-  std::shared_ptr<DiskCacheMetric> metric_;
-  std::unique_ptr<TaskThreadPool<>> task_pool_;
+  DiskCacheLayoutSPtr layout_;
+  LRUCacheUPtr cache_block_;  // Only store cached block key
+  // Store stage block key which will not deleted by anyone util it uploaded to
+  // storage. It will causes io error if we delete the stage block which not
+  // uploaded for we can't get block both local disk and remote storage.
+  std::unordered_map<std::string, CacheValue> stage_block_;
+  MessageQueueUPtr mq_;
+  TaskThreadPoolUPtr task_pool_;
 };
 
-}  // namespace blockcache
+using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;
+
 }  // namespace cache
 }  // namespace dingofs
 

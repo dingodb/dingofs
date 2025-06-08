@@ -27,20 +27,19 @@
 
 #include <utility>
 
+#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/datastream/data_stream.h"
 #include "client/vfs_old/filesystem/filesystem.h"
 #include "client/vfs_old/in_time_warmup_manager.h"
 #include "client/vfs_old/s3/client_s3_cache_manager.h"
-#include "blockaccess/block_accesser.h"
 
 namespace dingofs {
 
 namespace client {
 
-using cache::blockcache::BlockCache;
-using common::S3ClientAdaptorOption;
 using blockaccess::BlockAccesserSPtr;
+using common::S3ClientAdaptorOption;
 using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;
@@ -57,7 +56,7 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
                           std::shared_ptr<MdsClient> mdsClient,
                           std::shared_ptr<FsCacheManager> fsCacheManager,
                           std::shared_ptr<FileSystem> filesystem,
-                          std::shared_ptr<BlockCache> block_cache,
+                          cache::BlockCacheSPtr block_cache,
                           std::shared_ptr<KVClientManager> kvClientManager,
                           bool startBackGround) {
   blockSize_ = option.blockSize;
@@ -341,26 +340,7 @@ DINGOFS_ERROR S3ClientAdaptorImpl::FlushAllCache(uint64_t inodeId) {
 
   // force flush data in memory to s3
   VLOG(6) << "FlushAllCache, flush memory data of inodeId=" << inodeId;
-  DINGOFS_ERROR ret = fileCacheManager->Flush(true, false);
-  if (ret != DINGOFS_ERROR::OK) {
-    return ret;
-  }
-
-  // force flush data in diskcache to s3
-  if (!kvClientManager_ && HasDiskCache()) {
-    VLOG(6) << "FlushAllCache, wait inodeId=" << inodeId
-            << " related chunk upload to s3";
-
-    auto status = block_cache_->Flush(inodeId);
-    if (!status.ok()) {
-      return DINGOFS_ERROR::INTERNAL;
-    }
-
-    VLOG(6) << "FlushAllCache, inodeId=" << inodeId
-            << " related chunk upload to s3 done";
-  }
-
-  return ret;
+  return fileCacheManager->Flush(true, false);
 }
 
 void S3ClientAdaptorImpl::Enqueue(

@@ -23,18 +23,12 @@
 #ifndef DINGOFS_SRC_CACHE_UTILS_ACCESS_LOG_H_
 #define DINGOFS_SRC_CACHE_UTILS_ACCESS_LOG_H_
 
-#include <butil/time.h>
-
-#include <functional>
-#include <string>
-
 #include "cache/common/common.h"
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
-bool InitCacheAccessLog(const std::string& prefix);
+bool InitCacheAccessLog(const std::string& log_dir);
 
 void ShutdownCacheAccessLog();
 
@@ -55,7 +49,6 @@ class LogGuard {
 
 void LogIt(const std::string& message);
 
-}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs
 

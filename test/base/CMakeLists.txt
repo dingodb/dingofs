@@ -27,7 +27,6 @@ function(add_base_test test_name)
     )
 endfunction()
 
-add_base_test(test_cache test_cache.cpp)
 add_base_test(test_filepath test_filepath.cpp)
 add_base_test(test_ketama_con_hash test_ketama_con_hash.cpp)
 add_base_test(test_math test_math.cpp)

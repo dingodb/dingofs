@@ -30,11 +30,9 @@
 namespace dingofs {
 namespace client {
 
-using cache::blockcache::BlockCache;
-
 class IntimeWarmUpManager {
  public:
-  IntimeWarmUpManager(std::shared_ptr<BlockCache> block_cache,
+  IntimeWarmUpManager(std::shared_ptr<cache::BlockCache> block_cache,
                       uint64_t chunk_size, uint64_t block_size)
       : block_cache_(std::move(block_cache)),
         chunk_size_(chunk_size),
@@ -62,7 +60,7 @@ class IntimeWarmUpManager {
 
   void Prefetch(std::shared_ptr<InodeWrapper> inode_wrapper);
 
-  std::shared_ptr<BlockCache> block_cache_;
+  cache::BlockCacheSPtr block_cache_;
   uint64_t chunk_size_{0};
   uint64_t block_size_{0};
 

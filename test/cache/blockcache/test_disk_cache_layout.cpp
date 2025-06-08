@@ -28,7 +28,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class DiskCacheLayoutTest : public ::testing::Test {
  protected:
@@ -49,6 +48,5 @@ TEST_F(DiskCacheLayoutTest, Basic) {
             "/mnt/data/cache/blocks/0/0/1_1_1_1_0");
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

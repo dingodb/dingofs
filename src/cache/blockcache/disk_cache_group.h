@@ -23,62 +23,47 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_GROUP_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_GROUP_H_
 
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 #include "base/hash/ketama_con_hash.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
-#include "cache/common/common.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::base::hash::ConHash;
-using UploadFunc = CacheStore::UploadFunc;
-
-class DiskCacheGroup : public CacheStore {
+class DiskCacheGroup final : public CacheStore {
  public:
+  explicit DiskCacheGroup(std::vector<DiskCacheOption> options);
   ~DiskCacheGroup() override = default;
 
-  explicit DiskCacheGroup(std::vector<DiskCacheOption> options);
-
   Status Init(UploadFunc uploader) override;
-
   Status Shutdown() override;
 
   Status Stage(const BlockKey& key, const Block& block,
-               BlockContext ctx) override;
+               StageOption option) override;
+  Status RemoveStage(const BlockKey& key, RemoveStageOption option) override;
+  Status Cache(const BlockKey& key, const Block& block,
+               CacheOption option) override;
+  Status Load(const BlockKey& key, off_t offset, size_t length,
+              IOBuffer* buffer, LoadOption option) override;
 
-  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
-
-  Status Cache(const BlockKey& key, const Block& block) override;
-
-  Status Load(const BlockKey& key,
-              std::shared_ptr<BlockReader>& reader) override;
-
-  bool IsCached(const BlockKey& key) override;
-
-  std::string Id() override;
+  std::string Id() const override;
+  bool IsRunning() const override;
+  bool IsCached(const BlockKey& key) const override;
 
  private:
   static std::vector<uint64_t> CalcWeights(
       std::vector<DiskCacheOption> options);
+  DiskCacheSPtr GetStore(const BlockKey& key) const;
+  DiskCacheSPtr GetStore(const std::string& store_id) const;
 
-  std::shared_ptr<DiskCache> GetStore(const BlockKey& key);
-
- private:
-  std::vector<DiskCacheOption> options_;
-  std::unique_ptr<ConHash> chash_;
-  std::unordered_map<std::string, std::shared_ptr<DiskCache>> stores_;
-  std::unique_ptr<DiskCacheWatcher> watcher_;
+  std::atomic<bool> running_;
+  const std::vector<DiskCacheOption> options_;
+  std::unique_ptr<base::hash::ConHash> chash_;
+  std::unordered_map<std::string, DiskCacheSPtr> stores_;
+  DiskCacheWatcherUPtr watcher_;
 };
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

@@ -28,17 +28,17 @@
 #include <vector>
 
 namespace dingofs {
-namespace common {
 
 IOBuffer::IOBuffer(butil::IOBuf iobuf) : iobuf_(iobuf) {}
 
 IOBuffer::IOBuffer(const char* data, size_t size) { iobuf_.append(data, size); }
 
-const butil::IOBuf& IOBuffer::RawBuffer() { return iobuf_; }
+butil::IOBuf& IOBuffer::IOBuf() { return iobuf_; }
 
 std::vector<iovec> IOBuffer::Fetch() {
   std::vector<iovec> iovecs;
-  for (int i = 0; i < iobuf_.block_count(); i++) {
+  // for (int i = 0; i < iobuf_.block_count(); i++) { // FIXME
+  for (int i = 0; i < iobuf_.backing_block_num(); i++) {
     const auto& string_piece = iobuf_.backing_block(i);
 
     char* data = (char*)string_piece.data();
@@ -50,7 +50,6 @@ std::vector<iovec> IOBuffer::Fetch() {
 
 void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }
 
-size_t IOBuffer::Size() { return iobuf_.length(); }
+size_t IOBuffer::Size() const { return iobuf_.length(); }
 
-}  // namespace common
 }  // namespace dingofs

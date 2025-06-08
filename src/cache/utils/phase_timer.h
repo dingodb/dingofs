@@ -30,44 +30,52 @@
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
 enum class Phase : uint8_t {
-  // unknown
-  kUnknown = 0,
-
   // block cache
-  kStageBlock = 1,
+  kStageBlock = 0,
+  kRemoveStageBlock = 1,
   kCacheBlock = 2,
   kLoadBlock = 3,
-  kReadBlock = 4,
-
-  // s3
-  kS3Put = 10,
-  kS3Range = 11,
 
   // disk cache
-  kOpenFile = 20,
-  kWriteFile = 21,
-  kReadFile = 22,
-  kLink = 23,
-  kCacheAdd = 24,
-  kEnqueueUpload = 25,
+  kOpenFile = 10,
+  kWriteFile = 11,
+  kReadFile = 12,
+  kLinkFile = 13,
+  kRemoveFile = 14,
+  kCacheAdd = 15,
+  kEnterUploadQueue = 16,
 
   // aio
-  kQueued = 30,
-  kCheckIo = 31,
-  kEnqueue = 32,
-  kPrepareIo = 33,
-  kSubmitIo = 34,
-  kExecuteIo = 35,
-  kMemcpy = 36,
-  kRunClosure = 37,
+  kWaitThrottle = 20,
+  kCheckIO = 21,
+  kEnterPrepareQueue = 22,
+  kPrepareIO = 23,
+  kSubmitIO = 24,
+  kExecuteIO = 25,
+
+  // s3
+  kS3Put = 30,
+  kS3Range = 31,
+
+  // unknown
+  kUnknown = 100,
 };
 
 std::string StrPhase(Phase phase);
 
 class PhaseTimer {
+ public:
+  PhaseTimer() = default;
+  virtual ~PhaseTimer() = default;
+
+  void NextPhase(Phase phase);
+  Phase GetPhase();
+
+  std::string ToString();
+
+ private:
   struct Timer {
     Timer(Phase phase) : phase(phase) {}
 
@@ -75,38 +83,20 @@ class PhaseTimer {
 
     void Stop() {
       timer.stop();
-      s_elapsed = timer.u_elapsed() / 1e6;
+      elapsed_s = timer.u_elapsed() / 1e6;
     }
 
-    Phase phase;
+    const Phase phase{Phase::kUnknown};
     butil::Timer timer;
-    double s_elapsed;
+    double elapsed_s{0};
   };
 
- public:
-  PhaseTimer();
-
-  virtual ~PhaseTimer() = default;
-
-  void NextPhase(Phase phase);
-
-  Phase CurrentPhase();
-
-  std::string ToString();
-
-  int64_t TotalUElapsed();
-
- private:
   void StopPreTimer();
-
   void StartNewTimer(Phase phase);
 
- private:
-  butil::Timer g_timer_;
   std::vector<Timer> timers_;
 };
 
-}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs
 

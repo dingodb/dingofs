@@ -30,9 +30,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
-
-using base::filepath::PathJoin;
 
 /*
  * disk cache layout:
@@ -64,33 +61,40 @@ using base::filepath::PathJoin;
  */
 class DiskCacheLayout {
  public:
-  explicit DiskCacheLayout(const std::string& root_dir) : root_dir_(root_dir) {}
+  explicit DiskCacheLayout(const std::string& cache_dir)
+      : cache_dir_(cache_dir) {}
 
-  std::string GetRootDir() const { return root_dir_; }
-
-  std::string GetStageDir() const { return PathJoin({root_dir_, "stage"}); }
-
-  std::string GetCacheDir() const { return PathJoin({root_dir_, "cache"}); }
-
-  std::string GetProbeDir() const { return PathJoin({root_dir_, "probe"}); }
-
-  std::string GetDetectPath() const { return PathJoin({root_dir_, ".detect"}); }
-
-  std::string GetLockPath() const { return PathJoin({root_dir_, ".lock"}); }
+  std::string GetRootDir() const { return cache_dir_; }
+  std::string GetStageDir() const { return PathJoin(cache_dir_, "stage"); }
+  std::string GetCacheDir() const { return PathJoin(cache_dir_, "cache"); }
+  std::string GetProbeDir() const { return PathJoin(cache_dir_, "probe"); }
+  std::string GetDetectPath() const { return PathJoin(cache_dir_, ".detect"); }
+  std::string GetLockPath() const { return PathJoin(cache_dir_, ".lock"); }
 
   std::string GetStagePath(const BlockKey& key) const {
-    return PathJoin({GetStageDir(), key.StoreKey()});
+    return PathJoin(GetStageDir(), key.StoreKey());
   }
 
   std::string GetCachePath(const BlockKey& key) const {
-    return PathJoin({GetCacheDir(), key.StoreKey()});
+    return PathJoin(GetCacheDir(), key.StoreKey());
   }
 
  private:
-  std::string root_dir_;
+  std::string PathJoin(const std::string& parent,
+                       const std::string& child) const {
+    return base::filepath::PathJoin({parent, child});
+  }
+
+  const std::string cache_dir_;
 };
 
-}  // namespace blockcache
+using DiskCacheLayoutSPtr = std::shared_ptr<DiskCacheLayout>;
+
+inline std::string RealCacheDir(const std::string& cache_dir,
+                                const std::string& uuid) {
+  return base::filepath::PathJoin({cache_dir, uuid});
+}
+
 }  // namespace cache
 }  // namespace dingofs
 
