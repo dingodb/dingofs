@@ -31,7 +31,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using dingofs::base::filepath::PathJoin;
 using dingofs::cache::utils::LocalFileSystem;
@@ -145,6 +144,5 @@ TEST_F(LocalFileSystemTest, FileExists) {
   ASSERT_TRUE(fs->FileExists(path));
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

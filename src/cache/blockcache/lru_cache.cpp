@@ -24,19 +24,8 @@
 
 #include <glog/logging.h>
 
-#include <cassert>
-#include <memory>
-
-#include "absl/cleanup/cleanup.h"
-#include "base/time/time.h"
-#include "cache/blockcache/lru_common.h"
-
 namespace dingofs {
 namespace cache {
-namespace blockcache {
-
-using dingofs::base::cache::NewLRUCache;
-using dingofs::base::time::TimeNow;
 
 static void FreeNode(const std::string_view&, void* value) {
   ListNode* node = reinterpret_cast<ListNode*>(value);
@@ -70,7 +59,7 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
 
   ListRemove(node);
   ListAddFront(&active_, node);
-  node->value.atime = TimeNow();  // update access time
+  node->value.atime = base::time::TimeNow();  // update access time
   *value = node->value;
   return true;
 }
@@ -164,6 +153,5 @@ void LRUCache::EvictAllNodes(ListNode* list) {
   }
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

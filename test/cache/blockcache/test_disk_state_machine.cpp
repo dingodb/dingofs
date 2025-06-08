@@ -20,7 +20,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class DiskStateMachineTest : public ::testing::Test {
  public:
@@ -101,6 +100,5 @@ TEST_F(DiskStateMachineTest, Unstable2Normal) {
   EXPECT_TRUE(disk_state_machine.Stop());
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

@@ -16,87 +16,43 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-01-13
+ * Created Date: 2025-06-05
  * Author: Jingli Chen (Wine93)
  */
 
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 
-#include <cstdint>
-#include <memory>
-
 #include "base/hash/con_hash.h"
 #include "cache/common/common.h"
 #include "cache/remotecache/remote_node.h"
-#include "dingofs/cachegroup.pb.h"
-#include "stub/rpcclient/mds_client.h"
-#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace cache {
-namespace remotecache {
-
-using dingofs::base::hash::ConHash;
-using dingofs::pb::mds::cachegroup::CacheGroupMember;
-using dingofs::stub::rpcclient::MdsClient;
-using dingofs::utils::RWLock;
 
 class RemoteNodeGroup {
  public:
-  virtual ~RemoteNodeGroup() = default;
+  explicit RemoteNodeGroup(const PB_CacheGroupMembers& members);
 
-  virtual Status Start() = 0;
+  Status Init();
 
-  virtual void Stop() = 0;
+  RemoteNodeSPtr GetNode(const std::string& key);
 
-  virtual RemoteNodePtr Get(const std::string& key) = 0;
-};
-
-class RemoteNodeGroupImpl : public RemoteNodeGroup {
-  using NodesT = std::unordered_map<std::string, std::shared_ptr<RemoteNode>>;
-  using CacheGroupMembers = std::vector<CacheGroupMember>;
-
- public:
-  RemoteNodeGroupImpl(RemoteBlockCacheOption option,
-                      std::shared_ptr<MdsClient> mds_client);
-
-  ~RemoteNodeGroupImpl() override = default;
-
-  Status Start() override;
-
-  void Stop() override;
-
-  RemoteNodePtr Get(const std::string& key) override;
+  bool IsDiff(const PB_CacheGroupMembers& members) const;
 
  private:
-  Status RefreshMembers();
+  std::vector<uint64_t> CalcWeights(const PB_CacheGroupMembers& members);
 
-  Status LoadMembers(CacheGroupMembers* members);
+  std::string MemberKey(const PB_CacheGroupMember& member) const;
 
-  static bool IsSame(const CacheGroupMembers& local_members,
-                     const CacheGroupMembers& remote_members);
-
-  void CommitChange(const CacheGroupMembers& members);
-
-  std::vector<uint64_t> CalcWeights(const CacheGroupMembers& members);
-
-  std::shared_ptr<ConHash> BuildHash(const CacheGroupMembers& members);
-
-  std::shared_ptr<NodesT> CreateNodes(const CacheGroupMembers& members);
-
- private:
-  RWLock rwlock_;  // for chash_ & nodes_
-  std::atomic<bool> running_;
-  RemoteBlockCacheOption option_;
-  std::shared_ptr<MdsClient> mds_client_;
-  CacheGroupMembers local_members_;
-  std::unique_ptr<TimerImpl> timer_;
-  std::shared_ptr<ConHash> chash_;
-  std::shared_ptr<NodesT> nodes_;
+  RemoteAccessOption option_;
+  PB_CacheGroupMembers members_;
+  std::shared_ptr<base::hash::ConHash> chash_;
+  std::unordered_map<std::string, RemoteNodeSPtr> nodes_;
 };
 
-}  // namespace remotecache
+using RemoteNodeGorupSPtr = std::shared_ptr<RemoteNodeGroup>;
+
 }  // namespace cache
 }  // namespace dingofs
 

@@ -26,7 +26,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class BlockCacheUploadQueue : public ::testing::Test {
  protected:
@@ -54,6 +53,5 @@ TEST_F(BlockCacheUploadQueue, StageBlock) {
   }
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

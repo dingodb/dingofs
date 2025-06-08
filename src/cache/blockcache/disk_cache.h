@@ -23,104 +23,83 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 
-#include <atomic>
-#include <memory>
-#include <string>
-
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_loader.h"
 #include "cache/blockcache/disk_cache_manager.h"
-#include "cache/blockcache/disk_cache_metric.h"
 #include "cache/blockcache/disk_state_health_checker.h"
-#include "cache/blockcache/disk_state_machine.h"
-#include "cache/utils/aio_queue.h"
-#include "cache/utils/local_filesystem.h"
-#include "options/cache/app.h"
-#include "options/cache/block_cache.h"
+#include "cache/config/config.h"
+#include "cache/storage/filesystem.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::cache::utils::AioQueueImpl;
+class DiskCache final : public CacheStore {
+ public:
+  explicit DiskCache(DiskCacheOption option);
+  ~DiskCache() override = default;
 
-class DiskCache : public CacheStore {
-  enum : std::int8_t {
+  Status Init(UploadFunc uploader) override;
+  Status Shutdown() override;
+
+  Status Stage(const BlockKey& key, const Block& block,
+               StageOption option = StageOption()) override;
+  Status RemoveStage(const BlockKey& key,
+                     RemoveStageOption option = RemoveStageOption()) override;
+  Status Cache(const BlockKey& key, const Block& block,
+               CacheOption option = CacheOption()) override;
+  Status Load(const BlockKey& key, off_t offset, size_t length,
+              IOBuffer* buffer, LoadOption option = LoadOption()) override;
+
+  std::string Id() const override;
+  bool IsRunning() const override;
+  bool IsCached(const BlockKey& key) const override;
+
+ private:
+  friend class Target;
+
+  enum : uint8_t {
     kWantExec = 1,
     kWantStage = 2,
     kWantCache = 4,
   };
 
- public:
-  ~DiskCache() override = default;
-
-  explicit DiskCache(DiskCacheOption option);
-
-  Status Init(UploadFunc uploader) override;
-
-  Status Shutdown() override;
-
-  Status Stage(const BlockKey& key, const Block& block,
-               BlockContext ctx) override;
-
-  Status RemoveStage(const BlockKey& key, BlockContext ctx) override;
-
-  Status Cache(const BlockKey& key, const Block& block) override;
-
-  Status Load(const BlockKey& key,
-              std::shared_ptr<BlockReader>& reader) override;
-
-  bool IsCached(const BlockKey& key) override;
-
-  std::string Id() override;
-
- private:
-  // for init
+  // for start
   Status CreateDirs();
-
-  Status LoadLockFile();
-
-  void DetectDirectIO();
-
-  // for read
-  Status NewBlockReader(const BlockKey& key,
-                        std::shared_ptr<BlockReader>& reader);
+  Status LoadOrCreateLockFile();
+  bool DetectDirectIO();
 
   // check running status, disk healthy and disk free space
-  Status Check(uint8_t want);
-
+  Status Check(uint8_t want) const;
   bool IsLoading() const;
-
   bool IsHealthy() const;
-
   bool StageFull() const;
-
   bool CacheFull() const;
 
+  // path utility
   std::string GetRootDir() const;
-
+  std::string GetStageDir() const;
+  std::string GetCacheDir() const;
+  std::string GetProbeDir() const;
+  std::string GetDetectPath() const;
+  std::string GetLockPath() const;
   std::string GetStagePath(const BlockKey& key) const;
-
   std::string GetCachePath(const BlockKey& key) const;
 
  private:
-  std::string uuid_;
-  UploadFunc uploader_;
-  DiskCacheOption option_;
-  bool use_direct_write_;
   std::atomic<bool> running_;
-  std::shared_ptr<DiskCacheMetric> metric_;
-  std::shared_ptr<DiskCacheLayout> layout_;
-  std::shared_ptr<DiskStateMachine> disk_state_machine_;
-  std::unique_ptr<DiskStateHealthChecker> disk_state_health_checker_;
-  std::shared_ptr<LocalFileSystem> fs_;
-  std::shared_ptr<DiskCacheManager> manager_;
-  std::unique_ptr<DiskCacheLoader> loader_;
-  std::shared_ptr<AioQueueImpl> aio_queue_;
+  UploadFunc uploader_;
+  std::string uuid_;
+  DiskCacheLayoutSPtr layout_;
+  StateMachineSPtr state_machine_;
+  DiskStateHealthCheckerUPtr disk_state_health_checker_;
+  FileSystemSPtr fs_;
+  DiskCacheManagerSPtr manager_;
+  DiskCacheLoaderUPtr loader_;
 };
 
-}  // namespace blockcache
+using DiskCacheSPtr = std::shared_ptr<DiskCache>;
+
 }  // namespace cache
 }  // namespace dingofs
 

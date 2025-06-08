@@ -23,67 +23,34 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 
-#include <memory>
-
+#include "cache/common/common.h"
 #include "utils/executor/timer_impl.h"
-#include "utils/leaky_bucket.h"
 #include "utils/throttle.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::utils::LeakyBucket;
-
-class BlockCacheMetricHelper;
-class BlockCacheThrottleClosure;
-
-class BlockCacheThrottle {
+class UploadStageThrottle {
  public:
-  BlockCacheThrottle();
-
-  virtual ~BlockCacheThrottle() = default;
+  UploadStageThrottle();
+  virtual ~UploadStageThrottle() = default;
 
   void Start();
-
   void Stop();
-
-  bool Add(uint64_t stage_bytes);
+  void Add(uint64_t upload_bytes);
 
  private:
-  void Reset();
-
   void UpdateThrottleParam();
 
- private:
-  friend class BlockCacheMetricHelper;
-  friend class BlockCacheThrottleClosure;
-
- private:
-  std::mutex mutex_;
-  uint64_t current_bandwidth_throttle_mb_;
-  bool waiting_;
-  std::unique_ptr<LeakyBucket> throttle_;
-  std::unique_ptr<TimerImpl> timer_;
+  BthreadMutex mutex_;
+  uint64_t current_throttle_bandwidth_mb_;
+  uint64_t current_throttle_iops_;
+  utils::ThrottleUPtr throttle_;
+  TimerUPtr timer_;
 };
 
-class BlockCacheThrottleClosure : public ::google::protobuf::Closure {
- public:
-  BlockCacheThrottleClosure(BlockCacheThrottle* throttle)
-      : throttle_(throttle) {}
+using UploadStageThrottleUPtr = std::unique_ptr<UploadStageThrottle>;
 
-  void Run() override {
-    throttle_->Reset();
-    delete this;
-  }
-
-  void Wait() {}
-
- private:
-  BlockCacheThrottle* throttle_;
-};
-
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

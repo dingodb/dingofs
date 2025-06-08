@@ -33,7 +33,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class MockBlockCache : public BlockCache {
  public:
@@ -45,44 +44,46 @@ class MockBlockCache : public BlockCache {
 
   MOCK_METHOD0(Shutdown, Status());
 
-  MOCK_METHOD3(Put, Status(const BlockKey& key, const Block& block,
-                           BlockContext ctx));
+  MOCK_METHOD(Status, Put,
+              (const BlockKey& key, const Block& block, PutOption option),
+              (override));
 
-  MOCK_METHOD5(Range, Status(const BlockKey& key, off_t offset, size_t size,
-                             char* buffer, bool retrive));
+  MOCK_METHOD(Status, Range,
+              (const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, RangeOption option),
+              (override));
 
-  MOCK_METHOD2(SubmitPrefetch, void(const BlockKey& key, size_t length));
+  MOCK_METHOD(Status, Cache,
+              (const BlockKey& key, const Block& block, CacheOption option),
+              (override));
 
-  MOCK_METHOD2(Cache, Status(const BlockKey& key, const Block& block));
-
-  MOCK_METHOD1(Flush, Status(uint64_t ino));
+  MOCK_METHOD(Status, Prefetch,
+              (const BlockKey& key, size_t length, PrefetchOption option),
+              (override));
 
   MOCK_METHOD(void, AsyncPut,
-              (PutOption option, const BlockKey& key, const Block& block,
-               AsyncCallback callback),
+              (const BlockKey& key, const Block& block, AsyncCallback callback,
+               PutOption option),
               (override));
 
   MOCK_METHOD(void, AsyncRange,
-              (RangeOption option, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, AsyncCallback callback),
+              (const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, AsyncCallback callback, RangeOption option),
               (override));
 
   MOCK_METHOD(void, AsyncCache,
-              (CacheOption option, const BlockKey& key, const Block& block,
-               AsyncCallback callback),
+              (const BlockKey& key, const Block& block, AsyncCallback callback,
+               CacheOption option),
               (override));
 
   MOCK_METHOD(void, AsyncPrefetch,
-              (PrefetchOption option, const BlockKey& key, size_t length,
-               AsyncCallback callback),
+              (const BlockKey& key, size_t length, AsyncCallback callback,
+               PrefetchOption option),
               (override));
 
   MOCK_METHOD1(IsCached, bool(const BlockKey& key));
-
-  MOCK_METHOD0(GetStoreType, StoreType());
 };
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

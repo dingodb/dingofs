@@ -20,19 +20,19 @@
 
 #include <cstdint>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/utils.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
+#include "common/io_buffer.h"
 #include "common/status.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-using namespace cache::blockcache;
 
 Chunk::Chunk(VFSHub* hub, uint64_t ino, uint64_t index)
     : hub_(hub),
@@ -44,9 +44,10 @@ Chunk::Chunk(VFSHub* hub, uint64_t ino, uint64_t index)
       chunk_start_(index * chunk_size_),
       chunk_end_(chunk_start_ + chunk_size_) {}
 
-Status Chunk::WriteToBlockCache(const BlockKey& key, const Block& block,
-                                BlockContext ctx) {
-  return hub_->GetBlockCache()->Put(key, block, ctx);
+Status Chunk::WriteToBlockCache(const cache::BlockKey& key,
+                                const cache::Block& block,
+                                cache::PutOption option) {
+  return hub_->GetBlockCache()->Put(key, block, option);
 }
 
 Status Chunk::AllockChunkId(uint64_t* chunk_id) {
@@ -77,15 +78,15 @@ Status Chunk::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
 
   while (remain_len > 0) {
     uint64_t write_size = std::min(remain_len, block_size_ - block_offset);
-    BlockKey key(fs_id_, ino_, chunk_id, block_index, 0);
-    Block block(buf_pos, write_size);
-    BlockContext ctx(BlockFrom::kCtoFlush);
+    cache::BlockKey key(fs_id_, ino_, chunk_id, block_index, 0);
+    cache::Block block(buf_pos, write_size);
 
     VLOG(4) << "ChunkWrite ino: " << ino_ << ", index: " << index_
             << ", block_key: " << key.StoreKey()
             << ", buf: " << Char2Addr(buf_pos)
             << ", write_size: " << write_size;
-    WriteToBlockCache(key, block, ctx);
+    WriteToBlockCache(key, block,
+                      cache::PutOption());  // TODO: consider writeback
 
     remain_len -= write_size;
     buf_pos += write_size;
@@ -146,8 +147,8 @@ Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
 
   for (auto& block_req : block_reqs) {
     VLOG(6) << "ChunkRead block_req: " << block_req.ToString();
-    BlockKey key(fs_id_, ino_, block_req.block.slice_id, block_req.block.index,
-                 block_req.block.version);
+    cache::BlockKey key(fs_id_, ino_, block_req.block.slice_id,
+                        block_req.block.index, block_req.block.version);
 
     char* buf_pos = buf + (block_req.block.file_offset +
                            block_req.block_offset - read_file_offset);
@@ -158,9 +159,11 @@ Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
             << ", read_size: " << block_req.len
             << ", buf: " << Char2Addr(buf_pos);
 
-    bool retrive = true;
+    IOBuffer buffer;
     DINGOFS_RETURN_NOT_OK(hub_->GetBlockCache()->Range(
-        key, block_req.block_offset, block_req.len, buf_pos, retrive));
+        key, block_req.block_offset, block_req.len, &buffer,
+        cache::RangeOption(true, block_req.block.block_len)));
+    buffer.CopyTo(buf_pos);
   }
 
   return Status::OK();
