@@ -74,6 +74,7 @@ jobs:
         fi
 
         tar -czvf dingofs.tar.gz -C docker/rocky9 dingofs
+        tar -czvf dingofs-latest.tar.gz --exclude='dingofs/mds' --exclude='dingofs/metaserver' --exclude='dingofs/tools' -C docker/rocky9 dingofs
 
         echo "DingoFS Build finished"
         EOF
@@ -150,7 +151,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
       with:
-        files: /mnt/dingofs/dingofs.tar.gz
+        files: /mnt/dingofs/dingofs-latest.tar.gz
         name: ${{ env.TAG_NAME }}
         tag_name: ${{ env.TAG_NAME }}
         token: ${{ secrets.GH_TOKEN }}
