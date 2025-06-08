@@ -23,95 +23,66 @@
 #ifndef DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 
-#include <brpc/server.h>
-#include <bthread/execution_queue.h>
-#include <butil/iobuf.h>
-
-#include <atomic>
-#include <cstdint>
-#include <cstdlib>
-#include <memory>
-
 #include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
 #include "cache/cachegroup/async_cache.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
-#include "cache/cachegroup/cache_group_node_metric.h"
-#include "cache/utils/block_accesser_pool.h"
-#include "stub/rpcclient/mds_client.h"
+#include "cache/config/config.h"
+#include "cache/storage/storage_pool.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
-
-using dingofs::cache::blockcache::Block;
-using dingofs::cache::blockcache::BlockCache;
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::cache::utils::BlockAccesserPool;
-using dingofs::stub::rpcclient::MDSBaseClient;
-using dingofs::stub::rpcclient::MdsClient;
 
 class CacheGroupNode {
  public:
   virtual ~CacheGroupNode() = default;
 
   virtual Status Start() = 0;
-
   virtual Status Stop() = 0;
 
-  virtual std::string GetListenIp() = 0;
-
-  virtual uint32_t GetListenPort() = 0;
-
-  virtual Status HandleRangeRequest(const BlockKey& block_key,
-                                    size_t block_size, off_t offset,
-                                    size_t length, butil::IOBuf* buffer) = 0;
+  virtual Status Put(const BlockKey& key, const Block& block) = 0;
+  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
+                       IOBuffer* buffer, size_t block_size) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
+  virtual Status Prefetch(const BlockKey& key, size_t length) = 0;
 };
 
-class CacheGroupNodeImpl : public CacheGroupNode {
+using CacheGroupNodeSPtr = std::shared_ptr<CacheGroupNode>;
+
+class CacheGroupNodeImpl final : public CacheGroupNode {
  public:
   explicit CacheGroupNodeImpl(CacheGroupNodeOption option);
 
-  ~CacheGroupNodeImpl() override = default;
-
   Status Start() override;
-
   Status Stop() override;
 
-  std::string GetListenIp() override;
-
-  uint32_t GetListenPort() override;
-
-  Status HandleRangeRequest(const BlockKey& block_key, size_t block_size,
-                            off_t offset, size_t length,
-                            butil::IOBuf* buffer) override;
+  Status Put(const BlockKey& key, const Block& block) override;
+  Status Range(const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, size_t block_size) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
+  Status Prefetch(const BlockKey& key, size_t length) override;
 
  private:
   void RewriteCacheDir();
-
   Status InitBlockCache();
 
-  Status HandleBlockCached(const BlockKey& block_key, off_t offset,
-                           size_t length, butil::IOBuf* buffer);
-
-  Status HandleBlockMissed(const BlockKey& block_key, size_t block_size,
-                           off_t offset, size_t length, butil::IOBuf* buffer);
+  Status RangeCachedBlock(const BlockKey& key, off_t offset, size_t length,
+                          IOBuffer* buffer);
+  Status RangeStorage(const BlockKey& key, off_t offset, size_t length,
+                      IOBuffer* buffer, size_t block_size);
 
  private:
   std::atomic<bool> running_;
   CacheGroupNodeOption option_;
-  std::shared_ptr<MDSBaseClient> mds_base_;
-  std::shared_ptr<MdsClient> mds_client_;
-  std::shared_ptr<BlockCache> block_cache_;  // inited by later
-  std::unique_ptr<BlockAccesserPool> block_accesser_pool_;
-  std::unique_ptr<AsyncCache> async_cache_;  // inited by later
-  std::shared_ptr<CacheGroupNodeMember> member_;
-  std::shared_ptr<CacheGroupNodeMetric> metric_;
-  std::unique_ptr<CacheGroupNodeHeartbeat> heartbeat_;
+  std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  CacheGroupNodeMemberSPtr member_;
+  BlockCacheSPtr block_cache_;
+  AsyncCacheUPtr async_cache_;
+  CacheGroupNodeHeartbeatUPtr heartbeat_;
+  StoragePoolSPtr storage_pool_;
 };
 
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs
 

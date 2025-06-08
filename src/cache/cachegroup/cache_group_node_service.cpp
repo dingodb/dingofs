@@ -24,37 +24,103 @@
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
-#include <butil/iobuf.h>
 
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
-#include "dingofs/blockcache.pb.h"
+#include "cache/utils/access_log.h"
+#include "cache/utils/phase_timer.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
 
-using dingofs::cache::blockcache::BlockKey;
-
-CacheGroupNodeServiceImpl::CacheGroupNodeServiceImpl(
-    std::shared_ptr<CacheGroupNode> node)
+CacheGroupNodeServiceImpl::CacheGroupNodeServiceImpl(CacheGroupNodeSPtr node)
     : node_(node) {}
 
-DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
-  brpc::ClosureGuard done_guard(done);
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Put) {
+  Status status;
+  PhaseTimer timer;
   auto* cntl = static_cast<brpc::Controller*>(controller);
+  BlockKey key(request->block_key());
+  IOBuffer buffer(cntl->request_attachment());
+  LogGuard log([&]() {
+    return absl::StrFormat("[service] put(%s,%zu): %s%s", key.Filename(),
+                           buffer.Size(), status.ToString(), timer.ToString());
+  });
 
-  butil::IOBuf buffer;
-  BlockKey block_key(request->block_key());
-  auto status =
-      node_->HandleRangeRequest(block_key, request->block_size(),
-                                request->offset(), request->length(), &buffer);
-  response->set_status(PbErr(status));
-  if (status.ok()) {
-    cntl->response_attachment().append(buffer);
+  if (request->block_size() != buffer.Size()) {
+    status = Status::InvalidParam("request block body size mismatch");
+  } else {
+    timer.NextPhase(Phase::kNodePut);
+    status = node_->Put(key, Block(buffer));
   }
+
+  timer.NextPhase(Phase::kSendResponse);
+  response->set_status(PBErr(status));
+  done->Run();
 }
 
-}  // namespace cachegroup
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
+  Status status;
+  PhaseTimer timer;
+  IOBuffer buffer;
+  BlockKey key(request->block_key());
+  auto offset = request->offset();
+  auto length = request->length();
+  auto* cntl = static_cast<brpc::Controller*>(controller);
+  LogGuard log([&]() {
+    return absl::StrFormat("[service] range(%s,%lld,%zu): %s%s", key.Filename(),
+                           offset, length, status.ToString(), timer.ToString());
+  });
+
+  timer.NextPhase(Phase::kNodeRange);
+  status = node_->Range(key, offset, length, &buffer, request->block_size());
+  if (status.ok()) {
+    cntl->response_attachment().append(buffer.IOBuf());
+  }
+
+  timer.NextPhase(Phase::kSendResponse);
+  response->set_status(PBErr(status));
+  done->Run();
+}
+
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {
+  Status status;
+  PhaseTimer timer;
+  auto* cntl = static_cast<brpc::Controller*>(controller);
+  BlockKey key(request->block_key());
+  IOBuffer buffer(cntl->request_attachment());
+  LogGuard log([&]() {
+    return absl::StrFormat("[service] cache(%s,%zu): %s", key.Filename(),
+                           buffer.Size(), status.ToString());
+  });
+
+  if (request->block_size() != buffer.Size()) {
+    status = Status::InvalidParam("request block body size mismatch");
+  } else {
+    timer.NextPhase(Phase::kNodeCache);
+    status = node_->Cache(key, Block(buffer));
+  }
+
+  timer.NextPhase(Phase::kSendResponse);
+  response->set_status(PBErr(status));
+  done->Run();
+}
+
+DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Prefetch) {  // NOLINT
+  Status status;
+  PhaseTimer timer;
+  BlockKey key(request->block_key());
+  auto length = request->block_size();
+  LogGuard log([&]() {
+    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+                           length, status.ToString(), timer.ToString());
+  });
+
+  timer.NextPhase(Phase::kNodePrefetch);
+  status = node_->Prefetch(key, length);
+
+  timer.NextPhase(Phase::kSendResponse);
+  response->set_status(PBErr(status));
+  done->Run();
+}
+
 }  // namespace cache
 }  // namespace dingofs

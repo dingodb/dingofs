@@ -24,35 +24,20 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 
 #include <atomic>
-#include <memory>
 
-#include "blockaccess/block_accesser.h"
-#include "cache/blockcache/block_cache_metric.h"
-#include "cache/blockcache/block_cache_throttle.h"
-#include "cache/blockcache/block_cache_uploader.h"
-#include "cache/blockcache/block_prefetcher.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/blockcache/countdown.h"
-#include "cache/common/common.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
-
-enum class StoreType : uint8_t {
-  kNone = 0,
-  kDisk = 1,
-};
 
 struct PutOption {
-  PutOption() = default;
-  PutOption(bool writeback) : writeback(writeback) {}
-
   bool writeback{false};
+  BlockContext ctx{BlockFrom::kUnknown};
 };
 
 struct RangeOption {
-  RangeOption() = default;
+  bool retrive{true};
+  size_t block_size{0};
 };
 
 struct CacheOption {
@@ -63,88 +48,52 @@ struct PrefetchOption {
   PrefetchOption() = default;
 };
 
+// async callback
 using AsyncCallback = std::function<void(Status)>;
 
-class BlockCache {
+class BlockCache : public std::enable_shared_from_this<BlockCache> {
  public:
   virtual ~BlockCache() = default;
 
+  // init, shutdown
   virtual Status Init() = 0;
   virtual Status Shutdown() = 0;
 
+  // block operations (sync)
   virtual Status Put(const BlockKey& key, const Block& block,
-                     BlockContext ctx) = 0;
+                     PutOption option = PutOption()) = 0;
   virtual Status Range(const BlockKey& key, off_t offset, size_t length,
-                       char* buffer, bool retrive = true) = 0;
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
-  virtual Status Flush(uint64_t ino) = 0;
-  virtual void SubmitPrefetch(const BlockKey& key, size_t length) = 0;
+                       IOBuffer* buffer,
+                       RangeOption option = RangeOption()) = 0;
+  virtual Status Cache(const BlockKey& key, const Block& block,
+                       CacheOption option = CacheOption()) = 0;
+  virtual Status Prefetch(const BlockKey& key, size_t length,
+                          PrefetchOption option = PrefetchOption()) = 0;
 
-  // block operations
-  virtual void AsyncPut(PutOption option, const BlockKey& key,
-                        const Block& block, AsyncCallback callback) = 0;
-  virtual void AsyncRange(RangeOption option, const BlockKey& key, off_t offset,
-                          size_t length, IOBuffer* buffer,
-                          AsyncCallback callback) = 0;
-  virtual void AsyncCache(CacheOption option, const BlockKey& key,
-                          const Block& block, AsyncCallback callback) = 0;
-  virtual void AsyncPrefetch(PrefetchOption option, const BlockKey& key,
-                             size_t length, AsyncCallback callback) = 0;
+  // block operations (async)
+  virtual void AsyncPut(const BlockKey& key, const Block& block,
+                        AsyncCallback callback,
+                        PutOption option = PutOption()) = 0;
+  virtual void AsyncRange(const BlockKey& key, off_t offset, size_t length,
+                          IOBuffer* buffer, AsyncCallback callback,
+                          RangeOption option = RangeOption()) = 0;
+  virtual void AsyncCache(const BlockKey& key, const Block& block,
+                          AsyncCallback callback,
+                          CacheOption option = CacheOption()) = 0;
+  virtual void AsyncPrefetch(const BlockKey& key, size_t length,
+                             AsyncCallback callback,
+                             PrefetchOption option = PrefetchOption()) = 0;
 
-  virtual bool IsCached(const BlockKey& key) = 0;
-  virtual StoreType GetStoreType() = 0;
+  // utility
+  virtual bool HasCacheStore() const = 0;
+  virtual bool EnableStage() const = 0;
+  virtual bool EnableCache() const = 0;
+  virtual bool IsCached(const BlockKey& key) const = 0;
 };
 
-class BlockCacheImpl final : public BlockCache {
- public:
-  explicit BlockCacheImpl(BlockCacheOption option,
-                          blockaccess::BlockAccesser* block_accesser);
+using BlockCacheSPtr = std::shared_ptr<BlockCache>;
+using BlockCacheUPtr = std::unique_ptr<BlockCache>;
 
-  ~BlockCacheImpl() override = default;
-
-  Status Init() override;
-  Status Shutdown() override;
-
-  Status Put(const BlockKey& key, const Block& block,
-             BlockContext ctx) override;
-  Status Range(const BlockKey& key, off_t offset, size_t length, char* buffer,
-               bool retrive = true) override;
-  Status Cache(const BlockKey& key, const Block& block) override;
-  Status Flush(uint64_t ino) override;
-  void SubmitPrefetch(const BlockKey& key, size_t length) override;
-
-  void AsyncPut(PutOption option, const BlockKey& key, const Block& block,
-                AsyncCallback callback) override {}
-  void AsyncRange(RangeOption option, const BlockKey& key, off_t offset,
-                  size_t length, IOBuffer* buffer,
-                  AsyncCallback callback) override {}
-  void AsyncCache(CacheOption option, const BlockKey& key, const Block& block,
-                  AsyncCallback callback) override {}
-  void AsyncPrefetch(PrefetchOption option, const BlockKey& key, size_t length,
-                     AsyncCallback callback) override {}
-
-  bool IsCached(const BlockKey& key) override;
-  StoreType GetStoreType() override;
-
- private:
-  Status DoPrefetch(const BlockKey& key, size_t length);
-
- private:
-  friend class BlockCacheBuilder;
-
- private:
-  BlockCacheOption option_;
-  std::atomic<bool> running_;
-  blockaccess::BlockAccesser* block_accesser_;
-  std::shared_ptr<CacheStore> store_;
-  std::shared_ptr<Countdown> stage_count_;
-  std::shared_ptr<BlockCacheThrottle> throttle_;
-  std::shared_ptr<BlockCacheUploader> uploader_;
-  std::unique_ptr<BlockPrefetcher> prefetcher_;
-  std::unique_ptr<BlockCacheMetric> metric_;
-};
-
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

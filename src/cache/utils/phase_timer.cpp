@@ -31,45 +31,64 @@
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
-using dingofs::base::string::StrFormat;
-using dingofs::base::string::StrJoin;
+using base::string::StrJoin;
+
+static const std::unordered_map<Phase, std::string> kPhases = {
+    // tier block cache
+    {Phase::kLocalPut, "local_put"},
+    {Phase::kRemotePut, "remote_put"},
+    {Phase::kLocalRange, "local_range"},
+    {Phase::kRemoteRange, "remote_range"},
+    {Phase::kLocalCache, "local_cache"},
+    {Phase::kRemoteCache, "remote_cache"},
+    {Phase::kLocalPrefetch, "local_prefetch"},
+    {Phase::kRemotePrefetch, "remote_prefetch"},
+
+    // block cache
+    {Phase::kStageBlock, "stage"},
+    {Phase::kRemoveStageBlock, "removestage"},
+    {Phase::kCacheBlock, "cache"},
+    {Phase::kLoadBlock, "load"},
+
+    // disk cache
+    {Phase::kOpenFile, "open"},
+    {Phase::kWriteFile, "write"},
+    {Phase::kReadFile, "read"},
+    {Phase::kLinkFile, "link"},
+    {Phase::kRemoveFile, "remove"},
+    {Phase::kCacheAdd, "cache_add"},
+    {Phase::kEnterUploadQueue, "enqueue"},
+
+    // aio
+    {Phase::kWaitThrottle, "throttle"},
+    {Phase::kCheckIO, "check"},
+    {Phase::kEnterPrepareQueue, "enqueue"},
+    {Phase::kPrepareIO, "prepare"},
+    {Phase::kExecuteIO, "execute"},
+
+    // remote block cache
+    {Phase::kRPCPut, "rpc_put"},
+    {Phase::kRPCRange, "rpc_range"},
+    {Phase::kRPCCache, "rpc_cache"},
+    {Phase::kRPCPrefetch, "rpc_prefetch"},
+
+    // s3
+    {Phase::kS3Put, "s3_put"},
+    {Phase::kS3Range, "s3_range"},
+
+    // block cache service
+    {Phase::kNodePut, "node_put"},
+    {Phase::kNodeRange, "node_range"},
+    {Phase::kNodeCache, "node_cache"},
+    {Phase::kNodePrefetch, "node_prefetch"},
+    {Phase::kSendResponse, "send_response"},
+
+    // unknown
+    {Phase::kUnknown, "unknown"},
+};
 
 std::string StrPhase(Phase phase) {
-  static const std::unordered_map<Phase, std::string> kPhases = {
-      // unknown
-      {Phase::kUnknown, "unknown"},
-
-      // block cache
-      {Phase::kStageBlock, "stage_block"},
-      {Phase::kCacheBlock, "cache_block"},
-      {Phase::kLoadBlock, "load_block"},
-      {Phase::kReadBlock, "read_block"},
-
-      // s3
-      {Phase::kS3Put, "s3_put"},
-      {Phase::kS3Range, "s3_range"},
-
-      // disk cache
-      {Phase::kOpenFile, "open"},
-      {Phase::kWriteFile, "write"},
-      {Phase::kReadFile, "read"},
-      {Phase::kLink, "link"},
-      {Phase::kCacheAdd, "cache_add"},
-      {Phase::kEnqueueUpload, "enqueue"},
-
-      // aio
-      {Phase::kQueued, "queued"},
-      {Phase::kCheckIo, "check"},
-      {Phase::kEnqueue, "enqueue"},
-      {Phase::kPrepareIo, "prepare"},
-      {Phase::kSubmitIo, "submit"},
-      {Phase::kExecuteIo, "execute"},
-      {Phase::kMemcpy, "memcpy"},
-      {Phase::kRunClosure, "clousre"},
-  };
-
   auto it = kPhases.find(phase);
   if (it != kPhases.end()) {
     return it->second;
@@ -96,32 +115,34 @@ void PhaseTimer::NextPhase(Phase phase) {
   StartNewTimer(phase);
 }
 
-Phase PhaseTimer::CurrentPhase() {
+Phase PhaseTimer::GetPhase() {
   if (timers_.empty()) {
     return Phase::kUnknown;
   }
   return timers_.back().phase;
 }
 
-std::string PhaseTimer::ToString() {
-  StopPreTimer();
-  std::vector<std::string> out;
-  for (const auto& timer : timers_) {
-    auto elapsed = StrFormat("%s:%.6f", StrPhase(timer.phase), timer.s_elapsed);
-    out.emplace_back(elapsed);
-  }
-
-  if (out.empty()) {
-    return "";
-  }
-  return " (" + StrJoin(out, ",") + ")";
-}
-
-int64_t PhaseTimer::TotalUElapsed() {
+int64_t PhaseTimer::UElapsed() {
   g_timer_.stop();
   return g_timer_.u_elapsed();
 }
 
-}  // namespace utils
+// e.g. (write:0.005317,link:0.000094,cache_add:0.000013,enqueue:0.000004)
+std::string PhaseTimer::ToString() {
+  StopPreTimer();
+
+  std::vector<std::string> description;
+  for (const auto& timer : timers_) {
+    auto elapsed =
+        absl::StrFormat("%s:%.6f", StrPhase(timer.phase), timer.elapsed_s);
+    description.emplace_back(elapsed);
+  }
+
+  if (description.empty()) {
+    return "";
+  }
+  return " (" + StrJoin(description, ",") + ")";
+}
+
 }  // namespace cache
 }  // namespace dingofs

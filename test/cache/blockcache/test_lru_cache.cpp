@@ -27,7 +27,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 class LRUCacheTest : public ::testing::Test {
  protected:
@@ -163,6 +162,5 @@ TEST_F(LRUCacheTest, Size) {
   ASSERT_EQ(cache->Size(), 2);
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

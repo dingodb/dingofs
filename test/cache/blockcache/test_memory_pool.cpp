@@ -26,7 +26,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using base::math::kMiB;
 using client::datastream::MemoryPool;
@@ -104,6 +103,5 @@ TEST_F(MemoryPoolTest, DeAllocate) {
   mem_pool->DestroyPool();
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

@@ -24,29 +24,60 @@
 #define DINGOFS_SRC_CACHE_UTILS_HELPER_H_
 
 #include <absl/strings/str_format.h>
+#include <sys/stat.h>
 
-#include <cstring>
-#include <memory>
 #include <sstream>
 #include <string>
 
+#include "cache/common/common.h"
+#include "cache/storage/filesystem_base.h"
+
 namespace dingofs {
 namespace cache {
-namespace utils {
 
-template <typename... Args>
-inline std::string Errorf(int code, const char* format, const Args&... args) {
-  std::ostringstream message;
-  message << absl::StrFormat(format, args...) << ": " << ::strerror(code);
-  return message.str();
-}
+class Helper {
+ public:
+  // error
+  template <typename... Args>
+  static std::string Errorf(int code, const char* format, const Args&... args) {
+    std::ostringstream message;
+    message << absl::StrFormat(format, args...) << ": " << ::strerror(code);
+    return message.str();
+  }
 
-template <typename... Args>
-inline std::string Errorf(const char* format, const Args&... args) {
-  return Errorf(errno, format, args...);
-}
+  template <typename... Args>
+  static std::string Errorf(const char* format, const Args&... args) {
+    return Errorf(errno, format, args...);
+  }
 
-}  // namespace utils
+  // sys conf
+  static uint64_t GetSysPageSize();
+  static uint64_t GetIOAlignedBlockSize();
+  static bool IsAligned(uint64_t n, uint64_t m);
+
+  // filesystem
+  static Status Walk(const std::string& dir, WalkFunc walk_func);
+  static Status MkDirs(const std::string& dir);
+  static bool FileExists(const std::string& filepath);
+  static Status ReadFile(const std::string& filepath, std::string* content);
+  static Status WriteFile(const std::string& filepath,
+                          const std::string& content);
+  static Status RemoveFile(const std::string& filepath);
+  static Status StatFS(const std::string& dir, FSStat* stat);
+  static bool IsFile(const struct stat* stat);
+  static bool IsDir(const struct stat* stat);
+  static bool IsLink(const struct stat* stat);
+
+  static std::string TempFilepath(const std::string& filepath);
+  static bool IsTempFilepath(const std::string& filepath);
+
+  // utils
+  static std::vector<uint64_t> NormalizeByGcd(
+      const std::vector<uint64_t>& nums);
+
+  static void DeleteBuffer(void* data);
+};
+
 }  // namespace cache
 }  // namespace dingofs
 

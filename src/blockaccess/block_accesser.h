@@ -17,20 +17,27 @@
 #ifndef DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
 #define DINGOFS_BLOCK_ACCESS_BLOCK_ACCESSER_H_
 
+#include <sys/types.h>
+
 #include <condition_variable>
 #include <functional>
 #include <memory>
 #include <string>
 
-#include "common/status.h"
 #include "blockaccess/accesser.h"
 #include "blockaccess/accesser_common.h"
+#include "common/status.h"
 #include "utils/throttle.h"
 
 namespace dingofs {
 namespace blockaccess {
 
-using RetryCallback = std::function<bool(int code)>;
+enum class RetryStrategy : uint8_t {
+  kRetry = 0,
+  kNotRetry = 1,
+};
+
+using RetryCallback = std::function<RetryStrategy(int code)>;
 
 // BlockAccesser is a class that provides a way to access block from a data
 // source. It is a base class for all data access classes.
@@ -56,10 +63,13 @@ class BlockAccesser {
 
   virtual Status Get(const std::string& key, std::string* data) = 0;
 
+  virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
+
   virtual Status Range(const std::string& key, off_t offset, size_t length,
                        char* buffer) = 0;
 
-  virtual void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) = 0;
+  virtual void AsyncRange(const std::string& key, off_t offset, size_t length,
+                          char* buffer, RetryCallback retry_cb) = 0;
 
   virtual bool BlockExist(const std::string& key) = 0;
 
@@ -92,10 +102,13 @@ class BlockAccesserImpl : public BlockAccesser {
 
   Status Get(const std::string& key, std::string* data) override;
 
+  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+
   Status Range(const std::string& key, off_t offset, size_t length,
                char* buffer) override;
 
-  void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
+  void AsyncRange(const std::string& key, off_t offset, size_t length,
+                  char* buffer, RetryCallback retry_cb) override;
 
   bool BlockExist(const std::string& key) override;
 

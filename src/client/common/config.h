@@ -27,17 +27,15 @@
 #include <string>
 
 #include "blockaccess/accesser_common.h"
+#include "cache/config/config.h"
+#include "cache/config/remote_cache.h"
 #include "dingofs/common.pb.h"
-#include "options/cache/app.h"
-#include "options/cache/block_cache.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
 namespace common {
-
-using options::cache::BlockCacheOption;
 
 // { data stream option
 struct BackgroundFlushOption {
@@ -187,14 +185,15 @@ struct ClientOption {
   stub::common::MetaCacheOpt metaCacheOpt;
   stub::common::ExcutorOpt excutorOpt;
   stub::common::ExcutorOpt excutorInternalOpt;
-  S3ClientAdaptorOption s3_client_adaptor_opt;      // from config
+  S3ClientAdaptorOption s3_client_adaptor_opt;       // from config
   blockaccess::BlockAccessOptions block_access_opt;  // from config
   LeaseOpt leaseOpt;
   RefreshDataOption refreshDataOption;
   KVClientManagerOpt kvClientManagerOpt;
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
-  BlockCacheOption block_cache_option;
+  cache::BlockCacheOption block_cache_option;
+  cache::RemoteBlockCacheOption remote_block_cache_option;
   FuseOption fuse_option;
 
   uint32_t listDentryLimit;
@@ -207,7 +206,7 @@ struct ClientOption {
 
 void InitClientOption(utils::Configuration* conf, ClientOption* client_option);
 
-void RewriteCacheDir(BlockCacheOption* option, std::string uuid);
+void RewriteCacheDir(cache::BlockCacheOption* option, std::string uuid);
 
 void InitUdsOption(utils::Configuration* conf, UdsOption* uds_option);
 

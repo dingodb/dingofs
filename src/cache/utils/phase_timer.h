@@ -30,44 +30,76 @@
 
 namespace dingofs {
 namespace cache {
-namespace utils {
 
 enum class Phase : uint8_t {
-  // unknown
-  kUnknown = 0,
+  // tier block cache
+  kLocalPut = 0,
+  kRemotePut = 1,
+  kLocalRange = 2,
+  kRemoteRange = 3,
+  kLocalCache = 4,
+  kRemoteCache = 5,
+  kLocalPrefetch = 6,
+  kRemotePrefetch = 7,
 
   // block cache
-  kStageBlock = 1,
-  kCacheBlock = 2,
-  kLoadBlock = 3,
-  kReadBlock = 4,
-
-  // s3
-  kS3Put = 10,
-  kS3Range = 11,
+  kStageBlock = 10,
+  kRemoveStageBlock = 11,
+  kCacheBlock = 12,
+  kLoadBlock = 13,
 
   // disk cache
   kOpenFile = 20,
   kWriteFile = 21,
   kReadFile = 22,
-  kLink = 23,
-  kCacheAdd = 24,
-  kEnqueueUpload = 25,
+  kLinkFile = 23,
+  kRemoveFile = 24,
+  kCacheAdd = 25,
+  kEnterUploadQueue = 26,
 
   // aio
-  kQueued = 30,
-  kCheckIo = 31,
-  kEnqueue = 32,
-  kPrepareIo = 33,
-  kSubmitIo = 34,
-  kExecuteIo = 35,
-  kMemcpy = 36,
-  kRunClosure = 37,
+  kWaitThrottle = 30,
+  kCheckIO = 31,
+  kEnterPrepareQueue = 32,
+  kPrepareIO = 33,
+  kExecuteIO = 34,
+
+  // remote block cache
+  kRPCPut = 40,
+  kRPCRange = 41,
+  kRPCCache = 42,
+  kRPCPrefetch = 43,
+
+  // s3
+  kS3Put = 50,
+  kS3Range = 51,
+
+  // block cache service
+  kNodePut = 60,
+  kNodeRange = 61,
+  kNodeCache = 62,
+  kNodePrefetch = 63,
+  kSendResponse = 64,
+
+  // unknown
+  kUnknown = 100,
 };
 
 std::string StrPhase(Phase phase);
 
 class PhaseTimer {
+ public:
+  PhaseTimer();
+  virtual ~PhaseTimer() = default;
+
+  void NextPhase(Phase phase);
+  Phase GetPhase();
+
+  int64_t UElapsed();
+
+  std::string ToString();
+
+ private:
   struct Timer {
     Timer(Phase phase) : phase(phase) {}
 
@@ -75,38 +107,21 @@ class PhaseTimer {
 
     void Stop() {
       timer.stop();
-      s_elapsed = timer.u_elapsed() / 1e6;
+      elapsed_s = timer.u_elapsed() / 1e6;
     }
 
-    Phase phase;
+    const Phase phase{Phase::kUnknown};
     butil::Timer timer;
-    double s_elapsed;
+    double elapsed_s{0};
   };
 
- public:
-  PhaseTimer();
-
-  virtual ~PhaseTimer() = default;
-
-  void NextPhase(Phase phase);
-
-  Phase CurrentPhase();
-
-  std::string ToString();
-
-  int64_t TotalUElapsed();
-
- private:
   void StopPreTimer();
-
   void StartNewTimer(Phase phase);
 
- private:
-  butil::Timer g_timer_;
   std::vector<Timer> timers_;
+  butil::Timer g_timer_;
 };
 
-}  // namespace utils
 }  // namespace cache
 }  // namespace dingofs
 

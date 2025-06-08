@@ -37,12 +37,12 @@ struct SliceRange {
 };
 
 struct FileSlice {
-  uint64_t file_offset;                   // file offset
-  uint64_t len;                           // slice length
-  uint64_t block_offset;                  // block offset
-  cache::blockcache::BlockKey block_key;  // block key
-  uint64_t block_len;                     // block length
-  bool zero;                              // is zero or not
+  uint64_t file_offset;       // file offset
+  uint64_t len;               // slice length
+  uint64_t block_offset;      // block offset
+  cache::BlockKey block_key;  // block key
+  uint64_t block_len;         // block length
+  bool zero;                  // is zero or not
 
   std::string ToString() const;
 };

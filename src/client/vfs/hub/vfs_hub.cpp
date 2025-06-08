@@ -25,7 +25,9 @@
 #include "blockaccess/block_accesser.h"
 #include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
-#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/block_cache_impl.h"
+#include "cache/storage/storage_impl.h"
+#include "cache/tiercache/tier_block_cache.h"
 #include "client/common/config.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/v2/filesystem.h"
@@ -107,12 +109,13 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   {
     // related to block cache
     auto block_cache_option = client_option_.block_cache_option;
+    auto remote_block_cache_option = client_option_.remote_block_cache_option;
 
     std::string uuid = absl::StrFormat("%d-%s", fs_info_.id, fs_info_.name);
     common::RewriteCacheDir(&block_cache_option, uuid);
 
-    block_cache_ = std::make_unique<cache::blockcache::BlockCacheImpl>(
-        block_cache_option, block_accesser_.get());
+    block_cache_ = std::make_unique<cache::TierBlockCache>(
+        block_cache_option, remote_block_cache_option, block_accesser_.get());
 
     DINGOFS_RETURN_NOT_OK(block_cache_->Init());
   }
@@ -143,7 +146,7 @@ HandleManager* VFSHubImpl::GetHandleManager() {
   return handle_manager_.get();
 }
 
-cache::blockcache::BlockCache* VFSHubImpl::GetBlockCache() {
+cache::BlockCache* VFSHubImpl::GetBlockCache() {
   CHECK_NOTNULL(handle_manager_);
   return block_cache_.get();
 }

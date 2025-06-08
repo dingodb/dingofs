@@ -22,54 +22,56 @@
 
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 
-#include <glog/logging.h>
-
-#include "dingofs/cachegroup.pb.h"
+#include "cache/common/common.h"
+#include "cache/metrics/cache_group_node_metric.h"
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
-
-using dingofs::pb::mds::cachegroup::CacheGroupOk;
 
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
-    CacheGroupNodeOption option, std::shared_ptr<CacheGroupNodeMember> member,
-    std::shared_ptr<CacheGroupNodeMetric> metric,
-    std::shared_ptr<MdsClient> mds_client)
-    : option_(option),
+    CacheGroupNodeMemberSPtr member,
+    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
+    : running_(false),
       member_(member),
-      metric_(metric),
       mds_client_(mds_client),
       timer_(std::make_unique<TimerImpl>()) {}
 
 void CacheGroupNodeHeartbeatImpl::Start() {
   if (!running_.exchange(true)) {
+    LOG(INFO) << "Cache group node heartbeat starting...";
+
     CHECK(timer_->Start());
-    timer_->Add([this] { SendHeartbeat(); }, 1000);
+    timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
+
+    LOG(INFO) << "Cache group node heartbeat started.";
   }
 }
 
 void CacheGroupNodeHeartbeatImpl::Stop() {
   if (running_.exchange(false)) {
+    LOG(INFO) << "Cache group node heartbeat stoping...";
+
     CHECK(timer_->Stop());
+
+    LOG(INFO) << "Cache group node heartbeat stopped.";
   }
 }
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
-  pb::mds::cachegroup::HeartbeatRequest::Statistic stat;
-  stat.set_hits(metric_->GetCacheHit());
-  stat.set_misses(metric_->GetCacheMiss());
+  PBStatistic stat;
+  stat.set_hits(CacheGroupNodeMetric::GetInstance().GetCacheHit());
+  stat.set_misses(CacheGroupNodeMetric::GetInstance().GetCacheMiss());
 
   std::string group_name = member_->GetGroupName();
   uint64_t member_id = member_->GetMemberId();
   auto rc = mds_client_->SendCacheGroupHeartbeat(group_name, member_id, stat);
-  if (rc != CacheGroupOk) {
+  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Send heartbeat for (" << group_name << "," << member_id
-               << ") failed, rc = " << CacheGroupErrCode_Name(rc);
+               << ") failed: rc = " << CacheGroupErrCode_Name(rc);
   }
-  timer_->Add([this] { SendHeartbeat(); }, 1000);
+
+  timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
 }
 
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs

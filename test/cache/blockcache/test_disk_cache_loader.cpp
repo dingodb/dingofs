@@ -32,7 +32,6 @@
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
 using absl::MakeCleanup;
 
@@ -89,6 +88,5 @@ TEST_F(DiskCacheLoaderTest, LoadCache) {
   ASSERT_TRUE(disk_cache->IsCached(key));
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

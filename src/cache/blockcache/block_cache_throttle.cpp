@@ -22,68 +22,56 @@
 
 #include "cache/blockcache/block_cache_throttle.h"
 
-#include <memory>
-#include <mutex>
-
-#include "base/math/math.h"
-#include "cache/common/common.h"
-#include "utils/leaky_bucket.h"
+#include "cache/config/config.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-using dingofs::base::math::kMiB;
-
-BlockCacheThrottle::BlockCacheThrottle()
-    : current_bandwidth_throttle_mb_(
-          FLAGS_block_cache_stage_bandwidth_throttle_mb),
-      waiting_(false),
-      throttle_(std::make_unique<LeakyBucket>()),
+UploadStageThrottle::UploadStageThrottle()
+    : current_throttle_bandwidth_mb_(0),
+      current_throttle_iops_(0),
+      throttle_(std::make_unique<dingofs::utils::Throttle>()),
       timer_(std::make_unique<TimerImpl>()) {
-  throttle_->SetLimit(current_bandwidth_throttle_mb_ * kMiB, 0, 0);
+  UpdateThrottleParam();
 }
 
-void BlockCacheThrottle::Start() {
+void UploadStageThrottle::Start() {
   CHECK(timer_->Start());
   timer_->Add([this] { UpdateThrottleParam(); }, 100);
 }
 
-void BlockCacheThrottle::Stop() { timer_->Stop(); }
+void UploadStageThrottle::Stop() { timer_->Stop(); }
 
-bool BlockCacheThrottle::Add(uint64_t stage_bytes) {
-  if (!FLAGS_block_cache_stage_bandwidth_throttle_enable) {
-    return false;
+void UploadStageThrottle::Add(uint64_t upload_bytes) {
+  if (FLAGS_upload_stage_throttle_enable) {
+    std::lock_guard<BthreadMutex> lk(mutex_);
+    throttle_->Add(false, upload_bytes);
   }
-
-  std::lock_guard<std::mutex> lk(mutex_);
-  if (waiting_) {
-    return true;
-  }
-
-  // BlockCacheThrottleClosure will reset overflow flag
-  auto* done = new BlockCacheThrottleClosure(this);
-  waiting_ = throttle_->Add(stage_bytes, done);
-  return waiting_;
 }
 
-void BlockCacheThrottle::Reset() {
-  std::lock_guard<std::mutex> lk(mutex_);
-  waiting_ = false;
-}
+void UploadStageThrottle::UpdateThrottleParam() {
+  if (current_throttle_bandwidth_mb_ !=
+          FLAGS_upload_stage_throttle_bandwidth_mb ||
+      current_throttle_iops_ != FLAGS_upload_stage_throttle_iops) {
+    current_throttle_bandwidth_mb_ = FLAGS_upload_stage_throttle_bandwidth_mb;
+    current_throttle_iops_ = FLAGS_upload_stage_throttle_iops;
 
-void BlockCacheThrottle::UpdateThrottleParam() {
-  if (FLAGS_block_cache_stage_bandwidth_throttle_mb !=
-      current_bandwidth_throttle_mb_) {
-    current_bandwidth_throttle_mb_ =
-        FLAGS_block_cache_stage_bandwidth_throttle_mb;
+    dingofs::utils::ReadWriteThrottleParams params;
+    params.iopsWrite = dingofs::utils::ThrottleParams(
+        current_throttle_iops_, current_throttle_iops_, 0);
+    params.bpsWrite = dingofs::utils::ThrottleParams(
+        current_throttle_bandwidth_mb_ * kMiB,
+        current_throttle_bandwidth_mb_ * kMiB, 0);
 
-    std::lock_guard<std::mutex> lk(mutex_);
-    throttle_->SetLimit(current_bandwidth_throttle_mb_ * kMiB, 0, 0);
+    LOG(INFO) << "Update upload stage throttle params: "
+              << "bandwidth_mb = " << current_throttle_bandwidth_mb_
+              << ", iops = " << current_throttle_iops_;
+
+    std::lock_guard<BthreadMutex> lk(mutex_);
+    throttle_->UpdateThrottleParams(params);
   }
   timer_->Add([this] { UpdateThrottleParam(); }, 100);
 }
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs

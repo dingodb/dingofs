@@ -20,6 +20,7 @@
 #include <atomic>
 #include <memory>
 
+#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
 #include "client/vfs/handle/handle_manager.h"
@@ -27,7 +28,6 @@
 #include "client/vfs/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
-#include "blockaccess/block_accesser.h"
 
 namespace dingofs {
 namespace client {
@@ -48,7 +48,7 @@ class VFSHub {
 
   virtual HandleManager* GetHandleManager() = 0;
 
-  virtual cache::blockcache::BlockCache* GetBlockCache() = 0;
+  virtual cache::BlockCache* GetBlockCache() = 0;
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
@@ -70,7 +70,7 @@ class VFSHubImpl : public VFSHub {
 
   HandleManager* GetHandleManager() override;
 
-  cache::blockcache::BlockCache* GetBlockCache() override;
+  cache::BlockCache* GetBlockCache() override;
 
   blockaccess::BlockAccesser* GetBlockAccesser() override;
 
@@ -85,7 +85,7 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
-  std::unique_ptr<cache::blockcache::BlockCache> block_cache_;
+  std::unique_ptr<cache::BlockCache> block_cache_;
 };
 
 }  // namespace vfs

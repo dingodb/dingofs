@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(dingofs_common 
+add_library(dingofs_common
     process.cpp
     rpc_stream.cpp
     wrap_posix.cpp
+    io_buffer.cpp
 )
 target_link_libraries(dingofs_common
     dingofs_utils

@@ -30,10 +30,10 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/mock/mock_block_cache.h"
-#include "common/status.h"
 #include "client/vfs_old/inode_wrapper.h"
 #include "client/vfs_old/mock_client_s3_cache_manager.h"
 #include "client/vfs_old/mock_inode_cache_manager.h"
+#include "common/status.h"
 #include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {
@@ -43,8 +43,7 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using dingofs::cache::blockcache::MockBlockCache;
-using dingofs::cache::blockcache::StoreType;
+using dingofs::cache::MockBlockCache;
 using dingofs::client::common::S3ClientAdaptorOption;
 using dingofs::stub::rpcclient::MockMdsClient;
 
@@ -59,7 +58,6 @@ class ClientS3AdaptorTest : public testing::Test {
     mockInodeManager_ = std::make_shared<MockInodeCacheManager>();
     mockFsCacheManager_ = std::make_shared<MockFsCacheManager>();
     mockMdsClient_ = std::make_shared<MockMdsClient>();
-    mockBlockCache_ = std::make_shared<MockBlockCache>();
     S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
@@ -84,7 +82,6 @@ class ClientS3AdaptorTest : public testing::Test {
   std::shared_ptr<MockFsCacheManager> mockFsCacheManager_;
   std::shared_ptr<MockMdsClient> mockMdsClient_;
   std::shared_ptr<KVClientManager> kvClientManager_;
-  std::shared_ptr<MockBlockCache> mockBlockCache_;
 };
 
 uint64_t gInodeId = 1;
@@ -268,9 +265,6 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
   EXPECT_CALL(*mockFsCacheManager_, FindFileCacheManager(_))
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
-  EXPECT_CALL(*mockBlockCache_, GetStoreType())
-      .WillOnce(Return(StoreType::kNone));
-  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::IoError("")));
   ASSERT_EQ(DINGOFS_ERROR::INTERNAL, s3ClientAdaptor_->FlushAllCache(1));
 
   LOG(INFO)
@@ -278,9 +272,6 @@ TEST_F(ClientS3AdaptorTest, FlushAllCache_with_cache) {
   EXPECT_CALL(*mockFsCacheManager_, FindFileCacheManager(_))
       .WillOnce(Return(filecache));
   EXPECT_CALL(*filecache, Flush(_, _)).WillOnce(Return(DINGOFS_ERROR::OK));
-  EXPECT_CALL(*mockBlockCache_, GetStoreType())
-      .WillOnce(Return(StoreType::kDisk));
-  EXPECT_CALL(*mockBlockCache_, Flush(_)).WillOnce(Return(Status::OK()));
   ASSERT_EQ(DINGOFS_ERROR::OK, s3ClientAdaptor_->FlushAllCache(1));
 }
 

@@ -14,14 +14,27 @@
 
 add_subdirectory(common)
 add_subdirectory(utils)
+add_subdirectory(config)
+add_subdirectory(metrics)
+add_subdirectory(storage)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
+add_subdirectory(tiercache)
+add_subdirectory(benchmark)
 
-add_executable(dingo-cache dingo_cache.cpp)
-target_link_libraries(dingo-cache
+add_library(cache_lib "server.cpp")
+target_link_libraries(cache_lib
     cache_common
     cache_utils
+    cache_config
+    cache_metrics
+    cache_storage
     cache_blockcache
     cache_cachegroup
+    cache_remotecache
+    cache_tiercache
 )
+
+add_executable(dingo-cache main.cpp)
+target_link_libraries(dingo-cache cache_lib)

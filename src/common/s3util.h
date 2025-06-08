@@ -32,12 +32,10 @@ namespace dingofs {
 namespace common {
 namespace s3util {
 
-using cache::blockcache::BlockKey;
-
 inline std::string GenObjName(uint64_t chunkid, uint64_t index,
                               uint64_t compaction, uint64_t fsid,
                               uint64_t inodeid) {
-  BlockKey key(fsid, inodeid, chunkid, index, compaction);
+  cache::BlockKey key(fsid, inodeid, chunkid, index, compaction);
   return key.StoreKey();
 }
 

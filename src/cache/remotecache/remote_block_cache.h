@@ -23,56 +23,55 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
-#include <butil/iobuf.h>
-
-#include <memory>
-
-#include "base/hash/con_hash.h"
-#include "cache/blockcache/cache_store.h"
-#include "cache/remotecache/remote_node_group.h"
-#include "stub/rpcclient/base_client.h"
-#include "stub/rpcclient/mds_client.h"
+#include "cache/blockcache/block_cache.h"
+#include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/remote_node_manager.h"
+#include "cache/storage/storage.h"
 
 namespace dingofs {
 namespace cache {
-namespace remotecache {
 
-using dingofs::cache::blockcache::BlockKey;
-using dingofs::stub::rpcclient::MDSBaseClient;
-
-class RemoteBlockCache {
+class RemoteBlockCacheImpl final : public BlockCache {
  public:
-  virtual ~RemoteBlockCache() = default;
-
-  virtual Status Init() = 0;
-
-  virtual void Shutdown() = 0;
-
-  virtual Status Range(const BlockKey& block_key, size_t block_size,
-                       off_t offset, size_t length, butil::IOBuf* buffer) = 0;
-};
-
-class RemoteBlockCacheImpl : public RemoteBlockCache {
- public:
-  explicit RemoteBlockCacheImpl(RemoteBlockCacheOption option);
+  RemoteBlockCacheImpl(RemoteBlockCacheOption option, StorageSPtr storage);
 
   Status Init() override;
+  Status Shutdown() override;
 
-  void Shutdown() override;
+  Status Put(const BlockKey& key, const Block& block,
+             PutOption option) override;
+  Status Range(const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, RangeOption option) override;
+  Status Cache(const BlockKey& key, const Block& block,
+               CacheOption option) override;
+  Status Prefetch(const BlockKey& key, size_t length,
+                  PrefetchOption option) override;
 
-  Status Range(const BlockKey& block_key, size_t block_size, off_t offset,
-               size_t length, butil::IOBuf* buffer) override;
+  void AsyncPut(const BlockKey& key, const Block& block, AsyncCallback cb,
+                PutOption option) override;
+  void AsyncRange(const BlockKey& key, off_t offset, size_t length,
+                  IOBuffer* buffer, AsyncCallback cb,
+                  RangeOption option) override;
+  void AsyncCache(const BlockKey& key, const Block& block, AsyncCallback cb,
+                  CacheOption option) override;
+  void AsyncPrefetch(const BlockKey& key, size_t length, AsyncCallback cb,
+                     PrefetchOption option) override;
+
+  bool HasCacheStore() const override;
+  bool EnableStage() const override;
+  bool EnableCache() const override;
+  bool IsCached(const BlockKey& key) const override;
 
  private:
-  std::atomic<bool> inited_;
+  BlockCacheSPtr GetSelfSPtr() { return shared_from_this(); }
+
+  std::atomic<bool> running_;
   RemoteBlockCacheOption option_;
-  std::shared_ptr<MDSBaseClient> mds_base_;
-  std::shared_ptr<MdsClient> mds_client_;
-  std::unique_ptr<RemoteNodeGroup> node_group_;
+  RemoteNodeSPtr remote_node_;
+  StorageSPtr storage_;
 };
 
-}  // namespace remotecache
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_CACHEGROUP_CLIENT_BLOCK_CACHE_CLIENT_H_
+#endif  // DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_

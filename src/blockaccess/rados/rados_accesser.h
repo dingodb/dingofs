@@ -53,7 +53,7 @@ struct RadosAsyncIOUnit {
 
 class RadosAccesser : public Accesser {
  public:
-  RadosAccesser(const RadosOptions& options) : options_(options) {};
+  RadosAccesser(const RadosOptions& options) : options_(options){};
 
   ~RadosAccesser() override { Destroy(); }
 
@@ -69,7 +69,7 @@ class RadosAccesser : public Accesser {
 
   Status Get(const std::string& key, std::string* data) override;
   Status Range(const std::string& key, off_t offset, size_t length,
-             char* buffer) override;
+               char* buffer) override;
   void AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) override;
 
   bool BlockExist(const std::string& key) override;

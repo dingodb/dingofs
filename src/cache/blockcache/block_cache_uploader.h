@@ -23,80 +23,49 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 
-#include <atomic>
-#include <memory>
-#include <mutex>
-
+#include "cache/blockcache/block_cache_throttle.h"
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/blockcache/countdown.h"
-#include "cache/utils/phase_timer.h"
-#include "blockaccess/block_accesser.h"
-#include "utils/concurrent/task_thread_pool.h"
+#include "cache/storage/storage_pool.h"
+#include "cache/utils/infight_throttle.h"
 
 namespace dingofs {
 namespace cache {
-namespace blockcache {
 
-// How it works:
-//               add                   scan                     put
-// [stage block]----> [pending queue] -----> [uploading queue] ----> [s3]
-class BlockCacheUploader {
+class BlockCacheUploader;
+using BlockCacheUploaderSPtr = std::shared_ptr<BlockCacheUploader>;
+
+class BlockCacheUploader
+    : public std::enable_shared_from_this<BlockCacheUploader> {
  public:
-  BlockCacheUploader(blockaccess::BlockAccesser* block_accesser,
-                     std::shared_ptr<CacheStore> store,
-                     std::shared_ptr<Countdown> stage_count);
-
+  BlockCacheUploader(StoragePoolSPtr storage_pool, CacheStoreSPtr store);
   virtual ~BlockCacheUploader();
 
-  void Init(uint64_t upload_workers, uint64_t upload_queue_size);
-
+  void Init();
   void Shutdown();
 
-  void AddStageBlock(const BlockKey& key, const std::string& stage_path,
-                     BlockContext ctx);
-
+  void AddStageBlock(const StageBlock& block);
   void WaitAllUploaded();
 
  private:
-  friend class BlockCacheMetricHelper;
-
- private:
-  bool CanUpload(const std::vector<StageBlock>& blocks);
-
-  void ScaningWorker();
-
   void UploadingWorker();
+  void UploadBlock(const StageBlock& block);
+  Status DoUpload(const StageBlock& block);
 
-  void UploadStageBlock(const StageBlock& stage_block);
+  Status StoragePut(const BlockKey& key, const IOBuffer& buffer);
 
-  static Status ReadBlock(const StageBlock& stage_block,
-                          std::shared_ptr<char>& buffer, size_t* length);
+  BlockCacheUploaderSPtr GetSelfSPtr() { return shared_from_this(); }
 
-  void UploadBlock(const StageBlock& stage_block, std::shared_ptr<char> buffer,
-                   size_t length, utils::PhaseTimer timer);
-
-  void RemoveBlock(const StageBlock& stage_block);
-
-  void Staging(const StageBlock& stage_block);
-
-  void Uploaded(const StageBlock& stage_block, bool success);
-
-  static bool NeedCount(const StageBlock& stage_block);
-
- private:
-  std::mutex mutex_;
   std::atomic<bool> running_;
-  blockaccess::BlockAccesser* block_accesser_;
-  std::shared_ptr<CacheStore> store_;
-  std::shared_ptr<Countdown> stage_count_;
-  std::shared_ptr<PendingQueue> pending_queue_;
-  std::shared_ptr<UploadingQueue> uploading_queue_;
-  std::unique_ptr<dingofs::utils::TaskThreadPool<>> scan_stage_thread_pool_;
-  std::unique_ptr<dingofs::utils::TaskThreadPool<>> upload_stage_thread_pool_;
+  BthreadMutex mutex_;
+  StoragePoolSPtr storage_pool_;
+  CacheStoreSPtr store_;
+  PendingQueueUPtr pending_queue_;
+  TaskThreadPoolUPtr upload_stage_thread_pool_;
+  InflightThrottleUPtr inflights_throttle_;
+  BthreadCountdownEvent uploading_count_;
 };
 
-}  // namespace blockcache
 }  // namespace cache
 }  // namespace dingofs
 

@@ -22,17 +22,10 @@
 
 #include "cache/cachegroup/cache_group_node_server.h"
 
-#include <brpc/server.h>
-#include <glog/logging.h>
-
-#include <cstdint>
-#include <memory>
-#include <string>
-
+#include "blockaccess/block_access_log.h"
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/utils/access_log.h"
-#include "common/status.h"
-#include "blockaccess/block_access_log.h"
+#include "cache/utils/offload_thread_pool.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -40,49 +33,53 @@ DECLARE_bool(graceful_quit_on_sigterm);
 
 namespace dingofs {
 namespace cache {
-namespace cachegroup {
 
-using dingofs::cache::utils::InitCacheAccessLog;
-using dingofs::blockaccess::InitBlockAccessLog;
-
-CacheGroupNodeServerImpl::CacheGroupNodeServerImpl(AppOption option)
+CacheGroupNodeServerImpl::CacheGroupNodeServerImpl(CacheGroupNodeOption option)
     : option_(option),
-      node_(std::make_shared<CacheGroupNodeImpl>(
-          option.cache_group_node_option())),
+      node_(std::make_shared<CacheGroupNodeImpl>(option)),
       service_(std::make_unique<CacheGroupNodeServiceImpl>(node_)),
       server_(std::make_unique<::brpc::Server>()) {}
 
-void CacheGroupNodeServerImpl::InstallSignal() {
-  CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN));
-}
+Status CacheGroupNodeServerImpl::Run() {
+  // init signal
+  InstallSignal();
 
-Status CacheGroupNodeServerImpl::InitLogger() {
-  // glog
-  const auto& option = option_.global_option();
-  FLAGS_log_dir = option.log_dir();
-  FLAGS_v = option.log_level();
-  FLAGS_logbufsecs = 0;
-  FLAGS_max_log_size = 80;
-  FLAGS_stop_logging_if_full_disk = true;
+  // init offload thread pool
+  OffloadThreadPool::GetInstance().Init();
 
-  static const std::string program_name = "dingo-cache";
-  google::InitGoogleLogging(program_name.c_str());
-  LOG(INFO) << "init logger success, log_dir = " << FLAGS_log_dir;
-
-  // access logging
-  if (option.block_cache_access_logging() &&
-      !InitCacheAccessLog(FLAGS_log_dir)) {
-    return Status::Internal("Init cache access logging failed");
-  } else if (option.s3_access_logging() && !InitBlockAccessLog(FLAGS_log_dir)) {
-    return Status::Internal("Init s3 access logging failed");
+  // start cache group node
+  auto status = node_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start cache group node failed: " << status.ToString();
+    return status;
   }
 
+  // start brpc server
+  std::string listen_ip = option_.listen_ip;
+  uint32_t listen_port = option_.listen_port;
+  status = StartRpcServer(listen_ip, listen_port);
+  if (!status.ok()) {
+    LOG(ERROR) << "Start cache group node server on addresss (" << listen_ip
+               << ":" << listen_port << ") failed.";
+    return status;
+  }
+
+  // run until asked to quit
+  LOG(INFO) << "Start cache group node server on address (" << listen_ip << ":"
+            << listen_port << ") success.";
+
+  brpc::FLAGS_graceful_quit_on_sigterm = true;
+  server_->RunUntilAskedToQuit();
   return Status::OK();
 }
 
-Status CacheGroupNodeServerImpl::Init() {
-  InstallSignal();
-  return InitLogger();
+Status CacheGroupNodeServerImpl::Shutdown() {
+  brpc::AskToQuit();
+  return node_->Stop();
+}
+
+void CacheGroupNodeServerImpl::InstallSignal() {
+  CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN));
 }
 
 Status CacheGroupNodeServerImpl::StartRpcServer(const std::string& listen_ip,
@@ -110,33 +107,5 @@ Status CacheGroupNodeServerImpl::StartRpcServer(const std::string& listen_ip,
   return Status::OK();
 }
 
-Status CacheGroupNodeServerImpl::Run() {
-  auto status = node_->Start();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start cache group node failed, status = "
-               << status.ToString();
-    return status;
-  }
-
-  std::string listen_ip = node_->GetListenIp();
-  uint32_t listen_port = node_->GetListenPort();
-  status = StartRpcServer(listen_ip, listen_port);
-  if (!status.ok()) {
-    LOG(ERROR) << "Start cache group node server on(" << listen_ip << ":"
-               << listen_port << ") failed.";
-    return status;
-  }
-
-  LOG(INFO) << "Start cache group node server on(" << listen_ip << ":"
-            << listen_port << ") success.";
-
-  brpc::FLAGS_graceful_quit_on_sigterm = true;
-  server_->RunUntilAskedToQuit();
-  return Status::OK();
-}
-
-void CacheGroupNodeServerImpl::Shutdown() { brpc::AskToQuit(); }
-
-}  // namespace cachegroup
 }  // namespace cache
 }  // namespace dingofs

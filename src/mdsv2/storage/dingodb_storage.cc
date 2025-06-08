@@ -35,21 +35,28 @@ DEFINE_int32(dingodb_scan_batch_size, 100000, "dingodb scan batch size");
 
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
-static dingodb::sdk::KVPair ToKVPair(const KeyValue& kv) { return dingodb::sdk::KVPair{kv.key, kv.value}; }
+static dingodb::sdk::KVPair ToKVPair(const KeyValue& kv) {
+  return dingodb::sdk::KVPair{kv.key, kv.value};
+}
 
-static void KvPairToKeyValue(const dingodb::sdk::KVPair& kv_pair, KeyValue& kv) {
+static void KvPairToKeyValue(const dingodb::sdk::KVPair& kv_pair,
+                             KeyValue& kv) {
   kv.key = kv_pair.key;
   kv.value = kv_pair.value;
 }
 
-static void KvPairsToKeyValues(const std::vector<dingodb::sdk::KVPair>& kv_pairs, std::vector<KeyValue>& kvs) {
+static void KvPairsToKeyValues(
+    const std::vector<dingodb::sdk::KVPair>& kv_pairs,
+    std::vector<KeyValue>& kvs) {
   kvs.reserve(kv_pairs.size());
   for (const auto& kv_pair : kv_pairs) {
-    kvs.emplace_back(KeyValue{KeyValue::OpType::kPut, kv_pair.key, kv_pair.value});
+    kvs.emplace_back(
+        KeyValue{KeyValue::OpType::kPut, kv_pair.key, kv_pair.value});
   }
 }
 
-static std::vector<dingodb::sdk::KVPair> ToKVPairs(const std::vector<KeyValue>& kvs) {
+static std::vector<dingodb::sdk::KVPair> ToKVPairs(
+    const std::vector<KeyValue>& kvs) {
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   kv_pairs.reserve(kvs.size());
   for (const auto& kv : kvs) {
@@ -63,7 +70,8 @@ bool DingodbStorage::Init(const std::string& addr) {
   DINGO_LOG(INFO) << fmt::format("init dingo storage, addr({}).", addr);
 
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
-  CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}",
+                                    status.ToString());
 
   return true;
 }
@@ -76,7 +84,9 @@ bool DingodbStorage::Destroy() {
   return true;
 }
 
-Status DingodbStorage::CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) {
+Status DingodbStorage::CreateTable(const std::string& name,
+                                   const TableOption& option,
+                                   int64_t& table_id) {
   dingodb::sdk::RegionCreator* creator = nullptr;
   auto status = client_->NewRegionCreator(&creator);
   if (!status.ok()) {
@@ -107,10 +117,12 @@ Status DingodbStorage::DropTable(int64_t table_id) {
   return Status::OK();
 }
 
-Status DingodbStorage::IsExistTable(const std::string& start_key, const std::string& end_key) {
+Status DingodbStorage::IsExistTable(const std::string& start_key,
+                                    const std::string& end_key) {
   dingodb::sdk::Coordinator* coordinator{nullptr};
   auto status = client_->NewCoordinator(&coordinator);
-  CHECK(status.ok()) << fmt::format("new dingo sdk coordinator fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("new dingo sdk coordinator fail, error: {}",
+                                    status.ToString());
 
   std::vector<int64_t> region_ids;
   status = coordinator->ScanRegions(start_key, end_key, region_ids);
@@ -118,7 +130,8 @@ Status DingodbStorage::IsExistTable(const std::string& start_key, const std::str
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
-  return region_ids.empty() ? Status(pb::error::ENOT_FOUND, "table not exist") : Status::OK();
+  return region_ids.empty() ? Status(pb::error::ENOT_FOUND, "table not exist")
+                            : Status::OK();
 }
 
 DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn() {
@@ -129,18 +142,21 @@ DingodbStorage::SdkTxnUPtr DingodbStorage::NewSdkTxn() {
 
   dingodb::sdk::Transaction* txn = nullptr;
   auto status = client_->NewTransaction(options, &txn);
-  CHECK(status.ok()) << fmt::format("new transaction fail, error: {}", status.ToString());
+  CHECK(status.ok()) << fmt::format("new transaction fail, error: {}",
+                                    status.ToString());
 
   return DingodbStorage::SdkTxnUPtr(txn);
 }
 
-Status DingodbStorage::Put(WriteOption option, const std::string& key, const std::string& value) {
+Status DingodbStorage::Put(WriteOption option, const std::string& key,
+                           const std::string& value) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
   }
 
-  auto status = option.is_if_absent ? txn->PutIfAbsent(key, value) : txn->Put(key, value);
+  auto status =
+      option.is_if_absent ? txn->PutIfAbsent(key, value) : txn->Put(key, value);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -164,7 +180,8 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
   }
 
   if (kv.opt_type == KeyValue::OpType::kPut) {
-    auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value) : txn->Put(kv.key, kv.value);
+    auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value)
+                                      : txn->Put(kv.key, kv.value);
     if (!status.ok()) {
       return Status(pb::error::EBACKEND_STORE, status.ToString());
     }
@@ -187,7 +204,8 @@ Status DingodbStorage::Put(WriteOption option, KeyValue& kv) {
   return Status::OK();
 }
 
-Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs) {
+Status DingodbStorage::Put(WriteOption option,
+                           const std::vector<KeyValue>& kvs) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -195,7 +213,8 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
 
   for (const auto& kv : kvs) {
     if (kv.opt_type == KeyValue::OpType::kPut) {
-      auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value) : txn->Put(kv.key, kv.value);
+      auto status = option.is_if_absent ? txn->PutIfAbsent(kv.key, kv.value)
+                                        : txn->Put(kv.key, kv.value);
       if (!status.ok()) {
         return Status(pb::error::EBACKEND_STORE, status.ToString());
       }
@@ -227,8 +246,9 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
 
   auto status = txn->Get(key, value);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return status.IsNotFound()
+               ? Status(pb::error::ENOT_FOUND, status.ToString())
+               : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   status = txn->PreCommit();
@@ -243,7 +263,8 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
   return Status::OK();
 }
 
-Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+Status DingodbStorage::BatchGet(const std::vector<std::string>& keys,
+                                std::vector<KeyValue>& kvs) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
     return Status(pb::error::EBACKEND_STORE, "new transaction fail");
@@ -252,8 +273,9 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn->BatchGet(keys, kv_pairs);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return status.IsNotFound()
+               ? Status(pb::error::ENOT_FOUND, status.ToString())
+               : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   status = txn->PreCommit();
@@ -277,7 +299,8 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
   }
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn->Scan(range.start_key, range.end_key, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  auto status = txn->Scan(range.start_key, range.end_key,
+                          FLAGS_dingodb_scan_batch_size, kv_pairs);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -344,9 +367,13 @@ Status DingodbStorage::Delete(const std::vector<std::string>& keys) {
   return Status::OK();
 }
 
-TxnUPtr DingodbStorage::NewTxn() { return std::make_unique<DingodbTxn>(NewSdkTxn()); }
+TxnUPtr DingodbStorage::NewTxn() {
+  return std::make_unique<DingodbTxn>(NewSdkTxn());
+}
 
-int64_t DingodbTxn::ID() const { return txn_->ID(); }
+int64_t DingodbTxn::ID() const { /*return txn_->ID();*/
+  return 0;
+}  // FIXME(Wine93)
 
 Status DingodbTxn::Put(const std::string& key, const std::string& value) {
   auto status = txn_->Put(key, value);
@@ -355,7 +382,8 @@ Status DingodbTxn::Put(const std::string& key, const std::string& value) {
   return Status::OK();
 }
 
-Status DingodbTxn::PutIfAbsent(const std::string& key, const std::string& value) {
+Status DingodbTxn::PutIfAbsent(const std::string& key,
+                               const std::string& value) {
   auto status = txn_->PutIfAbsent(key, value);
   CHECK(status.ok()) << "txn put fail, " << status.ToString();
 
@@ -371,26 +399,33 @@ Status DingodbTxn::Delete(const std::string& key) {
 
 Status DingodbTxn::Get(const std::string& key, std::string& value) {
   uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  ON_SCOPE_EXIT([&]() {
+    txn_trace_.read_time_us += (Helper::TimestampUs() - start_time);
+  });
 
   auto status = txn_->Get(key, value);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return status.IsNotFound()
+               ? Status(pb::error::ENOT_FOUND, status.ToString())
+               : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   return Status::OK();
 }
 
-Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) {
+Status DingodbTxn::BatchGet(const std::vector<std::string>& keys,
+                            std::vector<KeyValue>& kvs) {
   uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  ON_SCOPE_EXIT([&]() {
+    txn_trace_.read_time_us += (Helper::TimestampUs() - start_time);
+  });
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->BatchGet(keys, kv_pairs);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return status.IsNotFound()
+               ? Status(pb::error::ENOT_FOUND, status.ToString())
+               : Status(pb::error::EBACKEND_STORE, status.ToString());
   }
 
   KvPairsToKeyValues(kv_pairs, kvs);
@@ -398,9 +433,12 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
   return Status::OK();
 }
 
-Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) {
+Status DingodbTxn::Scan(const Range& range, uint64_t limit,
+                        std::vector<KeyValue>& kvs) {
   uint64_t start_time = Helper::TimestampUs();
-  ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
+  ON_SCOPE_EXIT([&]() {
+    txn_trace_.read_time_us += (Helper::TimestampUs() - start_time);
+  });
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->Scan(range.start_key, range.end_key, limit, kv_pairs);
@@ -416,7 +454,8 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
 void DingodbTxn::Rollback() {
   auto status = txn_->Rollback();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("rollback fail, error: {}", status.ToString());
+    DINGO_LOG(ERROR) << fmt::format("rollback fail, error: {}",
+                                    status.ToString());
   }
 }
 
