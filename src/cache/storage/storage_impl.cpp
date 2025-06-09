@@ -35,37 +35,22 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_operator.h"
+#include "cache/utils/offload_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 
 using blockaccess::RetryStrategy;
 
-StorageImpl::StorageImpl(blockaccess::BlockAccesserSPtr block_accesser)
-    : running_(false),
-      block_accesser_(block_accesser),
-      task_thread_pool_(
-          std::make_unique<TaskThreadPool>("cache_storage_worker")),
-      submit_queue_id_({0}) {}
+StorageImpl::StorageImpl(blockaccess::BlockAccesser* block_accesser)
+    : running_(false), block_accesser_(block_accesser), submit_queue_id_({0}) {}
 
 Status StorageImpl::Init() {
   if (!running_.exchange(true)) {
-    auto status = block_accesser_->Init();
-    if (!status.ok()) {
-      LOG(ERROR) << "Init block accesser failed: " << status.ToString();
-      return status;
-    }
-
-    int rc = task_thread_pool_->Start(3);
-    if (rc != 0) {
-      LOG(ERROR) << "Start storage thread pool failed: rc = " << rc;
-      return Status::Internal("start storage thread pool fail");
-    }
-
     bthread::ExecutionQueueOptions queue_options;
     queue_options.use_pthread = true;
-    rc = bthread::execution_queue_start(&submit_queue_id_, &queue_options,
-                                        Executor, this);
+    int rc = bthread::execution_queue_start(&submit_queue_id_, &queue_options,
+                                            Executor, this);
     if (rc != 0) {
       LOG(ERROR) << "Start storage submit execution queue failed: rc = " << rc;
       return Status::Internal("start storage submit execution queue fail");
@@ -82,7 +67,6 @@ Status StorageImpl::Shutdown() {
       LOG(ERROR) << "Stop storage submit execution queue failed: rc = " << rc;
       return Status::Internal("stop storage submit execution queue failed");
     }
-    task_thread_pool_->Stop();
   }
   return Status::OK();
 }
@@ -111,7 +95,7 @@ int StorageImpl::Executor(void* meta,
   StorageImpl* storage = static_cast<StorageImpl*>(meta);
   for (; iter; iter++) {
     auto* closure = *iter;
-    storage->task_thread_pool_->Enqueue(  // multi-thread for memory copy
+    OffloadThreadPool::GetInstance().Submit(  // copy memory
         [storage, closure]() { storage->Execute(closure); });
   }
   return 0;

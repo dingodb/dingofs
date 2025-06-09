@@ -68,7 +68,8 @@ struct StorageClosure : public Closure {
 
 inline StorageClosure StoragePutClosure(const std::string& key,
                                         const IOBuffer& buffer) {
-  return StorageClosure(OperatorType::kPut, key, 0, 0, buffer, nullptr);
+  return StorageClosure(OperatorType::kPut, key, 0, buffer.Size(), buffer,
+                        nullptr);
 }
 
 inline StorageClosure StorageRangeClosure(const std::string& key, off_t offset,

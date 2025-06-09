@@ -531,14 +531,13 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
                                                    uint64_t len) {
   {
     auto block_cache = s3ClientAdaptor_->GetBlockCache();
-    if (!block_cache->IsCached(key)) {
-      return false;
-    }
-
     IOBuffer buffer;
-    auto status = block_cache->Range(key, offset, len, &buffer,
-                                     cache::RangeOption(false));
-    if (!status.ok()) {
+    auto option = cache::RangeOption();
+    option.retrive = false;
+    auto status = block_cache->Range(key, offset, len, &buffer, option);
+    if (status.IsNotFound()) {
+      return false;
+    } else if (!status.ok()) {
       LOG(WARNING) << "Object " << key.Filename() << " not cached in disk.";
       return false;
     }

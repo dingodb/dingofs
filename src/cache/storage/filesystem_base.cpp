@@ -35,7 +35,7 @@
 #include "base/math/math.h"
 #include "base/time/time.h"
 #include "cache/storage/aio/aio_queue.h"
-#include "cache/storage/aio/io_uring.h"
+#include "cache/storage/aio/linux_io_uring.h"
 #include "cache/storage/filesystem.h"
 #include "cache/utils/filepath.h"
 #include "cache/utils/helper.h"

@@ -23,8 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_STORAGE_POOL_H_
 #define DINGOFS_SRC_CACHE_STORAGE_STORAGE_POOL_H_
 
+#include <cstddef>
+
+#include "blockaccess/block_accesser.h"
 #include "cache/common/common.h"
+#include "cache/common/type.h"
 #include "cache/storage/storage.h"
+#include "common/status.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
@@ -42,15 +47,12 @@ using StoragePoolUPtr = std::unique_ptr<StoragePool>;
 
 class SingleStorage final : public StoragePool {
  public:
-  explicit SingleStorage(StorageSPtr storage) : storage_(storage) {}
+  explicit SingleStorage(StorageSPtr storage);
 
-  Status GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) override {
-    storage = storage_;
-    return Status::OK();
-  }
+  Status GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) override;
 
  private:
-  const StorageSPtr storage_;
+  StorageSPtr storage_;
 };
 
 class StoragePoolImpl final : public StoragePool {
@@ -65,8 +67,10 @@ class StoragePoolImpl final : public StoragePool {
   void Insert(uint32_t fs_id, StorageSPtr storage);
   Status Create(uint32_t fs_id, StorageSPtr& storage);
 
-  BthreadRWLock rwlock_;
+  BthreadMutex mutex_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  std::unordered_map<uint32_t, blockaccess::BlockAccesserUPtr>
+      block_accesseres_;
   std::unordered_map<uint32_t, StorageSPtr> storages_;
 };
 

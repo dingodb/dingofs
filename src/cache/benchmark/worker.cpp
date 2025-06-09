@@ -22,148 +22,175 @@
 
 #include "cache/benchmark/worker.h"
 
-#include <butil/iobuf.h>
-#include <butil/time.h>
+#include <memory>
 
-#include <thread>
-
-#include "cache/benchmark/helper.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/config/config.h"
+#include "cache/common/type.h"
+#include "cache/config/benchmark.h"
 #include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
 
-extern BenchmarkOption* g_option;
-
-static constexpr uint64_t kBlocksPerChunk = 16;
-
-Worker::Worker(int worker_id, BlockCacheSPtr block_cache, ReporterSPtr reporter)
+Worker::Worker(int worker_id, BlockCacheSPtr block_cache, ReporterSPtr reporter,
+               BthreadCountdownEventSPtr countdown_event)
     : worker_id_(worker_id),
-      block_(NewBlock()),
+      block_(NewOneBlock()),
       block_cache_(block_cache),
-      reporter_(reporter) {}
+      reporter_(reporter),
+      countdown_event_(countdown_event) {}
 
-Status Worker::Init() {
-  auto op = g_option->op;
-  if (op == "range" || op == "async_range") {
-    return PrepRange();
+Status Worker::Init() { return NeedPrepBlock() ? PrepBlock() : Status::OK(); }
+
+void Worker::Run() {
+  auto factory = NewBlockKeyFactory();
+  auto task_factory = NewTaskFactory();
+
+  for (auto i = 0; i < FLAGS_op_blocks; i++) {
+    auto key = factory.Next();
+    CHECK(key != std::nullopt);
+    ExecuteTask(task_factory(key.value()));
   }
-  return Status::OK();
+  countdown_event_->signal(1);
 }
 
-Status Worker::PrepRange() {
-  std::cout << "Preapre worker " << worker_id_ << "...." << std::endl;
-  BlockKey key;
-  auto key_generator = BlockKeyGenerator(worker_id_, g_option->blocks);
-  for (;;) {
-    auto key = key_generator.Next();
-    if (key == std::nullopt) {
-      break;
-    }
+void Worker::Shutdown() {
+  // do nothing
+}
 
+std::function<Worker::TaskFunc(const BlockKey& key)> Worker::NewTaskFactory() {
+  if (FLAGS_op == "put") {
+    return [this](const BlockKey& key) {
+      return [this, key]() { return PutBlock(key); };
+    };
+  } else if (FLAGS_op == "async_put") {
+    return [this](const BlockKey& key) {
+      return [this, key]() { return AsyncPutBlock(key); };
+    };
+  } else if (FLAGS_op == "range") {
+    return [this](const BlockKey& key) {
+      return [this, key]() { return RangeBlock(key); };
+    };
+  } else if (FLAGS_op == "async_range") {
+    return [this](const BlockKey& key) {
+      return [this, key]() { return AsyncRangeBlock(key); };
+    };
+  }
+
+  CHECK(false) << "Unsupported operation: " << FLAGS_op;
+}
+
+BlockKeyFactory Worker::NewBlockKeyFactory() const {
+  return BlockKeyFactory(worker_id_, FLAGS_op_blocks);
+}
+
+Status Worker::PrepBlock() {
+  std::cout << absl::StrFormat("[worker-%d] %d blocks preparing...\n",
+                               worker_id_, FLAGS_op_blocks);
+
+  butil::Timer timer;
+  timer.start();
+
+  auto factory = NewBlockKeyFactory();
+  for (auto i = 0; i < FLAGS_op_blocks; i++) {
+    auto key = factory.Next();
+    CHECK(key != std::nullopt);
     auto status = block_cache_->Cache(key.value(), block_);
     if (!status.ok()) {
       return status;
     }
   }
 
-  std::cout << "Preapre worker " << worker_id_ << "success." << std::endl;
-  std::this_thread::sleep_for(std::chrono::seconds(10));
+  timer.stop();
 
-  std::cout << "start to run" << std::endl;
+  std::cout << absl::StrFormat(
+      "[worker-%d] %d blocks prepared, cost %.6lf seconds.\n", worker_id_,
+      FLAGS_op_blocks, timer.u_elapsed() * 1.0 / 1e6);
 
   return Status::OK();
 }
 
-void Worker::DoPut() {
-  auto key_generator = BlockKeyGenerator(worker_id_, g_option->blocks);
-  for (;;) {
-    auto key = key_generator.Next();
-    if (key == std::nullopt) {
-      break;
-    }
-
-    Execute([this, key]() {
-      return block_cache_->Put(key.value(), block_, PutOption(true));
-    });
-  }
+Status Worker::PutBlock(const BlockKey& key) {
+  auto option = PutOption();
+  option.writeback = FLAGS_put_writeback;
+  return block_cache_->Put(key, block_, option);
 }
 
-void Worker::DoRange() {
-  auto key_generator = BlockKeyGenerator(worker_id_, g_option->blocks);
-  for (;;) {
-    auto key = key_generator.Next();
-    if (key == std::nullopt) {
-      break;
-    }
-
-    Execute([this, key]() {
-      IOBuffer buffer;
-      auto status = block_cache_->Range(key.value(), 0, g_option->blksize,
-                                        &buffer, RangeOption(false));
-      if (status.ok()) {
-        // char* null = new char[g_option->blksize];
-        //  buffer.CopyTo(null);
-        // auto bufvec = buffer.Fetch();
-        //  CHECK_EQ(bufvec.size(), 1);
-        //   CHECK_EQ(buffer.Size(), 0);
-        //  std::memcpy(null, bufvec[0].iov_base, buffer.Size());
-        // delete[] null;
-      }
-      return status;
-    });
+Status Worker::RangeBlock(const BlockKey& key) {
+  IOBuffer buffer;
+  auto option = RangeOption();
+  option.retrive = FLAGS_range_retrive;
+  auto status = block_cache_->Range(key, 0, FLAGS_op_blksize, &buffer, option);
+  if (!status.ok()) {
+    return status;
   }
+
+  CHECK_EQ(buffer.Size(), FLAGS_op_blksize)
+      << absl::StrFormat("Range block size mismatch: expected %lu, got %lu",
+                         FLAGS_op_blksize, buffer.Size());
+
+  auto data = std::make_unique<char[]>(buffer.Size());
+  buffer.CopyTo(data.get());
+  return Status::OK();
 }
 
-void Worker::Run() {
-  auto op = g_option->op;
-  if (op == "put") {
-    DoPut();
-  } else if (op == "range") {
-    DoRange();
-  }
+Status Worker::AsyncPutBlock(const BlockKey& key) {
+  Status status;
+  auto option = PutOption();
+  option.writeback = FLAGS_put_writeback;
+  BthreadCountdownEvent countdown_event(1);
+
+  block_cache_->AsyncPut(
+      key, block_,
+      [&](Status st) {
+        status = st;
+        countdown_event.signal(1);
+      },
+      option);
+
+  countdown_event.wait();
+  return status;
 }
 
-void Worker::Execute(std::function<Status()> task) {
+Status Worker::AsyncRangeBlock(const BlockKey& key) {
+  Status status;
+  auto option = RangeOption();
+  option.retrive = FLAGS_range_retrive;
+
+  BthreadCountdownEvent countdown_event(1);
+
+  IOBuffer buffer;
+  block_cache_->AsyncRange(
+      key, 0, FLAGS_op_blksize, &buffer,
+      [&](Status st) {
+        status = st;
+        countdown_event.signal(1);
+      },
+      option);
+
+  countdown_event.wait();
+
+  auto data = std::make_unique<char[]>(buffer.Size());
+  buffer.CopyTo(data.get());
+
+  return status;
+}
+
+void Worker::ExecuteTask(std::function<Status()> task) {
   butil::Timer timer;
-
   timer.start();
+
   auto status = task();
+  if (!status.ok()) {
+    std::cout << absl::StrFormat("[worker-%d] execute task failed: %s\n",
+                                 worker_id_, status.ToString());
+  }
+
   timer.stop();
 
-  reporter_->Submit(Record(g_option->blksize, timer.u_elapsed() / 1e6));
-}
-
-Block Worker::NewBlock() {
-  butil::IOBuf iobuf;
-  auto page_size = g_option->page_size;
-  auto length = g_option->blksize;
-  while (length > 0) {
-    auto size = std::min(page_size, length);
-    AppendPage(&iobuf, size);
-    LOG(INFO) << "size = " << size;
-    length -= size;
-  }
-
-  auto* buffer = new IOBuffer(iobuf);
-
-  LOG(INFO) << "buffer size: " << buffer->Size();
-  LOG(INFO) << "buffer size: " << buffer->IOBuf().size();
-  LOG(INFO) << "buffer size: " << buffer->IOBuf().length();
-  LOG(INFO) << "block num: " << buffer->IOBuf().backing_block_num();
-  LOG(INFO) << "block count: " << buffer->IOBuf().block_count();
-
-  return Block(buffer);
-}
-
-void Worker::AppendPage(butil::IOBuf* iobuf, size_t size) {
-  char* data = new char[size];
-  std::memset(data, 0, size);
-  iobuf->append_user_data(
-      data, size, [](void* data) { delete[] static_cast<char*>(data); });
+  reporter_->Submit(Event(EventType::kAddStat, FLAGS_op_blksize,
+                          timer.u_elapsed() * 1.0 / 1e6));
 }
 
 }  // namespace cache

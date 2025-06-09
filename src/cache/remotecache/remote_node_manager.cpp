@@ -29,21 +29,21 @@ namespace cache {
 
 using dingofs::pb::mds::cachegroup::CacheGroupErrCode_Name;
 
-RemoteNodeManagerImpl::RemoteNodeManagerImpl(RemoteBlockCacheOption option)
+RemoteNodeManager::RemoteNodeManager(RemoteBlockCacheOption option,
+                                     OnMemberLoad on_member_load)
     : running_(false),
       option_(option),
+      on_member_load_(on_member_load),
       mds_base_(std::make_shared<stub::rpcclient::MDSBaseClient>()),
       mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
-      timer_(std::make_unique<TimerImpl>()),
-      group_(nullptr) {}
+      timer_(std::make_unique<TimerImpl>()) {}
 
-Status RemoteNodeManagerImpl::Start() {
+Status RemoteNodeManager::Start() {
   if (!running_.exchange(true)) {
     LOG(INFO) << "Remote node manager starting...";
 
-    auto rc =
-        mds_client_->Init(NewMdsOption(option_.mds_addrs), mds_base_.get());
-    if (rc != PB_FSStatusCode::OK) {
+    auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
+    if (rc != PBFSStatusCode::OK) {
       return Status::Internal("init mds client failed");
     }
 
@@ -54,8 +54,7 @@ Status RemoteNodeManagerImpl::Start() {
     }
 
     CHECK(timer_->Start());
-    timer_->Add([this] { BackgroudRefresh(); },
-                option_.load_members_interval_ms);
+    timer_->Add([this] { BackgroudRefresh(); }, FLAGS_load_members_interval_ms);
 
     LOG(INFO) << "Remote node manager started.";
   }
@@ -63,65 +62,42 @@ Status RemoteNodeManagerImpl::Start() {
   return Status::OK();
 }
 
-void RemoteNodeManagerImpl::Stop() {
+void RemoteNodeManager::Stop() {
   if (running_.exchange(false)) {
     timer_->Stop();
   }
 }
 
-void RemoteNodeManagerImpl::BackgroudRefresh() {
+void RemoteNodeManager::BackgroudRefresh() {
   auto status = RefreshMembers();
   if (!status.ok()) {
     LOG(ERROR) << "Refresh cache group members failed: " << status.ToString();
   }
-  timer_->Add([this] { BackgroudRefresh(); }, option_.load_members_interval_ms);
+
+  timer_->Add([this] { BackgroudRefresh(); }, FLAGS_load_members_interval_ms);
 }
 
-Status RemoteNodeManagerImpl::RefreshMembers() {
-  PB_CacheGroupMembers members;
+Status RemoteNodeManager::RefreshMembers() {
+  PBCacheGroupMembers members;
   Status status = LoadMembers(&members);
-  if (!status.ok()) {
-    return status;
-  } else if (!group_->IsDiff(members)) {
-    return Status::OK();
+  if (status.ok()) {
+    status = on_member_load_(members);
   }
-
-  auto group = std::make_shared<RemoteNodeGroup>(members);
-  status = group->Init();
-  if (!status.ok()) {
-    return status;
-  }
-
-  LOG(INFO) << "Refresh cache group (name=" << option_.group_name
-            << ") members success.";
-
-  SetGroup(group);
-  return Status::OK();
+  return status;
 }
 
-Status RemoteNodeManagerImpl::LoadMembers(PB_CacheGroupMembers* members) {
-  auto status = mds_client_->LoadCacheGroupMembers(option_.group_name, members);
-  if (status != PB_CacheGroupErrCode::CacheGroupOk) {
+Status RemoteNodeManager::LoadMembers(PBCacheGroupMembers* members) {
+  auto status =
+      mds_client_->LoadCacheGroupMembers(option_.cache_group, members);
+  if (status != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Load cache group members failed: "
                << CacheGroupErrCode_Name(status);
     return Status::Internal("load cache group member failed");
   }
+
+  VLOG(9) << "Load cache group members: size = " << members->size();
+
   return Status::OK();
-}
-
-RemoteNodeSPtr RemoteNodeManagerImpl::GetNode(const std::string& key) {
-  auto group = GetGroup();
-  return group_->GetNode(key);
-}
-
-RemoteNodeGorupSPtr RemoteNodeManagerImpl::GetGroup() {
-  ReadLockGuard lk(rwlock_);
-  return group_;
-}
-
-void RemoteNodeManagerImpl::SetGroup(RemoteNodeGorupSPtr group) {
-  WriteLockGuard lk(rwlock_);
-  group_ = group;
 }
 
 }  // namespace cache

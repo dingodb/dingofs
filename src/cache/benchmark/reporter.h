@@ -24,41 +24,78 @@
 #define DINGOFS_SRC_CACHE_BENCHMARK_REPORTER_H_
 
 #include <bthread/execution_queue.h>
-#include <sys/types.h>
+#include <bthread/execution_queue_inl.h>
 
-#include <cstdint>
-#include <memory>
-#include <mutex>
-
-#include "base/timer/timer.h"
-#include "cache/common/type.h"
+#include "cache/common/common.h"
+#include "cache/config/config.h"
+#include "utils/executor/timer.h"
 
 namespace dingofs {
 namespace cache {
 
-struct Record {
-  Record(uint64_t bytes, double latency_s)
-      : bytes(bytes), latency_s(latency_s) {}
+enum class EventType : uint8_t {
+  kOnStart = 0,
+  kAddStat = 1,
+  kReportStat = 2,
+  kOnStop = 3,
+};
 
+struct Event {
+  Event() = default;
+
+  Event(EventType type, uint64_t bytes = 0, double latency_s = 0)
+      : type(type), bytes(bytes), latency_s(latency_s) {}
+
+  EventType type;
   uint64_t bytes{0};
   double latency_s{0};
 };
 
-struct AggRecord {
-  AggRecord() = default;
+class Statistics {  // Per 3 sconds
+ public:
+  Statistics() = default;
 
   void Add(uint64_t bytes, double latency_s) {
-    count++;
-    total_bytes += bytes;
-    max_latency_s = std::max(max_latency_s, latency_s);
-    min_latency_s = std::min(min_latency_s, latency_s);
+    max_latency_s_ = std::max(max_latency_s_, latency_s);
+    if (min_latency_s_ == 0 || latency_s < min_latency_s_) {
+      min_latency_s_ = latency_s;
+    }
+
+    count_++;
+    total_bytes_ += bytes;
     total_latency_s += latency_s;
   }
 
-  uint64_t count{0};
-  uint64_t total_bytes{0};
-  double max_latency_s{0};
-  double min_latency_s{99999999999};
+  uint64_t IOPS() const { return count_ / FLAGS_stat_interval_s; }
+
+  uint64_t Bandwidth() const {
+    return total_bytes_ * 1.0 / FLAGS_stat_interval_s / kMiB;
+  }
+
+  double AvgLatency() const {
+    if (count_ == 0) {
+      return 0;
+    }
+    return total_latency_s / count_;
+  }
+
+  double MaxLatency() const { return max_latency_s_; }
+
+  double MinLatency() const { return min_latency_s_; }
+
+  void Reset() {
+    count_ = 0;
+    total_bytes_ = 0;
+    max_latency_s_ = 0;
+    min_latency_s_ = 0;
+    total_latency_s = 0;
+  }
+
+ private:
+  uint64_t count_{0};
+  uint64_t total_bytes_{0};
+  double max_latency_s_{0};
+  double min_latency_s_{0};
   double total_latency_s{0};
 };
 
@@ -67,18 +104,26 @@ class Reporter {
   Reporter();
 
   Status Start();
+  Status Stop();
 
-  void Submit(Record record);
+  void Submit(Event event);
 
  private:
-  static int Aggregate(void* meta, bthread::TaskIterator<Record>& iter);
-  void Add(const Record& record);
-  void ReportOnce();
+  static int HandleEvent(void* meta, bthread::TaskIterator<Event>& iter);
 
-  BthreadMutex mutex_;
-  AggRecord agg_;
-  bthread::ExecutionQueueId<Record> queue_id_;
-  std::unique_ptr<base::timer::Timer> timer_;
+  void OnStart();
+  void AddStat(Event event);
+  void ReportStat();
+  void OnStop();
+
+  void TickTok();
+
+  void PrintfStat(const std::string& item, Statistics stat);
+
+  Statistics interval_stat_;
+  Statistics summary_stat_;
+  bthread::ExecutionQueueId<Event> queue_id_;
+  TimerUPtr timer_;
 };
 
 using ReporterSPtr = std::shared_ptr<Reporter>;

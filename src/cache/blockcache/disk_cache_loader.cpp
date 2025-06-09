@@ -98,10 +98,10 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& root, BlockType type) {
       "%.6f seconds.",
       ToString(type), root, status.ToString(), num_blocks, num_invalids,
       timer.u_elapsed() / 1e6);
-  if (status.ok()) {
-    LOG(INFO) << message;
-  } else {
-    LOG(ERROR) << message;
+
+  LOG(INFO) << message;
+  if (!status.ok()) {
+    LOG(ERROR) << "Load blocks from disk failed: " << status.ToString();
   }
 
   if (type == BlockType::kCacheBlock) {

@@ -42,7 +42,7 @@ namespace cache {
       pb::cache::blockcache::method##Response* response,     \
       google::protobuf::Closure* done)
 
-class CacheGroupNodeServiceImpl final : public PB_BlockCacheService {
+class CacheGroupNodeServiceImpl final : public PBBlockCacheService {
  public:
   explicit CacheGroupNodeServiceImpl(CacheGroupNodeSPtr node);
 

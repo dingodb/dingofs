@@ -26,7 +26,7 @@ namespace dingofs {
 namespace cache {
 
 AsyncCacheImpl::AsyncCacheImpl(BlockCacheSPtr block_cache)
-    : running_(false), block_cache_(block_cache) {}
+    : running_(false), block_cache_(block_cache), async_cache_queue_id_({0}) {}
 
 Status AsyncCacheImpl::Start() {
   if (!running_.exchange(true)) {

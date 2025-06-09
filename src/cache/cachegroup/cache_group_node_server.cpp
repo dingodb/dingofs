@@ -25,6 +25,7 @@
 #include "blockaccess/block_access_log.h"
 #include "cache/cachegroup/cache_group_node.h"
 #include "cache/utils/access_log.h"
+#include "cache/utils/offload_thread_pool.h"
 
 namespace brpc {
 DECLARE_bool(graceful_quit_on_sigterm);
@@ -43,15 +44,11 @@ Status CacheGroupNodeServerImpl::Run() {
   // init signal
   InstallSignal();
 
-  // init logger
-  auto status = InitLogger();
-  if (!status.ok()) {
-    LOG(ERROR) << "Init logger failed: " << status.ToString();
-    return status;
-  }
+  // init offload thread pool
+  OffloadThreadPool::GetInstance().Init();
 
   // start cache group node
-  status = node_->Start();
+  auto status = node_->Start();
   if (!status.ok()) {
     LOG(ERROR) << "Start cache group node failed: " << status.ToString();
     return status;
@@ -76,29 +73,13 @@ Status CacheGroupNodeServerImpl::Run() {
   return Status::OK();
 }
 
-void CacheGroupNodeServerImpl::Shutdown() { brpc::AskToQuit(); }
+Status CacheGroupNodeServerImpl::Shutdown() {
+  brpc::AskToQuit();
+  return node_->Stop();
+}
 
 void CacheGroupNodeServerImpl::InstallSignal() {
   CHECK(SIG_ERR != signal(SIGPIPE, SIG_IGN));
-}
-
-Status CacheGroupNodeServerImpl::InitLogger() {
-  FLAGS_log_dir = FLAGS_logdir;
-  FLAGS_v = FLAGS_loglevel;
-  FLAGS_logbufsecs = 0;
-  FLAGS_max_log_size = 80;
-  FLAGS_stop_logging_if_full_disk = true;
-
-  static const std::string program_name = "dingo-cache";
-  google::InitGoogleLogging(program_name.c_str());
-  LOG(INFO) << "Init logger success, log_dir = " << FLAGS_log_dir;
-
-  if (!InitCacheAccessLog(FLAGS_log_dir)) {
-    return Status::Internal("Init cache access logging failed");
-  } else if (!blockaccess::InitBlockAccessLog(FLAGS_log_dir)) {
-    return Status::Internal("Init block access logging failed");
-  }
-  return Status::OK();
 }
 
 Status CacheGroupNodeServerImpl::StartRpcServer(const std::string& listen_ip,

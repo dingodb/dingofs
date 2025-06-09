@@ -16,96 +16,64 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-02-10
+ * Created Date: 2025-06-15
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/rpc_client.h"
 
-#include "cache/utils/state_machine_impl.h"
+#include "cache/config/remote_cache.h"
 
 namespace dingofs {
 namespace cache {
 
-RemoteNodeImpl::RemoteNodeImpl(const PB_CacheGroupMember& member,
-                               RemoteAccessOption option)
-    : member_(member),
+RPCClient::RPCClient(const std::string& server_ip, uint32_t server_port,
+                     RemoteNodeOption option)
+    : server_ip_(server_ip),
+      server_port_(server_port),
       option_(option),
-      channel_(std::make_unique<brpc::Channel>()),
-      state_machine_(std::make_unique<StateMachineImpl>()) {}
+      channel_(std::make_unique<brpc::Channel>()) {}
 
-Status RemoteNodeImpl::Init() {
-  return InitChannel(member_.ip(), member_.port());
-}
+Status RPCClient::Init() { return InitChannel(server_ip_, server_port_); }
 
-Status RemoteNodeImpl::Put(const BlockKey& key, const Block& block) {
-  auto status = CheckHealth();
-  if (status.ok()) {
-    status = RemotePut(key, block);
-  }
-  return status;
-}
-
-Status RemoteNodeImpl::Range(const BlockKey& key, off_t offset, size_t length,
-                             IOBuffer* buffer, size_t block_size) {
-  auto status = CheckHealth();
-  if (status.ok()) {
-    status = RemoteRange(key, offset, length, buffer, block_size);
-  }
-  return status;
-}
-
-Status RemoteNodeImpl::Cache(const BlockKey& key, const Block& block) {
-  auto status = CheckHealth();
-  if (status.ok()) {
-    status = RemoteCache(key, block);
-  }
-  return status;
-}
-
-Status RemoteNodeImpl::Prefetch(const BlockKey& key, size_t length) {
-  auto status = CheckHealth();
-  if (status.ok()) {
-    status = RemotePrefetch(key, length);
-  }
-  return status;
-}
-
-Status RemoteNodeImpl::RemotePut(const BlockKey& key, const Block& block) {
+Status RPCClient::Put(const BlockKey& key, const Block& block) {
   brpc::Controller cntl;
-  PB_PutRequest request;
-  PB_PutResponse response;
+  PBPutRequest request;
+  PBPutResponse response;
 
   auto buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
   cntl.request_attachment().append(buffer.IOBuf());
   cntl.set_timeout_ms(option_.remote_put_rpc_timeout_ms);
-  PB_BlockCacheService_Stub stub(channel_.get());
+  PBBlockCacheService_Stub stub(channel_.get());
 
   stub.Put(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
     LOG(ERROR) << "Send block put request to remote failed: "
                << cntl.ErrorText();
     return Status::IoError("put failed");
+  } else if (response.status() != PBBlockCacheErrCode::BlockCacheOk) {
+    LOG(ERROR) << "Remote put failed: "
+               << response.status();  // Log the error code
+    return Status::IoError("put failed");
   }
 
   return Status::OK();
 }
 
-Status RemoteNodeImpl::RemoteRange(const BlockKey& key, off_t offset,
-                                   size_t length, IOBuffer* buffer,
-                                   size_t block_size) {
+Status RPCClient::Range(const BlockKey& key, off_t offset, size_t length,
+                        IOBuffer* buffer, size_t block_size) {
   brpc::Controller cntl;
-  PB_RangeRequest request;
-  PB_RangeResponse response;
+  PBRangeRequest request;
+  PBRangeResponse response;
 
   *request.mutable_block_key() = key.ToPB();
   request.set_offset(offset);
   request.set_length(length);
   request.set_block_size(block_size);
   cntl.set_timeout_ms(option_.remote_range_rpc_timeout_ms);
-  PB_BlockCacheService_Stub stub(channel_.get());
+  PBBlockCacheService_Stub stub(channel_.get());
 
   stub.Range(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
@@ -115,24 +83,24 @@ Status RemoteNodeImpl::RemoteRange(const BlockKey& key, off_t offset,
   }
 
   auto status = response.status();
-  if (status == PB_BlockCacheErrCode::BlockCacheOk) {
+  if (status == PBBlockCacheErrCode::BlockCacheOk) {
     *buffer = IOBuffer(cntl.response_attachment());
     return Status::OK();
   }
   return Status::IoError("range failed");
 }
 
-Status RemoteNodeImpl::RemoteCache(const BlockKey& key, const Block& block) {
+Status RPCClient::Cache(const BlockKey& key, const Block& block) {
   brpc::Controller cntl;
-  PB_CacheRequest request;
-  PB_CacheResponse response;
+  PBCacheRequest request;
+  PBCacheResponse response;
 
   auto buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
   cntl.request_attachment().append(buffer.IOBuf());
   cntl.set_timeout_ms(option_.remote_cache_rpc_timeout_ms);
-  PB_BlockCacheService_Stub stub(channel_.get());
+  PBBlockCacheService_Stub stub(channel_.get());
 
   stub.Cache(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
@@ -144,16 +112,16 @@ Status RemoteNodeImpl::RemoteCache(const BlockKey& key, const Block& block) {
   return Status::OK();
 }
 
-Status RemoteNodeImpl::RemotePrefetch(const BlockKey& key, size_t length) {
+Status RPCClient::Prefetch(const BlockKey& key, size_t length) {
   brpc::Controller cntl;
-  PB_PrefetchRequest request;
-  PB_PrefetchResponse response;
+  PBPrefetchRequest request;
+  PBPrefetchResponse response;
 
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(length);
   cntl.set_timeout_ms(option_.remote_cache_rpc_timeout_ms);
 
-  PB_BlockCacheService_Stub stub(channel_.get());
+  PBBlockCacheService_Stub stub(channel_.get());
   stub.Prefetch(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
     LOG(ERROR) << "Send block prefetch request to remote failed: "
@@ -164,50 +132,34 @@ Status RemoteNodeImpl::RemotePrefetch(const BlockKey& key, size_t length) {
   return Status::OK();
 }
 
-Status RemoteNodeImpl::InitChannel(const std::string& listen_ip,
-                                   uint32_t listen_port) {
+Status RPCClient::InitChannel(const std::string& server_ip,
+                              uint32_t server_port) {
   butil::EndPoint ep;
-  int rc = butil::str2endpoint(listen_ip.c_str(), listen_port, &ep);
+  int rc = butil::str2endpoint(server_ip.c_str(), server_port, &ep);
   if (rc != 0) {
-    LOG(ERROR) << "str2endpoint(" << listen_ip << "," << listen_port
+    LOG(ERROR) << "str2endpoint(" << server_ip << "," << server_port
                << ") failed, rc = " << rc;
     return Status::Internal("str2endpoint() failed");
   }
 
   rc = channel_->Init(ep, nullptr);
   if (rc != 0) {
-    LOG(INFO) << "Init channel for " << listen_ip << ":" << listen_port
+    LOG(INFO) << "Init channel for " << server_ip << ":" << server_port
               << " failed, rc = " << rc;
     return Status::Internal("Init channel failed");
   }
 
-  LOG(INFO) << "Create channel for address (" << listen_ip << ":" << listen_port
+  LOG(INFO) << "Create channel for address (" << server_ip << ":" << server_port
             << ") success.";
   return Status::OK();
 }
 
-Status RemoteNodeImpl::ResetChannel() {
+Status RPCClient::ResetChannel() {
   std::lock_guard<BthreadMutex> mutex(mutex_);
   if (channel_->CheckHealth() != 0) {
-    return InitChannel(member_.ip(), member_.port());
+    return InitChannel(server_ip_, server_port_);
   }
   return Status::OK();
-}
-
-Status RemoteNodeImpl::CheckHealth() const {
-  if (state_machine_->GetState() == State::kStateNormal) {
-    return Status::OK();
-  }
-  return Status::Internal("remote node is unhealthy");
-}
-
-Status RemoteNodeImpl::CheckStatus(Status status) {
-  if (status.ok() || status.IsNotFound()) {
-    state_machine_->Success();
-  } else {
-    state_machine_->Error();
-  }
-  return status;
 }
 
 }  // namespace cache

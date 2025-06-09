@@ -65,7 +65,7 @@ Status CacheGroupNodeMemberImpl::LeaveGroup() {
 
 Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   std::string content;
-  PB_CacheGroupNodeMetadata metadata;
+  PBCacheGroupNodeMetadata metadata;
 
   auto filepath = option_.metadata_filepath;
   auto status = Helper::ReadFile(filepath, &content);
@@ -85,10 +85,12 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   }
 
   *member_id = metadata.member_id();
+  member_uuid_ = metadata.member_uuid();
 
-  LOG(INFO) << "Load cache group node success: "
-            << "id = " << *member_id
-            << ", birth_time = " << metadata.birth_time();
+  LOG(INFO) << "Load cache group node metadata success: filepath = " << filepath
+            << ", id = " << *member_id
+            << ", birth_time = " << metadata.birth_time()
+            << ", uuid = " << member_uuid_;
 
   return Status::OK();
 }
@@ -96,7 +98,7 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
 Status CacheGroupNodeMemberImpl::RegisterMember(uint64_t old_id,
                                                 uint64_t* member_id) {
   auto rc = mds_client_->RegisterCacheGroupMember(old_id, member_id);
-  if (rc != PB_CacheGroupErrCode::CacheGroupOk) {
+  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Register member (id=" << old_id
                << ") failed: rc = " << CacheGroupErrCode_Name(rc);
     return Status::Internal("register cache group member failed");
@@ -109,14 +111,14 @@ Status CacheGroupNodeMemberImpl::RegisterMember(uint64_t old_id,
 
 Status CacheGroupNodeMemberImpl::AddMember2Group(const std::string& group_name,
                                                  uint64_t member_id) {
-  PB_CacheGroupMember member;
+  PBCacheGroupMember member;
   member.set_id(member_id);
   member.set_ip(option_.listen_ip);
   member.set_port(option_.listen_port);
   member.set_weight(option_.group_weight);
 
   auto rc = mds_client_->AddCacheGroupMember(group_name, member);
-  if (rc != PB_CacheGroupErrCode::CacheGroupOk) {
+  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Add member (id=" << member_id_
                << ", weight=" << option_.group_weight
                << ") to group (name=" << group_name
@@ -133,10 +135,15 @@ Status CacheGroupNodeMemberImpl::AddMember2Group(const std::string& group_name,
 
 Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
   std::string content;
-  PB_CacheGroupNodeMetadata metadata;
-  metadata.set_birth_time(base::time::TimeNow().seconds);
+  PBCacheGroupNodeMetadata metadata;
   metadata.set_member_id(member_id);
-  metadata.set_member_uuid(GenMemberUuid());
+  metadata.set_birth_time(base::time::TimeNow().seconds);
+  if (!member_uuid_.empty()) {
+    metadata.set_member_uuid(member_uuid_);
+  } else {
+    metadata.set_member_uuid(GenMemberUuid());
+  }
+
   if (!metadata.SerializeToString(&content)) {
     LOG(ERROR) << "Serialize cache group metadata failed.";
     return Status::Internal("serialize cache group node metadata failed");
@@ -150,8 +157,10 @@ Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
                << ", status = " << status.ToString();
   }
 
-  LOG(INFO) << "Save cachegroup node metadata to file (path=" << filepath
-            << ") success.";
+  LOG(INFO) << "Save cache group node metadata success: filepath = " << filepath
+            << ", id = " << metadata.member_id()
+            << ", birth_time = " << metadata.birth_time()
+            << ", uuid = " << metadata.member_uuid();
 
   return status;
 }

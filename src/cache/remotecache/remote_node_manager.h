@@ -24,51 +24,38 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
 
 #include "cache/common/common.h"
-#include "cache/remotecache/remote_node_group.h"
+#include "cache/config/config.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/executor/timer.h"
 
 namespace dingofs {
 namespace cache {
 
+using OnMemberLoad = std::function<Status(const PBCacheGroupMembers& members)>;
+
 class RemoteNodeManager {
  public:
-  virtual ~RemoteNodeManager() = default;
+  RemoteNodeManager(RemoteBlockCacheOption option, OnMemberLoad on_member_load);
 
-  virtual Status Start() = 0;
-  virtual void Stop() = 0;
-
-  virtual RemoteNodeSPtr GetNode(const std::string& key) = 0;
-};
-
-using RemoteNodeManagerUPtr = std::unique_ptr<RemoteNodeManager>;
-
-class RemoteNodeManagerImpl final : public RemoteNodeManager {
- public:
-  explicit RemoteNodeManagerImpl(RemoteBlockCacheOption option);
-  ~RemoteNodeManagerImpl() override = default;
-
-  Status Start() override;
-  void Stop() override;
-
-  RemoteNodeSPtr GetNode(const std::string& key) override;
+  Status Start();
+  void Stop();
 
  private:
   void BackgroudRefresh();
-  Status RefreshMembers();
-  Status LoadMembers(PB_CacheGroupMembers* members);
 
-  RemoteNodeGorupSPtr GetGroup();
-  void SetGroup(RemoteNodeGorupSPtr group);
+  Status RefreshMembers();
+
+  Status LoadMembers(PBCacheGroupMembers* members);
 
   std::atomic<bool> running_;
-  BthreadRWLock rwlock_;  // for group
   const RemoteBlockCacheOption option_;
+  OnMemberLoad on_member_load_;
   std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
   TimerUPtr timer_;
-  RemoteNodeGorupSPtr group_;
 };
+
+using RemoteNodeManagerUPtr = std::unique_ptr<RemoteNodeManager>;
 
 }  // namespace cache
 }  // namespace dingofs

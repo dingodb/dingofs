@@ -24,30 +24,55 @@
 
 #include <memory>
 
+#include "blockaccess/block_accesser.h"
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/remotecache/remote_block_cache.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_impl.h"
+#include "cache/utils/access_log.h"
 #include "cache/utils/bthread.h"
+#include "cache/utils/offload_thread_pool.h"
+#include "cache/utils/phase_timer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
-
 TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
                                RemoteBlockCacheOption remote_cache_option,
-                               StorageSPtr storage)
-    : local_block_cache_(
-          std::make_unique<BlockCacheImpl>(local_cache_option, storage)),
-      remote_block_cache_(std::make_unique<RemoteBlockCacheImpl>(
-          remote_cache_option, storage)) {}
+                               blockaccess::BlockAccesser* block_accesser) {
+  running_ = false;
+  storage_ = std::make_shared<StorageImpl>(block_accesser);
+  local_block_cache_ =
+      std::make_unique<BlockCacheImpl>(local_cache_option, storage_);
+  remote_block_cache_ =
+      std::make_unique<RemoteBlockCacheImpl>(remote_cache_option, storage_);
+}
+
+// TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
+//                                RemoteBlockCacheOption remote_cache_option,
+//                                blockaccess::BlockAccesser* block_accesser)
+//     : storage_(std::make_shared<StorageImpl>(block_accesser)),
+//       local_block_cache_(
+//           std::make_unique<BlockCacheImpl>(local_cache_option, storage_)),
+//       remote_block_cache_(std::make_unique<RemoteBlockCacheImpl>(
+//           remote_cache_option, storage_)) {}
 
 Status TierBlockCache::Init() {
   if (!running_.exchange(true)) {
-    auto status = local_block_cache_->Init();
-    if (status.ok()) {
-      status = remote_block_cache_->Init();
+    OffloadThreadPool::GetInstance().Init();
+
+    auto status = storage_->Init();
+    if (!status.ok()) {
+      return status;
     }
-    return status;
+
+    status = local_block_cache_->Init();
+    if (!status.ok()) {
+      return status;
+    }
+
+    return remote_block_cache_->Init();
   }
   return Status::OK();
 }
@@ -55,10 +80,16 @@ Status TierBlockCache::Init() {
 Status TierBlockCache::Shutdown() {
   if (running_.exchange(false)) {
     auto status = local_block_cache_->Shutdown();
-    if (status.ok()) {
-      status = remote_block_cache_->Shutdown();
+    if (!status.ok()) {
+      return status;
     }
-    return status;
+
+    status = remote_block_cache_->Shutdown();
+    if (!status.ok()) {
+      return status;
+    }
+
+    return storage_->Shutdown();
   }
   return Status::OK();
 }
@@ -66,46 +97,99 @@ Status TierBlockCache::Shutdown() {
 Status TierBlockCache::Put(const BlockKey& key, const Block& block,
                            PutOption option) {
   Status status;
-  if (option.writeback) {
-    // if (local_block_cache_->EnableStage()) {
-    //   status = local_block_cache_->Put(option, key, block);
-    // } else if (remote_block_cache_->EnableStage()) {
-    //   status = remote_block_cache_->Put(option, key, block);
-    // }
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return absl::StrFormat("[tier] put(%s,%zu): %s%s", key.Filename(),
+                           block.size, status.ToString(), timer.ToString());
+  });
 
-    status = remote_block_cache_->Put(key, block, option);
+  if (option.writeback) {
+    if (LocalEnableStage()) {
+      timer.NextPhase(Phase::kLocalPut);
+      status = local_block_cache_->Put(key, block, option);
+    } else if (RemoteEnableStage()) {
+      timer.NextPhase(Phase::kLocalPut);
+      status = remote_block_cache_->Put(key, block, option);
+    }
   } else {  // directly put to storage
+    timer.NextPhase(Phase::kS3Put);
     status = local_block_cache_->Put(key, block, option);
   }
+
   return status;
 }
 
 Status TierBlockCache::Range(const BlockKey& key, off_t offset, size_t length,
                              IOBuffer* buffer, RangeOption option) {
-  Status status = Status::NotFound("block not found");
+  Status status;
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return absl::StrFormat("[tier] range(%s,%lld,%zu): %s%s", key.Filename(),
+                           offset, length, status.ToString(), timer.ToString());
+  });
 
-  // try local block cache
-  // If (local_block_cache_->EnableStage()) {
-  //  status = local_block_cache_->Range(WithoutRetrive(option), key, offset,
-  //                                     length, buffer);
-  //}
+  // try local cache first
+  if (LocalEnableCache()) {
+    timer.NextPhase(Phase::kLocalRange);
+    auto o = option;
+    o.retrive = false;
+    status = local_block_cache_->Range(key, offset, length, buffer, o);
+    if (status.ok()) {
+      return status;
+    }
+  }
 
-  // then try remote block cache
-  // if (status.IsNotFound() && remote_block_cache_->EnableCache()) {
-  status = remote_block_cache_->Range(key, offset, length, buffer, option);
-  //}
+  // Not found or failed for local cache
+
+  if (RemoteEnableCache()) {  // Remote cache will always retrive storage
+    timer.NextPhase(Phase::kRemoteRange);
+    status = remote_block_cache_->Range(key, offset, length, buffer, option);
+  } else if (option.retrive) {  // No remote cache, retrive storage
+    timer.NextPhase(Phase::kS3Range);
+    status = storage_->Range(key.StoreKey(), offset, length, buffer);
+  } else {
+    status = Status::NotFound("no cache store available for block cache");
+  }
 
   return status;
 }
 
 Status TierBlockCache::Cache(const BlockKey& key, const Block& block,
                              CacheOption option) {
-  return local_block_cache_->Cache(key, block, option);
+  Status status;
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return absl::StrFormat("[tier] cache(%s,%zu): %s", key.Filename(),
+                           block.size, status.ToString());
+  });
+
+  if (LocalEnableCache()) {
+    status = local_block_cache_->Cache(key, block, option);
+  } else if (RemoteEnableCache()) {
+    status = remote_block_cache_->Cache(key, block, option);
+  } else {
+    status = Status::NotFound("no cache store available for block cache");
+  }
+  return status;
 }
 
 Status TierBlockCache::Prefetch(const BlockKey& key, size_t length,
                                 PrefetchOption option) {
-  return local_block_cache_->Prefetch(key, length, option);
+  Status status;
+  PhaseTimer timer;
+  LogGuard log([&]() {
+    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+                           length, status.ToString(), timer.ToString());
+  });
+
+  if (LocalEnableCache()) {
+    status = local_block_cache_->Prefetch(key, length, option);
+  } else if (RemoteEnableCache()) {
+    status = remote_block_cache_->Prefetch(key, length, option);
+  } else {
+    status = Status::NotFound("no cache store available for block cache");
+  }
+  return status;
 }
 
 void TierBlockCache::AsyncPut(const BlockKey& key, const Block& block,
@@ -153,7 +237,34 @@ void TierBlockCache::AsyncPrefetch(const BlockKey& key, size_t length,
   });
 }
 
-bool TierBlockCache::IsCached(const BlockKey& /*key*/) const { return true; }
+bool TierBlockCache::LocalEnableStage() const {
+  return local_block_cache_->EnableStage();
+}
+
+bool TierBlockCache::LocalEnableCache() const {
+  return local_block_cache_->EnableCache();
+}
+
+bool TierBlockCache::RemoteEnableStage() const {
+  return remote_block_cache_->EnableStage();
+}
+
+bool TierBlockCache::RemoteEnableCache() const {
+  return remote_block_cache_->EnableCache();
+}
+
+bool TierBlockCache::HasCacheStore() const { return true; }
+bool TierBlockCache::EnableStage() const { return true; }
+bool TierBlockCache::EnableCache() const { return true; }
+
+bool TierBlockCache::IsCached(const BlockKey& key) const {
+  if (LocalEnableCache() && local_block_cache_->IsCached(key)) {
+    return true;
+  } else if (RemoteEnableCache() && remote_block_cache_->IsCached(key)) {
+    return true;
+  }
+  return false;
+}
 
 }  // namespace cache
 }  // namespace dingofs

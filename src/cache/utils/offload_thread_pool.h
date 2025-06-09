@@ -16,28 +16,37 @@
 
 /*
  * Project: DingoFS
- * Created Date: 2025-05-08
+ * Created Date: 2025-06-09
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_OPTIONS_CLIENT_GLOBAL_H_
-#define DINGOFS_SRC_OPTIONS_CLIENT_GLOBAL_H_
+#ifndef DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_
+#define DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_
 
-#include "options/options.h"
+#include <functional>
+
+#include "cache/common/common.h"
 
 namespace dingofs {
-namespace options {
-namespace client {
+namespace cache {
 
-class GlobalOption : public BaseOption {
-  BIND_string(log_dir, "/tmp", "");
-  BIND_int32(vlog_level, 0, "");
-  BIND_bool(access_logging, true, "");
-  BIND_uint32(dump_server_start_port, 9000, "");
+class OffloadThreadPool {
+ public:
+  using TaskFunc = std::function<void()>;
+
+  static OffloadThreadPool& GetInstance() {
+    static OffloadThreadPool instance;
+    return instance;
+  }
+
+  void Init() { CHECK_EQ(thread_pool_.Start(5), 0); }
+  void Submit(TaskFunc task) { thread_pool_.Enqueue(task); }
+
+ private:
+  TaskThreadPool thread_pool_{"offload_thread_pool"};
 };
 
-}  // namespace client
-}  // namespace options
+}  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_OPTIONS_CLIENT_GLOBAL_H_
+#endif  // DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_

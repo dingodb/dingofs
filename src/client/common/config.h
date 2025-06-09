@@ -28,6 +28,7 @@
 
 #include "blockaccess/accesser_common.h"
 #include "cache/config/config.h"
+#include "cache/config/remote_cache.h"
 #include "dingofs/common.pb.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
@@ -192,6 +193,7 @@ struct ClientOption {
   FileSystemOption fileSystemOption;
   DataStreamOption data_stream_option;
   cache::BlockCacheOption block_cache_option;
+  cache::RemoteBlockCacheOption remote_block_cache_option;
   FuseOption fuse_option;
 
   uint32_t listDentryLimit;

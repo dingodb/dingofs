@@ -41,7 +41,7 @@ CacheGroupNodeOption::CacheGroupNodeOption()
       listen_port(FLAGS_listen_port),
       group_weight(FLAGS_group_weight),
       metadata_filepath(FLAGS_metadata_filepath),
-      mds_addrs(std::vector<std::string>{FLAGS_mds_addrs}) {}
+      mds_option(NewMdsOption()) {}
 
 }  // namespace cache
 }  // namespace dingofs

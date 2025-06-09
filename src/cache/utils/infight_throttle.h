@@ -58,6 +58,11 @@ class InflightThrottle {
     cond_.notify_all();
   }
 
+  uint64_t GetInflights() {
+    std::unique_lock<BthreadMutex> lock(mutex_);
+    return inflights_;
+  }
+
  private:
   uint64_t inflights_;
   const uint64_t max_inflights_;
@@ -66,6 +71,7 @@ class InflightThrottle {
 };
 
 using InflightThrottleSPtr = std::shared_ptr<InflightThrottle>;
+using InflightThrottleUPtr = std::unique_ptr<InflightThrottle>;
 
 class InflightThrottleGuard {
  public:

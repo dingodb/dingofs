@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 
+#include "blockaccess/block_accesser.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
 #include "cache/blockcache/block_cache.h"
@@ -35,14 +36,28 @@ class Benchmarker {
   Benchmarker();
 
   Status Run();
-
-  void Stop();
+  void Shutdown();
 
  private:
+  Status Init();
+  Status InitBlockCache();
+  Status InitWrokers();
+
+  Status Start();
+  Status StartReporter();
+  void StartWorkers();
+
+  void Stop();
+  void StopWorkers();
+  void StopReporter();
+  void StopBlockCache();
+
+  blockaccess::BlockAccesserUPtr block_accesser_;
   BlockCacheSPtr block_cache_;
-  ReporterSPtr reporter_;
   TaskThreadPoolUPtr task_pool_;
   std::vector<WorkerSPtr> workers_;
+  BthreadCountdownEventSPtr countdown_event_;
+  ReporterSPtr reporter_;
 };
 
 }  // namespace cache

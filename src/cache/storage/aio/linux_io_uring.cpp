@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "cache/storage/aio/io_uring.h"
+#include "cache/storage/aio/linux_io_uring.h"
 
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/helper.h"
@@ -75,6 +75,9 @@ Status LinuxIOUring::Init() {
                                  io_uring_.ring_fd);
     return Status::Internal("epoll_ctl() failed");
   }
+
+  LOG(INFO) << "Linux IO uring initialized success: iodepth = " << iodepth_;
+
   return Status::OK();
 }
 
@@ -97,11 +100,14 @@ void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, AioClosure* aio) {
 }
 
 void LinuxIOUring::PrepRead(io_uring_sqe* sqe, AioClosure* aio) {
+  LOG(INFO) << "alloc: size = " << aio->length;
   char* data = new char[aio->length];
-  butil::IOBuf iobuf;
-  iobuf.append_user_data(data, aio->length,
-                         [](void* data) { delete[] static_cast<char*>(data); });
-  *aio->buffer_out = IOBuffer(iobuf);
+  butil::IOBuf buffer;
+  buffer.append_user_data(data, aio->length, [](void* data) {
+    LOG(INFO) << "free";
+    delete[] static_cast<char*>(data);
+  });
+  *aio->buffer_out = IOBuffer(buffer);
 
   io_uring_prep_read(sqe, aio->fd, data, aio->length, aio->offset);
 }
@@ -136,22 +142,20 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   aios->clear();
 
   struct epoll_event ev;
-  int n = epoll_wait(epoll_fd_, &ev, iodepth_, timeout_ms);
-  if (n < 0) {
-    LOG(ERROR) << Helper::Errorf(-n, "epoll_wait(%d,%lu,%lld)", epoll_fd_,
+  int rc = epoll_wait(epoll_fd_, &ev, iodepth_, timeout_ms);
+  if (rc < 0) {
+    LOG(ERROR) << Helper::Errorf(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_,
                                  iodepth_, timeout_ms);
     return Status::Internal("epoll_wait() failed");
-  } else if (n == 0) {
+  } else if (rc == 0) {
     return Status::OK();
   }
-
-  LOG(INFO) << n << " aio completed, waiting for io_uring_cq.";
 
   // n > 0: any aio completed
   unsigned head;
   struct io_uring_cqe* cqe;
   io_uring_for_each_cqe(&io_uring_, head, cqe) {
-    auto* aio = reinterpret_cast<AioClosure*>(io_uring_cqe_get_data(cqe));
+    auto* aio = static_cast<AioClosure*>(io_uring_cqe_get_data(cqe));
     OnCompleted(aio, cqe->res);
     aios->emplace_back(aio);
   }

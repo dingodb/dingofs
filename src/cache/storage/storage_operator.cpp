@@ -34,10 +34,10 @@ PutOp::PutOp(StorageClosure* closure) : closure_(closure), data_(nullptr) {}
 // TODO(Wine93): use thread pool to copy buffer
 char* PutOp::OnPrepare() {
   auto& iobuf = closure_->buffer_in.IOBuf();
-  if (iobuf.backing_block_num() > 1) {  // with copying
-    data_ = new char[closure_->length];
-  }
-  return (char*)iobuf.fetch(&data_, iobuf.length());
+  // if (iobuf.backing_block_num() > 1) {  // with copying
+  data_ = new char[closure_->length];
+  //}
+  return (char*)iobuf.fetch(data_, iobuf.length());
 }
 
 RetryStrategy PutOp::OnRetry(bool succ) {

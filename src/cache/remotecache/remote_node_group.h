@@ -25,30 +25,63 @@
 
 #include "base/hash/con_hash.h"
 #include "cache/common/common.h"
+#include "cache/common/type.h"
+#include "cache/config/config.h"
+#include "cache/config/remote_cache.h"
 #include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/remote_node_manager.h"
 
 namespace dingofs {
 namespace cache {
 
-class RemoteNodeGroup {
+class Upstream {
  public:
-  explicit RemoteNodeGroup(const PB_CacheGroupMembers& members);
+  Upstream();
+
+  Upstream(const PBCacheGroupMembers& members, RemoteBlockCacheOption option);
 
   Status Init();
 
   RemoteNodeSPtr GetNode(const std::string& key);
 
-  bool IsDiff(const PB_CacheGroupMembers& members) const;
+  bool IsDiff(const PBCacheGroupMembers& members) const;
 
  private:
-  std::vector<uint64_t> CalcWeights(const PB_CacheGroupMembers& members);
+  std::vector<uint64_t> CalcWeights(const PBCacheGroupMembers& members);
 
-  std::string MemberKey(const PB_CacheGroupMember& member) const;
+  std::string MemberKey(const PBCacheGroupMember& member) const;
 
-  RemoteAccessOption option_;
-  PB_CacheGroupMembers members_;
+  PBCacheGroupMembers members_;
+  RemoteBlockCacheOption option_;
   std::shared_ptr<base::hash::ConHash> chash_;
   std::unordered_map<std::string, RemoteNodeSPtr> nodes_;
+};
+
+using UpstreamSPtr = std::shared_ptr<Upstream>;
+
+class RemoteNodeGroup final : public RemoteNode {
+ public:
+  explicit RemoteNodeGroup(RemoteBlockCacheOption option);
+
+  Status Init() override;
+  Status Destroy() override;
+
+  Status Put(const BlockKey& key, const Block& block) override;
+  Status Range(const BlockKey& key, off_t offset, size_t length,
+               IOBuffer* buffer, size_t block_size) override;
+  Status Cache(const BlockKey& key, const Block& block) override;
+  Status Prefetch(const BlockKey& key, size_t length) override;
+
+ private:
+  Status OnMemberLoad(const PBCacheGroupMembers& members);
+
+  RemoteNodeSPtr GetNode(const BlockKey& key);
+
+  std::atomic<bool> running_;
+  RemoteBlockCacheOption option_;
+  RemoteNodeManagerUPtr node_manager_;
+  BthreadRWLock rwlock_;
+  UpstreamSPtr upstream_;
 };
 
 using RemoteNodeGorupSPtr = std::shared_ptr<RemoteNodeGroup>;
