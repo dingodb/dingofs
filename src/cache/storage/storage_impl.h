@@ -36,9 +36,9 @@ namespace cache {
 //  bthread -> Put(...) -> BlockAccesser::AsyncGet(...)
 //  maybe there is pthread synchronization semantics in function
 //  BlockAccesser::AsyncGet.
-class StorageImpl : public Storage {
+class StorageImpl final : public Storage {
  public:
-  explicit StorageImpl(blockaccess::BlockAccesserSPtr block_accesser);
+  explicit StorageImpl(blockaccess::BlockAccesser* block_accesser);
 
   Status Init() override;
   Status Shutdown() override;
@@ -53,8 +53,7 @@ class StorageImpl : public Storage {
   StorageOperator* NewOperator(StorageClosure* closure);
 
   std::atomic<bool> running_;
-  blockaccess::BlockAccesserSPtr block_accesser_;
-  TaskThreadPoolUPtr task_thread_pool_;
+  blockaccess::BlockAccesser* block_accesser_;
   bthread::ExecutionQueueId<StorageClosure*> submit_queue_id_;
 };
 

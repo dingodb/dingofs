@@ -27,6 +27,7 @@
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage_pool.h"
+#include "cache/utils/infight_throttle.h"
 
 namespace dingofs {
 namespace cache {
@@ -61,7 +62,8 @@ class BlockCacheUploader
   CacheStoreSPtr store_;
   PendingQueueUPtr pending_queue_;
   TaskThreadPoolUPtr upload_stage_thread_pool_;
-  UploadStageThrottleUPtr throttle_;
+  // UploadStageThrottleUPtr throttle_;
+  InflightThrottleUPtr inflights_throttle_;
   BthreadCountdownEvent uploading_count_;
 };
 

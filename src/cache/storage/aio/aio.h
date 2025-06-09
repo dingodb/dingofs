@@ -39,12 +39,19 @@ enum class AioType : uint8_t {
 struct AioClosure : public Closure {
   AioClosure(AioType iotype, int fd, off_t offset, size_t length,
              const IOBuffer& buffer_in, IOBuffer* buffer_out)
-      : iotype(iotype),
+      : sequ_num_(GetSequNum()),
+        iotype(iotype),
         fd(fd),
         offset(offset),
         length(length),
         buffer_in(buffer_in),
-        buffer_out(buffer_out) {}
+        buffer_out(buffer_out),
+        ctx(nullptr) {}
+
+  uint64_t GetSequNum() {
+    static std::atomic<uint64_t> sequ_num(0);
+    return sequ_num.fetch_add(1, std::memory_order_relaxed);
+  }
 
   void Run() override {
     std::unique_lock<BthreadMutex> lk(mutex);
@@ -57,11 +64,12 @@ struct AioClosure : public Closure {
   }
 
   std::string ToString() const {
-    return absl::StrFormat("aio(%s,%d,%lld,%zu)",
+    return absl::StrFormat("aio(%lld,%s,%d,%lld,%zu)", sequ_num_,
                            iotype == AioType::kRead ? "read" : "write", fd,
                            offset, length);
   }
 
+  uint64_t sequ_num_;
   AioType iotype;
   int fd;
   off_t offset;
@@ -73,6 +81,8 @@ struct AioClosure : public Closure {
   BthreadMutex mutex;
   BthreadConditionVariable cond;
 };
+
+using Aios = std::vector<AioClosure*>;
 
 inline AioClosure AioWriteClosure(int fd, const IOBuffer& buffer) {
   return AioClosure(AioType::kWrite, fd, 0, buffer.Size(), buffer, nullptr);

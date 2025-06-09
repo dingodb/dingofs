@@ -32,32 +32,54 @@ namespace dingofs {
 namespace cache {
 
 enum class Phase : uint8_t {
+  // tier block cache
+  kLocalPut = 0,
+  kRemotePut = 1,
+  kLocalRange = 2,
+  kRemoteRange = 3,
+  kLocalCache = 4,
+  kRemoteCache = 5,
+  kLocalPrefetch = 6,
+  kRemotePrefetch = 7,
+
   // block cache
-  kStageBlock = 0,
-  kRemoveStageBlock = 1,
-  kCacheBlock = 2,
-  kLoadBlock = 3,
+  kStageBlock = 10,
+  kRemoveStageBlock = 11,
+  kCacheBlock = 12,
+  kLoadBlock = 13,
 
   // disk cache
-  kOpenFile = 10,
-  kWriteFile = 11,
-  kReadFile = 12,
-  kLinkFile = 13,
-  kRemoveFile = 14,
-  kCacheAdd = 15,
-  kEnterUploadQueue = 16,
+  kOpenFile = 20,
+  kWriteFile = 21,
+  kReadFile = 22,
+  kLinkFile = 23,
+  kRemoveFile = 24,
+  kCacheAdd = 25,
+  kEnterUploadQueue = 26,
 
   // aio
-  kWaitThrottle = 20,
-  kCheckIO = 21,
-  kEnterPrepareQueue = 22,
-  kPrepareIO = 23,
-  kSubmitIO = 24,
-  kExecuteIO = 25,
+  kWaitThrottle = 30,
+  kCheckIO = 31,
+  kEnterPrepareQueue = 32,
+  kPrepareIO = 33,
+  kExecuteIO = 34,
+
+  // remote block cache
+  kRPCPut = 40,
+  kRPCRange = 41,
+  kRPCCache = 42,
+  kRPCPrefetch = 43,
 
   // s3
-  kS3Put = 30,
-  kS3Range = 31,
+  kS3Put = 50,
+  kS3Range = 51,
+
+  // block cache service
+  kNodePut = 60,
+  kNodeRange = 61,
+  kNodeCache = 62,
+  kNodePrefetch = 63,
+  kSendResponse = 64,
 
   // unknown
   kUnknown = 100,
@@ -67,11 +89,13 @@ std::string StrPhase(Phase phase);
 
 class PhaseTimer {
  public:
-  PhaseTimer() = default;
+  PhaseTimer();
   virtual ~PhaseTimer() = default;
 
   void NextPhase(Phase phase);
   Phase GetPhase();
+
+  int64_t UElapsed();
 
   std::string ToString();
 
@@ -95,6 +119,7 @@ class PhaseTimer {
   void StartNewTimer(Phase phase);
 
   std::vector<Timer> timers_;
+  butil::Timer g_timer_;
 };
 
 }  // namespace cache

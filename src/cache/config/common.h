@@ -25,12 +25,24 @@
 
 #include <gflags/gflags_declare.h>
 
+#include "stub/common/config.h"
+
 namespace dingofs {
 namespace cache {
 
 DECLARE_string(logdir);
 DECLARE_int32(loglevel);
-DECLARE_string(mds_addrs);
+
+DECLARE_string(mds_rpc_addrs);
+DECLARE_uint64(mds_rpc_retry_total_ms);
+DECLARE_uint64(mds_rpc_max_timeout_ms);
+DECLARE_uint64(mds_rpc_timeout_ms);
+DECLARE_uint64(mds_rpc_retry_interval_us);
+DECLARE_uint64(mds_rpc_max_failed_times_before_change_addr);
+DECLARE_uint64(mds_rpc_normal_retry_times_before_trigger_wait);
+DECLARE_uint64(mds_rpc_wait_sleep_ms);
+
+stub::common::MdsOption NewMdsOption();
 
 }  // namespace cache
 }  // namespace dingofs

@@ -26,6 +26,7 @@
 #include <gflags/gflags.h>
 
 #include "cache/config/block_cache.h"
+#include "cache/config/common.h"
 
 namespace dingofs {
 namespace cache {
@@ -46,7 +47,7 @@ struct CacheGroupNodeOption {
   uint32_t listen_port;
   uint32_t group_weight;
   std::string metadata_filepath;
-  std::vector<std::string> mds_addrs;
+  stub::common::MdsOption mds_option;
 
   BlockCacheOption block_cache_option;
 };

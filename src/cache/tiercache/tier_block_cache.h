@@ -38,7 +38,7 @@ class TierBlockCache final : public BlockCache {
  public:
   TierBlockCache(BlockCacheOption local_cache_option,
                  RemoteBlockCacheOption remote_cache_option,
-                 StorageSPtr storage);
+                 blockaccess::BlockAccesser* block_accesser);
 
   Status Init() override;
   Status Shutdown() override;
@@ -62,11 +62,23 @@ class TierBlockCache final : public BlockCache {
   void AsyncPrefetch(const BlockKey& key, size_t length, AsyncCallback cb,
                      PrefetchOption option = PrefetchOption()) override;
 
+  bool HasCacheStore() const override;
+  bool EnableStage() const override;
+  bool EnableCache() const override;
   bool IsCached(const BlockKey& key) const override;
 
  private:
   BlockCacheSPtr GetSelfSPtr() { return shared_from_this(); }
 
+  bool LocalEnableStage() const;
+  bool LocalEnableCache() const;
+  bool RemoteEnableStage() const;
+  bool RemoteEnableCache() const;
+
+  // The behavior of local block cache is same as remote block cache,
+  // the biggest difference is that the local blocak cache will read/write data
+  // from/to the local disk, while the remote block cache will read/write data
+  // from/to the remote cache group node.
   std::atomic<bool> running_;
   StorageSPtr storage_;
   BlockCacheUPtr local_block_cache_;

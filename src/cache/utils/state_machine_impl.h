@@ -107,9 +107,7 @@ class DownState final : public BaseState {
 
 class StateMachineImpl final : public StateMachine {
  public:
-  using OnStateChangeFunc = std::function<void(State)>;
-
-  explicit StateMachineImpl(OnStateChangeFunc on_stage_change_func = nullptr);
+  explicit StateMachineImpl();
 
   ~StateMachineImpl() override = default;
 
@@ -145,7 +143,6 @@ class StateMachineImpl final : public StateMachine {
   bool running_;
   mutable BthreadMutex mutex_;
   BaseStateUPtr state_;
-  OnStateChangeFunc on_stage_change_func_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;
   TimerUPtr timer_;
 };

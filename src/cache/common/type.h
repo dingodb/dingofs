@@ -40,6 +40,7 @@ namespace cache {
 using BthreadMutex = bthread::Mutex;
 using BthreadConditionVariable = bthread::ConditionVariable;
 using BthreadCountdownEvent = bthread::CountdownEvent;
+using BthreadCountdownEventSPtr = std::shared_ptr<BthreadCountdownEvent>;
 using BthreadRWLock = dingofs::utils::BthreadRWLock;
 using ReadLockGuard = dingofs::utils::ReadLockGuard;
 using WriteLockGuard = dingofs::utils::WriteLockGuard;

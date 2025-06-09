@@ -24,95 +24,138 @@
 
 #include <memory>
 
-#include "blockaccess/block_accesser.h"
-#include "cache/blockcache/block_cache_impl.h"
-#include "cache/remotecache/remote_block_cache.h"
-#include "cache/storage/storage_impl.h"
+#include "base/time/time.h"
+#include "blockaccess/block_access_log.h"
+#include "cache/config/config.h"
+#include "cache/tiercache/tier_block_cache.h"
+#include "cache/utils/access_log.h"
 
 namespace dingofs {
 namespace cache {
 
-extern BenchmarkOption* g_option;
-
-static blockaccess::BlockAccesserSPtr NewBlockAccesser() {
-  blockaccess::S3Options s3_option;
-  s3_option.s3_info.ak = g_option->ak;
-  s3_option.s3_info.sk = g_option->sk;
-  s3_option.s3_info.endpoint = g_option->endpoint;
-  s3_option.s3_info.bucket_name = g_option->bucket;
-
-  blockaccess::BlockAccessOptions option;
-  option.type = blockaccess::AccesserType::kS3;
-  option.s3_options = s3_option;
-  return std::make_shared<blockaccess::BlockAccesserImpl>(option);
-}
-
-static BlockCacheSPtr NewLocalBlockCache() {
-  // block accesser
-  auto block_accesser = NewBlockAccesser();
-
-  // storage
-  auto storage = std::make_shared<StorageImpl>(block_accesser);
-
-  auto block_cache =
-      std::make_shared<BlockCacheImpl>(g_option->block_cache_option, storage);
-  return block_cache;
-}
-
-static BlockCacheSPtr NewRemoteBlockCache() {
-  auto remote_block_cache = std::make_shared<RemoteBlockCacheImpl>(
-      g_option->remote_block_cache_option);
-  return remote_block_cache;
-}
-
 Benchmarker::Benchmarker()
-    : task_pool_(std::make_unique<TaskThreadPool>("benchmarker")),
+    : block_accesser_(std::make_unique<blockaccess::BlockAccesserImpl>(
+          NewBlockAccessOptions())),
+      block_cache_(std::make_shared<TierBlockCache>(
+          BlockCacheOption(), RemoteBlockCacheOption(), block_accesser_.get())),
+      task_pool_(std::make_unique<TaskThreadPool>("benchmarker")),
+      countdown_event_(std::make_shared<BthreadCountdownEvent>(FLAGS_threads)),
       reporter_(std::make_shared<Reporter>()) {
-  if (g_option->local) {
-    block_cache_ = NewLocalBlockCache();
-  } else {
-    block_cache_ = NewRemoteBlockCache();
+  if (FLAGS_ino == 0) {
+    FLAGS_ino = base::time::TimeNow().seconds;
   }
 }
 
 Status Benchmarker::Run() {
-  // block cache
-  auto status = block_cache_->Init();
+  // Init logger, block cache, workers
+  auto status = Init();
   if (!status.ok()) {
-    LOG(ERROR) << "Init block cache failed: " << status.ToString();
     return status;
   }
 
-  // task pool
-  CHECK_EQ(task_pool_->Start(g_option->threads), 0);
-
-  // create worker
-  for (auto i = 0; i < g_option->threads; i++) {
-    auto worker = std::make_shared<Worker>(i, block_cache_, reporter_);
-    auto status = worker->Init();
-    if (!status.ok()) {
-      return status;
-    }
-    workers_.emplace_back(worker);
-  }
-
-  // reporter
-  status = reporter_->Start();
+  // Start reporter, workers
+  status = Start();
   if (!status.ok()) {
-    LOG(ERROR) << "Init reporter failed: " << status.ToString();
-    return Status::Internal("init reporter failed");
-  }
-
-  // start workers
-  for (auto& worker : workers_) {
-    task_pool_->Enqueue([worker]() { worker->Run(); });
+    return status;
   }
 
   return Status::OK();
 }
 
+void Benchmarker::Shutdown() {
+  // Wait for all workers to complete
+  countdown_event_->wait();
+
+  LOG(INFO) << "All workers completed, shutting down...";
+
+  // stop worker, reporter
+  Stop();
+}
+
+Status Benchmarker::Init() {
+  auto status = InitBlockCache();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init block cache failed: " << status.ToString();
+    return status;
+  }
+
+  status = InitWrokers();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init workers failed: " << status.ToString();
+    return status;
+  }
+
+  return Status::OK();
+}
+
+Status Benchmarker::InitBlockCache() {
+  auto status = block_accesser_->Init();
+  if (!status.ok()) {
+    return status;
+  }
+  return block_cache_->Init();
+}
+
+Status Benchmarker::InitWrokers() {
+  for (auto i = 0; i < FLAGS_threads; i++) {
+    auto worker =
+        std::make_shared<Worker>(i, block_cache_, reporter_, countdown_event_);
+    auto status = worker->Init();
+    if (!status.ok()) {
+      return status;
+    }
+
+    workers_.emplace_back(worker);
+  }
+  return Status::OK();
+}
+
+Status Benchmarker::Start() {
+  auto status = StartReporter();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start reporter failed: " << status.ToString();
+    return status;
+  }
+
+  StartWorkers();
+
+  return Status::OK();
+}
+
+Status Benchmarker::StartReporter() { return reporter_->Start(); }
+
+void Benchmarker::StartWorkers() {
+  CHECK_EQ(task_pool_->Start(FLAGS_threads), 0);
+
+  for (auto& worker : workers_) {
+    task_pool_->Enqueue([worker]() { worker->Run(); });
+  }
+}
+
 void Benchmarker::Stop() {
-  std::this_thread::sleep_for(std::chrono::seconds(3600));
+  StopWorkers();
+  StopReporter();
+  StopBlockCache();
+}
+
+void Benchmarker::StopWorkers() {
+  for (auto& worker : workers_) {
+    worker->Shutdown();
+  }
+}
+
+void Benchmarker::StopReporter() {
+  auto status = reporter_->Stop();
+  if (!status.ok()) {
+    LOG(ERROR) << "Stop reporter failed: " << status.ToString();
+  }
+}
+
+void Benchmarker::StopBlockCache() {
+  auto status = block_cache_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown block cache failed: " << status.ToString();
+  }
 }
 
 }  // namespace cache

@@ -22,6 +22,7 @@
 
 #include "cache/config/common.h"
 
+#include <absl/strings/str_split.h>
 #include <gflags/gflags.h>
 
 namespace dingofs {
@@ -29,7 +30,34 @@ namespace cache {
 
 DEFINE_string(logdir, "/tmp", "");
 DEFINE_int32(loglevel, 0, "");
-DEFINE_string(mds_addrs, "127.0.0.1:6700", "");
+
+DEFINE_string(mds_rpc_addrs, "127.0.0.1:6700,127.0.0.1:6701,127.0.0.1:6702",
+              "");
+DEFINE_uint64(mds_rpc_retry_total_ms, 16000, "");
+DEFINE_uint64(mds_rpc_max_timeout_ms, 2000, "");
+DEFINE_uint64(mds_rpc_timeout_ms, 500, "");
+DEFINE_uint64(mds_rpc_retry_interval_us, 50000, "");
+DEFINE_uint64(mds_rpc_max_failed_times_before_change_addr, 2, "");
+DEFINE_uint64(mds_rpc_normal_retry_times_before_trigger_wait, 3, "");
+DEFINE_uint64(mds_rpc_wait_sleep_ms, 1000, "");
+
+stub::common::MdsOption NewMdsOption() {
+  stub::common::MdsOption option;
+  auto& retry = option.rpcRetryOpt;
+
+  option.mdsMaxRetryMS = FLAGS_mds_rpc_retry_total_ms;
+  retry.addrs = absl::StrSplit(FLAGS_mds_rpc_addrs, ',', absl::SkipEmpty());
+  retry.maxRPCTimeoutMS = FLAGS_mds_rpc_max_timeout_ms;
+  retry.rpcTimeoutMs = FLAGS_mds_rpc_timeout_ms;
+  retry.rpcRetryIntervalUS = FLAGS_mds_rpc_retry_interval_us;
+  retry.maxFailedTimesBeforeChangeAddr =
+      FLAGS_mds_rpc_max_failed_times_before_change_addr;
+  retry.normalRetryTimesBeforeTriggerWait =
+      FLAGS_mds_rpc_normal_retry_times_before_trigger_wait;
+  retry.waitSleepMs = FLAGS_mds_rpc_wait_sleep_ms;
+
+  return option;
+}
 
 }  // namespace cache
 }  // namespace dingofs

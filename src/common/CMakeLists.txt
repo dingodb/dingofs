@@ -24,15 +24,6 @@ target_link_libraries(dingofs_common
     glog::glog
 )
 
-add_library(dingofs_options
-    options.cpp
-)
-target_link_libraries(dingofs_options
-    glog::glog
-    gflags::gflags
-    toml11::toml11
-)
-
 add_library(dynamic_vlog
     dynamic_vlog.cpp
 )

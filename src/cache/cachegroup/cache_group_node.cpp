@@ -24,6 +24,7 @@
 
 #include <butil/binary_printer.h>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/metrics/cache_group_node_metric.h"
@@ -44,9 +45,8 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
 
 Status CacheGroupNodeImpl::Start() {
   if (!running_.exchange(true)) {
-    auto rc =
-        mds_client_->Init(NewMdsOption(option_.mds_addrs), mds_base_.get());
-    if (rc != PB_FSStatusCode::OK) {
+    auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
+    if (rc != PBFSStatusCode::OK) {
       return Status::Internal("init mds client failed");
     }
 
@@ -75,6 +75,7 @@ Status CacheGroupNodeImpl::Start() {
 Status CacheGroupNodeImpl::Stop() {
   if (running_.exchange(false)) {
     heartbeat_->Stop();
+
     Status status = member_->LeaveGroup();
     if (!status.ok()) {
       return status;
@@ -109,7 +110,9 @@ Status CacheGroupNodeImpl::InitBlockCache() {
 }
 
 Status CacheGroupNodeImpl::Put(const BlockKey& key, const Block& block) {
-  return block_cache_->Put(key, block, PutOption(true));
+  auto option = PutOption();
+  option.writeback = true;
+  return block_cache_->Put(key, block, option);
 }
 
 Status CacheGroupNodeImpl::Range(const BlockKey& key, off_t offset,
@@ -134,7 +137,9 @@ Status CacheGroupNodeImpl::Prefetch(const BlockKey& key, size_t length) {
 
 Status CacheGroupNodeImpl::RangeCachedBlock(const BlockKey& key, off_t offset,
                                             size_t length, IOBuffer* buffer) {
-  auto status = block_cache_->Range(key, offset, length, buffer);
+  RangeOption option;
+  option.retrive = false;
+  auto status = block_cache_->Range(key, offset, length, buffer, option);
   if (status.ok()) {
     CacheGroupNodeMetric::GetInstance().AddCacheHit();
   } else {
@@ -152,12 +157,12 @@ Status CacheGroupNodeImpl::RangeStorage(const BlockKey& key, off_t offset,
     return status;
   }
 
-  // retrive range of block: unknown block size or unreach max_range_size
+  // Retrive range of block: unknown block size or unreach max_range_size
   if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
     return storage->Range(key.StoreKey(), offset, length, buffer);
   }
 
-  // retrive the whole block
+  // Retrive the whole block
   IOBuffer block;
   status = storage->Range(key.StoreKey(), offset, block_size, &block);
   if (!status.ok()) {

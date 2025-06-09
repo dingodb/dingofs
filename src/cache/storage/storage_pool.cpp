@@ -22,17 +22,32 @@
 
 #include "cache/storage/storage_pool.h"
 
+#include <memory>
+#include <mutex>
+
+#include "cache/common/type.h"
 #include "cache/storage/storage_impl.h"
 #include "common/config_mapper.h"
 
 namespace dingofs {
 namespace cache {
 
+SingleStorage::SingleStorage(StorageSPtr storage) : storage_(storage) {}
+
+Status SingleStorage::GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) {
+  if (storage_ != nullptr) {
+    storage = storage_;
+    return Status::OK();
+  }
+  return Status::Internal("no storage available");
+}
+
 StoragePoolImpl::StoragePoolImpl(
     std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
     : mds_client_(mds_client) {}
 
 Status StoragePoolImpl::GetStorage(uint32_t fs_id, StorageSPtr& storage) {
+  std::unique_lock<BthreadMutex> lk(mutex_);
   if (Get(fs_id, storage)) {
     return Status::OK();
   }
@@ -46,7 +61,6 @@ Status StoragePoolImpl::GetStorage(uint32_t fs_id, StorageSPtr& storage) {
 }
 
 bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
-  ReadLockGuard lk(rwlock_);
   auto iter = storages_.find(fs_id);
   if (iter != storages_.end()) {
     storage = iter->second;
@@ -56,15 +70,14 @@ bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
 }
 
 void StoragePoolImpl::Insert(uint32_t fs_id, StorageSPtr storage) {
-  WriteLockGuard lk(rwlock_);
   storages_.emplace(fs_id, storage);
 }
 
 Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // get filesyste information
-  PB_FsInfo fs_info;
-  PB_FSStatusCode code = mds_client_->GetFsInfo(fs_id, &fs_info);
-  if (code != PB_FSStatusCode::OK) {
+  PBFsInfo fs_info;
+  PBFSStatusCode code = mds_client_->GetFsInfo(fs_id, &fs_info);
+  if (code != PBFSStatusCode::OK) {
     LOG(ERROR) << "Get filesystem information failed: fs_id = " << fs_id
                << ", rc = " << FSStatusCode_Name(code);
     return Status::Internal("get filesystem information failed");
@@ -76,16 +89,24 @@ Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // new block accesser
   blockaccess::BlockAccessOptions block_access_opt;
   FillBlockAccessOption(fs_info.storage_info(), &block_access_opt);
-  auto block_accesser =
-      std::make_shared<blockaccess::BlockAccesserImpl>(block_access_opt);
+  block_accesseres_[fs_id] =
+      std::make_unique<blockaccess::BlockAccesserImpl>(block_access_opt);
+  auto* block_accesser = block_accesseres_[fs_id].get();
+  auto status = block_accesser->Init();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init block accesser for filesystem (fs_id=" << fs_id
+               << ") failed: " << status.ToString();
+    return status;
+  }
 
   // new storage and init it
   storage = std::make_shared<StorageImpl>(block_accesser);
-  auto status = storage->Init();
+  status = storage->Init();
   if (status.ok()) {
     LOG(INFO) << "New storage for filesystem (fs_id=" << fs_id << ") success.";
   } else {
-    LOG(ERROR) << "New storage for filesystem (fs_id=" << fs_id << ") failed.";
+    LOG(ERROR) << "New storage for filesystem (fs_id=" << fs_id
+               << ") failed: " << status.ToString();
   }
   return status;
 }

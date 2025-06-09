@@ -31,24 +31,24 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(group_name, "", "");
+DEFINE_string(cache_group, "", "");
 DEFINE_uint32(load_members_interval_ms, 1000, "");
 
 DEFINE_uint32(remote_put_rpc_timeout_ms, 3000, "");
-DEFINE_uint32(remote_range_timeout_ms, 3000, "");
+DEFINE_uint32(remote_range_rpc_timeout_ms, 3000, "");
 DEFINE_uint32(remote_cache_rpc_timeout_ms, 3000, "");
 DEFINE_uint32(remote_prefetch_rpc_timeout_ms, 3000, "");
 
-RemoteAccessOption::RemoteAccessOption()
+RemoteNodeOption::RemoteNodeOption()
     : remote_put_rpc_timeout_ms(FLAGS_remote_put_rpc_timeout_ms),
       remote_range_rpc_timeout_ms(FLAGS_remote_range_rpc_timeout_ms),
       remote_cache_rpc_timeout_ms(FLAGS_remote_cache_rpc_timeout_ms),
       remote_prefetch_rpc_timeout_ms(FLAGS_remote_prefetch_rpc_timeout_ms) {}
 
 RemoteBlockCacheOption::RemoteBlockCacheOption()
-    : group_name(FLAGS_group_name),
+    : cache_group(FLAGS_cache_group),
       load_members_interval_ms(FLAGS_load_members_interval_ms),
-      mds_addrs(std::vector<std::string>{FLAGS_mds_addrs}) {}
+      mds_option(NewMdsOption()) {}
 
 }  // namespace cache
 }  // namespace dingofs

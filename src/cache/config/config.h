@@ -27,7 +27,6 @@
 #include "cache/config/block_cache.h"
 #include "cache/config/cache_group.h"
 #include "cache/config/common.h"
-#include "cache/config/helper.h"
 #include "cache/config/remote_cache.h"
 
 #endif  // DINGOFS_SRC_CACHE_CONFIG_CONFIG_H_

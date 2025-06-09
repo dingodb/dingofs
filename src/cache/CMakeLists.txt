@@ -21,7 +21,7 @@ add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
 add_subdirectory(remotecache)
 add_subdirectory(tiercache)
-#add_subdirectory(benchmark)
+add_subdirectory(benchmark)
 
 add_library(cache_lib "server.cpp")
 target_link_libraries(cache_lib

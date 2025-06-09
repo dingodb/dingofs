@@ -31,6 +31,7 @@
 #include "blockaccess/s3/s3_common.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/config/block_cache.h"
+#include "cache/config/remote_cache.h"
 #include "client/common/dynamic_config.h"
 #include "gflags/gflags.h"
 #include "utils/gflags_helper.h"
@@ -262,48 +263,22 @@ static void InitFuseOption(Configuration* c, FuseOption* option) {
   }
 }
 
-namespace {
-
-void SplitDiskCacheOption(std::vector<cache::DiskCacheOption>* options) {
-  std::vector<std::string> dirs = StrSplit(cache::FLAGS_cache_dir, ";");
-  for (size_t i = 0; i < dirs.size(); i++) {
-    uint64_t cache_size_mb = cache::FLAGS_cache_size_mb;
-    std::vector<std::string> items = StrSplit(dirs[i], ":");
-    if (items.size() > 2 ||
-        (items.size() == 2 && !Str2Int(items[1], &cache_size_mb))) {
-      CHECK(false) << "Invalid cache dir: " << dirs[i];
-    } else if (cache_size_mb == 0) {
-      CHECK(false) << "Cache size must greater than 0.";
-    }
-
-    cache::DiskCacheOption o;
-    o.cache_store = cache::FLAGS_cache_store;
-    o.cache_dir = items[0];
-    o.cache_size_mb = cache_size_mb;
-    options->emplace_back(o);
-  }
-}
-
-}  // namespace
-
 static void InitBlockCacheOption(Configuration* c,
                                  cache::BlockCacheOption* option) {
   {  // block cache option
-
-    c->GetValue("block_cache.logging", &cache::FLAGS_cache_access_logging);
     c->GetValue("block_cache.cache_store", &cache::FLAGS_cache_store);
-    c->GetValue("block_cache.upload_stage_throttle_bandwidth_enable",
+    c->GetValue("block_cache.enable_stage", &cache::FLAGS_enable_stage);
+    c->GetValue("block_cache.enable_cache", &cache::FLAGS_enable_cache);
+    c->GetValue("block_cache.access_logging",
+                &cache::FLAGS_cache_access_logging);
+    c->GetValue("block_cache.upload_stage_throttle_enable",
                 &cache::FLAGS_upload_stage_throttle_enable);
     c->GetValue("block_cache.upload_stage_throttle_bandwidth_mb",
                 &cache::FLAGS_upload_stage_throttle_bandwidth_mb);
+    c->GetValue("block_cache.upload_stage_throttle_iops",
+                &cache::FLAGS_upload_stage_throttle_iops);
     c->GetValue("block_cache.prefecth_max_inflights",
                 &cache::FLAGS_prefetch_max_inflights);
-
-    std::string cache_store = option->cache_store;
-    if (cache_store != "none" && cache_store != "disk" &&
-        cache_store != "3fs") {
-      CHECK(false) << "Only support none, disk or 3fs cache store.";
-    }
   }
 
   {  // disk cache option
@@ -313,11 +288,10 @@ static void InitBlockCacheOption(Configuration* c,
     c->GetValue("disk_cache.cache_expire_second", &cache::FLAGS_cache_expire_s);
     c->GetValue("disk_cache.cleanup_expire_interval_millsecond",
                 &cache::FLAGS_cleanup_expire_interval_ms);
-    c->GetValue("disk_cache.drop_page_cache", &cache::FLAGS_drop_page_cache);
-
     c->GetValue("disk_cache.ioring_iodepth", &cache::FLAGS_ioring_iodepth);
     c->GetValue("disk_cache.ioring_blksize", &cache::FLAGS_ioring_blksize);
     c->GetValue("disk_cache.ioring_prefetch", &cache::FLAGS_ioring_prefetch);
+    c->GetValue("disk_cache.drop_page_cache", &cache::FLAGS_drop_page_cache);
   }
 
   {  // disk state option
@@ -325,22 +299,47 @@ static void InitBlockCacheOption(Configuration* c,
     c->GetValue("disk_state.tick_duration_second",
                 &cache::FLAGS_state_tick_duration_s);
     c->GetValue("disk_state.normal2unstable_io_error_num",
-                &cache::FLAGS_state_normal2unstable_io_error_num);
+                &cache::FLAGS_state_normal2unstable_error_num);
     c->GetValue("disk_state.unstable2normal_io_succ_num",
-                &cache::FLAGS_state_unstable2normal_io_succ_num);
+                &cache::FLAGS_state_unstable2normal_succ_num);
     c->GetValue("disk_state.unstable2down_second",
                 &cache::FLAGS_state_unstable2down_s);
     c->GetValue("disk_state.disk_check_duration_millsecond",
                 &cache::FLAGS_check_disk_state_duration_ms);
   }
 
-  // rewrite disk cache options
-  {
-    auto cache_store = cache::FLAGS_cache_store;
-    if (cache_store == "disk" || cache_store == "3fs") {
-      SplitDiskCacheOption(&option->disk_cache_options);
-    }
-  }
+  *option = cache::BlockCacheOption();
+}
+
+static void InitRemoteBlockCacheOption(Configuration* c,
+                                       cache::RemoteBlockCacheOption* option) {
+  c->GetValue("remote_cache.cache_group", &cache::FLAGS_cache_group);
+  c->GetValue("remote_cache.load_members_interval_ms",
+              &cache::FLAGS_load_members_interval_ms);
+  c->GetValue("remote_cache.mds_rpc_addrs", &cache::FLAGS_mds_rpc_addrs);
+  c->GetValue("remote_cache.mds_rpc_retry_total_ms",
+              &cache::FLAGS_mds_rpc_retry_total_ms);
+  c->GetValue("remote_cache.mds_rpc_max_timeout_ms",
+              &cache::FLAGS_mds_rpc_max_timeout_ms);
+  c->GetValue("remote_cache.mds_rpc_timeout_ms",
+              &cache::FLAGS_mds_rpc_timeout_ms);
+  c->GetValue("remote_cache.mds_rpc_retry_interval_us",
+              &cache::FLAGS_mds_rpc_retry_interval_us);
+  c->GetValue("remote_cache.mds_rpc_max_failed_times_before_change_addr",
+              &cache::FLAGS_mds_rpc_max_failed_times_before_change_addr);
+  c->GetValue("remote_cache.mds_rpc_normal_retry_times_before_trigger_wait",
+              &cache::FLAGS_mds_rpc_normal_retry_times_before_trigger_wait);
+  c->GetValue("remote_cache.mds_rpc_wait_sleep_ms",
+              &cache::FLAGS_mds_rpc_wait_sleep_ms);
+  c->GetValue("remote_cache.remote_put_rpc_timeout_ms",
+              &cache::FLAGS_remote_put_rpc_timeout_ms);
+  c->GetValue("remote_cache.remote_range_rpc_timeout_ms",
+              &cache::FLAGS_remote_range_rpc_timeout_ms);
+  c->GetValue("remote_cache.remote_cache_rpc_timeout_ms",
+              &cache::FLAGS_remote_cache_rpc_timeout_ms);
+  c->GetValue("remote_cache.remote_prefetch_rpc_timeout_ms",
+              &cache::FLAGS_remote_prefetch_rpc_timeout_ms);
+  *option = cache::RemoteBlockCacheOption();
 }
 
 static void SetBrpcOpt(Configuration* conf) {
@@ -367,6 +366,7 @@ void InitClientOption(Configuration* conf, ClientOption* client_option) {
   InitFileSystemOption(conf, &client_option->fileSystemOption);
   InitDataStreamOption(conf, &client_option->data_stream_option);
   InitBlockCacheOption(conf, &client_option->block_cache_option);
+  InitRemoteBlockCacheOption(conf, &client_option->remote_block_cache_option);
   InitFuseOption(conf, &client_option->fuse_option);
 
   conf->GetValueFatalIfFail("fuseClient.listDentryLimit",

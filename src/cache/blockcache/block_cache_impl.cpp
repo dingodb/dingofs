@@ -41,11 +41,11 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option, StorageSPtr storage)
 
 BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
                                StoragePoolSPtr storage_pool)
-    : running_(false), storage_pool_(storage_pool) {
-  if (IsNoneCacheStore(option.cache_store)) {
-    store_ = std::make_shared<MemCache>();
-  } else {
+    : running_(false), option_(option), storage_pool_(storage_pool) {
+  if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
+  } else {
+    store_ = std::make_shared<MemCache>();
   }
   uploader_ = std::make_shared<BlockCacheUploader>(storage_pool_, store_);
   prefetch_throttle_ =
@@ -77,7 +77,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("block.put(%s,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[local] put(%s,%zu): %s%s", key.Filename(),
                            block.size, status.ToString(), timer.ToString());
   });
 
@@ -93,11 +93,11 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING)
-        << "Stage block " << key.Filename() << " failed: " << status.ToString();
+    LOG_EVERY_SECOND(WARNING) << "Stage block (key=" << key.Filename()
+                              << ") failed: " << status.ToString();
   } else if (!status.IsNotSupport()) {
-    LOG(WARNING) << "Stage block " << key.Filename()
-                 << " failed: " << status.ToString();
+    LOG(WARNING) << "Stage block (key=" << key.Filename()
+                 << ") failed: " << status.ToString();
   }
 
   // stage block failed, try to upload it
@@ -111,8 +111,8 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("range(%s,%lld,%zu): %s%s", key.Filename(), offset,
-                           length, status.ToString(), timer.ToString());
+    return absl::StrFormat("[local] range(%s,%lld,%zu): %s%s", key.Filename(),
+                           offset, length, status.ToString(), timer.ToString());
   });
 
   timer.NextPhase(Phase::kLoadBlock);
@@ -128,8 +128,8 @@ Status BlockCacheImpl::Cache(const BlockKey& key, const Block& block,
                              CacheOption /*option*/) {
   Status status;
   LogGuard log([&]() {
-    return absl::StrFormat("cache(%s,%zu): %s", key.Filename(), block.size,
-                           status.ToString());
+    return absl::StrFormat("[local] cache(%s,%zu): %s", key.Filename(),
+                           block.size, status.ToString());
   });
 
   status = store_->Cache(key, block);
@@ -141,8 +141,8 @@ Status BlockCacheImpl::Prefetch(const BlockKey& key, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("prefetch(%s,%zu): %s%s", key.Filename(), length,
-                           status.ToString(), timer.ToString());
+    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+                           length, status.ToString(), timer.ToString());
   });
 
   if (IsCached(key)) {
@@ -196,7 +196,8 @@ void BlockCacheImpl::AsyncCache(const BlockKey& key, const Block& block,
 
 void BlockCacheImpl::AsyncPrefetch(const BlockKey& key, size_t length,
                                    AsyncCallback cb, PrefetchOption option) {
-  InflightThrottleGuard guard(prefetch_throttle_, 1);  // TODO: acts on sync op
+  InflightThrottleGuard guard(prefetch_throttle_,
+                              1);  // TODO: acts on sync op
   auto self = GetSelfSPtr();
   RunInBthread([self, option, key, length, cb]() {
     Status status = self->Prefetch(key, length, option);
@@ -223,6 +224,18 @@ Status BlockCacheImpl::StorageRange(const BlockKey& key, off_t offset,
     status = storage->Range(key.StoreKey(), offset, length, buffer);
   }
   return status;
+}
+
+bool BlockCacheImpl::HasCacheStore() const {
+  return option_.cache_store != "none";
+}
+
+bool BlockCacheImpl::EnableStage() const {
+  return HasCacheStore() && option_.enable_stage;
+}
+
+bool BlockCacheImpl::EnableCache() const {
+  return HasCacheStore() && option_.enable_cache;
 }
 
 bool BlockCacheImpl::IsCached(const BlockKey& key) const {
