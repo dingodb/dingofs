@@ -49,7 +49,7 @@ class Dentry {
 
   InodeSPtr Inode() const { return inode_.lock(); }
 
-  DentryType CopyTo() const;
+  DentryType Copy() const;
 
  private:
   std::string name_;

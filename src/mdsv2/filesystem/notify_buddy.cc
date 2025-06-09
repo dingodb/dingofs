@@ -215,6 +215,17 @@ void NotifyBuddy::SendMessage(uint64_t mds_id, BatchMessage& batch_message) {
 
       } break;
 
+      case Type::kCleanPartitionCache: {
+        mut_message->set_type(pb::mdsv2::NotifyBuddyRequest::TYPE_CLEAN_PARTITION_CACHE);
+
+        auto clean_partition_cache_message = std::dynamic_pointer_cast<CleanPartitionCacheMessage>(message);
+        mut_message->mutable_clean_partition_cache()->set_ino(clean_partition_cache_message->ino);
+
+        DINGO_LOG(INFO) << fmt::format("[notify.{}] clean partition cache({}/{}) info.", mds_id, message->fs_id,
+                                       clean_partition_cache_message->ino);
+
+      } break;
+
       default:
         DINGO_LOG(FATAL) << fmt::format("[notify] unknown message type: {}.", static_cast<int>(message->type));
         break;

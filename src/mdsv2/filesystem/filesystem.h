@@ -68,14 +68,14 @@ struct EntryOut {
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
   FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-             RenamerSPtr renamer, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
              notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
-                            KVStorageSPtr kv_storage, RenamerSPtr renamer, OperationProcessorSPtr operation_processor,
+                            KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
                             MDSMetaMapSPtr mds_meta_map, notify::NotifyBuddySPtr notify_buddy) {
-    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage, renamer,
+    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage,
                                         operation_processor, mds_meta_map, notify_buddy);
   }
 
@@ -183,8 +183,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
   Status ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                     std::vector<Dentry>& dentries);
-  Status GetInode(Context& ctx, Ino ino, EntryOut& entry_out);
-  Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries);
+  Status GetInode(Context& ctx, Ino ino, bool just_basic, EntryOut& entry_out);
+  Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, bool just_basic,
+                       std::vector<EntryOut>& out_entries);
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mdsv2::XAttr>& out_xattrs);
 
   Status RefreshInode(const std::vector<uint64_t>& inoes);
@@ -252,6 +253,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   void UpdateParentMemo(const std::vector<Ino>& ancestors);
 
   void NotifyBuddyRefreshInode(AttrType&& attr);
+  void NotifyBuddyCleanPartitionCache(Ino ino);
 
   uint64_t self_mds_id_;
 
@@ -285,7 +287,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   // quota
   quota::QuotaManager quota_manager_;
 
-  RenamerSPtr renamer_;
+  // renamer
+  Renamer renamer_;
 
   OperationProcessorSPtr operation_processor_;
 
@@ -298,17 +301,17 @@ class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                 IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer, OperationProcessorSPtr operation_processor,
+                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
                 notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
                                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
-                               MDSMetaMapSPtr mds_meta_map, RenamerSPtr renamer,
-                               OperationProcessorSPtr operation_processor, notify::NotifyBuddySPtr notify_buddy) {
+                               MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
+                               notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
                                            std::move(slice_id_generator), kv_storage, self_mds_meta, mds_meta_map,
-                                           renamer, operation_processor, notify_buddy);
+                                           operation_processor, notify_buddy);
   }
 
   bool Init();
@@ -329,7 +332,7 @@ class FileSystemSet {
 
   Status CreateFs(const CreateFsParam& param, FsInfoType& fs_info);
   Status MountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint);
-  Status UmountFs(Context& ctx, const std::string& fs_name, const pb::mdsv2::MountPoint& mountpoint);
+  Status UmountFs(Context& ctx, const std::string& fs_name, const std::string& client_id);
   Status DeleteFs(Context& ctx, const std::string& fs_name, bool is_force);
   Status UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info);
   Status GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info);
@@ -368,8 +371,6 @@ class FileSystemSet {
   IdGeneratorUPtr slice_id_generator_;
 
   KVStorageSPtr kv_storage_;
-
-  RenamerSPtr renamer_;
 
   OperationProcessorSPtr operation_processor_;
 

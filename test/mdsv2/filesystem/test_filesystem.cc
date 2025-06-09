@@ -21,12 +21,10 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
-#include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/coordinator/dummy_coordinator_client.h"
 #include "mdsv2/filesystem/filesystem.h"
-#include "mdsv2/filesystem/renamer.h"
 #include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/dummy_storage.h"
 
@@ -69,9 +67,6 @@ class FileSystemSetTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
-    auto renamer = Renamer::New();
-    ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
-
     auto operation_processor = OperationProcessor::New(kv_storage);
     ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
 
@@ -83,7 +78,7 @@ class FileSystemSetTest : public testing::Test {
 
     auto mds_meta_map = MDSMetaMap::New();
     fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), std::move(slice_id_generator),
-                                kv_storage, mds_meta, mds_meta_map, renamer, operation_processor, nullptr);
+                                kv_storage, mds_meta, mds_meta_map, operation_processor, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -112,9 +107,6 @@ class FileSystemTest : public testing::Test {
     auto kv_storage = DummyStorage::New();
     ASSERT_TRUE(kv_storage->Init("")) << "init kv storage fail.";
 
-    auto renamer = Renamer::New();
-    ASSERT_TRUE(renamer->Init()) << "init renamer fail.";
-
     auto operation_processor = OperationProcessor::New(kv_storage);
     ASSERT_TRUE(operation_processor->Init()) << "init mutation merger fail.";
 
@@ -131,7 +123,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), kv_storage, renamer,
+    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), kv_storage,
                          operation_processor, nullptr, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
@@ -294,6 +286,7 @@ TEST_F(FileSystemSetTest, UnMountFs) {
 
   Context ctx;
   pb::mdsv2::MountPoint mount_point;
+  mount_point.set_client_id("xxxxxxxxxxxxxxxxxxxxxxxx");
   mount_point.set_hostname("localhost");
   mount_point.set_port(8080);
   mount_point.set_path("/mnt/dingofs");
@@ -311,7 +304,7 @@ TEST_F(FileSystemSetTest, UnMountFs) {
   ASSERT_EQ(mount_point.path(), actual_mount_point.path()) << "path not equal.";
   ASSERT_EQ(mount_point.cto(), actual_mount_point.cto()) << "cto not equal.";
 
-  status = fs_set->UmountFs(ctx, param.fs_name, mount_point);
+  status = fs_set->UmountFs(ctx, param.fs_name, mount_point.client_id());
   ASSERT_TRUE(status.ok()) << "unmount fs fail, error: " << status.error_str();
 
   {

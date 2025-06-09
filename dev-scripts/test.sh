@@ -16,7 +16,7 @@ eval set -- "${FLAGS_ARGV}"
 
 
 for ((i=1; i<=${FLAGS_num}; ++i)); do
-  padded=$(printf "%05d" $i)
+  padded=$(printf "%07d" $i)
   
   if [ "${FLAGS_type}" == "file" ]; then
     file_path=${FLAGS_path}/file${padded}

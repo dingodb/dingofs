@@ -173,13 +173,6 @@ bool Server::InitStorage(const std::string& store_url) {
   return kv_storage_->Init(store_addrs);
 }
 
-bool Server::InitRenamer() {
-  renamer_ = Renamer::New();
-  CHECK(renamer_ != nullptr) << "new Renamer fail.";
-
-  return renamer_->Init();
-}
-
 bool Server::InitOperationProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
 
@@ -207,9 +200,8 @@ bool Server::InitFileSystem() {
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ =
-      FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator), kv_storage_,
-                         mds_meta_, mds_meta_map_, renamer_, operation_processor_, notify_buddy_);
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
+                                        kv_storage_, mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 
   return file_system_set_->Init();
@@ -451,7 +443,6 @@ void Server::Stop() {
 
   brpc_server_.Stop(0);
   brpc_server_.Join();
-  renamer_->Destroy();
   operation_processor_->Destroy();
   heartbeat_->Destroy();
   crontab_manager_.Destroy();

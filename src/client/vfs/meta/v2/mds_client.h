@@ -66,8 +66,7 @@ class MDSClient {
 
   Status MountFs(const std::string& name,
                  const pb::mdsv2::MountPoint& mount_point);
-  Status UmountFs(const std::string& name,
-                  const pb::mdsv2::MountPoint& mount_point);
+  Status UmountFs(const std::string& name, const std::string& client_id);
 
   Status Lookup(Ino parent, const std::string& name, Attr& out_attr);
 

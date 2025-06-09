@@ -980,7 +980,7 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
       InodeSPtr inode;
       auto status = file_system->GetInodeFromStore(ino, "Stat", inode);
       if (status.ok()) {
-        RenderInodePage(inode->CopyTo(), os);
+        RenderInodePage(inode->Copy(), os);
 
       } else {
         os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());

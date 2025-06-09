@@ -267,8 +267,8 @@ class MountFsOperation : public Operation {
 
 class UmountFsOperation : public Operation {
  public:
-  UmountFsOperation(Trace& trace, std::string fs_name, pb::mdsv2::MountPoint mountpoint)
-      : Operation(trace), fs_name_(fs_name), mount_point_(mountpoint) {};
+  UmountFsOperation(Trace& trace, std::string fs_name, const std::string& client_id)
+      : Operation(trace), fs_name_(fs_name), client_id_(client_id) {};
   ~UmountFsOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUmountFs; }
@@ -280,7 +280,7 @@ class UmountFsOperation : public Operation {
 
  private:
   std::string fs_name_;
-  pb::mdsv2::MountPoint mount_point_;
+  std::string client_id_;
 };
 
 class DeleteFsOperation : public Operation {

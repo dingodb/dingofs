@@ -39,6 +39,7 @@ class Partition {
 
   void PutChild(const Dentry& dentry);
   void DeleteChild(const std::string& name);
+  void DeleteChildIf(const std::string& name, Ino ino);
 
   bool HasChild();
   bool GetChild(const std::string& name, Dentry& dentry);
@@ -60,14 +61,15 @@ class PartitionCache {
   PartitionCache();
   ~PartitionCache();
 
-  void Put(uint64_t ino, PartitionPtr partition);
-  void Delete(uint64_t ino);
+  void Put(Ino ino, PartitionPtr partition);
+  void Delete(Ino ino);
 
-  PartitionPtr Get(uint64_t ino);
+  PartitionPtr Get(Ino ino);
 
   std::map<uint64_t, PartitionPtr> GetAll();
 
  private:
+  // dir ino -> partition
   utils::LRUCache<uint64_t, PartitionPtr> cache_;
 };
 

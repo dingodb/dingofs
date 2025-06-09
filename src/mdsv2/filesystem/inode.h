@@ -73,8 +73,7 @@ class Inode {
   bool UpdateIf(const AttrType& attr);
   bool UpdateIf(AttrType&& attr);
 
-  AttrType Copy();
-  AttrType CopyTo();
+  AttrType Copy(bool just_basic = false);
   AttrType&& Move();
 
  private:

@@ -237,7 +237,6 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitMDSMeta()) << "init mds meta error.";
   CHECK(server.InitCoordinatorClient(FLAGS_coor_url)) << "init coordinator client error.";
   CHECK(server.InitStorage(FLAGS_coor_url)) << "init storage error.";
-  CHECK(server.InitRenamer()) << "init renamer error.";
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
   CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";
   CHECK(server.InitFileSystem()) << "init file system set error.";

@@ -14,7 +14,10 @@
 
 #include "mdsv2/filesystem/partition.h"
 
+#include <cstdint>
 #include <memory>
+
+#include "mdsv2/common/logging.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -23,6 +26,8 @@ static const std::string kPartitionMetricsPrefix = "dingofs_partition_cache_";
 
 // 0: no limit
 DEFINE_uint32(partition_cache_max_count, 0, "partition cache max count");
+
+const uint32_t kDentryDefaultNum = 1024;
 
 InodeSPtr Partition::ParentInode() {
   CHECK(parent_inode_ != nullptr) << "parent inode is null.";
@@ -47,6 +52,15 @@ void Partition::DeleteChild(const std::string& name) {
   children_.erase(name);
 }
 
+void Partition::DeleteChildIf(const std::string& name, Ino ino) {
+  utils::WriteLockGuard lk(lock_);
+
+  auto it = children_.find(name);
+  if (it != children_.end() && it->second.INo() == ino) {
+    children_.erase(it);
+  }
+}
+
 bool Partition::HasChild() {
   utils::ReadLockGuard lk(lock_);
 
@@ -68,8 +82,10 @@ bool Partition::GetChild(const std::string& name, Dentry& dentry) {
 std::vector<Dentry> Partition::GetChildren(const std::string& start_name, uint32_t limit, bool is_only_dir) {
   utils::ReadLockGuard lk(lock_);
 
+  limit = limit > 0 ? limit : UINT32_MAX;
+
   std::vector<Dentry> dentries;
-  dentries.reserve(limit);
+  dentries.reserve(kDentryDefaultNum);
 
   for (auto it = children_.upper_bound(start_name); it != children_.end() && dentries.size() < limit; ++it) {
     if (is_only_dir && it->second.Type() != pb::mdsv2::FileType::DIRECTORY) {
@@ -99,11 +115,15 @@ PartitionCache::PartitionCache()
     : cache_(FLAGS_partition_cache_max_count, std::make_shared<utils::CacheMetrics>(kPartitionMetricsPrefix)) {}
 PartitionCache::~PartitionCache() {}  // NOLINT
 
-void PartitionCache::Put(uint64_t ino, PartitionPtr partition) { cache_.Put(ino, partition); }
+void PartitionCache::Put(Ino ino, PartitionPtr partition) { cache_.Put(ino, partition); }
 
-void PartitionCache::Delete(uint64_t ino) { cache_.Remove(ino); }
+void PartitionCache::Delete(Ino ino) {
+  DINGO_LOG(INFO) << fmt::format("[partition] delete partition ino({}).", ino);
 
-PartitionPtr PartitionCache::Get(uint64_t ino) {
+  cache_.Remove(ino);
+}
+
+PartitionPtr PartitionCache::Get(Ino ino) {
   PartitionPtr partition;
   if (!cache_.Get(ino, &partition)) {
     return nullptr;

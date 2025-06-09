@@ -47,15 +47,15 @@ void DebugServiceImpl::GetFs(google::protobuf::RpcController*, const pb::debug::
 
 static void FillPartition(PartitionPtr partition, bool with_inode,
                           pb::debug::GetPartitionResponse::Partition* pb_partition) {
-  *pb_partition->mutable_parent_inode() = partition->ParentInode()->CopyTo();
+  *pb_partition->mutable_parent_inode() = partition->ParentInode()->Copy();
 
   auto child_dentries = partition->GetAllChildren();
   for (auto& child_dentry : child_dentries) {
     auto* pb_dentry = pb_partition->add_entries();
-    *pb_dentry->mutable_dentry() = child_dentry.CopyTo();
+    *pb_dentry->mutable_dentry() = child_dentry.Copy();
     auto inode = child_dentry.Inode();
     if (with_inode && inode != nullptr) {
-      *pb_dentry->mutable_inode() = inode->CopyTo();
+      *pb_dentry->mutable_inode() = inode->Copy();
     }
   }
 }
@@ -97,11 +97,11 @@ void DebugServiceImpl::GetPartition(google::protobuf::RpcController* controller,
   } else {
     Dentry dentry;
     partition->GetChild(request->name(), dentry);
-    *pb_partition->mutable_parent_inode() = partition->ParentInode()->CopyTo();
+    *pb_partition->mutable_parent_inode() = partition->ParentInode()->Copy();
     auto* pb_dentry = pb_partition->add_entries();
     auto inode = dentry.Inode();
     if (request->with_inode() && inode != nullptr) {
-      *pb_dentry->mutable_inode() = inode->CopyTo();
+      *pb_dentry->mutable_inode() = inode->Copy();
     }
   }
 }
@@ -121,7 +121,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
   if (request->inoes().empty() && request->use_cache()) {
     auto inode_map = fs->GetAllInodesFromCache();
     for (auto& [_, inode] : inode_map) {
-      *response->add_inodes() = inode->CopyTo();
+      *response->add_inodes() = inode->Copy();
     }
   }
 
@@ -129,7 +129,7 @@ void DebugServiceImpl::GetInode(google::protobuf::RpcController*, const pb::debu
     InodeSPtr inode;
     auto status = fs->GetInode(ctx, ino, inode);
     if (status.ok()) {
-      *response->add_inodes() = inode->CopyTo();
+      *response->add_inodes() = inode->Copy();
     }
   }
 }

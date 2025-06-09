@@ -271,7 +271,7 @@ void MDSServiceImpl::DoUmountFs(google::protobuf::RpcController* controller, con
   brpc::ClosureGuard done_guard(done);
 
   Context ctx;
-  auto status = file_system_set_->UmountFs(ctx, request->fs_name(), request->mount_point());
+  auto status = file_system_set_->UmountFs(ctx, request->fs_name(), request->client_id());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -287,15 +287,9 @@ void MDSServiceImpl::UmountFs(google::protobuf::RpcController* controller, const
     if (request->fs_name().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
     }
-    const auto& mount_point = request->mount_point();
-    if (mount_point.client_id().empty()) {
+
+    if (request->client_id().empty()) {
       return Status(pb::error::EILLEGAL_PARAMTETER, "client_id is empty");
-    }
-    if (mount_point.hostname().empty()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "hostname is empty");
-    }
-    if (mount_point.path().empty()) {
-      return Status(pb::error::EILLEGAL_PARAMTETER, "mount point path is empty");
     }
 
     return Status::OK();
@@ -510,7 +504,7 @@ void MDSServiceImpl::DoGetDentry(google::protobuf::RpcController* controller,
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
-  response->mutable_dentry()->CopyFrom(dentry.CopyTo());
+  response->mutable_dentry()->CopyFrom(dentry.Copy());
 }
 
 // dentry interface
@@ -545,15 +539,16 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController* controller,
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::vector<Dentry> dentries;
-  auto status = file_system->ListDentry(ctx, request->parent(), request->last(), request->limit(),
-                                        request->is_only_dir(), dentries);
+  uint32_t limit = request->limit() > 0 ? request->limit() : UINT32_MAX;
+  auto status =
+      file_system->ListDentry(ctx, request->parent(), request->last(), limit, request->is_only_dir(), dentries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   for (auto& dentry : dentries) {
-    response->add_dentries()->CopyFrom(dentry.CopyTo());
+    response->add_dentries()->CopyFrom(dentry.Copy());
   }
 }
 
@@ -561,6 +556,24 @@ void MDSServiceImpl::ListDentry(google::protobuf::RpcController* controller,
                                 const pb::mdsv2::ListDentryRequest* request, pb::mdsv2::ListDentryResponse* response,
                                 google::protobuf::Closure* done) {
   auto* svr_done = new ServiceClosure(__func__, done, request, response);
+
+  // validate request
+  auto validate_fn = [&]() -> Status {
+    if (request->fs_id() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "fs_id is 0");
+    }
+    if (request->parent() == 0) {
+      return Status(pb::error::EILLEGAL_PARAMTETER, "parent is 0");
+    }
+
+    return Status::OK();
+  };
+
+  auto status = validate_fn();
+  if (BAIDU_UNLIKELY(!status.ok())) {
+    brpc::ClosureGuard done_guard(svr_done);
+    return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
+  }
 
   // Run in queue.
   auto task = std::make_shared<ServiceTask>(
@@ -588,7 +601,7 @@ void MDSServiceImpl::DoGetInode(google::protobuf::RpcController* controller, con
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   EntryOut entry_out;
-  auto status = file_system->GetInode(ctx, request->ino(), entry_out);
+  auto status = file_system->GetInode(ctx, request->ino(), request->just_basic(), entry_out);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -2333,6 +2346,16 @@ void MDSServiceImpl::DoNotifyBuddy(google::protobuf::RpcController* controller,
 
         auto& mut_message = const_cast<pb::mdsv2::NotifyBuddyRequest::Message&>(message);
         file_system->RefreshInode(*mut_message.mutable_refresh_inode()->mutable_inode());
+      } break;
+
+      case pb::mdsv2::NotifyBuddyRequest::TYPE_CLEAN_PARTITION_CACHE: {
+        auto file_system = GetFileSystem(message.fs_id());
+        if (file_system == nullptr) {
+          return ServiceHelper::SetError(response->mutable_error(), pb::error::ENOT_FOUND, "fs not found");
+        }
+
+        file_system->GetPartitionCache().Delete(message.clean_partition_cache().ino());
+
       } break;
 
       default:

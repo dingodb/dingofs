@@ -192,13 +192,34 @@ bool Inode::UpdateIf(AttrType&& attr) {
   return true;
 }
 
-Inode::AttrType Inode::Copy() {
+Inode::AttrType Inode::Copy(bool just_basic) {
   utils::ReadLockGuard lk(lock_);
 
-  return attr_;
-}
+  if (!just_basic) {
+    return attr_;
+  }
 
-Inode::AttrType Inode::CopyTo() { return Copy(); }
+  // Copy only basic attributes
+  AttrType attr;
+  attr.set_fs_id(attr_.fs_id());
+  attr.set_ino(attr_.ino());
+  attr.set_type(attr_.type());
+  attr.set_length(attr_.length());
+  attr.set_uid(attr_.uid());
+  attr.set_gid(attr_.gid());
+  attr.set_mode(attr_.mode());
+  attr.set_nlink(attr_.nlink());
+  attr.set_symlink(attr_.symlink());
+  attr.set_rdev(attr_.rdev());
+  attr.set_dtime(attr_.dtime());
+  attr.set_ctime(attr_.ctime());
+  attr.set_mtime(attr_.mtime());
+  attr.set_atime(attr_.atime());
+  attr.set_openmpcount(attr_.openmpcount());
+  attr.set_version(attr_.version());
+
+  return std::move(attr);
+}
 
 Inode::AttrType&& Inode::Move() {
   utils::WriteLockGuard lk(lock_);

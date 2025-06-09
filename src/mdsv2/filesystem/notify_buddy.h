@@ -34,6 +34,7 @@ namespace notify {
 enum class Type {
   kRefreshFsInfo = 0,
   kRefreshInode = 1,
+  kCleanPartitionCache = 2,
 };
 
 struct Message {
@@ -67,6 +68,17 @@ struct RefreshInodeMessage : public Message {
   }
 
   AttrType attr;
+};
+
+struct CleanPartitionCacheMessage : public Message {
+  CleanPartitionCacheMessage(uint64_t mds_id, uint32_t fs_id, Ino ino)
+      : Message{Type::kCleanPartitionCache, mds_id, fs_id}, ino(ino) {}
+
+  static MessageSPtr Create(uint64_t mds_id, uint32_t fs_id, Ino ino) {
+    return std::make_shared<CleanPartitionCacheMessage>(mds_id, fs_id, ino);
+  }
+
+  Ino ino{0};
 };
 
 class NotifyBuddy;

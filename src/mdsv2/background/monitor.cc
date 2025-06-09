@@ -325,13 +325,8 @@ Status Monitor::MonitorClient() {
     if (!fs_name.empty()) {
       // umount fs from client
       Context ctx;
-      pb::mdsv2::MountPoint mountpoint;
-      mountpoint.set_client_id(client.id());
-      mountpoint.set_hostname(client.hostname());
-      mountpoint.set_port(client.port());
-      mountpoint.set_path(client.mountpoint());
 
-      auto status = fs_set_->UmountFs(ctx, fs_name, mountpoint);
+      auto status = fs_set_->UmountFs(ctx, fs_name, client.id());
       if (!status.ok()) {
         DINGO_LOG(ERROR) << fmt::format("[monitor] umount fs({}) from client({}) fail, {}.", fs_name, client.id(),
                                         status.error_str());

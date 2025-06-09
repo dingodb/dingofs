@@ -164,11 +164,7 @@ UmountFsResponse MDSClient::UmountFs(const std::string& fs_name, const std::stri
   UmountFsResponse response;
 
   request.set_fs_name(fs_name);
-  auto* mountpoint = request.mutable_mount_point();
-  mountpoint->set_client_id(client_id);
-  mountpoint->set_hostname("127.0.0.1");
-  mountpoint->set_port(10000);
-  mountpoint->set_path("/mnt/dingo");
+  request.set_client_id(client_id);
 
   interaction_->SendRequest("MDSService", "UmountFs", request, response);
 

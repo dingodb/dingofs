@@ -159,12 +159,12 @@ Status MDSClient::MountFs(const std::string& name,
 }
 
 Status MDSClient::UmountFs(const std::string& name,
-                           const pb::mdsv2::MountPoint& mount_point) {
+                           const std::string& client_id) {
   pb::mdsv2::UmountFsRequest request;
   pb::mdsv2::UmountFsResponse response;
 
   request.set_fs_name(name);
-  request.mutable_mount_point()->CopyFrom(mount_point);
+  request.set_client_id(client_id);
 
   auto status = rpc_->SendRequest("MDSService", "UmountFs", request, response);
   if (!status.ok()) {

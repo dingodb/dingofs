@@ -138,9 +138,9 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
-static void RemoveMountPoint(FsInfoType& fs_info, const pb::mdsv2::MountPoint& mountpoint) {
+static void RemoveMountPoint(FsInfoType& fs_info, const std::string& client_id) {
   for (int i = 0; i < fs_info.mount_points_size(); i++) {
-    if (fs_info.mount_points(i).client_id() == mountpoint.client_id()) {
+    if (fs_info.mount_points(i).client_id() == client_id) {
       fs_info.mutable_mount_points()->SwapElements(i, fs_info.mount_points_size() - 1);
       fs_info.mutable_mount_points()->RemoveLast();
       return;
@@ -158,7 +158,7 @@ Status UmountFsOperation::Run(TxnUPtr& txn) {
 
   auto fs_info = MetaCodec::DecodeFSValue(value);
 
-  RemoveMountPoint(fs_info, mount_point_);
+  RemoveMountPoint(fs_info, client_id_);
 
   fs_info.set_last_update_time_ns(GetTime());
 
@@ -199,7 +199,7 @@ Status CreateRootOperation::Run(TxnUPtr& txn) {
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, attr_.ino()), MetaCodec::EncodeInodeValue(attr_));
 
   txn->Put(MetaCodec::EncodeDentryKey(fs_id, dentry_.ParentIno(), dentry_.Name()),
-           MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+           MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   return Status::OK();
 }
@@ -209,7 +209,7 @@ Status MkDirOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
@@ -227,7 +227,7 @@ Status MkNodOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
@@ -283,7 +283,7 @@ Status HardLinkOperation::Run(TxnUPtr& txn) {
   txn->Put(key, MetaCodec::EncodeInodeValue(attr));
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   SetAttr(parent_attr);
   result_.child_attr = attr;
@@ -296,7 +296,7 @@ Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   const Ino parent = parent_attr.ino();
 
   // create dentry
-  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.CopyTo()));
+  txn->Put(MetaCodec::EncodeDentryKey(fs_id, parent, dentry_.Name()), MetaCodec::EncodeDentryValue(dentry_.Copy()));
 
   // create inode
   txn->Put(MetaCodec::EncodeInodeKey(fs_id, dentry_.INo()), MetaCodec::EncodeInodeValue(attr_));
@@ -970,9 +970,8 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
 
   fs_quota.set_max_bytes(quota_.max_bytes() > 0 ? quota_.max_bytes() : UINT64_MAX);
   fs_quota.set_max_inodes(quota_.max_inodes() > 0 ? quota_.max_inodes() : UINT64_MAX);
-  if (quota_.used_inodes() > 0 && fs_quota.used_inodes() == 0) {
-    fs_quota.set_used_inodes(quota_.used_inodes());
-  }
+  if (quota_.used_inodes() > 0) fs_quota.set_used_inodes(quota_.used_inodes());
+  if (quota_.used_bytes() > 0) fs_quota.set_used_bytes(quota_.used_bytes());
 
   txn->Put(key, MetaCodec::EncodeFsQuotaValue(fs_quota));
 
@@ -1031,8 +1030,10 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
   }
 
-  dir_quota.set_max_bytes(quota_.max_bytes());
-  dir_quota.set_max_inodes(quota_.max_inodes());
+  dir_quota.set_max_bytes(quota_.max_bytes() > 0 ? quota_.max_bytes() : UINT64_MAX);
+  dir_quota.set_max_inodes(quota_.max_inodes() > 0 ? quota_.max_inodes() : UINT64_MAX);
+  if (quota_.used_inodes() > 0) dir_quota.set_used_inodes(quota_.used_inodes());
+  if (quota_.used_bytes() > 0) dir_quota.set_used_bytes(quota_.used_bytes());
 
   txn->Put(key, MetaCodec::EncodeDirQuotaValue(dir_quota));
 

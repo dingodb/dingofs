@@ -43,7 +43,7 @@ Dentry::Dentry(const Dentry& dentry, InodeSPtr inode)
 
 Dentry::~Dentry() {}  // NOLINT
 
-DentryType Dentry::CopyTo() const {
+DentryType Dentry::Copy() const {
   DentryType dentry;
 
   dentry.set_fs_id(fs_id_);
