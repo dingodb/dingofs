@@ -55,9 +55,6 @@ static const int64_t kInoTableId = 1001;
 static const int64_t kInoBatchSize = 32;
 static const int64_t kInoStartId = 100000;
 
-static const uint64_t kRootIno = 1;
-static const uint64_t kRootParentIno = 0;
-
 static const std::string kFsTableName = "dingofs";
 
 static const std::string kStatsName = ".stats";

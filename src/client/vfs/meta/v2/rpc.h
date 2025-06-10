@@ -21,6 +21,7 @@
 #include <glog/logging.h>
 #include <json/config.h>
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -31,6 +32,7 @@
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
+#include "mdsv2/common/helper.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -152,30 +154,33 @@ Status RPC::SendRequest(const EndPoint& endpoint,
     cntl.set_timeout_ms(FLAGS_rpc_timeout_ms);
     cntl.set_log_id(butil::fast_rand());
 
+    uint64_t start_us = mdsv2::Helper::TimestampUs();
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
+    uint64_t elapsed_us = mdsv2::Helper::TimestampUs() - start_us;
     if (cntl.Failed()) {
-      LOG(ERROR) << fmt::format("[rpc][{}][{}] fail, {} {} {} request({}).",
-                                EndPointToStr(endpoint), api_name,
-                                cntl.log_id(), cntl.ErrorCode(),
-                                cntl.ErrorText(), request.ShortDebugString());
+      LOG(ERROR) << fmt::format(
+          "[rpc][{}][{}][{}us] fail, {} {} {} request({}).",
+          EndPointToStr(endpoint), api_name, elapsed_us, cntl.log_id(),
+          cntl.ErrorCode(), cntl.ErrorText(), request.ShortDebugString());
       DeleteChannel(endpoint);
       return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
     }
 
     if (response.error().errcode() == pb::error::OK) {
       LOG(INFO) << fmt::format(
-          "[rpc][{}][{}] success, request({}) response({}).",
-          EndPointToStr(endpoint), api_name, request.ShortDebugString(),
-          response.ShortDebugString());
+          "[rpc][{}][{}][{}us] success, request({}) response({}).",
+          EndPointToStr(endpoint), api_name, elapsed_us,
+          request.ShortDebugString(), response.ShortDebugString());
       return Status();
     }
 
     ++retry_count;
 
     LOG(ERROR) << fmt::format(
-        "[rpc][{}][{}] fail, request({}) retry_count({}) error({} {}).",
-        EndPointToStr(endpoint), api_name, request.ShortDebugString(),
-        retry_count, pb::error::Errno_Name(response.error().errcode()),
+        "[rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} {}).",
+        EndPointToStr(endpoint), api_name, elapsed_us,
+        request.ShortDebugString(), retry_count,
+        pb::error::Errno_Name(response.error().errcode()),
         response.error().errmsg());
 
     // the errno of need retry

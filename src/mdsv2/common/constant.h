@@ -31,6 +31,9 @@ const uint32_t kSetAttrNlink = 1 << 7;
 
 const int kEmptyDirMinLinkNum = 2;
 
+const uint64_t kRootIno = 1;
+const uint64_t kRootParentIno = 0;
+
 }  // namespace mdsv2
 }  // namespace dingofs
 

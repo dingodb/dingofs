@@ -74,9 +74,11 @@ class FsUtils {
 
   FsTreeNode* GenFsTree(uint32_t fs_id);
   std::string GenFsTreeJsonString();
+  Status GenDirJsonString(Ino parent, std::string& result);
 
  private:
   void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc);
+  Status GenRootDirJsonString(std::string& result);
 
   FsInfoType fs_info_;
   KVStorageSPtr kv_storage_;

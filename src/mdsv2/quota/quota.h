@@ -69,7 +69,7 @@ class DirQuotaMap {
   DirQuotaMap(ParentMemoSPtr parent_memo) : parent_memo_(parent_memo) {}
   ~DirQuotaMap() = default;
 
-  void InsertQuota(Ino ino, const QuotaEntry& quota);
+  void UpsertQuota(Ino ino, const QuotaEntry& quota);
 
   void UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta);
 

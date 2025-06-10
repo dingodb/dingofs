@@ -14,24 +14,28 @@
 
 #include "mdsv2/filesystem/fs_utils.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <map>
+#include <string>
+#include <vector>
 
 #include "dingofs/mdsv2.pb.h"
-#include "fmt/core.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/codec.h"
+#include "mdsv2/common/constant.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/type.h"
 #include "nlohmann/json.hpp"
 
 namespace dingofs {
 namespace mdsv2 {
 
 DEFINE_int32(fs_scan_batch_size, 10000, "fs scan batch size");
+
+static const uint32_t kBatchGetSize = 1000;
 
 void FreeFsTree(FsTreeNode* root) {
   if (root == nullptr) {
@@ -235,6 +239,140 @@ std::string FsUtils::GenFsTreeJsonString() {
   FreeMap(node_map);
 
   return doc.dump();
+}
+
+Status FsUtils::GenRootDirJsonString(std::string& result) {
+  const uint32_t fs_id = fs_info_.fs_id();
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeInodeKey(fs_id, kRootIno), value);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fsutils] get root inode fail, {}.", status.error_str());
+    return status;
+  }
+
+  auto attr = MetaCodec::DecodeInodeValue(value);
+
+  nlohmann::json doc = nlohmann::json::array();
+
+  nlohmann::json item;
+  item["ino"] = attr.ino();
+  item["name"] = "/";
+  item["type"] = "directory";
+  if (fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+    item["node"] = fs_info_.partition_policy().mono().mds_id();
+  } else {
+    item["node"] = hash_router_->GetMDS(attr.ino());
+  }
+
+  // mode,nlink,uid,gid,size,ctime,mtime,atime
+  item["description"] =
+      fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+                  attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
+                  FormatTime(attr.mtime()), FormatTime(attr.atime()));
+
+  doc.push_back(item);
+
+  result = doc.dump();
+  return Status::OK();
+}
+
+Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
+  if (parent == kRootParentIno) {
+    return GenRootDirJsonString(result);
+  }
+
+  const uint32_t fs_id = fs_info_.fs_id();
+  Range range;
+  MetaCodec::EncodeDentryRange(fs_id, parent, range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+
+  std::vector<KeyValue> kvs;
+  auto status = txn->Scan(range, 100000, kvs);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fsutils] scan dentry table fail, {}.", status.error_str());
+    return status;
+  }
+
+  if (kvs.empty()) {
+    return Status(pb::error::ENOT_FOUND, "not found kv");
+  }
+
+  // add child dentry
+  std::map<Ino, DentryType> dentries;
+  for (size_t i = 1; i < kvs.size(); ++i) {
+    const auto& kv = kvs.at(i);
+    auto dentry = MetaCodec::DecodeDentryValue(kv.value);
+    dentries.insert(std::make_pair(dentry.ino(), dentry));
+  }
+
+  // batch get inode attrs
+  std::map<Ino, AttrType> attrs;
+  uint32_t count = 0;
+  std::vector<std::string> keys;
+  keys.reserve(kBatchGetSize);
+  for (auto& [ino, dentry] : dentries) {
+    keys.push_back(MetaCodec::EncodeInodeKey(fs_id, ino));
+
+    if (++count == dentries.size() || keys.size() == kBatchGetSize) {
+      std::vector<KeyValue> inode_kvs;
+      status = txn->BatchGet(keys, inode_kvs);
+      if (!status.ok()) {
+        DINGO_LOG(ERROR) << fmt::format("[fsutils] batch get inode attrs fail, {}.", status.error_str());
+        return status;
+      }
+
+      if (inode_kvs.size() != keys.size()) {
+        DINGO_LOG(WARNING) << fmt::format("[fsutils] batch get inode attrs size({}) not match keys size({}).",
+                                          inode_kvs.size(), keys.size());
+      }
+
+      for (const auto& kv : inode_kvs) {
+        auto attr = MetaCodec::DecodeInodeValue(kv.value);
+        attrs.insert(std::make_pair(attr.ino(), attr));
+      }
+
+      keys.clear();
+    }
+  }
+
+  // gen json
+  nlohmann::json doc = nlohmann::json::array();
+  for (auto& [ino, dentry] : dentries) {
+    auto it = attrs.find(ino);
+    if (it == attrs.end()) {
+      DINGO_LOG(ERROR) << fmt::format("[fsutils] not found attr for dentry({}/{})", dentry.ino(), dentry.name());
+      continue;
+    }
+
+    const auto& attr = it->second;
+
+    nlohmann::json item;
+    item["ino"] = dentry.ino();
+    item["name"] = dentry.name();
+    item["type"] = dentry.type() == pb::mdsv2::FileType::DIRECTORY ? "directory" : "file";
+    if (fs_info_.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION) {
+      item["node"] = fs_info_.partition_policy().mono().mds_id();
+    } else {
+      item["node"] = (dentry.type() == pb::mdsv2::FileType::DIRECTORY) ? hash_router_->GetMDS(dentry.ino())
+                                                                       : hash_router_->GetMDS(dentry.parent());
+    }
+
+    // mode,nlink,uid,gid,size,ctime,mtime,atime
+    item["description"] =
+        fmt::format("{},{}/{},{},{},{},{},{},{},{}", attr.version(), attr.mode(), Helper::FsModeToString(attr.mode()),
+                    attr.nlink(), attr.uid(), attr.gid(), attr.length(), FormatTime(attr.ctime()),
+                    FormatTime(attr.mtime()), FormatTime(attr.atime()));
+
+    doc.push_back(item);
+  }
+
+  result = doc.dump();
+
+  return Status::OK();
 }
 
 }  // namespace mdsv2

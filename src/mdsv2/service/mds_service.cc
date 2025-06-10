@@ -642,7 +642,8 @@ void MDSServiceImpl::DoBatchGetInode(google::protobuf::RpcController* controller
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
   std::vector<EntryOut> entries;
-  auto status = file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), entries);
+  auto status =
+      file_system->BatchGetInode(ctx, Helper::PbRepeatedToVector(request->inoes()), request->just_basic(), entries);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

@@ -86,12 +86,15 @@ void Quota::Refresh(const QuotaEntry& quota, const UsageEntry& minus_usage) {
   quota_ = quota;
 }
 
-void DirQuotaMap::InsertQuota(Ino ino, const QuotaEntry& quota) {
+void DirQuotaMap::UpsertQuota(Ino ino, const QuotaEntry& quota) {
   utils::WriteLockGuard lk(rwlock_);
 
   auto it = quota_map_.find(ino);
   if (it == quota_map_.end()) {
     quota_map_[ino] = std::make_shared<Quota>(ino, quota);
+  } else {
+    // update existing quota
+    it->second->Refresh(quota, {});
   }
 }
 
@@ -242,6 +245,8 @@ Status QuotaManager::SetFsQuota(Trace& trace, const QuotaEntry& quota) {
     return status;
   }
 
+  fs_quota_.Refresh(quota, {});
+
   return Status::OK();
 }
 
@@ -272,7 +277,7 @@ Status QuotaManager::SetDirQuota(Trace& trace, Ino ino, const QuotaEntry& quota)
     return status;
   }
 
-  dir_quota_map_.InsertQuota(ino, quota);
+  dir_quota_map_.UpsertQuota(ino, quota);
 
   return Status::OK();
 }

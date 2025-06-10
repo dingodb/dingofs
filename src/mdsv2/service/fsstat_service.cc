@@ -470,7 +470,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "</html>";
 }
 
-static void RenderFsTreePage(FsUtils& fs_utils, const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+static void RenderFsTreePage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
   const auto fs_id = fs_info.fs_id();
   if (fs_id == 0) {
     os << "Invalid fs_id";
@@ -488,21 +488,23 @@ static void RenderFsTreePage(FsUtils& fs_utils, const FsInfoType& fs_info, butil
 <style>
 body {
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+  margin: 20px;
 }
 
 .tree {
   margin-left: 20px;
 }
 
-.tree,
 .tree ul {
   list-style-type: none;
   padding-left: 20px;
+  margin: 0;
 }
 
 .tree li {
   position: relative;
   padding: 5px 0;
+  margin: 0;
 }
 
 .tree li::before {
@@ -529,21 +531,89 @@ body {
   height: 12px;
 }
 
-.folder {
+.folder-name {
   cursor: pointer;
   font-weight: bold;
+  color: #0066cc;
+  user-select: none;
+}
+
+.folder-name:hover {
+  color: #004499;
+  background-color: #f0f8ff;
+  padding: 2px 4px;
+  border-radius: 3px;
 }
 
 .file {
   color: #333;
 }
 
-.collapsed>ul {
-  display: none;
+.file a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+.file a:hover {
+  text-decoration: underline;
 }
 
 .icon {
   margin-right: 5px;
+  font-size: 14px;
+}
+
+.loading {
+  color: #666;
+  font-style: italic;
+  margin-left: 20px;
+}
+
+.error {
+  color: #cc0000;
+  font-style: italic;
+  margin-left: 20px;
+}
+
+.expanded > .folder > .icon:before {
+  content: "📂";
+}
+
+.collapsed > .folder > .icon:before,
+.folder > .icon:before {
+  content: "📁";
+}
+
+.children {
+  display: none;
+}
+
+.expanded > .children {
+  display: block;
+}
+
+.info {
+  color: #666;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.controls {
+  margin-bottom: 20px;
+}
+
+.controls button {
+  margin-right: 10px;
+  padding: 8px 16px;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background-color: #004499;
 }
 </style>)";
   os << "</head>";
@@ -552,74 +622,227 @@ body {
   os << R"(<h1 style="text-align:center;">FileSystem Directory Tree</h1>)";
   os << fmt::format(R"(<h3>{}({})</h3>)", fs_info.fs_name(), fs_id);
   os << "<p style=\"color: gray;\">format: name [ino,version,mode,nlink,uid,gid,length,ctime,mtime,atime][mds]</p>";
+
   os << R"(
 <div class="controls">
-  <button id="expandAll">Expand</button>
-  <button id="collapseAll">Collapse</button>
+  <button id="collapseAll">Collapse All</button>
+  <button id="refreshRoot">Refresh</button>
 </div>
 <ul id="fileTree" class="tree"></ul>)";
 
   os << "<script>";
 
   os << "const fs_id = " << fs_id << ";";
-  os << "const fileSystem =" + fs_utils.GenFsTreeJsonString() + ";";
 
   os << R"(
-    function generateTree(item, parentElement) {
+    // API endpoints
+    const API_BASE = '/FsStatService/partition';
+    
+    // Cache for loaded directories
+    const directoryCache = new Map();
+    
+    // Get children of a directory
+    async function getDirectoryChildren(parentIno) {
+      const cacheKey = `${fs_id}_${parentIno}`;
+      
+      if (directoryCache.has(cacheKey)) {
+        return directoryCache.get(cacheKey);
+      }
+      
+      try {
+        const response = await fetch(`${API_BASE}/${fs_id}/${parentIno}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        directoryCache.set(cacheKey, data);
+        return data;
+      } catch (error) {
+        console.error('Failed to fetch directory children:', error);
+        throw error;
+      }
+    }
+    
+    // Create tree node element
+    function createTreeNode(item) {
       const li = document.createElement('li');
-
+      li.dataset.ino = item.ino;
+      li.dataset.type = item.type;
+      
       if (item.type === 'directory') {
-        const folderSpan = document.createElement('span');
-        folderSpan.className = 'folder';
-        folderSpan.innerHTML = `<div><span class="icon">📁</span>${item.name} [${item.ino},${item.description}][${item.node}]</div>`;
-        folderSpan.addEventListener('click', function () {
-          this.parentElement.classList.toggle('collapsed');
-          if (this.parentElement.classList.contains('collapsed')) {
-            this.querySelector('.icon').textContent = '📁';
+        li.className = 'collapsed';
+        
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'folder';
+        
+        const icon = document.createElement('span');
+        icon.className = 'icon';
+        
+        const folderName = document.createElement('span');
+        folderName.className = 'folder-name';
+        folderName.textContent = item.name;
+        
+        const info = document.createElement('span');
+        info.className = 'info';
+        info.textContent = `[${item.ino},${item.description}][${item.node}]`;
+        
+        folderDiv.appendChild(icon);
+        folderDiv.appendChild(folderName);
+        folderDiv.appendChild(info);
+        
+        // 只给目录名添加点击事件
+        folderName.addEventListener('click', async function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const listItem = this.closest('li');
+          
+          if (listItem.classList.contains('expanded')) {
+            // Collapse
+            listItem.classList.remove('expanded');
+            listItem.classList.add('collapsed');
           } else {
-            this.querySelector('.icon').textContent = '📂';
+            // Expand
+            await expandDirectory(listItem, item.ino);
           }
         });
-        li.appendChild(folderSpan);
-
-        if (item.children && item.children.length > 0) {
-          const ul = document.createElement('ul');
-          item.children.forEach(child => {
-            generateTree(child, ul);
-          });
-          li.appendChild(ul);
-        }
+        
+        li.appendChild(folderDiv);
+        
+        // Children container
+        const childrenUl = document.createElement('ul');
+        childrenUl.className = 'children';
+        li.appendChild(childrenUl);
+        
       } else {
-        const fileSpan = document.createElement('span');
-        fileSpan.className = 'file';
-        fileSpan.innerHTML = `<div><span class="icon">📄</span><a href="${fs_id}/${item.ino}" target="_blank">${item.name}</a> [${item.ino},${item.description}]</div>`;
-        li.appendChild(fileSpan);
+        const fileDiv = document.createElement('div');
+        fileDiv.className = 'file';
+        
+        const icon = document.createElement('span');
+        icon.className = 'icon';
+        icon.textContent = '📄';
+        
+        const link = document.createElement('a');
+        link.href = `${fs_id}/${item.ino}`;
+        link.target = '_blank';
+        link.textContent = item.name;
+        
+        const info = document.createElement('span');
+        info.className = 'info';
+        info.textContent = `[${item.ino},${item.description}]`;
+        
+        fileDiv.appendChild(icon);
+        fileDiv.appendChild(link);
+        fileDiv.appendChild(info);
+        
+        li.appendChild(fileDiv);
       }
-
-      parentElement.appendChild(li);
+      
+      return li;
     }
-
-    const treeRoot = document.getElementById('fileTree');
-    generateTree(fileSystem, treeRoot);
-
-    document.getElementById('expandAll').addEventListener('click', function () {
-      const collapsedItems = document.querySelectorAll('.collapsed');
-      collapsedItems.forEach(item => {
-        item.classList.remove('collapsed');
-        item.querySelector('.icon').textContent = '📂';
-      });
-    });
-
-    document.getElementById('collapseAll').addEventListener('click', function () {
-      const folders = document.querySelectorAll('.folder');
-      folders.forEach(folder => {
-        const li = folder.parentElement;
-        if (!li.classList.contains('collapsed') && li.querySelector('ul')) {
-          li.classList.add('collapsed');
-          folder.querySelector('.icon').textContent = '📁';
+    
+    // Expand directory and load children
+    async function expandDirectory(listItem, ino) {
+      const childrenContainer = listItem.querySelector('.children');
+      
+      // 如果已经加载过子项，直接展开
+      if (childrenContainer.children.length > 0) {
+        listItem.classList.remove('collapsed');
+        listItem.classList.add('expanded');
+        return;
+      }
+      
+      // Show loading indicator
+      const loadingDiv = document.createElement('li');
+      loadingDiv.className = 'loading';
+      loadingDiv.textContent = 'Loading...';
+      childrenContainer.appendChild(loadingDiv);
+      
+      listItem.classList.remove('collapsed');
+      listItem.classList.add('expanded');
+      
+      try {
+        const children = await getDirectoryChildren(ino);
+        
+        // Remove loading indicator
+        childrenContainer.removeChild(loadingDiv);
+        
+        // Add children
+        if (children && children.length > 0) {
+          children.forEach(child => {
+            const childNode = createTreeNode(child);
+            childrenContainer.appendChild(childNode);
+          });
+        } else {
+          const emptyDiv = document.createElement('li');
+          emptyDiv.className = 'info';
+          emptyDiv.textContent = 'Empty directory';
+          childrenContainer.appendChild(emptyDiv);
         }
+        
+      } catch (error) {
+        // Remove loading indicator
+        if (childrenContainer.contains(loadingDiv)) {
+          childrenContainer.removeChild(loadingDiv);
+        }
+        
+        // Show error
+        const errorDiv = document.createElement('li');
+        errorDiv.className = 'error';
+        errorDiv.textContent = `Failed to load: ${error.message}`;
+        childrenContainer.appendChild(errorDiv);
+        
+        // Collapse on error
+        listItem.classList.remove('expanded');
+        listItem.classList.add('collapsed');
+      }
+    }
+    
+    // Initialize tree with root directory
+    async function initializeTree() {
+      const treeRoot = document.getElementById('fileTree');
+      
+      try {
+        // Load root directory (ino = 1 typically)
+        const rootChildren = await getDirectoryChildren(0);
+        
+        rootChildren.forEach(child => {
+          const childNode = createTreeNode(child);
+          treeRoot.appendChild(childNode);
+        });
+        
+      } catch (error) {
+        const errorDiv = document.createElement('li');
+        errorDiv.className = 'error';
+        errorDiv.textContent = `Failed to load root directory: ${error.message}`;
+        treeRoot.appendChild(errorDiv);
+      }
+    }
+    
+    // Collapse all directories
+    function collapseAll() {
+      const expandedDirs = document.querySelectorAll('.expanded');
+      expandedDirs.forEach(dir => {
+        dir.classList.remove('expanded');
+        dir.classList.add('collapsed');
       });
-    });
+    }
+    
+    // Refresh root directory
+    function refreshRoot() {
+      const treeRoot = document.getElementById('fileTree');
+      treeRoot.innerHTML = '';
+      directoryCache.clear();
+      initializeTree();
+    }
+    
+    // Event listeners
+    document.getElementById('collapseAll').addEventListener('click', collapseAll);
+    document.getElementById('refreshRoot').addEventListener('click', refreshRoot);
+    
+    // Initialize the tree when page loads
+    document.addEventListener('DOMContentLoaded', initializeTree);
   )";
   os << "</script>";
   os << "</body>";
@@ -627,9 +850,7 @@ body {
 }
 
 void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
-  os << R"(
-  <!DOCTYPE html>
-<html lang="zh-CN">)";
+  os << R"(<!DOCTYPE html><html lang="zh-CN">)";
 
   os << R"(
 <head>
@@ -888,9 +1109,9 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       auto fs_info = file_system->GetFsInfo();
-      FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
+      // FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
+      RenderFsTreePage(fs_info, os);
 
-      RenderFsTreePage(fs_utils, fs_info, os);
     } else {
       os << fmt::format("Not found file system {}.", fs_id);
     }
@@ -989,8 +1210,35 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
       os << fmt::format("Not found file system {}", fs_id);
     }
 
+  } else if (params.size() == 3 && params[0] == "partition") {
+    // /FsStatService/partition/{fs_id}/{ino}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint64_t ino = Helper::StringToInt64(params[2]);
+
+    DINGO_LOG(INFO) << fmt::format("Get dir json, fs_id: {}, ino: {}", fs_id, ino);
+
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      auto fs_info = file_system->GetFsInfo();
+      FsUtils fs_utils(Server::GetInstance().GetKVStorage(), fs_info);
+      std::string result;
+      auto status = fs_utils.GenDirJsonString(ino, result);
+      if (status.ok()) {
+        cntl->http_response().set_content_type("application/json");
+        os << result;
+
+      } else {
+        cntl->SetFailed(fmt::format("Get dir({}) json fail, {}.", path, status.error_str()));
+      }
+
+    } else {
+      cntl->SetFailed(fmt::format("Not found file system {}.", fs_id));
+    }
+
   } else {
-    os << fmt::format("Unknown url {}", path);
+    cntl->SetFailed("unknown path: " + path);
   }
 
   os.move_to(cntl->response_attachment());
