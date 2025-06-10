@@ -35,7 +35,7 @@ namespace cachegroup {
 
 using dingofs::base::time::TimeNow;
 using dingofs::cache::utils::LocalFileSystem;
-using dingofs::pb::mds::cachegroup::CacheGroupNodeMeta;
+using dingofs::pb::mds::cachegroup::CacheGroupNodeMetadata;
 using dingofs::pb::mds::cachegroup::CacheGroupOk;
 
 CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(
@@ -73,7 +73,7 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   LocalFileSystem fs;
   uint64_t length;
   std::shared_ptr<char> buffer;
-  CacheGroupNodeMeta meta;
+  CacheGroupNodeMetadata meta;
   auto filepath = option_.metadata_filepath();
 
   auto status = fs.ReadFile(filepath, buffer, &length);
@@ -100,7 +100,7 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
 
 Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
   std::string buffer;
-  CacheGroupNodeMeta meta;
+  CacheGroupNodeMetadata meta;
   meta.set_member_id(member_id);
   meta.set_birth_time(TimeNow().seconds);
   if (!meta.SerializeToString(&buffer)) {
