@@ -342,6 +342,16 @@ DINGOFS_ERROR RenameOperator::UpdateMCTime(uint64_t inode_id) {
   return rc;
 }
 
+// rename from dir to file is forbidden by system
+// rename from dir to dir is allowed olny when dest dir is empty
+// 1. if source is dir
+//   1.1 if source and destination dir under same directory
+//     1.1.1 if old inode exist, update new_parent link -1, this case will overwrite old dir
+//     1.1.2 if old inode not exist, update new_parent mctime
+//   1.2 if source and destination dir under different directory
+//     1.2.1 if old inode exist, update new_parent mctime
+//     1.2.2 if old inode not exist, update new_parent link +1, this case will add new dir
+// 2, if source not dir, only need to update new_parent mctime
 DINGOFS_ERROR RenameOperator::LinkDestParentInode() {
   // Link action is unnecessary when met one of the following 2 conditions:
   //   (1) source and destination under same directory
@@ -357,6 +367,7 @@ DINGOFS_ERROR RenameOperator::LinkDestParentInode() {
     UpdateMCTime(newParentId_);
     return DINGOFS_ERROR::OK;
   }
+
   return LinkInode(newParentId_);
 }
 
