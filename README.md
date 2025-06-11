@@ -32,6 +32,9 @@ DingFS implements a three-tier caching topology (memory/local SSD/distributed cl
 
 ## Get Start
 
+### Docs
+All Documentation [Docs](https://dingofs.readthedocs.io/en/latest/)
+
 ## 1. Installation prerequisites
 ### Linux Operating system
 | Release    | Version     |
@@ -122,7 +125,7 @@ cmake -DWITH_LIBUSRBIO=ON ..
 DingoFS is Sponsored by [DataCanvas](https://www.datacanvas.com/), a new platform to do data science and data process in real-time.
 
 
-DingoFS is an open-source project licensed in **License Version 3.0**, welcome any feedback from the community.
+DingoFS is an open-source project licensed under the **Apache License Version 2.0**, welcome any feedback from the community.
 For any support or suggestion, please contact us.
 
 ## Contact us
