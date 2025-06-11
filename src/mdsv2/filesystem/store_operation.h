@@ -997,6 +997,11 @@ class OperationProcessor {
   OperationProcessor(KVStorageSPtr kv_storage);
   ~OperationProcessor();
 
+  OperationProcessor(const OperationProcessor&) = delete;
+  OperationProcessor& operator=(const OperationProcessor&) = delete;
+  OperationProcessor(OperationProcessor&&) = delete;
+  OperationProcessor& operator=(OperationProcessor&&) = delete;
+
   static OperationProcessorSPtr New(KVStorageSPtr kv_storage) {
     return std::make_shared<OperationProcessor>(kv_storage);
   }

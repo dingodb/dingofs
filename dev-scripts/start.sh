@@ -83,7 +83,7 @@ function start_server() {
   server_name="dingo-${role}"
   echo "start server: ${root_dir}/bin/${server_name}"
 
-  nohup ${root_dir}/bin/${server_name} 2>&1 >./log/out &
+  nohup ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${server_name}.toml 2>&1 >./log/out &
 }
 
 

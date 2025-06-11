@@ -968,8 +968,8 @@ Status SetFsQuotaOperation::Run(TxnUPtr& txn) {
     fs_quota = MetaCodec::DecodeFsQuotaValue(value);
   }
 
-  fs_quota.set_max_bytes(quota_.max_bytes() > 0 ? quota_.max_bytes() : UINT64_MAX);
-  fs_quota.set_max_inodes(quota_.max_inodes() > 0 ? quota_.max_inodes() : UINT64_MAX);
+  if (quota_.max_bytes() > 0) fs_quota.set_max_bytes(quota_.max_bytes());
+  if (quota_.max_inodes() > 0) fs_quota.set_max_inodes(quota_.max_inodes());
   if (quota_.used_inodes() > 0) fs_quota.set_used_inodes(quota_.used_inodes());
   if (quota_.used_bytes() > 0) fs_quota.set_used_bytes(quota_.used_bytes());
 
@@ -1030,8 +1030,8 @@ Status SetDirQuotaOperation::Run(TxnUPtr& txn) {
     dir_quota = MetaCodec::DecodeDirQuotaValue(value);
   }
 
-  dir_quota.set_max_bytes(quota_.max_bytes() > 0 ? quota_.max_bytes() : UINT64_MAX);
-  dir_quota.set_max_inodes(quota_.max_inodes() > 0 ? quota_.max_inodes() : UINT64_MAX);
+  if (quota_.max_bytes() > 0) dir_quota.set_max_bytes(quota_.max_bytes());
+  if (quota_.max_inodes() > 0) dir_quota.set_max_inodes(quota_.max_inodes());
   if (quota_.used_inodes() > 0) dir_quota.set_used_inodes(quota_.used_inodes());
   if (quota_.used_bytes() > 0) dir_quota.set_used_bytes(quota_.used_bytes());
 

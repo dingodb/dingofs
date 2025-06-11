@@ -90,6 +90,8 @@ class InodeCache {
 
   InodeCache(const InodeCache&) = delete;
   InodeCache& operator=(const InodeCache&) = delete;
+  InodeCache(InodeCache&&) = delete;
+  InodeCache& operator=(InodeCache&&) = delete;
 
   void PutInode(Ino ino, InodeSPtr inode);
   void DeleteInode(Ino ino);

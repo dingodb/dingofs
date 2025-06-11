@@ -39,6 +39,9 @@
 namespace dingofs {
 namespace mdsv2 {
 
+const std::string kReadWorkerSetName = "READ_WORKER_SET";
+const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
+
 template <typename T>
 static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
   if (request->context().epoch() < file_system->Epoch()) {
@@ -51,13 +54,34 @@ static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
   return Status::OK();
 }
 
-MDSServiceImpl::MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set,
-                               FileSystemSetSPtr file_system_set, GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
-    : read_worker_set_(read_worker_set),
-      write_worker_set_(write_worker_set),
-      file_system_set_(file_system_set),
-      gc_processor_(gc_processor),
-      fs_stat_(std::move(fs_stat)) {}
+MDSServiceImpl::MDSServiceImpl(const MetaServiceOption& option, FileSystemSetSPtr file_system_set,
+                               GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat)
+    : option_(option), file_system_set_(file_system_set), gc_processor_(gc_processor), fs_stat_(std::move(fs_stat)) {}
+
+bool MDSServiceImpl::Init() {
+  read_worker_set_ =
+      SimpleWorkerSet::NewUnique(kReadWorkerSetName, option_.read_worker_num(), option_.read_worker_max_pending_num(),
+                                 option_.read_worker_use_pthread(), false);
+  if (!read_worker_set_->Init()) {
+    DINGO_LOG(ERROR) << "init service read worker set fail!";
+    return false;
+  }
+
+  write_worker_set_ =
+      SimpleWorkerSet::NewUnique(kWriteWorkerSetName, option_.write_worker_num(),
+                                 option_.write_worker_max_pending_num(), option_.write_worker_use_pthread(), false);
+  if (!write_worker_set_->Init()) {
+    DINGO_LOG(ERROR) << "init service write worker set fail!";
+    return false;
+  }
+
+  return true;
+}
+
+void MDSServiceImpl::Destroy() {
+  read_worker_set_->Destroy();
+  write_worker_set_->Destroy();
+}
 
 FileSystemSPtr MDSServiceImpl::GetFileSystem(uint32_t fs_id) { return file_system_set_->GetFileSystem(fs_id); }
 

@@ -22,14 +22,32 @@
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/service/service_helper.h"
 #include "mdsv2/statistics/fs_stat.h"
+#include "options/mdsv2/app.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
+using options::mdsv2::MetaServiceOption;
+
+class MDSServiceImpl;
+using MDSServiceImplUPtr = std::unique_ptr<MDSServiceImpl>;
+
 class MDSServiceImpl : public pb::mdsv2::MDSService {
  public:
-  MDSServiceImpl(WorkerSetSPtr read_worker_set, WorkerSetSPtr write_worker_set, FileSystemSetSPtr file_system,
-                 GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat);
+  MDSServiceImpl(const MetaServiceOption& option, FileSystemSetSPtr file_system, GcProcessorSPtr gc_processor,
+                 FsStatsUPtr fs_stat);
+  ~MDSServiceImpl() override = default;
+
+  MDSServiceImpl(const MDSServiceImpl&) = delete;
+  MDSServiceImpl& operator=(const MDSServiceImpl&) = delete;
+
+  static MDSServiceImplUPtr New(const MetaServiceOption& option, FileSystemSetSPtr file_system,
+                                GcProcessorSPtr gc_processor, FsStatsUPtr fs_stat) {
+    return std::make_unique<MDSServiceImpl>(option, file_system, gc_processor, std::move(fs_stat));
+  }
+
+  bool Init();
+  void Destroy();
 
   // mds
   void Heartbeat(google::protobuf::RpcController* controller, const pb::mdsv2::HeartbeatRequest* request,
@@ -299,6 +317,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                              const pb::mdsv2::GetFsPerSecondStatsRequest* request,
                              pb::mdsv2::GetFsPerSecondStatsResponse* response, TraceClosure* done);
 
+  options::mdsv2::MetaServiceOption option_;
+
   // file system set
   FileSystemSetSPtr file_system_set_;
 
@@ -309,8 +329,8 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   FsStatsUPtr fs_stat_;
 
   // Run service request.
-  WorkerSetSPtr read_worker_set_;
-  WorkerSetSPtr write_worker_set_;
+  WorkerSetUPtr read_worker_set_;
+  WorkerSetUPtr write_worker_set_;
 };
 
 }  // namespace mdsv2

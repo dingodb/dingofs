@@ -29,7 +29,11 @@
 #include "mdsv2/filesystem/filesystem.h"
 #include "mdsv2/filesystem/notify_buddy.h"
 #include "mdsv2/mds/mds_meta.h"
+#include "mdsv2/service/debug_service.h"
+#include "mdsv2/service/fsstat_service.h"
+#include "mdsv2/service/mds_service.h"
 #include "mdsv2/storage/storage.h"
+#include "options/mdsv2/app.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -61,8 +65,6 @@ class Server {
 
   bool InitFsInfoSync();
 
-  bool InitWorkerSet();
-
   bool InitMonitor();
 
   bool InitQuotaSynchronizer();
@@ -70,6 +72,8 @@ class Server {
   bool InitGcProcessor();
 
   bool InitCrontab();
+
+  bool InitService();
 
   std::string GetPidFilePath();
   std::string GetListenAddr();
@@ -95,9 +99,8 @@ class Server {
   ~Server();
 
   std::atomic<bool> stop_{false};
-  brpc::Server brpc_server_;
 
-  Configuration conf_;
+  options::mdsv2::AppOption app_option_;
 
   // mds self info
   MDSMeta mds_meta_;
@@ -139,9 +142,12 @@ class Server {
   // gc
   GcProcessorSPtr gc_processor_;
 
-  // worker set for service request
-  WorkerSetSPtr read_worker_set_;
-  WorkerSetSPtr write_worker_set_;
+  // service
+  MDSServiceImplUPtr mds_service_;
+  DebugServiceImplUPtr debug_service_;
+  FsStatServiceImplUPtr fs_stat_service_;
+
+  brpc::Server brpc_server_;
 };
 
 }  // namespace mdsv2

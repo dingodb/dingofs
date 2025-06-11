@@ -23,9 +23,20 @@
 namespace dingofs {
 namespace mdsv2 {
 
+class DebugServiceImpl;
+using DebugServiceImplUPtr = std::unique_ptr<DebugServiceImpl>;
+
 class DebugServiceImpl : public pb::debug::DebugService {
  public:
   DebugServiceImpl(FileSystemSetSPtr file_system_set) : file_system_set_(file_system_set) {};
+  ~DebugServiceImpl() override = default;
+
+  DebugServiceImpl(const DebugServiceImpl&) = delete;
+  DebugServiceImpl& operator=(const DebugServiceImpl&) = delete;
+
+  static DebugServiceImplUPtr New(FileSystemSetSPtr file_system_set) {
+    return std::make_unique<DebugServiceImpl>(std::move(file_system_set));
+  }
 
   void GetFs(google::protobuf::RpcController* controller, const pb::debug::GetFsRequest* request,
              pb::debug::GetFsResponse* response, google::protobuf::Closure* done) override;

@@ -25,7 +25,7 @@
 #include "mdsv2/common/version.h"
 #include "mdsv2/server.h"
 
-DEFINE_string(conf, "./conf/mdsv2.conf", "mdsv2 config path");
+DEFINE_string(conf, "./conf/dingo-mdsv2.toml", "mdsv2 config path");
 DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
 
 const int kMaxStacktraceSize = 128;
@@ -240,13 +240,13 @@ int main(int argc, char* argv[]) {
   CHECK(server.InitOperationProcessor()) << "init operation processor error.";
   CHECK(server.InitNotifyBuddy()) << "init notify buddy error.";
   CHECK(server.InitFileSystem()) << "init file system set error.";
-  CHECK(server.InitWorkerSet()) << "init worker set error.";
   CHECK(server.InitHeartbeat()) << "init heartbeat error.";
   CHECK(server.InitFsInfoSync()) << "init fs info sync error.";
   CHECK(server.InitMonitor()) << "init mds monitor error.";
   CHECK(server.InitGcProcessor()) << "init gc error.";
   CHECK(server.InitQuotaSynchronizer()) << "init quota synchronizer error.";
   CHECK(server.InitCrontab()) << "init crontab error.";
+  CHECK(server.InitService()) << "init service error.";
 
   DINGO_LOG(INFO) << "##################### init finish ######################";
 

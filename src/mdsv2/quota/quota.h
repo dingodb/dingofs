@@ -73,6 +73,8 @@ class DirQuotaMap {
 
   void UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta);
 
+  void DeleteQuota(Ino ino);
+
   bool CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta);
 
   QuotaSPtr GetNearestQuota(Ino ino);
@@ -101,6 +103,11 @@ class QuotaManager {
         dir_quota_map_(parent_memo),
         operation_processor_(std::move(operation_processor)) {}
   ~QuotaManager() = default;
+
+  QuotaManager(const QuotaManager&) = delete;
+  QuotaManager& operator=(const QuotaManager&) = delete;
+  QuotaManager(QuotaManager&&) = delete;
+  QuotaManager& operator=(QuotaManager&&) = delete;
 
   bool Init();
   void Destroy();

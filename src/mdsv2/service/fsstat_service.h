@@ -15,15 +15,25 @@
 #ifndef DINGOFS_MDSV2_SERVICE_FSSTAT_H_
 #define DINGOFS_MDSV2_SERVICE_FSSTAT_H_
 
+#include <memory>
+
 #include "brpc/builtin/tabbed.h"
 #include "dingofs/web.pb.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
+class FsStatServiceImpl;
+using FsStatServiceImplUPtr = std::unique_ptr<FsStatServiceImpl>;
+
 class FsStatServiceImpl : public pb::web::FsStatService, public brpc::Tabbed {
  public:
   FsStatServiceImpl() = default;
+
+  FsStatServiceImpl(const FsStatServiceImpl&) = delete;
+  FsStatServiceImpl& operator=(const FsStatServiceImpl&) = delete;
+
+  static FsStatServiceImplUPtr New() { return std::make_unique<FsStatServiceImpl>(); }
 
   void default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest* request,
                       pb::web::FsStatResponse* response, ::google::protobuf::Closure* done) override;

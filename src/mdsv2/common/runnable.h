@@ -259,6 +259,11 @@ class SimpleWorkerSet : public WorkerSet {
     return std::make_shared<SimpleWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
   }
 
+  static WorkerSetUPtr NewUnique(std::string name, uint32_t worker_num, uint32_t max_pending_task_count,
+                                 bool use_pthread, bool is_inplace_run) {
+    return std::make_unique<SimpleWorkerSet>(name, worker_num, max_pending_task_count, use_pthread, is_inplace_run);
+  }
+
   bool Init() override;
   void Destroy() override;
 

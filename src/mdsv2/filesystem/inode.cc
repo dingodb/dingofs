@@ -216,6 +216,7 @@ Inode::AttrType Inode::Copy(bool just_basic) {
   attr.set_mtime(attr_.mtime());
   attr.set_atime(attr_.atime());
   attr.set_openmpcount(attr_.openmpcount());
+  attr.mutable_parents()->CopyFrom(attr_.parents());
   attr.set_version(attr_.version());
 
   return std::move(attr);

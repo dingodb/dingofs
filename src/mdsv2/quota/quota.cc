@@ -119,6 +119,11 @@ void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) 
     curr_ino = parent;
   }
 }
+void DirQuotaMap::DeleteQuota(Ino ino) {
+  utils::WriteLockGuard lk(rwlock_);
+
+  quota_map_.erase(ino);
+}
 
 bool DirQuotaMap::CheckQuota(Ino ino, int64_t byte_delta, int64_t inode_delta) {
   auto quota = GetNearestQuota(ino);
@@ -305,6 +310,8 @@ Status QuotaManager::DeleteDirQuota(Trace& trace, Ino ino) {
     DINGO_LOG(ERROR) << fmt::format("[quota] delete dir quota fail, status({}).", status.error_str());
     return status;
   }
+
+  dir_quota_map_.DeleteQuota(ino);
 
   return Status::OK();
 }

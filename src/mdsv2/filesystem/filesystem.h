@@ -72,6 +72,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
              notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
+  FileSystem(const FileSystem&) = delete;
+  FileSystem& operator=(const FileSystem&) = delete;
+  FileSystem(FileSystem&&) = delete;
+  FileSystem& operator=(FileSystem&&) = delete;
+
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
                             KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
                             MDSMetaMapSPtr mds_meta_map, notify::NotifyBuddySPtr notify_buddy) {

@@ -31,7 +31,7 @@ namespace mdsv2 {
 
 struct CrontabConfig {
   std::string name;
-  int32_t interval;
+  uint32_t interval;
   bool async;
   std::function<void(void*)> funcer;
 };

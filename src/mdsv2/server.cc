@@ -36,28 +36,11 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DEFINE_int32(heartbeat_interval_s, 5, "heartbeat interval seconds");
-DEFINE_int32(fsinfosync_interval_s, 10, "fs info sync interval seconds");
-DEFINE_int32(mdsmonitor_interval_s, 5, "mds monitor interval seconds");
-DEFINE_int32(quota_sync_interval_s, 6, "quota sync interval seconds");
-DEFINE_int32(gc_interval_s, 60, "gc interval seconds");
-
 DEFINE_string(mdsmonitor_lock_name, "/lock/mds/monitor", "mds monitor lock name");
 DEFINE_string(gc_lock_name, "/lock/mds/gc", "gc lock name");
 DEFINE_int32(compact_chunk_interval_s, 5, "compact chunk interval seconds");
 
-DEFINE_uint32(read_worker_num, 128, "read service worker num");
-DEFINE_uint64(read_worker_max_pending_num, 1024, "read service worker num");
-DEFINE_bool(read_worker_set_use_pthread, false, "read worker set use pthread");
-
-DEFINE_uint32(write_worker_num, 128, "write service worker num");
-DEFINE_uint64(write_worker_max_pending_num, 1024, "write service worker num");
-DEFINE_bool(write_worker_set_use_pthread, false, "write worker set use pthread");
-
 DEFINE_string(pid_file_name, "pid", "pid file name");
-
-const std::string kReadWorkerSetName = "READ_WORKER_SET";
-const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
 
 static const int64_t kFsTableId = 1000;
 static const int64_t kFsIdBatchSize = 8;
@@ -93,22 +76,42 @@ LogLevel GetDingoLogLevel(const std::string& log_level) {
 bool Server::InitConfig(const std::string& path) {
   DINGO_LOG(INFO) << "Init config: " << path;
 
-  conf_.SetConfigPath(path);
-  return conf_.LoadConfig();
+  if (!app_option_.Parse(path)) {
+    DINGO_LOG(ERROR) << "parse config file fail.";
+    return false;
+  }
+
+  const auto& server_option = app_option_.server();
+  if (server_option.id() == 0) {
+    DINGO_LOG(ERROR) << "mds server id is 0, please set a valid id.";
+    return false;
+  }
+  if (server_option.addr().empty()) {
+    DINGO_LOG(ERROR) << "mds server addr is empty, please set a valid addr.";
+    return false;
+  }
+
+  const auto& log_option = app_option_.log();
+  if (log_option.level().empty()) {
+    DINGO_LOG(ERROR) << "mds log level is empty, please set a valid log level.";
+    return false;
+  }
+  if (log_option.path().empty()) {
+    DINGO_LOG(ERROR) << "mds log path is empty, please set a valid log path.";
+    return false;
+  }
+
+  return true;
 }
 
 bool Server::InitLog() {
   DINGO_LOG(INFO) << "init log.";
 
-  std::string log_path;
-  conf_.GetValueFatalIfFail("log.path", &log_path);
+  const auto& log_option = app_option_.log();
 
-  std::string log_level;
-  conf_.GetValueFatalIfFail("log.level", &log_level);
+  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", log_option.level(), log_option.path());
 
-  DINGO_LOG(INFO) << fmt::format("Init log: {} {}", log_level, log_path);
-
-  DingoLogger::InitLogger(log_path, "mdsv2", GetDingoLogLevel(log_level));
+  DingoLogger::InitLogger(log_option.path(), "mdsv2", GetDingoLogLevel(log_option.level()));
 
   DingoLogVerion();
   return true;
@@ -117,16 +120,13 @@ bool Server::InitLog() {
 bool Server::InitMDSMeta() {
   DINGO_LOG(INFO) << "init mds meta.";
 
-  int id;
-  conf_.GetValueFatalIfFail("id", &id);
+  const auto& server_option = app_option_.server();
 
-  mds_meta_.SetID(id);
+  mds_meta_.SetID(server_option.id());
 
-  std::string listen_addr;
-  conf_.GetValueFatalIfFail("listen.addr", &listen_addr);
   std::string host;
   int port;
-  if (!Helper::ParseAddr(listen_addr, host, port)) {
+  if (!Helper::ParseAddr(server_option.addr(), host, port)) {
     return false;
   }
 
@@ -220,25 +220,6 @@ bool Server::InitFsInfoSync() {
   return fs_info_sync_.Init();
 }
 
-bool Server::InitWorkerSet() {
-  read_worker_set_ = SimpleWorkerSet::New(kReadWorkerSetName, FLAGS_read_worker_num, FLAGS_read_worker_max_pending_num,
-                                          FLAGS_read_worker_set_use_pthread, false);
-  if (!read_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service read worker set fail!";
-    return false;
-  }
-
-  write_worker_set_ =
-      SimpleWorkerSet::New(kWriteWorkerSetName, FLAGS_write_worker_num, FLAGS_write_worker_max_pending_num,
-                           FLAGS_write_worker_set_use_pthread, false);
-  if (!write_worker_set_->Init()) {
-    DINGO_LOG(ERROR) << "init service write worker set fail!";
-    return false;
-  }
-
-  return true;
-}
-
 bool Server::InitNotifyBuddy() {
   CHECK(mds_meta_map_ != nullptr) << "mds meta map is nullptr.";
   notify_buddy_ = notify::NotifyBuddy::New(mds_meta_map_, mds_meta_.ID());
@@ -289,10 +270,12 @@ bool Server::InitGcProcessor() {
 bool Server::InitCrontab() {
   DINGO_LOG(INFO) << "init crontab.";
 
+  const auto& crontab_option = app_option_.crontab();
+
   // Add heartbeat crontab
   crontab_configs_.push_back({
       "HEARTBEA",
-      FLAGS_heartbeat_interval_s * 1000,
+      crontab_option.heartbeat_interval_s() * 1000,
       true,
       [](void*) { Server::GetInstance().GetHeartbeat()->Run(); },
   });
@@ -300,7 +283,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "FSINFO_SYNC",
-      FLAGS_fsinfosync_interval_s * 1000,
+      crontab_option.fsinfosync_interval_s() * 1000,
       true,
       [](void*) { FsInfoSync::TriggerFsInfoSync(); },
   });
@@ -308,7 +291,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "MDS_MONITOR",
-      FLAGS_mdsmonitor_interval_s * 1000,
+      crontab_option.mdsmonitor_interval_s() * 1000,
       true,
       [](void*) { Server::GetInstance().GetMonitor()->Run(); },
   });
@@ -316,7 +299,7 @@ bool Server::InitCrontab() {
   // Add quota sync crontab
   crontab_configs_.push_back({
       "QUOTA_SYNC",
-      FLAGS_quota_sync_interval_s * 1000,
+      crontab_option.quota_sync_interval_s() * 1000,
       true,
       [](void*) { Server::GetInstance().GetQuotaSynchronizer()->Run(); },
   });
@@ -324,7 +307,7 @@ bool Server::InitCrontab() {
   // Add fs info sync crontab
   crontab_configs_.push_back({
       "GC",
-      FLAGS_gc_interval_s * 1000,
+      crontab_option.gc_interval_s() * 1000,
       true,
       [](void*) { Server::GetInstance().GetGcProcessor()->Run(); },
   });
@@ -334,17 +317,40 @@ bool Server::InitCrontab() {
   return true;
 }
 
-std::string Server::GetPidFilePath() {
-  std::string log_path;
-  conf_.GetValueFatalIfFail("log.path", &log_path);
+bool Server::InitService() {
+  // mds service
+  auto fs_stats = FsStats::New(kv_storage_);
+  CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
-  return log_path + "/" + FLAGS_pid_file_name;
+  const auto& mds_option = app_option_.server().service().meta();
+  mds_service_ = MDSServiceImpl::New(mds_option, file_system_set_, gc_processor_, std::move(fs_stats));
+  CHECK(mds_service_ != nullptr) << "new MDSServiceImpl fail.";
+
+  if (!mds_service_->Init()) {
+    DINGO_LOG(ERROR) << "init MDSServiceImpl fail.";
+    return false;
+  }
+
+  // debug service
+  debug_service_ = DebugServiceImpl::New(file_system_set_);
+  CHECK(debug_service_ != nullptr) << "new DebugServiceImpl fail.";
+
+  // fs stat service
+  fs_stat_service_ = FsStatServiceImpl::New();
+  CHECK(fs_stat_service_ != nullptr) << "new FsStatServiceImpl fail.";
+
+  return true;
+}
+
+std::string Server::GetPidFilePath() {
+  const auto& log_option = app_option_.log();
+
+  return log_option.path() + "/" + FLAGS_pid_file_name;
 }
 
 std::string Server::GetListenAddr() {
-  std::string addr;
-  conf_.GetValueFatalIfFail("listen.addr", &addr);
-  return addr;
+  const auto& server_option = app_option_.server();
+  return server_option.addr();
 }
 
 MDSMeta& Server::GetMDSMeta() { return mds_meta_; }
@@ -409,22 +415,13 @@ GcProcessorSPtr Server::GetGcProcessor() {
 }
 
 void Server::Run() {
-  CHECK(read_worker_set_ != nullptr) << "read worker set is nullptr.";
-  CHECK(write_worker_set_ != nullptr) << "write worker set is nullptr.";
-  CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
-  CHECK(gc_processor_ != nullptr) << "gc_processor is nullptr.";
+  CHECK(brpc_server_.AddService(mds_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
 
-  auto fs_stats = FsStats::New(kv_storage_);
-  CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
+  CHECK(brpc_server_.AddService(debug_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+      << "add debug service error.";
 
-  MDSServiceImpl mds_service(read_worker_set_, write_worker_set_, file_system_set_, gc_processor_, std::move(fs_stats));
-  CHECK(brpc_server_.AddService(&mds_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add mds service error.";
-
-  DebugServiceImpl debug_service(file_system_set_);
-  CHECK(brpc_server_.AddService(&debug_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add debug service error.";
-
-  FsStatServiceImpl fs_stat_service;
-  CHECK(brpc_server_.AddService(&fs_stat_service, brpc::SERVER_DOESNT_OWN_SERVICE) == 0) << "add fsstat service error.";
+  CHECK(brpc_server_.AddService(fs_stat_service_.get(), brpc::SERVER_DOESNT_OWN_SERVICE) == 0)
+      << "add fsstat service error.";
 
   brpc::ServerOptions option;
   CHECK(brpc_server_.Start(GetListenAddr().c_str(), &option) == 0) << "start brpc server error.";
@@ -441,13 +438,13 @@ void Server::Stop() {
     return;
   }
 
+  mds_service_->Destroy();
+
   brpc_server_.Stop(0);
   brpc_server_.Join();
   operation_processor_->Destroy();
   heartbeat_->Destroy();
   crontab_manager_.Destroy();
-  read_worker_set_->Destroy();
-  write_worker_set_->Destroy();
   monitor_->Destroy();
 }
 

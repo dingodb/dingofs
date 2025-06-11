@@ -71,7 +71,8 @@ def threaded_create_structure(base_path, depth, num_threads=5, num_dirs=10, num_
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = []
         for i in range(num_threads):
-            thread_base_path = f"{base_path}_thread_{i}"
+            thread_base_path = f"{base_path}/thread_{i}"
+            create_directory(thread_base_path)  # 确保线程的基础路径存在
             futures.append(executor.submit(create_nested_structure, thread_base_path, depth, num_dirs, num_files))
         
         for future in futures:
@@ -83,7 +84,7 @@ def main():
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="Test script for creating and deleting nested directory structures.")
     parser.add_argument('--path', type=str, default='test_structure', help='Base path for the nested structure')
-    parser.add_argument('--depth', type=int, default=3, help='Depth of the nested structure')
+    parser.add_argument('--depth', type=int, default=5, help='Depth of the nested structure')
     parser.add_argument('--threads', type=int, default=5, help='Number of threads to use for creating structure')
     args = parser.parse_args()
 
@@ -92,9 +93,11 @@ def main():
         # 运行各种测试
         base_path = args.path
         depth = args.depth
+        num_threads = args.threads
         print(f"Creating nested structure at {base_path} with depth {depth}...")
 
-        create_nested_structure(base_path, depth, num_dirs=5, num_files=1000)
+        # create_nested_structure(base_path, depth, num_dirs=5, num_files=1000)
+        threaded_create_structure(base_path, depth, num_threads, num_dirs=5, num_files=1000)
         
         print("\ntest finish!")
         

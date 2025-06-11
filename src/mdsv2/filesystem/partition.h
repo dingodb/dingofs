@@ -61,6 +61,11 @@ class PartitionCache {
   PartitionCache();
   ~PartitionCache();
 
+  PartitionCache(const PartitionCache&) = delete;
+  PartitionCache& operator=(const PartitionCache&) = delete;
+  PartitionCache(PartitionCache&&) = delete;
+  PartitionCache& operator=(PartitionCache&&) = delete;
+
   void Put(Ino ino, PartitionPtr partition);
   void Delete(Ino ino);
 

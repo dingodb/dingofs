@@ -109,6 +109,11 @@ class FileSessionManager {
   FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage);
   ~FileSessionManager() = default;
 
+  FileSessionManager(const FileSessionManager&) = delete;
+  FileSessionManager& operator=(const FileSessionManager&) = delete;
+  FileSessionManager(FileSessionManager&&) = delete;
+  FileSessionManager& operator=(FileSessionManager&&) = delete;
+
   static FileSessionManagerUPtr New(uint32_t fs_id, KVStorageSPtr kv_storage) {
     return std::make_unique<FileSessionManager>(fs_id, kv_storage);
   }

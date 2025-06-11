@@ -40,6 +40,7 @@ target_link_libraries(mdsv2_lib
   mdsv2_background
   mdsv2_statistics
 
+  dingofs_options
   dingofs_utils
 
   absl::log_internal_message

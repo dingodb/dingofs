@@ -32,6 +32,11 @@ bool BaseOption::Parse(const std::string& filepath) {
     const auto& root = input.unwrap();
     return Walk(root);
   }
+
+  for (const auto& err : input.unwrap_err()) {
+    std::cerr << "parse toml file failed: " << err << std::endl;
+  }
+
   return false;
 }
 
@@ -40,7 +45,7 @@ bool BaseOption::Walk(const toml::value& node) {
     return true;
   }
 
-  for (auto [key, value] : node.as_table()) {
+  for (const auto& [key, value] : node.as_table()) {
     bool succ =
         value.is_table() ? HandleTable(key, value) : HandleNormal(key, value);
     if (!succ) {
