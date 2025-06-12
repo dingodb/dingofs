@@ -37,6 +37,8 @@ jobs:
         sudo systemctl start docker.socket
         sudo systemctl start docker
         docker info | grep "Docker Root Dir"
+        echo "check disk space"
+        df -h
 
     - name: Pull dingodatabase/dingo-eureka:rocky9-fs
       run: |

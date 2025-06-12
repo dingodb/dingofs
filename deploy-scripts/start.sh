@@ -82,7 +82,7 @@ function start_server() {
   server_name="dingo-${role}"
   echo "start server: ${root_dir}/bin/${server_name}"
 
-  exec ${root_dir}/bin/${server_name} >> ${root_dir}/log/mdsv2.log 2>&1
+  exec ${root_dir}/bin/${server_name} --conf=${root_dir}/conf/${server_name}.toml >> ${root_dir}/log/mdsv2.log 2>&1
 }
 
 
