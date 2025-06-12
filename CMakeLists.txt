@@ -129,6 +129,9 @@ add_definitions(-DGIT_COMMIT_MAIL="${GIT_COMMIT_MAIL}")
 add_definitions(-DGIT_COMMIT_TIME="${GIT_COMMIT_TIME}")
 add_definitions(-DDINGOFS_BUILD_TYPE="${CMAKE_BUILD_TYPE}")
 
+# find dingoEureka
+find_package(dingoEureka 1.0 REQUIRED)
+
 find_package(backtrace REQUIRED)
 message("Using backtrace ${LIBBACKTRACE_VERSION}, lib:${LIBBACKTRACE_LIBRARY}")
 
