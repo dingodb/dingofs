@@ -619,6 +619,8 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
 
   out_attr = ToAttr(response.inode());
 
+  parent_memo_->UpsertVersion(ino, response.inode().version());
+
   return Status::OK();
 }
 
@@ -668,6 +670,8 @@ Status MDSClient::SetXAttr(Ino ino, const std::string& name,
   if (!status.ok()) {
     return status;
   }
+
+  parent_memo_->UpsertVersion(ino, response.inode_version());
 
   return Status::OK();
 }

@@ -36,6 +36,7 @@
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
+#include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/dentry.h"
 #include "mdsv2/filesystem/file_session.h"
 #include "mdsv2/filesystem/fs_info.h"
@@ -1309,10 +1310,15 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
-  // update cache
-  inode->UpdateIf(attr);
+  entry_out.attr = attr;
 
-  entry_out.attr = std::move(attr);
+  // update cache
+  if (IsDir(ino) && IsParentHashPartition()) {
+    inode->UpdateIf(attr);
+    NotifyBuddyRefreshInode(std::move(attr));
+  } else {
+    inode->UpdateIf(std::move(attr));
+  }
 
   return Status::OK();
 }
@@ -1353,7 +1359,7 @@ Status FileSystem::GetXAttr(Context& ctx, Ino ino, const std::string& name, std:
   return Status::OK();
 }
 
-Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs) {
+Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs, uint64_t& version) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] setxattr ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
@@ -1385,8 +1391,15 @@ Status FileSystem::SetXAttr(Context& ctx, Ino ino, const Inode::XAttrMap& xattrs
   auto& result = operation.GetResult();
   auto& attr = result.attr;
 
+  version = attr.version();
+
   // update cache
-  inode->UpdateIf(std::move(attr));
+  if (IsDir(ino) && IsParentHashPartition()) {
+    inode->UpdateIf(attr);
+    NotifyBuddyRefreshInode(std::move(attr));
+  } else {
+    inode->UpdateIf(std::move(attr));
+  }
 
   return Status::OK();
 }

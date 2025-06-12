@@ -1426,12 +1426,14 @@ void MDSServiceImpl::DoSetXAttr(google::protobuf::RpcController* controller, con
   const auto& req_ctx = request->context();
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
 
-  std::string value;
-  status = file_system->SetXAttr(ctx, request->ino(), request->xattrs());
+  uint64_t version;
+  status = file_system->SetXAttr(ctx, request->ino(), request->xattrs(), version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
+
+  response->set_inode_version(version);
 }
 
 void MDSServiceImpl::SetXAttr(google::protobuf::RpcController* controller, const pb::mdsv2::SetXAttrRequest* request,

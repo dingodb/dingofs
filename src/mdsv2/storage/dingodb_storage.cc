@@ -450,7 +450,10 @@ Status DingodbTxn::Commit() {
   return Status::OK();
 }
 
-Trace::Txn DingodbTxn::GetTrace() { return txn_trace_; }
+Trace::Txn DingodbTxn::GetTrace() {
+  txn_trace_.txn_id = ID();
+  return txn_trace_;
+}
 
 }  // namespace mdsv2
 }  // namespace dingofs

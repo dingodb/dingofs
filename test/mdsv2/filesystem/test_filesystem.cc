@@ -665,7 +665,8 @@ TEST_F(FileSystemTest, SetXAttr) {
   Inode::XAttrMap xattr;
   xattr.insert({"key3", "value3"});
   xattr.insert({"key4", "value4"});
-  status = fs->SetXAttr(ctx, inode->Ino(), xattr);
+  uint64_t version;
+  status = fs->SetXAttr(ctx, inode->Ino(), xattr, version);
   ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
 }
 
@@ -695,7 +696,8 @@ TEST_F(FileSystemTest, GetXAttr) {
   Inode::XAttrMap xattr;
   xattr.insert({"key3", "value3"});
   xattr.insert({"key4", "value4"});
-  status = fs->SetXAttr(ctx, inode->Ino(), xattr);
+  uint64_t version;
+  status = fs->SetXAttr(ctx, inode->Ino(), xattr, version);
   ASSERT_TRUE(status.ok()) << "set xattr fail, error: " << status.error_str();
 
   Inode::XAttrMap actual_xattr;

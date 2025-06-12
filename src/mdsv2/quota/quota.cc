@@ -390,11 +390,17 @@ Status QuotaManager::FlushDirUsage() {
   std::map<uint64_t, UsageEntry> usages;
   for (auto& quota : quotas) {
     auto usage = quota->GetUsage();
+    DINGO_LOG(INFO) << fmt::format("[quota] flush dir usage, ino({}), bytes({}), inodes({}).", quota->GetIno(),
+                                   usage.bytes(), usage.inodes());
     if (usage.bytes() == 0 && usage.inodes() == 0) {
       continue;
     }
 
     usages[quota->GetIno()] = usage;
+  }
+
+  if (usages.empty()) {
+    return Status::OK();
   }
 
   Trace trace;

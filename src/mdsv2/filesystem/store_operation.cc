@@ -1292,6 +1292,11 @@ Status OperationProcessor::RunAlone(Operation* operation) {
       break;
     }
 
+    DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, onepc({}) retry({}) status({}).",
+                                      operation->GetFsId(), operation->GetIno(), txn_id,
+                                      Helper::TimestampUs() - time_us, operation->OpName(), is_one_pc, retry,
+                                      status.error_str());
+
   } while (++retry < FLAGS_txn_max_retry_times);
 
   trace.RecordElapsedTime("store_operate");
@@ -1458,6 +1463,10 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
       break;
     }
+
+    DINGO_LOG(WARNING) << fmt::format(
+        "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) onepc({}) retry({}) status({}).", fs_id, ino,
+        txn_id, Helper::TimestampUs() - time_us, op_names, count, is_one_pc, retry, status.error_str());
 
   } while (++retry < FLAGS_txn_max_retry_times);
 
