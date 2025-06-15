@@ -27,6 +27,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_uploader.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/config/block_cache.h"
 #include "cache/config/config.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_pool.h"
@@ -64,6 +65,9 @@ class BlockCacheImpl final : public BlockCache {
   void AsyncPrefetch(const BlockKey& key, size_t length, AsyncCallback cb,
                      PrefetchOption option = PrefetchOption()) override;
 
+  bool HasCacheStore() const override;
+  bool EnableStage() const override;
+  bool EnableCache() const override;
   bool IsCached(const BlockKey& key) const override;
 
  private:
@@ -76,6 +80,7 @@ class BlockCacheImpl final : public BlockCache {
                       IOBuffer* buffer);
 
   std::atomic<bool> running_;
+  BlockCacheOption option_;
   StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;

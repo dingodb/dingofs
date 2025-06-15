@@ -29,31 +29,19 @@ namespace dingofs {
 namespace cache {
 
 DEFINE_string(op, "put", "");
-DEFINE_bool(local, true, "");
 DEFINE_uint32(threads, 1, "");
-DEFINE_uint32(blksize, 4194304, "");
-DEFINE_uint32(blocks, 1, "");
-DEFINE_bool(writeback, true, "");
-DEFINE_bool(retrive, false, "");
-DEFINE_string(ak, "", "");
-DEFINE_string(sk, "", "");
-DEFINE_string(endpoint, "", "");
-DEFINE_string(bucket, "", "");
-
-BenchmarkOption::BenchmarkOption()
-    : start_s(base::time::TimeNow().seconds),
-      op(FLAGS_op),
-      local(FLAGS_local),
-      threads(FLAGS_threads),
-      blksize(FLAGS_blksize),
-      blocks(FLAGS_blocks),
-      page_size(64 * kKiB),
-      writeback(FLAGS_writeback),
-      retrive(FLAGS_retrive),
-      ak(FLAGS_ak),
-      sk(FLAGS_sk),
-      endpoint(FLAGS_endpoint),
-      bucket(FLAGS_bucket) {}
+DEFINE_uint32(page_size, 65536, "");
+DEFINE_uint32(op_blksize, 4194304, "");
+DEFINE_uint32(op_blocks, 1, "");
+DEFINE_bool(put_writeback, true, "");
+DEFINE_bool(range_retrive, false, "");
+DEFINE_uint64(fsid, 1, "");
+DEFINE_uint64(ino, 0, "");
+DEFINE_string(s3_ak, "", "");
+DEFINE_string(s3_sk, "", "");
+DEFINE_string(s3_endpoint, "", "");
+DEFINE_string(s3_bucket, "", "");
+DEFINE_uint32(stat_interval_s, 3, "");
 
 }  // namespace cache
 }  // namespace dingofs

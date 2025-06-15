@@ -32,41 +32,20 @@
 namespace dingofs {
 namespace cache {
 
-DECLARE_string(op);   // put/async_put/range/async_range
-DECLARE_bool(local);  // put/async_put/range/async_range
+DECLARE_string(op);
 DECLARE_uint32(threads);
-DECLARE_uint32(blksize);
-DECLARE_uint32(blocks);
-DECLARE_bool(writeback);
-DECLARE_bool(retrive);
-DECLARE_string(ak);
-DECLARE_string(sk);
-DECLARE_string(endpoint);
-DECLARE_string(bucket);
-
-struct BenchmarkOption {
-  BenchmarkOption();
-
-  // job
-  uint64_t start_s;
-  bool local;
-  std::string op;
-  uint32_t threads;
-  uint32_t blksize;
-  uint32_t blocks;
-  uint32_t page_size;
-  bool writeback;
-  bool retrive;
-
-  // storage
-  std::string ak;
-  std::string sk;
-  std::string endpoint;
-  std::string bucket;
-
-  BlockCacheOption block_cache_option;
-  RemoteBlockCacheOption remote_block_cache_option;
-};
+DECLARE_uint32(page_size);
+DECLARE_uint32(op_blksize);
+DECLARE_uint32(op_blocks);
+DECLARE_bool(put_writeback);
+DECLARE_bool(range_retrive);
+DECLARE_uint64(fsid);
+DECLARE_uint64(ino);
+DECLARE_string(s3_ak);
+DECLARE_string(s3_sk);
+DECLARE_string(s3_endpoint);
+DECLARE_string(s3_bucket);
+DECLARE_uint32(stat_interval_s);
 
 }  // namespace cache
 }  // namespace dingofs

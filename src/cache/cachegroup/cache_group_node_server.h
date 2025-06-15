@@ -39,7 +39,7 @@ class CacheGroupNodeServer {
   virtual ~CacheGroupNodeServer() = default;
 
   virtual Status Run() = 0;
-  virtual void Shutdown() = 0;
+  virtual Status Shutdown() = 0;
 };
 
 class CacheGroupNodeServerImpl final : public CacheGroupNodeServer {
@@ -49,16 +49,15 @@ class CacheGroupNodeServerImpl final : public CacheGroupNodeServer {
   ~CacheGroupNodeServerImpl() override = default;
 
   Status Run() override;
-  void Shutdown() override;
+  Status Shutdown() override;
 
  private:
   void InstallSignal();
-  Status InitLogger();
   Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
 
   const CacheGroupNodeOption option_;
   CacheGroupNodeSPtr node_;
-  std::unique_ptr<PB_BlockCacheService> service_;
+  std::unique_ptr<PBBlockCacheService> service_;
   std::unique_ptr<brpc::Server> server_;
 };
 

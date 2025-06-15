@@ -19,7 +19,5 @@ file(GLOB BENCHMARK_LIB_SRCS
 
 add_executable(cache-bench ${BENCHMARK_LIB_SRCS})
 target_link_libraries(cache-bench
-    cache_config
-    cache_blockcache
-    cache_remotecache
+    cache_lib
 )

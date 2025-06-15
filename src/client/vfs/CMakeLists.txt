@@ -26,7 +26,6 @@ target_link_libraries(vfs_lib
     PROTO_OBJS
     client_common
     dingofs_common
-    dingofs_options
     vfs_meta_lib
     vfs_data
     vfs_hub

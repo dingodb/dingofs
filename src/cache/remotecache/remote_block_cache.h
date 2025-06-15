@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_BLOCK_CACHE_H_
 
 #include "cache/blockcache/block_cache.h"
+#include "cache/remotecache/remote_node.h"
 #include "cache/remotecache/remote_node_manager.h"
 #include "cache/storage/storage.h"
 
@@ -56,16 +57,17 @@ class RemoteBlockCacheImpl final : public BlockCache {
   void AsyncPrefetch(const BlockKey& key, size_t length, AsyncCallback cb,
                      PrefetchOption option) override;
 
+  bool HasCacheStore() const override;
+  bool EnableStage() const override;
+  bool EnableCache() const override;
   bool IsCached(const BlockKey& key) const override;
 
  private:
   BlockCacheSPtr GetSelfSPtr() { return shared_from_this(); }
 
-  Status CheckStatus(Status status);
-
   std::atomic<bool> running_;
   RemoteBlockCacheOption option_;
-  RemoteNodeManagerUPtr node_manager_;
+  RemoteNodeSPtr remote_node_;
   StorageSPtr storage_;
 };
 

@@ -25,7 +25,12 @@
 #include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
 
+#include <cstdint>
+#include <memory>
+
+#include "cache/storage/aio/aio.h"
 #include "cache/utils/access_log.h"
+#include "cache/utils/phase_timer.h"
 
 namespace dingofs {
 namespace cache {
@@ -34,6 +39,7 @@ AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
       ioring_(io_ring),
       prep_io_queue_id_({0}),
+      prep_aios_(kSubmitBatchSize),
       infight_throttle_(io_ring->GetIODepth()) {}
 
 Status AioQueueImpl::Init() {
@@ -57,6 +63,9 @@ Status AioQueueImpl::Init() {
   }
 
   bg_wait_thread_ = std::thread(&AioQueueImpl::BackgroundWait, this);
+
+  LOG(INFO) << "Aio queue started: iodepth = " << ioring_->GetIODepth();
+
   return Status::OK();
 }
 
@@ -79,23 +88,34 @@ void AioQueueImpl::EnterPhase(AioClosure* aio, Phase phase) {
   aio->timer.NextPhase(phase);
 }
 
-void AioQueueImpl::BatchEnterPhase(AioClosure* aios[], int n, Phase phase) {
+void AioQueueImpl::BatchEnterPhase(const Aios& aios, int n, Phase phase) {
   for (int i = 0; i < n; i++) {
-    aios[i]->timer.NextPhase(phase);
+    EnterPhase(aios[i], phase);
   }
+}
+
+uint64_t AioQueueImpl::GetTotalSize(const Aios& aios, int n) {
+  uint64_t total_size = 0;
+  for (int i = 0; i < n; i++) {
+    total_size += aios[i]->length;
+  }
+  return total_size;
 }
 
 void AioQueueImpl::Submit(AioClosure* aio) {
   EnterPhase(aio, Phase::kWaitThrottle);
   infight_throttle_.Increment(1);
 
+  LOG(INFO) << "inflights: " << infight_throttle_.GetInflights();
+
   EnterPhase(aio, Phase::kCheckIO);
   CheckIO(aio);
+  // CHECK_EQ(0, bthread::execution_queue_execute(prep_io_queue_id_, aio));
 }
 
 void AioQueueImpl::CheckIO(AioClosure* aio) {
   if (aio->fd <= 0 || aio->length < 0) {
-    OnError(aio);
+    OnError(aio, Status::Internal("invalid aio param"));
     return;
   }
 
@@ -110,51 +130,56 @@ int AioQueueImpl::PrepareIO(void* meta,
   }
 
   int n = 0;
-  static AioClosure* aios[kSubmitBatchSize];
   AioQueueImpl* queue = static_cast<AioQueueImpl*>(meta);
+  std::vector<AioClosure*> aios(kSubmitBatchSize);
+
   auto ioring = queue->ioring_;
   for (; iter; iter++) {
     auto* aio = *iter;
     EnterPhase(aio, Phase::kPrepareIO);
     Status status = ioring->PrepareIO(aio);
     if (!status.ok()) {
-      queue->OnError(aio);
+      queue->OnError(aio, status);
       continue;
     }
 
     aios[n++] = aio;
     if (n == kSubmitBatchSize) {
-      BatchEnterPhase(aios, n, Phase::kSubmitIO);
+      BatchEnterPhase(aios, n, Phase::kExecuteIO);
       queue->BatchSubmitIO(aios, n);
       n = 0;
     }
   }
 
   if (n > 0) {
-    BatchEnterPhase(aios, n, Phase::kSubmitIO);
+    BatchEnterPhase(aios, n, Phase::kExecuteIO);
     queue->BatchSubmitIO(aios, n);
   }
   return 0;
 }
 
-void AioQueueImpl::BatchSubmitIO(AioClosure* aios[], int n) {
+void AioQueueImpl::BatchSubmitIO(const Aios& aios, int n) {
   Status status = ioring_->SubmitIO();
-  for (int i = 0; i < n; i++) {
-    if (status.ok()) {
-      EnterPhase(aios[i], Phase::kExecuteIO);
-    } else {
-      OnError(aios[i]);
+  if (!status.ok()) {
+    for (auto* aio : aios) {
+      OnError(aio, status);
     }
+    return;
   }
+
+  VLOG(9) << n << " aio[s] submitted: batch size = " << GetTotalSize(aios, n);
 }
 
 void AioQueueImpl::BackgroundWait() {
-  std::vector<AioClosure*> completed;
+  Aios completed;
   while (running_.load(std::memory_order_relaxed)) {
     Status status = ioring_->WaitIO(1000, &completed);
     if (!status.ok() || completed.empty()) {
       continue;
     }
+
+    VLOG(9) << completed.size() << " aio[s] compelted : batch size = "
+            << GetTotalSize(completed, completed.size());
 
     for (auto* aio : completed) {
       OnCompleted(aio);
@@ -162,32 +187,21 @@ void AioQueueImpl::BackgroundWait() {
   }
 }
 
-Status AioQueueImpl::GetErrorStatus(AioClosure* aio) {
-  auto phase = aio->timer.GetPhase();
-  switch (phase) {
-    case Phase::kCheckIO:
-      return Status::InvalidParam("invalid aio param");
-    case Phase::kPrepareIO:
-      return Status::Internal("prepare aio failed");
-    case Phase::kSubmitIO:
-      return Status::Internal("submit aio failed");
-    default:
-      CHECK(false) << "Invalid aio phase : " << static_cast<int>(phase);
-  }
-}
-
-void AioQueueImpl::OnError(AioClosure* aio) {
-  auto phase = aio->timer.GetPhase();
+void AioQueueImpl::OnError(AioClosure* aio, Status status) {
   // TODO: CHECK_LT(phase, Phase::kExecuteIO);
 
-  auto status = GetErrorStatus(aio);
   aio->status() = status;
   RunClosure(aio);
 }
 
 void AioQueueImpl::OnCompleted(AioClosure* aio) {
   // NOTE: The status of completed aio is set in the io_ring.
-  CHECK(aio->timer.GetPhase() == Phase::kExecuteIO);
+  auto phase = aio->timer.GetPhase();
+
+  CHECK(phase == Phase::kExecuteIO) << absl::StrFormat(
+      "%s it not on expected phase: got(%s) != expect(%s)", aio->ToString(),
+      StrPhase(phase), StrPhase(Phase::kExecuteIO));
+
   RunClosure(aio);
 }
 
@@ -207,8 +221,8 @@ void AioQueueImpl::RunClosure(AioClosure* aio) {
   aio->Run();
 
   // access log
-  LogIt(absl::StrFormat("%s: %s%s <.6lf>", description, status.ToString(),
-                        timer.ToString()));
+  LogIt(absl::StrFormat("%s: %s%s <%.6lf>", description, status.ToString(),
+                        timer.ToString(), timer.UElapsed() / 1e6));
 
   infight_throttle_.Decrement(1);
 }

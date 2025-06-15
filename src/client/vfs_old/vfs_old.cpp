@@ -29,6 +29,7 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/storage/storage_impl.h"
+#include "cache/tiercache/tier_block_cache.h"
 #include "client/common/config.h"
 #include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
@@ -325,7 +326,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     const auto& storage_info = fs_info_->storage_info();
     FillBlockAccessOption(storage_info, &fuse_client_option_.block_access_opt);
 
-    block_accesser_ = std::make_shared<blockaccess::BlockAccesserImpl>(
+    block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
         fuse_client_option_.block_access_opt);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
@@ -362,9 +363,9 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     }
 
     RewriteCacheDir(&block_cache_option, uuid);
-    auto block_cache = std::make_shared<cache::BlockCacheImpl>(
-        block_cache_option,
-        std::make_shared<cache::StorageImpl>(block_accesser_));
+    auto block_cache = std::make_shared<cache::TierBlockCache>(
+        block_cache_option, fuse_client_option_.remote_block_cache_option,
+        block_accesser_.get());
 
     if (s3_adapter_->Init(fuse_client_option_.s3_client_adaptor_opt,
                           block_accesser_.get(), inode_cache_manager_,

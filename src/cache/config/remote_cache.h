@@ -25,10 +25,12 @@
 
 #include <gflags/gflags.h>
 
+#include "cache/config/common.h"
+
 namespace dingofs {
 namespace cache {
 
-DECLARE_string(group_name);
+DECLARE_string(cache_group);
 DECLARE_uint32(load_members_interval_ms);
 
 DECLARE_uint32(remote_put_rpc_timeout_ms);
@@ -36,8 +38,8 @@ DECLARE_uint32(remote_range_rpc_timeout_ms);
 DECLARE_uint32(remote_cache_rpc_timeout_ms);
 DECLARE_uint32(remote_prefetch_rpc_timeout_ms);
 
-struct RemoteAccessOption {
-  RemoteAccessOption();
+struct RemoteNodeOption {
+  RemoteNodeOption();
 
   uint32_t remote_put_rpc_timeout_ms;
   uint32_t remote_range_rpc_timeout_ms;
@@ -48,12 +50,12 @@ struct RemoteAccessOption {
 struct RemoteBlockCacheOption {
   RemoteBlockCacheOption();
 
-  std::string group_name;
+  std::string cache_group;
   uint32_t load_members_interval_ms;
-  std::vector<std::string> mds_addrs;
+  stub::common::MdsOption mds_option;
 
   // remote access
-  RemoteAccessOption remote_access_option;
+  RemoteNodeOption remote_node_option;
 };
 
 }  // namespace cache

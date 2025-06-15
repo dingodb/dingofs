@@ -24,24 +24,58 @@
 
 #include <optional>
 
+#include "base/time/time.h"
+#include "cache/config/benchmark.h"
 #include "cache/config/config.h"
 
 namespace dingofs {
 namespace cache {
 
-extern BenchmarkOption* g_option;
-
 static constexpr uint64_t kBlocksPerChunk = 16;
 
-BlockKeyGenerator::BlockKeyGenerator(uint64_t worker_id, uint64_t blocks)
-    : fs_id_(g_option->start_s),
-      ino_(worker_id + 1),
+blockaccess::BlockAccessOptions NewBlockAccessOptions() {
+  blockaccess::S3Options s3_option;
+  s3_option.s3_info.ak = FLAGS_s3_ak;
+  s3_option.s3_info.sk = FLAGS_s3_sk;
+  s3_option.s3_info.endpoint = FLAGS_s3_endpoint;
+  s3_option.s3_info.bucket_name = FLAGS_s3_bucket;
+
+  blockaccess::BlockAccessOptions block_access_option;
+  block_access_option.type = blockaccess::AccesserType::kS3;
+  block_access_option.s3_options = s3_option;
+
+  return block_access_option;
+}
+
+static void AppendOnePage(butil::IOBuf* buffer, size_t size) {
+  char* data = new char[size];
+  std::memset(data, 0, size);
+  buffer->append_user_data(
+      data, size, [](void* data) { delete[] static_cast<char*>(data); });
+}
+
+Block NewOneBlock() {
+  butil::IOBuf pages;
+  auto page_size = FLAGS_page_size;
+  auto length = FLAGS_op_blksize;
+  while (length > 0) {
+    auto size = std::min(page_size, length);
+    AppendOnePage(&pages, size);
+    length -= size;
+  }
+
+  return Block(IOBuffer(pages));
+}
+
+BlockKeyFactory::BlockKeyFactory(uint64_t worker_id, uint64_t blocks)
+    : fs_id_(FLAGS_fsid),
+      ino_(FLAGS_ino),
       chunkid_(worker_id * blocks + 1),
       block_index_(0),
       allocated_blocks_(0),
       total_blocks_(blocks) {}
 
-std::optional<BlockKey> BlockKeyGenerator::Next() {
+std::optional<BlockKey> BlockKeyFactory::Next() {
   if (allocated_blocks_ == total_blocks_) {
     return std::nullopt;
   }

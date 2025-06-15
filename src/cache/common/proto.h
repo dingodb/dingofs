@@ -31,46 +31,46 @@
 namespace dingofs {
 namespace cache {
 
-using PB_FSStatusCode = pb::mds::FSStatusCode;
-using PB_FsInfo = pb::mds::FsInfo;
+using PBFSStatusCode = pb::mds::FSStatusCode;
+using PBFsInfo = pb::mds::FsInfo;
 
-using PB_CacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
-using PB_CacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;
-using PB_CacheGroupErrCode = pb::mds::cachegroup::CacheGroupErrCode;
-using PB_Statistic = pb::mds::cachegroup::HeartbeatRequest::Statistic;
-using PB_CacheGroupMemberStatus = pb::mds::cachegroup::CacheGroupMemberStatus;
-using PB_CacheGroupMembers = std::vector<PB_CacheGroupMember>;
+using PBCacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
+using PBCacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;
+using PBCacheGroupErrCode = pb::mds::cachegroup::CacheGroupErrCode;
+using PBStatistic = pb::mds::cachegroup::HeartbeatRequest::Statistic;
+using PBCacheGroupMemberStatus = pb::mds::cachegroup::CacheGroupMemberStatus;
+using PBCacheGroupMembers = std::vector<PBCacheGroupMember>;
 
-using PB_BlockCacheErrCode = pb::cache::blockcache::BlockCacheErrCode;
-using PB_BlockCacheService_Stub = pb::cache::blockcache::BlockCacheService_Stub;
-using PB_PutRequest = pb::cache::blockcache::PutRequest;
-using PB_PutResponse = pb::cache::blockcache::PutResponse;
-using PB_RangeRequest = pb::cache::blockcache::RangeRequest;
-using PB_RangeResponse = pb::cache::blockcache::RangeResponse;
-using PB_CacheRequest = pb::cache::blockcache::CacheRequest;
-using PB_CacheResponse = pb::cache::blockcache::CacheResponse;
-using PB_PrefetchRequest = pb::cache::blockcache::PrefetchRequest;
-using PB_PrefetchResponse = pb::cache::blockcache::PrefetchResponse;
-using PB_BlockCacheService = pb::cache::blockcache::BlockCacheService;
+using PBBlockCacheErrCode = pb::cache::blockcache::BlockCacheErrCode;
+using PBBlockCacheService_Stub = pb::cache::blockcache::BlockCacheService_Stub;
+using PBPutRequest = pb::cache::blockcache::PutRequest;
+using PBPutResponse = pb::cache::blockcache::PutResponse;
+using PBRangeRequest = pb::cache::blockcache::RangeRequest;
+using PBRangeResponse = pb::cache::blockcache::RangeResponse;
+using PBCacheRequest = pb::cache::blockcache::CacheRequest;
+using PBCacheResponse = pb::cache::blockcache::CacheResponse;
+using PBPrefetchRequest = pb::cache::blockcache::PrefetchRequest;
+using PBPrefetchResponse = pb::cache::blockcache::PrefetchResponse;
+using PBBlockCacheService = pb::cache::blockcache::BlockCacheService;
 
-inline PB_BlockCacheErrCode PBErr(Status status) {
+inline PBBlockCacheErrCode PBErr(Status status) {
   if (status.ok()) {
-    return PB_BlockCacheErrCode::BlockCacheOk;
+    return PBBlockCacheErrCode::BlockCacheOk;
   } else if (status.IsInvalidParam()) {
-    return PB_BlockCacheErrCode::BlockCacheErrInvalidParam;
+    return PBBlockCacheErrCode::BlockCacheErrInvalidParam;
   } else if (status.IsNotFound()) {
-    return PB_BlockCacheErrCode::BlockCacheErrNotFound;
+    return PBBlockCacheErrCode::BlockCacheErrNotFound;
   } else if (status.IsInternal()) {
-    return PB_BlockCacheErrCode::BlockCacheErrFailure;
+    return PBBlockCacheErrCode::BlockCacheErrFailure;
   } else if (status.IsIoError()) {
-    return PB_BlockCacheErrCode::BlockCacheErrIOError;
+    return PBBlockCacheErrCode::BlockCacheErrIOError;
   }
 
-  return PB_BlockCacheErrCode::BlockCacheErrUnknown;
+  return PBBlockCacheErrCode::BlockCacheErrUnknown;
 }
 
-inline bool operator==(const PB_CacheGroupMember& lhs,
-                       const PB_CacheGroupMember& rhs) {
+inline bool operator==(const PBCacheGroupMember& lhs,
+                       const PBCacheGroupMember& rhs) {
   return lhs.id() == rhs.id() && lhs.ip() == rhs.ip() &&
          lhs.port() == rhs.port() && lhs.weight() == rhs.weight();
 }

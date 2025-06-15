@@ -31,7 +31,7 @@ namespace cache {
 // normal
 void NormalState::IOErr() {
   io_error_count_.fetch_add(1);
-  if (io_error_count_.load() > FLAGS_state_normal2unstable_io_error_num) {
+  if (io_error_count_.load() > FLAGS_state_normal2unstable_error_num) {
     state_machine->OnEvent(StateEvent::kStateEventUnstable);
   }
 }
@@ -41,7 +41,7 @@ void NormalState::Tick() { io_error_count_.store(0); }
 // unstable
 void UnstableState::IOSucc() {
   io_succ_count_.fetch_add(1);
-  if (io_succ_count_.load() > FLAGS_state_unstable2normal_io_succ_num) {
+  if (io_succ_count_.load() > FLAGS_state_unstable2normal_succ_num) {
     state_machine->OnEvent(StateEvent::kStateEventNormal);
   }
 }
@@ -57,10 +57,8 @@ void UnstableState::Tick() {
   io_succ_count_.store(0);
 }
 
-StateMachineImpl::StateMachineImpl(OnStateChangeFunc on_stage_change_func)
-    : running_(false),
-      state_(std::make_unique<BaseState>(this)),
-      on_stage_change_func_(on_stage_change_func) {}
+StateMachineImpl::StateMachineImpl()
+    : running_(false), state_(std::make_unique<BaseState>(this)) {}
 
 bool StateMachineImpl::Start() {
   std::lock_guard<BthreadMutex> lk(mutex_);
@@ -70,7 +68,6 @@ bool StateMachineImpl::Start() {
   }
 
   state_ = std::make_unique<NormalState>(this);
-  on_stage_change_func_(state_->GetState());
 
   bthread::ExecutionQueueOptions options;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
@@ -97,7 +94,7 @@ bool StateMachineImpl::Stop() {
     return true;
   }
 
-  LOG(INFO) << "Try to stop state machine...";
+  LOG(INFO) << "State machine is stopping...";
   running_ = false;
 
   if (bthread::execution_queue_stop(disk_event_queue_id_) != 0) {
@@ -109,7 +106,6 @@ bool StateMachineImpl::Stop() {
   }
 
   timer_->Stop();
-  on_stage_change_func_(kStateUnknown);
 
   return true;
 }
@@ -167,8 +163,6 @@ void StateMachineImpl::ProcessEvent(StateEvent event) {
     default:
       LOG(FATAL) << "Unknown disk state " << state_->GetState();
   }
-
-  on_stage_change_func_(state_->GetState());
 
   LOG(INFO) << "After process, current disk state is "
             << StateToString(state_->GetState());

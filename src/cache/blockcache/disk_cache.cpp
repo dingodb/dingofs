@@ -41,7 +41,7 @@ DiskCache::DiskCache(DiskCacheOption option) : running_(false) {
   layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
 
   // health checker
-  state_machine_ = std::make_shared<StateMachineImpl>([](State) {});
+  state_machine_ = std::make_shared<StateMachineImpl>();
   disk_state_health_checker_ =
       std::make_unique<DiskStateHealthChecker>(layout_, state_machine_);
 
@@ -72,12 +72,14 @@ Status DiskCache::Init(UploadFunc uploader) {
 
     uploader_ = uploader;
 
-    // create directories and load disk id
+    // create directories
     auto status = CreateDirs();
-    if (status.ok()) {
-      status = LoadOrCreateLockFile();
+    if (!status.ok()) {
+      return status;
     }
 
+    // load disk id
+    status = LoadOrCreateLockFile();
     if (!status.ok()) {
       return status;
     }
@@ -149,7 +151,7 @@ Status DiskCache::LoadOrCreateLockFile() {
     uuid_ = TrimSpace(content);
   } else if (status.IsNotFound()) {
     uuid_ = GenUuid();
-    status = Helper::WriteFile(lock_path, content);
+    status = Helper::WriteFile(lock_path, uuid_);
   }
   return status;
 }
@@ -181,8 +183,8 @@ Status DiskCache::Stage(const BlockKey& key, const Block& block,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("stage(%s,%zu): %s%s", key.Filename(), block.size,
-                           status.ToString(), timer.ToString());
+    return absl::StrFormat("[disk] stage(%s,%zu): %s%s", key.Filename(),
+                           block.size, status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec | kWantStage);
@@ -222,7 +224,7 @@ Status DiskCache::RemoveStage(const BlockKey& key,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("removestage(%s): %s", key.Filename(),
+    return absl::StrFormat("[disk] removestage(%s): %s", key.Filename(),
                            status.ToString());
   });
 
@@ -242,13 +244,15 @@ Status DiskCache::Cache(const BlockKey& key, const Block& block,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("cache(%s,%zu): %s%s", key.Filename(), block.size,
-                           status.ToString(), timer.ToString());
+    return absl::StrFormat("[disk] cache(%s,%zu): %s%s", key.Filename(),
+                           block.size, status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec | kWantCache);
   if (!status.ok()) {
     return status;
+  } else if (IsCached(key)) {
+    return Status::OK();
   }
 
   timer.NextPhase(Phase::kWriteFile);
@@ -267,8 +271,8 @@ Status DiskCache::Load(const BlockKey& key, off_t offset, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("load(%s,%lld,%zu): %s%s", key.Filename(), offset,
-                           length, status.ToString(), timer.ToString());
+    return absl::StrFormat("[disk] load(%s,%lld,%zu): %s%s", key.Filename(),
+                           offset, length, status.ToString(), timer.ToString());
   });
 
   status = Check(kWantExec);

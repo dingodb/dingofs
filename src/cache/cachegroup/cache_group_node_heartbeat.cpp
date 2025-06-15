@@ -38,7 +38,7 @@ CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
 
 void CacheGroupNodeHeartbeatImpl::Start() {
   if (!running_.exchange(true)) {
-    LOG(INFO) << "Cache group node heartbeat staring...";
+    LOG(INFO) << "Cache group node heartbeat starting...";
 
     CHECK(timer_->Start());
     timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
@@ -58,17 +58,18 @@ void CacheGroupNodeHeartbeatImpl::Stop() {
 }
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
-  PB_Statistic stat;
+  PBStatistic stat;
   stat.set_hits(CacheGroupNodeMetric::GetInstance().GetCacheHit());
   stat.set_misses(CacheGroupNodeMetric::GetInstance().GetCacheMiss());
 
   std::string group_name = member_->GetGroupName();
   uint64_t member_id = member_->GetMemberId();
   auto rc = mds_client_->SendCacheGroupHeartbeat(group_name, member_id, stat);
-  if (rc != PB_CacheGroupErrCode::CacheGroupOk) {
+  if (rc != PBCacheGroupErrCode::CacheGroupOk) {
     LOG(ERROR) << "Send heartbeat for (" << group_name << "," << member_id
                << ") failed: rc = " << CacheGroupErrCode_Name(rc);
   }
+
   timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
 }
 

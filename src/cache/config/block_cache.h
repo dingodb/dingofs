@@ -30,11 +30,14 @@ namespace cache {
 
 // block cache
 DECLARE_string(cache_store);
+DECLARE_bool(enable_stage);
+DECLARE_bool(enable_cache);
 DECLARE_bool(cache_access_logging);
 DECLARE_bool(upload_stage_throttle_enable);
 DECLARE_uint32(upload_stage_throttle_bandwidth_mb);
 DECLARE_uint32(upload_stage_throttle_iops);
 DECLARE_uint32(prefetch_max_inflights);
+DECLARE_uint64(upload_stage_max_inflights);
 
 // disk cache
 DECLARE_string(cache_dir);
@@ -42,8 +45,6 @@ DECLARE_uint32(cache_size_mb);
 DECLARE_double(free_space_ratio);
 DECLARE_uint32(cache_expire_s);
 DECLARE_uint32(cleanup_expire_interval_ms);
-DECLARE_bool(enable_stage);
-DECLARE_bool(enable_cache);
 DECLARE_uint32(ioring_blksize);
 DECLARE_uint32(ioring_iodepth);
 DECLARE_bool(ioring_prefetch);
@@ -51,8 +52,8 @@ DECLARE_bool(drop_page_cache);
 
 // disk state
 DECLARE_uint32(state_tick_duration_s);
-DECLARE_uint32(state_normal2unstable_io_error_num);
-DECLARE_uint32(state_unstable2normal_io_succ_num);
+DECLARE_uint32(state_normal2unstable_error_num);
+DECLARE_uint32(state_unstable2normal_succ_num);
 DECLARE_uint32(state_unstable2down_s);
 DECLARE_uint32(check_disk_state_duration_ms);
 
@@ -68,13 +69,11 @@ struct BlockCacheOption {
   BlockCacheOption();
 
   std::string cache_store;
+  bool enable_stage;
+  bool enable_cache;
 
   std::vector<DiskCacheOption> disk_cache_options;
 };
-
-inline bool IsNoneCacheStore(const std::string& cache_store) {
-  return cache_store == "none";
-}
 
 }  // namespace cache
 }  // namespace dingofs

@@ -60,13 +60,13 @@ Status DiskCacheGroup::Init(UploadFunc uploader) {
 
 Status DiskCacheGroup::Shutdown() {
   if (running_.exchange(false)) {
+    watcher_->Stop();
     for (const auto& it : stores_) {
       auto status = it.second->Shutdown();
       if (!status.ok()) {
         return status;
       }
     }
-    watcher_->Stop();
   }
   return Status::OK();
 }

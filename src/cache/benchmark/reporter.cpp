@@ -22,77 +22,120 @@
 
 #include "cache/benchmark/reporter.h"
 
-#include <memory>
+#include <absl/strings/str_format.h>
 
-#include "base/timer/timer_impl.h"
 #include "cache/common/common.h"
+#include "cache/config/benchmark.h"
 #include "cache/config/config.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
 
-extern BenchmarkOption* g_option;
-
-Reporter::Reporter() : timer_(std::make_unique<base::timer::TimerImpl>()) {}
+Reporter::Reporter() : queue_id_({0}), timer_(std::make_unique<TimerImpl>()) {}
 
 Status Reporter::Start() {
   bthread::ExecutionQueueOptions queue_options;
   queue_options.use_pthread = true;
-  int rc = bthread::execution_queue_start(&queue_id_, &queue_options, Aggregate,
-                                          this);
+  int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
+                                          HandleEvent, this);
   if (rc != 0) {
     return Status::Internal("stop execution queue failed");
   }
 
+  Submit(Event(EventType::kOnStart));
+
   CHECK(timer_->Start());
-  timer_->Add([this]() { ReportOnce(); }, 3 * 1000);
+  timer_->Add([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
+
   return Status::OK();
 }
 
-void Reporter::Submit(Record record) {
-  // LOG(INFO) << "submit: " << record.bytes << ": " << record.latency_s;
-  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, record));
+Status Reporter::Stop() {
+  timer_->Stop();
+  Submit(Event(EventType::kOnStop));
+
+  int rc = bthread::execution_queue_stop(queue_id_);
+  if (rc != 0) {
+    return Status::Internal("stop execution queue failed");
+  }
+
+  rc = bthread::execution_queue_join(queue_id_);
+  if (rc != 0) {
+    return Status::Internal("join execution queue failed");
+  }
+
+  return Status::OK();
 }
 
-int Reporter::Aggregate(void* meta, bthread::TaskIterator<Record>& iter) {
+void Reporter::TickTok() {
+  Submit(Event(EventType::kReportStat));
+  timer_->Add([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
+}
+
+void Reporter::Submit(Event event) {
+  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, event));
+}
+
+int Reporter::HandleEvent(void* meta, bthread::TaskIterator<Event>& iter) {
   if (iter.is_queue_stopped()) {
     return 0;
   }
 
   Reporter* r = static_cast<Reporter*>(meta);
   for (; iter; iter++) {
-    auto& record = *iter;
-    r->Add(record);
+    auto& event = *iter;
+    switch (event.type) {
+      case EventType::kOnStart:
+        r->OnStart();
+        break;
+
+      case EventType::kAddStat:
+        r->AddStat(event);
+        break;
+
+      case EventType::kReportStat:
+        r->ReportStat();
+        break;
+
+      case EventType::kOnStop:
+        r->OnStop();
+        break;
+
+      default:
+        CHECK(false) << "Unknown event type: " << static_cast<int>(event.type);
+    }
   }
+
   return 0;
 }
 
-void Reporter::Add(const Record& record) {
-  std::unique_lock<BthreadMutex> lk(mutex_);
-  agg_.Add(record.bytes, record.latency_s);
+void Reporter::OnStart() {
+  std::cout << absl::StrFormat("op=%s threads=%d blksize=%lu blocks=%lu\n",
+                               FLAGS_op, FLAGS_threads, FLAGS_op_blksize,
+                               FLAGS_op_blocks);
 }
+
+void Reporter::AddStat(Event event) {
+  interval_stat_.Add(event.bytes, event.latency_s);
+  summary_stat_.Add(event.bytes, event.latency_s);
+}
+
+void Reporter::ReportStat() {
+  PrintfStat(FLAGS_op, interval_stat_);
+  interval_stat_.Reset();
+}
+
+void Reporter::OnStop() { PrintfStat("summary", summary_stat_); }
 
 // async_put:   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
 //       put:   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
-void Reporter::ReportOnce() {
-  AggRecord out;
-  {
-    std::unique_lock<BthreadMutex> lk(mutex_);
-    out = agg_;
-    agg_ = AggRecord();
-  }
-
-  uint64_t iops = out.count / 3;
-  uint64_t bw = out.total_bytes / 3 / kMiB;
-  double avg_latency = (out.count == 0) ? 0 : out.total_latency_s / out.count;
-
+//   summary:   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
+void Reporter::PrintfStat(const std::string& item, Statistics stat) {
   std::cout << absl::StrFormat(
-                   "%s: %6lld op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)",
-                   g_option->op, iops, bw, avg_latency, out.max_latency_s,
-                   out.min_latency_s)
-            << std::endl;
-
-  timer_->Add([this]() { ReportOnce(); }, 3 * 1000);
+      "%9s: %6lld op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)\n", item,
+      stat.IOPS(), stat.Bandwidth(), stat.AvgLatency(), stat.MaxLatency(),
+      stat.MinLatency());
 }
 
 }  // namespace cache

@@ -35,7 +35,7 @@ target_link_libraries(vfs_old_lib
     client_memcached_client
     dynamic_vlog
     client_datastream
-    cache_blockcache
+    cache_lib
     dingofs_utils
     block_accesser
     dingofs_threading

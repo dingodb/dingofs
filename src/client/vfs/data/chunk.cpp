@@ -160,9 +160,12 @@ Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
             << ", buf: " << Char2Addr(buf_pos);
 
     IOBuffer buffer;
+    cache::RangeOption option;
+    option.retrive = true;
+    option.block_size = block_req.block.block_len;
+
     DINGOFS_RETURN_NOT_OK(hub_->GetBlockCache()->Range(
-        key, block_req.block_offset, block_req.len, &buffer,
-        cache::RangeOption(true, block_req.block.block_len)));
+        key, block_req.block_offset, block_req.len, &buffer, option));
     buffer.CopyTo(buf_pos);
   }
 

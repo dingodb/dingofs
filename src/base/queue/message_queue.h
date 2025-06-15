@@ -36,8 +36,8 @@ namespace dingofs {
 namespace base {
 namespace queue {
 
-using ::dingofs::utils::TaskQueue;
 using ::dingofs::common::SetThreadName;
+using ::dingofs::utils::TaskQueue;
 
 template <typename MessageT>
 class MessageQueue {
@@ -59,7 +59,7 @@ class MessageQueue {
 
     thread_ = std::thread(&MessageQueue::Consumer, this);
     LOG(INFO) << "MessageQueue [ " << name_ << " ] "
-              << "consumer thread start success";
+              << "consumer thread start success.";
   }
 
   void Stop() {

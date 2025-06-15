@@ -1,8 +1,0 @@
-# global
---logdir=/tmp/dingofs-logs
---loglevel=0
-
---group_nane=default
---listen_ip=192.168.1.77
---listen_port=9999
---mds_addrs=192.168.1.77:6702

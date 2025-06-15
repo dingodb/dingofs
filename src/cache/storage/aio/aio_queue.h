@@ -25,6 +25,8 @@
 
 #include <bthread/execution_queue.h>
 
+#include <memory>
+
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/infight_throttle.h"
 
@@ -44,21 +46,22 @@ class AioQueueImpl : public AioQueue {
   static constexpr uint32_t kSubmitBatchSize = 16;
 
   static void EnterPhase(AioClosure* aio, Phase phase);
-  static void BatchEnterPhase(AioClosure* aios[], int n, Phase phase);
+  static void BatchEnterPhase(const Aios& aios, int n, Phase phase);
+  static uint64_t GetTotalSize(const Aios& aios, int n);
 
   void CheckIO(AioClosure* aio);
   static int PrepareIO(void* meta, bthread::TaskIterator<AioClosure*>& iter);
-  void BatchSubmitIO(AioClosure* aios[], int n);
+  void BatchSubmitIO(const Aios& aios, int n);
   void BackgroundWait();
 
-  Status GetErrorStatus(AioClosure* aio);
-  void OnError(AioClosure* aio);
+  void OnError(AioClosure* aio, Status status);
   void OnCompleted(AioClosure* aio);
   void RunClosure(AioClosure* aio);
 
   std::atomic<bool> running_;
   std::shared_ptr<IORing> ioring_;
   bthread::ExecutionQueueId<AioClosure*> prep_io_queue_id_;
+  Aios prep_aios_;  // prepared aio
   std::thread bg_wait_thread_;
   InflightThrottle infight_throttle_;
 };

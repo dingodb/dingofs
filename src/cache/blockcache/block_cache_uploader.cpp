@@ -24,8 +24,10 @@
 
 #include <bthread/bthread.h>
 
+#include "cache/config/block_cache.h"
 #include "cache/utils/access_log.h"
 #include "cache/utils/bthread.h"
+#include "cache/utils/infight_throttle.h"
 #include "cache/utils/phase_timer.h"
 
 namespace dingofs {
@@ -39,7 +41,8 @@ BlockCacheUploader::BlockCacheUploader(StoragePoolSPtr storage_pool,
       pending_queue_(std::make_unique<PendingQueue>()),
       upload_stage_thread_pool_(
           std::make_unique<TaskThreadPool>("upload_stage_worker")),
-      throttle_(std::make_unique<UploadStageThrottle>()),
+      inflights_throttle_(
+          std::make_unique<InflightThrottle>(FLAGS_upload_stage_max_inflights)),
       uploading_count_(0) {}
 
 BlockCacheUploader::~BlockCacheUploader() { Shutdown(); }
@@ -89,15 +92,20 @@ void BlockCacheUploader::UploadingWorker() {
 }
 
 void BlockCacheUploader::UploadBlock(const StageBlock& block) {
-  throttle_->Add(block.length);
+  // throttle_->Add(block.length);
+  inflights_throttle_->Increment(1);
+
   auto self = GetSelfSPtr();
   RunInBthread([self, block]() {
     auto status = self->DoUpload(block);
+    self->inflights_throttle_->Increment(1);
+    self->uploading_count_.signal(1);
+
     if (!status.ok() && !status.IsNotFound()) {
       bthread_usleep(100 * 1000);
+      // LOG(INFO) << ""
       self->AddStageBlock(block);  // retry
     }
-    self->uploading_count_.signal(1);
   });
 }
 
@@ -138,6 +146,7 @@ Status BlockCacheUploader::DoUpload(const StageBlock& block) {
                  << ") after upload failed: " << status.ToString();
     status = Status::OK();  // ignore removestage error
   }
+
   return status;
 }
 

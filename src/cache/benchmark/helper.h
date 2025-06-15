@@ -25,14 +25,19 @@
 
 #include <optional>
 
+#include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 
 namespace dingofs {
 namespace cache {
 
-class BlockKeyGenerator {
+blockaccess::BlockAccessOptions NewBlockAccessOptions();
+
+Block NewOneBlock();
+
+class BlockKeyFactory {
  public:
-  BlockKeyGenerator(uint64_t worker_id, uint64_t blocks);
+  BlockKeyFactory(uint64_t worker_id, uint64_t blocks);
 
   std::optional<BlockKey> Next();
 

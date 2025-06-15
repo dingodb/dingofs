@@ -30,25 +30,14 @@
 namespace dingofs {
 namespace cache {
 
-// option
-class PutOption {
- public:
-  PutOption() = default;
-  PutOption(BlockContext ctx) : ctx(ctx) {}
-  PutOption(bool writeback) : writeback(writeback) {}
-
-  BlockContext ctx{BlockFrom::kUnknown};
+struct PutOption {
   bool writeback{false};
+  BlockContext ctx{BlockFrom::kUnknown};
 };
 
 struct RangeOption {
-  RangeOption() = default;
-  RangeOption(bool retrive, size_t block_size)
-      : retrive(retrive), block_size(block_size){};
-  RangeOption(bool retrive) : retrive(retrive) {}
-
-  size_t block_size{0};
   bool retrive{true};
+  size_t block_size{0};
 };
 
 struct CacheOption {
@@ -96,6 +85,9 @@ class BlockCache : public std::enable_shared_from_this<BlockCache> {
                              PrefetchOption option = PrefetchOption()) = 0;
 
   // utility
+  virtual bool HasCacheStore() const = 0;
+  virtual bool EnableStage() const = 0;
+  virtual bool EnableCache() const = 0;
   virtual bool IsCached(const BlockKey& key) const = 0;
 };
 

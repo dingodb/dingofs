@@ -57,7 +57,7 @@ void DiskCacheWatcher::Stop() {
 }
 
 void DiskCacheWatcher::WatchingWorker() {
-  while (running_.load(std::memory_order_acquire)) {
+  if (running_.load(std::memory_order_acquire)) {
     for (auto& target : targets_) {
       auto should = CheckTarget(&target);
       if (should == Should::kShutdown) {
@@ -66,6 +66,8 @@ void DiskCacheWatcher::WatchingWorker() {
         Restart(&target);
       }
     }
+
+    timer_->Add([this] { WatchingWorker(); }, 100);
   }
 }
 

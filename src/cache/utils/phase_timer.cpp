@@ -35,6 +35,16 @@ namespace cache {
 using base::string::StrJoin;
 
 static const std::unordered_map<Phase, std::string> kPhases = {
+    // tier block cache
+    {Phase::kLocalPut, "local_put"},
+    {Phase::kRemotePut, "remote_put"},
+    {Phase::kLocalRange, "local_range"},
+    {Phase::kRemoteRange, "remote_range"},
+    {Phase::kLocalCache, "local_cache"},
+    {Phase::kRemoteCache, "remote_cache"},
+    {Phase::kLocalPrefetch, "local_prefetch"},
+    {Phase::kRemotePrefetch, "remote_prefetch"},
+
     // block cache
     {Phase::kStageBlock, "stage"},
     {Phase::kRemoveStageBlock, "removestage"},
@@ -55,12 +65,24 @@ static const std::unordered_map<Phase, std::string> kPhases = {
     {Phase::kCheckIO, "check"},
     {Phase::kEnterPrepareQueue, "enqueue"},
     {Phase::kPrepareIO, "prepare"},
-    {Phase::kSubmitIO, "submit"},
     {Phase::kExecuteIO, "execute"},
+
+    // remote block cache
+    {Phase::kRPCPut, "rpc_put"},
+    {Phase::kRPCRange, "rpc_range"},
+    {Phase::kRPCCache, "rpc_cache"},
+    {Phase::kRPCPrefetch, "rpc_prefetch"},
 
     // s3
     {Phase::kS3Put, "s3_put"},
     {Phase::kS3Range, "s3_range"},
+
+    // block cache service
+    {Phase::kNodePut, "node_put"},
+    {Phase::kNodeRange, "node_range"},
+    {Phase::kNodeCache, "node_cache"},
+    {Phase::kNodePrefetch, "node_prefetch"},
+    {Phase::kSendResponse, "send_response"},
 
     // unknown
     {Phase::kUnknown, "unknown"},
@@ -72,6 +94,20 @@ std::string StrPhase(Phase phase) {
     return it->second;
   }
   return "unknown";
+}
+
+PhaseTimer::PhaseTimer() { g_timer_.start(); }
+
+void PhaseTimer::StopPreTimer() {
+  if (!timers_.empty()) {
+    timers_.back().Stop();
+  }
+}
+
+void PhaseTimer::StartNewTimer(Phase phase) {
+  auto timer = Timer(phase);
+  timer.Start();
+  timers_.emplace_back(timer);
 }
 
 void PhaseTimer::NextPhase(Phase phase) {
@@ -86,6 +122,12 @@ Phase PhaseTimer::GetPhase() {
   return timers_.back().phase;
 }
 
+int64_t PhaseTimer::UElapsed() {
+  g_timer_.stop();
+  return g_timer_.u_elapsed();
+}
+
+// e.g. (write:0.005317,link:0.000094,cache_add:0.000013,enqueue:0.000004)
 std::string PhaseTimer::ToString() {
   StopPreTimer();
 
@@ -100,18 +142,6 @@ std::string PhaseTimer::ToString() {
     return "";
   }
   return " (" + StrJoin(description, ",") + ")";
-}
-
-void PhaseTimer::StopPreTimer() {
-  if (!timers_.empty()) {
-    timers_.back().Stop();
-  }
-}
-
-void PhaseTimer::StartNewTimer(Phase phase) {
-  auto timer = Timer(phase);
-  timer.Start();
-  timers_.emplace_back(timer);
 }
 
 }  // namespace cache
