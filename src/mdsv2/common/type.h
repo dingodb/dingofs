@@ -29,6 +29,7 @@ namespace mdsv2 {
 using Ino = uint64_t;
 using AttrType = pb::mdsv2::Inode;
 using DentryType = pb::mdsv2::Dentry;
+using SliceType = pb::mdsv2::Slice;
 using ChunkType = pb::mdsv2::Chunk;
 using FsInfoType = pb::mdsv2::FsInfo;
 using TrashSliceList = pb::mdsv2::TrashSliceList;
@@ -36,6 +37,7 @@ using QuotaEntry = pb::mdsv2::Quota;
 using UsageEntry = pb::mdsv2::Usage;
 using MdsEntry = pb::mdsv2::MDS;
 using ClientEntry = pb::mdsv2::Client;
+using FileSessionEntry = pb::mdsv2::FileSession;
 
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
 inline bool IsFile(Ino ino) { return (ino & 1) == 0; }

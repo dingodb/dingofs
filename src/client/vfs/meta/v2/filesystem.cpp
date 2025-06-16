@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/filesystem.h"
 
+#include <fcntl.h>
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -335,6 +337,10 @@ Status MDSV2FileSystem::MkNod(Ino parent, const std::string& name, uint32_t uid,
 
 Status MDSV2FileSystem::Open(Ino ino, int flags, uint64_t fh) {
   LOG(INFO) << fmt::format("[meta.{}] open ino({}).", name_, ino);
+
+  if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
+    return Status::NoPermission("O_TRUNC without O_WRONLY or O_RDWR");
+  }
 
   std::string session_id;
   auto status = mds_client_->Open(ino, flags, session_id);

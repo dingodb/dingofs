@@ -67,8 +67,8 @@ struct EntryOut {
 
 class FileSystem : public std::enable_shared_from_this<FileSystem> {
  public:
-  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
-             OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+  FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, IdGeneratorSPtr slice_id_generator,
+             KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
              notify::NotifyBuddySPtr notify_buddy);
   ~FileSystem();
 
@@ -78,10 +78,11 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   FileSystem& operator=(FileSystem&&) = delete;
 
   static FileSystemSPtr New(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
-                            KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
-                            MDSMetaMapSPtr mds_meta_map, notify::NotifyBuddySPtr notify_buddy) {
-    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), kv_storage,
-                                        operation_processor, mds_meta_map, notify_buddy);
+                            IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
+                            OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
+                            notify::NotifyBuddySPtr notify_buddy) {
+    return std::make_shared<FileSystem>(self_mds_id, std::move(fs_info), std::move(id_generator), slice_id_generator,
+                                        kv_storage, operation_processor, mds_meta_map, notify_buddy);
   }
 
   FileSystemSPtr GetSelfPtr();
@@ -120,7 +121,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
     uint64_t rdev{0};
   };
   Status MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_out);
-  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id);
+  Status Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, uint64_t& version);
   Status Release(Context& ctx, Ino ino, const std::string& session_id);
 
   // directory
@@ -270,6 +271,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   // generate inode id
   IdGeneratorUPtr id_generator_;
+  // for slice id
+  IdGeneratorSPtr slice_id_generator_;
 
   // persistence store dentry/inode
   KVStorageSPtr kv_storage_;
@@ -305,13 +308,18 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 class FileSystemSet {
  public:
   FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
+                IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                 MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
                 notify::NotifyBuddySPtr notify_buddy);
   ~FileSystemSet();
 
+  FileSystemSet(const FileSystemSet&) = delete;
+  FileSystemSet& operator=(const FileSystemSet&) = delete;
+  FileSystemSet(FileSystemSet&&) = delete;
+  FileSystemSet& operator=(FileSystemSet&&) = delete;
+
   static FileSystemSetSPtr New(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                               IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
+                               IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                                MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
                                notify::NotifyBuddySPtr notify_buddy) {
     return std::make_shared<FileSystemSet>(coordinator_client, std::move(fs_id_generator),
@@ -373,7 +381,7 @@ class FileSystemSet {
   // for fs id
   IdGeneratorUPtr id_generator_;
   // for slice id
-  IdGeneratorUPtr slice_id_generator_;
+  IdGeneratorSPtr slice_id_generator_;
 
   KVStorageSPtr kv_storage_;
 

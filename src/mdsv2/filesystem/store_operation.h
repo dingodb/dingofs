@@ -52,6 +52,8 @@ class Operation {
     kUpdateAttr = 15,
     kUpdateXAttr = 16,
     kUpdateChunk = 17,
+    kOpenFile = 18,
+    kCloseFile = 19,
     kRmDir = 20,
     kUnlink = 21,
     kRename = 22,
@@ -73,6 +75,9 @@ class Operation {
     kUpsertClient = 43,
     kDeleteClient = 44,
     kScanClient = 45,
+
+    kGetFileSession = 50,
+    kScanFileSession = 51,
   };
 
   const char* OpName() const {
@@ -109,6 +114,12 @@ class Operation {
 
       case OpType::kUpdateChunk:
         return "UpdateChunk";
+
+      case OpType::kOpenFile:
+        return "OpenFile";
+
+      case OpType::kCloseFile:
+        return "CloseFile";
 
       case OpType::kRmDir:
         return "RmDir";
@@ -164,6 +175,12 @@ class Operation {
       case OpType::kScanClient:
         return "ScanClient";
 
+      case OpType::kGetFileSession:
+        return "GetFileSession";
+
+      case OpType::kScanFileSession:
+        return "ScanFileSession";
+
       default:
         return "UnknownOperation";
     }
@@ -193,6 +210,8 @@ class Operation {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kUpdateChunk:
+      case OpType::kOpenFile:
+      case OpType::kCloseFile:
         return true;
 
       default:
@@ -208,6 +227,7 @@ class Operation {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
       case OpType::kUpdateChunk:
+      case OpType::kOpenFile:
         return true;
 
       default:
@@ -421,8 +441,16 @@ class SmyLinkOperation : public Operation {
 
 class UpdateAttrOperation : public Operation {
  public:
-  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrType& attr)
-      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr) {};
+  struct ExtraParam {
+    uint64_t slice_id{0};
+    uint32_t slice_num{0};
+
+    uint64_t chunk_size{0};
+    uint64_t block_size{0};
+  };
+
+  UpdateAttrOperation(Trace& trace, uint64_t ino, uint32_t to_set, const AttrType& attr, const ExtraParam& extra_param)
+      : Operation(trace), ino_(ino), to_set_(to_set), attr_(attr), extra_param_(extra_param) {};
   ~UpdateAttrOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kUpdateAttr; }
@@ -433,9 +461,14 @@ class UpdateAttrOperation : public Operation {
   Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
  private:
+  bool ExpandChunk(AttrType& attr, uint64_t new_length);
+  bool Truncate(AttrType& attr);
+
   uint64_t ino_;
   const uint32_t to_set_;
   const AttrType& attr_;
+
+  const ExtraParam extra_param_;
 };
 
 class UpdateXAttrOperation : public Operation {
@@ -491,6 +524,46 @@ class UpdateChunkOperation : public Operation {
   std::vector<pb::mdsv2::Slice> slices_;
 
   Result result_;
+};
+
+class OpenFileOperation : public Operation {
+ public:
+  OpenFileOperation(Trace& trace, uint32_t fs_id, Ino ino, uint32_t flags, FileSessionEntry file_session)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), flags_(flags), file_session_(file_session) {};
+  ~OpenFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kOpenFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  uint32_t flags_;
+
+  FileSessionEntry file_session_;
+};
+
+class CloseFileOperation : public Operation {
+ public:
+  CloseFileOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& session_id)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id) {};
+  ~CloseFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCloseFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  std::string session_id_;
 };
 
 class RmDirOperation : public Operation {
@@ -976,6 +1049,70 @@ class ScanClientOperation : public Operation {
   }
 
  private:
+  Result result_;
+};
+
+class GetFileSessionOperation : public Operation {
+ public:
+  GetFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& session_id)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), session_id_(session_id) {};
+  ~GetFileSessionOperation() override = default;
+
+  struct Result : public Operation::Result {
+    FileSessionEntry file_session;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetFileSession; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+  std::string session_id_;
+  Result result_;
+};
+
+class ScanFileSessionOperation : public Operation {
+ public:
+  ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~ScanFileSessionOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<FileSessionEntry> file_sessions;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanFileSession; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
   Result result_;
 };
 

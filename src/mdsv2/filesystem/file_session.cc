@@ -14,19 +14,18 @@
 
 #include "mdsv2/filesystem/file_session.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <string>
 #include <utility>
 
 #include "dingofs/error.pb.h"
-#include "mdsv2/common/codec.h"
+#include "fmt/format.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/storage/storage.h"
+#include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -39,26 +38,20 @@ static const std::string kFileSessionCacheCountMetricsName = "dingofs_file_sessi
 static const std::string kFileSessionTatalCountMetricsName = "dingofs_file_session_total_count";
 static const std::string kFileSessionCountMetricsName = "dingofs_file_session_count";
 
-std::string FileSession::EncodeKey(uint32_t fs_id, uint64_t ino, const std::string& session_id) {
-  return MetaCodec::EncodeFileSessionKey(fs_id, ino, session_id);
-}
+static FileSessionPtr NewFileSession(uint64_t ino, const std::string& client_id) {
+  auto file_session = std::make_shared<FileSessionEntry>();
+  file_session->set_session_id(utils::UUIDGenerator::GenerateUUID());
+  file_session->set_ino(ino);
+  file_session->set_client_id(client_id);
 
-std::string FileSession::EncodeKey() const { return MetaCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_); }
-
-std::string FileSession::EncodeValue() const {
-  pb::mdsv2::FileSession file_session;
-  file_session.set_session_id(session_id_);
-  file_session.set_ino(ino_);
-  file_session.set_client_id(client_id_);
-
-  return MetaCodec::EncodeFileSessionValue(file_session);
+  return file_session;
 }
 
 FileSessionCache::FileSessionCache() : count_metrics_(kFileSessionCacheCountMetricsName) {}
 
 bool FileSessionCache::Put(FileSessionPtr file_session) {
   utils::WriteLockGuard guard(lock_);
-  auto key = Key{.ino = file_session->Ino(), .session_id = file_session->SessionId()};
+  auto key = Key{.ino = file_session->ino(), .session_id = file_session->session_id()};
   auto it = file_session_map_.find(key);
   if (it != file_session_map_.end()) {
     return false;
@@ -74,7 +67,7 @@ bool FileSessionCache::Put(FileSessionPtr file_session) {
 void FileSessionCache::Upsert(FileSessionPtr file_session) {
   utils::WriteLockGuard guard(lock_);
 
-  auto key = Key{.ino = file_session->Ino(), .session_id = file_session->SessionId()};
+  auto key = Key{.ino = file_session->ino(), .session_id = file_session->session_id()};
 
   auto it = file_session_map_.find(key);
   if (it == file_session_map_.end()) {
@@ -150,21 +143,14 @@ bool FileSessionCache::IsExist(uint64_t ino, const std::string& session_id) {
   return file_session_map_.find(key) != file_session_map_.end();
 }
 
-FileSessionManager::FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage)
+FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor)
     : fs_id_(fs_id),
-      kv_storage_(kv_storage),
+      operation_processor_(operation_processor),
       total_count_metrics_(kFileSessionTatalCountMetricsName),
       count_metrics_(kFileSessionCountMetricsName) {}
 
 Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session) {
-  file_session = FileSession::New(fs_id_, ino, client_id);
-
-  KVStorage::WriteOption write_option;
-  auto status = kv_storage_->Put(write_option, file_session->EncodeKey(), file_session->EncodeValue());
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] create fail, {}/{} {}", ino, client_id, status.error_str());
-    return status;
-  }
+  file_session = NewFileSession(ino, client_id);
 
   // add to cache
   CHECK(file_session_cache_.Put(file_session))
@@ -230,12 +216,6 @@ Status FileSessionManager::IsExist(uint64_t ino, bool just_cache, bool& is_exist
 }
 
 Status FileSessionManager::Delete(uint64_t ino, const std::string& session_id) {
-  auto status = kv_storage_->Delete(FileSession::EncodeKey(fs_id_, ino, session_id));
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] delete fail, {}/{} {}", ino, session_id, status.error_str());
-    return status;
-  }
-
   // delete cache
   file_session_cache_.Delete(ino, session_id);
 
@@ -245,95 +225,64 @@ Status FileSessionManager::Delete(uint64_t ino, const std::string& session_id) {
 }
 
 Status FileSessionManager::Delete(uint64_t ino) {
-  std::vector<FileSessionPtr> file_sessions;
-  auto status = GetFileSessionsFromStore(ino, file_sessions);
-  if (!status.ok()) {
-    return status;
-  }
+  // delete cache
+  file_session_cache_.Delete(ino);
 
-  if (file_sessions.empty()) {
-    return Status::OK();
-  }
+  // count_metrics_ << (0 - static_cast<int64_t>(file_sessions.size()));
 
-  int retry = 0;
-  do {
-    auto txn = kv_storage_->NewTxn();
-
-    for (auto& file_session : file_sessions) {
-      txn->Delete(file_session->EncodeKey());
-    }
-
-    status = txn->Commit();
-    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      break;
-    }
-
-    ++retry;
-  } while (retry < FLAGS_txn_max_retry_times);
-
-  if (status.ok()) {
-    // delete cache
-    file_session_cache_.Delete(ino);
-
-    count_metrics_ << (0 - static_cast<int64_t>(file_sessions.size()));
-  }
-
-  return status;
+  return Status::OK();
 }
 
 Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionPtr>& file_sessions) {
-  Range range;
-  MetaCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
+  Trace trace;
+  ScanFileSessionOperation operation(trace, fs_id_, ino);
 
-  auto txn = kv_storage_->NewTxn();
-  std::vector<KeyValue> kvs;
-  do {
-    kvs.clear();
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
+    return status;
+  }
 
-    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      DINGO_LOG(ERROR) << fmt::format("[filesession] scan fail, {} {}", ino, status.error_str());
-      break;
-    }
+  auto& result = operation.GetResult();
 
-    for (auto& kv : kvs) {
-      file_sessions.push_back(FileSession::New(fs_id_, MetaCodec::DecodeFileSessionValue(kv.value)));
-    }
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+  for (const auto& file_session : result.file_sessions) {
+    file_sessions.push_back(std::make_shared<FileSessionEntry>(file_session));
+  }
 
   return Status::OK();
 }
 
 Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::string& session_id,
                                                    FileSessionPtr& file_session) {
-  std::string key = FileSession::EncodeKey(fs_id_, ino, session_id);
+  Trace trace;
+  GetFileSessionOperation operation(trace, fs_id_, ino, session_id);
 
-  std::string value;
-  auto status = kv_storage_->Get(key, value);
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] get fail, {}/{} {}", ino, session_id, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[filesession] get file session fail, status({}).", status.error_str());
     return status;
   }
 
-  file_session = FileSession::New(fs_id_, MetaCodec::DecodeFileSessionValue(value));
+  auto& result = operation.GetResult();
+
+  file_session = std::make_shared<FileSessionEntry>(result.file_session);
 
   return Status::OK();
 }
 
 Status FileSessionManager::IsExistFromStore(uint64_t ino, bool& is_exist) {
-  Range range;
-  MetaCodec::GetFileSessionRange(fs_id_, ino, range.start_key, range.end_key);
+  Trace trace;
+  ScanFileSessionOperation operation(trace, fs_id_, ino);
 
-  std::vector<KeyValue> kvs;
-  auto txn = kv_storage_->NewTxn();
-  auto status = txn->Scan(range, 1, kvs);
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[filesession] scan fail, {} {}", ino, status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
 
-  is_exist = !kvs.empty();
+  auto& result = operation.GetResult();
+
+  is_exist = !result.file_sessions.empty();
 
   return Status::OK();
 }

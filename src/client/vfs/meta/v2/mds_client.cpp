@@ -384,6 +384,8 @@ Status MDSClient::Open(Ino ino, int flags, std::string& session_id) {
 
   session_id = response.session_id();
 
+  parent_memo_->UpsertVersion(ino, response.version());
+
   return Status::OK();
 }
 

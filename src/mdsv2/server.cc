@@ -196,11 +196,11 @@ bool Server::InitFileSystem() {
   CHECK(fs_id_generator->Init()) << "init fs AutoIncrementIdGenerator fail.";
 
   auto slice_id_generator =
-      AutoIncrementIdGenerator::New(coordinator_client_, kSliceTableId, kSliceIdStartId, kSliceIdBatchSize);
+      AutoIncrementIdGenerator::NewShare(coordinator_client_, kSliceTableId, kSliceIdStartId, kSliceIdBatchSize);
   CHECK(slice_id_generator != nullptr) << "new slice AutoIncrementIdGenerator fail.";
   CHECK(slice_id_generator->Init()) << "init slice AutoIncrementIdGenerator fail.";
 
-  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), std::move(slice_id_generator),
+  file_system_set_ = FileSystemSet::New(coordinator_client_, std::move(fs_id_generator), slice_id_generator,
                                         kv_storage_, mds_meta_, mds_meta_map_, operation_processor_, notify_buddy_);
   CHECK(file_system_set_ != nullptr) << "new FileSystem fail.";
 

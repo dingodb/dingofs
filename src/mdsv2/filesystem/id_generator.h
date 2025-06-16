@@ -35,7 +35,7 @@ class IdGenerator {
   virtual bool Init() = 0;
 
   virtual bool GenID(uint32_t num, uint64_t& id) = 0;
-  virtual bool GenID(uint32_t num, uint64_t min_slice_id,  uint64_t& id) = 0;
+  virtual bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) = 0;
 };
 
 using IdGeneratorUPtr = std::unique_ptr<IdGenerator>;
@@ -49,10 +49,14 @@ class AutoIncrementIdGenerator : public IdGenerator {
   static IdGeneratorUPtr New(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id, uint32_t batch_size) {
     return std::make_unique<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
   }
+  static IdGeneratorSPtr NewShare(CoordinatorClientSPtr client, int64_t table_id, uint64_t start_id,
+                                  uint32_t batch_size) {
+    return std::make_shared<AutoIncrementIdGenerator>(client, table_id, start_id, batch_size);
+  }
 
   bool Init() override;
   bool GenID(uint32_t num, uint64_t& id) override;
-  bool GenID(uint32_t num,uint64_t min_slice_id,  uint64_t& id) override;
+  bool GenID(uint32_t num, uint64_t min_slice_id, uint64_t& id) override;
 
  private:
   Status IsExistAutoIncrement();

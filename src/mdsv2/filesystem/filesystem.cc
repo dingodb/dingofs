@@ -14,6 +14,7 @@
 
 #include "mdsv2/filesystem/filesystem.h"
 
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
@@ -76,13 +77,15 @@ bool IsReserveName(const std::string& name) { return name == kStatsName || name 
 
 bool IsInvalidName(const std::string& name) { return name.empty() || name.size() > FLAGS_filesystem_name_max_size; }
 
-FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator, KVStorageSPtr kv_storage,
+FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr id_generator,
+                       IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage,
                        OperationProcessorSPtr operation_processor, MDSMetaMapSPtr mds_meta_map,
                        notify::NotifyBuddySPtr notify_buddy)
     : self_mds_id_(self_mds_id),
       fs_info_(std::move(fs_info)),
       fs_id_(fs_info_->GetFsId()),
       id_generator_(std::move(id_generator)),
+      slice_id_generator_(slice_id_generator),
       kv_storage_(kv_storage),
       operation_processor_(operation_processor),
       mds_meta_map_(mds_meta_map),
@@ -91,7 +94,7 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       notify_buddy_(notify_buddy) {
   can_serve_ = CanServe(self_mds_id);
 
-  file_session_manager_ = FileSessionManager::New(fs_id_, kv_storage_);
+  file_session_manager_ = FileSessionManager::New(fs_id_, operation_processor);
 };
 
 FileSystem::~FileSystem() {
@@ -701,11 +704,15 @@ Status FileSystem::MkNod(Context& ctx, const MkNodParam& param, EntryOut& entry_
   return Status::OK();
 }
 
-Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id) {
+Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& session_id, uint64_t& version) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}] open ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  if ((flags & O_TRUNC) && !(flags & O_WRONLY || flags & O_RDWR)) {
+    return Status(pb::error::ENO_PERMISSION, "O_TRUNC without O_WRONLY or O_RDWR");
   }
 
   auto& trace = ctx.GetTrace();
@@ -726,20 +733,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     return status;
   }
 
-  session_id = file_session->SessionId();
-
-  // O_TRUNC && (O_WRONLY || O_RDWR)
-  // truncate file
-  // set file length to 0 and update inode mtime/ctime
-
-  AttrType attr;
-  attr.set_fs_id(fs_id_);
-  attr.set_ino(ino);
-  attr.set_atime(time_ns);
-  attr.set_ctime(time_ns);
-  attr.set_mtime(time_ns);
-
-  UpdateAttrOperation operation(trace, ino, kSetAttrAtime | kSetAttrCtime | kSetAttrMtime, attr);
+  OpenFileOperation operation(trace, fs_id_, ino, flags, *file_session);
 
   status = RunOperation(&operation);
   if (!status.ok()) {
@@ -747,23 +741,36 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   }
 
   auto& result = operation.GetResult();
+
+  version = result.attr.version();
+  session_id = file_session->session_id();
+
   // update cache
   inode->UpdateIf(std::move(result.attr));
 
   return Status::OK();
 }
 
-Status FileSystem::Release(Context&, Ino ino, const std::string& session_id) {
+Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}] release ino({}).", fs_id_, ino);
 
   if (!CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
-  auto status = file_session_manager_->Delete(ino, session_id);
+  auto& trace = ctx.GetTrace();
+
+  CloseFileOperation operation(trace, fs_id_, ino, session_id);
+
+  auto status = RunOperation(&operation);
   if (!status.ok()) {
     return status;
   }
+
+  auto& result = operation.GetResult();
+
+  // delete cache
+  file_session_manager_->Delete(ino, session_id);
 
   return Status::OK();
 }
@@ -1295,13 +1302,38 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
     return status;
   }
 
+  uint64_t slice_num = 0;
+  uint64_t slice_id = 0;
+  if (param.to_set & kSetAttrLength) {
+    if (param.attr.length() > inode->Length()) {
+      // check quota
+      if (!quota_manager_.CheckQuota(ino, param.attr.length() - inode->Length(), 0)) {
+        return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+      }
+
+      // prealloc slice id
+      slice_num = (param.attr.length() - inode->Length()) / fs_info_->GetChunkSize() + 1;
+      if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
+        return Status(pb::error::EINTERNAL, "generate slice id fail");
+      }
+    }
+  }
+
   // update backend store
-  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr);
+  UpdateAttrOperation::ExtraParam extra_param;
+  if (slice_id > 0) {
+    extra_param.block_size = fs_info_->GetBlockSize();
+    extra_param.chunk_size = fs_info_->GetChunkSize();
+    extra_param.slice_id = slice_id;
+    extra_param.slice_num = slice_num;
+  }
+
+  UpdateAttrOperation operation(trace, ino, param.to_set, param.attr, extra_param);
 
   status = RunOperation(&operation);
 
-  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish,  statusstatus({}).", fs_id_, ElapsedTimeUs(time_ns),
-                                 ino, status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] setattr {} finish, slice({}/{}) status({}).", fs_id_,
+                                 ElapsedTimeUs(time_ns), ino, slice_id, slice_num, status.error_str());
 
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
@@ -1311,6 +1343,18 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
   auto& attr = result.attr;
 
   entry_out.attr = attr;
+
+  // update quota
+  if (param.to_set & kSetAttrLength) {
+    int64_t change_bytes = param.attr.length() > inode->Length()
+                               ? param.attr.length() - inode->Length()
+                               : -static_cast<int64_t>(inode->Length() - param.attr.length());
+    quota_manager_.UpdateFsUsage(change_bytes, 0);
+
+    for (const auto& parent : attr.parents()) {
+      quota_manager_.UpdateDirUsage(parent, change_bytes, 0);
+    }
+  }
 
   // update cache
   if (IsDir(ino) && IsParentHashPartition()) {
@@ -2035,12 +2079,12 @@ Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
-                             IdGeneratorUPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
+                             IdGeneratorSPtr slice_id_generator, KVStorageSPtr kv_storage, MDSMeta self_mds_meta,
                              MDSMetaMapSPtr mds_meta_map, OperationProcessorSPtr operation_processor,
                              notify::NotifyBuddySPtr notify_buddy)
     : coordinator_client_(coordinator_client),
       id_generator_(std::move(fs_id_generator)),
-      slice_id_generator_(std::move(slice_id_generator)),
+      slice_id_generator_(slice_id_generator),
       kv_storage_(kv_storage),
       self_mds_meta_(self_mds_meta),
       mds_meta_map_(mds_meta_map),
@@ -2255,8 +2299,8 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
   CHECK(id_generator != nullptr) << "new id generator fail.";
 
-  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                            operation_processor_, mds_meta_map_, notify_buddy_);
+  auto fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
+                            slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
   if (!fs->Init()) {
     cleanup(dentry_table_id, fs_key, "");
     return Status(pb::error::EINTERNAL, "init FileSystem fail");
@@ -2538,8 +2582,8 @@ bool FileSystemSet::LoadFileSystems() {
     if (fs == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());
 
-      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator), kv_storage_,
-                           operation_processor_, mds_meta_map_, notify_buddy_);
+      fs = FileSystem::New(self_mds_meta_.ID(), FsInfo::NewUnique(fs_info), std::move(id_generator),
+                           slice_id_generator_, kv_storage_, operation_processor_, mds_meta_map_, notify_buddy_);
       if (!fs->Init()) {
         DINGO_LOG(ERROR) << fmt::format("[fsset] init FileSystem({}) fail.", fs_info.fs_id());
         continue;

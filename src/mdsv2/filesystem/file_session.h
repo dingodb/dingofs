@@ -20,48 +20,15 @@
 #include <string>
 #include <vector>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/storage/storage.h"
+#include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/uuid.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-class FileSession;
-using FileSessionPtr = std::shared_ptr<FileSession>;
-
-// represent file session for client open file
-class FileSession {
- public:
-  FileSession() = default;
-  FileSession(uint32_t fs_id, const std::string& session_id, uint64_t ino, const std::string& client_id)
-      : fs_id_(fs_id), session_id_(session_id), ino_(ino), client_id_(client_id) {}
-
-  static FileSessionPtr New(uint32_t fs_id, uint64_t ino, const std::string& client_id) {
-    return std::make_shared<FileSession>(fs_id, utils::UUIDGenerator::GenerateUUID(), ino, client_id);
-  }
-
-  static FileSessionPtr New(uint32_t fs_id, const pb::mdsv2::FileSession& file_session) {
-    return std::make_shared<FileSession>(fs_id, file_session.session_id(), file_session.ino(),
-                                         file_session.client_id());
-  }
-
-  const std::string& SessionId() const { return session_id_; }
-  uint64_t Ino() const { return ino_; }
-  const std::string& ClientId() const { return client_id_; }
-
-  static std::string EncodeKey(uint32_t fs_id, uint64_t ino, const std::string& session_id);
-  std::string EncodeKey() const;
-  std::string EncodeValue() const;
-
- private:
-  uint32_t fs_id_;
-  uint64_t ino_;
-  std::string session_id_;
-  std::string client_id_;
-};
+using FileSessionPtr = std::shared_ptr<FileSessionEntry>;
 
 // cache file session
 class FileSessionCache {
@@ -85,6 +52,7 @@ class FileSessionCache {
   void Upsert(FileSessionPtr file_session);
   void Delete(uint64_t ino, const std::string& session_id);
   void Delete(uint64_t ino);
+
   FileSessionPtr Get(uint64_t ino, const std::string& session_id);
   std::vector<FileSessionPtr> Get(uint64_t ino);
   bool IsExist(uint64_t ino);
@@ -106,7 +74,7 @@ using FileSessionManagerUPtr = std::unique_ptr<FileSessionManager>;
 // persist store file session and cache file session
 class FileSessionManager {
  public:
-  FileSessionManager(uint32_t fs_id, KVStorageSPtr kv_storage);
+  FileSessionManager(uint32_t fs_id, OperationProcessorSPtr operation_processor);
   ~FileSessionManager() = default;
 
   FileSessionManager(const FileSessionManager&) = delete;
@@ -114,14 +82,15 @@ class FileSessionManager {
   FileSessionManager(FileSessionManager&&) = delete;
   FileSessionManager& operator=(FileSessionManager&&) = delete;
 
-  static FileSessionManagerUPtr New(uint32_t fs_id, KVStorageSPtr kv_storage) {
-    return std::make_unique<FileSessionManager>(fs_id, kv_storage);
+  static FileSessionManagerUPtr New(uint32_t fs_id, OperationProcessorSPtr operation_processor) {
+    return std::make_unique<FileSessionManager>(fs_id, operation_processor);
   }
 
   Status Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session);
   Status IsExist(uint64_t ino, bool just_cache, bool& is_exist);
   Status Delete(uint64_t ino, const std::string& session_id);
   Status Delete(uint64_t ino);
+
   FileSessionPtr Get(uint64_t ino, const std::string& session_id, bool just_cache = false);
   std::vector<FileSessionPtr> Get(uint64_t ino, bool just_cache = false);
 
@@ -134,11 +103,10 @@ class FileSessionManager {
 
   uint32_t fs_id_;
 
-  // store file session
-  KVStorageSPtr kv_storage_;
-
   // cache file session
   FileSessionCache file_session_cache_;
+
+  OperationProcessorSPtr operation_processor_;
 
   // statistics
   bvar::Adder<uint64_t> total_count_metrics_;

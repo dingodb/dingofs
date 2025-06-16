@@ -572,7 +572,7 @@ void MDSServiceImpl::DoListDentry(google::protobuf::RpcController* controller,
   }
 
   for (auto& dentry : dentries) {
-    response->add_dentries()->CopyFrom(dentry.Copy());
+    *response->add_dentries() = dentry.Copy();
   }
 }
 
@@ -1009,13 +1009,15 @@ void MDSServiceImpl::DoOpen(google::protobuf::RpcController* controller, const p
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version(), req_ctx.client_id());
 
   std::string session_id;
-  status = file_system->Open(ctx, request->ino(), request->flags(), session_id);
+  uint64_t version;
+  status = file_system->Open(ctx, request->ino(), request->flags(), session_id, version);
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
   }
 
   response->set_session_id(session_id);
+  response->set_version(version);
 }
 
 void MDSServiceImpl::Open(google::protobuf::RpcController* controller, const pb::mdsv2::OpenRequest* request,

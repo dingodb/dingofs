@@ -13,8 +13,7 @@
 
 #include "mdsv2/filesystem/store_operation.h"
 
-#include <fmt/format.h>
-#include <glog/logging.h>
+#include <fcntl.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -24,6 +23,8 @@
 
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
 #include "mdsv2/common/logging.h"
@@ -308,6 +309,64 @@ Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   return Status::OK();
 }
 
+bool UpdateAttrOperation::ExpandChunk(AttrType& attr, uint64_t new_length) {
+  uint64_t length = attr.length();
+  const uint64_t chunk_size_ = extra_param_.chunk_size;
+  const uint64_t block_size_ = extra_param_.block_size;
+  uint64_t slice_id_ = extra_param_.slice_id;
+  const uint32_t slice_num_ = extra_param_.slice_num;
+
+  uint32_t count = 0;
+  while (length < new_length) {
+    uint64_t chunk_pos = length % chunk_size_;
+    uint64_t chunk_index = length / chunk_size_;
+    uint64_t delta_size = new_length - length;
+    uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size_) ? (chunk_size_ - chunk_pos) : delta_size;
+
+    SliceType slice;
+    slice.set_id(slice_id_++);
+    slice.set_offset(chunk_pos);
+    slice.set_len(delta_chunk_size);
+    slice.set_size(delta_chunk_size);
+    slice.set_zero(true);
+
+    auto it = attr.mutable_chunks()->find(chunk_index);
+    if (it == attr.mutable_chunks()->end()) {
+      ChunkType chunk;
+      chunk.set_index(chunk_index);
+      chunk.set_chunk_size(chunk_size_);
+      chunk.set_block_size(block_size_);
+      chunk.set_version(0);
+      chunk.add_slices()->Swap(&slice);
+      attr.mutable_chunks()->insert({chunk_index, std::move(chunk)});
+
+    } else {
+      auto& chunk = it->second;
+      chunk.add_slices()->Swap(&slice);
+    }
+
+    length += delta_chunk_size;
+    ++count;
+    if (count > slice_num_) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool UpdateAttrOperation::Truncate(AttrType& attr) {
+  if (attr_.length() > attr.length()) {
+    if (!ExpandChunk(attr, attr_.length())) {
+      return false;
+    }
+  }
+
+  attr.set_length(attr_.length());
+
+  return true;
+}
+
 Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
   const uint32_t fs_id = attr.fs_id();
 
@@ -324,7 +383,9 @@ Status UpdateAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
   }
 
   if (to_set_ & kSetAttrLength) {
-    attr.set_length(attr_.length());
+    if (!Truncate(attr)) {
+      return Status(pb::error::EINTERNAL, fmt::format("truncate file length({}) fail.", attr_.length()));
+    }
   }
 
   if (to_set_ & kSetAttrAtime) {
@@ -392,6 +453,27 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
   inode.set_ctime(std::max(inode.ctime(), GetTime()));
   inode.set_mtime(std::max(inode.mtime(), GetTime()));
 
+  return Status::OK();
+}
+
+Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrType& inode) {
+  if (flags_ & O_TRUNC) {
+    inode.set_length(0);
+  }
+
+  inode.set_atime(std::max(inode.atime(), GetTime()));
+  inode.set_ctime(std::max(inode.ctime(), GetTime()));
+  inode.set_mtime(std::max(inode.mtime(), GetTime()));
+
+  // add file session
+  txn->Put(MetaCodec::EncodeFileSessionKey(fs_id_, ino_, file_session_.session_id()),
+           MetaCodec::EncodeFileSessionValue(file_session_));
+
+  return Status::OK();
+}
+
+Status CloseFileOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_));
   return Status::OK();
 }
 
@@ -1190,6 +1272,40 @@ Status ScanClientOperation::Run(TxnUPtr& txn) {
       ClientEntry client;
       MetaCodec::DecodeHeartbeatValue(kv.value, client);
       result_.client_entries.push_back(client);
+    }
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  return status;
+}
+
+Status GetFileSessionOperation::Run(TxnUPtr& txn) {
+  std::string value;
+  auto status = txn->Get(MetaCodec::EncodeFileSessionKey(fs_id_, ino_, session_id_), value);
+  if (!status.ok()) {
+    return status;
+  }
+
+  result_.file_session = MetaCodec::DecodeFileSessionValue(value);
+
+  return Status::OK();
+};
+
+Status ScanFileSessionOperation::Run(TxnUPtr& txn) {
+  Range range;
+  MetaCodec::GetFileSessionRange(fs_id_, ino_, range.start_key, range.end_key);
+
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    for (auto& kv : kvs) {
+      result_.file_sessions.push_back(MetaCodec::DecodeFileSessionValue(kv.value));
     }
 
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);

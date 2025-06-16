@@ -61,7 +61,7 @@ class FileSystemSetTest : public testing::Test {
     auto fs_id_generator = AutoIncrementIdGenerator::New(coordinator_client, kFsTableId, 20000, 8);
     ASSERT_TRUE(fs_id_generator->Init()) << "init fs id generator fail.";
 
-    auto slice_id_generator = AutoIncrementIdGenerator::New(coordinator_client, kSliceTableId, 20001, 8);
+    auto slice_id_generator = AutoIncrementIdGenerator::NewShare(coordinator_client, kSliceTableId, 20001, 8);
     ASSERT_TRUE(slice_id_generator->Init()) << "init fs id generator fail.";
 
     auto kv_storage = DummyStorage::New();
@@ -77,8 +77,8 @@ class FileSystemSetTest : public testing::Test {
     mds_meta.SetState(MDSMeta::State::kInit);
 
     auto mds_meta_map = MDSMetaMap::New();
-    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), std::move(slice_id_generator),
-                                kv_storage, mds_meta, mds_meta_map, operation_processor, nullptr);
+    fs_set = FileSystemSet::New(coordinator_client, std::move(fs_id_generator), slice_id_generator, kv_storage,
+                                mds_meta, mds_meta_map, operation_processor, nullptr);
     ASSERT_TRUE(fs_set->Init()) << "init fs set fail.";
   }
 
@@ -123,7 +123,7 @@ class FileSystemTest : public testing::Test {
     fs_info.set_recycle_time_hour(24);
     *fs_info.mutable_extra()->mutable_s3_info() = CreateS3Info();
 
-    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), kv_storage,
+    fs = FileSystem::New(kMdsId, FsInfo::NewUnique(fs_info), std::move(fs_id_generator), nullptr, kv_storage,
                          operation_processor, nullptr, nullptr);
     auto status = fs->CreateRoot();
     ASSERT_TRUE(status.ok()) << "create root fail, error: " << status.error_str();
