@@ -93,6 +93,7 @@ class FileSessionManager {
 
   FileSessionPtr Get(uint64_t ino, const std::string& session_id, bool just_cache = false);
   std::vector<FileSessionPtr> Get(uint64_t ino, bool just_cache = false);
+  Status GetAll(std::vector<FileSessionEntry>& file_sessions);
 
   FileSessionCache& GetFileSessionCache() { return file_session_cache_; }
 

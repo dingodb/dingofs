@@ -607,8 +607,8 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
   }
 
   if (to_set & kSetAttrSize) {
-    // todo: Truncate data
     request.set_length(attr.length);
+    temp_to_set |= mdsv2::kSetAttrLength;
   }
 
   request.set_to_set(temp_to_set);

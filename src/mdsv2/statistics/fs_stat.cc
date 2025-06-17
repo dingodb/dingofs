@@ -29,7 +29,7 @@ namespace dingofs {
 namespace mdsv2 {
 
 DECLARE_uint32(txn_max_retry_times);
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 
 DEFINE_uint32(fs_stats_compact_interval_s, 3600, "compact fs stats interval seconds.");
 DEFINE_uint32(fs_stats_duration_s, 60, "get per seconds fs stats duration.");

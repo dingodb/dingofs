@@ -27,6 +27,7 @@
 #include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/type.h"
@@ -39,7 +40,7 @@ DEFINE_uint32(txn_max_retry_times, 5, "txn max retry times.");
 
 DEFINE_uint32(merge_operation_delay_us, 0, "merge operation delay us.");
 
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 
 static const uint32_t kOpNameBufInitSize = 128;
 
@@ -1293,7 +1294,11 @@ Status GetFileSessionOperation::Run(TxnUPtr& txn) {
 
 Status ScanFileSessionOperation::Run(TxnUPtr& txn) {
   Range range;
-  MetaCodec::GetFileSessionRange(fs_id_, ino_, range.start_key, range.end_key);
+  if (ino_ == 0) {
+    MetaCodec::GetFsFileSessionRange(fs_id_, range.start_key, range.end_key);
+  } else {
+    MetaCodec::GetFileSessionRange(fs_id_, ino_, range.start_key, range.end_key);
+  }
 
   Status status;
   std::vector<KeyValue> kvs;
@@ -1311,6 +1316,24 @@ Status ScanFileSessionOperation::Run(TxnUPtr& txn) {
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
   return status;
+}
+
+Status DeleteFileSessionOperation::Run(TxnUPtr& txn) {
+  for (const auto& file_session : file_sessions_) {
+    txn->Delete(MetaCodec::EncodeFileSessionKey(file_session.fs_id(), file_session.ino(), file_session.session_id()));
+  }
+
+  return Status::OK();
+}
+
+Status CleanDeletedSliceOperation::Run(TxnUPtr& txn) {
+  txn->Delete(key_);
+  return Status::OK();
+}
+
+Status CleanDeletedFileOperation::Run(TxnUPtr& txn) {
+  txn->Delete(MetaCodec::EncodeDelFileKey(fs_id_, ino_));
+  return Status::OK();
 }
 
 OperationProcessor::OperationProcessor(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {

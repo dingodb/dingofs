@@ -42,7 +42,7 @@ namespace mdsv2 {
 DECLARE_uint32(mds_offline_period_time_ms);
 DECLARE_uint32(client_offline_period_time_ms);
 
-static std::string RenderHead() {
+static std::string RenderHead(const std::string& title) {
   butil::IOBufBuilder os;
 
   os << fmt::format(R"(<head>{})", brpc::gridtable_style());
@@ -70,7 +70,8 @@ static std::string RenderHead() {
   }
 </style>)";
 
-  os << brpc::TabsHead() << "</head>";
+  os << fmt::format(R"(<title>{}</title>)", title);
+  os << "</head>";
 
   butil::IOBuf buf;
   os.move_to(buf);
@@ -175,6 +176,9 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
     std::string result;
     result += "<div>";
     result += fmt::format(R"(<a href="FsStatService/details/{}" target="_blank">details</a>)", fs_info.fs_id());
+    result += "<br>";
+    result +=
+        fmt::format(R"(<a href="FsStatService/filesession/{}" target="_blank">file session</a>)", fs_info.fs_id());
     result += "<br>";
     result += fmt::format(R"(<a href="FsStatService/quota/{}" target="_blank">quota</a>)", fs_info.fs_id());
     result += "<br>";
@@ -321,7 +325,7 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
-  os << RenderHead();
+  os << RenderHead("dingofs dashboard");
   os << "</head>";
 
   os << "<body>";
@@ -402,7 +406,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
   os << "<head>";
-  os << RenderHead();
+  os << RenderHead("dinfofs quota");
   os << "</head>";
 
   os << "<body>";
@@ -484,7 +488,7 @@ static void RenderFsTreePage(const FsInfoType& fs_info, butil::IOBufBuilder& os)
   os << R"(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FileSystem Directory Tree</title>
+<title>dingofs tree</title>
 <style>
 body {
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -856,7 +860,7 @@ void RenderJsonPage(const std::string& header, const std::string& json, butil::I
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inode Details</title>
+  <title>dingofs inode details</title>
   <style>
     body {
       font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -974,10 +978,51 @@ void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
   RenderJsonPage(header, json, os);
 }
 
+void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dinfofs filesession") << "</head>";
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;">File Session</h1>)";
+
+  auto& file_session_manager = filesystem->GetFileSessionManager();
+  std::vector<FileSessionEntry> file_sessions;
+  auto status = file_session_manager.GetAll(file_sessions);
+  if (!status.ok()) {
+    os << fmt::format(R"(<div>get file session fail: {}</div></body>)", status.error_str());
+    return;
+  }
+
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << R"(<h3>FileSession</h3>)";
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>Ino</th>";
+  os << "<th>SessionID</th>";
+  os << "<th>ClientID</th>";
+  os << "<th>Time</th>";
+  os << "</tr>";
+
+  for (const auto& file_session : file_sessions) {
+    os << "<tr>";
+
+    os << "<td>" << file_session.ino() << "</td>";
+    os << "<td>" << file_session.session_id() << "</td>";
+    os << "<td>" << file_session.client_id() << "</td>";
+    os << "<td>" << Helper::FormatTime(file_session.create_time_s()) << "</td>";
+
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
+}
+
 void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead() << "</head>";
+  os << "<head>" << RenderHead("dingofs delfile") << "</head>";
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Deleted File</h1>)";
 
@@ -1033,7 +1078,7 @@ void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
 
   os << "<!DOCTYPE html><html>";
 
-  os << "<head>" << RenderHead() << "</head>";
+  os << "<head>" << RenderHead("dingofs delslice") << "</head>";
   os << "<body>";
   os << R"(<h1 style="text-align:center;">Deleted Slice</h1>)";
 
@@ -1124,6 +1169,19 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     auto file_system = file_system_set->GetFileSystem(fs_id);
     if (file_system != nullptr) {
       RenderFsDetailsPage(file_system->GetFsInfo(), os);
+
+    } else {
+      os << fmt::format("Not found file system {}.", fs_id);
+    }
+
+  } else if (params.size() == 2 && params[0] == "filesession") {
+    // /FsStatService/filesession/{fs_id}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      RenderFileSessionPage(file_system, os);
 
     } else {
       os << fmt::format("Not found file system {}.", fs_id);

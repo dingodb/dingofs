@@ -78,6 +78,10 @@ class Operation {
 
     kGetFileSession = 50,
     kScanFileSession = 51,
+    kDeleteFileSession = 52,
+
+    kCleanDeletedSlice = 60,
+    kCleanDeletedFile = 61,
   };
 
   const char* OpName() const {
@@ -181,6 +185,15 @@ class Operation {
       case OpType::kScanFileSession:
         return "ScanFileSession";
 
+      case OpType::kDeleteFileSession:
+        return "DeleteFileSession";
+
+      case OpType::kCleanDeletedSlice:
+        return "CleanDeletedSlice";
+
+      case OpType::kCleanDeletedFile:
+        return "CleanDeletedFile";
+
       default:
         return "UnknownOperation";
     }
@@ -211,7 +224,6 @@ class Operation {
       case OpType::kUpdateXAttr:
       case OpType::kUpdateChunk:
       case OpType::kOpenFile:
-      case OpType::kCloseFile:
         return true;
 
       default:
@@ -563,7 +575,7 @@ class CloseFileOperation : public Operation {
  private:
   uint32_t fs_id_;
   Ino ino_;
-  std::string session_id_;
+  const std::string session_id_;
 };
 
 class RmDirOperation : public Operation {
@@ -1114,6 +1126,56 @@ class ScanFileSessionOperation : public Operation {
   uint32_t fs_id_;
   Ino ino_;
   Result result_;
+};
+
+class DeleteFileSessionOperation : public Operation {
+ public:
+  DeleteFileSessionOperation(Trace& trace, const std::vector<FileSessionEntry>& file_sessions)
+      : Operation(trace), file_sessions_(file_sessions) {};
+  ~DeleteFileSessionOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kDeleteFileSession; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::vector<FileSessionEntry> file_sessions_;
+};
+
+class CleanDeletedSliceOperation : public Operation {
+ public:
+  CleanDeletedSliceOperation(Trace& trace, const std::string& key) : Operation(trace), key_(key) {};
+  ~CleanDeletedSliceOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCleanDeletedSlice; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  std::string key_;
+};
+
+class CleanDeletedFileOperation : public Operation {
+ public:
+  CleanDeletedFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~CleanDeletedFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCleanDeletedFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
 };
 
 struct BatchOperation {

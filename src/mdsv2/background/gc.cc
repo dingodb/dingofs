@@ -14,10 +14,6 @@
 
 #include "mdsv2/background/gc.h"
 
-#include <fmt/format.h>
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -29,30 +25,34 @@
 #include "cache/blockcache/cache_store.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
+#include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
+#include "mdsv2/common/tracing.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 
 DEFINE_uint32(gc_worker_num, 4, "gc worker set num");
 DEFINE_uint32(gc_max_pending_task_count, 512, "gc max pending task count");
 
 DEFINE_uint32(gc_delfile_reserve_time_s, 600, "gc del file reserve time");
 
+DEFINE_uint32(gc_filesession_reserve_time_s, 86400, "gc file session reserve time");
+
 static const std::string kWorkerSetName = "GC";
 
 void CleanDeletedSliceTask::Run() {
   auto status = CleanDeletedSlice();
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[gc.delslice] clean deleted slice fail, {}", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delslice] clean deleted slice fail, {}", status.error_str());
   }
 }
 
@@ -68,17 +68,13 @@ Status CleanDeletedSliceTask::CleanDeletedSlice() {
 
     for (const auto& range : slice.ranges()) {
       uint64_t index = range.offset() / slice.block_size();
-      cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(),
-                                index, 0);
+      cache::BlockKey block_key(slice.fs_id(), slice.ino(), slice.slice_id(), index, 0);
 
-      DINGO_LOG(INFO) << fmt::format(
-          "[gc.delslice] delete block filename({}) key({}).",
-          block_key.Filename(), block_key.StoreKey());
+      DINGO_LOG(INFO) << fmt::format("[gc.delslice] delete block filename({}) key({}).", block_key.Filename(),
+                                     block_key.StoreKey());
       auto status = data_accessor_->Delete(block_key.StoreKey());
       if (!status.ok()) {
-        return Status(
-            pb::error::EINTERNAL,
-            fmt::format("delete s3 object fail, {}", status.ToString()));
+        return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
       }
     }
 
@@ -89,13 +85,14 @@ Status CleanDeletedSliceTask::CleanDeletedSlice() {
   }
 
   // delete slice
-  auto status = kv_storage_->Delete(key);
+  class Trace trace;
+  CleanDeletedSliceOperation operation(trace, kv_.key);
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     return status;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delslice] clean slice finish, slice({}).",
-                                 slice_id_trace);
+  DINGO_LOG(INFO) << fmt::format("[gc.delslice] clean slice finish, slice({}).", slice_id_trace);
 
   return status;
 }
@@ -103,44 +100,57 @@ Status CleanDeletedSliceTask::CleanDeletedSlice() {
 void CleanDeletedFileTask::Run() {
   auto status = CleanDeletedFile(attr_);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}",
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}", status.error_str());
   }
 }
 
 Status CleanDeletedFileTask::CleanDeletedFile(const AttrType& attr) {
-  DINGO_LOG(INFO) << fmt::format(
-      "[gc.delfile] clean delfile, ino({}) nlink({}) len({}) version({}).",
-      attr.ino(), attr.nlink(), attr.length(), attr.version());
+  DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean delfile, ino({}) nlink({}) len({}) version({}).", attr.ino(),
+                                 attr.nlink(), attr.length(), attr.version());
 
   // delete data from s3
   for (const auto& [_, chunk] : attr.chunks()) {
     for (const auto& slice : chunk.slices()) {
       uint64_t index = slice.offset() / chunk.block_size();
-      cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), index,
-                                chunk.version());
+      cache::BlockKey block_key(attr.fs_id(), attr.ino(), slice.id(), index, chunk.version());
 
-      DINGO_LOG(INFO) << fmt::format(
-          "[gc.delfile] delete block filename({}) key({}).",
-          block_key.Filename(), block_key.StoreKey());
+      DINGO_LOG(INFO) << fmt::format("[gc.delfile] delete block filename({}) key({}).", block_key.Filename(),
+                                     block_key.StoreKey());
       auto status = data_accessor_->Delete(block_key.StoreKey());
       if (!status.ok()) {
-        return Status(
-            pb::error::EINTERNAL,
-            fmt::format("delete s3 object fail, {}", status.ToString()));
+        return Status(pb::error::EINTERNAL, fmt::format("delete s3 object fail, {}", status.ToString()));
       }
     }
   }
 
   // delete inode
-  auto status = kv_storage_->Delete(
-      MetaCodec::EncodeDelFileKey(attr.fs_id(), attr.ino()));
+  class Trace trace;
+  CleanDeletedFileOperation operation(trace, attr.fs_id(), attr.ino());
+  auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     return status;
   }
 
-  DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean file({}/{}) finish.",
-                                 attr.fs_id(), attr.ino());
+  DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean file({}/{}) finish.", attr.fs_id(), attr.ino());
+
+  return Status::OK();
+}
+
+void CleanExpiredFileSessionTask::Run() {
+  auto status = CleanExpiredFileSession();
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.filesession] clean filesession fail, {}", status.error_str());
+  }
+}
+
+Status CleanExpiredFileSessionTask::CleanExpiredFileSession() {
+  class Trace trace;
+  DeleteFileSessionOperation operation(trace, file_sessions_);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    return status;
+  }
 
   return Status::OK();
 }
@@ -154,8 +164,7 @@ bool GcProcessor::Init() {
     return false;
   }
 
-  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num,
-                                    FLAGS_gc_max_pending_task_count);
+  worker_set_ = ExecqWorkerSet::New(kWorkerSetName, FLAGS_gc_worker_num, FLAGS_gc_max_pending_task_count);
   return worker_set_->Init();
 }
 
@@ -176,12 +185,10 @@ void GcProcessor::Run() {
   }
 }
 
-Status GcProcessor::ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id,
-                                            Ino ino, uint64_t chunk_index) {
+Status GcProcessor::ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index) {
   auto block_accessor = GetOrCreateDataAccesser(fs_id);
   if (block_accessor == nullptr) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
     return Status(pb::error::EINTERNAL, "get data accesser fail");
   }
 
@@ -189,8 +196,7 @@ Status GcProcessor::ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id,
   if (chunk_index == 0) {
     MetaCodec::GetTrashChunkRange(fs_id, ino, range.start_key, range.end_key);
   } else {
-    MetaCodec::GetTrashChunkRange(fs_id, ino, chunk_index, range.start_key,
-                                  range.end_key);
+    MetaCodec::GetTrashChunkRange(fs_id, ino, chunk_index, range.start_key, range.end_key);
   }
 
   auto txn = kv_storage_->NewTxn();
@@ -204,12 +210,11 @@ Status GcProcessor::ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id,
     }
 
     for (auto& kv : kvs) {
-      auto task = CleanDeletedSliceTask::New(kv_storage_, block_accessor, kv);
+      auto task = CleanDeletedSliceTask::New(operation_processor_, block_accessor, kv);
 
       status = task->CleanDeletedSlice();
       if (!status.ok()) {
-        DINGO_LOG(ERROR) << fmt::format("[gc.delslice] clean delfile fail, {}.",
-                                        status.error_str());
+        DINGO_LOG(ERROR) << fmt::format("[gc.delslice] clean delfile fail, {}.", status.error_str());
         break;
       }
     }
@@ -221,12 +226,10 @@ Status GcProcessor::ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id,
   return status;
 }
 
-Status GcProcessor::ManualCleanDeletedFile(Trace& trace, uint32_t fs_id,
-                                           Ino ino) {
+Status GcProcessor::ManualCleanDeletedFile(Trace& trace, uint32_t fs_id, Ino ino) {
   auto block_accessor = GetOrCreateDataAccesser(fs_id);
   if (block_accessor == nullptr) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
     return Status(pb::error::EINTERNAL, "get data accesser fail");
   }
 
@@ -237,8 +240,7 @@ Status GcProcessor::ManualCleanDeletedFile(Trace& trace, uint32_t fs_id,
   std::string value;
   auto status = txn->Get(key, value);
   if (!status.ok()) {
-    DINGO_LOG(INFO) << fmt::format(
-        "[gc.delfile] get delfile fail, fs_id({}) ino({}).", fs_id, ino);
+    DINGO_LOG(INFO) << fmt::format("[gc.delfile] get delfile fail, fs_id({}) ino({}).", fs_id, ino);
     return status;
   }
 
@@ -246,12 +248,11 @@ Status GcProcessor::ManualCleanDeletedFile(Trace& trace, uint32_t fs_id,
 
   auto attr = MetaCodec::DecodeDelFileValue(value);
 
-  auto task = CleanDeletedFileTask::New(kv_storage_, block_accessor, attr);
+  auto task = CleanDeletedFileTask::New(operation_processor_, block_accessor, attr);
 
   status = task->CleanDeletedFile(attr);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}.",
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] clean delfile fail, {}.", status.error_str());
     return status;
   }
 
@@ -272,6 +273,7 @@ Status GcProcessor::LaunchGc() {
 
   ScanDeletedSlice();
   ScanDeletedFile();
+  ScanExpiredFileSession();
 
   return Status::OK();
 }
@@ -312,19 +314,16 @@ void GcProcessor::ScanDeletedSlice() {
 
       auto block_accessor = GetOrCreateDataAccesser(fs_id);
       if (block_accessor == nullptr) {
-        DINGO_LOG(ERROR) << fmt::format(
-            "[gc.delslice] get data accesser fail, fs_id({}).", fs_id);
+        DINGO_LOG(ERROR) << fmt::format("[gc.delslice] get data accesser fail, fs_id({}).", fs_id);
         continue;
       }
 
-      Execute(ino, CleanDeletedSliceTask::New(kv_storage_, block_accessor, kv));
+      Execute(ino, CleanDeletedSliceTask::New(operation_processor_, block_accessor, kv));
     }
 
   } while (kvs.size() >= FLAGS_fs_scan_batch_size);
 
-  DINGO_LOG(INFO) << fmt::format(
-      "[gc.delslice] scan delslice count({}), status({}).", kvs.size(),
-      status.error_str());
+  DINGO_LOG(INFO) << fmt::format("[gc.delslice] scan delslice count({}), status({}).", kvs.size(), status.error_str());
 }
 
 void GcProcessor::ScanDeletedFile() {
@@ -348,15 +347,13 @@ void GcProcessor::ScanDeletedFile() {
       MetaCodec::DecodeDelFileKey(kv.key, fs_id, ino);
       auto block_accessor = GetOrCreateDataAccesser(fs_id);
       if (block_accessor == nullptr) {
-        DINGO_LOG(ERROR) << fmt::format(
-            "[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
+        DINGO_LOG(ERROR) << fmt::format("[gc.delfile] get data accesser fail, fs_id({}).", fs_id);
         continue;
       }
 
       auto attr = MetaCodec::DecodeDelFileValue(kv.value);
       if (ShouldDeleteFile(attr)) {
-        Execute(attr.ino(),
-                CleanDeletedFileTask::New(kv_storage_, block_accessor, attr));
+        Execute(attr.ino(), CleanDeletedFileTask::New(operation_processor_, block_accessor, attr));
       }
     }
 
@@ -367,8 +364,47 @@ void GcProcessor::ScanDeletedFile() {
   DINGO_LOG(INFO) << fmt::format("[gc.delfile] scan delfile count({}).", count);
 
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] scan delfile fail, {}.",
-                                    status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("[gc.delfile] scan delfile fail, {}.", status.error_str());
+  }
+}
+
+void GcProcessor::ScanExpiredFileSession() {
+  Range range;
+  MetaCodec::GetFileSessionTableRange(range.start_key, range.end_key);
+
+  auto txn = kv_storage_->NewTxn();
+
+  uint32_t count = 0;
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    std::vector<FileSessionEntry> file_sessions;
+    file_sessions.reserve(kvs.size());
+    for (auto& kv : kvs) {
+      auto file_session = MetaCodec::DecodeFileSessionValue(kv.value);
+
+      if (ShouldCleanFileSession(file_session)) {
+        file_sessions.push_back(file_session);
+      }
+    }
+
+    if (!file_sessions.empty()) {
+      Execute(CleanExpiredFileSessionTask::New(operation_processor_, file_sessions));
+    }
+
+    count += kvs.size();
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  DINGO_LOG(INFO) << fmt::format("[gc.filesession] scan file session count({}).", count);
+
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.filesession] scan file session fail, {}.", status.error_str());
   }
 }
 
@@ -377,8 +413,12 @@ bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   return (attr.ctime() / 1000000000 + FLAGS_gc_delfile_reserve_time_s) < now_s;
 }
 
-blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(
-    uint32_t fs_id) {
+bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session) {
+  uint64_t now_s = Helper::Timestamp();
+  return file_session.create_time_s() + FLAGS_gc_filesession_reserve_time_s < now_s;
+}
+
+blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(uint32_t fs_id) {
   auto it = block_accessers_.find(fs_id);
   if (it != block_accessers_.end()) {
     return it->second;
@@ -395,45 +435,37 @@ blockaccess::BlockAccesserSPtr GcProcessor::GetOrCreateDataAccesser(
   blockaccess::BlockAccessOptions options;
   if (fs_info.fs_type() == pb::mdsv2::FsType::S3) {
     const auto& s3_info = fs_info.extra().s3_info();
-    if (s3_info.ak().empty() || s3_info.sk().empty() ||
-        s3_info.endpoint().empty() || s3_info.bucketname().empty()) {
-      DINGO_LOG(ERROR) << fmt::format(
-          "[gc] get s3 info fail, fs_id({}) s3_info({}).", fs_id,
-          s3_info.ShortDebugString());
+    if (s3_info.ak().empty() || s3_info.sk().empty() || s3_info.endpoint().empty() || s3_info.bucketname().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[gc] get s3 info fail, fs_id({}) s3_info({}).", fs_id,
+                                      s3_info.ShortDebugString());
       return nullptr;
     }
 
     options.type = blockaccess::AccesserType::kS3;
-    options.s3_options.s3_info =
-        blockaccess::S3Info{.ak = s3_info.ak(),
-                            .sk = s3_info.sk(),
-                            .endpoint = s3_info.endpoint(),
-                            .bucket_name = s3_info.bucketname()};
+    options.s3_options.s3_info = blockaccess::S3Info{
+        .ak = s3_info.ak(), .sk = s3_info.sk(), .endpoint = s3_info.endpoint(), .bucket_name = s3_info.bucketname()};
   } else {
     const auto& rados_info = fs_info.extra().rados_info();
-    if (rados_info.mon_host().empty() || rados_info.user_name().empty() ||
-        rados_info.key().empty() || rados_info.pool_name().empty()) {
-      DINGO_LOG(ERROR) << fmt::format(
-          "[gc] get rados info fail, fs_id({}) rados_info({}).", fs_id,
-          rados_info.ShortDebugString());
+    if (rados_info.mon_host().empty() || rados_info.user_name().empty() || rados_info.key().empty() ||
+        rados_info.pool_name().empty()) {
+      DINGO_LOG(ERROR) << fmt::format("[gc] get rados info fail, fs_id({}) rados_info({}).", fs_id,
+                                      rados_info.ShortDebugString());
       return nullptr;
     }
 
     options.type = blockaccess::AccesserType::kRados;
-    options.rados_options =
-        blockaccess::RadosOptions{.mon_host = rados_info.mon_host(),
-                                  .user_name = rados_info.user_name(),
-                                  .key = rados_info.key(),
-                                  .pool_name = rados_info.pool_name(),
-                                  .cluster_name = rados_info.cluster_name()};
+    options.rados_options = blockaccess::RadosOptions{.mon_host = rados_info.mon_host(),
+                                                      .user_name = rados_info.user_name(),
+                                                      .key = rados_info.key(),
+                                                      .pool_name = rados_info.pool_name(),
+                                                      .cluster_name = rados_info.cluster_name()};
   }
 
   blockaccess::BlockAccesserFactory factory;
   auto block_accessor = factory.NewShareBlockAccesser(options);
   auto status = block_accessor->Init();
   if (!status.IsOK()) {
-    DINGO_LOG(ERROR) << fmt::format(
-        "[gc] init block accesser fail, status({}).", status.ToString());
+    DINGO_LOG(ERROR) << fmt::format("[gc] init block accesser fail, status({}).", status.ToString());
     return nullptr;
   }
 

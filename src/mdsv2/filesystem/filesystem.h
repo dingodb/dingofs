@@ -209,6 +209,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
 
   quota::QuotaManager& GetQuotaManager() { return quota_manager_; }
 
+  FileSessionManager& GetFileSessionManager() { return file_session_manager_; }
+
   // get deleted file
   Status GetDelFiles(std::vector<AttrType>& delfiles);
   Status GetDelSlices(std::vector<TrashSliceList>& delslices);
@@ -278,7 +280,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   KVStorageSPtr kv_storage_;
 
   // for open/read/write/close file
-  FileSessionManagerUPtr file_session_manager_;
+  FileSessionManager file_session_manager_;
 
   // organize dentry directory tree
   PartitionCache partition_cache_;

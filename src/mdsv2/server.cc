@@ -255,12 +255,13 @@ bool Server::InitQuotaSynchronizer() {
 
 bool Server::InitGcProcessor() {
   CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
-  gc_processor_ = GcProcessor::New(file_system_set_, kv_storage_, dist_lock);
+  gc_processor_ = GcProcessor::New(file_system_set_, kv_storage_, operation_processor_, dist_lock);
 
   CHECK(gc_processor_->Init()) << "init GcProcessor fail.";
 

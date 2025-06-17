@@ -69,7 +69,7 @@ DEFINE_uint32(compact_slice_threshold_num, 64, "Compact slice threshold num.");
 
 DECLARE_uint32(txn_max_retry_times);
 
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 
 bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
@@ -91,10 +91,9 @@ FileSystem::FileSystem(int64_t self_mds_id, FsInfoUPtr fs_info, IdGeneratorUPtr 
       mds_meta_map_(mds_meta_map),
       parent_memo_(ParentMemo::New(fs_id_)),
       quota_manager_(fs_id_, parent_memo_, operation_processor),
-      notify_buddy_(notify_buddy) {
+      notify_buddy_(notify_buddy),
+      file_session_manager_(fs_id_, operation_processor) {
   can_serve_ = CanServe(self_mds_id);
-
-  file_session_manager_ = FileSessionManager::New(fs_id_, operation_processor);
 };
 
 FileSystem::~FileSystem() {
@@ -728,7 +727,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
   }
 
   FileSessionPtr file_session;
-  status = file_session_manager_->Create(ino, client_id, file_session);
+  status = file_session_manager_.Create(ino, client_id, file_session);
   if (!status.ok()) {
     return status;
   }
@@ -770,7 +769,7 @@ Status FileSystem::Release(Context& ctx, Ino ino, const std::string& session_id)
   auto& result = operation.GetResult();
 
   // delete cache
-  file_session_manager_->Delete(ino, session_id);
+  file_session_manager_.Delete(ino, session_id);
 
   return Status::OK();
 }

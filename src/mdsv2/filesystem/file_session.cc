@@ -20,6 +20,7 @@
 
 #include "dingofs/error.pb.h"
 #include "fmt/format.h"
+#include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/type.h"
@@ -30,7 +31,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 DECLARE_uint32(txn_max_retry_times);
 
 static const std::string kFileSessionCacheCountMetricsName = "dingofs_file_session_cache_count";
@@ -38,11 +39,14 @@ static const std::string kFileSessionCacheCountMetricsName = "dingofs_file_sessi
 static const std::string kFileSessionTatalCountMetricsName = "dingofs_file_session_total_count";
 static const std::string kFileSessionCountMetricsName = "dingofs_file_session_count";
 
-static FileSessionPtr NewFileSession(uint64_t ino, const std::string& client_id) {
+static FileSessionPtr NewFileSession(uint32_t fs_id, Ino ino, const std::string& client_id) {
   auto file_session = std::make_shared<FileSessionEntry>();
-  file_session->set_session_id(utils::UUIDGenerator::GenerateUUID());
+
+  file_session->set_fs_id(fs_id);
   file_session->set_ino(ino);
   file_session->set_client_id(client_id);
+  file_session->set_session_id(utils::UUIDGenerator::GenerateUUID());
+  file_session->set_create_time_s(Helper::Timestamp());
 
   return file_session;
 }
@@ -150,7 +154,7 @@ FileSessionManager::FileSessionManager(uint32_t fs_id, OperationProcessorSPtr op
       count_metrics_(kFileSessionCountMetricsName) {}
 
 Status FileSessionManager::Create(uint64_t ino, const std::string& client_id, FileSessionPtr& file_session) {
-  file_session = NewFileSession(ino, client_id);
+  file_session = NewFileSession(fs_id_, ino, client_id);
 
   // add to cache
   CHECK(file_session_cache_.Put(file_session))
@@ -200,6 +204,23 @@ std::vector<FileSessionPtr> FileSessionManager::Get(uint64_t ino, bool just_cach
   }
 
   return file_sessions;
+}
+
+Status FileSessionManager::GetAll(std::vector<FileSessionEntry>& file_sessions) {
+  Trace trace;
+  ScanFileSessionOperation operation(trace, fs_id_, 0);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+
+  file_sessions.swap(result.file_sessions);
+
+  return Status::OK();
 }
 
 Status FileSessionManager::IsExist(uint64_t ino, bool just_cache, bool& is_exist) {

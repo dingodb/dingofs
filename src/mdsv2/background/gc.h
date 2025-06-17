@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "blockaccess/block_accesser.h"
 #include "mdsv2/common/distribution_lock.h"
@@ -37,19 +38,23 @@ using CleanDeletedSliceTaskSPtr = std::shared_ptr<CleanDeletedSliceTask>;
 class CleanDeletedFileTask;
 using CleanDeletedFileTaskSPtr = std::shared_ptr<CleanDeletedFileTask>;
 
+class CleanExpiredFileSessionTask;
+using CleanExpiredFileSessionTaskSPtr = std::shared_ptr<CleanExpiredFileSessionTask>;
+
 class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 // clean trash slice corresponding to s3 object
 class CleanDeletedSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(KVStorageSPtr kv_storage, blockaccess::BlockAccesserSPtr block_accessor, const KeyValue& kv)
-      : kv_storage_(kv_storage), data_accessor_(block_accessor), kv_(kv) {}
+  CleanDeletedSliceTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
+                        const KeyValue& kv)
+      : operation_processor_(operation_processor), data_accessor_(block_accessor), kv_(kv) {}
   ~CleanDeletedSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(KVStorageSPtr kv_storage, blockaccess::BlockAccesserSPtr block_accessor,
-                                       const KeyValue& kv) {
-    return std::make_shared<CleanDeletedSliceTask>(kv_storage, block_accessor, kv);
+  static CleanDeletedSliceTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                       blockaccess::BlockAccesserSPtr block_accessor, const KeyValue& kv) {
+    return std::make_shared<CleanDeletedSliceTask>(operation_processor, block_accessor, kv);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -62,7 +67,7 @@ class CleanDeletedSliceTask : public TaskRunnable {
 
   KeyValue kv_;
 
-  KVStorageSPtr kv_storage_;
+  OperationProcessorSPtr operation_processor_;
 
   // data accessor for s3
   blockaccess::BlockAccesserSPtr data_accessor_;
@@ -71,13 +76,14 @@ class CleanDeletedSliceTask : public TaskRunnable {
 // clen delete file corresponding to s3 object
 class CleanDeletedFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask(KVStorageSPtr kv_storage, blockaccess::BlockAccesserSPtr block_accessor, const AttrType& attr)
-      : kv_storage_(kv_storage), data_accessor_(block_accessor), attr_(attr) {}
+  CleanDeletedFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
+                       const AttrType& attr)
+      : operation_processor_(operation_processor), data_accessor_(block_accessor), attr_(attr) {}
   ~CleanDeletedFileTask() override = default;
 
-  static CleanDeletedFileTaskSPtr New(KVStorageSPtr kv_storage, blockaccess::BlockAccesserSPtr block_accessor,
-                                      const AttrType& attr) {
-    return std::make_shared<CleanDeletedFileTask>(kv_storage, block_accessor, attr);
+  static CleanDeletedFileTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                      blockaccess::BlockAccesserSPtr block_accessor, const AttrType& attr) {
+    return std::make_shared<CleanDeletedFileTask>(operation_processor, block_accessor, attr);
   }
 
   std::string Type() override { return "CLEAN_DELETED_FILE"; }
@@ -91,21 +97,49 @@ class CleanDeletedFileTask : public TaskRunnable {
 
   AttrType attr_;
 
-  KVStorageSPtr kv_storage_;
+  OperationProcessorSPtr operation_processor_;
 
   // data accessor for s3
   blockaccess::BlockAccesserSPtr data_accessor_;
 };
 
+class CleanExpiredFileSessionTask : public TaskRunnable {
+ public:
+  CleanExpiredFileSessionTask(OperationProcessorSPtr operation_processor,
+                              const std::vector<FileSessionEntry>& file_sessions)
+      : operation_processor_(operation_processor), file_sessions_(file_sessions) {}
+  ~CleanExpiredFileSessionTask() override = default;
+
+  static CleanExpiredFileSessionTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                             const std::vector<FileSessionEntry>& file_sessions) {
+    return std::make_shared<CleanExpiredFileSessionTask>(operation_processor, file_sessions);
+  }
+
+  std::string Type() override { return "CLEAN_EXPIRED_FILE_SESSION"; }
+
+  void Run() override;
+
+ private:
+  Status CleanExpiredFileSession();
+
+  OperationProcessorSPtr operation_processor_;
+
+  std::vector<FileSessionEntry> file_sessions_;
+};
+
 class GcProcessor {
  public:
-  GcProcessor(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage, DistributionLockSPtr dist_lock)
-      : file_system_set_(file_system_set), kv_storage_(kv_storage), dist_lock_(dist_lock) {}
+  GcProcessor(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
+              DistributionLockSPtr dist_lock)
+      : file_system_set_(file_system_set),
+        kv_storage_(kv_storage),
+        operation_processor_(operation_processor),
+        dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
   static GcProcessorSPtr New(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage,
-                             DistributionLockSPtr dist_lock) {
-    return std::make_shared<GcProcessor>(file_system_set, kv_storage, dist_lock);
+                             OperationProcessorSPtr operation_processor, DistributionLockSPtr dist_lock) {
+    return std::make_shared<GcProcessor>(file_system_set, kv_storage, operation_processor, dist_lock);
   }
 
   bool Init();
@@ -124,8 +158,10 @@ class GcProcessor {
 
   void ScanDeletedSlice();
   void ScanDeletedFile();
+  void ScanExpiredFileSession();
 
   static bool ShouldDeleteFile(const AttrType& attr);
+  static bool ShouldCleanFileSession(const FileSessionEntry& file_session);
 
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);
 
@@ -134,6 +170,8 @@ class GcProcessor {
   DistributionLockSPtr dist_lock_;
 
   KVStorageSPtr kv_storage_;
+
+  OperationProcessorSPtr operation_processor_;
 
   // fs_id -> data accessor
   std::map<uint32_t, blockaccess::BlockAccesserSPtr> block_accessers_;

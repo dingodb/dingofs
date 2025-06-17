@@ -29,7 +29,7 @@
 namespace dingofs {
 namespace mdsv2 {
 
-DECLARE_int32(fs_scan_batch_size);
+DECLARE_uint32(fs_scan_batch_size);
 
 DECLARE_uint32(mds_offline_period_time_ms);
 DECLARE_uint32(client_offline_period_time_ms);

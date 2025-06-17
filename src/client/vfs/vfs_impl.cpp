@@ -243,7 +243,14 @@ Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
 
 Status VFSImpl::Flush(Ino ino, uint64_t fh) { return Status::OK(); }
 
-Status VFSImpl::Release(Ino ino, uint64_t fh) { return Status::OK(); }
+Status VFSImpl::Release(Ino ino, uint64_t fh) {
+  auto s = meta_system_->Close(ino, fh);
+  if (!s.ok()) {
+    handle_manager_->ReleaseHandler(fh);
+  }
+
+  return Status::OK();
+}
 
 Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
   return Status::OK();
