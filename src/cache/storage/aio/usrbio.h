@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_STORAGE_AIO_USRBIO_H_
 
 #include "cache/storage/aio/aio.h"
+#include "common/status.h"
 #ifdef WITH_LIBUSRBIO
 #include "cache/storage/aio/usrbio_api.h"
 #include "cache/storage/aio/usrbio_helper.h"
@@ -49,7 +50,7 @@ class USRBIO final : public IORing {
   USRBIO(const std::string& mountpoint, uint32_t blksize, uint32_t iodepth,
          bool for_read);
 
-  Status Init() override;
+  Status Start() override;
   Status Shutdown() override;
 
   Status PrepareIO(AioClosure* aio) override;
@@ -59,7 +60,7 @@ class USRBIO final : public IORing {
   uint32_t GetIODepth() const override;
 
  private:
-  struct Context {
+  struct ContextSPtr {
     Context(char* buffer) : buffer(buffer) {}
     char* buffer;
   };
@@ -88,13 +89,12 @@ class USRBIO final : public IORing {
   USRBIO(const std::string& /*mountpoint*/, uint32_t /*blksize*/,
          uint32_t /*iodepth*/, bool /*for_read*/) {}
 
-  Status Init() override { RETURN_NOT_SUPPORT(); }
+  Status Start() override { RETURN_NOT_SUPPORT(); }
   Status Shutdown() override { RETURN_NOT_SUPPORT(); }
 
-  Status PrepareIO(AioClosure* /*aio*/) override { RETURN_NOT_SUPPORT(); }
+  Status PrepareIO(Aio* /*aio*/) override { RETURN_NOT_SUPPORT(); }
   Status SubmitIO() override { RETURN_NOT_SUPPORT(); }
-  Status WaitIO(uint64_t /*timeout_ms*/,
-                std::vector<AioClosure*>* /*aios*/) override {
+  Status WaitIO(uint64_t /*timeout_ms*/, std::vector<Aio*>* /*aios*/) override {
     RETURN_NOT_SUPPORT();
   }
 

@@ -15,7 +15,6 @@
 add_subdirectory(common)
 add_subdirectory(utils)
 add_subdirectory(config)
-add_subdirectory(metrics)
 add_subdirectory(storage)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)

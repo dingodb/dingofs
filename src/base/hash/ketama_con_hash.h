@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H
-#define DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H
+#ifndef DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H_
+#define DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H_
 
 #include <cstdint>
 #include <unordered_map>
@@ -69,4 +69,4 @@ class KetamaConHash : public ConHash {
 }  // namespace base
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H
+#endif  // DINGOFS_SRC_BASE_HASH_KETAMA_CON_HASH_H_

@@ -23,11 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_CACHE_STORE_H_
 
-#include <mutex>
+#include <glog/logging.h>
 
 #include "base/string/string.h"
-#include "cache/common/common.h"
-#include "dingofs/blockcache.pb.h"
+#include "cache/common/proto.h"
+#include "cache/utils/context.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,7 +49,7 @@ struct BlockKey {
            uint64_t version)
       : fs_id(fs_id), ino(ino), id(id), index(index), version(version) {}
 
-  BlockKey(pb::cache::blockcache::BlockKey pb)
+  BlockKey(PBBlockKey pb)
       : fs_id(pb.fs_id()),
         ino(pb.ino()),
         id(pb.id()),
@@ -64,8 +66,8 @@ struct BlockKey {
                                    id / 1000, Filename());
   }
 
-  pb::cache::blockcache::BlockKey ToPB() const {
-    pb::cache::blockcache::BlockKey pb;
+  PBBlockKey ToPB() const {
+    PBBlockKey pb;
     pb.set_fs_id(fs_id);
     pb.set_ino(ino);
     pb.set_id(id);
@@ -74,7 +76,7 @@ struct BlockKey {
     return pb;
   }
 
-  bool ParseFilename(const std::string_view& filename) {
+  bool ParseFromFilename(const std::string_view& filename) {
     auto strs = base::string::StrSplit(filename, "_");
     return base::string::Strs2Ints(strs, {&fs_id, &ino, &id, &index, &version});
   }
@@ -95,27 +97,27 @@ struct Block {
   size_t size;
 };
 
-enum class BlockFrom : uint8_t {
-  kWriteback = 0,
-  kReload = 1,
-  kUnknown = 2,
-};
-
 // block context
 struct BlockContext {
-  BlockContext() : from(BlockFrom::kUnknown), store_id("") {}
+  enum BlockFrom : uint8_t {
+    kFromWriteback = 0,
+    kFromReload = 1,
+    kFromUnknown = 2,
+  };
+
+  BlockContext() : from(kFromUnknown), store_id("") {}
 
   BlockContext(BlockFrom from) : from(from), store_id("") {}
 
   BlockContext(BlockFrom from, const std::string& store_id)
       : from(from), store_id(store_id) {
     if (!store_id.empty()) {  // Only for block which from reload
-      CHECK(from == BlockFrom::kReload);
+      CHECK(from == BlockContext::kFromReload);
     }
   }
 
   BlockFrom from;
-  std::string store_id;  // specified store id which this block real stored in
+  std::string store_id;  // Specified store id which this block real stored in
                          // (for disk cache group changed)
 };
 
@@ -123,46 +125,37 @@ struct BlockContext {
 class CacheStore {
  public:
   struct StageOption {
-    StageOption() = default;
-    StageOption(BlockContext ctx) : ctx(ctx) {}
-
-    BlockContext ctx;
+    BlockContext block_ctx;
   };
 
   struct RemoveStageOption {
-    RemoveStageOption() = default;
-    RemoveStageOption(BlockContext ctx) : ctx(ctx) {}
-
-    BlockContext ctx;
+    BlockContext block_ctx;
   };
 
-  struct CacheOption {
-    CacheOption() = default;
-  };
+  struct CacheOption {};
 
   struct LoadOption {
-    LoadOption() = default;
-    LoadOption(BlockContext ctx) : ctx(ctx) {}
-
-    BlockContext ctx;
+    BlockContext block_ctx;
   };
 
-  using UploadFunc =
-      std::function<void(const BlockKey& key, size_t length, BlockContext ctx)>;
+  using UploadFunc = std::function<void(ContextSPtr ctx, const BlockKey& key,
+                                        size_t length, BlockContext block_ctx)>;
 
   virtual ~CacheStore() = default;
 
-  virtual Status Init(UploadFunc uploader) = 0;
+  virtual Status Start(UploadFunc uploader) = 0;
   virtual Status Shutdown() = 0;
 
-  virtual Status Stage(const BlockKey& key, const Block& block,
+  virtual Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
                        StageOption option = StageOption()) = 0;
   virtual Status RemoveStage(
-      const BlockKey& key, RemoveStageOption option = RemoveStageOption()) = 0;
-  virtual Status Cache(const BlockKey& key, const Block& block,
+      ContextSPtr ctx, const BlockKey& key,
+      RemoveStageOption option = RemoveStageOption()) = 0;
+  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
                        CacheOption option = CacheOption()) = 0;
-  virtual Status Load(const BlockKey& key, off_t offset, size_t length,
-                      IOBuffer* buffer, LoadOption option = LoadOption()) = 0;
+  virtual Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                      size_t length, IOBuffer* buffer,
+                      LoadOption option = LoadOption()) = 0;
 
   virtual std::string Id() const = 0;
   virtual bool IsRunning() const = 0;

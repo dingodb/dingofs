@@ -22,9 +22,7 @@
 
 #include "cache/cachegroup/cache_group_node_server.h"
 
-#include "blockaccess/block_access_log.h"
 #include "cache/cachegroup/cache_group_node.h"
-#include "cache/utils/access_log.h"
 #include "cache/utils/offload_thread_pool.h"
 
 namespace brpc {
@@ -45,7 +43,7 @@ Status CacheGroupNodeServerImpl::Run() {
   InstallSignal();
 
   // init offload thread pool
-  OffloadThreadPool::GetInstance().Init();
+  OffloadThreadPool::GetInstance().Start();
 
   // start cache group node
   auto status = node_->Start();
@@ -75,7 +73,7 @@ Status CacheGroupNodeServerImpl::Run() {
 
 Status CacheGroupNodeServerImpl::Shutdown() {
   brpc::AskToQuit();
-  return node_->Stop();
+  return node_->Shutdown();
 }
 
 void CacheGroupNodeServerImpl::InstallSignal() {

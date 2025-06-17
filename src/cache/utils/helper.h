@@ -29,8 +29,9 @@
 #include <sstream>
 #include <string>
 
-#include "cache/common/common.h"
-#include "cache/storage/filesystem_base.h"
+#include "cache/storage/filesystem.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -55,6 +56,20 @@ class Helper {
   static uint64_t GetIOAlignedBlockSize();
   static bool IsAligned(uint64_t n, uint64_t m);
 
+  // time
+  static int64_t TimestampNs();
+  static int64_t TimestampUs();
+  static int64_t TimestampMs();
+  static int64_t Timestamp();
+
+  // filepath
+  static std::string ParentDir(const std::string& path);
+  static std::string Filename(const std::string& path);
+  static bool HasSuffix(const std::string& path, const std::string& suffix);
+  static std::string PathJoin(const std::vector<std::string>& subpaths);
+  static std::string TempFilepath(const std::string& filepath);
+  static bool IsTempFilepath(const std::string& filepath);
+
   // filesystem
   static Status Walk(const std::string& dir, WalkFunc walk_func);
   static Status MkDirs(const std::string& dir);
@@ -67,15 +82,17 @@ class Helper {
   static bool IsFile(const struct stat* stat);
   static bool IsDir(const struct stat* stat);
   static bool IsLink(const struct stat* stat);
+  static std::string StrMode(uint16_t mode);
 
-  static std::string TempFilepath(const std::string& filepath);
-  static bool IsTempFilepath(const std::string& filepath);
-
-  // utils
+  // others
   static std::vector<uint64_t> NormalizeByGcd(
       const std::vector<uint64_t>& nums);
 
   static void DeleteBuffer(void* data);
+
+  static bool IsAligned(const IOBuffer& buffer);
+
+  static double Divide(uint64_t a, uint64_t b);
 };
 
 }  // namespace cache

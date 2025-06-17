@@ -24,15 +24,15 @@
 
 #include "base/string/string.h"
 #include "base/time/time.h"
-#include "cache/common/common.h"
+#include "cache/cachegroup/cache_group_node.h"
+#include "cache/common/proto.h"
 #include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(
-    CacheGroupNodeOption option,
-    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
+CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
+                                                   MdsClientSPtr mds_client)
     : member_id_(0),
       member_uuid_(""),
       option_(option),
@@ -179,32 +179,6 @@ uint64_t CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }
 std::string CacheGroupNodeMemberImpl::GetMemberUuid() const {
   return member_uuid_;
 }
-
-// void CacheGroupNodeMemberImpl::SetLocalAccessOption(LocalAccessOption* o,
-//                                                     uint64_t member_id) {
-//   auto disk_cache_options =
-//   option_.block_cache_option().disk_cache_options(); const auto&
-//   disk_cache_option = disk_cache_options[0]; if
-//   (!option_.local_access_enable()) {
-//     return;
-//   } else if (disk_cache_options.size() != 1) {
-//     LOG(WARNING) << "Local access option only support one disk cache now.";
-//     return;
-//   }
-//
-//   auto cache_dir = disk_cache_option.cache_dir();
-//   auto layout =
-//       blockcache::DiskCacheLayout(blockcache::RootDir(cache_dir,
-//       member_id_));
-//
-//   o->set_root_dir(layout.GetRootDir());
-//   // o->set_lock_path(layout.GetLockPath());
-//   if (disk_cache_option.filesystem_type() == "3fs") {
-//     o->set_filesystem_type(FileSystemType::FileSystemType3FS);
-//   } else {
-//     o->set_filesystem_type(FileSystemType::FileSystemTypeLocal);
-//   }
-// }
 
 }  // namespace cache
 }  // namespace dingofs

@@ -39,19 +39,19 @@ class Segments {
   explicit Segments(size_t segment_size);
 
   void Push(T element);
+
   Segment Pop();
 
   size_t Size();
 
  private:
-  size_t size_;
+  size_t size_{0};
   const size_t segment_size_;
   std::queue<Segment> segments_;
 };
 
 template <typename T>
-Segments<T>::Segments(size_t segment_size)
-    : size_(0), segment_size_(segment_size){};
+Segments<T>::Segments(size_t segment_size) : segment_size_(segment_size){};
 
 template <typename T>
 void Segments<T>::Push(T element) {

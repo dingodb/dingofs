@@ -39,7 +39,7 @@ USRBIO::USRBIO(const std::string& mountpoint, uint32_t blksize,
       cqes_(nullptr),
       fd_register_(std::make_unique<FdRegister>()) {}
 
-Status USRBIO::Init() {
+Status USRBIO::Start() {
   if (running_.exchange(true)) {  // already running
     return Status::OK();
   }

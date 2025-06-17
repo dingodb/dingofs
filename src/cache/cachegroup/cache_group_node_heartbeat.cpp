@@ -22,8 +22,9 @@
 
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 
-#include "cache/common/common.h"
-#include "cache/metrics/cache_group_node_metric.h"
+#include "cache/common/proto.h"
+#include "cache/config/cachegroup.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
@@ -47,7 +48,7 @@ void CacheGroupNodeHeartbeatImpl::Start() {
   }
 }
 
-void CacheGroupNodeHeartbeatImpl::Stop() {
+void CacheGroupNodeHeartbeatImpl::Shutdown() {
   if (running_.exchange(false)) {
     LOG(INFO) << "Cache group node heartbeat stoping...";
 
@@ -59,8 +60,8 @@ void CacheGroupNodeHeartbeatImpl::Stop() {
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
   PBStatistic stat;
-  stat.set_hits(CacheGroupNodeMetric::GetInstance().GetCacheHit());
-  stat.set_misses(CacheGroupNodeMetric::GetInstance().GetCacheMiss());
+  // stat.set_hits(CacheGroupNodeMetric::GetInstance().GetCacheHit());
+  // stat.set_misses(CacheGroupNodeMetric::GetInstance().GetCacheMiss());
 
   std::string group_name = member_->GetGroupName();
   uint64_t member_id = member_->GetMemberId();

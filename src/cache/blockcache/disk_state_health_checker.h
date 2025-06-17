@@ -19,7 +19,7 @@
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/utils/state_machine.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/timer.h"
 
 namespace dingofs {
 namespace cache {
@@ -31,7 +31,7 @@ class DiskStateHealthChecker {
   virtual ~DiskStateHealthChecker() = default;
 
   virtual void Start();
-  virtual void Stop();
+  virtual void Shutdown();
 
  private:
   void RunCheck();

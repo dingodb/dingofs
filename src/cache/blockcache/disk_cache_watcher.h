@@ -38,7 +38,7 @@ struct Target {  // watched target
   std::string GetLockPath() const { return store->GetLockPath(); }
   bool IsRunning() const { return store->IsRunning(); }
   Status Shutdown() { return store->Shutdown(); }
-  Status Restart(CacheStore::UploadFunc) { return store->Init(uploader); }
+  Status Restart(CacheStore::UploadFunc) { return store->Start(uploader); }
 
   CacheStore::UploadFunc uploader;
   DiskCacheSPtr store;
@@ -50,8 +50,9 @@ class DiskCacheWatcher {
   virtual ~DiskCacheWatcher() = default;
 
   void Add(DiskCacheSPtr store, CacheStore::UploadFunc uploader);
+
   void Start();
-  void Stop();
+  void Shutdown();
 
  private:
   enum class Should : uint8_t {

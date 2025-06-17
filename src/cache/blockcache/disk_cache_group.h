@@ -23,10 +23,12 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_GROUP_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_GROUP_H_
 
-#include "base/hash/ketama_con_hash.h"
+#include "base/hash/con_hash.h"
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
+#include "cache/utils/context.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,16 +38,17 @@ class DiskCacheGroup final : public CacheStore {
   explicit DiskCacheGroup(std::vector<DiskCacheOption> options);
   ~DiskCacheGroup() override = default;
 
-  Status Init(UploadFunc uploader) override;
+  Status Start(UploadFunc uploader) override;
   Status Shutdown() override;
 
-  Status Stage(const BlockKey& key, const Block& block,
-               StageOption option) override;
-  Status RemoveStage(const BlockKey& key, RemoveStageOption option) override;
-  Status Cache(const BlockKey& key, const Block& block,
-               CacheOption option) override;
-  Status Load(const BlockKey& key, off_t offset, size_t length,
-              IOBuffer* buffer, LoadOption option) override;
+  Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
+               StageOption option = StageOption()) override;
+  Status RemoveStage(ContextSPtr ctx, const BlockKey& key,
+                     RemoveStageOption option = RemoveStageOption()) override;
+  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+               CacheOption option = CacheOption()) override;
+  Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset, size_t length,
+              IOBuffer* buffer, LoadOption option = LoadOption()) override;
 
   std::string Id() const override;
   bool IsRunning() const override;
