@@ -12,30 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(common)
-add_subdirectory(data)
-add_subdirectory(handle)
-add_subdirectory(hub)
-add_subdirectory(meta)
-add_subdirectory(statistics)
-
-add_library(vfs_lib
-    vfs_impl.cpp
+add_library(vfs_statistics 
+    fs_stats_manager.cpp
 )
 
-target_link_libraries(vfs_lib
-    PROTO_OBJS
-    client_common
+target_link_libraries(vfs_statistics
     dingofs_common
-    vfs_meta_lib
-    vfs_data
-    vfs_hub
-    vfs_handle
-    vfs_statistics
-    glog::glog
-    gflags::gflags
-    fmt::fmt
-    absl::str_format
+    stub_metric
+    PROTO_OBJS
 )
-
-

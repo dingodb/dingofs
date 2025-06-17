@@ -26,9 +26,6 @@
 namespace dingofs {
 namespace blockaccess {
 
-using stub::metric::MetricGuard;
-using stub::metric::S3Metric;
-
 bool S3Accesser::Init() {
   const auto& s3_info = options_.s3_info;
   LOG(INFO) << fmt::format(
@@ -57,12 +54,7 @@ bool S3Accesser::ContainerExist() { return client_->BucketExist(); }
 
 Status S3Accesser::Put(const std::string& key, const char* buffer,
                        size_t length) {
-  int rc = 0;
-  // write s3 metrics
-  auto start = butil::cpuwide_time_us();
-  MetricGuard guard(&rc, &S3Metric::GetInstance().write_s3, length, start);
-
-  rc = client_->PutObject(S3Key(key), buffer, length);
+  int rc = client_->PutObject(S3Key(key), buffer, length);
   if (rc < 0) {
     LOG(ERROR) << fmt::format("[accesser] put object({}) fail, retcode: {}.",
                               key, rc);
@@ -77,8 +69,6 @@ void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
   auto start_time = butil::cpuwide_time_us();
   context->cb = [&, start_time,
                  origin_cb](const std::shared_ptr<PutObjectAsyncContext>& ctx) {
-    MetricGuard guard(&ctx->ret_code, &S3Metric::GetInstance().write_s3,
-                      ctx->buffer_size, start_time);
     ctx->cb = origin_cb;
     ctx->cb(ctx);
   };
@@ -86,12 +76,7 @@ void S3Accesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
 }
 
 Status S3Accesser::Get(const std::string& key, std::string* data) {
-  int rc;  // read s3 metrics
-  auto start = butil::cpuwide_time_us();
-  MetricGuard guard(&rc, &S3Metric::GetInstance().read_s3, data->length(),
-                    start);
-
-  rc = client_->GetObject(S3Key(key), data);
+  int rc = client_->GetObject(S3Key(key), data);
   if (rc < 0) {
     if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
       LOG(WARNING) << fmt::format("[accesser] object({}) not found.", key);
@@ -108,11 +93,7 @@ Status S3Accesser::Get(const std::string& key, std::string* data) {
 
 Status S3Accesser::Range(const std::string& key, off_t offset, size_t length,
                          char* buffer) {
-  int rc;  // read s3 metrics
-  auto start = butil::cpuwide_time_us();
-  MetricGuard guard(&rc, &S3Metric::GetInstance().read_s3, length, start);
-
-  rc = client_->RangeObject(S3Key(key), buffer, offset, length);
+  int rc = client_->RangeObject(S3Key(key), buffer, offset, length);
   if (rc < 0) {
     if (!client_->ObjectExist(S3Key(key))) {  // TODO: more efficient
       LOG(WARNING) << fmt::format("[accesser] object({}) not found.", key);
@@ -132,8 +113,6 @@ void S3Accesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
   auto start_time = butil::cpuwide_time_us();
   context->cb = [&, start_time,
                  origin_cb](const std::shared_ptr<GetObjectAsyncContext>& ctx) {
-    MetricGuard guard(&ctx->ret_code, &S3Metric::GetInstance().read_s3,
-                      ctx->len, start_time);
     ctx->cb = origin_cb;
     ctx->cb(ctx);
   };

@@ -27,6 +27,7 @@
 #include "blockaccess/accesser.h"
 #include "blockaccess/accesser_common.h"
 #include "common/status.h"
+#include "stub/metric/metric.h"
 #include "utils/throttle.h"
 
 namespace dingofs {
@@ -38,7 +39,7 @@ enum class RetryStrategy : uint8_t {
 };
 
 using RetryCallback = std::function<RetryStrategy(int code)>;
-
+using ::dingofs::stub::metric::InterfaceMetric;
 // BlockAccesser is a class that provides a way to access block from a data
 // source. It is a base class for all data access classes.
 class BlockAccesser {
@@ -151,6 +152,28 @@ class BlockAccesserImpl : public BlockAccesser {
 
   std::unique_ptr<utils::Throttle> throttle_{nullptr};
   std::unique_ptr<AsyncRequestInflightBytesThrottle> inflight_bytes_throttle_;
+};
+
+struct BlockAccessMetricGuard {
+  explicit BlockAccessMetricGuard(Status* status, InterfaceMetric* metric,
+                                  size_t count, uint64_t start)
+      : status_(status), metric_(metric), count_(count), start_(start) {}
+  ~BlockAccessMetricGuard() {
+    if (status_->ok()) {
+      metric_->bps.count << count_;
+      metric_->qps.count << 1;
+      auto duration = butil::cpuwide_time_us() - start_;
+      metric_->latency << duration;
+      metric_->latTotal << duration;
+    } else {
+      metric_->eps.count << 1;
+    }
+  }
+
+  Status* status_;
+  InterfaceMetric* metric_;
+  size_t count_;
+  uint64_t start_;
 };
 
 using BlockAccesserSPtr = std::shared_ptr<BlockAccesser>;

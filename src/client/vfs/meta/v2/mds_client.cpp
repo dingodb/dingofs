@@ -875,6 +875,25 @@ Status MDSClient::GetFsQuota(FsStat& fs_stat) {
   return Status::OK();
 }
 
+Status MDSClient::PushFsStatsToMDS(const std::string& fs_name,
+                                   const pb::mdsv2::FsStatsData& fs_stat_data) {
+  CHECK(fs_name != "") << "fs_name is invalid.";
+
+  pb::mdsv2::SetFsStatsRequest request;
+  pb::mdsv2::SetFsStatsResponse response;
+
+  request.set_fs_name(fs_name);
+  request.mutable_stats()->CopyFrom(fs_stat_data);
+
+  auto status =
+      rpc_->SendRequest("MDSService", "SetFsStats", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  return Status::OK();
+}
+
 bool MDSClient::UpdateRouter() {
   pb::mdsv2::FsInfo new_fs_info;
   auto status = MDSClient::GetFsInfo(rpc_, fs_info_->GetName(), new_fs_info);

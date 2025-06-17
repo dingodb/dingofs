@@ -268,23 +268,25 @@ struct FSMetric {
   }
 };
 
-struct S3Metric {
+// s3 or rados read write metric
+struct ObjectMetric {
   static const std::string prefix;
 
-  InterfaceMetric write_s3;
-  InterfaceMetric read_s3;
+  InterfaceMetric write_object;
+  InterfaceMetric read_object;
 
  private:
-  explicit S3Metric()
-      : write_s3(prefix, "_write_s3"), read_s3(prefix, "_read_s3") {}
+  explicit ObjectMetric()
+      : write_object(prefix, "_write_object"),
+        read_object(prefix, "_read_object") {}
 
-  S3Metric(const S3Metric&) = delete;
+  ObjectMetric(const ObjectMetric&) = delete;
 
-  S3Metric& operator=(const S3Metric&) = delete;
+  ObjectMetric& operator=(const ObjectMetric&) = delete;
 
  public:
-  static S3Metric& GetInstance() {
-    static S3Metric instance;
+  static ObjectMetric& GetInstance() {
+    static ObjectMetric instance;
     return instance;
   }
 };

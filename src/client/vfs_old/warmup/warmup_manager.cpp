@@ -49,7 +49,7 @@ using base::filepath::PathSplit;
 using common::ClientOption;
 using common::WarmupStorageType;
 using stub::metric::MetricGuard;
-using stub::metric::S3Metric;
+using stub::metric::ObjectMetric;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 
@@ -499,7 +499,8 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   blockaccess::GetObjectAsyncCallBack cb =
       [&](const std::shared_ptr<blockaccess::GetObjectAsyncContext>& context) {
         // metrics for async get data from s3
-        MetricGuard guard(&context->ret_code, &S3Metric::GetInstance().read_s3,
+        MetricGuard guard(&context->ret_code,
+                          &ObjectMetric::GetInstance().read_object,
                           context->len, start);
         if (bgFetchStop_.load(std::memory_order_acquire)) {
           VLOG(9) << "need stop warmup";

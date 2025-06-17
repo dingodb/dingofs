@@ -24,6 +24,7 @@
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
+#include "client/vfs/statistics/fs_stats_manager.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
@@ -77,15 +78,18 @@ class FileSessionMap {
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
   MDSV2FileSystem(mdsv2::FsInfoPtr fs_info, const ClientId& client_id,
-                  MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client);
+                  MDSDiscoveryPtr mds_discovery, MDSClientPtr mds_client,
+                  FsStatsManagerUPtr fs_stats_manager);
   ~MDSV2FileSystem() override;
 
   static MDSV2FileSystemUPtr New(mdsv2::FsInfoPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
-                                 MDSClientPtr mds_client) {
+                                 MDSClientPtr mds_client,
+                                 FsStatsManagerUPtr fs_stats_manager) {
     return std::make_unique<MDSV2FileSystem>(fs_info, client_id, mds_discovery,
-                                             mds_client);
+                                             mds_client,
+                                             std::move(fs_stats_manager));
   }
 
   static MDSV2FileSystemUPtr Build(const std::string& fs_name,
@@ -155,6 +159,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   void Heartbeat();
 
+  void PushFsStatsToMDS();
+
   bool InitCrontab();
 
   const std::string name_;
@@ -172,6 +178,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   std::vector<mdsv2::CrontabConfig> crontab_configs_;
   // This is manage crontab, like heartbeat.
   mdsv2::CrontabManager crontab_manager_;
+  // Fs stats manager
+  FsStatsManagerUPtr fs_stats_manager_;
 };
 
 }  // namespace v2

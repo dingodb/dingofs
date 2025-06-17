@@ -28,7 +28,7 @@ namespace filesystem {
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FSStatusCode;
 using ::dingofs::stub::metric::FSMetric;
-using ::dingofs::stub::metric::S3Metric;
+using ::dingofs::stub::metric::ObjectMetric;
 
 USING_FLAG(push_metric_interval_millsecond)
 
@@ -101,13 +101,13 @@ FsStatsData FsPushMetricManager::GetClientMetrics() {
       FSMetric::GetInstance().user_write.qps.count.get_value());
   // s3 write metrics
   client_metrics.set_s3readbytes(
-      S3Metric::GetInstance().read_s3.bps.count.get_value());
+      ObjectMetric::GetInstance().read_object.bps.count.get_value());
   client_metrics.set_s3readqps(
-      S3Metric::GetInstance().read_s3.qps.count.get_value());
+      ObjectMetric::GetInstance().read_object.qps.count.get_value());
   client_metrics.set_s3writebytes(
-      S3Metric::GetInstance().write_s3.bps.count.get_value());
+      ObjectMetric::GetInstance().write_object.bps.count.get_value());
   client_metrics.set_s3writeqps(
-      S3Metric::GetInstance().write_s3.qps.count.get_value());
+      ObjectMetric::GetInstance().write_object.qps.count.get_value());
 
   return client_metrics;
 }

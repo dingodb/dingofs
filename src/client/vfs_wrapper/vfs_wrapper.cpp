@@ -426,6 +426,9 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
 
+  FsMetricGuard fs_metric(&s, &stub::metric::FSMetric::GetInstance().user_read,
+                          out_rsize, butil::cpuwide_time_us());
+
   s = vfs_->Read(ino, buf, size, offset, fh, out_rsize);
   VLOG(1) << "VFSRead end ino: " << ino << " parma_size: " << size
           << " offset: " << offset << " fh: " << fh
@@ -448,6 +451,9 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opWrite, &client_op_metric_->opAll});
+
+  FsMetricGuard fs_metric(&s, &stub::metric::FSMetric::GetInstance().user_write,
+                          out_wsize, butil::cpuwide_time_us());
 
   s = vfs_->Write(ino, buf, size, offset, fh, out_wsize);
   VLOG(1) << "VFSWrite end ino: " << ino << " size: " << size
