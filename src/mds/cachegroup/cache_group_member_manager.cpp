@@ -28,6 +28,8 @@ namespace dingofs {
 namespace mds {
 namespace cachegroup {
 
+using ::dingofs::pb::mds::cachegroup::CacheGroupMemberState;
+
 CacheGroupMemberManagerImpl::CacheGroupMemberManagerImpl(
     CacheGroupOption option, std::shared_ptr<KVStorageClient> kv)
     : option_(option),
@@ -52,7 +54,7 @@ Errno CacheGroupMemberManagerImpl::RegisterMember(uint64_t old_id,
 }
 
 Errno CacheGroupMemberManagerImpl::AddMember(const std::string& group_name,
-                                             const CacheGroupMember& member) {
+                                             CacheGroupMember member) {
   uint64_t group_id;
   auto rc = storage_->GetGroupId(group_name, &group_id);
   if (rc == Errno::kNotFound) {
@@ -68,27 +70,58 @@ Errno CacheGroupMemberManagerImpl::AddMember(const std::string& group_name,
   }
 
   // rc == Errno::kOk
+  member.set_last_online_time_ms(TimestampMs());
   rc = storage_->AddMember(group_id, member);
   if (rc == Errno::kOk) {
-    LOG(INFO) << "Add member (id=" << member.id()
-              << ",weight=" << member.weight()
-              << ") to group (name=" << group_name << ") success.";
+    LOG(INFO) << "Add member (id=" << member.id() << ",ip=" << member.ip()
+              << ",port=" << member.port() << ",weight=" << member.weight()
+              << ",last_online_time_ms=" << member.last_online_time_ms()
+              << ",state=" << member.state()
+              << ") to group (name=" << group_name << ",id=" << group_id
+              << ") success.";
   } else {
-    LOG(ERROR) << "Add member (id=" << member.id()
-               << ",weight=" << member.weight()
-               << ") to group (name=" << group_name
+    LOG(ERROR) << "Add member (id=" << member.id() << ",ip=" << member.ip()
+               << ",port=" << member.port() << ",weight=" << member.weight()
+               << ",last_online_time_ms=" << member.last_online_time_ms()
+               << ",state=" << member.state()
+               << ") to group (name=" << group_name << ",id=" << group_id
                << ") failed: " << StrErr(rc);
   }
   return rc;
+}
+
+void CacheGroupMemberManagerImpl::SetMembersState(
+    std::vector<CacheGroupMember>* members) {
+  auto time_now_ms = TimestampMs();
+  auto miss_timeout_ms = option_.heartbeat_miss_timeout_s * 1000;
+  auto offline_timeout_ms = option_.heartbeat_offline_timeout_s * 1000;
+
+  auto set_state = [&](CacheGroupMember* member) {
+    auto time_pass_ms = time_now_ms - member->last_online_time_ms();
+    if (time_pass_ms < miss_timeout_ms) {
+      member->set_state(CacheGroupMemberState::CacheGroupMemberStateOnline);
+    } else if (time_pass_ms < offline_timeout_ms) {
+      member->set_state(CacheGroupMemberState::CacheGroupMemberStateUnstable);
+    } else {  // TODO: we can remove offline members from group
+      member->set_state(CacheGroupMemberState::CacheGroupMemberStateOffline);
+    }
+  };
+
+  for (auto& member : *members) {
+    set_state(&member);
+  }
 }
 
 Errno CacheGroupMemberManagerImpl::LoadMembers(
     const std::string& group_name, std::vector<CacheGroupMember>* members) {
   uint64_t group_id;
   auto rc = storage_->GetGroupId(group_name, &group_id);
-  if (rc == Errno::kOk) {
-    storage_->LoadMembers(group_id, members);
+  if (rc != Errno::kOk) {
+    return rc;
   }
+
+  storage_->LoadMembers(group_id, members);
+  SetMembersState(members);
   return rc;
 }
 
@@ -108,10 +141,22 @@ Errno CacheGroupMemberManagerImpl::ReweightMember(const std::string& group_name,
 }
 
 Errno CacheGroupMemberManagerImpl::HandleHeartbeat(
-    const std::string& /*group_name*/, uint64_t /*id*/,
+    const std::string& group_name, uint64_t member_id,
     const Statistic& /*stat*/) {
-  // TODO(Wine93): handle heartbeat, use CacheGroupOption
-  return Errno::kOk;
+  uint64_t group_id;
+  auto rc = storage_->GetGroupId(group_name, &group_id);
+  if (rc != Errno::kOk) {
+    LOG(ERROR) << "Group not found: group_name = " << group_name;
+    return rc;
+  }
+
+  return storage_->SetMemberLastOnlineTime(group_id, member_id, TimestampMs());
+}
+
+uint64_t CacheGroupMemberManagerImpl::TimestampMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
 }
 
 }  // namespace cachegroup

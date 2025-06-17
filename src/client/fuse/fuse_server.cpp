@@ -29,11 +29,10 @@
 #include "client/fuse/fuse_passfd.h"
 #include "client/fuse/fuse_upgrade_manager.h"
 #include "common/version.h"
-#include "options/client/options/fuse/fuse_dynamic_option.h"
+#include "options/client/fuse/fuse_dynamic_option.h"
 #include "utils/concurrent/concurrent.h"
 
-using ::dingofs::base::string::BufToHexString;
-using ::dingofs::base::string::StrFormat;
+using ::dingofs::utils::BufToHexString;
 
 namespace dingofs {
 namespace client {
@@ -262,7 +261,7 @@ int FuseServer::SessionMount() {
         FuseUpgradeState::kFuseUpgradeNew);
 
     // construct new mountpoint
-    std::string mountpoint = StrFormat("/dev/fd/%d", fuse_fd_);
+    std::string mountpoint = absl::StrFormat("/dev/fd/%d", fuse_fd_);
     LOG(INFO) << "start mount on mountpoint: " << mountpoint;
     if (fuse_session_mount(se_, mountpoint.c_str()) != 0) return 1;
 
@@ -339,7 +338,8 @@ void FuseServer::ExportMetrics(const std::string& key,
 }
 
 int FuseServer::Serve(const std::string& fd_comm_path) {
-  fd_comm_file_ = StrFormat("%s/fd_comm_socket.%d", fd_comm_path, getpid());
+  fd_comm_file_ =
+      absl::StrFormat("%s/fd_comm_socket.%d", fd_comm_path, getpid());
   // export fd_comm_path value for new dingo-fuse use
   ExportMetrics(kFdCommPathKey, fd_comm_file_);
 
@@ -384,7 +384,8 @@ void FuseServer::SessionUnmount() {
 // TODO: check the fstype to determain the dingo-fuse
 bool FuseServer::ShutdownGracefully(const char* mountpoint) {
   // get old dingo-fuse pid
-  std::string file_name = StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
+  std::string file_name =
+      absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
   int pid = GetDingoFusePid(file_name);
   if (pid == -1) {
     return false;

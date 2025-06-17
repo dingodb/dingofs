@@ -35,9 +35,9 @@
 #include "client/vfs/meta/v2/filesystem.h"
 #include "client/meta/vfs_meta.h"
 #include "common/status.h"
-#include "options/client/options/common_option.h"
-#include "options/client/options/vfs/vfs_dynamic_option.h"
-#include "options/client/options/vfs/vfs_option.h"
+#include "options/client/common_option.h"
+#include "options/client/vfs/vfs_dynamic_option.h"
+#include "options/client/vfs/vfs_option.h"
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 
@@ -130,7 +130,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     block_cache_ = std::make_shared<cache::TierBlockCache>(
         block_cache_option, remote_block_cache_option, block_accesser_.get());
 
-    DINGOFS_RETURN_NOT_OK(block_cache_->Init());
+    DINGOFS_RETURN_NOT_OK(block_cache_->Start());
   }
 
   {

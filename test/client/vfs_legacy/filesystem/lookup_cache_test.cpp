@@ -24,7 +24,7 @@
 
 #include <gtest/gtest.h>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {

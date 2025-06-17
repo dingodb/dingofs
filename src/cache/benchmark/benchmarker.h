@@ -23,10 +23,13 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_BENCHMARKER_H_
 
-#include "blockaccess/block_accesser.h"
+#include "cache/benchmark/factory.h"
 #include "cache/benchmark/reporter.h"
 #include "cache/benchmark/worker.h"
 #include "cache/blockcache/block_cache.h"
+#include "cache/storage/storage.h"
+#include "cache/storage/storage_pool.h"
+#include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,29 +38,43 @@ class Benchmarker {
  public:
   Benchmarker();
 
-  Status Run();
-  void Shutdown();
+  Status Start();
+
+  void RunUntilFinish();
 
  private:
-  Status Init();
+  // Init
+  Status InitAll();
+  Status InitMdsClient();
+  Status InitStorage();
   Status InitBlockCache();
-  Status InitWrokers();
+  Status InitCollector();
+  Status InitReporter();
+  void InitFactory();
+  void InitWorkers();
 
-  Status Start();
-  Status StartReporter();
+  // Start
+  void StartAll();
+  void StartReporter();
   void StartWorkers();
 
-  void Stop();
+  // Stop
+  void StopAll();
   void StopWorkers();
   void StopReporter();
-  void StopBlockCache();
+  void StopCollector();
 
-  blockaccess::BlockAccesserUPtr block_accesser_;
+ private:
+  std::unique_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
+  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  StoragePoolSPtr storage_pool_;
+  StorageSPtr storage_;
   BlockCacheSPtr block_cache_;
-  TaskThreadPoolUPtr task_pool_;
-  std::vector<WorkerSPtr> workers_;
-  BthreadCountdownEventSPtr countdown_event_;
+  CollectorSPtr collector_;
   ReporterSPtr reporter_;
+  TaskFactorySPtr factory_;
+  std::vector<WorkerUPtr> workers_;
+  TaskThreadPoolUPtr thread_pool_;
 };
 
 }  // namespace cache

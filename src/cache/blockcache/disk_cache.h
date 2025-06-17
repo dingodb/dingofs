@@ -23,13 +23,16 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 
+#include <memory>
+
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_loader.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/blockcache/disk_state_health_checker.h"
-#include "cache/config/config.h"
 #include "cache/storage/filesystem.h"
+#include "metrics/cache/disk_cache_metric.h"
+#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
@@ -39,16 +42,16 @@ class DiskCache final : public CacheStore {
   explicit DiskCache(DiskCacheOption option);
   ~DiskCache() override = default;
 
-  Status Init(UploadFunc uploader) override;
+  Status Start(UploadFunc uploader) override;
   Status Shutdown() override;
 
-  Status Stage(const BlockKey& key, const Block& block,
+  Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
                StageOption option = StageOption()) override;
-  Status RemoveStage(const BlockKey& key,
+  Status RemoveStage(ContextSPtr ctx, const BlockKey& key,
                      RemoveStageOption option = RemoveStageOption()) override;
-  Status Cache(const BlockKey& key, const Block& block,
+  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
                CacheOption option = CacheOption()) override;
-  Status Load(const BlockKey& key, off_t offset, size_t length,
+  Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset, size_t length,
               IOBuffer* buffer, LoadOption option = LoadOption()) override;
 
   std::string Id() const override;
@@ -70,7 +73,7 @@ class DiskCache final : public CacheStore {
   bool DetectDirectIO();
 
   // check running status, disk healthy and disk free space
-  Status Check(uint8_t want) const;
+  Status CheckStatus(uint8_t want) const;
   bool IsLoading() const;
   bool IsHealthy() const;
   bool StageFull() const;
@@ -94,11 +97,13 @@ class DiskCache final : public CacheStore {
   StateMachineSPtr state_machine_;
   DiskStateHealthCheckerUPtr disk_state_health_checker_;
   FileSystemSPtr fs_;
+  metrics::DiskCacheMetricSPtr metric_;
   DiskCacheManagerSPtr manager_;
   DiskCacheLoaderUPtr loader_;
 };
 
 using DiskCacheSPtr = std::shared_ptr<DiskCache>;
+using DiskCacheUPtr = std::unique_ptr<DiskCache>;
 
 }  // namespace cache
 }  // namespace dingofs

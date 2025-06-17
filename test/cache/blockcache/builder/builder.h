@@ -29,21 +29,20 @@
 #include <memory>
 #include <vector>
 
-#include "base/filepath/filepath.h"
-#include "base/string/string.h"
 #include "blockaccess/mock/mock_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/utils/access_log.h"
 #include "options/cache/block_cache.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace cache {
 
-using base::string::GenUuid;
 using cache::BlockCacheOption;
 using cache::DiskCacheOption;
+using utils::GenUuid;
 
 class BlockKeyBuilder {
  public:

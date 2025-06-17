@@ -31,7 +31,7 @@ class DiskStateHealthChecker {
   virtual ~DiskStateHealthChecker() = default;
 
   virtual void Start();
-  virtual void Stop();
+  virtual void Shutdown();
 
  private:
   void RunCheck();

@@ -22,12 +22,12 @@
 
 #include "metaserver/superpartition/access_log.h"
 
+#include <absl/strings/str_format.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
-#include "base/string/string.h"
 #include "metaserver/common/dynamic_config.h"
 
 namespace dingofs {
@@ -36,7 +36,6 @@ namespace superpartition {
 
 USING_FLAG(superpartition_access_logging);
 
-using ::dingofs::base::string::StrFormat;
 using MessageHandler = std::function<std::string()>;
 
 static std::shared_ptr<spdlog::logger> logger;
@@ -44,7 +43,8 @@ static bool initialized = false;
 
 bool InitAccessLog(const std::string& prefix) {
   if (!initialized) {
-    std::string filename = StrFormat("%s/access_log_%d.log", prefix, getpid());
+    std::string filename =
+        absl::StrFormat("%s/access_log_%d.log", prefix, getpid());
     logger = spdlog::daily_logger_mt("trace", filename, 0, 0);
     spdlog::flush_every(std::chrono::seconds(1));
     initialized = true;

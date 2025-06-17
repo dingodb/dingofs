@@ -28,20 +28,20 @@
 #include <sys/mman.h>
 #include <sys/vfs.h>
 
-#include <functional>
-#include <memory>
 #include <string>
 
-#include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
 // Wrapper for POSIX interface which does:
-//  1. convert system error code to Status
-//  2. add logging
+//  1. Convert system error code to Status
+//  2. Add error/warning logging
 class Posix {
  public:
+  static constexpr int kDefaultCreatFlags = O_CREAT | O_WRONLY | O_TRUNC;
+
   static Status Stat(const std::string& path, struct stat* stat);
 
   static Status MkDir(const std::string& path, uint16_t mode);
@@ -64,6 +64,8 @@ class Posix {
 
   static Status Read(int fd, char* buffer, size_t length);
 
+  static Status FSync(int fd);
+
   static Status Close(int fd);
 
   static Status Unlink(const std::string& path);
@@ -79,7 +81,7 @@ class Posix {
   static Status MMap(void* addr, size_t length, int port, int flags, int fd,
                      off_t offset, void** addr_out);
 
-  static Status MUnMap(void* addr, size_t length);
+  static Status MUnmap(void* addr, size_t length);
 
  private:
   template <typename... Args>

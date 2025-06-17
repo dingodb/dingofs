@@ -26,12 +26,12 @@
 #include <string>
 
 #include "client/common/utils.h"
-#include "client/vfs/common/helper.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
-#include "options/client/options/fuse/fuse_dynamic_option.h"
+#include "options/client/fuse/fuse_dynamic_option.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;

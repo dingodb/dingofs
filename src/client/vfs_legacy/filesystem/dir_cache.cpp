@@ -24,18 +24,18 @@
 
 #include <utility>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
-#include "dingofs/metaserver.pb.h"
-#include "base/time/time.h"
 #include "client/vfs_legacy/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::time::TimeSpec;
 using utils::ReadLockGuard;
 using utils::RWLock;
+using utils::TimeSpec;
 using utils::WriteLockGuard;
 
 using pb::metaserver::InodeAttr;

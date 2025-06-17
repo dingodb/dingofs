@@ -31,16 +31,17 @@
 #include "client/vfs_legacy/filesystem/fs_stat_manager.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::time::TimeSpec;
+using utils::TimeSpec;
 
 using pb::metaserver::InodeAttr;
+
 using pb::metaserver::Quota;
 
 USING_FLAG(stat_timer_thread_num);

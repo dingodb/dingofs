@@ -17,7 +17,7 @@
 #include "glog/logging.h"
 #include "metrics/blockaccess/s3_accesser.h"
 #include "metrics/client/client.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 namespace dingofs {
 namespace client {

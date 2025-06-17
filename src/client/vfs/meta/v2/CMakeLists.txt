@@ -21,7 +21,6 @@ add_library(vfs_meta_v2_lib ${VFS_META_SRC_V2_LIB})
 
 target_link_libraries(vfs_meta_v2_lib
     PROTO_OBJS
-    dingofs_base_lib
 
     mdsv2_mds
 

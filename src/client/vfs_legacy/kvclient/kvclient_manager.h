@@ -29,9 +29,9 @@
 #include <string>
 #include <utility>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/kvclient/kvclient.h"
 #include "metrics/client/vfs_legacy/kv_client.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {

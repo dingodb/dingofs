@@ -26,108 +26,33 @@
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
 #include <butil/time.h>
+
 #include <memory>
 
-#include "cache/common/common.h"
-#include "cache/config/config.h"
+#include "cache/benchmark/collector.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
 
-enum class EventType : uint8_t {
-  kOnStart = 0,
-  kAddStat = 1,
-  kReportStat = 2,
-  kOnStop = 3,
-};
-
-struct Event {
-  Event() = default;
-
-  Event(EventType type, uint64_t bytes = 0, double latency_s = 0)
-      : type(type), bytes(bytes), latency_s(latency_s) {}
-
-  EventType type;
-  uint64_t bytes{0};
-  double latency_s{0};
-};
-
-class Statistics {  // Per 3 sconds
- public:
-  Statistics() = default;
-
-  void Add(uint64_t bytes, double latency_s) {
-    max_latency_s_ = std::max(max_latency_s_, latency_s);
-    if (min_latency_s_ == 0 || latency_s < min_latency_s_) {
-      min_latency_s_ = latency_s;
-    }
-
-    count_++;
-    total_bytes_ += bytes;
-    total_latency_s += latency_s;
-  }
-
-  uint64_t IOPS(uint32_t interval_s = FLAGS_stat_interval_s) const {
-    return count_ / interval_s;
-  }
-
-  uint64_t Bandwidth(uint32_t interval_s = FLAGS_stat_interval_s) const {
-    return total_bytes_ * 1.0 / interval_s / kMiB;
-  }
-
-  double TotalLatency() const { return total_latency_s; }
-
-  double AvgLatency() const {
-    if (count_ == 0) {
-      return 0;
-    }
-    return total_latency_s / count_;
-  }
-
-  double MaxLatency() const { return max_latency_s_; }
-
-  double MinLatency() const { return min_latency_s_; }
-
-  void Reset() {
-    count_ = 0;
-    total_bytes_ = 0;
-    max_latency_s_ = 0;
-    min_latency_s_ = 0;
-    total_latency_s = 0;
-  }
-
- private:
-  uint64_t count_{0};
-  uint64_t total_bytes_{0};
-  double max_latency_s_{0};
-  double min_latency_s_{0};
-  double total_latency_s{0};
-};
-
 class Reporter {
  public:
-  Reporter();
+  explicit Reporter(CollectorSPtr collector);
 
   Status Start();
-  Status Stop();
-
-  void Submit(Event event);
+  void Shutdown();
 
  private:
-  static int HandleEvent(void* meta, bthread::TaskIterator<Event>& iter);
-
-  void OnStart();
-  void AddStat(Event event);
-  void ReportStat();
-  void OnStop();
+  constexpr static uint64_t kReportIntervalSeconds = 3;
 
   void TickTok();
 
-  butil::Timer btimer_;
-  Statistics interval_stat_;
-  Statistics summary_stat_;
-  bthread::ExecutionQueueId<Event> queue_id_;
+  void OnStart(Stat* stat, Stat* total);
+  void OnShow(Stat* stat, Stat* total);
+  void OnStop(Stat* stat, Stat* total);
+
+  butil::Timer g_timer_;
+  CollectorSPtr collector_;
   std::unique_ptr<Executor> executor_;
 };
 

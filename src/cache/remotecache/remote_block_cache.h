@@ -25,8 +25,10 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/remotecache/remote_node.h"
-#include "cache/remotecache/remote_node_manager.h"
 #include "cache/storage/storage.h"
+#include "cache/utils/bthread.h"
+#include "cache/utils/context.h"
+#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,27 +37,27 @@ class RemoteBlockCacheImpl final : public BlockCache {
  public:
   RemoteBlockCacheImpl(RemoteBlockCacheOption option, StorageSPtr storage);
 
-  Status Init() override;
+  Status Start() override;
   Status Shutdown() override;
 
-  Status Put(const BlockKey& key, const Block& block,
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
              PutOption option) override;
-  Status Range(const BlockKey& key, off_t offset, size_t length,
-               IOBuffer* buffer, RangeOption option) override;
-  Status Cache(const BlockKey& key, const Block& block,
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer, RangeOption option) override;
+  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
                CacheOption option) override;
-  Status Prefetch(const BlockKey& key, size_t length,
+  Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
                   PrefetchOption option) override;
 
-  void AsyncPut(const BlockKey& key, const Block& block, AsyncCallback cb,
-                PutOption option) override;
-  void AsyncRange(const BlockKey& key, off_t offset, size_t length,
-                  IOBuffer* buffer, AsyncCallback cb,
+  void AsyncPut(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                AsyncCallback cb, PutOption option) override;
+  void AsyncRange(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                  size_t length, IOBuffer* buffer, AsyncCallback cb,
                   RangeOption option) override;
-  void AsyncCache(const BlockKey& key, const Block& block, AsyncCallback cb,
-                  CacheOption option) override;
-  void AsyncPrefetch(const BlockKey& key, size_t length, AsyncCallback cb,
-                     PrefetchOption option) override;
+  void AsyncCache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                  AsyncCallback cb, CacheOption option) override;
+  void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
+                     AsyncCallback cb, PrefetchOption option) override;
 
   bool HasCacheStore() const override;
   bool EnableStage() const override;
@@ -63,12 +65,13 @@ class RemoteBlockCacheImpl final : public BlockCache {
   bool IsCached(const BlockKey& key) const override;
 
  private:
-  BlockCacheSPtr GetSelfSPtr() { return shared_from_this(); }
+  BlockCachePtr GetSelfPtr() { return this; }
 
   std::atomic<bool> running_;
   RemoteBlockCacheOption option_;
   RemoteNodeSPtr remote_node_;
   StorageSPtr storage_;
+  BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache

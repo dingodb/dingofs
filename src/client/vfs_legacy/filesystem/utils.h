@@ -20,14 +20,14 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_UTILS_H_
-#define DINGOFS_SRC_CLIENT_FILESYSTEM_UTILS_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_LEGACY_FILESYSTEM_UTILS_H_
+#define DINGOFS_SRC_CLIENT_VFS_LEGACY_FILESYSTEM_UTILS_H_
 
 #include <memory>
 
-#include "dingofs/metaserver.pb.h"
-#include "base/time/time.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "dingofs/metaserver.pb.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -45,16 +45,16 @@ bool IsVolmeFile(const pb::metaserver::InodeAttr& attr);
 // symbol link
 bool IsSymLink(const pb::metaserver::InodeAttr& attr);
 
-base::time::TimeSpec AttrMtime(const pb::metaserver::InodeAttr& attr);
+utils::TimeSpec AttrMtime(const pb::metaserver::InodeAttr& attr);
 
-base::time::TimeSpec AttrCtime(const pb::metaserver::InodeAttr& attr);
+utils::TimeSpec AttrCtime(const pb::metaserver::InodeAttr& attr);
 
-base::time::TimeSpec InodeMtime(const std::shared_ptr<InodeWrapper> inode);
+utils::TimeSpec InodeMtime(const std::shared_ptr<InodeWrapper> inode);
 
-base::time::TimeSpec Now();
+utils::TimeSpec Now();
 
 }  // namespace filesystem
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_FILESYSTEM_UTILS_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_LEGACY_FILESYSTEM_UTILS_H_

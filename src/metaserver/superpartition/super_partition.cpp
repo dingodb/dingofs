@@ -25,14 +25,12 @@
 #include <memory>
 #include <unordered_map>
 
-#include "base/string/string.h"
 #include "metaserver/superpartition/access_log.h"
 
 namespace dingofs {
 namespace metaserver {
 namespace superpartition {
 
-using base::string::StrFormat;
 using superpartition::LogGuard;
 
 using pb::metaserver::MetaStatusCode;
@@ -45,8 +43,8 @@ SuperPartition::SuperPartition(std::shared_ptr<storage::KVStorage> kv)
 MetaStatusCode SuperPartition::SetFsQuota(uint32_t fs_id, const Quota& quota) {
   pb::metaserver::MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("set_fs_quota(%d,%s): %s", fs_id, StrQuota(quota),
-                     StrErr(rc));
+    return absl::StrFormat("set_fs_quota(%d,%s): %s", fs_id, StrQuota(quota),
+                           StrErr(rc));
   });
 
   rc = store_->SetFsQuota(fs_id, quota);
@@ -56,8 +54,8 @@ MetaStatusCode SuperPartition::SetFsQuota(uint32_t fs_id, const Quota& quota) {
 MetaStatusCode SuperPartition::GetFsQuota(uint32_t fs_id, Quota* quota) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("get_fs_quota(%d): %s (%s)", fs_id, StrErr(rc),
-                     StrQuota(*quota));
+    return absl::StrFormat("get_fs_quota(%d): %s (%s)", fs_id, StrErr(rc),
+                           StrQuota(*quota));
   });
 
   rc = store_->GetFsQuota(fs_id, quota);
@@ -67,7 +65,7 @@ MetaStatusCode SuperPartition::GetFsQuota(uint32_t fs_id, Quota* quota) {
 MetaStatusCode SuperPartition::DeleteFsQuota(uint32_t fs_id) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("delete_fs_quota(%d): %s", fs_id, StrErr(rc));
+    return absl::StrFormat("delete_fs_quota(%d): %s", fs_id, StrErr(rc));
   });
 
   rc = store_->DeleteFsQuota(fs_id);
@@ -78,8 +76,8 @@ MetaStatusCode SuperPartition::FlushFsUsage(uint32_t fs_id, const Usage& usage,
                                             Quota* quota) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("flush_fs_usage(%d,%s): %s (%s)", fs_id, StrUsage(usage),
-                     StrErr(rc), StrQuota(*quota));
+    return absl::StrFormat("flush_fs_usage(%d,%s): %s (%s)", fs_id,
+                           StrUsage(usage), StrErr(rc), StrQuota(*quota));
   });
 
   rc = store_->FlushFsUsage(fs_id, usage, quota);
@@ -91,8 +89,8 @@ MetaStatusCode SuperPartition::SetDirQuota(uint32_t fs_id,
                                            const Quota& quota) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("set_dir_quota(%d,%d,%s): %s", fs_id, dir_inode_id,
-                     StrQuota(quota), StrErr(rc));
+    return absl::StrFormat("set_dir_quota(%d,%d,%s): %s", fs_id, dir_inode_id,
+                           StrQuota(quota), StrErr(rc));
   });
 
   rc = store_->SetDirQuota(fs_id, dir_inode_id, quota);
@@ -104,8 +102,8 @@ MetaStatusCode SuperPartition::GetDirQuota(uint32_t fs_id,
                                            Quota* quota) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("get_dir_quota(%d,%d): %s (%s)", fs_id, dir_inode_id,
-                     StrErr(rc), StrQuota(*quota));
+    return absl::StrFormat("get_dir_quota(%d,%d): %s (%s)", fs_id, dir_inode_id,
+                           StrErr(rc), StrQuota(*quota));
   });
 
   rc = store_->GetDirQuota(fs_id, dir_inode_id, quota);
@@ -116,8 +114,8 @@ MetaStatusCode SuperPartition::DeleteDirQuota(uint32_t fs_id,
                                               uint64_t dir_inode_id) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("delete_dir_quota(%d,%d): %s", fs_id, dir_inode_id,
-                     StrErr(rc));
+    return absl::StrFormat("delete_dir_quota(%d,%d): %s", fs_id, dir_inode_id,
+                           StrErr(rc));
   });
 
   rc = store_->DeleteDirQuota(fs_id, dir_inode_id);
@@ -127,8 +125,8 @@ MetaStatusCode SuperPartition::DeleteDirQuota(uint32_t fs_id,
 MetaStatusCode SuperPartition::LoadDirQuotas(uint32_t fs_id, Quotas* quotas) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("load_dir_quotas(%d): %s (%d)", fs_id, StrErr(rc),
-                     quotas->size());
+    return absl::StrFormat("load_dir_quotas(%d): %s (%d)", fs_id, StrErr(rc),
+                           quotas->size());
   });
 
   rc = store_->LoadDirQuotas(fs_id, quotas);
@@ -139,8 +137,8 @@ MetaStatusCode SuperPartition::FlushDirUsages(uint32_t fs_id,
                                               const Usages& usages) {
   MetaStatusCode rc;
   LogGuard log([&]() {
-    return StrFormat("flush_dir_usages(%d,%d): %s", fs_id, usages.size(),
-                     StrErr(rc));
+    return absl::StrFormat("flush_dir_usages(%d,%d): %s", fs_id, usages.size(),
+                           StrErr(rc));
   });
 
   rc = store_->FlushDirUsages(fs_id, usages);
@@ -162,15 +160,15 @@ std::string SuperPartition::StrErr(MetaStatusCode code) {
 }
 
 std::string SuperPartition::StrQuota(const Quota& quota) {
-  return StrFormat("[%d,%d,%d,%d]",
-                   quota.has_maxbytes() ? quota.maxbytes() : -1,
-                   quota.has_maxinodes() ? quota.maxinodes() : -1,
-                   quota.has_usedbytes() ? quota.usedbytes() : -1,
-                   quota.has_usedinodes() ? quota.usedinodes() : -1);
+  return absl::StrFormat("[%d,%d,%d,%d]",
+                         quota.has_maxbytes() ? quota.maxbytes() : -1,
+                         quota.has_maxinodes() ? quota.maxinodes() : -1,
+                         quota.has_usedbytes() ? quota.usedbytes() : -1,
+                         quota.has_usedinodes() ? quota.usedinodes() : -1);
 }
 
 std::string SuperPartition::StrUsage(const Usage& usage) {
-  return StrFormat("[%d,%d]", usage.bytes(), usage.inodes());
+  return absl::StrFormat("[%d,%d]", usage.bytes(), usage.inodes());
 }
 
 }  // namespace superpartition

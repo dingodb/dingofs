@@ -60,7 +60,7 @@ file_install:
 	@bash build-scripts/file-install.sh --prefix=$(prefix) --only=$(only)
 
 file_deploy_config:
-	@bash build-scripts/file-deploy-config.sh $(os) 
+	@bash build-scripts/file-deploy-config.sh $(os)
 
 file_image:
 	@bash build-scripts/file-deploy-config.sh $(os) $(tag) ${build-image}

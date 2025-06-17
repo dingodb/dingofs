@@ -26,31 +26,30 @@
 #include <sys/types.h>
 
 #include <cstddef>
-#include <functional>
 #include <string>
 
 #include "cache/storage/aio/aio.h"
-#include "cache/storage/filesystem_base.h"
-#include "cache/storage/page_cache_manager.h"
+#include "cache/storage/base_filesystem.h"
 
 namespace dingofs {
 namespace cache {
 
-class HF3FS final : public FileSystemBase {
+class HF3FS final : public BaseFileSystem {
  public:
   HF3FS(const std::string& mountpoint, CheckStatusFunc check_status_func);
 
-  Status Init() override;
-  Status Destroy() override;
+  Status Start() override;
+  Status Shutdown() override;
 
-  Status WriteFile(const std::string& path, const IOBuffer& buffer,
-                   WriteOption option) override;
-  Status ReadFile(const std::string& path, off_t offset, size_t length,
-                  IOBuffer* buffer, ReadOption option) override;
+  Status WriteFile(ContextSPtr ctx, const std::string& path,
+                   const IOBuffer& buffer, WriteOption option) override;
+  Status ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
+                  size_t length, IOBuffer* buffer, ReadOption option) override;
 
  private:
-  Status AioWrite(int fd, const IOBuffer& buffer);
-  Status AioRead(int fd, off_t offset, size_t length, IOBuffer* buffer);
+  Status AioWrite(ContextSPtr ctx, int fd, const IOBuffer& buffer);
+  Status AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,
+                 IOBuffer* buffer);
 
   std::atomic<bool> running_;
   IORingSPtr io_ring_w_;

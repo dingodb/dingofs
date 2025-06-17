@@ -29,7 +29,7 @@
 
 #include "client/memory/page_allocator.h"
 #include "client/vfs_legacy/datastream/metric.h"
-#include "options/client/options/vfs_legacy/data_stream/data_stream_option.h"
+#include "options/client/vfs_legacy/data_stream/data_stream_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {

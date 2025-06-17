@@ -29,9 +29,9 @@
 #include <thread>
 
 #include "absl/strings/str_cat.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/kvclient/memcache_client.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/count_down_event.h"
 
 using dingofs::utils::CountDownEvent;

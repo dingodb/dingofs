@@ -20,37 +20,22 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_UTILS_LOGGER_H_
-#define DINGOFS_SRC_CACHE_UTILS_LOGGER_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_LOGGING_H_
+#define DINGOFS_SRC_CACHE_UTILS_LOGGING_H_
 
-#include <glog/logging.h>
-
-#include "blockaccess/block_access_log.h"
-#include "cache/common/common.h"
-#include "cache/config/config.h"
-#include "cache/utils/access_log.h"
-
+#include <string>
 namespace dingofs {
 namespace cache {
 
-inline void InitLogging(const char* argv0) {
-  FLAGS_log_dir = FLAGS_logdir;
-  FLAGS_v = FLAGS_loglevel;
-  FLAGS_logbufsecs = 0;
-  FLAGS_max_log_size = 80;
-  FLAGS_stop_logging_if_full_disk = true;
-  google::InitGoogleLogging(argv0);
-  LOG(INFO) << "Init glog logger success: log_dir = " << FLAGS_log_dir;
+void InitLogging(const char* argv0);
 
-  CHECK(InitCacheAccessLog(FLAGS_log_dir)) << "Init access log failed.";
-  LOG(INFO) << "Init cache access logger success: log_dir = " << FLAGS_log_dir;
+bool InitCacheTraceLog(const std::string& log_dir);
 
-  CHECK(blockaccess::InitBlockAccessLog(FLAGS_log_dir))
-      << "Init block access log failed.";
-  LOG(INFO) << "Init block access logger success: log_dir = " << FLAGS_log_dir;
-}
+void ShutdownCacheTraceLog();
+
+void LogTrace(const std::string& message);
 
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_UTILS_LOGGER_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_LOGGING_H_

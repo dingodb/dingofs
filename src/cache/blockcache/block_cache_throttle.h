@@ -23,9 +23,10 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 
+#include <atomic>
 #include <memory>
 
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 #include "utils/executor/executor.h"
 #include "utils/throttle.h"
 
@@ -38,12 +39,14 @@ class UploadStageThrottle {
   virtual ~UploadStageThrottle() = default;
 
   void Start();
-  void Stop();
+  void Shutdown();
+
   void Add(uint64_t upload_bytes);
 
  private:
   void UpdateThrottleParam();
 
+  std::atomic<bool> running_;
   BthreadMutex mutex_;
   uint64_t current_throttle_bandwidth_mb_;
   uint64_t current_throttle_iops_;
@@ -52,6 +55,7 @@ class UploadStageThrottle {
 };
 
 using UploadStageThrottleUPtr = std::unique_ptr<UploadStageThrottle>;
+using UploadStageThrottleSPtr = std::shared_ptr<UploadStageThrottle>;
 
 }  // namespace cache
 }  // namespace dingofs

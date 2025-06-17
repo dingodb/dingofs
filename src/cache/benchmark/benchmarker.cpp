@@ -24,139 +24,146 @@
 
 #include <memory>
 
-#include "base/time/time.h"
-#include "blockaccess/block_access_log.h"
-#include "cache/config/config.h"
+#include "cache/common/type.h"
+#include "cache/storage/storage_pool.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "cache/utils/access_log.h"
+#include "options/cache/benchmark.h"
+#include "options/cache/stub.h"
 
 namespace dingofs {
 namespace cache {
 
 Benchmarker::Benchmarker()
-    : block_accesser_(std::make_unique<blockaccess::BlockAccesserImpl>(
-          NewBlockAccessOptions())),
-      block_cache_(std::make_shared<TierBlockCache>(
-          BlockCacheOption(), RemoteBlockCacheOption(), block_accesser_.get())),
-      task_pool_(std::make_unique<TaskThreadPool>("benchmarker")),
-      countdown_event_(std::make_shared<BthreadCountdownEvent>(FLAGS_threads)),
-      reporter_(std::make_shared<Reporter>()) {
-  if (FLAGS_ino == 0) {
-    FLAGS_ino = base::time::TimeNow().seconds;
+    : mds_base_(std::make_unique<stub::rpcclient::MDSBaseClient>()),
+      mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
+      storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)),
+      collector_(std::make_unique<Collector>()),
+      reporter_(std::make_shared<Reporter>(collector_)),
+      thread_pool_(std::make_unique<TaskThreadPool>("benchmarker_worker")) {
+  if (FLAGS_offset + FLAGS_length > FLAGS_blksize) {
+    FLAGS_length = FLAGS_blksize - FLAGS_offset;
   }
 }
 
-Status Benchmarker::Run() {
-  // Init logger, block cache, workers
-  auto status = Init();
-  if (!status.ok()) {
-    return status;
-  }
+Status Benchmarker::Start() { return InitAll(); }
 
-  // Start reporter, workers
-  status = Start();
-  if (!status.ok()) {
-    return status;
+Status Benchmarker::InitAll() {
+  auto initers = std::vector<std::function<Status()>>{
+      [this]() { return InitMdsClient(); },
+      [this]() { return InitStorage(); },
+      [this]() { return InitBlockCache(); },
+      [this]() { return InitCollector(); },
+      [this]() { return InitReporter(); },
+      [this]() {
+        InitFactory();
+        return Status::OK();
+      },
+      [this]() {
+        InitWorkers();
+        return Status::OK();
+      }};
+
+  for (const auto& initer : initers) {
+    auto status = initer();
+    if (!status.ok()) {
+      return status;
+    }
   }
 
   return Status::OK();
 }
 
-void Benchmarker::Shutdown() {
-  // Wait for all workers to complete
-  countdown_event_->wait();
-
-  LOG(INFO) << "All workers completed, shutting down...";
-
-  // stop worker, reporter
-  Stop();
+void Benchmarker::RunUntilFinish() {
+  StartAll();
+  StopAll();
 }
 
-Status Benchmarker::Init() {
-  auto status = InitBlockCache();
+void Benchmarker::StartAll() {
+  StartReporter();
+  StartWorkers();
+}
+
+void Benchmarker::StopAll() {
+  StopWorkers();
+  StopReporter();
+  StopCollector();
+}
+
+// init
+Status Benchmarker::InitMdsClient() {
+  auto rc = mds_client_->Init(NewMdsOption(), mds_base_.get());
+  if (rc != PBFSStatusCode::OK) {
+    return Status::Internal("init mds client failed");
+  }
+  return Status::OK();
+}
+
+Status Benchmarker::InitStorage() {
+  auto status = storage_pool_->GetStorage(FLAGS_fsid, storage_);
   if (!status.ok()) {
-    LOG(ERROR) << "Init block cache failed: " << status.ToString();
+    LOG(ERROR) << "Init storage failed: " << status.ToString();
     return status;
   }
-
-  status = InitWrokers();
-  if (!status.ok()) {
-    LOG(ERROR) << "Init workers failed: " << status.ToString();
-    return status;
-  }
-
   return Status::OK();
 }
 
 Status Benchmarker::InitBlockCache() {
-  auto status = block_accesser_->Init();
+  block_cache_ = std::make_shared<TierBlockCache>(
+      BlockCacheOption(), RemoteBlockCacheOption(), storage_);
+
+  auto status = block_cache_->Start();
   if (!status.ok()) {
-    return status;
+    LOG(ERROR) << "Init block cache failed: " << status.ToString();
   }
-  return block_cache_->Init();
+  return status;
 }
 
-Status Benchmarker::InitWrokers() {
+Status Benchmarker::InitCollector() {
+  auto status = collector_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init collector failed: " << status.ToString();
+  }
+  return status;
+}
+
+Status Benchmarker::InitReporter() {
+  auto status = reporter_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init reporter failed: " << status.ToString();
+  }
+  return status;
+}
+
+void Benchmarker::InitFactory() {
+  factory_ = NewFactory(block_cache_, FLAGS_op);
+}
+
+void Benchmarker::InitWorkers() {
+  CHECK_EQ(thread_pool_->Start(FLAGS_threads), 0);
   for (auto i = 0; i < FLAGS_threads; i++) {
-    auto worker =
-        std::make_shared<Worker>(i, block_cache_, reporter_, countdown_event_);
-    auto status = worker->Init();
-    if (!status.ok()) {
-      return status;
-    }
-
-    workers_.emplace_back(worker);
+    workers_.emplace_back(std::make_unique<Worker>(i, factory_, collector_));
   }
-  return Status::OK();
 }
 
-Status Benchmarker::Start() {
-  auto status = StartReporter();
-  if (!status.ok()) {
-    LOG(ERROR) << "Start reporter failed: " << status.ToString();
-    return status;
-  }
-
-  StartWorkers();
-
-  return Status::OK();
-}
-
-Status Benchmarker::StartReporter() { return reporter_->Start(); }
+// start
+void Benchmarker::StartReporter() { reporter_->Start(); }
 
 void Benchmarker::StartWorkers() {
-  CHECK_EQ(task_pool_->Start(FLAGS_threads), 0);
-
   for (auto& worker : workers_) {
-    task_pool_->Enqueue([worker]() { worker->Run(); });
+    thread_pool_->Enqueue([&worker]() { worker->Start(); });
   }
 }
 
-void Benchmarker::Stop() {
-  StopWorkers();
-  StopReporter();
-  StopBlockCache();
-}
-
+// stop
 void Benchmarker::StopWorkers() {
   for (auto& worker : workers_) {
     worker->Shutdown();
   }
 }
 
-void Benchmarker::StopReporter() {
-  auto status = reporter_->Stop();
-  if (!status.ok()) {
-    LOG(ERROR) << "Stop reporter failed: " << status.ToString();
-  }
-}
+void Benchmarker::StopReporter() { reporter_->Shutdown(); }
 
-void Benchmarker::StopBlockCache() {
-  auto status = block_cache_->Shutdown();
-  if (!status.ok()) {
-    LOG(ERROR) << "Shutdown block cache failed: " << status.ToString();
-  }
-}
+void Benchmarker::StopCollector() { collector_->Detory(); }
 
 }  // namespace cache
 }  // namespace dingofs

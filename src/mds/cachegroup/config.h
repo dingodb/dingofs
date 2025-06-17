@@ -30,9 +30,9 @@ namespace mds {
 namespace cachegroup {
 
 struct CacheGroupOption {
-  uint32_t heartbeat_interval_second;
-  uint32_t heartbeat_miss_timeout_second;
-  uint32_t heartbeat_offline_timeout_second;
+  uint64_t heartbeat_interval_s;
+  uint64_t heartbeat_miss_timeout_s;
+  uint64_t heartbeat_offline_timeout_s;
 };
 
 }  // namespace cachegroup

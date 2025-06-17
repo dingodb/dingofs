@@ -22,6 +22,11 @@
 
 #include "cache/storage/aio/linux_io_uring.h"
 
+#include <absl/strings/str_format.h>
+
+#include <cstring>
+
+#include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/helper.h"
 #include "common/io_buffer.h"
@@ -37,33 +42,38 @@ bool LinuxIOUring::Supported() {
   struct io_uring ring;
   int rc = io_uring_queue_init(16, &ring, 0);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf("io_uring_queue_init(16)");
+    LOG_SYSERR(errno, "io_uring_queue_init(16)");
     return false;
   }
+
   io_uring_queue_exit(&ring);
   return true;
 }
 
-Status LinuxIOUring::Init() {
-  if (running_.exchange(true)) {  // already running
+Status LinuxIOUring::Start() {
+  CHECK_GE(iodepth_, 0);
+
+  if (running_) {
     return Status::OK();
   }
 
+  LOG_INFO("Linux IO uring is starting...");
+
   if (!Supported()) {
-    LOG(ERROR) << "Current system kernel not support io_uring.";
+    LOG_ERROR("Current system kernel not support io_uring.");
     return Status::NotSupport("not support io_uring");
   }
 
-  unsigned flags = IORING_SETUP_SQPOLL;  // TODO(Wine93): flags
+  unsigned flags = IORING_SETUP_SQPOLL;  // TODO: more efficient flags
   int rc = io_uring_queue_init(iodepth_, &io_uring_, flags);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf("io_uring_queue_init(%d)", iodepth_);
+    LOG_SYSERR(errno, "io_uring_queue_init(%d)", iodepth_);
     return Status::Internal("io_uring_queue_init() failed");
   }
 
   epoll_fd_ = epoll_create1(0);
   if (epoll_fd_ < 0) {
-    LOG(ERROR) << Helper::Errorf("epoll_create1(0)");
+    LOG_SYSERR(errno, "epoll_create1(0)");
     return Status::Internal("epoll_create1() failed");
   }
 
@@ -71,49 +81,61 @@ Status LinuxIOUring::Init() {
   ev.events = EPOLLIN;
   rc = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, io_uring_.ring_fd, &ev);
   if (rc != 0) {
-    LOG(ERROR) << Helper::Errorf("epoll_ctl(%d, EPOLL_CTL_ADD, %d)", epoll_fd_,
-                                 io_uring_.ring_fd);
+    LOG_SYSERR(errno, "epoll_ctl(%d, EPOLL_CTL_ADD, %d)", epoll_fd_,
+               io_uring_.ring_fd);
     return Status::Internal("epoll_ctl() failed");
   }
 
-  LOG(INFO) << "Linux IO uring initialized success: iodepth = " << iodepth_;
+  running_ = true;
 
+  LOG_INFO("Linux IO uring is up: iodepth = %d", iodepth_);
+
+  CHECK_RUNNING("Linux IO uring");
+  CHECK_GE(epoll_fd_, 0);
   return Status::OK();
 }
 
 Status LinuxIOUring::Shutdown() {
-  if (running_.exchange(false)) {
-    io_uring_queue_exit(&io_uring_);
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
+
+  LOG_INFO("Linux IO uring is shutting down...");
+
+  io_uring_queue_exit(&io_uring_);
+  epoll_fd_ = -1;
+
+  LOG_INFO("Linux IO uring is down.");
+
+  CHECK_DOWN("Linux IO uring");
   return Status::OK();
 }
 
-void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, AioClosure* aio) {
-  auto* context = new Context(aio->buffer_in.Fetch());
-  aio->ctx = context;
-  io_uring_prep_writev(sqe, aio->fd, context->iovecs.data(),
-                       context->iovecs.size(), aio->offset);
+void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, Aio* aio) {
+  aio->iovecs = aio->buffer->Fetch();
+  io_uring_prep_writev(sqe, aio->fd, aio->iovecs.data(), aio->iovecs.size(),
+                       aio->offset);
 }
 
-void LinuxIOUring::PrepRead(io_uring_sqe* sqe, AioClosure* aio) {
+void LinuxIOUring::PrepRead(io_uring_sqe* sqe, Aio* aio) {
   char* data = new char[aio->length];
-  butil::IOBuf buffer;
-  buffer.append_user_data(data, aio->length, Helper::DeleteBuffer);
-  *aio->buffer_out = IOBuffer(buffer);
+  butil::IOBuf iobuf;
+  iobuf.append_user_data(data, aio->length, Helper::DeleteBuffer);
+  *aio->buffer = IOBuffer(iobuf);
 
   io_uring_prep_read(sqe, aio->fd, data, aio->length, aio->offset);
 }
 
-Status LinuxIOUring::PrepareIO(AioClosure* aio) {
+Status LinuxIOUring::PrepareIO(Aio* aio) {
+  CHECK_RUNNING("Linux IO uring");
+
   struct io_uring_sqe* sqe = io_uring_get_sqe(&io_uring_);
   CHECK_NOTNULL(sqe);
 
-  if (IsAioWrite(aio)) {
-    PrepWrite(sqe, aio);
-  } else if (IsAioRead(aio)) {
+  if (aio->for_read) {
     PrepRead(sqe, aio);
-  } else {  // never happend
-    CHECK(false) << "Unknown aio type: " << static_cast<int>(aio->iotype);
+  } else {
+    PrepWrite(sqe, aio);
   }
 
   io_uring_sqe_set_data(sqe, (void*)aio);
@@ -121,23 +143,26 @@ Status LinuxIOUring::PrepareIO(AioClosure* aio) {
 }
 
 Status LinuxIOUring::SubmitIO() {
+  CHECK_RUNNING("Linux IO uring");
+
   int n = io_uring_submit(&io_uring_);
   if (n < 0) {
-    LOG(ERROR) << Helper::Errorf(-n, "io_uring_submit()");
-    return Status::Internal("io_uring_submit");
+    LOG_SYSERR(-n, "io_uring_submit()");
+    return Status::Internal("io_uring_submit() failed");
   }
   return Status::OK();
 }
 
 Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
-                            std::vector<AioClosure*>* completed) {
-  completed->clear();
+                            std::vector<Aio*>* completed_aios) {
+  CHECK_RUNNING("Linux IO uring");
+
+  completed_aios->clear();
 
   struct epoll_event ev;
   int rc = epoll_wait(epoll_fd_, &ev, iodepth_, timeout_ms);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_,
-                                 iodepth_, timeout_ms);
+    LOG_SYSERR(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_, iodepth_, timeout_ms);
     return Status::Internal("epoll_wait() failed");
   } else if (rc == 0) {
     return Status::OK();
@@ -147,33 +172,32 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   unsigned head;
   struct io_uring_cqe* cqe;
   io_uring_for_each_cqe(&io_uring_, head, cqe) {
-    auto* aio = static_cast<AioClosure*>(io_uring_cqe_get_data(cqe));
+    auto* aio = static_cast<Aio*>(io_uring_cqe_get_data(cqe));
     OnCompleted(aio, cqe->res);
-    completed->emplace_back(aio);
+    completed_aios->emplace_back(aio);
   }
 
-  io_uring_cq_advance(&io_uring_, completed->size());
+  io_uring_cq_advance(&io_uring_, completed_aios->size());
   return Status::OK();
 }
 
-void LinuxIOUring::OnCompleted(AioClosure* aio, int retcode) {
+void LinuxIOUring::OnCompleted(Aio* aio, int retcode) {
   auto status = Status::OK();
   if (retcode < 0) {
-    LOG(ERROR) << Helper::Errorf(-retcode, aio->ToString().c_str());
-    status = Status::IoError("aio failed");
+    LOG(ERROR) << "Aio failed: trace id = " << aio->ctx->TraceId()
+               << ", aio = " << aio->ToString()
+               << ", retcode = " << strerror(retcode);
+    status = Status::IoError(strerror(-retcode));
+  } else if (retcode != aio->length) {
+    LOG(ERROR) << absl::StrFormat(
+        "Aio %s fewer than length bytes: want (%zu) but got (%u)",
+        aio->ToString(), aio->length, retcode);
+    status = Status::IoError(absl::StrFormat(
+        "%s fewer than length bytes: want (%zu) but got (%u)",
+        aio->for_read ? "read" : "write", aio->length, retcode));
   }
 
   aio->status() = status;
-  CleanupContext(aio->ctx);
-}
-
-void LinuxIOUring::CleanupContext(void* context) {
-  if (nullptr == context) {
-    return;  // nothing to cleanup
-  }
-
-  auto* ctx = static_cast<Context*>(context);
-  delete ctx;
 }
 
 uint32_t LinuxIOUring::GetIODepth() const { return iodepth_; }

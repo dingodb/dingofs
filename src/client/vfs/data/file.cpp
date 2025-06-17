@@ -30,7 +30,7 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
 #include "common/status.h"
-#include "options/client/options/vfs/vfs_option.h"
+#include "options/client/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {

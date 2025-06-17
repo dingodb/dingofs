@@ -20,6 +20,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 #include "client/vfs/hub/vfs_hub.h"
 
 namespace dingofs {
@@ -102,7 +103,7 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                         slice_id_, block_index, 0);
     vfs_hub_->GetBlockCache()->AsyncPut(
-        key, cache::Block(io_buffer),
+        cache::NewContext(), key, cache::Block(io_buffer),
         [this, block_data](auto&& ph1) {
           BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
         },

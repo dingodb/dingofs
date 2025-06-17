@@ -36,6 +36,7 @@
 #include "absl/synchronization/blocking_counter.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "client/vfs_legacy/datastream/data_stream.h"
 #include "client/vfs_legacy/filesystem/meta.h"
@@ -44,7 +45,7 @@
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "metrics/client/vfs_legacy/s3_cache_manager.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
 
@@ -536,7 +537,8 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
     IOBuffer io_buffer;
     auto option = cache::RangeOption();
     option.retrive = false;
-    auto status = block_cache->Range(key, offset, len, &io_buffer, option);
+    auto status = block_cache->Range(cache::NewContext(), key, offset, len,
+                                     &io_buffer, option);
     if (status.IsNotFound()) {
       return false;
     } else if (!status.ok()) {
@@ -741,7 +743,7 @@ void FileCacheManager::PrefetchS3Objs(
     VLOG(3) << "try to prefetch s3 obj inodeId=" << key.ino
             << " block: " << name << ", read len: " << read_len;
     s3ClientAdaptor_->GetBlockCache()->AsyncPrefetch(
-        key, read_len, [key](Status status) {
+        cache::NewContext(), key, read_len, [key](Status status) {
           if (!status.ok()) {
             LOG(WARNING) << "Prefetch block (key=" << key.Filename()
                          << ") failed: " << status.ToString();
@@ -2346,7 +2348,7 @@ void DataCache::FlushTaskExecute(
       DataStream::GetInstance().EnterFlushSliceQueue(
           [&, key, block, writeback, callback]() {
             for (;;) {
-              auto status = block_cache->Put(key, block);
+              auto status = block_cache->Put(cache::NewContext(), key, block);
               if (status.ok()) {
                 callback(context);
                 break;

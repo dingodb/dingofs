@@ -23,9 +23,9 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_CLOSURE_H_
 #define DINGOFS_SRC_CACHE_STORAGE_CLOSURE_H_
 
-#include <brpc/closure_guard.h>
+#include <google/protobuf/stubs/callback.h>
 
-#include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {

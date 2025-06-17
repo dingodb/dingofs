@@ -24,7 +24,9 @@
 
 #include <glog/logging.h>
 
+#include "dingofs/cachegroup.pb.h"
 #include "mds/common/storage_key.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/encode.h"
 
@@ -92,7 +94,7 @@ bool CacheGroupMemberStorageImpl::LoadGroupNames() {
   std::string start = CACHE_GROUP_GROUP_NAME_KEY_PREFIX;
   std::string end = CACHE_GROUP_GROUP_NAME_KEY_END;
   int rc = kv_->List(start, end, &kvs);
-  if (rc != 0) {
+  if (rc != EtcdErrCode::EtcdOK) {
     LOG(ERROR) << "Load group names failed, rc=" << rc;
     return false;
   }
@@ -111,7 +113,7 @@ bool CacheGroupMemberStorageImpl::LoadGroupMembers() {
   std::string start = CACHE_GROUP_GROUP_MEMBER_KEY_PREFIX;
   std::string end = CACHE_GROUP_GROUP_MEMBER_KEY_END;
   int rc = kv_->List(start, end, &kvs);
-  if (rc != 0) {
+  if (rc != EtcdErrCode::EtcdOK) {
     LOG(ERROR) << "Load group members failed, rc=" << rc;
     return false;
   }
@@ -124,28 +126,38 @@ bool CacheGroupMemberStorageImpl::LoadGroupMembers() {
       LOG(ERROR) << "Parse group member failed, key=" << kv.first;
       return false;
     }
+
+    LOG(INFO) << "Member loaded: group_id=" << group_id
+              << ", member_id=" << member_id
+              << ", member=" << member.ShortDebugString();
+
     AddMember2Group(group_id, member_id, member);
     num_members++;
   }
+
   LOG(INFO) << groups_.size() << " groups " << num_members
             << " members loaded.";
+
   return true;
 }
 
 void CacheGroupMemberStorageImpl::AddMember2Group(
     uint64_t group_id, uint64_t member_id, const CacheGroupMember& member) {
+  CHECK(member.has_last_online_time_ms());
+
   auto iter = groups_.find(group_id);
   if (iter == groups_.end()) {
     iter = groups_.emplace(group_id, CacheGroupMembersType()).first;
   }
+
   auto& members = iter->second;
-  members.emplace(member_id, member);
+  members.insert_or_assign(member_id, member);
 }
 
 bool CacheGroupMemberStorageImpl::StoreGroupName(
     uint64_t group_id, const std::string& group_name) {
   std::string key = Helper::EncodeGroupNameKey(group_id);
-  return kv_->Put(key, group_name) == 0;
+  return kv_->Put(key, group_name) == EtcdErrCode::EtcdOK;
 }
 
 bool CacheGroupMemberStorageImpl::StoreGroupMember(
@@ -153,7 +165,13 @@ bool CacheGroupMemberStorageImpl::StoreGroupMember(
   std::string value;
   std::string key = Helper::EncodeGroupMemberKey(group_id, member_id);
   if (member.SerializeToString(&value)) {
-    return kv_->Put(key, value) == 0;
+    if (kv_->Put(key, value) == EtcdErrCode::EtcdOK) {
+      LOG(INFO) << "Store group member success: group_id=" << group_id
+                << ", member_id=" << member_id
+                << ", member=" << member.ShortDebugString();
+      return true;
+    }
+    return false;
   }
   return false;
 }
@@ -183,7 +201,7 @@ Errno CacheGroupMemberStorageImpl::RegisterGroup(const std::string& group_name,
     return Errno::kOk;
   }
 
-  int rc = member_id_generator_->GenId(1, group_id);
+  int rc = group_id_generator_->GenId(1, group_id);
   if (rc == 0) {
     if (StoreGroupName(*group_id, group_name)) {
       group_names_[group_name] = *group_id;
@@ -221,6 +239,22 @@ void CacheGroupMemberStorageImpl::LoadMembers(
 Errno CacheGroupMemberStorageImpl::ReweightMember(uint64_t group_id,
                                                   uint64_t member_id,
                                                   uint32_t weight) {
+  return UpdateMember(group_id, member_id, [weight](CacheGroupMember* member) {
+    member->set_weight(weight);
+  });
+}
+
+Errno CacheGroupMemberStorageImpl::SetMemberLastOnlineTime(
+    uint64_t group_id, uint64_t member_id, uint64_t last_online_time_ms) {
+  return UpdateMember(group_id, member_id,
+                      [last_online_time_ms](CacheGroupMember* member) {
+                        member->set_last_online_time_ms(last_online_time_ms);
+                      });
+}
+
+Errno CacheGroupMemberStorageImpl::UpdateMember(uint64_t group_id,
+                                                uint64_t member_id,
+                                                UpdateFunc update_func) {
   WriteLockGuard lk(rwlock_);
   auto iter = groups_.find(group_id);
   if (iter == groups_.end()) {
@@ -233,7 +267,7 @@ Errno CacheGroupMemberStorageImpl::ReweightMember(uint64_t group_id,
   }
 
   auto member = members[member_id];
-  member.set_weight(weight);
+  update_func(&member);
   if (StoreGroupMember(group_id, member_id, member)) {
     members[member_id] = member;
     return Errno::kOk;

@@ -25,35 +25,40 @@
 
 #include <brpc/channel.h>
 
-#include "cache/blockcache/block_cache.h"
-#include "cache/common/common.h"
-#include "cache/config/config.h"
 #include "cache/remotecache/remote_node.h"
+#include "cache/remotecache/remote_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
+#include "cache/utils/context.h"
 #include "cache/utils/state_machine.h"
+#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
 
 class RemoteNodeImpl final : public RemoteNode {
  public:
-  RemoteNodeImpl(const PBCacheGroupMember& member, RemoteNodeOption option);
+  RemoteNodeImpl(const PBCacheGroupMember& member,
+                 RemoteBlockCacheOption option);
 
-  Status Init() override;
-  Status Destroy() override;
+  Status Start() override;
+  Status Shutdown() override;
 
-  Status Put(const BlockKey& key, const Block& block) override;
-  Status Range(const BlockKey& key, off_t offset, size_t length,
-               IOBuffer* buffer, size_t block_size) override;
-  Status Cache(const BlockKey& key, const Block& block) override;
-  Status Prefetch(const BlockKey& key, size_t length) override;
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block) override;
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer, size_t block_size) override;
+  Status Cache(ContextSPtr ctx, const BlockKey& key,
+               const Block& block) override;
+  Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
   Status CheckHealth() const;
   Status CheckStatus(Status status);
 
+  std::atomic<bool> running_;
+  const PBCacheGroupMember member_info_;
   RPCClientUPtr rpc_;
-  StateMachineUPtr state_machine_;
+  StateMachineSPtr state_machine_;
+  RemoteNodeHealthCheckerUPtr health_checker_;
 };
 
 }  // namespace cache

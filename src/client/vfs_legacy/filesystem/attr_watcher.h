@@ -25,10 +25,10 @@
 
 #include <memory>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/lru_cache.h"
 
 namespace dingofs {
@@ -37,15 +37,14 @@ namespace filesystem {
 
 class AttrWatcher {
  public:
-  using LRUType = utils::LRUCache<Ino, base::time::TimeSpec>;
+  using LRUType = utils::LRUCache<Ino, utils::TimeSpec>;
 
-  AttrWatcher(AttrWatcherOption option,
-              std::shared_ptr<OpenFiles> openFiles,
+  AttrWatcher(AttrWatcherOption option, std::shared_ptr<OpenFiles> openFiles,
               std::shared_ptr<DirCache> dirCache);
 
   void RemeberMtime(const pb::metaserver::InodeAttr& attr);
 
-  bool GetMtime(Ino ino, base::time::TimeSpec* time);
+  bool GetMtime(Ino ino, utils::TimeSpec* time);
 
   void UpdateDirEntryAttr(Ino ino, const pb::metaserver::InodeAttr& attr);
 

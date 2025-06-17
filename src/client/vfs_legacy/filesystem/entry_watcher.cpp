@@ -22,18 +22,17 @@
 
 #include "client/vfs_legacy/filesystem/entry_watcher.h"
 
-#include "dingofs/metaserver.pb.h"
-#include "base/filepath/filepath.h"
-#include "base/string/string.h"
+#include <absl/strings/match.h>
+#include <absl/strings/str_split.h>
+
 #include "client/vfs_legacy/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
 #include "glog/logging.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::filepath::HasSuffix;
-using base::string::StrSplit;
 using utils::LRUCache;
 using utils::ReadLockGuard;
 using utils::RWLock;
@@ -48,7 +47,7 @@ EntryWatcher::EntryWatcher(const std::string& nocto_suffix) {
     return;
   }
 
-  std::vector<std::string> suffixs = StrSplit(nocto_suffix, ":");
+  std::vector<std::string> suffixs = absl::StrSplit(nocto_suffix, ":");
   for (const auto& suffix : suffixs) {
     VLOG(3) << "nocto_suffix " << nocto_suffix << ", split suffix " << suffix;
     if (!suffix.empty()) {
@@ -63,7 +62,7 @@ void EntryWatcher::Remeber(const InodeAttr& attr, const std::string& filename) {
   }
 
   for (const auto& suffix : suffixs_) {
-    if (HasSuffix(filename, suffix)) {
+    if (absl::EndsWith(filename, suffix)) {
       WriteLockGuard lk(rwlock_);
       nocto_->Put(attr.inodeid(), true);
       return;

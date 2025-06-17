@@ -23,16 +23,17 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_H_
 
-#include <atomic>
-
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
 struct PutOption {
   bool writeback{false};
-  BlockContext ctx{BlockFrom::kUnknown};
+  BlockContext block_ctx{BlockContext::kFromUnknown};
 };
 
 struct RangeOption {
@@ -40,48 +41,44 @@ struct RangeOption {
   size_t block_size{0};
 };
 
-struct CacheOption {
-  CacheOption() = default;
-};
+struct CacheOption {};
 
-struct PrefetchOption {
-  PrefetchOption() = default;
-};
+struct PrefetchOption {};
 
 // async callback
 using AsyncCallback = std::function<void(Status)>;
 
-class BlockCache : public std::enable_shared_from_this<BlockCache> {
+class BlockCache {
  public:
   virtual ~BlockCache() = default;
 
-  // init, shutdown
-  virtual Status Init() = 0;
+  virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
   // block operations (sync)
-  virtual Status Put(const BlockKey& key, const Block& block,
+  virtual Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
                      PutOption option = PutOption()) = 0;
-  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
-                       IOBuffer* buffer,
+  virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                       size_t length, IOBuffer* buffer,
                        RangeOption option = RangeOption()) = 0;
-  virtual Status Cache(const BlockKey& key, const Block& block,
+  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
                        CacheOption option = CacheOption()) = 0;
-  virtual Status Prefetch(const BlockKey& key, size_t length,
+  virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
                           PrefetchOption option = PrefetchOption()) = 0;
 
   // block operations (async)
-  virtual void AsyncPut(const BlockKey& key, const Block& block,
-                        AsyncCallback callback,
+  virtual void AsyncPut(ContextSPtr ctx, const BlockKey& key,
+                        const Block& block, AsyncCallback callback,
                         PutOption option = PutOption()) = 0;
-  virtual void AsyncRange(const BlockKey& key, off_t offset, size_t length,
-                          IOBuffer* buffer, AsyncCallback callback,
-                          RangeOption option = RangeOption()) = 0;
-  virtual void AsyncCache(const BlockKey& key, const Block& block,
+  virtual void AsyncRange(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer,
                           AsyncCallback callback,
+                          RangeOption option = RangeOption()) = 0;
+  virtual void AsyncCache(ContextSPtr ctx, const BlockKey& key,
+                          const Block& block, AsyncCallback callback,
                           CacheOption option = CacheOption()) = 0;
-  virtual void AsyncPrefetch(const BlockKey& key, size_t length,
-                             AsyncCallback callback,
+  virtual void AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+                             size_t length, AsyncCallback callback,
                              PrefetchOption option = PrefetchOption()) = 0;
 
   // utility
@@ -91,6 +88,7 @@ class BlockCache : public std::enable_shared_from_this<BlockCache> {
   virtual bool IsCached(const BlockKey& key) const = 0;
 };
 
+using BlockCachePtr = BlockCache*;
 using BlockCacheSPtr = std::shared_ptr<BlockCache>;
 using BlockCacheUPtr = std::unique_ptr<BlockCache>;
 

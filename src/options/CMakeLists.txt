@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(client/options)
+add_subdirectory(cache)
+add_subdirectory(client)
 add_subdirectory(common)
 
 file(GLOB DINGOFS_OPTIONS_LIB_SRCS

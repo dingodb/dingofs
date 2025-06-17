@@ -24,23 +24,27 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
 
 #include <cstdint>
+#include <memory>
 
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/common.h"
+#include "cache/common/type.h"
+#include "cache/utils/context.h"
 #include "cache/utils/segments.h"
 
 namespace dingofs {
 namespace cache {
 
-struct StageBlock {
-  StageBlock() = delete;
+struct StagingBlock {
+  StagingBlock() = delete;
 
-  StageBlock(const BlockKey& key, size_t length, BlockContext ctx)
-      : key(key), length(length), ctx(ctx) {}
+  StagingBlock(ContextSPtr ctx, const BlockKey& key, size_t length,
+               BlockContext block_ctx)
+      : ctx(ctx), key(key), length(length), block_ctx(block_ctx) {}
 
+  ContextSPtr ctx;
   BlockKey key;
   size_t length;
-  BlockContext ctx;
+  BlockContext block_ctx;
 };
 
 struct BlocksStat {
@@ -57,27 +61,30 @@ struct BlocksStat {
   uint64_t num_from_reload;
 };
 
-// PendingQueue is a priority queue for uploading stage blocks
+// PendingQueue is a priority queue for uploading staging blocks
 // which will upload writeback blocks first, then reload blocks.
 class PendingQueue {
  public:
   PendingQueue() = default;
 
-  void Push(const StageBlock& stage_block);
-  std::vector<StageBlock> Pop();
+  void Push(const StagingBlock& staging_block);
+
+  std::vector<StagingBlock> Pop();
+
   size_t Size();
 
   void Stat(struct BlocksStat* stat);
 
  private:
-  static constexpr uint64_t kSegmentSize = 100;
+  static constexpr size_t kSegmentSize = 100;
 
   BthreadMutex mutex_;
-  std::unordered_map<BlockFrom, Segments<StageBlock>> queues_;
-  std::unordered_map<BlockFrom, uint64_t> count_;
+  std::unordered_map<BlockContext::BlockFrom, Segments<StagingBlock>> queues_;
+  std::unordered_map<BlockContext::BlockFrom, uint64_t> count_;
 };
 
 using PendingQueueUPtr = std::unique_ptr<PendingQueue>;
+using PendingQueueSPtr = std::shared_ptr<PendingQueue>;
 
 }  // namespace cache
 }  // namespace dingofs

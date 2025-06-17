@@ -25,9 +25,9 @@
 
 #include <vector>
 
-#include "base/time/time.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/cache.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace cache {
@@ -37,11 +37,10 @@ using CacheKey = BlockKey;
 struct CacheValue {
   CacheValue() = default;
 
-  CacheValue(size_t size, base::time::TimeSpec atime)
-      : size(size), atime(atime) {}
+  CacheValue(size_t size, utils::TimeSpec atime) : size(size), atime(atime) {}
 
   size_t size;
-  base::time::TimeSpec atime;  // access time
+  utils::TimeSpec atime;  // access time
 };
 
 struct CacheItem {

@@ -26,11 +26,11 @@
 #include <memory>
 #include <string>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/package.h"
 #include "dingofs/metaserver.pb.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {

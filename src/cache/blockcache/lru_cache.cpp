@@ -59,7 +59,7 @@ bool LRUCache::Get(const CacheKey& key, CacheValue* value) {
 
   ListRemove(node);
   ListAddFront(&active_, node);
-  node->value.atime = base::time::TimeNow();  // update access time
+  node->value.atime = utils::TimeNow();  // update access time
   *value = node->value;
   return true;
 }
@@ -116,7 +116,7 @@ CacheItem LRUCache::KV(ListNode* node) {
   CacheKey key;
   // we use CacheKey.Filename() as hash key
   auto filename = hash_->Key(node->handle);
-  CHECK(key.ParseFilename(filename));
+  CHECK(key.ParseFromFilename(filename));
   return CacheItem(key, node->value);
 }
 

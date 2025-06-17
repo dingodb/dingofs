@@ -25,8 +25,8 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/lease/lease_excutor.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metacache.h"
 

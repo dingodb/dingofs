@@ -28,7 +28,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/common/common.h"
+#include "cache/utils/context.h"
 #include "gmock/gmock.h"
 
 namespace dingofs {
@@ -45,40 +45,43 @@ class MockBlockCache : public BlockCache {
   MOCK_METHOD0(Shutdown, Status());
 
   MOCK_METHOD(Status, Put,
-              (const BlockKey& key, const Block& block, PutOption option),
+              (ContextSPtr, const BlockKey& key, const Block& block,
+               PutOption option),
               (override));
 
   MOCK_METHOD(Status, Range,
-              (const BlockKey& key, off_t offset, size_t length,
+              (ContextSPtr, const BlockKey& key, off_t offset, size_t length,
                IOBuffer* buffer, RangeOption option),
               (override));
 
   MOCK_METHOD(Status, Cache,
-              (const BlockKey& key, const Block& block, CacheOption option),
+              (ContextSPtr, const BlockKey& key, const Block& block,
+               CacheOption option),
               (override));
 
   MOCK_METHOD(Status, Prefetch,
-              (const BlockKey& key, size_t length, PrefetchOption option),
+              (ContextSPtr, const BlockKey& key, size_t length,
+               PrefetchOption option),
               (override));
 
   MOCK_METHOD(void, AsyncPut,
-              (const BlockKey& key, const Block& block, AsyncCallback callback,
-               PutOption option),
+              (ContextSPtr, const BlockKey& key, const Block& block,
+               AsyncCallback callback, PutOption option),
               (override));
 
   MOCK_METHOD(void, AsyncRange,
-              (const BlockKey& key, off_t offset, size_t length,
+              (ContextSPtr, const BlockKey& key, off_t offset, size_t length,
                IOBuffer* buffer, AsyncCallback callback, RangeOption option),
               (override));
 
   MOCK_METHOD(void, AsyncCache,
-              (const BlockKey& key, const Block& block, AsyncCallback callback,
-               CacheOption option),
+              (ContextSPtr, const BlockKey& key, const Block& block,
+               AsyncCallback callback, CacheOption option),
               (override));
 
   MOCK_METHOD(void, AsyncPrefetch,
-              (const BlockKey& key, size_t length, AsyncCallback callback,
-               PrefetchOption option),
+              (ContextSPtr, const BlockKey& key, size_t length,
+               AsyncCallback callback, PrefetchOption option),
               (override));
 
   MOCK_METHOD1(IsCached, bool(const BlockKey& key));

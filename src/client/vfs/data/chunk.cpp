@@ -25,20 +25,19 @@
 #include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 #include "client/common/utils.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/meta/vfs_meta.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "fmt/format.h"
-#include "glog/logging.h"
-#include "options/client/options/vfs/vfs_option.h"
+#include "options/client/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {
@@ -77,7 +76,7 @@ Chunk::~Chunk() { delete fake_header_; }
 Status Chunk::WriteToBlockCache(const cache::BlockKey& key,
                                 const cache::Block& block,
                                 cache::PutOption option) {
-  return hub_->GetBlockCache()->Put(key, block, option);
+  return hub_->GetBlockCache()->Put(cache::NewContext(), key, block, option);
 }
 
 Status Chunk::AllockChunkId(uint64_t* chunk_id) {
@@ -338,7 +337,8 @@ Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
     option.block_size = block_req.block.block_len;
 
     DINGOFS_RETURN_NOT_OK(hub_->GetBlockCache()->Range(
-        key, block_req.block_offset, block_req.len, &buffer, option));
+        cache::NewContext(), key, block_req.block_offset, block_req.len,
+        &buffer, option));
     buffer.CopyTo(buf_pos);
   }
 
@@ -473,7 +473,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
       to_destroy.push_back(task);
     }  // end  for to_commit
-  }  // end while(true)
+  }    // end while(true)
 }
 
 void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {

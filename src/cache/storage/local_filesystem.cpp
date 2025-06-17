@@ -22,144 +22,269 @@
 
 #include "cache/storage/local_filesystem.h"
 
-#include <memory>
-
-#include "absl/cleanup/cleanup.h"
-#include "cache/config/config.h"
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/storage/aio/aio_queue.h"
 #include "cache/storage/aio/linux_io_uring.h"
-#include "cache/storage/filesystem_base.h"
-#include "cache/utils/filepath.h"
+#include "cache/storage/base_filesystem.h"
+#include "cache/storage/filesystem.h"
+#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
+#include "options/cache/blockcache.h"
 
 namespace dingofs {
 namespace cache {
 
+static const std::string kModule = kFileSysteMoudle;
+
 LocalFileSystem::LocalFileSystem(CheckStatusFunc check_status_func)
-    : FileSystemBase::FileSystemBase(check_status_func),
+    : BaseFileSystem::BaseFileSystem(check_status_func),
       running_(false),
       io_ring_(std::make_shared<LinuxIOUring>(FLAGS_ioring_iodepth)),
       aio_queue_(std::make_unique<AioQueueImpl>(io_ring_)),
       page_cache_manager_(std::make_unique<PageCacheManager>()) {}
 
-Status LocalFileSystem::Init() {
-  if (!running_.exchange(true)) {
-    auto status = page_cache_manager_->Start();
-    if (status.ok()) {
-      status = aio_queue_->Init();
-    }
+Status LocalFileSystem::Start() {
+  CHECK_NOTNULL(io_ring_);
+  CHECK_NOTNULL(aio_queue_);
+  CHECK_NOTNULL(page_cache_manager_);
+
+  if (running_) {
+    return Status::OK();
+  }
+
+  LOG(INFO) << "Local filesystem is starting...";
+
+  auto status = page_cache_manager_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start page cache manager failed: " << status.ToString();
     return status;
   }
+
+  status = status = aio_queue_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start AIO queue failed: " << status.ToString();
+    return status;
+  }
+
+  running_ = true;
+
+  LOG(INFO) << "Local filesystem is up.";
+
+  CHECK_RUNNING("Local filesystem");
   return Status::OK();
 }
 
-Status LocalFileSystem::Destroy() {
-  if (running_.exchange(false)) {
-    auto status = aio_queue_->Shutdown();
-    if (status.ok()) {
-      status = page_cache_manager_->Stop();
-    }
+Status LocalFileSystem::Shutdown() {
+  if (!running_.exchange(false)) {
+    return Status::OK();
+  }
+
+  LOG(INFO) << "Local filesystem is shutting down...";
+
+  auto status = aio_queue_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown AIO queue failed: " << status.ToString();
     return status;
   }
+
+  status = page_cache_manager_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown page cache manager failed: " << status.ToString();
+    return status;
+  }
+
+  LOG(INFO) << "Local filesystem is down.";
+
+  CHECK_DOWN("Local filesystem");
   return Status::OK();
 }
 
-Status LocalFileSystem::WriteFile(const std::string& path,
+// TODO(Wine93): we should compare the peformance for below case which
+// should execute by io_uring or sync write:
+//  1. direct-io with one continuos buffer
+//  2. direct-io with multi buffers
+//  3. buffer-io with one continuos buffer
+//  4. buffer-io with multi buffers
+//
+// now we use way-2 or way-4 by io_uring.
+Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
                                   const IOBuffer& buffer, WriteOption option) {
-  // TODO(Wine93): we should compare the peformance for below case which
-  // should execute by io_uring or sync write:
-  //  1. direct-io with one continuos buffer
-  //  2. direct-io with multi buffers
-  //  3. buffer-io with one continuos buffer
-  //  4. buffer-io with multi buffers
-  //
-  // now we use way-2 or way-4 by io_uring.
-  int fd;
+  CHECK_RUNNING("Local filesystem");
+
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "write(%s,%zu)",
+                    Helper::Filename(path), buffer.Size());
+  StepTimerGuard guard(timer);
+
+  NEXT_STEP(kMkDir);
   auto tmppath = Helper::TempFilepath(path);
-  auto status = MkDirs(FilePath::ParentDir(tmppath));
-  if (status.ok() || status.IsExist()) {
-    status = Posix::Creat(tmppath, 0644, &fd);
-  }
-  if (!status.ok()) {
+  status = MkDirs(Helper::ParentDir(tmppath));
+  if (!status.ok() && !status.IsExist()) {
+    LOG(ERROR) << "Create parent directory failed: trace id = "
+               << ctx->TraceId() << ", path = " << tmppath
+               << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
-  auto defer = absl::MakeCleanup([&]() {
-    if (option.drop_page_cache) {
-      auto st = Posix::PosixFAdvise(fd, 0, 0, POSIX_FADV_DONTNEED);
-      if (!st.ok()) {
-        LOG(ERROR) << "drop page cache failed: " << st.ToString();
-      }
-    }
-    Posix::Close(fd);
-    if (!status.ok()) {
-      Posix::Unlink(tmppath);
-    }
-  });
-
-  status = AioWrite(fd, buffer);
-  if (status.ok()) {
-    status = Posix::Rename(tmppath, path);
-  }
-
-  return CheckStatus(status);
-}
-
-Status LocalFileSystem::ReadFile(const std::string& path, off_t offset,
-                                 size_t length, IOBuffer* buffer,
-                                 ReadOption /*option*/) {
+  NEXT_STEP(kOpenFile);
   int fd;
-  auto status = Posix::Open(path, O_RDONLY, &fd);
+  bool use_direct = Helper::IsAligned(buffer);
+  int flags = Posix::kDefaultCreatFlags | (use_direct ? O_DIRECT : 0);
+  status = Posix::Open(tmppath, flags, 0644, &fd);
   if (!status.ok()) {
+    LOG(ERROR) << "Open file failed: trace id = " << ctx->TraceId()
+               << ", path = " << tmppath << ", status = " << status.ToString();
     return CheckStatus(status);
   }
 
-  auto defer = absl::MakeCleanup([fd]() { Posix::Close(fd); });
-  if (Helper::IsAligned(offset, Helper::GetSysPageSize())) {
-    status = MapFile(fd, offset, length, buffer);
-  } else {
-    status = AioRead(fd, offset, length, buffer);
+  NEXT_STEP(kAioWrite);
+  status = AioWrite(ctx, fd, buffer, option);
+  if (!status.ok()) {
+    LOG(ERROR) << "Aio write failed: trace id = " << ctx->TraceId()
+               << ", path = " << tmppath << ", length = " << buffer.Size()
+               << ", status = " << status.ToString();
+    Unlink(ctx, tmppath);
+    return CheckStatus(status);
+  }
+
+  NEXT_STEP(kRenameFile);
+  status = Posix::Rename(tmppath, path);
+  if (!status.ok()) {
+    LOG(ERROR) << "Rename temp file failed: trace id = " << ctx->TraceId()
+               << ", from = " << tmppath << ", to = " << path
+               << ", status = " << status.ToString();
+    Unlink(ctx, tmppath);
   }
   return CheckStatus(status);
 }
 
-Status LocalFileSystem::AioWrite(int fd, const IOBuffer& buffer) {
-  auto aio = AioWriteClosure(fd, buffer);
-  aio_queue_->Submit(&aio);
-  aio.Wait();
-  return aio.status();
+Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
+                                 off_t offset, size_t length, IOBuffer* buffer,
+                                 ReadOption option) {
+  CHECK_RUNNING("Local filesystem");
+
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "read(%s,%zu,%zu)",
+                    Helper::Filename(path), offset, length);
+  StepTimerGuard guard(timer);
+
+  NEXT_STEP(kCreatFile);
+  int fd;
+  status = Posix::Open(path, O_RDONLY, &fd);
+  if (!status.ok()) {
+    LOG(ERROR) << "Open file failed: trace id = " << ctx->TraceId()
+               << ", path = " << path << ", status = " << status.ToString();
+    return CheckStatus(status);
+  }
+
+  if (Helper::IsAligned(offset, Helper::GetSysPageSize())) {
+    NEXT_STEP(kMmap);
+    status = MapFile(ctx, fd, offset, length, buffer, option);
+    if (!status.ok()) {
+      LOG(ERROR) << "Map file failed: trace id = " << ctx->TraceId()
+                 << ", path = " << path << ", offset = " << offset
+                 << ", length = " << length
+                 << ", status = " << status.ToString();
+      return CheckStatus(status);
+    }
+  } else {
+    NEXT_STEP(kAioRead);
+    status = AioRead(ctx, fd, offset, length, buffer, option);
+    if (!status.ok()) {
+      LOG(ERROR) << "Aio read failed: trace id = " << ctx->TraceId()
+                 << ", path = " << path << ", offset = " << offset
+                 << ", length = " << length
+                 << ", status = " << status.ToString();
+      return CheckStatus(status);
+    }
+  }
+
+  return CheckStatus(status);
 }
 
-Status LocalFileSystem::AioRead(int fd, off_t offset, size_t length,
-                                IOBuffer* buffer) {
-  auto aio = AioReadClosure(fd, offset, length, buffer);
+Status LocalFileSystem::AioWrite(ContextSPtr ctx, int fd,
+                                 const IOBuffer& buffer, WriteOption option) {
+  auto aio = Aio(ctx, fd, 0, buffer.Size(),
+                 const_cast<IOBuffer*>(&buffer));  // FIXME: remove const_cast
   aio_queue_->Submit(&aio);
   aio.Wait();
-  return aio.status();
+
+  auto status = aio.status();
+  if (status.ok() && option.drop_page_cache) {
+    page_cache_manager_->AsyncDropPageCache(ctx, fd, 0, buffer.Size());
+  } else {
+    CloseFd(ctx, fd);
+  }
+  return status;
 }
 
-Status LocalFileSystem::MapFile(int fd, off_t offset, size_t length,
-                                IOBuffer* buffer) {
+Status LocalFileSystem::AioRead(ContextSPtr ctx, int fd, off_t offset,
+                                size_t length, IOBuffer* buffer,
+                                ReadOption option) {
+  auto aio = Aio(ctx, fd, offset, length, buffer, true);
+  aio_queue_->Submit(&aio);
+  aio.Wait();
+
+  auto status = aio.status();
+  if (status.ok() && option.drop_page_cache) {
+    page_cache_manager_->AsyncDropPageCache(ctx, fd, offset, length);
+  } else {
+    CloseFd(ctx, fd);
+  }
+  return status;
+}
+
+Status LocalFileSystem::MapFile(ContextSPtr ctx, int fd, off_t offset,
+                                size_t length, IOBuffer* buffer,
+                                ReadOption option) {
   void* data;
   auto status =
       Posix::MMap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, offset, &data);
   if (!status.ok()) {
+    CloseFd(ctx, fd);
     return status;
   }
 
-  auto deleter = [this, fd, offset, length](void* data) {
-    auto status = Posix::MUnMap(data, length);
-    if (status.ok()) {
-      page_cache_manager_->DropPageCache(fd, offset, length);
+  auto deleter = [this, ctx, fd, offset, length, option](void* data) {
+    auto status = Posix::MUnmap(data, length);
+    if (status.ok() && option.drop_page_cache) {  // it will close fd
+      page_cache_manager_->AsyncDropPageCache(ctx, fd, offset, length);
+    } else {
+      CloseFd(ctx, fd);
+      LOG(ERROR) << "MUnmap failed: trace id = " << ctx->TraceId()
+                 << ", fd = " << fd << ", offset = " << offset
+                 << ", length = " << length
+                 << ", status = " << status.ToString();
     }
   };
 
   butil::IOBuf iobuf;
   iobuf.append_user_data(data, length, deleter);
   *buffer = IOBuffer(iobuf);
-  return status;
+  return Status::OK();
+}
+
+void LocalFileSystem::CloseFd(ContextSPtr ctx, int fd) {
+  auto status = Posix::Close(fd);
+  if (!status.ok()) {
+    LOG(ERROR) << "Close file descriptor failed: trace id = " << ctx->TraceId()
+               << ", fd = " << fd << ", status = " << status.ToString();
+  }
+}
+
+void LocalFileSystem::Unlink(ContextSPtr ctx, const std::string& path) {
+  auto status = Posix::Unlink(path);
+  if (!status.ok()) {
+    LOG(ERROR) << "Unlink file failed: trace id = " << ctx->TraceId()
+               << ", path = " << path << ", status = " << status.ToString();
+  }
 }
 
 }  // namespace cache

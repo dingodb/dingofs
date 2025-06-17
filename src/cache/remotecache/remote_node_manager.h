@@ -23,9 +23,9 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
 
-#include <memory>
-#include "cache/common/common.h"
-#include "cache/config/config.h"
+#include "cache/common/proto.h"
+#include "common/status.h"
+#include "options/cache/tiercache.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/executor/executor.h"
 
@@ -39,7 +39,7 @@ class RemoteNodeManager {
   RemoteNodeManager(RemoteBlockCacheOption option, OnMemberLoad on_member_load);
 
   Status Start();
-  void Stop();
+  void Shutdown();
 
  private:
   void BackgroudRefresh();
@@ -49,7 +49,7 @@ class RemoteNodeManager {
   Status LoadMembers(PBCacheGroupMembers* members);
 
   std::atomic<bool> running_;
-  const RemoteBlockCacheOption option_;
+  RemoteBlockCacheOption option_;
   OnMemberLoad on_member_load_;
   std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;

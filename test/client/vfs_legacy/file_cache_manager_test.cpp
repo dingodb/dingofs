@@ -24,13 +24,13 @@
 #include <gtest/gtest.h>
 
 #include "blockaccess/mock/mock_accesser.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
 #include "common/status.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {

@@ -30,7 +30,6 @@ target_link_libraries(cache_utils
     rpcclient
     stub_common
     block_accesser
-    dingofs_base_lib
     dingofs_utils
     dingofs_common
     dingofs_status

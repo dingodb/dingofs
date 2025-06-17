@@ -29,9 +29,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/interruptible_sleeper.h"
 

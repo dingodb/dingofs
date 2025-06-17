@@ -32,7 +32,7 @@
 
 #include <string>
 
-#include "options/client/options/client_dynamic_option.h"
+#include "options/client/client_dynamic_option.h"
 
 namespace dingofs {
 namespace client {

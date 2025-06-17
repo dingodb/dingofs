@@ -58,7 +58,9 @@ class IOBuffer {
   IOBuffer(const char* data, size_t size);
 
   butil::IOBuf& IOBuf();
-  std::vector<iovec> Fetch();
+  const butil::IOBuf& ConstIOBuf();
+  std::vector<iovec> Fetch() const;
+  char* Fetch1() const;
   void CopyTo(char* dest);
 
   size_t Size() const;

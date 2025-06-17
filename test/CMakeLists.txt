@@ -33,8 +33,6 @@ set(TEST_DEPS_WITHOUT_MAIN
     dl
 )
 
-
-add_subdirectory(base)
 add_subdirectory(fs)
 add_subdirectory(stub)
 add_subdirectory(utils)

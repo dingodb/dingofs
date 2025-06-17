@@ -26,36 +26,49 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstdlib>
 #include <memory>
 
-#include "base/filepath/filepath.h"
-#include "base/math/math.h"
-#include "base/string/string.h"
+#include "common/const.h"
+#include "fs/ext4_filesystem_impl.h"
 #include "metaserver/storage/config.h"
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
 #include "metaserver/superpartition/super_partition.h"
-#include "metaserver/superpartition/builder/shell.h"
-#include "fs/ext4_filesystem_impl.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace metaserver {
 namespace superpartition {
 
-using ::dingofs::base::filepath::PathJoin;
-using ::dingofs::base::math::kGiB;
-using ::dingofs::base::math::kMiB;
-using ::dingofs::base::string::GenUuid;
 using ::dingofs::metaserver::storage::KVStorage;
 using ::dingofs::metaserver::storage::RocksDBStorage;
 using ::dingofs::metaserver::storage::StorageOptions;
+using ::dingofs::utils::GenUuid;
+
+using PcloseDeleter = int (*)(FILE*);
+
+static bool RunShell(const std::string& cmd, std::string* ret) {
+  std::array<char, 128> buffer;
+  std::unique_ptr<FILE, PcloseDeleter> pipe(popen(cmd.c_str(), "r"), pclose);
+  if (!pipe) {
+    return false;
+  } else if (ret == nullptr) {
+    return true;
+  }
+
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    *ret += buffer.data();
+  }
+  return true;
+}
 
 class KVStorageBuilder {
   StorageOptions DefaultOption() {
     data_dir_ = "." + GenUuid();
     auto local_fs = ::dingofs::fs::Ext4FileSystemImpl::getInstance();
     auto options = StorageOptions();
-    options.dataDir = base::filepath::PathJoin({data_dir_, "rocksdb.db"});
+    options.dataDir = absl::StrFormat("%s/%s", data_dir_, "rocksdb.db");
     options.maxMemoryQuotaBytes = 2 * kGiB;
     options.maxDiskQuotaBytes = 10 * kMiB;
     options.compression = false;
@@ -76,7 +89,7 @@ class KVStorageBuilder {
   std::string GetDataDir() { return data_dir_; }
 
   void Cleanup() {
-    CHECK(kv_->Close());
+    CHECK(std::system(("rm -rf " + data_dir_).c_str()) == 0);
     CHECK(RunShell("rm -rf " + data_dir_, nullptr));
   }
 

@@ -23,11 +23,12 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_MANAGER_H_
 
-#include "base/queue/message_queue.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
-#include "cache/storage/filesystem.h"
+#include "cache/common/type.h"
+#include "metrics/cache/disk_cache_metric.h"
+#include "utils/message_queue.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,11 +43,12 @@ enum class BlockPhase : uint8_t {
 // Manage cache items and its capacity
 class DiskCacheManager {
  public:
-  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
+  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout,
+                   metrics::DiskCacheMetricSPtr metric);
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
-  virtual void Stop();
+  virtual void Shutdown();
 
   virtual void Add(const CacheKey& key, const CacheValue& value,
                    BlockPhase phase);
@@ -63,7 +65,7 @@ class DiskCacheManager {
   };
 
   using MessageType = std::pair<CacheItems, DeletionReason>;
-  using MessageQueueType = base::queue::MessageQueue<MessageType>;
+  using MessageQueueType = utils::MessageQueue<MessageType>;
   using MessageQueueUPtr = std::unique_ptr<MessageQueueType>;
 
   void CheckFreeSpace();
@@ -83,13 +85,15 @@ class DiskCacheManager {
   std::atomic<bool> stage_full_;
   std::atomic<bool> cache_full_;
   DiskCacheLayoutSPtr layout_;
-  LRUCacheUPtr cache_block_;  // Only store cached block key
+  // Only store cached block key
+  LRUCacheUPtr cached_blocks_;
   // Store stage block key which will not deleted by anyone util it uploaded to
   // storage. It will causes io error if we delete the stage block which not
   // uploaded for we can't get block both local disk and remote storage.
-  std::unordered_map<std::string, CacheValue> stage_block_;
+  std::unordered_map<std::string, CacheValue> staging_blocks_;
   MessageQueueUPtr mq_;
-  TaskThreadPoolUPtr task_pool_;
+  TaskThreadPoolUPtr thread_pool_;
+  metrics::DiskCacheMetricSPtr metric_;
 };
 
 using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;

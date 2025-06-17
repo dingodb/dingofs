@@ -22,23 +22,24 @@
 
 #include "cache/cachegroup/cache_group_node_member.h"
 
-#include "base/string/string.h"
-#include "base/time/time.h"
-#include "cache/common/common.h"
+#include "cache/common/proto.h"
 #include "cache/utils/helper.h"
+#include "utils/string.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace cache {
 
-CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(
-    CacheGroupNodeOption option,
-    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
+CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
+                                                   MdsClientSPtr mds_client)
     : member_id_(0),
       member_uuid_(""),
       option_(option),
       mds_client_(mds_client) {}
 
 Status CacheGroupNodeMemberImpl::JoinGroup() {
+  CHECK_NOTNULL(mds_client_);
+
   uint64_t old_id;
   auto status = LoadMemberId(&old_id);
   if (!status.ok()) {
@@ -71,12 +72,12 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   auto status = Helper::ReadFile(filepath, &content);
   if (status.IsNotFound()) {
     *member_id = 0;
-    LOG(INFO) << "Cache group node metadata file not found: filepath="
+    LOG(INFO) << "Cache group node metadata file not found: filepath = "
               << filepath;
     return Status::OK();
   } else if (!status.ok()) {
-    LOG(ERROR) << "Read cache group node metadata file (path=" << filepath
-               << ") failed: " << status.ToString();
+    LOG(ERROR) << "Read cache group node metadata file failed: path = "
+               << filepath << ", status = " << status.ToString();
     return status;
   } else if (!metadata.ParseFromString(content)) {
     LOG(ERROR) << "Cache group node metadata file maybe broken: filepath = "
@@ -119,15 +120,16 @@ Status CacheGroupNodeMemberImpl::AddMember2Group(const std::string& group_name,
 
   auto rc = mds_client_->AddCacheGroupMember(group_name, member);
   if (rc != PBCacheGroupErrCode::CacheGroupOk) {
-    LOG(ERROR) << "Add member (id=" << member_id_
-               << ", weight=" << option_.group_weight
+    LOG(ERROR) << "Add member (id=" << member.id() << ",ip=" << member.ip()
+               << ",port=" << member.port()
+               << ",weight=" << option_.group_weight
                << ") to group (name=" << group_name
                << ") failed: rc = " << CacheGroupErrCode_Name(rc);
     return Status::Internal("add cache group member failed");
   }
 
-  LOG(INFO) << "Add member (id=" << member_id_
-            << ", weight=" << option_.group_weight
+  LOG(INFO) << "Add member (id=" << member.id() << ",ip=" << member.ip()
+            << ",port=" << member.port() << ",weight=" << option_.group_weight
             << ") to group (name=" << group_name << ") success.";
 
   return Status::OK();
@@ -137,7 +139,7 @@ Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
   std::string content;
   PBCacheGroupNodeMetadata metadata;
   metadata.set_member_id(member_id);
-  metadata.set_birth_time(base::time::TimeNow().seconds);
+  metadata.set_birth_time(utils::TimeNow().seconds);
   if (!member_uuid_.empty()) {
     metadata.set_member_uuid(member_uuid_);
   } else {
@@ -166,7 +168,7 @@ Status CacheGroupNodeMemberImpl::SaveMemberId(uint64_t member_id) {
 }
 
 std::string CacheGroupNodeMemberImpl::GenMemberUuid() {
-  member_uuid_ = base::string::GenUuid();
+  member_uuid_ = utils::GenUuid();
   return member_uuid_;
 }
 
@@ -179,32 +181,6 @@ uint64_t CacheGroupNodeMemberImpl::GetMemberId() const { return member_id_; }
 std::string CacheGroupNodeMemberImpl::GetMemberUuid() const {
   return member_uuid_;
 }
-
-// void CacheGroupNodeMemberImpl::SetLocalAccessOption(LocalAccessOption* o,
-//                                                     uint64_t member_id) {
-//   auto disk_cache_options =
-//   option_.block_cache_option().disk_cache_options(); const auto&
-//   disk_cache_option = disk_cache_options[0]; if
-//   (!option_.local_access_enable()) {
-//     return;
-//   } else if (disk_cache_options.size() != 1) {
-//     LOG(WARNING) << "Local access option only support one disk cache now.";
-//     return;
-//   }
-//
-//   auto cache_dir = disk_cache_option.cache_dir();
-//   auto layout =
-//       blockcache::DiskCacheLayout(blockcache::RootDir(cache_dir,
-//       member_id_));
-//
-//   o->set_root_dir(layout.GetRootDir());
-//   // o->set_lock_path(layout.GetLockPath());
-//   if (disk_cache_option.filesystem_type() == "3fs") {
-//     o->set_filesystem_type(FileSystemType::FileSystemType3FS);
-//   } else {
-//     o->set_filesystem_type(FileSystemType::FileSystemTypeLocal);
-//   }
-// }
 
 }  // namespace cache
 }  // namespace dingofs

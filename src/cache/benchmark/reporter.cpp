@@ -23,130 +23,95 @@
 #include "cache/benchmark/reporter.h"
 
 #include <absl/strings/str_format.h>
+#include <fmt/format.h>
 
-#include "cache/common/common.h"
-#include "cache/config/benchmark.h"
-#include "cache/config/config.h"
+#include "options/cache/benchmark.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
-Reporter::Reporter()
-    : queue_id_({0}), executor_(std::make_unique<BthreadExecutor>()) {
-  btimer_.start();
-}
+Reporter::Reporter(CollectorSPtr collector)
+    : collector_(collector), executor_(std::make_unique<BthreadExecutor>()) {}
 
 Status Reporter::Start() {
-  bthread::ExecutionQueueOptions queue_options;
-  queue_options.use_pthread = true;
-  int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
-                                          HandleEvent, this);
-  if (rc != 0) {
-    return Status::Internal("stop execution queue failed");
+  if (!executor_->Start()) {
+    return Status::Internal("start reporter timer failed");
   }
+  g_timer_.start();
 
-  Submit(Event(EventType::kOnStart));
-
-  CHECK(executor_->Start());
-  executor_->Schedule([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
-
+  collector_->Submit([this](Stat* stat, Stat* total) { OnStart(stat, total); });
+  executor_->Schedule([this]() { TickTok(); }, kReportIntervalSeconds * 1000);
   return Status::OK();
 }
 
-Status Reporter::Stop() {
+void Reporter::Shutdown() {
+  g_timer_.stop();
+
   executor_->Stop();
-  Submit(Event(EventType::kOnStop));
-
-  int rc = bthread::execution_queue_stop(queue_id_);
-  if (rc != 0) {
-    return Status::Internal("stop execution queue failed");
-  }
-
-  rc = bthread::execution_queue_join(queue_id_);
-  if (rc != 0) {
-    return Status::Internal("join execution queue failed");
-  }
-
-  return Status::OK();
+  collector_->Submit([this](Stat* stat, Stat* total) { OnStop(stat, total); });
 }
 
 void Reporter::TickTok() {
-  Submit(Event(EventType::kReportStat));
-  executor_->Schedule([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
+  collector_->Submit([this](Stat* stat, Stat* total) { OnShow(stat, total); });
+  executor_->Schedule([this]() { TickTok(); }, kReportIntervalSeconds * 1000);
 }
 
-void Reporter::Submit(Event event) {
-  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, event));
+// put: threads=3 fsid=1 ino=1 blksize=4096 blocks=1000000
+// ...
+// Starting 3 workers
+// ...
+void Reporter::OnStart(Stat* stat, Stat* total) {
+  CHECK_EQ(stat->Count(), 0);
+  CHECK_EQ(total->Count(), 0);
+
+  std::cout << absl::StrFormat(
+      "%s: threads=%d fsid=%llu ino=%llu blksize=%llu blocks=%llu\n", FLAGS_op,
+      FLAGS_threads, FLAGS_fsid, FLAGS_ino, FLAGS_blksize, FLAGS_blocks);
+
+  std::cout << "...\n";
+  std::cout << "Starting " << FLAGS_threads << " workers\n";
+  std::cout << "...\n";
 }
 
-int Reporter::HandleEvent(void* meta, bthread::TaskIterator<Event>& iter) {
-  if (iter.is_queue_stopped()) {
-    return 0;
+// [10.28%]    put:    584 op/s   2336 MB/s  lat(0.013706 0.042489 0.002988)
+// [10.28%]    put:    563 op/s   2253 MB/s  lat(0.014187 0.044417 0.003051)
+void Reporter::OnShow(Stat* stat, Stat* total) {
+  auto interval_us = kReportIntervalSeconds * 1e6;
+  auto iops = stat->IOPS(interval_us);
+  auto bandwidth = stat->Bandwidth(interval_us);
+  auto avglat = stat->AvgLat() * 1.0 / 1e6;
+  auto maxlat = stat->MaxLat() * 1.0 / 1e6;
+  auto minlat = stat->MinLat() * 1.0 / 1e6;
+  auto percent = total->Count() * 1.0 / (FLAGS_threads * FLAGS_blocks) * 100;
+
+  std::cout << absl::StrFormat(
+      "%9s  %s: %6llu op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)\n",
+      absl::StrFormat("[%.2lf%%]", percent), FLAGS_op, iops, bandwidth, avglat,
+      maxlat, minlat);
+
+  *stat = Stat();  // Reset the interval stat
+}
+
+// Summary (3 workers):
+//   avg(put):  563 op/s  2253 MB/s  lat(0.014187 0.044417 0.003051)
+void Reporter::OnStop(Stat* stat, Stat* total) {
+  if (stat->Count() != 0) {
+    OnShow(stat, total);
   }
 
-  Reporter* r = static_cast<Reporter*>(meta);
-  for (; iter; iter++) {
-    auto& event = *iter;
-    switch (event.type) {
-      case EventType::kOnStart:
-        r->OnStart();
-        break;
+  auto interval_us = g_timer_.u_elapsed();
+  auto iops = total->IOPS(interval_us);
+  auto bandwidth = total->Bandwidth(interval_us);
+  auto avglat = total->AvgLat() * 1.0 / 1e6;
+  auto maxlat = total->MaxLat() * 1.0 / 1e6;
+  auto minlat = total->MinLat() * 1.0 / 1e6;
 
-      case EventType::kAddStat:
-        r->AddStat(event);
-        break;
-
-      case EventType::kReportStat:
-        r->ReportStat();
-        break;
-
-      case EventType::kOnStop:
-        r->OnStop();
-        break;
-
-      default:
-        CHECK(false) << "Unknown event type: " << static_cast<int>(event.type);
-    }
-  }
-
-  return 0;
-}
-
-void Reporter::OnStart() {
-  std::cout << absl::StrFormat("op=%s threads=%d blksize=%lu blocks=%lu\n",
-                               FLAGS_op, FLAGS_threads, FLAGS_op_blksize,
-                               FLAGS_op_blocks);
-}
-
-void Reporter::AddStat(Event event) {
-  interval_stat_.Add(event.bytes, event.latency_s);
-  summary_stat_.Add(event.bytes, event.latency_s);
-}
-
-// async_put:   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
-//       put:   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
-void Reporter::ReportStat() {
-  auto stat = interval_stat_;
+  std::cout << "\n";
+  std::cout << "Summary (" << FLAGS_threads << " workers):\n";
   std::cout << absl::StrFormat(
-      "%9s: %6lld op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)\n", FLAGS_op,
-      stat.IOPS(), stat.Bandwidth(), stat.AvgLatency(), stat.MaxLatency(),
-      stat.MinLatency());
-
-  interval_stat_.Reset();
-}
-
-//  avg(put):   1000 op/s   4090 MB/s  lat(0.000001 0.000001 0.000001)
-void Reporter::OnStop() {
-  btimer_.stop();
-  auto elapsed_s = btimer_.s_elapsed();
-
-  auto stat = summary_stat_;
-  std::cout << absl::StrFormat(
-      "%9s: %6lld op/s  %5lld MB/s  lat(%.6lf %.6lf %.6lf)\n",
-      absl::StrFormat("avg(%s)", FLAGS_op), stat.IOPS(elapsed_s),
-      stat.Bandwidth(elapsed_s), stat.AvgLatency(), stat.MaxLatency(),
-      stat.MinLatency());
+      "  Avg(%s):  %llu op/s  %lld MB/s  lat(%.6lf %.6lf %.6lf)\n", FLAGS_op,
+      iops, bandwidth, avglat, maxlat, minlat);
 }
 
 }  // namespace cache

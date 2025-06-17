@@ -29,10 +29,8 @@
 
 #include <cstring>
 #include <memory>
-#include <sstream>
-#include <string>
 
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 
 namespace dingofs {
 namespace cache {
@@ -40,7 +38,7 @@ namespace cache {
 class InflightThrottle {
  public:
   explicit InflightThrottle(uint64_t max_inflights)
-      : inflights_(0), max_inflights_(max_inflights) {}
+      : max_inflights_(max_inflights) {}
 
   void Increment(uint64_t n) {
     std::unique_lock<BthreadMutex> lock(mutex_);
@@ -64,7 +62,7 @@ class InflightThrottle {
   }
 
  private:
-  uint64_t inflights_;
+  uint64_t inflights_{0};
   const uint64_t max_inflights_;
   BthreadMutex mutex_;
   BthreadConditionVariable cond_;
@@ -78,7 +76,7 @@ class InflightThrottleGuard {
   InflightThrottleGuard(InflightThrottleSPtr throttle, uint64_t inflights)
       : throttle_(throttle), inflights_(inflights) {
     if (throttle_) {
-      throttle_->Increment(inflights_);
+      throttle_->Increment(1);
     }
   }
 

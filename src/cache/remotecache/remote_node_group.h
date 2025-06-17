@@ -23,22 +23,23 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 
-#include "base/hash/con_hash.h"
-#include "cache/common/common.h"
+#include "cache/common/proto.h"
 #include "cache/common/type.h"
-#include "cache/config/config.h"
-#include "cache/config/remote_cache.h"
 #include "cache/remotecache/remote_node.h"
 #include "cache/remotecache/remote_node_manager.h"
+#include "cache/utils/con_hash.h"
+#include "cache/utils/context.h"
+#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
 
-class Upstream {
+class CacheUpstream {
  public:
-  Upstream();
+  CacheUpstream();
 
-  Upstream(const PBCacheGroupMembers& members, RemoteBlockCacheOption option);
+  CacheUpstream(const PBCacheGroupMembers& members,
+                RemoteBlockCacheOption option);
 
   Status Init();
 
@@ -53,24 +54,25 @@ class Upstream {
 
   PBCacheGroupMembers members_;
   RemoteBlockCacheOption option_;
-  std::shared_ptr<base::hash::ConHash> chash_;
+  std::shared_ptr<ConHash> chash_;
   std::unordered_map<std::string, RemoteNodeSPtr> nodes_;
 };
 
-using UpstreamSPtr = std::shared_ptr<Upstream>;
+using CacheUpstreamSPtr = std::shared_ptr<CacheUpstream>;
 
 class RemoteNodeGroup final : public RemoteNode {
  public:
   explicit RemoteNodeGroup(RemoteBlockCacheOption option);
 
-  Status Init() override;
-  Status Destroy() override;
+  Status Start() override;
+  Status Shutdown() override;
 
-  Status Put(const BlockKey& key, const Block& block) override;
-  Status Range(const BlockKey& key, off_t offset, size_t length,
-               IOBuffer* buffer, size_t block_size) override;
-  Status Cache(const BlockKey& key, const Block& block) override;
-  Status Prefetch(const BlockKey& key, size_t length) override;
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block) override;
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer, size_t block_size) override;
+  Status Cache(ContextSPtr ctx, const BlockKey& key,
+               const Block& block) override;
+  Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
   Status OnMemberLoad(const PBCacheGroupMembers& members);
@@ -78,10 +80,10 @@ class RemoteNodeGroup final : public RemoteNode {
   RemoteNodeSPtr GetNode(const BlockKey& key);
 
   std::atomic<bool> running_;
+  BthreadRWLock rwlock_;  // protect upstream_
   RemoteBlockCacheOption option_;
+  CacheUpstreamSPtr upstream_;
   RemoteNodeManagerUPtr node_manager_;
-  BthreadRWLock rwlock_;
-  UpstreamSPtr upstream_;
 };
 
 using RemoteNodeGorupSPtr = std::shared_ptr<RemoteNodeGroup>;

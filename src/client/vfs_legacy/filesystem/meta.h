@@ -30,11 +30,11 @@
 #include <memory>
 #include <string>
 
-#include "base/time/time.h"
 #include "client/meta/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -89,7 +89,7 @@ struct FileHandler {
 
   FileBuffer file_buffer;
 
-  base::time::TimeSpec mtime;
+  utils::TimeSpec mtime;
 
   bool padding{false};  // padding buffer
   std::vector<vfs::DirEntry> entries;

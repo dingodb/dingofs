@@ -29,13 +29,13 @@
 #include <memory>
 #include <set>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "dingofs/metaserver.pb.h"
 #include "metrics/client/vfs_legacy/s3_chunk_info.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/concurrent/concurrent.h"

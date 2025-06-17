@@ -28,8 +28,6 @@
 #include <memory>
 
 #include "blockaccess/mock/mock_accesser.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
@@ -37,6 +35,8 @@
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "common/status.h"
 #include "dingofs/metaserver.pb.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
 #include "utils/dingo_define.h"

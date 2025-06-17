@@ -22,9 +22,9 @@
 
 #include "client/vfs_legacy/filesystem/attr_watcher.h"
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {
@@ -48,7 +48,7 @@ void AttrWatcher::RemeberMtime(const InodeAttr& attr) {
   modifiedAt_->Put(attr.inodeid(), AttrMtime(attr));
 }
 
-bool AttrWatcher::GetMtime(Ino ino, base::time::TimeSpec* time) {
+bool AttrWatcher::GetMtime(Ino ino, utils::TimeSpec* time) {
   ReadLockGuard lk(rwlock_);
   return modifiedAt_->Get(ino, time);
 }

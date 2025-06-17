@@ -25,7 +25,7 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
-#include "options/client/options/vfs/vfs_option.h"
+#include "options/client/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {
@@ -33,7 +33,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option){};
 
   ~VFSImpl() override = default;
 

@@ -20,8 +20,8 @@
  * Author: yangyaokai
  */
 
-#ifndef SRC_FS_EXT4_FILESYSTEM_IMPL_H_
-#define SRC_FS_EXT4_FILESYSTEM_IMPL_H_
+#ifndef DINGOFS_SRC_FS_EXT4_FILESYSTEM_IMPL_H_
+#define DINGOFS_SRC_FS_EXT4_FILESYSTEM_IMPL_H_
 
 #include <butil/iobuf.h>
 
@@ -74,6 +74,6 @@ class Ext4FileSystemImpl : public LocalFileSystem {
 };
 
 }  // namespace fs
-}  // namespace dingo
+}  // namespace dingofs
 
-#endif  // SRC_FS_EXT4_FILESYSTEM_IMPL_H_
+#endif  // DINGOFS_SRC_FS_EXT4_FILESYSTEM_IMPL_H_

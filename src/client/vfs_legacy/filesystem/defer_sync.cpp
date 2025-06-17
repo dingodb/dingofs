@@ -27,10 +27,10 @@
 #include <unordered_map>
 #include <vector>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
-#include "utils/concurrent/concurrent.h"
 #include "glog/logging.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
+#include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
 namespace client {

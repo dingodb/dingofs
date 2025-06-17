@@ -29,11 +29,11 @@
 #include <cstdint>
 #include <memory>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/mock_dentry_cache_mamager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
 #include "client/vfs_legacy/mock_metaserver_client.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {

@@ -20,8 +20,8 @@
  * Author: charisu
  */
 
-#ifndef SRC_COMMON_CHANNEL_POOL_H_
-#define SRC_COMMON_CHANNEL_POOL_H_
+#ifndef DINGOFS_SRC_UTILS_CHANNEL_POOL_H_
+#define DINGOFS_SRC_UTILS_CHANNEL_POOL_H_
 
 #include <brpc/channel.h>
 
@@ -62,4 +62,4 @@ class ChannelPool {
 }  // namespace utils
 }  // namespace dingofs
 
-#endif  // SRC_COMMON_CHANNEL_POOL_H_
+#endif  // DINGOFS_SRC_UTILS_CHANNEL_POOL_H_

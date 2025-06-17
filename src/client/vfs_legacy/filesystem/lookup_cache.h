@@ -26,8 +26,8 @@
 #include <memory>
 #include <string>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/meta.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/lru_cache.h"
 
 namespace dingofs {
@@ -40,7 +40,7 @@ class LookupCache {
  public:
   struct CacheEntry {
     uint32_t uses;
-    base::time::TimeSpec expireTime;
+    utils::TimeSpec expireTime;
   };
 
   using LRUType = utils::LRUCache<std::string, CacheEntry>;

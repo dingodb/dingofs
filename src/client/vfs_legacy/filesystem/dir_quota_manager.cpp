@@ -18,10 +18,10 @@
 #include <cstdint>
 #include <unordered_map>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "common/define.h"
 #include "glog/logging.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {

@@ -20,14 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "base/math/math.h"
 #include "client/datastream/memory_pool.h"
+#include "common/const.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
 namespace cache {
 
-using base::math::kMiB;
 using client::datastream::MemoryPool;
 
 class MemoryPoolTest : public ::testing::Test {

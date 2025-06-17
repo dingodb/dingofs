@@ -22,9 +22,13 @@
 
 #include "cache/storage/storage_pool.h"
 
+#include <glog/logging.h>
+
 #include <memory>
 #include <mutex>
 
+#include "cache/common/macro.h"
+#include "cache/common/proto.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage_impl.h"
 #include "common/config_mapper.h"
@@ -32,19 +36,20 @@
 namespace dingofs {
 namespace cache {
 
-SingleStorage::SingleStorage(StorageSPtr storage) : storage_(storage) {}
+SingleStorage::SingleStorage(StorageSPtr storage) : storage_(storage) {
+  CHECK_NOTNULL(storage_);
+}
 
 Status SingleStorage::GetStorage(uint32_t /*fs_id*/, StorageSPtr& storage) {
-  if (storage_ != nullptr) {
-    storage = storage_;
-    return Status::OK();
-  }
-  return Status::Internal("no storage available");
+  storage = storage_;
+  return Status::OK();
 }
 
 StoragePoolImpl::StoragePoolImpl(
     std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
-    : mds_client_(mds_client) {}
+    : mds_client_(mds_client) {
+  CHECK_NOTNULL(mds_client);
+}
 
 Status StoragePoolImpl::GetStorage(uint32_t fs_id, StorageSPtr& storage) {
   std::unique_lock<BthreadMutex> lk(mutex_);
@@ -69,21 +74,17 @@ bool StoragePoolImpl::Get(uint32_t fs_id, StorageSPtr& storage) {
   return false;
 }
 
-void StoragePoolImpl::Insert(uint32_t fs_id, StorageSPtr storage) {
-  storages_.emplace(fs_id, storage);
-}
-
 Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   // get filesyste information
   PBFsInfo fs_info;
   PBFSStatusCode code = mds_client_->GetFsInfo(fs_id, &fs_info);
   if (code != PBFSStatusCode::OK) {
-    LOG(ERROR) << "Get filesystem information failed: fs_id = " << fs_id
-               << ", rc = " << FSStatusCode_Name(code);
+    LOG_ERROR("Get filesystem information failed: fs_id = %d, rc = %s", fs_id,
+              FSStatusCode_Name(code));
     return Status::Internal("get filesystem information failed");
   } else if (!fs_info.has_storage_info()) {
-    LOG(ERROR) << "The filesystem missing storage_info: fs_id = " << fs_id;
-    return Status::Internal("filesystem missing storage_info");
+    LOG_ERROR("The filesystem missing storage_info: fs_id = %d", fs_id);
+    return Status::Internal("filesystem missing storage info");
   }
 
   // new block accesser
@@ -94,21 +95,26 @@ Status StoragePoolImpl::Create(uint32_t fs_id, StorageSPtr& storage) {
   auto* block_accesser = block_accesseres_[fs_id].get();
   auto status = block_accesser->Init();
   if (!status.ok()) {
-    LOG(ERROR) << "Init block accesser for filesystem (fs_id=" << fs_id
-               << ") failed: " << status.ToString();
+    LOG_ERROR(
+        "Init block accesser for filesystem failed: fs_id = %d, status = %s",
+        fs_id, status.ToString());
     return status;
   }
 
   // new storage and init it
   storage = std::make_shared<StorageImpl>(block_accesser);
-  status = storage->Init();
+  status = storage->Start();
   if (status.ok()) {
     LOG(INFO) << "New storage for filesystem (fs_id=" << fs_id << ") success.";
   } else {
-    LOG(ERROR) << "New storage for filesystem (fs_id=" << fs_id
-               << ") failed: " << status.ToString();
+    LOG_ERROR("New storage for filesystem failed: fs_id = %d, status = %s",
+              fs_id, status.ToString());
   }
   return status;
+}
+
+void StoragePoolImpl::Insert(uint32_t fs_id, StorageSPtr storage) {
+  storages_.emplace(fs_id, storage);
 }
 
 }  // namespace cache

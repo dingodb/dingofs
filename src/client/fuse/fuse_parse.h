@@ -21,9 +21,9 @@
 
 #include "client/fuse/fuse_common.h"
 #include "common/define.h"
+#include "utils/string.h"
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::base::string::TrimSpace;
+using dingofs::utils::TrimSpace;
 
 inline void PrintOptionHelp(const char* o, const char* msg) {
   printf("    -o %-20s%s\n", o, msg);

@@ -14,33 +14,62 @@
 
 #include "cache/utils/state_machine_impl.h"
 
+#include <brpc/reloadable_flags.h>
 #include <glog/logging.h>
 
 #include <functional>
 #include <memory>
 #include <mutex>
 
-#include "cache/config/config.h"
+#include "cache/common/macro.h"
 #include "cache/utils/state_machine.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
+DEFINE_uint32(state_tick_duration_s, 60,
+              "Duration in seconds for the disk state tick");
+DEFINE_validator(state_tick_duration_s, brpc::PassValidate);
+
+DEFINE_uint32(state_normal2unstable_error_num, 3,
+              "Number of errors to trigger unstable state from normal state");
+DEFINE_validator(state_normal2unstable_error_num, brpc::PassValidate);
+
+DEFINE_uint32(state_unstable2normal_succ_num, 10,
+              "Number of successful operations to trigger normal state from "
+              "unstable state");
+DEFINE_validator(state_unstable2normal_succ_num, brpc::PassValidate);
+
+DEFINE_uint32(state_unstable2down_s, 1800,
+              "Duration in seconds to trigger down state from unstable state");
+DEFINE_validator(state_unstable2down_s, brpc::PassValidate);
+
 // normal
-void NormalState::IOErr() {
-  io_error_count_.fetch_add(1);
-  if (io_error_count_.load() > FLAGS_state_normal2unstable_error_num) {
+NormalState::NormalState(StateMachine* state_machine)
+    : BaseState(state_machine) {}
+
+void NormalState::Error() {
+  error_count_.fetch_add(1);
+  if (error_count_.load() > FLAGS_state_normal2unstable_error_num) {
     state_machine->OnEvent(StateEvent::kStateEventUnstable);
   }
 }
 
-void NormalState::Tick() { io_error_count_.store(0); }
+void NormalState::Tick() { error_count_.store(0); }
+
+State NormalState::GetState() const { return kStateNormal; };
 
 // unstable
-void UnstableState::IOSucc() {
-  io_succ_count_.fetch_add(1);
-  if (io_succ_count_.load() > FLAGS_state_unstable2normal_succ_num) {
+UnstableState::UnstableState(StateMachine* state_machine)
+    : BaseState(state_machine),
+      start_time_(std::chrono::duration_cast<std::chrono::seconds>(
+                      std::chrono::steady_clock::now().time_since_epoch())
+                      .count()) {}
+
+void UnstableState::Success() {
+  succ_count_.fetch_add(1);
+  if (succ_count_.load() > FLAGS_state_unstable2normal_succ_num) {
     state_machine->OnEvent(StateEvent::kStateEventNormal);
   }
 }
@@ -53,11 +82,21 @@ void UnstableState::Tick() {
     state_machine->OnEvent(StateEvent::kStateEventDown);
   }
 
-  io_succ_count_.store(0);
+  succ_count_.store(0);
 }
 
+State UnstableState::GetState() const { return kStateUnStable; }
+
+// down
+DownState::DownState(StateMachine* state_machine) : BaseState(state_machine) {}
+
+State DownState::GetState() const { return kStateDown; }
+
+// state machine
 StateMachineImpl::StateMachineImpl()
-    : running_(false), state_(std::make_unique<BaseState>(this)) {}
+    : running_(false),
+      state_(std::make_unique<BaseState>(this)),
+      executor_(std::make_unique<BthreadExecutor>()) {}
 
 bool StateMachineImpl::Start() {
   std::lock_guard<BthreadMutex> lk(mutex_);
@@ -65,6 +104,8 @@ bool StateMachineImpl::Start() {
   if (running_) {
     return true;
   }
+
+  LOG(INFO) << "State machine is starting...";
 
   state_ = std::make_unique<NormalState>(this);
 
@@ -76,26 +117,26 @@ bool StateMachineImpl::Start() {
     return false;
   }
 
-  executor_ = std::make_unique<BthreadExecutor>();
-  CHECK(executor_->Start());
-
   running_ = true;
+
+  CHECK(executor_->Start());
   executor_->Schedule([this] { TickTock(); },
                       FLAGS_state_tick_duration_s * 1000);
 
-  LOG(INFO) << "Success start state machine.";
+  LOG(INFO) << "State machine is up.";
+
+  CHECK_RUNNING("State machine");
   return true;
 }
 
-bool StateMachineImpl::Stop() {
+bool StateMachineImpl::Shutdown() {
   std::lock_guard<BthreadMutex> lk(mutex_);
 
-  if (!running_) {
+  if (!running_.exchange(false)) {
     return true;
   }
 
-  LOG(INFO) << "State machine is stopping...";
-  running_ = false;
+  LOG(INFO) << "State machine is shutting down...";
 
   if (bthread::execution_queue_stop(disk_event_queue_id_) != 0) {
     LOG(ERROR) << "Fail stop execution queue for process event.";
@@ -107,7 +148,33 @@ bool StateMachineImpl::Stop() {
 
   executor_->Stop();
 
+  LOG(INFO) << "State machine is down.";
+
+  CHECK_DOWN("State machine");
   return true;
+}
+
+void StateMachineImpl::Success() {
+  if (running_) {
+    std::lock_guard<BthreadMutex> lk(mutex_);
+    state_->Success();
+  }
+}
+
+void StateMachineImpl::Error() {
+  if (running_) {
+    std::lock_guard<BthreadMutex> lk(mutex_);
+    state_->Error();
+  }
+}
+
+State StateMachineImpl::GetState() const {
+  std::lock_guard<BthreadMutex> lk(mutex_);
+  return state_->GetState();
+}
+
+void StateMachineImpl::OnEvent(StateEvent event) {
+  CHECK_EQ(0, bthread::execution_queue_execute(disk_event_queue_id_, event));
 }
 
 void StateMachineImpl::TickTock() {
@@ -121,10 +188,6 @@ void StateMachineImpl::TickTock() {
                       FLAGS_state_tick_duration_s * 1000);
 }
 
-void StateMachineImpl::OnEvent(StateEvent event) {
-  CHECK_EQ(0, bthread::execution_queue_execute(disk_event_queue_id_, event));
-}
-
 int StateMachineImpl::EventThread(void* meta,
                                   bthread::TaskIterator<StateEvent>& iter) {
   if (iter.is_queue_stopped()) {
@@ -132,9 +195,9 @@ int StateMachineImpl::EventThread(void* meta,
     return 0;
   }
 
-  auto* state_machine = reinterpret_cast<StateMachineImpl*>(meta);
+  auto* self = reinterpret_cast<StateMachineImpl*>(meta);
   for (; iter; ++iter) {
-    state_machine->ProcessEvent(*iter);
+    self->ProcessEvent(*iter);
   }
   return 0;
 }
@@ -142,8 +205,8 @@ int StateMachineImpl::EventThread(void* meta,
 void StateMachineImpl::ProcessEvent(StateEvent event) {
   std::lock_guard<BthreadMutex> lk(mutex_);
 
-  LOG(INFO) << "ProcessEvent event: " << StateEventToString(event)
-            << " in state:" << StateToString(state_->GetState());
+  LOG(INFO) << "Process state event: event = " << StateEventToString(event)
+            << ", current state = " << StateToString(state_->GetState());
 
   switch (state_->GetState()) {
     case State::kStateNormal:
@@ -162,10 +225,10 @@ void StateMachineImpl::ProcessEvent(StateEvent event) {
     case kStateDown:
       break;
     default:
-      LOG(FATAL) << "Unknown disk state " << state_->GetState();
+      LOG(FATAL) << "Unknown state: " << state_->GetState();
   }
 
-  LOG(INFO) << "After process, current disk state is "
+  LOG(INFO) << "After process, current state is "
             << StateToString(state_->GetState());
 }
 

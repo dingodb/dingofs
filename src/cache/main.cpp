@@ -20,6 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include <gflags/gflags.h>
+
 #include "cache/server.h"
 #include "cache/utils/logging.h"
 
@@ -27,6 +29,5 @@ int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   dingofs::cache::InitLogging(argv[0]);
 
-  auto status = dingofs::cache::RunServer();
-  return status.ok() ? 0 : -1;
+  return dingofs::cache::RunServer();
 }

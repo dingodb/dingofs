@@ -29,8 +29,8 @@ list(REMOVE_ITEM DINGOFS_METASERVER_SRCS
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 
-add_library(metaserver_lib 
-    ${DINGOFS_METASERVER_SRCS} 
+add_library(metaserver_lib
+    ${DINGOFS_METASERVER_SRCS}
 )
 target_link_libraries(metaserver_lib
     PROTO_OBJS
@@ -42,7 +42,6 @@ target_link_libraries(metaserver_lib
     dynamic_vlog
     local_fs
     metaserver_s3
-    dingofs_base_lib
     braft::braft
     brpc::brpc
     RocksDB::rocksdb

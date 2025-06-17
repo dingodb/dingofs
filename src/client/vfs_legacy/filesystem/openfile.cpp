@@ -24,9 +24,9 @@
 
 #include <memory>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "glog/logging.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {

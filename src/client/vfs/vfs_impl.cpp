@@ -34,7 +34,7 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
-#include "options/client/options/common_option.h"
+#include "options/client/common_option.h"
 #include "utils/configuration.h"
 #include "utils/net_common.h"
 

@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_TEST_CLIENT_FILESYSTEM_HELPER_META_H_
-#define DINGOFS_TEST_CLIENT_FILESYSTEM_HELPER_META_H_
+#ifndef DINGOFS_TEST_CLIENT_VFS_LEGACY_FILESYSTEM_HELPER_META_H_
+#define DINGOFS_TEST_CLIENT_VFS_LEGACY_FILESYSTEM_HELPER_META_H_
 
 #include <gmock/gmock.h>
 
@@ -29,19 +29,19 @@
 #include <string>
 
 #include "absl/strings/str_format.h"
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/filesystem/meta.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
 using ::absl::StrFormat;
-using ::dingofs::base::time::TimeSpec;
 using ::dingofs::pb::metaserver::Dentry;
 using ::dingofs::pb::metaserver::FsFileType;
 using ::dingofs::pb::metaserver::InodeAttr;
+using ::dingofs::utils::TimeSpec;
 
 struct AttrOption {
  public:
@@ -101,4 +101,4 @@ DirEntry MkDirEntry(Ino ino, const std::string& name,
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_TEST_CLIENT_FILESYSTEM_HELPER_META_H_
+#endif  // DINGOFS_TEST_CLIENT_VFS_LEGACY_FILESYSTEM_HELPER_META_H_

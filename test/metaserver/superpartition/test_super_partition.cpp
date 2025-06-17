@@ -20,18 +20,16 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "common/const.h"
 #include "dingofs/metaserver.pb.h"
-#include "base/math/math.h"
-#include "metaserver/superpartition/access_log.h"
-#include "metaserver/superpartition/super_partition_storage.h"
-#include "metaserver/superpartition/builder/builder.h"
 #include "gtest/gtest.h"
+#include "metaserver/superpartition/access_log.h"
+#include "metaserver/superpartition/builder/builder.h"
+#include "metaserver/superpartition/super_partition_storage.h"
 
 namespace dingofs {
 namespace metaserver {
 namespace superpartition {
-
-using ::dingofs::base::math::kGiB;
 
 using pb::metaserver::MetaStatusCode;
 using pb::metaserver::Quota;

@@ -22,8 +22,11 @@
 
 #include "cache/blockcache/disk_cache_group.h"
 
-#include "base/hash/ketama_con_hash.h"
+#include <atomic>
+
+#include "cache/common/macro.h"
 #include "cache/utils/helper.h"
+#include "cache/utils/ketama_con_hash.h"
 
 namespace dingofs {
 namespace cache {
@@ -31,85 +34,113 @@ namespace cache {
 DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
     : running_(false),
       options_(options),
-      chash_(std::make_unique<base::hash::KetamaConHash>()),
+      chash_(std::make_unique<KetamaConHash>()),
       watcher_(std::make_unique<DiskCacheWatcher>()) {}
 
-Status DiskCacheGroup::Init(UploadFunc uploader) {
-  if (!running_.exchange(true)) {
-    auto weights = CalcWeights(options_);
-    for (size_t i = 0; i < options_.size(); i++) {
-      auto store = std::make_shared<DiskCache>(options_[i]);
-      auto status = store->Init(uploader);
-      if (!status.ok()) {
-        return status;
-      }
+Status DiskCacheGroup::Start(UploadFunc uploader) {
+  CHECK(!options_.empty());
+  CHECK_NOTNULL(chash_);
+  CHECK_NOTNULL(watcher_);
 
-      stores_[store->Id()] = store;
-      chash_->AddNode(store->Id(), weights[i]);
-      watcher_->Add(store, uploader);
-      LOG(INFO) << "Add disk cache (dir=" << options_[i].cache_dir
-                << ", weight=" << weights[i]
-                << ") to disk cache group success.";
+  if (running_) {
+    return Status::OK();
+  }
+
+  auto weights = CalcWeights(options_);
+  for (size_t i = 0; i < options_.size(); i++) {
+    auto store = std::make_shared<DiskCache>(options_[i]);
+    auto status = store->Start(uploader);
+    if (!status.ok()) {
+      return status;
     }
 
-    chash_->Final();
-    watcher_->Start();
+    stores_[store->Id()] = store;
+    chash_->AddNode(store->Id(), weights[i]);
+    watcher_->Add(store, uploader);
+    LOG(INFO) << "Add disk cache (dir=" << options_[i].cache_dir
+              << ", weight=" << weights[i] << ") to disk cache group success.";
   }
+
+  chash_->Final();
+  watcher_->Start();
+
+  running_ = true;
+
+  CHECK_RUNNING("Disk cache group");
   return Status::OK();
 }
 
 Status DiskCacheGroup::Shutdown() {
-  if (running_.exchange(false)) {
-    watcher_->Stop();
-    for (const auto& it : stores_) {
-      auto status = it.second->Shutdown();
-      if (!status.ok()) {
-        return status;
-      }
+  if (!running_.exchange(false)) {
+    return Status::OK();
+  }
+
+  LOG(INFO) << "Disk cache group is shutting down...";
+
+  watcher_->Shutdown();
+  for (const auto& it : stores_) {
+    auto status = it.second->Shutdown();
+    if (!status.ok()) {
+      return status;
     }
   }
+
+  LOG(INFO) << "Disk cache group is down.";
+
+  CHECK_DOWN("Disk cache group");
   return Status::OK();
 }
 
-Status DiskCacheGroup::Stage(const BlockKey& key, const Block& block,
-                             StageOption option) {
-  return GetStore(key)->Stage(key, block, option);
+Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
+                             const Block& block, StageOption option) {
+  CHECK_RUNNING("Disk cache group");
+
+  return GetStore(key)->Stage(ctx, key, block, option);
 }
 
-Status DiskCacheGroup::RemoveStage(const BlockKey& key,
+Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
                                    RemoveStageOption option) {
+  CHECK_RUNNING("Disk cache group");
+
   DiskCacheSPtr store;
-  const auto& store_id = option.ctx.store_id;
+  const auto& store_id = option.block_ctx.store_id;
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
     store = GetStore(key);
   }
-  return store->RemoveStage(key, option);
+  return store->RemoveStage(ctx, key, option);
 }
 
-Status DiskCacheGroup::Cache(const BlockKey& key, const Block& block,
-                             CacheOption option) {
-  return GetStore(key)->Cache(key, block, option);
+Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
+                             const Block& block, CacheOption option) {
+  CHECK_RUNNING("Disk cache group");
+
+  return GetStore(key)->Cache(ctx, key, block, option);
 }
 
-Status DiskCacheGroup::Load(const BlockKey& key, off_t offset, size_t length,
-                            IOBuffer* buffer, LoadOption option) {
+Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                            size_t length, IOBuffer* buffer,
+                            LoadOption option) {
+  DCHECK_RUNNING("Disk cache group");
+
   DiskCacheSPtr store;
-  const auto& store_id = option.ctx.store_id;
+  const auto& store_id = option.block_ctx.store_id;
   if (!store_id.empty()) {
     store = GetStore(store_id);
   } else {
     store = GetStore(key);
   }
-  return store->Load(key, offset, length, buffer, option);
+  return store->Load(ctx, key, offset, length, buffer, option);
 }
 
 bool DiskCacheGroup::IsRunning() const {
-  return running_.load(std::memory_order_acquire);
+  return running_.load(std::memory_order_relaxed);
 }
 
 bool DiskCacheGroup::IsCached(const BlockKey& key) const {
+  DCHECK_RUNNING("Disk cache group");
+
   return GetStore(key)->IsCached(key);
 }
 
@@ -118,6 +149,7 @@ std::string DiskCacheGroup::Id() const { return "disk_cache_group"; }
 std::vector<uint64_t> DiskCacheGroup::CalcWeights(
     std::vector<DiskCacheOption> options) {
   std::vector<uint64_t> weights;
+  weights.reserve(options.size());
   for (const auto& option : options) {
     weights.push_back(option.cache_size_mb);
   }
@@ -125,7 +157,7 @@ std::vector<uint64_t> DiskCacheGroup::CalcWeights(
 }
 
 DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
-  base::hash::ConNode node;
+  ConNode node;
   bool find = chash_->Lookup(std::to_string(key.id), node);
   CHECK(find);
 
@@ -136,14 +168,13 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
 
 // We should pass the request to specified store if |store_id|
 // is not empty, because add/delete cache will leads the consistent hash
-// changed.
-// so when we restart the store after add/delete some stores, the
+// changed. So when we restart the store after add/delete some stores, the
 // stage block key will be mapped to one stroe by the consistent hash
 // algorithm, but this is actually not the real location the block stores.
 DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
   CHECK(!store_id.empty());
-
   auto iter = stores_.find(store_id);
+
   CHECK(iter != stores_.end());
   return iter->second;
 }

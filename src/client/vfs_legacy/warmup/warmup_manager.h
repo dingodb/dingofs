@@ -39,18 +39,16 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs.h"
 #include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
-#include "client/meta/vfs_meta.h"
 #include "metrics/client/vfs_legacy/warmup.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
-#include "stub/rpcclient/metaserver_client.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/concurrent.h"
-#include "utils/concurrent/rw_lock.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {

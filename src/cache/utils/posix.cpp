@@ -27,18 +27,10 @@
 #include <sys/vfs.h>
 #include <unistd.h>
 
-#include <memory>
-
-#include "absl/cleanup/cleanup.h"
-#include "base/file/file.h"
-#include "base/filepath/filepath.h"
-#include "base/math/math.h"
 #include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
-
-using dingofs::base::file::StrMode;
 
 template <typename... Args>
 Status Posix::PosixError(int code, const char* format, const Args&... args) {
@@ -80,7 +72,7 @@ Status Posix::Stat(const std::string& path, struct stat* stat) {
 
 Status Posix::MkDir(const std::string& path, uint16_t mode) {
   if (::mkdir(path.c_str(), mode) != 0) {
-    return PosixError(errno, "mkdir(%s,%s)", path, StrMode(mode));
+    return PosixError(errno, "mkdir(%s,%s)", path, Helper::StrMode(mode));
   }
   return Status::OK();
 }
@@ -123,7 +115,8 @@ Status Posix::Open(const std::string& path, int flags, int* fd) {
 Status Posix::Open(const std::string& path, int flags, mode_t mode, int* fd) {
   *fd = ::open(path.c_str(), flags, mode);
   if (*fd < 0) {
-    return PosixError(errno, "open(%s,%#x,%s)", path, flags, StrMode(mode));
+    return PosixError(errno, "open(%s,%#x,%s)", path, flags,
+                      Helper::StrMode(mode));
   }
   return Status::OK();
 }
@@ -131,7 +124,7 @@ Status Posix::Open(const std::string& path, int flags, mode_t mode, int* fd) {
 Status Posix::Creat(const std::string& path, mode_t mode, int* fd) {
   *fd = creat(path.c_str(), mode);
   if (*fd < 0) {
-    return PosixError(errno, "creat(%s,%s)", path, StrMode(mode));
+    return PosixError(errno, "creat(%s,%s)", path, Helper::StrMode(mode));
   }
   return Status::OK();
 }
@@ -176,6 +169,13 @@ Status Posix::Read(int fd, char* buffer, size_t length) {
   return Status::OK();
 }
 
+Status Posix::FSync(int fd) {
+  if (::fsync(fd) != 0) {
+    return PosixError(errno, "fsync(%d)", fd);
+  }
+  return Status::OK();
+}
+
 Status Posix::Close(int fd) {
   if (::close(fd) != 0) {
     return PosixError(errno, "close(%d)", fd);
@@ -211,6 +211,11 @@ Status Posix::StatFS(const std::string& path, struct statfs* statfs) {
   return Status::OK();
 }
 
+// NOTE:
+// 1. The dirty page cache will not dropped which means you should sync data
+// to disk before calling this function.
+// 2. The file descriptor should be valid which means you should not
+// close the file descriptor before calling this function.
 Status Posix::PosixFAdvise(int fd, off_t offset, size_t length, int advise) {
   if (::posix_fadvise(fd, offset, length, advise) != 0) {
     return PosixError(errno, "posix_fadvise(%d, %lld, %zu, %d)", fd, offset,
@@ -229,7 +234,7 @@ Status Posix::MMap(void* addr, size_t length, int port, int flags, int fd,
   return Status::OK();
 }
 
-Status Posix::MUnMap(void* addr, size_t length) {
+Status Posix::MUnmap(void* addr, size_t length) {
   if (::munmap(addr, length) != 0) {
     return PosixError(errno, "munmap(%p,%zu)", addr, length);
   }

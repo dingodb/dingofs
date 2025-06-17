@@ -30,10 +30,10 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/vfs_legacy/datastream/data_stream.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/in_time_warmup_manager.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 
@@ -85,9 +85,9 @@ S3ClientAdaptorImpl::Init(const S3ClientAdaptorOption& option,
 
   // init block cache
   {
-    auto status = block_cache_->Init();
+    auto status = block_cache_->Start();
     if (!status.ok()) {
-      LOG(ERROR) << "Init block cache failed: " << status.ToString();
+      LOG(ERROR) << "Start block cache failed: " << status.ToString();
       return DINGOFS_ERROR::INTERNAL;
     }
   }

@@ -25,7 +25,8 @@
 
 #include <memory>
 
-#include "cache/blockcache/block_cache.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,32 +36,48 @@ class RemoteNode {
  public:
   virtual ~RemoteNode() = default;
 
-  virtual Status Init() = 0;
-  virtual Status Destroy() = 0;
+  virtual Status Start() = 0;
+  virtual Status Shutdown() = 0;
 
-  virtual Status Put(const BlockKey& key, const Block& block) = 0;
-  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
-                       IOBuffer* buffer, uint64_t block_size) = 0;
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
-  virtual Status Prefetch(const BlockKey& key, size_t length) = 0;
+  virtual Status Put(ContextSPtr ctx, const BlockKey& key,
+                     const Block& block) = 0;
+  virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                       size_t length, IOBuffer* buffer,
+                       uint64_t block_size) = 0;
+  virtual Status Cache(ContextSPtr ctx, const BlockKey& key,
+                       const Block& block) = 0;
+  virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key,
+                          size_t length) = 0;
 };
 
 class NoneRemoteNode final : public RemoteNode {
  public:
-  Status Init() override { return Status::OK(); }
-  Status Destroy() override { return Status::OK(); }
+  Status Start() override {
+    return Status::NotSupport("Remote node is not supported");
+  }
 
-  Status Put(const BlockKey& /*key*/, const Block& /*block*/) override {
+  Status Shutdown() override {
     return Status::NotSupport("Remote node is not supported");
   }
-  Status Range(const BlockKey& /*key*/, off_t /*offset*/, size_t /*length*/,
-               IOBuffer* /*buffer*/, uint64_t /*block_size*/) override {
+
+  Status Put(ContextSPtr, const BlockKey& /*key*/,
+             const Block& /*block*/) override {
     return Status::NotSupport("Remote node is not supported");
   }
-  Status Cache(const BlockKey& /*key*/, const Block& /*block*/) override {
+
+  Status Range(ContextSPtr, const BlockKey& /*key*/, off_t /*offset*/,
+               size_t /*length*/, IOBuffer* /*buffer*/,
+               uint64_t /*block_size*/) override {
     return Status::NotSupport("Remote node is not supported");
   }
-  Status Prefetch(const BlockKey& /*key*/, size_t /*length*/) override {
+
+  Status Cache(ContextSPtr, const BlockKey& /*key*/,
+               const Block& /*block*/) override {
+    return Status::NotSupport("Remote node is not supported");
+  }
+
+  Status Prefetch(ContextSPtr, const BlockKey& /*key*/,
+                  size_t /*length*/) override {
     return Status::NotSupport("Remote node is not supported");
   }
 };

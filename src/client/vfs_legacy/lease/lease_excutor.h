@@ -30,7 +30,7 @@
 #include <memory>
 #include <string>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metacache.h"
 

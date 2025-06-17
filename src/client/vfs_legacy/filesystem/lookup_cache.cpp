@@ -89,8 +89,7 @@ bool LookupCache::Put(Ino parent, const std::string& name) {
     entry.uses = 0;
   }
 
-  entry.expireTime =
-      Now() + base::time::TimeSpec(option_.negativeTimeoutSec, 0);
+  entry.expireTime = Now() + utils::TimeSpec(option_.negativeTimeoutSec, 0);
   lru_->Put(key, entry);
   return true;
 }

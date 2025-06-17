@@ -27,13 +27,13 @@
 #include <vector>
 
 #include "absl/container/btree_map.h"
-#include "base/queue/message_queue.h"
-#include "base/time/time.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/metric.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/lru_cache.h"
+#include "utils/message_queue.h"
+#include "utils/time.h"
 
 namespace dingofs {
 namespace client {
@@ -59,13 +59,13 @@ class DirEntryList {
 
   void Clear();
 
-  void SetMtime(base::time::TimeSpec mtime);
+  void SetMtime(utils::TimeSpec mtime);
 
-  base::time::TimeSpec GetMtime();
+  utils::TimeSpec GetMtime();
 
  private:
   utils::RWLock rwlock_;
-  base::time::TimeSpec mtime_;
+  utils::TimeSpec mtime_;
   std::vector<DirEntry> entries_;
   absl::btree_map<Ino, uint32_t> index_;
 };
@@ -74,7 +74,7 @@ class DirCache {
  public:
   using LRUType = utils::LRUCache<Ino, std::shared_ptr<DirEntryList>>;
   using MessageType = std::shared_ptr<DirEntryList>;
-  using MessageQueueType = base::queue::MessageQueue<MessageType>;
+  using MessageQueueType = utils::MessageQueue<MessageType>;
 
   explicit DirCache(DirCacheOption option);
 

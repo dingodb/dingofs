@@ -26,8 +26,6 @@
 
 #include <cstdint>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
@@ -36,6 +34,8 @@
 #include "client/vfs_legacy/mock_metaserver_client.h"
 #include "dingofs/metaserver.pb.h"
 #include "metaserver/mock_metaserver_s3_adaptor.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/metaserver_client.h"
 

@@ -28,20 +28,19 @@
 
 #include <atomic>
 #include <cstdint>
-#include <deque>
 #include <list>
 #include <memory>
 #include <thread>
 #include <utility>
 
-#include "base/filepath/filepath.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 #include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "metrics/blockaccess/s3_accesser.h"
 #include "metrics/metric.h"
 #include "metrics/metric_guard.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/executor/bthread/bthread_executor.h"
 #include "utils/executor/executor.h"
@@ -51,7 +50,6 @@ namespace dingofs {
 namespace client {
 namespace warmup {
 
-using base::filepath::PathSplit;
 using common::WarmupStorageType;
 using metrics::MetricGuard;
 using metrics::blockaccess::S3Metric;
@@ -62,6 +60,18 @@ using pb::metaserver::Dentry;
 using pb::metaserver::FsFileType;
 
 #define WARMUP_CHECKINTERVAL_US (1000 * 1000)
+
+namespace {
+
+std::vector<std::string> PathSplit(const std::string& path) {
+  std::vector<std::string> out;
+  std::vector<std::string> names = ::absl::StrSplit(path, '/');
+  std::copy_if(names.begin(), names.end(), std::back_inserter(out),
+               [](const std::string& name) { return name.length() > 0; });
+  return out;
+}
+
+}  // namespace
 
 bool WarmupManagerS3Impl::AddWarmupFilelist(Ino key, WarmupStorageType type) {
   if (!mounted_.load(std::memory_order_acquire)) {
@@ -753,9 +763,9 @@ void WarmupManagerS3Impl::PutObjectToCache(
       cache::Block block(context->buf, context->len);
       auto items = PathSplit(context->key);
       CHECK_GT(items.size(), 0);
-      CHECK(key.ParseFilename(items.back()));
+      CHECK(key.ParseFromFilename(items.back()));
       auto block_cache = s3Adaptor_->GetBlockCache();
-      auto status = block_cache->Cache(key, block);
+      auto status = block_cache->Cache(cache::NewContext(), key, block);
       if (!status.ok()) {
         // cache failed,add error count
         iter->second.ErrorsPlusOne();

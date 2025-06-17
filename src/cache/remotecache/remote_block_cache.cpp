@@ -24,18 +24,28 @@
 
 #include <memory>
 
-#include "cache/remotecache/remote_node.h"
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
 #include "cache/remotecache/remote_node_group.h"
-#include "cache/utils/access_log.h"
 #include "cache/utils/bthread.h"
-#include "cache/utils/phase_timer.h"
+#include "cache/utils/context.h"
+#include "common/status.h"
+#include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
 
+DEFINE_string(cache_group, "",
+              "Cache group name to use, empty means not use cache group");
+
+static const std::string kModule = kRmoteBlockCacheMoudule;
+
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
                                            StorageSPtr storage)
-    : running_(false), option_(option), storage_(storage) {
+    : running_(false),
+      option_(option),
+      storage_(storage),
+      joiner_(std::make_unique<BthreadJoiner>()) {
   if (HasCacheStore()) {
     remote_node_ = std::make_unique<RemoteNodeGroup>(option);
   } else {
@@ -43,133 +53,232 @@ RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
   }
 }
 
-Status RemoteBlockCacheImpl::Init() {
-  if (!running_.exchange(true)) {
-    return remote_node_->Init();
+Status RemoteBlockCacheImpl::Start() {
+  CHECK_NOTNULL(remote_node_);
+  CHECK_NOTNULL(joiner_);
+
+  if (running_) {
+    return Status::OK();
   }
+
+  LOG(INFO) << "Remote block cache is starting...";
+
+  auto status = joiner_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start bthread joiner failed: " << status.ToString();
+    return status;
+  }
+
+  status = remote_node_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start remote node failed: " << status.ToString();
+    return status;
+  }
+
+  running_ = true;
+
+  LOG(INFO) << "Remote block cache is up.";
+
+  CHECK_RUNNING("Remote block cache");
   return Status::OK();
 }
 
 Status RemoteBlockCacheImpl::Shutdown() {
   if (running_.exchange(false)) {
-    return remote_node_->Destroy();
+    return Status::OK();
   }
-  return Status::OK();
-}
 
-Status RemoteBlockCacheImpl::Put(const BlockKey& key, const Block& block,
-                                 PutOption option) {
-  Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[remote] put(%s,%zu): %s%s", key.Filename(),
-                           block.size, status.ToString(), timer.ToString());
-  });
+  LOG(INFO) << "Remote block cache is shutting down...";
 
-  if (!option.writeback) {
-    timer.NextPhase(Phase::kS3Put);
-    status = storage_->Put(key.StoreKey(), block.buffer);
+  auto status = joiner_->Shutdown();
+  if (!status.ok()) {
+    LOG(ERROR) << "Shutdown bthread joiner failed: " << status.ToString();
     return status;
   }
 
-  timer.NextPhase(Phase::kRPCPut);
-  status = remote_node_->Put(key, block);
+  status = remote_node_->Shutdown();
   if (!status.ok()) {
-    timer.NextPhase(Phase::kS3Put);
-    status = storage_->Put(key.StoreKey(), block.buffer);
+    LOG(ERROR) << "Shutdown remote node failed: " << status.ToString();
+    return status;
   }
 
+  LOG(INFO) << "Remote block cache is down.";
+
+  CHECK_DOWN("Remote block cache");
+  return Status::OK();
+}
+
+Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                                 const Block& block, PutOption option) {
+  CHECK_RUNNING("Remote block cache");
+
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "put(%s,%zu)", key.Filename(),
+                    block.size);
+  StepTimerGuard guard(timer);
+
+  if (!option.writeback) {
+    NEXT_STEP(kS3Put);
+    status = storage_->Put(ctx, key, block);
+  } else {
+    NEXT_STEP(kRemotePut);
+    status = remote_node_->Put(ctx, key, block);
+    if (!status.ok()) {
+      NEXT_STEP(kS3Put);
+      status = storage_->Put(ctx, key, block);
+    }
+  }
+
+  if (!status.ok()) {
+    LOG(ERROR) << "Put block failed: key = " << key.Filename()
+               << ", length = " << block.size
+               << ", status = " << status.ToString();
+  }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Range(const BlockKey& key, off_t offset,
-                                   size_t length, IOBuffer* buffer,
-                                   RangeOption option) {
-  Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[remote] range(%s,%lld,%zu): %s%s", key.Filename(),
-                           offset, length, status.ToString(), timer.ToString());
-  });
+Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
+                                   off_t offset, size_t length,
+                                   IOBuffer* buffer, RangeOption option) {
+  CHECK_RUNNING("Remote block cache");
 
-  timer.NextPhase(Phase::kRPCRange);
-  status = remote_node_->Range(key, offset, length, buffer, option.block_size);
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "range(%s,%lld,%zu)",
+                    key.Filename(), offset, length);
+  StepTimerGuard guard(timer);
+
+  NEXT_STEP(kRemoteRange);
+  status =
+      remote_node_->Range(ctx, key, offset, length, buffer, option.block_size);
   if (!status.ok() && option.retrive) {
-    timer.NextPhase(Phase::kS3Range);
-    status = storage_->Range(key.StoreKey(), offset, length, buffer);
+    NEXT_STEP(kS3Range);
+    status = storage_->Range(ctx, key, offset, length, buffer);
   }
 
+  if (!status.ok()) {
+    LOG(ERROR) << "Range block failed: key = " << key.Filename()
+               << ", offset = " << offset << ", length = " << length
+               << ", status = " << status.ToString();
+  }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Cache(const BlockKey& key, const Block& block,
-                                   CacheOption /*option*/) {
+Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+                                   const Block& block, CacheOption /*option*/) {
+  CHECK_RUNNING("Remote block cache");
+
   Status status;
-  LogGuard log([&]() {
-    return absl::StrFormat("[remote] cache(%s,%zu): %s", key.Filename(),
-                           block.size, status.ToString());
-  });
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "cache(%s,%zu)",
+                    key.Filename(), block.size);
+  StepTimerGuard guard(timer);
 
-  status = remote_node_->Cache(key, block);
+  NEXT_STEP(kRemoteCache);
+  status = remote_node_->Cache(ctx, key, block);
+
+  if (!status.ok()) {
+    LOG(ERROR) << "Cache block failed: key = " << key.Filename()
+               << ", length = " << block.size
+               << ", status = " << status.ToString();
+  }
   return status;
 }
 
-Status RemoteBlockCacheImpl::Prefetch(const BlockKey& key, size_t length,
+Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                      size_t length,
                                       PrefetchOption /*option*/) {
-  Status status;
-  LogGuard log([&]() {
-    return absl::StrFormat("[remote] refetch(%s,%zu): %s", key.Filename(),
-                           length, status.ToString());
-  });
+  CHECK_RUNNING("Remote block cache");
 
-  status = remote_node_->Prefetch(key, length);
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "prefetch(%s,%zu)",
+                    key.Filename(), length);
+  StepTimerGuard guard(timer);
+
+  NEXT_STEP(kRemotePrefetch);
+  status = remote_node_->Prefetch(ctx, key, length);
+
+  if (!status.ok()) {
+    LOG(ERROR) << "Prefetch block failed: key = " << key.Filename()
+               << ", length = " << length << ", status = " << status.ToString();
+  }
   return status;
 }
 
-void RemoteBlockCacheImpl::AsyncPut(const BlockKey& key, const Block& block,
-                                    AsyncCallback cb, PutOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, block, cb, option]() {
-    Status status = self->Put(key, block, option);
+void RemoteBlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
+                                    const Block& block, AsyncCallback cb,
+                                    PutOption option) {
+  CHECK_RUNNING("Remote block cache");
+
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
+    Status status = self->Put(ctx, key, block, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
-void RemoteBlockCacheImpl::AsyncRange(const BlockKey& key, off_t offset,
-                                      size_t length, IOBuffer* buffer,
-                                      AsyncCallback cb, RangeOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, offset, length, buffer, cb, option]() {
-    Status status = self->Range(key, offset, length, buffer, option);
+void RemoteBlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
+                                      off_t offset, size_t length,
+                                      IOBuffer* buffer, AsyncCallback cb,
+                                      RangeOption option) {
+  CHECK_RUNNING("Remote block cache");
+
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([self, ctx, key, offset, length, buffer, cb, option]() {
+        Status status = self->Range(ctx, key, offset, length, buffer, option);
+        if (cb) {
+          cb(status);
+        }
+      });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
+}
+
+void RemoteBlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+                                      const Block& block, AsyncCallback cb,
+                                      CacheOption option) {
+  CHECK_RUNNING("Remote block cache");
+
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
+    Status status = self->Cache(ctx, key, block, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
-void RemoteBlockCacheImpl::AsyncCache(const BlockKey& key, const Block& block,
-                                      AsyncCallback cb, CacheOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, option, key, block, cb]() {
-    Status status = self->Cache(key, block, option);
-    if (cb) {
-      cb(status);
-    }
-  });
-}
-
-void RemoteBlockCacheImpl::AsyncPrefetch(const BlockKey& key, size_t length,
-                                         AsyncCallback cb,
+void RemoteBlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+                                         size_t length, AsyncCallback cb,
                                          PrefetchOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, option, key, length, cb]() {
-    Status status = self->Prefetch(key, length, option);
+  CHECK_RUNNING("Remote block cache");
+
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
+    Status status = self->Prefetch(ctx, key, length, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
 bool RemoteBlockCacheImpl::HasCacheStore() const {
@@ -181,7 +290,8 @@ bool RemoteBlockCacheImpl::HasCacheStore() const {
 bool RemoteBlockCacheImpl::EnableStage() const { return HasCacheStore(); }
 bool RemoteBlockCacheImpl::EnableCache() const { return HasCacheStore(); };
 bool RemoteBlockCacheImpl::IsCached(const BlockKey& /*key*/) const {
-  return HasCacheStore();
+  return HasCacheStore();  // FIXME: using rpc request to check if the key is
+                           // cached
 }
 
 }  // namespace cache

@@ -26,7 +26,8 @@
 #include <bthread/execution_queue.h>
 #include <sys/types.h>
 
-#include "cache/common/common.h"
+#include "cache/utils/context.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,27 +37,35 @@ class PageCacheManager {
   PageCacheManager();
 
   Status Start();
-  Status Stop();
+  Status Shutdown();
 
-  void DropPageCache(int fd, off_t offset, size_t length);
+  void AsyncDropPageCache(ContextSPtr ctx, int fd, off_t offset, size_t length,
+                          bool sync = false);
 
  private:
-  struct DropTask {
-    DropTask(int fd, off_t offset, size_t length)
-        : fd(fd), offset(offset), length(length) {}
+  struct Task {  // drop task
+    Task(ContextSPtr ctx, int fd, off_t offset, size_t length, bool sync)
+        : ctx(ctx), fd(fd), offset(offset), length(length), sync(sync) {}
 
+    ContextSPtr ctx;
     int fd;
     off_t offset;
     size_t length;
+    bool sync;
   };
 
-  static int DoDrop(void* meta, bthread::TaskIterator<DropTask>& iter);
+  static int HandleTask(void* meta, bthread::TaskIterator<Task>& iter);
+  void Handle(const Task& task);
+
+  void SyncData(int fd);
+  void DropCache(int fd, off_t offset, size_t length);
+  void CloseFd(int fd);
 
   std::atomic<bool> running_;
-  bthread::ExecutionQueueId<DropTask> drop_page_cache_queue_id_;
+  bthread::ExecutionQueueId<Task> queue_id_;
 };
 
-using PacheCacheManagerUPtr = std::unique_ptr<PageCacheManager>;
+using PageCacheManagerUPtr = std::unique_ptr<PageCacheManager>;
 
 }  // namespace cache
 }  // namespace dingofs

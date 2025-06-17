@@ -30,11 +30,11 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/mock/mock_block_cache.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
 #include "common/status.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {

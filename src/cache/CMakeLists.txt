@@ -14,8 +14,6 @@
 
 add_subdirectory(common)
 add_subdirectory(utils)
-add_subdirectory(config)
-add_subdirectory(metrics)
 add_subdirectory(storage)
 add_subdirectory(blockcache)
 add_subdirectory(cachegroup)
@@ -27,7 +25,7 @@ add_library(cache_lib "server.cpp")
 target_link_libraries(cache_lib
     cache_common
     cache_utils
-    cache_config
+    cache_options
     cache_metrics
     cache_storage
     cache_blockcache

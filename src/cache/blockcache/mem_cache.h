@@ -26,6 +26,7 @@
 #include <sys/types.h>
 
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/context.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,22 +36,25 @@ class MemCache final : public CacheStore {
   MemCache() = default;
   ~MemCache() override = default;
 
-  Status Init(UploadFunc) override { return Status::OK(); }
+  Status Start(UploadFunc) override { return Status::OK(); }
   Status Shutdown() override { return Status::OK(); }
 
-  Status Stage(const BlockKey&, const Block&, StageOption) override {
+  Status Stage(ContextSPtr, const BlockKey&, const Block&,
+               StageOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status RemoveStage(const BlockKey&, RemoveStageOption) override {
+  Status RemoveStage(ContextSPtr, const BlockKey&, RemoveStageOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status Cache(const BlockKey&, const Block&, CacheOption) override {
+  Status Cache(ContextSPtr, const BlockKey&, const Block&,
+               CacheOption) override {
     return Status::NotSupport("not support");
   }
 
-  Status Load(const BlockKey&, off_t, size_t, IOBuffer*, LoadOption) override {
+  Status Load(ContextSPtr, const BlockKey&, off_t, size_t, IOBuffer*,
+              LoadOption) override {
     return Status::NotSupport("not support");
   }
 

@@ -25,10 +25,10 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
 #include "client/vfs_legacy/mock_metaserver_client.h"
+#include "dingofs/metaserver.pb.h"
+#include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 namespace dingofs {
 namespace client {

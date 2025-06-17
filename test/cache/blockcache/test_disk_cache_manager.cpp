@@ -24,18 +24,16 @@
 #include <thread>
 
 #include "absl/cleanup/cleanup.h"
-#include "base/math/math.h"
 #include "cache/blockcache/builder/builder.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/access_log.h"
-#include "glog/logging.h"
+#include "common/const.h"
 #include "gtest/gtest.h"
 
 namespace dingofs {
 namespace cache {
 
 using ::absl::MakeCleanup;
-using base::math::kMiB;
 
 class DiskCacheManagerTest : public ::testing::Test {
  protected:

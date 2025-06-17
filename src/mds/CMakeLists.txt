@@ -45,7 +45,6 @@ target_link_libraries(mds_lib
     mds_leader_election
     mds_kvstorage_client
     mds_cachegroup
-    dingofs_base_lib
     dingofs_common
     dynamic_vlog
     dingofs_utils

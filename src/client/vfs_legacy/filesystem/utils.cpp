@@ -28,7 +28,7 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::time::TimeSpec;
+using utils::TimeSpec;
 
 bool IsDir(const pb::metaserver::InodeAttr& attr) {
   return attr.type() == pb::metaserver::FsFileType::TYPE_DIRECTORY;
@@ -47,7 +47,7 @@ bool IsSymLink(const pb::metaserver::InodeAttr& attr) {
 }
 
 TimeSpec AttrMtime(const pb::metaserver::InodeAttr& attr) {
-  return base::time::TimeSpec(attr.mtime(), attr.mtime_ns());
+  return utils::TimeSpec(attr.mtime(), attr.mtime_ns());
 }
 
 TimeSpec AttrCtime(const pb::metaserver::InodeAttr& attr) {

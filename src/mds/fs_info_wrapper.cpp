@@ -27,12 +27,12 @@
 
 #include <algorithm>
 
-#include "base/string/string.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace mds {
 
-using ::dingofs::base::string::GenUuid;
+using utils::GenUuid;
 
 FsInfoWrapper::FsInfoWrapper(const pb::mds::CreateFsRequest* request,
                              uint64_t fs_id, uint64_t root_inode_id) {

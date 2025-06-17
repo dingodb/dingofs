@@ -22,6 +22,7 @@
 #include <mutex>
 #include <utility>
 
+#include "cache/utils/context.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/service/flat_file.h"
 #include "client/vfs_legacy/service/flat_file_util.h"
@@ -136,12 +137,13 @@ void IntimeWarmUpManager::Prefetch(
                         obj.version);
     VLOG(3) << "try to prefetch inodeId=" << inode_id
             << " block: " << key.StoreKey() << " len: " << obj.obj_len;
-    block_cache_->AsyncPrefetch(key, obj.obj_len, [key](Status status) {
-      if (!status.ok()) {
-        LOG(WARNING) << "Failed to prefetch block (key=" << key.Filename()
-                     << "): " << status.ToString();
-      }
-    });
+    block_cache_->AsyncPrefetch(
+        cache::NewContext(), key, obj.obj_len, [key](Status status) {
+          if (!status.ok()) {
+            LOG(WARNING) << "Failed to prefetch block (key=" << key.Filename()
+                         << "): " << status.ToString();
+          }
+        });
   }
 }
 

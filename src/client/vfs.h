@@ -17,13 +17,14 @@
 #ifndef DINGOFS_CLIENT_VFS_H_
 #define DINGOFS_CLIENT_VFS_H_
 
+#include <json/value.h>
+
 #include <cstdint>
 #include <string>
 
 #include "client/meta/vfs_meta.h"
 #include "common/status.h"
-#include "json/value.h"
-#include "options/client/options/fuse/fuse_option.h"
+#include "options/client/fuse/fuse_option.h"
 
 namespace dingofs {
 namespace client {

@@ -25,6 +25,7 @@
 
 #define FUSE_USE_VERSION 34
 
+#include <absl/strings/str_format.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
 #include <poll.h>
@@ -38,12 +39,11 @@
 #include <fstream>
 #include <unordered_map>
 
-#include "base/string/string.h"
 #include "common/define.h"
+#include "utils/string.h"
 
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::base::string::TrimChars;
-using ::dingofs::base::string::TrimSpace;
+using dingofs::utils::TrimChars;
+using dingofs::utils::TrimSpace;
 
 const std::string kFdCommPathKey = "fd_comm_path";
 
@@ -166,7 +166,8 @@ inline bool CanShutdownGracefully(const char* mountpoint) {
   if (GetFileInode(mountpoint) != dingofs::ROOTINODEID) {
     return false;
   }
-  std::string file_name = StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
+  std::string file_name =
+      absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
   return GetDingoFusePid(file_name) != -1;
 }
 

@@ -38,11 +38,13 @@ using PBCacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
 using PBCacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;
 using PBCacheGroupErrCode = pb::mds::cachegroup::CacheGroupErrCode;
 using PBStatistic = pb::mds::cachegroup::HeartbeatRequest::Statistic;
-using PBCacheGroupMemberStatus = pb::mds::cachegroup::CacheGroupMemberStatus;
+using PBCacheGroupMemberState = pb::mds::cachegroup::CacheGroupMemberState;
 using PBCacheGroupMembers = std::vector<PBCacheGroupMember>;
 
+using PBBlockKey = pb::cache::blockcache::BlockKey;
 using PBBlockCacheErrCode = pb::cache::blockcache::BlockCacheErrCode;
 using PBBlockCacheService_Stub = pb::cache::blockcache::BlockCacheService_Stub;
+using PBBlockCacheService = pb::cache::blockcache::BlockCacheService;
 using PBPutRequest = pb::cache::blockcache::PutRequest;
 using PBPutResponse = pb::cache::blockcache::PutResponse;
 using PBRangeRequest = pb::cache::blockcache::RangeRequest;
@@ -51,6 +53,8 @@ using PBCacheRequest = pb::cache::blockcache::CacheRequest;
 using PBCacheResponse = pb::cache::blockcache::CacheResponse;
 using PBPrefetchRequest = pb::cache::blockcache::PrefetchRequest;
 using PBPrefetchResponse = pb::cache::blockcache::PrefetchResponse;
+using PBPingRequest = pb::cache::blockcache::PingRequest;
+using PBPingResponse = pb::cache::blockcache::PingResponse;
 using PBBlockCacheService = pb::cache::blockcache::BlockCacheService;
 
 inline PBBlockCacheErrCode PBErr(Status status) {
@@ -69,10 +73,19 @@ inline PBBlockCacheErrCode PBErr(Status status) {
   return PBBlockCacheErrCode::BlockCacheErrUnknown;
 }
 
-inline bool operator==(const PBCacheGroupMember& lhs,
-                       const PBCacheGroupMember& rhs) {
-  return lhs.id() == rhs.id() && lhs.ip() == rhs.ip() &&
-         lhs.port() == rhs.port() && lhs.weight() == rhs.weight();
+inline Status ToStatus(const PBBlockCacheErrCode& code) {
+  if (code == PBBlockCacheErrCode::BlockCacheOk) {
+    return Status::OK();
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrInvalidParam) {
+    return Status::InvalidParam("Invalid parameter");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrNotFound) {
+    return Status::NotFound("Not found");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrFailure) {
+    return Status::Internal("Internal error");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrIOError) {
+    return Status::IoError("IO error");
+  }
+  return Status::Unknown("unknown error");
 }
 
 }  // namespace cache

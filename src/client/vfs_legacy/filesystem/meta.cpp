@@ -29,12 +29,14 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/meta/vfs_meta.h"
+#include "utils/string.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using utils::BufToHexString;
+using utils::HexStringToBuf;
 using utils::Mutex;
 using utils::ReadLockGuard;
 using utils::RWLock;
@@ -116,7 +118,7 @@ bool HandlerManager::Load(const Json::Value& value) {
       auto handler = std::make_shared<FileHandler>();
       handler->fh = fh;
       handler->flags = flags;
-      handler->mtime = base::time::TimeSpec(seconds, nanoSeconds);
+      handler->mtime = utils::TimeSpec(seconds, nanoSeconds);
       handler->padding = padding;
       handlers_.emplace(handler->fh, handler);
     }

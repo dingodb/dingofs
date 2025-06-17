@@ -22,10 +22,18 @@
 
 #include "cache/remotecache/remote_node_manager.h"
 
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+
+#include "cache/common/macro.h"
+#include "options/cache/tiercache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint32(load_members_interval_ms, 1000,
+              "Interval to load members of the cache group in milliseconds");
 
 using dingofs::pb::mds::cachegroup::CacheGroupErrCode_Name;
 
@@ -39,34 +47,53 @@ RemoteNodeManager::RemoteNodeManager(RemoteBlockCacheOption option,
       executor_(std::make_unique<BthreadExecutor>()) {}
 
 Status RemoteNodeManager::Start() {
-  if (!running_.exchange(true)) {
-    LOG(INFO) << "Remote node manager starting...";
+  CHECK_NOTNULL(on_member_load_);
+  CHECK_NOTNULL(mds_base_);
+  CHECK_NOTNULL(mds_client_);
+  CHECK_NOTNULL(executor_);
 
-    auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
-    if (rc != PBFSStatusCode::OK) {
-      return Status::Internal("init mds client failed");
-    }
-
-    Status status = RefreshMembers();
-    if (!status.ok()) {
-      LOG(ERROR) << "Load cache group members failed: " << status.ToString();
-      return status;
-    }
-
-    CHECK(executor_->Start());
-    executor_->Schedule([this] { BackgroudRefresh(); },
-                        FLAGS_load_members_interval_ms);
-
-    LOG(INFO) << "Remote node manager started.";
+  if (running_) {
+    return Status::OK();
   }
 
+  LOG(INFO) << "Remote node manager is starting...";
+
+  auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
+  if (rc != PBFSStatusCode::OK) {
+    LOG(ERROR) << "Init MDS client failed: rc = " << rc;
+    return Status::Internal("init mds client failed");
+  }
+
+  Status status = RefreshMembers();
+  if (!status.ok()) {
+    LOG(ERROR) << "Load cache group members failed: " << status.ToString();
+    return status;
+  }
+
+  CHECK(executor_->Start());
+  executor_->Schedule([this] { BackgroudRefresh(); },
+                      FLAGS_load_members_interval_ms);
+
+  running_ = true;
+
+  LOG(INFO) << "Remote node manager is up.";
+
+  CHECK_RUNNING("Remote node manager");
   return Status::OK();
 }
 
-void RemoteNodeManager::Stop() {
-  if (running_.exchange(false)) {
-    executor_->Stop();
+void RemoteNodeManager::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
   }
+
+  LOG(INFO) << "Remote node manager is shutting down...";
+
+  executor_->Stop();
+
+  LOG(INFO) << "Remote node manager is down.";
+
+  CHECK_DOWN("Remote node manager");
 }
 
 void RemoteNodeManager::BackgroudRefresh() {
@@ -97,7 +124,8 @@ Status RemoteNodeManager::LoadMembers(PBCacheGroupMembers* members) {
     return Status::Internal("load cache group member failed");
   }
 
-  VLOG(9) << "Load cache group members: size = " << members->size();
+  VLOG(9) << "Load cache group members success: member count = "
+          << members->size();
 
   return Status::OK();
 }

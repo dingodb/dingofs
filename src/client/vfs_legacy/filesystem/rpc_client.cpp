@@ -28,7 +28,8 @@
 #include <set>
 #include <string>
 #include <utility>
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
+
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {
@@ -121,8 +122,8 @@ DINGOFS_ERROR RPCClient::ReadDir(Ino ino,
 DINGOFS_ERROR RPCClient::Open(Ino ino, std::shared_ptr<InodeWrapper>* inode) {
   DINGOFS_ERROR rc = inodeManager_->GetInode(ino, *inode);
   if (rc != DINGOFS_ERROR::OK) {
-    LOG(ERROR) << "rpc(open/GetInode) failed" << ", retCode = " << rc
-               << ", ino = " << ino;
+    LOG(ERROR) << "rpc(open/GetInode) failed"
+               << ", retCode = " << rc << ", ino = " << ino;
   }
   return rc;
 }

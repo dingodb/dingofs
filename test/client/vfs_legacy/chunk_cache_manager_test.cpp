@@ -23,10 +23,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {
