@@ -22,7 +22,10 @@
 
 #include "cache/remotecache/rpc_client.h"
 
+#include <absl/strings/str_format.h>
+
 #include "cache/config/remote_cache.h"
+#include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
@@ -41,7 +44,7 @@ Status RPCClient::Put(const BlockKey& key, const Block& block) {
   PBPutRequest request;
   PBPutResponse response;
 
-  auto buffer = block.buffer;
+  IOBuffer buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
   cntl.request_attachment().append(buffer.IOBuf());
@@ -50,13 +53,13 @@ Status RPCClient::Put(const BlockKey& key, const Block& block) {
 
   stub.Put(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    LOG(ERROR) << "Send block put request to remote failed: "
-               << cntl.ErrorText();
+    LOG(ERROR) << "Send put rpc request failed: " << cntl.ErrorText();
     return Status::IoError("put failed");
   } else if (response.status() != PBBlockCacheErrCode::BlockCacheOk) {
     LOG(ERROR) << "Remote put failed: "
                << response.status();  // Log the error code
-    return Status::IoError("put failed");
+
+    return Status::IoError("put rpc failed");
   }
 
   return Status::OK();
@@ -77,9 +80,14 @@ Status RPCClient::Range(const BlockKey& key, off_t offset, size_t length,
 
   stub.Range(&cntl, &request, &response, nullptr);
   if (cntl.Failed()) {
-    LOG(ERROR) << "Send block range request to remote failed: "
-               << cntl.ErrorText();
-    return Status::IoError("range failed");
+    LOG(ERROR) << "Send range request failed: " << cntl.ErrorText();
+    return Status::IoError("range rpc failed");
+  } else if (response.status() != PBBlockCacheErrCode::BlockCacheOk) {
+    LOG(ERROR) << "Range failed."
+               << " from " << cntl.remote_side() << " to " << cntl.local_side()
+               << " request = " << request.ShortDebugString()
+               << " status = " << response.status();
+    return Status::IoError("range rpc failed");
   }
 
   auto status = response.status();
@@ -126,7 +134,7 @@ Status RPCClient::Prefetch(const BlockKey& key, size_t length) {
   if (cntl.Failed()) {
     LOG(ERROR) << "Send block prefetch request to remote failed: "
                << cntl.ErrorText();
-    return Status::IoError("prefetch failed");
+    return Status::IoError("prefetch rpc failed");
   }
 
   return Status::OK();

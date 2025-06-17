@@ -31,7 +31,7 @@ DEFINE_string(group_name, "default", "");
 DEFINE_string(listen_ip, "127.0.0.1", "");
 DEFINE_uint32(listen_port, 9300, "");
 DEFINE_uint32(group_weight, 100, "");
-DEFINE_uint32(max_range_size_kb, 256, "");
+DEFINE_uint32(max_range_size_kb, 128, "");
 DEFINE_string(metadata_filepath, "/var/log/cache_group_meta", "");  // Use dir
 DEFINE_uint32(send_heartbeat_interval_ms, 1000, "");
 

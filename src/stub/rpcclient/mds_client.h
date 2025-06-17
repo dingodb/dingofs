@@ -294,7 +294,8 @@ class MdsClientImpl : public MdsClient {
   pb::mds::FSStatusCode RefreshSession(
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-      const std::string& fsName, const pb::mds::Mountpoint& mountpoint) override;
+      const std::string& fsName,
+      const pb::mds::Mountpoint& mountpoint) override;
 
   pb::mds::FSStatusCode GetLatestTxId(
       uint32_t fsId,

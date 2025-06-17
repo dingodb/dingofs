@@ -64,14 +64,16 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Range) {
   BlockKey key(request->block_key());
   auto offset = request->offset();
   auto length = request->length();
+  auto block_size = request->block_size();
   auto* cntl = static_cast<brpc::Controller*>(controller);
   LogGuard log([&]() {
-    return absl::StrFormat("[service] range(%s,%lld,%zu): %s%s", key.Filename(),
-                           offset, length, status.ToString(), timer.ToString());
+    return absl::StrFormat("[service] range(%s,%lld,%zu,%zu): %s%s",
+                           key.Filename(), offset, length, block_size,
+                           status.ToString(), timer.ToString());
   });
 
   timer.NextPhase(Phase::kNodeRange);
-  status = node_->Range(key, offset, length, &buffer, request->block_size());
+  status = node_->Range(key, offset, length, &buffer, block_size);
   if (status.ok()) {
     cntl->response_attachment().append(buffer.IOBuf());
   }
@@ -88,8 +90,8 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Cache) {
   BlockKey key(request->block_key());
   IOBuffer buffer(cntl->request_attachment());
   LogGuard log([&]() {
-    return absl::StrFormat("[service] cache(%s,%zu): %s", key.Filename(),
-                           buffer.Size(), status.ToString());
+    return absl::StrFormat("[service] cache(%s,%zu): %s%s", key.Filename(),
+                           buffer.Size(), status.ToString(), timer.ToString());
   });
 
   if (request->block_size() != buffer.Size()) {
@@ -110,7 +112,7 @@ DEFINE_RPC_METHOD(CacheGroupNodeServiceImpl, Prefetch) {  // NOLINT
   BlockKey key(request->block_key());
   auto length = request->block_size();
   LogGuard log([&]() {
-    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[block] refetch(%s,%zu): %s%s", key.Filename(),
                            length, status.ToString(), timer.ToString());
   });
 
