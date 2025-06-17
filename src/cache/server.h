@@ -23,12 +23,10 @@
 #ifndef DINGOFS_SRC_CACHE_SERVER_H_
 #define DINGOFS_SRC_CACHE_SERVER_H_
 
-#include "cache/common/common.h"
-
 namespace dingofs {
 namespace cache {
 
-Status RunServer();
+int RunServer();
 
 }  // namespace cache
 }  // namespace dingofs

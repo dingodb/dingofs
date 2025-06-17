@@ -24,13 +24,36 @@
 #define DINGOFS_SRC_CACHE_UTILS_BTHREAD_H_
 
 #include <bthread/bthread.h>
+#include <bthread/execution_queue.h>
+#include <bthread/execution_queue_inl.h>
 
 #include <functional>
+#include <memory>
+
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
-void RunInBthread(std::function<void()> func);
+bthread_t RunInBthread(std::function<void()> func);
+
+class BthreadJoiner {
+ public:
+  BthreadJoiner();
+
+  Status Start();
+  Status Shutdown();
+
+  void BackgroundJoin(bthread_t tid);
+
+ private:
+  static int HandleTid(void* meta, bthread::TaskIterator<bthread_t>& iter);
+
+  std::atomic<bool> running_;
+  bthread::ExecutionQueueId<bthread_t> queue_id_;
+};
+
+using BthreadJoinerUPtr = std::unique_ptr<BthreadJoiner>;
 
 }  // namespace cache
 }  // namespace dingofs

@@ -29,6 +29,7 @@
 
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/infight_throttle.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -37,33 +38,38 @@ class AioQueueImpl : public AioQueue {
  public:
   explicit AioQueueImpl(std::shared_ptr<IORing> io_ring);
 
-  Status Init() override;
+  Status Start() override;
   Status Shutdown() override;
 
-  void Submit(AioClosure* aio) override;
+  void Submit(Aio* aio) override;
 
  private:
   static constexpr uint32_t kSubmitBatchSize = 16;
 
-  static void EnterPhase(AioClosure* aio, Phase phase);
-  static void BatchEnterPhase(const Aios& aios, int n, Phase phase);
-  static uint64_t GetTotalSize(const Aios& aios, int n);
-
-  void CheckIO(AioClosure* aio);
-  static int PrepareIO(void* meta, bthread::TaskIterator<AioClosure*>& iter);
-  void BatchSubmitIO(const Aios& aios, int n);
+  // aio steps
+  void CheckIO(Aio* aio);
+  static int PrepareIO(void* meta, bthread::TaskIterator<Aio*>& iter);
+  void BatchSubmitIO(const std::vector<Aio*>& aios);
   void BackgroundWait();
 
-  void OnError(AioClosure* aio, Status status);
-  void OnCompleted(AioClosure* aio);
-  void RunClosure(AioClosure* aio);
+  // handle status
+  void OnError(Aio* aio, Status status);
+  void OnCompleted(Aio* aio);
+  void RunClosure(Aio* aio);
+
+  // utility
+  static std::string LastStep(Aio* aio);
+  static void NextStep(Aio* aio, const std::string& step_name);
+  static void BatchNextStep(const std::vector<Aio*>& aios,
+                            const std::string& step_name);
+  static uint64_t GetTotalLength(const std::vector<Aio*>& aios);
 
   std::atomic<bool> running_;
   std::shared_ptr<IORing> ioring_;
-  bthread::ExecutionQueueId<AioClosure*> prep_io_queue_id_;
-  Aios prep_aios_;  // prepared aio
-  std::thread bg_wait_thread_;
-  InflightThrottle infight_throttle_;
+  InflightThrottleUPtr infight_throttle_;
+  bthread::ExecutionQueueId<Aio*> prep_io_queue_id_;  // for prepare io
+  std::vector<Aio*> prep_aios_;
+  std::thread bg_wait_thread_;  // for wait io
 };
 
 }  // namespace cache

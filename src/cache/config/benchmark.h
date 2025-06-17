@@ -25,27 +25,22 @@
 
 #include <gflags/gflags_declare.h>
 
-#include "cache/blockcache/block_cache.h"
-#include "cache/config/block_cache.h"
-#include "cache/config/remote_cache.h"
-
 namespace dingofs {
 namespace cache {
 
-DECLARE_string(op);
 DECLARE_uint32(threads);
-DECLARE_uint32(page_size);
-DECLARE_uint32(op_blksize);
-DECLARE_uint32(op_blocks);
-DECLARE_bool(put_writeback);
-DECLARE_bool(range_retrive);
+DECLARE_string(op);
 DECLARE_uint64(fsid);
 DECLARE_uint64(ino);
-DECLARE_string(s3_ak);
-DECLARE_string(s3_sk);
-DECLARE_string(s3_endpoint);
-DECLARE_string(s3_bucket);
-DECLARE_uint32(stat_interval_s);
+DECLARE_uint64(blksize);
+DECLARE_uint64(blocks);
+DECLARE_uint64(offset);
+DECLARE_uint64(length);
+DECLARE_bool(writeback);
+DECLARE_bool(retrive);
+DECLARE_uint32(async_max_inflight);
+DECLARE_uint32(runtime);
+DECLARE_bool(time_based);
 
 }  // namespace cache
 }  // namespace dingofs

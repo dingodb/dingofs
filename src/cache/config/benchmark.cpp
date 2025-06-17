@@ -22,26 +22,24 @@
 
 #include "cache/config/benchmark.h"
 
-#include "base/time/time.h"
-#include "cache/config/common.h"
+#include <gflags/gflags.h>
 
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(op, "put", "");
 DEFINE_uint32(threads, 1, "");
-DEFINE_uint32(page_size, 65536, "");
-DEFINE_uint32(op_blksize, 4194304, "");
-DEFINE_uint32(op_blocks, 1, "");
-DEFINE_bool(put_writeback, true, "");
-DEFINE_bool(range_retrive, false, "");
+DEFINE_string(op, "put", "");
 DEFINE_uint64(fsid, 1, "");
 DEFINE_uint64(ino, 0, "");
-DEFINE_string(s3_ak, "", "");
-DEFINE_string(s3_sk, "", "");
-DEFINE_string(s3_endpoint, "", "");
-DEFINE_string(s3_bucket, "", "");
-DEFINE_uint32(stat_interval_s, 3, "");
+DEFINE_uint64(blksize, 4194304, "");
+DEFINE_uint64(blocks, 1, "");
+DEFINE_uint64(offset, 0, "");
+DEFINE_uint64(length, 4194304, "");
+DEFINE_bool(writeback, false, "");
+DEFINE_bool(retrive, true, "");
+DEFINE_uint32(async_max_inflight, 128, "");
+DEFINE_uint32(runtime, 300, "");
+DEFINE_bool(time_based, false, "");
 
 }  // namespace cache
 }  // namespace dingofs

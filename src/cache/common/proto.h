@@ -38,11 +38,13 @@ using PBCacheGroupMember = pb::mds::cachegroup::CacheGroupMember;
 using PBCacheGroupNodeMetadata = pb::mds::cachegroup::CacheGroupNodeMetadata;
 using PBCacheGroupErrCode = pb::mds::cachegroup::CacheGroupErrCode;
 using PBStatistic = pb::mds::cachegroup::HeartbeatRequest::Statistic;
-using PBCacheGroupMemberStatus = pb::mds::cachegroup::CacheGroupMemberStatus;
+using PBCacheGroupMemberState = pb::mds::cachegroup::CacheGroupMemberState;
 using PBCacheGroupMembers = std::vector<PBCacheGroupMember>;
 
+using PBBlockKey = pb::cache::blockcache::BlockKey;
 using PBBlockCacheErrCode = pb::cache::blockcache::BlockCacheErrCode;
 using PBBlockCacheService_Stub = pb::cache::blockcache::BlockCacheService_Stub;
+using PBBlockCacheService = pb::cache::blockcache::BlockCacheService;
 using PBPutRequest = pb::cache::blockcache::PutRequest;
 using PBPutResponse = pb::cache::blockcache::PutResponse;
 using PBRangeRequest = pb::cache::blockcache::RangeRequest;
@@ -67,6 +69,21 @@ inline PBBlockCacheErrCode PBErr(Status status) {
   }
 
   return PBBlockCacheErrCode::BlockCacheErrUnknown;
+}
+
+inline Status ToStatus(const PBBlockCacheErrCode& code) {
+  if (code == PBBlockCacheErrCode::BlockCacheOk) {
+    return Status::OK();
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrInvalidParam) {
+    return Status::InvalidParam("Invalid parameter");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrNotFound) {
+    return Status::NotFound("Not found");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrFailure) {
+    return Status::Internal("Internal error");
+  } else if (code == PBBlockCacheErrCode::BlockCacheErrIOError) {
+    return Status::IoError("IO error");
+  }
+  return Status::Unknown("unknown error");
 }
 
 inline bool operator==(const PBCacheGroupMember& lhs,

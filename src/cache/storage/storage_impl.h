@@ -26,8 +26,9 @@
 #include <bthread/execution_queue.h>
 
 #include "blockaccess/block_accesser.h"
+#include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage.h"
-#include "cache/storage/storage_operator.h"
+#include "cache/storage/storage_closure.h"
 
 namespace dingofs {
 namespace cache {
@@ -40,21 +41,22 @@ class StorageImpl final : public Storage {
  public:
   explicit StorageImpl(blockaccess::BlockAccesser* block_accesser);
 
-  Status Init() override;
+  Status Start() override;
   Status Shutdown() override;
 
-  Status Put(const std::string& key, const IOBuffer& buffer) override;
-  Status Range(const std::string& key, off_t offset, size_t length,
-               IOBuffer* buffer) override;
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
+             PutOption option = PutOption()) override;
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer,
+               RangeOption option = RangeOption()) override;
 
  private:
-  static int Executor(void* meta, bthread::TaskIterator<StorageClosure*>& iter);
-  void Execute(StorageClosure* closure);
-  StorageOperator* NewOperator(StorageClosure* closure);
+  static int HandleClosure(void* meta,
+                           bthread::TaskIterator<StorageClosure*>& iter);
 
   std::atomic<bool> running_;
   blockaccess::BlockAccesser* block_accesser_;
-  bthread::ExecutionQueueId<StorageClosure*> submit_queue_id_;
+  bthread::ExecutionQueueId<StorageClosure*> queue_id_;
 };
 
 }  // namespace cache

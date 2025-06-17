@@ -23,8 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_MEMBER_H_
 
-#include "cache/common/common.h"
-#include "cache/config/config.h"
+#include "cache/config/cachegroup.h"
+#include "common/status.h"
 #include "stub/rpcclient/mds_client.h"
 
 namespace dingofs {
@@ -46,9 +46,10 @@ using CacheGroupNodeMemberSPtr = std::shared_ptr<CacheGroupNodeMember>;
 
 class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
  public:
-  CacheGroupNodeMemberImpl(
-      CacheGroupNodeOption option,
-      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
+  using MdsClientSPtr = std::shared_ptr<stub::rpcclient::MdsClient>;
+
+  CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
+                           MdsClientSPtr mds_client);
 
   ~CacheGroupNodeMemberImpl() override = default;
 
@@ -67,15 +68,10 @@ class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
 
   std::string GenMemberUuid();
 
-  // TODO: support local access
-  // void SetLocalAccessOption(
-  //     dingofs::pb::mds::cachegroup::LocalAccessOption* option,
-  //     uint64_t member_id);
-
   uint64_t member_id_;       // allocated by mds
-  std::string member_uuid_;  // allocated by local, for directory name
+  std::string member_uuid_;  // allocated by local, used for directory name
   const CacheGroupNodeOption option_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  MdsClientSPtr mds_client_;
 };
 
 }  // namespace cache

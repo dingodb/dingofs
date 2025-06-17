@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(cache)
+
 file(GLOB DINGOFS_METRICS_LIB_SRCS
     "blockaccess/*.cpp"
     "client/*.cpp"

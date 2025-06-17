@@ -32,7 +32,9 @@
 #include <string>
 
 #include "base/time/time.h"
-#include "cache/common/common.h"
+#include "cache/utils/context.h"
+#include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -63,14 +65,11 @@ struct FSStat {
 };
 
 struct WriteOption {
-  WriteOption() = default;
-  WriteOption(bool drop_page_cache) : drop_page_cache(drop_page_cache) {}
-
   bool drop_page_cache{false};
 };
 
 struct ReadOption {
-  ReadOption() = default;
+  bool drop_page_cache{false};
 };
 
 // The filesystem with high-level utilities.
@@ -78,20 +77,20 @@ class FileSystem {
  public:
   virtual ~FileSystem() = default;
 
-  virtual Status Init() = 0;
-
-  virtual Status Destroy() = 0;
+  virtual Status Start() = 0;
+  virtual Status Shutdown() = 0;
 
   virtual Status MkDirs(const std::string& path) = 0;
 
   // NOTE: only invoke WalkFunc for file
   virtual Status Walk(const std::string& prefix, WalkFunc func) = 0;
 
-  virtual Status WriteFile(const std::string& path, const IOBuffer& buffer,
+  virtual Status WriteFile(ContextSPtr ctx, const std::string& path,
+                           const IOBuffer& buffer,
                            WriteOption option = WriteOption()) = 0;
 
-  virtual Status ReadFile(const std::string& path, off_t offset, size_t length,
-                          IOBuffer* buffer,
+  virtual Status ReadFile(ContextSPtr ctx, const std::string& path,
+                          off_t offset, size_t length, IOBuffer* buffer,
                           ReadOption option = ReadOption()) = 0;
 
   virtual Status RemoveFile(const std::string& path) = 0;

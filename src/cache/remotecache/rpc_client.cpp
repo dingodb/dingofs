@@ -22,48 +22,57 @@
 
 #include "cache/remotecache/rpc_client.h"
 
-#include "cache/config/remote_cache.h"
+#include <absl/strings/str_format.h>
+
+#include "cache/common/type.h"
+#include "cache/config/tiercache.h"
+#include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
 
-RPCClient::RPCClient(const std::string& server_ip, uint32_t server_port,
-                     RemoteNodeOption option)
-    : server_ip_(server_ip),
+DEFINE_uint32(put_rpc_timeout_ms, 3000,
+              "RPC timeout for remote put operation in milliseconds");
+DEFINE_uint32(range_rpc_timeout_ms, 3000,
+              "RPC timeout for remote range operation in milliseconds");
+DEFINE_uint32(cache_rpc_timeout_ms, 3000,
+              "RPC timeout for remote cache operation in milliseconds");
+DEFINE_uint32(prefetch_rpc_timeout_ms, 3000,
+              "RPC timeout for remote prefetch operation in milliseconds");
+DEFINE_uint32(cache_rpc_max_retry_times, 3,
+              "Maximum number of retry times for remote cache rpc operations");
+
+static const std::string kApiPut = "Put";
+static const std::string kApiRange = "Range";
+static const std::string kApiCache = "Cache";
+static const std::string kApiPrefetch = "Prefetch";
+
+using pb::cache::blockcache::BlockCacheErrCode_Name;
+
+RPCClient::RPCClient(const std::string& server_ip, uint32_t server_port)
+    : inited_(false),
+      server_ip_(server_ip),
       server_port_(server_port),
-      option_(option),
       channel_(std::make_unique<brpc::Channel>()) {}
 
 Status RPCClient::Init() { return InitChannel(server_ip_, server_port_); }
 
-Status RPCClient::Put(const BlockKey& key, const Block& block) {
+Status RPCClient::Put(ContextSPtr ctx, const BlockKey& key,
+                      const Block& block) {
   brpc::Controller cntl;
   PBPutRequest request;
   PBPutResponse response;
 
-  auto buffer = block.buffer;
+  IOBuffer buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
   cntl.request_attachment().append(buffer.IOBuf());
-  cntl.set_timeout_ms(option_.remote_put_rpc_timeout_ms);
-  PBBlockCacheService_Stub stub(channel_.get());
 
-  stub.Put(&cntl, &request, &response, nullptr);
-  if (cntl.Failed()) {
-    LOG(ERROR) << "Send block put request to remote failed: "
-               << cntl.ErrorText();
-    return Status::IoError("put failed");
-  } else if (response.status() != PBBlockCacheErrCode::BlockCacheOk) {
-    LOG(ERROR) << "Remote put failed: "
-               << response.status();  // Log the error code
-    return Status::IoError("put failed");
-  }
-
-  return Status::OK();
+  return SendRequest(ctx, kApiPut, cntl, request, response);
 }
 
-Status RPCClient::Range(const BlockKey& key, off_t offset, size_t length,
-                        IOBuffer* buffer, size_t block_size) {
+Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                        size_t length, IOBuffer* buffer, size_t block_size) {
   brpc::Controller cntl;
   PBRangeRequest request;
   PBRangeResponse response;
@@ -72,25 +81,16 @@ Status RPCClient::Range(const BlockKey& key, off_t offset, size_t length,
   request.set_offset(offset);
   request.set_length(length);
   request.set_block_size(block_size);
-  cntl.set_timeout_ms(option_.remote_range_rpc_timeout_ms);
-  PBBlockCacheService_Stub stub(channel_.get());
 
-  stub.Range(&cntl, &request, &response, nullptr);
-  if (cntl.Failed()) {
-    LOG(ERROR) << "Send block range request to remote failed: "
-               << cntl.ErrorText();
-    return Status::IoError("range failed");
-  }
-
-  auto status = response.status();
-  if (status == PBBlockCacheErrCode::BlockCacheOk) {
+  auto status = SendRequest(ctx, kApiRange, cntl, request, response);
+  if (status.ok()) {
     *buffer = IOBuffer(cntl.response_attachment());
-    return Status::OK();
   }
-  return Status::IoError("range failed");
+  return status;
 }
 
-Status RPCClient::Cache(const BlockKey& key, const Block& block) {
+Status RPCClient::Cache(ContextSPtr ctx, const BlockKey& key,
+                        const Block& block) {
   brpc::Controller cntl;
   PBCacheRequest request;
   PBCacheResponse response;
@@ -99,37 +99,20 @@ Status RPCClient::Cache(const BlockKey& key, const Block& block) {
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
   cntl.request_attachment().append(buffer.IOBuf());
-  cntl.set_timeout_ms(option_.remote_cache_rpc_timeout_ms);
-  PBBlockCacheService_Stub stub(channel_.get());
 
-  stub.Cache(&cntl, &request, &response, nullptr);
-  if (cntl.Failed()) {
-    LOG(ERROR) << "Send block cache request to remote failed: "
-               << cntl.ErrorText();
-    return Status::IoError("cache failed");
-  }
-
-  return Status::OK();
+  return SendRequest(ctx, kApiCache, cntl, request, response);
 }
 
-Status RPCClient::Prefetch(const BlockKey& key, size_t length) {
+Status RPCClient::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                           size_t length) {
   brpc::Controller cntl;
   PBPrefetchRequest request;
   PBPrefetchResponse response;
 
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(length);
-  cntl.set_timeout_ms(option_.remote_cache_rpc_timeout_ms);
 
-  PBBlockCacheService_Stub stub(channel_.get());
-  stub.Prefetch(&cntl, &request, &response, nullptr);
-  if (cntl.Failed()) {
-    LOG(ERROR) << "Send block prefetch request to remote failed: "
-               << cntl.ErrorText();
-    return Status::IoError("prefetch failed");
-  }
-
-  return Status::OK();
+  return SendRequest(ctx, kApiPrefetch, cntl, request, response);
 }
 
 Status RPCClient::InitChannel(const std::string& server_ip,
@@ -138,29 +121,119 @@ Status RPCClient::InitChannel(const std::string& server_ip,
   int rc = butil::str2endpoint(server_ip.c_str(), server_port, &ep);
   if (rc != 0) {
     LOG(ERROR) << "str2endpoint(" << server_ip << "," << server_port
-               << ") failed, rc = " << rc;
+               << ") failed: rc = " << rc;
     return Status::Internal("str2endpoint() failed");
   }
 
   rc = channel_->Init(ep, nullptr);
   if (rc != 0) {
     LOG(INFO) << "Init channel for " << server_ip << ":" << server_port
-              << " failed, rc = " << rc;
+              << " failed: rc = " << rc;
     return Status::Internal("Init channel failed");
   }
 
   LOG(INFO) << "Create channel for address (" << server_ip << ":" << server_port
             << ") success.";
+
+  inited_ = true;
   return Status::OK();
 }
 
-Status RPCClient::ResetChannel() {
-  std::lock_guard<BthreadMutex> mutex(mutex_);
-  if (channel_->CheckHealth() != 0) {
-    return InitChannel(server_ip_, server_port_);
-  }
-  return Status::OK();
+brpc::Channel* RPCClient::GetChannel() {
+  ReadLockGuard lock(rwlock_);
+  return inited_ ? channel_.get() : nullptr;
 }
+
+Status RPCClient::ResetChannel() {
+  WriteLockGuard lock(rwlock_);
+  return InitChannel(server_ip_, server_port_);
+}
+
+// Only retry for timeout
+bool RPCClient::ShouldRetry(int retcode) {
+  return retcode == -brpc::ERPCTIMEDOUT || retcode == -ETIMEDOUT;
+}
+
+bool RPCClient::ShouldReset(int retcode) {
+  return retcode != -brpc::ERPCTIMEDOUT && retcode != -ETIMEDOUT;
+}
+
+// TODO: consider retry_count
+uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
+                                  int /*retry_count*/) const {
+  if (api_name == kApiPut) {
+    return FLAGS_put_rpc_timeout_ms;
+  } else if (api_name == kApiRange) {
+    return FLAGS_range_rpc_timeout_ms;
+  } else if (api_name == kApiCache) {
+    return FLAGS_cache_rpc_timeout_ms;
+  } else if (api_name == kApiPrefetch) {
+    return FLAGS_prefetch_rpc_timeout_ms;
+  }
+
+  CHECK(false) << "Unknown API name: " << api_name;
+  return 0;
+}
+
+template <typename Request, typename Response>
+Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
+                              brpc::Controller& cntl, const Request& request,
+                              Response& response) {
+  const auto* method =
+      PBBlockCacheService::descriptor()->FindMethodByName(api_name);
+
+  if (method == nullptr) {
+    LOG(FATAL) << "Unknown api name: " << api_name;
+  }
+
+  for (int retry_count = 0; retry_count < FLAGS_cache_rpc_max_retry_times;
+       ++retry_count) {
+    cntl.set_timeout_ms(NextTimeoutMs(api_name, retry_count));
+    cntl.set_request_id(ctx->TraceId());
+
+    auto* channel = GetChannel();
+    if (channel == nullptr) {
+      LOG(ERROR) << absl::StrFormat(
+          "[rpc][%s:%d][%s] channel is not inited, retrying...", server_ip_,
+          server_port_, api_name);
+      ResetChannel();
+      continue;
+    }
+
+    channel->CallMethod(method, &cntl, &request, &response, nullptr);
+    if (cntl.Failed()) {
+      LOG(ERROR) << absl::StrFormat(
+          "[rpc][%s:%d][%s][%.6lfs] failed: request(%s) cntl_code(%d) "
+          "cntl_error(%s)",
+          server_ip_, server_port_, api_name, cntl.latency_us() / 1e6,
+          request.ShortDebugString(), cntl.ErrorCode(), cntl.ErrorText());
+
+      if (!ShouldRetry(cntl.ErrorCode())) {
+        return Status::NetError(cntl.ErrorCode(), cntl.ErrorText());
+      } else if (ShouldReset(cntl.ErrorCode())) {
+        ResetChannel();
+      }
+      continue;
+    }
+
+    if (response.status() != PBBlockCacheErrCode::BlockCacheOk) {
+      LOG(ERROR) << absl::StrFormat(
+          "[rpc][%s:%d][%s][%.6lfs] failed: request(%s) response(%s) "
+          "status(%s)",
+          server_ip_, server_port_, api_name, cntl.latency_us() / 1e6,
+          request.ShortDebugString(), response.ShortDebugString(),
+          BlockCacheErrCode_Name(response.status()));
+
+      return ToStatus(response.status());
+    }
+  }
+
+  LOG(ERROR) << absl::StrFormat(
+      "[rpc][%s:%d][%s] failed: request(%s) exceed max retry times.",
+      server_ip_, server_port_, api_name, request.ShortDebugString());
+
+  return Status::Internal("rpc failed exceed max retry times");
+};
 
 }  // namespace cache
 }  // namespace dingofs

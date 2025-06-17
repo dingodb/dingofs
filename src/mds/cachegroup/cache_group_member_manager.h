@@ -49,7 +49,7 @@ class CacheGroupMemberManager {
   virtual Errno RegisterMember(uint64_t old_id, uint64_t* member_id) = 0;
 
   virtual Errno AddMember(const std::string& group_name,
-                          const CacheGroupMember& member) = 0;
+                          CacheGroupMember member) = 0;
 
   virtual Errno LoadMembers(const std::string& group_name,
                             std::vector<CacheGroupMember>* members) = 0;
@@ -73,7 +73,7 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
   Errno RegisterMember(uint64_t old_id, uint64_t* member_id) override;
 
   Errno AddMember(const std::string& group_name,
-                  const CacheGroupMember& member) override;
+                  CacheGroupMember member) override;
 
   Errno LoadMembers(const std::string& group_name,
                     std::vector<CacheGroupMember>* members) override;
@@ -85,7 +85,11 @@ class CacheGroupMemberManagerImpl : public CacheGroupMemberManager {
                         const Statistic& stat) override;
 
  private:
+  void SetMembersState(std::vector<CacheGroupMember>* members);
+
   bool CheckId(uint64_t member_id);
+
+  uint64_t TimestampMs();
 
  private:
   CacheGroupOption option_;

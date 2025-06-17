@@ -29,14 +29,13 @@
 #include <memory>
 
 #include "base/filepath/filepath.h"
-#include "base/math/math.h"
 #include "base/string/string.h"
+#include "fs/ext4_filesystem_impl.h"
 #include "metaserver/storage/config.h"
 #include "metaserver/storage/rocksdb_storage.h"
 #include "metaserver/storage/storage.h"
-#include "metaserver/superpartition/super_partition.h"
 #include "metaserver/superpartition/builder/shell.h"
-#include "fs/ext4_filesystem_impl.h"
+#include "metaserver/superpartition/super_partition.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -55,7 +54,7 @@ class KVStorageBuilder {
     data_dir_ = "." + GenUuid();
     auto local_fs = ::dingofs::fs::Ext4FileSystemImpl::getInstance();
     auto options = StorageOptions();
-    options.dataDir = base::filepath::PathJoin({data_dir_, "rocksdb.db"});
+    options.dataDir = absl::StrFotmat("%s/%s", data_dir_, "rocksdb.db");
     options.maxMemoryQuotaBytes = 2 * kGiB;
     options.maxDiskQuotaBytes = 10 * kMiB;
     options.compression = false;

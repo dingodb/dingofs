@@ -16,14 +16,11 @@
 #define DINGOFS_SRC_CACHE_UTILS_STATE_MACHINE_IMPL_H_
 
 #include <memory>
-#include <mutex>
 
 #include "bthread/execution_queue.h"
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 #include "cache/utils/state_machine.h"
-#include "utils/concurrent/rw_lock.h"
 #include "utils/executor/timer.h"
-#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
@@ -48,8 +45,8 @@ class BaseState {
   BaseState(StateMachine* state_machine) : state_machine(state_machine) {}
   virtual ~BaseState() = default;
 
-  virtual void IOSucc(){};
-  virtual void IOErr(){};
+  virtual void Success(){};
+  virtual void Error(){};
   virtual void Tick(){};
 
   virtual State GetState() const { return kStateUnknown; }
@@ -62,47 +59,40 @@ using BaseStateUPtr = std::unique_ptr<BaseState>;
 
 class NormalState final : public BaseState {
  public:
-  NormalState(StateMachine* state_machine) : BaseState(state_machine) {}
+  explicit NormalState(StateMachine* state_machine);
   ~NormalState() override = default;
 
-  void IOErr() override;
+  void Error() override;
   void Tick() override;
 
-  State GetState() const override { return kStateNormal; }
+  State GetState() const override;
 
  private:
-  std::atomic<int32_t> io_error_count_{0};
+  std::atomic<int32_t> error_count_{0};
 };
 
 // TODO: support percentage of io error
 class UnstableState final : public BaseState {
  public:
-  UnstableState(StateMachine* state_machine)
-      : BaseState(state_machine),
-        start_time_(std::chrono::duration_cast<std::chrono::seconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count()) {}
-
+  explicit UnstableState(StateMachine* state_machine);
   ~UnstableState() override = default;
 
-  void IOSucc() override;
-
+  void Success() override;
   void Tick() override;
 
-  State GetState() const override { return kStateUnStable; }
+  State GetState() const override;
 
  private:
   uint64_t start_time_;
-  std::atomic<int32_t> io_succ_count_{0};
+  std::atomic<int32_t> succ_count_{0};
 };
 
 class DownState final : public BaseState {
  public:
-  DownState(StateMachine* state_machine) : BaseState(state_machine) {}
-
+  DownState(StateMachine* state_machine);
   ~DownState() override = default;
 
-  State GetState() const override { return kStateDown; }
+  State GetState() const override;
 };
 
 class StateMachineImpl final : public StateMachine {
@@ -112,27 +102,12 @@ class StateMachineImpl final : public StateMachine {
   ~StateMachineImpl() override = default;
 
   bool Start() override;
-  bool Stop() override;
+  bool Shutdown() override;
 
-  void Success() override {
-    if (running_) {
-      std::lock_guard<BthreadMutex> lk(mutex_);
-      state_->IOSucc();
-    }
-  }
+  void Success() override;
+  void Error() override;
 
-  void Error() override {
-    if (running_) {
-      std::lock_guard<BthreadMutex> lk(mutex_);
-      state_->IOErr();
-    }
-  }
-
-  State GetState() const override {
-    std::lock_guard<BthreadMutex> lk(mutex_);
-    return state_->GetState();
-  }
-
+  State GetState() const override;
   void OnEvent(StateEvent event) override;
 
  private:
@@ -140,8 +115,8 @@ class StateMachineImpl final : public StateMachine {
   void ProcessEvent(StateEvent event);
   void TickTock();
 
-  bool running_;
-  mutable BthreadMutex mutex_;
+  std::atomic<bool> running_;
+  mutable BthreadMutex mutex_;  // for state_
   BaseStateUPtr state_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;
   TimerUPtr timer_;

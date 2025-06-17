@@ -22,45 +22,64 @@
 
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 
-#include "cache/common/common.h"
-#include "cache/metrics/cache_group_node_metric.h"
+#include "cache/common/macro.h"
+#include "cache/common/proto.h"
+#include "cache/config/cachegroup.h"
+#include "metrics/cache/cache_group_node_metric.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
 
+DEFINE_uint32(send_heartbeat_interval_ms, 1000,
+              "Interval to send heartbeat to MDS in milliseconds");
+
 CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
-    CacheGroupNodeMemberSPtr member,
-    std::shared_ptr<stub::rpcclient::MdsClient> mds_client)
+    CacheGroupNodeMemberSPtr member, MdsClientSPtr mds_client)
     : running_(false),
       member_(member),
       mds_client_(mds_client),
       timer_(std::make_unique<TimerImpl>()) {}
 
 void CacheGroupNodeHeartbeatImpl::Start() {
-  if (!running_.exchange(true)) {
-    LOG(INFO) << "Cache group node heartbeat starting...";
+  CHECK_NOTNULL(member_);
+  CHECK_NOTNULL(mds_client_);
+  CHECK_NOTNULL(timer_);
 
-    CHECK(timer_->Start());
-    timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
-
-    LOG(INFO) << "Cache group node heartbeat started.";
+  if (running_) {
+    return;
   }
+
+  LOG(INFO) << "Cache group node heartbeat is starting...";
+
+  CHECK(timer_->Start());
+  timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
+
+  running_ = true;
+
+  LOG(INFO) << "Cache group node heartbeat is up.";
+
+  CHECK_RUNNING("Cache group node heartbeat");
 }
 
-void CacheGroupNodeHeartbeatImpl::Stop() {
-  if (running_.exchange(false)) {
-    LOG(INFO) << "Cache group node heartbeat stoping...";
-
-    CHECK(timer_->Stop());
-
-    LOG(INFO) << "Cache group node heartbeat stopped.";
+void CacheGroupNodeHeartbeatImpl::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
   }
+
+  LOG(INFO) << "Cache group node heartbeat is shutting down...";
+
+  CHECK(timer_->Stop());
+
+  LOG(INFO) << "Cache group node heartbeat is down.";
+
+  CHECK_DOWN("Cache group node heartbeat");
 }
 
 void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
   PBStatistic stat;
-  stat.set_hits(CacheGroupNodeMetric::GetInstance().GetCacheHit());
-  stat.set_misses(CacheGroupNodeMetric::GetInstance().GetCacheMiss());
+  stat.set_hits(GetCacheHitCount());
+  stat.set_misses(GetCacheMissCount());
 
   std::string group_name = member_->GetGroupName();
   uint64_t member_id = member_->GetMemberId();
@@ -71,6 +90,16 @@ void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
   }
 
   timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
+}
+
+int64_t CacheGroupNodeHeartbeatImpl::GetCacheHitCount() {
+  return metrics::CacheGroupNodeMetric::GetInstance()
+      .cache_hit_count.get_value();
+}
+
+int64_t CacheGroupNodeHeartbeatImpl::GetCacheMissCount() {
+  return metrics::CacheGroupNodeMetric::GetInstance()
+      .cache_miss_count.get_value();
 }
 
 }  // namespace cache

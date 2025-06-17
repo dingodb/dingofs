@@ -29,112 +29,132 @@
 #include <sys/types.h>
 
 #include <cstddef>
-#include <memory>
-#include <mutex>
 
 #include "blockaccess/block_accesser.h"
+#include "cache/blockcache/cache_store.h"
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
 #include "cache/storage/storage.h"
-#include "cache/storage/storage_operator.h"
+#include "cache/storage/storage_closure.h"
 #include "cache/utils/offload_thread_pool.h"
+#include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
 
-using blockaccess::RetryStrategy;
+const std::string kModule = kStorageMoudule;
 
 StorageImpl::StorageImpl(blockaccess::BlockAccesser* block_accesser)
-    : running_(false), block_accesser_(block_accesser), submit_queue_id_({0}) {}
+    : running_(false), block_accesser_(block_accesser), queue_id_({0}) {}
 
-Status StorageImpl::Init() {
-  if (!running_.exchange(true)) {
-    bthread::ExecutionQueueOptions queue_options;
-    queue_options.use_pthread = true;
-    int rc = bthread::execution_queue_start(&submit_queue_id_, &queue_options,
-                                            Executor, this);
-    if (rc != 0) {
-      LOG(ERROR) << "Start storage submit execution queue failed: rc = " << rc;
-      return Status::Internal("start storage submit execution queue fail");
-    }
+Status StorageImpl::Start() {
+  CHECK_NOTNULL(block_accesser_);
+
+  if (running_) {
+    return Status::OK();
   }
+
+  LOG_INFO("Storage is starting...");
+
+  bthread::ExecutionQueueOptions queue_options;
+  queue_options.use_pthread = true;
+  int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
+                                          HandleClosure, this);
+  if (rc != 0) {
+    LOG_ERROR("Start execution queue failed: rc = %d", rc);
+    return Status::Internal("start execution queue fail");
+  }
+
+  running_ = true;
+
+  LOG_INFO("Storage is up.");
+
+  CHECK_RUNNING("Storage");
   return Status::OK();
 }
 
 Status StorageImpl::Shutdown() {
-  if (running_.exchange(false)) {
-    int rc = bthread::execution_queue_stop(submit_queue_id_);
-    if (rc != 0) {
-      LOG(ERROR) << "Stop storage submit execution queue failed: rc = " << rc;
-      return Status::Internal("stop storage submit execution queue failed");
-    }
-
-    rc = bthread::execution_queue_join(submit_queue_id_);
-    if (rc != 0) {
-      LOG(ERROR) << "Join storage submit execution queue failed: rc = " << rc;
-      return Status::Internal("Join storage submit execution queue failed");
-    }
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
+
+  LOG_INFO("Storage is shutting down...");
+
+  if (bthread::execution_queue_stop(queue_id_) != 0) {
+    LOG_ERROR("Stop execution queue failed.");
+    return Status::Internal("stop execution queue failed");
+  } else if (bthread::execution_queue_join(queue_id_) != 0) {
+    LOG_ERROR("Join execution queue failed");
+    return Status::Internal("join execution queue failed");
+  }
+
+  LOG_INFO("Storage is down.");
+
+  CHECK_DOWN("Storage");
   return Status::OK();
 }
 
-Status StorageImpl::Put(const std::string& key, const IOBuffer& buffer) {
-  auto closure = StoragePutClosure(key, buffer);
-  CHECK_EQ(0, bthread::execution_queue_execute(submit_queue_id_, &closure));
+Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                        const Block& block, PutOption option) {
+  DCHECK_RUNNING("Storage");
+
+  Status status;
+  TracingGuard tracing(ctx, status, kModule, "put(%s,%zu)", key.Filename(),
+                       block.size);
+
+  NEXT_STEP(kEnqueue);
+  auto closure = PutClosure(ctx, key, block, option, block_accesser_);
+  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
+
+  NEXT_STEP(kS3Put);
   closure.Wait();
-  return closure.status();
+
+  status = closure.status();
+  if (!status.ok()) {
+    LOG_ERROR("Storage put failed: %s, key = %s, size = %lld",
+              status.ToString(), key.Filename(), block.size);
+    return status;
+  }
+  return status;
 }
 
-Status StorageImpl::Range(const std::string& key, off_t offset, size_t length,
-                          IOBuffer* buffer) {
-  auto closure = StorageRangeClosure(key, offset, length, buffer);
-  CHECK_EQ(0, bthread::execution_queue_execute(submit_queue_id_, &closure));
+Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer, RangeOption option) {
+  DCHECK_RUNNING("Storage");
+
+  Status status;
+  TracingGuard tracing(ctx, status, kModule, "range(%s,%lld,%zu)",
+                       key.Filename(), offset, length);
+
+  NEXT_STEP(kEnqueue);
+  auto closure =
+      RangeClosure(ctx, key, offset, length, buffer, option, block_accesser_);
+  CHECK_EQ(0, bthread::execution_queue_execute(queue_id_, &closure));
+
+  NEXT_STEP(kS3Range);
   closure.Wait();
-  return closure.status();
+
+  status = closure.status();
+  if (!status.ok()) {
+    LOG_ERROR("Storage range failed: %s, key = %s, offset = %lld, length = %zu",
+              status.ToString(), key.Filename(), offset, length);
+  }
+  return status;
 }
 
-int StorageImpl::Executor(void* meta,
-                          bthread::TaskIterator<StorageClosure*>& iter) {
+int StorageImpl::HandleClosure(void* meta,
+                               bthread::TaskIterator<StorageClosure*>& iter) {
   if (iter.is_queue_stopped()) {
     return 0;
   }
 
-  StorageImpl* storage = static_cast<StorageImpl*>(meta);
+  StorageImpl* self = static_cast<StorageImpl*>(meta);
   for (; iter; iter++) {
-    auto* closure = *iter;
+    auto* op = *iter;
     OffloadThreadPool::GetInstance().Submit(  // copy memory
-        [storage, closure]() { storage->Execute(closure); });
+        [self, op]() { op->Run(); });
   }
   return 0;
-}
-
-StorageOperator* StorageImpl::NewOperator(StorageClosure* closure) {
-  if (IsPutOp(closure)) {
-    return new PutOp(closure);
-  } else if (IsRangeOp(closure)) {
-    return new RangeOp(closure);
-  }
-
-  CHECK(false) << "Unknown storage operation type: "
-               << static_cast<int>(closure->optype);
-}
-
-void StorageImpl::Execute(StorageClosure* closure) {
-  auto* op = NewOperator(closure);
-  char* data = op->OnPrepare();
-  auto retry_cb = [op](int code) {
-    bool succ = (code == 0);
-    auto strategy = op->OnRetry(succ);
-    if (strategy == RetryStrategy::kNotRetry) {
-      op->OnComplete(succ);
-    }
-    return strategy;
-  };
-
-  if (IsPutOp(closure)) {
-    block_accesser_->AsyncPut(closure->key, data, closure->length, retry_cb);
-  } else {
-    block_accesser_->AsyncRange(closure->key, closure->offset, closure->length,
-                                data, retry_cb);
-  }
 }
 
 }  // namespace cache

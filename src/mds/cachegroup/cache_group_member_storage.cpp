@@ -24,7 +24,9 @@
 
 #include <glog/logging.h>
 
+#include "dingofs/cachegroup.pb.h"
 #include "mds/common/storage_key.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/encode.h"
 
@@ -134,6 +136,8 @@ bool CacheGroupMemberStorageImpl::LoadGroupMembers() {
 
 void CacheGroupMemberStorageImpl::AddMember2Group(
     uint64_t group_id, uint64_t member_id, const CacheGroupMember& member) {
+  CHECK(member.has_last_online_time_ms());
+
   auto iter = groups_.find(group_id);
   if (iter == groups_.end()) {
     iter = groups_.emplace(group_id, CacheGroupMembersType()).first;
@@ -221,6 +225,22 @@ void CacheGroupMemberStorageImpl::LoadMembers(
 Errno CacheGroupMemberStorageImpl::ReweightMember(uint64_t group_id,
                                                   uint64_t member_id,
                                                   uint32_t weight) {
+  return UpdateMember(group_id, member_id, [weight](CacheGroupMember* member) {
+    member->set_weight(weight);
+  });
+}
+
+Errno CacheGroupMemberStorageImpl::SetMemberLastOnlineTime(
+    uint64_t group_id, uint64_t member_id, uint64_t last_online_time_ms) {
+  return UpdateMember(group_id, member_id,
+                      [last_online_time_ms](CacheGroupMember* member) {
+                        member->set_last_online_time_ms(last_online_time_ms);
+                      });
+}
+
+Errno CacheGroupMemberStorageImpl::UpdateMember(uint64_t group_id,
+                                                uint64_t member_id,
+                                                UpdateFunc update_func) {
   WriteLockGuard lk(rwlock_);
   auto iter = groups_.find(group_id);
   if (iter == groups_.end()) {
@@ -233,7 +253,7 @@ Errno CacheGroupMemberStorageImpl::ReweightMember(uint64_t group_id,
   }
 
   auto member = members[member_id];
-  member.set_weight(weight);
+  update_func(&member);
   if (StoreGroupMember(group_id, member_id, member)) {
     members[member_id] = member;
     return Errno::kOk;

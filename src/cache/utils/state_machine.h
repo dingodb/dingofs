@@ -42,7 +42,7 @@ inline std::string StateToString(State state) {
     case kStateDown:
       return "down";
     default:
-      CHECK(false) << "invalid state: " << static_cast<int>(state);
+      CHECK(false) << "Unknown state: " << static_cast<int>(state);
   }
 }
 
@@ -63,8 +63,8 @@ inline std::string StateEventToString(StateEvent event) {
       return "StateEventUnstable";
     case kStateEventDown:
       return "StateEventDown";
-      // default:
-      //   CHECK(false) << "Unknown StateEvent: " << static_cast<int>(event);
+    default:
+      CHECK(false) << "Unknown StateEvent: " << static_cast<int>(event);
   }
 }
 
@@ -75,7 +75,7 @@ class StateMachine {
   virtual ~StateMachine() = default;
 
   virtual bool Start() = 0;
-  virtual bool Stop() = 0;
+  virtual bool Shutdown() = 0;
 
   virtual void Success() = 0;
   virtual void Error() = 0;

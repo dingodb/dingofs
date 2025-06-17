@@ -24,11 +24,11 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/cachegroup/async_cache.h"
+#include "cache/cachegroup/async_cacher.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
-#include "cache/config/config.h"
 #include "cache/storage/storage_pool.h"
+#include "cache/utils/context.h"
 
 namespace dingofs {
 namespace cache {
@@ -38,13 +38,17 @@ class CacheGroupNode {
   virtual ~CacheGroupNode() = default;
 
   virtual Status Start() = 0;
-  virtual Status Stop() = 0;
+  virtual Status Shutdown() = 0;
 
-  virtual Status Put(const BlockKey& key, const Block& block) = 0;
-  virtual Status Range(const BlockKey& key, off_t offset, size_t length,
-                       IOBuffer* buffer, size_t block_size) = 0;
-  virtual Status Cache(const BlockKey& key, const Block& block) = 0;
-  virtual Status Prefetch(const BlockKey& key, size_t length) = 0;
+  virtual Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                     PutOption option = PutOption()) = 0;
+  virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                       size_t length, IOBuffer* buffer,
+                       RangeOption option = RangeOption()) = 0;
+  virtual Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+                       CacheOption option = CacheOption()) = 0;
+  virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
+                          PrefetchOption option = PrefetchOption()) = 0;
 };
 
 using CacheGroupNodeSPtr = std::shared_ptr<CacheGroupNode>;
@@ -54,22 +58,29 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
   explicit CacheGroupNodeImpl(CacheGroupNodeOption option);
 
   Status Start() override;
-  Status Stop() override;
+  Status Shutdown() override;
 
-  Status Put(const BlockKey& key, const Block& block) override;
-  Status Range(const BlockKey& key, off_t offset, size_t length,
-               IOBuffer* buffer, size_t block_size) override;
-  Status Cache(const BlockKey& key, const Block& block) override;
-  Status Prefetch(const BlockKey& key, size_t length) override;
+  Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block,
+             PutOption option = PutOption()) override;
+  Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+               size_t length, IOBuffer* buffer,
+               RangeOption option = RangeOption()) override;
+  Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
+               CacheOption option = CacheOption()) override;
+  Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length,
+                  PrefetchOption option = PrefetchOption()) override;
 
  private:
   void RewriteCacheDir();
   Status InitBlockCache();
 
-  Status RangeCachedBlock(const BlockKey& key, off_t offset, size_t length,
-                          IOBuffer* buffer);
-  Status RangeStorage(const BlockKey& key, off_t offset, size_t length,
-                      IOBuffer* buffer, size_t block_size);
+  Status RangeCachedBlock(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer, RangeOption option);
+  Status RangeStorage(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                      size_t length, IOBuffer* buffer, RangeOption option);
+
+  void AddCacheHitCount(int64_t count);
+  void AddCacheMissCount(int64_t count);
 
  private:
   std::atomic<bool> running_;
@@ -78,7 +89,7 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
   CacheGroupNodeMemberSPtr member_;
   BlockCacheSPtr block_cache_;
-  AsyncCacheUPtr async_cache_;
+  AsyncCacherUPtr async_cacher_;
   CacheGroupNodeHeartbeatUPtr heartbeat_;
   StoragePoolSPtr storage_pool_;
 };

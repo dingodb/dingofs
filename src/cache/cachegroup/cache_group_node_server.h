@@ -28,8 +28,6 @@
 #include <csignal>
 
 #include "cache/cachegroup/cache_group_node.h"
-#include "cache/cachegroup/cache_group_node_service.h"
-#include "cache/config/config.h"
 
 namespace dingofs {
 namespace cache {
@@ -38,7 +36,7 @@ class CacheGroupNodeServer {
  public:
   virtual ~CacheGroupNodeServer() = default;
 
-  virtual Status Run() = 0;
+  virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 };
 
@@ -48,13 +46,14 @@ class CacheGroupNodeServerImpl final : public CacheGroupNodeServer {
 
   ~CacheGroupNodeServerImpl() override = default;
 
-  Status Run() override;
+  Status Start() override;
   Status Shutdown() override;
 
  private:
   void InstallSignal();
   Status StartRpcServer(const std::string& listen_ip, uint32_t listen_port);
 
+  std::atomic<bool> running_;
   const CacheGroupNodeOption option_;
   CacheGroupNodeSPtr node_;
   std::unique_ptr<PBBlockCacheService> service_;

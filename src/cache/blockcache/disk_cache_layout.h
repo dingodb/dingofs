@@ -25,8 +25,8 @@
 
 #include <string>
 
-#include "base/filepath/filepath.h"
 #include "cache/blockcache/cache_store.h"
+#include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
@@ -82,7 +82,7 @@ class DiskCacheLayout {
  private:
   std::string PathJoin(const std::string& parent,
                        const std::string& child) const {
-    return base::filepath::PathJoin({parent, child});
+    return Helper::PathJoin({parent, child});
   }
 
   const std::string cache_dir_;
@@ -92,7 +92,7 @@ using DiskCacheLayoutSPtr = std::shared_ptr<DiskCacheLayout>;
 
 inline std::string RealCacheDir(const std::string& cache_dir,
                                 const std::string& uuid) {
-  return base::filepath::PathJoin({cache_dir, uuid});
+  return Helper::PathJoin({cache_dir, uuid});
 }
 
 }  // namespace cache

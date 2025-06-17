@@ -22,13 +22,32 @@
 
 #include "cache/blockcache/block_cache_throttle.h"
 
-#include "cache/config/config.h"
+#include <brpc/reloadable_flags.h>
+
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
 
+DEFINE_bool(
+    upload_stage_throttle_enable, false,
+    "Whether to enable throttling for uploading stage blocks to storage.");
+DEFINE_validator(upload_stage_throttle_enable, brpc::PassValidate);
+
+DEFINE_uint64(
+    upload_stage_throttle_bandwidth_mb, 256,
+    "Maximum bandwidth for uploading stage blocks to storage in MB/s");
+DEFINE_validator(upload_stage_throttle_bandwidth_mb, brpc::PassValidate);
+
+DEFINE_uint64(upload_stage_throttle_iops, 100,
+              "Maximum IOPS for uploading stage blocks to storage");
+DEFINE_validator(upload_stage_throttle_iops, brpc::PassValidate);
+
 UploadStageThrottle::UploadStageThrottle()
-    : current_throttle_bandwidth_mb_(0),
+    : running_(false),
+      current_throttle_bandwidth_mb_(0),
       current_throttle_iops_(0),
       throttle_(std::make_unique<dingofs::utils::Throttle>()),
       timer_(std::make_unique<TimerImpl>()) {
@@ -36,13 +55,42 @@ UploadStageThrottle::UploadStageThrottle()
 }
 
 void UploadStageThrottle::Start() {
+  CHECK_NOTNULL(throttle_);
+  CHECK_NOTNULL(timer_);
+
+  if (running_) {
+    return;
+  }
+
+  LOG(INFO) << "Upload stage throttle is starting...";
+
   CHECK(timer_->Start());
   timer_->Add([this] { UpdateThrottleParam(); }, 100);
+
+  running_ = true;
+
+  LOG(INFO) << "Upload stage throttle is up.";
+
+  CHECK_RUNNING("Upload stage throttle");
 }
 
-void UploadStageThrottle::Stop() { timer_->Stop(); }
+void UploadStageThrottle::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
+  }
+
+  LOG(INFO) << "Upload stage throttle is shutting down...";
+
+  timer_->Stop();
+
+  LOG(INFO) << "Upload stage throttle is down.";
+
+  CHECK_DOWN("Upload stage throttle");
+}
 
 void UploadStageThrottle::Add(uint64_t upload_bytes) {
+  DCHECK_RUNNING("Upload stage throttle");
+
   if (FLAGS_upload_stage_throttle_enable) {
     std::lock_guard<BthreadMutex> lk(mutex_);
     throttle_->Add(false, upload_bytes);

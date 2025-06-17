@@ -24,9 +24,8 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_HEARTBEAT_H_
 
 #include "cache/cachegroup/cache_group_node_member.h"
-#include "cache/common/common.h"
 #include "stub/rpcclient/mds_client.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/timer.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,27 +35,31 @@ class CacheGroupNodeHeartbeat {
   virtual ~CacheGroupNodeHeartbeat() = default;
 
   virtual void Start() = 0;
-  virtual void Stop() = 0;
+  virtual void Shutdown() = 0;
 };
 
 using CacheGroupNodeHeartbeatUPtr = std::unique_ptr<CacheGroupNodeHeartbeat>;
 
 class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
  public:
-  CacheGroupNodeHeartbeatImpl(
-      CacheGroupNodeMemberSPtr member,
-      std::shared_ptr<stub::rpcclient::MdsClient> mds_client);
+  using MdsClientSPtr = std::shared_ptr<stub::rpcclient::MdsClient>;
+
+  CacheGroupNodeHeartbeatImpl(CacheGroupNodeMemberSPtr member,
+                              MdsClientSPtr mds_client);
 
   void Start() override;
-  void Stop() override;
+  void Shutdown() override;
 
  private:
   void SendHeartbeat();
 
+  int64_t GetCacheHitCount();
+  int64_t GetCacheMissCount();
+
  private:
   std::atomic<bool> running_;
   CacheGroupNodeMemberSPtr member_;
-  std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
+  MdsClientSPtr mds_client_;
   TimerUPtr timer_;
 };
 

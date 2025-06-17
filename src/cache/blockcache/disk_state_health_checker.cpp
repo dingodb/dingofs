@@ -14,12 +14,19 @@
 
 #include "cache/blockcache/disk_state_health_checker.h"
 
-#include "cache/config/config.h"
-#include "cache/utils/filepath.h"
+#include <brpc/reloadable_flags.h>
+
+#include "cache/common/macro.h"
+#include "cache/config/blockcache.h"
 #include "cache/utils/helper.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint32(check_disk_state_duration_ms, 3000,
+              "Duration in milliseconds to check the disk state");
+DEFINE_validator(check_disk_state_duration_ms, brpc::PassValidate);
 
 DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
                                                StateMachineSPtr state_machine)
@@ -29,30 +36,40 @@ DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
       timer_(std::make_unique<TimerImpl>()) {}
 
 void DiskStateHealthChecker::Start() {
-  if (!running_.exchange(true, std::memory_order_acq_rel)) {
-    LOG(INFO) << "Disk state health checker starting...";
-
-    CHECK(state_machine_->Start());
-    CHECK(timer_->Start());
-    timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
-
-    LOG(INFO) << "Disk state health checker started.";
+  if (running_) {
+    return;
   }
+
+  LOG(INFO) << "Disk state health checker is starting...";
+
+  CHECK(state_machine_->Start());
+  CHECK(timer_->Start());
+  timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
+
+  running_ = true;
+
+  LOG(INFO) << "Disk state health checker is up.";
+
+  CHECK_RUNNING("Disk state health checker");
 }
 
-void DiskStateHealthChecker::Stop() {
-  if (running_.exchange(false, std::memory_order_acq_rel)) {
-    LOG(INFO) << "Disk state health checker stopping...";
-
-    timer_->Stop();
-    state_machine_->Stop();
-
-    LOG(INFO) << "Disk state health checker stopped.";
+void DiskStateHealthChecker::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
   }
+
+  LOG(INFO) << "Disk state health checker is shutting down...";
+
+  timer_->Stop();
+  state_machine_->Shutdown();
+
+  LOG(INFO) << "Disk state health checker is down.";
+
+  CHECK_DOWN("Disk state health checker");
 }
 
 void DiskStateHealthChecker::RunCheck() {
-  if (running_.load(std::memory_order_acquire)) {
+  if (running_.load(std::memory_order_relaxed)) {
     ProbeDisk();
     timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
   }
@@ -79,7 +96,7 @@ void DiskStateHealthChecker::ProbeDisk() {
 }
 
 std::string DiskStateHealthChecker::GetProbeFilepath() const {
-  return FilePath::PathJoin({layout_->GetProbeDir(), "probe"});
+  return Helper::PathJoin({layout_->GetProbeDir(), "probe"});
 }
 
 }  // namespace cache
