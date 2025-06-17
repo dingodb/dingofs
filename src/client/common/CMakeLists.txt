@@ -24,4 +24,5 @@ target_link_libraries(client_common
     fmt::fmt
     glog::glog
     gflags::gflags
+    stub_common
 )
