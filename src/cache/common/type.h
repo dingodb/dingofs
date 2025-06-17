@@ -29,8 +29,6 @@
 
 #include <memory>
 
-#include "common/io_buffer.h"
-#include "common/status.h"
 #include "utils/concurrent/rw_lock.h"
 #include "utils/concurrent/task_thread_pool.h"
 

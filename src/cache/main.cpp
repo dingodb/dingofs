@@ -20,6 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include <gflags/gflags.h>
+
 #include "cache/server.h"
 #include "cache/utils/logging.h"
 

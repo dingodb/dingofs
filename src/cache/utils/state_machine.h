@@ -75,7 +75,7 @@ class StateMachine {
   virtual ~StateMachine() = default;
 
   virtual bool Start() = 0;
-  virtual bool Stop() = 0;
+  virtual bool Shutdown() = 0;
 
   virtual void Success() = 0;
   virtual void Error() = 0;

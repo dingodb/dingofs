@@ -24,8 +24,7 @@
 
 #include <bits/types/struct_iovec.h>
 #include <butil/iobuf.h>
-
-#include <vector>
+#include <glog/logging.h>
 
 namespace dingofs {
 
@@ -35,7 +34,9 @@ IOBuffer::IOBuffer(const char* data, size_t size) { iobuf_.append(data, size); }
 
 butil::IOBuf& IOBuffer::IOBuf() { return iobuf_; }
 
-std::vector<iovec> IOBuffer::Fetch() {
+const butil::IOBuf& IOBuffer::ConstIOBuf() { return iobuf_; }
+
+std::vector<iovec> IOBuffer::Fetch() const {
   std::vector<iovec> iovecs;
   // for (int i = 0; i < iobuf_.block_count(); i++) { // FIXME
   for (int i = 0; i < iobuf_.backing_block_num(); i++) {
@@ -46,6 +47,11 @@ std::vector<iovec> IOBuffer::Fetch() {
     iovecs.emplace_back(iovec{data, size});
   }
   return iovecs;
+}
+
+char* IOBuffer::Fetch1() const {
+  CHECK_EQ(iobuf_.backing_block_num(), 1);
+  return (char*)iobuf_.fetch1();
 }
 
 void IOBuffer::CopyTo(char* dest) { iobuf_.copy_to(dest); }

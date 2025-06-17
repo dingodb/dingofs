@@ -23,53 +23,31 @@
 #ifndef DINGOFS_SRC_CACHE_BENCHMARK_WORKER_H_
 #define DINGOFS_SRC_CACHE_BENCHMARK_WORKER_H_
 
-#include "cache/benchmark/helper.h"
-#include "cache/benchmark/reporter.h"
-#include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/cache_store.h"
+#include "cache/benchmark/collector.h"
+#include "cache/benchmark/factory.h"
+#include "cache/common/type.h"
 
 namespace dingofs {
 namespace cache {
 
 class Worker {
  public:
-  Worker(int worker_id, BlockCacheSPtr block_cache, ReporterSPtr reporter,
-         BthreadCountdownEventSPtr countdown_event);
+  Worker(uint64_t idx, TaskFactorySPtr factory, CollectorSPtr collector);
 
-  Status Init();
-  void Run();
+  void Start();
   void Shutdown();
 
  private:
-  using TaskFunc = std::function<Status()>;
+  void ExecAllTasks();
+  void ExecTask(std::function<void()> task);
 
-  BlockKeyFactory NewBlockKeyFactory() const;
-  std::function<Worker::TaskFunc(const BlockKey& key)> NewTaskFactory();
-
-  bool NeedPrepBlock() const { return IsRange() || IsAsyncRange(); }
-  Status PrepBlock();
-
-  Status PutBlock(const BlockKey& key);
-  Status RangeBlock(const BlockKey& key);
-  Status AsyncPutBlock(const BlockKey& key);
-  Status AsyncRangeBlock(const BlockKey& key);
-
-  void ExecuteTask(std::function<Status()> task);
-
-  bool IsRange() const { return FLAGS_op == "range"; }
-  bool IsAsyncRange() const { return FLAGS_op == "async_range"; }
-  bool IsPut() const { return FLAGS_op == "put"; }
-  bool IsAsyncPut() const { return FLAGS_op == "async_put"; }
-
-  int worker_id_;
-  Block block_;
-  BlockCacheSPtr block_cache_;
-  ReporterSPtr reporter_;
-  BthreadCountdownEventSPtr countdown_event_;
-  BthreadCountdownEvent inflighting_;
+  uint64_t idx_;
+  TaskFactorySPtr factory_;
+  CollectorSPtr collector_;
+  BthreadCountdownEvent countdown_;
 };
 
-using WorkerSPtr = std::shared_ptr<Worker>;
+using WorkerUPtr = std::unique_ptr<Worker>;
 
 }  // namespace cache
 }  // namespace dingofs

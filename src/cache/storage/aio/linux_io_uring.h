@@ -36,19 +36,19 @@ class LinuxIOUring final : public IORing {
  public:
   explicit LinuxIOUring(uint32_t iodepth);
 
-  Status Init() override;
+  Status Start() override;
   Status Shutdown() override;
 
   Status PrepareIO(AioClosure* aio) override;
   Status SubmitIO() override;
   Status WaitIO(uint64_t timeout_ms,
-                std::vector<AioClosure*>* completed) override;
+                std::vector<AioClosure*>* completed_aios) override;
 
   uint32_t GetIODepth() const override;
 
  private:
-  struct Context {
-    Context(const std::vector<iovec>& iovecs) : iovecs(iovecs) {}
+  struct AuxInfo {
+    AuxInfo(const std::vector<iovec>& iovecs) : iovecs(iovecs) {}
     std::vector<iovec> iovecs;
   };
 
@@ -57,7 +57,7 @@ class LinuxIOUring final : public IORing {
   void PrepWrite(io_uring_sqe* sqe, AioClosure* aio);
   void PrepRead(io_uring_sqe* sqe, AioClosure* aio);
   void OnCompleted(AioClosure* aio, int retcode);
-  void CleanupContext(void* context);
+  void CleanupAuxInfo(void* aux_info);
 
   std::atomic<bool> running_;
   uint32_t iodepth_;

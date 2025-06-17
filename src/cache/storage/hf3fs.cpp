@@ -23,11 +23,11 @@
 #include "cache/storage/hf3fs.h"
 
 #include "absl/cleanup/cleanup.h"
-#include "cache/common/common.h"
-#include "cache/config/config.h"
+#include "cache/config/blockcache.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/storage/aio/aio_queue.h"
 #include "cache/storage/aio/usrbio.h"
+#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 
@@ -44,18 +44,18 @@ HF3FS::HF3FS(const std::string& mountpoint, CheckStatusFunc check_status_func)
       aio_queue_w_(std::make_unique<AioQueueImpl>(io_ring_w_)),
       aio_queue_r_(std::make_unique<AioQueueImpl>(io_ring_r_)) {}
 
-Status HF3FS::Init() {
+Status HF3FS::Start() {
   if (!running_.exchange(true)) {
-    auto status = aio_queue_w_->Init();
+    auto status = aio_queue_w_->Start();
     if (status.ok()) {
-      status = aio_queue_r_->Init();
+      status = aio_queue_r_->Start();
     }
     return status;
   }
   return Status::OK();
 }
 
-Status HF3FS::Destroy() {
+Status HF3FS::Shutdown() {
   if (running_.exchange(false)) {
     auto status = aio_queue_w_->Shutdown();
     if (status.ok()) {
@@ -66,8 +66,8 @@ Status HF3FS::Destroy() {
   return Status::OK();
 }
 
-Status HF3FS::WriteFile(const std::string& path, const IOBuffer& buffer,
-                        WriteOption /*option*/) {
+Status HF3FS::WriteFile(ContextSPtr ctx, const std::string& path,
+                        const IOBuffer& buffer, WriteOption /*option*/) {
   int fd;
   auto tmpfile = Helper::TempFilepath(path);
   auto status = Posix::Creat(tmpfile, 0644, &fd);
@@ -82,33 +82,34 @@ Status HF3FS::WriteFile(const std::string& path, const IOBuffer& buffer,
     }
   });
 
-  status = AioWrite(fd, buffer);
+  status = AioWrite(ctx, fd, buffer);
   if (status.ok()) {
     status = Posix::Rename(tmpfile, path);
   }
   return CheckStatus(status);
 }
 
-Status HF3FS::ReadFile(const std::string& path, off_t offset, size_t length,
-                       IOBuffer* buffer, ReadOption /*option*/) {
+Status HF3FS::ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
+                       size_t length, IOBuffer* buffer, ReadOption /*option*/) {
   int fd;
   auto status = Posix::Open(path, O_RDONLY, &fd);
   if (status.ok()) {
     auto defer = absl::MakeCleanup([fd]() { Posix::Close(fd); });
-    status = AioRead(fd, offset, length, buffer);
+    status = AioRead(ctx, fd, offset, length, buffer);
   }
   return CheckStatus(status);
 }
 
-Status HF3FS::AioWrite(int fd, const IOBuffer& buffer) {
-  auto closure = AioWriteClosure(fd, buffer);
+Status HF3FS::AioWrite(ContextSPtr ctx, int fd, const IOBuffer& buffer) {
+  auto closure = WriteClosure(ctx, fd, buffer);
   aio_queue_w_->Submit(&closure);
   closure.Wait();
   return closure.status();
 }
 
-Status HF3FS::AioRead(int fd, off_t offset, size_t length, IOBuffer* buffer) {
-  auto closure = AioReadClosure(fd, offset, length, buffer);
+Status HF3FS::AioRead(ContextSPtr ctx, int fd, off_t offset, size_t length,
+                      IOBuffer* buffer) {
+  auto closure = ReadClosure(ctx, fd, offset, length, buffer);
   aio_queue_r_->Submit(&closure);
   closure.Wait();
   return closure.status();

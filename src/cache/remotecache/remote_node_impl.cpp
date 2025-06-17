@@ -22,6 +22,10 @@
 
 #include "cache/remotecache/remote_node_impl.h"
 
+#include "cache/common/proto.h"
+#include "cache/config/tiercache.h"
+#include "cache/remotecache/rpc_client.h"
+#include "cache/utils/context.h"
 #include "cache/utils/state_machine_impl.h"
 #include "common/status.h"
 
@@ -29,12 +33,12 @@ namespace dingofs {
 namespace cache {
 
 RemoteNodeImpl::RemoteNodeImpl(const PBCacheGroupMember& member,
-                               RemoteNodeOption option)
-    : rpc_(std::make_unique<RPCClient>(member.ip(), member.port(), option)),
+                               RemoteBlockCacheOption /*option*/)
+    : rpc_(std::make_unique<RPCClient>(member.ip(), member.port())),
       state_machine_(std::make_unique<StateMachineImpl>()) {}
 
-Status RemoteNodeImpl::Init() {
-  auto status = rpc_->Init();
+Status RemoteNodeImpl::Start() {
+  auto status = rpc_->Start();
   if (!status.ok()) {
     return status;
   }
@@ -46,56 +50,65 @@ Status RemoteNodeImpl::Init() {
   return Status::OK();
 }
 
-Status RemoteNodeImpl::Destroy() {
-  if (!state_machine_->Stop()) {
+Status RemoteNodeImpl::Shutdown() {
+  if (!state_machine_->Shutdown()) {
     return Status::Internal("state machine stop failed");
   }
 
   return Status::OK();
 }
 
-Status RemoteNodeImpl::Put(const BlockKey& key, const Block& block) {
+Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                           const Block& block) {
   auto status = CheckHealth();
   if (!status.ok()) {
     return status;
   }
 
-  status = rpc_->Put(key, block);
+  status = rpc_->Put(ctx, key, block);
   return CheckStatus(status);
 }
 
-Status RemoteNodeImpl::Range(const BlockKey& key, off_t offset, size_t length,
-                             IOBuffer* buffer, size_t block_size) {
+Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                             size_t length, IOBuffer* buffer,
+                             size_t block_size) {
   auto status = CheckHealth();
   if (!status.ok()) {
     return status;
   }
 
-  status = rpc_->Range(key, offset, length, buffer, block_size);
+  status = rpc_->Range(ctx, key, offset, length, buffer, block_size);
   return CheckStatus(status);
 }
 
-Status RemoteNodeImpl::Cache(const BlockKey& key, const Block& block) {
+Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+                             const Block& block) {
   auto status = CheckHealth();
   if (!status.ok()) {
     return status;
   }
 
-  status = CheckStatus(rpc_->Cache(key, block));
+  status = rpc_->Cache(ctx, key, block);
   return CheckStatus(status);
 }
 
-Status RemoteNodeImpl::Prefetch(const BlockKey& key, size_t length) {
+Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                size_t length) {
   auto status = CheckHealth();
   if (!status.ok()) {
     return status;
   }
 
-  status = rpc_->Prefetch(key, length);
+  status = rpc_->Prefetch(ctx, key, length);
   return CheckStatus(status);
 }
 
 Status RemoteNodeImpl::CheckHealth() const {
+  if (member_info_.state() !=
+      PBCacheGroupMemberState::CacheGroupMemberStateOnline) {
+    return Status::Internal("remote node is unstable");
+  }
+
   if (state_machine_->GetState() == State::kStateNormal) {
     return Status::OK();
   }

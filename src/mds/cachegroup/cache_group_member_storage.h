@@ -63,6 +63,9 @@ class CacheGroupMemberStorage {
 
   virtual Errno ReweightMember(uint64_t group_id, uint64_t member_id,
                                uint32_t weight) = 0;
+
+  virtual Errno SetMemberLastOnlineTime(uint64_t group_id, uint64_t member_id,
+                                        uint64_t last_online_time_ms) = 0;
 };
 
 class CacheGroupMemberStorageImpl : public CacheGroupMemberStorage {
@@ -88,7 +91,12 @@ class CacheGroupMemberStorageImpl : public CacheGroupMemberStorage {
   Errno ReweightMember(uint64_t group_id, uint64_t member_id,
                        uint32_t weight) override;
 
+  Errno SetMemberLastOnlineTime(uint64_t group_id, uint64_t member_id,
+                                uint64_t last_online_time_ms) override;
+
  private:
+  using UpdateFunc = std::function<void(CacheGroupMember* member)>;
+
   bool LoadGroupNames();
 
   bool LoadGroupMembers();
@@ -100,6 +108,9 @@ class CacheGroupMemberStorageImpl : public CacheGroupMemberStorage {
 
   bool StoreGroupMember(uint64_t group_id, uint64_t member_id,
                         const CacheGroupMember& member);
+
+  Errno UpdateMember(uint64_t group_id, uint64_t member_id,
+                     UpdateFunc update_func);
 
  private:
   BthreadRWLock rwlock_;  // TODO(Wine93): more efficient for multi-locks

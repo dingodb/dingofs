@@ -23,45 +23,51 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOADER_H_
 
-#include "cache/blockcache/block_cache_throttle.h"
+#include <memory>
+
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/infight_throttle.h"
+#include "common/io_buffer.h"
 
 namespace dingofs {
 namespace cache {
 
 class BlockCacheUploader;
+using BlockCacheUploaderPtr = BlockCacheUploader*;
 using BlockCacheUploaderSPtr = std::shared_ptr<BlockCacheUploader>;
 
-class BlockCacheUploader
-    : public std::enable_shared_from_this<BlockCacheUploader> {
+class BlockCacheUploader {
  public:
   BlockCacheUploader(StoragePoolSPtr storage_pool, CacheStoreSPtr store);
   virtual ~BlockCacheUploader();
 
-  void Init();
+  void Start();
   void Shutdown();
 
-  void AddStageBlock(const StageBlock& block);
+  void AddStagingBlock(const StagingBlock& staging_block);
   void WaitAllUploaded();
 
  private:
+  BlockCacheUploaderPtr GetSelfPtr() { return this; }
+
   void UploadingWorker();
-  void UploadBlock(const StageBlock& block);
-  Status DoUpload(const StageBlock& block);
+  void AsyncUploading(const StagingBlock& staging_block);
+  Status Uploading(const StagingBlock& staging_block);
 
-  Status StoragePut(const BlockKey& key, const IOBuffer& buffer);
+  Status Load(const StagingBlock& staging_block, IOBuffer* buffer);
+  Status Upload(const StagingBlock& staging_block, const IOBuffer& buffer);
+  Status RemoveStage(const StagingBlock& staging_block);
 
-  BlockCacheUploaderSPtr GetSelfSPtr() { return shared_from_this(); }
+  bool IsRunning() const;
 
   std::atomic<bool> running_;
   BthreadMutex mutex_;
   StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
   PendingQueueUPtr pending_queue_;
-  TaskThreadPoolUPtr upload_stage_thread_pool_;
+  TaskThreadPoolUPtr thread_pool_;
   InflightThrottleUPtr inflights_throttle_;
   BthreadCountdownEvent uploading_count_;
 };

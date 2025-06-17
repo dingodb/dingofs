@@ -30,10 +30,9 @@
 #include "cache/remotecache/remote_block_cache.h"
 #include "cache/storage/storage.h"
 #include "cache/storage/storage_impl.h"
-#include "cache/utils/access_log.h"
 #include "cache/utils/bthread.h"
+#include "cache/utils/context.h"
 #include "cache/utils/offload_thread_pool.h"
-#include "cache/utils/phase_timer.h"
 #include "common/status.h"
 
 namespace dingofs {
@@ -41,29 +40,35 @@ namespace cache {
 
 TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
                                RemoteBlockCacheOption remote_cache_option,
-                               blockaccess::BlockAccesser* block_accesser)
+                               StorageSPtr storage)
     : running_(false),
-      storage_(std::make_shared<StorageImpl>(block_accesser)),
+      storage_(storage),
       local_block_cache_(
           std::make_unique<BlockCacheImpl>(local_cache_option, storage_)),
       remote_block_cache_(std::make_unique<RemoteBlockCacheImpl>(
           remote_cache_option, storage_)) {}
 
-Status TierBlockCache::Init() {
+TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
+                               RemoteBlockCacheOption remote_cache_option,
+                               blockaccess::BlockAccesser* block_accesser)
+    : TierBlockCache(local_cache_option, remote_cache_option,
+                     std::make_shared<StorageImpl>(block_accesser)) {}
+
+Status TierBlockCache::Start() {
   if (!running_.exchange(true)) {
-    OffloadThreadPool::GetInstance().Init();
+    OffloadThreadPool::GetInstance().Start();
 
-    auto status = storage_->Init();
+    auto status = storage_->Start();
     if (!status.ok()) {
       return status;
     }
 
-    status = local_block_cache_->Init();
+    status = local_block_cache_->Start();
     if (!status.ok()) {
       return status;
     }
 
-    return remote_block_cache_->Init();
+    return remote_block_cache_->Start();
   }
   return Status::OK();
 }
@@ -85,46 +90,34 @@ Status TierBlockCache::Shutdown() {
   return Status::OK();
 }
 
-Status TierBlockCache::Put(const BlockKey& key, const Block& block,
-                           PutOption option) {
+Status TierBlockCache::Put(ContextSPtr ctx, const BlockKey& key,
+                           const Block& block, PutOption option) {
   Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[tier] put(%s,%zu): %s%s", key.Filename(),
-                           block.size, status.ToString(), timer.ToString());
-  });
 
   if (option.writeback) {
     if (LocalEnableStage()) {
-      timer.NextPhase(Phase::kLocalPut);
-      status = local_block_cache_->Put(key, block, option);
+      status = local_block_cache_->Put(ctx, key, block, option);
     } else if (RemoteEnableStage()) {
-      timer.NextPhase(Phase::kRemotePut);
-      status = remote_block_cache_->Put(key, block, option);
+      status = remote_block_cache_->Put(ctx, key, block, option);
     }
   } else {  // directly put to storage
-    timer.NextPhase(Phase::kS3Put);
-    status = local_block_cache_->Put(key, block, option);
+
+    status = local_block_cache_->Put(ctx, key, block, option);
   }
 
   return status;
 }
 
-Status TierBlockCache::Range(const BlockKey& key, off_t offset, size_t length,
-                             IOBuffer* buffer, RangeOption option) {
+Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                             size_t length, IOBuffer* buffer,
+                             RangeOption option) {
   Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[tier] range(%s,%lld,%zu): %s%s", key.Filename(),
-                           offset, length, status.ToString(), timer.ToString());
-  });
 
   // try local cache first
   if (LocalEnableCache()) {
-    timer.NextPhase(Phase::kLocalRange);
-    auto o = option;
-    o.retrive = false;
-    status = local_block_cache_->Range(key, offset, length, buffer, o);
+    auto opt = option;
+    opt.retrive = false;
+    status = local_block_cache_->Range(ctx, key, offset, length, buffer, opt);
     if (status.ok()) {
       return status;
     }
@@ -133,99 +126,111 @@ Status TierBlockCache::Range(const BlockKey& key, off_t offset, size_t length,
   // Not found or failed for local cache
 
   if (RemoteEnableCache()) {  // Remote cache will always retrive storage
-    timer.NextPhase(Phase::kRemoteRange);
-    status = remote_block_cache_->Range(key, offset, length, buffer, option);
+
+    status =
+        remote_block_cache_->Range(ctx, key, offset, length, buffer, option);
   } else if (option.retrive) {  // No remote cache, retrive storage
-    timer.NextPhase(Phase::kS3Range);
-    status = storage_->Range(key.StoreKey(), offset, length, buffer);
+
+    status = storage_->Range(ctx, key, offset, length, buffer);
   } else {
+    LOG(ERROR) << "";
     status = Status::NotFound("no cache store available for block cache");
   }
 
   return status;
 }
 
-Status TierBlockCache::Cache(const BlockKey& key, const Block& block,
-                             CacheOption option) {
+Status TierBlockCache::Cache(ContextSPtr ctx, const BlockKey& key,
+                             const Block& block, CacheOption option) {
   Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[tier] cache(%s,%zu): %s", key.Filename(),
-                           block.size, status.ToString());
-  });
 
   if (LocalEnableCache()) {
-    status = local_block_cache_->Cache(key, block, option);
+    status = local_block_cache_->Cache(ctx, key, block, option);
   } else if (RemoteEnableCache()) {
-    status = remote_block_cache_->Cache(key, block, option);
+    status = remote_block_cache_->Cache(ctx, key, block, option);
   } else {
     status = Status::NotFound("no cache store available for block cache");
   }
   return status;
 }
 
-Status TierBlockCache::Prefetch(const BlockKey& key, size_t length,
-                                PrefetchOption option) {
+Status TierBlockCache::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                size_t length, PrefetchOption option) {
   Status status;
-  PhaseTimer timer;
-  LogGuard log([&]() {
-    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
-                           length, status.ToString(), timer.ToString());
-  });
 
   if (LocalEnableCache()) {
-    status = local_block_cache_->Prefetch(key, length, option);
+    status = local_block_cache_->Prefetch(ctx, key, length, option);
   } else if (RemoteEnableCache()) {
-    status = remote_block_cache_->Prefetch(key, length, option);
+    status = remote_block_cache_->Prefetch(ctx, key, length, option);
   } else {
-    status = Status::NotFound("no cache store available for block cache");
+    status = Status::NotFound("no cache available");
   }
   return status;
 }
 
-void TierBlockCache::AsyncPut(const BlockKey& key, const Block& block,
-                              AsyncCallback cb, PutOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, block, cb, option]() {
-    Status status = self->Put(key, block, option);
+void TierBlockCache::AsyncPut(ContextSPtr ctx, const BlockKey& key,
+                              const Block& block, AsyncCallback cb,
+                              PutOption option) {
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
+    Status status = self->Put(ctx, key, block, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
-void TierBlockCache::AsyncRange(const BlockKey& key, off_t offset,
-                                size_t length, IOBuffer* buffer,
+void TierBlockCache::AsyncRange(ContextSPtr ctx, const BlockKey& key,
+                                off_t offset, size_t length, IOBuffer* buffer,
                                 AsyncCallback cb, RangeOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, offset, length, buffer, cb, option]() {
-    Status status = self->Range(key, offset, length, buffer, option);
-    if (cb) {
-      cb(status);
-    }
-  });
+  auto* self = GetSelfPtr();
+  auto tid =
+      RunInBthread([self, ctx, key, offset, length, buffer, cb, option]() {
+        Status status = self->Range(ctx, key, offset, length, buffer, option);
+        if (cb) {
+          cb(status);
+        }
+      });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
-void TierBlockCache::AsyncCache(const BlockKey& key, const Block& block,
-                                AsyncCallback cb, CacheOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, block, cb, option]() {
-    Status status = self->Cache(key, block, option);
+void TierBlockCache::AsyncCache(ContextSPtr ctx, const BlockKey& key,
+                                const Block& block, AsyncCallback cb,
+                                CacheOption option) {
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
+    Status status = self->Cache(ctx, key, block, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
-void TierBlockCache::AsyncPrefetch(const BlockKey& key, size_t length,
-                                   AsyncCallback cb, PrefetchOption option) {
-  auto self = GetSelfSPtr();
-  RunInBthread([self, key, length, cb, option]() {
-    Status status = self->Prefetch(key, length, option);
+void TierBlockCache::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
+                                   size_t length, AsyncCallback cb,
+                                   PrefetchOption option) {
+  auto* self = GetSelfPtr();
+  auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
+    Status status = self->Prefetch(ctx, key, length, option);
     if (cb) {
       cb(status);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
 bool TierBlockCache::LocalEnableStage() const {

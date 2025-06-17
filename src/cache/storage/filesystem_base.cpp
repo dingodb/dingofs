@@ -22,27 +22,23 @@
 
 #include "cache/storage/filesystem_base.h"
 
-#include <fcntl.h>
-#include <glog/logging.h>
-#include <sys/vfs.h>
-
-#include <cstddef>
-#include <memory>
-
 #include "absl/cleanup/cleanup.h"
 #include "base/file/file.h"
-#include "base/filepath/filepath.h"
 #include "base/math/math.h"
 #include "base/time/time.h"
-#include "cache/storage/aio/aio_queue.h"
-#include "cache/storage/aio/linux_io_uring.h"
 #include "cache/storage/filesystem.h"
-#include "cache/utils/filepath.h"
+#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/posix.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint32(ioring_blksize, 1048576,
+              "Block size for iouring operations in bytes");
+DEFINE_uint32(ioring_iodepth, 128, "I/O depth for iouring operations");
+DEFINE_bool(ioring_prefetch, true,
+            "Whether to enable prefetching for iouring operations");
 
 using dingofs::base::file::IsDir;
 using dingofs::base::file::IsFile;
@@ -57,9 +53,9 @@ FileSystemBase& FileSystemBase::GetInstance() {
   return instance;
 }
 
-Status FileSystemBase::Init() { return Status::OK(); }
+Status FileSystemBase::Start() { return Status::OK(); }
 
-Status FileSystemBase::Destroy() { return Status::OK(); }
+Status FileSystemBase::Shutdown() { return Status::OK(); }
 
 Status FileSystemBase::MkDirs(const std::string& path) {
   // The parent diectory already exists in most time
@@ -76,7 +72,7 @@ Status FileSystemBase::MkDirs(const std::string& path) {
     }
     return CheckStatus(Status::OK());
   } else if (status.IsNotFound()) {  // parent directory not exist
-    status = MkDirs(FilePath::ParentDir(path));
+    status = MkDirs(Helper::ParentDir(path));
     if (status.ok()) {
       status = MkDirs(path);
     }
@@ -108,7 +104,7 @@ Status FileSystemBase::Walk(const std::string& prefix, WalkFunc func) {
       continue;
     }
 
-    std::string path(FilePath::PathJoin({prefix, name}));
+    std::string path(Helper::PathJoin({prefix, name}));
     status = Posix::Stat(path, &stat);
     if (!status.ok()) {
       // break
@@ -126,13 +122,15 @@ Status FileSystemBase::Walk(const std::string& prefix, WalkFunc func) {
   return CheckStatus(status);
 }
 
-Status FileSystemBase::WriteFile(const std::string& /*path*/,
+Status FileSystemBase::WriteFile(ContextSPtr /*ctx*/,
+                                 const std::string& /*path*/,
                                  const IOBuffer& /* buffer*/,
                                  WriteOption /*option*/) {
   return Status::NotSupport("filesystem base does not support write");
 }
 
-Status FileSystemBase::ReadFile(const std::string& /*path*/, off_t /*offset*/,
+Status FileSystemBase::ReadFile(ContextSPtr /*ctx*/,
+                                const std::string& /*path*/, off_t /*offset*/,
                                 size_t /*length*/, IOBuffer* /*buffer*/,
                                 ReadOption /*option*/) {
   return Status::NotSupport("filesystem base does not support read");
@@ -143,7 +141,7 @@ Status FileSystemBase::RemoveFile(const std::string& path) {
 }
 
 Status FileSystemBase::Link(const std::string& from, const std::string& to) {
-  auto status = MkDirs(FilePath::ParentDir(to));
+  auto status = MkDirs(Helper::ParentDir(to));
   if (status.ok()) {
     status = Posix::Link(from, to);
   }
@@ -185,7 +183,7 @@ Status FileSystemBase::StatFS(const std::string& path, FSStat* stat) {
 }
 
 Status FileSystemBase::CheckStatus(Status status) {
-  // if (check_status_func_ != nullptr) {
+  // if (check_status_func_ != nullptr) { // FIXME
   //   return check_status_func_(status);
   // }
   return status;

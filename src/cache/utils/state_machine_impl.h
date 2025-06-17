@@ -16,14 +16,11 @@
 #define DINGOFS_SRC_CACHE_UTILS_STATE_MACHINE_IMPL_H_
 
 #include <memory>
-#include <mutex>
 
 #include "bthread/execution_queue.h"
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 #include "cache/utils/state_machine.h"
-#include "utils/concurrent/rw_lock.h"
 #include "utils/executor/timer.h"
-#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
@@ -112,7 +109,7 @@ class StateMachineImpl final : public StateMachine {
   ~StateMachineImpl() override = default;
 
   bool Start() override;
-  bool Stop() override;
+  bool Shutdown() override;
 
   void Success() override {
     if (running_) {
@@ -140,7 +137,7 @@ class StateMachineImpl final : public StateMachine {
   void ProcessEvent(StateEvent event);
   void TickTock();
 
-  bool running_;
+  std::atomic<bool> running_;
   mutable BthreadMutex mutex_;
   BaseStateUPtr state_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;
