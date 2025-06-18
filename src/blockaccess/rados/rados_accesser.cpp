@@ -46,33 +46,7 @@ void DestroyIoctx(rados_ioctx_t ioctx) {
     rados_ioctx_destroy(ioctx);
   }
 }
-
-template <typename Context>
-void InvokeCallback(const std::shared_ptr<Context>& context, int err) {
-  context->ret_code = err;
-  context->cb(context);
-}
 }  // namespace
-
-static void CompleteCallback(rados_completion_t cb, void* arg) {
-  RadosAsyncIOUnit* io_unit = static_cast<RadosAsyncIOUnit*>(arg);
-
-  CHECK_NOTNULL(io_unit);
-  CHECK(rados_aio_is_complete(io_unit->completion))
-      << "Completion is not "
-      << "complete, key: " << io_unit->key;
-
-  int err = rados_aio_get_return_value(cb);
-  if (err < 0) {
-    LOG(WARNING) << "Async operation failed, key: " << io_unit->key
-                 << ", error: " << strerror(-err);
-  }
-
-  std::visit([err](auto&& ctx) { InvokeCallback(ctx, err); },
-             io_unit->async_context);
-
-  delete io_unit;
-}
 
 bool RadosAccesser::Init() {
   if (options_.cluster_name.empty() || options_.user_name.empty() ||
@@ -270,46 +244,89 @@ RadosAsyncIOUnit::~RadosAsyncIOUnit() {
   }
 }
 
-template <typename Context>
-void RadosAccesser::ExecuteAsyncOperation(
-    std::shared_ptr<Context> context,
-    std::function<int(const RadosAsyncIOUnit&)> async_op) {
-  auto io_unit = std::make_unique<RadosAsyncIOUnit>(context);
-  io_unit->key = context->key;
+static void CompleteCallback(rados_completion_t cb, void* arg) {
+  RadosAsyncIOUnit* io_unit = static_cast<RadosAsyncIOUnit*>(arg);
 
+  CHECK_NOTNULL(io_unit);
+  CHECK(rados_aio_is_complete(io_unit->completion))
+      << "Completion is not "
+      << "complete, key: " << io_unit->key;
+
+  int err = rados_aio_get_return_value(cb);
+  if (err < 0) {
+    LOG(WARNING) << "Async operation failed, key: " << io_unit->key
+                 << ", error: " << strerror(-err);
+  }
+
+  io_unit->callback(io_unit, err);
+
+  delete io_unit;
+}
+
+// take ownership of io_unit and pass it to the callback
+void RadosAccesser::ExecuteAsyncOperation(
+    RadosAsyncIOUnit* io_unit, std::function<int(RadosAsyncIOUnit*)> async_op) {
   int err = CreateIoContext(cluster_, options_.pool_name, &io_unit->ioctx);
+
+  auto defer = ::absl::MakeCleanup([&]() { delete io_unit; });
+
   if (err < 0) {
     LOG(ERROR) << "Failed to create ioctx, pool: " << options_.pool_name
-               << ", key: " << context->key << ", err: " << strerror(-err);
-    InvokeCallback(context, err);
+               << ", key: " << io_unit->key << ", err: " << strerror(-err);
+
+    io_unit->callback(io_unit, err);
     return;
   }
 
-  err = rados_aio_create_completion(io_unit.get(), &CompleteCallback, nullptr,
+  err = rados_aio_create_completion(io_unit, &CompleteCallback, nullptr,
                                     &io_unit->completion);
   if (err < 0) {
-    LOG(ERROR) << "Failed to create completion, key: " << context->key
+    LOG(ERROR) << "Failed to create completion, key: " << io_unit->key
                << ", err: " << strerror(-err);
-    InvokeCallback(context, err);
+    io_unit->callback(io_unit, err);
     return;
   }
 
-  err = async_op(*io_unit.get());
+  err = async_op(io_unit);
   if (err < 0) {
-    LOG(ERROR) << "Failed to async_op, key: " << context->key
+    LOG(ERROR) << "Failed to async_op, key: " << io_unit->key
                << ", err: " << strerror(-err);
-    InvokeCallback(context, err);
+    io_unit->callback(io_unit, err);
     return;
   }
 
-  // transfer ownership of io_unit to the callback
-  auto* released_io_unit = io_unit.release();
+  std::move(defer).Cancel();
+}
+
+//  * The return value of the completion will be number of bytes read on
+//  * success, negative error code on failure.
+static void AsyncGetCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
+  CHECK(std::holds_alternative<std::shared_ptr<GetObjectAsyncContext>>(
+      io_unit->async_context))
+      << "AsyncGetCallback expects GetObjectAsyncContext";
+
+  auto get_context =
+      std::get<std::shared_ptr<GetObjectAsyncContext>>(io_unit->async_context);
+
+  if (ret_code < 0) {
+    get_context->ret_code = ret_code;
+  } else {
+    get_context->ret_code = 0;
+    get_context->actual_len = ret_code;
+  }
+
+  get_context->cb(get_context);
 }
 
 void RadosAccesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
-  ExecuteAsyncOperation(context, [this, context](const RadosAsyncIOUnit& unit) {
-    int err = rados_aio_read(unit.ioctx, context->key.c_str(), unit.completion,
-                             context->buf, context->len, context->offset);
+  auto* io_unit = new RadosAsyncIOUnit(context);
+  io_unit->callback = &AsyncGetCallback;
+
+  // transfer ownership of io_unit to the callback
+  ExecuteAsyncOperation(io_unit, [this, context](RadosAsyncIOUnit* unit) {
+    int err =
+        rados_aio_read(unit->ioctx, context->key.c_str(), unit->completion,
+                       context->buf, context->len, context->offset);
     if (err < 0) {
       LOG(ERROR) << "Fail AsyncGet key: " << context->key
                  << ", length: " << context->len
@@ -320,10 +337,26 @@ void RadosAccesser::AsyncGet(std::shared_ptr<GetObjectAsyncContext> context) {
   });
 }
 
+static void AsyncPutCallback(RadosAsyncIOUnit* io_unit, int ret_code) {
+  CHECK(std::holds_alternative<std::shared_ptr<PutObjectAsyncContext>>(
+      io_unit->async_context))
+      << "AsyncPutCallback expects PutObjectAsyncContext";
+
+  auto put_context =
+      std::get<std::shared_ptr<PutObjectAsyncContext>>(io_unit->async_context);
+  put_context->ret_code = ret_code;
+  put_context->cb(put_context);
+}
+
 void RadosAccesser::AsyncPut(std::shared_ptr<PutObjectAsyncContext> context) {
-  ExecuteAsyncOperation(context, [this, context](const RadosAsyncIOUnit& unit) {
-    int err = rados_aio_write(unit.ioctx, context->key.c_str(), unit.completion,
-                              context->buffer, context->buffer_size, 0);
+  auto* io_unit = new RadosAsyncIOUnit(context);
+  io_unit->callback = &AsyncPutCallback;
+
+  // transfer ownership of io_unit to the callback
+  ExecuteAsyncOperation(io_unit, [this, context](RadosAsyncIOUnit* unit) {
+    int err =
+        rados_aio_write(unit->ioctx, context->key.c_str(), unit->completion,
+                        context->buffer, context->buffer_size, 0);
     if (err < 0) {
       LOG(ERROR) << "Fail AsyncPut key: " << context->key
                  << ", length: " << context->buffer_size

@@ -34,16 +34,19 @@ using AsyncContext = std::variant<std::shared_ptr<GetObjectAsyncContext>,
                                   std::shared_ptr<PutObjectAsyncContext>>;
 
 struct RadosAsyncIOUnit {
-  std::string key;
+  const std::string key;
   AsyncContext async_context;
   rados_ioctx_t ioctx{nullptr};
   rados_completion_t completion{nullptr};
+  std::function<void(RadosAsyncIOUnit*, int ret_code)> callback;
 
   explicit RadosAsyncIOUnit(std::shared_ptr<GetObjectAsyncContext> get_context)
-      : async_context(std::move(CHECK_NOTNULL(get_context))) {}
+      : async_context(std::move(CHECK_NOTNULL(get_context))),
+        key(get_context->key) {}
 
   explicit RadosAsyncIOUnit(std::shared_ptr<PutObjectAsyncContext> put_context)
-      : async_context(std::move(CHECK_NOTNULL(put_context))) {}
+      : async_context(std::move(CHECK_NOTNULL(put_context))),
+        key(put_context->key) {}
 
   ~RadosAsyncIOUnit();
 
@@ -53,7 +56,7 @@ struct RadosAsyncIOUnit {
 
 class RadosAccesser : public Accesser {
  public:
-  RadosAccesser(const RadosOptions& options) : options_(options){};
+  RadosAccesser(const RadosOptions& options) : options_(options) {};
 
   ~RadosAccesser() override { Destroy(); }
 
@@ -89,10 +92,9 @@ class RadosAccesser : public Accesser {
   Status ExecuteSyncOp(const std::string& key,
                        std::function<Status(rados_ioctx_t ioctx)> sync_op);
 
-  template <typename Context>
   void ExecuteAsyncOperation(
-      std::shared_ptr<Context> context,
-      std::function<int(const RadosAsyncIOUnit&)> async_op);
+      RadosAsyncIOUnit* io_unit,
+      std::function<int(RadosAsyncIOUnit*)> async_op);
 
   const RadosOptions options_;
 
