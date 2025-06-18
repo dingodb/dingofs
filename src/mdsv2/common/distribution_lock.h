@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "bthread/bthread.h"
 #include "dingosdk/version.h"
@@ -119,6 +120,15 @@ class StoreDistributionLock : public DistributionLock {
   void Destroy() override;
   std::string LockKey() override;
   bool IsLocked() override;
+
+  struct LockEntry {
+    std::string name;
+    int64_t owner{0};
+    uint64_t epoch{0};
+    uint64_t expire_time_ms{0};
+  };
+
+  static Status GetAllLockInfo(KVStorageSPtr kv_storage, std::vector<LockEntry>& lock_entries);
 
  private:
   Status RenewLease();

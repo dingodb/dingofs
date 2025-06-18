@@ -732,7 +732,7 @@ Status FileSystem::Open(Context& ctx, Ino ino, uint32_t flags, std::string& sess
     return status;
   }
 
-  OpenFileOperation operation(trace, fs_id_, ino, flags, *file_session);
+  OpenFileOperation operation(trace, flags, *file_session);
 
   status = RunOperation(&operation);
   if (!status.ok()) {

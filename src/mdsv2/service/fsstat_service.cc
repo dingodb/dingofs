@@ -145,7 +145,7 @@ static std::string PartitionTypeName(pb::mdsv2::PartitionType partition_type) {
   }
 }
 
-static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes) {
+static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil::IOBufBuilder& os) {
   auto render_size_func = [](const pb::mdsv2::FsInfo& fs_info) -> std::string {
     std::string result;
     result += "<div>";
@@ -189,8 +189,6 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
     return result;
   };
 
-  butil::IOBufBuilder os;
-
   os << R"(<div style="margin:12px;font-size:smaller;">)";
   os << R"(<h3>FS</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -233,16 +231,9 @@ static std::string RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes)
 
   os << "</table>\n";
   os << "</div>";
-
-  butil::IOBuf buf;
-  os.move_to(buf);
-
-  return buf.to_string();
 }
 
-static std::string RenderMdsList(const std::vector<MdsEntry>& mdses) {
-  butil::IOBufBuilder os;
-
+static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << R"(<h3>MDS</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -274,16 +265,9 @@ static std::string RenderMdsList(const std::vector<MdsEntry>& mdses) {
 
   os << "</table>";
   os << "</div>";
-
-  butil::IOBuf buf;
-  os.move_to(buf);
-
-  return buf.to_string();
 }
 
-static std::string RenderClientList(const std::vector<ClientEntry>& clients) {
-  butil::IOBufBuilder os;
-
+static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
   os << R"(<h3>Client</h3>)";
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
@@ -314,11 +298,31 @@ static std::string RenderClientList(const std::vector<ClientEntry>& clients) {
 
   os << "</table>";
   os << "</div>";
+}
 
-  butil::IOBuf buf;
-  os.move_to(buf);
+static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockEntry>& lock_entries,
+                                  butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
+  os << R"(<h3>Distributed Lock</h3>)";
+  os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
+  os << "<tr>";
+  os << "<th>Name</th>";
+  os << "<th>Owner</th>";
+  os << "<th>Epoch</th>";
+  os << "<th>Expired Time</th>";
+  os << "</tr>";
 
-  return buf.to_string();
+  for (const auto& lock_entry : lock_entries) {
+    os << "<tr>";
+    os << "<td>" << lock_entry.name << "</td>";
+    os << "<td>" << lock_entry.owner << "</td>";
+    os << "<td>" << lock_entry.epoch << "</td>";
+    os << "<td>" << Helper::FormatMsTime(lock_entry.expire_time_ms) << "</td>";
+    os << "</tr>";
+  }
+
+  os << "</table>";
+  os << "</div>";
 }
 
 static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
@@ -344,7 +348,7 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
     sort(fs_infoes.begin(), fs_infoes.end(),
          [](const pb::mdsv2::FsInfo& a, const pb::mdsv2::FsInfo& b) { return a.fs_id() < b.fs_id(); });
 
-    os << RenderFsInfo(fs_infoes);
+    RenderFsInfo(fs_infoes, os);
   }
 
   // mds stats
@@ -357,7 +361,7 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 
   } else {
     sort(mdses.begin(), mdses.end(), [](const MdsEntry& a, const MdsEntry& b) { return a.id() < b.id(); });
-    os << RenderMdsList(mdses);
+    RenderMdsList(mdses, os);
   }
 
   // client stats
@@ -373,7 +377,19 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
     sort(clients.begin(), clients.end(),
          [](const ClientEntry& a, const ClientEntry& b) { return a.last_online_time_ms() > b.last_online_time_ms(); });
 
-    os << RenderClientList(clients);
+    RenderClientList(clients, os);
+  }
+
+  // distribution lock
+  std::vector<StoreDistributionLock::LockEntry> lock_entries;
+  status = StoreDistributionLock::GetAllLockInfo(Server::GetInstance().GetKVStorage(), lock_entries);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[mdsstat] get distributed lock info fail, error({}).", status.error_str());
+    os << fmt::format(R"(<div style="color:red;">get distributed lock info fail, error({}).</div>)",
+                      status.error_str());
+
+  } else {
+    RenderDistributedLock(lock_entries, os);
   }
 
   os << "</body>";

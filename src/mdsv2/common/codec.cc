@@ -271,20 +271,22 @@ void MetaCodec::DecodeLockKey(const std::string& key, std::string& name) {
 }
 
 // format: [$mds_id, $expire_time_ms]
-std::string MetaCodec::EncodeLockValue(int64_t mds_id, uint64_t expire_time_ms) {
+std::string MetaCodec::EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t expire_time_ms) {
   std::string value;
 
   SerialHelper::WriteLong(mds_id, value);
+  SerialHelper::WriteULong(epoch, value);
   SerialHelper::WriteULong(expire_time_ms, value);
 
   return std::move(value);
 }
 
-void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ms) {
-  CHECK(value.size() == 16) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
+void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& epoch, uint64_t& expire_time_ms) {
+  CHECK(value.size() == 24) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
 
   mds_id = SerialHelper::ReadLong(value);
-  expire_time_ms = SerialHelper::ReadULong(value.substr(8));
+  epoch = SerialHelper::ReadULong(value.substr(8));
+  expire_time_ms = SerialHelper::ReadULong(value.substr(16));
 }
 
 std::string MetaCodec::EncodeAutoIncrementKey(const std::string& name) {
@@ -619,7 +621,6 @@ std::string MetaCodec::EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::
   key.push_back(KeyType::kTypeFileSession);
   SerialHelper::WriteInt(fs_id, key);
   SerialHelper::WriteULong(ino, key);
-  ;
   key.append(session_id);
 
   return key;

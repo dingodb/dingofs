@@ -421,10 +421,10 @@ Status UpdateXAttrOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
   return Status::OK();
 }
 
-Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
+Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
   // update chunk
-  auto it = inode.mutable_chunks()->find(chunk_index_);
-  if (it == inode.chunks().end()) {
+  auto it = attr.mutable_chunks()->find(chunk_index_);
+  if (it == attr.chunks().end()) {
     pb::mdsv2::Chunk chunk;
     chunk.set_index(chunk_index_);
     chunk.set_chunk_size(fs_info_.chunk_size());
@@ -432,7 +432,7 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
     chunk.set_version(0);
     Helper::VectorToPbRepeated(slices_, chunk.mutable_slices());
 
-    inode.mutable_chunks()->insert({chunk_index_, std::move(chunk)});
+    attr.mutable_chunks()->insert({chunk_index_, std::move(chunk)});
 
   } else {
     auto& chunk = it->second;
@@ -442,32 +442,32 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& inode) {
   }
 
   // update length
-  uint64_t prev_length = inode.length();
+  uint64_t prev_length = attr.length();
   for (auto& slice : slices_) {
-    if (inode.length() < slice.offset() + slice.len()) {
-      inode.set_length(slice.offset() + slice.len());
+    if (attr.length() < slice.offset() + slice.len()) {
+      attr.set_length(slice.offset() + slice.len());
     }
   }
-  result_.length_delta = inode.length() - prev_length;
+  result_.length_delta = attr.length() - prev_length;
 
   // update attr
-  inode.set_ctime(std::max(inode.ctime(), GetTime()));
-  inode.set_mtime(std::max(inode.mtime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
 
   return Status::OK();
 }
 
-Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrType& inode) {
+Status OpenFileOperation::RunInBatch(TxnUPtr& txn, AttrType& attr) {
   if (flags_ & O_TRUNC) {
-    inode.set_length(0);
+    attr.set_length(0);
   }
 
-  inode.set_atime(std::max(inode.atime(), GetTime()));
-  inode.set_ctime(std::max(inode.ctime(), GetTime()));
-  inode.set_mtime(std::max(inode.mtime(), GetTime()));
+  attr.set_atime(std::max(attr.atime(), GetTime()));
+  attr.set_ctime(std::max(attr.ctime(), GetTime()));
+  attr.set_mtime(std::max(attr.mtime(), GetTime()));
 
   // add file session
-  txn->Put(MetaCodec::EncodeFileSessionKey(fs_id_, ino_, file_session_.session_id()),
+  txn->Put(MetaCodec::EncodeFileSessionKey(file_session_.fs_id(), file_session_.ino(), file_session_.session_id()),
            MetaCodec::EncodeFileSessionValue(file_session_));
 
   return Status::OK();

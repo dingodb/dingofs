@@ -61,8 +61,8 @@ class MetaCodec {
   // format: [$prefix, $type, $name]
   static std::string EncodeLockKey(const std::string& name);
   static void DecodeLockKey(const std::string& key, std::string& name);
-  static std::string EncodeLockValue(int64_t mds_id, uint64_t expire_time_ms);
-  static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& expire_time_ms);
+  static std::string EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t expire_time_ms);
+  static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& epoch, uint64_t& expire_time_ms);
 
   // auto increment id
   // format: [$prefix, $type, $name]

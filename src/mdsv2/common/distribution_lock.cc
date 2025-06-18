@@ -428,8 +428,8 @@ Status StoreDistributionLock::RenewLease() {
   do {
     auto txn = kv_storage_->NewTxn();
 
-    const std::string key = MetaCodec::EncodeLockKey(name_);
     std::string value;
+    const std::string key = MetaCodec::EncodeLockKey(name_);
     status = txn->Get(key, value);
     if (!status.ok() && status.error_code() != pb::error::ENOT_FOUND) {
       break;
@@ -437,10 +437,11 @@ Status StoreDistributionLock::RenewLease() {
 
     bool need_update_last_lock_time = false;
     uint64_t now_ms = Helper::TimestampMs();
+    uint64_t epoch = 0;
     uint64_t expire_time_ms = 0;
     if (status.ok()) {
       // already exist lock owner
-      MetaCodec::DecodeLockValue(value, owner_mds_id, expire_time_ms);
+      MetaCodec::DecodeLockValue(value, owner_mds_id, epoch, expire_time_ms);
 
       // self is lock owner
       if (owner_mds_id == mds_id_) {
@@ -470,7 +471,8 @@ Status StoreDistributionLock::RenewLease() {
       state = "NotExistLockOwner";
     }
 
-    txn->Put(key, MetaCodec::EncodeLockValue(mds_id_, expire_time_ms));
+    epoch = (owner_mds_id != mds_id_) ? epoch + 1 : epoch;
+    txn->Put(key, MetaCodec::EncodeLockValue(mds_id_, epoch, expire_time_ms));
     status = txn->Commit();
     if (status.ok()) {
       is_locked_.store(true);
@@ -539,6 +541,27 @@ void StoreDistributionLock::StopRenewLease() {
   if (bthread_join(lease_th_, nullptr) != 0) {
     DINGO_LOG(ERROR) << fmt::format("[dlock.{}] bthread_join fail.", LockKey());
   }
+}
+
+Status StoreDistributionLock::GetAllLockInfo(KVStorageSPtr kv_storage, std::vector<LockEntry>& lock_entries) {
+  Range range;
+  MetaCodec::GetLockTableRange(range.start_key, range.end_key);
+
+  std::vector<KeyValue> kvs;
+  auto status = kv_storage->Scan(range, kvs);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (auto& kv : kvs) {
+    LockEntry lock_entry;
+    MetaCodec::DecodeLockKey(kv.key, lock_entry.name);
+    MetaCodec::DecodeLockValue(kv.value, lock_entry.owner, lock_entry.epoch, lock_entry.expire_time_ms);
+
+    lock_entries.push_back(lock_entry);
+  }
+
+  return Status::OK();
 }
 
 }  // namespace mdsv2

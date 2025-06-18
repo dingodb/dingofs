@@ -518,7 +518,7 @@ class UpdateChunkOperation : public Operation {
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
   template <int size = 0>
   Result& GetResult() {
@@ -540,20 +540,18 @@ class UpdateChunkOperation : public Operation {
 
 class OpenFileOperation : public Operation {
  public:
-  OpenFileOperation(Trace& trace, uint32_t fs_id, Ino ino, uint32_t flags, FileSessionEntry file_session)
-      : Operation(trace), fs_id_(fs_id), ino_(ino), flags_(flags), file_session_(file_session) {};
+  OpenFileOperation(Trace& trace, uint32_t flags, const FileSessionEntry& file_session)
+      : Operation(trace), flags_(flags), file_session_(file_session) {};
   ~OpenFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kOpenFile; }
 
-  uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return ino_; }
+  uint32_t GetFsId() const override { return file_session_.fs_id(); }
+  Ino GetIno() const override { return file_session_.ino(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& inode) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
  private:
-  uint32_t fs_id_;
-  Ino ino_;
   uint32_t flags_;
 
   FileSessionEntry file_session_;
