@@ -47,7 +47,7 @@
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "common/task_thread_pool.h"
-#include "stub/metric/metric.h"
+#include "metrics/client/vfs_legacy/warmup.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
@@ -222,7 +222,7 @@ class WarmupManager {
     return ret;
   }
 
-  void CollectMetrics(stub::metric::InterfaceMetric* interface, int count,
+  void CollectMetrics(metrics::InterfaceMetric* interface, int count,
                       uint64_t start);
 
  protected:
@@ -435,7 +435,7 @@ class WarmupManagerS3Impl : public WarmupManager {
       inode2FetchS3ObjectsPool_;
   mutable utils::RWLock inode2FetchS3ObjectsPoolMutex_;
 
-  dingofs::stub::metric::WarmupManagerS3Metric warmupS3Metric_;
+  dingofs::metrics::client::vfs_legacy::WarmupManagerS3Metric warmupS3Metric_;
 
   blockaccess::BlockAccesser* block_accesser_;
 };

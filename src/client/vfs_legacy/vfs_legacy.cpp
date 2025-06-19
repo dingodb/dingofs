@@ -51,6 +51,8 @@
 #include "dingofs/common.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
+#include "metrics/client/client.h"
+#include "metrics/metric_guard.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/base_client.h"
 #include "stub/rpcclient/channel_manager.h"
@@ -59,6 +61,7 @@
 #include "stub/rpcclient/metacache.h"
 #include "utils/configuration.h"
 #include "utils/net_common.h"
+#include "utils/string_util.h"
 #include "utils/throttle.h"
 
 #define PORT_LIMIT 65535
@@ -76,6 +79,7 @@ namespace client {
 namespace vfs {
 
 using client::common::RewriteCacheDir;
+using metrics::FsMetricGuard;
 
 static void OnThrottleTimer(void* arg) {
   VFSOld* vfs = reinterpret_cast<VFSOld*>(arg);
@@ -1402,7 +1406,7 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   // fuse read metrics
   uint64_t r_size = 0;
 
-  FsMetricGuard guard(&stub::metric::FSMetric::GetInstance().user_read,
+  FsMetricGuard guard(&metrics::client::FSMetric::GetInstance().user_read,
                       &r_size);
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
@@ -1457,7 +1461,7 @@ Status VFSOld::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
 
   // fuse write metrics
   uint64_t w_size = 0;
-  FsMetricGuard guard(&stub::metric::FSMetric::GetInstance().user_write,
+  FsMetricGuard guard(&metrics::client::FSMetric::GetInstance().user_write,
                       &w_size);
 
   int w_ret = s3_adapter_->Write(ino, offset, size, buf);

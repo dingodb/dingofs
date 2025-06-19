@@ -38,8 +38,9 @@
 #include "common/rpc_stream.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/core.h"
+#include "metrics/metaserver/metaserver_client.h"
+#include "metrics/metric_guard.h"
 #include "stub/common/common.h"
-#include "stub/metric/metric.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "stub/rpcclient/metacache.h"
 #include "stub/rpcclient/task_excutor.h"
@@ -84,8 +85,8 @@ using common::LogicPoolID;
 using common::MetaserverID;
 using common::MetaServerOpType;
 using common::PartitionID;
-using metric::MetaServerClientMetric;
-using metric::MetricListGuard;
+using metrics::MetricListGuard;
+using metrics::metaserver::MetaServerClientMetric;
 using rpcclient::ConvertToMetaStatusCode;
 using utils::StringToUll;
 
@@ -120,13 +121,13 @@ MetaStatusCode MetaServerClientImpl::Init(
 
 #define RPCTask                                                         \
   [&](LogicPoolID poolID, CopysetID copysetID, PartitionID partitionID, \
-      uint64_t txId, uint64_t applyIndex, brpc::Channel * channel,      \
-      brpc::Controller * cntl, TaskExecutorDone * taskExecutorDone) -> int
+      uint64_t txId, uint64_t applyIndex, brpc::Channel* channel,       \
+      brpc::Controller* cntl, TaskExecutorDone* taskExecutorDone) -> int
 
 #define AsyncRPCTask                                                    \
   [=](LogicPoolID poolID, CopysetID copysetID, PartitionID partitionID, \
-      uint64_t txId, uint64_t applyIndex, brpc::Channel * channel,      \
-      brpc::Controller * cntl, TaskExecutorDone * taskExecutorDone) -> int
+      uint64_t txId, uint64_t applyIndex, brpc::Channel* channel,       \
+      brpc::Controller* cntl, TaskExecutorDone* taskExecutorDone) -> int
 
 class MetaServerClientRpcDoneBase : public google::protobuf::Closure {
  public:

@@ -35,6 +35,7 @@
 #include "metaserver/copyset/copyset_node.h"
 #include "metaserver/copyset/utils.h"
 #include "metaserver/resource_statistic.h"
+#include "utils/string_util.h"
 #include "utils/timeutility.h"
 #include "utils/uri_parser.h"
 

@@ -27,9 +27,10 @@
 #include <utility>
 #include <vector>
 
-#include "common/metric_utils.h"
 #include "dingofs/cachegroup.pb.h"
+#include "metrics/metric_guard.h"
 #include "stub/common/config.h"
+#include "utils/string_util.h"
 
 namespace dingofs {
 namespace stub {
@@ -57,7 +58,7 @@ using common::CopysetPeerInfo;
 using common::LogicPoolID;
 using common::MetaserverID;
 using common::PeerAddr;
-using metric::MetricListGuard;
+using metrics::MetricListGuard;
 using utils::TimeUtility;
 
 // rpc发送和mds地址切换状态机

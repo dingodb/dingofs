@@ -33,13 +33,15 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
-#include "stub/metric/metric.h"
+#include "metrics/metric_guard.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+using metrics::ClientOpMetricGuard;
 
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
@@ -111,7 +113,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
 
   LOG(INFO) << "use vfs type: " << vfs_conf.fs_type;
 
-  client_op_metric_ = std::make_unique<stub::metric::ClientOpMetric>();
+  client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
     vfs_ = std::make_unique<vfs::VFSImpl>(fuse_client_option_);

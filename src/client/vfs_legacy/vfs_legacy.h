@@ -204,30 +204,6 @@ class VFSOld : public VFS {
   dingofs::utils::Mutex rename_mutex_;
 };
 
-struct FsMetricGuard {
-  explicit FsMetricGuard(stub::metric::InterfaceMetric* metric, size_t* count)
-      : metric(metric), count(count), start(butil::cpuwide_time_us()) {}
-
-  ~FsMetricGuard() {
-    if (!fail) {
-      metric->bps.count << *count;
-      metric->qps.count << 1;
-      auto duration = butil::cpuwide_time_us() - start;
-      metric->latency << duration;
-      metric->latTotal << duration;
-    } else {
-      metric->eps.count << 1;
-    }
-  }
-
-  void Fail() { fail = true; }
-
-  bool fail{false};
-  stub::metric::InterfaceMetric* metric;
-  size_t* count;
-  uint64_t start;
-};
-
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

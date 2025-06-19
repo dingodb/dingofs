@@ -29,6 +29,7 @@ target_link_libraries(fuse_client_lib
     vfs_lib
     block_accesser
     jsoncpp
+    dingofs_metrics
     ${FUSE3_LIBRARY}
 )
 

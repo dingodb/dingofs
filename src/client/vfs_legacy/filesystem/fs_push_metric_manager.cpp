@@ -14,21 +14,19 @@
 
 #include "client/vfs_legacy/filesystem/fs_push_metric_manager.h"
 
-#include <memory>
-
 #include "client/common/dynamic_config.h"
-#include "common/define.h"
 #include "glog/logging.h"
-#include "stub/metric/metric.h"
+#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/client/client.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using ::dingofs::metrics::client::FSMetric;
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FSStatusCode;
-using ::dingofs::stub::metric::FSMetric;
-using ::dingofs::stub::metric::S3Metric;
+using metrics::blockaccess::S3Metric;
 
 USING_FLAG(push_metric_interval_millsecond)
 

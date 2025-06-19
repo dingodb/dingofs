@@ -31,9 +31,9 @@
 #include "dingofs/cachegroup.pb.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/topology.pb.h"
+#include "metrics/mds/mds_client.h"
 #include "stub/common/config.h"
 #include "stub/common/metacache_struct.h"
-#include "stub/metric/metric.h"
 #include "stub/rpcclient/base_client.h"
 
 namespace dingofs {
@@ -294,7 +294,8 @@ class MdsClientImpl : public MdsClient {
   pb::mds::FSStatusCode RefreshSession(
       const std::vector<pb::mds::topology::PartitionTxId>& txIds,
       std::vector<pb::mds::topology::PartitionTxId>* latestTxIdList,
-      const std::string& fsName, const pb::mds::Mountpoint& mountpoint) override;
+      const std::string& fsName,
+      const pb::mds::Mountpoint& mountpoint) override;
 
   pb::mds::FSStatusCode GetLatestTxId(
       uint32_t fsId,
@@ -351,7 +352,7 @@ class MdsClientImpl : public MdsClient {
   RPCExcutorRetryPolicy rpcexcutor_;
   common::MdsOption mdsOpt_;
 
-  metric::MDSClientMetric mdsClientMetric_;
+  metrics::mds::MDSClientMetric mdsClientMetric_;
 };
 
 }  // namespace rpcclient

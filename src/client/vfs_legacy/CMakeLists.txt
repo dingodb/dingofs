@@ -39,6 +39,7 @@ target_link_libraries(vfs_old_lib
     dingofs_utils
     block_accesser
     dingofs_threading
+    dingofs_metrics
     stub_common
     gflags::gflags
     glog::glog

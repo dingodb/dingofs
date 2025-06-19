@@ -12,15 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_executable(test_client_metric 
-    metric/client_metric_test.cpp
-)
-target_link_libraries(test_client_metric
-    stub_metric
-    ${TEST_DEPS}
-)
-set_target_properties(test_client_metric PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
-)
-
 add_subdirectory(rpcclient)

@@ -21,13 +21,14 @@
 #include <memory>
 
 #include "fmt/format.h"
-#include "stub/metric/metric.h"
+#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/metric_guard.h"
 
 namespace dingofs {
 namespace blockaccess {
 
-using stub::metric::MetricGuard;
-using stub::metric::S3Metric;
+using metrics::MetricGuard;
+using metrics::blockaccess::S3Metric;
 
 bool S3Accesser::Init() {
   const auto& s3_info = options_.s3_info;

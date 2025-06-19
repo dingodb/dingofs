@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(stub_metric 
-    metric.cpp 
+add_executable(test_client_metric 
+    client_metric_test.cpp
 )
-
-target_link_libraries(stub_metric
-    dingofs_utils
-    gflags::gflags
-    brpc::brpc
+target_link_libraries(test_client_metric
+    dingofs_metrics
+    ${TEST_DEPS}
+)
+set_target_properties(test_client_metric PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${TEST_EXECUTABLE_OUTPUT_PATH}
 )

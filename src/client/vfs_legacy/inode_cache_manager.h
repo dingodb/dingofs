@@ -35,6 +35,7 @@
 #include "client/vfs_legacy/filesystem/openfile.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "dingofs/metaserver.pb.h"
+#include "metrics/client/vfs_legacy/s3_chunk_info.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "stub/rpcclient/task_excutor.h"
 #include "utils/concurrent/concurrent.h"
@@ -108,7 +109,8 @@ class InodeCacheManagerImpl
       std::shared_ptr<filesystem::OpenFiles> open_files,
       std::shared_ptr<filesystem::DeferSync> defer_sync) override {
     option_ = option;
-    s3ChunkInfoMetric_ = std::make_shared<stub::metric::S3ChunkInfoMetric>();
+    s3ChunkInfoMetric_ =
+        std::make_shared<metrics::client::vfs_legacy::S3ChunkInfoMetric>();
     openFiles_ = open_files;
     deferSync_ = defer_sync;
     return DINGOFS_ERROR::OK;
@@ -153,7 +155,8 @@ class InodeCacheManagerImpl
                                    bool streaming = true);
 
   std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient_;
-  std::shared_ptr<stub::metric::S3ChunkInfoMetric> s3ChunkInfoMetric_;
+  std::shared_ptr<metrics::client::vfs_legacy::S3ChunkInfoMetric>
+      s3ChunkInfoMetric_;
 
   std::shared_ptr<filesystem::OpenFiles> openFiles_;
 

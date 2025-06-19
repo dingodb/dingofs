@@ -37,6 +37,7 @@ target_link_libraries(metaserver_lib
     dingofs_common
     metaserver_common
     dingofs_utils
+    dingofs_metrics
     rpcclient
     dynamic_vlog
     local_fs

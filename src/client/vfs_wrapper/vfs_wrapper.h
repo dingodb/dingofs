@@ -22,7 +22,7 @@
 
 #include "client/common/config.h"
 #include "client/vfs.h"
-#include "stub/metric/metric.h"
+#include "metrics/client/client.h"
 
 namespace dingofs {
 namespace client {
@@ -125,37 +125,7 @@ class VFSWrapper {
   common::ClientOption fuse_client_option_;
 
   std::unique_ptr<VFS> vfs_;
-  std::unique_ptr<stub::metric::ClientOpMetric> client_op_metric_;
-};
-
-struct ClientOpMetricGuard {
-  explicit ClientOpMetricGuard(
-      std::list<dingofs::stub::metric::OpMetric*> p_metric_list)
-      : metric_list(p_metric_list), start(butil::cpuwide_time_us()) {
-    for (auto& metric : metric_list) {
-      metric->inflightOpNum << 1;
-    }
-  }
-
-  ~ClientOpMetricGuard() {
-    for (auto& metric : metric_list) {
-      metric->inflightOpNum << -1;
-      if (op_ok) {
-        metric->qpsTotal << 1;
-        auto duration = butil::cpuwide_time_us() - start;
-        metric->latency << duration;
-        metric->latTotal << duration;
-      } else {
-        metric->ecount << 1;
-      }
-    }
-  }
-
-  void FailOp() { op_ok = false; }
-
-  bool op_ok{true};
-  std::list<dingofs::stub::metric::OpMetric*> metric_list;
-  uint64_t start;
+  std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;
 };
 
 }  // namespace vfs

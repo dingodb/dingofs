@@ -22,7 +22,7 @@ target_link_libraries(s3_accesser
     dingofs_utils
     dingofs_status
     aws_s3_adapter
-    stub_metric
+    dingofs_metrics
     ${AWSSDK_LIBRARIES}
     glog::glog
     spdlog::spdlog

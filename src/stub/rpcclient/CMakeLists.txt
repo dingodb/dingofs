@@ -26,7 +26,7 @@ add_library(rpcclient
 target_link_libraries(rpcclient
     PROTO_OBJS
     stub_common
-    stub_metric
+    dingofs_metrics
     dingofs_utils
     dingofs_common
     brpc::brpc

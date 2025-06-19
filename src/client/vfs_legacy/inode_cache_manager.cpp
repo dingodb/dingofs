@@ -29,9 +29,9 @@
 #include <memory>
 #include <utility>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {

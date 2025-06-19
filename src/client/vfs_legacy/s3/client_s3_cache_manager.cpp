@@ -44,10 +44,12 @@
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
-#include "stub/metric/metric.h"
+#include "metrics/client/vfs_legacy/s3_cache_manager.h"
 
-static dingofs::stub::metric::S3MultiManagerMetric* g_s3MultiManagerMetric =
-    new dingofs::stub::metric::S3MultiManagerMetric();
+using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
+
+static S3MultiManagerMetric* g_s3MultiManagerMetric =
+    new S3MultiManagerMetric();
 
 namespace dingofs {
 namespace client {

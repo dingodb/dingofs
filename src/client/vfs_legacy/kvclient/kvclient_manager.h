@@ -31,7 +31,7 @@
 
 #include "client/common/config.h"
 #include "client/vfs_legacy/kvclient/kvclient.h"
-#include "stub/metric/metric.h"
+#include "metrics/client/vfs_legacy/kv_client.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -88,7 +88,7 @@ class KVClientManager {
 
   void Get(std::shared_ptr<GetKVCacheTask> task);
 
-  stub::metric::KVClientMetric* GetClientMetricForTesting() {
+  metrics::client::vfs_legacy::KVClientMetric* GetClientMetricForTesting() {
     return &kvClientMetric_;
   }
 
@@ -97,7 +97,7 @@ class KVClientManager {
 
   utils::TaskThreadPool<bthread::Mutex, bthread::ConditionVariable> threadPool_;
   std::shared_ptr<KVClient> client_;
-  stub::metric::KVClientMetric kvClientMetric_;
+  metrics::client::vfs_legacy::KVClientMetric kvClientMetric_;
 };
 
 }  // namespace client

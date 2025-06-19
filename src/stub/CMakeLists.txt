@@ -13,5 +13,4 @@
 # limitations under the License.
 
 add_subdirectory(common)
-add_subdirectory(metric)
 add_subdirectory(rpcclient)

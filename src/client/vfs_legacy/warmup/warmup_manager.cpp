@@ -37,7 +37,9 @@
 #include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
 #include "client/vfs_legacy/inode_wrapper.h"
-#include "stub/metric/metric.h"
+#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/metric.h"
+#include "metrics/metric_guard.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/string_util.h"
 
@@ -48,8 +50,8 @@ namespace warmup {
 using base::filepath::PathSplit;
 using common::ClientOption;
 using common::WarmupStorageType;
-using stub::metric::MetricGuard;
-using stub::metric::S3Metric;
+using metrics::MetricGuard;
+using metrics::blockaccess::S3Metric;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 
@@ -754,7 +756,7 @@ void WarmupManagerS3Impl::PutObjectToCache(
   }
 }
 
-void WarmupManager::CollectMetrics(stub::metric::InterfaceMetric* interface,
+void WarmupManager::CollectMetrics(metrics::InterfaceMetric* interface,
                                    int count, uint64_t start) {
   interface->bps.count << count;
   interface->qps.count << 1;

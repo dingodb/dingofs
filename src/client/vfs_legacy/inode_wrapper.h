@@ -35,7 +35,7 @@
 #include "client/common/common.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "dingofs/metaserver.pb.h"
-#include "stub/metric/metric.h"
+#include "metrics/client/vfs_legacy/s3_chunk_info.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/timeutility.h"
@@ -66,7 +66,7 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
  public:
   InodeWrapper(pb::metaserver::Inode inode,
                std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient,
-               std::shared_ptr<stub::metric::S3ChunkInfoMetric>
+               std::shared_ptr<metrics::client::vfs_legacy::S3ChunkInfoMetric>
                    s3ChunkInfoMetric = nullptr,
                int64_t maxDataSize = LONG_MAX,
                uint32_t refreshDataInterval = UINT_MAX)
@@ -366,7 +366,8 @@ class InodeWrapper : public std::enable_shared_from_this<InodeWrapper> {
   int64_t s3ChunkInfoSize_;
 
   std::shared_ptr<stub::rpcclient::MetaServerClient> metaClient_;
-  std::shared_ptr<stub::metric::S3ChunkInfoMetric> s3ChunkInfoMetric_;
+  std::shared_ptr<metrics::client::vfs_legacy::S3ChunkInfoMetric>
+      s3ChunkInfoMetric_;
   bool dirty_;
   mutable utils::Mutex mtx_;
 

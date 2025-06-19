@@ -20,8 +20,8 @@ add_library(client_memcached_client
 
 target_link_libraries(client_memcached_client
     PROTO_OBJS
-    stub_metric
     dingofs_utils
+    dingofs_metrics
     block_accesser
     absl::strings
     glog::glog

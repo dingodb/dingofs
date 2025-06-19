@@ -22,9 +22,10 @@
 
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 
-#include "stub/metric/metric.h"
+#include "metrics/metric.h"
+#include "metrics/metric_guard.h"
 
-using dingofs::stub::metric::LatencyGuard;
+using dingofs::metrics::LatencyGuard;
 
 namespace dingofs {
 namespace client {
