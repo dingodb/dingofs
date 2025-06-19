@@ -428,8 +428,7 @@ void FuseOpRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   if (!s.ok()) {
     ReplyError(req, s);
   } else {
-    // TODO : if reply buf is FUSE_BUF_SPLICE_MOVE, we need release the buffer
-    ReplyData(req, buffer.release(), rsize);
+    ReplyData(req, buffer.get(), rsize);
   }
 }
 
