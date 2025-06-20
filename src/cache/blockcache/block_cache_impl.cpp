@@ -77,7 +77,7 @@ Status BlockCacheImpl::Put(const BlockKey& key, const Block& block,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] put(%s,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[block] put(%s,%zu): %s%s", key.Filename(),
                            block.size, status.ToString(), timer.ToString());
   });
 
@@ -111,7 +111,7 @@ Status BlockCacheImpl::Range(const BlockKey& key, off_t offset, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] range(%s,%lld,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[block] range(%s,%lld,%zu): %s%s", key.Filename(),
                            offset, length, status.ToString(), timer.ToString());
   });
 
@@ -128,7 +128,7 @@ Status BlockCacheImpl::Cache(const BlockKey& key, const Block& block,
                              CacheOption /*option*/) {
   Status status;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] cache(%s,%zu): %s", key.Filename(),
+    return absl::StrFormat("[block] cache(%s,%zu): %s", key.Filename(),
                            block.size, status.ToString());
   });
 
@@ -141,7 +141,7 @@ Status BlockCacheImpl::Prefetch(const BlockKey& key, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[block] refetch(%s,%zu): %s%s", key.Filename(),
                            length, status.ToString(), timer.ToString());
   });
 

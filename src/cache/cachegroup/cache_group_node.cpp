@@ -122,7 +122,7 @@ Status CacheGroupNodeImpl::Range(const BlockKey& key, off_t offset,
   if (status.ok()) {
     // do nothing
   } else if (status.IsNotFound()) {
-    status = RangeStorage(key, offset, offset, buffer, block_size);
+    status = RangeStorage(key, offset, length, buffer, block_size);
   }
   return status;
 }

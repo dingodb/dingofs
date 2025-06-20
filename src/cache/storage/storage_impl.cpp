@@ -77,6 +77,8 @@ Status StorageImpl::Shutdown() {
 }
 
 Status StorageImpl::Put(const std::string& key, const IOBuffer& buffer) {
+  VLOG(9) << absl::StrFormat("storage_put(%s, %zu)", key, buffer.Size());
+
   auto closure = StoragePutClosure(key, buffer);
   CHECK_EQ(0, bthread::execution_queue_execute(submit_queue_id_, &closure));
   closure.Wait();
@@ -85,6 +87,9 @@ Status StorageImpl::Put(const std::string& key, const IOBuffer& buffer) {
 
 Status StorageImpl::Range(const std::string& key, off_t offset, size_t length,
                           IOBuffer* buffer) {
+  VLOG(9) << absl::StrFormat("storage_range(%s, %lld, %zu)", key, offset,
+                             length);
+
   auto closure = StorageRangeClosure(key, offset, length, buffer);
   CHECK_EQ(0, bthread::execution_queue_execute(submit_queue_id_, &closure));
   closure.Wait();

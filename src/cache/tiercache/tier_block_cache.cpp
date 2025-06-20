@@ -41,13 +41,19 @@ namespace cache {
 
 TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
                                RemoteBlockCacheOption remote_cache_option,
-                               blockaccess::BlockAccesser* block_accesser)
+                               StorageSPtr storage)
     : running_(false),
-      storage_(std::make_shared<StorageImpl>(block_accesser)),
+      storage_(storage),
       local_block_cache_(
           std::make_unique<BlockCacheImpl>(local_cache_option, storage_)),
       remote_block_cache_(std::make_unique<RemoteBlockCacheImpl>(
           remote_cache_option, storage_)) {}
+
+TierBlockCache::TierBlockCache(BlockCacheOption local_cache_option,
+                               RemoteBlockCacheOption remote_cache_option,
+                               blockaccess::BlockAccesser* block_accesser)
+    : TierBlockCache(local_cache_option, remote_cache_option,
+                     std::make_shared<StorageImpl>(block_accesser)) {}
 
 Status TierBlockCache::Init() {
   if (!running_.exchange(true)) {
@@ -169,7 +175,7 @@ Status TierBlockCache::Prefetch(const BlockKey& key, size_t length,
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] refetch(%s,%zu): %s%s", key.Filename(),
+    return absl::StrFormat("[block] refetch(%s,%zu): %s%s", key.Filename(),
                            length, status.ToString(), timer.ToString());
   });
 

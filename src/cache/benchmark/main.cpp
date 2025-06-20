@@ -1,6 +1,7 @@
 
 #include <glog/logging.h>
 
+#include <iostream>
 #include <thread>
 
 #include "cache/benchmark/benchmarker.h"
@@ -8,16 +9,20 @@
 
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
+
   dingofs::cache::InitLogging(argv[0]);
 
+  // Init benchmarker
   dingofs::cache::Benchmarker benchmarker;
-  auto status = benchmarker.Run();
+  auto status = benchmarker.Init();
   if (!status.ok()) {
-    std::cerr << "Run benchmarker failed: " << status.ToString() << std::endl;
+    std::cerr << "Failed to initialize benchmarker: " << status.ToString()
+              << std::endl;
     return -1;
   }
 
-  benchmarker.Shutdown();
+  // Run until finish
+  benchmarker.RunUntilFinish();
 
   return 0;
 }

@@ -111,7 +111,7 @@ Status BlockCacheUploader::DoUpload(const StageBlock& block) {
   Status status;
   PhaseTimer timer;
   LogGuard log([&]() {
-    return absl::StrFormat("[local] upload_stage(%s,%zu): %s%s",
+    return absl::StrFormat("[block] upload_stage(%s,%zu): %s%s",
                            block.key.Filename(), block.length,
                            status.ToString(), timer.ToString());
   });

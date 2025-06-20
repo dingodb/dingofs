@@ -95,7 +95,7 @@ Status RemoteNodeManager::LoadMembers(PBCacheGroupMembers* members) {
     return Status::Internal("load cache group member failed");
   }
 
-  VLOG(9) << "Load cache group members: size = " << members->size();
+  VLOG(9) << "Load cache group members success: size = " << members->size();
 
   return Status::OK();
 }

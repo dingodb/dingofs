@@ -38,6 +38,9 @@ class TierBlockCache final : public BlockCache {
  public:
   TierBlockCache(BlockCacheOption local_cache_option,
                  RemoteBlockCacheOption remote_cache_option,
+                 StorageSPtr storage);
+  TierBlockCache(BlockCacheOption local_cache_option,
+                 RemoteBlockCacheOption remote_cache_option,
                  blockaccess::BlockAccesser* block_accesser);
 
   Status Init() override;

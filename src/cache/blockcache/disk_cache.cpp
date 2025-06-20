@@ -279,8 +279,11 @@ Status DiskCache::Load(const BlockKey& key, off_t offset, size_t length,
   status = Check(kWantExec);
   if (!status.ok()) {
     return status;
-  } else if (!IsCached(key)) {
-    return Status::NotFound("cache not found");
+  }
+
+  if (!IsCached(key)) {
+    status = Status::NotFound("cache not found");
+    return status;
   }
 
   timer.NextPhase(Phase::kReadFile);

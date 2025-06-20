@@ -39,10 +39,15 @@ inline void InitLogging(const char* argv0) {
   FLAGS_logbufsecs = 0;
   FLAGS_max_log_size = 80;
   FLAGS_stop_logging_if_full_disk = true;
+  FLAGS_minloglevel = google::GLOG_INFO;
+  FLAGS_logbuflevel = google::GLOG_INFO;
+  FLAGS_logtostdout = false;
+  FLAGS_logtostderr = false;
+  FLAGS_alsologtostderr = false;
   google::InitGoogleLogging(argv0);
   LOG(INFO) << "Init glog logger success: log_dir = " << FLAGS_log_dir;
 
-  CHECK(InitCacheAccessLog(FLAGS_log_dir)) << "Init access log failed.";
+  CHECK(InitCacheAccessLog(FLAGS_log_dir)) << "Init cache access log failed.";
   LOG(INFO) << "Init cache access logger success: log_dir = " << FLAGS_log_dir;
 
   CHECK(blockaccess::InitBlockAccessLog(FLAGS_log_dir))
