@@ -31,7 +31,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include <gtest/gtest.h>
 
-#include "client/vfs_old/utils.h"
+#include "client/vfs_legacy/utils.h"
 #include "dingofs/metaserver.pb.h"
 #include "stub/common/common.h"
 #include "stub/filesystem/xattr.h"

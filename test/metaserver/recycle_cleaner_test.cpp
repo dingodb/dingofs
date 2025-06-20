@@ -24,7 +24,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/vfs_old/mock_metaserver_client.h"
+#include "client/vfs_legacy/mock_metaserver_client.h"
 #include "fs/ext4_filesystem_impl.h"
 #include "metaserver/copyset/mock/mock_copyset_node.h"
 #include "metaserver/storage/rocksdb_storage.h"

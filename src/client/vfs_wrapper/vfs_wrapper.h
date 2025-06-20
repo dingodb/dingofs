@@ -21,7 +21,7 @@
 #include <memory>
 
 #include "client/common/config.h"
-#include "client/vfs/vfs.h"
+#include "client/vfs.h"
 #include "stub/metric/metric.h"
 
 namespace dingofs {

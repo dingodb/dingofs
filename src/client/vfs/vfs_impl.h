@@ -24,7 +24,7 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs/vfs.h"
+#include "client/vfs.h"
 
 namespace dingofs {
 namespace client {

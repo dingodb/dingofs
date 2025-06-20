@@ -29,7 +29,7 @@
 #include <set>
 #include <string>
 
-#include "client/vfs_old/mock_metaserver_service.h"
+#include "client/vfs_legacy/mock_metaserver_service.h"
 #include "metaserver/s3/metaserver_s3_adaptor.h"
 
 namespace dingofs {

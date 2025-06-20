@@ -14,7 +14,7 @@
 
 add_subdirectory(common)
 add_subdirectory(datastream)
-add_subdirectory(vfs_old)
+add_subdirectory(vfs_legacy)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS

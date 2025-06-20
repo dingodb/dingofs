@@ -33,7 +33,7 @@
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 #include "client/vfs/meta/v2/filesystem.h"
-#include "client/vfs/vfs.h"
+#include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/configuration.h"

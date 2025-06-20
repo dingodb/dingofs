@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(vfs_old)
+add_subdirectory(vfs_legacy)
 add_subdirectory(vfs)
