@@ -158,6 +158,29 @@ struct ClientOpMetricGuard {
   uint64_t start;
 };
 
+struct FsMetricGuard {
+  explicit FsMetricGuard(Status* status, stub::metric::InterfaceMetric* metric,
+                         size_t* count, uint64_t start)
+      : status_(status), metric_(metric), count_(count), start_(start) {}
+
+  ~FsMetricGuard() {
+    if (status_->ok()) {
+      metric_->bps.count << *count_;
+      metric_->qps.count << 1;
+      auto duration = butil::cpuwide_time_us() - start_;
+      metric_->latency << duration;
+      metric_->latTotal << duration;
+    } else {
+      metric_->eps.count << 1;
+    }
+  }
+
+  Status* status_;
+  stub::metric::InterfaceMetric* metric_;
+  size_t* count_;
+  uint64_t start_;
+};
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

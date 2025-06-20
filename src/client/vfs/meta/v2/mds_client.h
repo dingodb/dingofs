@@ -104,6 +104,9 @@ class MDSClient {
 
   Status GetFsQuota(FsStat& fs_stat);
 
+  Status PushFsStatsToMDS(const std::string& fs_name,
+                          const pb::mdsv2::FsStatsData& fs_stat_data);
+
  private:
   EndPoint GetEndpoint(Ino ino);
   EndPoint GetEndpointByParent(int64_t parent);

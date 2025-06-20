@@ -35,8 +35,8 @@ using ::dingofs::stub::metric::FSMetric;
 using ::dingofs::stub::metric::KVClientMetric;
 using ::dingofs::stub::metric::MDSClientMetric;
 using ::dingofs::stub::metric::MetaServerClientMetric;
+using ::dingofs::stub::metric::ObjectMetric;
 using ::dingofs::stub::metric::S3ChunkInfoMetric;
-using ::dingofs::stub::metric::S3Metric;
 using ::dingofs::stub::metric::S3MultiManagerMetric;
 using ::dingofs::stub::metric::WarmupManagerS3Metric;
 
@@ -73,8 +73,8 @@ TEST_F(ClientMetricTest, test_prefix) {
   }
 
   {
-    const char* prefix = "dingofs_s3";
-    ASSERT_EQ(0, ::strcmp(S3Metric::prefix.c_str(), prefix));
+    const char* prefix = "dingofs_object";
+    ASSERT_EQ(0, ::strcmp(ObjectMetric::prefix.c_str(), prefix));
   }
 
   {

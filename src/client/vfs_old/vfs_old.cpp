@@ -1399,18 +1399,13 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
     return Status::OK();
   }
 
-  // fuse read metrics
   uint64_t r_size = 0;
-
-  FsMetricGuard guard(&stub::metric::FSMetric::GetInstance().user_read,
-                      &r_size);
 
   std::shared_ptr<InodeWrapper> inode_wrapper;
   DINGOFS_ERROR ret = inode_cache_manager_->GetInode(ino, inode_wrapper);
   if (ret != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail get inode fail in read, rc: " << ret
                << ", inodeId=" << ino;
-    guard.Fail();
     return filesystem::DingofsErrorToStatus(ret);
   }
 
@@ -1425,7 +1420,6 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   int r_ret = s3_adapter_->Read(ino, offset, len, buf);
   if (r_ret < 0) {
     LOG(ERROR) << "Fail read for inodeId=" << ino << ", rc: " << r_ret;
-    guard.Fail();
     return Status::Internal("read s3 fail");
   }
   r_size = r_ret;
@@ -1455,15 +1449,11 @@ Status VFSOld::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
     return Status::NoSpace("check quota fail");
   }
 
-  // fuse write metrics
   uint64_t w_size = 0;
-  FsMetricGuard guard(&stub::metric::FSMetric::GetInstance().user_write,
-                      &w_size);
 
   int w_ret = s3_adapter_->Write(ino, offset, size, buf);
   if (w_ret < 0) {
     LOG(ERROR) << "Fail write for inodeId=" << ino << ", rc: " << w_ret;
-    guard.Fail();
     return Status::Internal("write s3 fail");
   }
 
@@ -1473,7 +1463,6 @@ Status VFSOld::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
   DINGOFS_ERROR ret = inode_cache_manager_->GetInode(ino, inode_wrapper);
   if (ret != DINGOFS_ERROR::OK) {
     LOG(ERROR) << "Fail get inode fail, rc: " << ret << ", inodeId=" << ino;
-    guard.Fail();
     return filesystem::DingofsErrorToStatus(ret);
   }
 

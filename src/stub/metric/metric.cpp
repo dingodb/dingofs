@@ -34,7 +34,7 @@ const std::string ClientOpMetric::prefix = "dingofs_fuse";  // NOLINT
 const std::string S3MultiManagerMetric::prefix =
     "dingofs_client_manager";                                         // NOLINT
 const std::string FSMetric::prefix = "dingofs_filesystem";            // NOLINT
-const std::string S3Metric::prefix = "dingofs_s3";                    // NOLINT
+const std::string ObjectMetric::prefix = "dingofs_object";            // NOLINT
 const std::string DiskCacheMetric::prefix = "dingofs_diskcache";      // NOLINT
 const std::string KVClientMetric::prefix = "dingofs_kvclient";        // NOLINT
 const std::string S3ChunkInfoMetric::prefix = "inode_s3_chunk_info";  // NOLINT

@@ -17,11 +17,14 @@
 #include <fcntl.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "client/common/dynamic_config.h"
 #include "client/vfs/meta/v2/client_id.h"
+#include "client/vfs/statistics/fs_stats_manager.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
@@ -35,6 +38,10 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 namespace v2 {
+
+USING_FLAG(push_metric_interval_millsecond)
+
+using FsStatsManager = dingofs::client::vfs::FsStatsManager;
 
 const uint32_t kMaxHostNameLength = 255;
 
@@ -133,12 +140,14 @@ std::string FileSessionMap::Get(uint64_t fh) {
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
                                  const ClientId& client_id,
                                  MDSDiscoveryPtr mds_discovery,
-                                 MDSClientPtr mds_client)
+                                 MDSClientPtr mds_client,
+                                 FsStatsManagerUPtr fs_stats_manager)
     : name_(fs_info->GetName()),
       client_id_(client_id),
       fs_info_(fs_info),
       mds_discovery_(mds_discovery),
-      mds_client_(mds_client) {}
+      mds_client_(mds_client),
+      fs_stats_manager_(std::move(fs_stats_manager)) {}
 
 MDSV2FileSystem::~MDSV2FileSystem() {}  // NOLINT
 
@@ -271,6 +280,8 @@ void MDSV2FileSystem::Heartbeat() {
   }
 }
 
+void MDSV2FileSystem::PushFsStatsToMDS() { fs_stats_manager_->PushFsStats(); }
+
 bool MDSV2FileSystem::InitCrontab() {
   // Add heartbeat crontab
   crontab_configs_.push_back({
@@ -278,6 +289,14 @@ bool MDSV2FileSystem::InitCrontab() {
       kHeartbeatIntervalS * 1000,
       true,
       [this](void*) { this->Heartbeat(); },
+  });
+
+  // Add push fs stats crontab
+  crontab_configs_.push_back({
+      "PUSH_FSSTATS",
+      FLAGS_push_metric_interval_millsecond,
+      true,
+      [this](void*) { this->PushFsStatsToMDS(); },
   });
 
   crontab_manager_.AddCrontab(crontab_configs_);
@@ -646,8 +665,12 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
     return nullptr;
   }
 
+  // create fs stats manager
+  auto fs_stats_manager = FsStatsManager::New(fs_name, mds_client);
+
   // create filesystem
-  return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, mds_client);
+  return MDSV2FileSystem::New(fs_info, client_id, mds_discovery, mds_client,
+                              std::move(fs_stats_manager));
 }
 
 }  // namespace v2
