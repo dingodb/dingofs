@@ -23,9 +23,9 @@ file(GLOB VFS_OLD_SRC_LIB
     "*.cpp"
 )
 
-add_library(vfs_old_lib ${VFS_OLD_SRC_LIB})
+add_library(vfs_legacy_lib ${VFS_OLD_SRC_LIB})
 
-target_link_libraries(vfs_old_lib
+target_link_libraries(vfs_legacy_lib
     PROTO_OBJS
     dingofs_base_lib
     dingofs_executor

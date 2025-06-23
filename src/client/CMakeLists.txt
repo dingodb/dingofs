@@ -25,7 +25,7 @@ file(GLOB FUSE_CLIENT_LIB_SRCS
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS
-    vfs_old_lib
+    vfs_legacy_lib
     vfs_lib
     block_accesser
     jsoncpp
