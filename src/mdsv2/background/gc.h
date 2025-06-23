@@ -156,12 +156,14 @@ class GcProcessor {
   void Execute(TaskRunnablePtr task);
   void Execute(int64_t id, TaskRunnablePtr task);
 
+  Status GetClientList(std::set<std::string>& clients);
+
   void ScanDeletedSlice();
   void ScanDeletedFile();
   void ScanExpiredFileSession();
 
   static bool ShouldDeleteFile(const AttrType& attr);
-  static bool ShouldCleanFileSession(const FileSessionEntry& file_session);
+  static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);
 
   blockaccess::BlockAccesserSPtr GetOrCreateDataAccesser(uint32_t fs_id);
 

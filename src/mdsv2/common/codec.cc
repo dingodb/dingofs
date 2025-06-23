@@ -636,12 +636,12 @@ void MetaCodec::DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, ui
   session_id = key.substr(kPrefixSize + 13);
 }
 
-std::string MetaCodec::EncodeFileSessionValue(const pb::mdsv2::FileSession& file_session) {
+std::string MetaCodec::EncodeFileSessionValue(const FileSessionEntry& file_session) {
   return file_session.SerializeAsString();
 }
 
-pb::mdsv2::FileSession MetaCodec::DecodeFileSessionValue(const std::string& value) {
-  pb::mdsv2::FileSession file_session;
+FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
+  FileSessionEntry file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
   return std::move(file_session);
 }

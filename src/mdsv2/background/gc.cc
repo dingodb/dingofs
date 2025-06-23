@@ -290,6 +290,24 @@ void GcProcessor::Execute(int64_t id, TaskRunnablePtr task) {
   }
 }
 
+Status GcProcessor::GetClientList(std::set<std::string>& clients) {
+  Trace trace;
+  ScanClientOperation operation(trace);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc] get client list fail, error({}).", status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  for (auto& client : result.client_entries) {
+    clients.insert(client.id());
+  }
+
+  return Status::OK();
+}
+
 void GcProcessor::ScanDeletedSlice() {
   Range range;
   MetaCodec::GetTrashChunkTableRange(range.start_key, range.end_key);
@@ -369,13 +387,21 @@ void GcProcessor::ScanDeletedFile() {
 }
 
 void GcProcessor::ScanExpiredFileSession() {
+  // get alive clients
+  // to dead clients, we will clean their file sessions
+  std::set<std::string> alive_clients;
+  auto status = GetClientList(alive_clients);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[gc.filesession] get client list fail, {}.", status.error_str());
+    return;
+  }
+
   Range range;
   MetaCodec::GetFileSessionTableRange(range.start_key, range.end_key);
 
   auto txn = kv_storage_->NewTxn();
 
   uint32_t count = 0;
-  Status status;
   std::vector<KeyValue> kvs;
   do {
     status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
@@ -388,7 +414,7 @@ void GcProcessor::ScanExpiredFileSession() {
     for (auto& kv : kvs) {
       auto file_session = MetaCodec::DecodeFileSessionValue(kv.value);
 
-      if (ShouldCleanFileSession(file_session)) {
+      if (ShouldCleanFileSession(file_session, alive_clients)) {
         file_sessions.push_back(file_session);
       }
     }
@@ -413,7 +439,13 @@ bool GcProcessor::ShouldDeleteFile(const AttrType& attr) {
   return (attr.ctime() / 1000000000 + FLAGS_gc_delfile_reserve_time_s) < now_s;
 }
 
-bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session) {
+bool GcProcessor::ShouldCleanFileSession(const FileSessionEntry& file_session,
+                                         const std::set<std::string>& alive_clients) {
+  // check whether client exist
+  if (alive_clients.count(file_session.client_id()) == 0) {
+    return true;
+  }
+
   uint64_t now_s = Helper::Timestamp();
   return file_session.create_time_s() + FLAGS_gc_filesession_reserve_time_s < now_s;
 }

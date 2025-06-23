@@ -134,8 +134,8 @@ class MetaCodec {
   // format: [$prefix, $type, $fs_id, $ino, $session_id]
   static std::string EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::string& session_id);
   static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
-  static std::string EncodeFileSessionValue(const pb::mdsv2::FileSession& file_session);
-  static pb::mdsv2::FileSession DecodeFileSessionValue(const std::string& value);
+  static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
+  static FileSessionEntry DecodeFileSessionValue(const std::string& value);
 
   // trash chunk
   // format: [$prefix, $type, $fs_id, $ino, $chunk_index, $time_ns]
