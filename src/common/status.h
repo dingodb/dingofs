@@ -34,6 +34,8 @@ namespace dingofs {
     if (!_s.IsOK()) return _s;         \
   } while (0)
 
+#undef DECLARE_ERROR_STATUS
+
 #define DECLARE_ERROR_STATUS(NAME, CODE)                        \
   static Status NAME(const StringSlice& msg,                    \
                      const StringSlice& msg2 = StringSlice()) { \
@@ -226,6 +228,8 @@ inline Status& Status::operator=(Status&& rhs) noexcept {
   }
   return *this;
 }
+
+#undef DECLARE_ERROR_STATUS
 
 }  // namespace dingofs
 

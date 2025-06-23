@@ -310,12 +310,12 @@ Status SmyLinkOperation::RunInBatch(TxnUPtr& txn, AttrType& parent_attr) {
   return Status::OK();
 }
 
-bool UpdateAttrOperation::ExpandChunk(AttrType& attr, uint64_t new_length) {
+bool UpdateAttrOperation::ExpandChunk(AttrType& attr, uint64_t new_length) const {
   uint64_t length = attr.length();
   const uint64_t chunk_size_ = extra_param_.chunk_size;
   const uint64_t block_size_ = extra_param_.block_size;
-  uint64_t slice_id_ = extra_param_.slice_id;
-  const uint32_t slice_num_ = extra_param_.slice_num;
+  uint64_t slice_id = extra_param_.slice_id;
+  const uint32_t slice_num = extra_param_.slice_num;
 
   uint32_t count = 0;
   while (length < new_length) {
@@ -325,7 +325,7 @@ bool UpdateAttrOperation::ExpandChunk(AttrType& attr, uint64_t new_length) {
     uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size_) ? (chunk_size_ - chunk_pos) : delta_size;
 
     SliceType slice;
-    slice.set_id(slice_id_++);
+    slice.set_id(slice_id++);
     slice.set_offset(chunk_pos);
     slice.set_len(delta_chunk_size);
     slice.set_size(delta_chunk_size);
@@ -348,7 +348,7 @@ bool UpdateAttrOperation::ExpandChunk(AttrType& attr, uint64_t new_length) {
 
     length += delta_chunk_size;
     ++count;
-    if (count > slice_num_) {
+    if (count > slice_num) {
       return false;
     }
   }
@@ -453,6 +453,142 @@ Status UpdateChunkOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
   // update attr
   attr.set_ctime(std::max(attr.ctime(), GetTime()));
   attr.set_mtime(std::max(attr.mtime(), GetTime()));
+
+  return Status::OK();
+}
+
+bool FallocateOperation::PreAlloc(AttrType& attr, uint64_t offset, uint32_t len) const {
+  uint64_t length = attr.length();
+  uint64_t new_length = offset + len;
+  if (length >= new_length) {
+    return true;
+  }
+
+  const uint64_t chunk_size = param_.chunk_size;
+  const uint64_t block_size = param_.block_size;
+  uint64_t slice_id = param_.slice_id;
+  const uint32_t slice_num = param_.slice_num;
+
+  uint32_t count = 0;
+  while (length < new_length) {
+    uint64_t chunk_pos = length % chunk_size;
+    uint64_t chunk_index = length / chunk_size;
+    uint64_t delta_size = new_length - length;
+    uint64_t delta_chunk_size = (chunk_pos + delta_size > chunk_size) ? (chunk_size - chunk_pos) : delta_size;
+
+    SliceType slice;
+    slice.set_id(slice_id++);
+    slice.set_offset(chunk_pos);
+    slice.set_len(delta_chunk_size);
+    slice.set_size(delta_chunk_size);
+    slice.set_zero(true);
+
+    auto it = attr.mutable_chunks()->find(chunk_index);
+    if (it == attr.mutable_chunks()->end()) {
+      ChunkType chunk;
+      chunk.set_index(chunk_index);
+      chunk.set_chunk_size(chunk_size);
+      chunk.set_block_size(block_size);
+      chunk.set_version(0);
+      chunk.add_slices()->Swap(&slice);
+      attr.mutable_chunks()->insert({chunk_index, std::move(chunk)});
+
+    } else {
+      auto& chunk = it->second;
+      chunk.add_slices()->Swap(&slice);
+    }
+
+    length += delta_chunk_size;
+    ++count;
+    if (count > slice_num) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// |---------file length--------|
+// ------------------------------------------>
+// 1. [offset, len)    |-----|
+// 2. [offset, len)    |-------------|
+// 3. [offset, len)                |-----|
+bool FallocateOperation::SetZero(AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const {
+  const uint64_t chunk_size = param_.chunk_size;
+  const uint64_t block_size = param_.block_size;
+  uint64_t slice_id = param_.slice_id;
+  const uint32_t slice_num = param_.slice_num;
+
+  uint64_t end_offset = keep_size ? std::min(attr.length(), offset + len) : (offset + len);
+
+  uint32_t count = 0;
+  while (offset < end_offset) {
+    uint64_t chunk_pos = offset % chunk_size;
+    uint64_t chunk_index = offset / chunk_size;
+
+    uint64_t delta_chunk_size = chunk_size - chunk_pos;
+
+    SliceType slice;
+    slice.set_id(slice_id++);
+    slice.set_offset(chunk_pos);
+    slice.set_len(delta_chunk_size);
+    slice.set_size(delta_chunk_size);
+    slice.set_zero(true);
+
+    auto it = attr.mutable_chunks()->find(chunk_index);
+    if (it == attr.mutable_chunks()->end()) {
+      ChunkType chunk;
+      chunk.set_index(chunk_index);
+      chunk.set_chunk_size(chunk_size);
+      chunk.set_block_size(block_size);
+      chunk.set_version(0);
+      chunk.add_slices()->Swap(&slice);
+      attr.mutable_chunks()->insert({chunk_index, std::move(chunk)});
+
+    } else {
+      auto& chunk = it->second;
+      chunk.add_slices()->Swap(&slice);
+    }
+
+    offset += delta_chunk_size;
+    ++count;
+    if (count > slice_num) {
+      return false;
+    }
+  }
+
+  if (!keep_size && end_offset > attr.length()) {
+    attr.set_length(end_offset);
+  }
+
+  return true;
+}
+
+Status FallocateOperation::RunInBatch(TxnUPtr&, AttrType& attr) {
+  const int32_t mode_ = param_.mode;
+  const uint64_t offset = param_.offset;
+  const uint64_t len = param_.len;
+
+  if (mode_ == 0) {
+    // pre allocate
+    if (!PreAlloc(attr, offset, len)) {
+      return Status(pb::error::EINTERNAL, fmt::format("pre allocate file length({}) fail.", offset + len));
+    }
+
+  } else if (mode_ & FALLOC_FL_PUNCH_HOLE) {
+    if (!SetZero(attr, offset, len, true)) {
+      return Status(pb::error::EINTERNAL, fmt::format("punch hole range[{},{}) fail.", offset, offset + len));
+    }
+
+  } else if (mode_ & FALLOC_FL_ZERO_RANGE) {
+    // set range to zero
+    if (!SetZero(attr, offset, len, mode_ & FALLOC_FL_KEEP_SIZE)) {
+      return Status(pb::error::EINTERNAL, fmt::format("set range[{},{}) to zero fail.", offset, offset + len));
+    }
+
+  } else if (mode_ & FALLOC_FL_COLLAPSE_RANGE) {
+    return Status(pb::error::ENOT_SUPPORT, "not support");
+  }
 
   return Status::OK();
 }

@@ -1725,6 +1725,66 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
                                  ino, chunk_index, status.error_str());
 
   return status;
+}
+
+Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out) {
+  if (!CanServe()) {
+    return Status(pb::error::ENOT_SERVE, "can not serve");
+  }
+
+  auto& trace = ctx.GetTrace();
+
+  InodeSPtr inode;
+  auto status = GetInode(ctx, ino, inode);
+  if (!status.ok()) {
+    return status;
+  }
+
+  uint64_t time_ns = Helper::TimestampNs();
+
+  uint64_t slice_num = 0;
+  uint64_t slice_id = 0;
+  if (mode == 0 || (mode & FALLOC_FL_ZERO_RANGE)) {
+    uint64_t new_length = offset + len;
+    if (new_length > inode->Length()) {
+      // check quota
+      if (!quota_manager_.CheckQuota(ino, new_length - inode->Length(), 0)) {
+        return Status(pb::error::EQUOTA_EXCEED, "exceed quota limit");
+      }
+
+      // prealloc slice id
+      slice_num = (new_length - inode->Length()) / fs_info_->GetChunkSize() + 1;
+      if (!slice_id_generator_->GenID(slice_num, 0, slice_id)) {
+        return Status(pb::error::EINTERNAL, "generate slice id fail");
+      }
+    }
+  }
+
+  FallocateOperation::Param param;
+  param.fs_id = fs_id_;
+  param.ino = ino;
+  param.mode = mode;
+  param.offset = offset;
+  param.len = len;
+  param.block_size = fs_info_->GetBlockSize();
+  param.chunk_size = fs_info_->GetChunkSize();
+  param.slice_id = slice_id;
+  param.slice_num = slice_num;
+  FallocateOperation operation(trace, param);
+
+  status = RunOperation(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fs.{}][{}us] fallocate ino({}), mode({}), offset({}), len({}) fail, status({}).",
+                                    fs_id_, ElapsedTimeUs(time_ns), ino, mode, offset, len, status.error_str());
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  auto& attr = result.attr;
+
+  inode->UpdateIf(attr);
+
+  entry_out.attr = std::move(attr);
 
   return Status::OK();
 }

@@ -182,6 +182,9 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
                     const std::vector<pb::mdsv2::Slice>& slices);
   Status ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices);
 
+  // fallocate
+  Status Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out);
+
   // compact
   Status CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::TrashSlice>& trash_slices);
 

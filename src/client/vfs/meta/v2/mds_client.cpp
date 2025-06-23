@@ -852,6 +852,33 @@ Status MDSClient::WriteSlice(Ino ino, uint64_t index,
   return Status::OK();
 }
 
+Status MDSClient::Fallocate(Ino ino, int32_t mode, uint64_t offset,
+                            uint64_t length) {
+  CHECK(fs_id_ != 0) << "fs_id is invalid.";
+  auto endpoint = GetEndpoint(ino);
+
+  pb::mdsv2::FallocateRequest request;
+  pb::mdsv2::FallocateResponse response;
+
+  request.set_fs_id(fs_id_);
+  request.set_ino(ino);
+  request.set_mode(mode);
+  request.set_offset(offset);
+  request.set_len(length);
+
+  auto status =
+      SendRequest(endpoint, "MDSService", "Fallocate", request, response);
+  if (!status.ok()) {
+    return status;
+  }
+
+  const auto& attr = response.inode();
+
+  parent_memo_->UpsertVersion(attr.ino(), attr.version());
+
+  return Status::OK();
+}
+
 Status MDSClient::GetFsQuota(FsStat& fs_stat) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 

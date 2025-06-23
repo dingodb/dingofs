@@ -52,12 +52,13 @@ class Operation {
     kUpdateAttr = 15,
     kUpdateXAttr = 16,
     kUpdateChunk = 17,
-    kOpenFile = 18,
-    kCloseFile = 19,
-    kRmDir = 20,
-    kUnlink = 21,
-    kRename = 22,
-    kCompactChunk = 23,
+    kFallocate = 18,
+    kOpenFile = 19,
+    kCloseFile = 20,
+    kRmDir = 21,
+    kUnlink = 22,
+    kRename = 23,
+    kCompactChunk = 24,
 
     kSetFsQuota = 30,
     kGetFsQuota = 31,
@@ -118,6 +119,9 @@ class Operation {
 
       case OpType::kUpdateChunk:
         return "UpdateChunk";
+
+      case OpType::kFallocate:
+        return "Fallocate";
 
       case OpType::kOpenFile:
         return "OpenFile";
@@ -224,6 +228,7 @@ class Operation {
       case OpType::kUpdateXAttr:
       case OpType::kUpdateChunk:
       case OpType::kOpenFile:
+      case OpType::kFallocate:
         return true;
 
       default:
@@ -240,6 +245,7 @@ class Operation {
       case OpType::kUpdateXAttr:
       case OpType::kUpdateChunk:
       case OpType::kOpenFile:
+      case OpType::kFallocate:
         return true;
 
       default:
@@ -473,7 +479,7 @@ class UpdateAttrOperation : public Operation {
   Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
 
  private:
-  bool ExpandChunk(AttrType& attr, uint64_t new_length);
+  bool ExpandChunk(AttrType& attr, uint64_t new_length) const;
   bool Truncate(AttrType& attr);
 
   uint64_t ino_;
@@ -536,6 +542,39 @@ class UpdateChunkOperation : public Operation {
   std::vector<pb::mdsv2::Slice> slices_;
 
   Result result_;
+};
+
+class FallocateOperation : public Operation {
+ public:
+  struct Param {
+    uint32_t fs_id;
+    uint64_t ino;
+    int32_t mode;
+    uint64_t offset;
+    uint64_t len;
+
+    uint64_t slice_id{0};
+    uint32_t slice_num{0};
+
+    uint64_t chunk_size{0};
+    uint64_t block_size{0};
+  };
+
+  FallocateOperation(Trace& trace, const Param& param) : Operation(trace), param_(param) {};
+  ~FallocateOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kFallocate; }
+
+  uint32_t GetFsId() const override { return param_.fs_id; }
+  Ino GetIno() const override { return param_.ino; }
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+
+ private:
+  bool PreAlloc(AttrType& attr, uint64_t offset, uint32_t len) const;
+  bool SetZero(AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const;
+
+  Param param_;
 };
 
 class OpenFileOperation : public Operation {

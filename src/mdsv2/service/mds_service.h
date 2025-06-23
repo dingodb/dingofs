@@ -143,6 +143,10 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
   void ReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                  pb::mdsv2::ReadSliceResponse* response, google::protobuf::Closure* done) override;
 
+  // fallocate
+  void Fallocate(google::protobuf::RpcController* controller, const pb::mdsv2::FallocateRequest* request,
+                 pb::mdsv2::FallocateResponse* response, google::protobuf::Closure* done) override;
+
   // compact interface
   void CompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
                     pb::mdsv2::CompactChunkResponse* response, google::protobuf::Closure* done) override;
@@ -279,6 +283,9 @@ class MDSServiceImpl : public pb::mdsv2::MDSService {
                     pb::mdsv2::WriteSliceResponse* response, TraceClosure* done);
   void DoReadSlice(google::protobuf::RpcController* controller, const pb::mdsv2::ReadSliceRequest* request,
                    pb::mdsv2::ReadSliceResponse* response, TraceClosure* done);
+
+  void DoFallocate(google::protobuf::RpcController* controller, const pb::mdsv2::FallocateRequest* request,
+                   pb::mdsv2::FallocateResponse* response, TraceClosure* done);
 
   void DoCompactChunk(google::protobuf::RpcController* controller, const pb::mdsv2::CompactChunkRequest* request,
                       pb::mdsv2::CompactChunkResponse* response, TraceClosure* done);

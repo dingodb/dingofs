@@ -102,6 +102,8 @@ class MDSClient {
   Status ReadSlice(Ino ino, uint64_t index, std::vector<Slice>* slices);
   Status WriteSlice(Ino ino, uint64_t index, const std::vector<Slice>& slices);
 
+  Status Fallocate(Ino ino, int32_t mode, uint64_t offset, uint64_t length);
+
   Status GetFsQuota(FsStat& fs_stat);
 
  private:
