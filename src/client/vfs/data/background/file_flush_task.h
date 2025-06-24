@@ -42,7 +42,7 @@ class FileFlushTask {
   void RunAsync(StatusCallback cb);
 
   std::string ToString() const {
-    return fmt::format("{file_flush_id: {}, ino: {},  chunks_size: {}}",
+    return fmt::format("file_flush_id: {}, ino: {},  chunks_size: {}",
                        file_flush_id_, ino_, chunks_.size());
   }
 

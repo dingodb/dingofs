@@ -55,7 +55,7 @@ struct Chunk::FlushTask {
   bool done{false};
 
   std::string ToString() const {
-    return fmt::format("{chunk_flush_id:{}, done: {}, status: {}}",
+    return fmt::format("chunk_flush_id:{}, done: {}, status: {}",
                        chunk_flush_id, (done ? "true" : "false"),
                        status.ToString());
   }

@@ -56,7 +56,7 @@ class ChunkFlushTask {
 
   std::string ToString() const {
     return fmt::format(
-        "{chunk_flush_id: {}, ino: {}, chunk_index: {}, slices_size: {}}",
+        "chunk_flush_id: {}, ino: {}, chunk_index: {}, slices_size: {}",
         chunk_flush_id, ino_, chunk_index_, flush_slices_.size());
   }
 
