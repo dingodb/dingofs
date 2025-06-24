@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "client/vfs/background/periodic_flush_manager.h"
+
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -21,7 +23,6 @@
 #include <memory>
 #include <mutex>
 
-#include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 
@@ -33,7 +34,7 @@ namespace {
 bool PassUint32(const char*, uint32_t) { return true; }
 };  // namespace
 
-DEFINE_uint32(periodic_flush_interval_ms, 3000,
+DEFINE_uint32(periodic_flush_interval_ms, 10 * 1000,
               "Periodic flush interval in milliseconds");
 DEFINE_validator(periodic_flush_interval_ms, &PassUint32);
 
@@ -68,7 +69,7 @@ void PeriodicFlushManager::FlushHandleDone(Status s, uint64_t seq_id,
                  << " handle: " << handle->ToString();
   } else {
     VLOG(4) << "PeriodicFlushManager::FlushHandleDone seq_id: " << seq_id
-            << handle->ToString() << " status: " << s.ToString();
+            << ", handle" << handle->ToString() << " status: " << s.ToString();
   }
 }
 

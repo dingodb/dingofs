@@ -21,6 +21,7 @@
 #include <fmt/format.h>
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
@@ -38,13 +39,18 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-std::string SliceData::ToString() const {
+std::string SliceData::ToStringUnlocked() const {
   return fmt::format(
-      "{(ino:{}, chunk_indxe:{}, seq:{}) chunk_range: [{}-{}], len: {}, id: "
-      "{}, flushed: {}, block_data_count: {}}",
+      "[(ino:{}, chunk_indxe:{}, seq:{}) chunk_range: [{}-{}], len: {}, id: "
+      "{}, flushed: {}, block_data_count: {}]",
       context_.ino, context_.chunk_index, context_.seq, chunk_offset_, End(),
       len_, id_, (flushed_.load(std::memory_order_relaxed) ? "true" : "false"),
       block_datas_.size());
+}
+
+std::string SliceData::ToString() const {
+  std::lock_guard<std::mutex> lg(lock_);
+  return ToStringUnlocked();
 }
 
 BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
@@ -69,6 +75,7 @@ BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
   return iter->second.get();
 }
 
+// no overlap slice write will come here
 Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
   uint64_t end_in_chunk = chunk_offset + size;
 
@@ -77,8 +84,10 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
       end_in_chunk, size, ToString());
 
   CHECK_GT(size, 0);
-  CHECK_LE(chunk_offset, End());
-  CHECK_GE(chunk_offset, chunk_offset);
+  CHECK(chunk_offset == End() || end_in_chunk == chunk_offset_) << fmt::format(
+      "Unexpected chunk offset: {}, end in chunk: {}, chunk_offset_: {}, "
+      "slice: {}",
+      chunk_offset, end_in_chunk, chunk_offset_, ToString());
 
   uint64_t block_size = context_.block_size;
   uint64_t block_index = chunk_offset / block_size;
@@ -88,35 +97,39 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
 
   uint64_t remain_len = size;
 
-  std::lock_guard<std::mutex> lg(lock_);
+  {
+    std::lock_guard<std::mutex> lg(lock_);
 
-  while (remain_len > 0) {
-    uint64_t write_size = std::min(remain_len, block_size - block_offset);
-    BlockData* block_data =
-        FindOrCreateBlockDataUnlocked(block_index, block_offset, write_size);
+    while (remain_len > 0) {
+      uint64_t write_size = std::min(remain_len, block_size - block_offset);
+      BlockData* block_data =
+          FindOrCreateBlockDataUnlocked(block_index, block_offset, write_size);
 
-    Status s = block_data->Write(buf_pos, write_size, block_offset);
-    CHECK(s.ok()) << fmt::format(
-        "Failed to write data to block data, block_index: {}, chunk_range: "
-        "[{}-{}], len: {}, slice: {}, status: {}",
-        block_index, block_offset, (block_offset + write_size), write_size,
-        ToString(), s.ToString());
+      Status s = block_data->Write(buf_pos, write_size, block_offset);
+      CHECK(s.ok()) << fmt::format(
+          "Failed to write data to block data, block_index: {}, chunk_range: "
+          "[{}-{}], len: {}, slice: {}, status: {}",
+          block_index, block_offset, (block_offset + write_size), write_size,
+          ToStringUnlocked(), s.ToString());
 
-    remain_len -= write_size;
-    buf_pos += write_size;
-    block_offset = 0;
-    ++block_index;
-  }
+      remain_len -= write_size;
+      buf_pos += write_size;
+      block_offset = 0;
+      ++block_index;
+    }
 
-  uint64_t old_end_offset_in_chunk = End();
-  if (end_in_chunk > old_end_offset_in_chunk) {
-    uint64_t old_len = len_;
-    len_ += end_in_chunk - old_end_offset_in_chunk;
+    {
+      uint64_t old_len = len_;
+      uint64_t old_chunk_offset = chunk_offset_;
 
-    VLOG(4) << fmt::format(
-        "Updating len of slice data, old len: {}, old end offset in chunk: {}, "
-        "slice: {}",
-        old_len, old_end_offset_in_chunk, ToString());
+      chunk_offset_ = std::min(chunk_offset, chunk_offset_);
+      len_ += size;
+
+      VLOG(4) << fmt::format(
+          "Updating slice data, old_chunk_offset: {}, old_len: {}, "
+          "updated slice: {}",
+          old_chunk_offset, old_len, ToStringUnlocked());
+    }
   }
 
   VLOG(4) << fmt::format(
@@ -133,7 +146,7 @@ void SliceData::FlushAsync(StatusCallback cb) {
     std::lock_guard<std::mutex> lg(lock_);
     CHECK(!flushing_)
         << "Flush already in progress, unexpected state for slice: "
-        << ToString();
+        << ToStringUnlocked();
     flushing_ = true;
     flush_cb_.swap(cb);
   }
@@ -161,32 +174,34 @@ void SliceData::DoFlush() {
                            ToString());
   }
 
-  std::lock_guard<std::mutex> lg(lock_);
-  id_ = slice_id;
+  {
+    std::lock_guard<std::mutex> lg(lock_);
+    id_ = slice_id;
 
-  CHECK_GT(block_datas_.size(), 0)
-      << "No block data to flush for slice: " << ToString();
-  flush_block_data_count_.store(block_datas_.size());
+    CHECK_GT(block_datas_.size(), 0)
+        << "No block data to flush for slice: " << ToStringUnlocked();
+    flush_block_data_count_.store(block_datas_.size());
 
-  for (const auto& [block_index, block_data_ptr] : block_datas_) {
-    BlockData* block_data = block_data_ptr.get();
-    VLOG(6) << fmt::format(
-        "Flushing block data for block index: {}, block_data: {}", block_index,
-        block_data->ToString());
-    CHECK_EQ(block_data->BlockIndex(), block_index);
+    for (const auto& [block_index, block_data_ptr] : block_datas_) {
+      BlockData* block_data = block_data_ptr.get();
+      VLOG(6) << fmt::format(
+          "Flushing block data for block index: {}, block_data: {}",
+          block_index, block_data->ToString());
+      CHECK_EQ(block_data->BlockIndex(), block_index);
 
-    IOBuffer io_buffer = block_data->ToIOBuffer();
+      IOBuffer io_buffer = block_data->ToIOBuffer();
 
-    // TODO: read write back option from somewhere, currently using default
-    cache::PutOption option;
-    // TODO: Block should  take own the iobuf
-    cache::BlockKey key(context_.fs_id, context_.ino, id_, block_index, 0);
-    vfs_hub_->GetBlockCache()->AsyncPut(
-        key, cache::Block(io_buffer),
-        [this, block_data](auto&& ph1) {
-          BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
-        },
-        option);
+      // TODO: read write back option from somewhere, currently using default
+      cache::PutOption option;
+      // TODO: Block should  take own the iobuf
+      cache::BlockKey key(context_.fs_id, context_.ino, id_, block_index, 0);
+      vfs_hub_->GetBlockCache()->AsyncPut(
+          key, cache::Block(io_buffer),
+          [this, block_data](auto&& ph1) {
+            BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
+          },
+          option);
+    }
   }
 }
 
@@ -252,7 +267,7 @@ void SliceData::GetCommitSlices(std::vector<Slice>& slices) {
 
     VLOG(4) << fmt::format(
         "Generated commit_slice: {}, for block: {} in slice: {}",
-        Slice2Str(slices.back()), block_data_ptr->ToString(), ToString());
+        Slice2Str(slices.back()), block_data_ptr->ToString(), ToStringUnlocked());
   }
 }
 

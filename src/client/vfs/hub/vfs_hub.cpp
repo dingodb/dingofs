@@ -120,7 +120,9 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     std::string uuid = absl::StrFormat("%d-%s", fs_info_.id, fs_info_.name);
     common::RewriteCacheDir(&block_cache_option, uuid);
 
-    block_cache_ = std::make_unique<cache::TierBlockCache>(
+    // block_cache_ = std::make_unique<cache::TierBlockCache>(
+    //     block_cache_option, remote_block_cache_option, block_accesser_.get());
+    block_cache_ = std::make_shared<cache::TierBlockCache>(
         block_cache_option, remote_block_cache_option, block_accesser_.get());
 
     DINGOFS_RETURN_NOT_OK(block_cache_->Init());

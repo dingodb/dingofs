@@ -74,7 +74,7 @@ class BlockData {
   const SliceDataContext context_;
   datastream::PageAllocator* page_allocator_{nullptr};
   const uint64_t block_index_;
-  const uint64_t chunk_offset_{0};
+  uint64_t chunk_offset_{0};
   uint64_t len_{0};
   const uint64_t lower_bound_in_chunk_{0};
   const uint64_t upper_bound_in_chunk_{0};

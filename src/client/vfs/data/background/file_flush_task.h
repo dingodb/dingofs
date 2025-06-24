@@ -17,12 +17,12 @@
 #ifndef DINGODB_CLIENT_VFS_DATA_FILE_FLUSH_TASK_H_
 #define DINGODB_CLIENT_VFS_DATA_FILE_FLUSH_TASK_H_
 
-#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <sstream>
 
 #include "client/vfs/data/chunk.h"
 #include "common/callback.h"
@@ -42,8 +42,10 @@ class FileFlushTask {
   void RunAsync(StatusCallback cb);
 
   std::string ToString() const {
-    return fmt::format("{file_flush_id: {}, ino: {},  chunks_size: {}}",
-                       file_flush_id_, ino_, chunks_.size());
+    std::ostringstream ss;
+    ss << "{ file_flush_id: " << file_flush_id_ << ", ino: " << ino_
+       << ", chunks_size: " << chunks_.size() << " }";
+    return ss.str();
   }
 
  private:

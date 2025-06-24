@@ -16,6 +16,8 @@
 
 #include "client/vfs/data/chunk.h"
 
+#include <absl/cleanup/cleanup.h>
+#include <fmt/base.h>
 #include <fmt/format.h>
 #include <glog/logging.h>
 
@@ -23,6 +25,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <utility>
 
 #include "cache/blockcache/block_cache.h"
@@ -48,16 +51,20 @@ static std::atomic<uint64_t> chunk_flush_id_gen{1};
 
 // proteted by mutex_
 struct Chunk::FlushTask {
-  const StatusCallback cb{nullptr};
   const uint64_t chunk_flush_id{0};
-  std::unique_ptr<ChunkFlushTask> chunk_flush_task;
-  Status status;
   bool done{false};
+  Status status;
+  const StatusCallback cb{nullptr};
+  std::unique_ptr<ChunkFlushTask> chunk_flush_task;
 
   std::string ToString() const {
-    return fmt::format("{chunk_flush_id:{}, done: {}, status: {}}",
-                       chunk_flush_id, (done ? "true" : "false"),
-                       status.ToString());
+    std::ostringstream oss;
+    oss << "{ chunk_flush_id: " << chunk_flush_id
+        << ", done: " << (done ? "true" : "false")
+        << ", status: " << status.ToString() << ", task: "
+        << (chunk_flush_task ? chunk_flush_task->ToString() : "nullptr")
+        << " }";
+    return oss.str();
   }
 };
 
@@ -153,28 +160,34 @@ Status Chunk::DirectWrite(const char* buf, uint64_t size,
 SliceData* Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size) {
   uint64_t end_in_chunk = chunk_pos + size;
 
-  for (int i = slices_.size() - 1; i >= 0; --i) {
-    SliceData* slice = slices_[i].get();
+  //   from new to old
+  for (auto it = slices_.rbegin(); it != slices_.rend(); ++it) {
+    uint64_t seq = it->first;
+    SliceData* slice = it->second.get();
+    DCHECK_NOTNULL(slice);
 
     VLOG(6) << fmt::format(
         "(ino:{}, chunk_index:{}) FindWritableSliceUnLocked for chunk_range: "
-        "[{}-{}], size: {}, i: {}"
-        ", slice: {}",
-        ino_, index_, chunk_pos, end_in_chunk, size, i, slice->ToString());
+        "[{}-{}], size: {}, seq: {}, check slice: {}",
+        ino_, index_, chunk_pos, end_in_chunk, size, seq, slice->ToString());
 
-    uint64_t flush_end = (slice->End() / block_size_) * block_size_;
-    if (chunk_pos >= flush_end && chunk_pos <= slice->End()) {
-      return slice;
-    }
-
-    if (chunk_pos < slice->End() && slice->ChunkOffset() < end_in_chunk) {
+    // if overlap with slice, then use new slice
+    if (chunk_pos < slice->End() && end_in_chunk > slice->ChunkOffset()) {
       VLOG(6) << fmt::format(
-          "(ino:{}, chunk_index:{}) Slice overlaps with chunk_range: "
-          "[{}-{}], size: {}, i: {}"
-          ", slice: {}",
-          ino_, index_, chunk_pos, end_in_chunk, size, i, slice->ToString());
+          "(ino:{}, chunk_index:{}) End FindWritableSliceUnLocked because "
+          "slice overlaps with chunk_range: "
+          "[{}-{}], size: {}, seq: {}, slice: {}",
+          ino_, index_, chunk_pos, end_in_chunk, size, seq, slice->ToString());
 
       return nullptr;
+    }
+
+    if (chunk_pos == slice->End() || end_in_chunk == slice->ChunkOffset()) {
+      VLOG(6) << fmt::format(
+          "(ino:{}, chunk_index:{}) Found slice for chunk_range: "
+          "[{}-{}], size: {}, seq: {}, slice: {}",
+          ino_, index_, chunk_pos, end_in_chunk, size, seq, slice->ToString());
+      return slice;
     }
   }
 
@@ -203,11 +216,9 @@ SliceData* Chunk::CreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
   return data;
 }
 
-SliceData* Chunk::FindOrCreateSlice(uint64_t chunk_pos, uint64_t size) {
-  std::lock_guard<std::mutex> lg(mutex_);
-
+SliceData* Chunk::FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
   SliceData* slice = FindWritableSliceUnLocked(chunk_pos, size);
-  if (slice != nullptr) {
+  if (slice == nullptr) {
     slice = CreateSliceUnlocked(chunk_pos, size);
   }
   DCHECK_NOTNULL(slice);
@@ -233,12 +244,12 @@ Status Chunk::BufferWrite(const char* buf, uint64_t size,
 
   bool is_full = false;
   {
-    auto* slice = FindOrCreateSlice(chunk_offset, size);
+    std::lock_guard<std::mutex> lg(mutex_);
+
+    SliceData* slice = FindOrCreateSliceUnlocked(chunk_offset, size);
     s = slice->Write(buf, size, chunk_offset);
 
     if (slice->Len() == chunk_size_) {
-      VLOG(4) << fmt::format("(ino:{}, chunk_index:{}) Slice is full", ino_,
-                             index_);
       is_full = true;
     }
   }
@@ -394,13 +405,13 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       VLOG(4) << fmt::format(
           "Chunk::FlushTaskDone task: {} is not the header of flush_queue_, "
           "end directly",
-          flush_task->chunk_flush_task->ToString());
+          flush_task->ToString());
       return;
     } else {
       VLOG(4) << fmt::format(
           "Chunk::FlushTaskDone task: {} is the header of flush_queue_, "
           "flush_queue size: {}, insert fake header: {}, ",
-          flush_task->chunk_flush_task->ToString(), flush_queue_.size(),
+          flush_task->ToString(), flush_queue_.size(),
           static_cast<const void*>(&kFakeHeader));
 
       flush_queue_.push_front(&kFakeHeader);
@@ -409,6 +420,16 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
   // only the first flush task in the queue can be processed
   // may use another commit thread or make meta is async
+
+  std::vector<FlushTask*> to_destroy;
+
+  auto defer_destory = ::absl::MakeCleanup([&]() {
+    for (FlushTask* task : to_destroy) {
+      VLOG(4) << fmt::format("Chunk::FlushTaskDone delete task: {}",
+                             task->ToString());
+      delete task;
+    }
+  });
 
   while (true) {
     std::vector<FlushTask*> to_commit;
@@ -423,7 +444,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       while (it != flush_queue_.end()) {
         VLOG(4) << fmt::format(
             "Chunk::FlushTaskDone header_task: {} try to commit task: {}",
-            flush_task->chunk_flush_task->ToString(), (*it)->ToString());
+            flush_task->ToString(), (*it)->ToString());
 
         // sequence iterate the flush queue, only pick the flush task which is
         // done
@@ -437,12 +458,12 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       };
 
       if (to_commit.empty()) {
-        VLOG(4) << fmt::format(
-            "Chunk::FlushTaskDone header_task: {} has no flush_task to "
-            "commit, remove fake header and return",
-            flush_task->chunk_flush_task->ToString());
-
         flush_queue_.pop_front();
+        VLOG(4) << fmt::format(
+            "Chunk::FlushTaskDone will return header_task: {} has no "
+            "flush_task to commit, fake header is removed, remain "
+            "flush_queue_size: {}",
+            flush_task->ToString(), flush_queue_.size());
         return;
       }
     }  //  end lock_guard
@@ -452,7 +473,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
     for (FlushTask* task : to_commit) {
       VLOG(4) << fmt::format(
           "Chunk::FlushTaskDone header_task: {} commit flush_task: {}",
-          flush_task->chunk_flush_task->ToString(), task->ToString());
+          flush_task->ToString(), task->ToString());
 
       if (task->status.ok()) {
         std::vector<Slice> slices;
@@ -462,10 +483,9 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
         Status status = hub_->GetMetaSystem()->WriteSlice(ino_, index_, slices);
         if (!status.ok()) {
           LOG(WARNING) << fmt::format(
-              "Chunk::FlushTaskDone header_task: {} fail commit task: {} "
-              "status: {}",
-              flush_task->chunk_flush_task->ToString(), task->ToString(),
-              status.ToString());
+              "Chunk::FlushTaskDone header_task: {} fail commit task: {}, "
+              "commit_status: {}",
+              flush_task->ToString(), task->ToString(), status.ToString());
 
           MarkErrorStatus(status);
         }
@@ -473,7 +493,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
         LOG(WARNING) << fmt::format(
             "Chunk::FlushTaskDone header_task: {} skip commit flush fail "
             "task: {}",
-            flush_task->chunk_flush_task->ToString(), task->ToString());
+            flush_task->ToString(), task->ToString());
 
         MarkErrorStatus(task->status);
       }
@@ -481,7 +501,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       // if some error happend before
       task->cb(GetErrorStatus());
 
-      delete task;
+      to_destroy.push_back(task);
     }  // end  for to_commit
   }  // end while(true)
 }
@@ -500,8 +520,9 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
     error_status = error_status_;
     if (error_status.ok()) {
       flush_queue_.emplace_back(new FlushTask{
-          .cb = std::move(cb),
+          .chunk_flush_id = chunk_flush_id,
           .status = Status::OK(),
+          .cb = std::move(cb),
       });
 
       flush_task = flush_queue_.back();
@@ -537,9 +558,8 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
     FlushTaskDone(flush_task, std::forward<decltype(ph1)>(ph1));
   });
 
-  VLOG(4) << fmt::format("Chunk::FlushAsync end chunk_flush_id: {} task: {}",
-                         chunk_flush_id,
-                         flush_task->chunk_flush_task->ToString());
+  VLOG(4) << fmt::format("Chunk::FlushAsync end chunk_flush_id: {}",
+                         chunk_flush_id);
 }
 
 void Chunk::FlushAsync(StatusCallback cb) {

@@ -17,13 +17,13 @@
 #ifndef DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
 #define DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
 
-#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <atomic>
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <sstream>
 
 #include "client/vfs/data/slice/slice_data.h"
 #include "common/callback.h"
@@ -55,9 +55,11 @@ class ChunkFlushTask {
   uint64_t GetFlushSeqId() const { return chunk_flush_id; }
 
   std::string ToString() const {
-    return fmt::format(
-        "{chunk_flush_id: {}, ino: {}, chunk_index: {}, slices_size: {}}",
-        chunk_flush_id, ino_, chunk_index_, flush_slices_.size());
+    std::ostringstream oss;
+    oss << "{ chunk_flush_id: " << chunk_flush_id << ", ino: " << ino_
+        << ", chunk_index: " << chunk_index_
+        << ", slices_size: " << flush_slices_.size() << " }";
+    return oss.str();
   }
 
  private:

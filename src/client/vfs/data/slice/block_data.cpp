@@ -42,17 +42,19 @@ BlockData::~BlockData() {
         "Deallocating page at: {} for block_index: {}, page_index: {}, took: "
         "<{:.6f}> ms",
         Char2Addr(page_data_ptr->data), block_index_, page_index,
-        timer.u_elapsed());
+        timer.u_elapsed(0.0));
   }
 }
 
 std::string BlockData::ToString() const {
-  return fmt::format(
-      "{(ino:{}, chunk_index:{}, seq:{}, block_index: {}) chunk_range: "
-      "[{}-{}], len: {}, bound: [{}-{}]}, page_count: {}",
-      context_.ino, context_.chunk_index, context_.seq, block_index_,
-      chunk_offset_, End(), len_, lower_bound_in_chunk_, upper_bound_in_chunk_,
-      pages_.size());
+  std::ostringstream ss;
+  ss << "{ (ino: " << context_.ino << ", chunk_index: " << context_.chunk_index
+     << ", seq: " << context_.seq << ", block_index: " << block_index_ << ") "
+     << "chunk_range: [" << chunk_offset_ << "-" << End() << "] "
+     << "len: " << len_ << " bound: [" << lower_bound_in_chunk_ << "-"
+     << upper_bound_in_chunk_ << "] "
+     << "page_count: " << pages_.size() << " }";
+  return ss.str();
 }
 
 char* BlockData::AllocPage() {
@@ -63,7 +65,7 @@ char* BlockData::AllocPage() {
   timer.stop();
   VLOG(4) << fmt::format(
       "Allocated page at: {} for block_index: {}, allocation took: <{:.6f}> ms",
-      Char2Addr(page), block_index_, timer.u_elapsed());
+      Char2Addr(page), block_index_, timer.u_elapsed(0.0));
   return page;
 }
 
@@ -98,8 +100,10 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
   // TODO: use DCHECK in future
   CHECK_GT(size, 0);
   CHECK_LE(lower_bound_in_chunk_, write_chunk_offset);
-  CHECK_GT(upper_bound_in_chunk_, end_write_chunk_offset);
-  CHECK_GE(block_offset, write_chunk_offset);
+  CHECK_GE(upper_bound_in_chunk_, end_write_chunk_offset);
+  CHECK(write_chunk_offset == End() || end_write_chunk_offset == chunk_offset_)
+      << fmt::format("Write chunk_range: [{}-{}] is illega for block_data: {}",
+                     write_chunk_offset, end_write_chunk_offset, ToString());
 
   uint64_t page_size = context_.page_size;
   uint64_t page_index = block_offset / page_size;
@@ -142,7 +146,6 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
 
   return Status::OK();
 }
-
 
 IOBuffer BlockData::ToIOBuffer() const {
   butil::IOBuf iobuf;

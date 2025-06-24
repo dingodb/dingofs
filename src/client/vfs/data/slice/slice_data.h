@@ -35,7 +35,7 @@ namespace vfs {
 class VFSHub;
 class Chunk;
 
-// writing -> flushing -> flushed 
+// writing -> flushing -> flushed
 class SliceData {
  public:
   explicit SliceData(const SliceDataContext& context, VFSHub* hub,
@@ -59,7 +59,10 @@ class SliceData {
 
   uint64_t ChunkOffset() const { return chunk_offset_; }
 
-  uint64_t End() const { return chunk_offset_ + len_; }
+  uint64_t End() const {
+    std::lock_guard<std::mutex> lg(lock_);
+    return chunk_offset_ + len_;
+  }
 
   uint64_t Len() const { return len_; }
 
@@ -68,6 +71,8 @@ class SliceData {
   bool IsFlushed() const { return flushed_.load(std::memory_order_acquire); }
 
  private:
+  std::string ToStringUnlocked() const;
+
   BlockData* FindOrCreateBlockDataUnlocked(uint64_t block_index,
                                            uint64_t chunk_offset, uint64_t len);
 
@@ -80,9 +85,8 @@ class SliceData {
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
 
-  const uint64_t chunk_offset_;
-
   mutable std::mutex lock_;
+  uint64_t chunk_offset_;
   uint64_t len_;
   bool flushing_{false};  // used to prevent multiple flushes
   uint64_t id_{0};        // from mds

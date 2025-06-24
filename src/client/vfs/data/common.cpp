@@ -30,24 +30,24 @@ std::string FileRange::ToString() const {
 
 std::string SliceReadReq::ToString() const {
   std::ostringstream oss;
-  oss << "{read_range: [" << file_offset << "-" << End() << "]"
+  oss << "{ read_range: [" << file_offset << "-" << End() << "]"
       << ", len: " << len
       << ", slice: " << (slice.has_value() ? Slice2Str(slice.value()) : "null")
-      << "}";
+      << " }";
   return oss.str();
 }
 
 std::string BlockDesc::ToString() const {
   std::ostringstream os;
-  os << "{range:[" << file_offset << "-" << End() << "]"
+  os << "{ range:[" << file_offset << "-" << End() << "]"
      << ", len: " << block_len << ", zero: " << zero << ", version: " << version
-     << ", slice_id: " << slice_id << ", block_index: " << index << "}";
+     << ", slice_id: " << slice_id << ", block_index: " << index << " }";
   return os.str();
 }
 
 std::string BlockReadReq::ToString() const {
   std::ostringstream oss;
-  oss << "{block_req_range: [" << block_offset << "-" << End()
+  oss << "{ block_req_range: [" << block_offset << "-" << End()
       << "], len: " << len << ", block: " << block.ToString() << " }";
   return oss.str();
 }

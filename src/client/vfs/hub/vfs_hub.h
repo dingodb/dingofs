@@ -27,10 +27,10 @@
 #include "cache/blockcache/block_cache.h"
 #include "client/common/config.h"
 #include "client/datastream/page_allocator.h"
+#include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/executor/executor.h"
@@ -54,7 +54,8 @@ class VFSHub {
 
   virtual HandleManager* GetHandleManager() = 0;
 
-  virtual cache::BlockCache* GetBlockCache() = 0;
+  //   virtual cache::BlockCache* GetBlockCache() = 0;
+  virtual std::shared_ptr<cache::BlockCache> GetBlockCache() = 0;
 
   virtual blockaccess::BlockAccesser* GetBlockAccesser() = 0;
 
@@ -90,10 +91,16 @@ class VFSHubImpl : public VFSHub {
     return handle_manager_.get();
   }
 
-  cache::BlockCache* GetBlockCache() override {
+  std::shared_ptr<cache::BlockCache> GetBlockCache() override {
     CHECK_NOTNULL(handle_manager_);
-    return block_cache_.get();
+    return block_cache_;
+    // return block_cache_.get();
   }
+
+  //   cache::BlockCache* GetBlockCache() override {
+  //     CHECK_NOTNULL(handle_manager_);
+  //     return block_cache_.get();
+  //   }
 
   blockaccess::BlockAccesser* GetBlockAccesser() override {
     CHECK_NOTNULL(block_accesser_);
@@ -134,7 +141,8 @@ class VFSHubImpl : public VFSHub {
   std::unique_ptr<MetaSystem> meta_system_;
   std::unique_ptr<HandleManager> handle_manager_;
   std::unique_ptr<blockaccess::BlockAccesser> block_accesser_;
-  std::unique_ptr<cache::BlockCache> block_cache_;
+  //   std::unique_ptr<cache::BlockCache> block_cache_;
+  std::shared_ptr<cache::BlockCache> block_cache_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
   std::shared_ptr<datastream::PageAllocator> page_allocator_;

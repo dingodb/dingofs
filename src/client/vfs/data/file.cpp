@@ -180,8 +180,7 @@ void File::AsyncFlush(StatusCallback cb) {
   flush_task->RunAsync(cb);
 
   VLOG(3) << "File::AsyncFlush end ino: " << ino_
-          << ", file_flush_id: " << file_flush_id
-          << ", task: " << flush_task->ToString();
+          << ", file_flush_id: " << file_flush_id;
 }
 
 Status File::Flush() {

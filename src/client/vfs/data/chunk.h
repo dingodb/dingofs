@@ -96,7 +96,7 @@ class Chunk {
 
   SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
   SliceData* CreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
-  SliceData* FindOrCreateSlice(uint64_t chunk_pos, uint64_t size);
+  SliceData* FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   // --------new added--------
 
@@ -113,7 +113,8 @@ class Chunk {
   const uint64_t chunk_end_{0};    // in file offset
 
   mutable std::mutex mutex_;
-  // seq_id -> slice data
+  // TODO: maybe use std::vector
+  // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
   std::deque<FlushTask*> flush_queue_;
   // when this not ok, all write and flush should return error

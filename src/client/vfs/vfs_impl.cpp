@@ -235,6 +235,8 @@ Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
     return Status::BadFd(fmt::format("bad  fh:{}", fh));
   }
 
+  DINGOFS_RETURN_NOT_OK(handle->file->Flush());
+
   return handle->file->Read(buf, size, offset, out_rsize);
 }
 

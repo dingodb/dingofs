@@ -22,21 +22,19 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-
 std::string SliceRange::ToString() const {
   std::ostringstream oss;
-  oss << "{file_offset:" << file_offset << ", len:" << len
-      << ", slice_id:" << slice_id << "}";
+  oss << "{ file_offset:" << file_offset << ", len:" << len
+      << ", slice_id:" << slice_id << " }";
   return oss.str();
 }
 
-
 std::string FileSlice::ToString() const {
   std::ostringstream oss;
-  oss << "{file_offset: " << file_offset << ", len: " << len
+  oss << "{ file_offset: " << file_offset << ", len: " << len
       << ", block_offset: " << block_offset
       << ", block_key: " << block_key.Filename() << ", block_len: " << block_len
-      << ", zero: " << zero << "}";
+      << ", zero: " << zero << " }";
   return oss.str();
 }
 
