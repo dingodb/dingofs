@@ -26,6 +26,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/vfs/data/slice/slice_data.h"
+#include "client/vfs/data/task/chunk_flush_task.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
@@ -35,7 +36,6 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
-
 class Chunk {
  public:
   Chunk(VFSHub* hub, uint64_t ino, uint64_t index);
@@ -74,9 +74,19 @@ class Chunk {
     }
   }
 
-  struct FlushTask;
-
  private:
+  // proteted by mutex_
+  struct FlushTask {
+    const uint64_t chunk_flush_id{0};
+    bool done{false};
+    Status status;
+    const StatusCallback cb{nullptr};
+    std::unique_ptr<ChunkFlushTask> chunk_flush_task{nullptr};
+
+    std::string UUID() const;
+    std::string ToString() const;
+  };
+
   std::string UUID() const { return fmt::format("chunk-{}-{}", ino_, index_); }
 
   // proteted by mutex_
@@ -119,6 +129,7 @@ class Chunk {
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
   std::deque<FlushTask*> flush_queue_;
+  FlushTask kFakeHeader;
   // when this not ok, all write and flush should return error
   Status error_status_;
 };

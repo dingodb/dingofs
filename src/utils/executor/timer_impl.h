@@ -74,7 +74,7 @@ class TimerImpl : public Timer {
   bool running_{false};
 
   const bool own_thread_pool_;
-  std::unique_ptr<ThreadPool> thread_pool_;
+  ThreadPool* thread_pool_;
 };
 
 }  // namespace dingofs

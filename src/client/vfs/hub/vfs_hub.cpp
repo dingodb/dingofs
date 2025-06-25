@@ -166,9 +166,8 @@ Status VFSHubImpl::Stop() {
 
   handle_manager_->FlushAll();
 
-  block_cache_->Shutdown();
-  flush_executor_->Stop();
   priodic_flush_manager_->Stop();
+  block_cache_->Shutdown();
   meta_system_->UnInit();
 
   return Status::OK();

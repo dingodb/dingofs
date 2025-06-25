@@ -74,7 +74,7 @@ class VFSHubImpl : public VFSHub {
  public:
   VFSHubImpl() = default;
 
-  ~VFSHubImpl() override = default;
+  ~VFSHubImpl() override { Stop(); }
 
   Status Start(const VFSConfig& vfs_conf,
                const common::ClientOption& client_option) override;

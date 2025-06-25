@@ -32,13 +32,19 @@ using namespace std::chrono;
 TimerImpl::TimerImpl() : TimerImpl(FLAGS_timer_bg_thread_default_num) {}
 
 TimerImpl::TimerImpl(int bg_thread_num) : own_thread_pool_(true) {
-  thread_pool_ = std::make_unique<ThreadPool>(bg_thread_num);
+  thread_pool_ = new ThreadPool(bg_thread_num);
 }
 
 TimerImpl::TimerImpl(ThreadPool* thread_pool)
     : own_thread_pool_(false), thread_pool_(thread_pool) {}
 
-TimerImpl::~TimerImpl() { Stop(); }
+TimerImpl::~TimerImpl() {
+  Stop();
+
+  if (own_thread_pool_) {
+    delete thread_pool_;
+  }
+}
 
 bool TimerImpl::Start() {
   std::lock_guard<std::mutex> lk(mutex_);

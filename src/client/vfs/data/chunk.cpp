@@ -49,28 +49,17 @@ namespace vfs {
 static std::atomic<uint64_t> slice_seq_id_gen{1};
 static std::atomic<uint64_t> chunk_flush_id_gen{1};
 
-// proteted by mutex_
-struct Chunk::FlushTask {
-  const uint64_t chunk_flush_id{0};
-  bool done{false};
-  Status status;
-  const StatusCallback cb{nullptr};
-  std::unique_ptr<ChunkFlushTask> chunk_flush_task;
+std::string Chunk::FlushTask::UUID() const {
+  CHECK_NOTNULL(chunk_flush_task);
+  return chunk_flush_task->UUID();
+}
 
-  std::string UUID() const {
-    CHECK_NOTNULL(chunk_flush_task);
-    return chunk_flush_task->UUID();
-  }
-
-  std::string ToString() const {
-    return fmt::format(
-        "(chunk_flush_id: {}, done: {}, status: {}, task: {})", chunk_flush_id,
-        done ? "true" : "false", status.ToString(),
-        chunk_flush_task ? chunk_flush_task->ToString() : "nullptr");
-  }
-};
-
-static Chunk::FlushTask kFakeHeader;
+std::string Chunk::FlushTask::ToString() const {
+  return fmt::format(
+      "(chunk_flush_id: {}, done: {}, status: {}, task: {})", chunk_flush_id,
+      done ? "true" : "false", status.ToString(),
+      chunk_flush_task ? chunk_flush_task->ToString() : "nullptr");
+}
 
 // protected by mutex_
 Chunk::Chunk(VFSHub* hub, uint64_t ino, uint64_t index)
@@ -249,8 +238,8 @@ Status Chunk::BufferWrite(const char* buf, uint64_t size,
   }
 
   if (is_full) {
-    VLOG(4) << fmt::format("{} BufferWrite triggering flush because some slice is full",
-                           UUID());
+    VLOG(4) << fmt::format(
+        "{} BufferWrite triggering flush because some slice is full", UUID());
     TriggerFlush();
   }
 
@@ -444,12 +433,12 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       };
 
       if (to_commit.empty()) {
-        flush_queue_.pop_front();
         VLOG(4) << fmt::format(
             "{} FlushTaskDone header_task: {} will return because has no "
             "flush_task to commit, fake header is removed, remain "
             "flush_queue_size: {}",
             UUID(), flush_task->UUID(), flush_queue_.size());
+        flush_queue_.pop_front();
         return;
       }
     }  //  end lock_guard

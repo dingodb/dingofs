@@ -119,7 +119,7 @@ class ThreadPool::Impl {
       (task)();
     }
 
-    VLOG(12) << "bthread id:" << id << " started.";
+    VLOG(12) << "bthread id:" << id << " exit";
   }
 
   bthread_mutex_t mutex_;
