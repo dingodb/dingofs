@@ -23,7 +23,6 @@
 #include <atomic>
 #include <cstdint>
 #include <mutex>
-#include <sstream>
 
 #include "client/vfs/data/chunk.h"
 #include "common/callback.h"
@@ -47,13 +46,11 @@ class FileFlushTask {
   }
 
   std::string ToString() const {
-    std::ostringstream ss;
-    ss << "{ uuid: " << UUID() << ", chunks_size: " << chunks_.size() << " }";
-    return ss.str();
+    return fmt::format("(uuid: {}, chunks_size: {})", UUID(), chunks_.size());
   }
 
  private:
-  void ChunkFlushed(uint64_t chunk_id, Status status);
+  void ChunkFlushed(uint64_t chunk_index, Status status);
 
   const uint64_t ino_;
   const uint64_t file_flush_id_;

@@ -17,7 +17,10 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_SLICE_COMMON_H_
 #define DINGOFS_CLIENT_VFS_DATA_SLICE_COMMON_H_
 
+#include <fmt/format.h>
+
 #include <cstdint>
+#include <string>
 
 namespace dingofs {
 namespace client {
@@ -45,6 +48,10 @@ struct SliceDataContext {
         page_size(p_page_size) {}
 
   ~SliceDataContext() = default;
+
+  std::string UUID() const {
+    return fmt::format("{}-{}-{}-{}", fs_id, ino, chunk_index, seq);
+  }
 };
 
 }  // namespace vfs

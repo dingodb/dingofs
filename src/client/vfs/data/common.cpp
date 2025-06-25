@@ -16,40 +16,32 @@
 
 #include "client/vfs/data/common.h"
 
-#include <sstream>
+#include <fmt/format.h>
 
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 std::string FileRange::ToString() const {
-  std::ostringstream os;
-  os << "[" << offset << "-" << End() << "]";
-  return os.str();
+  return fmt::format("[{}-{}]", offset, End());
 }
 
 std::string SliceReadReq::ToString() const {
-  std::ostringstream oss;
-  oss << "{ read_range: [" << file_offset << "-" << End() << "]"
-      << ", len: " << len
-      << ", slice: " << (slice.has_value() ? Slice2Str(slice.value()) : "null")
-      << " }";
-  return oss.str();
+  return fmt::format("(read_range: [{}-{}], len: {}, slice: {})", file_offset,
+                     End(), len,
+                     slice.has_value() ? Slice2Str(slice.value()) : "null");
 }
 
 std::string BlockDesc::ToString() const {
-  std::ostringstream os;
-  os << "{ range:[" << file_offset << "-" << End() << "]"
-     << ", len: " << block_len << ", zero: " << zero << ", version: " << version
-     << ", slice_id: " << slice_id << ", block_index: " << index << " }";
-  return os.str();
+  return fmt::format(
+      "(range:[{}-{}], len: {}, zero: {}, version: {}, slice_id: {}, "
+      "block_index: {})",
+      file_offset, End(), block_len, zero, version, slice_id, index);
 }
 
 std::string BlockReadReq::ToString() const {
-  std::ostringstream oss;
-  oss << "{ block_req_range: [" << block_offset << "-" << End()
-      << "], len: " << len << ", block: " << block.ToString() << " }";
-  return oss.str();
+  return fmt::format("(block_req_range: [{}-{}], len: {}, block: {})",
+                     block_offset, End(), len, block.ToString());
 }
 
 }  // namespace vfs

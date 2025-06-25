@@ -25,8 +25,6 @@ ExecutorImpl::ExecutorImpl()
 
 ExecutorImpl::~ExecutorImpl() {
   Stop();
-  timer_.reset();
-  pool_.reset();
 }
 
 bool ExecutorImpl::Start(int thread_num) {

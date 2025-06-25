@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/background/chunk_flush_task.h"
+#include "client/vfs/data/task/chunk_flush_task.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -32,7 +32,8 @@ namespace vfs {
 void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
   if (!s.ok()) {
     LOG(WARNING) << fmt::format(
-        "Fail flush slice_seq: {} in chunk_flush_task: {}, status: {}",
+        "{} SliceFlushed Fail flush slice_seq: {} in chunk_flush_task: {}, "
+        "status: {}",
         slice_seq, ToString(), s.ToString());
   }
 
@@ -40,12 +41,10 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
     std::lock_guard<std::mutex> lg(mutex_);
 
     auto it = flush_slices_.find(slice_seq);
-    CHECK(it != flush_slices_.end()) << fmt::format(
-        "Chunk::SliceFlushed slice_seq: {} not found in task: {}, ", slice_seq,
-        ToString());
-
-    CHECK(!it->second->IsFlushed());
-    it->second->SetFlushed();
+    CHECK(it != flush_slices_.end())
+        << fmt::format("{} SliceFlushed slice_seq: {} not found in task: {}, ",
+                       UUID(), slice_seq, ToString());
+    CHECK(it->second->IsFlushed());
 
     if (!s.ok()) {
       if (status_.ok()) {
@@ -67,19 +66,17 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
 
     cb(tmp);
 
-    VLOG(4) << fmt::format("End chunk_flush_task: {} status: {}", ToString(),
-                           tmp.ToString());
+    VLOG(4) << fmt::format("{} End status: {}", UUID(), tmp.ToString());
   }
 }
 
 void ChunkFlushTask::RunAsync(StatusCallback cb) {
-  VLOG(4) << fmt::format("Start chunk_flush_task: {} flush_slices size: {}",
-                         ToString(), flush_slices_.size());
+  VLOG(4) << fmt::format("{} Start chunk_flush_task: {} flush_slices size: {}",
+                         UUID(), ToString(), flush_slices_.size());
 
   if (flush_slices_.empty()) {
-    LOG(INFO) << fmt::format(
-        "End chunk_flush_task: {} because no slices to flush, return directly",
-        ToString());
+    VLOG(1) << fmt::format(
+        "{} End  because no slices to flush, return directly", UUID());
     cb(Status::OK());
     return;
   }
@@ -87,19 +84,18 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     cb_.swap(cb);
+    status_ = Status::OK();
   }
 
   flusing_slice_.store(flush_slices_.size(), std::memory_order_relaxed);
-  CHECK_GT(flusing_slice_.load(), 0);
+  DCHECK_GT(flusing_slice_.load(), 0);
 
   for (const auto& seq_slice : flush_slices_) {
     int64_t seq = seq_slice.first;
     SliceData* slice = seq_slice.second.get();
 
-    VLOG(4) << fmt::format(
-        "Chunk::FlushAsync chunk_flush_task: {} will flush slice_seq: {}, "
-        "slice: {}",
-        ToString(), seq, slice->UUID());
+    VLOG(4) << fmt::format("{} will flush slice_seq: {}, slice: {}", UUID(),
+                           seq, slice->UUID());
 
     slice->FlushAsync([this, seq](auto&& ph1) {
       SliceFlushed(seq, std::forward<decltype(ph1)>(ph1));

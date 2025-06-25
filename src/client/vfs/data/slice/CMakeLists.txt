@@ -16,6 +16,7 @@ add_library(vfs_data_slice
     slice_data.cpp
     block_data.cpp
     page_data.cpp
+    task/slice_flush_task.cpp
 )
 
 target_link_libraries(vfs_data_slice

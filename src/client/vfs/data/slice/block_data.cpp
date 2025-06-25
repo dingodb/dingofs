@@ -29,22 +29,30 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-BlockData::~BlockData() {
-  VLOG(6) << fmt::format("block_data: {} will destroy", ToString());
+void BlockData::FreePageData() {
+  VLOG(6) << fmt::format("{} FreePageData, block_data: {}", UUID(), ToString());
 
-  for (const auto& [page_index, page_data_ptr] : pages_) {
-    CHECK_NOTNULL(page_data_ptr->page);
+  for (auto it = pages_.begin(); it != pages_.end();) {
+    uint64_t page_index = it->first;
+    PageData* page_data = it->second.get();
+    CHECK_NOTNULL(page_data->page);
+
     butil::Timer timer;
     timer.start();
-    page_allocator_->DeAllocate(page_data_ptr->page);
+    page_allocator_->DeAllocate(page_data->page);
     timer.stop();
 
     VLOG(6) << fmt::format(
-        "Deallocating page at: {} for block_index: {}, page_index: {}, took: "
-        "<{:.6f}> ms",
-        Char2Addr(page_data_ptr->page), block_index_, page_index,
-        timer.u_elapsed(0.0));
+        "{} Deallocating page at: {}, page_index: {} took: <{:.6f}> ms", UUID(),
+        Char2Addr(page_data->page), page_index, timer.u_elapsed(0.0));
+
+    it = pages_.erase(it);
   }
+}
+
+void BlockData::FlushDone() {
+  VLOG(6) << fmt::format("{} FlushDone", UUID());
+  FreePageData();
 }
 
 char* BlockData::AllocPage() {
@@ -54,7 +62,8 @@ char* BlockData::AllocPage() {
   auto* page = page_allocator_->Allocate();
   timer.stop();
   VLOG(6) << fmt::format(
-      "Allocated page at: {} for block_index: {}, allocation took: <{:.6f}> ms",
+      "Allocated page at: {} for block_index: {}, allocation took: <{:.6f}> "
+      "ms",
       Char2Addr(page), block_index_, timer.u_elapsed(0.0));
   return page;
 }
@@ -63,9 +72,8 @@ PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
                                           uint64_t page_offset) {
   auto iter = pages_.find(page_index);
   if (iter != pages_.end()) {
-    VLOG(6) << fmt::format(
-        "Found existing page data for page index: {} in block data: {}",
-        page_index, ToString());
+    VLOG(6) << fmt::format("{} Found existing page data for page index: {}",
+                           UUID(), page_index);
     return iter->second.get();
   }
 
@@ -74,9 +82,8 @@ PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
                                              AllocPage(), page_offset));
   CHECK(inserted);
 
-  VLOG(6) << fmt::format(
-      "Creating new page data for page index: {} in block data: {}", page_index,
-      ToString());
+  VLOG(6) << fmt::format("{} Creating new page_data: {} for page index: {}",
+                         UUID(), new_iter->second->ToString(), page_index);
 
   return new_iter->second.get();
 }
@@ -89,9 +96,9 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
   uint64_t end_write_chunk_offset = write_chunk_offset + size;
 
   VLOG(6) << fmt::format(
-      "Start writing data size: {}, block_range: [{}-{}], chunk_range: [{}-{}] "
-      "to block_data: {}",
-      size, block_offset, end_write_block_offset, write_chunk_offset,
+      "{} Write Start data size: {}, block_range: [{}-{}], chunk_range: "
+      "[{}-{}] to block_data: {}",
+      UUID(), size, block_offset, end_write_block_offset, write_chunk_offset,
       end_write_chunk_offset, ToString());
 
   // TODO: use DCHECK in future
@@ -102,8 +109,8 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
   CHECK(block_offset == (block_offset_ + len_) ||
         (block_offset + size) == block_offset_)
       << fmt::format(
-             "Write block_range: [{}-{}], chunk_range: [{}-{}] is illegal for "
-             "block_data: {}",
+             "{} Write Illegal block_range: [{}-{}], chunk_range: [{}-{}] "
+             "for block_data: {}",
              block_offset, end_write_block_offset, write_chunk_offset,
              end_write_chunk_offset, ToString());
 
@@ -134,16 +141,12 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
     len_ += size;
 
     VLOG(6) << fmt::format(
-        "Update block_data old_block_offset: {}, old_len: {}, "
+        "{} Update block_data old_block_offset: {}, old_len: {}, "
         "updated data_block: {}",
-        old_block_offset, old_len, ToString());
+        UUID(), old_block_offset, old_len, ToString());
   }
 
-  VLOG(6) << fmt::format(
-      "End writing data size: {}, block_range: [{}-{}],  chunk_range: [{}-{}] "
-      "to block_data: {}",
-      size, block_offset, (block_offset + size), write_chunk_offset,
-      end_write_chunk_offset, ToString());
+  VLOG(6) << fmt::format("{} Write End", UUID());
 
   return Status::OK();
 }
@@ -163,16 +166,15 @@ IOBuffer BlockData::ToIOBuffer() const {
 
     remain_len -= data_size;
 
-    VLOG(6) << "Add page_data: " << page_data_ptr->ToString()
-            << ", data_ptr: " << Char2Addr(data_ptr)
-            << "to IOBuffer in block_data: " << UUID();
+    VLOG(6) << fmt::format("{} Add page_data: {}, data_ptr: {} to IOBuffer",
+                           UUID(), page_data_ptr->ToString(),
+                           Char2Addr(data_ptr));
   }
 
   CHECK_EQ(remain_len, 0) << "BlockData::Flush Remaining len is not zero: "
                           << remain_len << ", block_data: " << ToString();
 
-  VLOG(6) << "Flushing block data for block index: " << block_index_
-          << ", block_data: " << ToString();
+  VLOG(6) << fmt::format("{} Finish ToIOBuffer", UUID(), ToString());
 
   return IOBuffer(iobuf);
 }

@@ -28,26 +28,23 @@ namespace client {
 namespace vfs {
 
 std::string PageData::ToString() const {
-  std::ostringstream oss;
-  oss << "{" << "index: " << index << ", page_size: " << page_size
-      << ", page_range: [" << data_offset << " - " << DataEnd() << "]"
-      << ", data_len: " << data_len << ", page: " << Char2Addr(page) << " }";
-  return oss.str();
+  return fmt::format(
+      "(index: {}, page_size: {}, page_range: [{}-{}], data_len: {}, page: "
+      "{})",
+      index, page_size, data_offset, DataEnd(), data_len, Char2Addr(page));
 }
 
 void PageData::Write(const char* buf, uint64_t size, uint64_t page_offset) {
   uint64_t write_page_end = page_offset + size;
-  VLOG(8) << fmt::format(
-      "Start write page_range: [{}-{}], size: {} to  page: {}", page_offset,
-      write_page_end, size, ToString());
+  VLOG(8) << fmt::format("{} Write Start page_range: [{}-{}], size: {}",
+                         ToString(), page_offset, write_page_end, size);
   CHECK_LE(page_offset + size, page_size);
   CHECK(page_offset == DataEnd() || write_page_end == page_offset)
-      << "Illegal write page_offset=" << page_offset << ", size=" << size
-      << ", page: " << ToString();
+      << fmt::format("{} Illegal write page_range: [{}-{}], size: {}",
+                     ToString(), page_offset, write_page_end, size);
 
   CHECK_NOTNULL(page);
 
-  // Copy data into the allocated page
   memcpy(page + page_offset, buf, size);
 
   uint64_t old_data_offset = data_offset;
@@ -57,9 +54,8 @@ void PageData::Write(const char* buf, uint64_t size, uint64_t page_offset) {
   data_len += size;
 
   VLOG(8) << fmt::format(
-      "End write page_range, update page old_data_offset: {}, old_data_len: "
-      "{}, updated page: {}",
-      old_data_offset, old_data_len, ToString());
+      "{} Write End page_range old_data_offset: {}, old_data_len: {}",
+      ToString(), old_data_offset, old_data_len);
 }
 
 }  // namespace vfs

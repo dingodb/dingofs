@@ -19,8 +19,8 @@ add_library(vfs_data
     common.cpp
     file.cpp
     chunk.cpp
-    background/chunk_flush_task.cpp
-    background//file_flush_task.cpp
+    task/file_flush_task.cpp
+    task/chunk_flush_task.cpp
 )
 
 target_link_libraries(vfs_data
@@ -29,4 +29,6 @@ target_link_libraries(vfs_data
     vfs_data_slice
     vfs_background
     vfs_common_lib
+    fmt::fmt
+    glog::glog
 )

@@ -46,11 +46,13 @@ class BlockData {
         lower_bound_in_chunk_(block_index_ * context_.block_size),
         upper_bound_in_chunk_(lower_bound_in_chunk_ + context_.block_size) {}
 
-  ~BlockData();
+  ~BlockData() { FreePageData(); }
 
   Status Write(const char* buf, uint64_t size, uint64_t block_offset);
 
   IOBuffer ToIOBuffer() const;
+
+  void FlushDone();
 
   uint64_t BlockIndex() const { return block_index_; }
 
@@ -63,25 +65,21 @@ class BlockData {
   uint64_t Len() const { return len_; }
 
   std::string UUID() const {
-    return fmt::format("block_data-{}-{}-{}-{}", context_.ino,
-                       context_.chunk_index, context_.seq, block_index_);
+    return fmt::format("block_data-{}-{}", context_.UUID(), block_index_);
   }
 
-  // NOTE: should be called under slice lock
   std::string ToString() const {
-    std::ostringstream ss;
-    ss << "{ uuid: " << UUID() << ", block_range: [" << block_offset_ << "-"
-       << (block_offset_ + len_) << "] "
-       << ", chunk_range: [" << ChunkOffset() << "-" << End() << "] "
-       << "len: " << len_
-       << ", bound: [" << lower_bound_in_chunk_ << "-" << upper_bound_in_chunk_
-       << "] "
-       << "page_count: " << pages_.size() << " }";
-    return ss.str();
+    return fmt::format(
+        "(uuid: {}, block_range: [{}-{}], chunk_range: [{}-{}], len: {}, "
+        "bound: [{}-{}], page_count: {})",
+        UUID(), block_offset_, block_offset_ + len_, ChunkOffset(), End(), len_,
+        lower_bound_in_chunk_, upper_bound_in_chunk_, pages_.size());
   }
 
  private:
   char* AllocPage();
+
+  void FreePageData();
 
   PageData* FindOrCreatePageData(uint64_t page_index, uint64_t page_offset);
 

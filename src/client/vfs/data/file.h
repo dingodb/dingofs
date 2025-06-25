@@ -22,9 +22,9 @@
 #include <mutex>
 #include <unordered_map>
 
-#include "client/vfs/data/background/file_flush_task.h"
 #include "client/vfs/data/chunk.h"
 #include "client/vfs/data/ifile.h"
+#include "client/vfs/data/task/file_flush_task.h"
 #include "common/callback.h"
 #include "common/status.h"
 

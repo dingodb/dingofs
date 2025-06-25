@@ -24,7 +24,6 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
-#include <sstream>
 
 #include "client/vfs/data/slice/slice_data.h"
 #include "common/callback.h"
@@ -43,15 +42,13 @@ class ChunkFlushTask {
         chunk_flush_id(chunk_flush_id),
         flush_slices_(std::move(flush_slices)) {}
 
-  ~ChunkFlushTask() {
-    VLOG(4) << fmt::format("chunk_flush_task: {} destroy", UUID());
-  }
+  ~ChunkFlushTask() = default;
 
   void RunAsync(StatusCallback cb);
 
   void GetCommitSlices(std::vector<Slice>& slices) const {
     for (const auto& [seq, slice_data] : flush_slices_) {
-      slice_data->GetCommitSlices(slices);
+      slices.push_back(slice_data->GetCommitSlice());
     }
   }
 
@@ -63,10 +60,8 @@ class ChunkFlushTask {
   }
 
   std::string ToString() const {
-    std::ostringstream oss;
-    oss << "{ uuid: " << UUID() << ", slices_size: " << flush_slices_.size()
-        << " }";
-    return oss.str();
+    return fmt::format("(uuid: {}, slices_size: {})", UUID(),
+                       flush_slices_.size());
   }
 
  private:

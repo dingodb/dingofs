@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/background/file_flush_task.h"
+#include "client/vfs/data/task/file_flush_task.h"
 
 #include <fmt/format.h>
 #include <glog/logging.h>
@@ -28,12 +28,10 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-void FileFlushTask::ChunkFlushed(uint64_t chunk_id, Status status) {
+void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
-        "FileFlushTask::ChunkFlushed: Failed to flush chunk {} in "
-        "file_flush_task: {}",
-        chunk_id, ToString());
+        "{} ChunkFlushed Failed to flush chunk_index: {}", UUID(), chunk_index);
   }
 
   if (flusing_chunk_.fetch_sub(1) == 1) {
@@ -47,18 +45,16 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_id, Status status) {
 
     cb(tmp);
 
-    VLOG(4) << fmt::format("End file_flush_task: {} status: {}", UUID(),
-                           tmp.ToString());
+    VLOG(4) << fmt::format("{} End status: {}", UUID(), tmp.ToString());
   }
 }
 
 void FileFlushTask::RunAsync(StatusCallback cb) {
-  VLOG(4) << fmt::format("Start file_flush_task: {} with {} chunks", ToString(),
-                         chunks_.size());
+  VLOG(4) << fmt::format("{} Start file_flush_task: {}", UUID(), ToString());
 
   if (chunks_.empty()) {
-    LOG(INFO) << fmt::format(
-        "End file_flush_task: {} directly because no chunks to flush", UUID());
+    VLOG(1) << fmt::format("{} End directly because no chunks to flush",
+                           UUID());
     cb(Status::OK());
     return;
   }
@@ -70,19 +66,18 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
   }
 
   flusing_chunk_.store(chunks_.size(), std::memory_order_relaxed);
-  CHECK_GT(flusing_chunk_.load(), 0);
+  DCHECK_GT(flusing_chunk_.load(), 0);
 
   for (const auto& iter : chunks_) {
-    uint64_t chunk_id = iter.first;
+    uint64_t chunk_index = iter.first;
     Chunk* chunk = iter.second;
     CHECK_NOTNULL(chunk);
 
-    VLOG(4) << fmt::format("file_flush_task: {} Flushing chunk {}", UUID(),
-                           chunk_id);
+    VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);
 
-    // Simulate async flush operation
-    chunk->FlushAsync(
-        [this, chunk_id](Status status) { ChunkFlushed(chunk_id, status); });
+    chunk->FlushAsync([this, chunk_index](Status status) {
+      ChunkFlushed(chunk_index, status);
+    });
   }
 }
 

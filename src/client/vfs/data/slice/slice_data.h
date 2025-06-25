@@ -17,7 +17,9 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 #define DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 
+#include <fmt/format.h>
 #include <glog/logging.h>
+
 #include <atomic>
 #include <cstdint>
 #include <map>
@@ -35,7 +37,7 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
-class Chunk;
+class SliceFlushTask;
 
 // writing -> flushing -> flushed
 class SliceData {
@@ -44,7 +46,7 @@ class SliceData {
                      uint64_t chunk_offset)
       : context_(context), vfs_hub_(hub), chunk_offset_(chunk_offset) {}
 
-  ~SliceData();
+  ~SliceData() = default;
 
   Status Write(const char* buf, uint64_t size, uint64_t chunk_offset);
 
@@ -52,37 +54,34 @@ class SliceData {
   // first call freeze, then call this
   void FlushAsync(StatusCallback cb);
 
-  void GetCommitSlices(std::vector<Slice>& slices);
+  Slice GetCommitSlice();
 
   uint64_t ChunkOffset() const { return chunk_offset_; }
 
   uint64_t End() const {
-    std::lock_guard<std::mutex> lg(lock_);
+    std::lock_guard<std::mutex> lg(write_flush_mutex_);
     return chunk_offset_ + len_;
   }
 
   uint64_t Len() const { return len_; }
 
-  void SetFlushed() { flushed_.store(true, std::memory_order_release); }
-
-  bool IsFlushed() const { return flushed_.load(std::memory_order_acquire); }
+  bool IsFlushed() const { return flushed_.load(std::memory_order_relaxed); }
 
   std::string UUID() const {
-    return fmt::format("slice_data-{}-{}-{}", context_.ino,
-                       context_.chunk_index, context_.seq);
+    return fmt::format("slice_data-{}", context_.UUID());
   }
 
   // NOTE: should be called outside lock
   std::string ToString() const {
-    std::lock_guard<std::mutex> lg(lock_);
+    std::lock_guard<std::mutex> lg(write_flush_mutex_);
     return ToStringUnlocked();
   }
 
  private:
   std::string ToStringUnlocked() const {
     return fmt::format(
-        "[uuid: {}, chunk_range: [{}-{}], len: {}, id: "
-        "{}, flushed: {}, block_data_count: {}]",
+        "(uuid: {}, chunk_range: [{}-{}], len: {}, id: "
+        "{}, flushed: {}, block_data_count: {})",
         UUID(), chunk_offset_, (chunk_offset_ + len_), len_, id_,
         (flushed_.load(std::memory_order_relaxed) ? "true" : "false"),
         block_datas_.size());
@@ -91,16 +90,16 @@ class SliceData {
   BlockData* FindOrCreateBlockDataUnlocked(uint64_t block_index,
                                            uint64_t block_offset);
 
-  void BlockDataFlushed(BlockData* block_data, Status status);
-
-  void DoFlush();
-
+  void SliceFlushed(Status status, SliceFlushTask* task);
   void FlushDone(Status s);
+  void DoFlush();
 
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
 
-  mutable std::mutex lock_;
+  // write and flush will run in sequence, but they may be called in different thread,
+  // so this mutex is just used for the member variables are accessed in a thread-safe manner.
+  mutable std::mutex write_flush_mutex_;
   uint64_t chunk_offset_;
   uint64_t len_{0};
   bool flushing_{false};  // used to prevent multiple flushes
@@ -111,7 +110,6 @@ class SliceData {
   Status flush_status_;
 
   std::atomic_bool flushed_{false};
-  std::atomic_uint64_t flush_block_data_count_{0};
 };
 
 using SliceDataUPtr = std::unique_ptr<SliceData>;

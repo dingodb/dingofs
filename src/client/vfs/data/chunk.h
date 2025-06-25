@@ -77,6 +77,8 @@ class Chunk {
   struct FlushTask;
 
  private:
+  std::string UUID() const { return fmt::format("chunk-{}-{}", ino_, index_); }
+
   // proteted by mutex_
   Status WriteToBlockCache(const cache::BlockKey& key,
                            const cache::Block& block, cache::PutOption option);
