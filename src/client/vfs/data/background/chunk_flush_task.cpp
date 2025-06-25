@@ -99,7 +99,7 @@ void ChunkFlushTask::RunAsync(StatusCallback cb) {
     VLOG(4) << fmt::format(
         "Chunk::FlushAsync chunk_flush_task: {} will flush slice_seq: {}, "
         "slice: {}",
-        ToString(), seq, slice->ToString());
+        ToString(), seq, slice->UUID());
 
     slice->FlushAsync([this, seq](auto&& ph1) {
       SliceFlushed(seq, std::forward<decltype(ph1)>(ph1));

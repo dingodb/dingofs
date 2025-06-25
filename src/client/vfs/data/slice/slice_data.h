@@ -17,6 +17,7 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 #define DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 
+#include <glog/logging.h>
 #include <atomic>
 #include <cstdint>
 #include <map>
@@ -25,6 +26,7 @@
 
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
+#include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 
@@ -39,13 +41,10 @@ class Chunk;
 class SliceData {
  public:
   explicit SliceData(const SliceDataContext& context, VFSHub* hub,
-                     uint64_t chunk_offset, uint64_t len)
-      : context_(context),
-        vfs_hub_(hub),
-        chunk_offset_(chunk_offset),
-        len_(len) {}
+                     uint64_t chunk_offset)
+      : context_(context), vfs_hub_(hub), chunk_offset_(chunk_offset) {}
 
-  ~SliceData() = default;
+  ~SliceData();
 
   Status Write(const char* buf, uint64_t size, uint64_t chunk_offset);
 
@@ -54,8 +53,6 @@ class SliceData {
   void FlushAsync(StatusCallback cb);
 
   void GetCommitSlices(std::vector<Slice>& slices);
-
-  std::string ToString() const;
 
   uint64_t ChunkOffset() const { return chunk_offset_; }
 
@@ -70,11 +67,29 @@ class SliceData {
 
   bool IsFlushed() const { return flushed_.load(std::memory_order_acquire); }
 
+  std::string UUID() const {
+    return fmt::format("slice_data-{}-{}-{}", context_.ino,
+                       context_.chunk_index, context_.seq);
+  }
+
+  // NOTE: should be called outside lock
+  std::string ToString() const {
+    std::lock_guard<std::mutex> lg(lock_);
+    return ToStringUnlocked();
+  }
+
  private:
-  std::string ToStringUnlocked() const;
+  std::string ToStringUnlocked() const {
+    return fmt::format(
+        "[uuid: {}, chunk_range: [{}-{}], len: {}, id: "
+        "{}, flushed: {}, block_data_count: {}]",
+        UUID(), chunk_offset_, (chunk_offset_ + len_), len_, id_,
+        (flushed_.load(std::memory_order_relaxed) ? "true" : "false"),
+        block_datas_.size());
+  }
 
   BlockData* FindOrCreateBlockDataUnlocked(uint64_t block_index,
-                                           uint64_t chunk_offset, uint64_t len);
+                                           uint64_t block_offset);
 
   void BlockDataFlushed(BlockData* block_data, Status status);
 
@@ -87,7 +102,7 @@ class SliceData {
 
   mutable std::mutex lock_;
   uint64_t chunk_offset_;
-  uint64_t len_;
+  uint64_t len_{0};
   bool flushing_{false};  // used to prevent multiple flushes
   uint64_t id_{0};        // from mds
   // block_index -> BlockData, this should be immutable

@@ -35,6 +35,7 @@
 #include "client/vfs/data/background/chunk_flush_task.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
+#include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/vfs_meta.h"
@@ -56,6 +57,11 @@ struct Chunk::FlushTask {
   Status status;
   const StatusCallback cb{nullptr};
   std::unique_ptr<ChunkFlushTask> chunk_flush_task;
+
+  std::string UUID() const {
+    CHECK_NOTNULL(chunk_flush_task);
+    return chunk_flush_task->UUID();
+  }
 
   std::string ToString() const {
     std::ostringstream oss;
@@ -194,19 +200,13 @@ SliceData* Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size) {
   return nullptr;
 }
 
-SliceData* Chunk::CreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
+SliceData* Chunk::CreateSliceUnlocked(uint64_t chunk_pos) {
   // Use static because chunk with same index may be deleted and recreated
   uint64_t seq = slice_seq_id_gen.fetch_add(1, std::memory_order_relaxed);
-  SliceDataContext ctx{
-      .ino = ino_,
-      .chunk_index = index_,
-      .seq = seq,
-      .chunk_size = chunk_size_,
-      .block_size = block_size_,
-      .page_size = page_size_,
-  };
+  SliceDataContext ctx(fs_id_, ino_, index_, seq, chunk_size_, block_size_,
+                       page_size_);
 
-  slices_.emplace(seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos, size));
+  slices_.emplace(seq, std::make_unique<SliceData>(ctx, hub_, chunk_pos));
 
   SliceData* data = slices_[seq].get();
 
@@ -219,7 +219,7 @@ SliceData* Chunk::CreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
 SliceData* Chunk::FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size) {
   SliceData* slice = FindWritableSliceUnLocked(chunk_pos, size);
   if (slice == nullptr) {
-    slice = CreateSliceUnlocked(chunk_pos, size);
+    slice = CreateSliceUnlocked(chunk_pos);
   }
   DCHECK_NOTNULL(slice);
   return slice;
@@ -406,10 +406,11 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
           "Chunk::FlushTaskDone task: {} is not the header of flush_queue_, "
           "end directly",
           flush_task->ToString());
+
       return;
     } else {
       VLOG(4) << fmt::format(
-          "Chunk::FlushTaskDone task: {} is the header of flush_queue_, "
+          "Chunk::FlushTaskDone header_task: {} of the flush_queue_, "
           "flush_queue size: {}, insert fake header: {}, ",
           flush_task->ToString(), flush_queue_.size(),
           static_cast<const void*>(&kFakeHeader));
@@ -444,7 +445,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       while (it != flush_queue_.end()) {
         VLOG(4) << fmt::format(
             "Chunk::FlushTaskDone header_task: {} try to commit task: {}",
-            flush_task->ToString(), (*it)->ToString());
+            flush_task->UUID(), (*it)->ToString());
 
         // sequence iterate the flush queue, only pick the flush task which is
         // done
@@ -460,10 +461,10 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       if (to_commit.empty()) {
         flush_queue_.pop_front();
         VLOG(4) << fmt::format(
-            "Chunk::FlushTaskDone will return header_task: {} has no "
+            "Chunk::FlushTaskDone header_task: {} will return because has no "
             "flush_task to commit, fake header is removed, remain "
             "flush_queue_size: {}",
-            flush_task->ToString(), flush_queue_.size());
+            flush_task->UUID(), flush_queue_.size());
         return;
       }
     }  //  end lock_guard
@@ -473,7 +474,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
     for (FlushTask* task : to_commit) {
       VLOG(4) << fmt::format(
           "Chunk::FlushTaskDone header_task: {} commit flush_task: {}",
-          flush_task->ToString(), task->ToString());
+          flush_task->UUID(), task->ToString());
 
       if (task->status.ok()) {
         std::vector<Slice> slices;
@@ -485,7 +486,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
           LOG(WARNING) << fmt::format(
               "Chunk::FlushTaskDone header_task: {} fail commit task: {}, "
               "commit_status: {}",
-              flush_task->ToString(), task->ToString(), status.ToString());
+              flush_task->UUID(), task->ToString(), status.ToString());
 
           MarkErrorStatus(status);
         }
@@ -493,7 +494,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
         LOG(WARNING) << fmt::format(
             "Chunk::FlushTaskDone header_task: {} skip commit flush fail "
             "task: {}",
-            flush_task->ToString(), task->ToString());
+            flush_task->UUID(), task->ToString());
 
         MarkErrorStatus(task->status);
       }

@@ -265,13 +265,13 @@ static pb::mdsv2::FsInfo GenFsInfo() {
 
   auto* s3_info = fs_info.mutable_extra()->mutable_s3_info();
 
-  std::string ak = "QLY6EFKWW1FICDCN4L5E";
+  std::string ak = "UAJ1WIVF3NM5XRIL0OU2";
   s3_info->set_ak(ak);
 
-  std::string sk = "XSOAEU6t6EygbcfoY94kq6AdWoch5dJws73CJwCZ";
+  std::string sk = "X9MxdCZslPmXADljX140iiN6r81aGgCnO61wEA3L";
   s3_info->set_sk(sk);
 
-  std::string endpoint = "http://10.220.69.8";
+  std::string endpoint = "http://10.220.68.19:80";
   s3_info->set_endpoint(endpoint);
 
   std::string bucketname = "dummy-fs";

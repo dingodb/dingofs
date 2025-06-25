@@ -39,40 +39,31 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-std::string SliceData::ToStringUnlocked() const {
-  return fmt::format(
-      "[(ino:{}, chunk_indxe:{}, seq:{}) chunk_range: [{}-{}], len: {}, id: "
-      "{}, flushed: {}, block_data_count: {}]",
-      context_.ino, context_.chunk_index, context_.seq, chunk_offset_, End(),
-      len_, id_, (flushed_.load(std::memory_order_relaxed) ? "true" : "false"),
-      block_datas_.size());
-}
-
-std::string SliceData::ToString() const {
-  std::lock_guard<std::mutex> lg(lock_);
-  return ToStringUnlocked();
+SliceData::~SliceData() {
+  VLOG(4) << fmt::format("slice_data: {} will destructed", UUID());
 }
 
 BlockData* SliceData::FindOrCreateBlockDataUnlocked(uint64_t block_index,
-                                                    uint64_t chunk_offset,
-                                                    uint64_t len) {
-  auto [iter, inserted] = block_datas_.try_emplace(
-      block_index,
-      std::make_unique<BlockData>(context_, vfs_hub_->GetPageAllocator(),
-                                  block_index, chunk_offset, len));
-  if (inserted) {
+                                                    uint64_t block_offset) {
+  auto iter = block_datas_.find(block_index);
+  if (iter != block_datas_.end()) {
     VLOG(4) << fmt::format(
-        "Creating new block data for block index: {}, chunk_range:[{}-{}], "
-        "len: {}, in slice: {}",
-        block_index, chunk_offset, (chunk_offset + len), len, ToString());
-  } else {
-    VLOG(4) << fmt::format(
-        "Found existing block data for block index: {}, chunk_range:[{}-{}]"
-        ", len: {}, in slice: {}",
-        block_index, chunk_offset, (chunk_offset + len), len, ToString());
+        "Found existing block data for block index: {}, block: {} in slice: {}",
+        block_index, iter->second->ToString(), ToStringUnlocked());
+    return iter->second.get();
   }
 
-  return iter->second.get();
+  auto [new_iter, inserted] = block_datas_.emplace(
+      block_index,
+      std::make_unique<BlockData>(context_, vfs_hub_->GetPageAllocator(),
+                                  block_index, block_offset));
+  CHECK(inserted);
+
+  VLOG(4) << fmt::format(
+      "Creating new block data for block index: {}, block: {}  in slice: {}",
+      block_index, new_iter->second->ToString(), ToStringUnlocked());
+
+  return new_iter->second.get();
 }
 
 // no overlap slice write will come here
@@ -81,7 +72,7 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
 
   VLOG(4) << fmt::format(
       "Start writing chunk_range: [{}-{}] len: {} to slice {}", chunk_offset,
-      end_in_chunk, size, ToString());
+      end_in_chunk, size, UUID());
 
   CHECK_GT(size, 0);
   CHECK(chunk_offset == End() || end_in_chunk == chunk_offset_) << fmt::format(
@@ -103,7 +94,7 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
     while (remain_len > 0) {
       uint64_t write_size = std::min(remain_len, block_size - block_offset);
       BlockData* block_data =
-          FindOrCreateBlockDataUnlocked(block_index, block_offset, write_size);
+          FindOrCreateBlockDataUnlocked(block_index, block_offset);
 
       Status s = block_data->Write(buf_pos, write_size, block_offset);
       CHECK(s.ok()) << fmt::format(
@@ -126,7 +117,7 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
       len_ += size;
 
       VLOG(4) << fmt::format(
-          "Updating slice data, old_chunk_offset: {}, old_len: {}, "
+          "Update slice data, old_chunk_offset: {}, old_len: {}, "
           "updated slice: {}",
           old_chunk_offset, old_len, ToStringUnlocked());
     }
@@ -134,13 +125,13 @@ Status SliceData::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
 
   VLOG(4) << fmt::format(
       "End writing chunk_range: [{}-{}], len: {} to slice: {}", chunk_offset,
-      end_in_chunk, size, ToString());
+      end_in_chunk, size, UUID());
 
   return Status::OK();
 }
 
 void SliceData::FlushAsync(StatusCallback cb) {
-  VLOG(4) << fmt::format("Start FlushAsync slice_data: {}", ToString());
+  VLOG(4) << fmt::format("Start FlushAsync slice_data: {}", UUID());
 
   {
     std::lock_guard<std::mutex> lg(lock_);
@@ -154,8 +145,7 @@ void SliceData::FlushAsync(StatusCallback cb) {
   vfs_hub_->GetFlushExecutor()->Execute([this]() { this->DoFlush(); });
 
   VLOG(4) << fmt::format(
-      "End FlushAsync DoFlushAsync is scheduled for slice_data: {}",
-      ToString());
+      "End FlushAsync DoFlushAsync is scheduled for slice_data: {}", UUID());
 }
 
 void SliceData::DoFlush() {
@@ -187,7 +177,7 @@ void SliceData::DoFlush() {
       VLOG(6) << fmt::format(
           "Flushing block data for block index: {}, block_data: {}",
           block_index, block_data->ToString());
-      CHECK_EQ(block_data->BlockIndex(), block_index);
+      DCHECK_EQ(block_data->BlockIndex(), block_index);
 
       IOBuffer io_buffer = block_data->ToIOBuffer();
 
@@ -201,6 +191,9 @@ void SliceData::DoFlush() {
             BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
           },
           option);
+      VLOG(6) << fmt::format(
+          "Scheduled flush for block_data: {}, block_key: {}",
+          block_data->UUID(), key.StoreKey());
     }
   }
 }
@@ -210,13 +203,13 @@ void SliceData::DoFlush() {
 void SliceData::BlockDataFlushed(BlockData* block_data, Status status) {
   VLOG(6) << fmt::format(
       "Block data flushed for block index: {}, status: {}, block_data: {}",
-      block_data->BlockIndex(), status.ToString(), block_data->ToString());
+      block_data->BlockIndex(), status.ToString(), block_data->UUID());
 
   if (!status.ok()) {
     LOG(WARNING) << fmt::format(
         "Failed to flush block data for block index: {}, status: {}, "
         "block_data: {}",
-        block_data->BlockIndex(), status.ToString(), block_data->ToString());
+        block_data->BlockIndex(), status.ToString(), block_data->UUID());
 
     std::lock_guard<std::mutex> lg(lock_);
     // TODO: save all errors
@@ -235,7 +228,7 @@ void SliceData::BlockDataFlushed(BlockData* block_data, Status status) {
 }
 
 void SliceData::FlushDone(Status s) {
-  VLOG(4) << fmt::format("Flush done for slice: {}, status: {}", ToString(),
+  VLOG(4) << fmt::format("Flush done for slice: {}, status: {}", UUID(),
                          s.ToString());
 
   StatusCallback cb;
@@ -247,7 +240,7 @@ void SliceData::FlushDone(Status s) {
   cb(s);
 
   VLOG(4) << fmt::format("Flush callback executed for slice: {}, status: {}",
-                         ToString(), s.ToString());
+                         UUID(), s.ToString());
 }
 
 void SliceData::GetCommitSlices(std::vector<Slice>& slices) {
@@ -267,7 +260,7 @@ void SliceData::GetCommitSlices(std::vector<Slice>& slices) {
 
     VLOG(4) << fmt::format(
         "Generated commit_slice: {}, for block: {} in slice: {}",
-        Slice2Str(slices.back()), block_data_ptr->ToString(), ToStringUnlocked());
+        Slice2Str(slices.back()), block_data_ptr->ToString(), UUID());
   }
 }
 

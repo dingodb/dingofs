@@ -47,7 +47,7 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_id, Status status) {
 
     cb(tmp);
 
-    VLOG(4) << fmt::format("End file_flush_task: {} status: {}", ToString(),
+    VLOG(4) << fmt::format("End file_flush_task: {} status: {}", UUID(),
                            tmp.ToString());
   }
 }
@@ -58,8 +58,7 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
 
   if (chunks_.empty()) {
     LOG(INFO) << fmt::format(
-        "End file_flush_task: {} directly because no chunks to flush",
-        ToString());
+        "End file_flush_task: {} directly because no chunks to flush", UUID());
     cb(Status::OK());
     return;
   }
@@ -78,7 +77,7 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
     Chunk* chunk = iter.second;
     CHECK_NOTNULL(chunk);
 
-    VLOG(4) << fmt::format("file_flush_task: {} Flushing chunk {}", ToString(),
+    VLOG(4) << fmt::format("file_flush_task: {} Flushing chunk {}", UUID(),
                            chunk_id);
 
     // Simulate async flush operation

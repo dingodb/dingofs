@@ -17,6 +17,7 @@
 #ifndef DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
 #define DINGODB_CLIENT_VFS_DATA_CHUNK_FLUSH_TASK_H_
 
+#include <fmt/format.h>
 #include <glog/logging.h>
 
 #include <atomic>
@@ -42,7 +43,9 @@ class ChunkFlushTask {
         chunk_flush_id(chunk_flush_id),
         flush_slices_(std::move(flush_slices)) {}
 
-  ~ChunkFlushTask() = default;
+  ~ChunkFlushTask() {
+    VLOG(4) << fmt::format("chunk_flush_task: {} destroy", UUID());
+  }
 
   void RunAsync(StatusCallback cb);
 
@@ -54,11 +57,15 @@ class ChunkFlushTask {
 
   uint64_t GetFlushSeqId() const { return chunk_flush_id; }
 
+  std::string UUID() const {
+    return fmt::format("chunk_flush_task-{}-{}-{}", chunk_flush_id, ino_,
+                       chunk_index_);
+  }
+
   std::string ToString() const {
     std::ostringstream oss;
-    oss << "{ chunk_flush_id: " << chunk_flush_id << ", ino: " << ino_
-        << ", chunk_index: " << chunk_index_
-        << ", slices_size: " << flush_slices_.size() << " }";
+    oss << "{ uuid: " << UUID() << ", slices_size: " << flush_slices_.size()
+        << " }";
     return oss.str();
   }
 

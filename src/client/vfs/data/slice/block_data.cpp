@@ -30,31 +30,21 @@ namespace client {
 namespace vfs {
 
 BlockData::~BlockData() {
-  std::map<uint64_t, PageDataUPtr> pages_;  // page_index -> PageData
+  VLOG(6) << fmt::format("block_data: {} will destroy", ToString());
+
   for (const auto& [page_index, page_data_ptr] : pages_) {
-    CHECK_NOTNULL(page_data_ptr->data);
+    CHECK_NOTNULL(page_data_ptr->page);
     butil::Timer timer;
     timer.start();
-    page_allocator_->DeAllocate(page_data_ptr->data);
+    page_allocator_->DeAllocate(page_data_ptr->page);
     timer.stop();
 
-    VLOG(4) << fmt::format(
+    VLOG(6) << fmt::format(
         "Deallocating page at: {} for block_index: {}, page_index: {}, took: "
         "<{:.6f}> ms",
-        Char2Addr(page_data_ptr->data), block_index_, page_index,
+        Char2Addr(page_data_ptr->page), block_index_, page_index,
         timer.u_elapsed(0.0));
   }
-}
-
-std::string BlockData::ToString() const {
-  std::ostringstream ss;
-  ss << "{ (ino: " << context_.ino << ", chunk_index: " << context_.chunk_index
-     << ", seq: " << context_.seq << ", block_index: " << block_index_ << ") "
-     << "chunk_range: [" << chunk_offset_ << "-" << End() << "] "
-     << "len: " << len_ << " bound: [" << lower_bound_in_chunk_ << "-"
-     << upper_bound_in_chunk_ << "] "
-     << "page_count: " << pages_.size() << " }";
-  return ss.str();
 }
 
 char* BlockData::AllocPage() {
@@ -63,47 +53,59 @@ char* BlockData::AllocPage() {
   timer.start();
   auto* page = page_allocator_->Allocate();
   timer.stop();
-  VLOG(4) << fmt::format(
+  VLOG(6) << fmt::format(
       "Allocated page at: {} for block_index: {}, allocation took: <{:.6f}> ms",
       Char2Addr(page), block_index_, timer.u_elapsed(0.0));
   return page;
 }
 
-PageData* BlockData::FindOrCreatePageData(uint64_t page_index) {
-  auto [iter, inserted] = pages_.try_emplace(
-      page_index, std::make_unique<PageData>(
-                      PageData{.index = page_index, .data = AllocPage()}));
-  if (inserted) {
-    VLOG(4) << fmt::format(
-        "Creating new page data for page index: {} in block data: {}",
-        page_index, ToString());
-  } else {
-    VLOG(4) << fmt::format(
+PageData* BlockData::FindOrCreatePageData(uint64_t page_index,
+                                          uint64_t page_offset) {
+  auto iter = pages_.find(page_index);
+  if (iter != pages_.end()) {
+    VLOG(6) << fmt::format(
         "Found existing page data for page index: {} in block data: {}",
         page_index, ToString());
+    return iter->second.get();
   }
 
-  return iter->second.get();
+  auto [new_iter, inserted] = pages_.emplace(
+      page_index, std::make_unique<PageData>(page_index, context_.page_size,
+                                             AllocPage(), page_offset));
+  CHECK(inserted);
+
+  VLOG(6) << fmt::format(
+      "Creating new page data for page index: {} in block data: {}", page_index,
+      ToString());
+
+  return new_iter->second.get();
 }
 
 Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
+  uint64_t end_write_block_offset = (block_offset + size);
+
   uint64_t write_chunk_offset =
       (block_index_ * context_.block_size) + block_offset;
   uint64_t end_write_chunk_offset = write_chunk_offset + size;
 
-  VLOG(4) << fmt::format(
+  VLOG(6) << fmt::format(
       "Start writing data size: {}, block_range: [{}-{}], chunk_range: [{}-{}] "
       "to block_data: {}",
-      size, block_offset, (block_offset + size), write_chunk_offset,
+      size, block_offset, end_write_block_offset, write_chunk_offset,
       end_write_chunk_offset, ToString());
 
   // TODO: use DCHECK in future
   CHECK_GT(size, 0);
   CHECK_LE(lower_bound_in_chunk_, write_chunk_offset);
   CHECK_GE(upper_bound_in_chunk_, end_write_chunk_offset);
-  CHECK(write_chunk_offset == End() || end_write_chunk_offset == chunk_offset_)
-      << fmt::format("Write chunk_range: [{}-{}] is illega for block_data: {}",
-                     write_chunk_offset, end_write_chunk_offset, ToString());
+
+  CHECK(block_offset == (block_offset_ + len_) ||
+        (block_offset + size) == block_offset_)
+      << fmt::format(
+             "Write block_range: [{}-{}], chunk_range: [{}-{}] is illegal for "
+             "block_data: {}",
+             block_offset, end_write_block_offset, write_chunk_offset,
+             end_write_chunk_offset, ToString());
 
   uint64_t page_size = context_.page_size;
   uint64_t page_index = block_offset / page_size;
@@ -114,11 +116,9 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
 
   while (remain_len > 0) {
     uint64_t write_size = std::min(remain_len, page_size - page_offset);
-    PageData* page_data = FindOrCreatePageData(page_index);
-    CHECK_NOTNULL(page_data->data);
+    PageData* page_data = FindOrCreatePageData(page_index, page_offset);
 
-    // Copy data into the allocated page
-    memcpy(page_data->data + page_offset, buf_pos, write_size);
+    page_data->Write(buf_pos, write_size, page_offset);
 
     remain_len -= write_size;
     buf_pos += write_size;
@@ -126,19 +126,20 @@ Status BlockData::Write(const char* buf, uint64_t size, uint64_t block_offset) {
     ++page_index;
   }
 
-  uint64_t old_end_write_chunk_offset = End();
-
-  if (end_write_chunk_offset > old_end_write_chunk_offset) {
+  {
     uint64_t old_len = len_;
-    len_ += end_write_chunk_offset - old_end_write_chunk_offset;
+    uint64_t old_block_offset = block_offset_;
 
-    VLOG(4) << fmt::format(
-        "Updating length for block_data: {}, old_len: {}, "
-        "old_end_write_chunk_offset: {}",
-        ToString(), old_len, old_end_write_chunk_offset);
+    block_offset_ = std::min(block_offset_, block_offset);
+    len_ += size;
+
+    VLOG(6) << fmt::format(
+        "Update block_data old_block_offset: {}, old_len: {}, "
+        "updated data_block: {}",
+        old_block_offset, old_len, ToString());
   }
 
-  VLOG(4) << fmt::format(
+  VLOG(6) << fmt::format(
       "End writing data size: {}, block_range: [{}-{}],  chunk_range: [{}-{}] "
       "to block_data: {}",
       size, block_offset, (block_offset + size), write_chunk_offset,
@@ -151,19 +152,26 @@ IOBuffer BlockData::ToIOBuffer() const {
   butil::IOBuf iobuf;
 
   uint64_t remain_len = len_;
+
   for (const auto& [page_index, page_data_ptr] : pages_) {
-    CHECK_NOTNULL(page_data_ptr->data);
-    uint64_t write_size = std::min(remain_len, context_.page_size);
+    CHECK_NOTNULL(page_data_ptr->page);
 
-    iobuf.append(page_data_ptr->data, write_size);
+    uint64_t data_size = page_data_ptr->data_len;
+    char* data_ptr = page_data_ptr->page + page_data_ptr->data_offset;
 
-    remain_len -= write_size;
+    iobuf.append(data_ptr, data_size);
+
+    remain_len -= data_size;
+
+    VLOG(6) << "Add page_data: " << page_data_ptr->ToString()
+            << ", data_ptr: " << Char2Addr(data_ptr)
+            << "to IOBuffer in block_data: " << UUID();
   }
 
   CHECK_EQ(remain_len, 0) << "BlockData::Flush Remaining len is not zero: "
                           << remain_len << ", block_data: " << ToString();
 
-  VLOG(4) << "Flushing block data for block index: " << block_index_
+  VLOG(6) << "Flushing block data for block index: " << block_index_
           << ", block_data: " << ToString();
 
   return IOBuffer(iobuf);

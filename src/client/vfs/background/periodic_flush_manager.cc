@@ -34,7 +34,7 @@ namespace {
 bool PassUint32(const char*, uint32_t) { return true; }
 };  // namespace
 
-DEFINE_uint32(periodic_flush_interval_ms, 10 * 1000,
+DEFINE_uint32(periodic_flush_interval_ms, 5 * 1000,
               "Periodic flush interval in milliseconds");
 DEFINE_validator(periodic_flush_interval_ms, &PassUint32);
 

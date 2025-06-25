@@ -95,7 +95,7 @@ class Chunk {
   // --------new added--------
 
   SliceData* FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size);
-  SliceData* CreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
+  SliceData* CreateSliceUnlocked(uint64_t chunk_pos);
   SliceData* FindOrCreateSliceUnlocked(uint64_t chunk_pos, uint64_t size);
 
   // --------new added--------

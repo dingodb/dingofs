@@ -31,6 +31,20 @@ struct SliceDataContext {
   uint64_t chunk_size{0};
   uint64_t block_size{0};
   uint64_t page_size{0};
+
+  explicit SliceDataContext(uint64_t p_fs_id, uint64_t p_ino,
+                            uint64_t p_chunk_index, uint64_t p_seq,
+                            uint64_t p_chunk_size, uint64_t p_block_size,
+                            uint64_t p_page_size)
+      : fs_id(p_fs_id),
+        ino(p_ino),
+        chunk_index(p_chunk_index),
+        seq(p_seq),
+        chunk_size(p_chunk_size),
+        block_size(p_block_size),
+        page_size(p_page_size) {}
+
+  ~SliceDataContext() = default;
 };
 
 }  // namespace vfs
