@@ -253,6 +253,7 @@ Status Chunk::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
   }
 
   if (FLAGS_data_use_direct_write) {
+    LOG(INFO) << "Write 100000";
     return DirectWrite(buf, size, chunk_offset);
   } else {
     return BufferWrite(buf, size, chunk_offset);
@@ -440,8 +441,8 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
         task->chunk_flush_task->GetCommitSlices(slices);
 
         if (!slices.empty()) {
-          Status status =
-              hub_->GetMetaSystem()->WriteSlice(ino_, index_, slices);
+          // TODO: maybe use batch commit
+          Status status = CommitSlices(slices);
           if (!status.ok()) {
             LOG(WARNING) << fmt::format(
                 "{} FlushTaskDone header_task: {} fail commit"
@@ -452,6 +453,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
             MarkErrorStatus(status);
           }
         }
+
       } else {
         LOG(WARNING) << fmt::format(
             "{} FlushTaskDone header_task: {} skip commit flush fail "

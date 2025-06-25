@@ -35,6 +35,8 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+DECLARE_bool(data_use_direct_write);
+
 static std::atomic<uint64_t> file_flush_id_gen{1};
 
 uint64_t File::GetChunkSize() const { return vfs_hub_->GetFsInfo().chunk_size; }
@@ -184,11 +186,15 @@ void File::AsyncFlush(StatusCallback cb) {
 }
 
 Status File::Flush() {
-  Status ret;
-  Synchronizer sync;
-  AsyncFlush(sync.AsStatusCallBack(ret));
-  sync.Wait();
-  return ret;
+  Status s;
+
+  if (!FLAGS_data_use_direct_write) {
+    Synchronizer sync;
+    AsyncFlush(sync.AsStatusCallBack(s));
+    sync.Wait();
+  }
+
+  return s;
 }
 
 }  // namespace vfs

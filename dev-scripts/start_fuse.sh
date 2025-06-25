@@ -138,6 +138,8 @@ function start() {
 
     if [ ! -d "${log_dir}" ]; then
         mkdir -p ${log_dir}
+    else
+        rm -rf ${log_dir}/*
     fi
 
     # echo "umount ${mountpoint_dir}"
@@ -153,7 +155,7 @@ function start() {
         exit -1
     fi
 
-    nohup ${FUSE_BIN_PATH} -f \
+    nohup ${FUSE_BIN_PATH} -f -d \
         -o default_permissions \
         -o allow_other \
         -o fsname=${FLAGS_fsname} \

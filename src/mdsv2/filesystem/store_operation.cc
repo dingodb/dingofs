@@ -1714,16 +1714,20 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
 
     // run set attr operations
     for (auto* operation : batch_operation.setattr_operations) {
-      op_names += fmt::format("{},", operation->OpName());
       operation->RunInBatch(txn, attr);
-      ++count;
+      if (retry == 0) {
+        op_names += fmt::format("{},", operation->OpName());
+        ++count;
+      }
     }
 
     // run create operations
     for (auto* operation : batch_operation.create_operations) {
-      op_names += fmt::format("{},", operation->OpName());
       operation->RunInBatch(txn, attr);
-      ++count;
+      if (retry == 0) {
+        op_names += fmt::format("{},", operation->OpName());
+        ++count;
+      }
     }
 
     attr.set_version(attr.version() + 1);

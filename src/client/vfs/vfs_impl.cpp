@@ -18,6 +18,7 @@
 
 #include <fcntl.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -137,71 +138,119 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
 
 Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
                      uint64_t fh, uint64_t* out_rsize) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("read (%d,%d,%d,%d): %s", ino, offset, size, fh,
+                           s.ToString());
+  });
+
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+    return s;
   }
 
-  DINGOFS_RETURN_NOT_OK(handle->file->Flush());
+  s = handle->file->Flush();
+  if (!s.ok()) {
+    return s;
+  }
 
-  return handle->file->Read(buf, size, offset, out_rsize);
+  s = handle->file->Read(buf, size, offset, out_rsize);
+
+  return s;
 }
 
 Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
                       uint64_t fh, uint64_t* out_wsize) {
+  static std::atomic<int> write_count{0};
+  write_count.fetch_add(1);
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    write_count.fetch_sub(1);
+    return absl::StrFormat("write (%d,%d,%d,%d): %s %d %d", ino, offset, size,
+                           fh, s.ToString(), *out_wsize, write_count.load());
+  });
+
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+
+  } else {
+    s = handle->file->Write(buf, size, offset, out_wsize);
   }
 
-  return handle->file->Write(buf, size, offset, out_wsize);
+  return s;
 }
 
 Status VFSImpl::Flush(Ino ino, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("flush (%d,%d): %s", ino, fh, s.ToString());
+  });
+
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+
+  } else {
+    s = handle->file->Flush();
   }
 
-  return handle->file->Flush();
+  return s;
 }
 
 Status VFSImpl::Release(Ino ino, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("release (%d,%d): %s", ino, fh, s.ToString());
+  });
+
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+
+  } else {
+    // how do we return
+    s = meta_system_->Close(ino, fh);
   }
 
-  // how do we return
-  DINGOFS_RETURN_NOT_OK(meta_system_->Close(ino, fh));
-
   handle_manager_->ReleaseHandler(fh);
-  return Status::OK();
+
+  return s;
 }
 
 // TODO: seperate data flush with metadata flush
 Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("fsync (%d,%d,%d): %s", ino, datasync, fh,
+                           s.ToString());
+  });
+
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
+    s = Status::BadFd(fmt::format("bad  fh:{}", fh));
+
+  } else {
+    s = handle->file->Flush();
   }
 
-  return handle->file->Flush();
+  return s;
 }
 
 Status VFSImpl::SetXattr(Ino ino, const std::string& name,
