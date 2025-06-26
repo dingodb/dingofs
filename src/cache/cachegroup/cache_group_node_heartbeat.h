@@ -23,10 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_HEARTBEAT_H_
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_HEARTBEAT_H_
 
+#include <memory>
 #include "cache/cachegroup/cache_group_node_member.h"
 #include "cache/common/common.h"
 #include "stub/rpcclient/mds_client.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -57,7 +58,7 @@ class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
   std::atomic<bool> running_;
   CacheGroupNodeMemberSPtr member_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 }  // namespace cache

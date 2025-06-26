@@ -17,10 +17,10 @@
 #include <iostream>
 #include <memory>
 
-#include "stub/rpcclient/mock_mds_client.h"
-#include "client/vfs_legacy/mock_timer.h"
+#include "client/vfs_legacy/mock_executor.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "stub/rpcclient/mock_mds_client.h"
 
 namespace dingofs {
 namespace client {
@@ -29,23 +29,22 @@ namespace filesystem {
 // using testing::_;
 using testing::Return;
 
-using base::timer::MockTimer;
 using dingofs::pb::mds::FsStatsData;
 using dingofs::stub::rpcclient::MockMdsClient;
 
 class FsPushMetricManagerTest : public ::testing::Test {
  protected:
-  std::shared_ptr<MockTimer> mock_timer;
+  std::shared_ptr<MockExecutor> mock_executor;
   std::shared_ptr<MockMdsClient> mock_mds_client;
   std::unique_ptr<FsPushMetricManager> fs_push_metrics_manager;
 
   void SetUp() override {
-    mock_timer = std::make_shared<MockTimer>();
+    mock_executor = std::make_shared<MockExecutor>();
     mock_mds_client = std::make_shared<MockMdsClient>();
 
     const std::string fsname = "dingofs";
     fs_push_metrics_manager = std::make_unique<FsPushMetricManager>(
-        fsname, mock_mds_client, mock_timer);
+        fsname, mock_mds_client, mock_executor);
   }
 
   void TearDown() override {
@@ -54,14 +53,14 @@ class FsPushMetricManagerTest : public ::testing::Test {
 };
 
 TEST_F(FsPushMetricManagerTest, Start) {
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_push_metrics_manager->Start();
   EXPECT_TRUE(fs_push_metrics_manager->IsRunning());
 }
 
 TEST_F(FsPushMetricManagerTest, Stop) {
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_push_metrics_manager->Start();
   EXPECT_TRUE(fs_push_metrics_manager->IsRunning());

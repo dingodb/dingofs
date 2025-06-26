@@ -17,7 +17,6 @@
 cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(dingofs C CXX)
 
-option(BUILD_WITH_BTHREAD "Build dingofs with bthread instead pthread" ON)
 option(BUILD_UNIT_TESTS "Build unit test" OFF)
 
 set(CMAKE_CXX_STANDARD 17)

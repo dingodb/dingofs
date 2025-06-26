@@ -23,10 +23,11 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_MANAGER_H_
 
+#include <memory>
 #include "cache/common/common.h"
 #include "cache/config/config.h"
 #include "stub/rpcclient/mds_client.h"
-#include "utils/executor/timer.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -52,7 +53,7 @@ class RemoteNodeManager {
   OnMemberLoad on_member_load_;
   std::shared_ptr<stub::rpcclient::MDSBaseClient> mds_base_;
   std::shared_ptr<stub::rpcclient::MdsClient> mds_client_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 using RemoteNodeManagerUPtr = std::unique_ptr<RemoteNodeManager>;

@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "utils/executor/executor_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 #include <glog/logging.h>
 
-#include "utils/executor/timer_impl.h"
+#include <memory>
+
+#include "utils/executor/bthread/bthread_pool.h"
+#include "utils/executor/timer/timer_impl.h"
 
 namespace dingofs {
 
-ExecutorImpl::ExecutorImpl()
-    : timer_(nullptr), pool_(nullptr), running_(false) {}
+DEFINE_int32(bthread_executor_bg_thread_num, 16,
+             "background thread number for executor");
 
-ExecutorImpl::~ExecutorImpl() {
-  Stop();
-}
-
-bool ExecutorImpl::Start(int thread_num) {
-  pool_.reset(NewThreadPool(thread_num));
+bool BthreadExecutor::Start() {
+  pool_ = std::make_unique<BThreadPool>(bthread_num_);
   pool_->Start();
   timer_ = std::make_unique<TimerImpl>(pool_.get());
   CHECK(timer_->Start());
@@ -36,7 +35,7 @@ bool ExecutorImpl::Start(int thread_num) {
   return true;
 }
 
-bool ExecutorImpl::Stop() {
+bool BthreadExecutor::Stop() {
   if (running_.load()) {
     CHECK(timer_->Stop());
     pool_->Stop();
@@ -47,13 +46,13 @@ bool ExecutorImpl::Stop() {
   }
 }
 
-bool ExecutorImpl::Execute(std::function<void()> func) {
+bool BthreadExecutor::Execute(std::function<void()> func) {
   CHECK(running_);
   pool_->Execute(std::move(func));
   return true;
 }
 
-bool ExecutorImpl::Schedule(std::function<void()> func, int delay_ms) {
+bool BthreadExecutor::Schedule(std::function<void()> func, int delay_ms) {
   CHECK(running_);
   timer_->Add(std::move(func), delay_ms);
   return true;

@@ -16,9 +16,9 @@
 
 #include <memory>
 
-#include "dingofs/metaserver.pb.h"
+#include "client/vfs_legacy/mock_executor.h"
 #include "client/vfs_legacy/mock_metaserver_client.h"
-#include "client/vfs_legacy/mock_timer.h"
+#include "dingofs/metaserver.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -29,7 +29,6 @@ namespace filesystem {
 // using testing::_;
 using testing::Return;
 
-using base::timer::MockTimer;
 using dingofs::pb::metaserver::MetaStatusCode;
 using dingofs::pb::metaserver::Quota;
 using dingofs::pb::metaserver::Usage;
@@ -37,16 +36,16 @@ using dingofs::stub::rpcclient::MockMetaServerClient;
 
 class FsStatManagerTest : public ::testing::Test {
  protected:
-  std::shared_ptr<MockTimer> mock_timer;
+  std::shared_ptr<MockExecutor> mock_executor;
   std::shared_ptr<MockMetaServerClient> mock_meta_client;
   std::shared_ptr<FsStatManager> fs_stat_manager;
 
   void SetUp() override {
-    mock_timer = std::make_shared<MockTimer>();
+    mock_executor = std::make_shared<MockExecutor>();
     mock_meta_client = std::make_shared<MockMetaServerClient>();
 
     fs_stat_manager =
-        std::make_shared<FsStatManager>(100, mock_meta_client, mock_timer);
+        std::make_shared<FsStatManager>(100, mock_meta_client, mock_executor);
   }
 
   void TearDown() override {
@@ -58,7 +57,7 @@ TEST_F(FsStatManagerTest, Start) {
   EXPECT_CALL(*mock_meta_client, GetFsQuota)
       .WillOnce(Return(MetaStatusCode::OK));
 
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_stat_manager->Start();
 
@@ -88,7 +87,7 @@ TEST_F(FsStatManagerTest, Stop) {
         return MetaStatusCode::OK;
       });
 
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_stat_manager->Start();
 
@@ -113,7 +112,7 @@ TEST_F(FsStatManagerTest, CheckQuota) {
         return MetaStatusCode::OK;
       });
 
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_stat_manager->Start();
 
@@ -158,7 +157,7 @@ TEST_F(FsStatManagerTest, UpdateQuotaUsage) {
         return MetaStatusCode::OK;
       });
 
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   fs_stat_manager->Start();
 
@@ -206,7 +205,7 @@ TEST_F(FsStatManagerTest, DoFlushFsUsage) {
         return MetaStatusCode::OK;
       });
 
-  EXPECT_CALL(*mock_timer, Add).WillOnce(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillOnce(Return(true));
 
   {
     fs_stat_manager->Start();

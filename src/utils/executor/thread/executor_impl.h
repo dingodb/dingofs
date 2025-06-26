@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_UITLS_EXECUTOR_IMPL_H_
-#define DINGOFS_UITLS_EXECUTOR_IMPL_H_
+#ifndef DINGOFS_UITLS_THREAD_EXECUTOR_IMPL_H_
+#define DINGOFS_UITLS_THREAD_EXECUTOR_IMPL_H_
+
+#include <gflags/gflags_declare.h>
 
 #include <atomic>
 #include <functional>
@@ -21,17 +23,25 @@
 
 #include "utils/executor/executor.h"
 #include "utils/executor/thread_pool.h"
-#include "utils/executor/timer.h"
+#include "utils/executor/timer/timer.h"
 
 namespace dingofs {
 
+DECLARE_int32(executor_impl_bg_thread_num);
+
 class ExecutorImpl final : public Executor {
  public:
-  ExecutorImpl();
+  ExecutorImpl() : ExecutorImpl(FLAGS_executor_impl_bg_thread_num) {}
 
-  ~ExecutorImpl() override;
+  ExecutorImpl(int thread_num)
+      : thread_num_(thread_num),
+        timer_(nullptr),
+        pool_(nullptr),
+        running_(false) {}
 
-  bool Start(int thread_num) override;
+  ~ExecutorImpl() override { Stop(); }
+
+  bool Start() override;
 
   bool Stop() override;
 
@@ -46,6 +56,7 @@ class ExecutorImpl final : public Executor {
   static std::string InternalName() { return "ExecutorImpl"; }
 
  private:
+  const int thread_num_;
   std::unique_ptr<Timer> timer_;
   std::unique_ptr<ThreadPool> pool_;
   std::atomic_bool running_;
@@ -53,4 +64,4 @@ class ExecutorImpl final : public Executor {
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_UITLS_EXECUTOR_IMPL_H_
+#endif  // DINGOFS_UITLS_THREAD_EXECUTOR_IMPL_H_

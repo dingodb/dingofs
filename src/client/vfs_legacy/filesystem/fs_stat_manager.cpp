@@ -121,8 +121,8 @@ void FsStatManager::Start() {
     return;
   }
 
-  timer_->Add([this] { FlushFsUsage(); },
-              FLAGS_fs_usage_flush_interval_second * 1000);
+  executor_->Schedule([this] { FlushFsUsage(); },
+                      FLAGS_fs_usage_flush_interval_second * 1000);
 
   running_.store(true);
 }
@@ -183,8 +183,8 @@ void FsStatManager::FlushFsUsage() {
 
   DoFlushFsUsage();
 
-  timer_->Add([this] { FlushFsUsage(); },
-              FLAGS_fs_usage_flush_interval_second * 1000);
+  executor_->Schedule([this] { FlushFsUsage(); },
+                      FLAGS_fs_usage_flush_interval_second * 1000);
 }
 
 void FsStatManager::DoFlushFsUsage() {

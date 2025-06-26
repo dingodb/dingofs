@@ -35,8 +35,8 @@ void FsPushMetricManager::Start() {
     return;
   }
 
-  timer_->Add([this] { PushClientMetrics(); },
-              FLAGS_push_metric_interval_millsecond);
+  executor_->Schedule([this] { PushClientMetrics(); },
+                      FLAGS_push_metric_interval_millsecond);
 
   running_.store(true);
 }
@@ -61,8 +61,8 @@ void FsPushMetricManager::PushClientMetrics() {
 
   DoPushClientMetrics();
 
-  timer_->Add([this] { PushClientMetrics(); },
-              FLAGS_push_metric_interval_millsecond);
+  executor_->Schedule([this] { PushClientMetrics(); },
+                      FLAGS_push_metric_interval_millsecond);
 }
 
 void FsPushMetricManager::DoPushClientMetrics() {

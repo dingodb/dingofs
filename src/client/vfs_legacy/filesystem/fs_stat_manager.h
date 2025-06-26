@@ -18,10 +18,10 @@
 #include <atomic>
 #include <memory>
 
-#include "utils/executor/timer.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "stub/rpcclient/metaserver_client.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
@@ -59,8 +59,10 @@ class FsStatManager {
  public:
   FsStatManager(uint32_t fs_id,
                 std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client,
-                std::shared_ptr<Timer> timer)
-      : fs_id_(fs_id), meta_client_(meta_client), timer_(std::move(timer)) {}
+                std::shared_ptr<Executor> executor)
+      : fs_id_(fs_id),
+        meta_client_(meta_client),
+        executor_(std::move(executor)) {}
 
   virtual ~FsStatManager() = default;
 
@@ -85,7 +87,7 @@ class FsStatManager {
 
   const uint32_t fs_id_{0};
   std::shared_ptr<stub::rpcclient::MetaServerClient> meta_client_;
-  std::shared_ptr<Timer> timer_;
+  std::shared_ptr<Executor> executor_;
 
   std::atomic<bool> running_{false};
 

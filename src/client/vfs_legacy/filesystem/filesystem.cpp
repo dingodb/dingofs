@@ -34,7 +34,7 @@
 #include "client/vfs_legacy/filesystem/fs_stat_manager.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 #define FD_STATE_PATH "/tmp/dingo-fuse-state.json.%d"
 
@@ -74,17 +74,18 @@ void FileSystem::Run() {
   dir_parent_watcher_ =
       std::make_shared<DirParentWatcherImpl>(member.inodeManager);
 
-  stat_timer_ = std::make_shared<TimerImpl>(FLAGS_stat_timer_thread_num);
-  fs_stat_manager_ =
-      std::make_shared<FsStatManager>(fs_id_, member.meta_client, stat_timer_);
+  stat_executor_ = std::shared_ptr<BthreadExecutor>(
+      new BthreadExecutor(FLAGS_stat_timer_thread_num));
+  fs_stat_manager_ = std::make_shared<FsStatManager>(fs_id_, member.meta_client,
+                                                     stat_executor_);
   dir_quota_manager_ = std::make_shared<DirQuotaManager>(
-      fs_id_, member.meta_client, dir_parent_watcher_, stat_timer_);
+      fs_id_, member.meta_client, dir_parent_watcher_, stat_executor_);
   fs_push_metrics_manager_ = std::make_unique<FsPushMetricManager>(
-      fs_name_, member.mds_client, stat_timer_);
+      fs_name_, member.mds_client, stat_executor_);
 
   // must start before fs_stat_manager_ and dir_quota_manager_ and
   // fs_push_metrics_manager_
-  stat_timer_->Start();
+  stat_executor_->Start();
 
   fs_stat_manager_->Start();
   dir_quota_manager_->Start();
@@ -102,7 +103,7 @@ void FileSystem::Destory() {
   deferSync_->Stop();
   dirCache_->Stop();
 
-  stat_timer_->Stop();
+  stat_executor_->Stop();
   fs_stat_manager_->Stop();
   dir_quota_manager_->Stop();
   fs_push_metrics_manager_->Stop();
@@ -123,15 +124,15 @@ std::shared_ptr<FileHandler> FileSystem::FindHandler(uint64_t fh) {
 }
 
 void FileSystem::ReleaseHandler(uint64_t fh) {
-  return handlerManager_->ReleaseHandler(fh);
+  handlerManager_->ReleaseHandler(fh);
 }
 
 void FileSystem::SaveAllHandlers(const std::string& path) {
-  return handlerManager_->SaveAllHandlers(path);
+  handlerManager_->SaveAllHandlers(path);
 }
 
 void FileSystem::LoadAllHandlers(const std::string& path) {
-  return handlerManager_->LoadAllHandlers(path);
+  handlerManager_->LoadAllHandlers(path);
 }
 
 FileSystemMember FileSystem::BorrowMember() {

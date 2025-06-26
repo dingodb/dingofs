@@ -20,10 +20,9 @@
 #include <memory>
 #include <mutex>
 
-#include "base/time/time.h"
 #include "cache/config/config.h"
 #include "cache/utils/state_machine.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -77,11 +76,12 @@ bool StateMachineImpl::Start() {
     return false;
   }
 
-  timer_ = std::make_unique<TimerImpl>();
-  CHECK(timer_->Start());
+  executor_ = std::make_unique<BthreadExecutor>();
+  CHECK(executor_->Start());
 
   running_ = true;
-  timer_->Add([this] { TickTock(); }, FLAGS_state_tick_duration_s * 1000);
+  executor_->Schedule([this] { TickTock(); },
+                      FLAGS_state_tick_duration_s * 1000);
 
   LOG(INFO) << "Success start state machine.";
   return true;
@@ -105,7 +105,7 @@ bool StateMachineImpl::Stop() {
     return false;
   }
 
-  timer_->Stop();
+  executor_->Stop();
 
   return true;
 }
@@ -117,7 +117,8 @@ void StateMachineImpl::TickTock() {
   }
 
   state_->Tick();
-  timer_->Add([this] { TickTock(); }, FLAGS_state_tick_duration_s * 1000);
+  executor_->Schedule([this] { TickTock(); },
+                      FLAGS_state_tick_duration_s * 1000);
 }
 
 void StateMachineImpl::OnEvent(StateEvent event) {

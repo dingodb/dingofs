@@ -12,38 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set(EXECUTOR_SRCS
-    executor_impl.cc
-    timer_impl.cc
+add_library(dingofs_executor 
+    bthread/bthread_executor.cc
+    bthread/bthread_pool.cc
+    thread/executor_impl.cc
+    thread/thread_pool_impl.cc
+    timer/timer_impl.cc
 )
-
-if(BUILD_WITH_BTHREAD)
-    message(STATUS "dingofs_executor: Building with Bthread support")
-    list(APPEND EXECUTOR_SRCS
-        bthread/thread_pool.cc
-    )
-
-    add_library(dingofs_executor 
-        ${EXECUTOR_SRCS}
-    )
     
-    target_link_libraries(dingofs_executor
-        brpc::brpc
-        glog::glog
-        gflags::gflags
-    )
-else()
-    message(STATUS "dingofs_executor: Building without Pthread support")
-    list(APPEND EXECUTOR_SRCS
-        thread/thread_pool.cc
-    )
-
-    add_library(dingofs_executor 
-        ${EXECUTOR_SRCS}
-    )
-
-    target_link_libraries(dingofs_executor
-        glog::glog
-        gflags::gflags
-    )
-endif()
+target_link_libraries(dingofs_executor
+    brpc::brpc
+    glog::glog
+    gflags::gflags
+)

@@ -27,12 +27,13 @@
 #include "cache/common/common.h"
 #include "cache/config/benchmark.h"
 #include "cache/config/config.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
-Reporter::Reporter() : queue_id_({0}), timer_(std::make_unique<TimerImpl>()) {
+Reporter::Reporter()
+    : queue_id_({0}), executor_(std::make_unique<BthreadExecutor>()) {
   btimer_.start();
 }
 
@@ -47,14 +48,14 @@ Status Reporter::Start() {
 
   Submit(Event(EventType::kOnStart));
 
-  CHECK(timer_->Start());
-  timer_->Add([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
+  CHECK(executor_->Start());
+  executor_->Schedule([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
 
   return Status::OK();
 }
 
 Status Reporter::Stop() {
-  timer_->Stop();
+  executor_->Stop();
   Submit(Event(EventType::kOnStop));
 
   int rc = bthread::execution_queue_stop(queue_id_);
@@ -72,7 +73,7 @@ Status Reporter::Stop() {
 
 void Reporter::TickTok() {
   Submit(Event(EventType::kReportStat));
-  timer_->Add([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
+  executor_->Schedule([this]() { TickTok(); }, FLAGS_stat_interval_s * 1000);
 }
 
 void Reporter::Submit(Event event) {

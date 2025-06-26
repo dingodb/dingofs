@@ -23,8 +23,9 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_WATCHER_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_WATCHER_H_
 
+#include <memory>
 #include "cache/blockcache/disk_cache.h"
-#include "utils/executor/timer.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -70,7 +71,7 @@ class DiskCacheWatcher {
 
   std::atomic<bool> running_;
   std::vector<Target> targets_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 using DiskCacheWatcherUPtr = std::unique_ptr<DiskCacheWatcher>;

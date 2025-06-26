@@ -14,9 +14,12 @@
 
 #include "cache/blockcache/disk_state_health_checker.h"
 
+#include <memory>
+
 #include "cache/config/config.h"
 #include "cache/utils/filepath.h"
 #include "cache/utils/helper.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -26,15 +29,16 @@ DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
     : running_(false),
       layout_(layout),
       state_machine_(state_machine),
-      timer_(std::make_unique<TimerImpl>()) {}
+      executor_(std::make_unique<BthreadExecutor>()) {}
 
 void DiskStateHealthChecker::Start() {
   if (!running_.exchange(true, std::memory_order_acq_rel)) {
     LOG(INFO) << "Disk state health checker starting...";
 
     CHECK(state_machine_->Start());
-    CHECK(timer_->Start());
-    timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
+    CHECK(executor_->Start());
+    executor_->Schedule([this] { RunCheck(); },
+                        FLAGS_check_disk_state_duration_ms);
 
     LOG(INFO) << "Disk state health checker started.";
   }
@@ -44,7 +48,7 @@ void DiskStateHealthChecker::Stop() {
   if (running_.exchange(false, std::memory_order_acq_rel)) {
     LOG(INFO) << "Disk state health checker stopping...";
 
-    timer_->Stop();
+    executor_->Stop();
     state_machine_->Stop();
 
     LOG(INFO) << "Disk state health checker stopped.";
@@ -54,7 +58,8 @@ void DiskStateHealthChecker::Stop() {
 void DiskStateHealthChecker::RunCheck() {
   if (running_.load(std::memory_order_acquire)) {
     ProbeDisk();
-    timer_->Add([this] { RunCheck(); }, FLAGS_check_disk_state_duration_ms);
+    executor_->Schedule([this] { RunCheck(); },
+                        FLAGS_check_disk_state_duration_ms);
   }
 }
 

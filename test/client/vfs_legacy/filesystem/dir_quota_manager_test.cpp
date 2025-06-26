@@ -14,11 +14,11 @@
 
 #include "client/vfs_legacy/filesystem/dir_quota_manager.h"
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/mock_dir_parent_watcher.h"
+#include "client/vfs_legacy/mock_executor.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
 #include "client/vfs_legacy/mock_metaserver_client.h"
-#include "client/vfs_legacy/mock_timer.h"
+#include "dingofs/metaserver.pb.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -28,7 +28,6 @@ namespace filesystem {
 
 using testing::Return;
 
-using base::timer::MockTimer;
 using dingofs::stub::rpcclient::MockMetaServerClient;
 
 using dingofs::pb::metaserver::MetaStatusCode;
@@ -251,7 +250,7 @@ TEST_F(DirQuotaTest, CheckQuotaNoLimits) {
 
 class DirQuotaManagerTest : public ::testing::Test {
  protected:
-  std::shared_ptr<MockTimer> mock_timer;
+  std::shared_ptr<MockExecutor> mock_executor;
   std::shared_ptr<MockMetaServerClient> mock_meta_client;
 
   std::shared_ptr<MockInodeCacheManager> inode_cache_manager;
@@ -260,7 +259,7 @@ class DirQuotaManagerTest : public ::testing::Test {
   std::shared_ptr<DirQuotaManager> dir_quota_manager;
 
   void SetUp() override {
-    mock_timer = std::make_shared<MockTimer>();
+    mock_executor = std::make_shared<MockExecutor>();
     mock_meta_client = std::make_shared<MockMetaServerClient>();
 
     inode_cache_manager = std::make_shared<MockInodeCacheManager>();
@@ -268,7 +267,7 @@ class DirQuotaManagerTest : public ::testing::Test {
         std::make_shared<DirParentWatcherImpl>(inode_cache_manager);
 
     dir_quota_manager = std::make_shared<DirQuotaManager>(
-        100, mock_meta_client, dir_parent_watcher, mock_timer);
+        100, mock_meta_client, dir_parent_watcher, mock_executor);
   }
 };
 
@@ -276,7 +275,7 @@ TEST_F(DirQuotaManagerTest, StartStop) {
   EXPECT_CALL(*mock_meta_client, LoadDirQuotas)
       .WillOnce(Return(MetaStatusCode::OK));
 
-  EXPECT_CALL(*mock_timer, Add).WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillRepeatedly(Return(true));
 
   dir_quota_manager->Start();
   EXPECT_TRUE(dir_quota_manager->IsRunning());
@@ -317,7 +316,7 @@ TEST_F(DirQuotaManagerTest, HasDirQuota) {
             return MetaStatusCode::OK;
           });
 
-  EXPECT_CALL(*mock_timer, Add).WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillRepeatedly(Return(true));
 
   dir_quota_manager->Start();
   EXPECT_TRUE(dir_quota_manager->IsRunning());
@@ -381,7 +380,7 @@ TEST_F(DirQuotaManagerTest, CheckDirQuota) {
             return MetaStatusCode::OK;
           });
 
-  EXPECT_CALL(*mock_timer, Add).WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillRepeatedly(Return(true));
 
   dir_quota_manager->Start();
   EXPECT_TRUE(dir_quota_manager->IsRunning());
@@ -438,7 +437,7 @@ TEST_F(DirQuotaManagerTest, UpdateDirQuotaUsage) {
             return MetaStatusCode::OK;
           });
 
-  EXPECT_CALL(*mock_timer, Add).WillRepeatedly(Return(true));
+  EXPECT_CALL(*mock_executor, Schedule).WillRepeatedly(Return(true));
 
   dir_quota_manager->Start();
   EXPECT_TRUE(dir_quota_manager->IsRunning());

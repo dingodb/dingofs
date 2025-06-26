@@ -14,22 +14,19 @@
 
 #include <gmock/gmock.h>
 
-#include "utils/executor/timer.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
-namespace base {
-namespace timer {
 
-class MockTimer : public Timer {
+class MockExecutor : public Executor {
  public:
   MOCK_METHOD(bool, Start, (), (override));
   MOCK_METHOD(bool, Stop, (), (override));
-  MOCK_METHOD(bool, Add, (std::function<void()> func, int delay_ms),
+  MOCK_METHOD(bool, Execute, (std::function<void()> func), (override));
+  MOCK_METHOD(bool, Schedule, (std::function<void()> func, int delay_ms),
               (override));
-  MOCK_METHOD(bool, IsStopped, (), (override));
+  MOCK_METHOD(int, ThreadNum, (), (const override));
+  MOCK_METHOD(std::string, Name, (), (const override));
 };
-
-}  // namespace timer
-}  // namespace base
 
 }  // namespace dingofs

@@ -23,12 +23,13 @@
 #include "cache/blockcache/disk_cache_watcher.h"
 
 #include "cache/utils/helper.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
 
 DiskCacheWatcher::DiskCacheWatcher()
-    : running_(false), timer_(std::make_unique<TimerImpl>()) {}
+    : running_(false), executor_(std::make_unique<BthreadExecutor>()) {}
 
 void DiskCacheWatcher::Add(DiskCacheSPtr store,
                            CacheStore::UploadFunc uploader) {
@@ -39,8 +40,8 @@ void DiskCacheWatcher::Start() {
   if (!running_.exchange(true, std::memory_order_acq_rel)) {
     LOG(INFO) << "Disk cache watcher starting...";
 
-    CHECK(timer_->Start());
-    timer_->Add([this] { WatchingWorker(); }, 100);
+    CHECK(executor_->Start());
+    executor_->Schedule([this] { WatchingWorker(); }, 100);
 
     LOG(INFO) << "Disk cache watcher started.";
   }
@@ -50,7 +51,7 @@ void DiskCacheWatcher::Stop() {
   if (running_.exchange(false, std::memory_order_acq_rel)) {
     LOG(INFO) << "Disk cache watcher stopping...";
 
-    timer_->Stop();
+    executor_->Stop();
 
     LOG(INFO) << "Disk cache watcher stopped.";
   }
@@ -67,7 +68,7 @@ void DiskCacheWatcher::WatchingWorker() {
       }
     }
 
-    timer_->Add([this] { WatchingWorker(); }, 100);
+    executor_->Schedule([this] { WatchingWorker(); }, 100);
   }
 }
 

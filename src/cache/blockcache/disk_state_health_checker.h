@@ -19,7 +19,7 @@
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/utils/state_machine.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -41,7 +41,7 @@ class DiskStateHealthChecker {
   std::atomic<bool> running_;
   DiskCacheLayoutSPtr layout_;
   StateMachineSPtr state_machine_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 using DiskStateHealthCheckerUPtr = std::unique_ptr<DiskStateHealthChecker>;

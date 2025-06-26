@@ -22,7 +22,7 @@
 
 #include "cache/remotecache/remote_node_manager.h"
 
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -36,7 +36,7 @@ RemoteNodeManager::RemoteNodeManager(RemoteBlockCacheOption option,
       on_member_load_(on_member_load),
       mds_base_(std::make_shared<stub::rpcclient::MDSBaseClient>()),
       mds_client_(std::make_shared<stub::rpcclient::MdsClientImpl>()),
-      timer_(std::make_unique<TimerImpl>()) {}
+      executor_(std::make_unique<BthreadExecutor>()) {}
 
 Status RemoteNodeManager::Start() {
   if (!running_.exchange(true)) {
@@ -53,8 +53,9 @@ Status RemoteNodeManager::Start() {
       return status;
     }
 
-    CHECK(timer_->Start());
-    timer_->Add([this] { BackgroudRefresh(); }, FLAGS_load_members_interval_ms);
+    CHECK(executor_->Start());
+    executor_->Schedule([this] { BackgroudRefresh(); },
+                        FLAGS_load_members_interval_ms);
 
     LOG(INFO) << "Remote node manager started.";
   }
@@ -64,7 +65,7 @@ Status RemoteNodeManager::Start() {
 
 void RemoteNodeManager::Stop() {
   if (running_.exchange(false)) {
-    timer_->Stop();
+    executor_->Stop();
   }
 }
 
@@ -74,7 +75,8 @@ void RemoteNodeManager::BackgroudRefresh() {
     LOG(ERROR) << "Refresh cache group members failed: " << status.ToString();
   }
 
-  timer_->Add([this] { BackgroudRefresh(); }, FLAGS_load_members_interval_ms);
+  executor_->Schedule([this] { BackgroudRefresh(); },
+                      FLAGS_load_members_interval_ms);
 }
 
 Status RemoteNodeManager::RefreshMembers() {

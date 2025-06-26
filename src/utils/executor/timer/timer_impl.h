@@ -22,19 +22,13 @@
 
 #include "gflags/gflags_declare.h"
 #include "utils/executor/thread_pool.h"
-#include "utils/executor/timer.h"
+#include "utils/executor/timer/timer.h"
 
-DECLARE_int32(timer_bg_thread_default_num);
 
 namespace dingofs {
 
 class TimerImpl : public Timer {
  public:
-  TimerImpl();
-
-  // timer own the thread pool, this will create a thread pool
-  TimerImpl(int bg_thread_num);
-
   // caller owns the thread pool
   TimerImpl(ThreadPool* thread_pool);
 
@@ -73,7 +67,6 @@ class TimerImpl : public Timer {
       heap_;
   bool running_{false};
 
-  const bool own_thread_pool_;
   ThreadPool* thread_pool_;
 };
 

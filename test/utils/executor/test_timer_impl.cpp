@@ -16,9 +16,10 @@
 
 #include <memory>
 
-#include "utils/executor/timer_impl.h"
 #include "glog/logging.h"
 #include "gtest/gtest.h"
+#include "utils/executor/thread/thread_pool_impl.h"
+#include "utils/executor/timer/timer_impl.h"
 
 namespace dingofs {
 
@@ -27,13 +28,18 @@ namespace timer {
 
 class TimerImplTest : public ::testing::Test {
  public:
-  TimerImplTest() = default;
+  TimerImplTest() {
+    pool = std::make_unique<ThreadPoolImpl>(2);
+    pool->Start();
+  }
 
   ~TimerImplTest() override = default;
+
+  std::unique_ptr<ThreadPoolImpl> pool{nullptr};
 };
 
 TEST_F(TimerImplTest, BaseTest) {
-  auto timer = std::make_unique<TimerImpl>();
+  auto timer = std::make_unique<TimerImpl>(pool.get());
   EXPECT_TRUE(timer->Start());
 
   EXPECT_TRUE(timer->Stop());
@@ -42,7 +48,7 @@ TEST_F(TimerImplTest, BaseTest) {
 }
 
 TEST_F(TimerImplTest, Add) {
-  auto timer = std::make_unique<TimerImpl>();
+  auto timer = std::make_unique<TimerImpl>(pool.get());
 
   EXPECT_TRUE(timer->Start());
 

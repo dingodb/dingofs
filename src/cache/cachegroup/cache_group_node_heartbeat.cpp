@@ -24,6 +24,7 @@
 
 #include "cache/common/common.h"
 #include "cache/metrics/cache_group_node_metric.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -34,14 +35,15 @@ CacheGroupNodeHeartbeatImpl::CacheGroupNodeHeartbeatImpl(
     : running_(false),
       member_(member),
       mds_client_(mds_client),
-      timer_(std::make_unique<TimerImpl>()) {}
+      executor_(std::make_unique<BthreadExecutor>()) {}
 
 void CacheGroupNodeHeartbeatImpl::Start() {
   if (!running_.exchange(true)) {
     LOG(INFO) << "Cache group node heartbeat starting...";
 
-    CHECK(timer_->Start());
-    timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
+    CHECK(executor_->Start());
+    executor_->Schedule([this] { SendHeartbeat(); },
+                        FLAGS_send_heartbeat_interval_ms);
 
     LOG(INFO) << "Cache group node heartbeat started.";
   }
@@ -51,7 +53,7 @@ void CacheGroupNodeHeartbeatImpl::Stop() {
   if (running_.exchange(false)) {
     LOG(INFO) << "Cache group node heartbeat stoping...";
 
-    CHECK(timer_->Stop());
+    CHECK(executor_->Stop());
 
     LOG(INFO) << "Cache group node heartbeat stopped.";
   }
@@ -70,7 +72,8 @@ void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
                << ") failed: rc = " << CacheGroupErrCode_Name(rc);
   }
 
-  timer_->Add([this] { SendHeartbeat(); }, FLAGS_send_heartbeat_interval_ms);
+  executor_->Schedule([this] { SendHeartbeat(); },
+                      FLAGS_send_heartbeat_interval_ms);
 }
 
 }  // namespace cache

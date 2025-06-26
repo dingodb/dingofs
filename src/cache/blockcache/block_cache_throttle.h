@@ -23,8 +23,10 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 
+#include <memory>
+
 #include "cache/common/common.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/executor.h"
 #include "utils/throttle.h"
 
 namespace dingofs {
@@ -46,7 +48,7 @@ class UploadStageThrottle {
   uint64_t current_throttle_bandwidth_mb_;
   uint64_t current_throttle_iops_;
   utils::ThrottleUPtr throttle_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 using UploadStageThrottleUPtr = std::unique_ptr<UploadStageThrottle>;

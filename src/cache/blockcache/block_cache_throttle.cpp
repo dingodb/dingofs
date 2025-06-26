@@ -23,6 +23,7 @@
 #include "cache/blockcache/block_cache_throttle.h"
 
 #include "cache/config/config.h"
+#include "utils/executor/bthread/bthread_executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -31,16 +32,16 @@ UploadStageThrottle::UploadStageThrottle()
     : current_throttle_bandwidth_mb_(0),
       current_throttle_iops_(0),
       throttle_(std::make_unique<dingofs::utils::Throttle>()),
-      timer_(std::make_unique<TimerImpl>()) {
+      executor_(std::make_unique<BthreadExecutor>()) {
   UpdateThrottleParam();
 }
 
 void UploadStageThrottle::Start() {
-  CHECK(timer_->Start());
-  timer_->Add([this] { UpdateThrottleParam(); }, 100);
+  CHECK(executor_->Start());
+  executor_->Schedule([this] { UpdateThrottleParam(); }, 100);
 }
 
-void UploadStageThrottle::Stop() { timer_->Stop(); }
+void UploadStageThrottle::Stop() { executor_->Stop(); }
 
 void UploadStageThrottle::Add(uint64_t upload_bytes) {
   if (FLAGS_upload_stage_throttle_enable) {
@@ -70,7 +71,7 @@ void UploadStageThrottle::UpdateThrottleParam() {
     std::lock_guard<BthreadMutex> lk(mutex_);
     throttle_->UpdateThrottleParams(params);
   }
-  timer_->Add([this] { UpdateThrottleParam(); }, 100);
+  executor_->Schedule([this] { UpdateThrottleParam(); }, 100);
 }
 
 }  // namespace cache

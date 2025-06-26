@@ -24,7 +24,7 @@ class Executor {
  public:
   virtual ~Executor() = default;
 
-  virtual bool Start(int thread_num) = 0;
+  virtual bool Start() = 0;
 
   virtual bool Stop() = 0;
 

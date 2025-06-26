@@ -26,10 +26,11 @@
 #include <bthread/execution_queue.h>
 #include <bthread/execution_queue_inl.h>
 #include <butil/time.h>
+#include <memory>
 
 #include "cache/common/common.h"
 #include "cache/config/config.h"
-#include "utils/executor/timer.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -127,7 +128,7 @@ class Reporter {
   Statistics interval_stat_;
   Statistics summary_stat_;
   bthread::ExecutionQueueId<Event> queue_id_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 using ReporterSPtr = std::shared_ptr<Reporter>;

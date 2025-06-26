@@ -37,8 +37,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/configuration.h"
-#include "utils/executor/executor.h"
-#include "utils/executor/executor_impl.h"
+#include "utils/executor/thread/executor_impl.h"
 
 DEFINE_int32(flush_bg_thread, 16, "Number of background flush threads");
 
@@ -82,8 +81,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     return Status::Internal("build meta system fail");
   }
 
-  meta_system_ =
-      std::make_unique<MetaWrapper>(std::move(rela_meta_system));
+  meta_system_ = std::make_unique<MetaWrapper>(std::move(rela_meta_system));
 
   DINGOFS_RETURN_NOT_OK(meta_system_->Init());
 
@@ -134,8 +132,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    flush_executor_ = std::make_unique<ExecutorImpl>();
-    flush_executor_->Start(FLAGS_flush_bg_thread);
+    flush_executor_ = std::make_unique<ExecutorImpl>(FLAGS_flush_bg_thread);
+    flush_executor_->Start();
   }
 
   {

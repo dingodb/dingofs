@@ -18,8 +18,8 @@
 #include <atomic>
 #include <memory>
 
-#include "utils/executor/timer.h"
 #include "stub/rpcclient/mds_client.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
@@ -32,8 +32,10 @@ class FsPushMetricManager {
  public:
   FsPushMetricManager(const std::string fsname,
                       std::shared_ptr<MdsClient> mds_client,
-                      std::shared_ptr<Timer> timer)
-      : fsname_(fsname), mds_client_(mds_client), timer_(std::move(timer)) {}
+                      std::shared_ptr<Executor> executor)
+      : fsname_(fsname),
+        mds_client_(mds_client),
+        executor_(std::move(executor)) {}
 
   virtual ~FsPushMetricManager() = default;
 
@@ -52,7 +54,7 @@ class FsPushMetricManager {
 
   const std::string fsname_;
   std::shared_ptr<MdsClient> mds_client_;
-  std::shared_ptr<Timer> timer_;
+  std::shared_ptr<Executor> executor_;
   std::atomic<bool> running_{false};
   // store last client push metrics
   FsStatsData last_client_metrics_;

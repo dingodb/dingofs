@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_UITLS_THREAD_POOL_H_
-#define DINGOFS_UITLS_THREAD_POOL_H_
+#ifndef DINGOFS_UITLS_EXECUTOR_THREAD_POOL_H_
+#define DINGOFS_UITLS_EXECUTOR_THREAD_POOL_H_
 
 #include <functional>
 
@@ -21,35 +21,25 @@ namespace dingofs {
 
 class ThreadPool {
  public:
-  ThreadPool(int num_threads);
+  virtual ~ThreadPool() = default;
 
-  virtual ~ThreadPool();
+  virtual void Start() = 0;
 
-  virtual void Start();
+  virtual void Stop() = 0;
 
-  virtual void Stop();
-
-  virtual int GetBackgroundThreads();
+  virtual int GetBackgroundThreads() = 0;
 
   // Get the number of task scheduled in the ThreadPool
-  virtual int GetTaskNum() const;
+  virtual int GetTaskNum() const = 0;
 
   // Submit a fire and forget jobs
   // This allows to submit the same job multiple times
-  virtual void Execute(const std::function<void()>&);
+  virtual void Execute(const std::function<void()>&) = 0;
 
   // This moves the function in for efficiency
-  virtual void Execute(std::function<void()>&&);
-
- private:
-  class Impl;
-  Impl* impl_;
+  virtual void Execute(std::function<void()>&&) = 0;
 };
-
-// NewThreadPool() is a function that could be used to create a ThreadPool
-// with `num_threads` background threads.
-ThreadPool* NewThreadPool(int num_threads);
 
 }  // namespace dingofs
 
-#endif  // DINGOFS_UITLS_THREAD_POOL_H_
+#endif  // DINGOFS_UITLS_EXECUTOR_THREAD_POOL_H_

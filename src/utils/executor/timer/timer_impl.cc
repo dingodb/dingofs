@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/timer/timer_impl.h"
 
 #include <sys/stat.h>
 
@@ -29,31 +29,17 @@ namespace dingofs {
 
 using namespace std::chrono;
 
-TimerImpl::TimerImpl() : TimerImpl(FLAGS_timer_bg_thread_default_num) {}
-
-TimerImpl::TimerImpl(int bg_thread_num) : own_thread_pool_(true) {
-  thread_pool_ = new ThreadPool(bg_thread_num);
-}
-
 TimerImpl::TimerImpl(ThreadPool* thread_pool)
-    : own_thread_pool_(false), thread_pool_(thread_pool) {}
+    : thread_pool_(thread_pool) {}
 
 TimerImpl::~TimerImpl() {
   Stop();
-
-  if (own_thread_pool_) {
-    delete thread_pool_;
-  }
 }
 
 bool TimerImpl::Start() {
   std::lock_guard<std::mutex> lk(mutex_);
   if (running_) {
     return false;
-  }
-
-  if (own_thread_pool_) {
-    thread_pool_->Start();
   }
 
   thread_ = std::make_unique<std::thread>(&TimerImpl::Run, this);
@@ -80,10 +66,6 @@ bool TimerImpl::Stop() {
 
   if (thread_) {
     thread_->join();
-  }
-
-  if (own_thread_pool_) {
-    thread_pool_->Stop();
   }
 
   return true;

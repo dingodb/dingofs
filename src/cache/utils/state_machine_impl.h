@@ -21,9 +21,7 @@
 #include "bthread/execution_queue.h"
 #include "cache/common/common.h"
 #include "cache/utils/state_machine.h"
-#include "utils/concurrent/rw_lock.h"
-#include "utils/executor/timer.h"
-#include "utils/executor/timer_impl.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace cache {
@@ -48,9 +46,9 @@ class BaseState {
   BaseState(StateMachine* state_machine) : state_machine(state_machine) {}
   virtual ~BaseState() = default;
 
-  virtual void IOSucc(){};
-  virtual void IOErr(){};
-  virtual void Tick(){};
+  virtual void IOSucc() {};
+  virtual void IOErr() {};
+  virtual void Tick() {};
 
   virtual State GetState() const { return kStateUnknown; }
 
@@ -144,7 +142,7 @@ class StateMachineImpl final : public StateMachine {
   mutable BthreadMutex mutex_;
   BaseStateUPtr state_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;
-  TimerUPtr timer_;
+  std::unique_ptr<Executor> executor_;
 };
 
 }  // namespace cache

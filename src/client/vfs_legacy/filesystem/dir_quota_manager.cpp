@@ -137,10 +137,10 @@ void DirQuotaManager::Start() {
     return;
   }
 
-  timer_->Add([this] { FlushQuotas(); },
-              FLAGS_flush_quota_interval_second * 1000);
-  timer_->Add([this] { LoadQuotas(); },
-              FLAGS_load_quota_interval_second * 1000);
+  executor_->Schedule([this] { FlushQuotas(); },
+                      FLAGS_flush_quota_interval_second * 1000);
+  executor_->Schedule([this] { LoadQuotas(); },
+                      FLAGS_load_quota_interval_second * 1000);
 
   running_.store(true);
 }
@@ -254,8 +254,8 @@ void DirQuotaManager::FlushQuotas() {
 
   DoFlushQuotas();
 
-  timer_->Add([this] { FlushQuotas(); },
-              FLAGS_flush_quota_interval_second * 1000);
+  executor_->Schedule([this] { FlushQuotas(); },
+                      FLAGS_flush_quota_interval_second * 1000);
 }
 
 void DirQuotaManager::DoFlushQuotas() {
@@ -311,8 +311,8 @@ void DirQuotaManager::LoadQuotas() {
 
   DoLoadQuotas();
 
-  timer_->Add([this] { LoadQuotas(); },
-              FLAGS_load_quota_interval_second * 1000);
+  executor_->Schedule([this] { LoadQuotas(); },
+                      FLAGS_load_quota_interval_second * 1000);
 }
 
 DINGOFS_ERROR DirQuotaManager::DoLoadQuotas() {
