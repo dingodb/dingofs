@@ -121,8 +121,6 @@ struct BlockContext {
                          // (for disk cache group changed)
 };
 
-// option
-
 // cache store
 class CacheStore {
  public:

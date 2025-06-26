@@ -23,6 +23,8 @@
 #ifndef DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_H_
 
+#include <memory>
+
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_loader.h"
@@ -101,6 +103,7 @@ class DiskCache final : public CacheStore {
 };
 
 using DiskCacheSPtr = std::shared_ptr<DiskCache>;
+using DiskCacheUPtr = std::unique_ptr<DiskCache>;
 
 }  // namespace cache
 }  // namespace dingofs

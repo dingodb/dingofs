@@ -69,14 +69,14 @@ static const std::string kCacheBlock = "cache";
 static const std::string kLoadBlock = "load";
 
 // disk cache
-static const std::string kCacheAdd = "cache_add";
-
-// filesystem
 static const std::string kOpenFile = "open";
-static const std::string kRemoveFile = "unlink";
 static const std::string kWriteFile = "write";
 static const std::string kReadFile = "read";
 static const std::string kLinkFile = "link";
+static const std::string kRemoveFile = "unlink";
+static const std::string kCacheAdd = "cache_add";
+
+// filesystem
 static const std::string kAioWrite = "aio_write";
 static const std::string kAioRead = "aio_read";
 static const std::string kDropPageCache = "drop_page_cache";
