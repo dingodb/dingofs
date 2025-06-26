@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_THROTTLE_H_
 
 #include <atomic>
+#include <memory>
 
 #include "cache/common/type.h"
 #include "utils/executor/timer.h"
@@ -54,6 +55,7 @@ class UploadStageThrottle {
 };
 
 using UploadStageThrottleUPtr = std::unique_ptr<UploadStageThrottle>;
+using UploadStageThrottleSPtr = std::shared_ptr<UploadStageThrottle>;
 
 }  // namespace cache
 }  // namespace dingofs

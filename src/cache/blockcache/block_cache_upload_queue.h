@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_BLOCK_CACHE_UPLOAD_QUEUE_H_
 
 #include <cstdint>
+#include <memory>
 
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
@@ -60,20 +61,22 @@ struct BlocksStat {
   uint64_t num_from_reload;
 };
 
-// PendingQueue is a priority queue for uploading stage blocks
+// PendingQueue is a priority queue for uploading staging blocks
 // which will upload writeback blocks first, then reload blocks.
 class PendingQueue {
  public:
   PendingQueue() = default;
 
   void Push(const StagingBlock& staging_block);
+
   std::vector<StagingBlock> Pop();
+
   size_t Size();
 
   void Stat(struct BlocksStat* stat);
 
  private:
-  static constexpr uint64_t kSegmentSize = 100;
+  static constexpr size_t kSegmentSize = 100;
 
   BthreadMutex mutex_;
   std::unordered_map<BlockContext::BlockFrom, Segments<StagingBlock>> queues_;
@@ -81,6 +84,7 @@ class PendingQueue {
 };
 
 using PendingQueueUPtr = std::unique_ptr<PendingQueue>;
+using PendingQueueSPtr = std::shared_ptr<PendingQueue>;
 
 }  // namespace cache
 }  // namespace dingofs

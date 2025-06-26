@@ -46,17 +46,17 @@ DECLARE_bool(enable_stage);
 // If sets to false, the block cache will not cache any block.
 DECLARE_bool(enable_cache);
 
+// Sets the maximum inflight requests for prefetching blocks.
+DECLARE_uint32(prefetch_max_inflights);
+
 // Sets whether to enable throttling for uploading stage blocks to storage.
 DECLARE_bool(upload_stage_throttle_enable);
 
 // Sets the maximum bandwidth for uploading stage blocks to storage in MB/s.
-DECLARE_uint32(upload_stage_throttle_bandwidth_mb);
+DECLARE_uint64(upload_stage_throttle_bandwidth_mb);
 
 // Sets the maximum IOPS for uploading stage blocks to storage.
-DECLARE_uint32(upload_stage_throttle_iops);
-
-// Sets the maximum inflight requests for prefetching blocks.
-DECLARE_uint32(prefetch_max_inflights);
+DECLARE_uint64(upload_stage_throttle_iops);
 
 // Sets the maximum inflight requests for uploading stage blocks to storage.
 DECLARE_uint32(upload_stage_max_inflights);

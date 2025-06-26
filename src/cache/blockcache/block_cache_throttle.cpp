@@ -36,12 +36,12 @@ DEFINE_bool(
     "Whether to enable throttling for uploading stage blocks to storage.");
 DEFINE_validator(upload_stage_throttle_enable, brpc::PassValidate);
 
-DEFINE_uint32(
+DEFINE_uint64(
     upload_stage_throttle_bandwidth_mb, 256,
     "Maximum bandwidth for uploading stage blocks to storage in MB/s");
 DEFINE_validator(upload_stage_throttle_bandwidth_mb, brpc::PassValidate);
 
-DEFINE_uint32(upload_stage_throttle_iops, 100,
+DEFINE_uint64(upload_stage_throttle_iops, 100,
               "Maximum IOPS for uploading stage blocks to storage");
 DEFINE_validator(upload_stage_throttle_iops, brpc::PassValidate);
 
@@ -75,6 +75,10 @@ void UploadStageThrottle::Start() {
 }
 
 void UploadStageThrottle::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
+  }
+
   LOG(INFO) << "Upload stage throttle is shutting down...";
 
   timer_->Stop();

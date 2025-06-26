@@ -100,7 +100,7 @@ Status BlockCacheImpl::Start() {
     return status;
   }
 
-  running_.store(true);
+  running_ = true;
 
   LOG(INFO) << "Block cache is up.";
 
