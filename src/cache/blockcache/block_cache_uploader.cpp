@@ -144,7 +144,7 @@ Status BlockCacheUploader::Uploading(const StagingBlock& staging_block) {
   TracingGuard tracing(ctx, status, kModule, "uploading(%s,%zu)",
                        staging_block.key.Filename(), staging_block.length);
 
-  NEXT_STEP(kLoad);
+  NEXT_STEP(kLoadBlock);
   status = Load(staging_block, &buffer);
   if (!status.ok()) {
     return status;

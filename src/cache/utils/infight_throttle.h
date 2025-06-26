@@ -74,7 +74,11 @@ using InflightThrottleUPtr = std::unique_ptr<InflightThrottle>;
 class InflightThrottleGuard {
  public:
   InflightThrottleGuard(InflightThrottleSPtr throttle, uint64_t inflights)
-      : throttle_(throttle), inflights_(inflights) {}
+      : throttle_(throttle), inflights_(inflights) {
+    if (throttle_) {
+      throttle_->Increment(1);
+    }
+  }
 
   ~InflightThrottleGuard() {
     if (throttle_) {

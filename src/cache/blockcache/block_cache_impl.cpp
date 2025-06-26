@@ -34,7 +34,6 @@
 #include "cache/storage/storage_pool.h"
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
-#include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 
@@ -44,8 +43,8 @@ namespace cache {
 DEFINE_string(cache_store, "disk",
               "Cache store type, can be none, disk or 3fs");
 DEFINE_bool(enable_stage, true, "Whether to enable stage block for writeback");
-DEFINE_bool(enable_cache, true, "Whether to enable cache for block");
-DEFINE_uint32(prefetch_max_inflights, 100,
+DEFINE_bool(enable_cache, true, "Whether to enable cache block");
+DEFINE_uint32(prefetch_max_inflights, 32,
               "Maximum inflight requests for prefetching blocks");
 
 static const std::string kModule = kBlockCacheMoudule;
@@ -55,15 +54,18 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option, StorageSPtr storage)
 
 BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
                                StoragePoolSPtr storage_pool)
-    : running_(false), option_(option), storage_pool_(storage_pool) {
+    : running_(false),
+      option_(option),
+      storage_pool_(storage_pool),
+      prefetch_throttle_(
+          std::make_shared<InflightThrottle>(FLAGS_prefetch_max_inflights)),
+      joiner_(std::make_unique<BthreadJoiner>()) {
   if (HasCacheStore()) {
     store_ = std::make_shared<DiskCacheGroup>(option.disk_cache_options);
   } else {
     store_ = std::make_shared<MemCache>();
   }
   uploader_ = std::make_shared<BlockCacheUploader>(storage_pool_, store_);
-  prefetch_throttle_ =
-      std::make_shared<InflightThrottle>(FLAGS_prefetch_max_inflights);
 }
 
 BlockCacheImpl::~BlockCacheImpl() { Shutdown(); }
@@ -73,10 +75,13 @@ Status BlockCacheImpl::Start() {
   CHECK_NOTNULL(store_);
   CHECK_NOTNULL(uploader_);
   CHECK_NOTNULL(prefetch_throttle_);
+  CHECK_NOTNULL(joiner_);
 
-  if (running_) {  // Already running
+  if (running_) {
     return Status::OK();
   }
+
+  LOG(INFO) << "Block cache is starting...";
 
   uploader_->Start();
 
@@ -89,12 +94,22 @@ Status BlockCacheImpl::Start() {
     return status;
   }
 
+  status = joiner_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start bthread joiner failed: " << status.ToString();
+    return status;
+  }
+
+  running_.store(true);
+
+  LOG(INFO) << "Block cache is up.";
+
   CHECK_RUNNING("Block cache");
   return Status::OK();
 }
 
 Status BlockCacheImpl::Shutdown() {
-  if (!running_.exchange(false)) {  // Already shutdown
+  if (!running_.exchange(false)) {
     return Status::OK();
   }
 
@@ -113,32 +128,35 @@ Status BlockCacheImpl::Shutdown() {
 
 Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
                            const Block& block, PutOption option) {
+  CHECK_RUNNING("Block cache");
+
   Status status;
   TracingGuard tracing(ctx, status, kModule, "put(%s,%zu)", key.Filename(),
                        block.size);
 
   if (!option.writeback) {
     NEXT_STEP(kS3Put);
-    status = StoragePut(ctx, key, block.buffer);
+    status = StoragePut(ctx, key, block);
     return status;
   }
 
   // writeback: stage block
-  NEXT_STEP(kStage);
+  NEXT_STEP(kStageBlock);
   CacheStore::StageOption opt;
   opt.block_ctx = option.block_ctx;
   status = store_->Stage(ctx, key, block, opt);
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING) << "Stage block (key=" << key.Filename()
-                              << ") failed: " << status.ToString();
-  } else if (!status.IsNotSupport()) {
-    LOG(WARNING) << "Stage block (key=" << key.Filename()
-                 << ") failed: " << status.ToString();
+    LOG_EVERY_SECOND(WARNING) << "Stage block failed: key = " << key.Filename()
+                              << ", status = " << status.ToString();
+  } else {
+    LOG_EVERY_SECOND(WARNING) << "Stage block failed: key = " << key.Filename()
+                              << ", status = " << status.ToString();
   }
 
   // Stage block failed, try to upload it
+  NEXT_STEP(kS3Put);
   status = StoragePut(ctx, key, block);
   return status;
 }
@@ -146,15 +164,20 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
 Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                              size_t length, IOBuffer* buffer,
                              RangeOption option) {
+  CHECK_RUNNING("Block cache");
+
   Status status;
-  TracingGuard tracing(ctx, status, kModule, "range(%s,%zu,%zu)",
+  TracingGuard tracing(ctx, status, kModule, "range(%s,%lld,%zu)",
                        key.Filename(), offset, length);
 
-  NEXT_STEP(kLoad);
+  NEXT_STEP(kLoadBlock);
   status = store_->Load(ctx, key, offset, length, buffer);
   if (status.ok()) {
     return status;
   } else if (!option.retrive) {
+    LOG(ERROR) << "Load block failed, and no longer retrive storage: key = "
+               << key.Filename() << ", offset = " << offset
+               << ", length = " << length << ", status = " << status.ToString();
     return status;
   }
 
@@ -165,21 +188,31 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
 Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, CacheOption /*option*/) {
+  CHECK_RUNNING("Block cache");
+
   Status status;
   TracingGuard tracing(ctx, status, kModule, "cache(%s,%zu)", key.Filename(),
                        block.size);
 
-  NEXT_STEP(kCache);
+  NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, block);
+  if (!status.ok()) {
+    LOG(ERROR) << "Cache block failed: key = " << key.Filename()
+               << ", length = " << block.size
+               << ", status = " << status.ToString();
+    return status;
+  }
 
   return status;
 }
 
 Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                 size_t length, PrefetchOption /*option*/) {
+  CHECK_RUNNING("Block cache");
+
   Status status;
-  TracingGuard tracing(ctx, status, kModule, "prefetch(%s,%zu)", key.Filename(),
-                       length);
+  TracingGuard tracing(ctx, status, kModule, "prefetch(%s,%lld)",
+                       key.Filename(), length);
 
   if (IsCached(key)) {
     return Status::OK();
@@ -192,8 +225,13 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
     return status;
   }
 
-  NEXT_STEP(kCache);
+  NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, Block(buffer));
+  if (!status.ok()) {
+    LOG(ERROR) << "Cache block failed: key = " << key.Filename()
+               << ", length = " << length << ", status = " << status.ToString();
+    return status;
+  }
 
   return status;
 }
@@ -201,6 +239,8 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 void BlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
                               const Block& block, AsyncCallback cb,
                               PutOption option) {
+  CHECK_RUNNING("Block cache");
+
   auto* self = GetSelfPtr();
   auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
     Status status = self->Put(ctx, key, block, option);
@@ -217,6 +257,8 @@ void BlockCacheImpl::AsyncPut(ContextSPtr ctx, const BlockKey& key,
 void BlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
                                 off_t offset, size_t length, IOBuffer* buffer,
                                 AsyncCallback cb, RangeOption option) {
+  CHECK_RUNNING("Block cache");
+
   auto* self = GetSelfPtr();
   auto tid =
       RunInBthread([self, ctx, key, offset, length, buffer, cb, option]() {
@@ -234,6 +276,8 @@ void BlockCacheImpl::AsyncRange(ContextSPtr ctx, const BlockKey& key,
 void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
                                 const Block& block, AsyncCallback cb,
                                 CacheOption option) {
+  CHECK_RUNNING("Block cache");
+
   auto* self = GetSelfPtr();
   auto tid = RunInBthread([self, ctx, key, block, cb, option]() {
     Status status = self->Cache(ctx, key, block, option);
@@ -250,10 +294,10 @@ void BlockCacheImpl::AsyncCache(ContextSPtr ctx, const BlockKey& key,
 void BlockCacheImpl::AsyncPrefetch(ContextSPtr ctx, const BlockKey& key,
                                    size_t length, AsyncCallback cb,
                                    PrefetchOption option) {
-  // TODO: acts on sync op
-  prefetch_throttle_->Increment(1);
-  InflightThrottleGuard guard(prefetch_throttle_, 1);
+  CHECK_RUNNING("Block cache");
 
+  // TODO: acts on sync op
+  InflightThrottleGuard guard(prefetch_throttle_, 1);
   auto* self = GetSelfPtr();
   auto tid = RunInBthread([self, ctx, key, length, cb, option]() {
     Status status = self->Prefetch(ctx, key, length, option);
@@ -271,8 +315,17 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
                                   const Block& block) {
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
-  if (status.ok()) {
-    status = storage->Put(ctx, key, block);
+  if (!status.ok()) {
+    LOG(ERROR) << "Get storage failed: fs_id = " << key.fs_id
+               << ", key = " << key.Filename()
+               << ", status = " << status.ToString();
+    return status;
+  }
+
+  status = storage->Put(ctx, key, block);
+  if (!status.ok()) {
+    LOG(ERROR) << "Storage put failed: key = " << key.Filename()
+               << ", status = " << status.ToString();
   }
   return status;
 }
@@ -283,13 +336,17 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << "";
+    LOG(ERROR) << "Get storage failed: fs_id = " << key.fs_id
+               << ", key = " << key.Filename()
+               << ", status = " << status.ToString();
     return status;
   }
 
   status = storage->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
-    LOG(ERROR) << "";
+    LOG(ERROR) << "Storage range failed: key = " << key.Filename()
+               << ", offset = " << offset << ", length = " << length
+               << ", status = " << status.ToString();
   }
   return status;
 }

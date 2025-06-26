@@ -42,7 +42,7 @@ DECLARE_string(cache_store);
 // using writeback mode.
 DECLARE_bool(enable_stage);
 
-// Sets whether to enable cache for block .
+// Sets whether to enable cache block .
 // If sets to false, the block cache will not cache any block.
 DECLARE_bool(enable_cache);
 

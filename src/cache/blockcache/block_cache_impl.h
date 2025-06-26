@@ -87,8 +87,8 @@ class BlockCacheImpl final : public BlockCache {
   StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
   BlockCacheUploaderSPtr uploader_;
-  BthreadJoinerUPtr joiner_;
   InflightThrottleSPtr prefetch_throttle_;
+  BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache

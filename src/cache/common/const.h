@@ -46,8 +46,10 @@ static const std::string kPageCacheModule = "pagecache";
 static const std::string kStorageMoudule = "storage";
 
 // step
+// service
 static const std::string kSendResponse = "send_response";
 
+// tier cache
 static const std::string kLocalPut = "local_put";
 static const std::string kRemotePut = "remote_put";
 static const std::string kLocalRange = "local_range";
@@ -61,10 +63,10 @@ static const std::string kNodePut = "node_put";
 static const std::string kNodeRange = "node_range";
 
 // block cache
-static const std::string kStage = "stage";
-static const std::string kRemoveStage = "removestage";
-static const std::string kCache = "cache";
-static const std::string kLoad = "load";
+static const std::string kStageBlock = "stage";
+static const std::string kRemoveStageBlock = "removestage";
+static const std::string kCacheBlock = "cache";
+static const std::string kLoadBlock = "load";
 
 // disk cache
 static const std::string kCacheAdd = "cache_add";
@@ -77,6 +79,7 @@ static const std::string kReadFile = "read";
 static const std::string kLinkFile = "link";
 static const std::string kAioWrite = "aio_write";
 static const std::string kAioRead = "aio_read";
+static const std::string kDropPageCache = "drop_page_cache";
 
 // aio
 static const std::string kCheckIo = "check";
@@ -85,8 +88,7 @@ static const std::string kPrepareIO = "prepare";
 static const std::string kExecuteIO = "execute";
 static const std::string kRunClosure = "closure";
 
-static const std::string kDropPageCache = "drop_page_cache";
-
+// storage
 static const std::string kS3Put = "s3_put";
 static const std::string kS3Range = "s3_range";
 
