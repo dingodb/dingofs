@@ -24,6 +24,7 @@
 #define DINGOFS_SRC_CACHE_BLOCKCACHE_DISK_CACHE_GROUP_H_
 
 #include "base/hash/con_hash.h"
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/blockcache/disk_cache.h"
 #include "cache/blockcache/disk_cache_watcher.h"
@@ -41,13 +42,13 @@ class DiskCacheGroup final : public CacheStore {
   Status Shutdown() override;
 
   Status Stage(ContextSPtr ctx, const BlockKey& key, const Block& block,
-               StageOption option) override;
+               StageOption option = StageOption()) override;
   Status RemoveStage(ContextSPtr ctx, const BlockKey& key,
-                     RemoveStageOption option) override;
+                     RemoveStageOption option = RemoveStageOption()) override;
   Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block,
-               CacheOption option) override;
+               CacheOption option = CacheOption()) override;
   Status Load(ContextSPtr ctx, const BlockKey& key, off_t offset, size_t length,
-              IOBuffer* buffer, LoadOption option) override;
+              IOBuffer* buffer, LoadOption option = LoadOption()) override;
 
   std::string Id() const override;
   bool IsRunning() const override;

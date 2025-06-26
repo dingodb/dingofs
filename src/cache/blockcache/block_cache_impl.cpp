@@ -65,7 +65,7 @@ BlockCacheImpl::BlockCacheImpl(BlockCacheOption option,
   } else {
     store_ = std::make_shared<MemCache>();
   }
-  uploader_ = std::make_shared<BlockCacheUploader>(storage_pool_, store_);
+  uploader_ = std::make_shared<BlockCacheUploader>(store_, storage_pool_);
 }
 
 BlockCacheImpl::~BlockCacheImpl() { Shutdown(); }

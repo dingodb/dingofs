@@ -159,7 +159,7 @@ Status DiskCache::Shutdown() {
     return status;
   }
 
-  // stop disk healther checker
+  // Shutdown disk healther checker
   disk_state_health_checker_->Shutdown();
 
   LOG(INFO) << "Disk cache (dir=" << GetRootDir() << ") is down.";
@@ -361,9 +361,6 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   }
 
   if (!IsCached(key)) {
-    LOG(WARNING) << absl::StrFormat("Cache block (key=%s) not found",
-                                    key.Filename());
-
     status = Status::NotFound("cache not found");
     return status;
   }
@@ -405,7 +402,7 @@ bool DiskCache::IsCached(const BlockKey& key) const {
 //   2. check disk healthy (HEALTHY/UNHEALTHY)
 //   3. check disk free space (FULL or NOT)
 Status DiskCache::CheckStatus(uint8_t want) const {
-  if (!running_.load(std::memory_order_acquire)) {
+  if (!IsRunning()) {
     return Status::CacheDown("disk cache is down");
   }
 

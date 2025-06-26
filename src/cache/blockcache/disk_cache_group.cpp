@@ -64,16 +64,18 @@ Status DiskCacheGroup::Start(UploadFunc uploader) {
   chash_->Final();
   watcher_->Start();
 
-  running_.store(true);
+  running_ = true;
 
-  CHECK(running_);
+  CHECK_RUNNING("Disk cache group");
   return Status::OK();
 }
 
 Status DiskCacheGroup::Shutdown() {
-  if (!running_.load()) {
+  if (!running_.exchange(false)) {
     return Status::OK();
   }
+
+  LOG(INFO) << "Disk cache group is shutting down...";
 
   watcher_->Shutdown();
   for (const auto& it : stores_) {
@@ -83,22 +85,22 @@ Status DiskCacheGroup::Shutdown() {
     }
   }
 
-  running_.store(false);
+  LOG(INFO) << "Disk cache group is down.";
 
-  CHECK(!running_.load());
+  CHECK_DOWN("Disk cache group");
   return Status::OK();
 }
 
 Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, StageOption option) {
-  DCHECK(IsRunning());
+  CHECK_RUNNING("Disk cache group");
 
   return GetStore(key)->Stage(ctx, key, block, option);
 }
 
 Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
                                    RemoveStageOption option) {
-  DCHECK(IsRunning());
+  CHECK_RUNNING("Disk cache group");
 
   DiskCacheSPtr store;
   const auto& store_id = option.block_ctx.store_id;
@@ -112,7 +114,7 @@ Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
 
 Status DiskCacheGroup::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, CacheOption option) {
-  DCHECK_RUNNING("Disk cache group");
+  CHECK_RUNNING("Disk cache group");
 
   return GetStore(key)->Cache(ctx, key, block, option);
 }
@@ -137,7 +139,7 @@ bool DiskCacheGroup::IsRunning() const {
 }
 
 bool DiskCacheGroup::IsCached(const BlockKey& key) const {
-  DCHECK(IsRunning());
+  DCHECK_RUNNING("Disk cache group");
 
   return GetStore(key)->IsCached(key);
 }
@@ -166,8 +168,7 @@ DiskCacheSPtr DiskCacheGroup::GetStore(const BlockKey& key) const {
 
 // We should pass the request to specified store if |store_id|
 // is not empty, because add/delete cache will leads the consistent hash
-// changed.
-// so when we restart the store after add/delete some stores, the
+// changed. So when we restart the store after add/delete some stores, the
 // stage block key will be mapped to one stroe by the consistent hash
 // algorithm, but this is actually not the real location the block stores.
 DiskCacheSPtr DiskCacheGroup::GetStore(const std::string& store_id) const {
