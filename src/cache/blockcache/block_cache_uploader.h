@@ -28,6 +28,7 @@
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/storage/storage_pool.h"
+#include "cache/utils/bthread.h"
 #include "cache/utils/infight_throttle.h"
 #include "common/io_buffer.h"
 
@@ -36,18 +37,18 @@ namespace cache {
 
 class BlockCacheUploader;
 using BlockCacheUploaderPtr = BlockCacheUploader*;
+using BlockCacheUploaderUPtr = std::unique_ptr<BlockCacheUploader>;
 using BlockCacheUploaderSPtr = std::shared_ptr<BlockCacheUploader>;
 
 class BlockCacheUploader {
  public:
-  BlockCacheUploader(StoragePoolSPtr storage_pool, CacheStoreSPtr store);
+  BlockCacheUploader(CacheStoreSPtr store, StoragePoolSPtr storage_pool);
   virtual ~BlockCacheUploader();
 
   void Start();
   void Shutdown();
 
   void AddStagingBlock(const StagingBlock& staging_block);
-  void WaitAllUploaded();
 
  private:
   BlockCacheUploaderPtr GetSelfPtr() { return this; }
@@ -60,16 +61,16 @@ class BlockCacheUploader {
   Status Upload(const StagingBlock& staging_block, const IOBuffer& buffer);
   Status RemoveStage(const StagingBlock& staging_block);
 
-  bool IsRunning() const;
+  void WaitAllUploaded();
 
   std::atomic<bool> running_;
   BthreadMutex mutex_;
-  StoragePoolSPtr storage_pool_;
   CacheStoreSPtr store_;
+  StoragePoolSPtr storage_pool_;
   PendingQueueUPtr pending_queue_;
-  TaskThreadPoolUPtr thread_pool_;
   InflightThrottleUPtr inflights_throttle_;
-  BthreadCountdownEvent uploading_count_;
+  TaskThreadPoolUPtr thread_pool_;  // uploading worker
+  BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache

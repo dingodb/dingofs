@@ -251,8 +251,8 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kLinkFile);
   status = fs_->Link(stage_path, cache_path);
   if (!status.ok()) {
-    LOG(WARNING) << "Link " << stage_path << " to " << cache_path
-                 << " failed: " << status.ToString();
+    LOG(ERROR) << "Link " << stage_path << " to " << cache_path
+               << " failed, ignore error: status = " << status.ToString();
     status = Status::OK();  // ignore link error
   }
 

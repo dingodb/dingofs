@@ -116,8 +116,7 @@ Status BlockCacheImpl::Shutdown() {
   LOG(INFO) << "Block cache is shutting down...";
 
   joiner_->Shutdown();
-  uploader_->WaitAllUploaded();  // Wait all stage blocks uploaded
-  uploader_->Shutdown();
+  uploader_->Shutdown();  // It will wait all stage blocks uploaded
   store_->Shutdown();
 
   LOG(INFO) << "Block cache is down.";

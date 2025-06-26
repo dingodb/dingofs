@@ -25,6 +25,7 @@
 #include <bthread/bthread.h>
 
 #include <atomic>
+#include <memory>
 
 #include "cache/blockcache/block_cache_upload_queue.h"
 #include "cache/common/const.h"
@@ -33,36 +34,36 @@
 #include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/infight_throttle.h"
-#include "cache/utils/step_timer.h"
 
 namespace dingofs {
 namespace cache {
 
 DEFINE_uint32(
-    upload_stage_max_inflights, 128,
+    upload_stage_max_inflights, 32,
     "Maximum inflight requests for uploading stage blocks to storage");
 
 static const std::string kModule = kBlockCacheUploaderMoudule;
 
-BlockCacheUploader::BlockCacheUploader(StoragePoolSPtr storage_pool,
-                                       CacheStoreSPtr store)
+BlockCacheUploader::BlockCacheUploader(CacheStoreSPtr store,
+                                       StoragePoolSPtr storage_pool)
     : running_(false),
-      storage_pool_(storage_pool),
       store_(store),
+      storage_pool_(storage_pool),
       pending_queue_(std::make_unique<PendingQueue>()),
-      thread_pool_(std::make_unique<TaskThreadPool>("upload_stage")),
       inflights_throttle_(
           std::make_unique<InflightThrottle>(FLAGS_upload_stage_max_inflights)),
-      uploading_count_(0) {}
+      thread_pool_(std::make_unique<TaskThreadPool>("upload_stage")),
+      joiner_(std::make_unique<BthreadJoiner>()) {}
 
 BlockCacheUploader::~BlockCacheUploader() { Shutdown(); }
 
 void BlockCacheUploader::Start() {
-  CHECK_NOTNULL(storage_pool_);
   CHECK_NOTNULL(store_);
+  CHECK_NOTNULL(storage_pool_);
   CHECK_NOTNULL(pending_queue_);
-  CHECK_NOTNULL(thread_pool_);
   CHECK_NOTNULL(inflights_throttle_);
+  CHECK_NOTNULL(thread_pool_);
+  CHECK_NOTNULL(joiner_);
 
   if (running_) {
     return;
@@ -73,7 +74,13 @@ void BlockCacheUploader::Start() {
   CHECK_EQ(thread_pool_->Start(1), 0) << "Failed to start thread pool.";
   thread_pool_->Enqueue(&BlockCacheUploader::UploadingWorker, this);
 
-  running_.store(true);
+  auto status = joiner_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Failed to start bthread joiner: " << status.ToString();
+    return;
+  }
+
+  running_ = true;
 
   LOG(INFO) << "Block cache uploader is up.";
 
@@ -81,16 +88,17 @@ void BlockCacheUploader::Start() {
 }
 
 void BlockCacheUploader::Shutdown() {
-  if (!running_) {  // Already shutdown
+  WaitAllUploaded();
+
+  if (!running_.exchange(false)) {
     return;
   }
 
   LOG(INFO) << "Block cache uploader is shutting down...";
 
   thread_pool_->Stop();
-  uploading_count_.reset(0);
 
-  running_.store(false);
+  joiner_->Shutdown();
 
   LOG(INFO) << "Block cache uploader is down.";
 
@@ -100,14 +108,18 @@ void BlockCacheUploader::Shutdown() {
 void BlockCacheUploader::AddStagingBlock(const StagingBlock& block) {
   DCHECK_RUNNING("Block cache uploader");
 
-  uploading_count_.add_count(1);
   pending_queue_->Push(block);
 }
 
-void BlockCacheUploader::WaitAllUploaded() { uploading_count_.wait(); }
+void BlockCacheUploader::WaitAllUploaded() {
+  while (pending_queue_->Size() > 0 ||
+         inflights_throttle_->GetInflights() > 0) {
+    bthread_usleep(1000 * 1000);
+  }
+}
 
 void BlockCacheUploader::UploadingWorker() {
-  while (IsRunning()) {
+  while (running_.load(std::memory_order_relaxed)) {
     auto blocks = pending_queue_->Pop();
     if (blocks.empty()) {
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -122,31 +134,41 @@ void BlockCacheUploader::UploadingWorker() {
 
 void BlockCacheUploader::AsyncUploading(const StagingBlock& staging_block) {
   inflights_throttle_->Increment(1);
-
   auto* self = GetSelfPtr();
-  RunInBthread([self, staging_block]() {
+
+  auto tid = RunInBthread([self, staging_block]() {
     auto status = self->Uploading(staging_block);
     self->inflights_throttle_->Decrement(1);
 
-    if (status.ok() || status.IsNotFound()) {
-      self->uploading_count_.signal(1);
-    } else {
+    if (!status.ok() && !status.IsNotFound()) {
+      LOG(ERROR) << "Uploading staging block failed, retry: key = "
+                 << staging_block.key.Filename()
+                 << ", status = " << status.ToString();
+
       bthread_usleep(100 * 1000);
-      self->AddStagingBlock(staging_block);  // retry
+      self->AddStagingBlock(staging_block);
     }
   });
+
+  if (tid != 0) {
+    joiner_->BackgroundJoin(tid);
+  }
 }
 
 Status BlockCacheUploader::Uploading(const StagingBlock& staging_block) {
   Status status;
-  IOBuffer buffer;
   auto ctx = staging_block.ctx;
   TracingGuard tracing(ctx, status, kModule, "uploading(%s,%zu)",
                        staging_block.key.Filename(), staging_block.length);
 
   NEXT_STEP(kLoadBlock);
+  IOBuffer buffer;
   status = Load(staging_block, &buffer);
   if (!status.ok()) {
+    LOG(ERROR) << "Load staging block failed: key = "
+               << staging_block.key.Filename()
+               << ", length = " << staging_block.length
+               << ", status = " << status.ToString();
     return status;
   }
 
@@ -156,8 +178,13 @@ Status BlockCacheUploader::Uploading(const StagingBlock& staging_block) {
     return status;
   }
 
-  NEXT_STEP(kS3Put);
+  NEXT_STEP(kRemoveStageBlock);
   status = RemoveStage(staging_block);
+  if (!status.ok()) {
+    LOG(WARNING) << "Remove staging block failed: key = "
+                 << staging_block.key.Filename()
+                 << ", status = " << status.ToString();
+  }
 
   return status;
 }
@@ -173,7 +200,7 @@ Status BlockCacheUploader::Load(const StagingBlock& staging_block,
                << key.Filename() << ", status = " << status.ToString();
     return status;
   } else if (!status.ok()) {
-    LOG(ERROR) << "Load block failed: key = " << key.Filename()
+    LOG(ERROR) << "Load staging block failed: key = " << key.Filename()
                << ", status = " << status.ToString();
     return status;
   }
@@ -215,10 +242,6 @@ Status BlockCacheUploader::RemoveStage(const StagingBlock& staging_block) {
   }
 
   return status;
-}
-
-bool BlockCacheUploader::IsRunning() const {
-  return running_.load(std::memory_order_relaxed);
 }
 
 }  // namespace cache
