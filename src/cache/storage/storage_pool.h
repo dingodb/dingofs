@@ -23,10 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_STORAGE_POOL_H_
 #define DINGOFS_SRC_CACHE_STORAGE_STORAGE_POOL_H_
 
-#include <cstddef>
-
 #include "blockaccess/block_accesser.h"
-#include "cache/common/common.h"
 #include "cache/common/type.h"
 #include "cache/storage/storage.h"
 #include "common/status.h"

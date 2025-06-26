@@ -23,10 +23,12 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_AIO_AIO_H_
 #define DINGOFS_SRC_CACHE_STORAGE_AIO_AIO_H_
 
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 #include "cache/storage/closure.h"
-#include "cache/utils/phase_timer.h"
+#include "cache/utils/context.h"
+#include "cache/utils/step_timer.h"
 #include "common/io_buffer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -37,21 +39,15 @@ enum class AioType : uint8_t {
 };
 
 struct AioClosure : public Closure {
-  AioClosure(AioType iotype, int fd, off_t offset, size_t length,
-             const IOBuffer& buffer_in, IOBuffer* buffer_out)
-      : sequ_num_(GetSequNum()),
+  AioClosure(ContextSPtr ctx, AioType iotype, int fd, off_t offset,
+             size_t length, const IOBuffer& buffer_in, IOBuffer* buffer_out)
+      : ctx(ctx),
         iotype(iotype),
         fd(fd),
         offset(offset),
         length(length),
         buffer_in(buffer_in),
-        buffer_out(buffer_out),
-        ctx(nullptr) {}
-
-  uint64_t GetSequNum() {
-    static std::atomic<uint64_t> sequ_num(0);
-    return sequ_num.fetch_add(1, std::memory_order_relaxed);
-  }
+        buffer_out(buffer_out) {}
 
   void Run() override {
     std::unique_lock<BthreadMutex> lk(mutex);
@@ -64,33 +60,36 @@ struct AioClosure : public Closure {
   }
 
   std::string ToString() const {
-    return absl::StrFormat("aio(%lld,%s,%d,%lld,%zu)", sequ_num_,
+    return absl::StrFormat("%s(%d,%lld,%zu)",
                            iotype == AioType::kRead ? "read" : "write", fd,
                            offset, length);
   }
 
-  uint64_t sequ_num_;
+  ContextSPtr ctx;
   AioType iotype;
   int fd;
   off_t offset;
   size_t length;
   IOBuffer buffer_in;
   IOBuffer* buffer_out;
-  PhaseTimer timer;
-  void* ctx;  // for different io ring
+  StepTimer timer;
   BthreadMutex mutex;
   BthreadConditionVariable cond;
+  void* aux_info;
 };
 
-using Aios = std::vector<AioClosure*>;
+using AioClosurePtr = AioClosure*;
 
-inline AioClosure AioWriteClosure(int fd, const IOBuffer& buffer) {
-  return AioClosure(AioType::kWrite, fd, 0, buffer.Size(), buffer, nullptr);
+inline AioClosure WriteClosure(ContextSPtr ctx, int fd,
+                               const IOBuffer& buffer) {
+  return AioClosure(ctx, AioType::kWrite, fd, 0, buffer.Size(), buffer,
+                    nullptr);
 }
 
-inline AioClosure AioReadClosure(int fd, off_t offset, size_t length,
-                                 IOBuffer* buffer) {
-  return AioClosure(AioType::kRead, fd, offset, length, IOBuffer(), buffer);
+inline AioClosure ReadClosure(ContextSPtr ctx, int fd, off_t offset,
+                              size_t length, IOBuffer* buffer) {
+  return AioClosure(ctx, AioType::kRead, fd, offset, length, IOBuffer(),
+                    buffer);
 }
 
 inline bool IsAioRead(AioClosure* aio) { return aio->iotype == AioType::kRead; }
@@ -103,13 +102,13 @@ class IORing {
  public:
   virtual ~IORing() = default;
 
-  virtual Status Init() = 0;
+  virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
   virtual Status PrepareIO(AioClosure* aio) = 0;
   virtual Status SubmitIO() = 0;
   virtual Status WaitIO(uint64_t timeout_ms,
-                        std::vector<AioClosure*>* aios) = 0;
+                        std::vector<AioClosure*>* completed_aios) = 0;
 
   virtual uint32_t GetIODepth() const = 0;
 };
@@ -120,7 +119,7 @@ class AioQueue {
  public:
   virtual ~AioQueue() = default;
 
-  virtual Status Init() = 0;
+  virtual Status Start() = 0;
   virtual Status Shutdown() = 0;
 
   virtual void Submit(AioClosure* aio) = 0;

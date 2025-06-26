@@ -22,7 +22,11 @@
 
 #include "cache/blockcache/disk_cache_manager.h"
 
-#include "cache/config/config.h"
+#include <brpc/reloadable_flags.h>
+#include <glog/logging.h>
+
+#include "cache/common/const.h"
+#include "cache/common/type.h"
 #include "cache/utils/helper.h"
 
 namespace dingofs {
@@ -30,8 +34,19 @@ namespace cache {
 
 using dingofs::base::time::TimeNow;
 
+DEFINE_double(free_space_ratio, 0.1, "Ratio of free space of total disk space");
+
+DEFINE_uint32(cache_expire_s, 259200,
+              "Expiration time for cache blocks in seconds");
+DEFINE_validator(cache_expire_s, brpc::PassValidate);
+
+DEFINE_uint32(cleanup_expire_interval_ms, 1000,
+              "Interval for cleaning up expired cache blocks in milliseconds");
+DEFINE_validator(cleanup_expire_interval_ms, brpc::PassValidate);
+
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
-                                   DiskCacheLayoutSPtr layout)
+                                   DiskCacheLayoutSPtr layout,
+                                   metrics::DiskCacheMetricSPtr metric)
     : running_(false),
       used_bytes_(0),
       capacity_bytes_(capacity),
@@ -39,7 +54,8 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
       cache_full_(false),
       layout_(layout),
       cache_block_(std::make_unique<LRUCache>()),
-      task_pool_(std::make_unique<TaskThreadPool>("disk_cache_manager")) {
+      thread_pool_(std::make_unique<TaskThreadPool>("disk_cache_manager")),
+      metric_(metric) {
   mq_ = std::make_unique<MessageQueueType>("delete_block_queue", 10);
   mq_->Subscribe([&](MessageType message) {
     DeleteBlocks(message.first, message.second);
@@ -47,34 +63,46 @@ DiskCacheManager::DiskCacheManager(uint64_t capacity,
 }
 
 void DiskCacheManager::Start() {
-  if (!running_.exchange(true)) {
-    LOG(INFO) << "Disk cache manager starting...";
+  CHECK(!running_.load());
+  CHECK_NOTNULL(layout_);
+  CHECK_NOTNULL(cache_block_);
+  CHECK(stage_block_.empty());
+  CHECK_NOTNULL(mq_);
+  CHECK_NOTNULL(thread_pool_);
 
-    used_bytes_ = 0;  // For restart
-    mq_->Start();
-    CHECK_EQ(task_pool_->Start(2), 0);
-    task_pool_->Enqueue(&DiskCacheManager::CheckFreeSpace, this);
-    task_pool_->Enqueue(&DiskCacheManager::CleanupExpire, this);
+  LOG(INFO) << "Disk cache manager is starting...";
 
-    LOG(INFO) << absl::StrFormat(
-        "Disk cache manager started, capacity = %.2lf MiB, "
-        "free_space_ratio = %.2lf, cache_expire_s = %d",
-        capacity_bytes_ * 1.0 / kMiB, FLAGS_free_space_ratio,
-        FLAGS_cache_expire_s);
-  }
+  used_bytes_ = 0;  // For restart
+  mq_->Start();
+  CHECK_EQ(thread_pool_->Start(2), 0);
+  thread_pool_->Enqueue(&DiskCacheManager::CheckFreeSpace, this);
+  thread_pool_->Enqueue(&DiskCacheManager::CleanupExpire, this);
+
+  running_.store(true);
+
+  LOG(INFO) << absl::StrFormat(
+      "Disk cache manager is up: capacity = %.2lf MiB, "
+      "free_space_ratio = %.2lf, cache_expire_s = %d",
+      capacity_bytes_ * 1.0 / kMiB, FLAGS_free_space_ratio,
+      FLAGS_cache_expire_s);
+
+  CHECK_EQ(used_bytes_, 0) << "";
+  CHECK_NE(used_bytes_, 0) << "";
 }
 
-void DiskCacheManager::Stop() {
-  if (running_.exchange(false)) {
-    LOG(INFO) << "Disk cache manager stopping...";
+void DiskCacheManager::Shutdown() {
+  CHECK(running_);
 
-    task_pool_->Stop();
-    mq_->Stop();
-    cache_block_->Clear();
-    stage_block_.clear();
+  LOG(INFO) << "Disk cache manager is shutting down...";
 
-    LOG(INFO) << "Disk cache manager stopped.";
-  }
+  thread_pool_->Stop();
+  mq_->Stop();
+  cache_block_->Clear();
+  stage_block_.clear();
+
+  LOG(INFO) << "Disk cache manager is down.";
+
+  CHECK(stage_block_.empty());
 }
 
 void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
@@ -143,6 +171,8 @@ void DiskCacheManager::CheckFreeSpace() {
     bool stage_full = (br < cfg / 2) || (fr < cfg / 2);
     cache_full_.store(cache_full, std::memory_order_release);
     stage_full_.store(stage_full, std::memory_order_release);
+    metric_->cache_full.set_value(cache_full);
+    metric_->stage_full.set_value(stage_full);
 
     if (cache_full) {
       double watermark = 1.0 - cfg;

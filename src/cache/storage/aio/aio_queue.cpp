@@ -24,32 +24,46 @@
 
 #include <absl/cleanup/cleanup.h>
 #include <absl/strings/str_format.h>
+#include <glog/logging.h>
 
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <thread>
 
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
-#include "cache/utils/access_log.h"
-#include "cache/utils/phase_timer.h"
+#include "cache/utils/infight_throttle.h"
+#include "cache/utils/step_timer.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
 
+const std::string kModule = kAioModule;
+
 AioQueueImpl::AioQueueImpl(std::shared_ptr<IORing> io_ring)
     : running_(false),
       ioring_(io_ring),
+      infight_throttle_(
+          std::make_unique<InflightThrottle>(ioring_->GetIODepth())),
       prep_io_queue_id_({0}),
-      prep_aios_(kSubmitBatchSize),
-      infight_throttle_(io_ring->GetIODepth()) {}
+      prep_aios_(kSubmitBatchSize) {}
 
-Status AioQueueImpl::Init() {
-  if (running_.exchange(true)) {  // already running
+Status AioQueueImpl::Start() {
+  CHECK_NOTNULL(ioring_);
+  CHECK_NOTNULL(infight_throttle_);
+
+  if (running_) {
     return Status::OK();
   }
 
-  Status status = ioring_->Init();
+  LOG_INFO("Aio queue is starting...");
+
+  Status status = ioring_->Start();
   if (!status.ok()) {
-    LOG(ERROR) << "Init io ring failed: status = " << status.ToString();
+    LOG_ERROR("Start io ring failed: %s", status.ToString());
     return status;
   }
 
@@ -58,55 +72,59 @@ Status AioQueueImpl::Init() {
   int rc = bthread::execution_queue_start(&prep_io_queue_id_, &options,
                                           PrepareIO, this);
   if (rc != 0) {
-    LOG(ERROR) << "Start aio prepare execution queue failed: rc = " << rc;
-    return Status::Internal("bthread::execution_queue_start() failed");
+    LOG_ERROR("Start execution queue failed: rc = %d", rc);
+    return Status::Internal("start execution queue failed");
   }
 
   bg_wait_thread_ = std::thread(&AioQueueImpl::BackgroundWait, this);
 
-  LOG(INFO) << "Aio queue started: iodepth = " << ioring_->GetIODepth();
+  running_.store(true);
 
+  LOG_INFO("Aio queue is up: iodepth = %d", ioring_->GetIODepth());
+
+  CHECK_RUNNING("Aio queue");
   return Status::OK();
 }
 
 Status AioQueueImpl::Shutdown() {
-  if (running_.exchange(false)) {
-    bthread::execution_queue_stop(prep_io_queue_id_);
-    int rc = bthread::execution_queue_join(prep_io_queue_id_);
-    if (rc != 0) {
-      LOG(ERROR) << "Join aio prepare execution queue failed: rc = " << rc;
-      return Status::Internal("bthread::execution_queue_join() failed");
-    }
-    bg_wait_thread_.join();
-
-    return ioring_->Shutdown();
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
+
+  LOG_INFO("Aio queue is shutting down...");
+
+  if (bthread::execution_queue_stop(prep_io_queue_id_) != 0) {
+    LOG_ERROR("Stop execution queue failed.");
+    return Status::Internal("execution_queue_join() failed");
+  } else if (bthread::execution_queue_join(prep_io_queue_id_) != 0) {
+    LOG_ERROR("Join execution queue failed.");
+    return Status::Internal("execution_queue_join() failed");
+  }
+
+  bg_wait_thread_.join();
+
+  auto status = ioring_->Shutdown();
+  if (!status.ok()) {
+    LOG_ERROR("Shutdown io ring failed: %s", status.ToString());
+    return status;
+  }
+
+  prep_aios_.clear();
+
+  LOG_INFO("Aio queue is shutting down...");
+
+  CHECK_DOWN("Aio queue");
+  CHECK_EQ(prep_aios_.size(), 0);
   return Status::OK();
 }
 
-void AioQueueImpl::EnterPhase(AioClosure* aio, Phase phase) {
-  aio->timer.NextPhase(phase);
-}
-
-void AioQueueImpl::BatchEnterPhase(const Aios& aios, int n, Phase phase) {
-  for (int i = 0; i < n; i++) {
-    EnterPhase(aios[i], phase);
-  }
-}
-
-uint64_t AioQueueImpl::GetTotalSize(const Aios& aios, int n) {
-  uint64_t total_size = 0;
-  for (int i = 0; i < n; i++) {
-    total_size += aios[i]->length;
-  }
-  return total_size;
-}
-
 void AioQueueImpl::Submit(AioClosure* aio) {
-  EnterPhase(aio, Phase::kWaitThrottle);
-  infight_throttle_.Increment(1);
+  CHECK_RUNNING("Aio queue");
 
-  EnterPhase(aio, Phase::kCheckIO);
+  NextStep(aio, kWaitThrottle);
+  infight_throttle_->Increment(1);
+
+  NextStep(aio, kCheckIo);
   CheckIO(aio);
 }
 
@@ -116,7 +134,7 @@ void AioQueueImpl::CheckIO(AioClosure* aio) {
     return;
   }
 
-  EnterPhase(aio, Phase::kEnterPrepareQueue);
+  NextStep(aio, kEnqueue);
   CHECK_EQ(0, bthread::execution_queue_execute(prep_io_queue_id_, aio));
 }
 
@@ -128,34 +146,35 @@ int AioQueueImpl::PrepareIO(void* meta,
 
   int n = 0;
   AioQueueImpl* queue = static_cast<AioQueueImpl*>(meta);
-  std::vector<AioClosure*> aios(kSubmitBatchSize);
+  std::vector<AioClosure*> aios;
 
   auto ioring = queue->ioring_;
   for (; iter; iter++) {
     auto* aio = *iter;
-    EnterPhase(aio, Phase::kPrepareIO);
+    NextStep(aio, kPrepareIO);
+
     Status status = ioring->PrepareIO(aio);
     if (!status.ok()) {
       queue->OnError(aio, status);
       continue;
     }
 
-    aios[n++] = aio;
+    aios.emplace_back(aio);
     if (n == kSubmitBatchSize) {
-      BatchEnterPhase(aios, n, Phase::kExecuteIO);
+      BatchNextStep(aios, kExecuteIO);
       queue->BatchSubmitIO(aios, n);
       n = 0;
     }
   }
 
   if (n > 0) {
-    BatchEnterPhase(aios, n, Phase::kExecuteIO);
+    BatchNextStep(aios, kExecuteIO);
     queue->BatchSubmitIO(aios, n);
   }
   return 0;
 }
 
-void AioQueueImpl::BatchSubmitIO(const Aios& aios, int n) {
+void AioQueueImpl::BatchSubmitIO(const std::vector<AioClosure*>& aios, int n) {
   Status status = ioring_->SubmitIO();
   if (!status.ok()) {
     for (auto* aio : aios) {
@@ -164,64 +183,83 @@ void AioQueueImpl::BatchSubmitIO(const Aios& aios, int n) {
     return;
   }
 
-  VLOG(9) << n << " aio[s] submitted: batch size = " << GetTotalSize(aios, n);
+  VLOG(9) << n << " aio[s] submitted: total length = " << GetTotalLength(aios);
 }
 
 void AioQueueImpl::BackgroundWait() {
-  Aios completed;
+  std::vector<AioClosure*> completed_aios;
   while (running_.load(std::memory_order_relaxed)) {
-    Status status = ioring_->WaitIO(1000, &completed);
-    if (!status.ok() || completed.empty()) {
+    Status status = ioring_->WaitIO(1000, &completed_aios);
+    if (!status.ok() || completed_aios.empty()) {
       continue;
     }
 
-    VLOG(9) << completed.size() << " aio[s] compelted : batch size = "
-            << GetTotalSize(completed, completed.size());
+    VLOG(9) << completed_aios.size() << " aio[s] compelted : total length = "
+            << GetTotalLength(completed_aios);
 
-    for (auto* aio : completed) {
+    for (auto* aio : completed_aios) {
       OnCompleted(aio);
     }
   }
 }
 
 void AioQueueImpl::OnError(AioClosure* aio, Status status) {
-  // TODO: CHECK_LT(phase, Phase::kExecuteIO);
+  CHECK_NE(GetStep(aio), kExecuteIO)
+      << absl::StrFormat("%s it not on expected phase: got(%s) != expect(%s)",
+                         aio->ToString(), GetStep(aio), kExecuteIO);
+
+  LOG_ERROR("Aio encountered an error in %s step: aio = %s, status = %s",
+            GetStep(aio), aio->ToString(), status.ToString());
 
   aio->status() = status;
   RunClosure(aio);
 }
 
 void AioQueueImpl::OnCompleted(AioClosure* aio) {
-  // NOTE: The status of completed aio is set in the io_ring.
-  auto phase = aio->timer.GetPhase();
+  CHECK_EQ(GetStep(aio), kExecuteIO)
+      << absl::StrFormat("%s it not on expected phase: got(%s) != expect(%s)",
+                         aio->ToString(), GetStep(aio), kExecuteIO);
 
-  CHECK(phase == Phase::kExecuteIO) << absl::StrFormat(
-      "%s it not on expected phase: got(%s) != expect(%s)", aio->ToString(),
-      StrPhase(phase), StrPhase(Phase::kExecuteIO));
+  if (!aio->status().ok()) {
+    LOG_ERROR("Aio failed: aio = %s, status = %s", aio->ToString(),
+              aio->status().ToString());
+  }
 
   RunClosure(aio);
 }
 
-// TODO(Wine93): run in bthread
 void AioQueueImpl::RunClosure(AioClosure* aio) {
   auto status = aio->status();
-  auto timer = aio->timer;
-  auto description = aio->ToString();
+  TracingGuard tracing(aio->ctx, status, kModule, "%s", aio->ToString());
 
-  // error log
-  if (!status.ok()) {
-    LOG(ERROR) << "Aio error raised for " << description << " in "
-               << StrPhase(timer.GetPhase()) << " phase: " << status.ToString();
-  }
-
-  // run closure
+  NextStep(aio, kRunClosure);
   aio->Run();
 
-  // access log
-  LogIt(absl::StrFormat("%s: %s%s <%.6lf>", description, status.ToString(),
-                        timer.ToString(), timer.UElapsed() / 1e6));
+  infight_throttle_->Decrement(1);
+}
 
-  infight_throttle_.Decrement(1);
+std::string AioQueueImpl::GetStep(AioClosure* aio) {
+  return aio->timer.GetStep();
+}
+
+void AioQueueImpl::NextStep(AioClosure* aio, const std::string& step_name) {
+  auto ctx = aio->ctx;
+  NEXT_STEP(step_name);
+}
+
+void AioQueueImpl::BatchNextStep(const std::vector<AioClosure*>& aios,
+                                 const std::string& step_name) {
+  for (auto* aio : aios) {
+    NextStep(aio, step_name);
+  }
+}
+
+uint64_t AioQueueImpl::GetTotalLength(const std::vector<AioClosure*>& aios) {
+  uint64_t total_length = 0;
+  for (auto* aio : aios) {
+    total_length += aio->length;
+  }
+  return total_length;
 }
 
 }  // namespace cache

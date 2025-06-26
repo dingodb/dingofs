@@ -116,7 +116,7 @@ CacheItem LRUCache::KV(ListNode* node) {
   CacheKey key;
   // we use CacheKey.Filename() as hash key
   auto filename = hash_->Key(node->handle);
-  CHECK(key.ParseFilename(filename));
+  CHECK(key.ParseFromFilename(filename));
   return CacheItem(key, node->value);
 }
 

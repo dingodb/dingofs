@@ -25,7 +25,7 @@
 #include <mutex>
 #include <string_view>
 
-#include "cache/common/common.h"
+#include "cache/common/type.h"
 
 namespace dingofs {
 namespace cache {

@@ -23,7 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_SERVER_H_
 #define DINGOFS_SRC_CACHE_SERVER_H_
 
-#include "cache/common/common.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {

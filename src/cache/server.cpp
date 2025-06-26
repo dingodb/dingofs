@@ -21,7 +21,6 @@
  */
 
 #include "cache/cachegroup/cache_group_node_server.h"
-#include "cache/config/cache_group.h"
 
 namespace dingofs {
 namespace cache {

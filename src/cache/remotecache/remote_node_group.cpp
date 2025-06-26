@@ -26,32 +26,32 @@
 
 #include "base/hash/ketama_con_hash.h"
 #include "cache/blockcache/cache_store.h"
-#include "cache/config/remote_cache.h"
 #include "cache/remotecache/remote_node_impl.h"
 #include "cache/remotecache/remote_node_manager.h"
+#include "cache/utils/context.h"
 #include "cache/utils/helper.h"
 
 namespace dingofs {
 namespace cache {
 
-Upstream::Upstream() : chash_(std::make_shared<base::hash::KetamaConHash>()) {}
+CacheUpstream::CacheUpstream()
+    : chash_(std::make_shared<base::hash::KetamaConHash>()) {}
 
-Upstream::Upstream(const PBCacheGroupMembers& members,
-                   RemoteBlockCacheOption option)
+CacheUpstream::CacheUpstream(const PBCacheGroupMembers& members,
+                             RemoteBlockCacheOption option)
     : members_(members),
       option_(option),
       chash_(std::make_shared<base::hash::KetamaConHash>()) {}
 
 // TODO: check node status, skip offline node
-Status Upstream::Init() {
+Status CacheUpstream::Start() {
   auto weights = CalcWeights(members_);
 
   for (size_t i = 0; i < members_.size(); i++) {
     const auto& member = members_[i];
     auto key = MemberKey(member);
-    auto node =
-        std::make_shared<RemoteNodeImpl>(member, option_.remote_node_option);
-    auto status = node->Init();
+    auto node = std::make_shared<RemoteNodeImpl>(member, option_);
+    auto status = node->Start();
     if (!status.ok()) {  // NOTE: only throw error
       LOG(ERROR) << "Init remote node failed: id = " << member.id()
                  << ", status = " << status.ToString();
@@ -69,7 +69,7 @@ Status Upstream::Init() {
   return Status::OK();
 }
 
-RemoteNodeSPtr Upstream::GetNode(const std::string& key) {
+RemoteNodeSPtr CacheUpstream::GetNode(const std::string& key) {
   base::hash::ConNode cnode;
   bool find = chash_->Lookup(key, cnode);
   CHECK(find);
@@ -79,7 +79,7 @@ RemoteNodeSPtr Upstream::GetNode(const std::string& key) {
   return iter->second;
 }
 
-bool Upstream::IsDiff(const PBCacheGroupMembers& members) const {
+bool CacheUpstream::IsDiff(const PBCacheGroupMembers& members) const {
   std::unordered_map<uint64_t, PBCacheGroupMember> m;
   for (const auto& member : members_) {
     m[member.id()] = member;
@@ -95,7 +95,7 @@ bool Upstream::IsDiff(const PBCacheGroupMembers& members) const {
   return false;
 }
 
-std::vector<uint64_t> Upstream::CalcWeights(
+std::vector<uint64_t> CacheUpstream::CalcWeights(
     const PBCacheGroupMembers& members) {
   std::vector<uint64_t> weights(members.size());
   for (int i = 0; i < members.size(); i++) {
@@ -104,49 +104,53 @@ std::vector<uint64_t> Upstream::CalcWeights(
   return Helper::NormalizeByGcd(weights);
 }
 
-std::string Upstream::MemberKey(const PBCacheGroupMember& member) const {
+std::string CacheUpstream::MemberKey(const PBCacheGroupMember& member) const {
   return std::to_string(member.id());
 }
 
 RemoteNodeGroup::RemoteNodeGroup(RemoteBlockCacheOption option)
     : running_(false),
       option_(option),
-      upstream_(std::make_shared<Upstream>()) {
+      upstream_(std::make_shared<CacheUpstream>()) {
   node_manager_ = std::make_unique<RemoteNodeManager>(
       option, [this](const PBCacheGroupMembers& members) {
         return OnMemberLoad(members);
       });
 }
 
-Status RemoteNodeGroup::Init() {
+Status RemoteNodeGroup::Start() {
   if (!running_.exchange(true)) {
     return node_manager_->Start();
   }
   return Status::OK();
 }
 
-Status RemoteNodeGroup::Destroy() {
+Status RemoteNodeGroup::Shutdown() {
   if (running_.exchange(false)) {
-    node_manager_->Stop();
+    node_manager_->Shutdown();
   }
   return Status::OK();
 }
 
-Status RemoteNodeGroup::Put(const BlockKey& key, const Block& block) {
-  return GetNode(key)->Put(key, block);
+Status RemoteNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
+                            const Block& block) {
+  return GetNode(key)->Put(ctx, key, block);
 }
 
-Status RemoteNodeGroup::Range(const BlockKey& key, off_t offset, size_t length,
-                              IOBuffer* buffer, size_t block_size) {
-  return GetNode(key)->Range(key, offset, length, buffer, block_size);
+Status RemoteNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
+                              off_t offset, size_t length, IOBuffer* buffer,
+                              size_t block_size) {
+  return GetNode(key)->Range(ctx, key, offset, length, buffer, block_size);
 }
 
-Status RemoteNodeGroup::Cache(const BlockKey& key, const Block& block) {
-  return GetNode(key)->Cache(key, block);
+Status RemoteNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,
+                              const Block& block) {
+  return GetNode(key)->Cache(ctx, key, block);
 }
 
-Status RemoteNodeGroup::Prefetch(const BlockKey& key, size_t length) {
-  return GetNode(key)->Prefetch(key, length);
+Status RemoteNodeGroup::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                 size_t length) {
+  return GetNode(key)->Prefetch(ctx, key, length);
 }
 
 RemoteNodeSPtr RemoteNodeGroup::GetNode(const BlockKey& key) {
@@ -160,8 +164,8 @@ Status RemoteNodeGroup::OnMemberLoad(const PBCacheGroupMembers& members) {
     return Status::OK();
   }
 
-  auto upstream = std::make_shared<Upstream>(members, option_);
-  auto status = upstream->Init();
+  auto upstream = std::make_shared<CacheUpstream>(members, option_);
+  auto status = upstream->Start();
   if (!status.ok()) {
     return status;
   }

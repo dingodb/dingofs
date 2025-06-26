@@ -22,7 +22,9 @@
 
 #include "cache/blockcache/disk_cache_watcher.h"
 
+#include "cache/common/macro.h"
 #include "cache/utils/helper.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
@@ -32,43 +34,60 @@ DiskCacheWatcher::DiskCacheWatcher()
 
 void DiskCacheWatcher::Add(DiskCacheSPtr store,
                            CacheStore::UploadFunc uploader) {
+  CHECK(!running_) << "MUST add targets before watcher started.";
+
   targets_.emplace_back(Target(store, uploader));
 }
 
 void DiskCacheWatcher::Start() {
-  if (!running_.exchange(true, std::memory_order_acq_rel)) {
-    LOG(INFO) << "Disk cache watcher starting...";
+  CHECK(!targets_.empty());
+  CHECK_NOTNULL(timer_);
 
-    CHECK(timer_->Start());
-    timer_->Add([this] { WatchingWorker(); }, 100);
-
-    LOG(INFO) << "Disk cache watcher started.";
+  if (running_) {
+    return;
   }
+
+  LOG(INFO) << "Disk cache watcher is starting...";
+
+  CHECK(timer_->Start());
+  timer_->Add([this] { WatchingWorker(); }, 100);
+
+  running_.store(true);
+
+  LOG(INFO) << "Disk cache watcher is up.";
+
+  CHECK_RUNNING("Disk cache watcher");
 }
 
-void DiskCacheWatcher::Stop() {
-  if (running_.exchange(false, std::memory_order_acq_rel)) {
-    LOG(INFO) << "Disk cache watcher stopping...";
-
-    timer_->Stop();
-
-    LOG(INFO) << "Disk cache watcher stopped.";
+void DiskCacheWatcher::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
   }
+
+  LOG(INFO) << "Disk cache watcher is shutting down...";
+
+  timer_->Stop();
+
+  LOG(INFO) << "Disk cache watcher is down.";
+
+  CHECK_DOWN("Disk cache watcher");
 }
 
 void DiskCacheWatcher::WatchingWorker() {
-  if (running_.load(std::memory_order_acquire)) {
-    for (auto& target : targets_) {
-      auto should = CheckTarget(&target);
-      if (should == Should::kShutdown) {
-        Shutdown(&target);
-      } else if (should == Should::kRestart) {
-        Restart(&target);
-      }
-    }
-
-    timer_->Add([this] { WatchingWorker(); }, 100);
+  if (!running_.load(std::memory_order_relaxed)) {
+    return;
   }
+
+  for (auto& target : targets_) {
+    auto should = CheckTarget(&target);
+    if (should == Should::kShutdown) {
+      Shutdown(&target);
+    } else if (should == Should::kRestart) {
+      Restart(&target);
+    }
+  }
+
+  timer_->Add([this] { WatchingWorker(); }, 100);
 }
 
 DiskCacheWatcher::Should DiskCacheWatcher::CheckTarget(Target* target) {
@@ -89,43 +108,52 @@ bool DiskCacheWatcher::CheckUuid(const std::string& lock_path,
   std::string content;
   auto status = Helper::ReadFile(lock_path, &content);
   if (!status.ok()) {
-    LOG(ERROR) << "Read lock file (" << lock_path
-               << ") failed: " << status.ToString();
+    LOG(ERROR) << "Read lock file failed: path = " << lock_path
+               << ", status = " << status.ToString();
     return false;
   }
 
   content = base::string::TrimSpace(content);
   if (uuid != content) {
-    LOG(ERROR) << "Disk cache uuid mismatch: " << uuid << " != " << content;
+    LOG(ERROR) << "Disk cache uuid mismatch, please rewrite it: got(" << content
+               << ") != expect(" << uuid << ").";
     return false;
   }
   return true;
 }
 
 void DiskCacheWatcher::Shutdown(Target* target) {
-  if (target->IsRunning()) {  // running
-    auto root_dir = target->GetRootDir();
-    auto status = target->Shutdown();
-    if (status.ok()) {
-      LOG(INFO) << "Shutdown disk cache (dir=" << root_dir
-                << ") success for disk maybe broken.";
-    } else {
-      LOG(ERROR) << "Try to shutdown cache store (dir=" << root_dir
-                 << ") failed: " << status.ToString();
-    }
+  if (!target->IsRunning()) {
+    LOG(INFO) << "Disk cache (dir=" << target->GetRootDir()
+              << ") is already shutdown, no need to shutdown again.";
+    return;
+  }
+
+  auto root_dir = target->GetRootDir();
+  auto status = target->Shutdown();
+  if (status.ok()) {
+    LOG(INFO) << "Shutdown disk cache (dir=" << root_dir
+              << ") success for disk maybe broken.";
+  } else {
+    LOG(ERROR) << "Try to shutdown cache store (dir=" << root_dir
+               << ") failed: " << status.ToString();
   }
 }
 
 void DiskCacheWatcher::Restart(Target* target) {
-  if (!target->IsRunning()) {
-    auto root_dir = target->GetRootDir();
-    auto status = target->Restart(target->uploader);
-    if (status.ok()) {
-      LOG(INFO) << "Restart disk cache (dir=" << root_dir << ") success.";
-    } else {
-      LOG(ERROR) << "Try to restart cache store (dir=" << root_dir
-                 << ") failed: " << status.ToString();
-    }
+  if (target->IsRunning()) {  // Already running
+    LOG(INFO) << "Disk cache (dir=" << target->GetRootDir()
+              << ") is already running, no need to restart again.";
+    return;
+  }
+
+  auto root_dir = target->GetRootDir();
+  auto status = target->Restart(target->uploader);
+  if (status.ok()) {
+    LOG(INFO) << "Restart disk cache (dir=" << root_dir << ") success.";
+  } else {
+    LOG(ERROR) << "Try to restart cache store (dir=" << root_dir
+               << ") failed: " << status.ToString();
   }
 }
 

@@ -271,7 +271,7 @@ static void InitBlockCacheOption(Configuration* c,
     c->GetValue("block_cache.enable_stage", &cache::FLAGS_enable_stage);
     c->GetValue("block_cache.enable_cache", &cache::FLAGS_enable_cache);
     c->GetValue("block_cache.access_logging",
-                &cache::FLAGS_cache_access_logging);
+                &cache::FLAGS_cache_trace_logging);
     c->GetValue("block_cache.upload_stage_throttle_enable",
                 &cache::FLAGS_upload_stage_throttle_enable);
     c->GetValue("block_cache.upload_stage_throttle_bandwidth_mb",

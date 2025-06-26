@@ -14,9 +14,9 @@
 
 #include "cache/blockcache/disk_state_health_checker.h"
 
-#include "cache/config/config.h"
-#include "cache/utils/filepath.h"
+#include "cache/config/blockcache.h"
 #include "cache/utils/helper.h"
+#include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
@@ -40,12 +40,12 @@ void DiskStateHealthChecker::Start() {
   }
 }
 
-void DiskStateHealthChecker::Stop() {
+void DiskStateHealthChecker::Shutdown() {
   if (running_.exchange(false, std::memory_order_acq_rel)) {
     LOG(INFO) << "Disk state health checker stopping...";
 
     timer_->Stop();
-    state_machine_->Stop();
+    state_machine_->Shutdown();
 
     LOG(INFO) << "Disk state health checker stopped.";
   }
@@ -79,7 +79,7 @@ void DiskStateHealthChecker::ProbeDisk() {
 }
 
 std::string DiskStateHealthChecker::GetProbeFilepath() const {
-  return FilePath::PathJoin({layout_->GetProbeDir(), "probe"});
+  return Helper::PathJoin({layout_->GetProbeDir(), "probe"});
 }
 
 }  // namespace cache

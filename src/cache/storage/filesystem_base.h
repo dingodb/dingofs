@@ -23,7 +23,6 @@
 #ifndef DINGOFS_SRC_CACHE_STORAGE_FILESYSTEM_BASE_H_
 #define DINGOFS_SRC_CACHE_STORAGE_FILESYSTEM_BASE_H_
 
-#include "cache/common/common.h"
 #include "cache/storage/filesystem.h"
 
 namespace dingofs {
@@ -37,21 +36,22 @@ class FileSystemBase : public FileSystem {
 
   static FileSystemBase& GetInstance();
 
-  Status Init() override;
-
-  Status Destroy() override;
+  Status Start() override;
+  Status Shutdown() override;
 
   Status MkDirs(const std::string& path) override;
 
   Status Walk(const std::string& prefix, WalkFunc func) override;
 
   // NOTE: not support in base class
-  Status WriteFile(const std::string& path, const IOBuffer& buffer,
+  Status WriteFile(ContextSPtr ctx, const std::string& path,
+                   const IOBuffer& buffer,
                    WriteOption option = WriteOption()) override;
 
   // NOTE: not support in base class
-  Status ReadFile(const std::string& path, off_t offset, size_t length,
-                  IOBuffer* buffer, ReadOption option = ReadOption()) override;
+  Status ReadFile(ContextSPtr ctx, const std::string& path, off_t offset,
+                  size_t length, IOBuffer* buffer,
+                  ReadOption option = ReadOption()) override;
 
   Status RemoveFile(const std::string& path) override;
 

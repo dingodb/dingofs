@@ -22,6 +22,7 @@
 
 #include "cache/storage/aio/linux_io_uring.h"
 
+#include "cache/common/macro.h"
 #include "cache/storage/aio/aio.h"
 #include "cache/utils/helper.h"
 #include "common/io_buffer.h"
@@ -37,33 +38,38 @@ bool LinuxIOUring::Supported() {
   struct io_uring ring;
   int rc = io_uring_queue_init(16, &ring, 0);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf("io_uring_queue_init(16)");
+    LOG_SYSERR(errno, "io_uring_queue_init(16)");
     return false;
   }
+
   io_uring_queue_exit(&ring);
   return true;
 }
 
-Status LinuxIOUring::Init() {
-  if (running_.exchange(true)) {  // already running
+Status LinuxIOUring::Start() {
+  CHECK_GE(iodepth_, 0);
+
+  if (running_) {
     return Status::OK();
   }
 
+  LOG_INFO("Linux IO uring is starting...");
+
   if (!Supported()) {
-    LOG(ERROR) << "Current system kernel not support io_uring.";
+    LOG_ERROR("Current system kernel not support io_uring.");
     return Status::NotSupport("not support io_uring");
   }
 
   unsigned flags = IORING_SETUP_SQPOLL;  // TODO(Wine93): flags
   int rc = io_uring_queue_init(iodepth_, &io_uring_, flags);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf("io_uring_queue_init(%d)", iodepth_);
+    LOG_SYSERR(errno, "io_uring_queue_init(%d)", iodepth_);
     return Status::Internal("io_uring_queue_init() failed");
   }
 
   epoll_fd_ = epoll_create1(0);
   if (epoll_fd_ < 0) {
-    LOG(ERROR) << Helper::Errorf("epoll_create1(0)");
+    LOG_SYSERR(errno, "epoll_create1(0)");
     return Status::Internal("epoll_create1() failed");
   }
 
@@ -71,28 +77,41 @@ Status LinuxIOUring::Init() {
   ev.events = EPOLLIN;
   rc = epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, io_uring_.ring_fd, &ev);
   if (rc != 0) {
-    LOG(ERROR) << Helper::Errorf("epoll_ctl(%d, EPOLL_CTL_ADD, %d)", epoll_fd_,
-                                 io_uring_.ring_fd);
+    LOG_SYSERR(errno, "epoll_ctl(%d, EPOLL_CTL_ADD, %d)", epoll_fd_,
+               io_uring_.ring_fd);
     return Status::Internal("epoll_ctl() failed");
   }
 
-  LOG(INFO) << "Linux IO uring initialized success: iodepth = " << iodepth_;
+  running_.store(true);
 
+  LOG_INFO("Linux IO uring is up: iodepth = %d", iodepth_);
+
+  CHECK_RUNNING("Linux IO uring");
+  CHECK_GE(epoll_fd_, 0);
   return Status::OK();
 }
 
 Status LinuxIOUring::Shutdown() {
-  if (running_.exchange(false)) {
-    io_uring_queue_exit(&io_uring_);
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
+
+  LOG_INFO("Linux IO uring is shutting down...");
+
+  io_uring_queue_exit(&io_uring_);
+  epoll_fd_ = -1;
+
+  LOG_INFO("Linux IO uring is down.");
+
+  CHECK_DOWN("Linux IO uring");
   return Status::OK();
 }
 
 void LinuxIOUring::PrepWrite(io_uring_sqe* sqe, AioClosure* aio) {
-  auto* context = new Context(aio->buffer_in.Fetch());
-  aio->ctx = context;
-  io_uring_prep_writev(sqe, aio->fd, context->iovecs.data(),
-                       context->iovecs.size(), aio->offset);
+  auto* aux_info = new AuxInfo(aio->buffer_in.Fetch());
+  aio->aux_info = aux_info;
+  io_uring_prep_writev(sqe, aio->fd, aux_info->iovecs.data(),
+                       aux_info->iovecs.size(), aio->offset);
 }
 
 void LinuxIOUring::PrepRead(io_uring_sqe* sqe, AioClosure* aio) {
@@ -105,6 +124,8 @@ void LinuxIOUring::PrepRead(io_uring_sqe* sqe, AioClosure* aio) {
 }
 
 Status LinuxIOUring::PrepareIO(AioClosure* aio) {
+  CHECK_RUNNING("Linux IO uring");
+
   struct io_uring_sqe* sqe = io_uring_get_sqe(&io_uring_);
   CHECK_NOTNULL(sqe);
 
@@ -112,7 +133,7 @@ Status LinuxIOUring::PrepareIO(AioClosure* aio) {
     PrepWrite(sqe, aio);
   } else if (IsAioRead(aio)) {
     PrepRead(sqe, aio);
-  } else {  // never happend
+  } else {  // Never happend
     CHECK(false) << "Unknown aio type: " << static_cast<int>(aio->iotype);
   }
 
@@ -121,23 +142,26 @@ Status LinuxIOUring::PrepareIO(AioClosure* aio) {
 }
 
 Status LinuxIOUring::SubmitIO() {
+  CHECK_RUNNING("Linux IO uring");
+
   int n = io_uring_submit(&io_uring_);
   if (n < 0) {
-    LOG(ERROR) << Helper::Errorf(-n, "io_uring_submit()");
-    return Status::Internal("io_uring_submit");
+    LOG_SYSERR(-n, "io_uring_submit()");
+    return Status::Internal("io_uring_submit() failed");
   }
   return Status::OK();
 }
 
 Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
-                            std::vector<AioClosure*>* completed) {
-  completed->clear();
+                            std::vector<AioClosure*>* completed_aios) {
+  CHECK_RUNNING("Linux IO uring");
+
+  completed_aios->clear();
 
   struct epoll_event ev;
   int rc = epoll_wait(epoll_fd_, &ev, iodepth_, timeout_ms);
   if (rc < 0) {
-    LOG(ERROR) << Helper::Errorf(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_,
-                                 iodepth_, timeout_ms);
+    LOG_SYSERR(-rc, "epoll_wait(%d,%lu,%lld)", epoll_fd_, iodepth_, timeout_ms);
     return Status::Internal("epoll_wait() failed");
   } else if (rc == 0) {
     return Status::OK();
@@ -149,31 +173,31 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
   io_uring_for_each_cqe(&io_uring_, head, cqe) {
     auto* aio = static_cast<AioClosure*>(io_uring_cqe_get_data(cqe));
     OnCompleted(aio, cqe->res);
-    completed->emplace_back(aio);
+    completed_aios->emplace_back(aio);
   }
 
-  io_uring_cq_advance(&io_uring_, completed->size());
+  io_uring_cq_advance(&io_uring_, completed_aios->size());
   return Status::OK();
 }
 
 void LinuxIOUring::OnCompleted(AioClosure* aio, int retcode) {
   auto status = Status::OK();
   if (retcode < 0) {
-    LOG(ERROR) << Helper::Errorf(-retcode, aio->ToString().c_str());
+    LOG_SYSERR(-retcode, "%s", aio->ToString().c_str());
     status = Status::IoError("aio failed");
   }
 
   aio->status() = status;
-  CleanupContext(aio->ctx);
+  CleanupAuxInfo(aio->aux_info);
 }
 
-void LinuxIOUring::CleanupContext(void* context) {
-  if (nullptr == context) {
+void LinuxIOUring::CleanupAuxInfo(void* aux_info) {
+  if (nullptr == aux_info) {
     return;  // nothing to cleanup
   }
 
-  auto* ctx = static_cast<Context*>(context);
-  delete ctx;
+  auto* info = static_cast<AuxInfo*>(aux_info);
+  delete info;
 }
 
 uint32_t LinuxIOUring::GetIODepth() const { return iodepth_; }

@@ -14,19 +14,39 @@
 
 #include "cache/utils/state_machine_impl.h"
 
+#include <brpc/reloadable_flags.h>
 #include <glog/logging.h>
 
 #include <functional>
 #include <memory>
 #include <mutex>
 
-#include "base/time/time.h"
-#include "cache/config/config.h"
 #include "cache/utils/state_machine.h"
 #include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint32(state_tick_duration_s, 60,
+              "Duration in seconds for the disk state tick");
+DEFINE_validator(state_tick_duration_s, brpc::PassValidate);
+
+DEFINE_uint32(state_normal2unstable_error_num, 3,
+              "Number of errors to trigger unstable state from normal state");
+DEFINE_validator(state_normal2unstable_error_num, brpc::PassValidate);
+
+DEFINE_uint32(state_unstable2normal_succ_num, 10,
+              "Number of successful operations to trigger normal state from "
+              "unstable state");
+DEFINE_validator(state_unstable2normal_succ_num, brpc::PassValidate);
+
+DEFINE_uint32(state_unstable2down_s, 1800,
+              "Duration in seconds to trigger down state from unstable state");
+DEFINE_validator(state_unstable2down_s, brpc::PassValidate);
+
+DEFINE_uint32(check_disk_state_duration_ms, 3000,
+              "Duration in milliseconds to check the disk state");
+DEFINE_validator(check_disk_state_duration_ms, brpc::PassValidate);
 
 // normal
 void NormalState::IOErr() {
@@ -87,7 +107,7 @@ bool StateMachineImpl::Start() {
   return true;
 }
 
-bool StateMachineImpl::Stop() {
+bool StateMachineImpl::Shutdown() {
   std::lock_guard<BthreadMutex> lk(mutex_);
 
   if (!running_) {
@@ -131,9 +151,9 @@ int StateMachineImpl::EventThread(void* meta,
     return 0;
   }
 
-  auto* state_machine = reinterpret_cast<StateMachineImpl*>(meta);
+  auto* self = reinterpret_cast<StateMachineImpl*>(meta);
   for (; iter; ++iter) {
-    state_machine->ProcessEvent(*iter);
+    self->ProcessEvent(*iter);
   }
   return 0;
 }

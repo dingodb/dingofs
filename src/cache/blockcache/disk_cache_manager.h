@@ -27,7 +27,8 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/lru_cache.h"
 #include "cache/blockcache/lru_common.h"
-#include "cache/storage/filesystem.h"
+#include "cache/common/type.h"
+#include "metrics/cache/disk_cache_metric.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,11 +43,12 @@ enum class BlockPhase : uint8_t {
 // Manage cache items and its capacity
 class DiskCacheManager {
  public:
-  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout);
+  DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout,
+                   metrics::DiskCacheMetricSPtr metric);
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
-  virtual void Stop();
+  virtual void Shutdown();
 
   virtual void Add(const CacheKey& key, const CacheValue& value,
                    BlockPhase phase);
@@ -89,7 +91,8 @@ class DiskCacheManager {
   // uploaded for we can't get block both local disk and remote storage.
   std::unordered_map<std::string, CacheValue> stage_block_;
   MessageQueueUPtr mq_;
-  TaskThreadPoolUPtr task_pool_;
+  TaskThreadPoolUPtr thread_pool_;
+  metrics::DiskCacheMetricSPtr metric_;
 };
 
 using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;

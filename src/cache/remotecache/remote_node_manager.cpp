@@ -22,10 +22,16 @@
 
 #include "cache/remotecache/remote_node_manager.h"
 
+#include <gflags/gflags.h>
+
+#include "cache/config/tiercache.h"
 #include "utils/executor/timer_impl.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_uint32(load_members_interval_ms, 1000,
+              "Interval to load members of the cache group in milliseconds");
 
 using dingofs::pb::mds::cachegroup::CacheGroupErrCode_Name;
 
@@ -62,7 +68,7 @@ Status RemoteNodeManager::Start() {
   return Status::OK();
 }
 
-void RemoteNodeManager::Stop() {
+void RemoteNodeManager::Shutdown() {
   if (running_.exchange(false)) {
     timer_->Stop();
   }
@@ -95,7 +101,7 @@ Status RemoteNodeManager::LoadMembers(PBCacheGroupMembers* members) {
     return Status::Internal("load cache group member failed");
   }
 
-  VLOG(9) << "Load cache group members: size = " << members->size();
+  VLOG(9) << "Load cache group members success: size = " << members->size();
 
   return Status::OK();
 }

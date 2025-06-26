@@ -25,37 +25,37 @@
 namespace dingofs {
 namespace cache {
 
-void PendingQueue::Push(const StageBlock& stage_block) {
+void PendingQueue::Push(const StagingBlock& staging_block) {
   std::unique_lock<BthreadMutex> lk(mutex_);
-  auto from = stage_block.ctx.from;
+  auto from = staging_block.block_ctx.from;
   auto iter = queues_.find(from);
   if (iter == queues_.end()) {
-    iter = queues_.emplace(from, Segments<StageBlock>(kSegmentSize)).first;
+    iter = queues_.emplace(from, Segments<StagingBlock>(kSegmentSize)).first;
   }
 
   auto& queue = iter->second;
-  queue.Push(stage_block);
+  queue.Push(staging_block);
   count_[from]++;
 }
 
-std::vector<StageBlock> PendingQueue::Pop() {
-  static std::vector<BlockFrom> pop_prority{
-      BlockFrom::kWriteback,
-      BlockFrom::kReload,
-      BlockFrom::kUnknown,
+std::vector<StagingBlock> PendingQueue::Pop() {
+  static std::vector<BlockContext::BlockFrom> pop_prority{
+      BlockContext::kFromWriteback,
+      BlockContext::kFromReload,
+      BlockContext::kFromUnknown,
   };
 
   std::unique_lock<BthreadMutex> lk(mutex_);
   for (const auto& from : pop_prority) {
     auto iter = queues_.find(from);
     if (iter != queues_.end() && iter->second.Size() != 0) {
-      auto stage_blocks = iter->second.Pop();
-      CHECK(count_[from] >= stage_blocks.size());
-      count_[from] -= stage_blocks.size();
-      return stage_blocks;
+      auto staging_blocks = iter->second.Pop();
+      CHECK(count_[from] >= staging_blocks.size());
+      count_[from] -= staging_blocks.size();
+      return staging_blocks;
     }
   }
-  return std::vector<StageBlock>();
+  return std::vector<StagingBlock>();
 }
 
 size_t PendingQueue::Size() {
@@ -69,8 +69,8 @@ size_t PendingQueue::Size() {
 
 void PendingQueue::Stat(struct BlocksStat* stat) {
   std::unique_lock<BthreadMutex> lk(mutex_);
-  auto num_from_writeback = count_[BlockFrom::kWriteback];
-  auto num_from_reload = count_[BlockFrom::kReload];
+  auto num_from_writeback = count_[BlockContext::kFromWriteback];
+  auto num_from_reload = count_[BlockContext::kFromReload];
   auto num_total = num_from_writeback + num_from_reload;
   *stat = BlocksStat(num_total, num_from_writeback, num_from_reload);
 }

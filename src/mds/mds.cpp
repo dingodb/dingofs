@@ -453,12 +453,12 @@ void MDS::InitHeartbeatManager() {
 }
 
 void MDS::InitCacheGroupOption(CacheGroupOption* option) {
-  conf_->GetValueFatalIfFail("cachegroup.heartbeat.interval_second",
-                             &option->heartbeat_interval_second);
-  conf_->GetValueFatalIfFail("cachegroup.heartbeat.miss_timeout_second",
-                             &option->heartbeat_miss_timeout_second);
-  conf_->GetValueFatalIfFail("cachegroup.heartbeat.offline_timeout_second",
-                             &option->heartbeat_offline_timeout_second);
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.interval_s",
+                             &option->heartbeat_interval_s);
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.miss_timeout_s",
+                             &option->heartbeat_miss_timeout_s);
+  conf_->GetValueFatalIfFail("cachegroup.heartbeat.offline_timeout_s",
+                             &option->heartbeat_offline_timeout_s);
 }
 
 void MDS::InitCacheGroup() {

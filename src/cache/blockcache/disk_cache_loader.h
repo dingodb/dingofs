@@ -26,19 +26,19 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/storage/filesystem.h"
-#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
 
 class DiskCacheLoader {
  public:
-  DiskCacheLoader(DiskCacheLayoutSPtr layout, DiskCacheManagerSPtr manager);
+  DiskCacheLoader(DiskCacheLayoutSPtr layout, DiskCacheManagerSPtr manager,
+                  metrics::DiskCacheMetricSPtr metric);
   virtual ~DiskCacheLoader() = default;
 
   virtual void Start(const std::string& disk_id,
                      CacheStore::UploadFunc uploader);
-  virtual void Stop();
+  virtual void Shutdown();
 
   virtual bool IsLoading();
 
@@ -48,7 +48,7 @@ class DiskCacheLoader {
     kCacheBlock = 1,
   };
 
-  void LoadAllBlocks(const std::string& root, BlockType type);
+  void LoadAllBlocks(const std::string& dir, BlockType type);
   bool LoadOneBlock(const std::string& prefix, const FileInfo& file,
                     BlockType type);
 
@@ -57,12 +57,14 @@ class DiskCacheLoader {
   std::string ToString(BlockType type) const;
 
   std::atomic<bool> running_;
-  std::atomic<bool> loading_;
+  std::atomic<bool> cache_loading_;
+  std::atomic<bool> stage_loading_;
   std::string disk_id_;
   CacheStore::UploadFunc uploader_;
   DiskCacheLayoutSPtr layout_;
   DiskCacheManagerSPtr manager_;
-  TaskThreadPoolUPtr task_pool_;
+  TaskThreadPoolUPtr thread_pool_;
+  metrics::DiskCacheMetricSPtr metric_;
 };
 
 using DiskCacheLoaderUPtr = std::unique_ptr<DiskCacheLoader>;

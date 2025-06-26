@@ -23,15 +23,35 @@
 #include "cache/cachegroup/cache_group_node.h"
 
 #include <butil/binary_printer.h>
+#include <fmt/format.h>
+#include <glog/logging.h>
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/block_cache_impl.h"
 #include "cache/blockcache/disk_cache_layout.h"
-#include "cache/metrics/cache_group_node_metric.h"
+#include "cache/common/const.h"
+#include "cache/common/macro.h"
+#include "cache/utils/context.h"
 #include "common/io_buffer.h"
+#include "common/status.h"
+#include "dingofs/mds.pb.h"
 
 namespace dingofs {
 namespace cache {
+
+DEFINE_string(group_name, "default", "Which group this cache node belongs to");
+DEFINE_string(listen_ip, "127.0.0.1",
+              "IP address to listen on for this cache group node");
+DEFINE_uint32(listen_port, 9300, "Port to listen on for this cache group node");
+DEFINE_uint32(group_weight, 100,
+              "Weight of this cache group node, used for consistent hashing");
+DEFINE_uint32(max_range_size_kb, 128,
+              "Retrive the whole block if length of range request is larger "
+              "than this value");
+DEFINE_string(metadata_filepath, "/var/log/cache_group_meta",
+              "Filepath to store metadata of cache group node");  // Use dir
+DEFINE_uint32(send_heartbeat_interval_ms, 1000,
+              "Interval to send heartbeat to MDS in milliseconds");
 
 CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
     : running_(false),
@@ -44,51 +64,81 @@ CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
       storage_pool_(std::make_shared<StoragePoolImpl>(mds_client_)) {}
 
 Status CacheGroupNodeImpl::Start() {
-  if (!running_.exchange(true)) {
-    auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
-    if (rc != PBFSStatusCode::OK) {
-      return Status::Internal("init mds client failed");
-    }
+  CHECK_NOTNULL(mds_base_);
+  CHECK_NOTNULL(mds_client_);
+  CHECK_NOTNULL(member_);
+  CHECK_NOTNULL(heartbeat_);
+  CHECK_NOTNULL(storage_pool_);
 
-    auto status = member_->JoinGroup();
-    if (!status.ok()) {
-      return status;
-    }
-
-    // Cache directory name depends node member uuid, so init after join group
-    status = InitBlockCache();
-    if (!status.ok()) {
-      return status;
-    }
-
-    async_cache_ = std::make_unique<AsyncCacheImpl>(block_cache_);
-    status = async_cache_->Start();
-    if (!status.ok()) {
-      return status;
-    }
-
-    heartbeat_->Start();
+  if (running_) {
+    return Status::OK();
   }
+
+  LOG(INFO) << "Cache group node is starting...";
+
+  auto rc = mds_client_->Init(option_.mds_option, mds_base_.get());
+  if (rc != PBFSStatusCode::OK) {
+    LOG(ERROR) << "Init mds client failed: rc = "
+               << pb::mds::FSStatusCode_Name(rc);
+    return Status::Internal("init mds client failed");
+  }
+
+  auto status = member_->JoinGroup();
+  if (!status.ok()) {
+    LOG(ERROR) << "Join node to cache group failed: " << status.ToString();
+    return status;
+  }
+
+  // Cache directory name depends node member uuid, so init after join group
+  status = InitBlockCache();
+  if (!status.ok()) {
+    LOG(ERROR) << "Init block cache failed: " << status.ToString();
+    return status;
+  }
+
+  async_cacher_ = std::make_unique<AsyncCacherImpl>(block_cache_);
+  status = async_cacher_->Start();
+  if (!status.ok()) {
+    LOG(ERROR) << "Start async cacher failed: " << status.ToString();
+    return status;
+  }
+
+  heartbeat_->Start();
+
+  LOG(INFO) << "Cache group node is up.";
+
+  CHECK_RUNNING("Cache group node");
   return Status::OK();
 }
 
-Status CacheGroupNodeImpl::Stop() {
-  if (running_.exchange(false)) {
-    heartbeat_->Stop();
-
-    Status status = member_->LeaveGroup();
-    if (!status.ok()) {
-      return status;
-    }
-
-    status = async_cache_->Stop();
-    if (!status.ok()) {
-      return status;
-    }
-
-    return block_cache_->Shutdown();
+Status CacheGroupNodeImpl::Shutdown() {
+  if (!running_.exchange(false)) {
+    return Status::OK();
   }
-  return Status::OK();
+
+  LOG(INFO) << "Cache group node is shutting down...";
+
+  heartbeat_->Shutdown();
+
+  Status status = member_->LeaveGroup();
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = async_cacher_->Shutdown();
+  if (!status.ok()) {
+    return status;
+  }
+
+  status = block_cache_->Shutdown();
+  if (!status.ok()) {
+    return status;
+  }
+
+  LOG(INFO) << "Cache group node is down.";
+
+  CHECK_DOWN("Cache group node");
+  return status;
 }
 
 void CacheGroupNodeImpl::RewriteCacheDir() {
@@ -106,65 +156,82 @@ Status CacheGroupNodeImpl::InitBlockCache() {
   block_cache_ = std::make_shared<BlockCacheImpl>(option_.block_cache_option,
                                                   storage_pool_);
 
-  return block_cache_->Init();
+  return block_cache_->Start();
 }
 
-Status CacheGroupNodeImpl::Put(const BlockKey& key, const Block& block) {
-  auto option = PutOption();
-  option.writeback = true;
-  return block_cache_->Put(key, block, option);
+Status CacheGroupNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
+                               const Block& block, PutOption option) {
+  Status status;
+
+  status = block_cache_->Put(ctx, key, block, option);
+  return status;
 }
 
-Status CacheGroupNodeImpl::Range(const BlockKey& key, off_t offset,
-                                 size_t length, IOBuffer* buffer,
-                                 size_t block_size) {
-  auto status = RangeCachedBlock(key, offset, length, buffer);
+Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
+                                 off_t offset, size_t length, IOBuffer* buffer,
+                                 RangeOption option) {
+  Status status;
+
+  status = RangeCachedBlock(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
     // do nothing
   } else if (status.IsNotFound()) {
-    status = RangeStorage(key, offset, offset, buffer, block_size);
+    status = RangeStorage(ctx, key, offset, length, buffer, option);
   }
   return status;
 }
 
-Status CacheGroupNodeImpl::Cache(const BlockKey& key, const Block& block) {
-  return block_cache_->Cache(key, block);
+Status CacheGroupNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
+                                 const Block& block, CacheOption option) {
+  Status status;
+
+  status = block_cache_->Cache(ctx, key, block, option);
+  return status;
 }
 
-Status CacheGroupNodeImpl::Prefetch(const BlockKey& key, size_t length) {
-  return block_cache_->Prefetch(key, length);
+Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
+                                    size_t length, PrefetchOption option) {
+  Status status;
+
+  status = block_cache_->Prefetch(ctx, key, length, option);
+  return status;
 }
 
-Status CacheGroupNodeImpl::RangeCachedBlock(const BlockKey& key, off_t offset,
-                                            size_t length, IOBuffer* buffer) {
-  RangeOption option;
+Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx,
+                                            const BlockKey& key, off_t offset,
+                                            size_t length, IOBuffer* buffer,
+                                            RangeOption option) {
   option.retrive = false;
-  auto status = block_cache_->Range(key, offset, length, buffer, option);
+  auto status = block_cache_->Range(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
-    CacheGroupNodeMetric::GetInstance().AddCacheHit();
+    // CacheGroupNodeMetric::GetInstance().AddCacheHit();
   } else {
-    CacheGroupNodeMetric::GetInstance().AddCacheMiss();
+    // CacheGroupNodeMetric::GetInstance().AddCacheMiss();
   }
   return status;
 }
 
-Status CacheGroupNodeImpl::RangeStorage(const BlockKey& key, off_t offset,
-                                        size_t length, IOBuffer* buffer,
-                                        size_t block_size) {
+Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, const BlockKey& key,
+                                        off_t offset, size_t length,
+                                        IOBuffer* buffer, RangeOption option) {
+  Status status;
+
   StorageSPtr storage;
-  auto status = storage_pool_->GetStorage(key.fs_id, storage);
+  status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
     return status;
   }
 
   // Retrive range of block: unknown block size or unreach max_range_size
+  auto block_size = option.block_size;
   if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
-    return storage->Range(key.StoreKey(), offset, length, buffer);
+    status = storage->Range(ctx, key, offset, length, buffer);
+    return status;
   }
 
   // Retrive the whole block
   IOBuffer block;
-  status = storage->Range(key.StoreKey(), offset, block_size, &block);
+  status = storage->Range(ctx, key, offset, block_size, &block);
   if (!status.ok()) {
     return status;
   }
@@ -173,9 +240,9 @@ Status CacheGroupNodeImpl::RangeStorage(const BlockKey& key, off_t offset,
   block.IOBuf().append_to(&piecs, length, offset);
   *buffer = IOBuffer(piecs);
 
-  async_cache_->Cache(key, block);
+  async_cacher_->AsyncCache(ctx, key, block);
 
-  return Status::OK();
+  return status;
 }
 
 }  // namespace cache

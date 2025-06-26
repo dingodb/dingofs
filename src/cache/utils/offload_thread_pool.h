@@ -20,13 +20,12 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_
-#define DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_
+#ifndef DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
+#define DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
 
 #include <functional>
 
-#include "cache/common/common.h"
-
+#include "cache/common/type.h"
 namespace dingofs {
 namespace cache {
 
@@ -39,7 +38,7 @@ class OffloadThreadPool {
     return instance;
   }
 
-  void Init() { CHECK_EQ(thread_pool_.Start(5), 0); }
+  void Start() { CHECK_EQ(thread_pool_.Start(5), 0); }
   void Submit(TaskFunc task) { thread_pool_.Enqueue(task); }
 
  private:
@@ -49,4 +48,4 @@ class OffloadThreadPool {
 }  // namespace cache
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CACHE_OFFLOAD_THREAD_POOL_H_
+#endif  // DINGOFS_SRC_CACHE_UTILS_OFFLOAD_THREAD_POOL_H_
