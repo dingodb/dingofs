@@ -115,7 +115,7 @@ DEFINE_validator(flush_quota_interval_second, &PassUint32);
 DEFINE_uint32(load_quota_interval_second, 30, "flush quota interval in second");
 DEFINE_validator(load_quota_interval_second, &PassUint32);
 
-DEFINE_uint32(max_parent_depth_for_quota_check, 2048, 
+DEFINE_uint32(max_parent_depth_for_quota_check, 2048,
               "max parent depth for quota check");
 DEFINE_validator(max_parent_depth_for_quota_check, &PassUint32);
 
@@ -185,6 +185,25 @@ DEFINE_validator(fuseClientBurstReadIops, &PassUint64);
 DEFINE_uint64(fuseClientBurstReadIopsSecs, 180,
               "the times that Read burst iops can continue");
 DEFINE_validator(fuseClientBurstReadIopsSecs, &PassUint64);
+
+// smooth upgrade
+DEFINE_uint32(fuse_fd_get_max_retries, 100,
+              "the max retries that get fuse fd from old dingo-fuse during "
+              "smooth upgrade");
+DEFINE_validator(fuse_fd_get_max_retries, &PassUint32);
+DEFINE_uint32(
+    fuse_fd_get_retry_interval_ms, 100,
+    "the interval in millseconds that get fuse fd from old dingo-fuse "
+    "during smooth upgrade");
+DEFINE_validator(fuse_fd_get_retry_interval_ms, &PassUint32);
+DEFINE_uint32(
+    fuse_check_alive_max_retries, 600,
+    "the max retries that check old dingo-fuse is alive during smooth upgrade");
+DEFINE_validator(fuse_check_alive_max_retries, &PassUint32);
+DEFINE_uint32(fuse_check_alive_retry_interval_ms, 1000,
+              "the interval in millseconds that check old dingo-fuse is alive "
+              "during smooth upgrade");
+DEFINE_validator(fuse_check_alive_retry_interval_ms, &PassUint32);
 
 }  // namespace common
 }  // namespace client

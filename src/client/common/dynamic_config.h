@@ -109,6 +109,12 @@ DECLARE_uint64(fuseClientAvgReadBytes);
 DECLARE_uint64(fuseClientBurstReadBytes);
 DECLARE_uint64(fuseClientBurstReadBytesSecs);
 
+// smooth upgrade
+DECLARE_uint32(fuse_fd_get_max_retries);
+DECLARE_uint32(fuse_fd_get_retry_interval_ms);
+DECLARE_uint32(fuse_check_alive_max_retries);
+DECLARE_uint32(fuse_check_alive_retry_interval_ms);
+
 }  // namespace common
 }  // namespace client
 }  // namespace dingofs
