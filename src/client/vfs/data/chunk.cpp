@@ -130,10 +130,9 @@ Status Chunk::DirectWrite(const char* buf, uint64_t size,
     ++block_index;
   }
 
-  VLOG(4) << fmt::format("{} DirectWrite End", UUID());
-
   Slice slice{chunk_id, (chunk_start_ + chunk_offset), size, 0, false, size};
-  VLOG(4) << fmt::format("{} DirectWrite slice: {}", UUID(), Slice2Str(slice));
+  VLOG(4) << fmt::format("{} DirectWrite End slice: {}", UUID(),
+                         Slice2Str(slice));
 
   std::vector<Slice> slices;
   slices.push_back(slice);
@@ -159,21 +158,11 @@ SliceData* Chunk::FindWritableSliceUnLocked(uint64_t chunk_pos, uint64_t size) {
     // if overlap with slice, then use new slice
     if (chunk_pos < slice_data->End() &&
         end_in_chunk > slice_data->ChunkOffset()) {
-      VLOG(6) << fmt::format(
-          "{} FindWritableSliceUnLocked End because "
-          "slice overlaps with chunk_range: "
-          "[{}-{}], size: {}, seq: {}, slice_data: {}",
-          UUID(), chunk_pos, end_in_chunk, size, seq, slice_data->ToString());
-
       return nullptr;
     }
 
     if (chunk_pos == slice_data->End() ||
         end_in_chunk == slice_data->ChunkOffset()) {
-      VLOG(6) << fmt::format(
-          "{} Found slice for chunk_range: "
-          "[{}-{}], size: {}, seq: {}, slice_data: {}",
-          UUID(), chunk_pos, end_in_chunk, size, seq, slice_data->ToString());
       return slice_data;
     }
   }
@@ -238,8 +227,6 @@ Status Chunk::BufferWrite(const char* buf, uint64_t size,
   }
 
   if (is_full) {
-    VLOG(4) << fmt::format(
-        "{} BufferWrite triggering flush because some slice is full", UUID());
     TriggerFlush();
   }
 
@@ -334,18 +321,15 @@ Status Chunk::Read(char* buf, uint64_t size, uint64_t chunk_offset) {
   }
 
   for (auto& block_req : block_reqs) {
-    VLOG(6) << fmt::format("{} Read block_req: {}", UUID(),
-                           block_req.ToString());
     cache::BlockKey key(fs_id_, ino_, block_req.block.slice_id,
                         block_req.block.index, block_req.block.version);
 
     char* buf_pos = buf + (block_req.block.file_offset +
                            block_req.block_offset - read_file_offset);
 
-    VLOG(4) << fmt::format(
-        "{} Read block_key: {}, block_offset: {}, read_size: {}, buf: {}",
-        UUID(), key.StoreKey(), block_req.block_offset, block_req.len,
-        Char2Addr(buf_pos));
+    VLOG(6) << fmt::format("{} Read block_key: {}, buf: {}, block_req: {}",
+                           UUID(), key.StoreKey(), Char2Addr(buf_pos),
+                           block_req.ToString());
 
     IOBuffer buffer;
     cache::RangeOption option;
@@ -445,6 +429,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
     CHECK(!to_commit.empty());
 
+    // TODO: maybe use batch commit
     for (FlushTask* task : to_commit) {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone header_task: {} commit chunk_flush_task: {}",
@@ -454,15 +439,18 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
         std::vector<Slice> slices;
         task->chunk_flush_task->GetCommitSlices(slices);
 
-        // TODO: maybe use batch commit
-        Status status = hub_->GetMetaSystem()->WriteSlice(ino_, index_, slices);
-        if (!status.ok()) {
-          LOG(WARNING) << fmt::format(
-              "{} FlushTaskDone header_task: {} fail commit"
-              " chunk_flush_task: {}, commit_status: {}",
-              UUID(), flush_task->UUID(), task->ToString(), status.ToString());
+        if (!slices.empty()) {
+          Status status =
+              hub_->GetMetaSystem()->WriteSlice(ino_, index_, slices);
+          if (!status.ok()) {
+            LOG(WARNING) << fmt::format(
+                "{} FlushTaskDone header_task: {} fail commit"
+                " chunk_flush_task: {}, commit_status: {}",
+                UUID(), flush_task->UUID(), task->ToString(),
+                status.ToString());
 
-          MarkErrorStatus(status);
+            MarkErrorStatus(status);
+          }
         }
       } else {
         LOG(WARNING) << fmt::format(

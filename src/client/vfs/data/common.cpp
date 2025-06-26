@@ -34,7 +34,7 @@ std::string SliceReadReq::ToString() const {
 
 std::string BlockDesc::ToString() const {
   return fmt::format(
-      "(range:[{}-{}], len: {}, zero: {}, version: {}, slice_id: {}, "
+      "(file_range:[{}-{}], len: {}, zero: {}, version: {}, slice_id: {}, "
       "block_index: {})",
       file_offset, End(), block_len, zero, version, slice_id, index);
 }

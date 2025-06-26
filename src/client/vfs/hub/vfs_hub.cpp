@@ -26,14 +26,14 @@
 #include "blockaccess/block_accesser.h"
 #include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
-#include "cache/blockcache/block_cache_impl.h"
-#include "cache/storage/storage_impl.h"
 #include "cache/tiercache/tier_block_cache.h"
 #include "client/common/config.h"
+#include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
+#include "client/vfs/meta/meta_system.h"
+#include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
-#include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
 #include "utils/configuration.h"
@@ -60,9 +60,10 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     return Status::Internal("load config fail");
   }
 
+  std::unique_ptr<MetaSystem> rela_meta_system;
   if (vfs_conf.fs_type == "vfs_dummy") {
     LOG(INFO) << "use dummy file system.";
-    meta_system_ = std::make_unique<dummy::DummyFileSystem>();
+    rela_meta_system = std::make_unique<dummy::DummyFileSystem>();
 
   } else if (vfs_conf.fs_type == "vfs_v2") {
     LOG(INFO) << "use mdsv2 file system.";
@@ -70,16 +71,19 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     conf.GetValueFatalIfFail("mds.addr", &mds_addr);
     LOG(INFO) << fmt::format("mds addr: {}.", mds_addr);
 
-    meta_system_ = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
-                                              vfs_conf.mount_point);
+    rela_meta_system = v2::MDSV2FileSystem::Build(vfs_conf.fs_name, mds_addr,
+                                                  vfs_conf.mount_point);
   } else {
     LOG(INFO) << fmt::format("not unknown file system {}.", vfs_conf.fs_type);
     return Status::Internal("not unknown file system");
   }
 
-  if (meta_system_ == nullptr) {
+  if (rela_meta_system == nullptr) {
     return Status::Internal("build meta system fail");
   }
+
+  meta_system_ =
+      std::make_unique<MetaWrapper>(std::move(rela_meta_system));
 
   DINGOFS_RETURN_NOT_OK(meta_system_->Init());
 
@@ -121,7 +125,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
     common::RewriteCacheDir(&block_cache_option, uuid);
 
     // block_cache_ = std::make_unique<cache::TierBlockCache>(
-    //     block_cache_option, remote_block_cache_option, block_accesser_.get());
+    //     block_cache_option, remote_block_cache_option,
+    //     block_accesser_.get());
     block_cache_ = std::make_shared<cache::TierBlockCache>(
         block_cache_option, remote_block_cache_option, block_accesser_.get());
 
