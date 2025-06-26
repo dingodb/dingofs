@@ -23,6 +23,7 @@
 #include <chrono>
 
 #include "absl/cleanup/cleanup.h"
+#include "client/common/dynamic_config.h"
 #include "client/common/share_var.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
@@ -39,7 +40,10 @@ namespace dingofs {
 namespace client {
 namespace fuse {
 
-constexpr int kRetries = 100;
+USING_FLAG(fuse_fd_get_max_retries)
+USING_FLAG(fuse_fd_get_retry_interval_ms)
+USING_FLAG(fuse_check_alive_max_retries)
+USING_FLAG(fuse_check_alive_retry_interval_ms)
 
 FuseServer::FuseServer() = default;
 
@@ -391,8 +395,9 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
 
   fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
                        &init_fbuf_.size);
-  for (int i = 0; i < kRetries && fuse_fd_ <= 2; i++) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  for (int i = 0; i < FLAGS_fuse_fd_get_max_retries && fuse_fd_ <= 2; i++) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
     fuse_fd_ = GetFuseFd(comm_path.c_str(), init_fbuf_.mem, init_fbuf_.mem_size,
                          &init_fbuf_.size);
   }
@@ -407,8 +412,9 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
   kill(pid, SIGHUP);
 
   // check old dingo-fuse is alive
-  for (int i = 0; i < kRetries; i++) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  for (int i = 0; i < FLAGS_fuse_check_alive_max_retries; i++) {
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(FLAGS_fuse_check_alive_retry_interval_ms));
     if (!CheckProcessAlive(pid)) {
       return true;
     }
