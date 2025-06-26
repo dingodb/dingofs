@@ -208,17 +208,16 @@ std::vector<FileSessionPtr> FileSessionManager::Get(uint64_t ino, bool just_cach
 
 Status FileSessionManager::GetAll(std::vector<FileSessionEntry>& file_sessions) {
   Trace trace;
-  ScanFileSessionOperation operation(trace, fs_id_, 0);
+  ScanFileSessionOperation operation(trace, fs_id_, 0, [&](const FileSessionEntry& file_session) -> bool {
+    file_sessions.push_back(file_session);
+    return true;
+  });
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
-
-  auto& result = operation.GetResult();
-
-  file_sessions.swap(result.file_sessions);
 
   return Status::OK();
 }
@@ -256,18 +255,15 @@ Status FileSessionManager::Delete(uint64_t ino) {
 
 Status FileSessionManager::GetFileSessionsFromStore(uint64_t ino, std::vector<FileSessionPtr>& file_sessions) {
   Trace trace;
-  ScanFileSessionOperation operation(trace, fs_id_, ino);
+  ScanFileSessionOperation operation(trace, fs_id_, ino, [&](const FileSessionEntry& file_session) -> bool {
+    file_sessions.push_back(std::make_shared<FileSessionEntry>(file_session));
+    return true;
+  });
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
-  }
-
-  auto& result = operation.GetResult();
-
-  for (const auto& file_session : result.file_sessions) {
-    file_sessions.push_back(std::make_shared<FileSessionEntry>(file_session));
   }
 
   return Status::OK();
@@ -293,17 +289,16 @@ Status FileSessionManager::GetFileSessionFromStore(uint64_t ino, const std::stri
 
 Status FileSessionManager::IsExistFromStore(uint64_t ino, bool& is_exist) {
   Trace trace;
-  ScanFileSessionOperation operation(trace, fs_id_, ino);
+  ScanFileSessionOperation operation(trace, fs_id_, ino, [&](const FileSessionEntry&) -> bool {
+    is_exist = true;
+    return false;  // stop scanning
+  });
 
   auto status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[filesession] scan file session fail, status({}).", status.error_str());
     return status;
   }
-
-  auto& result = operation.GetResult();
-
-  is_exist = !result.file_sessions.empty();
 
   return Status::OK();
 }

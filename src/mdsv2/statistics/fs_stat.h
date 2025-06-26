@@ -17,10 +17,9 @@
 
 #include <memory>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/context.h"
 #include "mdsv2/common/status.h"
-#include "mdsv2/storage/storage.h"
+#include "mdsv2/filesystem/store_operation.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -30,19 +29,24 @@ using FsStatsUPtr = std::unique_ptr<FsStats>;
 
 class FsStats {
  public:
-  FsStats(KVStorageSPtr kv_storage) : kv_storage_(kv_storage) {};
+  FsStats(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {};
   ~FsStats() = default;
 
-  static FsStatsUPtr New(KVStorageSPtr kv_storage) { return std::make_unique<FsStats>(kv_storage); }
+  FsStats(const FsStats&) = delete;
+  FsStats& operator=(const FsStats&) = delete;
+  FsStats(FsStats&&) = delete;
+  FsStats& operator=(FsStats&&) = delete;
 
-  Status UploadFsStat(Context& ctx, uint32_t fs_id, const pb::mdsv2::FsStatsData& stats);
-  Status GetFsStat(Context& ctx, uint32_t fs_id, pb::mdsv2::FsStatsData& stats);
-  Status GetFsStatsPerSecond(Context& ctx, uint32_t fs_id,
-                             std::map<uint64_t, pb::mdsv2::FsStatsData>& stats_per_second);
+  static FsStatsUPtr New(OperationProcessorSPtr operation_processor) {
+    return std::make_unique<FsStats>(operation_processor);
+  }
+
+  Status UploadFsStat(Context& ctx, uint32_t fs_id, const FsStatsDataEntry& stats);
+  Status GetFsStat(Context& ctx, uint32_t fs_id, FsStatsDataEntry& stats);
+  Status GetFsStatsPerSecond(Context& ctx, uint32_t fs_id, std::map<uint64_t, FsStatsDataEntry>& stats_per_second);
 
  private:
-  // persistence store stats
-  KVStorageSPtr kv_storage_;
+  OperationProcessorSPtr operation_processor_;
 };
 
 }  // namespace mdsv2

@@ -34,7 +34,7 @@ class StoreClient {
   bool CreateFsQuotaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);
   bool CreateFileSessionTable(const std::string& name);
-  bool CreateTrashChunkTable(const std::string& name);
+  bool CreateDelSliceTable(const std::string& name);
   bool CreateDelFileTable(const std::string& name);
 
   // print fs dentry tree

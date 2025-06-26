@@ -189,6 +189,22 @@ Status DummyTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue>&
   return storage_->Scan(range, kvs);
 }
 
+Status DummyTxn::Scan(const Range& range, ScanHandlerType handler) {
+  std::vector<KeyValue> kvs;
+  auto status = storage_->Scan(range, kvs);
+  if (!status.ok()) {
+    return status;
+  }
+
+  for (const auto& kv : kvs) {
+    if (!handler(kv.key, kv.value)) {
+      break;
+    }
+  }
+
+  return status;
+}
+
 Status DummyTxn::Commit() { return Status::OK(); }
 
 Trace::Txn DummyTxn::GetTrace() { return Trace::Txn(); }

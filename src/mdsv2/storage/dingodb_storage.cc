@@ -33,6 +33,8 @@ DEFINE_int32(dingodb_replica_num, 3, "backend store replicas");
 
 DEFINE_int32(dingodb_scan_batch_size, 100000, "dingodb scan batch size");
 
+DECLARE_uint32(fs_scan_batch_size);
+
 const uint32_t kTxnKeepAliveMs = 10 * 1000;
 
 static dingodb::sdk::KVPair ToKVPair(const KeyValue& kv) { return dingodb::sdk::KVPair{kv.key, kv.value}; }
@@ -411,6 +413,31 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
   KvPairsToKeyValues(kv_pairs, kvs);
 
   return Status::OK();
+}
+
+Status DingodbTxn::Scan(const Range& range, ScanHandlerType handler) {
+  Status status;
+  std::vector<KeyValue> kvs;
+  do {
+    kvs.clear();
+    status = Scan(range, FLAGS_fs_scan_batch_size, kvs);
+    if (!status.ok()) {
+      break;
+    }
+
+    bool is_exit = false;
+    for (auto& kv : kvs) {
+      if (!handler(kv.key, kv.value)) {
+        is_exit = true;
+        break;
+      }
+    }
+
+    if (is_exit) break;
+
+  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
+
+  return status;
 }
 
 void DingodbTxn::Rollback() {

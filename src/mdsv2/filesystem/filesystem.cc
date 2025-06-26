@@ -67,10 +67,6 @@ DEFINE_uint32(filesystem_hash_bucket_num, 1024, "Filesystem hash bucket num.");
 
 DEFINE_uint32(compact_slice_threshold_num, 64, "Compact slice threshold num.");
 
-DECLARE_uint32(txn_max_retry_times);
-
-DECLARE_uint32(fs_scan_batch_size);
-
 bool IsReserveNode(Ino ino) { return ino == kRootIno; }
 
 bool IsReserveName(const std::string& name) { return name == kStatsName || name == kRecyleName; }
@@ -277,38 +273,18 @@ Status FileSystem::GetDentryFromStore(Ino parent, const std::string& name, Dentr
 Status FileSystem::ListDentryFromStore(Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                                        std::vector<Dentry>& dentries) {
   limit = limit > 0 ? limit : UINT32_MAX;
-  // scan dentry from store
-  Range range;
-  MetaCodec::EncodeDentryRange(fs_id_, parent, range.start_key, range.end_key);
-  if (!last_name.empty()) {
-    range.start_key = MetaCodec::EncodeDentryKey(fs_id_, parent, last_name);
-  }
 
-  auto txn = kv_storage_->NewTxn();
-
-  std::vector<KeyValue> kvs;
-  do {
-    kvs.clear();
-    auto status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      return status;
+  Trace trace;
+  ScanDentryOperation operation(trace, fs_id_, parent, last_name, [&](DentryType dentry) -> bool {
+    if (is_only_dir && dentry.type() != pb::mdsv2::FileType::DIRECTORY) {
+      return true;  // skip non-directory entries
     }
 
-    for (auto& kv : kvs) {
-      auto dentry = MetaCodec::DecodeDentryValue(kv.value);
-      if (is_only_dir && dentry.type() != pb::mdsv2::FileType::DIRECTORY) {
-        continue;
-      }
+    dentries.push_back(Dentry(dentry));
+    return dentries.size() < limit;
+  });
 
-      dentries.push_back(Dentry(dentry));
-      if (dentries.size() >= limit) {
-        return Status::OK();
-      }
-    }
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  return txn->Commit();
+  return RunOperation(&operation);
 }
 
 Status FileSystem::GetInode(Context& ctx, Dentry& dentry, PartitionPtr partition, InodeSPtr& out_inode) {
@@ -527,8 +503,8 @@ Status FileSystem::CreateRoot() {
 Status FileSystem::CreateQuota() {
   Trace trace;
   QuotaEntry quota_entry;
-  quota_entry.set_max_inodes(UINT64_MAX);
-  quota_entry.set_max_bytes(UINT64_MAX);
+  quota_entry.set_max_inodes(INT64_MAX);
+  quota_entry.set_max_bytes(INT64_MAX);
   quota_entry.set_used_inodes(1);
 
   auto status = quota_manager_.SetFsQuota(trace, quota_entry);
@@ -2080,61 +2056,27 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
 }
 
 Status FileSystem::GetDelFiles(std::vector<AttrType>& delfiles) {
-  Range range;
-  MetaCodec::GetDelFileTableRange(fs_id_, range.start_key, range.end_key);
-
-  auto txn = kv_storage_->NewTxn();
-
-  std::vector<KeyValue> kvs;
-  Status status;
+  Trace trace;
   uint32_t count = 0;
-  do {
-    kvs.clear();
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+  ScanDelFileOperation operation(trace, [&](const std::string&, const std::string& value) -> bool {
+    delfiles.push_back(MetaCodec::DecodeDelFileValue(value));
+    ++count;
+    return true;
+  });
 
-    for (auto& kv : kvs) {
-      delfiles.push_back(MetaCodec::DecodeDelFileValue(kv.value));
-    }
-
-    count += kvs.size();
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] get delfiles count({}), status({}).", fs_id_, count, status.error_str());
-
-  return status;
+  return RunOperation(&operation);
 }
 
 Status FileSystem::GetDelSlices(std::vector<TrashSliceList>& delslices) {
-  Range range;
-  MetaCodec::GetTrashChunkRange(fs_id_, range.start_key, range.end_key);
-
-  auto txn = kv_storage_->NewTxn();
-
-  std::vector<KeyValue> kvs;
-  Status status;
+  Trace trace;
   uint32_t count = 0;
-  do {
-    kvs.clear();
-    status = txn->Scan(range, FLAGS_fs_scan_batch_size, kvs);
-    if (!status.ok()) {
-      break;
-    }
+  ScanDelSliceOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
+    delslices.push_back(MetaCodec::DecodeDelSliceValue(value));
+    ++count;
+    return true;
+  });
 
-    for (auto& kv : kvs) {
-      delslices.push_back(MetaCodec::DecodeTrashChunkValue(kv.value));
-    }
-
-    count += kvs.size();
-
-  } while (kvs.size() >= FLAGS_fs_scan_batch_size);
-
-  DINGO_LOG(INFO) << fmt::format("[fs.{}] get delslice count({}), status({}).", fs_id_, count, status.error_str());
-
-  return status;
+  return RunOperation(&operation);
 }
 
 FileSystemSet::FileSystemSet(CoordinatorClientSPtr coordinator_client, IdGeneratorUPtr fs_id_generator,
@@ -2439,38 +2381,15 @@ Status FileSystemSet::DeleteFs(Context& ctx, const std::string& fs_name, bool is
 Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, const FsInfoType& fs_info) {
   auto trace = ctx.GetTrace();
 
-  std::string fs_key = MetaCodec::EncodeFSKey(fs_name);
+  UpdateFsOperation operation(trace, fs_name, fs_info);
 
-  Status status;
-  int retry = 0;
-  do {
-    auto txn = kv_storage_->NewTxn();
+  auto status = RunOperation(&operation);
+  if (!status.ok()) {
+    DINGO_LOG(ERROR) << fmt::format("[fsset] update fs({}) info fail, status({}).", fs_name, status.error_str());
+    return status;
+  }
 
-    std::string value;
-    status = txn->Get(fs_key, value);
-    if (!status.ok()) {
-      return Status(pb::error::EBACKEND_STORE, fmt::format("get fs({}) fail, {}.", fs_name, status.error_str()));
-    }
-
-    auto new_fs_info = MetaCodec::DecodeFSValue(value);
-    new_fs_info.set_capacity(fs_info.capacity());
-    new_fs_info.set_block_size(fs_info.block_size());
-    new_fs_info.set_owner(fs_info.owner());
-    new_fs_info.set_recycle_time_hour(fs_info.recycle_time_hour());
-
-    txn->Put(fs_key, MetaCodec::EncodeFSValue(new_fs_info));
-
-    status = txn->Commit();
-    trace.AddTxn(txn->GetTrace());
-    if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {
-      break;
-    }
-
-  } while (++retry < FLAGS_txn_max_retry_times);
-
-  trace.RecordElapsedTime("store_operate");
-
-  return status;
+  return Status::OK();
 }
 
 Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info) {

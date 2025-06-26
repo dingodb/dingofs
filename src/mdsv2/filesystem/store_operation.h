@@ -15,6 +15,7 @@
 #define DINGOFS_MDV2_FILESYSTEM_STORE_OPERATION_H_
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -44,6 +45,7 @@ class Operation {
     kMountFs = 0,
     kUmountFs = 1,
     kDeleteFs = 2,
+    kUpdateFs = 3,
     kCreateRoot = 10,
     kMkDir = 11,
     kMkNod = 12,
@@ -81,8 +83,17 @@ class Operation {
     kScanFileSession = 51,
     kDeleteFileSession = 52,
 
-    kCleanDeletedSlice = 60,
-    kCleanDeletedFile = 61,
+    kCleanDelSlice = 60,
+    kGetDelFile = 61,
+    kCleanDelFile = 62,
+
+    kScanDentry = 70,
+    kScanDelFile = 71,
+    kScanDelSlice = 72,
+
+    kSaveFsStats = 80,
+    kScanFsStats = 81,
+    kGetAndCompactFsStats = 82,
   };
 
   const char* OpName() const {
@@ -95,6 +106,9 @@ class Operation {
 
       case OpType::kDeleteFs:
         return "DeleteFs";
+
+      case OpType::kUpdateFs:
+        return "UpdateFs";
 
       case OpType::kCreateRoot:
         return "CreateRoot";
@@ -192,11 +206,29 @@ class Operation {
       case OpType::kDeleteFileSession:
         return "DeleteFileSession";
 
-      case OpType::kCleanDeletedSlice:
-        return "CleanDeletedSlice";
+      case OpType::kCleanDelSlice:
+        return "CleanDelSlice";
 
-      case OpType::kCleanDeletedFile:
-        return "CleanDeletedFile";
+      case OpType::kCleanDelFile:
+        return "CleanDelFile";
+
+      case OpType::kScanDentry:
+        return "ScanDentry";
+
+      case OpType::kScanDelFile:
+        return "ScanDelFile";
+
+      case OpType::kScanDelSlice:
+        return "ScanDelSlice";
+
+      case OpType::kSaveFsStats:
+        return "SaveFsStats";
+
+      case OpType::kScanFsStats:
+        return "ScanFsStats";
+
+      case OpType::kGetAndCompactFsStats:
+        return "GetAndCompactFsStats";
 
       default:
         return "UnknownOperation";
@@ -352,6 +384,24 @@ class DeleteFsOperation : public Operation {
   bool is_force_{false};
 
   Result result_;
+};
+
+class UpdateFsOperation : public Operation {
+ public:
+  UpdateFsOperation(Trace& trace, const std::string& fs_name, const FsInfoType& fs_info)
+      : Operation(trace), fs_name_(fs_name), fs_info_(fs_info) {};
+  ~UpdateFsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kUpdateFs; }
+
+  uint32_t GetFsId() const override { return fs_info_.fs_id(); }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const std::string fs_name_;
+  FsInfoType fs_info_;
 };
 
 class CreateRootOperation : public Operation {
@@ -1136,7 +1186,11 @@ class GetFileSessionOperation : public Operation {
 
 class ScanFileSessionOperation : public Operation {
  public:
-  ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  using HandlerType = std::function<bool(const FileSessionEntry&)>;
+
+  ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
+  ScanFileSessionOperation(Trace& trace, HandlerType handler) : Operation(trace), handler_(handler) {};
   ~ScanFileSessionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1146,7 +1200,7 @@ class ScanFileSessionOperation : public Operation {
   OpType GetOpType() const override { return OpType::kScanFileSession; }
 
   uint32_t GetFsId() const override { return fs_id_; }
-  Ino GetIno() const override { return 0; }
+  Ino GetIno() const override { return ino_; }
 
   Status Run(TxnUPtr& txn) override;
 
@@ -1160,8 +1214,9 @@ class ScanFileSessionOperation : public Operation {
   }
 
  private:
-  uint32_t fs_id_;
-  Ino ino_;
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  HandlerType handler_;
   Result result_;
 };
 
@@ -1182,12 +1237,12 @@ class DeleteFileSessionOperation : public Operation {
   std::vector<FileSessionEntry> file_sessions_;
 };
 
-class CleanDeletedSliceOperation : public Operation {
+class CleanDelSliceOperation : public Operation {
  public:
-  CleanDeletedSliceOperation(Trace& trace, const std::string& key) : Operation(trace), key_(key) {};
-  ~CleanDeletedSliceOperation() override = default;
+  CleanDelSliceOperation(Trace& trace, const std::string& key) : Operation(trace), key_(key) {};
+  ~CleanDelSliceOperation() override = default;
 
-  OpType GetOpType() const override { return OpType::kCleanDeletedSlice; }
+  OpType GetOpType() const override { return OpType::kCleanDelSlice; }
 
   uint32_t GetFsId() const override { return 0; }
   Ino GetIno() const override { return 0; }
@@ -1198,12 +1253,12 @@ class CleanDeletedSliceOperation : public Operation {
   std::string key_;
 };
 
-class CleanDeletedFileOperation : public Operation {
+class GetDelFileOperation : public Operation {
  public:
-  CleanDeletedFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
-  ~CleanDeletedFileOperation() override = default;
+  GetDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~GetDelFileOperation() override = default;
 
-  OpType GetOpType() const override { return OpType::kCleanDeletedFile; }
+  OpType GetOpType() const override { return OpType::kGetDelFile; }
 
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
@@ -1213,6 +1268,154 @@ class CleanDeletedFileOperation : public Operation {
  private:
   uint32_t fs_id_;
   Ino ino_;
+};
+
+class CleanDelFileOperation : public Operation {
+ public:
+  CleanDelFileOperation(Trace& trace, uint32_t fs_id, Ino ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~CleanDelFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCleanDelFile; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  Ino ino_;
+};
+
+class ScanDentryOperation : public Operation {
+ public:
+  using HandlerType = std::function<bool(const DentryType&)>;
+
+  ScanDentryOperation(Trace& trace, uint32_t fs_id, Ino ino, const std::string& last_name, HandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), last_name_(last_name), handler_(handler) {};
+  ~ScanDentryOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanDentry; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  const std::string last_name_;
+  HandlerType handler_;
+};
+
+class ScanDelSliceOperation : public Operation {
+ public:
+  ScanDelSliceOperation(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index, Txn::ScanHandlerType handler)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(chunk_index), handler_(handler) {};
+  ScanDelSliceOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType handler)
+      : Operation(trace), fs_id_(fs_id), handler_(handler) {};
+  ScanDelSliceOperation(Trace& trace, Txn::ScanHandlerType handler) : Operation(trace), handler_(handler) {};
+  ~ScanDelSliceOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanDelSlice; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_{0};
+  Ino ino_{0};
+  uint64_t chunk_index_{0};
+  Txn::ScanHandlerType handler_;
+};
+
+class ScanDelFileOperation : public Operation {
+ public:
+  ScanDelFileOperation(Trace& trace, Txn::ScanHandlerType scan_handler)
+      : Operation(trace), scan_handler_(scan_handler) {};
+  ~ScanDelFileOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanDelFile; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  Txn::ScanHandlerType scan_handler_;
+};
+
+class SaveFsStatsOperation : public Operation {
+ public:
+  SaveFsStatsOperation(Trace& trace, uint32_t fs_id, const FsStatsDataEntry& fs_stats)
+      : Operation(trace), fs_id_(fs_id), fs_stats_(fs_stats) {};
+  ~SaveFsStatsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kSaveFsStats; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const uint32_t fs_id_{0};
+  FsStatsDataEntry fs_stats_;
+};
+
+class ScanFsStatsOperation : public Operation {
+ public:
+  ScanFsStatsOperation(Trace& trace, uint32_t fs_id, uint64_t start_time_ns, Txn::ScanHandlerType handler)
+      : Operation(trace), fs_id_(fs_id), start_time_ns_(start_time_ns), handler_(handler) {};
+  ~ScanFsStatsOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kScanFsStats; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  const uint32_t fs_id_;
+  const uint64_t start_time_ns_{0};
+  Txn::ScanHandlerType handler_;
+};
+
+class GetAndCompactFsStatsOperation : public Operation {
+ public:
+  GetAndCompactFsStatsOperation(Trace& trace, uint32_t fs_id, uint64_t mark_time_ns)
+      : Operation(trace), fs_id_(fs_id), mark_time_ns_(mark_time_ns) {};
+  ~GetAndCompactFsStatsOperation() override = default;
+
+  struct Result : public Operation::Result {
+    FsStatsDataEntry fs_stats;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetAndCompactFsStats; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  const uint32_t fs_id_;
+  const uint64_t mark_time_ns_{0};
+  Result result_;
 };
 
 struct BatchOperation {

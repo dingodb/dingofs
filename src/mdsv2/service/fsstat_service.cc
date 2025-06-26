@@ -190,7 +190,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
   };
 
   os << R"(<div style="margin:12px;font-size:smaller;">)";
-  os << R"(<h3>FS</h3>)";
+  os << fmt::format(R"(<h3>FS [{}]</h3>)", fs_infoes.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -235,7 +235,7 @@ static void RenderFsInfo(const std::vector<pb::mdsv2::FsInfo>& fs_infoes, butil:
 
 static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
-  os << R"(<h3>MDS</h3>)";
+  os << fmt::format(R"(<h3>MDS [{}]</h3>)", mdses.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -269,7 +269,7 @@ static void RenderMdsList(const std::vector<MdsEntry>& mdses, butil::IOBufBuilde
 
 static void RenderClientList(const std::vector<ClientEntry>& clients, butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
-  os << R"(<h3>Client</h3>)";
+  os << fmt::format(R"(<h3>Client [{}]</h3>)", clients.size());
   os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
   os << "<tr>";
   os << "<th>ID</th>";
@@ -397,8 +397,8 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 }
 
 static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
-  auto render_bytes_func = [](uint64_t bytes, const std::string& unit) -> std::string {
-    if (bytes == UINT64_MAX) {
+  auto render_bytes_func = [](int64_t bytes, const std::string& unit) -> std::string {
+    if (bytes == INT64_MAX) {
       return "unlimited";
     }
     if (unit == "GB") {
@@ -412,8 +412,8 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
     }
   };
 
-  auto render_inode_func = [](uint64_t inodes) -> std::string {
-    if (inodes == UINT64_MAX) {
+  auto render_inode_func = [](int64_t inodes) -> std::string {
+    if (inodes == INT64_MAX) {
       return "unlimited";
     }
     return fmt::format("{}", inodes);
@@ -457,7 +457,7 @@ static void RenderQuotaPage(FileSystemSPtr fs, butil::IOBufBuilder& os) {
   status = quota_manager.LoadDirQuotas(trace, dir_quota_entry_map);
 
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller;">)";
-  os << R"(<h3>Dir Quota</h3>)";
+  os << fmt::format(R"(<h3>Dir Quota [{}]</h3>)", dir_quota_entry_map.size());
   if (status.ok()) {
     os << R"(<table class="gridtable sortable" border=1 style="max-width:100%;white-space:nowrap;">)";
     os << "<tr>";
@@ -1010,7 +1010,7 @@ void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
-  os << R"(<h3>FileSession</h3>)";
+  os << fmt::format(R"(<h3>FileSession [{}]</h3>)", file_sessions.size());
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>Ino</th>";
@@ -1050,7 +1050,7 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
-  os << R"(<h3>DelFile</h3>)";
+  os << fmt::format(R"(<h3>DelFile [{}]</h3>)", delfiles.size());
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>Ino</th>";
@@ -1106,7 +1106,7 @@ void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   }
 
   os << R"(<div style="margin: 12px;font-size:smaller">)";
-  os << R"(<h3>DelSlice</h3>)";
+  os << fmt::format(R"(<h3>DelSlice [{}]</h3>)", delslices.size());
   os << R"(<table class="gridtable sortable" border=1>)";
   os << "<tr>";
   os << "<th>FsId</th>";

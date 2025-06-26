@@ -55,7 +55,7 @@ DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
 DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
 DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
 DEFINE_string(filesession_table_name, "dingofs-filesession", "file session table name");
-DEFINE_string(trash_chunk_table_name, "dingofs-trashchunk", "trash chunk table name");
+DEFINE_string(del_slice_table_name, "dingofs-delslice", "del slice table name");
 DEFINE_string(del_file_table_name, "dingofs-delfile", "del file table name");
 
 DEFINE_uint32(max_bytes, 1024 * 1024 * 1024, "max bytes");
@@ -286,8 +286,8 @@ int main(int argc, char* argv[]) {
     } else if (lower_cmd == Helper::ToLowerCase("CreateFileSessionTable")) {
       store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
 
-    } else if (lower_cmd == Helper::ToLowerCase("CreateTrashChunkTable")) {
-      store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
+    } else if (lower_cmd == Helper::ToLowerCase("CreateDelSliceTable")) {
+      store_client.CreateDelSliceTable(FLAGS_del_slice_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateDelFileTable")) {
       store_client.CreateDelFileTable(FLAGS_del_file_table_name);
@@ -300,7 +300,7 @@ int main(int argc, char* argv[]) {
       store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
       store_client.CreateFsStatsTable(FLAGS_stats_table_name);
       store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
-      store_client.CreateTrashChunkTable(FLAGS_trash_chunk_table_name);
+      store_client.CreateDelSliceTable(FLAGS_del_slice_table_name);
       store_client.CreateDelFileTable(FLAGS_del_file_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("tree")) {

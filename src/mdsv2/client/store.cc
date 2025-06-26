@@ -158,10 +158,10 @@ bool StoreClient::CreateFileSessionTable(const std::string& name) {
   return true;
 }
 
-bool StoreClient::CreateTrashChunkTable(const std::string& name) {
+bool StoreClient::CreateDelSliceTable(const std::string& name) {
   int64_t table_id = 0;
   KVStorage::TableOption option;
-  MetaCodec::GetTrashChunkTableRange(option.start_key, option.end_key);
+  MetaCodec::GetDelSliceTableRange(option.start_key, option.end_key);
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create trash chunk table fail, error: {}.", status.error_str());

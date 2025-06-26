@@ -76,6 +76,7 @@ class DingodbTxn : public Txn {
   Status Get(const std::string& key, std::string& value) override;
   Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) override;
   Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) override;
+  Status Scan(const Range& range, ScanHandlerType handler) override;
 
   Status Commit() override;
 

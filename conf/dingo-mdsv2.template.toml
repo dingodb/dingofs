@@ -22,4 +22,4 @@ heartbeat_interval_s = 5
 fsinfosync_interval_s = 10
 mdsmonitor_interval_s = 5
 quota_sync_interval_s = 6
-gc_interval_s = 60
+gc_interval_s = 30

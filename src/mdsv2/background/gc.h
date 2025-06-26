@@ -27,16 +27,15 @@
 #include "mdsv2/common/tracing.h"
 #include "mdsv2/common/type.h"
 #include "mdsv2/filesystem/filesystem.h"
-#include "mdsv2/storage/storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
 
-class CleanDeletedSliceTask;
-using CleanDeletedSliceTaskSPtr = std::shared_ptr<CleanDeletedSliceTask>;
+class CleanDelSliceTask;
+using CleanDelSliceTaskSPtr = std::shared_ptr<CleanDelSliceTask>;
 
-class CleanDeletedFileTask;
-using CleanDeletedFileTaskSPtr = std::shared_ptr<CleanDeletedFileTask>;
+class CleanDelFileTask;
+using CleanDelFileTaskSPtr = std::shared_ptr<CleanDelFileTask>;
 
 class CleanExpiredFileSessionTask;
 using CleanExpiredFileSessionTaskSPtr = std::shared_ptr<CleanExpiredFileSessionTask>;
@@ -45,16 +44,17 @@ class GcProcessor;
 using GcProcessorSPtr = std::shared_ptr<GcProcessor>;
 
 // clean trash slice corresponding to s3 object
-class CleanDeletedSliceTask : public TaskRunnable {
+class CleanDelSliceTask : public TaskRunnable {
  public:
-  CleanDeletedSliceTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                        const KeyValue& kv)
-      : operation_processor_(operation_processor), data_accessor_(block_accessor), kv_(kv) {}
-  ~CleanDeletedSliceTask() override = default;
+  CleanDelSliceTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
+                    const std::string& key, const std::string& value)
+      : operation_processor_(operation_processor), data_accessor_(block_accessor), key_(key), value_(value) {}
+  ~CleanDelSliceTask() override = default;
 
-  static CleanDeletedSliceTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                       blockaccess::BlockAccesserSPtr block_accessor, const KeyValue& kv) {
-    return std::make_shared<CleanDeletedSliceTask>(operation_processor, block_accessor, kv);
+  static CleanDelSliceTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                   blockaccess::BlockAccesserSPtr block_accessor, const std::string& key,
+                                   const std::string& value) {
+    return std::make_shared<CleanDelSliceTask>(operation_processor, block_accessor, key, value);
   }
   std::string Type() override { return "CLEAN_DELETED_SLICE"; }
 
@@ -63,9 +63,10 @@ class CleanDeletedSliceTask : public TaskRunnable {
  private:
   friend class GcProcessor;
 
-  Status CleanDeletedSlice();
+  Status CleanDelSlice();
 
-  KeyValue kv_;
+  const std::string key_;
+  const std::string value_;
 
   OperationProcessorSPtr operation_processor_;
 
@@ -74,16 +75,16 @@ class CleanDeletedSliceTask : public TaskRunnable {
 };
 
 // clen delete file corresponding to s3 object
-class CleanDeletedFileTask : public TaskRunnable {
+class CleanDelFileTask : public TaskRunnable {
  public:
-  CleanDeletedFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
-                       const AttrType& attr)
+  CleanDelFileTask(OperationProcessorSPtr operation_processor, blockaccess::BlockAccesserSPtr block_accessor,
+                   const AttrType& attr)
       : operation_processor_(operation_processor), data_accessor_(block_accessor), attr_(attr) {}
-  ~CleanDeletedFileTask() override = default;
+  ~CleanDelFileTask() override = default;
 
-  static CleanDeletedFileTaskSPtr New(OperationProcessorSPtr operation_processor,
-                                      blockaccess::BlockAccesserSPtr block_accessor, const AttrType& attr) {
-    return std::make_shared<CleanDeletedFileTask>(operation_processor, block_accessor, attr);
+  static CleanDelFileTaskSPtr New(OperationProcessorSPtr operation_processor,
+                                  blockaccess::BlockAccesserSPtr block_accessor, const AttrType& attr) {
+    return std::make_shared<CleanDelFileTask>(operation_processor, block_accessor, attr);
   }
 
   std::string Type() override { return "CLEAN_DELETED_FILE"; }
@@ -93,7 +94,7 @@ class CleanDeletedFileTask : public TaskRunnable {
  private:
   friend class GcProcessor;
 
-  Status CleanDeletedFile(const AttrType& attr);
+  Status CleanDelFile(const AttrType& attr);
 
   AttrType attr_;
 
@@ -129,17 +130,14 @@ class CleanExpiredFileSessionTask : public TaskRunnable {
 
 class GcProcessor {
  public:
-  GcProcessor(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage, OperationProcessorSPtr operation_processor,
+  GcProcessor(FileSystemSetSPtr file_system_set, OperationProcessorSPtr operation_processor,
               DistributionLockSPtr dist_lock)
-      : file_system_set_(file_system_set),
-        kv_storage_(kv_storage),
-        operation_processor_(operation_processor),
-        dist_lock_(dist_lock) {}
+      : file_system_set_(file_system_set), operation_processor_(operation_processor), dist_lock_(dist_lock) {}
   ~GcProcessor() = default;
 
-  static GcProcessorSPtr New(FileSystemSetSPtr file_system_set, KVStorageSPtr kv_storage,
-                             OperationProcessorSPtr operation_processor, DistributionLockSPtr dist_lock) {
-    return std::make_shared<GcProcessor>(file_system_set, kv_storage, operation_processor, dist_lock);
+  static GcProcessorSPtr New(FileSystemSetSPtr file_system_set, OperationProcessorSPtr operation_processor,
+                             DistributionLockSPtr dist_lock) {
+    return std::make_shared<GcProcessor>(file_system_set, operation_processor, dist_lock);
   }
 
   bool Init();
@@ -147,19 +145,19 @@ class GcProcessor {
 
   void Run();
 
-  Status ManualCleanDeletedSlice(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index);
-  Status ManualCleanDeletedFile(Trace& trace, uint32_t fs_id, Ino ino);
+  Status ManualCleanDelSlice(Trace& trace, uint32_t fs_id, Ino ino, uint64_t chunk_index);
+  Status ManualCleanDelFile(Trace& trace, uint32_t fs_id, Ino ino);
 
  private:
   Status LaunchGc();
 
-  void Execute(TaskRunnablePtr task);
-  void Execute(int64_t id, TaskRunnablePtr task);
+  bool Execute(TaskRunnablePtr task);
+  bool Execute(Ino ino, TaskRunnablePtr task);
 
   Status GetClientList(std::set<std::string>& clients);
 
-  void ScanDeletedSlice();
-  void ScanDeletedFile();
+  void ScanDelSlice();
+  void ScanDelFile();
   void ScanExpiredFileSession();
 
   static bool ShouldDeleteFile(const AttrType& attr);
@@ -170,8 +168,6 @@ class GcProcessor {
   std::atomic<bool> is_running_{false};
 
   DistributionLockSPtr dist_lock_;
-
-  KVStorageSPtr kv_storage_;
 
   OperationProcessorSPtr operation_processor_;
 

@@ -254,14 +254,13 @@ bool Server::InitQuotaSynchronizer() {
 }
 
 bool Server::InitGcProcessor() {
-  CHECK(kv_storage_ != nullptr) << "kv storage is nullptr.";
   CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
   CHECK(file_system_set_ != nullptr) << "file system set is nullptr.";
 
   auto dist_lock = StoreDistributionLock::New(kv_storage_, FLAGS_gc_lock_name, mds_meta_.ID());
   CHECK(dist_lock != nullptr) << "gc dist lock is nullptr.";
 
-  gc_processor_ = GcProcessor::New(file_system_set_, kv_storage_, operation_processor_, dist_lock);
+  gc_processor_ = GcProcessor::New(file_system_set_, operation_processor_, dist_lock);
 
   CHECK(gc_processor_->Init()) << "init GcProcessor fail.";
 
@@ -319,8 +318,10 @@ bool Server::InitCrontab() {
 }
 
 bool Server::InitService() {
+  CHECK(operation_processor_ != nullptr) << "operation_processor is nullptr.";
+
   // mds service
-  auto fs_stats = FsStats::New(kv_storage_);
+  auto fs_stats = FsStats::New(operation_processor_);
   CHECK(fs_stats != nullptr) << "fsstats is nullptr.";
 
   const auto& mds_option = app_option_.server().service().meta();

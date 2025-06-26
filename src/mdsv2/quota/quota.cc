@@ -14,6 +14,8 @@
 
 #include "mdsv2/quota/quota.h"
 
+#include <atomic>
+
 #include "fmt/format.h"
 #include "glog/logging.h"
 #include "mdsv2/common/logging.h"
@@ -24,18 +26,18 @@ namespace mdsv2 {
 namespace quota {
 
 void Quota::UpdateUsage(int64_t byte_delta, int64_t inode_delta) {
-  byte_delta_.fetch_add(byte_delta, std::memory_order_relaxed);
-  inode_delta_.fetch_add(inode_delta, std::memory_order_relaxed);
+  byte_delta_.fetch_add(byte_delta, std::memory_order_release);
+  inode_delta_.fetch_add(inode_delta, std::memory_order_release);
 
-  DINGO_LOG(INFO) << fmt::format("[quota] update usage, ino({}), byte_delta({}), inode_delta({}).", ino_, byte_delta,
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] update usage, byte_delta({}) inode_delta({}).", ino_, byte_delta,
                                  inode_delta);
 }
 
 bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
   utils::ReadLockGuard lk(rwlock_);
 
-  int64_t used_bytes = quota_.used_bytes() + byte_delta_.load(std::memory_order_relaxed) + byte_delta;
-  int64_t used_inodes = quota_.used_inodes() + inode_delta_.load(std::memory_order_relaxed) + inode_delta;
+  int64_t used_bytes = quota_.used_bytes() + byte_delta_.load(std::memory_order_acquire) + byte_delta;
+  int64_t used_inodes = quota_.used_inodes() + inode_delta_.load(std::memory_order_acquire) + inode_delta;
 
   if ((quota_.max_bytes() > 0 && used_bytes > quota_.max_bytes()) ||
       (quota_.max_inodes() > 0 && used_inodes > quota_.max_inodes())) {
@@ -51,8 +53,8 @@ bool Quota::Check(int64_t byte_delta, int64_t inode_delta) {
 UsageEntry Quota::GetUsage() {
   UsageEntry usage;
 
-  usage.set_bytes(byte_delta_.load(std::memory_order_relaxed));
-  usage.set_inodes(inode_delta_.load(std::memory_order_relaxed));
+  usage.set_bytes(byte_delta_.load(std::memory_order_acquire));
+  usage.set_inodes(inode_delta_.load(std::memory_order_acquire));
 
   return usage;
 }
@@ -67,8 +69,8 @@ QuotaEntry Quota::GetQuotaAndDelta() {
   utils::ReadLockGuard lk(rwlock_);
 
   QuotaEntry quota = quota_;
-  quota.set_used_bytes(quota.used_bytes() + byte_delta_.load());
-  quota.set_used_inodes(quota.used_inodes() + inode_delta_.load());
+  quota.set_used_bytes(quota.used_bytes() + byte_delta_.load(std::memory_order_acquire));
+  quota.set_used_inodes(quota.used_inodes() + inode_delta_.load(std::memory_order_acquire));
 
   return quota;
 }
@@ -77,11 +79,15 @@ void Quota::Refresh(const QuotaEntry& quota, const UsageEntry& minus_usage) {
   utils::WriteLockGuard lk(rwlock_);
 
   if (minus_usage.bytes() != 0) {
-    byte_delta_.fetch_sub(minus_usage.bytes(), std::memory_order_relaxed);
+    byte_delta_.fetch_sub(minus_usage.bytes(), std::memory_order_release);
   }
   if (minus_usage.inodes() != 0) {
-    inode_delta_.fetch_sub(minus_usage.inodes(), std::memory_order_relaxed);
+    inode_delta_.fetch_sub(minus_usage.inodes(), std::memory_order_release);
   }
+
+  DINGO_LOG(INFO) << fmt::format("[quota.{}] refresh quota, bytes({}/{}/{}) inodes({}/{}/{}).", ino_,
+                                 byte_delta_.load(), quota.used_bytes(), quota.max_bytes(), inode_delta_.load(),
+                                 quota.used_inodes(), quota.max_inodes());
 
   quota_ = quota;
 }

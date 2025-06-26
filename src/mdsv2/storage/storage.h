@@ -107,6 +107,9 @@ class Txn {
   virtual Status BatchGet(const std::vector<std::string>& keys, std::vector<KeyValue>& kvs) = 0;
   virtual Status Scan(const Range& range, uint64_t limit, std::vector<KeyValue>& kvs) = 0;
 
+  using ScanHandlerType = std::function<bool(const std::string& key, const std::string& value)>;
+  virtual Status Scan(const Range& range, ScanHandlerType handler) = 0;
+
   virtual Status Commit() = 0;
 
   virtual Trace::Txn GetTrace() = 0;

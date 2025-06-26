@@ -1876,7 +1876,7 @@ void MDSServiceImpl::DoCleanTrashSlice(google::protobuf::RpcController* controll
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
   auto& trace = ctx.GetTrace();
 
-  status = gc_processor_->ManualCleanDeletedSlice(trace, request->fs_id(), request->ino(), request->chunk_index());
+  status = gc_processor_->ManualCleanDelSlice(trace, request->fs_id(), request->ino(), request->chunk_index());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());
@@ -1930,7 +1930,7 @@ void MDSServiceImpl::DoCleanDelFile(google::protobuf::RpcController* controller,
   Context ctx(req_ctx.is_bypass_cache(), req_ctx.inode_version());
   auto& trace = ctx.GetTrace();
 
-  status = gc_processor_->ManualCleanDeletedFile(trace, request->fs_id(), request->ino());
+  status = gc_processor_->ManualCleanDelFile(trace, request->fs_id(), request->ino());
   ServiceHelper::SetResponseInfo(ctx.GetTrace(), response->mutable_info());
   if (BAIDU_UNLIKELY(!status.ok())) {
     return ServiceHelper::SetError(response->mutable_error(), status.error_code(), status.error_str());

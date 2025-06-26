@@ -48,11 +48,11 @@ class MetaCodec {
   static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
 
-  static void GetTrashChunkTableRange(std::string& start_key, std::string& end_key);
-  static void GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetTrashChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
-  static void GetTrashChunkRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
-                                 std::string& end_key);
+  static void GetDelSliceTableRange(std::string& start_key, std::string& end_key);
+  static void GetDelSliceRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  static void GetDelSliceRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
+  static void GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
+                               std::string& end_key);
 
   static void GetDelFileTableRange(std::string& start_key, std::string& end_key);
   static void GetDelFileTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
@@ -95,8 +95,8 @@ class MetaCodec {
   // format: [$prefix, $type, $fs_id, $ino, $name]
   static std::string EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name);
   static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
-  static std::string EncodeDentryValue(const pb::mdsv2::Dentry& dentry);
-  static pb::mdsv2::Dentry DecodeDentryValue(const std::string& value);
+  static std::string EncodeDentryValue(const DentryType& dentry);
+  static DentryType DecodeDentryValue(const std::string& value);
   // format: [$prefix, $type, $fs_id, $ino]
   // format: [$prefix, $type, $fs_id, $ino+1]
   static void EncodeDentryRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
@@ -137,13 +137,13 @@ class MetaCodec {
   static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
   static FileSessionEntry DecodeFileSessionValue(const std::string& value);
 
-  // trash chunk
+  // del slice
   // format: [$prefix, $type, $fs_id, $ino, $chunk_index, $time_ns]
-  static std::string EncodeTrashChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns);
-  static void DecodeTrashChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
-                                  uint64_t& time_ns);
-  static std::string EncodeTrashChunkValue(const pb::mdsv2::TrashSliceList& slice_list);
-  static pb::mdsv2::TrashSliceList DecodeTrashChunkValue(const std::string& value);
+  static std::string EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns);
+  static void DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
+                                uint64_t& time_ns);
+  static std::string EncodeDelSliceValue(const TrashSliceList& slice_list);
+  static TrashSliceList DecodeDelSliceValue(const std::string& value);
 
   // del file
   // format: [$prefix, $type, $fs_id, $ino]

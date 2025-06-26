@@ -253,7 +253,6 @@ Status Chunk::Write(const char* buf, uint64_t size, uint64_t chunk_offset) {
   }
 
   if (FLAGS_data_use_direct_write) {
-    LOG(INFO) << "Write 100000";
     return DirectWrite(buf, size, chunk_offset);
   } else {
     return BufferWrite(buf, size, chunk_offset);

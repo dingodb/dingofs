@@ -42,7 +42,7 @@ enum KeyType : unsigned char {
   kTypeQuota = 11,
   kTypeFsStats = 15,
   kTypeFileSession = 17,
-  kTypeTrashChunk = 19,
+  kTypeDelSlice = 19,
   kTypeDelFile = 21,
 };
 
@@ -186,46 +186,46 @@ void MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_
   SerialHelper::WriteULong(ino + 1, end_key);
 }
 
-void MetaCodec::GetTrashChunkTableRange(std::string& start_key, std::string& end_key) {
+void MetaCodec::GetDelSliceTableRange(std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kTypeDelSlice);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeTrashChunk + 1);
+  end_key.push_back(kTypeDelSlice + 1);
 }
 
-void MetaCodec::GetTrashChunkRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
+void MetaCodec::GetDelSliceRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, start_key);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeTrashChunk);
+  end_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id + 1, end_key);
 }
 
-void MetaCodec::GetTrashChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
+void MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, start_key);
   SerialHelper::WriteULong(ino, start_key);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeTrashChunk);
+  end_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, end_key);
   SerialHelper::WriteULong(ino + 1, end_key);
 }
 
-void MetaCodec::GetTrashChunkRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
-                                   std::string& end_key) {
+void MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
+                                 std::string& end_key) {
   start_key = kPrefix;
-  start_key.push_back(kTypeTrashChunk);
+  start_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, start_key);
   SerialHelper::WriteULong(ino, start_key);
   SerialHelper::WriteULong(chunk_index, start_key);
 
   end_key = kPrefix;
-  end_key.push_back(kTypeTrashChunk);
+  end_key.push_back(kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, end_key);
   SerialHelper::WriteULong(ino, end_key);
   SerialHelper::WriteULong(chunk_index + 1, end_key);
@@ -447,10 +447,10 @@ void MetaCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_
   name = key.substr(kPrefixSize + 13);
 }
 
-std::string MetaCodec::EncodeDentryValue(const pb::mdsv2::Dentry& dentry) { return dentry.SerializeAsString(); }
+std::string MetaCodec::EncodeDentryValue(const DentryType& dentry) { return dentry.SerializeAsString(); }
 
-pb::mdsv2::Dentry MetaCodec::DecodeDentryValue(const std::string& value) {
-  pb::mdsv2::Dentry dentry;
+DentryType MetaCodec::DecodeDentryValue(const std::string& value) {
+  DentryType dentry;
   CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
   return dentry;
 }
@@ -646,12 +646,12 @@ FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
   return std::move(file_session);
 }
 
-std::string MetaCodec::EncodeTrashChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns) {
+std::string MetaCodec::EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns) {
   std::string key;
   key.reserve(kPrefixSize + 32);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeTrashChunk);
+  key.push_back(KeyType::kTypeDelSlice);
   SerialHelper::WriteInt(fs_id, key);
   SerialHelper::WriteULong(ino, key);
   SerialHelper::WriteULong(chunk_index, key);
@@ -659,10 +659,10 @@ std::string MetaCodec::EncodeTrashChunkKey(uint32_t fs_id, Ino ino, uint64_t chu
 
   return std::move(key);
 }
-void MetaCodec::DecodeTrashChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
-                                    uint64_t& time_ns) {
+void MetaCodec::DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
+                                  uint64_t& time_ns) {
   CHECK(key.size() == (kPrefixSize + 29)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeTrashChunk) << "key type is invalid.";
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeDelSlice) << "key type is invalid.";
 
   fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
   ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
@@ -670,12 +670,10 @@ void MetaCodec::DecodeTrashChunkKey(const std::string& key, uint32_t& fs_id, uin
   time_ns = SerialHelper::ReadULong(key.substr(kPrefixSize + 21, kPrefixSize + 29));
 }
 
-std::string MetaCodec::EncodeTrashChunkValue(const pb::mdsv2::TrashSliceList& slice) {
-  return slice.SerializeAsString();
-}
+std::string MetaCodec::EncodeDelSliceValue(const TrashSliceList& slice) { return slice.SerializeAsString(); }
 
-pb::mdsv2::TrashSliceList MetaCodec::DecodeTrashChunkValue(const std::string& value) {
-  pb::mdsv2::TrashSliceList slice_list;
+TrashSliceList MetaCodec::DecodeDelSliceValue(const std::string& value) {
+  TrashSliceList slice_list;
   CHECK(slice_list.ParseFromString(value)) << "parse trash slice list fail.";
   return std::move(slice_list);
 }
