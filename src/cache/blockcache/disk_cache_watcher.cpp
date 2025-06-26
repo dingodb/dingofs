@@ -22,6 +22,7 @@
 
 #include "cache/blockcache/disk_cache_watcher.h"
 
+#include "cache/common/macro.h"
 #include "cache/utils/helper.h"
 #include "utils/executor/timer_impl.h"
 
@@ -33,16 +34,16 @@ DiskCacheWatcher::DiskCacheWatcher()
 
 void DiskCacheWatcher::Add(DiskCacheSPtr store,
                            CacheStore::UploadFunc uploader) {
-  CHECK(!running_.load()) << "MUST add targets before watcher started.";
+  CHECK(!running_) << "MUST add targets before watcher started.";
 
   targets_.emplace_back(Target(store, uploader));
 }
 
 void DiskCacheWatcher::Start() {
-  CHECK_NOTNULL(timer_);
   CHECK(!targets_.empty());
+  CHECK_NOTNULL(timer_);
 
-  if (running_) {  // Already running
+  if (running_) {
     return;
   }
 
@@ -55,19 +56,21 @@ void DiskCacheWatcher::Start() {
 
   LOG(INFO) << "Disk cache watcher is up.";
 
-  CHECK(running_);
+  CHECK_RUNNING("Disk cache watcher");
 }
 
 void DiskCacheWatcher::Shutdown() {
+  if (!running_.exchange(false)) {
+    return;
+  }
+
   LOG(INFO) << "Disk cache watcher is shutting down...";
 
   timer_->Stop();
 
-  running_.store(false);
-
   LOG(INFO) << "Disk cache watcher is down.";
 
-  CHECK(!running_.load());
+  CHECK_DOWN("Disk cache watcher");
 }
 
 void DiskCacheWatcher::WatchingWorker() {
@@ -105,21 +108,22 @@ bool DiskCacheWatcher::CheckUuid(const std::string& lock_path,
   std::string content;
   auto status = Helper::ReadFile(lock_path, &content);
   if (!status.ok()) {
-    LOG(ERROR) << "Read lock file (" << lock_path
-               << ") failed: " << status.ToString();
+    LOG(ERROR) << "Read lock file failed: path = " << lock_path
+               << ", status = " << status.ToString();
     return false;
   }
 
   content = base::string::TrimSpace(content);
   if (uuid != content) {
-    LOG(ERROR) << "Disk cache uuid mismatch: " << uuid << " != " << content;
+    LOG(ERROR) << "Disk cache uuid mismatch, please rewrite it: got(" << content
+               << ") != expect(" << uuid << ").";
     return false;
   }
   return true;
 }
 
 void DiskCacheWatcher::Shutdown(Target* target) {
-  if (!target->IsRunning()) {  // Already shutdown
+  if (!target->IsRunning()) {
     LOG(INFO) << "Disk cache (dir=" << target->GetRootDir()
               << ") is already shutdown, no need to shutdown again.";
     return;

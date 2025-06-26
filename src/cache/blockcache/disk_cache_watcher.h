@@ -50,6 +50,7 @@ class DiskCacheWatcher {
   virtual ~DiskCacheWatcher() = default;
 
   void Add(DiskCacheSPtr store, CacheStore::UploadFunc uploader);
+
   void Start();
   void Shutdown();
 

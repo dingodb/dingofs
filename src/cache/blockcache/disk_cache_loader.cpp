@@ -25,6 +25,8 @@
 #include <absl/strings/str_format.h>
 #include <butil/time.h>
 
+#include <atomic>
+
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
 #include "cache/utils/context.h"
@@ -37,7 +39,8 @@ DiskCacheLoader::DiskCacheLoader(DiskCacheLayoutSPtr layout,
                                  std::shared_ptr<DiskCacheManager> manager,
                                  metrics::DiskCacheMetricSPtr metric)
     : running_(false),
-      loading_(false),
+      cache_loading_(false),
+      stage_loading_(false),
       layout_(layout),
       manager_(manager),
       thread_pool_(std::make_unique<TaskThreadPool>("disk_cache_loader")),
@@ -48,6 +51,7 @@ void DiskCacheLoader::Start(const std::string& disk_id,
   CHECK_NOTNULL(layout_);
   CHECK_NOTNULL(manager_);
   CHECK_NOTNULL(thread_pool_);
+  CHECK_NOTNULL(metric_);
 
   if (running_) {
     return;
@@ -57,7 +61,8 @@ void DiskCacheLoader::Start(const std::string& disk_id,
 
   disk_id_ = disk_id;
   uploader_ = uploader;
-  loading_.store(true, std::memory_order_acq_rel);
+  cache_loading_ = true;
+  stage_loading_ = true;
 
   CHECK_EQ(thread_pool_->Start(2), 0);
   thread_pool_->Enqueue(&DiskCacheLoader::LoadAllBlocks, this,
@@ -71,16 +76,15 @@ void DiskCacheLoader::Start(const std::string& disk_id,
 }
 
 void DiskCacheLoader::Shutdown() {
-  if (!running_) {  // Already shutdown
+  if (!running_.exchange(false)) {
     return;
   }
 
   LOG(INFO) << "Disk cache loader is shutting down...";
 
   thread_pool_->Stop();
-  loading_.store(false, std::memory_order_acq_rel);
-
-  running_.store(false);
+  cache_loading_ = false;
+  stage_loading_ = false;
 
   LOG(INFO) << "Disk cache loader is down.";
 
@@ -112,7 +116,7 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
 
   std::string message = absl::StrFormat(
       "Load %s (dir=%s) %s: %d blocks loaded, %d invalid blocks found, costs "
-      "%.6f seconds.",
+      "%.6lf seconds.",
       ToString(type), dir, status.ToString(), num_blocks, num_invalids,
       timer.u_elapsed() / 1e6);
 
@@ -122,7 +126,11 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
   }
 
   if (type == BlockType::kCacheBlock) {
-    loading_.store(false, std::memory_order_acq_rel);
+    cache_loading_.store(false, std::memory_order_relaxed);
+  } else if (type == BlockType::kStageBlock) {
+    stage_loading_.store(false, std::memory_order_relaxed);
+  } else {
+    CHECK(false) << "Unknown block type: " << static_cast<int>(type);
   }
 }
 
@@ -130,7 +138,7 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
                                    const FileInfo& file, BlockType type) {
   BlockKey key;
   std::string name = file.name;
-  std::string path = base::filepath::PathJoin({prefix, name});
+  std::string path = Helper::PathJoin({prefix, name});
 
   if (Helper::IsTempFilepath(name) || !key.ParseFromFilename(name)) {
     auto status = Helper::RemoveFile(path);
@@ -157,7 +165,7 @@ bool DiskCacheLoader::LoadOneBlock(const std::string& prefix,
 }
 
 bool DiskCacheLoader::IsLoading() {
-  return loading_.load(std::memory_order_acquire);
+  return cache_loading_.load(std::memory_order_relaxed);
 }
 
 std::string DiskCacheLoader::GetStageDir() const {

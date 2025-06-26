@@ -88,9 +88,6 @@ DECLARE_uint32(ioring_iodepth);
 // Sets whether to enable prefetching for iouring operations.
 DECLARE_bool(ioring_prefetch);
 
-// Sets whether to drop page cache after writing blocks to disk.
-DECLARE_bool(drop_page_cache);
-
 // Sets the duration in seconds for the disk state tick.
 DECLARE_uint32(state_tick_duration_s);
 

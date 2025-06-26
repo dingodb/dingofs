@@ -44,10 +44,6 @@ DEFINE_uint32(cleanup_expire_interval_ms, 1000,
               "Interval for cleaning up expired cache blocks in milliseconds");
 DEFINE_validator(cleanup_expire_interval_ms, brpc::PassValidate);
 
-DEFINE_bool(drop_page_cache, true,
-            "Whether to drop page cache after writing blocks to disk");
-DEFINE_validator(drop_page_cache, brpc::PassValidate);
-
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    DiskCacheLayoutSPtr layout,
                                    metrics::DiskCacheMetricSPtr metric)

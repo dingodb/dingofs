@@ -36,8 +36,10 @@ class MemCache final : public CacheStore {
   MemCache() = default;
   ~MemCache() override = default;
 
-  Status Start(UploadFunc) override { return Status::OK(); }
-  Status Shutdown() override { return Status::OK(); }
+  Status Start(UploadFunc) override {
+    return Status::NotSupport("not support");
+  }
+  Status Shutdown() override { return Status::NotSupport("not support"); }
 
   Status Stage(ContextSPtr, const BlockKey&, const Block&,
                StageOption) override {

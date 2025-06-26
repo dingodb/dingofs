@@ -26,7 +26,6 @@
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/blockcache/disk_cache_manager.h"
 #include "cache/storage/filesystem.h"
-#include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
 namespace cache {
@@ -58,7 +57,8 @@ class DiskCacheLoader {
   std::string ToString(BlockType type) const;
 
   std::atomic<bool> running_;
-  std::atomic<bool> loading_;
+  std::atomic<bool> cache_loading_;
+  std::atomic<bool> stage_loading_;
   std::string disk_id_;
   CacheStore::UploadFunc uploader_;
   DiskCacheLayoutSPtr layout_;
