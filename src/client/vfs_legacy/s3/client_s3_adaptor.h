@@ -31,7 +31,6 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
-#include "client/common/config.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/in_time_warmup_manager.h"
@@ -56,7 +55,7 @@ class S3ClientAdaptor {
    * @param[in] options the options for s3 client
    */
   virtual DINGOFS_ERROR Init(
-      const common::S3ClientAdaptorOption& option,
+      const S3ClientAdaptorOption& option,
       blockaccess::BlockAccesser* block_accesser,
       std::shared_ptr<InodeCacheManager> inodeManager,
       std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,
@@ -111,7 +110,7 @@ class S3ClientAdaptorImpl : public S3ClientAdaptor {
    * @param[in] options the options for s3 client
    */
   DINGOFS_ERROR
-  Init(const common::S3ClientAdaptorOption& option,
+  Init(const S3ClientAdaptorOption& option,
        blockaccess::BlockAccesser* block_accesser,
        std::shared_ptr<InodeCacheManager> inodeManager,
        std::shared_ptr<stub::rpcclient::MdsClient> mdsClient,

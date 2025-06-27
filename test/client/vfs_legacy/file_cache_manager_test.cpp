@@ -23,13 +23,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/common/dynamic_config.h"
+#include "blockaccess/mock/mock_accesser.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
 #include "common/status.h"
-#include "blockaccess/mock/mock_accesser.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -37,22 +38,20 @@ namespace client {
 using dingofs::utils::TaskThreadPool;
 using ::testing::_;
 using ::testing::DoAll;
-using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 using ::testing::SetArgReferee;
-using ::testing::WithArg;
 
 // extern KVClientManager *g_kvClientManager;
 
 class FileCacheManagerTest : public testing::Test {
  protected:
   FileCacheManagerTest() {}
-  ~FileCacheManagerTest() {}
+  ~FileCacheManagerTest() override = default;
   void SetUp() override {
     uint64_t inodeId = 1;
     uint64_t fsId = 2;
-    common::S3ClientAdaptorOption option;
+    S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
@@ -80,7 +79,7 @@ class FileCacheManagerTest : public testing::Test {
     fileCacheManager_ = std::make_shared<FileCacheManager>(
         fsId, inodeId, s3ClientAdaptor_, nullptr, threadPool_);
     mockChunkCacheManager_ = std::make_shared<MockChunkCacheManager>();
-    dingofs::client::common::FLAGS_enableCto = false;
+    dingofs::client::FLAGS_enableCto = false;
     kvClientManager_ = nullptr;
   }
 

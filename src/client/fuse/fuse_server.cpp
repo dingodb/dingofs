@@ -23,12 +23,12 @@
 #include <chrono>
 
 #include "absl/cleanup/cleanup.h"
-#include "client/common/dynamic_config.h"
 #include "client/common/share_var.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
 #include "client/fuse/fuse_parse.h"
 #include "client/fuse/fuse_passfd.h"
+#include "options/client/options/fuse/fuse_dynamic_option.h"
 #include "stub/common/version.h"
 #include "utils/concurrent/concurrent.h"
 

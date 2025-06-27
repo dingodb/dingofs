@@ -27,10 +27,10 @@
 #include <cassert>
 #include <cstring>
 
-#include "client/common/config.h"
 #include "client/common/share_var.h"
 #include "client/datastream/metric.h"
 #include "client/datastream/page_allocator.h"
+#include "options/client/options/data_stream/data_stream_option.h"
 
 namespace dingofs {
 namespace client {

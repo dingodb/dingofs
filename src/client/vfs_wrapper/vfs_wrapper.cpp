@@ -95,7 +95,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // init client option
-  common::InitClientOption(&conf_, &fuse_client_option_);
+  InitClientOption(&conf_, &client_option_);
 
   // init log
   s = InitLog();
@@ -103,8 +103,7 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
     return s;
   }
 
-  int32_t bthread_worker_num =
-      dingofs::client::common::FLAGS_bthread_worker_num;
+  int32_t bthread_worker_num = dingofs::client::FLAGS_bthread_worker_num;
   if (bthread_worker_num > 0) {
     bthread_setconcurrency(bthread_worker_num);
     LOG(INFO) << "set bthread concurrency to " << bthread_worker_num
@@ -116,10 +115,10 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
-    vfs_ = std::make_unique<vfs::VFSImpl>(fuse_client_option_);
+    vfs_ = std::make_unique<vfs::VFSImpl>(client_option_.vfs_option);
 
   } else {
-    vfs_ = std::make_unique<vfs::VFSOld>(fuse_client_option_);
+    vfs_ = std::make_unique<vfs::VFSOld>(client_option_.vfs_legacy_option);
   }
 
   return vfs_->Start(vfs_conf);
@@ -164,7 +163,7 @@ Status VFSWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opLookup, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -250,7 +249,7 @@ Status VFSWrapper::MkNod(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opMkNod, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -273,7 +272,7 @@ Status VFSWrapper::Unlink(Ino parent, const std::string& name) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opUnlink, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -300,8 +299,9 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
-    s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+  if (link.length() > vfs_->GetMaxNameLength()) {
+    s = Status::NameTooLong(
+        fmt::format("link name({}) too long", link.length()));
     return s;
   }
 
@@ -323,8 +323,8 @@ Status VFSWrapper::Rename(Ino old_parent, const std::string& old_name,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRename, &client_op_metric_->opAll});
 
-  if (old_name.length() > fuse_client_option_.fileSystemOption.maxNameLength ||
-      new_name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (old_name.length() > vfs_->GetMaxNameLength() ||
+      new_name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}|{}) too long",
                                         old_name.length(), new_name.length()));
     return s;
@@ -350,6 +350,15 @@ Status VFSWrapper::Link(Ino ino, Ino new_parent, const std::string& new_name,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opLink, &client_op_metric_->opAll});
+
+  uint64_t max_name_len = vfs_->GetMaxNameLength();
+
+  if (new_name.length() > max_name_len) {
+    LOG(WARNING) << "name too long, name: " << new_name
+                 << ", maxNameLength: " << max_name_len;
+    return Status::NameTooLong("name too long, length: " +
+                               std::to_string(new_name.length()));
+  }
 
   s = vfs_->Link(ino, new_parent, new_name, attr);
   if (!s.ok()) {
@@ -391,7 +400,7 @@ Status VFSWrapper::Create(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opCreate, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -515,7 +524,7 @@ Status VFSWrapper::SetXattr(Ino ino, const std::string& name,
     return absl::StrFormat("setxattr (%d,%s): %s", ino, name, s.ToString());
   });
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -537,7 +546,7 @@ Status VFSWrapper::GetXattr(Ino ino, const std::string& name,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opGetXattr, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -590,7 +599,7 @@ Status VFSWrapper::MkDir(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opMkDir, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -671,7 +680,7 @@ Status VFSWrapper::RmDir(Ino parent, const std::string& name) {
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRmDir, &client_op_metric_->opAll});
 
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(fmt::format("name({}) too long", name.length()));
     return s;
   }
@@ -709,9 +718,7 @@ uint64_t VFSWrapper::GetMaxNameLength() {
   return max_name_length;
 }
 
-common::FuseOption VFSWrapper::GetFuseOption() const {
-  return vfs_->GetFuseOption();
-}
+FuseOption VFSWrapper::GetFuseOption() const { return vfs_->GetFuseOption(); }
 
 }  // namespace vfs
 }  // namespace client

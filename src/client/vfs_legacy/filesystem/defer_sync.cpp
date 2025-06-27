@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "utils/concurrent/concurrent.h"
 #include "glog/logging.h"
@@ -35,7 +36,6 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::DeferSyncOption;
 using pb::metaserver::MetaStatusCode;
 using utils::LockGuard;
 using utils::Mutex;

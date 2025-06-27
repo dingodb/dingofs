@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
-#define DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
+#ifndef DINGOFS_SRC_CLIENT_OPTIONS_VFS_DYNAMIC_OPTION_H_
+#define DINGOFS_SRC_CLIENT_OPTIONS_VFS_DYNAMIC_OPTION_H_
 
 #include <gflags/gflags.h>
+#include <gflags/gflags_declare.h>
 
 namespace dingofs {
 namespace client {
-namespace vfs {
-
 
 // meta system log
 DECLARE_bool(meta_logging);
 
-}
+DECLARE_int32(flush_bg_thread);
+
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
+#endif  // DINGOFS_SRC_CLIENT_OPTIONS_FUSE_OPTION_H_

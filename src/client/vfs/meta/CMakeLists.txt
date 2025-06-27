@@ -23,7 +23,6 @@ add_library(vfs_meta_lib
 
 target_link_libraries(vfs_meta_lib
     client_common
-    vfs_common_lib
     vfs_meta_dummy_lib
     vfs_meta_v2_lib
     absl::str_format

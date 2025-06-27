@@ -23,9 +23,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "client/vfs_legacy/s3/client_s3_cache_manager.h"
-#include "client/vfs_legacy/s3/client_s3_adaptor.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
+#include "client/vfs_legacy/s3/client_s3_adaptor.h"
+#include "client/vfs_legacy/s3/client_s3_cache_manager.h"
 
 namespace dingofs {
 namespace client {
@@ -44,7 +45,7 @@ class ChunkCacheManagerTest : public testing::Test {
   void SetUp() override {
     uint64_t index = 0;
 
-    common::S3ClientAdaptorOption option;
+    S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;

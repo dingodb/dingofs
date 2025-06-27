@@ -25,8 +25,8 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
-#include "client/common/config.h"
 #include "client/datastream/page_allocator.h"
+#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
@@ -46,7 +46,7 @@ class VFSHub {
   virtual ~VFSHub() = default;
 
   virtual Status Start(const VFSConfig& vfs_conf,
-                       const common::ClientOption& client_option) = 0;
+                       const VFSOption& vfs_option) = 0;
 
   virtual Status Stop() = 0;
 
@@ -76,8 +76,7 @@ class VFSHubImpl : public VFSHub {
 
   ~VFSHubImpl() override { Stop(); }
 
-  Status Start(const VFSConfig& vfs_conf,
-               const common::ClientOption& client_option) override;
+  Status Start(const VFSConfig& vfs_conf, const VFSOption& vfs_option) override;
 
   Status Stop() override;
 
@@ -129,13 +128,13 @@ class VFSHubImpl : public VFSHub {
 
   uint64_t GetPageSize() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-    return client_option_.data_stream_option.page_option.page_size;
+    return vfs_option_.data_stream_option.page_option.page_size;
   }
 
  private:
   std::atomic_bool started_{false};
 
-  common::ClientOption client_option_;
+  VFSOption vfs_option_;
   FsInfo fs_info_;
   S3Info s3_info_;
   std::unique_ptr<MetaSystem> meta_system_;

@@ -20,6 +20,7 @@ add_library(client_memcached_client
 
 target_link_libraries(client_memcached_client
     PROTO_OBJS
+    client_options
     dingofs_utils
     dingofs_metrics
     block_accesser

@@ -28,12 +28,12 @@
 #include <set>
 #include <string>
 #include <utility>
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using client::common::RPCOption;
 using pb::metaserver::Dentry;
 
 RPCClient::RPCClient(RPCOption option, ExternalMember member)

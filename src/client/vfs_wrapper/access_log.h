@@ -32,7 +32,7 @@
 
 #include <string>
 
-#include "client/common/dynamic_config.h"
+#include "options/client/options/client_dynamic_option.h"
 
 namespace dingofs {
 namespace client {
@@ -45,7 +45,7 @@ struct AccessLogGuard {
   using MessageHandler = std::function<std::string()>;
 
   explicit AccessLogGuard(MessageHandler handler)
-      : enable(common::FLAGS_access_logging), handler(handler) {
+      : enable(FLAGS_access_logging), handler(handler) {
     if (!enable) {
       return;
     }

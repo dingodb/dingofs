@@ -14,16 +14,22 @@
  * limitations under the License.
  */
 
-#include "client/vfs/common/config.h"
+#include "options/client/options/client_dynamic_option.h"
 
 namespace dingofs {
 namespace client {
-namespace vfs {
 
-DEFINE_bool(data_use_direct_write, true,
-            "Use direct write to chunk, If true, use direct write to block "
-            "cache, otherwise use buffer write");
+namespace {
+bool PassDouble(const char*, double) { return true; }
+bool PassUint64(const char*, uint64_t) { return true; }
+bool PassInt32(const char*, int32_t) { return true; }
+bool PassUint32(const char*, uint32_t) { return true; }
+bool PassBool(const char*, bool) { return true; }
+};  // namespace
 
-}
+// access log
+DEFINE_bool(access_logging, true, "enable access log");
+DEFINE_validator(access_logging, &PassBool);
+
 }  // namespace client
 }  // namespace dingofs

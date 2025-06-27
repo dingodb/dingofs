@@ -14,8 +14,6 @@
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
 add_library(client_common
-    dynamic_config.cpp
-    config.cpp
     common.cpp
 )
 

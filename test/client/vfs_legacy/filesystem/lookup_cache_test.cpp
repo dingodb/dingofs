@@ -24,13 +24,11 @@
 
 #include <gtest/gtest.h>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
-
-using dingofs::client::common::LookupCacheOption;
 
 class LookupCacheTest : public ::testing::Test {
  protected:
@@ -40,7 +38,8 @@ class LookupCacheTest : public ::testing::Test {
 
 TEST_F(LookupCacheTest, Basic) {
   auto option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 1};
-  auto cache = std::make_shared<LookupCache>(option);
+  auto cache =
+      std::make_shared<dingofs::client::filesystem::LookupCache>(option);
 
   ASSERT_FALSE(cache->Get(1, "f1"));
 
@@ -51,7 +50,8 @@ TEST_F(LookupCacheTest, Basic) {
 TEST_F(LookupCacheTest, Enable) {
   // CASE 1: cache off, negativeTimeoutSec = 0.
   auto option = LookupCacheOption{lruSize : 10, negativeTimeoutSec : 0};
-  auto cache = std::make_shared<LookupCache>(option);
+  auto cache =
+      std::make_shared<dingofs::client::filesystem::LookupCache>(option);
   cache->Put(1, "f1");
   ASSERT_FALSE(cache->Get(1, "f1"));
 

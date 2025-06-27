@@ -30,12 +30,11 @@
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
 #include "common/status.h"
+#include "options/client/options/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {
 namespace vfs {
-
-DECLARE_bool(data_use_direct_write);
 
 static std::atomic<uint64_t> file_flush_id_gen{1};
 

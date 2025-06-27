@@ -30,6 +30,7 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/datastream/data_stream.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/in_time_warmup_manager.h"
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
@@ -39,7 +40,6 @@ namespace dingofs {
 namespace client {
 
 using blockaccess::BlockAccesserSPtr;
-using common::S3ClientAdaptorOption;
 using datastream::DataStream;
 using filesystem::FileSystem;
 using stub::rpcclient::MdsClient;

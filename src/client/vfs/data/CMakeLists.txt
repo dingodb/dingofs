@@ -28,7 +28,6 @@ target_link_libraries(vfs_data
     vfs_data_flat
     vfs_data_slice
     vfs_background
-    vfs_common_lib
     fmt::fmt
     glog::glog
 )

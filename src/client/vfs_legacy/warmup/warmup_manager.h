@@ -40,6 +40,7 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
@@ -187,7 +188,7 @@ class WarmupManager {
         kvClientManager_(std::move(kv_client_manager)),
         vfs_(vfs) {}
 
-  virtual void Init(const common::ClientOption& option) { option_ = option; }
+  virtual void Init(const VFSLegacyOption& option) { option_ = option; }
   virtual void UnInit() { ClearWarmupProcess(); }
 
   virtual bool AddWarmupFilelist(Ino key, common::WarmupStorageType type) = 0;
@@ -275,7 +276,7 @@ class WarmupManager {
 
   std::shared_ptr<KVClientManager> kvClientManager_ = nullptr;
 
-  common::ClientOption option_;
+  VFSLegacyOption option_;
 
   vfs::VFS* vfs_;
 };
@@ -300,7 +301,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   bool AddWarmupFile(Ino key, const std::string& path,
                      common::WarmupStorageType type) override;
 
-  void Init(const common::ClientOption& option) override;
+  void Init(const VFSLegacyOption& option) override;
   void UnInit() override;
 
  private:

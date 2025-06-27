@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "utils/lru_cache.h"
 
@@ -45,7 +45,7 @@ class LookupCache {
 
   using LRUType = utils::LRUCache<std::string, CacheEntry>;
 
-  explicit LookupCache(common::LookupCacheOption option);
+  explicit LookupCache(LookupCacheOption option);
 
   bool Get(Ino parent, const std::string& name);
 
@@ -58,7 +58,7 @@ class LookupCache {
 
   bool enable_;
   utils::RWLock rwlock_;
-  common::LookupCacheOption option_;
+  LookupCacheOption option_;
   std::shared_ptr<LRUType> lru_;
 };
 

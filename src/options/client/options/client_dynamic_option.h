@@ -14,26 +14,20 @@
  * limitations under the License.
  */
 
-#include "client/vfs/common/dynamic_param.h"
+#ifndef DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
+#define DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_
 
-#include <cstdint>
+#include <gflags/gflags.h>
 
 namespace dingofs {
 namespace client {
-namespace vfs {
 
-namespace {
-bool PassDouble(const char*, double) { return true; }
-bool PassUint64(const char*, uint64_t) { return true; }
-bool PassInt32(const char*, int32_t) { return true; }
-bool PassUint32(const char*, uint32_t) { return true; }
-bool PassBool(const char*, bool) { return true; }
-};  // namespace
+#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
 
 // access log
-DEFINE_bool(meta_logging, true, "enable meta system log");
-DEFINE_validator(meta_logging, &PassBool);
+DECLARE_bool(access_logging);
 
-}
 }  // namespace client
 }  // namespace dingofs
+
+#endif  // DINGOFS_SRC_CLIENT_OPTIONS_CLIENT_DYNAMIC_OPTION_H_

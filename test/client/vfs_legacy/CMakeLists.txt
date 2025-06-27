@@ -40,6 +40,7 @@ set(TEST_CLIENT_DEPS
     fuse_client_lib
     client_memcached_client
     cache_lib
+    client_options
     absl::strings
     ${PROTO_OBJS}
     ${TEST_DEPS}

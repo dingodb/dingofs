@@ -29,7 +29,7 @@
 #include <memory>
 #include <set>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
@@ -52,7 +52,7 @@ class InodeCacheManager {
   void SetFsId(uint32_t fs_id) { m_fs_id = fs_id; }
 
   virtual DINGOFS_ERROR Init(
-      common::RefreshDataOption option,
+      RefreshDataOption option,
       std::shared_ptr<filesystem::OpenFiles> open_files,
       std::shared_ptr<filesystem::DeferSync> defer_sync) = 0;
 
@@ -105,7 +105,7 @@ class InodeCacheManagerImpl
       : metaClient_(meta_client) {}
 
   DINGOFS_ERROR Init(
-      common::RefreshDataOption option,
+      RefreshDataOption option,
       std::shared_ptr<filesystem::OpenFiles> open_files,
       std::shared_ptr<filesystem::DeferSync> defer_sync) override {
     option_ = option;
@@ -166,7 +166,7 @@ class InodeCacheManagerImpl
 
   dingofs::utils::GenericNameLock<utils::Mutex> asyncNameLock_;
 
-  common::RefreshDataOption option_;
+  RefreshDataOption option_;
 };
 
 class BatchGetInodeAttrAsyncDone

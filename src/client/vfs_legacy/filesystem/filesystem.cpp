@@ -26,8 +26,8 @@
 #include <memory>
 
 #include "base/string/string.h"
-#include "client/common/dynamic_config.h"
 #include "client/common/share_var.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/filesystem/attr_watcher.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/dir_parent_watcher.h"
@@ -43,7 +43,6 @@ namespace client {
 namespace filesystem {
 
 using base::time::TimeSpec;
-using common::FileSystemOption;
 
 using pb::metaserver::InodeAttr;
 using pb::metaserver::Quota;

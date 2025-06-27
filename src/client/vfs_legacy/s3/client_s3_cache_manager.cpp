@@ -37,8 +37,8 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/helper.h"
-#include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
@@ -70,7 +70,7 @@ using pb::metaserver::Inode;
 using pb::metaserver::S3ChunkInfo;
 using pb::metaserver::S3ChunkInfoList;
 
-using common::FLAGS_fuse_read_max_retry_s3_not_exist;
+USING_FLAG(fuse_read_max_retry_s3_not_exist)
 
 void FsCacheManager::DataCacheNumInc() {
   g_s3MultiManagerMetric->writeDataCacheNum << 1;
@@ -489,7 +489,7 @@ int FileCacheManager::Read(uint64_t inode_id, uint64_t offset, uint64_t length,
   }
 
   // in time warmup
-  if (s3ClientAdaptor_->HasDiskCache() && common::FLAGS_in_time_warmup) {
+  if (s3ClientAdaptor_->HasDiskCache() && FLAGS_in_time_warmup) {
     auto inode_prefetch_manager = s3ClientAdaptor_->GetIntimeWarmUpManager();
     CHECK_NOTNULL(inode_prefetch_manager);
     inode_prefetch_manager->Submit(inode_wrapper);
@@ -631,7 +631,7 @@ Status FileCacheManager::ProcessKVRequest(const S3ReadRequest& req,
   const uint64_t chunk_size = s3ClientAdaptor_->GetChunkSize();
 
   // prefetch
-  if (s3ClientAdaptor_->HasDiskCache() && common::FLAGS_s3_prefetch) {
+  if (s3ClientAdaptor_->HasDiskCache() && FLAGS_s3_prefetch) {
     PrefetchForBlock(req, file_len, block_size, chunk_size, block_index);
   }
 
@@ -1975,7 +1975,6 @@ void DataCache::MergeDataCacheToDataCache(DataCachePtr mergeDataCache,
   VLOG(9) << "MergeDataCacheToDataCache end chunkPos:" << chunkPos_
           << ", len:" << len_ << ", actualChunkPos:" << actualChunkPos_
           << ",  actualLen:" << actualLen_;
-  return;
 }
 
 void DataCache::Write(uint64_t chunkPos, uint64_t len, const char* data,
@@ -2089,7 +2088,6 @@ void DataCache::Write(uint64_t chunkPos, uint64_t len, const char* data,
       s3ClientAdaptor_->GetFsCacheManager()->DataCacheByteInc(addByte);
     }
   }
-  return;
 }
 
 void DataCache::Truncate(uint64_t size) {
@@ -2157,7 +2155,6 @@ void DataCache::Truncate(uint64_t size) {
   }
   assert(tmpActualLen == actualLen_);
   (void)tmpActualLen;
-  return;
 }
 
 void DataCache::Release() {

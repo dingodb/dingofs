@@ -29,6 +29,7 @@
 #include <thread>
 
 #include "absl/strings/str_cat.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/kvclient/memcache_client.h"
 #include "utils/concurrent/count_down_event.h"
@@ -56,7 +57,7 @@ class MemCachedTest : public ::testing::Test {
     std::shared_ptr<MemCachedClient> client(new MemCachedClient());
     ASSERT_EQ(true, client->AddServer(hostname, port));
     ASSERT_EQ(true, client->PushServer());
-    common::KVClientManagerOpt opt;
+    KVClientManagerOpt opt;
     opt.setThreadPooln = 2;
     opt.getThreadPooln = 2;
     ASSERT_EQ(true, manager_.Init(opt, client));

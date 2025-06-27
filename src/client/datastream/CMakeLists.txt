@@ -21,4 +21,5 @@ add_library(client_datastream
 )
 target_link_libraries(client_datastream
     dingofs_utils
+    client_options
 )

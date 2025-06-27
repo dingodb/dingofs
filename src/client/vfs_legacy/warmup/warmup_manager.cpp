@@ -36,6 +36,7 @@
 #include "base/filepath/filepath.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/common.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "metrics/blockaccess/s3_accesser.h"
 #include "metrics/metric.h"
@@ -48,7 +49,6 @@ namespace client {
 namespace warmup {
 
 using base::filepath::PathSplit;
-using common::ClientOption;
 using common::WarmupStorageType;
 using metrics::MetricGuard;
 using metrics::blockaccess::S3Metric;
@@ -135,7 +135,7 @@ void WarmupManagerS3Impl::UnInit() {
   WarmupManager::UnInit();
 }
 
-void WarmupManagerS3Impl::Init(const ClientOption& option) {
+void WarmupManagerS3Impl::Init(const VFSLegacyOption& option) {
   WarmupManager::Init(option);
   bgFetchStop_.store(false, std::memory_order_release);
   bgFetchThread_ = utils::Thread(&WarmupManagerS3Impl::BackGroundFetch, this);

@@ -20,14 +20,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/common/dynamic_config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 namespace dingofs {
 namespace client {
-namespace common {
 
 namespace {
 bool PassDouble(const char*, double) { return true; }
@@ -36,17 +35,6 @@ bool PassInt32(const char*, int32_t) { return true; }
 bool PassUint32(const char*, uint32_t) { return true; }
 bool PassBool(const char*, bool) { return true; }
 };  // namespace
-
-// access log
-DEFINE_bool(access_logging, true, "enable access log");
-DEFINE_validator(access_logging, &PassBool);
-
-// fuse module
-DEFINE_bool(fuse_file_info_direct_io, false, "use direct io for file");
-DEFINE_bool(fuse_file_info_keep_cache, false, "keep file page cache");
-
-DEFINE_validator(fuse_file_info_direct_io, &PassBool);
-DEFINE_validator(fuse_file_info_keep_cache, &PassBool);
 
 // thread num or bthread num
 DEFINE_uint32(stat_timer_thread_num, 8, "stat timer thread num");
@@ -80,12 +68,8 @@ DEFINE_validator(s3_prefetch, &PassBool);
 DEFINE_bool(in_time_warmup, false, "in time warmup inode when enable");
 DEFINE_validator(in_time_warmup, &PassBool);
 
-DEFINE_int32(bthread_worker_num, 0, "bthread worker num");
-
 // from config.h and config.cpp
 DEFINE_bool(enableCto, true, "acheieve cto consistency");
-DEFINE_bool(useFakeS3, false,
-            "Use fake s3 to inject more metadata for testing metaserver");
 DEFINE_bool(supportKVcache, false, "use kvcache to speed up sharing");
 
 /**
@@ -130,25 +114,5 @@ DEFINE_uint64(fuseClientBurstReadIopsSecs, 180,
               "the times that Read burst iops can continue");
 DEFINE_validator(fuseClientBurstReadIopsSecs, &PassUint64);
 
-// smooth upgrade
-DEFINE_uint32(fuse_fd_get_max_retries, 100,
-              "the max retries that get fuse fd from old dingo-fuse during "
-              "smooth upgrade");
-DEFINE_validator(fuse_fd_get_max_retries, &PassUint32);
-DEFINE_uint32(
-    fuse_fd_get_retry_interval_ms, 100,
-    "the interval in millseconds that get fuse fd from old dingo-fuse "
-    "during smooth upgrade");
-DEFINE_validator(fuse_fd_get_retry_interval_ms, &PassUint32);
-DEFINE_uint32(
-    fuse_check_alive_max_retries, 600,
-    "the max retries that check old dingo-fuse is alive during smooth upgrade");
-DEFINE_validator(fuse_check_alive_max_retries, &PassUint32);
-DEFINE_uint32(fuse_check_alive_retry_interval_ms, 1000,
-              "the interval in millseconds that check old dingo-fuse is alive "
-              "during smooth upgrade");
-DEFINE_validator(fuse_check_alive_retry_interval_ms, &PassUint32);
-
-}  // namespace common
 }  // namespace client
 }  // namespace dingofs

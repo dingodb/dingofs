@@ -18,6 +18,7 @@ add_library(vfs_hub
 
 target_link_libraries(vfs_hub
     client_common
+    client_options
     cache_blockcache
     vfs_background
     vfs_meta_lib

@@ -33,8 +33,6 @@ namespace dingofs {
 namespace stub {
 namespace common {
 
-using ::dingofs::utils::Configuration;
-
 struct MetaCacheOpt {
   int metacacheGetLeaderRetry = 3;
   int metacacheRPCRetryIntervalUS = 500;
@@ -86,7 +84,7 @@ struct MdsOption {
   } rpcRetryOpt;
 };
 
-void InitMdsOption(Configuration* conf, MdsOption* mds_opt);
+void InitMdsOption(utils::Configuration* conf, MdsOption* mds_opt);
 
 }  // namespace common
 }  // namespace stub

@@ -21,7 +21,7 @@
 #include "client/fuse/fuse_op.h"
 #include "client/fuse/fuse_server.h"
 #include "client/vfs_wrapper/global_log.h"
-#include "common/config.h"
+#include "options/client/options/common_option.h"
 #include "utils/configuration.h"
 
 using FuseServer = dingofs::client::fuse::FuseServer;
@@ -93,8 +93,8 @@ int main(int argc, char* argv[]) {
   if (!conf.LoadConfig()) {
     LOG(ERROR) << "load config file failed: " << mount_option.conf;
   }
-  dingofs::client::common::UdsOption uds_option;
-  dingofs::client::common::InitUdsOption(&conf, &uds_option);
+  dingofs::client::UdsOption uds_option;
+  dingofs::client::InitUdsOption(&conf, &uds_option);
 
   if (fuse_server->Serve(uds_option.fd_comm_path) == 1) return EXIT_FAILURE;
 

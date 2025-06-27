@@ -27,11 +27,10 @@
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 
-#include <atomic>
 #include <memory>
 #include <string>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mds_client.h"
 #include "stub/rpcclient/metacache.h"
 
@@ -134,7 +133,7 @@ class RefreshSessionTask : public brpc::PeriodicTask {
 
 class LeaseExecutor : public LeaseExecutorBase {
  public:
-  LeaseExecutor(const common::LeaseOpt& opt,
+  LeaseExecutor(const LeaseOpt& opt,
                 std::shared_ptr<stub::rpcclient::MetaCache> metaCache,
                 std::shared_ptr<stub::rpcclient::MdsClient> mdsCli)
       : opt_(opt), metaCache_(metaCache), mdsCli_(mdsCli) {}
@@ -155,7 +154,7 @@ class LeaseExecutor : public LeaseExecutorBase {
   void SetMountPoint(const pb::mds::Mountpoint& mp) { mountpoint_ = mp; }
 
  private:
-  common::LeaseOpt opt_;
+  LeaseOpt opt_;
   std::shared_ptr<stub::rpcclient::MetaCache> metaCache_;
   std::shared_ptr<stub::rpcclient::MdsClient> mdsCli_;
   std::unique_ptr<RefreshSessionTask> task_;

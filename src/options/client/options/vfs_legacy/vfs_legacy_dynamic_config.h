@@ -20,29 +20,21 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
-#define DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_LEGACY_DYNAMIC_CONFIG_H_
+#define DINGOFS_SRC_CLIENT_VFS_LEGACY_DYNAMIC_CONFIG_H_
 
 #include "gflags/gflags.h"
 
 namespace dingofs {
 namespace client {
-namespace common {
 
-#define USING_FLAG(name) using ::dingofs::client::common::FLAGS_##name;
+#define USING_FLAG(name) using ::dingofs::client::FLAGS_##name;
 
 /**
  * You can modify the config on the fly, e.g.
  *
  * curl -s http://127.0.0.1:9000/flags/block_cache_logging?setvalue=true
  */
-
-// access log
-DECLARE_bool(access_logging);
-
-// fuse module
-DECLARE_bool(fuse_file_info_direct_io);
-DECLARE_bool(fuse_file_info_keep_cache);
 
 // ----- related stat or quota config -----
 // thread num or bthread num
@@ -59,10 +51,6 @@ DECLARE_uint32(fuse_read_max_retry_s3_not_exist);
 
 DECLARE_bool(s3_prefetch);
 DECLARE_bool(in_time_warmup);
-
-DECLARE_int32(bthread_worker_num);
-
-DECLARE_bool(useFakeS3);
 
 // ----- related fuse client -----
 DECLARE_bool(enableCto);
@@ -84,14 +72,7 @@ DECLARE_uint64(fuseClientAvgReadBytes);
 DECLARE_uint64(fuseClientBurstReadBytes);
 DECLARE_uint64(fuseClientBurstReadBytesSecs);
 
-// smooth upgrade
-DECLARE_uint32(fuse_fd_get_max_retries);
-DECLARE_uint32(fuse_fd_get_retry_interval_ms);
-DECLARE_uint32(fuse_check_alive_max_retries);
-DECLARE_uint32(fuse_check_alive_retry_interval_ms);
-
-}  // namespace common
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_COMMON_DYNAMIC_CONFIG_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_LEGACY_DYNAMIC_CONFIG_H_

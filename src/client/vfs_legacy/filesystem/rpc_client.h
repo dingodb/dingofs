@@ -26,7 +26,7 @@
 #include <memory>
 #include <string>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/package.h"
@@ -38,7 +38,7 @@ namespace filesystem {
 
 class RPCClient {
  public:
-  RPCClient(common::RPCOption option, ExternalMember member);
+  RPCClient(RPCOption option, ExternalMember member);
 
   DINGOFS_ERROR GetAttr(Ino ino, pb::metaserver::InodeAttr* attr);
 
@@ -49,7 +49,7 @@ class RPCClient {
   DINGOFS_ERROR Open(Ino ino, std::shared_ptr<InodeWrapper>* inode);
 
  private:
-  common::RPCOption option_;
+  RPCOption option_;
   std::shared_ptr<InodeCacheManager> inodeManager_;
   std::shared_ptr<DentryCacheManager> dentryManager_;
 };

@@ -24,6 +24,7 @@
 
 #include <utility>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "dingofs/metaserver.pb.h"
 #include "base/time/time.h"
 #include "client/vfs_legacy/filesystem/utils.h"
@@ -33,7 +34,6 @@ namespace client {
 namespace filesystem {
 
 using base::time::TimeSpec;
-using common::DirCacheOption;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::WriteLockGuard;

@@ -33,7 +33,6 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::LookupCacheOption;
 using utils::LRUCache;
 using utils::ReadLockGuard;
 using utils::RWLock;

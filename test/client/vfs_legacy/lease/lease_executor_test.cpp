@@ -25,6 +25,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/lease/lease_excutor.h"
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metacache.h"
@@ -52,7 +53,7 @@ class LeaseExecutorTest : public ::testing::Test {
  protected:
   std::shared_ptr<MockMdsClient> mdsCli_;
   std::shared_ptr<MockMetaCache> metaCache_;
-  common::LeaseOpt opt_;
+  LeaseOpt opt_;
 };
 
 TEST_F(LeaseExecutorTest, test_start) {

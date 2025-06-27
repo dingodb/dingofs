@@ -27,7 +27,9 @@
 #include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "client/common/config.h"
+#include "options/client/options/common_option.h"
+#include "options/client/options/vfs/vfs_dynamic_option.h"
+#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
@@ -39,18 +41,16 @@
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 
-DEFINE_int32(flush_bg_thread, 16, "Number of background flush threads");
-
 namespace dingofs {
 namespace client {
 namespace vfs {
 
 Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
-                         const common::ClientOption& client_option) {
+                         const VFSOption& vfs_option) {
   CHECK(started_.load(std::memory_order_relaxed) == false)
       << "unexpected start";
 
-  client_option_ = client_option;
+  vfs_option_ = vfs_option;
 
   utils::Configuration conf;
   conf.SetConfigPath(vfs_conf.config_path);
@@ -90,8 +90,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   // set s3/rados config info
   if (fs_info_.storage_info.store_type == StoreType::kS3) {
     auto s3_info = fs_info_.storage_info.s3_info;
-    client_option_.block_access_opt.type = blockaccess::AccesserType::kS3;
-    client_option_.block_access_opt.s3_options.s3_info =
+    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kS3;
+    vfs_option_.block_access_opt.s3_options.s3_info =
         blockaccess::S3Info{.ak = s3_info.ak,
                             .sk = s3_info.sk,
                             .endpoint = s3_info.endpoint,
@@ -99,8 +99,8 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
 
   } else if (fs_info_.storage_info.store_type == StoreType::kRados) {
     auto rados_info = fs_info_.storage_info.rados_info;
-    client_option_.block_access_opt.type = blockaccess::AccesserType::kRados;
-    client_option_.block_access_opt.rados_options =
+    vfs_option_.block_access_opt.type = blockaccess::AccesserType::kRados;
+    vfs_option_.block_access_opt.rados_options =
         blockaccess::RadosOptions{.mon_host = rados_info.mon_host,
                                   .user_name = rados_info.user_name,
                                   .key = rados_info.key,
@@ -109,18 +109,18 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   blockaccess::BlockAccesserFactory factory;
-  block_accesser_ = factory.NewBlockAccesser(client_option_.block_access_opt);
+  block_accesser_ = factory.NewBlockAccesser(vfs_option_.block_access_opt);
   DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
 
   handle_manager_ = std::make_unique<HandleManager>();
 
   {
     // related to block cache
-    auto block_cache_option = client_option_.block_cache_option;
-    auto remote_block_cache_option = client_option_.remote_block_cache_option;
+    auto block_cache_option = vfs_option_.block_cache_option;
+    auto remote_block_cache_option = vfs_option_.remote_block_cache_option;
 
     std::string uuid = absl::StrFormat("%d-%s", fs_info_.id, fs_info_.name);
-    common::RewriteCacheDir(&block_cache_option, uuid);
+    RewriteCacheDir(&block_cache_option, uuid);
 
     // block_cache_ = std::make_unique<cache::TierBlockCache>(
     //     block_cache_option, remote_block_cache_option,
@@ -142,7 +142,7 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    auto o = client_option_.data_stream_option.page_option;
+    auto o = vfs_option_.data_stream_option.page_option;
     if (o.use_pool) {
       page_allocator_ = std::make_shared<datastream::PagePool>();
     } else {

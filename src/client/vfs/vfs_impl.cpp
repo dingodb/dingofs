@@ -42,7 +42,7 @@ namespace vfs {
 
 Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
   vfs_hub_ = std::make_unique<VFSHubImpl>();
-  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, fuse_client_option_));
+  DINGOFS_RETURN_NOT_OK(vfs_hub_->Start(vfs_conf, vfs_option_));
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
@@ -326,7 +326,9 @@ Status VFSImpl::StatFs(Ino ino, FsStat* fs_stat) {
 
 uint64_t VFSImpl::GetFsId() { return 10; }
 
-uint64_t VFSImpl::GetMaxNameLength() { return 255; }
+uint64_t VFSImpl::GetMaxNameLength() {
+  return vfs_option_.meta_option.max_name_length;
+}
 
 }  // namespace vfs
 }  // namespace client

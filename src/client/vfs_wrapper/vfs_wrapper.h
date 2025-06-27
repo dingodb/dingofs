@@ -20,7 +20,8 @@
 #include <cstdint>
 #include <memory>
 
-#include "client/common/config.h"
+#include "options/client/options/client_option.h"
+#include "options/client/options/fuse/fuse_option.h"
 #include "client/vfs.h"
 #include "metrics/client/client.h"
 
@@ -118,11 +119,11 @@ class VFSWrapper {
 
   uint64_t GetMaxNameLength();
 
-  common::FuseOption GetFuseOption() const;
+  FuseOption GetFuseOption() const;
 
  private:
   utils::Configuration conf_;
-  common::ClientOption fuse_client_option_;
+  ClientOption client_option_;
 
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;

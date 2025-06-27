@@ -24,6 +24,7 @@
 
 #include <memory>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "glog/logging.h"
 
@@ -31,7 +32,6 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::OpenFilesOption;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 

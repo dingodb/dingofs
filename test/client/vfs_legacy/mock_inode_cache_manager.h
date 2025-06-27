@@ -31,8 +31,8 @@
 #include <memory>
 #include <set>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
@@ -47,7 +47,7 @@ class MockInodeCacheManager : public InodeCacheManager {
   ~MockInodeCacheManager() override = default;
 
   MOCK_METHOD3(Init,
-               DINGOFS_ERROR(common::RefreshDataOption option,
+               DINGOFS_ERROR(RefreshDataOption option,
                              std::shared_ptr<filesystem::OpenFiles> openFiles,
                              std::shared_ptr<filesystem::DeferSync> deferSync));
 

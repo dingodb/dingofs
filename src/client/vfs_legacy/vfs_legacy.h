@@ -26,7 +26,7 @@
 
 #include "blockaccess/block_accesser.h"
 #include "client/common/common.h"
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
@@ -44,8 +44,8 @@ namespace vfs {
 
 class VFSOld : public VFS {
  public:
-  VFSOld(const common::ClientOption& fuse_client_option)
-      : fuse_client_option_(fuse_client_option) {}
+  VFSOld(const VFSLegacyOption& option)
+      : option_(option) {}
 
   ~VFSOld() override = default;
 
@@ -123,8 +123,8 @@ class VFSOld : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  common::FuseOption GetFuseOption() override {
-    return fuse_client_option_.fuse_option;
+  FuseOption GetFuseOption() override {
+    return option_.fuse_option;
   }
 
   void InitQosParam();
@@ -164,7 +164,7 @@ class VFSOld : public VFS {
 
   pb::mds::Mountpoint mount_point_;
 
-  common::ClientOption fuse_client_option_;
+  VFSLegacyOption option_;
 
   // fs info
   std::shared_ptr<pb::mds::FsInfo> fs_info_{nullptr};

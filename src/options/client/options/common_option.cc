@@ -14,19 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
-#define DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
-
-#include <gflags/gflags.h>
+#include "options/client/options/common_option.h"
 
 namespace dingofs {
 namespace client {
-namespace vfs {
 
-DECLARE_bool(data_use_direct_write);
+DEFINE_int32(bthread_worker_num, 0, "bthread worker num");
 
-}
 }  // namespace client
-}  // namespace dingofs
 
-#endif  // DINGODB_CLIENT_VFS_COMMON_DYNAMIC_PARAM_H
+}  // namespace dingofs

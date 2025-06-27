@@ -30,7 +30,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/utils.h"
-#include "client/vfs/common/config.h"
+#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
 #include "client/vfs/data/slice/common.h"

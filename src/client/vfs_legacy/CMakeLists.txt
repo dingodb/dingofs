@@ -32,6 +32,7 @@ target_link_libraries(vfs_legacy_lib
     rpcclient
     dingofs_common
     client_lease
+    client_options
     client_memcached_client
     dynamic_vlog
     client_datastream

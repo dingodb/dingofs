@@ -29,7 +29,7 @@
 #include <string>
 #include <utility>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/kvclient/kvclient.h"
 #include "metrics/client/vfs_legacy/kv_client.h"
 #include "utils/concurrent/task_thread_pool.h"
@@ -76,7 +76,7 @@ class KVClientManager {
   KVClientManager() = default;
   ~KVClientManager() { Uninit(); }
 
-  bool Init(const common::KVClientManagerOpt& config,
+  bool Init(const KVClientManagerOpt& config,
             const std::shared_ptr<KVClient>& kvclient);
 
   /**

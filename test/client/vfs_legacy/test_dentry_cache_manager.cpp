@@ -25,17 +25,10 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
 #include "client/vfs_legacy/mock_metaserver_client.h"
-
-namespace dingofs {
-namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-}  // namespace common
-}  // namespace client
-}  // namespace dingofs
 
 namespace dingofs {
 namespace client {
@@ -76,7 +69,7 @@ class TestDentryCacheManager : public ::testing::Test {
 };
 
 TEST_F(TestDentryCacheManager, GetDentry) {
-  dingofs::client::common::FLAGS_enableCto = false;
+  dingofs::client::FLAGS_enableCto = false;
   uint64_t parent = 99;
   uint64_t inodeid = 100;
   const std::string name = "test";
@@ -106,7 +99,7 @@ TEST_F(TestDentryCacheManager, GetDentry) {
   ASSERT_TRUE(
       google::protobuf::util::MessageDifferencer::Equals(dentryExp, out));
 
-  dingofs::client::common::FLAGS_enableCto = true;
+  dingofs::client::FLAGS_enableCto = true;
   EXPECT_CALL(*metaClient_,
               DeleteDentry(fsId_, parent, name, FsFileType::TYPE_FILE))
       .WillOnce(Return(MetaStatusCode::OK));
@@ -120,7 +113,7 @@ TEST_F(TestDentryCacheManager, GetDentry) {
 }
 
 TEST_F(TestDentryCacheManager, CreateAndGetDentry) {
-  dingofs::client::common::FLAGS_enableCto = false;
+  dingofs::client::FLAGS_enableCto = false;
   uint64_t parent = 99;
   uint64_t inodeid = 100;
   const std::string name = "test";
@@ -150,7 +143,7 @@ TEST_F(TestDentryCacheManager, CreateAndGetDentry) {
   ASSERT_TRUE(
       google::protobuf::util::MessageDifferencer::Equals(dentryExp, out));
 
-  dingofs::client::common::FLAGS_enableCto = true;
+  dingofs::client::FLAGS_enableCto = true;
   EXPECT_CALL(*metaClient_,
               DeleteDentry(fsId_, parent, name, FsFileType::TYPE_FILE))
       .WillOnce(Return(MetaStatusCode::OK));
@@ -236,7 +229,7 @@ TEST_F(TestDentryCacheManager, ListDentryFailed) {
 }
 
 TEST_F(TestDentryCacheManager, GetTimeOutDentry) {
-  dingofs::client::common::FLAGS_enableCto = false;
+  dingofs::client::FLAGS_enableCto = false;
   uint64_t parent = 99;
   uint64_t inodeid = 100;
   const std::string name = "test";

@@ -30,8 +30,6 @@ using dingofs::metrics::LatencyGuard;
 namespace dingofs {
 namespace client {
 
-using common::KVClientManagerOpt;
-
 #define ONRETURN(TYPE, RES)                        \
   if (RES) {                                       \
     kvClientMetric_.kvClient##TYPE.qps.count << 1; \

@@ -20,7 +20,7 @@
 #include <unistd.h>
 
 #include "butil/time.h"
-#include "client/vfs/common/dynamic_param.h"
+#include "options/client/options/vfs/vfs_dynamic_option.h"
 #include "spdlog/logger.h"
 
 namespace dingofs {

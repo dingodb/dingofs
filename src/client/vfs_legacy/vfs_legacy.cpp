@@ -27,12 +27,9 @@
 #include <vector>
 
 #include "blockaccess/block_accesser.h"
-#include "cache/blockcache/block_cache_impl.h"
-#include "cache/storage/storage_impl.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "client/common/config.h"
-#include "client/common/dynamic_config.h"
 #include "client/datastream/data_stream.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/client_operator.h"
@@ -78,7 +75,6 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
-using client::common::RewriteCacheDir;
 using metrics::FsMetricGuard;
 
 static void OnThrottleTimer(void* arg) {
@@ -88,25 +84,21 @@ static void OnThrottleTimer(void* arg) {
 
 void VFSOld::InitQosParam() {
   utils::ReadWriteThrottleParams params;
-  params.iopsWrite =
-      utils::ThrottleParams(common::FLAGS_fuseClientAvgWriteIops,
-                            common::FLAGS_fuseClientBurstWriteIops,
-                            common::FLAGS_fuseClientBurstWriteIopsSecs);
+  params.iopsWrite = utils::ThrottleParams(FLAGS_fuseClientAvgWriteIops,
+                                           FLAGS_fuseClientBurstWriteIops,
+                                           FLAGS_fuseClientBurstWriteIopsSecs);
 
-  params.bpsWrite =
-      utils::ThrottleParams(common::FLAGS_fuseClientAvgWriteBytes,
-                            common::FLAGS_fuseClientBurstWriteBytes,
-                            common::FLAGS_fuseClientBurstWriteBytesSecs);
+  params.bpsWrite = utils::ThrottleParams(FLAGS_fuseClientAvgWriteBytes,
+                                          FLAGS_fuseClientBurstWriteBytes,
+                                          FLAGS_fuseClientBurstWriteBytesSecs);
 
-  params.iopsRead =
-      utils::ThrottleParams(common::FLAGS_fuseClientAvgReadIops,
-                            common::FLAGS_fuseClientBurstReadIops,
-                            common::FLAGS_fuseClientBurstReadIopsSecs);
+  params.iopsRead = utils::ThrottleParams(FLAGS_fuseClientAvgReadIops,
+                                          FLAGS_fuseClientBurstReadIops,
+                                          FLAGS_fuseClientBurstReadIopsSecs);
 
-  params.bpsRead =
-      utils::ThrottleParams(common::FLAGS_fuseClientAvgReadBytes,
-                            common::FLAGS_fuseClientBurstReadBytes,
-                            common::FLAGS_fuseClientBurstReadBytesSecs);
+  params.bpsRead = utils::ThrottleParams(FLAGS_fuseClientAvgReadBytes,
+                                         FLAGS_fuseClientBurstReadBytes,
+                                         FLAGS_fuseClientBurstReadBytesSecs);
 
   throttle_.UpdateThrottleParams(params);
 
@@ -151,13 +143,13 @@ int VFSOld::InitBrpcServer() {
   }
 
   brpc::ServerOptions brpc_server_options;
-  if (common::FLAGS_bthread_worker_num > 0) {
-    brpc_server_options.num_threads = common::FLAGS_bthread_worker_num;
+  if (FLAGS_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = FLAGS_bthread_worker_num;
   }
 
   uint32_t listen_port = 0;
   if (!StartBrpcServer(server_, &brpc_server_options,
-                       fuse_client_option_.dummyServerStartPort, PORT_LIMIT,
+                       option_.dummyServerStartPort, PORT_LIMIT,
                        &listen_port)) {
     LOG(ERROR) << "Start brpc server failed!";
     return -1;
@@ -184,7 +176,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
     mds_client_ = std::make_shared<stub::rpcclient::MdsClientImpl>();
     pb::mds::FSStatusCode ret =
-        mds_client_->Init(fuse_client_option_.mdsOpt, mds_base_.get());
+        mds_client_->Init(option_.mdsOpt, mds_base_.get());
     if (ret != pb::mds::FSStatusCode::OK) {
       LOG(WARNING) << "mds_client_ init failed, FSStatusCode = " << ret
                    << ", FSStatusCode_Name = " << FSStatusCode_Name(ret);
@@ -215,7 +207,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
   auto cli2_client = std::make_shared<stub::rpcclient::Cli2ClientImpl>();
   auto meta_cache = std::make_shared<stub::rpcclient::MetaCache>();
-  meta_cache->Init(fuse_client_option_.metaCacheOpt, cli2_client, mds_client_);
+  meta_cache->Init(option_.metaCacheOpt, cli2_client, mds_client_);
   auto channel_manager = std::make_shared<
       stub::rpcclient::ChannelManager<stub::common::MetaserverID>>();
 
@@ -224,9 +216,9 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     metaserver_client_ =
         std::make_shared<stub::rpcclient::MetaServerClientImpl>();
 
-    pb::metaserver::MetaStatusCode ret2 = metaserver_client_->Init(
-        fuse_client_option_.excutorOpt, fuse_client_option_.excutorInternalOpt,
-        meta_cache, channel_manager);
+    pb::metaserver::MetaStatusCode ret2 =
+        metaserver_client_->Init(option_.excutorOpt, option_.excutorInternalOpt,
+                                 meta_cache, channel_manager);
     if (ret2 != pb::metaserver::MetaStatusCode::OK) {
       LOG(WARNING) << "metaserver_client_ init failed, MetaStatusCode = "
                    << ret2
@@ -253,16 +245,14 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
                                       inode_cache_manager_, metaserver_client_,
                                       mds_client_);
     fs_ = std::make_shared<filesystem::FileSystem>(
-        fs_info_->fsid(), fs_info_->fsname(),
-        fuse_client_option_.fileSystemOption, member);
+        fs_info_->fsid(), fs_info_->fsname(), option_.fileSystemOption, member);
   }
 
   {
     // init inode cache manager
     auto member = fs_->BorrowMember();
-    DINGOFS_ERROR rc =
-        inode_cache_manager_->Init(fuse_client_option_.refreshDataOption,
-                                   member.openFiles, member.deferSync);
+    DINGOFS_ERROR rc = inode_cache_manager_->Init(
+        option_.refreshDataOption, member.openFiles, member.deferSync);
     if (rc != DINGOFS_ERROR::OK) {
       LOG(WARNING) << "inode_cache_manager_ init failed, DINGOFS_ERROR = "
                    << rc;
@@ -282,7 +272,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     // init mount point
     pb::mds::Mountpoint mount_point;
     mount_point.set_path(vfs_conf_.mount_point);
-    mount_point.set_cto(common::FLAGS_enableCto);
+    mount_point.set_cto(FLAGS_enableCto);
 
     int ret = SetHostPortInMountPoint(mount_point);
     if (ret != 0) {
@@ -316,8 +306,8 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
   dentry_cache_manager_->SetFsId(fs_info_->fsid());
 
   {
-    lease_executor_ = absl::make_unique<LeaseExecutor>(
-        fuse_client_option_.leaseOpt, meta_cache, mds_client_);
+    lease_executor_ = absl::make_unique<LeaseExecutor>(option_.leaseOpt,
+                                                       meta_cache, mds_client_);
     lease_executor_->SetFsName(vfs_conf.fs_name);
     lease_executor_->SetMountPoint(mount_point_);
     if (!lease_executor_->Start()) {
@@ -328,38 +318,34 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
   {
     const auto& storage_info = fs_info_->storage_info();
-    FillBlockAccessOption(storage_info, &fuse_client_option_.block_access_opt);
+    FillBlockAccessOption(storage_info, &option_.block_access_opt);
 
     block_accesser_ = std::make_unique<blockaccess::BlockAccesserImpl>(
-        fuse_client_option_.block_access_opt);
+        option_.block_access_opt);
     DINGOFS_RETURN_NOT_OK(block_accesser_->Init());
   }
 
   // data stream
-  if (!datastream::DataStream::GetInstance().Init(
-          fuse_client_option_.data_stream_option)) {
+  if (!datastream::DataStream::GetInstance().Init(option_.data_stream_option)) {
     return Status::Internal("datastream init failed");
   }
 
   {
     {
       // NOTE: block and chunk size from fs info
-      fuse_client_option_.s3_client_adaptor_opt.blockSize =
-          fs_info_->block_size();
-      fuse_client_option_.s3_client_adaptor_opt.chunkSize =
-          fs_info_->chunk_size();
+      option_.s3_client_adaptor_opt.blockSize = fs_info_->block_size();
+      option_.s3_client_adaptor_opt.chunkSize = fs_info_->chunk_size();
     }
 
-    auto page_option = fuse_client_option_.data_stream_option.page_option;
+    auto page_option = option_.data_stream_option.page_option;
     auto max_memory_size = page_option.total_size;
     auto fs_cache_manager = std::make_shared<FsCacheManager>(
         dynamic_cast<S3ClientAdaptorImpl*>(s3_adapter_.get()),
-        fuse_client_option_.s3_client_adaptor_opt.readCacheMaxByte,
-        max_memory_size,
-        fuse_client_option_.s3_client_adaptor_opt.readCacheThreads, nullptr);
+        option_.s3_client_adaptor_opt.readCacheMaxByte, max_memory_size,
+        option_.s3_client_adaptor_opt.readCacheThreads, nullptr);
 
     // block cache
-    auto block_cache_option = fuse_client_option_.block_cache_option;
+    auto block_cache_option = option_.block_cache_option;
     std::string uuid =
         absl::StrFormat("%d-%s", fs_info_->fsid(), fs_info_->fsname());
     if (fs_info_->has_uuid()) {
@@ -368,13 +354,13 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
 
     RewriteCacheDir(&block_cache_option, uuid);
     auto block_cache = std::make_shared<cache::TierBlockCache>(
-        block_cache_option, fuse_client_option_.remote_block_cache_option,
+        block_cache_option, option_.remote_block_cache_option,
         block_accesser_.get());
 
-    if (s3_adapter_->Init(fuse_client_option_.s3_client_adaptor_opt,
-                          block_accesser_.get(), inode_cache_manager_,
-                          mds_client_, fs_cache_manager, fs_, block_cache,
-                          nullptr, true) != DINGOFS_ERROR::OK) {
+    if (s3_adapter_->Init(option_.s3_client_adaptor_opt, block_accesser_.get(),
+                          inode_cache_manager_, mds_client_, fs_cache_manager,
+                          fs_, block_cache, nullptr,
+                          true) != DINGOFS_ERROR::OK) {
       LOG(ERROR) << "s3_adapter_ init failed";
       return Status::Internal("s3_adapter_ init failed");
     }
@@ -384,7 +370,7 @@ Status VFSOld::Start(const VFSConfig& vfs_conf) {
     warmup_manager_ = std::make_shared<warmup::WarmupManagerS3Impl>(
         metaserver_client_, inode_cache_manager_, dentry_cache_manager_,
         fs_info_, s3_adapter_, nullptr, this, block_accesser_.get());
-    warmup_manager_->Init(fuse_client_option_);
+    warmup_manager_->Init(option_);
     warmup_manager_->SetFsInfo(fs_info_);
     warmup_manager_->SetMounted(true);
   }
@@ -457,21 +443,17 @@ Status VFSOld::Stop() {
 
 double VFSOld::GetAttrTimeout(const FileType& type) {
   if (type == FileType::kDirectory) {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .dirAttrTimeoutSec;
+    return option_.fileSystemOption.kernelCacheOption.dirAttrTimeoutSec;
   } else {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .attrTimeoutSec;
+    return option_.fileSystemOption.kernelCacheOption.attrTimeoutSec;
   }
 }
 
 double VFSOld::GetEntryTimeout(const FileType& type) {
   if (type == FileType::kDirectory) {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .dirEntryTimeoutSec;
+    return option_.fileSystemOption.kernelCacheOption.dirEntryTimeoutSec;
   } else {
-    return fuse_client_option_.fileSystemOption.kernelCacheOption
-        .entryTimeoutSec;
+    return option_.fileSystemOption.kernelCacheOption.entryTimeoutSec;
   }
 }
 
@@ -481,6 +463,10 @@ Status VFSOld::Lookup(Ino parent, const std::string& name, Attr* attr) {
                      name == STATSNAME)) {  // stats node
     *attr = GenerateVirtualInodeAttr(STATSINODEID);
     return Status::OK();
+  }
+
+  if (name.length() > option_.fileSystemOption.maxNameLength) {
+    return Status::NameTooLong(fmt::format("name({}) too long", name.length()));
   }
 
   DINGOFS_ERROR rc = DINGOFS_ERROR::OK;
@@ -683,7 +669,7 @@ DINGOFS_ERROR VFSOld::UpdateParentMCTime(Ino parent) {
     dingofs::utils::UniqueLock lk = inode_wrapper->GetUniqueLock();
     inode_wrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
 
-    if (fuse_client_option_.fileSystemOption.deferSyncOption.deferDirMtime) {
+    if (option_.fileSystemOption.deferSyncOption.deferDirMtime) {
       inode_cache_manager_->ShipToFlush(inode_wrapper);
     } else {
       return inode_wrapper->SyncAttr();
@@ -710,7 +696,7 @@ DINGOFS_ERROR VFSOld::UpdateParentMCTimeAndNlink(Ino parent,
     inode_wrapper->UpdateTimestampLocked(kModifyTime | kChangeTime);
     inode_wrapper->UpdateNlinkLocked(nlink);
 
-    if (fuse_client_option_.fileSystemOption.deferSyncOption.deferDirMtime) {
+    if (option_.fileSystemOption.deferSyncOption.deferDirMtime) {
       inode_cache_manager_->ShipToFlush(inode_wrapper);
     } else {
       return inode_wrapper->SyncAttr();
@@ -732,9 +718,9 @@ Status VFSOld::AllocNode(Ino parent, const std::string& name, uint32_t uid,
           << ", mode: " << mode << ", dev: " << dev;
   {
     // precheck
-    if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
+    if (name.length() > option_.fileSystemOption.maxNameLength) {
       LOG(WARNING) << "name too long, name: " << name << ", maxNameLength: "
-                   << fuse_client_option_.fileSystemOption.maxNameLength;
+                   << option_.fileSystemOption.maxNameLength;
       return Status::NameTooLong(
           fmt::format("name too long, length: {}", name.length()));
     }
@@ -868,6 +854,10 @@ Status VFSOld::AllocNode(Ino parent, const std::string& name, uint32_t uid,
 
 Status VFSOld::MkNod(Ino parent, const std::string& name, uint32_t uid,
                      uint32_t gid, uint32_t mode, uint64_t dev, Attr* attr) {
+  if (name.length() > option_.fileSystemOption.maxNameLength) {
+    return Status::NameTooLong(fmt::format("name({}) too long", name.length()));
+  }
+
   std::shared_ptr<InodeWrapper> inode_wrapper;
   Status s =
       AllocNode(parent, name, uid, gid, pb::metaserver::FsFileType::TYPE_S3,
@@ -892,13 +882,6 @@ Status VFSOld::MkNod(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSOld::Unlink(Ino parent, const std::string& name) {
-  if (name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
-    LOG(WARNING) << "name too long, name: " << name << ", maxNameLength: "
-                 << fuse_client_option_.fileSystemOption.maxNameLength;
-    return Status::NameTooLong(
-        fmt::format("name too long, length: {}", name.length()));
-  }
-
   // check if node is recycle or recycle time dir or .stats node
   if ((IsInternalName(name) && parent == ROOTINODEID) ||
       parent == RECYCLEINODEID) {
@@ -1026,19 +1009,6 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
     return Status::NoPermitted("Can not rename internal node");
   }
 
-  uint64_t max_name_length = fuse_client_option_.fileSystemOption.maxNameLength;
-  if (old_name.length() > max_name_length ||
-      new_name.length() > max_name_length) {
-    LOG(WARNING) << "Rename name too long, name = " << old_name
-                 << ", name len = " << old_name.length()
-                 << ", new name = " << new_name
-                 << ", new name len = " << new_name.length()
-                 << ", maxNameLength = " << max_name_length;
-    return Status::NameTooLong(
-        fmt::format("name too long, old_name length: {}, new_name_length: {}",
-                    old_name.length(), new_name.length()));
-  }
-
   if (old_parent != new_parent) {
     pb::metaserver::Dentry entry;
     auto rc = dentry_cache_manager_->GetDentry(old_parent, old_name, &entry);
@@ -1094,7 +1064,7 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
   auto rename_operator = RenameOperator(
       fs_info_->fsid(), fs_info_->fsname(), old_parent, old_name, new_parent,
       new_name, dentry_cache_manager_, inode_cache_manager_, metaserver_client_,
-      mds_client_, fuse_client_option_.enableMultiMountPointRename);
+      mds_client_, option_.enableMultiMountPointRename);
 
   dingofs::utils::LockGuard lg(rename_mutex_);
   DINGOFS_ERROR rc = DINGOFS_ERROR::OK;
@@ -1134,13 +1104,6 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
 
 Status VFSOld::Link(Ino ino, Ino new_parent, const std::string& new_name,
                     Attr* attr) {
-  if (new_name.length() > fuse_client_option_.fileSystemOption.maxNameLength) {
-    LOG(WARNING) << "name too long, name: " << new_name << ", maxNameLength: "
-                 << fuse_client_option_.fileSystemOption.maxNameLength;
-    return Status::NameTooLong("name too long, length: " +
-                               std::to_string(new_name.length()));
-  }
-
   {
     // cant't allow  ln   <file> .stats
     // cant't allow  ln  .stats  <file>
@@ -1499,7 +1462,7 @@ Status VFSOld::Flush(Ino ino, uint64_t fh) {
   auto entry_watcher = fs_->BorrowMember().entry_watcher;
 
   // if enableCto, flush all write cache both in memory cache and disk cache
-  if (common::FLAGS_enableCto && !entry_watcher->ShouldWriteback(ino)) {
+  if (FLAGS_enableCto && !entry_watcher->ShouldWriteback(ino)) {
     DINGOFS_ERROR ret = s3_adapter_->FlushAllCache(ino);
     if (ret != DINGOFS_ERROR::OK) {
       LOG(ERROR) << "Fail flush all cache rc: " << ret << ", inodeId=" << ino;
@@ -1688,7 +1651,7 @@ Status VFSOld::SetXattr(Ino ino, const std::string& name,
     return Warmup(ino, name, value);
   }
 
-  if (fuse_client_option_.fileSystemOption.disableXAttr &&
+  if (option_.fileSystemOption.disableXAttr &&
       !stub::filesystem::IsSpecialXAttr(name)) {
     // NOTE: why return nodata?
     return Status::NoData("xattr is disabled");
@@ -1754,7 +1717,7 @@ Status VFSOld::GetXattr(Ino ino, const std::string& name, std::string* value) {
     return Status::OK();
   }
 
-  if (fuse_client_option_.fileSystemOption.disableXAttr &&
+  if (option_.fileSystemOption.disableXAttr &&
       !stub::filesystem::IsSpecialXAttr(name)) {
     return Status::NoData("xattr is disabled");
   }
@@ -1937,7 +1900,7 @@ Status VFSOld::RmDir(Ino parent, const std::string& name) {
 
   {
     // check dir empty
-    auto limit = fuse_client_option_.listDentryLimit;
+    auto limit = option_.listDentryLimit;
 
     std::list<pb::metaserver::Dentry> dentry_list;
     ret = dentry_cache_manager_->ListDentry(inode_id, &dentry_list, limit);
@@ -2026,7 +1989,7 @@ Status VFSOld::StatFs(Ino ino, FsStat* fs_stat) {
 }
 
 uint64_t VFSOld::GetMaxNameLength() {
-  return fuse_client_option_.fileSystemOption.maxNameLength;
+  return option_.fileSystemOption.maxNameLength;
 }
 
 }  // namespace vfs

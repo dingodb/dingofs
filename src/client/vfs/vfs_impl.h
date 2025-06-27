@@ -17,14 +17,13 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
-#include <atomic>
 #include <memory>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs/vfs_option.h"
+#include "client/vfs.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs.h"
 
 namespace dingofs {
 namespace client {
@@ -32,8 +31,7 @@ namespace vfs {
 
 class VFSImpl : public VFS {
  public:
-  VFSImpl(const common::ClientOption& fuse_client_option)
-      : fuse_client_option_(fuse_client_option) {};
+  VFSImpl(const VFSOption& vfs_option) : vfs_option_(vfs_option) {};
 
   ~VFSImpl() override = default;
 
@@ -111,12 +109,10 @@ class VFSImpl : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  common::FuseOption GetFuseOption() override {
-    return fuse_client_option_.fuse_option;
-  }
+  FuseOption GetFuseOption() override { return vfs_option_.fuse_option; }
 
  private:
-  common::ClientOption fuse_client_option_;
+  VFSOption vfs_option_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
   MetaSystem* meta_system_;

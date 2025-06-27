@@ -19,6 +19,7 @@ add_library(client_lease
 target_link_libraries(client_lease
     PROTO_OBJS
     rpcclient
+    client_options
     brpc::brpc
     gflags::gflags
     glog::glog

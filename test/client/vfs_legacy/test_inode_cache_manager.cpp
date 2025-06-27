@@ -26,24 +26,18 @@
 
 #include <cstdint>
 
-#include "dingofs/metaserver.pb.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "client/vfs_legacy/mock_metaserver_client.h"
+#include "dingofs/metaserver.pb.h"
+#include "metaserver/mock_metaserver_s3_adaptor.h"
 #include "stub/filesystem/xattr.h"
 #include "stub/rpcclient/metaserver_client.h"
-#include "client/vfs_legacy/mock_metaserver_client.h"
-#include "metaserver/mock_metaserver_s3_adaptor.h"
-
-namespace dingofs {
-namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-}  // namespace common
-}  // namespace client
-}  // namespace dingofs
 
 namespace dingofs {
 namespace client {
@@ -54,8 +48,6 @@ using ::testing::DoAll;
 using ::testing::Return;
 using ::testing::SetArgPointee;
 
-using ::dingofs::client::common::DeferSyncOption;
-using ::dingofs::client::common::OpenFilesOption;
 using ::dingofs::client::filesystem::DeferSync;
 using ::dingofs::client::filesystem::OpenFiles;
 
@@ -80,11 +72,11 @@ class TestInodeCacheManager : public ::testing::Test {
   ~TestInodeCacheManager() {}
 
   virtual void SetUp() {
-    dingofs::client::common::FLAGS_enableCto = false;
+    dingofs::client::FLAGS_enableCto = false;
     metaClient_ = std::make_shared<MockMetaServerClient>();
     iCacheManager_ = std::make_shared<InodeCacheManagerImpl>(metaClient_);
     iCacheManager_->SetFsId(fsId_);
-    common::RefreshDataOption option;
+    RefreshDataOption option;
     option.maxDataSize = 1;
     option.refreshDataIntervalSec = 0;
     auto deferSync = std::make_shared<DeferSync>(DeferSyncOption());
@@ -226,7 +218,7 @@ TEST_F(TestInodeCacheManager, GetInodeAttr) {
 }
 
 TEST_F(TestInodeCacheManager, CreateAndGetInode) {
-  dingofs::client::common::FLAGS_enableCto = false;
+  dingofs::client::FLAGS_enableCto = false;
   uint64_t inodeId = 100;
 
   InodeParam param;
@@ -423,7 +415,7 @@ TEST_F(TestInodeCacheManager, BatchGetXAttr) {
 }
 
 TEST_F(TestInodeCacheManager, CreateAndGetInodeWhenTimeout) {
-  dingofs::client::common::FLAGS_enableCto = false;
+  dingofs::client::FLAGS_enableCto = false;
   uint64_t inodeId = 100;
 
   InodeParam param;

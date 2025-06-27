@@ -25,7 +25,7 @@
 
 #include <memory>
 
-#include "client/common/config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/openfile.h"
@@ -39,7 +39,7 @@ class AttrWatcher {
  public:
   using LRUType = utils::LRUCache<Ino, base::time::TimeSpec>;
 
-  AttrWatcher(common::AttrWatcherOption option,
+  AttrWatcher(AttrWatcherOption option,
               std::shared_ptr<OpenFiles> openFiles,
               std::shared_ptr<DirCache> dirCache);
 

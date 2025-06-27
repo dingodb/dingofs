@@ -26,6 +26,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/filesystem/metric.h"
@@ -47,7 +48,7 @@ class OpenFiles {
  public:
   // option not used, but keeped here, we can turn on/off openfiles cache in the
   // future like juicefs
-  explicit OpenFiles(common::OpenFilesOption option,
+  explicit OpenFiles(OpenFilesOption option,
                      std::shared_ptr<DeferSync> defer_sync);
 
   void Open(Ino ino, std::shared_ptr<InodeWrapper> inode);
@@ -62,7 +63,7 @@ class OpenFiles {
 
  private:
   utils::RWLock rwlock_;
-  common::OpenFilesOption option_;
+  OpenFilesOption option_;
   std::shared_ptr<DeferSync> deferSync_;
   std::unordered_map<Ino, std::unique_ptr<OpenFile>> files_;
   std::shared_ptr<OpenfilesMetric> metric_;

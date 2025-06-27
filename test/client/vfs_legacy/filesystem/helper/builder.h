@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/mock_dentry_cache_mamager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
@@ -39,14 +40,6 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using dingofs::client::common::AttrWatcherOption;
-using dingofs::client::common::DeferSyncOption;
-using dingofs::client::common::DirCacheOption;
-using dingofs::client::common::FileSystemOption;
-using dingofs::client::common::KernelCacheOption;
-using dingofs::client::common::LookupCacheOption;
-using dingofs::client::common::OpenFilesOption;
-using dingofs::client::common::RPCOption;
 using dingofs::stub::rpcclient::MockMdsClient;
 using dingofs::stub::rpcclient::MockMetaServerClient;
 

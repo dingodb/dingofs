@@ -28,8 +28,9 @@ target_link_libraries(fuse_client_lib
     vfs_legacy_lib
     vfs_lib
     block_accesser
-    jsoncpp
     dingofs_metrics
+    client_options
+    jsoncpp
     ${FUSE3_LIBRARY}
 )
 

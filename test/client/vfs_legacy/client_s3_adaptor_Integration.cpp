@@ -28,6 +28,8 @@
 #include <memory>
 
 #include "blockaccess/mock/mock_accesser.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
@@ -38,14 +40,6 @@
 #include "stub/rpcclient/mock_mds_client.h"
 #include "stub/rpcclient/mock_metaserver_service.h"
 #include "utils/dingo_define.h"
-
-namespace dingofs {
-namespace client {
-namespace common {
-DECLARE_bool(enableCto);
-}  // namespace common
-}  // namespace client
-}  // namespace dingofs
 
 namespace dingofs {
 namespace client {
@@ -136,7 +130,7 @@ class ClientS3IntegrationTest : public testing::Test {
     ASSERT_EQ(0, server_.AddService(&mockMetaServerService_,
                                     brpc::SERVER_DOESNT_OWN_SERVICE));
     ASSERT_EQ(0, server_.Start(addr_.c_str(), nullptr));
-    common::S3ClientAdaptorOption option;
+    S3ClientAdaptorOption option;
     option.blockSize = 1 * 1024 * 1024;
     option.chunkSize = 4 * 1024 * 1024;
     option.baseSleepUs = 500;
@@ -159,7 +153,7 @@ class ClientS3IntegrationTest : public testing::Test {
                            mockMdsClient, fsCacheManager, nullptr, nullptr,
                            kvClientManager_);
     s3ClientAdaptor_->SetFsId(2);
-    dingofs::client::common::FLAGS_enableCto = false;
+    dingofs::client::FLAGS_enableCto = false;
   }
 
   void TearDown() override {
@@ -171,7 +165,7 @@ class ClientS3IntegrationTest : public testing::Test {
   void InitKVClientManager() {
     kvClientManager_ = std::make_shared<KVClientManager>();
 
-    common::KVClientManagerOpt opt;
+    KVClientManagerOpt opt;
     auto mockKVClient = std::make_shared<MockKVClient>();
     kvClientManager_->Init(opt, mockKVClient);
   }
@@ -2848,7 +2842,7 @@ TEST_F(ClientS3IntegrationTest, test_fssync_overlap_write) {
 }
 
 TEST_F(ClientS3IntegrationTest, test_write_read_remotekvcache) {
-  dingofs::client::common::FLAGS_enableCto = true;
+  dingofs::client::FLAGS_enableCto = true;
 
   uint64_t offset_0 = 0, offset_4M = (4 << 20), chunkId = 10;
   uint64_t inodeId = inode->GetInodeId();

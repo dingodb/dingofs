@@ -22,14 +22,14 @@
 
 #include "client/vfs_legacy/filesystem/attr_watcher.h"
 
-#include "dingofs/metaserver.pb.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/utils.h"
+#include "dingofs/metaserver.pb.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using common::AttrWatcherOption;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::WriteLockGuard;

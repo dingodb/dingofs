@@ -30,6 +30,7 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/mock/mock_block_cache.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/mock_client_s3_cache_manager.h"
 #include "client/vfs_legacy/mock_inode_cache_manager.h"
@@ -44,7 +45,6 @@ using ::testing::Return;
 using ::testing::SetArgPointee;
 
 using dingofs::cache::MockBlockCache;
-using dingofs::client::common::S3ClientAdaptorOption;
 using dingofs::stub::rpcclient::MockMdsClient;
 
 using dingofs::pb::mds::FSStatusCode;

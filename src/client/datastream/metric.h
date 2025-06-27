@@ -28,8 +28,8 @@
 
 #include <memory>
 
-#include "client/common/config.h"
 #include "client/datastream/page_allocator.h"
+#include "options/client/options/data_stream/data_stream_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -37,7 +37,6 @@ namespace client {
 namespace datastream {
 
 using ::dingofs::utils::TaskThreadPool;
-using ::dingofs::client::common::DataStreamOption;
 
 static uint32_t GetQueueSize(void* arg) {
   auto* thread_pool = reinterpret_cast<TaskThreadPool<>*>(arg);

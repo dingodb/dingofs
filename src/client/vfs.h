@@ -21,7 +21,7 @@
 #include <functional>
 #include <string>
 
-#include "client/common/config.h"
+#include "options/client/options/fuse/fuse_option.h"
 #include "common/status.h"
 #include "client/vfs/vfs_meta.h"
 
@@ -130,7 +130,7 @@ class VFS {
 
   // TODO: refactor this interface
   // used for fuse
-  virtual common::FuseOption GetFuseOption() = 0;
+  virtual FuseOption GetFuseOption() = 0;
 
 };
 

@@ -14,7 +14,7 @@
 
 #include "client/vfs_legacy/filesystem/fs_push_metric_manager.h"
 
-#include "client/common/dynamic_config.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "glog/logging.h"
 #include "metrics/blockaccess/s3_accesser.h"
 #include "metrics/client/client.h"

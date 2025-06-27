@@ -21,13 +21,13 @@
  * Author: Jingli Chen (Wine93)
  */
 
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/attr_watcher.h"
 #include "client/vfs_legacy/filesystem/helper/helper.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
-using dingofs::client::common::AttrWatcherOption;
 
 class AttrWatcherTest : public ::testing::Test {
  protected:

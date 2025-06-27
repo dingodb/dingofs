@@ -22,6 +22,8 @@ namespace dingofs {
 namespace stub {
 namespace common {
 
+using ::dingofs::utils::Configuration;
+
 void InitMdsOption(Configuration* conf, MdsOption* mds_opt) {
   conf->GetValueFatalIfFail("mdsOpt.mdsMaxRetryMS", &mds_opt->mdsMaxRetryMS);
   conf->GetValueFatalIfFail("mdsOpt.rpcRetryOpt.maxRPCTimeoutMS",
