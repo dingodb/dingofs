@@ -25,27 +25,36 @@ void ThreadPoolImpl::ThreadProc(size_t thread_id) {
 
   while (true) {
     std::function<void()> task;
+
     {
       std::unique_lock<std::mutex> lock(mutex_);
+      condition_.wait(lock, [this] { return !tasks_.empty() || !running_; });
 
-      condition_.wait(lock, [this] { return exit_ || !tasks_.empty(); });
-
-      if (exit_ && tasks_.empty()) {
+      if (!running_ && tasks_.empty()) {
         break;
       }
 
-      task = std::move(tasks_.front());
-      tasks_.pop();
-    }
+      if (!tasks_.empty()) {
+        task = std::move(tasks_.front());
+        tasks_.pop();
+      }
+    } // end lock scope
 
+    CHECK(task);
     (task)();
-  }
+  }  // end of while loop
 
   VLOG(12) << "Thread " << thread_id << " exit.";
 }
 
 void ThreadPoolImpl::Start() {
   std::unique_lock<std::mutex> lg(mutex_);
+  if (running_) {
+    return;
+  }
+
+  running_ = true;
+
   threads_.resize(thread_num_);
   for (size_t i = 0; i < thread_num_; i++) {
     threads_[i] = std::thread([this, i] { ThreadProc(i); });
@@ -55,8 +64,11 @@ void ThreadPoolImpl::Start() {
 void ThreadPoolImpl::Stop() {
   {
     std::unique_lock<std::mutex> lock(mutex_);
-    assert(!exit_);
-    exit_ = true;
+    if (!running_) {
+      return;
+    }
+
+    running_ = false;
     condition_.notify_all();
   }
 

@@ -53,7 +53,7 @@ class ThreadPoolImpl : public ThreadPool {
 
   mutable std::mutex mutex_;
   int thread_num_{0};
-  bool exit_{false};
+  bool running_{false};
   std::condition_variable condition_;
   std::vector<std::thread> threads_;
   std::queue<std::function<void()>> tasks_;
