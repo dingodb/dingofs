@@ -214,6 +214,10 @@ std::string StrMode(uint16_t mode) {
   return s;
 }
 
+void FsDirIterator::Append(const vfs::DirEntry& entry) {
+  entries_.push_back(entry);
+}
+
 Status FsDirIterator::Seek() {
   offset_ = 0;
   return Status::OK();

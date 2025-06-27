@@ -43,6 +43,7 @@ class DirIteratorImpl : public DirIterator {
   DirIteratorImpl(MDSClientPtr mds_client, Ino ino)
       : mds_client_(mds_client), ino_(ino) {}
 
+  void Append(const vfs::DirEntry& entry) override;
   Status Seek() override;
   bool Valid() override;
   DirEntry GetValue(bool with_attr) override;

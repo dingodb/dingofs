@@ -1,4 +1,4 @@
-// Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+// Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGOFS_SRC_CLIENT_SERVICE_METRICS_DUMPER_H_
-#define DINGOFS_SRC_CLIENT_SERVICE_METRICS_DUMPER_H_
+#ifndef DINGOFS_SRC_CLIENT_COMMON_METRICS_DUMPER_H_
+#define DINGOFS_SRC_CLIENT_COMMON_METRICS_DUMPER_H_
 
 #include <brpc/server.h>
 #include <bvar/bvar.h>
