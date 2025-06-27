@@ -19,6 +19,7 @@
 
 #include <queue>
 
+#include "bthread/bthread.h"
 #include "bthread/types.h"
 #include "utils/executor/thread_pool.h"
 
@@ -26,9 +27,16 @@ namespace dingofs {
 
 class BThreadPool : public ThreadPool {
  public:
-  BThreadPool(int num_threads) : bthread_num_(num_threads) {}
+  BThreadPool(int num_threads) : bthread_num_(num_threads) {
+    bthread_mutex_init(&mutex_, nullptr);
+    bthread_cond_init(&cond_, nullptr);
+  }
 
-  ~BThreadPool() override { Stop(); }
+  ~BThreadPool() override {
+    Stop();
+    bthread_cond_destroy(&cond_);
+    bthread_mutex_destroy(&mutex_);
+  }
 
   void Start() override;
 
