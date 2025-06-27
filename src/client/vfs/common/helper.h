@@ -87,6 +87,25 @@ static uint64_t CurrentTimestamp() {
   return ToTimestamp(ts);
 }
 
+static Attr GenerateVirtualInodeAttr(Ino ino) {
+  Attr attr;
+
+  attr.ino = ino;
+  attr.mode = S_IFREG | 0444;
+  attr.nlink = 1;
+  attr.length = 0;
+
+  struct timespec now;
+  clock_gettime(CLOCK_REALTIME, &now);
+  attr.atime = ToTimestamp(now);
+  attr.mtime = ToTimestamp(now);
+  attr.ctime = ToTimestamp(now);
+
+  attr.type = FileType::kFile;
+
+  return attr;
+}
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

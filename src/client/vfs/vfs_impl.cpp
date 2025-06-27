@@ -25,10 +25,13 @@
 #include <utility>
 
 #include "client/common/client_dummy_server_info.h"
+#include "client/common/metrics_dumper.h"
+#include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_log.h"
+#include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
@@ -63,14 +66,30 @@ double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
 double VFSImpl::GetEntryTimeout(const FileType& type) { return 1; }  // NOLINT
 
 Status VFSImpl::Lookup(Ino parent, const std::string& name, Attr* attr) {
+  // check if parent is root inode and file name is .stats name
+  if (BAIDU_UNLIKELY(parent == ROOTINODEID &&
+                     name == STATSNAME)) {  // stats node
+    *attr = GenerateVirtualInodeAttr(STATSINODEID);
+    return Status::OK();
+  }
+
   return meta_system_->Lookup(parent, name, attr);
 }
 
 Status VFSImpl::GetAttr(Ino ino, Attr* attr) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    *attr = GenerateVirtualInodeAttr(STATSINODEID);
+    return Status::OK();
+  }
+
   return meta_system_->GetAttr(ino, attr);
 }
 
 Status VFSImpl::SetAttr(Ino ino, int set, const Attr& in_attr, Attr* out_attr) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::OK();
+  }
+
   return meta_system_->SetAttr(ino, set, in_attr, out_attr);
 }
 
@@ -84,25 +103,88 @@ Status VFSImpl::MkNod(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSImpl::Unlink(Ino parent, const std::string& name) {
+  // check if node is recycle or recycle time dir or .stats node
+  if ((IsInternalName(name) && parent == ROOTINODEID) ||
+      parent == RECYCLEINODEID) {
+    LOG(WARNING) << "Can not unlink internal node, parent inodeId=" << parent
+                 << ", name: " << name;
+    return Status::NoPermitted("Can not unlink internal node");
+  }
+
   return meta_system_->Unlink(parent, name);
 }
 
 Status VFSImpl::Symlink(Ino parent, const std::string& name, uint32_t uid,
                         uint32_t gid, const std::string& link, Attr* attr) {
+  {
+    // internal file name can not allowed for symlink
+    // cant't allow  ln -s  .stats  <file>
+    if (parent == ROOTINODEID && IsInternalName(name)) {
+      LOG(WARNING) << "Can not symlink internal node, parent inodeId=" << parent
+                   << ", name: " << name;
+      return Status::NoPermitted("Can not symlink internal node");
+    }
+    // cant't allow  ln -s <file> .stats
+    if (parent == ROOTINODEID && IsInternalName(link)) {
+      LOG(WARNING) << "Can not symlink to internal node, parent inodeId="
+                   << parent << ", link: " << link;
+      return Status::NoPermitted("Can not symlink to internal node");
+    }
+  }
+
   return meta_system_->Symlink(parent, name, uid, gid, link, attr);
 }
 
 Status VFSImpl::Rename(Ino old_parent, const std::string& old_name,
                        Ino new_parent, const std::string& new_name) {
+  // internel name can not be rename or rename to
+  if ((IsInternalName(old_name) || IsInternalName(new_name)) &&
+      old_parent == ROOTINODEID) {
+    return Status::NoPermitted("Can not rename internal node");
+  }
+
   return meta_system_->Rename(old_parent, old_name, new_parent, new_name);
 }
 
 Status VFSImpl::Link(Ino ino, Ino new_parent, const std::string& new_name,
                      Attr* attr) {
+  {
+    // cant't allow  ln   <file> .stats
+    // cant't allow  ln  .stats  <file>
+    if (IsInternalNode(ino) ||
+        (new_parent == ROOTINODEID && IsInternalName(new_name))) {
+      return Status::NoPermitted("Can not link internal node");
+    }
+  }
+
   return meta_system_->Link(ino, new_parent, new_name, attr);
 }
 
 Status VFSImpl::Open(Ino ino, int flags, uint64_t* fh) {  // NOLINT
+  // check if ino is .stats inode,if true ,get metric data and generate
+  // inodeattr information
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    auto handler = handle_manager_->NewHandle();
+    *fh = handler->fh;
+
+    MetricsDumper metrics_dumper;
+    bvar::DumpOptions opts;
+    int ret = bvar::Variable::dump_exposed(&metrics_dumper, &opts);
+    std::string contents = metrics_dumper.Contents();
+
+    size_t len = contents.size();
+    if (len == 0) {
+      return Status::NoData("No data in .stats");
+    }
+
+    auto file_data_ptr = std::make_unique<char[]>(len);
+    std::memcpy(file_data_ptr.get(), contents.c_str(), len);
+    handler->file_buffer.size = len;
+    handler->file_buffer.data = std::move(file_data_ptr);
+
+    return Status::OK();
+  }
+
   HandleSPtr handle = handle_manager_->NewHandle();
 
   Status s = meta_system_->Open(ino, flags, handle->fh);
@@ -154,6 +236,19 @@ Status VFSImpl::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
   auto handle = handle_manager_->FindHandler(fh);
   VFS_CHECK_HANDLE(handle, ino, fh);
 
+  // read .stats file data
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    size_t file_size = handle->file_buffer.size;
+    size_t read_size =
+        std::min(size, file_size > offset ? file_size - offset : 0);
+    if (read_size > 0) {
+      std::memcpy(buf, handle->file_buffer.data.get() + offset, read_size);
+    }
+    *out_rsize = read_size;
+
+    return Status::OK();
+  }
+
   if (handle->file == nullptr) {
     LOG(ERROR) << "file is null in handle, ino: " << ino << ", fh: " << fh;
     s = Status::BadFd(fmt::format("bad  fh:{}", fh));
@@ -196,6 +291,10 @@ Status VFSImpl::Write(Ino ino, const char* buf, uint64_t size, uint64_t offset,
 }
 
 Status VFSImpl::Flush(Ino ino, uint64_t fh) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::OK();
+  }
+
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("flush (%d,%d): %s", ino, fh, s.ToString());
@@ -216,6 +315,11 @@ Status VFSImpl::Flush(Ino ino, uint64_t fh) {
 }
 
 Status VFSImpl::Release(Ino ino, uint64_t fh) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    handle_manager_->ReleaseHandler(fh);
+    return Status::OK();
+  }
+
   Status s;
   MetaLogGuard log_guard([&]() {
     return absl::StrFormat("release (%d,%d): %s", ino, fh, s.ToString());
@@ -262,14 +366,26 @@ Status VFSImpl::Fsync(Ino ino, int datasync, uint64_t fh) {
 
 Status VFSImpl::SetXattr(Ino ino, const std::string& name,
                          const std::string& value, int flags) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::OK();
+  }
+
   return meta_system_->SetXattr(ino, name, value, flags);
 }
 
 Status VFSImpl::GetXattr(Ino ino, const std::string& name, std::string* value) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::NoData("No Xattr data in .stats");
+  }
+
   return meta_system_->GetXattr(ino, name, value);
 }
 
 Status VFSImpl::ListXattr(Ino ino, std::vector<std::string>* xattrs) {
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    return Status::NoData("No Xattr data in .stats");
+  }
+
   return meta_system_->ListXattr(ino, xattrs);
 }
 
@@ -286,6 +402,7 @@ Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
 
   DirIteratorUPtr dir_iterator(meta_system_->NewDirIterator(ino));
   dir_iterator->Seek();
+
   handle->dir_iterator = std::move(dir_iterator);
 
   *fh = handle->fh;
@@ -313,6 +430,12 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
 
     dir_iterator->Next();
   }
+  // root dir(add .stats file)
+  if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
+    DirEntry stats_entry{STATSINODEID, STATSNAME,
+                         GenerateVirtualInodeAttr(STATSINODEID)};
+    handler(stats_entry);
+  }
 
   VLOG(1) << fmt::format("read dir ino({}) fh({}) offset({})", ino, fh, offset);
   return Status::OK();
@@ -324,6 +447,12 @@ Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {  // NOLINT
 }
 
 Status VFSImpl::RmDir(Ino parent, const std::string& name) {
+  // check if node is recycle or recycle time dir or .stats node
+  if ((IsInternalName(name) && parent == ROOTINODEID) ||
+      parent == RECYCLEINODEID) {
+    return Status::NoPermitted("not permit rmdir internal dir");
+  }
+
   return meta_system_->RmDir(parent, name);
 }
 

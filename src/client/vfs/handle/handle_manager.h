@@ -31,6 +31,12 @@ namespace dingofs {
 namespace client {
 namespace vfs {
 
+// temporary store .stats file data
+struct FileBuffer {
+  size_t size{0};
+  std::unique_ptr<char[]> data{nullptr};
+};
+
 struct Handle {
   Ino ino;
   uint64_t fh;
@@ -40,6 +46,8 @@ struct Handle {
 
   // dir related
   std::unique_ptr<DirIterator> dir_iterator;
+
+  FileBuffer file_buffer;
 
   std::string ToString() const {
     std::ostringstream oss;
