@@ -26,13 +26,13 @@
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
 #include "client/memory/page_allocator.h"
-#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "options/client/options/vfs/vfs_option.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -63,7 +63,7 @@ class VFSHub {
 
   virtual IPeriodicFlushManager* GetPeriodicFlushManger() = 0;
 
-  virtual datastream::PageAllocator* GetPageAllocator() = 0;
+  virtual PageAllocator* GetPageAllocator() = 0;
 
   virtual FsInfo GetFsInfo() = 0;
 
@@ -116,7 +116,7 @@ class VFSHubImpl : public VFSHub {
     return priodic_flush_manager_.get();
   }
 
-  datastream::PageAllocator* GetPageAllocator() override {
+  PageAllocator* GetPageAllocator() override {
     CHECK_NOTNULL(page_allocator_);
     return page_allocator_.get();
   }
@@ -128,7 +128,7 @@ class VFSHubImpl : public VFSHub {
 
   uint64_t GetPageSize() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
-    return vfs_option_.data_stream_option.page_option.page_size;
+    return vfs_option_.page_option.page_size;
   }
 
  private:
@@ -144,7 +144,7 @@ class VFSHubImpl : public VFSHub {
   std::shared_ptr<cache::BlockCache> block_cache_;
   std::unique_ptr<Executor> flush_executor_;
   std::unique_ptr<IPeriodicFlushManager> priodic_flush_manager_;
-  std::shared_ptr<datastream::PageAllocator> page_allocator_;
+  std::shared_ptr<PageAllocator> page_allocator_;
 };
 
 }  // namespace vfs

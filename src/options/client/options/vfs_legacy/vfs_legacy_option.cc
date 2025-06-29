@@ -19,10 +19,8 @@
 #include <string>
 
 #include "blockaccess/s3/s3_common.h"
-#include "cache/config/block_cache.h"
 #include "options/client/options/client_dynamic_option.h"
 #include "options/client/options/common_option.h"
-#include "options/client/options/data_stream/data_stream_option.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "stub/common/config.h"
 

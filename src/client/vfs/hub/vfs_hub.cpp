@@ -27,9 +27,6 @@
 #include "blockaccess/block_accesser_factory.h"
 #include "blockaccess/rados/rados_common.h"
 #include "cache/tiercache/tier_block_cache.h"
-#include "options/client/options/common_option.h"
-#include "options/client/options/vfs/vfs_dynamic_option.h"
-#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/background/periodic_flush_manager.h"
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
@@ -38,6 +35,9 @@
 #include "client/vfs/meta/v2/filesystem.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/status.h"
+#include "options/client/options/common_option.h"
+#include "options/client/options/vfs/vfs_dynamic_option.h"
+#include "options/client/options/vfs/vfs_option.h"
 #include "utils/configuration.h"
 #include "utils/executor/thread/executor_impl.h"
 
@@ -142,11 +142,11 @@ Status VFSHubImpl::Start(const VFSConfig& vfs_conf,
   }
 
   {
-    auto o = vfs_option_.data_stream_option.page_option;
+    auto o = vfs_option_.page_option;
     if (o.use_pool) {
-      page_allocator_ = std::make_shared<datastream::PagePool>();
+      page_allocator_ = std::make_shared<PagePool>();
     } else {
-      page_allocator_ = std::make_shared<datastream::DefaultPageAllocator>();
+      page_allocator_ = std::make_shared<DefaultPageAllocator>();
     }
 
     auto ok = page_allocator_->Init(o.page_size, o.total_size / o.page_size);

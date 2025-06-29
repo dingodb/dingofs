@@ -25,15 +25,15 @@
 
 #include <sys/types.h>
 
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "client/memory/memory_pool.h"
 
 namespace dingofs {
 namespace client {
-namespace datastream {
-
 class PageAllocator {
  public:
   virtual ~PageAllocator() = default;
@@ -91,7 +91,6 @@ class PagePool : public PageAllocator {
   std::unique_ptr<MemoryPool> mem_pool_;
 };
 
-}  // namespace datastream
 }  // namespace client
 }  // namespace dingofs
 

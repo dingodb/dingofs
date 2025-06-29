@@ -34,5 +34,3 @@ target_link_libraries(vfs_lib
     fmt::fmt
     absl::str_format
 )
-
-

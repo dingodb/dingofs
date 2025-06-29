@@ -22,8 +22,8 @@
 #include "blockaccess/accesser_common.h"
 #include "cache/config/block_cache.h"
 #include "cache/config/remote_cache.h"
-#include "options/client/options/data_stream/data_stream_option.h"
 #include "options/client/options/fuse/fuse_option.h"
+#include "options/client/options/vfs_legacy/data_stream/data_stream_option.h"
 #include "stub/common/config.h"
 #include "utils/configuration.h"
 

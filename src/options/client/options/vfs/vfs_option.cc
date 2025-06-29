@@ -17,6 +17,7 @@
 #include "options/client/options/vfs/vfs_option.h"
 
 #include "options/client/options/common_option.h"
+#include "options/client/options/memory/page_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -33,7 +34,7 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
   blockaccess::InitBlockAccesserThrottleOptions(
       conf, &option->block_access_opt.throttle_options);
 
-  InitDataStreamOption(conf, &option->data_stream_option);
+  InitMemoryPageOption(conf, &option->page_option);
 
   InitBlockCacheOption(conf, &option->block_cache_option);
   InitRemoteBlockCacheOption(conf, &option->remote_block_cache_option);

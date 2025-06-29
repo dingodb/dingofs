@@ -25,13 +25,10 @@
 
 #include <sys/types.h>
 
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 
 namespace dingofs {
 namespace client {
-namespace datastream {
 
 // Based on article from Ben Kenwright "Fast Efficient Fixed-Size Memory Pool":
 // https://arxiv.org/pdf/2210.16471
@@ -71,7 +68,6 @@ class MemoryPool {
   char* next_free_index_;            // num of next free block
 };
 
-}  // namespace datastream
 }  // namespace client
 }  // namespace dingofs
 

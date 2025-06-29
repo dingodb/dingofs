@@ -32,11 +32,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <mutex>
 
 namespace dingofs {
 namespace client {
-namespace datastream {
 
 using Timer = ::butil::Timer;
 
@@ -159,6 +157,5 @@ uint64_t MemoryPool::IndexFromAddr(const char* addr) const {
   return static_cast<uint64_t>(addr - mem_start_) / size_each_block_;
 }
 
-}  // namespace datastream
 }  // namespace client
 }  // namespace dingofs

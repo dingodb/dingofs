@@ -20,8 +20,8 @@
 #include "blockaccess/accesser_common.h"
 #include "cache/config/block_cache.h"
 #include "cache/config/remote_cache.h"
-#include "options/client/options/data_stream/data_stream_option.h"
 #include "options/client/options/fuse/fuse_option.h"
+#include "options/client/options/memory/page_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -40,12 +40,12 @@ struct VFSDataOption {
 
 struct VFSOption {
   blockaccess::BlockAccessOptions block_access_opt;  // from config
-  DataStreamOption data_stream_option;
+  PageOption page_option;
   cache::BlockCacheOption block_cache_option;
   cache::RemoteBlockCacheOption remote_block_cache_option;
   FuseOption fuse_option;
 
-  VFSMetaOption meta_option; 
+  VFSMetaOption meta_option;
   VFSDataOption data_option;
 };
 

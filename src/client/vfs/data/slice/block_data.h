@@ -36,9 +36,8 @@ namespace vfs {
 // protected by slice data
 class BlockData {
  public:
-  explicit BlockData(const SliceDataContext& context,
-                     datastream::PageAllocator* allocator, uint64_t block_index,
-                     uint64_t block_offset)
+  explicit BlockData(const SliceDataContext& context, PageAllocator* allocator,
+                     uint64_t block_index, uint64_t block_offset)
       : context_(context),
         page_allocator_(allocator),
         block_index_(block_index),
@@ -84,7 +83,7 @@ class BlockData {
   PageData* FindOrCreatePageData(uint64_t page_index, uint64_t page_offset);
 
   const SliceDataContext context_;
-  datastream::PageAllocator* page_allocator_{nullptr};
+  PageAllocator* page_allocator_{nullptr};
   const uint64_t block_index_;
   uint64_t block_offset_{0};
   uint64_t len_{0};

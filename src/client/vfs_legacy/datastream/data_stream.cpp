@@ -30,7 +30,6 @@
 #include "client/common/share_var.h"
 #include "client/vfs_legacy/datastream/metric.h"
 #include "client/memory/page_allocator.h"
-#include "options/client/options/data_stream/data_stream_option.h"
 
 namespace dingofs {
 namespace client {

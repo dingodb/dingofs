@@ -27,7 +27,6 @@
 
 namespace dingofs {
 namespace client {
-namespace datastream {
 
 DefaultPageAllocator::DefaultPageAllocator()
     : page_size_(0), num_free_pages_(0) {}
@@ -99,6 +98,5 @@ uint64_t PagePool::GetFreePages() {
   return num_free_pages_;
 }
 
-}  // namespace datastream
 }  // namespace client
 }  // namespace dingofs

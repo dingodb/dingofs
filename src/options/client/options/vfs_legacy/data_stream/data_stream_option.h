@@ -18,6 +18,7 @@
 #define DINGOFS_SRC_CLIENT_OPTIONS_DATA_STREAM_OPTION_H_
 
 #include "base/math/math.h"
+#include "options/client/options/memory/page_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -43,12 +44,6 @@ struct SliceOption {
 struct ChunkOption {
   uint64_t flush_workers;
   uint64_t flush_queue_size;
-};
-
-struct PageOption {
-  uint64_t page_size;
-  uint64_t total_size;
-  bool use_pool;
 };
 
 // TODO: refacto  this, sepecrate the background_flush_option with page option
@@ -90,23 +85,13 @@ static void InitDataStreamOption(utils::Configuration* c,
                            &o->flush_queue_size);
   }
   {  // page option
-    auto* o = &option->page_option;
-    c->GetValueFatalIfFail("data_stream.page.size", &o->page_size);
-    c->GetValueFatalIfFail("data_stream.page.total_size_mb", &o->total_size);
-    c->GetValueFatalIfFail("data_stream.page.use_pool", &o->use_pool);
-
-    if (o->page_size == 0) {
-      CHECK(false) << "Page size must greater than 0.";
-    }
-
-    o->total_size = o->total_size * kMiB;
-    if (o->total_size < 64 * kMiB) {
-      CHECK(false) << "Page total size must greater than 64MiB.";
-    }
+    InitMemoryPageOption(c, &option->page_option);
 
     double trigger_force_flush_memory_ratio =
         option->background_flush_option.trigger_force_memory_ratio;
-    if (o->total_size * (1.0 - trigger_force_flush_memory_ratio) < 32 * kMiB) {
+    if (option->page_option.total_size *
+            (1.0 - trigger_force_flush_memory_ratio) <
+        32 * kMiB) {
       CHECK(false) << "Please gurantee the free memory size greater than 32MiB "
                       "before force flush.";
     }
