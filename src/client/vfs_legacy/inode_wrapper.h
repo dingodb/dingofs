@@ -32,7 +32,7 @@
 #include <string>
 #include <utility>
 
-#include "client/common/common.h"
+#include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "dingofs/metaserver.pb.h"
 #include "metrics/client/vfs_legacy/s3_chunk_info.h"

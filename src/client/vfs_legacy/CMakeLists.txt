@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+add_subdirectory(common)
+add_subdirectory(datastream)
 add_subdirectory(kvclient)
 add_subdirectory(lease)
 
@@ -27,6 +29,7 @@ add_library(vfs_legacy_lib ${VFS_OLD_SRC_LIB})
 
 target_link_libraries(vfs_legacy_lib
     PROTO_OBJS
+    vfs_legacy_common
     dingofs_base_lib
     dingofs_executor
     rpcclient
@@ -35,7 +38,7 @@ target_link_libraries(vfs_legacy_lib
     client_options
     client_memcached_client
     dynamic_vlog
-    client_datastream
+    vfs_legacy_datastream
     cache_lib
     dingofs_utils
     block_accesser

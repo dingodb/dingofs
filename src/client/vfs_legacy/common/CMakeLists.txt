@@ -13,13 +13,14 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-# Seperate memory_pool and page_allocator from datastream
-add_library(client_datastream 
-    data_stream.cpp
-    memory_pool.cpp
-    page_allocator.cpp
+add_library(vfs_legacy_common
+    common.cpp
 )
-target_link_libraries(client_datastream
-    dingofs_utils
-    client_options
+
+target_link_libraries(vfs_legacy_common
+    brpc::brpc
+    fmt::fmt
+    glog::glog
+    gflags::gflags
+    stub_common
 )

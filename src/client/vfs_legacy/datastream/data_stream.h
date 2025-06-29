@@ -20,16 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_DATASTREAM_DATA_STREAM_H_
-#define DINGOFS_SRC_CLIENT_DATASTREAM_DATA_STREAM_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_DATA_STREAM_H_
+#define DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_DATA_STREAM_H_
 
 #include <cassert>
 #include <functional>
 #include <memory>
 
-#include "client/datastream/metric.h"
-#include "options/client/options/common_option.h"
-#include "client/datastream/page_allocator.h"
+#include "client/memory/page_allocator.h"
+#include "client/vfs_legacy/datastream/metric.h"
 #include "utils/concurrent/task_thread_pool.h"
 
 namespace dingofs {
@@ -77,4 +76,4 @@ class DataStream {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_DATASTREAM_DATA_STREAM_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_DATA_STREAM_H_

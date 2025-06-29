@@ -37,7 +37,7 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/helper.h"
-#include "client/datastream/data_stream.h"
+#include "client/vfs_legacy/datastream/data_stream.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"

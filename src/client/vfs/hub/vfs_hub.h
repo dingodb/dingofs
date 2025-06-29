@@ -25,7 +25,7 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
-#include "client/datastream/page_allocator.h"
+#include "client/memory/page_allocator.h"
 #include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/background/iperiodic_flush_manager.h"

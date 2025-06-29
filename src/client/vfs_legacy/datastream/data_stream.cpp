@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/datastream/data_stream.h"
+#include "client/vfs_legacy/datastream/data_stream.h"
 
 #include <glog/logging.h>
 
@@ -28,8 +28,8 @@
 #include <cstring>
 
 #include "client/common/share_var.h"
-#include "client/datastream/metric.h"
-#include "client/datastream/page_allocator.h"
+#include "client/vfs_legacy/datastream/metric.h"
+#include "client/memory/page_allocator.h"
 #include "options/client/options/data_stream/data_stream_option.h"
 
 namespace dingofs {

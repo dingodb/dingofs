@@ -29,7 +29,7 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/block_cache.h"
-#include "client/datastream/data_stream.h"
+#include "client/vfs_legacy/datastream/data_stream.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
 #include "client/vfs_legacy/in_time_warmup_manager.h"

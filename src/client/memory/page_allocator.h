@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_DATASTREAM_PAGE_ALLOCATOR_H_
-#define DINGOFS_SRC_CLIENT_DATASTREAM_PAGE_ALLOCATOR_H_
+#ifndef DINGOFS_SRC_CLIENT_MEMORY_PAGE_ALLOCATOR_H_
+#define DINGOFS_SRC_CLIENT_MEMORY_PAGE_ALLOCATOR_H_
 
 #include <sys/types.h>
 
 #include <cstdint>
 #include <memory>
 
-#include "client/datastream/memory_pool.h"
+#include "client/memory/memory_pool.h"
 
 namespace dingofs {
 namespace client {
@@ -95,4 +95,4 @@ class PagePool : public PageAllocator {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_DATASTREAM_PAGE_ALLOCATOR_H_
+#endif  // DINGOFS_SRC_CLIENT_MEMORY_PAGE_ALLOCATOR_H_

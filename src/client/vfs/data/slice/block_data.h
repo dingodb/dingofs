@@ -23,7 +23,7 @@
 #include <map>
 #include <memory>
 
-#include "client/datastream/page_allocator.h"
+#include "client/memory/page_allocator.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/page_data.h"
 #include "common/io_buffer.h"

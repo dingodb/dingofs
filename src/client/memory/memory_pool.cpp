@@ -20,7 +20,7 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#include "client/datastream/memory_pool.h"
+#include "client/memory/memory_pool.h"
 
 #include <butil/logging.h>
 #include <butil/time.h>

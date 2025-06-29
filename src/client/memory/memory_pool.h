@@ -20,8 +20,8 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_DATASTREAM_MEMORY_POOL_H_
-#define DINGOFS_SRC_CLIENT_DATASTREAM_MEMORY_POOL_H_
+#ifndef DINGOFS_SRC_CLIENT_MEMORY_MEMORY_POOL_H_
+#define DINGOFS_SRC_CLIENT_MEMORY_MEMORY_POOL_H_
 
 #include <sys/types.h>
 
@@ -75,4 +75,4 @@ class MemoryPool {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_DATASTREAM_MEMORY_POOL_H_
+#endif  // DINGOFS_SRC_CLIENT_MEMORY_MEMORY_POOL_H_

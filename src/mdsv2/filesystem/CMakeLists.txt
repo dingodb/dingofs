@@ -22,7 +22,6 @@ add_library(mdsv2_filesystem
 )
 
 target_link_libraries(mdsv2_filesystem
-    client_common
     mdsv2_common
     mdsv2_service
     mdsv2_background

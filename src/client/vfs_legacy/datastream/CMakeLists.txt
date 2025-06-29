@@ -11,18 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_library(vfs_hub 
-    vfs_hub.cpp
+# Seperate memory_pool and page_allocator from datastream
+add_library(vfs_legacy_datastream 
+    data_stream.cpp
 )
-
-target_link_libraries(vfs_hub
-    client_options
+target_link_libraries(vfs_legacy_datastream
     client_memory
-    cache_blockcache
-    vfs_background
-    vfs_meta_lib
-    block_accesser
-    vfs_handle
-    absl::str_format
+    dingofs_utils
+    client_options
 )

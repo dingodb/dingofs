@@ -34,6 +34,7 @@
 #include "common/rpc_stream.h"
 #include "common/status.h"
 #include "metrics/metric_guard.h"
+#include "options/client/options/common_option.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 

@@ -20,8 +20,8 @@
  * Author: lixiaocui
  */
 
-#ifndef DINGOFS_SRC_CLIENT_COMMON_COMMON_H_
-#define DINGOFS_SRC_CLIENT_COMMON_COMMON_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_LEGACY_COMMON_H_
+#define DINGOFS_SRC_CLIENT_VFS_LEGACY_COMMON_H_
 
 #include <cstdint>
 #include <string>
@@ -78,4 +78,4 @@ bool AddUllStringToFirst(uint64_t* first, const std::string& second);
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_COMMON_COMMON_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_LEGACY_COMMON_H_

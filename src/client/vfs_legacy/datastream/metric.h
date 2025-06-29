@@ -20,15 +20,15 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_CLIENT_DATASTREAM_METRIC_H_
-#define DINGOFS_SRC_CLIENT_DATASTREAM_METRIC_H_
+#ifndef DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_METRIC_H_
+#define DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_METRIC_H_
 
 #include <bvar/bvar.h>
 #include <bvar/passive_status.h>
 
 #include <memory>
 
-#include "client/datastream/page_allocator.h"
+#include "client/memory/page_allocator.h"
 #include "options/client/options/data_stream/data_stream_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -141,4 +141,4 @@ class DataStreamMetric {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_DATASTREAM_METRIC_H_
+#endif  // DINGOFS_SRC_CLIENT_VFS_LEGACY_DATASTREAM_METRIC_H_

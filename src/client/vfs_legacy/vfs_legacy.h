@@ -25,7 +25,7 @@
 #include <string>
 
 #include "blockaccess/block_accesser.h"
-#include "client/common/common.h"
+#include "client/vfs_legacy/common/common.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"

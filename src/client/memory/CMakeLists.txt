@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +13,12 @@
 # limitations under the License.
 # Define the BASE_FLAGS and DINGO_DEFAULT_COPTS variables
 
-add_library(client_common
-    common.cpp
+# Seperate memory_pool and page_allocator from datastream
+add_library(client_memory 
+    memory_pool.cpp
+    page_allocator.cpp
 )
-
-target_link_libraries(client_common
-    brpc::brpc
-    fmt::fmt
-    glog::glog
-    gflags::gflags
-    stub_common
+target_link_libraries(client_memory
+    dingofs_utils
+    client_options
 )
