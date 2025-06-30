@@ -27,7 +27,7 @@
 #include "client/vfs/vfs_meta.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "stub/common/common.h"
+#include "client/common/client_dummy_server_info.h"
 
 namespace dingofs {
 namespace client {
@@ -97,7 +97,7 @@ static int SetHostPortInMountPoint(pb::mds::Mountpoint& out) {
     return ret;
   }
   out.set_hostname(hostname);
-  out.set_port(stub::common::ClientDummyServerInfo::GetInstance().GetPort());
+  out.set_port(ClientDummyServerInfo::GetInstance().GetPort());
   return 0;
 }
 

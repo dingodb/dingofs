@@ -61,7 +61,20 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
     LOG(INFO) << "Not found `vfs.meta.max_name_length` in conf, default to "
               << option->meta_option.max_name_length;
   }
+
+  if (!conf->GetUInt32Value("vfs.dummy_server.port",
+                            &option->dummy_server_port)) {
+    LOG(INFO) << "Not found `vfs.dummy_server.port` in conf, default to "
+              << option->dummy_server_port;
+  }
+
+  if (!conf->GetIntValue("vfs.bthread_worker_num", &FLAGS_bthread_worker_num)) {
+    FLAGS_bthread_worker_num = 0;
+    LOG(INFO) << "Not found `vfs.bthread_worker_num` in conf, "
+                 "default to 0";
+  }
 }
+
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs

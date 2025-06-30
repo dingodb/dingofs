@@ -98,34 +98,6 @@ struct PeerAddr {
   bool operator==(const PeerAddr& other) const { return addr_ == other.addr_; }
 };
 
-class ClientDummyServerInfo {
- public:
-  static ClientDummyServerInfo& GetInstance() {
-    static ClientDummyServerInfo clientInfo;
-    return clientInfo;
-  }
-
-  void SetIP(const std::string& ip) { localIP_ = ip; }
-
-  std::string GetIP() const { return localIP_; }
-
-  void SetPort(uint32_t port) { localPort_ = port; }
-
-  uint32_t GetPort() const { return localPort_; }
-
-  void SetRegister(bool registerFlag) { register_ = registerFlag; }
-
-  bool GetRegister() const { return register_; }
-
- private:
-  ClientDummyServerInfo() = default;
-
- private:
-  std::string localIP_;
-  uint32_t localPort_ = 0;
-  bool register_ = false;
-};
-
 enum class MetaServerOpType {
   GetDentry,
   ListDentry,

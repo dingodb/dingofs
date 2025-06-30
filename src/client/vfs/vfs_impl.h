@@ -17,13 +17,15 @@
 #ifndef DINGOFS_CLIENT_VFS_IMPL_H_
 #define DINGOFS_CLIENT_VFS_IMPL_H_
 
+#include <brpc/server.h>
+
 #include <memory>
 
-#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
+#include "options/client/options/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {
@@ -112,11 +114,17 @@ class VFSImpl : public VFS {
   FuseOption GetFuseOption() override { return vfs_option_.fuse_option; }
 
  private:
+  Status StartBrpcServer();
+
+  void StopBrpcServer();
+
   VFSOption vfs_option_;
 
   std::unique_ptr<VFSHub> vfs_hub_;
   MetaSystem* meta_system_;
   HandleManager* handle_manager_;
+
+  brpc::Server brpc_server_;
 };
 
 }  // namespace vfs

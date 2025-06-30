@@ -21,8 +21,10 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
+#include "client/common/client_dummy_server_info.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -30,7 +32,9 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "options/client/options/common_option.h"
 #include "utils/configuration.h"
+#include "utils/net_common.h"
 
 #define VFS_CHECK_HANDLE(handle, ino, fh) \
   CHECK((handle) != nullptr)              \
@@ -46,6 +50,9 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 
   meta_system_ = vfs_hub_->GetMetaSystem();
   handle_manager_ = vfs_hub_->GetHandleManager();
+
+  DINGOFS_RETURN_NOT_OK(StartBrpcServer());
+
   return Status::OK();
 }
 
@@ -328,6 +335,40 @@ uint64_t VFSImpl::GetFsId() { return 10; }
 
 uint64_t VFSImpl::GetMaxNameLength() {
   return vfs_option_.meta_option.max_name_length;
+}
+
+Status VFSImpl::StartBrpcServer() {
+  brpc::ServerOptions brpc_server_options;
+  if (FLAGS_bthread_worker_num > 0) {
+    brpc_server_options.num_threads = FLAGS_bthread_worker_num;
+  }
+
+  int rc =
+      brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);
+  if (rc != 0) {
+    std::string error_msg =
+        fmt::format("Start brpc dummy server failed, port = {}, rc = {}",
+                    vfs_option_.dummy_server_port, rc);
+
+    LOG(ERROR) << error_msg;
+    return Status::InvalidParam(error_msg);
+  }
+
+  LOG(INFO) << "Start brpc server success, listen port = "
+            << vfs_option_.dummy_server_port;
+
+  std::string local_ip;
+  if (!utils::NetCommon::GetLocalIP(&local_ip)) {
+    std::string error_msg =
+        fmt::format("Get local ip failed, please check network configuration");
+    LOG(ERROR) << error_msg;
+    return Status::Unknown(error_msg);
+  }
+
+  ClientDummyServerInfo::GetInstance().SetPort(vfs_option_.dummy_server_port);
+  ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+
+  return Status::OK();
 }
 
 }  // namespace vfs

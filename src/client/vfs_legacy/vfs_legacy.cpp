@@ -28,6 +28,7 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/tiercache/tier_block_cache.h"
+#include "client/common/client_dummy_server_info.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/client_operator.h"
@@ -162,8 +163,8 @@ int VFSOld::InitBrpcServer() {
     return -1;
   }
 
-  stub::common::ClientDummyServerInfo::GetInstance().SetPort(listen_port);
-  stub::common::ClientDummyServerInfo::GetInstance().SetIP(local_ip);
+  ClientDummyServerInfo::GetInstance().SetPort(listen_port);
+  ClientDummyServerInfo::GetInstance().SetIP(local_ip);
 
   return 0;
 }

@@ -17,6 +17,7 @@
 #ifndef DINGOFS_SRC_CLIENT_OPTIONS_VFS_OPTION_H_
 #define DINGOFS_SRC_CLIENT_OPTIONS_VFS_OPTION_H_
 
+#include <cstdint>
 #include "blockaccess/accesser_common.h"
 #include "cache/config/block_cache.h"
 #include "cache/config/remote_cache.h"
@@ -47,6 +48,8 @@ struct VFSOption {
 
   VFSMetaOption meta_option;
   VFSDataOption data_option;
+
+  uint32_t dummy_server_port{10000};
 };
 
 void InitVFSOption(utils::Configuration* conf, VFSOption* option);
