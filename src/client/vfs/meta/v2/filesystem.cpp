@@ -59,6 +59,10 @@ std::string GetHostName() {
   return std::string(hostname);
 }
 
+void DirIteratorImpl::Append(const vfs::DirEntry& entry) {
+  entries_.push_back(entry);
+};
+
 Status DirIteratorImpl::Seek() {
   std::vector<DirEntry> entries;
   auto status = mds_client_->ReadDir(ino_, last_name_,

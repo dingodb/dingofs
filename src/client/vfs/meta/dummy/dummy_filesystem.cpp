@@ -1088,6 +1088,10 @@ DummyDirIterator::~DummyDirIterator() {
   }
 }
 
+void DummyDirIterator::Append(const vfs::DirEntry& entry) {
+  dir_entries_.push_back(entry);
+};
+
 Status DummyDirIterator::Seek() { return Status::OK(); }
 
 bool DummyDirIterator::Valid() { return offset_ < dir_entries_.size(); }

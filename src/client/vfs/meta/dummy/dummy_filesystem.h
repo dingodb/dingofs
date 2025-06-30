@@ -135,6 +135,8 @@ class DummyDirIterator : public vfs::DirIterator {
 
   ~DummyDirIterator() override;
 
+  void Append(const vfs::DirEntry& entry) override;
+
   Status Seek() override;
 
   bool Valid() override;

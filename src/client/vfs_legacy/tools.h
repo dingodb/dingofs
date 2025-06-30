@@ -35,25 +35,6 @@ namespace vfs {
 
 const uint32_t kMaxHostNameLength = 255u;
 
-static Attr GenerateVirtualInodeAttr(Ino ino) {
-  Attr attr;
-
-  attr.ino = ino;
-  attr.mode = S_IFREG | 0444;
-  attr.nlink = 1;
-  attr.length = 0;
-
-  struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
-  attr.atime = ToTimestamp(now);
-  attr.mtime = ToTimestamp(now);
-  attr.ctime = ToTimestamp(now);
-
-  attr.type = FileType::kFile;
-
-  return attr;
-}
-
 static FileType FsFileTypePBToFileType(
     pb::metaserver::FsFileType fs_file_type) {
   switch (fs_file_type) {
