@@ -85,8 +85,7 @@ void HandlerManager::SaveAllHandlers(const std::string& path) {
     item["fh"] = fileHandle->fh;
     item["flags"] = fileHandle->flags;
     item["padding"] = fileHandle->padding;
-    // do not store dir_handler_init, it's can reinitialize
-    // item["dir_handler_init"] = fileHandle->dir_handler_init;
+    item["dir_handler_init"] = fileHandle->dir_handler_init;
 
     Json::Value timespec_item;
     timespec_item["seconds"] = fileHandle->mtime.seconds;
@@ -146,6 +145,7 @@ void HandlerManager::LoadAllHandlers(const std::string& path) {
     uint64_t fh = handler["fh"].asUInt64();
     bool padding = handler["padding"].asBool();
     uint flags = handler["flags"].asUInt();
+    bool dir_handler_init = handler["dir_handler_init"].asBool();
     // peek timespec
     const Json::Value timespec_item = handler["timespec_item"];
     uint64_t seconds = timespec_item["seconds"].asUInt64();
@@ -166,6 +166,11 @@ void HandlerManager::LoadAllHandlers(const std::string& path) {
       handler->mtime = base::time::TimeSpec(seconds, nanoSeconds);
       handler->buffer->size = size;
       handler->buffer->wasRead = wasRead;
+      handler->dir_handler_init = dir_handler_init;
+      if (dir_handler_init) {
+        handler->dir_iterator = std::make_unique<FsDirIterator>();
+      }
+
       if (size > 0 && size == (p.size() / 2)) {
         handler->buffer->p = (char*)malloc(size);
         int ret = HexStringToBuf(
