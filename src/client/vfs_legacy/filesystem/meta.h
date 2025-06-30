@@ -90,6 +90,10 @@ class FsDirIterator : public vfs::DirIterator {
   bool Valid() override;
   vfs::DirEntry GetValue(bool with_attr) override;
   void Next() override;
+  // TODO: need implemented
+  std::string Dump() override { return {}; };
+  // TODO: need implemented
+  void Load(const std::string& data) override {};
 
  private:
   uint64_t offset_{0};

@@ -143,6 +143,12 @@ class DummyDirIterator : public vfs::DirIterator {
 
   void Next() override;
 
+  // TODO: need implemented
+  std::string Dump() override { return {}; };
+
+  // TODO: need implemented
+  void Load(const std::string& data) override {};
+
   void SetDirEntries(std::vector<DirEntry>&& dir_entries);
 
  private:

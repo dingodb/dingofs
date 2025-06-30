@@ -47,6 +47,10 @@ class DirIteratorImpl : public DirIterator {
   bool Valid() override;
   DirEntry GetValue(bool with_attr) override;
   void Next() override;
+  // TODO: need implemented
+  std::string Dump() override { return {}; };
+  // TODO: need implemented
+  void Load(const std::string& data) override {};
 
  private:
   Ino ino_;

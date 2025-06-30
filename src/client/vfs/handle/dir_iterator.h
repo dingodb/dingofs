@@ -39,6 +39,10 @@ class DirIterator {
   virtual DirEntry GetValue(bool with_attr) = 0;
 
   virtual void Next() = 0;
+
+  virtual std::string Dump() = 0;
+
+  virtual void Load(const std::string& data) = 0;
 };
 
 using DirIteratorUPtr = std::unique_ptr<DirIterator>;
