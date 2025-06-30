@@ -68,6 +68,8 @@ class VFSHub {
   virtual FsInfo GetFsInfo() = 0;
 
   virtual uint64_t GetPageSize() = 0;
+
+  virtual VFSOption GetVFSOption() = 0;
 };
 
 class VFSHubImpl : public VFSHub {
@@ -129,6 +131,11 @@ class VFSHubImpl : public VFSHub {
   uint64_t GetPageSize() override {
     CHECK(started_.load(std::memory_order_relaxed)) << "not started";
     return vfs_option_.page_option.page_size;
+  }
+
+  VFSOption GetVFSOption() override {
+    CHECK(started_.load(std::memory_order_relaxed)) << "not started";
+    return vfs_option_;
   }
 
  private:

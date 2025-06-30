@@ -92,7 +92,8 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     IOBuffer io_buffer = block_data->ToIOBuffer();
 
     // TODO: read write back option from somewhere, currently using default
-    cache::PutOption option;
+    cache::PutOption option{.writeback =
+                                vfs_hub_->GetVFSOption().data_option.writeback};
     // TODO: Block should  take own the iobuf
     cache::BlockKey key(slice_data_context_.fs_id, slice_data_context_.ino,
                         slice_id_, block_index, 0);
