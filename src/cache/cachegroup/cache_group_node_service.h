@@ -39,6 +39,8 @@ class CacheGroupNodeServiceImpl final : public PBBlockCacheService {
   DECLARE_RPC_METHOD(Prefetch);
 
  private:
+  Status CheckBodySize(size_t request_block_size, size_t body_size);
+
   CacheGroupNodeSPtr node_;
 };
 

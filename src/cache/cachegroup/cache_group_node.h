@@ -24,7 +24,6 @@
 #define DINGOFS_SRC_CACHE_CACHEGROUP_CACHE_GROUP_NODE_H_
 
 #include "cache/blockcache/block_cache.h"
-#include "cache/blockcache/block_cache_impl.h"
 #include "cache/cachegroup/async_cacher.h"
 #include "cache/cachegroup/cache_group_node_heartbeat.h"
 #include "cache/cachegroup/cache_group_node_member.h"
@@ -79,6 +78,9 @@ class CacheGroupNodeImpl final : public CacheGroupNode {
                           size_t length, IOBuffer* buffer, RangeOption option);
   Status RangeStorage(ContextSPtr ctx, const BlockKey& key, off_t offset,
                       size_t length, IOBuffer* buffer, RangeOption option);
+
+  void AddCacheHitCount(int64_t count);
+  void AddCacheMissCount(int64_t count);
 
  private:
   std::atomic<bool> running_;

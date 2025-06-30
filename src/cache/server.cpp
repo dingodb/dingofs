@@ -25,16 +25,16 @@
 namespace dingofs {
 namespace cache {
 
-Status RunServer() {
+int RunServer() {
   auto option = CacheGroupNodeOption();
   CacheGroupNodeServerImpl server(option);
-  auto status = server.Run();
+  auto status = server.Start();
   if (!status.ok()) {
-    return status;
+    return -1;
   }
 
   server.Shutdown();
-  return Status::OK();
+  return 0;
 }
 
 }  // namespace cache

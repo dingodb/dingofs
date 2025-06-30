@@ -35,6 +35,7 @@
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
+#include "metrics/cache/cache_group_node_metric.h"
 
 namespace dingofs {
 namespace cache {
@@ -52,6 +53,8 @@ DEFINE_string(metadata_filepath, "/var/log/cache_group_meta",
               "Filepath to store metadata of cache group node");  // Use dir
 DEFINE_uint32(send_heartbeat_interval_ms, 1000,
               "Interval to send heartbeat to MDS in milliseconds");
+
+static const std::string kModule = kCacheGroupNodeModule;
 
 CacheGroupNodeImpl::CacheGroupNodeImpl(CacheGroupNodeOption option)
     : running_(false),
@@ -122,16 +125,19 @@ Status CacheGroupNodeImpl::Shutdown() {
 
   Status status = member_->LeaveGroup();
   if (!status.ok()) {
+    LOG(ERROR) << "Leave cache group failed: " << status.ToString();
     return status;
   }
 
   status = async_cacher_->Shutdown();
   if (!status.ok()) {
+    LOG(ERROR) << "Shutdown async cacher failed: " << status.ToString();
     return status;
   }
 
   status = block_cache_->Shutdown();
   if (!status.ok()) {
+    LOG(ERROR) << "Shutdown block cache failed: " << status.ToString();
     return status;
   }
 
@@ -143,7 +149,7 @@ Status CacheGroupNodeImpl::Shutdown() {
 
 void CacheGroupNodeImpl::RewriteCacheDir() {
   auto member_uuid = member_->GetMemberUuid();
-  CHECK(!member_uuid.empty());
+  CHECK(!member_uuid.empty()) << "Member UUID should not be empty";
   auto& disk_cache_options = option_.block_cache_option.disk_cache_options;
   for (auto& option : disk_cache_options) {
     option.cache_dir = RealCacheDir(option.cache_dir, member_uuid);
@@ -162,8 +168,12 @@ Status CacheGroupNodeImpl::InitBlockCache() {
 Status CacheGroupNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
                                const Block& block, PutOption option) {
   Status status;
+  TracingGuard tracing(ctx, status, kModule, "put(%s,%zu)", key.Filename(),
+                       block.size);
 
+  NEXT_STEP(kLocalPut);
   status = block_cache_->Put(ctx, key, block, option);
+
   return status;
 }
 
@@ -171,6 +181,8 @@ Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
                                  off_t offset, size_t length, IOBuffer* buffer,
                                  RangeOption option) {
   Status status;
+  TracingGuard tracing(ctx, status, kModule, "range(%s,%lld,%zu)",
+                       key.Filename(), offset, length);
 
   status = RangeCachedBlock(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
@@ -184,16 +196,24 @@ Status CacheGroupNodeImpl::Range(ContextSPtr ctx, const BlockKey& key,
 Status CacheGroupNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                                  const Block& block, CacheOption option) {
   Status status;
+  TracingGuard tracing(ctx, status, kModule, "cache(%s,%zu)", key.Filename(),
+                       block.size);
 
+  NEXT_STEP(kLocalCache);
   status = block_cache_->Cache(ctx, key, block, option);
+
   return status;
 }
 
 Status CacheGroupNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                     size_t length, PrefetchOption option) {
   Status status;
+  TracingGuard tracing(ctx, status, kModule, "prefetch(%s,%zu)", key.Filename(),
+                       length);
 
+  NEXT_STEP(kLocalPrefetch);
   status = block_cache_->Prefetch(ctx, key, length, option);
+
   return status;
 }
 
@@ -201,12 +221,13 @@ Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx,
                                             const BlockKey& key, off_t offset,
                                             size_t length, IOBuffer* buffer,
                                             RangeOption option) {
+  NEXT_STEP(kLocalRange);
   option.retrive = false;
   auto status = block_cache_->Range(ctx, key, offset, length, buffer, option);
   if (status.ok()) {
-    // CacheGroupNodeMetric::GetInstance().AddCacheHit();
+    AddCacheHitCount(1);
   } else {
-    // CacheGroupNodeMetric::GetInstance().AddCacheMiss();
+    AddCacheMissCount(1);
   }
   return status;
 }
@@ -214,10 +235,9 @@ Status CacheGroupNodeImpl::RangeCachedBlock(ContextSPtr ctx,
 Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, const BlockKey& key,
                                         off_t offset, size_t length,
                                         IOBuffer* buffer, RangeOption option) {
-  Status status;
-
+  NEXT_STEP(kGetStorage)
   StorageSPtr storage;
-  status = storage_pool_->GetStorage(key.fs_id, storage);
+  auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
     return status;
   }
@@ -225,24 +245,34 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, const BlockKey& key,
   // Retrive range of block: unknown block size or unreach max_range_size
   auto block_size = option.block_size;
   if (block_size == 0 || length <= FLAGS_max_range_size_kb * kKiB) {
+    NEXT_STEP(kS3Range)
     status = storage->Range(ctx, key, offset, length, buffer);
     return status;
   }
 
   // Retrive the whole block
+  NEXT_STEP(kS3Get)
   IOBuffer block;
   status = storage->Range(ctx, key, offset, block_size, &block);
   if (!status.ok()) {
     return status;
   }
 
+  NEXT_STEP(kAsyncCache)
+  async_cacher_->AsyncCache(ctx, key, block);
+
   butil::IOBuf piecs;
   block.IOBuf().append_to(&piecs, length, offset);
   *buffer = IOBuffer(piecs);
-
-  async_cacher_->AsyncCache(ctx, key, block);
-
   return status;
+}
+
+void CacheGroupNodeImpl::AddCacheHitCount(int64_t count) {
+  metrics::CacheGroupNodeMetric::GetInstance().cache_hit_count << count;
+}
+
+void CacheGroupNodeImpl::AddCacheMissCount(int64_t count) {
+  metrics::CacheGroupNodeMetric::GetInstance().cache_miss_count << count;
 }
 
 }  // namespace cache

@@ -53,6 +53,9 @@ class CacheGroupNodeHeartbeatImpl final : public CacheGroupNodeHeartbeat {
  private:
   void SendHeartbeat();
 
+  int64_t GetCacheHitCount();
+  int64_t GetCacheMissCount();
+
  private:
   std::atomic<bool> running_;
   CacheGroupNodeMemberSPtr member_;

@@ -69,7 +69,7 @@ class CacheGroupNodeMemberImpl final : public CacheGroupNodeMember {
   std::string GenMemberUuid();
 
   uint64_t member_id_;       // allocated by mds
-  std::string member_uuid_;  // allocated by local, for directory name
+  std::string member_uuid_;  // allocated by local, used for directory name
   const CacheGroupNodeOption option_;
   MdsClientSPtr mds_client_;
 };

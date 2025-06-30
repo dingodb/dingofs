@@ -32,6 +32,12 @@ AsyncCacherImpl::AsyncCacherImpl(BlockCacheSPtr block_cache)
     : running_(false), block_cache_(block_cache), queue_id_({0}) {}
 
 Status AsyncCacherImpl::Start() {
+  CHECK_NOTNULL(block_cache_);
+
+  if (running_) {
+    return Status::OK();
+  }
+
   LOG(INFO) << "Async cacher is starting...";
 
   bthread::ExecutionQueueOptions queue_options;
@@ -39,20 +45,31 @@ Status AsyncCacherImpl::Start() {
   int rc = bthread::execution_queue_start(&queue_id_, &queue_options,
                                           HandleTask, this);
   if (rc != 0) {
-    return Status::Internal("start async cache execution queue failed");
+    LOG(ERROR) << "Start execution queue failed: rc = " << rc;
+    return Status::Internal("start execution queue failed");
   }
 
+  running_ = true;
+
   LOG(INFO) << "Async cacher is up.";
+
+  CHECK_RUNNING("Async cacher");
   return Status::OK();
 }
 
 Status AsyncCacherImpl::Shutdown() {
+  if (running_.exchange(false)) {
+    return Status::OK();
+  }
+
   LOG(INFO) << "Async cacher is shutting down...";
 
   if (bthread::execution_queue_stop(queue_id_) != 0) {
-    return Status::Internal("stop async cache execution queue failed");
+    LOG(ERROR) << "Stop execution queue failed.";
+    return Status::Internal("stop execution queue failed");
   } else if (bthread::execution_queue_join(queue_id_) != 0) {
-    return Status::Internal("join async cache execution queue failed");
+    LOG(ERROR) << "Join execution queue failed.";
+    return Status::Internal("join execution queue failed");
   }
 
   LOG(INFO) << "Async cacher is down.";
@@ -82,8 +99,9 @@ int AsyncCacherImpl::HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
     self->block_cache_->AsyncCache(
         task.ctx, task.key, task.block, [task](Status status) {
           if (!status.ok()) {
-            LOG(ERROR) << "Async cache block (key=" << task.key.Filename()
-                       << ") failed: " << status.ToString();
+            LOG(ERROR) << "Async cache block failed: key = "
+                       << task.key.Filename()
+                       << ", status = " << status.ToString();
           }
         });
   }

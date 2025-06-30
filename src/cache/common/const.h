@@ -61,6 +61,8 @@ static const std::string kRemotePrefetch = "remote_prefetch";
 
 static const std::string kNodePut = "node_put";
 static const std::string kNodeRange = "node_range";
+static const std::string kNodeCache = "node_cache";
+static const std::string kNodePrefetch = "node_prefetch";
 
 // block cache
 static const std::string kStageBlock = "stage";
@@ -95,7 +97,11 @@ static const std::string kRunClosure = "closure";
 // storage
 static const std::string kS3Put = "s3_put";
 static const std::string kS3Range = "s3_range";
+static const std::string kS3Get = "s3_get";
 
+static const std::string kAsyncCache = "async_cache";
+
+static const std::string kGetStorage = "get_storage";
 static const std::string kEnqueue = "enqueue";
 
 }  // namespace cache

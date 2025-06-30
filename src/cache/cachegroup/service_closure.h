@@ -27,6 +27,7 @@
 #include <brpc/closure_guard.h>
 #include <glog/logging.h>
 
+#include "cache/blockcache/cache_store.h"
 #include "cache/common/const.h"
 #include "cache/common/proto.h"
 #include "cache/utils/context.h"
@@ -34,41 +35,69 @@
 namespace dingofs {
 namespace cache {
 
-template <typename T, typename U>
+static const std::string kModule = kServiceModule;
+
+inline std::string ToString(const PBPutRequest* request) {
+  return absl::StrFormat("put(%s,%zu)",
+                         BlockKey(request->block_key()).Filename(),
+                         request->block_size());
+}
+
+inline std::string ToString(const PBRangeRequest* request) {
+  return absl::StrFormat("range(%s,%lld,%zu)",
+                         BlockKey(request->block_key()).Filename(),
+                         request->offset(), request->length());
+}
+
+inline std::string ToString(const PBCacheRequest* request) {
+  return absl::StrFormat("cache(%s,%zu)",
+                         BlockKey(request->block_key()).Filename(),
+                         request->block_size());
+}
+
+inline std::string ToString(const PBPrefetchRequest* request) {
+  return absl::StrFormat("prefetch(%s,%zu)",
+                         BlockKey(request->block_key()).Filename(),
+                         request->block_size());
+}
+
+template <typename T, typename U, typename... Args>
 class ServiceClosure : public google::protobuf::Closure {
  public:
-  ServiceClosure(ContextSPtr ctx, const std::string& method_name,
-                 google::protobuf::Closure* done, const T* request, U* response)
+  ServiceClosure(ContextSPtr ctx, google::protobuf::Closure* done,
+                 const T* request, U* response, Status& status)
       : ctx_(ctx),
-        method_name_(method_name),
         done_(done),
         request_(request),
-        response_(response) {}
+        response_(response),
+        status_(status) {}
 
   ~ServiceClosure() override = default;
 
   void Run() override {
     std::unique_ptr<ServiceClosure<T, U>> self_guard(this);
-    brpc::ClosureGuard done_guard(done_);
-
     auto ctx = ctx_;
-    NEXT_STEP(kSendResponse);
-    // TODO: metric guard
+    TracingGuard tracing(ctx, status_, kModule, "%s", ToString(request_));
 
     if (response_->status() != PBBlockCacheErrCode::BlockCacheOk) {
       LOG(ERROR) << absl::StrFormat(
-          "BlockCacheService [%s] reqeust failed: request = %s, response = %s",
-          method_name_, request_->ShortDebugString().substr(0, 512),
-          response_->ShortDebugString().substr(0, 512));
+          "BlockCacheService [%s] reqeust failed: request = %s, response = "
+          "%s, status = %s",
+          ToString(request_), request_->ShortDebugString().substr(0, 512),
+          response_->ShortDebugString().substr(0, 512),
+          pb::cache::blockcache::BlockCacheErrCode_Name(response_->status()));
     }
+
+    NEXT_STEP(kSendResponse);
+    done_->Run();
   }
 
  private:
   ContextSPtr ctx_;
-  std::string method_name_;
   google::protobuf::Closure* done_;
   const T* request_;
   U* response_;
+  Status& status_;
 };
 
 }  // namespace cache

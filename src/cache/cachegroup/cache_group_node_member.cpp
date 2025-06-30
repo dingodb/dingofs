@@ -24,7 +24,6 @@
 
 #include "base/string/string.h"
 #include "base/time/time.h"
-#include "cache/cachegroup/cache_group_node.h"
 #include "cache/common/proto.h"
 #include "cache/utils/helper.h"
 
@@ -39,6 +38,8 @@ CacheGroupNodeMemberImpl::CacheGroupNodeMemberImpl(CacheGroupNodeOption option,
       mds_client_(mds_client) {}
 
 Status CacheGroupNodeMemberImpl::JoinGroup() {
+  CHECK_NOTNULL(mds_client_);
+
   uint64_t old_id;
   auto status = LoadMemberId(&old_id);
   if (!status.ok()) {
@@ -71,12 +72,12 @@ Status CacheGroupNodeMemberImpl::LoadMemberId(uint64_t* member_id) {
   auto status = Helper::ReadFile(filepath, &content);
   if (status.IsNotFound()) {
     *member_id = 0;
-    LOG(INFO) << "Cache group node metadata file not found: filepath="
+    LOG(INFO) << "Cache group node metadata file not found: filepath = "
               << filepath;
     return Status::OK();
   } else if (!status.ok()) {
-    LOG(ERROR) << "Read cache group node metadata file (path=" << filepath
-               << ") failed: " << status.ToString();
+    LOG(ERROR) << "Read cache group node metadata file failed: path = "
+               << filepath << ", status = " << status.ToString();
     return status;
   } else if (!metadata.ParseFromString(content)) {
     LOG(ERROR) << "Cache group node metadata file maybe broken: filepath = "
