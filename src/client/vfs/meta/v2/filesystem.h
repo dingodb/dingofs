@@ -151,6 +151,12 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
                 const std::string& new_name) override;
 
+  // TODO : need implemented
+  bool Dump(const std::string& path) override { return true; };
+
+  // TODO : need implemented
+  bool Load(const std::string& path) override { return true; };
+
  private:
   bool SetRandomEndpoint();
   bool SetEndpoints();

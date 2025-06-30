@@ -132,6 +132,10 @@ class MetaSystem {
                         Ino new_parent, const std::string& new_name) = 0;
 
   virtual Status GetFsInfo(FsInfo* fs_info) = 0;
+
+  virtual bool Dump(const std::string& path) = 0;
+
+  virtual bool Load(const std::string& path) = 0;
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

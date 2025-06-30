@@ -100,6 +100,12 @@ class MetaWrapper : public MetaSystem {
 
   Status GetFsInfo(FsInfo* fs_info) override;
 
+  // TODO : need implemented
+  bool Dump(const std::string& path) override { return true; };
+
+  // TODO : need implemented
+  bool Load(const std::string& path) override { return true; };
+
  private:
   std::unique_ptr<MetaSystem> target_;
 };

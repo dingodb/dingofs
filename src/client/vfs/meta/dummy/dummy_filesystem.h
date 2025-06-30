@@ -233,6 +233,12 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status GetFsInfo(FsInfo* fs_info) override;
 
+  // TODO : need implemented
+  bool Dump(const std::string& path) override { return true; };
+
+  // TODO : need implemented
+  bool Load(const std::string& path) override { return true; };
+
  private:
   friend class DummyDirIterator;
 
