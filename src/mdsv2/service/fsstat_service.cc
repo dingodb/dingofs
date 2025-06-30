@@ -33,6 +33,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/common/version.h"
 #include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/server.h"
 
@@ -325,6 +326,19 @@ static void RenderDistributedLock(const std::vector<StoreDistributionLock::LockE
   os << "</div>";
 }
 
+static void RenderGitInfo(butil::IOBufBuilder& os) {
+  os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
+  os << R"(<h3>Git</h3>)";
+  os << R"(<div style="font-size:smaller;">)";
+  auto infos = DingoVersion();
+  for (const auto& info : infos) {
+    os << fmt::format("{}: {}", info.first, info.second);
+    os << "<br>";
+  }
+  os << R"(</div>)";
+  os << R"(</div>)";
+}
+
 static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_system_set, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>\n";
 
@@ -391,6 +405,9 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
   } else {
     RenderDistributedLock(lock_entries, os);
   }
+
+  // git info
+  RenderGitInfo(os);
 
   os << "</body>";
   os << "</html>";

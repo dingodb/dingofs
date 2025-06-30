@@ -34,11 +34,6 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
     LOG(WARNING) << fmt::format(
         "{} SliceFlushed Fail flush slice_seq: {} in chunk_flush_task: {}, "
         "status: {}",
-        slice_seq, ToString(), s.ToString());
-  } else {
-    VLOG(4) << fmt::format(
-        "{} SliceFlushed Success flush slice_seq: {} in chunk_flush_task: {}, "
-        "status: {}",
         UUID(), slice_seq, ToString(), s.ToString());
   }
 

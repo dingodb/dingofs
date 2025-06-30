@@ -216,7 +216,7 @@ int main(int argc, char* argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
   if (dingofs::mdsv2::FLAGS_show_version) {
-    dingofs::mdsv2::DingoShowVerion();
+    dingofs::mdsv2::DingoShowVersion();
 
     printf("Usage: %s --conf ./conf/mdsv2.conf --coor_url=[file://./conf/coor_list]\n", argv[0]);
     printf("Example: \n");

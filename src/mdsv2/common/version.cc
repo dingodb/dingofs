@@ -15,10 +15,10 @@
 #include "mdsv2/common/version.h"
 
 #include "butil/string_printf.h"
+#include "fmt/format.h"
 #include "mdsv2/common/logging.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 DEFINE_string(git_commit_hash, GIT_VERSION, "current git commit version");
@@ -28,8 +28,7 @@ DEFINE_string(git_commit_mail, GIT_COMMIT_MAIL, "current dingo git commit mail")
 DEFINE_string(git_commit_time, GIT_COMMIT_TIME, "current dingo git commit time");
 DEFINE_string(major_version, MAJOR_VERSION, "current dingo major version");
 DEFINE_string(minor_version, MINOR_VERSION, "current dingo mino version");
-DEFINE_string(dingo_build_type, DINGO_BUILD_TYPE, "current dingo build type");
-DEFINE_string(dingo_contrib_build_type, DINGO_CONTRIB_BUILD_TYPE, "current dingo contrib build type");
+DEFINE_string(dingo_build_type, DINGOFS_BUILD_TYPE, "current dingo build type");
 DEFINE_bool(use_tcmalloc, false, "use tcmalloc");
 DEFINE_bool(use_profiler, false, "use profiler");
 DEFINE_bool(use_sanitizer, false, "use sanitizer");
@@ -60,23 +59,34 @@ std::string GetBuildFlag() {
       FLAGS_use_tcmalloc ? "ON" : "OFF", FLAGS_use_profiler ? "ON" : "OFF", FLAGS_use_sanitizer ? "ON" : "OFF");
 }
 
-void DingoShowVerion() {
+void DingoShowVersion() {
   printf("DINGOFS VERSION:[%s-%s]\n", FLAGS_major_version.c_str(), FLAGS_minor_version.c_str());
   printf("DINGOFS GIT_TAG_VERSION:[%s]\n", FLAGS_git_tag_name.c_str());
   printf("DINGOFS GIT_COMMIT_HASH:[%s]\n", FLAGS_git_commit_hash.c_str());
-  printf("DINGOFS BUILD_TYPE:[%s] CONTRIB_BUILD_TYPE:[%s]\n", FLAGS_dingo_build_type.c_str(),
-         FLAGS_dingo_contrib_build_type.c_str());
+  printf("DINGOFS BUILD_TYPE:[%s]\n", FLAGS_dingo_build_type.c_str());
   printf("%s", GetBuildFlag().c_str());
 }
 
-void DingoLogVerion() {
+void DingoLogVersion() {
   DINGO_LOG(INFO) << "DINGOFS VERSION:[" << FLAGS_major_version << "-" << FLAGS_minor_version << "]";
   DINGO_LOG(INFO) << "DINGOFS GIT_TAG_VERSION:[" << FLAGS_git_tag_name << "]";
   DINGO_LOG(INFO) << "DINGOFS GIT_COMMIT_HASH:[" << FLAGS_git_commit_hash << "]";
-  DINGO_LOG(INFO) << "DINGOFS BUILD_TYPE:[" << FLAGS_dingo_build_type << "] CONTRIB_BUILD_TYPE:["
-                  << FLAGS_dingo_contrib_build_type << "]";
+  DINGO_LOG(INFO) << "DINGOFS BUILD_TYPE:[" << FLAGS_dingo_build_type << "]";
   DINGO_LOG(INFO) << GetBuildFlag();
   DINGO_LOG(INFO) << "PID: " << getpid();
+}
+
+std::vector<std::pair<std::string, std::string>> DingoVersion() {
+  std::vector<std::pair<std::string, std::string>> result;
+  result.emplace_back("VERSION", fmt::format("{}-{}", FLAGS_major_version, FLAGS_minor_version));
+  result.emplace_back("TAG_VERSION", FLAGS_git_tag_name);
+  result.emplace_back("COMMIT_HASH", FLAGS_git_commit_hash);
+  result.emplace_back("COMMIT_USER", FLAGS_git_commit_user);
+  result.emplace_back("COMMIT_MAIL", FLAGS_git_commit_mail);
+  result.emplace_back("COMMIT_TIME", FLAGS_git_commit_time);
+  result.emplace_back("BUILD_TYPE", FLAGS_dingo_build_type);
+
+  return result;
 }
 
 DEFINE_bool(show_version, false, "Print dingofs version flag");

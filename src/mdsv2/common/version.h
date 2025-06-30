@@ -15,10 +15,13 @@
 #ifndef DINGODB_COMMON_VERSION_H_
 #define DINGODB_COMMON_VERSION_H_
 
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "gflags/gflags.h"
 
 namespace dingofs {
-
 namespace mdsv2 {
 
 #ifndef GIT_VERSION
@@ -49,21 +52,17 @@ namespace mdsv2 {
 #define GIT_COMMIT_TIME "unknown"
 #endif
 
-#ifndef DINGO_BUILD_TYPE
-#define DINGO_BUILD_TYPE "unknown"
-#endif
-
-#ifndef DINGO_CONTRIB_BUILD_TYPE
-#define DINGO_CONTRIB_BUILD_TYPE "unknown"
+#ifndef DINGOFS_BUILD_TYPE
+#define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
 DECLARE_bool(show_version);
 
-void DingoShowVerion();
-void DingoLogVerion();
+void DingoShowVersion();
+void DingoLogVersion();
+std::vector<std::pair<std::string, std::string>> DingoVersion();
 
 }  // namespace mdsv2
-
 }  // namespace dingofs
 
 #endif  // DINGODB_COMMON_VERSION_H_

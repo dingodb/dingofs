@@ -113,7 +113,7 @@ bool Server::InitLog() {
 
   DingoLogger::InitLogger(log_option.path(), "mdsv2", GetDingoLogLevel(log_option.level()));
 
-  DingoLogVerion();
+  DingoLogVersion();
   return true;
 }
 

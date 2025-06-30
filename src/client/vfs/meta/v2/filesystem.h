@@ -38,6 +38,7 @@ class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
 
+// used by read dir
 class DirIteratorImpl : public DirIterator {
  public:
   DirIteratorImpl(MDSClientPtr mds_client, Ino ino)
@@ -54,15 +55,18 @@ class DirIteratorImpl : public DirIterator {
 
  private:
   Ino ino_;
+  // last file/dir name, used to read next batch
   std::string last_name_;
   bool with_attr_{false};
 
   uint32_t offset_{0};
+  // stash entry for read dir
   std::vector<DirEntry> entries_;
 
   MDSClientPtr mds_client_;
 };
 
+// used by open file
 class FileSessionMap {
  public:
   FileSessionMap() = default;
