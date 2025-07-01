@@ -96,17 +96,31 @@ void MDSV2FileSystem::UnInit() {
 }
 
 bool MDSV2FileSystem::Dump(Json::Value& value) {
-  // dump file session map
-  Json::Value file_session_map_item;
-  file_session_map_.Dump(file_session_map_item);
-  value["file_session_map"] = file_session_map_item;
+  if (!file_session_map_.Dump(value)) {
+    return false;
+  }
+
+  if (!dir_iterator_manager_.Dump(value)) {
+    return false;
+  }
+
+  if (!mds_client_->Dump(value)) {
+    return false;
+  }
 
   return true;
 }
 
 bool MDSV2FileSystem::Load(const Json::Value& value) {
-  // load file session map
-  if (!file_session_map_.Load(value["file_session_map"])) {
+  if (!file_session_map_.Load(value)) {
+    return false;
+  }
+
+  if (!dir_iterator_manager_.Load(mds_client_, value)) {
+    return false;
+  }
+
+  if (!mds_client_->Load(value)) {
     return false;
   }
 

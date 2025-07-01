@@ -72,6 +72,9 @@ class DirIteratorManager {
   DirIteratorSPtr Get(uint64_t fh);
   void Delete(uint64_t fh);
 
+  bool Dump(Json::Value& value);
+  bool Load(MDSClientPtr mds_client, const Json::Value& value);
+
  private:
   utils::RWLock lock_;
   // fh -> DirIteratorSPtr

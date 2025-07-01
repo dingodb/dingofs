@@ -23,8 +23,9 @@
 #include <sstream>
 #include <unordered_map>
 
-#include "client/vfs/data/ifile.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/data/ifile.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
@@ -68,6 +69,10 @@ class HandleManager {
 
   //  only called when process exit
   void FlushAll();
+
+  // Todo: implement dump and load
+  bool Dump(Json::Value& value) { return true; }
+  bool Load(const Json::Value& value) { return true; }
 
  private:
   std::mutex mutex_;

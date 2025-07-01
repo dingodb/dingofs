@@ -49,7 +49,7 @@ class ParentMemo {
   void Upsert(Ino ino, Ino parent, uint64_t version);
   void Delete(Ino ino);
 
-  void Dump(Json::Value& value);
+  bool Dump(Json::Value& value);
   bool Load(const Json::Value& value);
 
  private:

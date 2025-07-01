@@ -57,6 +57,9 @@ class MDSClient {
   bool Init();
   void Destory();
 
+  bool Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
+
   bool SetEndpoint(const std::string& ip, int port, bool is_default);
 
   static Status GetFsInfo(RPCPtr rpc, const std::string& name,

@@ -102,6 +102,12 @@ bool MDSClient::Init() {
 
 void MDSClient::Destory() {}
 
+bool MDSClient::Dump(Json::Value& value) { return parent_memo_->Dump(value); }
+
+bool MDSClient::Load(const Json::Value& value) {
+  return parent_memo_->Load(value);
+}
+
 bool MDSClient::SetEndpoint(const std::string& ip, int port, bool is_default) {
   return rpc_->AddEndpoint(ip, port, is_default);
 }

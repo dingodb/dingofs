@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/dir_iterator.h"
 
+#include <fmt/format.h>
+
 namespace dingofs {
 namespace client {
 namespace vfs {
@@ -66,6 +68,60 @@ void DirIterator::Next() {
   }
 }
 
+// struct Attr {
+//   Ino ino{0};
+//   uint32_t mode{0};
+//   uint32_t nlink{0};
+//   uint32_t uid{0};
+//   uint32_t gid{0};
+//   uint64_t length{0};
+//   uint64_t rdev{0};
+//   uint64_t atime{0};
+//   uint64_t mtime{0};
+//   uint64_t ctime{0};
+//   FileType type;
+//   // TODO: refact, maybe use separate key for hardlink
+//   std::vector<Ino> parents;
+// };
+
+static void DumpAttr(const Attr& attr, Json::Value& value) {
+  value["ino"] = attr.ino;
+  value["mode"] = attr.mode;
+  value["nlink"] = attr.nlink;
+  value["uid"] = attr.uid;
+  value["gid"] = attr.gid;
+  value["length"] = attr.length;
+  value["rdev"] = attr.rdev;
+  value["atime"] = attr.atime;
+  value["mtime"] = attr.mtime;
+  value["ctime"] = attr.ctime;
+  value["type"] = static_cast<int>(attr.type);
+  Json::Value parents;
+  for (const auto& parent : attr.parents) {
+    parents.append(parent);
+  }
+  value["parents"] = parents;
+}
+
+static void LoadAttr(const Json::Value& value, Attr& attr) {
+  attr.ino = value["ino"].asUInt64();
+  attr.mode = value["mode"].asUInt();
+  attr.nlink = value["nlink"].asUInt();
+  attr.uid = value["uid"].asUInt();
+  attr.gid = value["gid"].asUInt();
+  attr.length = value["length"].asUInt64();
+  attr.rdev = value["rdev"].asUInt64();
+  attr.atime = value["atime"].asUInt64();
+  attr.mtime = value["mtime"].asUInt64();
+  attr.ctime = value["ctime"].asUInt64();
+  attr.type = static_cast<FileType>(value["type"].asInt());
+
+  const Json::Value& parents = value["parents"];
+  for (const auto& parent : parents) {
+    attr.parents.push_back(parent.asUInt64());
+  }
+}
+
 bool DirIterator::Dump(Json::Value& value) {
   value["ino"] = ino_;
   value["last_name"] = last_name_;
@@ -77,7 +133,7 @@ bool DirIterator::Dump(Json::Value& value) {
     Json::Value entry_item;
     entry_item["ino"] = entry.ino;
     entry_item["name"] = entry.name;
-    // entry_item["attr"] = entry.attr.;
+    DumpAttr(entry.attr, entry_item["attr"]);
     entries.append(entry_item);
   }
   value["entries"] = entries;
@@ -86,17 +142,27 @@ bool DirIterator::Dump(Json::Value& value) {
 }
 
 bool DirIterator::Load(const Json::Value& value) {
+  if (!value.isObject()) {
+    LOG(ERROR) << "value is not an object.";
+    return false;
+  }
+
   ino_ = value["ino"].asUInt64();
   last_name_ = value["last_name"].asString();
   with_attr_ = value["with_attr"].asBool();
   offset_ = value["offset"].asUInt();
 
   const Json::Value& entries = value["entries"];
+  if (!entries.isArray()) {
+    LOG(ERROR) << "entries is not an array.";
+    return false;
+  }
+
   for (const auto& entry : entries) {
     DirEntry dir_entry;
     dir_entry.ino = entry["ino"].asUInt64();
     dir_entry.name = entry["name"].asString();
-    // dir_entry.attr = entry["attr"].asString(); // TODO: parse attr
+    LoadAttr(entry["attr"], dir_entry.attr);
     entries_.push_back(dir_entry);
   }
 
@@ -123,6 +189,49 @@ void DirIteratorManager::Delete(uint64_t fh) {
   utils::WriteLockGuard lk(lock_);
 
   dir_iterator_map_.erase(fh);
+}
+
+bool DirIteratorManager::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  Json::Value items;
+  for (const auto& [fh, dir_iterator] : dir_iterator_map_) {
+    Json::Value item;
+    if (!dir_iterator->Dump(item)) {
+      return false;
+    }
+
+    items.append(item);
+  }
+
+  value["dir_iterators"] = items;
+
+  return true;
+}
+
+bool DirIteratorManager::Load(MDSClientPtr mds_client,
+                              const Json::Value& value) {
+  utils::WriteLockGuard lk(lock_);
+
+  dir_iterator_map_.clear();
+  const Json::Value& items = value["dir_iterators"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "dir_iterators is not an array.";
+    return false;
+  }
+
+  for (const auto& item : items) {
+    Ino ino = item["ino"].asUInt64();
+    auto dir_iterator = DirIterator::New(mds_client, ino);
+    if (!dir_iterator->Load(item)) {
+      LOG(ERROR) << fmt::format("load dir({}) iterator fail.", ino);
+      return false;
+    }
+
+    dir_iterator_map_[item["fh"].asUInt64()] = dir_iterator;
+  }
+
+  return true;
 }
 
 }  // namespace v2

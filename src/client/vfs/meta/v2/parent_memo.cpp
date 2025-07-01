@@ -14,6 +14,8 @@
 
 #include "client/vfs/meta/v2/parent_memo.h"
 
+#include <json/value.h>
+
 #include "fmt/core.h"
 
 namespace dingofs {
@@ -125,24 +127,34 @@ void ParentMemo::Delete(Ino ino) {
   ino_map_.erase(ino);
 }
 
-void ParentMemo::Dump(Json::Value& value) {
+bool ParentMemo::Dump(Json::Value& value) {
   utils::ReadLockGuard lk(lock_);
 
+  Json::Value items;
   for (const auto& [ino, entry] : ino_map_) {
     Json::Value item;
     item["ino"] = ino;
     item["parent"] = entry.parent;
     item["version"] = entry.version;
 
-    value.append(item);
+    items.append(item);
   }
+  value["parent_memo"] = items;
+
+  return true;
 }
 
 bool ParentMemo::Load(const Json::Value& value) {
   utils::WriteLockGuard lk(lock_);
 
   ino_map_.clear();
-  for (const auto& item : value) {
+  const Json::Value& items = value["parent_memo"];
+  if (!items.isArray()) {
+    LOG(ERROR) << "parent_memo is not an array.";
+    return false;
+  }
+
+  for (const auto& item : items) {
     Ino ino = item["ino"].asUInt64();
     Ino parent = item["parent"].asUInt64();
     uint64_t version = item["version"].asUInt64();

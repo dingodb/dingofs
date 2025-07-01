@@ -23,6 +23,7 @@
 #include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/common/synchronization.h"
 
 namespace dingofs {
@@ -221,6 +222,18 @@ Status DingodbStorage::Put(WriteOption option, const std::vector<KeyValue>& kvs)
   return Status::OK();
 }
 
+static Status TransformStatus(dingodb::sdk::Status status) {
+  if (status.IsNotFound()) {
+    return Status(pb::error::ENOT_FOUND, status.ToString());
+
+  } else if (status.IsTxnLockConflict()) {
+    return Status(pb::error::ESTORE_TXN_LOCK_CONFLICT, status.ToString());
+
+  } else {
+    return Status(pb::error::EBACKEND_STORE, status.ToString());
+  }
+}
+
 Status DingodbStorage::Get(const std::string& key, std::string& value) {
   auto txn = NewSdkTxn();
   if (txn == nullptr) {
@@ -229,8 +242,7 @@ Status DingodbStorage::Get(const std::string& key, std::string& value) {
 
   auto status = txn->Get(key, value);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   status = txn->PreCommit();
@@ -254,8 +266,7 @@ Status DingodbStorage::BatchGet(const std::vector<std::string>& keys, std::vecto
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn->BatchGet(keys, kv_pairs);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   status = txn->PreCommit();
@@ -377,8 +388,7 @@ Status DingodbTxn::Get(const std::string& key, std::string& value) {
 
   auto status = txn_->Get(key, value);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   return Status::OK();
@@ -391,8 +401,7 @@ Status DingodbTxn::BatchGet(const std::vector<std::string>& keys, std::vector<Ke
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->BatchGet(keys, kv_pairs);
   if (!status.ok()) {
-    return status.IsNotFound() ? Status(pb::error::ENOT_FOUND, status.ToString())
-                               : Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   KvPairsToKeyValues(kv_pairs, kvs);
@@ -407,7 +416,7 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
   std::vector<dingodb::sdk::KVPair> kv_pairs;
   auto status = txn_->Scan(range.start_key, range.end_key, limit, kv_pairs);
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, status.ToString());
+    return TransformStatus(status);
   }
 
   KvPairsToKeyValues(kv_pairs, kvs);

@@ -124,7 +124,7 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   std::string key = MetaCodec::EncodeFSKey(fs_name_);
   Status status = txn->Get(key, value);
   if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name_, status.error_str()));
+    return status;
   }
 
   auto fs_info = MetaCodec::DecodeFSValue(value);
@@ -156,7 +156,7 @@ Status UmountFsOperation::Run(TxnUPtr& txn) {
   std::string key = MetaCodec::EncodeFSKey(fs_name_);
   Status status = txn->Get(key, value);
   if (!status.ok()) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name_, status.error_str()));
+    return status;
   }
 
   auto fs_info = MetaCodec::DecodeFSValue(value);
@@ -1464,7 +1464,10 @@ Status CleanDelSliceOperation::Run(TxnUPtr& txn) {
 
 Status GetDelFileOperation::Run(TxnUPtr& txn) {
   std::string value;
-  txn->Get(MetaCodec::EncodeDelFileKey(fs_id_, ino_), value);
+  auto status = txn->Get(MetaCodec::EncodeDelFileKey(fs_id_, ino_), value);
+  if (!status.ok()) {
+    return status;
+  }
 
   if (!value.empty()) {
     SetAttr(MetaCodec::DecodeDelFileValue(value));
@@ -1658,6 +1661,8 @@ Status OperationProcessor::RunAlone(Operation* operation) {
   uint64_t time_us = Helper::TimestampUs();
 
   auto& trace = operation->GetTrace();
+  const uint32_t fs_id = operation->GetFsId();
+  const Ino ino = operation->GetIno();
   Status status;
   int retry = 0;
   int64_t txn_id = 0;
@@ -1668,6 +1673,13 @@ Status OperationProcessor::RunAlone(Operation* operation) {
 
     status = operation->Run(txn);
     if (!status.ok()) {
+      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
+        DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run lock conflict, retry({}) status({}).",
+                                          fs_id, ino, txn_id, Helper::TimestampUs() - time_us, retry,
+                                          status.error_str());
+        bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
+        continue;
+      }
       break;
     }
 
@@ -1682,17 +1694,18 @@ Status OperationProcessor::RunAlone(Operation* operation) {
     }
 
     DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} fail, onepc({}) retry({}) status({}).",
-                                      operation->GetFsId(), operation->GetIno(), txn_id,
-                                      Helper::TimestampUs() - time_us, operation->OpName(), is_one_pc, retry,
-                                      status.error_str());
+                                      fs_id, ino, txn_id, Helper::TimestampUs() - time_us, operation->OpName(),
+                                      is_one_pc, retry, status.error_str());
+
+    bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
 
   } while (++retry < FLAGS_txn_max_retry_times);
 
   trace.RecordElapsedTime("store_operate");
 
   DINGO_LOG(INFO) << fmt::format("[operation.{}.{}][{}][{}us] alone run {} finish, onepc({}) retry({}) status({}).",
-                                 operation->GetFsId(), operation->GetIno(), txn_id, Helper::TimestampUs() - time_us,
-                                 operation->OpName(), is_one_pc, retry, status.error_str());
+                                 fs_id, ino, txn_id, Helper::TimestampUs() - time_us, operation->OpName(), is_one_pc,
+                                 retry, status.error_str());
 
   if (!status.ok()) {
     operation->SetStatus(status);
@@ -1821,6 +1834,13 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
     std::string value;
     status = txn->Get(key, value);
     if (!status.ok()) {
+      if (status.error_code() == pb::error::ESTORE_TXN_LOCK_CONFLICT) {
+        DINGO_LOG(WARNING) << fmt::format("[operation.{}.{}][{}][{}us] batch run lock conflict, retry({}) status({}).",
+                                          fs_id, ino, txn_id, Helper::TimestampUs() - time_us, retry,
+                                          status.error_str());
+        bthread_usleep(Helper::GenerateRealRandomInteger(100, 1000));
+        continue;
+      }
       break;
     }
 
@@ -1861,7 +1881,7 @@ void OperationProcessor::ExecuteBatchOperation(BatchOperation& batch_operation) 
         "[operation.{}.{}][{}][{}us] batch run ({}) fail, count({}) onepc({}) retry({}) status({}).", fs_id, ino,
         txn_id, Helper::TimestampUs() - time_us, op_names, count, is_one_pc, retry, status.error_str());
 
-    bthread_usleep(Helper::GenerateRealRandomInteger(100, 5000));
+    bthread_usleep(Helper::GenerateRealRandomInteger(100, 2000));
 
   } while (++retry < FLAGS_txn_max_retry_times);
 

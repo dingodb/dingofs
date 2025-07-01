@@ -55,22 +55,33 @@ class FileSessionMap {
   }
 
   // output json format string
-  void Dump(Json::Value& items) {
+  bool Dump(Json::Value& value) {
     utils::ReadLockGuard lk(lock_);
 
+    Json::Value items;
     for (const auto& [fh, session_id] : file_session_map_) {
       Json::Value item;
       item["fh"] = fh;
       item["session_id"] = session_id;
       items.append(item);
     }
+
+    value["file_sessions"] = items;
+
+    return true;
   }
 
   bool Load(const Json::Value& value) {
     utils::WriteLockGuard lk(lock_);
 
     file_session_map_.clear();
-    for (const auto& item : value) {
+    const Json::Value& items = value["file_sessions"];
+    if (!items.isArray()) {
+      LOG(ERROR) << "file_sessions is not an array.";
+      return false;
+    }
+
+    for (const auto& item : items) {
       uint64_t fh = item["fh"].asUInt64();
       file_session_map_[fh] = item["session_id"].asString();
     }

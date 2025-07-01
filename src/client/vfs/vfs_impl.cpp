@@ -62,8 +62,11 @@ Status VFSImpl::Stop() { return vfs_hub_->Stop(); }
 
 bool VFSImpl::Dump(Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "dump"; });
-  if (meta_system_ == nullptr) {
-    LOG(WARNING) << "meta_system_ is null, can not dump";
+
+  CHECK(meta_system_ != nullptr) << "meta_system is null";
+  CHECK(handle_manager_ != nullptr) << "handle_manager is null";
+
+  if (!handle_manager_->Dump(value)) {
     return false;
   }
 
@@ -72,8 +75,11 @@ bool VFSImpl::Dump(Json::Value& value) {
 
 bool VFSImpl::Load(const Json::Value& value) {
   MetaLogGuard log_guard([&]() { return "load"; });
-  if (meta_system_ == nullptr) {
-    LOG(WARNING) << "meta_system_ is null, can not load";
+
+  CHECK(meta_system_ != nullptr) << "meta_system is null";
+  CHECK(handle_manager_ != nullptr) << "handle_manager is null";
+
+  if (!handle_manager_->Load(value)) {
     return false;
   }
 
