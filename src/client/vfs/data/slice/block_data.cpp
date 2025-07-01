@@ -42,9 +42,9 @@ void BlockData::FreePageData() {
     page_allocator_->DeAllocate(page_data->page);
     timer.stop();
 
-    VLOG(6) << fmt::format(
-        "{} Deallocating page at: {}, page_index: {} took: <{:.6f}> ms", UUID(),
-        Char2Addr(page_data->page), page_index, timer.u_elapsed(0.0));
+    VLOG(6) << fmt::format("{} Deallocating page at: {} took: <{:.6f}> ms",
+                           UUID(), Char2Addr(page_data->page),
+                           timer.u_elapsed(0.0));
 
     it = pages_.erase(it);
   }
@@ -62,9 +62,8 @@ char* BlockData::AllocPage() {
   auto* page = page_allocator_->Allocate();
   timer.stop();
   VLOG(6) << fmt::format(
-      "Allocated page at: {} for block_index: {}, allocation took: <{:.6f}> "
-      "ms",
-      Char2Addr(page), block_index_, timer.u_elapsed(0.0));
+      "{} Allocated page at: {} allocation took: <{:.6f}> ms", UUID(),
+      Char2Addr(page), timer.u_elapsed(0.0));
   return page;
 }
 

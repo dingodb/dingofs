@@ -239,6 +239,9 @@ Status VFSImpl::Create(Ino parent, const std::string& name, uint32_t uid,
     handle->flags = flags;
     handle->file = std::make_unique<File>(vfs_hub_.get(), ino);
     *fh = handle->fh;
+
+    // TOOD: if flags is O_RDONLY, no need schedule flush
+    vfs_hub_->GetPeriodicFlushManger()->SubmitToFlush(handle);
   }
 
   return s;
