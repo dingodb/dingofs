@@ -19,6 +19,6 @@ add_library(client_memory
     page_allocator.cpp
 )
 target_link_libraries(client_memory
-    dingofs_utils
     client_options
+    dingofs_metrics
 )

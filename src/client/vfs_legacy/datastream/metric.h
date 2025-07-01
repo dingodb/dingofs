@@ -28,7 +28,6 @@
 
 #include <memory>
 
-#include "client/memory/page_allocator.h"
 #include "options/client/options/vfs_legacy/data_stream/data_stream_option.h"
 #include "utils/concurrent/task_thread_pool.h"
 
@@ -43,18 +42,12 @@ static uint32_t GetQueueSize(void* arg) {
   return thread_pool->QueueSize();
 }
 
-static uint64_t GetFreePages(void* arg) {
-  auto* page_allocator = reinterpret_cast<PageAllocator*>(arg);
-  return page_allocator->GetFreePages();
-}
-
 class DataStreamMetric {
  public:
   struct AuxMembers {
     std::shared_ptr<TaskThreadPool<>> flush_file_thread_pool;
     std::shared_ptr<TaskThreadPool<>> flush_chunk_thread_pool;
     std::shared_ptr<TaskThreadPool<>> flush_slice_thread_pool;
-    std::shared_ptr<PageAllocator> page_allocator;
   };
 
  public:
@@ -80,12 +73,6 @@ class DataStreamMetric {
       metric_.flush_slice_workers.set_value(o.flush_workers);
       metric_.flush_slice_queue_capacity.set_value(o.flush_queue_size);
     }
-
-    // page
-    {
-      auto o = option.page_option;
-      metric_.use_page_pool.set_value(o.use_pool);
-    }
   }
 
   virtual ~DataStreamMetric() = default;
@@ -110,11 +97,8 @@ class DataStreamMetric {
           flush_slice_queue_capacity(prefix, "flush_slice_queue_capacity", 0),
           flush_slice_pending_tasks(prefix, "flush_slice_pending_tasks",
                                     &GetQueueSize,
-                                    aux_members.flush_slice_thread_pool.get()),
-          // page
-          use_page_pool(prefix, "use_page_pool", false),
-          free_pages(prefix, "free_pages", &GetFreePages,
-                     aux_members.page_allocator.get()) {}
+                                    aux_members.flush_slice_thread_pool.get()) {
+    }
 
     // file
     bvar::Status<uint32_t> flush_file_workers;
@@ -128,9 +112,6 @@ class DataStreamMetric {
     bvar::Status<uint32_t> flush_slice_workers;
     bvar::Status<uint32_t> flush_slice_queue_capacity;
     bvar::PassiveStatus<uint32_t> flush_slice_pending_tasks;
-    // page
-    bvar::Status<bool> use_page_pool;
-    bvar::PassiveStatus<uint64_t> free_pages;
     bvar::Status<uint32_t> s3_async_upload_workers;
   };
 

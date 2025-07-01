@@ -28,8 +28,13 @@
 namespace dingofs {
 namespace client {
 
+static std::string kPageMetricPrefix = "dingofs_memory";
+
 DefaultPageAllocator::DefaultPageAllocator()
-    : page_size_(0), num_free_pages_(0) {}
+    : page_size_(0),
+      num_free_pages_(0),
+      metric_(std::make_unique<PageAllocatorMetric>(
+          kPageMetricPrefix, false, [this] { return GetFreePages(); })) {}
 
 bool DefaultPageAllocator::Init(uint64_t page_size, uint64_t num_pages) {
   page_size_ = page_size;
@@ -64,7 +69,9 @@ uint64_t DefaultPageAllocator::GetFreePages() {
 PagePool::PagePool()
     : page_size_(0),
       num_free_pages_(0),
-      mem_pool_(std::make_unique<MemoryPool>()) {}
+      mem_pool_(std::make_unique<MemoryPool>()),
+      metric_(std::make_unique<PageAllocatorMetric>(
+          kPageMetricPrefix, true, [this] { return GetFreePages(); })) {}
 
 PagePool::~PagePool() { mem_pool_->DestroyPool(); }
 

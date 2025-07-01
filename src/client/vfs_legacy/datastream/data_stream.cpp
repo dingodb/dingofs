@@ -106,7 +106,6 @@ bool DataStream::Init(DataStreamOption option) {
       .flush_file_thread_pool = flush_file_thread_pool_,
       .flush_chunk_thread_pool = flush_chunk_thread_pool_,
       .flush_slice_thread_pool = flush_slice_thread_pool_,
-      .page_allocator = page_allocator_,
   };
   metric_ = std::make_unique<DataStreamMetric>(option, aux_members);
   return true;

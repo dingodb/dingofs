@@ -31,6 +31,7 @@
 #include <mutex>
 
 #include "client/memory/memory_pool.h"
+#include "metrics/client/memory/page_allocator_metric.h"
 
 namespace dingofs {
 namespace client {
@@ -62,10 +63,12 @@ class DefaultPageAllocator : public PageAllocator {
   uint64_t GetFreePages() override;
 
  private:
-  uint64_t page_size_;
-  uint64_t num_free_pages_;
+  std::unique_ptr<PageAllocatorMetric> metric_;
+
   std::mutex mutex_;
   std::condition_variable can_allocate_;
+  uint64_t page_size_;
+  uint64_t num_free_pages_;
 };
 
 class PagePool : public PageAllocator {
@@ -83,11 +86,12 @@ class PagePool : public PageAllocator {
   uint64_t GetFreePages() override;
 
  private:
-  uint64_t page_size_;
-  uint64_t num_free_pages_;
+  std::unique_ptr<PageAllocatorMetric> metric_;
   // TODO: use multi-slots or thread local to reduce mutex overhead
   std::mutex mutex_;
   std::condition_variable can_allocate_;
+  uint64_t page_size_;
+  uint64_t num_free_pages_;
   std::unique_ptr<MemoryPool> mem_pool_;
 };
 
