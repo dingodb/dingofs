@@ -523,8 +523,8 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
           << " offset: " << offset << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
-    return absl::StrFormat("write (%d,%d,%d,%d): %s (%d)", ino, size, offset,
-                           fh, s.ToString(), *out_wsize);
+    return absl::StrFormat("write (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
+                           offset, s.ToString(), *out_wsize, fh);
   });
 
   ClientOpMetricGuard op_metric(

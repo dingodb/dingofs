@@ -14,10 +14,10 @@
 
 #include "client/vfs_legacy/filesystem/fs_push_metric_manager.h"
 
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "glog/logging.h"
 #include "metrics/blockaccess/s3_accesser.h"
 #include "metrics/client/client.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 namespace dingofs {
 namespace client {
@@ -76,11 +76,11 @@ void FsPushMetricManager::DoPushClientMetrics() {
   if (rc != FSStatusCode::OK) {
     LOG(WARNING) << "PushClientMetrics failed, fs_name: " << fsname_
                  << ", rc: " << rc << ", delta metrics data:["
-                 << delta_client_metrics.DebugString() << "]";
+                 << delta_client_metrics.ShortDebugString() << "]";
   } else {
     VLOG(9) << "PushClientMetrics success, fs_name: " << fsname_
-            << ",delta metrics data:[" << delta_client_metrics.DebugString()
-            << "]";
+            << ",delta metrics data:["
+            << delta_client_metrics.ShortDebugString() << "]";
     last_client_metrics_ = current_client_metrics;
   }
 }

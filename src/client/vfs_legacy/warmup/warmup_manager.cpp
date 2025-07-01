@@ -31,6 +31,7 @@
 #include <deque>
 #include <list>
 #include <memory>
+#include <thread>
 #include <utility>
 
 #include "base/filepath/filepath.h"
@@ -140,7 +141,7 @@ void WarmupManagerS3Impl::UnInit() {
 void WarmupManagerS3Impl::Init(const VFSLegacyOption& option) {
   WarmupManager::Init(option);
   bgFetchStop_.store(false, std::memory_order_release);
-  bgFetchThread_ = utils::Thread(&WarmupManagerS3Impl::BackGroundFetch, this);
+  bgFetchThread_ = std::thread(&WarmupManagerS3Impl::BackGroundFetch, this);
   initbgFetchThread_ = true;
 }
 
@@ -485,6 +486,7 @@ void WarmupManagerS3Impl::TravelChunk(
       for (auto block_index = travel_start_index;
            block_index <= travel_end_index; block_index++) {
         cache::BlockKey key(fs_id, ino, chunkid, block_index, compaction);
+        VLOG(9) << "add obj: " << key.StoreKey() << " to prefetch_objs";
         prefetch_objs->push_back(std::make_pair(key, block_size));
       }
     }
@@ -539,6 +541,7 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
       };
 
   pending_req.fetch_add(prefetch_objs.size(), std::memory_order_seq_cst);
+
   if (pending_req.load(std::memory_order_seq_cst)) {
     VLOG(9) << "wait for pendingReq";
     for (auto iter : prefetch_objs) {
@@ -602,34 +605,53 @@ bool WarmupManagerS3Impl::ProgressDone(Ino key) {
 }
 
 void WarmupManagerS3Impl::ScanCleanFetchDentryPool() {
-  // clean inode2FetchDentryPool_
-  WriteLockGuard lock(inode2FetchDentryPoolMutex_);
-  for (auto iter = inode2FetchDentryPool_.begin();
-       iter != inode2FetchDentryPool_.end();) {
-    std::deque<WarmupInodes>::iterator iter_inode;
-    if (iter->second->TaskNum() == 0) {
-      VLOG(9) << "remove FetchDentry task: " << iter->first;
-      iter->second->Stop();
-      iter = inode2FetchDentryPool_.erase(iter);
-    } else {
-      ++iter;
+  std::vector<std::unique_ptr<Executor>> to_stop;
+  {
+    // clean inode2FetchDentryPool_
+    WriteLockGuard lock(inode2FetchDentryPoolMutex_);
+    for (auto iter = inode2FetchDentryPool_.begin();
+         iter != inode2FetchDentryPool_.end();) {
+      if (iter->second->TaskNum() == 0) {
+        to_stop.emplace_back(std::move(iter->second));
+        VLOG(9) << "remove FetchDentry task: " << iter->first;
+        iter = inode2FetchDentryPool_.erase(iter);
+      } else {
+        ++iter;
+      }
     }
   }
+
+  for (auto& executor : to_stop) {
+    executor->Stop();
+  }
+
+  VLOG(9) << "FetchDentryPool clean finished";
 }
 
 void WarmupManagerS3Impl::ScanCleanFetchS3ObjectsPool() {
   // clean inode2FetchS3ObjectsPool_
-  WriteLockGuard lock(inode2FetchS3ObjectsPoolMutex_);
-  for (auto iter = inode2FetchS3ObjectsPool_.begin();
-       iter != inode2FetchS3ObjectsPool_.end();) {
-    if (iter->second->TaskNum() == 0) {
-      VLOG(9) << "remove FetchS3object task: " << iter->first;
-      iter->second->Stop();
-      iter = inode2FetchS3ObjectsPool_.erase(iter);
-    } else {
-      ++iter;
+  std::vector<std::unique_ptr<Executor>> to_stop;
+
+  {
+    WriteLockGuard lock(inode2FetchS3ObjectsPoolMutex_);
+    for (auto iter = inode2FetchS3ObjectsPool_.begin();
+         iter != inode2FetchS3ObjectsPool_.end();) {
+      if (iter->second->TaskNum() == 0) {
+        // move the executor to a vector to stop later
+        to_stop.emplace_back(std::move(iter->second));
+        VLOG(9) << "remove FetchS3object task: " << iter->first;
+        iter = inode2FetchS3ObjectsPool_.erase(iter);
+      } else {
+        ++iter;
+      }
     }
   }
+
+  for (auto& executor : to_stop) {
+    executor->Stop();
+  }
+
+  VLOG(9) << "FetchS3ObjectsPool clean finished";
 }
 
 void WarmupManagerS3Impl::ScanCleanWarmupProgress() {

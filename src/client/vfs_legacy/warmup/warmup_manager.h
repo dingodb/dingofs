@@ -413,18 +413,18 @@ class WarmupManagerS3Impl : public WarmupManager {
 
  protected:
   std::deque<WarmupFilelist> warmupFilelistDeque_;
-  mutable utils::RWLock warmupFilelistDequeMutex_;
+  mutable utils::BthreadRWLock warmupFilelistDequeMutex_;
 
   bool initbgFetchThread_ = false;
-  utils::Thread bgFetchThread_;
+  std::thread bgFetchThread_;
   std::atomic<bool> bgFetchStop_;
 
   // TODO(chengyi01): limit thread nums
   std::unordered_map<Ino, std::unique_ptr<Executor>> inode2FetchDentryPool_;
-  mutable utils::RWLock inode2FetchDentryPoolMutex_;
+  mutable utils::BthreadRWLock inode2FetchDentryPoolMutex_;
 
   std::deque<WarmupInodes> warmupInodesDeque_;
-  mutable utils::RWLock warmupInodesDequeMutex_;
+  mutable utils::BthreadRWLock warmupInodesDequeMutex_;
 
   // s3 adaptor
   std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
@@ -432,7 +432,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   // TODO(chengyi01): limit thread nums
   std::unordered_map<Ino, std::unique_ptr<Executor>> inode2FetchS3ObjectsPool_;
 
-  mutable utils::RWLock inode2FetchS3ObjectsPoolMutex_;
+  mutable utils::BthreadRWLock inode2FetchS3ObjectsPoolMutex_;
 
   dingofs::metrics::client::vfs_legacy::WarmupManagerS3Metric warmupS3Metric_;
 
