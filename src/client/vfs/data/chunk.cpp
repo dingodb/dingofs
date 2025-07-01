@@ -30,7 +30,6 @@
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/utils.h"
-#include "options/client/options/vfs/vfs_option.h"
 #include "client/vfs/data/common.h"
 #include "client/vfs/data/data_utils.h"
 #include "client/vfs/data/slice/common.h"
@@ -41,6 +40,7 @@
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
+#include "options/client/options/vfs/vfs_option.h"
 
 namespace dingofs {
 namespace client {
@@ -71,7 +71,10 @@ Chunk::Chunk(VFSHub* hub, uint64_t ino, uint64_t index)
       block_size_(hub->GetFsInfo().block_size),
       page_size_(hub->GetPageSize()),
       chunk_start_(index * chunk_size_),
-      chunk_end_(chunk_start_ + chunk_size_) {}
+      chunk_end_(chunk_start_ + chunk_size_),
+      fake_header_(new FlushTask()) {}
+
+Chunk::~Chunk() { delete fake_header_; }
 
 Status Chunk::WriteToBlockCache(const cache::BlockKey& key,
                                 const cache::Block& block,
@@ -358,21 +361,25 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
     flush_task->status = s;
     flush_task->done = true;
 
+    CHECK(!flush_queue_.empty());
+
     if (flush_queue_.front() != flush_task) {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone return because flush_chunk_task: {} is not the "
-          "header of the flush_queue_",
-          UUID(), flush_task->ToString());
+          "header of the flush_queue_, flush_queue size : {}, flush_task_addr: "
+          "{}",
+          UUID(), flush_task->ToString(), flush_queue_.size(),
+          static_cast<const void*>(fake_header_));
 
       return;
     } else {
       VLOG(4) << fmt::format(
           "{} FlushTaskDone become header_task: {} of the flush_queue_, "
-          "flush_queue size: {}, insert fake header: {}, ",
-          UUID(), flush_task->ToString(), flush_queue_.size(),
-          static_cast<const void*>(&kFakeHeader));
+          "flush_task_addr: {}, flush_queue size: {}, insert fake header: {}",
+          UUID(), flush_task->ToString(), static_cast<const void*>(flush_task),
+          flush_queue_.size(), static_cast<const void*>(fake_header_));
 
-      flush_queue_.push_front(&kFakeHeader);
+      flush_queue_.push_front(fake_header_);
     }
   }
 
@@ -383,8 +390,9 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
   auto defer_destory = ::absl::MakeCleanup([&]() {
     for (FlushTask* task : to_destroy) {
-      VLOG(4) << fmt::format("{} FlushTaskDone delete chunk_flush_task: {}",
-                             UUID(), task->ToString());
+      VLOG(4) << fmt::format(
+          "{} FlushTaskDone delete chunk_flush_task: {}, flush_task_addr: {}",
+          UUID(), task->ToString(), static_cast<const void*>(task));
       delete task;
     }
   });
@@ -480,7 +488,9 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
 
   {
     std::lock_guard<std::mutex> lg(mutex_);
+    slice_count = slices_.size();
     error_status = error_status_;
+
     if (error_status.ok()) {
       flush_queue_.emplace_back(new FlushTask{
           .chunk_flush_id = chunk_flush_id,
@@ -489,13 +499,9 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
       });
 
       flush_task = flush_queue_.back();
-
-      slice_count = slices_.size();
-
       flush_task->chunk_flush_task = std::make_unique<ChunkFlushTask>(
           ino_, index_, chunk_flush_id, std::move(slices_));
     }  // end if error_status.ok()
-
     //  not ok pass throuth
   }
 
@@ -512,15 +518,16 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
   CHECK_NOTNULL(flush_task);
 
   VLOG(1) << fmt::format(
-      "{} FlushAsync will run chunk_flush_task: {} slice_count: {}", UUID(),
-      flush_task->ToString(), slice_count);
+      "{} FlushAsync will run chunk_flush_task: {} slice_count: {}, "
+      "flush_task_addr: {}",
+      UUID(), flush_task->ToString(), slice_count,
+      static_cast<const void*>(flush_task));
 
   flush_task->chunk_flush_task->RunAsync([this, flush_task](auto&& ph1) {
     FlushTaskDone(flush_task, std::forward<decltype(ph1)>(ph1));
   });
 
-  VLOG(4) << fmt::format("{} End FlushAsync chunk_flush_id: {}", UUID(),
-                         chunk_flush_id);
+  VLOG(4) << fmt::format("End FlushAsync chunk_flush_id: {}", chunk_flush_id);
 }
 
 void Chunk::FlushAsync(StatusCallback cb) {

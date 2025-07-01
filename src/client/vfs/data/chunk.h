@@ -40,7 +40,7 @@ class Chunk {
  public:
   Chunk(VFSHub* hub, uint64_t ino, uint64_t index);
 
-  ~Chunk() = default;
+  ~Chunk();
 
   // chunk_offset is the offset in the chunk, not in the file
   Status Write(const char* buf, uint64_t size, uint64_t chunk_offset);
@@ -129,7 +129,7 @@ class Chunk {
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
   std::deque<FlushTask*> flush_queue_;
-  FlushTask kFakeHeader;
+  FlushTask* fake_header_{nullptr};
   // when this not ok, all write and flush should return error
   Status error_status_;
 };

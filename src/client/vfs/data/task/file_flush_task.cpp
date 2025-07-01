@@ -45,7 +45,7 @@ void FileFlushTask::ChunkFlushed(uint64_t chunk_index, Status status) {
 
     cb(tmp);
 
-    VLOG(4) << fmt::format("{} End status: {}", UUID(), tmp.ToString());
+    VLOG(4) << fmt::format("End status: {}", tmp.ToString());
   }
 }
 

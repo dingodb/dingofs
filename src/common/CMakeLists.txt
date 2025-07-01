@@ -15,20 +15,10 @@
 add_library(dingofs_common
     process.cpp
     rpc_stream.cpp
-    wrap_posix.cpp
     io_buffer.cpp
 )
 target_link_libraries(dingofs_common
     dingofs_utils
-    gflags::gflags
-    glog::glog
-)
-
-add_library(dynamic_vlog
-    dynamic_vlog.cpp
-)
-target_link_libraries(dynamic_vlog
-    brpc::brpc
     gflags::gflags
     glog::glog
 )

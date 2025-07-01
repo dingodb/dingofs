@@ -35,10 +35,11 @@ class SliceFlushTask {
  public:
   SliceFlushTask(const SliceDataContext& context, VFSHub* hub,
                  uint64_t slice_id,
-                 std::map<uint64_t, BlockDataUPtr>& block_datas)
+                 std::map<uint64_t, BlockDataUPtr> block_datas)
       : slice_data_context_(context),
         vfs_hub_(hub),
         slice_id_(slice_id),
+        block_count_(block_datas.size()),
         block_datas_(std::move(block_datas)) {}
 
   ~SliceFlushTask() = default;
@@ -51,8 +52,7 @@ class SliceFlushTask {
   }
 
   std::string ToString() const {
-    return fmt::format("(uuid: {}, chunks_size: {})", UUID(),
-                       block_datas_.size());
+    return fmt::format("(uuid: {}, blocks_count: {})", UUID(), block_count_);
   }
 
  private:
@@ -62,12 +62,13 @@ class SliceFlushTask {
   const SliceDataContext slice_data_context_;
   VFSHub* vfs_hub_{nullptr};
   const uint64_t slice_id_;
-  // block_index -> BlockData, this should be immutable
-  const std::map<uint64_t, BlockDataUPtr> block_datas_;
+  const uint64_t block_count_{0};
 
   std::atomic_uint64_t flush_block_data_count_{0};
 
   std::mutex mutex_;
+  // block_index -> BlockData, this should be immutable
+  std::map<uint64_t, BlockDataUPtr> block_datas_;
   StatusCallback cb_;
   Status status_;
 };

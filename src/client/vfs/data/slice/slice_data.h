@@ -28,6 +28,7 @@
 
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
+#include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
@@ -37,7 +38,6 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
-class SliceFlushTask;
 
 // writing -> flushing -> flushed
 class SliceData {
@@ -51,7 +51,6 @@ class SliceData {
   Status Write(const char* buf, uint64_t size, uint64_t chunk_offset);
 
   // prected by chunk, this is should be called only once
-  // first call freeze, then call this
   void FlushAsync(StatusCallback cb);
 
   Slice GetCommitSlice();
@@ -97,8 +96,11 @@ class SliceData {
   const SliceDataContext context_;
   VFSHub* vfs_hub_{nullptr};
 
-  // write and flush will run in sequence, but they may be called in different thread,
-  // so this mutex is just used for the member variables are accessed in a thread-safe manner.
+  std::unique_ptr<SliceFlushTask> flush_task_;
+  // write and flush will run in sequence, but they may be called in different
+  // thread, so this mutex is just used for the member variables are accessed in
+  // a thread-safe manner.
+  // TODO: use memory fench instead of mutex
   mutable std::mutex write_flush_mutex_;
   uint64_t chunk_offset_;
   uint64_t len_{0};

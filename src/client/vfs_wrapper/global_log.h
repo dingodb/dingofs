@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "common/dynamic_vlog.h"
+#include "options/common/dynamic_vlog.h"
 #include "utils/configuration.h"
 #include "utils/gflags_helper.h"
 

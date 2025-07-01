@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020 NetEase Inc.
+ *  Copyright (c) 2022 NetEase Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,26 +16,30 @@
 
 /*
  * Project: dingo
- * Created Date: Mon Aug 30 2021
- * Author: hzwuhongsong
+ * Date: Thursday May 19 10:03:22 CST 2022
+ * Author: wuhanqing
  */
 
-#ifndef DINGOFS_SRC_COMMON_UTILS_H_
-#define DINGOFS_SRC_COMMON_UTILS_H_
+#include "options/common/dynamic_vlog.h"
 
-#include <string>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+
+DECLARE_int32(v);
 
 namespace dingofs {
 namespace common {
 
-class SysUtils {
- public:
-  SysUtils() {}
-  ~SysUtils() {}
-  std::string RunSysCmd(const std::string& cmd);
-};
+namespace {
+bool CheckVLogLevel(const char* /*name*/, int32_t value) {
+  FLAGS_v = value;
+  LOG(INFO) << "current verbose logging level is `" << FLAGS_v << "`";
+  return true;
+}
+}  // namespace
+
+DEFINE_int32(vlog_level, 0, "set vlog level");
+DEFINE_validator(vlog_level, CheckVLogLevel);
 
 }  // namespace common
 }  // namespace dingofs
-
-#endif  // DINGOFS_SRC_COMMON_UTILS_H_

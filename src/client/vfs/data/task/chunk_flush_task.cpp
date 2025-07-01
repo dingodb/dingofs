@@ -35,6 +35,11 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
         "{} SliceFlushed Fail flush slice_seq: {} in chunk_flush_task: {}, "
         "status: {}",
         slice_seq, ToString(), s.ToString());
+  } else {
+    VLOG(4) << fmt::format(
+        "{} SliceFlushed Success flush slice_seq: {} in chunk_flush_task: {}, "
+        "status: {}",
+        UUID(), slice_seq, ToString(), s.ToString());
   }
 
   {
@@ -66,7 +71,7 @@ void ChunkFlushTask::SliceFlushed(uint64_t slice_seq, Status s) {
 
     cb(tmp);
 
-    VLOG(4) << fmt::format("{} End status: {}", UUID(), tmp.ToString());
+    VLOG(4) << fmt::format("End status: {}", tmp.ToString());
   }
 }
 

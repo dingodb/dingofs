@@ -24,7 +24,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "common/dynamic_vlog.h"
+#include "options/common/dynamic_vlog.h"
 #include "common/process.h"
 #include "common/threading.h"
 #include "blockaccess/block_access_log.h"

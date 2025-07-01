@@ -25,7 +25,7 @@
 
 #include <csignal>
 
-#include "common/dynamic_vlog.h"
+#include "options/common/dynamic_vlog.h"
 #include "blockaccess/block_access_log.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
 #include "mds/mds.h"

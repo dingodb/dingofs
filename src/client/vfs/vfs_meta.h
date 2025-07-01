@@ -17,6 +17,8 @@
 #ifndef DINGOFS_CLIENT_VFS_META_H_
 #define DINGOFS_CLIENT_VFS_META_H_
 
+#include <fmt/format.h>
+
 #include <cstdint>
 #include <sstream>
 #include <string>
@@ -75,29 +77,28 @@ struct Attr {
 };
 
 static std::string Attr2Str(const Attr& attr, bool with_parent = false) {
-  std::ostringstream oss;
-  oss << "Attr {"
-      << " ino: " << attr.ino << ", mode: " << attr.mode
-      << ", nlink: " << attr.nlink << ", uid: " << attr.uid
-      << ", gid: " << attr.gid << ", length: " << attr.length
-      << ", rdev: " << attr.rdev << ", atime: " << attr.atime
-      << ", mtime: " << attr.mtime << ", ctime: " << attr.ctime
-      << ", type: " << FileType2Str(attr.type);
-
-  if (with_parent) {
-    oss << ", parents: [";
+  if (!with_parent) {
+    return fmt::format(
+        "Attr {{ ino: {}, mode: {}, nlink: {}, uid: {}, gid: {}, length: {}, "
+        "rdev: {}, atime: {}, mtime: {}, ctime: {}, type: {} }}",
+        attr.ino, attr.mode, attr.nlink, attr.uid, attr.gid, attr.length,
+        attr.rdev, attr.atime, attr.mtime, attr.ctime, FileType2Str(attr.type));
+  } else {
+    std::string parents_str;
     for (size_t i = 0; i < attr.parents.size(); ++i) {
-      oss << attr.parents[i];
+      parents_str += fmt::format("{}", attr.parents[i]);
       if (i < attr.parents.size() - 1) {
-        oss << ", ";
+        parents_str += ", ";
       }
     }
-    oss << "] ";
+
+    return fmt::format(
+        "Attr {{ ino: {}, mode: {}, nlink: {}, uid: {}, gid: {}, length: {}, "
+        "rdev: {}, atime: {}, mtime: {}, ctime: {}, type: {}, parents: [{}] }}",
+        attr.ino, attr.mode, attr.nlink, attr.uid, attr.gid, attr.length,
+        attr.rdev, attr.atime, attr.mtime, attr.ctime, FileType2Str(attr.type),
+        parents_str);
   }
-
-  oss << " }";
-
-  return oss.str();
 }
 
 struct DirEntry {
@@ -114,14 +115,10 @@ struct FsStat {
 };
 
 static std::string FsStat2Str(const FsStat& fs_stat) {
-  std::ostringstream oss;
-  oss << "FsStat {"
-      << " max_bytes: " << fs_stat.max_bytes
-      << ", used_bytes: " << fs_stat.used_bytes
-      << ", max_inodes: " << fs_stat.max_inodes
-      << ", used_inodes: " << fs_stat.used_inodes << " }";
-
-  return oss.str();
+  return fmt::format(
+      "(max_bytes: {}, used_bytes: {}, max_inodes: {}, used_inodes: {})",
+      fs_stat.max_bytes, fs_stat.used_bytes, fs_stat.max_inodes,
+      fs_stat.used_inodes);
 }
 
 // map pb chunkinfo
@@ -137,13 +134,10 @@ struct Slice {
 };
 
 static std::string Slice2Str(const Slice& slice) {
-  std::ostringstream oss;
-  oss << "{id: " << slice.id << ", range: [" << slice.offset << "-"
-      << slice.End() << "]" << ", compaction: " << slice.compaction
-      << ", is_zero: " << (slice.is_zero ? "true" : "false")
-      << ", size: " << slice.size << " }";
-
-  return oss.str();
+  return fmt::format(
+      "{{id: {}, range: [{}-{}], compaction: {}, is_zero: {}, size: {}}}",
+      slice.id, slice.offset, slice.End(), slice.compaction,
+      slice.is_zero ? "true" : "false", slice.size);
 }
 
 enum StoreType : uint8_t {

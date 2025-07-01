@@ -12,19 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(client/options)
-add_subdirectory(common)
-
-file(GLOB DINGOFS_OPTIONS_LIB_SRCS
-    "cache/*.cpp"
-    "mdsv2/*.cpp"
-    "options.cpp"
+add_library(dynamic_vlog
+    dynamic_vlog.cpp
 )
-
-add_library(dingofs_options ${DINGOFS_OPTIONS_LIB_SRCS})
-
-target_link_libraries(dingofs_options
-    toml11::toml11
+target_link_libraries(dynamic_vlog
+    brpc::brpc
     gflags::gflags
     glog::glog
 )

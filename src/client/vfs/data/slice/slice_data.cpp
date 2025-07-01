@@ -24,7 +24,9 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
+#include <utility>
 
 #include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
@@ -133,8 +135,6 @@ void SliceData::FlushAsync(StatusCallback cb) {
   }
 
   vfs_hub_->GetFlushExecutor()->Execute([this]() { this->DoFlush(); });
-
-  VLOG(4) << fmt::format("{} FlushAsync End DoFlushAsync is scheduled", UUID());
 }
 
 void SliceData::FlushDone(Status s) {
@@ -149,8 +149,6 @@ void SliceData::FlushDone(Status s) {
   }
 
   cb(s);
-
-  VLOG(4) << fmt::format("{} Flush callback is executed", UUID());
 }
 
 void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
@@ -162,8 +160,6 @@ void SliceData::SliceFlushed(Status status, SliceFlushTask* task) {
   }
 
   FlushDone(status);
-
-  delete task;
 }
 
 void SliceData::DoFlush() {
@@ -190,11 +186,11 @@ void SliceData::DoFlush() {
     to_flush = std::move(block_datas_);
   }
 
-  auto* task = new SliceFlushTask(context_, vfs_hub_, slice_id, to_flush);
-  task->RunAsync([this, task](Status s) { this->SliceFlushed(s, task); });
+  flush_task_ = std::make_unique<SliceFlushTask>(context_, vfs_hub_, slice_id,
+                                                 std::move(to_flush));
 
-  VLOG(4) << fmt::format("{} Slice flush task scheduled for slice: {}", UUID(),
-                         ToStringUnlocked());
+  flush_task_->RunAsync(
+      [this](Status s) { this->SliceFlushed(s, flush_task_.get()); });
 }
 
 Slice SliceData::GetCommitSlice() {

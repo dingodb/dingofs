@@ -37,7 +37,7 @@ void SliceFlushTask::FlushDone(Status s) {
 
   cb(s);
 
-  VLOG(4) << fmt::format("{} End slice flush status: {}", UUID(), s.ToString());
+  VLOG(4) << fmt::format("End slice flush status: {}", s.ToString());
 }
 
 // callback from block cache, maybe in bthread
@@ -75,18 +75,22 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
     return;
   }
 
+  std::map<uint64_t, BlockDataUPtr> to_flush;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     cb_ = std::move(cb);
     status_ = Status::OK();
+
+    to_flush.swap(block_datas_);
   }
 
-  flush_block_data_count_.store(block_datas_.size(), std::memory_order_relaxed);
+  flush_block_data_count_.store(to_flush.size(), std::memory_order_relaxed);
 
-  for (const auto& [block_index, block_data_ptr] : block_datas_) {
+  for (const auto& [block_index, block_data_ptr] : to_flush) {
     BlockData* block_data = block_data_ptr.get();
-    VLOG(6) << fmt::format("{} flush block_data: {}", UUID(),
-                           block_data->ToString());
+    std::string block_uuid = block_data->UUID();
+
+    VLOG(6) << fmt::format("{} flush block_data: {}", UUID(), block_uuid);
     DCHECK_EQ(block_data->BlockIndex(), block_index);
 
     IOBuffer io_buffer = block_data->ToIOBuffer();
@@ -103,10 +107,6 @@ void SliceFlushTask::RunAsync(StatusCallback cb) {
           BlockDataFlushed(block_data, std::forward<decltype(ph1)>(ph1));
         },
         option);
-
-    VLOG(6) << fmt::format(
-        "{} Scheduled flush for block_data: {}, cache_block_key: {}", UUID(),
-        block_data->UUID(), key.StoreKey());
   }
 }
 
