@@ -19,7 +19,7 @@
 #include <utility>
 
 #include "client/vfs/common/helper.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/format.h"

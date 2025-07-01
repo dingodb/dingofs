@@ -18,18 +18,23 @@
 
 #include <fmt/format.h>
 #include <glog/logging.h>
+#include <json/reader.h>
+#include <json/writer.h>
 
 #include <cstdint>
+#include <fstream>
 #include <memory>
+#include <string>
 
 #include "blockaccess/block_access_log.h"
 #include "cache/utils/access_log.h"
+#include "client/common/share_var.h"
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/vfs_legacy.h"
+#include "client/vfs_meta.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
@@ -41,6 +46,8 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
 
 using metrics::ClientOpMetricGuard;
 
@@ -122,7 +129,19 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
     vfs_ = std::make_unique<vfs::VFSOld>(client_option_.vfs_legacy_option);
   }
 
-  return vfs_->Start(vfs_conf);
+  s = vfs_->Start(vfs_conf);
+  if (!s.IsOK()) {
+    return s;
+  }
+
+  // load vfs state
+  if (common::ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
+    if (!Load()) {
+      return Status::InvalidParam("load vfs state fail");
+    }
+  }
+
+  return Status::OK();
 }
 
 Status VFSWrapper::Stop() {
@@ -131,7 +150,67 @@ Status VFSWrapper::Stop() {
   AccessLogGuard log(
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
   s = vfs_->Stop();
+
+  if (common::ShareVar::GetInstance().HasValue(common::kSmoothUpgradeOld)) {
+    if (!Dump()) {
+      return Status::InvalidParam("dump vfs state fail");
+    }
+  }
+
   return s;
+}
+
+bool VFSWrapper::Dump() {
+  Json::Value root;
+  if (!vfs_->Dump(root)) {
+    LOG(ERROR) << "dump vfs state fail.";
+    return false;
+  }
+
+  const std::string path = fmt::format("{}.{}", kFdStatePath, getpid());
+  std::ofstream file(path);
+  if (!file.is_open()) {
+    LOG(ERROR) << "open dingo-fuse state file fail, file: " << path;
+    return false;
+  }
+
+  Json::StreamWriterBuilder writer;
+  file << Json::writeString(writer, root);
+  file.close();
+
+  LOG(INFO) << fmt::format("dump vfs state success, path({}).", path);
+
+  return true;
+}
+
+bool VFSWrapper::Load() {
+  std::string pid_str =
+      common::ShareVar::GetInstance().GetValue(common::kOldPid);
+
+  const std::string path = fmt::format("{}.{}", kFdStatePath, pid_str);
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    LOG(ERROR) << "write dingo-fuse state file fail, file: " << path;
+    return false;
+  }
+
+  Json::Value root;
+  Json::CharReaderBuilder reader;
+  std::string err;
+  if (!Json::parseFromStream(reader, file, &root, &err)) {
+    LOG(ERROR) << fmt::format("parse json fail, path({}) error({}).", path,
+                              err);
+    return false;
+  }
+
+  if (!vfs_->Load(root)) {
+    LOG(ERROR) << "load vfs state fail.";
+    return false;
+  }
+
+  LOG(INFO) << fmt::format("load vfs state success, path({}).", path);
+
+  return true;
 }
 
 void VFSWrapper::Init() {

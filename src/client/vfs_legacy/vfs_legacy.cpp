@@ -31,7 +31,6 @@
 #include "client/common/client_dummy_server_info.h"
 #include "client/common/metrics_dumper.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/client_operator.h"
 #include "client/vfs_legacy/datastream/data_stream.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
@@ -42,6 +41,7 @@
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/tools.h"
+#include "client/vfs_meta.h"
 #include "common/config_mapper.h"
 #include "common/define.h"
 #include "common/status.h"
@@ -442,6 +442,10 @@ Status VFSOld::Stop() {
 
   return Status::OK();
 }
+
+bool VFSOld::Dump(Json::Value& value) { return fs_->Dump(value); }
+
+bool VFSOld::Load(const Json::Value& value) { return fs_->Load(value); }
 
 double VFSOld::GetAttrTimeout(const FileType& type) {
   if (type == FileType::kDirectory) {

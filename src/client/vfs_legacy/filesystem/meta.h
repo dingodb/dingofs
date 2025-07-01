@@ -23,15 +23,16 @@
 #ifndef DINGOFS_SRC_CLIENT_FILESYSTEM_META_H_
 #define DINGOFS_SRC_CLIENT_FILESYSTEM_META_H_
 
+#include <json/value.h>
+
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
 
 #include "base/time/time.h"
-#include "client/vfs/handle/dir_iterator.h"
-#include "client/vfs/vfs_meta.h"
 #include "client/vfs_legacy/dir_buffer.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
@@ -79,21 +80,17 @@ struct DirEntry {
 
 struct FileHandler;
 
-class FsDirIterator : public vfs::DirIterator {
+class FsDirIterator {
  public:
   FsDirIterator() = default;
-  ~FsDirIterator() override = default;
+  ~FsDirIterator() = default;
 
   void Append(vfs::DirEntry& entry) { entries_.push_back(entry); }
 
-  Status Seek() override;
-  bool Valid() override;
-  vfs::DirEntry GetValue(bool with_attr) override;
-  void Next() override;
-  // TODO: need implemented
-  std::string Dump() override { return {}; };
-  // TODO: need implemented
-  void Load(const std::string& data) override {};
+  Status Seek();
+  bool Valid();
+  vfs::DirEntry GetValue(bool with_attr);
+  void Next();
 
  private:
   uint64_t offset_{0};
@@ -122,13 +119,13 @@ class HandlerManager {
 
   std::shared_ptr<FileHandler> NewHandler();
 
-  std::shared_ptr<FileHandler> FindHandler(uint64_t id);
+  std::shared_ptr<FileHandler> FindHandler(uint64_t fh);
 
-  void ReleaseHandler(uint64_t id);
+  void ReleaseHandler(uint64_t fh);
 
-  void SaveAllHandlers(const std::string& path);
+  bool Dump(Json::Value& value);
 
-  void LoadAllHandlers(const std::string& path);
+  bool Load(const Json::Value& value);
 
  private:
   utils::Mutex mutex_;

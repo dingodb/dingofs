@@ -30,7 +30,7 @@
 #include "client/vfs/background/iperiodic_flush_manager.h"
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/options/vfs/vfs_option.h"
 #include "utils/executor/executor.h"

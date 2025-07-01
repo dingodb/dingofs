@@ -15,6 +15,8 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_DUMMY_FILESYSTEM_H_
 
+#include <json/value.h>
+
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -24,10 +26,8 @@
 #include <vector>
 
 #include "bthread/types.h"
-#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
-#include "client/vfs/vfs_meta.h"
-#include "common/status.h"
+#include "client/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 
 namespace dingofs {
@@ -129,26 +129,27 @@ class FileChunkMap {
 
 class DummyFileSystem;
 
-class DummyDirIterator : public vfs::DirIterator {
+class DirIterator;
+using DirIteratorSPtr = std::shared_ptr<DirIterator>;
+
+class DirIterator {
  public:
-  DummyDirIterator(DummyFileSystem* system, Ino ino)
+  DirIterator(DummyFileSystem* system, Ino ino)
       : dumy_system_(system), ino_(ino) {}
 
-  ~DummyDirIterator() override;
+  ~DirIterator();
 
-  Status Seek() override;
+  static DirIteratorSPtr New(DummyFileSystem* system, Ino ino) {
+    return std::make_shared<DirIterator>(system, ino);
+  }
 
-  bool Valid() override;
+  Status Seek();
 
-  DirEntry GetValue(bool with_attr) override;
+  bool Valid();
 
-  void Next() override;
+  DirEntry GetValue(bool with_attr);
 
-  // TODO: need implemented
-  std::string Dump() override { return {}; };
-
-  // TODO: need implemented
-  void Load(const std::string& data) override {};
+  void Next();
 
   void SetDirEntries(std::vector<DirEntry>&& dir_entries);
 
@@ -158,6 +159,21 @@ class DummyDirIterator : public vfs::DirIterator {
 
   std::vector<DirEntry> dir_entries_;
   DummyFileSystem* dumy_system_{nullptr};
+};
+
+class DirIteratorManager {
+ public:
+  DirIteratorManager();
+  ~DirIteratorManager();
+
+  void Put(uint64_t fh, DirIteratorSPtr dir_iterator);
+  DirIteratorSPtr Get(uint64_t fh);
+  void Delete(uint64_t fh);
+
+ private:
+  bthread_mutex_t mutex_;
+  // fh -> DirIteratorSPtr
+  std::map<uint64_t, DirIteratorSPtr> dir_iterator_map_;
 };
 
 class DummyFileSystem : public vfs::MetaSystem {
@@ -180,6 +196,9 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status Init() override;
   void UnInit() override;
+
+  bool Dump(Json::Value& value) override;
+  bool Load(const Json::Value& value) override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_; }
 
@@ -206,15 +225,12 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status RmDir(Ino parent, const std::string& name) override;
 
-  Status OpenDir(Ino ino) override;
-
-  // NOTE: caller own dir and the DirHandler should be deleted by caller
-  DirIterator* NewDirIterator(Ino ino) override;
+  Status OpenDir(Ino ino, uint64_t fh) override;
 
   Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                 ReadDirHandler handler) override {
-    return Status::NotSupport("ReadDir is not supported in DummyFileSystem");
-  }
+                 ReadDirHandler handler) override;
+
+  Status ReleaseDir(Ino ino, uint64_t fh) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -239,14 +255,8 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   Status GetFsInfo(FsInfo* fs_info) override;
 
-  // TODO : need implemented
-  bool Dump(const std::string& path) override { return true; };
-
-  // TODO : need implemented
-  bool Load(const std::string& path) override { return true; };
-
  private:
-  friend class DummyDirIterator;
+  friend class DirIterator;
 
   pb::mdsv2::FsInfo fs_info_;
 
@@ -293,6 +303,8 @@ class DummyFileSystem : public vfs::MetaSystem {
 
   // for open file
   OpenFileMemo open_file_memo_;
+
+  DirIteratorManager dir_iterator_manager_;
 
   // for store file data
   DataStorage data_storage_;

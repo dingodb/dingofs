@@ -17,12 +17,13 @@
 #ifndef DINGOFS_CLIENT_VFS_META_H_
 #define DINGOFS_CLIENT_VFS_META_H_
 
-#include <fmt/format.h>
-
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
+
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -197,7 +198,12 @@ struct FsInfo {
 //  updated to the offset of the next entry that should be read on the
 //  next call to ReadDirHandler.
 using ReadDirHandler =
-    std::function<bool(const DirEntry& dir_entry, int32_t off)>;
+    std::function<bool(const DirEntry& dir_entry, uint64_t offset)>;
+
+inline uint64_t GenFh() {
+  static std::atomic<uint64_t> next_fh = 1;
+  return next_fh.fetch_add(1, std::memory_order_relaxed);
+}
 
 }  // namespace vfs
 }  // namespace client

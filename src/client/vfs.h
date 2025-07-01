@@ -18,12 +18,12 @@
 #define DINGOFS_CLIENT_VFS_H_
 
 #include <cstdint>
-#include <functional>
 #include <string>
 
-#include "options/client/options/fuse/fuse_option.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
-#include "client/vfs/vfs_meta.h"
+#include "json/value.h"
+#include "options/client/options/fuse/fuse_option.h"
 
 namespace dingofs {
 namespace client {
@@ -46,6 +46,10 @@ class VFS {
   virtual Status Start(const VFSConfig& vfs_con) = 0;
 
   virtual Status Stop() = 0;
+
+  virtual bool Dump(Json::Value& value) = 0;
+
+  virtual bool Load(const Json::Value& value) = 0;
 
   virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
 
@@ -129,7 +133,6 @@ class VFS {
   // TODO: refactor this interface
   // used for fuse
   virtual FuseOption GetFuseOption() = 0;
-
 };
 
 }  // namespace vfs

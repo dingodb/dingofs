@@ -17,8 +17,6 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 #define DINGOFS_CLIENT_VFS_DATA_CHUNK_H_
 
-#include <fmt/format.h>
-
 #include <cstdint>
 #include <deque>
 #include <mutex>
@@ -27,9 +25,10 @@
 #include "cache/blockcache/cache_store.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {

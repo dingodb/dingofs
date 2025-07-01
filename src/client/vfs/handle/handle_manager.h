@@ -24,8 +24,7 @@
 #include <unordered_map>
 
 #include "client/vfs/data/ifile.h"
-#include "client/vfs/handle/dir_iterator.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -43,9 +42,6 @@ struct Handle {
   // file ralted
   int32_t flags;
   std::unique_ptr<IFile> file;
-
-  // dir related
-  std::unique_ptr<DirIterator> dir_iterator;
 
   FileBuffer file_buffer;
 
@@ -75,7 +71,6 @@ class HandleManager {
 
  private:
   std::mutex mutex_;
-  uint64_t next_fh_{1};
   std::unordered_map<uint64_t, HandleSPtr> handles_;
 };
 

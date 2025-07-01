@@ -33,7 +33,7 @@
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/meta_wrapper.h"
 #include "client/vfs/meta/v2/filesystem.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "options/client/options/common_option.h"
 #include "options/client/options/vfs/vfs_dynamic_option.h"

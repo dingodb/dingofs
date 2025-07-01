@@ -25,16 +25,16 @@
 #include <string>
 
 #include "blockaccess/block_accesser.h"
-#include "client/vfs_legacy/common/common.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/lease/lease_excutor.h"
 #include "client/vfs_legacy/service/inode_objects_service.h"
 #include "client/vfs_legacy/warmup/warmup_manager.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/mds_client.h"
 #include "utils/throttle.h"
 
@@ -44,14 +44,17 @@ namespace vfs {
 
 class VFSOld : public VFS {
  public:
-  VFSOld(const VFSLegacyOption& option)
-      : option_(option) {}
+  VFSOld(const VFSLegacyOption& option) : option_(option) {}
 
   ~VFSOld() override = default;
 
   Status Start(const VFSConfig& vfs_conf) override;
 
   Status Stop() override;
+
+  bool Dump(Json::Value& value) override;
+
+  bool Load(const Json::Value& value) override;
 
   double GetAttrTimeout(const FileType& type) override;
 
@@ -123,9 +126,7 @@ class VFSOld : public VFS {
 
   uint64_t GetMaxNameLength() override;
 
-  FuseOption GetFuseOption() override {
-    return option_.fuse_option;
-  }
+  FuseOption GetFuseOption() override { return option_.fuse_option; }
 
   void InitQosParam();
 

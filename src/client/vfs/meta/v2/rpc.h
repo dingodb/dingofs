@@ -176,12 +176,14 @@ Status RPC::SendRequest(const EndPoint& endpoint,
 
     ++retry_count;
 
-    LOG(ERROR) << fmt::format(
-        "[rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} {}).",
-        EndPointToStr(endpoint), api_name, elapsed_us,
-        request.ShortDebugString(), retry_count,
-        pb::error::Errno_Name(response.error().errcode()),
-        response.error().errmsg());
+    if (response.error().errcode() != pb::error::ENOT_FOUND) {
+      LOG(ERROR) << fmt::format(
+          "[rpc][{}][{}][{}us] fail, request({}) retry_count({}) error({} {}).",
+          EndPointToStr(endpoint), api_name, elapsed_us,
+          request.ShortDebugString(), retry_count,
+          pb::error::Errno_Name(response.error().errcode()),
+          response.error().errmsg());
+    }
 
     // the errno of need retry
     if (response.error().errcode() != pb::error::EINTERNAL) {

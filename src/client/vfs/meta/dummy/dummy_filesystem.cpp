@@ -15,6 +15,7 @@
 #include "client/vfs/meta/dummy/dummy_filesystem.h"
 
 #include <fcntl.h>
+#include <json/value.h>
 
 #include <atomic>
 #include <cstddef>
@@ -25,7 +26,7 @@
 
 #include "bthread/mutex.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -350,6 +351,16 @@ Status DummyFileSystem::Init() {
 
 void DummyFileSystem::UnInit() {}
 
+bool DummyFileSystem::Dump(Json::Value& value) {
+  // Implement your dump logic here
+  return true;
+}
+
+bool DummyFileSystem::Load(const Json::Value& value) {
+  // Implement your load logic here
+  return true;
+}
+
 static FileType ToFileType(pb::mdsv2::FileType type) {
   switch (type) {
     case pb::mdsv2::FileType::FILE:
@@ -555,19 +566,41 @@ Status DummyFileSystem::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-Status DummyFileSystem::OpenDir(Ino ino) {
-  IncInodeNlink(ino);
+Status DummyFileSystem::OpenDir(Ino ino, uint64_t fh) {
+  auto dir_iterator = std::make_shared<DirIterator>(this, ino);
+  auto status = dir_iterator->Seek();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[meta.dummy] OpenDir ino({}) fail, error: {}.",
+                              ino, status.ToString());
+    return status;
+  }
+
+  dir_iterator_manager_.Put(fh, dir_iterator);
+
   return Status::OK();
 }
 
-DirIterator* DummyFileSystem::NewDirIterator(Ino ino) {
-  std::vector<DirEntry> entries;
-  GetAllChildDentry(ino, entries);
+Status DummyFileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
+                                bool with_attr, ReadDirHandler handler) {
+  auto dir_iterator = dir_iterator_manager_.Get(fh);
+  CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
-  auto* dir_iterator = new DummyDirIterator(this, ino);
-  dir_iterator->SetDirEntries(std::move(entries));
+  while (dir_iterator->Valid()) {
+    DirEntry entry = dir_iterator->GetValue(with_attr);
 
-  return dir_iterator;
+    if (!handler(entry, offset)) {
+      break;
+    }
+
+    dir_iterator->Next();
+  }
+
+  return Status::OK();
+}
+
+Status DummyFileSystem::ReleaseDir(Ino, uint64_t fh) {
+  dir_iterator_manager_.Delete(fh);
+  return Status::OK();
 }
 
 Status DummyFileSystem::Link(Ino ino, Ino new_parent,
@@ -1082,17 +1115,17 @@ void DummyFileSystem::UpdateInodeLength(uint64_t ino, size_t length) {
   }
 }
 
-DummyDirIterator::~DummyDirIterator() {
+DirIterator::~DirIterator() {
   if (dumy_system_ != nullptr) {
     dumy_system_->DecOrDeleteInodeNlink(ino_);
   }
 }
 
-Status DummyDirIterator::Seek() { return Status::OK(); }
+Status DirIterator::Seek() { return Status::OK(); }
 
-bool DummyDirIterator::Valid() { return offset_ < dir_entries_.size(); }
+bool DirIterator::Valid() { return offset_ < dir_entries_.size(); }
 
-DirEntry DummyDirIterator::GetValue(bool with_attr) {
+DirEntry DirIterator::GetValue(bool with_attr) {
   CHECK(offset_ < dir_entries_.size()) << "offset out of range";
 
   auto entry = dir_entries_[offset_];
@@ -1107,7 +1140,7 @@ DirEntry DummyDirIterator::GetValue(bool with_attr) {
   return entry;
 }
 
-void DummyDirIterator::Next() {
+void DirIterator::Next() {
   if (++offset_ < dir_entries_.size()) {
     return;
   }
@@ -1115,8 +1148,38 @@ void DummyDirIterator::Next() {
   dir_entries_.clear();
 }
 
-void DummyDirIterator::SetDirEntries(std::vector<DirEntry>&& dir_entries) {
+void DirIterator::SetDirEntries(std::vector<DirEntry>&& dir_entries) {
   dir_entries_ = std::move(dir_entries);
+}
+
+DirIteratorManager::DirIteratorManager() {
+  CHECK(bthread_mutex_init(&mutex_, nullptr) == 0) << "init mutex fail.";
+}
+
+DirIteratorManager::~DirIteratorManager() {
+  CHECK(bthread_mutex_destroy(&mutex_) == 0) << "destroy mutex fail.";
+}
+
+void DirIteratorManager::Put(uint64_t fh, DirIteratorSPtr dir_iterator) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  dir_iterator_map_[fh] = dir_iterator;
+}
+
+DirIteratorSPtr DirIteratorManager::Get(uint64_t fh) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  auto it = dir_iterator_map_.find(fh);
+  if (it != dir_iterator_map_.end()) {
+    return it->second;
+  }
+  return nullptr;
+}
+
+void DirIteratorManager::Delete(uint64_t fh) {
+  BAIDU_SCOPED_LOCK(mutex_);
+
+  dir_iterator_map_.erase(fh);
 }
 
 }  // namespace dummy

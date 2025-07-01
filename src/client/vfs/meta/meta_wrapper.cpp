@@ -20,7 +20,7 @@
 
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -38,6 +38,16 @@ Status MetaWrapper::Init() {
 void MetaWrapper::UnInit() {
   MetaLogGuard log_guard([&]() { return "uninit"; });
   target_->UnInit();
+}
+
+bool MetaWrapper::Dump(Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "dump"; });
+  return target_->Dump(value);
+}
+
+bool MetaWrapper::Load(const Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "load"; });
+  return target_->Load(value);
 }
 
 Status MetaWrapper::Lookup(Ino parent, const std::string& name, Attr* attr) {
@@ -234,36 +244,35 @@ Status MetaWrapper::RmDir(Ino parent, const std::string& name) {
   return s;
 }
 
-Status MetaWrapper::OpenDir(Ino ino) {
+Status MetaWrapper::OpenDir(Ino ino, uint64_t fh) {
   Status s;
-  MetaLogGuard log_guard(
-      [&]() { return absl::StrFormat("opendir (%d): %s", ino, s.ToString()); });
-
-  s = target_->OpenDir(ino);
-  return s;
-}
-
-DirIterator* MetaWrapper::NewDirIterator(Ino ino) {
-  DirIterator* iterator;
-
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("new_dir_iterator (%d): %s", ino,
-                           iterator ? "success" : "failed");
+    return absl::StrFormat("opendir (%d): %d %s", ino, fh, s.ToString());
   });
 
-  iterator = target_->NewDirIterator(ino);
-  return iterator;
+  s = target_->OpenDir(ino, fh);
+  return s;
 }
 
 Status MetaWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
                             bool with_attr, ReadDirHandler handler) {
   Status s;
   MetaLogGuard log_guard([&]() {
-    return absl::StrFormat("readdir (%d) %d : %s [fh:%d]", ino, offset,
-                           s.ToString(), fh);
+    return absl::StrFormat("readdir (%d): %d %d %d %s", ino, fh, offset,
+                           with_attr, s.ToString());
   });
 
   s = target_->ReadDir(ino, fh, offset, with_attr, handler);
+  return s;
+}
+
+Status MetaWrapper::ReleaseDir(Ino ino, uint64_t fh) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("releasedir (%d): %d %s", ino, fh, s.ToString());
+  });
+
+  s = target_->ReleaseDir(ino, fh);
   return s;
 }
 

@@ -125,6 +125,34 @@ void ParentMemo::Delete(Ino ino) {
   ino_map_.erase(ino);
 }
 
+void ParentMemo::Dump(Json::Value& value) {
+  utils::ReadLockGuard lk(lock_);
+
+  for (const auto& [ino, entry] : ino_map_) {
+    Json::Value item;
+    item["ino"] = ino;
+    item["parent"] = entry.parent;
+    item["version"] = entry.version;
+
+    value.append(item);
+  }
+}
+
+bool ParentMemo::Load(const Json::Value& value) {
+  utils::WriteLockGuard lk(lock_);
+
+  ino_map_.clear();
+  for (const auto& item : value) {
+    Ino ino = item["ino"].asUInt64();
+    Ino parent = item["parent"].asUInt64();
+    uint64_t version = item["version"].asUInt64();
+
+    ino_map_[ino] = Entry{parent, version};
+  }
+
+  return true;
+}
+
 }  // namespace v2
 }  // namespace vfs
 }  // namespace client

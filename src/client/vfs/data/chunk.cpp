@@ -16,17 +16,13 @@
 
 #include "client/vfs/data/chunk.h"
 
-#include <absl/cleanup/cleanup.h>
-#include <fmt/base.h>
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <utility>
 
+#include "absl/cleanup/cleanup.h"
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "client/common/utils.h"
@@ -36,10 +32,12 @@
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/callback.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
+#include "fmt/format.h"
+#include "glog/logging.h"
 #include "options/client/options/vfs/vfs_option.h"
 
 namespace dingofs {

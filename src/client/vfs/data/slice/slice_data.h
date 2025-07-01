@@ -17,9 +17,6 @@
 #ifndef DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 #define DINGOFS_CLIENT_VFS_DATA_SLICE_DATA_H_
 
-#include <fmt/format.h>
-#include <glog/logging.h>
-
 #include <atomic>
 #include <cstdint>
 #include <map>
@@ -29,9 +26,10 @@
 #include "client/vfs/data/slice/block_data.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/task/slice_flush_task.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
+#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -98,8 +96,8 @@ class SliceData {
 
   std::unique_ptr<SliceFlushTask> flush_task_;
   // write and flush will run in sequence, but they may be called in different
-  // thread, so this mutex is just used for the member variables are accessed in
-  // a thread-safe manner.
+  // thread, so this mutex is just used for the member variables are accessed
+  // in a thread-safe manner.
   // TODO: use memory fench instead of mutex
   mutable std::mutex write_flush_mutex_;
   uint64_t chunk_offset_;

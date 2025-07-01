@@ -20,10 +20,10 @@
 #include <cstdint>
 #include <memory>
 
-#include "options/client/options/client_option.h"
-#include "options/client/options/fuse/fuse_option.h"
 #include "client/vfs.h"
 #include "metrics/client/client.h"
+#include "options/client/options/client_option.h"
+#include "options/client/options/fuse/fuse_option.h"
 
 namespace dingofs {
 namespace client {
@@ -122,6 +122,9 @@ class VFSWrapper {
   FuseOption GetFuseOption() const;
 
  private:
+  bool Dump();
+  bool Load();
+
   utils::Configuration conf_;
   ClientOption client_option_;
 

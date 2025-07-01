@@ -24,7 +24,7 @@
 #include <map>
 #include <string>
 
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

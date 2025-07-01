@@ -15,16 +15,19 @@
 #ifndef DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 #define DINGOFS_SRC_CLIENT_VFS_META_V2_FILESYSTEM_H_
 
+#include <json/value.h>
+
 #include <cstdint>
 #include <memory>
 #include <string>
 
-#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 #include "client/vfs/meta/v2/client_id.h"
+#include "client/vfs/meta/v2/dir_iterator.h"
+#include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/crontab.h"
@@ -37,50 +40,6 @@ namespace v2 {
 class MDSV2FileSystem;
 using MDSV2FileSystemPtr = std::shared_ptr<MDSV2FileSystem>;
 using MDSV2FileSystemUPtr = std::unique_ptr<MDSV2FileSystem>;
-
-// used by read dir
-class DirIteratorImpl : public DirIterator {
- public:
-  DirIteratorImpl(MDSClientPtr mds_client, Ino ino)
-      : mds_client_(mds_client), ino_(ino) {}
-
-  Status Seek() override;
-  bool Valid() override;
-  DirEntry GetValue(bool with_attr) override;
-  void Next() override;
-  // TODO: need implemented
-  std::string Dump() override { return {}; };
-  // TODO: need implemented
-  void Load(const std::string& data) override {};
-
- private:
-  Ino ino_;
-  // last file/dir name, used to read next batch
-  std::string last_name_;
-  bool with_attr_{false};
-
-  uint32_t offset_{0};
-  // stash entry for read dir
-  std::vector<DirEntry> entries_;
-
-  MDSClientPtr mds_client_;
-};
-
-// used by open file
-class FileSessionMap {
- public:
-  FileSessionMap() = default;
-  ~FileSessionMap() = default;
-
-  bool Put(uint64_t fh, std::string session_id);
-  void Delete(uint64_t fh);
-  std::string Get(uint64_t fh);
-
- private:
-  utils::RWLock lock_;
-  // fh -> session id
-  std::map<uint64_t, std::string> file_session_map_;
-};
 
 class MDSV2FileSystem : public vfs::MetaSystem {
  public:
@@ -103,6 +62,10 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   Status Init() override;
 
   void UnInit() override;
+
+  bool Dump(Json::Value& value) override;
+
+  bool Load(const Json::Value& value) override;
 
   pb::mdsv2::FsInfo GetFsInfo() { return fs_info_->Get(); }
 
@@ -131,15 +94,12 @@ class MDSV2FileSystem : public vfs::MetaSystem {
                uint32_t mode, Attr* attr) override;
   Status RmDir(Ino parent, const std::string& name) override;
 
-  Status OpenDir(Ino ino) override;
-
-  // NOTE: caller own dir and the DirHandler should be deleted by caller
-  DirIterator* NewDirIterator(Ino ino) override;
+  Status OpenDir(Ino ino, uint64_t fh) override;
 
   Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                 ReadDirHandler handler) override {
-    return Status::NotSupport("ReadDir is not supported in DummyFileSystem");
-  }
+                 ReadDirHandler handler) override;
+
+  Status ReleaseDir(Ino ino, uint64_t fh) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -159,12 +119,6 @@ class MDSV2FileSystem : public vfs::MetaSystem {
 
   Status Rename(Ino old_parent, const std::string& old_name, Ino new_parent,
                 const std::string& new_name) override;
-
-  // TODO : need implemented
-  bool Dump(const std::string& path) override { return true; };
-
-  // TODO : need implemented
-  bool Load(const std::string& path) override { return true; };
 
  private:
   bool SetRandomEndpoint();
@@ -186,6 +140,8 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   MDSClientPtr mds_client_;
 
   FileSessionMap file_session_map_;
+
+  DirIteratorManager dir_iterator_manager_;
 
   // Crontab config
   std::vector<mdsv2::CrontabConfig> crontab_configs_;

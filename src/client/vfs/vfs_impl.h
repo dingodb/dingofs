@@ -41,6 +41,10 @@ class VFSImpl : public VFS {
 
   Status Stop() override;
 
+  bool Dump(Json::Value& value) override;
+
+  bool Load(const Json::Value& value) override;
+
   double GetAttrTimeout(const FileType& type) override;
 
   double GetEntryTimeout(const FileType& type) override;

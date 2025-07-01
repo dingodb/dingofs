@@ -23,11 +23,11 @@
 #include <cstdint>
 #include <ctime>
 
+#include "client/common/client_dummy_server_info.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "dingofs/mds.pb.h"
 #include "dingofs/metaserver.pb.h"
-#include "client/common/client_dummy_server_info.h"
 
 namespace dingofs {
 namespace client {

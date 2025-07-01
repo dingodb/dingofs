@@ -30,7 +30,7 @@
 
 #include "client/vfs/data/slice/task/slice_flush_task.h"
 #include "client/vfs/hub/vfs_hub.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 

@@ -27,7 +27,7 @@ namespace vfs {
 HandleSPtr HandleManager::NewHandle() {
   auto handle = std::make_shared<Handle>();
   std::lock_guard<std::mutex> lock(mutex_);
-  handle->fh = next_fh_++;
+  handle->fh = GenFh();
   handles_[handle->fh] = handle;
 
   return handle;

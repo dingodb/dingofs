@@ -22,15 +22,14 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <utility>
 
 #include "client/common/client_dummy_server_info.h"
 #include "client/common/metrics_dumper.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
-#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_log.h"
+#include "client/vfs_meta.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -60,6 +59,26 @@ Status VFSImpl::Start(const VFSConfig& vfs_conf) {  // NOLINT
 }
 
 Status VFSImpl::Stop() { return vfs_hub_->Stop(); }
+
+bool VFSImpl::Dump(Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "dump"; });
+  if (meta_system_ == nullptr) {
+    LOG(WARNING) << "meta_system_ is null, can not dump";
+    return false;
+  }
+
+  return meta_system_->Dump(value);
+}
+
+bool VFSImpl::Load(const Json::Value& value) {
+  MetaLogGuard log_guard([&]() { return "load"; });
+  if (meta_system_ == nullptr) {
+    LOG(WARNING) << "meta_system_ is null, can not load";
+    return false;
+  }
+
+  return meta_system_->Load(value);
+}
 
 double VFSImpl::GetAttrTimeout(const FileType& type) { return 1; }  // NOLINT
 
@@ -395,58 +414,25 @@ Status VFSImpl::MkDir(Ino parent, const std::string& name, uint32_t uid,
 }
 
 Status VFSImpl::OpenDir(Ino ino, uint64_t* fh) {
-  DINGOFS_RETURN_NOT_OK(meta_system_->OpenDir(ino));
+  *fh = GenFh();
 
-  auto handle = handle_manager_->NewHandle();
-  handle->ino = ino;
-
-  DirIteratorUPtr dir_iterator(meta_system_->NewDirIterator(ino));
-  dir_iterator->Seek();
-
-  handle->dir_iterator = std::move(dir_iterator);
-
-  *fh = handle->fh;
-
-  return Status::OK();
+  return meta_system_->OpenDir(ino, *fh);
 }
 
 Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
                         ReadDirHandler handler) {
-  auto handle = handle_manager_->FindHandler(fh);
-  if (handle == nullptr) {
-    return Status::BadFd(fmt::format("bad  fh:{}", fh));
-  }
-
-  auto& dir_iterator = handle->dir_iterator;
-  CHECK(dir_iterator != nullptr) << "dir_iterator is null";
-
-  int32_t fake_off = 1;
-
   // root dir(add .stats file)
   if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
     DirEntry stats_entry{STATSINODEID, STATSNAME,
                          GenerateVirtualInodeAttr(STATSINODEID)};
-    handler(stats_entry, fake_off);
+    handler(stats_entry, offset++);
   }
 
-  while (dir_iterator->Valid()) {
-    DirEntry entry = dir_iterator->GetValue(with_attr);
-
-    if (!handler(entry, fake_off)) {
-      LOG(INFO) << "read dir break by handler next_offset: " << offset;
-      break;
-    }
-
-    dir_iterator->Next();
-  }
-
-  VLOG(1) << fmt::format("read dir ino({}) fh({}) offset({})", ino, fh, offset);
-  return Status::OK();
+  return meta_system_->ReadDir(ino, fh, offset, with_attr, handler);
 }
 
-Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {  // NOLINT
-  handle_manager_->ReleaseHandler(fh);
-  return Status::OK();
+Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {
+  return meta_system_->ReleaseDir(ino, fh);
 }
 
 Status VFSImpl::RmDir(Ino parent, const std::string& name) {

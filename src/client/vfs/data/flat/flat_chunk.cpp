@@ -21,7 +21,7 @@
 
 #include "client/vfs/data/flat/common.h"
 #include "client/vfs/data/flat/slice_holder.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
@@ -179,9 +179,9 @@ std::shared_ptr<FlatFileChunk> FlatFileChunk::Create(
 }
 
 void FlatFileChunk::PrepareReadReq(const FileRange& file_range,
-                    std::vector<BlockReadReq>& block_read_reqs) {
+                                   std::vector<BlockReadReq>& block_read_reqs) {
 
-                    }
+}
 
 }  // namespace vfs
 }  // namespace client

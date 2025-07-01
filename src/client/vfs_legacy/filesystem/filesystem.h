@@ -80,6 +80,10 @@ class FileSystem {
 
   void Destory();
 
+  bool Dump(Json::Value& value);
+
+  bool Load(const Json::Value& value);
+
   // fuse request
   DINGOFS_ERROR Lookup(Ino parent, const std::string& name,
                        EntryOut* entry_out);
@@ -103,10 +107,6 @@ class FileSystem {
   std::shared_ptr<FileHandler> FindHandler(uint64_t fh);
 
   void ReleaseHandler(uint64_t fh);
-
-  void SaveAllHandlers(const std::string& path);
-
-  void LoadAllHandlers(const std::string& path);
 
   // utility: others
   FileSystemMember BorrowMember();

@@ -27,7 +27,6 @@
 #include <sys/stat.h>
 
 #include <cstdint>
-#include <fstream>
 
 #include "base/string/string.h"
 
@@ -43,8 +42,7 @@ using utils::RWLock;
 using utils::UniqueLock;
 using utils::WriteLockGuard;
 
-HandlerManager::HandlerManager()
-    : mutex_(), dirBuffer_(std::make_shared<DirBuffer>()), handlers_() {}
+HandlerManager::HandlerManager() : dirBuffer_(std::make_shared<DirBuffer>()) {}
 
 HandlerManager::~HandlerManager() { dirBuffer_->DirBufferFreeAll(); }
 
@@ -73,9 +71,8 @@ void HandlerManager::ReleaseHandler(uint64_t fh) {
   handlers_.erase(fh);
 }
 
-void HandlerManager::SaveAllHandlers(const std::string& path) {
+bool HandlerManager::Dump(Json::Value& value) {
   UniqueLock lk(mutex_);
-  Json::Value root;
   Json::Value handle_array;
 
   for (const auto& handle : handlers_) {
@@ -106,52 +103,29 @@ void HandlerManager::SaveAllHandlers(const std::string& path) {
 
     handle_array.append(item);
   }
-  root["handlers"] = handle_array;
+  value["handlers"] = handle_array;
 
-  std::ofstream file(path);
-  if (file.is_open()) {
-    Json::StreamWriterBuilder writer;
-    std::string json_string = Json::writeString(writer, root);
-    file << json_string;
-    file.close();
-    LOG(INFO) << "successfuly write " << handlers_.size()
-              << " handlers to file: " << path;
-  } else {
-    LOG(ERROR) << "write dingo-fuse state file failed, file: " << path;
-  }
+  return true;
 }
 
-void HandlerManager::LoadAllHandlers(const std::string& path) {
-  std::ifstream file(path);
-  if (!file.is_open()) {
-    LOG(ERROR) << "open dingo-fuse state file failed, file: " << path;
-    return;
-  }
-
-  Json::Value root;
-  Json::CharReaderBuilder reader;
-  std::string errs;
-  if (!Json::parseFromStream(reader, file, &root, &errs)) {
-    LOG(ERROR) << "failed to parse state json file: " << path
-               << ", errors: " << errs;
-    return;
-  }
-
-  const Json::Value handlers = root["handlers"];
+bool HandlerManager::Load(const Json::Value& value) {
+  const Json::Value& handlers = value["handlers"];
   if (!handlers.isArray()) {
-    return;
+    LOG(ERROR) << "handlers is not an array.";
+    return false;
   }
+
   for (const auto& handler : handlers) {
     // peek fh,padding,flags
     uint64_t fh = handler["fh"].asUInt64();
     bool padding = handler["padding"].asBool();
     uint flags = handler["flags"].asUInt();
     // peek timespec
-    const Json::Value timespec_item = handler["timespec_item"];
+    const Json::Value& timespec_item = handler["timespec_item"];
     uint64_t seconds = timespec_item["seconds"].asUInt64();
     uint32_t nanoSeconds = timespec_item["nanoSeconds"].asUInt();
     // peek buffer
-    const Json::Value buffer = handler["buffer"];
+    const Json::Value& buffer = handler["buffer"];
     std::string p = buffer["p"].asString();
     size_t size = buffer["size"].asUInt64();
     bool wasRead = buffer["wasRead"].asBool();
@@ -180,8 +154,9 @@ void HandlerManager::LoadAllHandlers(const std::string& path) {
       handlers_.emplace(handler->fh, handler);
     }
   }
-  LOG(INFO) << "successfuly load " << handlers_.size()
-            << " handlers from: " << path;
+  LOG(INFO) << "successfuly load " << handlers_.size();
+
+  return true;
 }
 
 std::string StrMode(uint16_t mode) {

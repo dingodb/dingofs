@@ -21,9 +21,9 @@
 #include <string>
 #include <vector>
 
-#include "client/vfs/handle/dir_iterator.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
@@ -43,6 +43,10 @@ class MetaSystem {
   virtual Status Init() = 0;
 
   virtual void UnInit() = 0;
+
+  virtual bool Dump(Json::Value& value) = 0;
+
+  virtual bool Load(const Json::Value& value) = 0;
 
   virtual Status Lookup(Ino parent, const std::string& name, Attr* attr) = 0;
 
@@ -122,12 +126,12 @@ class MetaSystem {
 
   virtual Status RmDir(Ino parent, const std::string& name) = 0;
 
-  virtual Status OpenDir(Ino ino) = 0;
+  virtual Status OpenDir(Ino ino, uint64_t fh) = 0;
 
   virtual Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
                          ReadDirHandler handler) = 0;
 
-  virtual DirIterator* NewDirIterator(Ino ino) = 0;
+  virtual Status ReleaseDir(Ino ino, uint64_t fh) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;
 
@@ -135,10 +139,6 @@ class MetaSystem {
                         Ino new_parent, const std::string& new_name) = 0;
 
   virtual Status GetFsInfo(FsInfo* fs_info) = 0;
-
-  virtual bool Dump(const std::string& path) = 0;
-
-  virtual bool Load(const std::string& path) = 0;
 };
 
 using MetaSystemPtr = std::shared_ptr<MetaSystem>;

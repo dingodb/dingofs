@@ -14,22 +14,23 @@
 
 #include "client/vfs/meta/v2/filesystem.h"
 
+#include <butil/file_util.h>
 #include <fcntl.h>
+#include <json/writer.h>
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "client/vfs/meta/v2/client_id.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "fmt/format.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "json/value.h"
 
 namespace dingofs {
 namespace client {
@@ -46,8 +47,6 @@ const uint32_t kHeartbeatIntervalS = 5;  // seconds
 const std::set<std::string> kXAttrBlackList = {
     "system.posix_acl_access", "system.posix_acl_default", "system.nfs4_acl"};
 
-DEFINE_uint32(read_dir_batch_size, 1024, "read dir batch size.");
-
 std::string GetHostName() {
   char hostname[kMaxHostNameLength];
   int ret = gethostname(hostname, kMaxHostNameLength);
@@ -57,77 +56,6 @@ std::string GetHostName() {
   }
 
   return std::string(hostname);
-}
-
-Status DirIteratorImpl::Seek() {
-  std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(ino_, last_name_,
-                                     FLAGS_read_dir_batch_size, true, entries);
-  if (!status.ok()) {
-    return status;
-  }
-
-  offset_ = 0;
-  entries_ = std::move(entries);
-  if (!entries_.empty()) {
-    last_name_ = entries_.back().name;
-  }
-
-  return Status::OK();
-}
-
-bool DirIteratorImpl::Valid() { return offset_ < entries_.size(); }
-
-DirEntry DirIteratorImpl::GetValue(bool with_attr) {
-  CHECK(offset_ < entries_.size()) << "offset out of range";
-
-  with_attr_ = with_attr;
-  return entries_[offset_];
-}
-
-void DirIteratorImpl::Next() {
-  if (++offset_ < entries_.size()) {
-    return;
-  }
-
-  std::vector<DirEntry> entries;
-  auto status = mds_client_->ReadDir(
-      ino_, last_name_, FLAGS_read_dir_batch_size, with_attr_, entries);
-  if (!status.ok()) {
-    return;
-  }
-
-  offset_ = 0;
-  entries_ = std::move(entries);
-  if (!entries_.empty()) {
-    last_name_ = entries_.back().name;
-  }
-}
-
-bool FileSessionMap::Put(uint64_t fh, std::string session_id) {
-  utils::WriteLockGuard lk(lock_);
-
-  auto it = file_session_map_.find(fh);
-  if (it != file_session_map_.end()) {
-    return false;
-  }
-
-  file_session_map_.insert(std::make_pair(fh, session_id));
-
-  return true;
-}
-
-void FileSessionMap::Delete(uint64_t fh) {
-  utils::WriteLockGuard lk(lock_);
-
-  file_session_map_.erase(fh);
-}
-
-std::string FileSessionMap::Get(uint64_t fh) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = file_session_map_.find(fh);
-  return (it != file_session_map_.end()) ? it->second : "";
 }
 
 MDSV2FileSystem::MDSV2FileSystem(mdsv2::FsInfoPtr fs_info,
@@ -165,6 +93,24 @@ void MDSV2FileSystem::UnInit() {
   UnmountFs();
 
   crontab_manager_.Destroy();
+}
+
+bool MDSV2FileSystem::Dump(Json::Value& value) {
+  // dump file session map
+  Json::Value file_session_map_item;
+  file_session_map_.Dump(file_session_map_item);
+  value["file_session_map"] = file_session_map_item;
+
+  return true;
+}
+
+bool MDSV2FileSystem::Load(const Json::Value& value) {
+  // load file session map
+  if (!file_session_map_.Load(value["file_session_map"])) {
+    return false;
+  }
+
+  return true;
 }
 
 static StoreType ToStoreType(pb::mdsv2::FsType fs_type) {
@@ -285,7 +231,7 @@ bool MDSV2FileSystem::InitCrontab() {
   return true;
 }
 
-Status MDSV2FileSystem::StatFs(Ino ino, FsStat* fs_stat) {
+Status MDSV2FileSystem::StatFs(Ino, FsStat* fs_stat) {
   auto status = mds_client_->GetFsQuota(*fs_stat);
 
   if (fs_stat->max_bytes == 0) {
@@ -389,7 +335,7 @@ Status MDSV2FileSystem::ReadSlice(Ino ino, uint64_t index,
 Status MDSV2FileSystem::NewSliceId(Ino ino, uint64_t* id) {
   auto status = mds_client_->NewSliceId(ino, id);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] NewSliceId fail, error: {}.", name_,
+    LOG(ERROR) << fmt::format("[meta.{}] newsliceid fail, error: {}.", name_,
                               status.ToString());
     return status;
   }
@@ -401,7 +347,7 @@ Status MDSV2FileSystem::WriteSlice(Ino ino, uint64_t index,
                                    const std::vector<Slice>& slices) {
   auto status = mds_client_->WriteSlice(ino, index, slices);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] WriteSlice ino({}) fail, error: {}.",
+    LOG(ERROR) << fmt::format("[meta.{}] writeslice ino({}) fail, error: {}.",
                               name_, ino, status.ToString());
     return status;
   }
@@ -431,15 +377,41 @@ Status MDSV2FileSystem::RmDir(Ino parent, const std::string& name) {
   return Status::OK();
 }
 
-// TODO: implement
-Status MDSV2FileSystem::OpenDir(Ino ino) {
-  LOG(INFO) << fmt::format("[meta.{}] OpenDir ino({})", name_, ino);
+Status MDSV2FileSystem::OpenDir(Ino ino, uint64_t fh) {
+  auto dir_iterator = DirIterator::New(mds_client_, ino);
+  auto status = dir_iterator->Seek();
+  if (!status.ok()) {
+    LOG(ERROR) << fmt::format("[meta.{}] opendir ino({}) fail, error: {}.",
+                              name_, ino, status.ToString());
+    return status;
+  }
+
+  dir_iterator_manager_.Put(fh, dir_iterator);
 
   return Status::OK();
 }
 
-DirIterator* MDSV2FileSystem::NewDirIterator(Ino ino) {
-  return new DirIteratorImpl(mds_client_, ino);
+Status MDSV2FileSystem::ReadDir(Ino, uint64_t fh, uint64_t offset,
+                                bool with_attr, ReadDirHandler handler) {
+  auto dir_iterator = dir_iterator_manager_.Get(fh);
+  CHECK(dir_iterator != nullptr) << "dir_iterator is null";
+
+  while (dir_iterator->Valid()) {
+    DirEntry entry = dir_iterator->GetValue(with_attr);
+
+    if (!handler(entry, offset)) {
+      break;
+    }
+
+    dir_iterator->Next();
+  }
+
+  return Status::OK();
+}
+
+Status MDSV2FileSystem::ReleaseDir(Ino, uint64_t fh) {
+  dir_iterator_manager_.Delete(fh);
+  return Status::OK();
 }
 
 Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
@@ -447,7 +419,7 @@ Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
   auto status = mds_client_->Link(ino, new_parent, new_name, *attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] Link({}/{}) to ino({}) fail, error: {}.", name_, new_parent,
+        "[meta.{}] link({}/{}) to ino({}) fail, error: {}.", name_, new_parent,
         new_name, ino, status.ToString());
     return status;
   }
@@ -458,7 +430,7 @@ Status MDSV2FileSystem::Link(Ino ino, Ino new_parent,
 Status MDSV2FileSystem::Unlink(Ino parent, const std::string& name) {
   auto status = mds_client_->UnLink(parent, name);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] UnLink({}/{}) fail, error: {}.", name_,
+    LOG(ERROR) << fmt::format("[meta.{}] unlink({}/{}) fail, error: {}.", name_,
                               parent, name, status.ToString());
     return status;
   }
@@ -472,7 +444,7 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
   auto status = mds_client_->Symlink(parent, name, uid, gid, link, *out_attr);
   if (!status.ok()) {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] Symlink({}/{}) fail, symlink({}) error: {}.", name_, parent,
+        "[meta.{}] symlink({}/{}) fail, symlink({}) error: {}.", name_, parent,
         name, link, status.ToString());
     return status;
   }
@@ -483,7 +455,7 @@ Status MDSV2FileSystem::Symlink(Ino parent, const std::string& name,
 Status MDSV2FileSystem::ReadLink(Ino ino, std::string* link) {
   auto status = mds_client_->ReadLink(ino, *link);
   if (!status.ok()) {
-    LOG(ERROR) << fmt::format("[meta.{}] ReadLink {} fail, error: {}.", name_,
+    LOG(ERROR) << fmt::format("[meta.{}] readlink {} fail, error: {}.", name_,
                               ino, status.ToString());
     return status;
   }
@@ -625,7 +597,7 @@ MDSV2FileSystemUPtr MDSV2FileSystem::Build(const std::string& fs_name,
 
   } else {
     LOG(ERROR) << fmt::format(
-        "[meta.{}] Not support partition policy type({}).", fs_name,
+        "[meta.{}] not support partition policy type({}).", fs_name,
         dingofs::pb::mdsv2::PartitionType_Name(
             pb_fs_info.partition_policy().type()));
     return nullptr;

@@ -27,7 +27,7 @@
 
 #include "client/common/utils.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
@@ -495,7 +495,7 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, false,
       [&](const dingofs::client::vfs::DirEntry& dir_entry,
-          int32_t off) -> bool {
+          uint64_t off) -> bool {
         (void)off;
         VLOG(1) << fmt::format("read dir entry({}/{})", dir_entry.name,
                                dir_entry.ino);

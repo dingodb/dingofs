@@ -25,18 +25,14 @@
 #include <cstdint>
 #include <memory>
 
-#include "base/string/string.h"
-#include "client/common/share_var.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/filesystem/attr_watcher.h"
 #include "client/vfs_legacy/filesystem/dir_cache.h"
 #include "client/vfs_legacy/filesystem/dir_parent_watcher.h"
 #include "client/vfs_legacy/filesystem/fs_stat_manager.h"
 #include "client/vfs_legacy/filesystem/utils.h"
 #include "dingofs/metaserver.pb.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "utils/executor/bthread/bthread_executor.h"
-
-#define FD_STATE_PATH "/tmp/dingo-fuse-state.json.%d"
 
 namespace dingofs {
 namespace client {
@@ -46,9 +42,6 @@ using base::time::TimeSpec;
 
 using pb::metaserver::InodeAttr;
 using pb::metaserver::Quota;
-
-using ::dingofs::base::string::StrFormat;
-using ::dingofs::client::common::ShareVar;
 
 USING_FLAG(stat_timer_thread_num);
 
@@ -73,8 +66,8 @@ void FileSystem::Run() {
   dir_parent_watcher_ =
       std::make_shared<DirParentWatcherImpl>(member.inodeManager);
 
-  stat_executor_ = std::shared_ptr<BthreadExecutor>(
-      new BthreadExecutor(FLAGS_stat_timer_thread_num));
+  stat_executor_ =
+      std::make_shared<BthreadExecutor>(FLAGS_stat_timer_thread_num);
   fs_stat_manager_ = std::make_shared<FsStatManager>(fs_id_, member.meta_client,
                                                      stat_executor_);
   dir_quota_manager_ = std::make_shared<DirQuotaManager>(
@@ -89,12 +82,6 @@ void FileSystem::Run() {
   fs_stat_manager_->Start();
   dir_quota_manager_->Start();
   fs_push_metrics_manager_->Start();
-
-  // load file handlers
-  if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
-    std::string pid_str = ShareVar::GetInstance().GetValue(common::kOldPid);
-    LoadAllHandlers(StrFormat(FD_STATE_PATH, std::stoi(pid_str)));
-  }
 }
 
 void FileSystem::Destory() {
@@ -106,11 +93,14 @@ void FileSystem::Destory() {
   fs_stat_manager_->Stop();
   dir_quota_manager_->Stop();
   fs_push_metrics_manager_->Stop();
+}
 
-  // save file handlers
-  if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeOld)) {
-    SaveAllHandlers(StrFormat(FD_STATE_PATH, getpid()));
-  }
+bool FileSystem::Dump(Json::Value& value) {
+  return handlerManager_->Dump(value);
+}
+
+bool FileSystem::Load(const Json::Value& value) {
+  return handlerManager_->Load(value);
 }
 
 // handler*
@@ -124,14 +114,6 @@ std::shared_ptr<FileHandler> FileSystem::FindHandler(uint64_t fh) {
 
 void FileSystem::ReleaseHandler(uint64_t fh) {
   handlerManager_->ReleaseHandler(fh);
-}
-
-void FileSystem::SaveAllHandlers(const std::string& path) {
-  handlerManager_->SaveAllHandlers(path);
-}
-
-void FileSystem::LoadAllHandlers(const std::string& path) {
-  handlerManager_->LoadAllHandlers(path);
 }
 
 FileSystemMember FileSystem::BorrowMember() {

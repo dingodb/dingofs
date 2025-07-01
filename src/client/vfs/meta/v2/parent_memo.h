@@ -21,7 +21,8 @@
 #include <memory>
 #include <vector>
 
-#include "client/vfs/vfs_meta.h"
+#include "client/vfs_meta.h"
+#include "json/value.h"
 #include "utils/concurrent/concurrent.h"
 
 namespace dingofs {
@@ -47,6 +48,9 @@ class ParentMemo {
   void UpsertVersion(Ino ino, uint64_t version);
   void Upsert(Ino ino, Ino parent, uint64_t version);
   void Delete(Ino ino);
+
+  void Dump(Json::Value& value);
+  bool Load(const Json::Value& value);
 
  private:
   struct Entry {

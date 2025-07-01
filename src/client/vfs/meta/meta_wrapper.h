@@ -17,12 +17,12 @@
 #ifndef DINGODB_CLIENT_VFS_META_WRAPPER_H
 #define DINGODB_CLIENT_VFS_META_WRAPPER_H
 
+#include <json/value.h>
+
 #include <cstdint>
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "client/vfs/handle/dir_iterator.h"
 #include "client/vfs/meta/meta_system.h"
 
 namespace dingofs {
@@ -31,14 +31,17 @@ namespace vfs {
 
 class MetaWrapper : public MetaSystem {
  public:
-  MetaWrapper(std::unique_ptr<MetaSystem> meta_system)
-      : target_(std::move(meta_system)) {};
+  MetaWrapper(MetaSystemUPtr meta_system) : target_(std::move(meta_system)) {};
 
   ~MetaWrapper() override = default;
 
   Status Init() override;
 
   void UnInit() override;
+
+  bool Dump(Json::Value& value) override;
+
+  bool Load(const Json::Value& value) override;
 
   Status Lookup(Ino parent, const std::string& name, Attr* attr) override;
 
@@ -57,13 +60,12 @@ class MetaWrapper : public MetaSystem {
 
   Status RmDir(Ino parent, const std::string& name) override;
 
-  Status OpenDir(Ino ino) override;
-
-  // NOTE: caller own dir and the DirHandler should be deleted by caller
-  DirIterator* NewDirIterator(Ino ino) override;
+  Status OpenDir(Ino ino, uint64_t fh) override;
 
   Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
-                         ReadDirHandler handler) override;
+                 ReadDirHandler handler) override;
+
+  Status ReleaseDir(Ino ino, uint64_t fh) override;
 
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
@@ -103,14 +105,8 @@ class MetaWrapper : public MetaSystem {
 
   Status GetFsInfo(FsInfo* fs_info) override;
 
-  // TODO : need implemented
-  bool Dump(const std::string& path) override { return true; };
-
-  // TODO : need implemented
-  bool Load(const std::string& path) override { return true; };
-
  private:
-  std::unique_ptr<MetaSystem> target_;
+  MetaSystemUPtr target_;
 };
 
 }  // namespace vfs
