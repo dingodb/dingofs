@@ -28,8 +28,8 @@
 
 #include "blockaccess/block_access_log.h"
 #include "cache/utils/access_log.h"
-#include "client/common/share_var.h"
 #include "client/common/utils.h"
+#include "client/fuse/fuse_upgrade_manager.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
@@ -49,6 +49,7 @@ namespace vfs {
 
 const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
 
+using ::dingofs::client::fuse::FuseUpgradeManager;
 using metrics::ClientOpMetricGuard;
 
 #define METRIC_GUARD(REQUEST)              \
@@ -135,7 +136,8 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // load vfs state
-  if (common::ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
+  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
+      fuse::FuseUpgradeState::kFuseUpgradeNew) {
     if (!Load()) {
       return Status::InvalidParam("load vfs state fail");
     }
@@ -151,7 +153,8 @@ Status VFSWrapper::Stop() {
       [&]() { return absl::StrFormat("stop: %s", s.ToString()); });
   s = vfs_->Stop();
 
-  if (common::ShareVar::GetInstance().HasValue(common::kSmoothUpgradeOld)) {
+  if (FuseUpgradeManager::GetInstance().GetFuseState() ==
+      fuse::FuseUpgradeState::kFuseUpgradeOld) {
     if (!Dump()) {
       return Status::InvalidParam("dump vfs state fail");
     }
@@ -184,10 +187,9 @@ bool VFSWrapper::Dump() {
 }
 
 bool VFSWrapper::Load() {
-  std::string pid_str =
-      common::ShareVar::GetInstance().GetValue(common::kOldPid);
+  int pid = FuseUpgradeManager::GetInstance().GetOldFusePid();
 
-  const std::string path = fmt::format("{}.{}", kFdStatePath, pid_str);
+  const std::string path = fmt::format("{}.{}", kFdStatePath, pid);
   std::ifstream file(path);
   if (!file.is_open()) {
     LOG(ERROR) << "write dingo-fuse state file fail, file: " << path;

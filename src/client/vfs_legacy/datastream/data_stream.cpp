@@ -27,15 +27,15 @@
 #include <cassert>
 #include <cstring>
 
-#include "client/common/share_var.h"
-#include "client/vfs_legacy/datastream/metric.h"
+#include "client/fuse/fuse_upgrade_manager.h"
 #include "client/memory/page_allocator.h"
+#include "client/vfs_legacy/datastream/metric.h"
 
 namespace dingofs {
 namespace client {
 namespace datastream {
 
-using ::dingofs::client::common::ShareVar;
+using ::dingofs::client::fuse::FuseUpgradeManager;
 
 bool DataStream::Init(DataStreamOption option) {
   option_ = option;
@@ -83,7 +83,8 @@ bool DataStream::Init(DataStreamOption option) {
   {
     auto o = option.page_option;
     // Smooth upgrade use DefaultPageAllocator
-    if (ShareVar::GetInstance().HasValue(common::kSmoothUpgradeNew)) {
+    if (FuseUpgradeManager::GetInstance().GetFuseState() ==
+        fuse::FuseUpgradeState::kFuseUpgradeNew) {
       LOG(INFO) << "use default page allocate for smooth upgrade";
       o.use_pool = false;
     }

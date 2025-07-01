@@ -53,8 +53,6 @@ class FuseServer {
 
   void Shutown();
 
-  void SetNoUmount(bool no_umount) { no_umount_ = no_umount; }
-
  private:
   void AllocateFuseInitBuf();
 
@@ -94,8 +92,6 @@ class FuseServer {
   utils::Atomic<bool> is_running_{false};
 
   // Manager smooth upgrade
-  bool is_smooth_upgrade_{false};
-  bool no_umount_{false};
   int fuse_fd_{-1};
   std::string fd_comm_file_;
 

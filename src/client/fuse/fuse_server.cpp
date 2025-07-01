@@ -23,18 +23,17 @@
 #include <chrono>
 
 #include "absl/cleanup/cleanup.h"
-#include "client/common/share_var.h"
 #include "client/fuse/fuse_common.h"
 #include "client/fuse/fuse_lowlevel_ops_func.h"
 #include "client/fuse/fuse_parse.h"
 #include "client/fuse/fuse_passfd.h"
-#include "options/client/options/fuse/fuse_dynamic_option.h"
+#include "client/fuse/fuse_upgrade_manager.h"
 #include "common/version.h"
+#include "options/client/options/fuse/fuse_dynamic_option.h"
 #include "utils/concurrent/concurrent.h"
 
 using ::dingofs::base::string::BufToHexString;
 using ::dingofs::base::string::StrFormat;
-using ::dingofs::client::common::ShareVar;
 
 namespace dingofs {
 namespace client {
@@ -75,7 +74,8 @@ FuseServer::~FuseServer() {
   FreeParsedArgv(parsed_argv_, argc_);
   fuse_opt_free_args(&args_);
 
-  if (no_umount_ && !is_smooth_upgrade_) {
+  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
     LOG(INFO) << "transfer dingo-fuse session to others";
   }
 }
@@ -85,7 +85,7 @@ void FuseServer::AllocateFuseInitBuf() {
   // fuse_init_in),256 bytes is enough
   init_fbuf_.mem_size = 256;
   init_fbuf_.size = 0;
-  init_fbuf_.mem = (void*)malloc(init_fbuf_.mem_size);
+  init_fbuf_.mem = malloc(init_fbuf_.mem_size);
   memset(init_fbuf_.mem, 0, init_fbuf_.mem_size);
 }
 
@@ -102,7 +102,8 @@ int FuseServer::GetDevFd() const { return fuse_session_fd(se_); }
 
 void FuseServer::Shutown() {
   LOG(INFO) << "start shutdown dingo-fuse";
-  ShareVar::GetInstance().SetValue(common::kSmoothUpgradeOld, "YES");
+  FuseUpgradeManager::GetInstance().UpdateFuseState(
+      FuseUpgradeState::kFuseUpgradeOld);
   fuse_session_exit(se_);
 }
 
@@ -256,9 +257,9 @@ int FuseServer::SessionMount() {
       return 1;
     }
     LOG(INFO) << "old dingo-fuse is already shutdown";
-
-    is_smooth_upgrade_ = true;
-    ShareVar::GetInstance().SetValue(common::kSmoothUpgradeNew, "YES");
+    // new fuse processes
+    FuseUpgradeManager::GetInstance().UpdateFuseState(
+        FuseUpgradeState::kFuseUpgradeNew);
 
     // construct new mountpoint
     std::string mountpoint = StrFormat("/dev/fd/%d", fuse_fd_);
@@ -276,7 +277,8 @@ int FuseServer::SessionMount() {
 int FuseServer::SaveOpInitMsg() {
   // smooth upgrade do not save fuse init message
   // it's recv from old dingo-fuse
-  if (is_smooth_upgrade_) return 0;
+  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) return 0;
 
   int ret = 0;
   struct fuse_buf fbuf = {
@@ -312,7 +314,8 @@ void FuseServer::ProcessInitMsg() {
 }
 
 int FuseServer::SessionLoop() {
-  if (is_smooth_upgrade_) {
+  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+  if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) {
     ProcessInitMsg();
   }
 
@@ -358,15 +361,18 @@ int FuseServer::Serve(const std::string& fd_comm_path) {
 }
 
 void FuseServer::SessionUnmount() {
-  if (no_umount_) {
+  auto fuse_state = FuseUpgradeManager::GetInstance().GetFuseState();
+
+  if (fuse_state == FuseUpgradeState::kFuseUpgradeOld) {
     LOG(INFO)
         << "during the smooth upgrade process, the filesystem not unmounted";
     return;
   }
 
-  if (is_smooth_upgrade_) {
-    // smooth upgrade will be umount by DingoSessionUnmount instead of
-    // fuse_session_unmount because se_->mountpoint is nullptr
+  if (fuse_state == FuseUpgradeState::kFuseUpgradeNew) {
+    // After smooth upgrade, fuse session will be umount by
+    // DingoSessionUnmount instead of fuse_session_unmount because
+    // se_->mountpoint is nullptr
     LOG(INFO) << "use DingoSessionUnmount";
     DingoSessionUnmount(opts_.mountpoint, GetDevFd());
   } else {
@@ -385,8 +391,7 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
   }
   LOG(INFO) << "successfully get old dingo-fuse pid: " << pid;
 
-  std::string pid_str = std::to_string(pid);
-  ShareVar::GetInstance().SetValue(common::kOldPid, pid_str);
+  FuseUpgradeManager::GetInstance().SetOldFusePid(pid);
 
   // recv mount fd、fuse_init data from old dingo-fuse
   std::string comm_path = GetFdCommFileName(file_name);
