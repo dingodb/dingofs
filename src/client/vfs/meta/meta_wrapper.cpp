@@ -255,6 +255,18 @@ DirIterator* MetaWrapper::NewDirIterator(Ino ino) {
   return iterator;
 }
 
+Status MetaWrapper::ReadDir(Ino ino, uint64_t fh, uint64_t offset,
+                            bool with_attr, ReadDirHandler handler) {
+  Status s;
+  MetaLogGuard log_guard([&]() {
+    return absl::StrFormat("readdir (%d) %d : %s [fh:%d]", ino, offset,
+                           s.ToString(), fh);
+  });
+
+  s = target_->ReadDir(ino, fh, offset, with_attr, handler);
+  return s;
+}
+
 Status MetaWrapper::NewSliceId(Ino ino, uint64_t* id) {
   Status s;
   MetaLogGuard log_guard([&]() {

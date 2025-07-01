@@ -132,6 +132,11 @@ class MDSV2FileSystem : public vfs::MetaSystem {
   // NOTE: caller own dir and the DirHandler should be deleted by caller
   DirIterator* NewDirIterator(Ino ino) override;
 
+  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                 ReadDirHandler handler) override {
+    return Status::NotSupport("ReadDir is not supported in DummyFileSystem");
+  }
+
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
   Status Unlink(Ino parent, const std::string& name) override;

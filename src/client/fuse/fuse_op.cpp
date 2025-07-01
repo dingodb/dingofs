@@ -26,12 +26,12 @@
 #include <string>
 
 #include "client/common/utils.h"
-#include "options/client/options/fuse/fuse_dynamic_option.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/vfs_meta.h"
 #include "client/vfs_wrapper/vfs_wrapper.h"
 #include "common/define.h"
 #include "common/status.h"
+#include "options/client/options/fuse/fuse_dynamic_option.h"
 #include "utils/configuration.h"
 
 static dingofs::client::vfs::VFSWrapper* g_vfs = nullptr;
@@ -494,7 +494,9 @@ void FuseOpReadDir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, false,
-      [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
+      [&](const dingofs::client::vfs::DirEntry& dir_entry,
+          int32_t off) -> bool {
+        (void)off;
         VLOG(1) << fmt::format("read dir entry({}/{})", dir_entry.name,
                                dir_entry.ino);
 
@@ -545,7 +547,8 @@ void FuseOpReadDirPlus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
   std::string buffer(size, '\0');
   Status s = g_vfs->ReadDir(
       ino, fi->fh, off, true,
-      [&](const dingofs::client::vfs::DirEntry& dir_entry) -> bool {
+      [&](const dingofs::client::vfs::DirEntry& dir_entry, int32_t) -> bool {
+        (void)off;
         VLOG(1) << fmt::format("read dir entry({}/{}) attr({})", dir_entry.name,
                                dir_entry.ino, Attr2Str(dir_entry.attr));
 

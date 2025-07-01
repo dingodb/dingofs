@@ -420,21 +420,24 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   auto& dir_iterator = handle->dir_iterator;
   CHECK(dir_iterator != nullptr) << "dir_iterator is null";
 
+  int32_t fake_off = 1;
+
+  // root dir(add .stats file)
+  if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
+    DirEntry stats_entry{STATSINODEID, STATSNAME,
+                         GenerateVirtualInodeAttr(STATSINODEID)};
+    handler(stats_entry, fake_off);
+  }
+
   while (dir_iterator->Valid()) {
     DirEntry entry = dir_iterator->GetValue(with_attr);
 
-    if (!handler(entry)) {
+    if (!handler(entry, fake_off)) {
       LOG(INFO) << "read dir break by handler next_offset: " << offset;
       break;
     }
 
     dir_iterator->Next();
-  }
-  // root dir(add .stats file)
-  if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
-    DirEntry stats_entry{STATSINODEID, STATSNAME,
-                         GenerateVirtualInodeAttr(STATSINODEID)};
-    handler(stats_entry);
   }
 
   VLOG(1) << fmt::format("read dir ino({}) fh({}) offset({})", ino, fh, offset);

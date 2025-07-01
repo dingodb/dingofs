@@ -36,8 +36,6 @@ struct VFSConfig {
   std::string fs_type;  // vfs_old/vfs_v1/vfs_v2/vfs_dummy
 };
 
-using ReadDirHandler = std::function<bool(const DirEntry& dir_entry)>;
-
 // NOT: all return value should sys error code in <errno.h>
 class VFS {
  public:

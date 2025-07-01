@@ -124,6 +124,9 @@ class MetaSystem {
 
   virtual Status OpenDir(Ino ino) = 0;
 
+  virtual Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                         ReadDirHandler handler) = 0;
+
   virtual DirIterator* NewDirIterator(Ino ino) = 0;
 
   virtual Status StatFs(Ino ino, FsStat* fs_stat) = 0;

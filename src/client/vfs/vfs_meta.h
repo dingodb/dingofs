@@ -20,7 +20,7 @@
 #include <fmt/format.h>
 
 #include <cstdint>
-#include <sstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -185,6 +185,19 @@ struct FsInfo {
   std::string uuid;
   StorageInfo storage_info;
 };
+
+//  *off* should be any non-zero value that the vfs can use to
+//  identify the current point in the directory stream. It does not
+//  need to be the actual physical position. A value of zero is
+//  reserved to mean "from the beginning", and should therefore never
+//  be used (the first call to ReadDirHandler should be passed the
+//  offset of the second directory entry).
+//  When the handler returns false, it indicates that the
+//  ReadDir operation should stop, and the *off* parameter should be
+//  updated to the offset of the next entry that should be read on the
+//  next call to ReadDirHandler.
+using ReadDirHandler =
+    std::function<bool(const DirEntry& dir_entry, int32_t off)>;
 
 }  // namespace vfs
 }  // namespace client

@@ -62,6 +62,9 @@ class MetaWrapper : public MetaSystem {
   // NOTE: caller own dir and the DirHandler should be deleted by caller
   DirIterator* NewDirIterator(Ino ino) override;
 
+  Status ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
+                         ReadDirHandler handler) override;
+
   Status Link(Ino ino, Ino new_parent, const std::string& new_name,
               Attr* attr) override;
 

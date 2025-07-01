@@ -1859,9 +1859,11 @@ Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
 
   auto& dir_iterator = file_handler->dir_iterator;
 
+  int32_t fake_off = 1;
+
   while (dir_iterator->Valid()) {
     DirEntry entry = dir_iterator->GetValue(with_attr);
-    if (!handler(entry)) {
+    if (!handler(entry, fake_off)) {
       LOG(INFO) << "ReadDir break by handler next_offset: " << offset;
       break;
     }
