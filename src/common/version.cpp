@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "stub/common/version.h"
+#include "common/version.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
 namespace dingofs {
-namespace stub {
-namespace common {
 
 DEFINE_bool(show_version, true, "Print DingoStore version Flag");
 
@@ -53,6 +51,4 @@ void LogVerion() {
   LOG(INFO) << "PID: " << getpid();
 }
 
-}  // namespace common
-}  // namespace stub
 }  // namespace dingofs

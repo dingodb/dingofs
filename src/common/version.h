@@ -15,8 +15,6 @@
 #include <gflags/gflags_declare.h>
 
 namespace dingofs {
-namespace stub {
-namespace common {
 
 DECLARE_bool(show_version);
 
@@ -56,6 +54,4 @@ void ShowVerion();
 
 void LogVerion();
 
-}  // namespace common
-}  // namespace stub
 }  // namespace dingofs

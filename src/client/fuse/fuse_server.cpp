@@ -29,7 +29,7 @@
 #include "client/fuse/fuse_parse.h"
 #include "client/fuse/fuse_passfd.h"
 #include "options/client/options/fuse/fuse_dynamic_option.h"
-#include "stub/common/version.h"
+#include "common/version.h"
 #include "utils/concurrent/concurrent.h"
 
 using ::dingofs::base::string::BufToHexString;
@@ -184,7 +184,7 @@ int FuseServer::ParseCmdLine() {
     ExtraOptionsHelp();
     return 1;
   } else if (opts_.show_version) {
-    dingofs::stub::common::ShowVerion();
+    dingofs::ShowVerion();
 
     printf("FUSE library version %s\n", fuse_pkgversion());
     fuse_lowlevel_version();

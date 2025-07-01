@@ -15,7 +15,6 @@
 add_library(stub_common 
     common.cpp 
     config.cpp
-    version.cpp
 )
 
 target_link_libraries(stub_common

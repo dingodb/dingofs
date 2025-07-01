@@ -16,6 +16,7 @@ add_library(dingofs_common
     process.cpp
     rpc_stream.cpp
     io_buffer.cpp
+    version.cpp
 )
 target_link_libraries(dingofs_common
     dingofs_utils

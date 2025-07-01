@@ -25,11 +25,11 @@
 
 #include <csignal>
 
-#include "options/common/dynamic_vlog.h"
 #include "blockaccess/block_access_log.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
+#include "common/version.h"
 #include "mds/mds.h"
-#include "stub/common/version.h"
+#include "options/common/dynamic_vlog.h"
 #include "utils/configuration.h"
 
 using ::dingofs::common::FLAGS_vlog_level;
@@ -38,7 +38,7 @@ using ::dingofs::utils::Configuration;
 DEFINE_string(confPath, "dingofs/conf/mds.conf", "mds confPath");
 DEFINE_string(mdsAddr, "127.0.0.1:6700", "mds listen addr");
 
-void LoadConfigFromCmdline(Configuration* conf) {
+static void LoadConfigFromCmdline(Configuration* conf) {
   google::CommandLineFlagInfo info;
   if (GetCommandLineFlagInfo("mdsAddr", &info) && !info.is_default) {
     conf->SetStringValue("mds.listen.addr", FLAGS_mdsAddr);
@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
   // config initialization
   google::ParseCommandLineFlags(&argc, &argv, false);
 
-  if (dingofs::stub::common::FLAGS_show_version && argc == 1) {
-    dingofs::stub::common::ShowVerion();
+  if (dingofs::FLAGS_show_version && argc == 1) {
+    dingofs::ShowVerion();
   }
 
   std::string confPath = FLAGS_confPath;
@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
   // initialize logging module
   google::InitGoogleLogging(argv[0]);
 
-  dingofs::stub::common::LogVerion();
+  dingofs::LogVerion();
 
   dingofs::blockaccess::InitBlockAccessLog(FLAGS_log_dir);
 

@@ -27,10 +27,10 @@
 #include "blockaccess/block_access_log.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
 #include "common/process.h"
+#include "common/version.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
 #include "options/common/dynamic_vlog.h"
-#include "stub/common/version.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 #include "utils/thread_util.h"
@@ -118,8 +118,8 @@ int main(int argc, char** argv) {
   // config initialization
   google::ParseCommandLineFlags(&argc, &argv, false);
 
-  if (dingofs::stub::common::FLAGS_show_version && argc == 1) {
-    dingofs::stub::common::ShowVerion();
+  if (dingofs::FLAGS_show_version && argc == 1) {
+    dingofs::ShowVerion();
   }
 
   ::dingofs::common::Process::InitSetProcTitle(argc, argv);
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
   // initialize logging module
   google::InitGoogleLogging(argv[0]);
 
-  dingofs::stub::common::LogVerion();
+  dingofs::LogVerion();
 
   conf->PrintConfig();
 
