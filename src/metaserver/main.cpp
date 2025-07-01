@@ -24,16 +24,16 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include "options/common/dynamic_vlog.h"
-#include "common/process.h"
-#include "common/threading.h"
 #include "blockaccess/block_access_log.h"
 #include "blockaccess/s3/aws/s3_adapter.h"
+#include "common/process.h"
 #include "metaserver/metaserver.h"
 #include "metaserver/superpartition/access_log.h"
+#include "options/common/dynamic_vlog.h"
 #include "stub/common/version.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
+#include "utils/thread_util.h"
 
 DEFINE_string(confPath, "dingofs/conf/metaserver.conf", "metaserver confPath");
 DEFINE_string(ip, "127.0.0.1", "metasetver listen ip");
@@ -66,7 +66,7 @@ void SetBthreadWorkerName() {
   snprintf(buffer, sizeof(buffer), "bthread:%d",
            counter.fetch_add(1, std::memory_order_relaxed));
 
-  dingofs::common::SetThreadName(buffer);
+  dingofs::SetThreadName(buffer);
 }
 
 void LoadConfigFromCmdline(Configuration* conf) {

@@ -34,6 +34,8 @@ class Executor {
 
   virtual int ThreadNum() const = 0;
 
+  virtual int TaskNum() const = 0;
+
   virtual std::string Name() const = 0;
 };
 

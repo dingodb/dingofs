@@ -27,7 +27,6 @@ add_library(dingofs_base_lib ${DINGOFS_BASE_LIB_SRCS})
 
 target_link_libraries(dingofs_base_lib
     dingofs_utils
-    dingofs_threading
     glog::glog
     gflags::gflags
     brpc::brpc

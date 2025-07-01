@@ -33,6 +33,7 @@ add_library(dingofs_utils
     throttle.cpp
     wait_interval.cpp
     bitmap.cpp
+    thread_util.cpp
 )
 
 target_link_libraries(dingofs_utils

@@ -20,14 +20,13 @@
  * Author: wuhanqing
  */
 
-#include "common/threading.h"
+#include "utils/thread_util.h"
 
 #include <glog/logging.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 
 namespace dingofs {
-namespace common {
 
 namespace {
 
@@ -49,5 +48,4 @@ void SetThreadName(const char* name) {
   }
 }
 
-}  // namespace common
 }  // namespace dingofs

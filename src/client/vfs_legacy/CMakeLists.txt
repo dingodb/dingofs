@@ -42,7 +42,6 @@ target_link_libraries(vfs_legacy_lib
     cache_lib
     dingofs_utils
     block_accesser
-    dingofs_threading
     dingofs_metrics
     stub_common
     gflags::gflags

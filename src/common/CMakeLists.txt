@@ -23,13 +23,6 @@ target_link_libraries(dingofs_common
     glog::glog
 )
 
-add_library(dingofs_threading
-    threading.cpp
-)
-target_link_libraries(dingofs_threading
-    glog::glog
-)
-
 add_library(dingofs_status
     string_slice.cpp
     status.cpp

@@ -52,6 +52,8 @@ class BthreadExecutor final : public Executor {
 
   int ThreadNum() const override { return pool_->GetBackgroundThreads(); }
 
+  int TaskNum() const override { return pool_->GetTaskNum(); }
+
   std::string Name() const override { return InternalName(); }
 
   static std::string InternalName() { return "BthreadExecutor"; }

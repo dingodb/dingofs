@@ -41,7 +41,6 @@ target_link_libraries(metaserver_lib
     rpcclient
     dynamic_vlog
     local_fs
-    dingofs_threading
     metaserver_s3
     dingofs_base_lib
     braft::braft

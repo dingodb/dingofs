@@ -35,7 +35,6 @@ set(TEST_DEPS_WITHOUT_MAIN
 
 
 add_subdirectory(base)
-add_subdirectory(common)
 add_subdirectory(fs)
 add_subdirectory(stub)
 add_subdirectory(utils)

@@ -26,14 +26,12 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
-#include "common/threading.h"
 #include "metaserver/copyset/copyset_node.h"
+#include "utils/thread_util.h"
 
 namespace dingofs {
 namespace metaserver {
 namespace copyset {
-
-using ::dingofs::common::SetThreadName;
 
 void ApplyQueue::StartWorkers() {
   for (uint32_t i = 0; i < option_.workerCount; ++i) {

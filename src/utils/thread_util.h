@@ -20,16 +20,14 @@
  * Author: wuhanqing
  */
 
-#ifndef DINGOFS_SRC_COMMON_THREADING_H_
-#define DINGOFS_SRC_COMMON_THREADING_H_
+#ifndef DINGOFS_UTILS_THREAD_UTIL_H_
+#define DINGOFS_UTILS_THREAD_UTIL_H_
 
 namespace dingofs {
-namespace common {
 
 // Set current thread's name
 void SetThreadName(const char* name);
 
-}  // namespace common
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_COMMON_THREADING_H_
+#endif  // DINGOFS_UTILS_THREAD_UTIL_H_

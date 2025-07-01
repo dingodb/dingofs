@@ -26,6 +26,7 @@ class MockExecutor : public Executor {
   MOCK_METHOD(bool, Schedule, (std::function<void()> func, int delay_ms),
               (override));
   MOCK_METHOD(int, ThreadNum, (), (const override));
+  MOCK_METHOD(int, TaskNum, (), (const override));
   MOCK_METHOD(std::string, Name, (), (const override));
 };
 

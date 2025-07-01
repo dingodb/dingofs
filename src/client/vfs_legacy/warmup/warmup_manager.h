@@ -39,28 +39,25 @@
 
 #include "blockaccess/block_accesser.h"
 #include "cache/blockcache/cache_store.h"
-#include "client/vfs_legacy/common/common.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "client/vfs.h"
 #include "client/vfs/vfs_meta.h"
+#include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/dentry_cache_manager.h"
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
-#include "common/task_thread_pool.h"
 #include "metrics/client/vfs_legacy/warmup.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/metaserver_client.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/concurrent/rw_lock.h"
+#include "utils/executor/executor.h"
 
 namespace dingofs {
 namespace client {
 namespace warmup {
 
 using dingofs::client::vfs::Ino;
-
-using ThreadPool = dingofs::common::TaskThreadPool2<bthread::Mutex,
-                                                    bthread::ConditionVariable>;
 
 class WarmupFile {
  public:
@@ -351,7 +348,7 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @return std::unordered_map<Ino,
    * std::unique_ptr<ThreadPool>>::iterator
    */
-  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>::iterator
+  std::unordered_map<Ino, std::unique_ptr<Executor>>::iterator
   FindFetchDentryPoolByKeyLocked(Ino key) {
     return inode2FetchDentryPool_.find(key);
   }
@@ -363,7 +360,7 @@ class WarmupManagerS3Impl : public WarmupManager {
    * @return std::unordered_map<Ino,
    * std::unique_ptr<ThreadPool>>::iterator
    */
-  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>::iterator
+  std::unordered_map<Ino, std::unique_ptr<Executor>>::iterator
   FindFetchS3ObjectsPoolByKeyLocked(Ino key) {
     return inode2FetchS3ObjectsPool_.find(key);
   }
@@ -422,7 +419,7 @@ class WarmupManagerS3Impl : public WarmupManager {
   std::atomic<bool> bgFetchStop_;
 
   // TODO(chengyi01): limit thread nums
-  std::unordered_map<Ino, std::unique_ptr<ThreadPool>> inode2FetchDentryPool_;
+  std::unordered_map<Ino, std::unique_ptr<Executor>> inode2FetchDentryPool_;
   mutable utils::RWLock inode2FetchDentryPoolMutex_;
 
   std::deque<WarmupInodes> warmupInodesDeque_;
@@ -432,8 +429,8 @@ class WarmupManagerS3Impl : public WarmupManager {
   std::shared_ptr<S3ClientAdaptor> s3Adaptor_;
 
   // TODO(chengyi01): limit thread nums
-  std::unordered_map<Ino, std::unique_ptr<ThreadPool>>
-      inode2FetchS3ObjectsPool_;
+  std::unordered_map<Ino, std::unique_ptr<Executor>> inode2FetchS3ObjectsPool_;
+
   mutable utils::RWLock inode2FetchS3ObjectsPoolMutex_;
 
   dingofs::metrics::client::vfs_legacy::WarmupManagerS3Metric warmupS3Metric_;

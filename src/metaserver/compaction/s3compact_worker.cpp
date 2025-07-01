@@ -30,10 +30,10 @@
 #include <utility>
 
 #include "absl/cleanup/cleanup.h"
-#include "common/threading.h"
 #include "metaserver/compaction/s3compact.h"
 #include "metaserver/compaction/s3compact_inode.h"
 #include "metaserver/storage/converter.h"
+#include "utils/thread_util.h"
 
 namespace dingofs {
 namespace metaserver {
@@ -150,7 +150,7 @@ bool S3CompactWorker::CompactInodes(const std::list<uint64_t>& inodes,
 }
 
 void S3CompactWorker::CompactWorker() {
-  common::SetThreadName("s3compact");
+  SetThreadName("s3compact");
 
   while (context_->running) {
     if (!WaitCompact()) {

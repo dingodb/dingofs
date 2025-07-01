@@ -29,14 +29,13 @@
 #include <string>
 #include <thread>
 
-#include "common/threading.h"
 #include "utils/concurrent/task_queue.h"
+#include "utils/thread_util.h"
 
 namespace dingofs {
 namespace base {
 namespace queue {
 
-using ::dingofs::common::SetThreadName;
 using ::dingofs::utils::TaskQueue;
 
 template <typename MessageT>
