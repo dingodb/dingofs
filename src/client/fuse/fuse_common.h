@@ -33,7 +33,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include <chrono>
 #include <csignal>
 #include <cstddef>
 #include <fstream>
@@ -166,9 +165,7 @@ inline bool CanShutdownGracefully(const char* mountpoint) {
   if (GetFileInode(mountpoint) != dingofs::ROOTINODEID) {
     return false;
   }
-  std::string file_name =
-      absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
-  return GetDingoFusePid(file_name) != -1;
+  return true;
 }
 
 /**

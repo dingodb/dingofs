@@ -17,4 +17,5 @@ add_library(vfs_meta
 )
 target_link_libraries(vfs_meta
     fmt::fmt
+    jsoncpp
 )

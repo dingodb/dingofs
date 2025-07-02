@@ -34,7 +34,7 @@ static void HandleSignal(int sig) {
   printf("Received signal %d, exit...\n", sig);
   if (sig == SIGHUP) {
     if (fuse_server != nullptr) {
-      fuse_server->Shutown();
+      fuse_server->Shutdown();
     }
   }
 }

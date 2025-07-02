@@ -51,7 +51,7 @@ class FuseServer {
 
   int Serve(const std::string& fd_comm_path);
 
-  void Shutown();
+  void Shutdown();
 
  private:
   void AllocateFuseInitBuf();

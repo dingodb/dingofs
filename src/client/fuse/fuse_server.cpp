@@ -99,7 +99,7 @@ void FuseServer::FreeFuseInitBuf() {
 
 int FuseServer::GetDevFd() const { return fuse_session_fd(se_); }
 
-void FuseServer::Shutown() {
+void FuseServer::Shutdown() {
   LOG(INFO) << "start shutdown dingo-fuse";
   FuseUpgradeManager::GetInstance().UpdateFuseState(
       FuseUpgradeState::kFuseUpgradeOld);
@@ -387,7 +387,14 @@ bool FuseServer::ShutdownGracefully(const char* mountpoint) {
   std::string file_name =
       absl::StrFormat("%s/%s", mountpoint, dingofs::STATSNAME);
   int pid = GetDingoFusePid(file_name);
-  if (pid == -1) {
+  for (int i = 0; i < FLAGS_fuse_fd_get_max_retries; i++) {
+    if (pid > 0) break;
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(FLAGS_fuse_fd_get_retry_interval_ms));
+    pid = GetDingoFusePid(file_name);
+  }
+  if (pid <= 0) {
+    LOG(ERROR) << "fail to get old dingo-fuse pid from " << file_name;
     return false;
   }
   LOG(INFO) << "successfully get old dingo-fuse pid: " << pid;

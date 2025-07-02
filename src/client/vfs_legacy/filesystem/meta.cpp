@@ -29,6 +29,7 @@
 #include <cstdint>
 #include <memory>
 
+#include "client/meta/vfs_meta.h"
 #include "utils/string.h"
 
 namespace dingofs {
@@ -81,37 +82,69 @@ bool HandlerManager::Dump(Json::Value& value) {
     item["fh"] = fileHandle->fh;
     item["flags"] = fileHandle->flags;
     item["padding"] = fileHandle->padding;
-    // do not store dir_handler_init, it's can reinitialize
-    // item["dir_handler_init"] = fileHandle->dir_handler_init;
 
     Json::Value timespec_item;
     timespec_item["seconds"] = fileHandle->mtime.seconds;
     timespec_item["nanoSeconds"] = fileHandle->mtime.nanoSeconds;
     item["timespec_item"] = timespec_item;
 
+    Json::Value entry_array;
+    for (const auto& entry : fileHandle->entries) {
+      Json::Value entry_item;
+      entry_item["ino"] = entry.ino;
+      entry_item["name"] = entry.name;
+      Json::Value attr_jvalue;
+      vfs::DumpAttr(entry.attr, attr_jvalue);
+      entry_item["attr"] = attr_jvalue;
+      entry_array.append(entry_item);
+    }
+    item["entries"] = entry_array;
+
     handle_array.append(item);
   }
   value["handlers"] = handle_array;
+
+  LOG(INFO) << "successfuly dump " << handlers_.size() << " handlers";
 
   return true;
 }
 
 bool HandlerManager::Load(const Json::Value& value) {
   const Json::Value& handlers = value["handlers"];
-  if (!handlers.isArray()) {
+  if (!handlers.isArray() && !handlers.isNull()) {
     LOG(ERROR) << "handlers is not an array.";
     return false;
   }
 
+  uint64_t max_fh = 0;
   for (const auto& handler : handlers) {
     // peek fh,padding,flags
     uint64_t fh = handler["fh"].asUInt64();
     bool padding = handler["padding"].asBool();
     uint flags = handler["flags"].asUInt();
+
     // peek timespec
     const Json::Value& timespec_item = handler["timespec_item"];
     uint64_t seconds = timespec_item["seconds"].asUInt64();
     uint32_t nanoSeconds = timespec_item["nanoSeconds"].asUInt();
+
+    // peek entries
+    std::vector<vfs::DirEntry> dir_entries;
+    const Json::Value& entries = handler["entries"];
+    // entries shouble be null for file handler
+    if (!entries.isArray() && !entries.isNull()) {
+      LOG(ERROR) << "entries is not an array.";
+      return false;
+    }
+    // iterate entries
+    for (const auto& entry : entries) {
+      vfs::DirEntry dir_entry;
+      dir_entry.ino = entry["ino"].asUInt64();
+      dir_entry.name = entry["name"].asString();
+      vfs::LoadAttr(entry["attr"], dir_entry.attr);
+
+      dir_entries.emplace_back(dir_entry);
+    }
 
     {
       UniqueLock lk(mutex_);
@@ -120,11 +153,15 @@ bool HandlerManager::Load(const Json::Value& value) {
       handler->flags = flags;
       handler->mtime = utils::TimeSpec(seconds, nanoSeconds);
       handler->padding = padding;
+      handler->entries = std::move(dir_entries);
       handlers_.emplace(handler->fh, handler);
     }
+    max_fh = std::max(max_fh, fh);
   }
+  vfs::next_fh.store(max_fh + 1);  // update next_fh
 
-  LOG(INFO) << "successfuly load " << handlers_.size();
+  LOG(INFO) << "successfuly load " << handlers_.size()
+            << " handlers, next fh is:" << vfs::next_fh.load();
 
   return true;
 }

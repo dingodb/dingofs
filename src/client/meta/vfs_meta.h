@@ -17,6 +17,8 @@
 #ifndef DINGOFS_CLIENT_META_VFS_META_H_
 #define DINGOFS_CLIENT_META_VFS_META_H_
 
+#include <json/json.h>
+
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -26,6 +28,8 @@
 namespace dingofs {
 namespace client {
 namespace vfs {
+
+static std::atomic<uint64_t> next_fh = 1;
 
 using Ino = uint64_t;
 
@@ -74,6 +78,44 @@ struct Attr {
   // TODO: refact, maybe use separate key for hardlink
   std::vector<Ino> parents;
 };
+
+static void DumpAttr(const Attr& attr, Json::Value& value) {
+  value["ino"] = attr.ino;
+  value["mode"] = attr.mode;
+  value["nlink"] = attr.nlink;
+  value["uid"] = attr.uid;
+  value["gid"] = attr.gid;
+  value["length"] = attr.length;
+  value["rdev"] = attr.rdev;
+  value["atime"] = attr.atime;
+  value["mtime"] = attr.mtime;
+  value["ctime"] = attr.ctime;
+  value["type"] = static_cast<int>(attr.type);
+  Json::Value parents;
+  for (const auto& parent : attr.parents) {
+    parents.append(parent);
+  }
+  value["parents"] = parents;
+}
+
+static void LoadAttr(const Json::Value& value, Attr& attr) {
+  attr.ino = value["ino"].asUInt64();
+  attr.mode = value["mode"].asUInt();
+  attr.nlink = value["nlink"].asUInt();
+  attr.uid = value["uid"].asUInt();
+  attr.gid = value["gid"].asUInt();
+  attr.length = value["length"].asUInt64();
+  attr.rdev = value["rdev"].asUInt64();
+  attr.atime = value["atime"].asUInt64();
+  attr.mtime = value["mtime"].asUInt64();
+  attr.ctime = value["ctime"].asUInt64();
+  attr.type = static_cast<FileType>(value["type"].asInt());
+
+  const Json::Value& parents = value["parents"];
+  for (const auto& parent : parents) {
+    attr.parents.push_back(parent.asUInt64());
+  }
+}
 
 std::string Attr2Str(const Attr& attr, bool with_parent = false);
 
@@ -155,7 +197,6 @@ struct FsInfo {
 std::string FsInfo2Str(const FsInfo& fs_info);
 
 inline uint64_t GenFh() {
-  static std::atomic<uint64_t> next_fh = 1;
   return next_fh.fetch_add(1, std::memory_order_relaxed);
 }
 
