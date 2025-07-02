@@ -38,13 +38,13 @@
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/helper.h"
 #include "client/vfs_legacy/datastream/data_stream.h"
-#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 #include "client/vfs_legacy/filesystem/meta.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
 #include "common/io_buffer.h"
 #include "common/status.h"
 #include "metrics/client/vfs_legacy/s3_cache_manager.h"
+#include "options/client/options/vfs_legacy/vfs_legacy_dynamic_config.h"
 
 using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
 
@@ -533,17 +533,19 @@ bool FileCacheManager::ReadKVRequestFromLocalCache(const cache::BlockKey& key,
                                                    uint64_t len) {
   {
     auto block_cache = s3ClientAdaptor_->GetBlockCache();
-    IOBuffer buffer;
+    IOBuffer io_buffer;
     auto option = cache::RangeOption();
     option.retrive = false;
-    auto status = block_cache->Range(key, offset, len, &buffer, option);
+    auto status = block_cache->Range(key, offset, len, &io_buffer, option);
     if (status.IsNotFound()) {
       return false;
     } else if (!status.ok()) {
       LOG(WARNING) << "Object " << key.Filename() << " not cached in disk.";
       return false;
     }
+    io_buffer.CopyTo(buffer);
   }
+
   return true;
 }
 
