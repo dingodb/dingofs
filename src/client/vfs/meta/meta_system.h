@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "json/value.h"
 

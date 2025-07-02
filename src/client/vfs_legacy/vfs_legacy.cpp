@@ -41,7 +41,7 @@
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/inode_wrapper.h"
 #include "client/vfs_legacy/tools.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/config_mapper.h"
 #include "common/define.h"
 #include "common/status.h"
@@ -1254,9 +1254,10 @@ Status VFSOld::Open(Ino ino, int flags, uint64_t* fh) {
       return Status::NoData("No data in .stats");
     }
 
-    handler->buffer->size = len;
-    handler->buffer->p = static_cast<char*>(malloc(len));
-    memcpy(handler->buffer->p, contents.c_str(), len);
+    auto file_data_ptr = std::make_unique<char[]>(len);
+    std::memcpy(file_data_ptr.get(), contents.c_str(), len);
+    handler->file_buffer.size = len;
+    handler->file_buffer.data = std::move(file_data_ptr);
 
     return Status::OK();
   } else {
@@ -1330,16 +1331,18 @@ Status VFSOld::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
     }
   };
 
-  if (ino == STATSINODEID) {
-    auto handler = fs_->FindHandler(fh);
-    auto* data_buf = handler->buffer;
-
-    size_t file_size = data_buf->size;
-    size_t len = read_size(size, offset, file_size);
-    if (len > 0 && data_buf->p != nullptr) {
-      memcpy(buf, data_buf->p + offset, len);
+  // read .stats file data
+  if (BAIDU_UNLIKELY(ino == STATSINODEID)) {
+    auto handle = fs_->FindHandler(fh);
+    size_t file_size = handle->file_buffer.size;
+    size_t read_size =
+        std::min(size, (file_size > offset ? file_size - offset : 0));
+    if (read_size > 0) {
+      std::memcpy(buf, handle->file_buffer.data.get() + offset, read_size);
     }
-    *out_rsize = len;
+
+    *out_rsize = read_size;
+
     return Status::OK();
   }
 
@@ -1795,7 +1798,12 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
   VLOG(1) << "InitDirHandle inodeId=" << ino << ", fh: " << fh;
 
   auto file_handler = fs_->FindHandler(fh);
-  if (file_handler->dir_handler_init) {
+  if (file_handler == nullptr) {
+    LOG(ERROR) << "Fail find handler fail, inodeId=" << ino << ", fh: " << fh;
+    return Status::BadFd("find handler fail");
+  }
+
+  if (file_handler->padding) {
     return Status::OK();
   }
 
@@ -1807,13 +1815,11 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
     return filesystem::DingofsErrorToStatus(rc);
   }
 
-  file_handler->dir_iterator = std::make_unique<filesystem::FsDirIterator>();
-
   bool has_stats = false;
 
   std::vector<pb::metaserver::InodeAttr> inode_attrs;
-
   std::vector<vfs::DirEntry> entries;
+
   entry_list->Iterate([&](filesystem::DirEntry* dir_entry) {
     if (dir_entry->ino == STATSINODEID) {
       has_stats = true;
@@ -1826,7 +1832,7 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
       entry.attr = InodeAttrPBToAttr(dir_entry->attr);
     }
 
-    file_handler->dir_iterator->Append(entry);
+    entries.push_back(entry);
   });
 
   // out of iterate
@@ -1840,10 +1846,11 @@ Status VFSOld::InitDirHandle(Ino ino, uint64_t fh, bool with_attr) {
     entry.ino = STATSINODEID;
     entry.name = STATSNAME;
     entry.attr = GenerateVirtualInodeAttr(STATSINODEID);
-    file_handler->dir_iterator->Append(entry);
+    entries.push_back(entry);
   }
 
-  file_handler->dir_handler_init = true;
+  file_handler->entries = std::move(entries);
+  file_handler->padding = true;
 
   return Status::OK();
 }
@@ -1858,21 +1865,25 @@ Status VFSOld::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   }
 
   auto file_handler = fs_->FindHandler(fh);
-  CHECK(file_handler->dir_handler_init);
-  CHECK_NOTNULL(file_handler->dir_iterator);
+  CHECK_NOTNULL(file_handler);
 
-  auto& dir_iterator = file_handler->dir_iterator;
+  uint64_t entrys_num = file_handler->entries.size();
+  if (offset > entrys_num) {
+    LOG(ERROR) << "ReadDir offset is out of range, inodeId=" << ino
+               << ", fh: " << fh << ", offset: " << offset
+               << ", entries_num: " << entrys_num;
+    return Status::BadFd("offset is out of range");
+  }
 
-  int32_t fake_off = 1;
+  uint64_t pos = offset;
 
-  while (dir_iterator->Valid()) {
-    DirEntry entry = dir_iterator->GetValue(with_attr);
-    if (!handler(entry, fake_off)) {
-      LOG(INFO) << "ReadDir break by handler next_offset: " << offset;
+  while (pos < entrys_num) {
+    const auto& entry = file_handler->entries[pos];
+    pos++;
+    if (!handler(entry, pos)) {
+      VLOG(1) << "ReadDir break by handler next_offset: " << pos;
       break;
     }
-
-    dir_iterator->Next();
   }
 
   return Status::OK();

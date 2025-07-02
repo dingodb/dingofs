@@ -27,30 +27,28 @@
 #include <sys/stat.h>
 
 #include <cstdint>
+#include <memory>
 
-#include "base/string/string.h"
+#include "client/meta/vfs_meta.h"
 
 namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using base::string::BufToHexString;
-using base::string::HexStringToBuf;
 using utils::Mutex;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::UniqueLock;
 using utils::WriteLockGuard;
 
-HandlerManager::HandlerManager() : dirBuffer_(std::make_shared<DirBuffer>()) {}
+HandlerManager::HandlerManager() = default;
 
-HandlerManager::~HandlerManager() { dirBuffer_->DirBufferFreeAll(); }
+HandlerManager::~HandlerManager() = default;
 
 std::shared_ptr<FileHandler> HandlerManager::NewHandler() {
   UniqueLock lk(mutex_);
   auto handler = std::make_shared<FileHandler>();
-  handler->fh = dirBuffer_->DirBufferNew();
-  handler->buffer = dirBuffer_->DirBufferGet(handler->fh);
+  handler->fh = vfs::GenFh();
   handler->padding = false;
   handlers_.emplace(handler->fh, handler);
   return handler;
@@ -67,7 +65,6 @@ std::shared_ptr<FileHandler> HandlerManager::FindHandler(uint64_t fh) {
 
 void HandlerManager::ReleaseHandler(uint64_t fh) {
   UniqueLock lk(mutex_);
-  dirBuffer_->DirBufferRelease(fh);
   handlers_.erase(fh);
 }
 
@@ -89,17 +86,6 @@ bool HandlerManager::Dump(Json::Value& value) {
     timespec_item["seconds"] = fileHandle->mtime.seconds;
     timespec_item["nanoSeconds"] = fileHandle->mtime.nanoSeconds;
     item["timespec_item"] = timespec_item;
-
-    Json::Value buffer_item;
-    buffer_item["wasRead"] = fileHandle->buffer->wasRead;
-    size_t size = fileHandle->buffer->size;
-    buffer_item["size"] = size;
-    buffer_item["p"] =
-        size > 0
-            ? BufToHexString(
-                  reinterpret_cast<unsigned char*>(fileHandle->buffer->p), size)
-            : "";
-    item["buffer"] = buffer_item;
 
     handle_array.append(item);
   }
@@ -124,36 +110,18 @@ bool HandlerManager::Load(const Json::Value& value) {
     const Json::Value& timespec_item = handler["timespec_item"];
     uint64_t seconds = timespec_item["seconds"].asUInt64();
     uint32_t nanoSeconds = timespec_item["nanoSeconds"].asUInt();
-    // peek buffer
-    const Json::Value& buffer = handler["buffer"];
-    std::string p = buffer["p"].asString();
-    size_t size = buffer["size"].asUInt64();
-    bool wasRead = buffer["wasRead"].asBool();
 
     {
       UniqueLock lk(mutex_);
       auto handler = std::make_shared<FileHandler>();
-      handler->fh = dirBuffer_->DirBufferNewWithIndex(fh);
-      handler->buffer = dirBuffer_->DirBufferGet(handler->fh);
-      handler->padding = padding;
+      handler->fh = fh;
       handler->flags = flags;
       handler->mtime = base::time::TimeSpec(seconds, nanoSeconds);
-      handler->buffer->size = size;
-      handler->buffer->wasRead = wasRead;
-      if (size > 0 && size == (p.size() / 2)) {
-        handler->buffer->p = (char*)malloc(size);
-        int ret = HexStringToBuf(
-            p.c_str(), reinterpret_cast<unsigned char*>(handler->buffer->p),
-            size);
-        if (ret == -1) {
-          free(handler->buffer->p);
-          handler->buffer->p = nullptr;
-        }
-      }
-
+      handler->padding = padding;
       handlers_.emplace(handler->fh, handler);
     }
   }
+
   LOG(INFO) << "successfuly load " << handlers_.size();
 
   return true;
@@ -188,26 +156,6 @@ std::string StrMode(uint16_t mode) {
   }
   return s;
 }
-
-Status FsDirIterator::Seek() {
-  offset_ = 0;
-  return Status::OK();
-}
-
-bool FsDirIterator::Valid() { return offset_ < entries_.size(); }
-
-vfs::DirEntry FsDirIterator::GetValue(bool with_attr) {
-  CHECK(offset_ < entries_.size()) << "offset out of range";
-
-  auto entry = entries_[offset_];
-  if (with_attr) {
-    entry.attr = entry.attr;
-  }
-
-  return entry;
-}
-
-void FsDirIterator::Next() { offset_++; }
 
 }  // namespace filesystem
 }  // namespace client

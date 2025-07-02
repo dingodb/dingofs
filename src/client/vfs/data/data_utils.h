@@ -26,7 +26,7 @@
 #include <vector>
 
 #include "client/vfs/data/common.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 
 namespace dingofs {
 namespace client {

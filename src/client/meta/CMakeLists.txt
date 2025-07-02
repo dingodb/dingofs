@@ -12,17 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_hub 
-    vfs_hub.cpp
+add_library(vfs_meta 
+    vfs_meta.cpp
 )
-
-target_link_libraries(vfs_hub
-    client_options
-    client_memory
-    cache_blockcache
-    vfs_background
-    vfs_meta_system
-    block_accesser
-    vfs_handle
-    absl::str_format
+target_link_libraries(vfs_meta
+    fmt::fmt
 )

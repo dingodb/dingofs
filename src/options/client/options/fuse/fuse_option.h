@@ -17,7 +17,6 @@
 #ifndef DINGOFS_SRC_CLIENT_OPTIONS_FUSE_OPTION_H_
 #define DINGOFS_SRC_CLIENT_OPTIONS_FUSE_OPTION_H_
 
-#include "options/client/options/fuse/fuse_dynamic_option.h"
 #include "utils/configuration.h"
 
 namespace dingofs {
@@ -41,26 +40,7 @@ struct FuseOption {
 };
 // }
 
-static void InitFuseOption(utils::Configuration* c, FuseOption* option) {
-  {  // fuse conn info
-    auto* o = &option->conn_info;
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_move",
-                           &o->want_splice_move);
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_read",
-                           &o->want_splice_read);
-    c->GetValueFatalIfFail("fuse.conn_info.want_splice_write",
-                           &o->want_splice_write);
-    c->GetValueFatalIfFail("fuse.conn_info.want_auto_inval_data",
-                           &o->want_auto_inval_data);
-  }
-
-  {  // fuse file info
-    c->GetValueFatalIfFail("fuse.file_info.direct_io",
-                           &FLAGS_fuse_file_info_direct_io);
-    c->GetValueFatalIfFail("fuse.file_info.keep_cache",
-                           &FLAGS_fuse_file_info_keep_cache);
-  }
-}
+void InitFuseOption(utils::Configuration* c, FuseOption* option);
 
 }  // namespace client
 }  // namespace dingofs

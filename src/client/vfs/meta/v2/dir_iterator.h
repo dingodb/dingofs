@@ -20,7 +20,7 @@
 #include <cstdint>
 
 #include "client/vfs/meta/v2/mds_client.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "utils/concurrent/concurrent.h"
 

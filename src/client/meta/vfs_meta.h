@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_CLIENT_VFS_META_H_
-#define DINGOFS_CLIENT_VFS_META_H_
+#ifndef DINGOFS_CLIENT_META_VFS_META_H_
+#define DINGOFS_CLIENT_META_VFS_META_H_
 
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
-
-#include "fmt/format.h"
 
 namespace dingofs {
 namespace client {
@@ -77,30 +75,7 @@ struct Attr {
   std::vector<Ino> parents;
 };
 
-static std::string Attr2Str(const Attr& attr, bool with_parent = false) {
-  if (!with_parent) {
-    return fmt::format(
-        "Attr {{ ino: {}, mode: {}, nlink: {}, uid: {}, gid: {}, length: {}, "
-        "rdev: {}, atime: {}, mtime: {}, ctime: {}, type: {} }}",
-        attr.ino, attr.mode, attr.nlink, attr.uid, attr.gid, attr.length,
-        attr.rdev, attr.atime, attr.mtime, attr.ctime, FileType2Str(attr.type));
-  } else {
-    std::string parents_str;
-    for (size_t i = 0; i < attr.parents.size(); ++i) {
-      parents_str += fmt::format("{}", attr.parents[i]);
-      if (i < attr.parents.size() - 1) {
-        parents_str += ", ";
-      }
-    }
-
-    return fmt::format(
-        "Attr {{ ino: {}, mode: {}, nlink: {}, uid: {}, gid: {}, length: {}, "
-        "rdev: {}, atime: {}, mtime: {}, ctime: {}, type: {}, parents: [{}] }}",
-        attr.ino, attr.mode, attr.nlink, attr.uid, attr.gid, attr.length,
-        attr.rdev, attr.atime, attr.mtime, attr.ctime, FileType2Str(attr.type),
-        parents_str);
-  }
-}
+std::string Attr2Str(const Attr& attr, bool with_parent = false);
 
 struct DirEntry {
   Ino ino;
@@ -115,12 +90,7 @@ struct FsStat {
   uint64_t used_inodes;
 };
 
-static std::string FsStat2Str(const FsStat& fs_stat) {
-  return fmt::format(
-      "(max_bytes: {}, used_bytes: {}, max_inodes: {}, used_inodes: {})",
-      fs_stat.max_bytes, fs_stat.used_bytes, fs_stat.max_inodes,
-      fs_stat.used_inodes);
-}
+std::string FsStat2Str(const FsStat& fs_stat);
 
 // map pb chunkinfo
 struct Slice {
@@ -134,12 +104,7 @@ struct Slice {
   uint64_t End() const { return offset + length; }
 };
 
-static std::string Slice2Str(const Slice& slice) {
-  return fmt::format(
-      "{{id: {}, range: [{}-{}], compaction: {}, is_zero: {}, size: {}}}",
-      slice.id, slice.offset, slice.End(), slice.compaction,
-      slice.is_zero ? "true" : "false", slice.size);
-}
+std::string Slice2Str(const Slice& slice);
 
 enum StoreType : uint8_t {
   kS3 = 1,
@@ -187,6 +152,13 @@ struct FsInfo {
   StorageInfo storage_info;
 };
 
+std::string FsInfo2Str(const FsInfo& fs_info);
+
+inline uint64_t GenFh() {
+  static std::atomic<uint64_t> next_fh = 1;
+  return next_fh.fetch_add(1, std::memory_order_relaxed);
+}
+
 //  *off* should be any non-zero value that the vfs can use to
 //  identify the current point in the directory stream. It does not
 //  need to be the actual physical position. A value of zero is
@@ -200,12 +172,7 @@ struct FsInfo {
 using ReadDirHandler =
     std::function<bool(const DirEntry& dir_entry, uint64_t offset)>;
 
-inline uint64_t GenFh() {
-  static std::atomic<uint64_t> next_fh = 1;
-  return next_fh.fetch_add(1, std::memory_order_relaxed);
-}
-
 }  // namespace vfs
 }  // namespace client
 }  // namespace dingofs
-#endif  // DINGOFS_CLIENT_VFS_META_H_
+#endif  // DINGOFS_CLIENT_META_VFS_META_H_

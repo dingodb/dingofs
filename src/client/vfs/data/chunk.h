@@ -25,7 +25,7 @@
 #include "cache/blockcache/cache_store.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 #include "fmt/format.h"

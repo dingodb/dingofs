@@ -25,8 +25,9 @@ add_library(vfs_lib
 target_link_libraries(vfs_lib
     PROTO_OBJS
     dingofs_common
-    vfs_meta_lib
+    vfs_meta_system
     vfs_data
+    vfs_meta
     vfs_hub
     vfs_handle
     glog::glog

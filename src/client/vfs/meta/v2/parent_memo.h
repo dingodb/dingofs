@@ -21,7 +21,7 @@
 #include <memory>
 #include <vector>
 
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "json/value.h"
 #include "utils/concurrent/concurrent.h"
 

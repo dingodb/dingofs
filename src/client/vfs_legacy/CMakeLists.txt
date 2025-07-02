@@ -38,6 +38,7 @@ target_link_libraries(vfs_legacy_lib
     client_options
     client_memcached_client
     dynamic_vlog
+    vfs_meta
     vfs_legacy_datastream
     cache_lib
     dingofs_utils

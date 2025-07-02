@@ -15,6 +15,7 @@
 
 add_library(client_options
     fuse/fuse_dynamic_option.cc
+    fuse/fuse_option.cc
     vfs/vfs_dynamic_option.cc
     vfs/vfs_option.cc
     vfs_legacy/vfs_legacy_dynamic_config.cc

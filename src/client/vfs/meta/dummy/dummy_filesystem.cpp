@@ -26,7 +26,7 @@
 
 #include "bthread/mutex.h"
 #include "client/vfs/common/helper.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"

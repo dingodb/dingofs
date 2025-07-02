@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <string>
 
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "json/value.h"
 #include "options/client/options/fuse/fuse_option.h"

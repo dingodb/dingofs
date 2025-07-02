@@ -31,9 +31,7 @@
 #include <string>
 
 #include "base/time/time.h"
-#include "client/vfs_legacy/dir_buffer.h"
-#include "client/vfs_meta.h"
-#include "common/status.h"
+#include "client/meta/vfs_meta.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "utils/concurrent/concurrent.h"
@@ -78,24 +76,10 @@ struct DirEntry {
   pb::metaserver::InodeAttr attr;
 };
 
-struct FileHandler;
-
-class FsDirIterator {
- public:
-  FsDirIterator() = default;
-  ~FsDirIterator() = default;
-
-  void Append(vfs::DirEntry& entry) { entries_.push_back(entry); }
-
-  Status Seek();
-  bool Valid();
-  vfs::DirEntry GetValue(bool with_attr);
-  void Next();
-
- private:
-  uint64_t offset_{0};
-
-  std::vector<vfs::DirEntry> entries_;
+// temporary store .stats file data
+struct FileBuffer {
+  size_t size{0};
+  std::unique_ptr<char[]> data{nullptr};
 };
 
 struct FileHandler {
@@ -103,12 +87,12 @@ struct FileHandler {
   // for file
   int32_t flags;
 
-  DirBufferHead* buffer;
+  FileBuffer file_buffer;
+
   base::time::TimeSpec mtime;
-  bool padding;  // padding buffer
-  // for read dir
-  bool dir_handler_init{false};
-  std::unique_ptr<FsDirIterator> dir_iterator;
+
+  bool padding{false};  // padding buffer
+  std::vector<vfs::DirEntry> entries;
 };
 
 class HandlerManager {
@@ -129,7 +113,6 @@ class HandlerManager {
 
  private:
   utils::Mutex mutex_;
-  std::shared_ptr<DirBuffer> dirBuffer_;
   std::map<uint64_t, std::shared_ptr<FileHandler>> handlers_;
 };
 

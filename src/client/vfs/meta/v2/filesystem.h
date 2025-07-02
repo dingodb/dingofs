@@ -27,7 +27,7 @@
 #include "client/vfs/meta/v2/file_session.h"
 #include "client/vfs/meta/v2/mds_client.h"
 #include "client/vfs/meta/v2/mds_discovery.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/crontab.h"

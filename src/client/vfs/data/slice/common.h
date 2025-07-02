@@ -50,7 +50,7 @@ struct SliceDataContext {
   ~SliceDataContext() = default;
 
   std::string UUID() const {
-    return fmt::format("{}-{}-{}-{}", fs_id, ino, chunk_index, seq);
+    return fmt::format("{}-{}-{}", ino, chunk_index, seq);
   }
 };
 

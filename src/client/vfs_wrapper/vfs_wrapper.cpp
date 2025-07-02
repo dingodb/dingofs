@@ -34,7 +34,7 @@
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs_legacy/vfs_legacy.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"

@@ -1,4 +1,4 @@
-# Copyright (c) 2024 dingodb.com, Inc. All Rights Reserved
+# Copyright (c) 2025 dingodb.com, Inc. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,22 @@
 # limitations under the License.
 
 add_subdirectory(memory)
+add_subdirectory(meta)
 add_subdirectory(vfs_legacy)
 add_subdirectory(vfs)
 
 file(GLOB FUSE_CLIENT_LIB_SRCS
-    "vfs_wrapper/*.cpp"
-    "fuse/*.cpp"
+    "vfs_wrapper/access_log.cpp"
+    "vfs_wrapper/access_wrapper.cpp"
+    "vfs_wrapper/vfs_wrapper.cpp"
+    "fuse/fuse_op.cpp"
+    "fuse/fuse_server.cpp"
 )
 
 add_library(fuse_client_lib ${FUSE_CLIENT_LIB_SRCS})
 target_link_libraries(fuse_client_lib
     PROTO_OBJS
+    vfs_meta
     vfs_legacy_lib
     vfs_lib
     block_accesser

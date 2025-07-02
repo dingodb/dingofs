@@ -31,7 +31,7 @@
 #include "client/vfs_legacy/lease/lease_excutor.h"
 #include "client/vfs_legacy/service/inode_objects_service.h"
 #include "client/vfs_legacy/warmup/warmup_manager.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/mds.pb.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_option.h"

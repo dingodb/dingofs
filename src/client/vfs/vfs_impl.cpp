@@ -25,11 +25,11 @@
 
 #include "client/common/client_dummy_server_info.h"
 #include "client/common/metrics_dumper.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_log.h"
-#include "client/vfs_meta.h"
 #include "common/define.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -428,10 +428,17 @@ Status VFSImpl::ReadDir(Ino ino, uint64_t fh, uint64_t offset, bool with_attr,
   if (BAIDU_UNLIKELY(ino == ROOTINODEID) && offset == 0) {
     DirEntry stats_entry{STATSINODEID, STATSNAME,
                          GenerateVirtualInodeAttr(STATSINODEID)};
-    handler(stats_entry, offset++);
+    handler(stats_entry, 1);  // pos 0 is the offset for .stats entry
   }
 
-  return meta_system_->ReadDir(ino, fh, offset, with_attr, handler);
+  uint64_t to_meta = (offset > 0) ? (offset - 1) : 0;
+
+  return meta_system_->ReadDir(
+      ino, fh, to_meta, with_attr,
+      [handler](const DirEntry& entry, uint64_t meta_offset) {
+        uint64_t return_off = meta_offset + 1;
+        return handler(entry, return_off);
+      });
 }
 
 Status VFSImpl::ReleaseDir(Ino ino, uint64_t fh) {

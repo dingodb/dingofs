@@ -16,12 +16,12 @@ add_subdirectory(dummy)
 add_subdirectory(v1)
 add_subdirectory(v2)
 
-add_library(vfs_meta_lib 
+add_library(vfs_meta_system 
     meta_log.cpp
     meta_wrapper.cpp
 )
 
-target_link_libraries(vfs_meta_lib
+target_link_libraries(vfs_meta_system
     vfs_meta_dummy_lib
     vfs_meta_v2_lib
     absl::str_format

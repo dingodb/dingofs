@@ -45,7 +45,7 @@
 #include "client/vfs_legacy/inode_cache_manager.h"
 #include "client/vfs_legacy/kvclient/kvclient_manager.h"
 #include "client/vfs_legacy/s3/client_s3_adaptor.h"
-#include "client/vfs_meta.h"
+#include "client/meta/vfs_meta.h"
 #include "metrics/client/vfs_legacy/warmup.h"
 #include "options/client/options/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/metaserver_client.h"
