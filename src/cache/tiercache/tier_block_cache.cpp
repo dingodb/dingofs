@@ -87,21 +87,13 @@ Status TierBlockCache::Start() {
   }
 
   status = local_block_cache_->Start();
-  if (status.ok()) {
-    LOG(INFO) << "Tier cache: using local block cache.";
-  } else if (status.IsNotSupport()) {
-    LOG(ERROR) << "Tier cache: local block cache is not used.";
-  } else {
+  if (!status.ok()) {
     LOG(ERROR) << "Start local block cache failed: " << status.ToString();
     return status;
   }
 
   status = remote_block_cache_->Start();
-  if (status.ok()) {
-    LOG(INFO) << "Tier cache: using remote block cache.";
-  } else if (status.IsNotSupport()) {
-    LOG(ERROR) << "Tier cache: remote block cache is not used.";
-  } else {
+  if (!status.ok()) {
     LOG(ERROR) << "Start remote block cache failed: " << status.ToString();
     return status;
   }
@@ -114,7 +106,14 @@ Status TierBlockCache::Start() {
 
   running_ = true;
 
-  LOG(INFO) << "Tier block cache is up.";
+  LOG(INFO) << "Tier block cache is up: local_block_cache(enable="
+            << local_block_cache_->HasCacheStore()
+            << ",stage=" << local_block_cache_->EnableStage()
+            << ",cache=" << local_block_cache_->EnableCache()
+            << "), remote_block_cache(enable="
+            << remote_block_cache_->HasCacheStore()
+            << ",stage=" << remote_block_cache_->EnableStage()
+            << ",cache=" << remote_block_cache_->EnableCache() << ")";
 
   CHECK_RUNNING("Tier block cache");
   return Status::OK();
@@ -224,10 +223,15 @@ Status TierBlockCache::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   }
 
   if (!status.ok()) {
-    LOG_ERROR(
-        "[%s] Range block failed: key = %s, offset = %lld, "
-        "length = %zu, status = %s",
+    auto message = absl::StrFormat(
+        "[%s] Range block failed: key = %s, offset = %lld, length = %zu, "
+        "status = %s",
         ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    if (status.IsCacheUnhealthy()) {
+      LOG_EVERY_SECOND(ERROR) << message;
+    } else if (!status.IsNotFound()) {
+      LOG(ERROR) << message;
+    }
   }
   return status;
 }

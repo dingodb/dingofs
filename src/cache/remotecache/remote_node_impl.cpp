@@ -22,11 +22,13 @@
 
 #include "cache/remotecache/remote_node_impl.h"
 
+#include <absl/strings/str_format.h>
 #include <butil/logging.h>
 #include <glog/logging.h>
 
 #include <memory>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/common/macro.h"
 #include "cache/common/proto.h"
 #include "cache/remotecache/remote_node_health_checker.h"
@@ -51,6 +53,7 @@ RemoteNodeImpl::RemoteNodeImpl(const PBCacheGroupMember& member,
 Status RemoteNodeImpl::Start() {
   CHECK_NOTNULL(rpc_);
   CHECK_NOTNULL(state_machine_);
+  CHECK_NOTNULL(health_checker_);
 
   if (running_) {
     return Status::OK();
@@ -112,37 +115,37 @@ Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
                            const Block& block) {
   CHECK_RUNNING("Remote node");
 
-  auto status = CheckHealth();
+  auto status = CheckHealth(ctx);
   if (!status.ok()) {
     return status;
   }
 
   status = rpc_->Put(ctx, key, block);
   if (!status.ok()) {
-    LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size,
-              status.ToString().c_str());
+    LOG_ERROR(
+        "[%s] Put block to cache node failed: key = %s, length = %zu, status = "
+        "%s",
+        ctx->TraceId(), key.Filename(), block.size, status.ToString());
   }
   return CheckStatus(status);
 }
 
 Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
                              size_t length, IOBuffer* buffer,
-                             size_t block_size) {
+                             RangeOption option) {
   CHECK_RUNNING("Remote node");
 
-  auto status = CheckHealth();
+  auto status = CheckHealth(ctx);
   if (!status.ok()) {
     return status;
   }
 
-  status = rpc_->Range(ctx, key, offset, length, buffer, block_size);
+  status = rpc_->Range(ctx, key, offset, length, buffer, option.block_size);
   if (!status.ok()) {
     LOG_ERROR(
         "[%s] Range block failed: key = %s, offset = %lld, length = %zu, "
         "status = %s",
-        ctx->TraceId(), key.Filename(), offset, length,
-        status.ToString().c_str());
+        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return CheckStatus(status);
 }
@@ -151,7 +154,7 @@ Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
                              const Block& block) {
   CHECK_RUNNING("Remote node");
 
-  auto status = CheckHealth();
+  auto status = CheckHealth(ctx);
   if (!status.ok()) {
     return status;
   }
@@ -159,8 +162,7 @@ Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   status = rpc_->Cache(ctx, key, block);
   if (!status.ok()) {
     LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), block.size,
-              status.ToString().c_str());
+              ctx->TraceId(), key.Filename(), block.size, status.ToString());
   }
   return status;  // Skip CheckStatus here
 }
@@ -169,7 +171,7 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
                                 size_t length) {
   CHECK_RUNNING("Remote node");
 
-  auto status = CheckHealth();
+  auto status = CheckHealth(ctx);
   if (!status.ok()) {
     return status;
   }
@@ -177,26 +179,27 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   status = rpc_->Prefetch(ctx, key, length);
   if (!status.ok()) {
     LOG_ERROR("[%s] Prefetch block failed: key = %s, length = %zu, status = %s",
-              ctx->TraceId(), key.Filename(), length,
-              status.ToString().c_str());
+              ctx->TraceId(), key.Filename(), length, status.ToString());
   }
   return status;  // Skip CheckStatus here
 }
 
-Status RemoteNodeImpl::CheckHealth() const {
+Status RemoteNodeImpl::CheckHealth(ContextSPtr ctx) const {
   if (member_info_.state() !=
       PBCacheGroupMemberState::CacheGroupMemberStateOnline) {
-    LOG_EVERY_N(WARNING, 100)
-        << "Remote node is unstable: "
-        << "id = " << member_info_.id() << ", endpoint = " << member_info_.ip()
-        << ":" << member_info_.port();
-    return Status::Internal("remote node is unstable");
+    LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
+        "[%s] Remote node is not online: "
+        "id = %d, endpoint = %s:%d, status = %d",
+        ctx->TraceId(), member_info_.id(), member_info_.ip(),
+        member_info_.port(), member_info_.state());
+    return Status::CacheUnhealthy("remote node is unstable");
   } else if (state_machine_->GetState() != State::kStateNormal) {
-    LOG_EVERY_N(WARNING, 100)
-        << "Remote node is unhealthy: "
-        << "id = " << member_info_.id() << ", endpoint = " << member_info_.ip()
-        << ":" << member_info_.port();
-    return Status::Internal("remote node is unhealthy");
+    LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
+        "[%s] Remote node is unhealthy: "
+        "id = %d, endpoint = %s:%d, status = %s",
+        ctx->TraceId(), member_info_.id(), member_info_.ip(),
+        member_info_.port(), StateToString(state_machine_->GetState()));
+    return Status::CacheUnhealthy("remote node is unhealthy");
   }
   return Status::OK();
 }

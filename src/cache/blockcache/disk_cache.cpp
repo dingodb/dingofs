@@ -41,8 +41,8 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_string(cache_dir, "/tmp/dingofs-cache", "Directory to store blocks");
-DEFINE_uint32(cache_size_mb, 10240, "Maximum size of the cache in MB");
+DEFINE_string(cache_dir, "/var/run/dingofs/", "Directory to store blocks");
+DEFINE_uint32(cache_size_mb, 102400, "Maximum size of the cache in MB");
 
 static const std::string kModule = kDiskCacheMoudule;
 
@@ -302,7 +302,7 @@ Status DiskCache::RemoveStage(ContextSPtr ctx, const BlockKey& key,
   status = fs_->RemoveFile(stage_path);
   if (!status.ok()) {
     LOG(ERROR) << absl::StrFormat(
-        "Remove stage block file failed: trace id = %s, path = %s, status = %s",
+        "[%s] Remove stage block file failed: path = %s, status = %s",
         ctx->TraceId(), stage_path, status.ToString());
   }
 

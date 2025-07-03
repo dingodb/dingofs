@@ -25,8 +25,10 @@
 
 #include <memory>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/utils/context.h"
+#include "common/status.h"
 
 namespace dingofs {
 namespace cache {
@@ -42,8 +44,7 @@ class RemoteNode {
   virtual Status Put(ContextSPtr ctx, const BlockKey& key,
                      const Block& block) = 0;
   virtual Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                       size_t length, IOBuffer* buffer,
-                       uint64_t block_size) = 0;
+                       size_t length, IOBuffer* buffer, RangeOption option) = 0;
   virtual Status Cache(ContextSPtr ctx, const BlockKey& key,
                        const Block& block) = 0;
   virtual Status Prefetch(ContextSPtr ctx, const BlockKey& key,
@@ -52,13 +53,8 @@ class RemoteNode {
 
 class NoneRemoteNode final : public RemoteNode {
  public:
-  Status Start() override {
-    return Status::NotSupport("Remote node is not supported");
-  }
-
-  Status Shutdown() override {
-    return Status::NotSupport("Remote node is not supported");
-  }
+  Status Start() override { return Status::OK(); }
+  Status Shutdown() override { return Status::OK(); }
 
   Status Put(ContextSPtr, const BlockKey& /*key*/,
              const Block& /*block*/) override {
@@ -67,7 +63,7 @@ class NoneRemoteNode final : public RemoteNode {
 
   Status Range(ContextSPtr, const BlockKey& /*key*/, off_t /*offset*/,
                size_t /*length*/, IOBuffer* /*buffer*/,
-               uint64_t /*block_size*/) override {
+               RangeOption /*block_size*/) override {
     return Status::NotSupport("Remote node is not supported");
   }
 

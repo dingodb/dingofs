@@ -25,6 +25,7 @@
 
 #include <brpc/channel.h>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/remotecache/remote_node.h"
 #include "cache/remotecache/remote_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
@@ -45,13 +46,13 @@ class RemoteNodeImpl final : public RemoteNode {
 
   Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block) override;
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, size_t block_size) override;
+               size_t length, IOBuffer* buffer, RangeOption option) override;
   Status Cache(ContextSPtr ctx, const BlockKey& key,
                const Block& block) override;
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
-  Status CheckHealth() const;
+  Status CheckHealth(ContextSPtr ctx) const;
   Status CheckStatus(Status status);
 
   std::atomic<bool> running_;

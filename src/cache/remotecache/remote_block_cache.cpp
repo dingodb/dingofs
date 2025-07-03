@@ -55,6 +55,7 @@ RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
 
 Status RemoteBlockCacheImpl::Start() {
   CHECK_NOTNULL(remote_node_);
+  CHECK_NOTNULL(storage_);
   CHECK_NOTNULL(joiner_);
 
   if (running_) {
@@ -149,17 +150,28 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   StepTimerGuard guard(timer);
 
   NEXT_STEP(kRemoteRange);
-  status =
-      remote_node_->Range(ctx, key, offset, length, buffer, option.block_size);
-  if (!status.ok() && option.retrive) {
-    NEXT_STEP(kS3Range);
-    status = storage_->Range(ctx, key, offset, length, buffer);
+  status = remote_node_->Range(ctx, key, offset, length, buffer, option);
+  if (status.ok()) {
+    return status;
+  } else if (!option.retrive) {
+    auto message = absl::StrFormat(
+        "[%s] Remote range block failed: key = %s, offset = %lld"
+        ", length = %zu, status = %s",
+        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    if (status.IsCacheUnhealthy()) {
+      LOG_EVERY_SECOND(ERROR) << message;
+    } else {
+      LOG(ERROR) << message;
+    }
+    return status;
   }
 
+  NEXT_STEP(kS3Range);
+  status = storage_->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
     LOG_ERROR(
-        "[%s] Range block failed: key = %s, offset = %lld, "
-        "length = %zu, status = %s",
+        "[%s] Storage range failed: key = %s, offset = %lld"
+        ", length = %zu, status = %s",
         ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return status;
@@ -180,10 +192,9 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
   if (!status.ok()) {
     LOG_ERROR(
-        "[%s] Cache block failed: trace id = %s, key = %s, length = %zu, "
-        "status = %s",
-        ctx->TraceId(), ctx->TraceId(), key.Filename(), block.size,
-        status.ToString());
+        "[%s] Cache block failed: key = %s, length = %zu"
+        ", status = %s",
+        ctx->TraceId(), key.Filename(), block.size, status.ToString());
   }
   return status;
 }
@@ -204,10 +215,9 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   if (!status.ok()) {
     LOG_ERROR(
-        "[%s] Prefetch block failed: trace id = %s, key = %s, "
+        "[%s] Prefetch block failed: key = %s, "
         "length = %zu, status = %s",
-        ctx->TraceId(), ctx->TraceId(), key.Filename(), length,
-        status.ToString());
+        ctx->TraceId(), key.Filename(), length, status.ToString());
   }
   return status;
 }

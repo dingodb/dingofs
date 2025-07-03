@@ -26,6 +26,7 @@
 
 #include <memory>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/macro.h"
 #include "cache/remotecache/remote_node_impl.h"
@@ -182,9 +183,9 @@ Status RemoteNodeGroup::Put(ContextSPtr ctx, const BlockKey& key,
 
 Status RemoteNodeGroup::Range(ContextSPtr ctx, const BlockKey& key,
                               off_t offset, size_t length, IOBuffer* buffer,
-                              size_t block_size) {
+                              RangeOption option) {
   CHECK_RUNNING("Remote node group");
-  return GetNode(key)->Range(ctx, key, offset, length, buffer, block_size);
+  return GetNode(key)->Range(ctx, key, offset, length, buffer, option);
 }
 
 Status RemoteNodeGroup::Cache(ContextSPtr ctx, const BlockKey& key,

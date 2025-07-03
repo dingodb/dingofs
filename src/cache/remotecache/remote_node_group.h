@@ -23,6 +23,7 @@
 #ifndef DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 #define DINGOFS_SRC_CACHE_REMOTECACHE_REMOTE_NODE_GROUP_H_
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/common/proto.h"
 #include "cache/common/type.h"
 #include "cache/remotecache/remote_node.h"
@@ -69,7 +70,7 @@ class RemoteNodeGroup final : public RemoteNode {
 
   Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block) override;
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, size_t block_size) override;
+               size_t length, IOBuffer* buffer, RangeOption option) override;
   Status Cache(ContextSPtr ctx, const BlockKey& key,
                const Block& block) override;
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
