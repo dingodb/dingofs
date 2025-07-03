@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_subdirectory(flat)
 add_subdirectory(slice)
 
 add_library(vfs_data 
-    common.cpp
-    file.cpp
-    chunk.cpp
-    task/file_flush_task.cpp
-    task/chunk_flush_task.cpp
+    common/common.cc
+    flat/flat_chunk.cc
+    flat/flat_file.cc
+    task/file_flush_task.cc
+    task/chunk_flush_task.cc
+    file.cc
+    chunk.cc
 )
 
 target_link_libraries(vfs_data
     PROTO_OBJS
     vfs_meta
-    vfs_data_flat
     vfs_data_slice
     vfs_background
     fmt::fmt

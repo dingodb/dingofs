@@ -25,6 +25,7 @@
 #include "client/vfs/handle/handle_manager.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "client/vfs/meta/meta_system.h"
+#include "client/vfs/service/inode_blocks_service.h"
 #include "options/client/vfs/vfs_option.h"
 
 namespace dingofs {
@@ -129,6 +130,7 @@ class VFSImpl : public VFS {
   HandleManager* handle_manager_;
 
   brpc::Server brpc_server_;
+  InodeBlocksServiceImpl inode_blocks_service_;
 };
 
 }  // namespace vfs

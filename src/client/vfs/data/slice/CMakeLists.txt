@@ -13,10 +13,10 @@
 # limitations under the License.
 
 add_library(vfs_data_slice
-    slice_data.cpp
-    block_data.cpp
-    page_data.cpp
-    task/slice_flush_task.cpp
+    slice_data.cc
+    block_data.cc
+    page_data.cc
+    task/slice_flush_task.cc
 )
 
 target_link_libraries(vfs_data_slice

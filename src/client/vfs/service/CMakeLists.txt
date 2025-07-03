@@ -12,13 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library(vfs_data_flat 
-    common.cpp
-    flat_chunk.cpp
-    slice_holder.cpp
+add_library(vfs_service
+    inode_blocks_service.cc
 )
 
-target_link_libraries(vfs_data_flat
+target_link_libraries(vfs_service
     PROTO_OBJS
+    vfs_data
+    vfs_meta
+    vfs_hub
+    client_options
+    dingofs_status
+    brpc::brpc
+    fmt::fmt
     glog::glog
+    gflags::gflags
 )

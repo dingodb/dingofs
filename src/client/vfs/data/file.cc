@@ -25,8 +25,8 @@
 #include <utility>
 
 #include "client/common/utils.h"
-#include "client/vfs/data/async_util.h"
 #include "client/vfs/data/chunk.h"
+#include "client/vfs/data/common/async_util.h"
 #include "client/vfs/hub/vfs_hub.h"
 #include "common/callback.h"
 #include "common/status.h"

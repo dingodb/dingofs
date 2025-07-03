@@ -28,6 +28,15 @@ DECLARE_bool(meta_logging);
 
 DECLARE_int32(flush_bg_thread);
 
+// begin used in inode_blocks_service
+DECLARE_uint32(format_file_offset_width);
+DECLARE_uint32(format_len_width);
+DECLARE_uint32(format_block_offset_width);
+DECLARE_uint32(format_block_name_width);
+DECLARE_uint32(format_block_len_width);
+DECLARE_string(format_delimiter);
+// end used in inode_blocks_service
+
 }  // namespace client
 }  // namespace dingofs
 

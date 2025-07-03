@@ -46,7 +46,7 @@ struct SliceReadReq {
 
 struct BlockDesc {
   uint64_t file_offset;
-  uint64_t block_len;
+  uint64_t block_len; // the len of the block
   bool zero;
   uint64_t version;
   uint64_t slice_id;

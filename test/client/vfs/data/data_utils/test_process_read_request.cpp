@@ -17,7 +17,7 @@
 #include <optional>
 #include <vector>
 
-#include "client/vfs/data/data_utils.h"
+#include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/data_utils/test_data_utils_common.h"
 
 namespace dingofs {

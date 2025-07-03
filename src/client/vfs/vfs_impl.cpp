@@ -472,13 +472,23 @@ uint64_t VFSImpl::GetMaxNameLength() {
 }
 
 Status VFSImpl::StartBrpcServer() {
+  inode_blocks_service_.Init(vfs_hub_.get());
+
+  int rc = brpc_server_.AddService(&inode_blocks_service_,
+                                   brpc::SERVER_DOESNT_OWN_SERVICE);
+  if (rc != 0) {
+    std::string error_msg = fmt::format(
+        "Add inode blocks service to brpc server failed, rc: {}", rc);
+    LOG(ERROR) << error_msg;
+    return Status::Internal(error_msg);
+  }
+
   brpc::ServerOptions brpc_server_options;
   if (FLAGS_bthread_worker_num > 0) {
     brpc_server_options.num_threads = FLAGS_bthread_worker_num;
   }
 
-  int rc =
-      brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);
+  rc = brpc_server_.Start(vfs_option_.dummy_server_port, &brpc_server_options);
   if (rc != 0) {
     std::string error_msg =
         fmt::format("Start brpc dummy server failed, port = {}, rc = {}",

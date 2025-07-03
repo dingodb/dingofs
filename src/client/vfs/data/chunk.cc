@@ -28,8 +28,8 @@
 #include "cache/utils/context.h"
 #include "client/common/utils.h"
 #include "client/meta/vfs_meta.h"
-#include "client/vfs/data/common.h"
-#include "client/vfs/data/data_utils.h"
+#include "client/vfs/data/common/common.h"
+#include "client/vfs/data/common/data_utils.h"
 #include "client/vfs/data/slice/common.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
@@ -473,7 +473,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
       to_destroy.push_back(task);
     }  // end  for to_commit
-  }    // end while(true)
+  }  // end while(true)
 }
 
 void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "client/vfs/data/common.h"
+#include "client/vfs/data/common/common.h"
 
 #include <fmt/format.h>
 

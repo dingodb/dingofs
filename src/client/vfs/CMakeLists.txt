@@ -17,6 +17,7 @@ add_subdirectory(data)
 add_subdirectory(handle)
 add_subdirectory(hub)
 add_subdirectory(meta)
+add_subdirectory(service)
 
 add_library(vfs_lib
     vfs_impl.cpp
@@ -30,6 +31,7 @@ target_link_libraries(vfs_lib
     vfs_meta
     vfs_hub
     vfs_handle
+    vfs_service
     glog::glog
     gflags::gflags
     fmt::fmt
