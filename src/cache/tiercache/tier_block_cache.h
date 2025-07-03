@@ -82,8 +82,11 @@ class TierBlockCache final : public BlockCache {
   bool RemoteEnableStage() const;
   bool RemoteEnableCache() const;
 
+  using FillGroupCacheCb = Storage::PutOption::AsyncCacheFunc;
+  FillGroupCacheCb NewFillGroupCacheCb(ContextSPtr ctx);
+
   // The behavior of local block cache is same as remote block cache,
-  // the biggest difference is that the local blocak cache will read/write data
+  // the biggest difference is that the local block cache will read/write data
   // from/to the local disk, while the remote block cache will read/write data
   // from/to the remote cache group node.
   std::atomic<bool> running_;

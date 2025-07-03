@@ -242,10 +242,10 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
 
   status = CheckStatus(kWantExec | kWantStage);
   if (!status.ok()) {
-    LOG(ERROR) << "Disk cache status is unavailable, skip stage: trace id = "
-               << ctx->TraceId() << ", key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Disk cache status is unavailable, skip stage: key = %s, "
+        "length = %zu, status = %s",
+        ctx->TraceId(), key.Filename(), block.size, status.ToString());
     return status;
   }
 
@@ -255,9 +255,10 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
   status = fs_->WriteFile(ctx, stage_path, block.buffer,
                           WriteOption{.drop_page_cache = true});
   if (!status.ok()) {
-    LOG(ERROR) << "Write stage block file failed: trace id = " << ctx->TraceId()
-               << ", path = " << stage_path << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Write stage block file failed: path = %s, length = %zu, "
+        "status = %s",
+        ctx->TraceId(), stage_path, block.size, status.ToString());
     return status;
   }
 
@@ -267,9 +268,8 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kLinkFile);
   status = fs_->Link(stage_path, cache_path);
   if (!status.ok()) {
-    LOG(ERROR) << "Link " << stage_path << " to " << cache_path
-               << " failed, ignore error: trace id = " << ctx->TraceId()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Link %s to %s failed, ignore error: status = %s",
+              ctx->TraceId(), stage_path, cache_path, status.ToString());
     status = Status::OK();  // ignore link error
   }
 
@@ -324,17 +324,16 @@ Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
 
   status = CheckStatus(kWantExec | kWantCache);
   if (!status.ok()) {
-    LOG(ERROR) << "Disk cache status is unavailable, skip cache: trace id = "
-               << ctx->TraceId() << ", key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Disk cache status is unavailable, skip cache: key = %s, "
+        "length = %zu, status = %s",
+        ctx->TraceId(), key.Filename(), block.size, status.ToString());
     return status;
   }
 
   if (IsCached(key)) {
-    VLOG(9) << absl::StrFormat(
-        "Cache block already exists: trace id = %s, key = %s", ctx->TraceId(),
-        key.Filename());
+    VLOG_9("[%s] Cache block already exists: key = %s, length = %zu",
+           ctx->TraceId(), key.Filename(), block.size);
     return Status::OK();
   }
 
@@ -343,9 +342,10 @@ Status DiskCache::Cache(ContextSPtr ctx, const BlockKey& key,
   status = fs_->WriteFile(ctx, cache_path, block.buffer,
                           WriteOption{.drop_page_cache = true});
   if (!status.ok()) {
-    LOG(ERROR) << "Write cache block file failed: trace id = " << ctx->TraceId()
-               << ", path = " << cache_path << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Write cache block file failed: path = %s, length = %zu, "
+        "status = %s",
+        ctx->TraceId(), cache_path, block.size, status.ToString());
     return status;
   }
 
@@ -368,9 +368,10 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   status = CheckStatus(kWantExec);
   if (!status.ok()) {
-    LOG(ERROR) << "Disk cache status is unavailable, skip load: trace id = "
-               << ctx->TraceId() << ", key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Disk cache status is unavailable, skip load: "
+        "key = %s, status = %s",
+        ctx->TraceId(), key.Filename(), status.ToString());
     return status;
   }
 
@@ -384,15 +385,16 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   status = fs_->ReadFile(ctx, cache_path, offset, length, buffer,
                          ReadOption{.drop_page_cache = true});
   if (status.IsNotFound()) {  // Delete block which meybe deleted by accident.
-    LOG(WARNING)
-        << "Cache block file not found, delete the corresponding key from "
-           "lru cache: trace id = "
-        << ctx->TraceId() << ", path = " << cache_path;
+    LOG_WARNING(
+        "[%s] Cache block file not found, delete the corresponding "
+        "key from lru cache: path = %s",
+        ctx->TraceId(), cache_path);
     manager_->Delete(key);
   } else if (!status.ok()) {
-    LOG(ERROR) << "Read cache block file failed: trace id = " << ctx->TraceId()
-               << ", path = " << cache_path << ", offset = " << offset
-               << ", length = " << length << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Read cache block file failed: path = %s, offset = %lld, "
+        "length = %zu, status = %s",
+        ctx->TraceId(), cache_path, offset, length, status.ToString());
   }
 
   return status;

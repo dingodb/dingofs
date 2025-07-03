@@ -83,8 +83,8 @@ class ServiceClosure : public google::protobuf::Closure {
 
     if (response_->status() != PBBlockCacheErrCode::BlockCacheOk) {
       LOG(ERROR) << absl::StrFormat(
-          "BlockCacheService [%s][%s] reqeust failed: request = %s, response = "
-          "%s, status = %s",
+          "[%s] BlockCacheService [%s] reqeust failed: request = %s, response "
+          "= %s, status = %s",
           ctx_->TraceId(), ToString(request_),
           request_->ShortDebugString().substr(0, 512),
           response_->ShortDebugString().substr(0, 512),

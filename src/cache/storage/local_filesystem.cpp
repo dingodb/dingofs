@@ -126,9 +126,8 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   auto tmppath = Helper::TempFilepath(path);
   status = MkDirs(Helper::ParentDir(tmppath));
   if (!status.ok() && !status.IsExist()) {
-    LOG(ERROR) << "Create parent directory failed: trace id = "
-               << ctx->TraceId() << ", path = " << tmppath
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Create parent directory failed: path = %s, status = %s",
+              ctx->TraceId(), tmppath, status.ToString());
     return CheckStatus(status);
   }
 
@@ -138,17 +137,16 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   int flags = Posix::kDefaultCreatFlags | (use_direct ? O_DIRECT : 0);
   status = Posix::Open(tmppath, flags, 0644, &fd);
   if (!status.ok()) {
-    LOG(ERROR) << "Open file failed: trace id = " << ctx->TraceId()
-               << ", path = " << tmppath << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Open file failed: path = %s, status = %s", ctx->TraceId(),
+              tmppath, status.ToString());
     return CheckStatus(status);
   }
 
   NEXT_STEP(kAioWrite);
   status = AioWrite(ctx, fd, buffer, option);
   if (!status.ok()) {
-    LOG(ERROR) << "Aio write failed: trace id = " << ctx->TraceId()
-               << ", path = " << tmppath << ", length = " << buffer.Size()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Aio write failed: path = %s, length = %zu, status = %s",
+              ctx->TraceId(), tmppath, buffer.Size(), status.ToString());
     Unlink(ctx, tmppath);
     return CheckStatus(status);
   }
@@ -156,9 +154,8 @@ Status LocalFileSystem::WriteFile(ContextSPtr ctx, const std::string& path,
   NEXT_STEP(kRenameFile);
   status = Posix::Rename(tmppath, path);
   if (!status.ok()) {
-    LOG(ERROR) << "Rename temp file failed: trace id = " << ctx->TraceId()
-               << ", from = " << tmppath << ", to = " << path
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Rename temp file failed: from = %s, to = %s, status = %s",
+              ctx->TraceId(), tmppath, path, status.ToString());
     Unlink(ctx, tmppath);
   }
   return CheckStatus(status);
@@ -179,8 +176,8 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
   int fd;
   status = Posix::Open(path, O_RDONLY, &fd);
   if (!status.ok()) {
-    LOG(ERROR) << "Open file failed: trace id = " << ctx->TraceId()
-               << ", path = " << path << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Open file failed: path = %s, status = %s", ctx->TraceId(),
+              path, status.ToString());
     return CheckStatus(status);
   }
 
@@ -188,20 +185,20 @@ Status LocalFileSystem::ReadFile(ContextSPtr ctx, const std::string& path,
     NEXT_STEP(kMmap);
     status = MapFile(ctx, fd, offset, length, buffer, option);
     if (!status.ok()) {
-      LOG(ERROR) << "Map file failed: trace id = " << ctx->TraceId()
-                 << ", path = " << path << ", offset = " << offset
-                 << ", length = " << length
-                 << ", status = " << status.ToString();
+      LOG_ERROR(
+          "[%s] Map file failed: path = %s, offset = %lld, length = %zu, "
+          "status = %s",
+          ctx->TraceId(), path, offset, length, status.ToString());
       return CheckStatus(status);
     }
   } else {
     NEXT_STEP(kAioRead);
     status = AioRead(ctx, fd, offset, length, buffer, option);
     if (!status.ok()) {
-      LOG(ERROR) << "Aio read failed: trace id = " << ctx->TraceId()
-                 << ", path = " << path << ", offset = " << offset
-                 << ", length = " << length
-                 << ", status = " << status.ToString();
+      LOG_ERROR(
+          "[%s] Aio read failed: path = %s, offset = %lld, "
+          "length = %zu, status = %s",
+          ctx->TraceId(), path, offset, length, status.ToString());
       return CheckStatus(status);
     }
   }
@@ -258,10 +255,10 @@ Status LocalFileSystem::MapFile(ContextSPtr ctx, int fd, off_t offset,
       page_cache_manager_->AsyncDropPageCache(ctx, fd, offset, length);
     } else {
       CloseFd(ctx, fd);
-      LOG(ERROR) << "MUnmap failed: trace id = " << ctx->TraceId()
-                 << ", fd = " << fd << ", offset = " << offset
-                 << ", length = " << length
-                 << ", status = " << status.ToString();
+      LOG_ERROR(
+          "[%s] MUnmap failed: fd = %d, offset = %lld, length = %zu, "
+          "status = %s",
+          ctx->TraceId(), fd, offset, length, status.ToString());
     }
   };
 
@@ -274,16 +271,16 @@ Status LocalFileSystem::MapFile(ContextSPtr ctx, int fd, off_t offset,
 void LocalFileSystem::CloseFd(ContextSPtr ctx, int fd) {
   auto status = Posix::Close(fd);
   if (!status.ok()) {
-    LOG(ERROR) << "Close file descriptor failed: trace id = " << ctx->TraceId()
-               << ", fd = " << fd << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Close file descriptor failed: fd = %d, status = %s",
+              ctx->TraceId(), fd, status.ToString());
   }
 }
 
 void LocalFileSystem::Unlink(ContextSPtr ctx, const std::string& path) {
   auto status = Posix::Unlink(path);
   if (!status.ok()) {
-    LOG(ERROR) << "Unlink file failed: trace id = " << ctx->TraceId()
-               << ", path = " << path << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Unlink file failed: path = %s, status = %s", ctx->TraceId(),
+              path, status.ToString());
   }
 }
 

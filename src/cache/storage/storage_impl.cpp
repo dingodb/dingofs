@@ -113,8 +113,8 @@ Status StorageImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   status = closure.status();
   if (!status.ok()) {
-    LOG_ERROR("Storage put failed: %s, key = %s, size = %lld",
-              status.ToString(), key.Filename(), block.size);
+    LOG_ERROR("[%s] Storage put failed: key = %s, size = %lld, status = %s",
+              ctx->TraceId(), key.Filename(), block.size, status.ToString());
     return status;
   }
   return status;
@@ -140,8 +140,10 @@ Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   status = closure.status();
   if (!status.ok()) {
-    LOG_ERROR("Storage range failed: %s, key = %s, offset = %lld, length = %zu",
-              status.ToString(), key.Filename(), offset, length);
+    LOG_ERROR(
+        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu,"
+        "status = %s",
+        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return status;
 }

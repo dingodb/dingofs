@@ -119,9 +119,9 @@ Status RemoteNodeImpl::Put(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Put(ctx, key, block);
   if (!status.ok()) {
-    LOG(ERROR) << "Put block failed: key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), block.size,
+              status.ToString().c_str());
   }
   return CheckStatus(status);
 }
@@ -138,9 +138,11 @@ Status RemoteNodeImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   status = rpc_->Range(ctx, key, offset, length, buffer, block_size);
   if (!status.ok()) {
-    LOG(ERROR) << "Range block failed: key = " << key.Filename()
-               << ", offset = " << offset << ", length = " << length
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Range block failed: key = %s, offset = %lld, length = %zu, "
+        "status = %s",
+        ctx->TraceId(), key.Filename(), offset, length,
+        status.ToString().c_str());
   }
   return CheckStatus(status);
 }
@@ -156,11 +158,11 @@ Status RemoteNodeImpl::Cache(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Cache(ctx, key, block);
   if (!status.ok()) {
-    LOG(ERROR) << "Cache block failed: key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), block.size,
+              status.ToString().c_str());
   }
-  return CheckStatus(status);
+  return status;  // Skip CheckStatus here
 }
 
 Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
@@ -174,10 +176,11 @@ Status RemoteNodeImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
 
   status = rpc_->Prefetch(ctx, key, length);
   if (!status.ok()) {
-    LOG(ERROR) << "Prefetch block failed: key = " << key.Filename()
-               << ", length = " << length << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Prefetch block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), length,
+              status.ToString().c_str());
   }
-  return CheckStatus(status);
+  return status;  // Skip CheckStatus here
 }
 
 Status RemoteNodeImpl::CheckHealth() const {

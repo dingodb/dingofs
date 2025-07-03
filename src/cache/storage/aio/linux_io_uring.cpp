@@ -184,14 +184,12 @@ Status LinuxIOUring::WaitIO(uint64_t timeout_ms,
 void LinuxIOUring::OnCompleted(Aio* aio, int retcode) {
   auto status = Status::OK();
   if (retcode < 0) {
-    LOG(ERROR) << "Aio failed: trace id = " << aio->ctx->TraceId()
-               << ", aio = " << aio->ToString()
-               << ", retcode = " << strerror(retcode);
+    LOG_ERROR("[%s] Aio failed: aio = %s, retcode = %s", aio->ctx->TraceId(),
+              aio->ToString(), strerror(-retcode));
     status = Status::IoError(strerror(-retcode));
   } else if (retcode != aio->length) {
-    LOG(ERROR) << absl::StrFormat(
-        "Aio %s fewer than length bytes: want (%zu) but got (%u)",
-        aio->ToString(), aio->length, retcode);
+    LOG_ERROR("[%s] Aio %s fewer than length bytes: want (%zu) but got (%u)",
+              aio->ctx->TraceId(), aio->ToString(), aio->length, retcode);
     status = Status::IoError(absl::StrFormat(
         "%s fewer than length bytes: want (%zu) but got (%u)",
         aio->for_read ? "read" : "write", aio->length, retcode));

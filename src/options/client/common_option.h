@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef DINGOFS_SRC_CLIENT_OPTIONS_COMMON_OPTION_H_
-#define DINGOFS_SRC_CLIENT_OPTIONS_COMMON_OPTION_H_
+#ifndef DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
+#define DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "options/cache/blockcache.h"
@@ -111,6 +111,9 @@ static void InitRemoteBlockCacheOption(utils::Configuration* c,
               &cache::FLAGS_cache_rpc_timeout_ms);
   c->GetValue("remote_cache.prefetch_rpc_timeout_ms",
               &cache::FLAGS_prefetch_rpc_timeout_ms);
+  c->GetValue("remote_cache.fill_group_cache", &cache::FLAGS_fill_group_cache);
+  c->GetValue("remote_cache.check_cache_node_state_duration_ms",
+              &cache::FLAGS_check_cache_node_state_duration_ms);
   *option = cache::RemoteBlockCacheOption();
 }
 
@@ -125,4 +128,4 @@ static void RewriteCacheDir(cache::BlockCacheOption* option, std::string uuid) {
 }  // namespace client
 }  // namespace dingofs
 
-#endif  // DINGOFS_SRC_CLIENT_OPTIONS_COMMON_OPTION_H_
+#endif  // DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_

@@ -23,6 +23,7 @@
 #include "cache/utils/helper.h"
 
 #include <absl/strings/match.h>
+#include <absl/strings/str_format.h>
 #include <absl/strings/str_join.h>
 #include <butil/file_util.h>
 
@@ -101,7 +102,8 @@ std::string Helper::PathJoin(const std::vector<std::string>& subpaths) {
 }
 
 std::string Helper::TempFilepath(const std::string& filepath) {
-  return filepath + kTempFileSuffix;
+  return absl::StrFormat("%s.%lld.%s", filepath, TimestampNs(),
+                         kTempFileSuffix);
 }
 
 bool Helper::IsTempFilepath(const std::string& filepath) {

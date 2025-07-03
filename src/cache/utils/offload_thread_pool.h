@@ -38,7 +38,7 @@ class OffloadThreadPool {
     return instance;
   }
 
-  void Start() { CHECK_EQ(thread_pool_.Start(5), 0); }
+  void Start() { CHECK_EQ(thread_pool_.Start(32), 0); }
   void Submit(TaskFunc task) { thread_pool_.Enqueue(task); }
 
  private:

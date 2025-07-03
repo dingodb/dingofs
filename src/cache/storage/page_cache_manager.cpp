@@ -102,8 +102,9 @@ int PageCacheManager::HandleTask(void* meta,
 }
 
 void PageCacheManager::Handle(const Task& task) {
-  VLOG(9) << "Drop page cache: fd = " << task.fd << ", offset = " << task.offset
-          << ", length = " << task.length << ", sync = " << task.sync;
+  VLOG_9(
+      "[%s] Drop page cache: fd = %d, offset = %lld, length = %zu, sync = %d",
+      task.ctx->TraceId(), task.fd, task.offset, task.length, task.sync);
 
   if (task.sync) {
     SyncData(task.fd);

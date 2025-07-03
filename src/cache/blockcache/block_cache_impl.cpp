@@ -22,6 +22,8 @@
 
 #include "cache/blockcache/block_cache_impl.h"
 
+#include <absl/strings/str_format.h>
+
 #include <memory>
 
 #include "cache/blockcache/cache_store.h"
@@ -150,13 +152,12 @@ Status BlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
   if (status.ok()) {
     return status;
   } else if (status.IsCacheFull()) {
-    LOG_EVERY_SECOND(WARNING)
-        << "Stage block failed: trace id = " << ctx->TraceId()
-        << ", key = " << key.Filename() << ", status = " << status.ToString();
+    LOG_EVERY_SECOND(WARNING) << absl::StrFormat(
+        "[%s] Stage block failed: key = %s, length = %zu, status = %s",
+        ctx->TraceId(), key.Filename(), block.size, status.ToString());
   } else {
-    LOG(ERROR) << "Stage block failed: trace id = " << ctx->TraceId()
-               << ", key = " << key.Filename() << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Stage block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), block.size, status.ToString());
   }
 
   // Stage block failed, try to upload it
@@ -178,14 +179,15 @@ Status BlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
   NEXT_STEP(kLoadBlock);
   status = store_->Load(ctx, key, offset, length, buffer);
-  if (status.ok()) {
+  if (status.ok()) {  // success
     return status;
-  } else if (!option.retrive) {
-    LOG(ERROR)
-        << "Load block failed, and no longer retrive storage: trace id = "
-        << ctx->TraceId() << ", key = " << key.Filename()
-        << ", offset = " << offset << ", length = " << length
-        << ", status = " << status.ToString();
+  } else if (!option.retrive) {  // failed but not retrive
+    if (!status.IsNotFound()) {
+      LOG_ERROR(
+          "[%s] Load block failed: key = %s, offset = %lld, length = %zu, "
+          "status = %s",
+          ctx->TraceId(), key.Filename(), offset, length, status.ToString());
+    }
     return status;
   }
 
@@ -207,9 +209,8 @@ Status BlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, block);
   if (!status.ok()) {
-    LOG(ERROR) << "Cache block failed: trace id = " << ctx->TraceId()
-               << ", key = " << key.Filename() << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), block.size, status.ToString());
     return status;
   }
 
@@ -240,9 +241,8 @@ Status BlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   NEXT_STEP(kCacheBlock);
   status = store_->Cache(ctx, key, Block(buffer));
   if (!status.ok()) {
-    LOG(ERROR) << "Cache block failed: trace id = " << ctx->TraceId()
-               << ", key = " << key.Filename() << ", length = " << length
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Cache block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), length, status.ToString());
     return status;
   }
 
@@ -329,16 +329,15 @@ Status BlockCacheImpl::StoragePut(ContextSPtr ctx, const BlockKey& key,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << "Get storage failed: fs_id = " << key.fs_id
-               << ", key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Get storage failed: fs_id = %d, key = %s, status = %s",
+              ctx->TraceId(), key.fs_id, key.Filename(), status.ToString());
     return status;
   }
 
   status = storage->Put(ctx, key, block);
   if (!status.ok()) {
-    LOG(ERROR) << "Storage put failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Storage put failed: key = %s, status = %s", ctx->TraceId(),
+              key.Filename(), status.ToString());
   }
   return status;
 }
@@ -349,17 +348,17 @@ Status BlockCacheImpl::StorageRange(ContextSPtr ctx, const BlockKey& key,
   StorageSPtr storage;
   auto status = storage_pool_->GetStorage(key.fs_id, storage);
   if (!status.ok()) {
-    LOG(ERROR) << "Get storage failed: trace id = " << ctx->TraceId()
-               << ", fs_id = " << key.fs_id << ", key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Get storage failed: fs_id = %d, key = %s, status = %s",
+              ctx->TraceId(), key.fs_id, key.Filename(), status.ToString());
     return status;
   }
 
   status = storage->Range(ctx, key, offset, length, buffer);
   if (!status.ok()) {
-    LOG(ERROR) << "Storage range failed: trace id = " << ctx->TraceId()
-               << ", key = " << key.Filename() << ", offset = " << offset
-               << ", length = " << length << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu, "
+        "status = %s",
+        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return status;
 }

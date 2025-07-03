@@ -212,10 +212,9 @@ void AioQueueImpl::OnError(Aio* aio, Status status) {
       "Aio %s it not on expected phase: got(%s) != expect(%s)", aio->ToString(),
       LastStep(aio), kExecuteIO);
 
-  LOG_ERROR(
-      "Aio encountered an error in %s step: trace id = %s, aio = %s, status = "
-      "%s",
-      LastStep(aio), aio->ctx->TraceId(), aio->ToString(), status.ToString());
+  LOG_ERROR("[%s] Aio encountered an error in %s step: aio = %s, status = %s",
+            aio->ctx->TraceId(), LastStep(aio), aio->ToString(),
+            status.ToString());
 
   aio->status() = status;
   RunClosure(aio);
@@ -227,8 +226,8 @@ void AioQueueImpl::OnCompleted(Aio* aio) {
       LastStep(aio), kExecuteIO);
 
   if (!aio->status().ok()) {
-    LOG_ERROR("Aio failed: trace id = %s, aio = %s, status = %s",
-              aio->ctx->TraceId(), aio->ToString(), aio->status().ToString());
+    LOG_ERROR("[%s] Aio failed: aio = %s, status = %s", aio->ctx->TraceId(),
+              aio->ToString(), aio->status().ToString());
   }
 
   RunClosure(aio);

@@ -38,7 +38,9 @@ std::string TimerMessage(const std::vector<ChildTimer>& child_timers) {
     steps.push_back(absl::StrFormat("%s:%.6lf", child_timer.step_name,
                                     child_timer.timer.u_elapsed() / 1e6));
   }
-  return absl::StrJoin(steps, ",");
+
+  auto message = absl::StrJoin(steps, ",");
+  return message.empty() ? "no steps" : message;
 }
 
 void StepTimer::Start() { timer_.start(); }

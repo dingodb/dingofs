@@ -38,7 +38,7 @@ namespace cache {
 DEFINE_string(cache_group, "",
               "Cache group name to use, empty means not use cache group");
 
-static const std::string kModule = kRmoteBlockCacheMoudule;
+static const std::string kModule = kRemoteBlockCacheMoudule;
 
 RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
                                            StorageSPtr storage)
@@ -131,9 +131,8 @@ Status RemoteBlockCacheImpl::Put(ContextSPtr ctx, const BlockKey& key,
   }
 
   if (!status.ok()) {
-    LOG(ERROR) << "Put block failed: key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Put block failed: key = %s, length = %zu, status = %s",
+              ctx->TraceId(), key.Filename(), block.size, status.ToString());
   }
   return status;
 }
@@ -158,9 +157,10 @@ Status RemoteBlockCacheImpl::Range(ContextSPtr ctx, const BlockKey& key,
   }
 
   if (!status.ok()) {
-    LOG(ERROR) << "Range block failed: key = " << key.Filename()
-               << ", offset = " << offset << ", length = " << length
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Range block failed: key = %s, offset = %lld, "
+        "length = %zu, status = %s",
+        ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return status;
 }
@@ -179,9 +179,11 @@ Status RemoteBlockCacheImpl::Cache(ContextSPtr ctx, const BlockKey& key,
   status = remote_node_->Cache(ctx, key, block);
 
   if (!status.ok()) {
-    LOG(ERROR) << "Cache block failed: key = " << key.Filename()
-               << ", length = " << block.size
-               << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Cache block failed: trace id = %s, key = %s, length = %zu, "
+        "status = %s",
+        ctx->TraceId(), ctx->TraceId(), key.Filename(), block.size,
+        status.ToString());
   }
   return status;
 }
@@ -201,8 +203,11 @@ Status RemoteBlockCacheImpl::Prefetch(ContextSPtr ctx, const BlockKey& key,
   status = remote_node_->Prefetch(ctx, key, length);
 
   if (!status.ok()) {
-    LOG(ERROR) << "Prefetch block failed: key = " << key.Filename()
-               << ", length = " << length << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Prefetch block failed: trace id = %s, key = %s, "
+        "length = %zu, status = %s",
+        ctx->TraceId(), ctx->TraceId(), key.Filename(), length,
+        status.ToString());
   }
   return status;
 }

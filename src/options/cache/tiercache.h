@@ -55,6 +55,9 @@ DECLARE_uint32(prefetch_rpc_timeout_ms);
 // Sets the maximum number of retry times for remote cache rpc operations.
 DECLARE_uint32(cache_rpc_max_retry_times);
 
+// Sets the maximum timeout for remote cache rpc operations in milliseconds.
+DECLARE_uint32(cache_rpc_max_timeout_ms);
+
 // Sets the duration in milliseconds to check the cache group node state.
 DECLARE_uint32(check_cache_node_state_duration_ms);
 

@@ -55,6 +55,7 @@ namespace cache {
 
 #define LOG_INFO(...) LOG(INFO) << absl::StrFormat(__VA_ARGS__)
 #define LOG_ERROR(...) LOG(ERROR) << absl::StrFormat(__VA_ARGS__)
+#define LOG_WARNING(...) LOG(WARNING) << absl::StrFormat(__VA_ARGS__)
 #define VLOG_1(...) VLOG(1) << absl::StrFormat(__VA_ARGS__)
 #define VLOG_3(...) VLOG(3) << absl::StrFormat(__VA_ARGS__)
 #define VLOG_6(...) VLOG(6) << absl::StrFormat(__VA_ARGS__)

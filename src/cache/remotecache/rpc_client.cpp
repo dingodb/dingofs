@@ -154,9 +154,9 @@ Status RPCClient::ResetChannel() {
   return InitChannel(server_ip_, server_port_);
 }
 
-// TODO: consider api_name and retcode
-bool RPCClient::ShouldRetry(const std::string& /*api_name*/, int /*retcode*/) {
-  return true;
+// TODO: consider retcode
+bool RPCClient::ShouldRetry(const std::string& api_name, int /*retcode*/) {
+  return api_name == kApiRange;
 }
 
 bool RPCClient::ShouldReset(int retcode) {

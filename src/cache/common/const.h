@@ -36,7 +36,7 @@ static constexpr uint64_t kTiB = 1024ULL * kGiB;
 
 // module name
 static const std::string kTierBlockCacheMoudule = "tiercache";
-static const std::string kRmoteBlockCacheMoudule = "remotecache";
+static const std::string kRemoteBlockCacheMoudule = "remotecache";
 static const std::string kServiceModule = "service";
 static const std::string kCacheGroupNodeModule = "cachenode";
 static const std::string kBlockCacheMoudule = "blockcache";
