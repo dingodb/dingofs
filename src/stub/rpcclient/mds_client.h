@@ -351,8 +351,6 @@ class MdsClientImpl : public MdsClient {
   MDSBaseClient* mdsbasecli_;
   RPCExcutorRetryPolicy rpcexcutor_;
   common::MdsOption mdsOpt_;
-
-  metrics::mds::MDSClientMetric mdsClientMetric_;
 };
 
 }  // namespace rpcclient

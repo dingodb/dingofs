@@ -36,6 +36,7 @@ namespace dingofs {
 namespace stub {
 namespace rpcclient {
 
+using metrics::mds::MDSClientMetric;
 using pb::common::PartitionInfo;
 using pb::mds::CommitTxRequest;
 using pb::mds::CommitTxResponse;
@@ -251,9 +252,10 @@ FSStatusCode MdsClientImpl::MountFs(const std::string& fsName,
     // mount fs metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mds_guard(
-        &is_ok, {&mdsClientMetric_.mountFs, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mds_guard(&is_ok,
+                              {&MDSClientMetric::GetInstance().mountFs,
+                               &MDSClientMetric::GetInstance().getAllOperation},
+                              start);
 
     pb::mds::MountFsResponse response;
     mdsbasecli_->MountFs(fsName, mountPt, &response, cntl, channel);
@@ -287,9 +289,10 @@ FSStatusCode MdsClientImpl::UmountFs(const std::string& fsName,
     // unmount fs metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok, {&mdsClientMetric_.umountFs, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().umountFs,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::UmountFsResponse response;
     mdsbasecli_->UmountFs(fsName, mountPt, &response, cntl, channel);
@@ -319,10 +322,10 @@ FSStatusCode MdsClientImpl::GetFsInfo(const std::string& fsName,
     // getfsinfo metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.getFsInfo, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().getFsInfo,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::GetFsInfoResponse response;
     mdsbasecli_->GetFsInfo(fsName, &response, cntl, channel);
@@ -355,10 +358,10 @@ FSStatusCode MdsClientImpl::GetFsInfo(uint32_t fsId, FsInfo* fsInfo) {
     // getfsinfo metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.getFsInfo, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().getFsInfo,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::GetFsInfoResponse response;
     mdsbasecli_->GetFsInfo(fsId, &response, cntl, channel);
@@ -423,8 +426,8 @@ bool MdsClientImpl::GetMetaServerInfo(
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
     MetricListGuard mdsGuard(&is_ok,
-                             {&mdsClientMetric_.getMetaServerInfo,
-                              &mdsClientMetric_.getAllOperation},
+                             {&MDSClientMetric::GetInstance().getMetaServerInfo,
+                              &MDSClientMetric::GetInstance().getAllOperation},
                              start);
 
     pb::mds::topology::GetMetaServerInfoResponse response;
@@ -466,10 +469,11 @@ bool MdsClientImpl::GetMetaServerListInCopysets(
     // getMetaServerListInCopysets metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(&is_ok,
-                             {&mdsClientMetric_.getMetaServerListInCopysets,
-                              &mdsClientMetric_.getAllOperation},
-                             start);
+    MetricListGuard mdsGuard(
+        &is_ok,
+        {&MDSClientMetric::GetInstance().getMetaServerListInCopysets,
+         &MDSClientMetric::GetInstance().getAllOperation},
+        start);
 
     pb::mds::topology::GetMetaServerListInCopySetsResponse response;
     mdsbasecli_->GetMetaServerListInCopysets(logicalpooid, copysetidvec,
@@ -521,10 +525,10 @@ bool MdsClientImpl::CreatePartition(
     // CreatePartition metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.createPartition, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().createPartition,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::topology::CreatePartitionResponse response;
     mdsbasecli_->CreatePartition(fsID, count, &response, cntl, channel);
@@ -573,10 +577,11 @@ bool MdsClientImpl::GetCopysetOfPartitions(
     // GetCopysetOfPartitions metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(&is_ok,
-                             {&mdsClientMetric_.getCopysetOfPartitions,
-                              &mdsClientMetric_.getAllOperation},
-                             start);
+    MetricListGuard mdsGuard(
+        &is_ok,
+        {&MDSClientMetric::GetInstance().getCopysetOfPartitions,
+         &MDSClientMetric::GetInstance().getAllOperation},
+        start);
 
     pb::mds::topology::GetCopysetOfPartitionResponse response;
     mdsbasecli_->GetCopysetOfPartitions(partitionIDList, &response, cntl,
@@ -623,10 +628,10 @@ bool MdsClientImpl::ListPartition(uint32_t fsID,
     // listPartition metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.listPartition, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().listPartition,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::topology::ListPartitionResponse response;
     mdsbasecli_->ListPartition(fsID, &response, cntl, channel);
@@ -666,10 +671,11 @@ bool MdsClientImpl::AllocOrGetMemcacheCluster(uint32_t fsId,
     // AllocOrGetMemcacheCluster metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(&is_ok,
-                             {&mdsClientMetric_.allocOrGetMemcacheCluster,
-                              &mdsClientMetric_.getAllOperation},
-                             start);
+    MetricListGuard mdsGuard(
+        &is_ok,
+        {&MDSClientMetric::GetInstance().allocOrGetMemcacheCluster,
+         &MDSClientMetric::GetInstance().getAllOperation},
+        start);
 
     dingofs::pb::mds::topology::AllocOrGetMemcacheClusterResponse response;
     mdsbasecli_->AllocOrGetMemcacheCluster(fsId, &response, cntl, channel);
@@ -703,10 +709,10 @@ FSStatusCode MdsClientImpl::AllocS3ChunkId(uint32_t fsId, uint32_t idNum,
     // AllocS3ChunkId metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.allocS3ChunkId, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().allocS3ChunkId,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::AllocateS3ChunkResponse response;
     mdsbasecli_->AllocS3ChunkId(fsId, idNum, &response, cntl, channel);
@@ -744,10 +750,10 @@ FSStatusCode MdsClientImpl::RefreshSession(
     // RefreshSession metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.refreshSession, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().refreshSession,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     pb::mds::RefreshSessionRequest request;
     pb::mds::RefreshSessionResponse response;
@@ -789,10 +795,10 @@ FSStatusCode MdsClientImpl::GetLatestTxId(const GetLatestTxIdRequest& request,
     // GetLatestTxId metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok,
-        {&mdsClientMetric_.getLatestTxId, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().getLatestTxId,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     mdsbasecli_->GetLatestTxId(request, response, cntl, channel);
     if (cntl->Failed()) {
@@ -831,9 +837,10 @@ FSStatusCode MdsClientImpl::CommitTx(const CommitTxRequest& request) {
     // CommitTx metrics information
     auto start = butil::cpuwide_time_us();
     bool is_ok = true;
-    MetricListGuard mdsGuard(
-        &is_ok, {&mdsClientMetric_.commitTx, &mdsClientMetric_.getAllOperation},
-        start);
+    MetricListGuard mdsGuard(&is_ok,
+                             {&MDSClientMetric::GetInstance().commitTx,
+                              &MDSClientMetric::GetInstance().getAllOperation},
+                             start);
 
     CommitTxResponse response;
     mdsbasecli_->CommitTx(request, &response, cntl, channel);

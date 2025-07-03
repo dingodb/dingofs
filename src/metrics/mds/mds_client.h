@@ -46,7 +46,7 @@ struct MDSClientMetric {
   // all
   InterfaceMetric getAllOperation;
 
-  MDSClientMetric()
+  explicit MDSClientMetric()
       : mountFs(prefix, "mountFs"),
         umountFs(prefix, "umountFs"),
         getFsInfo(prefix, "getFsInfo"),
@@ -61,6 +61,16 @@ struct MDSClientMetric {
         commitTx(prefix, "commitTx"),
         allocOrGetMemcacheCluster(prefix, "allocOrGetMemcacheCluster"),
         getAllOperation(prefix, "getAllopt") {}
+
+ public:
+  MDSClientMetric(const MDSClientMetric&) = delete;
+
+  MDSClientMetric& operator=(const MDSClientMetric&) = delete;
+
+  static MDSClientMetric& GetInstance() {
+    static MDSClientMetric instance;
+    return instance;
+  }
 };
 
 }  // namespace mds
