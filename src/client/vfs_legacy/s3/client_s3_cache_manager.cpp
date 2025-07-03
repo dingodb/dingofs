@@ -22,6 +22,7 @@
 
 #include "client/vfs_legacy/s3/client_s3_cache_manager.h"
 
+#include <bthread/countdown_event.h>
 #include <butil/time.h>
 #include <bvar/bvar.h>
 #include <glog/logging.h>
@@ -2316,8 +2317,8 @@ void DataCache::FlushTaskExecute(
   // callback
   std::atomic<uint64_t> s3PendingTaskCal(s3Tasks.size());
   std::atomic<uint64_t> kvPendingTaskCal(kvCacheTasks.size());
-  CountDownEvent s3TaskEvent(s3PendingTaskCal);
-  CountDownEvent kvTaskEvent(kvPendingTaskCal);
+  bthread::CountdownEvent s3TaskEvent(s3PendingTaskCal);
+  bthread::CountdownEvent kvTaskEvent(kvPendingTaskCal);
 
   // success callback
   PutObjectAsyncCallBack callback =
@@ -2327,11 +2328,11 @@ void DataCache::FlushTaskExecute(
         // Don't move the if sentence to the front
         // it will cause core dumped because s3Metric_
         // will be destructed before being accessed
-        s3TaskEvent.Signal();
+        s3TaskEvent.signal(1);
       };
 
   SetKVCacheDone kvdone = [&](const std::shared_ptr<SetKVCacheTask>& task) {
-    kvTaskEvent.Signal();
+    kvTaskEvent.signal(1);
     return;
   };
 
@@ -2344,17 +2345,17 @@ void DataCache::FlushTaskExecute(
       auto context = fblock.context;
       cache::BlockKey key = fblock.key;
       cache::Block block(context->buffer, context->buffer_size);
+
       bool writeback = entry_watcher->ShouldWriteback(key.ino);
-      DataStream::GetInstance().EnterFlushSliceQueue(
-          [&, key, block, writeback, callback]() {
-            for (;;) {
-              auto status = block_cache->Put(cache::NewContext(), key, block);
-              if (status.ok()) {
-                callback(context);
-                break;
-              }
-            }
-          });
+      auto option = cache::PutOption{.writeback = writeback};
+
+      block_cache->AsyncPut(
+          cache::NewContext(), key, block,
+          [callback, context](Status status) {
+            CHECK(status.ok());
+            callback(context);
+          },
+          option);
     }
   }
   // kvtask execute
@@ -2364,10 +2365,10 @@ void DataCache::FlushTaskExecute(
                     task->done = kvdone;
                     kvClientManager_->Set(task);
                   });
-    kvTaskEvent.Wait();
+    kvTaskEvent.wait();
   }
 
-  s3TaskEvent.Wait();
+  s3TaskEvent.wait();
 }
 
 void DataCache::PrepareS3ChunkInfo(uint64_t chunkId, uint64_t offset,
