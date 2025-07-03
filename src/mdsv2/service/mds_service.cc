@@ -45,7 +45,8 @@ const std::string kWriteWorkerSetName = "WRITE_WORKER_SET";
 template <typename T>
 static Status ValidateRequest(T* request, FileSystemSPtr file_system) {
   if (request->context().epoch() < file_system->Epoch()) {
-    return Status(pb::error::EROUTER_EPOCH_CHANGE, "epoch change");
+    return Status(pb::error::EROUTER_EPOCH_CHANGE,
+                  fmt::format("epoch change, {}<{}", request->context().epoch(), file_system->Epoch()));
 
   } else if (request->context().epoch() > file_system->Epoch()) {
     return file_system->RefreshFsInfo();

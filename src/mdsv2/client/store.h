@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef DINGOFS_MDSV2_CLIENT_STORE_H_
+#define DINGOFS_MDSV2_CLIENT_STORE_H_
+
 #include <string>
 
 #include "mdsv2/storage/storage.h"
@@ -47,3 +50,5 @@ class StoreClient {
 }  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs
+
+#endif  // DINGOFS_MDSV2_CLIENT_STORE_H_

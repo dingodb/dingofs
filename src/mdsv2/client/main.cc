@@ -17,6 +17,7 @@
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "mdsv2/client/integration_test.h"
 #include "mdsv2/client/mds.h"
 #include "mdsv2/client/store.h"
 #include "mdsv2/common/helper.h"
@@ -63,34 +64,23 @@ DEFINE_uint32(max_inodes, 1000000, "max inodes");
 
 DEFINE_bool(is_force, false, "is force");
 
-std::set<std::string> g_mds_cmd = {
-    "getmdslist",
-    "createfs",
-    "deletefs",
-    "updatefs",
-    "getfs",
-    "listfs",
-    "mkdir",
-    "batchmkdir",
-    "mknod",
-    "batchmknod",
-    "getdentry",
-    "listdentry",
-    "getinode",
-    "batchgetinode",
-    "batchgetxattr",
-    "setfsstats",
-    "continuesetfsstats",
-    "getfsstats",
-    "getfspersecondstats",
-    "setfsquota",
-    "getfsquota",
-    "setdirquota",
-    "getdirquota",
+static std::set<std::string> g_mds_cmd = {
+    "integrationtest", "getmdslist",
+    "createfs",        "deletefs",
+    "updatefs",        "getfs",
+    "listfs",          "mkdir",
+    "batchmkdir",      "mknod",
+    "batchmknod",      "getdentry",
+    "listdentry",      "getinode",
+    "batchgetinode",   "batchgetxattr",
+    "setfsstats",      "continuesetfsstats",
+    "getfsstats",      "getfspersecondstats",
+    "setfsquota",      "getfsquota",
+    "setdirquota",     "getdirquota",
     "deletedirquota",
 };
 
-std::string GetDefaultCoorAddrPath() {
+static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
     return FLAGS_coor_addr;
   }
@@ -106,6 +96,8 @@ std::string GetDefaultCoorAddrPath() {
 }
 
 int main(int argc, char* argv[]) {
+  using Helper = dingofs::mdsv2::Helper;
+
   FLAGS_minloglevel = google::GLOG_INFO;
   FLAGS_logtostdout = true;
   FLAGS_logtostderr = true;
@@ -117,9 +109,12 @@ int main(int argc, char* argv[]) {
 
   // dingofs::mdsv2::DingoLogger::InitLogger("./log", "mdsv2_client", dingofs::mdsv2::LogLevel::kINFO);
 
-  using Helper = dingofs::mdsv2::Helper;
-
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
+
+  if (lower_cmd == Helper::ToLowerCase("IntegrationTest")) {
+    dingofs::mdsv2::client::RunIntegrationTests();
+    return 0;
+  }
 
   if (g_mds_cmd.count(lower_cmd) > 0) {
     if (FLAGS_mds_addr.empty()) {

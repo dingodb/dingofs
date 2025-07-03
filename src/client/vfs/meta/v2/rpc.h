@@ -121,6 +121,12 @@ inline Status TransformError(const pb::error::Error& error) {
     case pb::error::EQUOTA_ILLEGAL:
       return Status::NotSupport(error.errcode(), error.errmsg());
 
+    case pb::error::ENOT_EMPTY:
+      return Status::NotEmpty(error.errcode(), error.errmsg());
+
+    case pb::error::ENOT_FOUND:
+      return Status::NotExist(error.errcode(), error.errmsg());
+
     default:
       return Status::Internal(error.errcode(), error.errmsg());
   }

@@ -19,6 +19,7 @@ add_executable(dingo-mdsv2-client
   mds.cc
   store.cc
   interaction.cc
+  integration_test.cc
 )
 
 target_link_libraries(dingo-mdsv2-client
@@ -36,4 +37,5 @@ target_link_libraries(dingo-mdsv2-client
   gflags
   glog
   OpenSSL::SSL
+  GTest::gtest
 )

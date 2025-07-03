@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef DINGOFS_MDSV2_CLIENT_MDS_H_
+#define DINGOFS_MDSV2_CLIENT_MDS_H_
+
 #include <cstdint>
 #include <string>
 
@@ -128,6 +131,9 @@ class MDSClient {
 
   bool Init(const std::string& mds_addr);
 
+  void SetFsId(uint32_t fs_id) { fs_id_ = fs_id; }
+  void SetEpoch(uint64_t epoch) { epoch_ = epoch; }
+
   HeartbeatResponse Heartbeat(uint32_t mds_id);
 
   GetMDSListResponse GetMdsList();
@@ -192,10 +198,13 @@ class MDSClient {
   DeleteDirQuotaResponse DeleteDirQuota(Ino ino);
 
  private:
-  uint32_t fs_id_;
+  uint32_t fs_id_{0};
+  uint64_t epoch_{0};
   InteractionPtr interaction_;
 };
 
 }  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs
+
+#endif  // DINGOFS_MDSV2_CLIENT_MDS_H_

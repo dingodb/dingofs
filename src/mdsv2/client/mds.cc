@@ -252,6 +252,8 @@ MkDirResponse MDSClient::MkDir(Ino parent, const std::string& name) {
   MkDirRequest request;
   MkDirResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
@@ -287,6 +289,8 @@ RmDirResponse MDSClient::RmDir(Ino parent, const std::string& name) {
   RmDirRequest request;
   RmDirResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
@@ -300,6 +304,8 @@ ReadDirResponse MDSClient::ReadDir(Ino ino, const std::string& last_name, bool w
   CHECK(fs_id_ > 0) << "fs_id_ is zero";
   ReadDirRequest request;
   ReadDirResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -318,6 +324,8 @@ MkNodResponse MDSClient::MkNod(Ino parent, const std::string& name) {
 
   MkNodRequest request;
   MkNodResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
@@ -354,6 +362,8 @@ GetDentryResponse MDSClient::GetDentry(Ino parent, const std::string& name) {
   GetDentryRequest request;
   GetDentryResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
@@ -372,6 +382,8 @@ ListDentryResponse MDSClient::ListDentry(Ino parent, bool is_only_dir) {
 
   ListDentryRequest request;
   ListDentryResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
@@ -392,6 +404,8 @@ GetInodeResponse MDSClient::GetInode(Ino ino) {
   GetInodeRequest request;
   GetInodeResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
@@ -409,6 +423,8 @@ BatchGetInodeResponse MDSClient::BatchGetInode(const std::vector<int64_t>& inos)
 
   BatchGetInodeRequest request;
   BatchGetInodeResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   for (auto ino : inos) {
@@ -429,6 +445,8 @@ BatchGetXAttrResponse MDSClient::BatchGetXattr(const std::vector<int64_t>& inos)
 
   BatchGetXAttrRequest request;
   BatchGetXAttrResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   for (auto ino : inos) {
@@ -527,6 +545,8 @@ OpenResponse MDSClient::Open(Ino ino) {
   OpenRequest request;
   OpenResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_flags(O_RDWR);
@@ -542,6 +562,8 @@ ReleaseResponse MDSClient::Release(Ino ino, const std::string& session_id) {
   ReleaseRequest request;
   ReleaseResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
   request.set_session_id(session_id);
@@ -556,6 +578,8 @@ LinkResponse MDSClient::Link(Ino ino, Ino new_parent, const std::string& new_nam
 
   LinkRequest request;
   LinkResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -573,6 +597,8 @@ UnLinkResponse MDSClient::UnLink(Ino parent, const std::string& name) {
   UnLinkRequest request;
   UnLinkResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_parent(parent);
   request.set_name(name);
@@ -587,6 +613,8 @@ SymlinkResponse MDSClient::Symlink(Ino parent, const std::string& name, const st
 
   SymlinkRequest request;
   SymlinkResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_new_parent(parent);
@@ -605,6 +633,8 @@ ReadLinkResponse MDSClient::ReadLink(Ino ino) {
   ReadLinkRequest request;
   ReadLinkResponse response;
 
+  request.mutable_context()->set_epoch(epoch_);
+
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
 
@@ -616,6 +646,8 @@ ReadLinkResponse MDSClient::ReadLink(Ino ino) {
 AllocSliceIdResponse MDSClient::AllocSliceId(uint32_t alloc_num, uint64_t min_slice_id) {
   AllocSliceIdRequest request;
   AllocSliceIdResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_alloc_num(alloc_num);
   request.set_min_slice_id(min_slice_id);
@@ -630,6 +662,8 @@ WriteSliceResponse MDSClient::WriteSlice(Ino ino, int64_t chunk_index) {
 
   WriteSliceRequest request;
   WriteSliceResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -654,6 +688,8 @@ ReadSliceResponse MDSClient::ReadSlice(Ino ino, int64_t chunk_index) {
 
   ReadSliceRequest request;
   ReadSliceResponse response;
+
+  request.mutable_context()->set_epoch(epoch_);
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
