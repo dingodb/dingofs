@@ -92,7 +92,7 @@ jobs:
         echo "$branchName" > branch_name.txt
 
         commitId="${{ github.sha }}"
-        shortCommitId=${commitId:0:7}
+        shortCommitId=${commitId:0:8}
         echo "commit id is: $shortCommitId"
         echo "$shortCommitId" > commit_id.txt
 

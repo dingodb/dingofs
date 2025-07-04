@@ -20,8 +20,8 @@ die() {
 }
 
 ############################ FUNCTIONS
-# tmpl.sh = /usr/local/metaserver.conf /tmp/metaserver.conf
-function tmpl() {
+# usage: process_config_template  conf/client.conf /path/to/dingofs/docker/rocky9/dingofs/confg/client.conf
+function process_config_template() {
     dsv=$1
     src=$2
     dst=$3
@@ -56,12 +56,12 @@ install_pkg() {
 ############################  MAIN()
 docker_prefix="$(pwd)/docker/$1"
 prefix="$docker_prefix/dingofs" # /path/to/dingofs/docker/rocky9/dingofs
-mkdir -p $prefix $prefix/conf
+mkdir -p $prefix $prefix/conf $prefix/confv2
 install_pkg $prefix
 install_pkg $prefix etcd
 install_pkg $prefix monitor
 
-paths=`ls conf/*`
+paths=`ls conf/* confv2/*`
 # paths="$paths tools-v2/pkg/config/dingo.yaml"
 for path in $paths;
 do
@@ -80,7 +80,7 @@ do
         dst="snapshotclone.conf"
     fi
 
-    tmpl $dsv "$dir/$file" "$prefix/conf/$dst"
+    process_config_template $dsv "$dir/$file" "$prefix/$dir/$dst"
     success "install $file success\n"
 done
 

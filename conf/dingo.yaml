@@ -1,9 +1,10 @@
 global:
   httpTimeout: 50000ms
   rpcTimeout: 50000ms
-  rpcRetryTimes: 1
+  rpcRetryTimes: 5
   maxChannelSize: 4
   showError: false
+  mds_api_version: <> # 1 or 2
 
 dingofs:
   mdsAddr: 127.0.0.1:6700,127.0.0.1:6701,127.0.0.1:6702  # __DINGOADM_TEMPLATE__ ${cluster_mds_addr} __DINGOADM_TEMPLATE__
