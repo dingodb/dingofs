@@ -230,6 +230,8 @@ void InitVFSLegacyOption(utils::Configuration* conf, VFSLegacyOption* option) {
                             &FLAGS_fuseClientBurstReadIops);
   conf->GetValueFatalIfFail("fuseClient.throttle.burstReadIopsSecs",
                             &FLAGS_fuseClientBurstReadIopsSecs);
+
+  SetBrpcOpt(conf);
 }
 
 }  // namespace client

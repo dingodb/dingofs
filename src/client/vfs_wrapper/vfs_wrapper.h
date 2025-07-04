@@ -22,7 +22,6 @@
 
 #include "client/vfs.h"
 #include "metrics/client/client.h"
-#include "options/client/client_option.h"
 #include "options/client/fuse/fuse_option.h"
 
 namespace dingofs {
@@ -126,7 +125,6 @@ class VFSWrapper {
   bool Load();
 
   utils::Configuration conf_;
-  ClientOption client_option_;
 
   std::unique_ptr<VFS> vfs_;
   std::unique_ptr<metrics::client::ClientOpMetric> client_op_metric_;

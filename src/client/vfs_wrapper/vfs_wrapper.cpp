@@ -30,16 +30,18 @@
 #include "cache/utils/logging.h"
 #include "client/common/utils.h"
 #include "client/fuse/fuse_upgrade_manager.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/meta/meta_log.h"
 #include "client/vfs/vfs_impl.h"
 #include "client/vfs_legacy/vfs_legacy.h"
-#include "client/meta/vfs_meta.h"
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
 #include "metrics/metric_guard.h"
 #include "options/client/common_option.h"
+#include "options/client/vfs/vfs_option.h"
+#include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "stub/rpcclient/meta_access_log.h"
 #include "utils/configuration.h"
 
@@ -104,7 +106,14 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   }
 
   // init client option
-  InitClientOption(&conf_, &client_option_);
+  vfs::VFSOption vfs_option;
+  VFSLegacyOption vfs_legacy_option;
+  if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
+      vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
+    InitVFSOption(&conf_, &vfs_option);
+  } else {
+    InitVFSLegacyOption(&conf_, &vfs_legacy_option);
+  }
 
   // init log
   s = InitLog();
@@ -124,10 +133,10 @@ Status VFSWrapper::Start(const char* argv0, const VFSConfig& vfs_conf) {
   client_op_metric_ = std::make_unique<metrics::client::ClientOpMetric>();
   if (vfs_conf.fs_type == "vfs" || vfs_conf.fs_type == "vfs_v1" ||
       vfs_conf.fs_type == "vfs_v2" || vfs_conf.fs_type == "vfs_dummy") {
-    vfs_ = std::make_unique<vfs::VFSImpl>(client_option_.vfs_option);
+    vfs_ = std::make_unique<vfs::VFSImpl>(vfs_option);
 
   } else {
-    vfs_ = std::make_unique<vfs::VFSOld>(client_option_.vfs_legacy_option);
+    vfs_ = std::make_unique<vfs::VFSOld>(vfs_legacy_option);
   }
 
   s = vfs_->Start(vfs_conf);

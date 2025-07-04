@@ -73,6 +73,8 @@ void InitVFSOption(utils::Configuration* conf, VFSOption* option) {
     LOG(INFO) << "Not found `vfs.bthread_worker_num` in conf, "
                  "default to 0";
   }
+
+  SetBrpcOpt(conf);
 }
 
 }  // namespace vfs

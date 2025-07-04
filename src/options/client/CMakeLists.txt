@@ -21,7 +21,6 @@ add_library(client_options
     vfs_legacy/vfs_legacy_dynamic_config.cc
     vfs_legacy/vfs_legacy_option.cc
     client_dynamic_option.cc
-    client_option.cc
     common_option.cc
 )
 

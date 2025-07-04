@@ -17,11 +17,19 @@
 #ifndef DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
 #define DINGOFS_SRC_OPTIONS_CLIENT_COMMON_OPTION_H_
 
+#include <gflags/gflags_declare.h>
+
 #include "cache/blockcache/disk_cache_layout.h"
 #include "options/cache/blockcache.h"
 #include "options/cache/stub.h"
 #include "options/cache/tiercache.h"
 #include "utils/configuration.h"
+#include "utils/gflags_helper.h"
+
+namespace brpc {
+DECLARE_int32(defer_close_second);
+DECLARE_int32(health_check_interval);
+}  // namespace brpc
 
 namespace dingofs {
 namespace client {
@@ -31,6 +39,14 @@ DECLARE_int32(bthread_worker_num);
 struct UdsOption {
   std::string fd_comm_path;
 };
+
+static void SetBrpcOpt(utils::Configuration* conf) {
+  dingofs::utils::GflagsLoadValueFromConfIfCmdNotSet dummy;
+  dummy.Load(conf, "defer_close_second", "rpc.defer.close.second",
+             &brpc::FLAGS_defer_close_second);
+  dummy.Load(conf, "health_check_interval", "rpc.healthCheckIntervalSec",
+             &brpc::FLAGS_health_check_interval);
+}
 
 static void InitUdsOption(utils::Configuration* conf, UdsOption* uds_opt) {
   if (!conf->GetValue("uds.fdCommPath", &uds_opt->fd_comm_path)) {
