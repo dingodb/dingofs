@@ -115,6 +115,10 @@ bool HandlerManager::Load(const Json::Value& value) {
     LOG(ERROR) << "handlers is not an array.";
     return false;
   }
+  if (handlers.empty()) {
+    LOG(INFO) << "no handlers to load";
+    return true;
+  }
 
   uint64_t max_fh = 0;
   for (const auto& handler : handlers) {
@@ -148,13 +152,13 @@ bool HandlerManager::Load(const Json::Value& value) {
 
     {
       UniqueLock lk(mutex_);
-      auto handler = std::make_shared<FileHandler>();
-      handler->fh = fh;
-      handler->flags = flags;
-      handler->mtime = utils::TimeSpec(seconds, nanoSeconds);
-      handler->padding = padding;
-      handler->entries = std::move(dir_entries);
-      handlers_.emplace(handler->fh, handler);
+      auto file_handler = std::make_shared<FileHandler>();
+      file_handler->fh = fh;
+      file_handler->flags = flags;
+      file_handler->mtime = utils::TimeSpec(seconds, nanoSeconds);
+      file_handler->padding = padding;
+      file_handler->entries = std::move(dir_entries);
+      handlers_.emplace(file_handler->fh, file_handler);
     }
     max_fh = std::max(max_fh, fh);
   }
