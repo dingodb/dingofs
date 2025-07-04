@@ -35,8 +35,9 @@ class MDSRouter {
 
   virtual bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
 
-  virtual mdsv2::MDSMeta GetMDSByParent(Ino parent) = 0;
-  virtual mdsv2::MDSMeta GetMDS(Ino ino) = 0;
+  virtual bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) = 0;
+  virtual bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) = 0;
+  virtual bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) = 0;
 
   virtual bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) = 0;
@@ -59,9 +60,10 @@ class MonoMDSRouter : public MDSRouter {
 
   bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
-  mdsv2::MDSMeta GetMDSByParent(Ino parent) override;
+  bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) override;
 
-  mdsv2::MDSMeta GetMDS(Ino ino) override;
+  bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) override;
+  bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) override;
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;
@@ -91,9 +93,11 @@ class ParentHashMDSRouter : public MDSRouter {
 
   bool Init(const pb::mdsv2::PartitionPolicy& partition_policy) override;
 
-  mdsv2::MDSMeta GetMDSByParent(Ino parent) override;
+  bool GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) override;
 
-  mdsv2::MDSMeta GetMDS(Ino ino) override;
+  bool GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) override;
+
+  bool GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) override;
 
   bool UpdateRouter(
       const pb::mdsv2::PartitionPolicy& partition_policy) override;

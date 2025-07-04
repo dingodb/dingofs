@@ -18,8 +18,8 @@
 #include <string>
 #include <utility>
 
-#include "client/vfs/common/helper.h"
 #include "client/meta/vfs_meta.h"
+#include "client/vfs/common/helper.h"
 #include "dingofs/mdsv2.pb.h"
 #include "dingofs/metaserver.pb.h"
 #include "fmt/format.h"
@@ -181,14 +181,49 @@ Status MDSClient::UmountFs(const std::string& name,
 }
 
 EndPoint MDSClient::GetEndpoint(Ino ino) {
-  auto mds_meta = mds_router_->GetMDS(ino);
+  mdsv2::MDSMeta mds_meta;
+  CHECK(mds_router_->GetMDS(ino, mds_meta))
+      << fmt::format("get mds fail for ino({}).", ino);
+
   LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for ino({}).",
                            mds_meta.Host(), mds_meta.Port(), ino);
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
 }
 
 EndPoint MDSClient::GetEndpointByParent(int64_t parent) {
-  auto mds_meta = mds_router_->GetMDSByParent(parent);
+  mdsv2::MDSMeta mds_meta;
+  CHECK(mds_router_->GetMDSByParent(parent, mds_meta))
+      << fmt::format("get mds fail for parent({}).", parent);
+
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for parent({}).",
+                           mds_meta.Host(), mds_meta.Port(), parent);
+  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+}
+
+EndPoint MDSClient::GetEndpointWithFallback(Ino ino, bool& is_fallback) {
+  is_fallback = false;
+  mdsv2::MDSMeta mds_meta;
+  if (!mds_router_->GetMDS(ino, mds_meta)) {
+    CHECK(mds_router_->GetRandomlyMDS(mds_meta))
+        << fmt::format("get randomly mds fail for ino({}).", ino);
+    is_fallback = true;
+  }
+
+  LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for ino({}).",
+                           mds_meta.Host(), mds_meta.Port(), ino);
+  return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
+}
+
+EndPoint MDSClient::GetEndpointByParentWithFallback(int64_t parent,
+                                                    bool& is_fallback) {
+  is_fallback = false;
+  mdsv2::MDSMeta mds_meta;
+  if (!mds_router_->GetMDSByParent(parent, mds_meta)) {
+    CHECK(mds_router_->GetRandomlyMDS(mds_meta))
+        << fmt::format("get randomly mds fail for ino({}).", parent);
+    is_fallback = true;
+  }
+
   LOG(INFO) << fmt::format("[meta] query target mds({}:{}) for parent({}).",
                            mds_meta.Host(), mds_meta.Port(), parent);
   return StrToEndpoint(mds_meta.Host(), mds_meta.Port());
@@ -532,13 +567,17 @@ Status MDSClient::ReadLink(Ino ino, std::string& symlink) {
 Status MDSClient::GetAttr(Ino ino, Attr& out_attr) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint =
-      mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  bool is_fallback = false;
+  auto endpoint = mdsv2::IsDir(ino)
+                      ? GetEndpointByParentWithFallback(ino, is_fallback)
+                      : GetEndpointWithFallback(ino, is_fallback);
 
   pb::mdsv2::GetAttrRequest request;
   pb::mdsv2::GetAttrResponse response;
 
-  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+  auto* ctx = request.mutable_context();
+  ctx->set_is_bypass_cache(is_fallback);
+  ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -584,7 +623,7 @@ Status MDSClient::SetAttr(Ino ino, const Attr& attr, int to_set,
   }
 
   struct timespec now;
-  clock_gettime(CLOCK_REALTIME, &now);
+  CHECK(clock_gettime(CLOCK_REALTIME, &now) == 0) << "get current time fail.";
 
   if (to_set & kSetAttrAtime) {
     request.set_atime(attr.atime);
@@ -636,13 +675,17 @@ Status MDSClient::GetXAttr(Ino ino, const std::string& name,
                            std::string& value) {
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
 
-  auto endpoint =
-      mdsv2::IsDir(ino) ? GetEndpointByParent(ino) : GetEndpoint(ino);
+  bool is_fallback = false;
+  auto endpoint = mdsv2::IsDir(ino)
+                      ? GetEndpointByParentWithFallback(ino, is_fallback)
+                      : GetEndpointWithFallback(ino, is_fallback);
 
   pb::mdsv2::GetXAttrRequest request;
   pb::mdsv2::GetXAttrResponse response;
 
-  request.mutable_context()->set_inode_version(GetInodeVersion(ino));
+  auto* ctx = request.mutable_context();
+  ctx->set_is_bypass_cache(is_fallback);
+  ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);
@@ -803,10 +846,15 @@ Status MDSClient::ReadSlice(Ino ino, uint64_t index,
   CHECK(fs_id_ != 0) << "fs_id is invalid.";
   CHECK(slices != nullptr) << "slices is nullptr.";
 
-  auto endpoint = GetEndpoint(ino);
+  bool is_fallback = false;
+  auto endpoint = GetEndpointWithFallback(ino, is_fallback);
 
   pb::mdsv2::ReadSliceRequest request;
   pb::mdsv2::ReadSliceResponse response;
+
+  auto* ctx = request.mutable_context();
+  ctx->set_is_bypass_cache(is_fallback);
+  ctx->set_inode_version(GetInodeVersion(ino));
 
   request.set_fs_id(fs_id_);
   request.set_ino(ino);

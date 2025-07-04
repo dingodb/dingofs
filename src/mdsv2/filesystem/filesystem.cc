@@ -300,7 +300,7 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, Part
   Status status;
   do {
     if (bypass_cache) {
-      status = GetInodeFromStore(dentry.INo(), "Bypass", out_inode);
+      status = GetInodeFromStore(dentry.INo(), "Bypass", false, out_inode);
       is_fetch = true;
       break;
     }
@@ -309,14 +309,14 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Dentry& dentry, Part
     if (inode == nullptr) {
       inode = GetInodeFromCache(dentry.INo());
       if (inode == nullptr) {
-        status = GetInodeFromStore(dentry.INo(), "CacheMiss", out_inode);
+        status = GetInodeFromStore(dentry.INo(), "CacheMiss", true, out_inode);
         is_fetch = true;
         break;
       }
     }
 
     if (inode->Version() < version) {
-      status = GetInodeFromStore(dentry.INo(), "OutOfDate", out_inode);
+      status = GetInodeFromStore(dentry.INo(), "OutOfDate", true, out_inode);
       is_fetch = true;
       break;
     }
@@ -342,16 +342,16 @@ Status FileSystem::GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& 
   const bool bypass_cache = ctx.IsBypassCache();
 
   if (bypass_cache) {
-    return GetInodeFromStore(ino, "Bypass", out_inode);
+    return GetInodeFromStore(ino, "Bypass", false, out_inode);
   }
 
   auto inode = GetInodeFromCache(ino);
   if (inode == nullptr) {
-    return GetInodeFromStore(ino, "CacheMiss", out_inode);
+    return GetInodeFromStore(ino, "CacheMiss", true, out_inode);
   }
 
   if (inode->Version() < version) {
-    return GetInodeFromStore(ino, "OutOfDate", out_inode);
+    return GetInodeFromStore(ino, "OutOfDate", true, out_inode);
   }
 
   out_inode = inode;
@@ -364,7 +364,7 @@ InodeSPtr FileSystem::GetInodeFromCache(Ino ino) { return inode_cache_.GetInode(
 
 std::map<uint64_t, InodeSPtr> FileSystem::GetAllInodesFromCache() { return inode_cache_.GetAllInodes(); }
 
-Status FileSystem::GetInodeFromStore(Ino ino, const std::string& reason, InodeSPtr& out_inode) {
+Status FileSystem::GetInodeFromStore(Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode) {
   std::string key = MetaCodec::EncodeInodeKey(fs_id_, ino);
   std::string value;
   auto status = kv_storage_->Get(key, value);
@@ -374,7 +374,7 @@ Status FileSystem::GetInodeFromStore(Ino ino, const std::string& reason, InodeSP
 
   out_inode = Inode::New(MetaCodec::DecodeInodeValue(value));
 
-  inode_cache_.PutInode(ino, out_inode);
+  if (is_cache) inode_cache_.PutInode(ino, out_inode);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}] fetch inode({}), reason({}).", fs_id_, ino, reason);
 
@@ -1245,7 +1245,7 @@ Status FileSystem::ReadLink(Context& ctx, Ino ino, std::string& link) {
 Status FileSystem::GetAttr(Context& ctx, Ino ino, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getattr ino({}).", fs_id_, ino);
 
-  if (!CanServe()) {
+  if (!ctx.IsBypassCache() && !CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
@@ -1345,7 +1345,7 @@ Status FileSystem::SetAttr(Context& ctx, Ino ino, const SetAttrParam& param, Ent
 Status FileSystem::GetXAttr(Context& ctx, Ino ino, Inode::XAttrMap& xattr) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getxattr ino({}).", fs_id_, ino);
 
-  if (!CanServe()) {
+  if (!ctx.IsBypassCache() && !CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 
@@ -1676,7 +1676,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
 Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::vector<pb::mdsv2::Slice>& slices) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] readslice ino({}), chunk_index({}).", fs_id_, ino, chunk_index);
 
-  if (!CanServe()) {
+  if (!ctx.IsBypassCache() && !CanServe()) {
     return Status(pb::error::ENOT_SERVE, "can not serve");
   }
 

@@ -248,7 +248,7 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetInode(Context& ctx, uint64_t version, Ino ino, InodeSPtr& out_inode);
   InodeSPtr GetInodeFromCache(Ino ino);
   std::map<uint64_t, InodeSPtr> GetAllInodesFromCache();
-  Status GetInodeFromStore(Ino ino, const std::string& reason, InodeSPtr& out_inode);
+  Status GetInodeFromStore(Ino ino, const std::string& reason, bool is_cache, InodeSPtr& out_inode);
   Status BatchGetInodeFromStore(std::vector<uint64_t> inoes, std::vector<InodeSPtr>& out_inodes);
 
   Status GetDelFileFromStore(Ino ino, AttrType& out_attr);

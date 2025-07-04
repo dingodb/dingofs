@@ -19,6 +19,7 @@
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/core.h"
 #include "glog/logging.h"
+#include "mdsv2/common/helper.h"
 
 namespace dingofs {
 namespace client {
@@ -50,16 +51,23 @@ bool MonoMDSRouter::Init(const pb::mdsv2::PartitionPolicy& partition_policy) {
   return UpdateMds(partition_policy.mono().mds_id());
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDSByParent(Ino parent) {  // NOLINT
+bool MonoMDSRouter::GetMDSByParent(Ino, mdsv2::MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
 
-  return mds_meta_;
+  mds_meta = mds_meta_;
+  return true;
 }
 
-mdsv2::MDSMeta MonoMDSRouter::GetMDS(Ino ino) {  // NOLINT
+bool MonoMDSRouter::GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) {  // NOLINT
   utils::ReadLockGuard lk(lock_);
 
-  return mds_meta_;
+  mds_meta = mds_meta_;
+  return true;
+}
+
+bool MonoMDSRouter::GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) {
+  mds_meta = mds_meta_;
+  return true;
 }
 
 bool MonoMDSRouter::UpdateRouter(
@@ -99,7 +107,7 @@ bool ParentHashMDSRouter::Init(
   return true;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParent(Ino parent) {
+bool ParentHashMDSRouter::GetMDSByParent(Ino parent, mdsv2::MDSMeta& mds_meta) {
   utils::ReadLockGuard lk(lock_);
 
   int64_t bucket_id = parent % hash_partition_.bucket_num();
@@ -107,14 +115,15 @@ mdsv2::MDSMeta ParentHashMDSRouter::GetMDSByParent(Ino parent) {
   CHECK(it != mds_map_.end())
       << fmt::format("not found mds by parent({}).", parent);
 
-  return it->second;
+  mds_meta = it->second;
+
+  return true;
 }
 
-mdsv2::MDSMeta ParentHashMDSRouter::GetMDS(Ino ino) {
+bool ParentHashMDSRouter::GetMDS(Ino ino, mdsv2::MDSMeta& mds_meta) {
   Ino parent = 1;
-  if (ino != 1) {
-    CHECK(parent_memo_->GetParent(ino, parent))
-        << fmt::format("not found parent by ino({}).", ino);
+  if (ino != 1 && !parent_memo_->GetParent(ino, parent)) {
+    return false;
   }
 
   utils::ReadLockGuard lk(lock_);
@@ -124,7 +133,23 @@ mdsv2::MDSMeta ParentHashMDSRouter::GetMDS(Ino ino) {
   CHECK(it != mds_map_.end())
       << fmt::format("not found mds by parent({}).", parent);
 
-  return it->second;
+  mds_meta = it->second;
+
+  return true;
+}
+
+bool ParentHashMDSRouter::GetRandomlyMDS(mdsv2::MDSMeta& mds_meta) {
+  utils::ReadLockGuard lk(lock_);
+
+  Ino parent =
+      mdsv2::Helper::GenerateRandomInteger(0, hash_partition_.bucket_num());
+  int64_t bucket_id = parent % hash_partition_.bucket_num();
+  auto it = mds_map_.find(bucket_id);
+  CHECK(it != mds_map_.end())
+      << fmt::format("not found mds by parent({}).", parent);
+
+  mds_meta = it->second;
+  return true;
 }
 
 bool ParentHashMDSRouter::UpdateRouter(

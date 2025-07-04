@@ -19,10 +19,10 @@
 #include <memory>
 #include <string>
 
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/meta/v2/client_id.h"
 #include "client/vfs/meta/v2/mds_router.h"
 #include "client/vfs/meta/v2/rpc.h"
-#include "client/meta/vfs_meta.h"
 #include "common/status.h"
 #include "dingofs/error.pb.h"
 #include "dingofs/mdsv2.pb.h"
@@ -112,6 +112,9 @@ class MDSClient {
  private:
   EndPoint GetEndpoint(Ino ino);
   EndPoint GetEndpointByParent(int64_t parent);
+
+  EndPoint GetEndpointWithFallback(Ino ino, bool& is_fallback);
+  EndPoint GetEndpointByParentWithFallback(int64_t parent, bool& is_fallback);
 
   uint64_t GetInodeVersion(Ino ino);
 
