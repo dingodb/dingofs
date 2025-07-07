@@ -34,6 +34,8 @@ class DingodbStorage : public KVStorage {
   bool Init(const std::string& addr) override;
   bool Destroy() override;
 
+  static std::vector<std::pair<std::string, std::string>> GetSdkVersion();
+
   Status CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) override;
   Status DropTable(int64_t table_id) override;
   Status IsExistTable(const std::string& start_key, const std::string& end_key) override;

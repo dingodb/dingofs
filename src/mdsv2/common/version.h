@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef DINGODB_COMMON_VERSION_H_
-#define DINGODB_COMMON_VERSION_H_
+#ifndef DINGOFS_MDSV2_COMMON_VERSION_H_
+#define DINGOFS_MDSV2_COMMON_VERSION_H_
 
 #include <string>
 #include <utility>
 #include <vector>
-
-#include "gflags/gflags.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -56,8 +54,6 @@ namespace mdsv2 {
 #define DINGOFS_BUILD_TYPE "unknown"
 #endif
 
-DECLARE_bool(show_version);
-
 void DingoShowVersion();
 void DingoLogVersion();
 std::vector<std::pair<std::string, std::string>> DingoVersion();
@@ -65,4 +61,4 @@ std::vector<std::pair<std::string, std::string>> DingoVersion();
 }  // namespace mdsv2
 }  // namespace dingofs
 
-#endif  // DINGODB_COMMON_VERSION_H_
+#endif  // DINGOFS_MDSV2_COMMON_VERSION_H_

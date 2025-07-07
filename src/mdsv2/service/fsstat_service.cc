@@ -36,6 +36,7 @@
 #include "mdsv2/common/version.h"
 #include "mdsv2/filesystem/fs_utils.h"
 #include "mdsv2/server.h"
+#include "mdsv2/storage/dingodb_storage.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -330,11 +331,19 @@ static void RenderGitInfo(butil::IOBufBuilder& os) {
   os << R"(<div style="margin:12px;margin-top:64px;font-size:smaller">)";
   os << R"(<h3>Git</h3>)";
   os << R"(<div style="font-size:smaller;">)";
+
   auto infos = DingoVersion();
   for (const auto& info : infos) {
     os << fmt::format("{}: {}", info.first, info.second);
     os << "<br>";
   }
+
+  auto dingo_sdk_infos = DingodbStorage::GetSdkVersion();
+  for (const auto& info : dingo_sdk_infos) {
+    os << fmt::format("DINGO_SDK_{}: {}", info.first, info.second);
+    os << "<br>";
+  }
+
   os << R"(</div>)";
   os << R"(</div>)";
 }

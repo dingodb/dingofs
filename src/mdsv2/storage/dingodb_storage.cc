@@ -65,6 +65,8 @@ static std::vector<dingodb::sdk::KVPair> ToKVPairs(const std::vector<KeyValue>& 
 bool DingodbStorage::Init(const std::string& addr) {
   DINGO_LOG(INFO) << fmt::format("init dingo storage, addr({}).", addr);
 
+  dingodb::sdk::ShowSdkVersion();
+
   auto status = dingodb::sdk::Client::BuildFromAddrs(addr, &client_);
   CHECK(status.ok()) << fmt::format("build dingo sdk client fail, error: {}", status.ToString());
 
@@ -77,6 +79,10 @@ bool DingodbStorage::Destroy() {
   delete client_;
 
   return true;
+}
+
+std::vector<std::pair<std::string, std::string>> DingodbStorage::GetSdkVersion() {
+  return dingodb::sdk::GetSdkVersion();
 }
 
 Status DingodbStorage::CreateTable(const std::string& name, const TableOption& option, int64_t& table_id) {

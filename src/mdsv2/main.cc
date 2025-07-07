@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <fmt/format.h>
+
 #include <csignal>
 #include <iostream>
 #include <string>
@@ -27,6 +29,8 @@
 
 DEFINE_string(conf, "./conf/dingo-mdsv2.toml", "mdsv2 config path");
 DEFINE_string(coor_url, "file://./conf/coor_list", "coor service url, e.g. file://<path> or list://<addr1>,<addr2>");
+
+DEFINE_bool(show_version, false, "show version and exit");
 
 const int kMaxStacktraceSize = 128;
 
@@ -45,7 +49,7 @@ struct BacktraceData {
   int fail{0};
 };
 
-int BacktraceCallback(void* vdata, uintptr_t pc, const char* filename, int lineno, const char* function) {
+static int BacktraceCallback(void* vdata, uintptr_t pc, const char* filename, int lineno, const char* function) {
   struct BacktraceData* backtrace = (struct BacktraceData*)vdata;
   struct StackTraceInfo* stack_trace;
 
@@ -68,7 +72,7 @@ int BacktraceCallback(void* vdata, uintptr_t pc, const char* filename, int linen
 }
 
 // An error callback passed to backtrace.
-void ErrorCallback(void* vdata, const char* msg, int errnum) {
+static void ErrorCallback(void* vdata, const char* msg, int errnum) {
   struct BacktraceData* data = (struct BacktraceData*)vdata;
 
   std::cerr << msg;
@@ -150,7 +154,7 @@ static void SignalHandler(int signo) {
   abort();
 }
 
-void SetupSignalHandler() {
+static void SetupSignalHandler() {
   sighandler_t s;
   s = signal(SIGTERM, SignalHandler);
   if (s == SIG_ERR) {
@@ -196,7 +200,7 @@ void SetupSignalHandler() {
   }
 }
 
-bool GeneratePidFile(const std::string& filepath) {
+static bool GeneratePidFile(const std::string& filepath) {
   int64_t pid = dingofs::mdsv2::Helper::GetPid();
   if (pid <= 0) {
     DINGO_LOG(ERROR) << "get pid fail.";
@@ -215,15 +219,16 @@ int main(int argc, char* argv[]) {
 
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  if (dingofs::mdsv2::FLAGS_show_version) {
+  if (FLAGS_show_version) {
     dingofs::mdsv2::DingoShowVersion();
 
-    printf("Usage: %s --conf ./conf/mdsv2.conf --coor_url=[file://./conf/coor_list]\n", argv[0]);
-    printf("Example: \n");
-    printf("         bin/dingofs_mdsv2\n");
-    printf(
-        "         bin/dingofs_mdsv2 --conf ./conf/mdsv2.yaml "
-        "--coor_url=file://./conf/coor_list\n");
+    std::cout << '\n';
+    std::cout << fmt::format("Usage: {} --conf ./conf/dingo-mdsv2.toml --coor_url=[file://./conf/coor_list]\n",
+                             argv[0]);
+    std::cout << "Example: \n";
+    std::cout << "\tbin/dingofs_mdsv2 --show_version\n";
+    std::cout << "\tbin/dingofs_mdsv2 --conf ./conf/dingo-mdsv2.toml --coor_url=file://./conf/coor_list\n";
+
     exit(-1);
   }
 
