@@ -194,13 +194,14 @@ Status BlockCacheUploader::Load(const StagingBlock& staging_block,
   auto status =
       store_->Load(staging_block.ctx, key, 0, staging_block.length, buffer);
   if (status.IsNotFound()) {
-    LOG(ERROR) << "Load staging block failed which already deleted, abort "
-                  "upload: key = "
-               << key.Filename() << ", status = " << status.ToString();
+    LOG_ERROR(
+        "[%s] Load staging block failed which already deleted, "
+        "abort upload: key = %s, status = %s",
+        staging_block.ctx->TraceId(), key.Filename(), status.ToString());
     return status;
   } else if (!status.ok()) {
-    LOG(ERROR) << "Load staging block failed: key = " << key.Filename()
-               << ", status = " << status.ToString();
+    LOG_ERROR("[%s] Load staging block failed: key = %s, status = %s",
+              staging_block.ctx->TraceId(), key.Filename(), status.ToString());
     return status;
   }
 

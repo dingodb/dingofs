@@ -141,8 +141,8 @@ Status StorageImpl::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
   status = closure.status();
   if (!status.ok()) {
     LOG_ERROR(
-        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu,"
-        "status = %s",
+        "[%s] Storage range failed: key = %s, offset = %lld, length = %zu"
+        ", status = %s",
         ctx->TraceId(), key.Filename(), offset, length, status.ToString());
   }
   return status;

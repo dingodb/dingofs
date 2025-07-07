@@ -23,6 +23,8 @@
 #include "cache/remotecache/rpc_client.h"
 
 #include <absl/strings/str_format.h>
+#include <brpc/channel.h>
+#include <brpc/options.pb.h>
 #include <butil/iobuf.h>
 #include <butil/time.h>
 
@@ -130,7 +132,9 @@ Status RPCClient::InitChannel(const std::string& server_ip,
     return Status::Internal("str2endpoint() failed");
   }
 
-  rc = channel_->Init(ep, nullptr);
+  brpc::ChannelOptions options;
+  options.connection_type = brpc::CONNECTION_TYPE_POOLED;
+  rc = channel_->Init(ep, &options);
   if (rc != 0) {
     LOG(INFO) << "Init channel for " << server_ip << ":" << server_port
               << " failed: rc = " << rc;
@@ -246,10 +250,10 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
     channel->CallMethod(method, &cntl, &request, &response, nullptr);
     if (cntl.Failed()) {
       LOG(ERROR) << absl::StrFormat(
-          "[rpc][%s][%s:%d][%.6lf][%s] failed: request(%s) cntl_code(%d) "
+          "[%s][rpc][%s][%s:%d][%.6lf] failed: request(%s) cntl_code(%d) "
           "cntl_error(%s)",
-          api_name, server_ip_, server_port_, cntl.latency_us() / 1e6,
-          ctx->TraceId(), request.ShortDebugString(), cntl.ErrorCode(),
+          ctx->TraceId(), api_name, server_ip_, server_port_,
+          cntl.latency_us() / 1e6, request.ShortDebugString(), cntl.ErrorCode(),
           cntl.ErrorText());
 
       if (!ShouldRetry(api_name, cntl.ErrorCode())) {

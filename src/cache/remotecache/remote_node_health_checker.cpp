@@ -30,6 +30,10 @@ DEFINE_uint32(check_cache_node_state_duration_ms, 3000,
               "Duration in milliseconds to check the cache group node state");
 DEFINE_validator(check_cache_node_state_duration_ms, brpc::PassValidate);
 
+DEFINE_uint32(ping_rpc_timeout_ms, 3000,
+              "RPC timeout for pinging remote cache node in milliseconds");
+DEFINE_validator(ping_rpc_timeout_ms, brpc::PassValidate);
+
 RemoteNodeHealthChecker::RemoteNodeHealthChecker(
     const PBCacheGroupMember& member, StateMachineSPtr state_machine)
     : running_(false),
@@ -104,6 +108,7 @@ Status RemoteNodeHealthChecker::SendPingrequest() {
   }
 
   cntl.ignore_eovercrowded();
+  cntl.set_timeout_ms(FLAGS_ping_rpc_timeout_ms);
 
   PBBlockCacheService_Stub stub(&channel);
   stub.Ping(&cntl, &request, &reponse, nullptr);

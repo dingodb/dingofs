@@ -100,9 +100,9 @@ int AsyncCacherImpl::HandleTask(void* meta, bthread::TaskIterator<Task>& iter) {
     self->block_cache_->AsyncCache(
         task.ctx, task.key, task.block, [task](Status status) {
           if (!status.ok()) {
-            LOG(ERROR) << "Async cache block failed: key = "
-                       << task.key.Filename()
-                       << ", status = " << status.ToString();
+            LOG_ERROR("[%s] Async cache block failed: key = %s, status = %s",
+                      task.ctx->TraceId(), task.key.Filename(),
+                      status.ToString());
           }
         });
   }
