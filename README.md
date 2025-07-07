@@ -56,7 +56,7 @@ We recommend Rocky and Ubuntu to develop the DingoFS codebase.
 
 ```sh
 sudo dnf install -y epel-release
-sudo dnf install -y gcc-toolset-13* fuse3-devel  libnl3-devel libunwind-devel python3-devel
+sudo dnf install -y gcc-toolset-13* libnl3-devel libunwind-devel python3-devel
 
 wget https://github.com/Kitware/CMake/releases/download/v3.30.1/cmake-3.30.1-linux-x86_64.tar.gz
 tar zxvf cmake-3.30.1-linux-x86_64.tar.gz
@@ -67,7 +67,7 @@ source /opt/rh/gcc-toolset-13/enable
 ### Ubuntu 22.04/24.04
 ```sh
 sudo apt update
-sudo apt install -y make gcc g++ libnl-genl-3-dev libunwind-dev libfuse3-dev python3-dev
+sudo apt install -y make gcc g++ libnl-genl-3-dev libunwind-dev python3-dev
 
 wget https://github.com/Kitware/CMake/releases/download/v3.30.1/cmake-3.30.1-linux-x86_64.tar.gz
 tar zxvf cmake-3.30.1-linux-x86_64.tar.gz
