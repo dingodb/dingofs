@@ -764,6 +764,11 @@ body {
         link.href = `${fs_id}/${item.ino}`;
         link.target = '_blank';
         link.textContent = item.name;
+
+        const chunk_link = document.createElement('a');
+        chunk_link.href = `chunk/${fs_id}/${item.ino}`;
+        chunk_link.target = '_blank';
+        chunk_link.textContent = 'chunk';
         
         const info = document.createElement('span');
         info.className = 'info';
@@ -772,6 +777,7 @@ body {
         fileDiv.appendChild(icon);
         fileDiv.appendChild(link);
         fileDiv.appendChild(info);
+        fileDiv.appendChild(chunk_link);
         
         li.appendChild(fileDiv);
       }
@@ -886,7 +892,7 @@ body {
   os << "</html>";
 }
 
-void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
+static void RenderJsonPage(const std::string& header, const std::string& json, butil::IOBufBuilder& os) {
   os << R"(<!DOCTYPE html><html lang="zh-CN">)";
 
   os << R"(
@@ -1004,14 +1010,14 @@ void RenderJsonPage(const std::string& header, const std::string& json, butil::I
   os << "</html>";
 }
 
-void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
+static void RenderFsDetailsPage(const FsInfoType& fs_info, butil::IOBufBuilder& os) {
   std::string header = fmt::format("FileSystem: {}({})", fs_info.fs_name(), fs_info.fs_id());
   std::string json;
   Helper::ProtoToJson(fs_info, json);
   RenderJsonPage(header, json, os);
 }
 
-void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dinfofs filesession") << "</head>";
@@ -1052,7 +1058,7 @@ void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "</body>";
 }
 
-void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs delfile") << "</head>";
@@ -1093,7 +1099,7 @@ void RenderDelfilePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "</body>";
 }
 
-void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
+static void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   auto render_range_func = [](const pb::mdsv2::TrashSlice& slice) -> std::string {
     std::string result;
     for (size_t i = 0; i < slice.ranges_size(); ++i) {
@@ -1152,11 +1158,116 @@ void RenderDelslicePage(FileSystemSPtr filesystem, butil::IOBufBuilder& os) {
   os << "</body>";
 }
 
-void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
+static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   std::string header = fmt::format("Inode: {}", attr.ino());
   std::string json;
   Helper::ProtoToJson(attr, json);
   RenderJsonPage(header, json, os);
+}
+
+static void RenderChunk(uint64_t& count, uint64_t chunk_index, ChunkType chunk, butil::IOBufBuilder& os) {
+  struct OffsetRange {
+    uint64_t start;
+    uint64_t end;
+    std::vector<SliceType> slices;
+  };
+
+  // sort by offset
+  std::sort(chunk.mutable_slices()->begin(), chunk.mutable_slices()->end(),
+            [](const SliceType& a, const SliceType& b) { return a.offset() < b.offset(); });
+
+  // get offset ranges
+  std::set<uint64_t> offsets;
+  for (const auto& slice : chunk.slices()) {
+    offsets.insert(slice.offset());
+    offsets.insert(slice.offset() + slice.len());
+  }
+
+  std::vector<OffsetRange> offset_ranges;
+  for (auto it = offsets.begin(); it != offsets.end(); ++it) {
+    auto next_it = std::next(it);
+    if (next_it != offsets.end()) {
+      offset_ranges.push_back({.start = *it, .end = *next_it});
+    }
+  }
+
+  for (auto& offset_range : offset_ranges) {
+    for (const auto& slice : chunk.slices()) {
+      uint64_t slice_start = slice.offset();
+      uint64_t slice_end = slice.offset() + slice.len();
+
+      // check intersect
+      if (slice_end <= offset_range.start || slice_start >= offset_range.end) {
+        continue;
+      }
+      offset_range.slices.push_back(slice);
+    }
+  }
+
+  // sort by slice id
+  for (auto& offset_range : offset_ranges) {
+    // sort by id, from newest to oldest
+    std::sort(offset_range.slices.begin(), offset_range.slices.end(),
+              [](const SliceType& a, const SliceType& b) { return a.id() < b.id(); });
+  }
+
+  for (const auto& offset_range : offset_ranges) {
+    os << "<tr>";
+
+    os << "<td>" << ++count << "</td>";
+    os << "<td>" << chunk_index << "</td>";
+    os << "<td>" << fmt::format("[{}, {})", offset_range.start, offset_range.end) << "</td>";
+
+    os << R"(<td><ul style="list-style:disc">)";
+    const auto& slices = offset_range.slices;
+    for (size_t i = 0; i < slices.size(); ++i) {
+      const auto& slice = slices.at(i);
+      if (i + 1 < slices.size()) {
+        os << fmt::format(R"(<li style="color:gray;">{} [{},{}) {} {}</li>)", slice.id(), slice.offset(), slice.len(),
+                          slice.size(), slice.zero());
+
+      } else {
+        os << fmt::format(R"(<li>{} [{},{}) {} {}</li>)", slice.id(), slice.offset(), slice.len(), slice.size(),
+                          slice.zero());
+      }
+    }
+    os << "</ul></td>";
+
+    os << "</tr>";
+  }
+}
+
+static void RenderChunksPage(const AttrType& attr, butil::IOBufBuilder& os) {
+  os << "<!DOCTYPE html><html>";
+
+  os << "<head>" << RenderHead("dingofs chunk") << "</head>";
+  os << "<body>";
+  os << R"(<h1 style="text-align:center;">Chunk Map</h1>)";
+
+  const auto& chunks = attr.chunks();
+  os << R"(<div style="margin: 12px;font-size:smaller">)";
+  os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks.size());
+  if (!chunks.empty()) {
+    const auto& chunk = chunks.at(0);
+    os << fmt::format(R"(<h5>ChunkSize: {}MB BlockSize: {}KB</h5>)", chunk.chunk_size() / (1024 * 1024),
+                      chunk.block_size() / 1024);
+  }
+  os << R"(<table class="gridtable sortable" border=1>)";
+  os << "<tr>";
+  os << "<th>No.</th>";
+  os << "<th>Index</th>";
+  os << "<th>Range(byte)</th>";
+  os << "<th>Slice<div>id [offset, len) size zero</div></th>";
+  os << "</tr>";
+
+  uint64_t count = 0;
+  for (const auto& [chunk_index, chunk] : chunks) {
+    RenderChunk(count, chunk_index, chunk, os);
+  }
+
+  os << "</table>";
+  os << "</div>";
+  os << "</body>";
 }
 
 void FsStatServiceImpl::default_method(::google::protobuf::RpcController* controller, const pb::web::FsStatRequest*,
@@ -1326,6 +1437,27 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
 
     } else {
       cntl->SetFailed(fmt::format("Not found file system {}.", fs_id));
+    }
+
+  } else if (params.size() == 3 && params[0] == "chunk") {
+    // /FsStatService/chunk/{fs_id}/{ino}
+
+    uint32_t fs_id = Helper::StringToInt32(params[1]);
+    uint64_t ino = Helper::StringToInt64(params[2]);
+
+    auto file_system_set = Server::GetInstance().GetFileSystemSet();
+    auto file_system = file_system_set->GetFileSystem(fs_id);
+    if (file_system != nullptr) {
+      InodeSPtr inode;
+      auto status = file_system->GetInodeFromStore(ino, "ShowChunk", false, inode);
+      if (status.ok()) {
+        RenderChunksPage(inode->Copy(), os);
+
+      } else {
+        os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());
+      }
+    } else {
+      os << fmt::format("Not found file system {}", fs_id);
     }
 
   } else {

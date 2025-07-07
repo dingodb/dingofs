@@ -926,7 +926,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
-    std::vector<pb::mdsv2::Slice> slices;
+    std::vector<SliceType> slices;
   };
 
   struct Block {
@@ -981,7 +981,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   // slice-2 is complete overlapped by slice-4
   // sort by offset
   std::sort(chunk_copy.mutable_slices()->begin(), chunk_copy.mutable_slices()->end(),
-            [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.offset() < b.offset(); });
+            [](const SliceType& a, const SliceType& b) { return a.offset() < b.offset(); });
 
   // get offset ranges
   std::set<uint64_t> offsets;
@@ -1016,7 +1016,7 @@ TrashSliceList CompactChunkOperation::GenTrashSlices(Ino ino, uint64_t file_leng
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
     std::sort(offset_range.slices.begin(), offset_range.slices.end(),
-              [](const pb::mdsv2::Slice& a, const pb::mdsv2::Slice& b) { return a.id() > b.id(); });
+              [](const SliceType& a, const SliceType& b) { return a.id() > b.id(); });
     if (!offset_range.slices.empty()) {
       reserve_slice_ids.insert(offset_range.slices.front().id());
     }
