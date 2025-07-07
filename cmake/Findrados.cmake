@@ -41,11 +41,18 @@ if(RADOS_FOUND AND NOT (TARGET ceph::rados))
   find_library(RDMACM_LIBRARIES NAMES librdmacm.a)
   find_library(IBVERBS_LIBRARIES NAMES libibverbs.a)
 
+  find_package(udev REQUIRED)
+  message(("Using udev: ${UDEV_LIBRARIES}, include dir: ${UDEV_INCLUDE_DIR}"))
+  find_package(blkid REQUIRED)
+  message("Using blkid: ${BLKID_LIBRARIES}, include dir: ${BLKID_INCLUDE_DIR}")
+
   set(RADOS_DEPS_LIBS
       OpenSSL::SSL
       ${Boost_LIBRARIES}
       ${RDMACM_LIBRARIES}
       ${IBVERBS_LIBRARIES}
+      ${UDEV_LIBRARIES}
+      ${BLKID_LIBRARIES}
       resolv
  )
   message("RADOS_DEPS_LIBS: ${RADOS_DEPS_LIBS}")

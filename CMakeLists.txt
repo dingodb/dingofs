@@ -218,6 +218,7 @@ message("Using leveldb ${leveldb_VERSION}")
 find_package(brpc REQUIRED)
 find_package(braft REQUIRED)
 find_package(RocksDB REQUIRED)
+message("Using RocksDB ${RocksDB_VERSION}")
 
 find_package(rados REQUIRED)
 message("Using rados: ${RADOS_LIBRARIES}")
