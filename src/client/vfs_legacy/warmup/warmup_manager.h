@@ -432,7 +432,8 @@ class WarmupManagerS3Impl : public WarmupManager {
 
   mutable utils::BthreadRWLock inode2FetchS3ObjectsPoolMutex_;
 
-  dingofs::metrics::client::vfs_legacy::WarmupManagerS3Metric warmupS3Metric_;
+  dingofs::metrics::client::vfs_legacy::WarmupManagerBlockMetric
+      warmupBlockMetric_;
 
   blockaccess::BlockAccesser* block_accesser_;
 };

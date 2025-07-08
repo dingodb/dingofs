@@ -28,15 +28,15 @@ namespace metrics {
 namespace client {
 namespace vfs_legacy {
 
-struct WarmupManagerS3Metric {
+struct WarmupManagerBlockMetric {
   inline static const std::string prefix = "dingofs_warmup";
 
-  InterfaceMetric warmupS3Cached;
-  bvar::Adder<uint64_t> warmupS3CacheSize;
+  InterfaceMetric warmupBlockCached;
+  bvar::Adder<uint64_t> warmupBlockCacheSize;
 
-  WarmupManagerS3Metric()
-      : warmupS3Cached(prefix, "s3_cached"),
-        warmupS3CacheSize(prefix, "s3_cache_size") {}
+  WarmupManagerBlockMetric()
+      : warmupBlockCached(prefix, "block_cached"),
+        warmupBlockCacheSize(prefix, "block_cache_size") {}
 };
 
 }  // namespace vfs_legacy

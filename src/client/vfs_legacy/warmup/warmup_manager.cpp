@@ -37,7 +37,7 @@
 #include "cache/utils/context.h"
 #include "client/vfs_legacy/common/common.h"
 #include "client/vfs_legacy/inode_wrapper.h"
-#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/metric.h"
 #include "metrics/metric_guard.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
@@ -51,8 +51,6 @@ namespace client {
 namespace warmup {
 
 using common::WarmupStorageType;
-using metrics::MetricGuard;
-using metrics::blockaccess::S3Metric;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 
@@ -514,9 +512,6 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
   // callback function
   blockaccess::GetObjectAsyncCallBack cb =
       [&](const std::shared_ptr<blockaccess::GetObjectAsyncContext>& context) {
-        // metrics for async get data from s3
-        MetricGuard guard(&context->ret_code, &S3Metric::GetInstance().read_s3,
-                          context->len, start);
         if (bgFetchStop_.load(std::memory_order_acquire)) {
           VLOG(9) << "need stop warmup";
           cond.Signal();
@@ -525,15 +520,16 @@ void WarmupManagerS3Impl::WarmUpAllObjs(
         if (context->ret_code == 0) {
           VLOG(9) << "Get Object success: " << context->key;
           PutObjectToCache(ino, context);
-          CollectMetrics(&warmupS3Metric_.warmupS3Cached, context->len, start);
-          warmupS3Metric_.warmupS3CacheSize << context->len;
+          CollectMetrics(&warmupBlockMetric_.warmupBlockCached, context->len,
+                         start);
+          warmupBlockMetric_.warmupBlockCacheSize << context->len;
           if (pending_req.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             VLOG(6) << "pendingReq is over";
             cond.Signal();
           }
           return;
         }
-        warmupS3Metric_.warmupS3Cached.eps.count << 1;
+        warmupBlockMetric_.warmupBlockCached.eps.count << 1;
         if (++context->retry >= option_.downloadMaxRetryTimes) {
           if (pending_req.fetch_sub(1, std::memory_order_seq_cst) == 1) {
             VLOG(6) << "pendingReq is over";

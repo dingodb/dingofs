@@ -27,23 +27,24 @@ namespace dingofs {
 namespace metrics {
 namespace blockaccess {
 
-struct S3Metric {
-  inline static const std::string prefix = "dingofs_s3";
+struct BlockMetric {
+  inline static const std::string prefix = "dingofs_block";
 
-  InterfaceMetric write_s3;
-  InterfaceMetric read_s3;
+  InterfaceMetric write_block;
+  InterfaceMetric read_block;
 
-  explicit S3Metric()
-      : write_s3(prefix, "_write_s3"), read_s3(prefix, "_read_s3") {}
-
- public:
-  S3Metric(const S3Metric&) = delete;
-
-  S3Metric& operator=(const S3Metric&) = delete;
+  explicit BlockMetric()
+      : write_block(prefix, "_write_block"),
+        read_block(prefix, "_read_block") {}
 
  public:
-  static S3Metric& GetInstance() {
-    static S3Metric instance;
+  BlockMetric(const BlockMetric&) = delete;
+
+  BlockMetric& operator=(const BlockMetric&) = delete;
+
+ public:
+  static BlockMetric& GetInstance() {
+    static BlockMetric instance;
     return instance;
   }
 };

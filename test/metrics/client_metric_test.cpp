@@ -18,7 +18,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "metrics/client/vfs_legacy/kv_client.h"
 #include "metrics/client/vfs_legacy/s3_cache_manager.h"
@@ -30,13 +30,13 @@
 namespace dingofs {
 namespace metric {
 
-using ::dingofs::metrics::blockaccess::S3Metric;
+using ::dingofs::metrics::blockaccess::BlockMetric;
 using ::dingofs::metrics::client::ClientOpMetric;
 using ::dingofs::metrics::client::FSMetric;
 using ::dingofs::metrics::client::vfs_legacy::KVClientMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3ChunkInfoMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
-using ::dingofs::metrics::client::vfs_legacy::WarmupManagerS3Metric;
+using ::dingofs::metrics::client::vfs_legacy::WarmupManagerBlockMetric;
 using ::dingofs::metrics::mds::MDSClientMetric;
 using ::dingofs::metrics::metaserver::MetaServerClientMetric;
 
@@ -73,8 +73,8 @@ TEST_F(ClientMetricTest, test_prefix) {
   }
 
   {
-    const char* prefix = "dingofs_s3";
-    ASSERT_EQ(0, ::strcmp(S3Metric::prefix.c_str(), prefix));
+    const char* prefix = "dingofs_block";
+    ASSERT_EQ(0, ::strcmp(BlockMetric::prefix.c_str(), prefix));
   }
 
   {
@@ -89,7 +89,7 @@ TEST_F(ClientMetricTest, test_prefix) {
 
   {
     const char* prefix = "dingofs_warmup";
-    ASSERT_EQ(0, ::strcmp(WarmupManagerS3Metric::prefix.c_str(), prefix));
+    ASSERT_EQ(0, ::strcmp(WarmupManagerBlockMetric::prefix.c_str(), prefix));
   }
 }
 

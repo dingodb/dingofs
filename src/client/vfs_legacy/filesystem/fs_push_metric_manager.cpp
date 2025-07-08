@@ -15,7 +15,7 @@
 #include "client/vfs_legacy/filesystem/fs_push_metric_manager.h"
 
 #include "glog/logging.h"
-#include "metrics/blockaccess/s3_accesser.h"
+#include "metrics/blockaccess/block_accesser.h"
 #include "metrics/client/client.h"
 #include "options/client/vfs_legacy/vfs_legacy_dynamic_config.h"
 
@@ -26,7 +26,7 @@ namespace filesystem {
 using ::dingofs::metrics::client::FSMetric;
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FSStatusCode;
-using metrics::blockaccess::S3Metric;
+using metrics::blockaccess::BlockMetric;
 
 USING_FLAG(push_metric_interval_millsecond)
 
@@ -99,13 +99,13 @@ FsStatsData FsPushMetricManager::GetClientMetrics() {
       FSMetric::GetInstance().user_write.qps.count.get_value());
   // s3 write metrics
   client_metrics.set_s3readbytes(
-      S3Metric::GetInstance().read_s3.bps.count.get_value());
+      BlockMetric::GetInstance().read_block.bps.count.get_value());
   client_metrics.set_s3readqps(
-      S3Metric::GetInstance().read_s3.qps.count.get_value());
+      BlockMetric::GetInstance().read_block.qps.count.get_value());
   client_metrics.set_s3writebytes(
-      S3Metric::GetInstance().write_s3.bps.count.get_value());
+      BlockMetric::GetInstance().write_block.bps.count.get_value());
   client_metrics.set_s3writeqps(
-      S3Metric::GetInstance().write_s3.qps.count.get_value());
+      BlockMetric::GetInstance().write_block.qps.count.get_value());
 
   return client_metrics;
 }

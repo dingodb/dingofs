@@ -21,6 +21,7 @@
 
 #include <cstdint>
 
+#include "common/status.h"
 #include "metrics/metric.h"
 #include "utils/timeutility.h"
 
@@ -29,12 +30,13 @@ namespace metrics {
 
 using ::dingofs::utils::TimeUtility;
 
+template <typename T>
 struct MetricGuard {
-  explicit MetricGuard(int* rc, InterfaceMetric* metric, size_t count,
+  explicit MetricGuard(T* rc, InterfaceMetric* metric, size_t count,
                        uint64_t start)
       : rc_(rc), metric_(metric), count_(count), start_(start) {}
   ~MetricGuard() {
-    if (*rc_ == 0) {
+    if (IsOk()) {
       metric_->bps.count << count_;
       metric_->qps.count << 1;
       auto duration = butil::cpuwide_time_us() - start_;
@@ -44,7 +46,17 @@ struct MetricGuard {
       metric_->eps.count << 1;
     }
   }
-  int* rc_;
+
+ private:
+  bool IsOk() const {
+    if constexpr (std::is_same_v<T, Status>) {
+      return rc_->ok();
+    } else if constexpr (std::is_same_v<T, int>) {
+      return *rc_ == 0;
+    }
+    return false;
+  }
+  T* rc_;
   InterfaceMetric* metric_;
   size_t count_;
   uint64_t start_;

@@ -25,10 +25,15 @@
 #include "blockaccess/rados/rados_accesser.h"
 #include "blockaccess/s3/s3_accesser.h"
 #include "common/status.h"
+#include "metrics/blockaccess/block_accesser.h"
+#include "metrics/metric_guard.h"
 #include "utils/dingo_define.h"
 
 namespace dingofs {
 namespace blockaccess {
+
+using metrics::MetricGuard;
+using metrics::blockaccess::BlockMetric;
 
 static bvar::Adder<uint64_t> block_put_async_num("block_put_async_num");
 static bvar::Adder<uint64_t> block_put_sync_num("block_put_sync_num");
@@ -105,6 +110,9 @@ Status BlockAccesserImpl::Put(const std::string& key, const char* buffer,
     return absl::StrFormat("put_block (%s, %d) : %s", key, length,
                            (s.ok() ? "ok" : "fail"));
   });
+  // write block metrics
+  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().write_block, length,
+                            butil::cpuwide_time_us());
 
   block_put_sync_num << 1;
 
@@ -131,6 +139,9 @@ void BlockAccesserImpl::AsyncPut(
       return absl::StrFormat("async_put_block (%s, %d) : %d", ctx->key,
                              ctx->buffer_size, ctx->ret_code);
     });
+    MetricGuard<int> guard(&ctx->ret_code,
+                           &BlockMetric::GetInstance().write_block,
+                           ctx->buffer_size, start_us);
 
     block_put_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->buffer_size);
@@ -172,6 +183,9 @@ Status BlockAccesserImpl::Get(const std::string& key, std::string* data) {
     return absl::StrFormat("get_block (%s) : %s", key,
                            (s.ok() ? "ok" : "fail"));
   });
+  // read block metrics
+  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block,
+                            data->length(), butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
   auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
@@ -197,6 +211,9 @@ void BlockAccesserImpl::AsyncGet(
       return absl::StrFormat("async_get_block (%s, %d, %d) : %d", ctx->key,
                              ctx->offset, ctx->len, ctx->ret_code);
     });
+    MetricGuard<int> guard(&ctx->ret_code,
+                           &BlockMetric::GetInstance().read_block, ctx->len,
+                           start_us);
 
     block_get_async_num << -1;
     inflight_bytes_throttle_->OnComplete(ctx->len);
@@ -222,6 +239,9 @@ Status BlockAccesserImpl::Range(const std::string& key, off_t offset,
     return absl::StrFormat("range_block (%s, %d, %d) : %s", key, offset, length,
                            (s.ok() ? "ok" : "fail"));
   });
+  // read s3 metrics
+  MetricGuard<Status> guard(&s, &BlockMetric::GetInstance().read_block, length,
+                            butil::cpuwide_time_us());
 
   block_get_sync_num << 1;
   auto dec = ::absl::MakeCleanup([&]() { block_get_sync_num << -1; });
