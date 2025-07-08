@@ -444,6 +444,10 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
       if (task->status.ok()) {
         std::vector<Slice> slices;
         task->chunk_flush_task->GetCommitSlices(slices);
+        VLOG(4) << fmt::format(
+            "{} FlushTaskDone header_task: {} commit chunk_flush_task: {}, "
+            "slices_count: {}",
+            UUID(), flush_task->UUID(), task->ToString(), slices.size());
 
         if (!slices.empty()) {
           // TODO: maybe use batch commit

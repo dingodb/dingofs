@@ -520,8 +520,9 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
 
   s = vfs_->Read(ino, buf, size, offset, fh, out_rsize);
-  VLOG(1) << "VFSRead end, read_size: " << *out_rsize
-          << ", status : " << s.ToString();
+  VLOG(1) << "VFSRead end ino: " << ino << ", buf: " << Char2Addr(buf)
+          << ", size: " << size << ", offset: " << offset << ", fh: " << fh
+          << ", read_size: " << *out_rsize << ", status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
   }
@@ -530,8 +531,8 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
 Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
                          uint64_t offset, uint64_t fh, uint64_t* out_wsize) {
-  VLOG(1) << "VFSWrite ino: " << ino << " size: " << size
-          << " offset: " << offset << " fh: " << fh;
+  VLOG(1) << "VFSWrite ino: " << ino << ", buf:  " << Char2Addr(buf)
+          << ", size: " << size << " offset: " << offset << " fh: " << fh;
   Status s;
   AccessLogGuard log([&]() {
     return absl::StrFormat("write (%d,%d,%d): %s (%d) [fh:%d]", ino, size,
@@ -542,8 +543,9 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
       {&client_op_metric_->opWrite, &client_op_metric_->opAll});
 
   s = vfs_->Write(ino, buf, size, offset, fh, out_wsize);
-  VLOG(1) << "VFSWrite end, write_size: " << *out_wsize
-          << " status: " << s.ToString();
+  VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Char2Addr(buf)
+          << ", size: " << size << " offset: " << offset << " fh: " << fh
+          << ", write_size: " << *out_wsize << ", status: " << s.ToString();
   if (!s.ok()) {
     op_metric.FailOp();
   }
