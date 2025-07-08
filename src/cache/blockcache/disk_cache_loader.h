@@ -33,7 +33,7 @@ namespace cache {
 class DiskCacheLoader {
  public:
   DiskCacheLoader(DiskCacheLayoutSPtr layout, DiskCacheManagerSPtr manager,
-                  metrics::DiskCacheMetricSPtr metric);
+                  DiskCacheMetricSPtr metric);
   virtual ~DiskCacheLoader() = default;
 
   virtual void Start(const std::string& disk_id,
@@ -64,7 +64,7 @@ class DiskCacheLoader {
   DiskCacheLayoutSPtr layout_;
   DiskCacheManagerSPtr manager_;
   TaskThreadPoolUPtr thread_pool_;
-  metrics::DiskCacheMetricSPtr metric_;
+  DiskCacheMetricSPtr metric_;
 };
 
 using DiskCacheLoaderUPtr = std::unique_ptr<DiskCacheLoader>;

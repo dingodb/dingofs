@@ -94,13 +94,11 @@ void CacheGroupNodeHeartbeatImpl::SendHeartbeat() {
 }
 
 int64_t CacheGroupNodeHeartbeatImpl::GetCacheHitCount() {
-  return metrics::CacheGroupNodeMetric::GetInstance()
-      .cache_hit_count.get_value();
+  return CacheGroupNodeMetric::GetInstance().cache_hit_count.get_value();
 }
 
 int64_t CacheGroupNodeHeartbeatImpl::GetCacheMissCount() {
-  return metrics::CacheGroupNodeMetric::GetInstance()
-      .cache_miss_count.get_value();
+  return CacheGroupNodeMetric::GetInstance().cache_miss_count.get_value();
 }
 
 }  // namespace cache

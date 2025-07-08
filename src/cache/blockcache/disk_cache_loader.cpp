@@ -37,7 +37,7 @@ namespace cache {
 
 DiskCacheLoader::DiskCacheLoader(DiskCacheLayoutSPtr layout,
                                  std::shared_ptr<DiskCacheManager> manager,
-                                 metrics::DiskCacheMetricSPtr metric)
+                                 DiskCacheMetricSPtr metric)
     : running_(false),
       cache_loading_(false),
       stage_loading_(false),
@@ -87,6 +87,7 @@ void DiskCacheLoader::Shutdown() {
   thread_pool_->Stop();
   cache_loading_ = false;
   stage_loading_ = false;
+  metric_->load_status.set_value("LOADING");
 
   LOG(INFO) << "Disk cache loader is down.";
 
@@ -133,6 +134,10 @@ void DiskCacheLoader::LoadAllBlocks(const std::string& dir, BlockType type) {
     stage_loading_.store(false, std::memory_order_relaxed);
   } else {
     CHECK(false) << "Unknown block type: " << static_cast<int>(type);
+  }
+
+  if (!cache_loading_ && !stage_loading_) {
+    metric_->load_status.set_value("FINISH");
   }
 }
 

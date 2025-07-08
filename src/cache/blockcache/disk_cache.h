@@ -93,11 +93,11 @@ class DiskCache final : public CacheStore {
   std::atomic<bool> running_;
   UploadFunc uploader_;
   std::string uuid_;
+  DiskCacheMetricSPtr metric_;
   DiskCacheLayoutSPtr layout_;
   StateMachineSPtr state_machine_;
   DiskStateHealthCheckerUPtr disk_state_health_checker_;
   FileSystemSPtr fs_;
-  metrics::DiskCacheMetricSPtr metric_;
   DiskCacheManagerSPtr manager_;
   DiskCacheLoaderUPtr loader_;
 };

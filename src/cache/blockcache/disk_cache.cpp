@@ -47,13 +47,16 @@ DEFINE_uint32(cache_size_mb, 102400, "Maximum size of the cache in MB");
 static const std::string kModule = kDiskCacheMoudule;
 
 DiskCache::DiskCache(DiskCacheOption option) : running_(false) {
+  // metric
+  metric_ = std::make_shared<DiskCacheMetric>(option);
+
   // layout
   layout_ = std::make_shared<DiskCacheLayout>(option.cache_dir);
 
   // health checker
   state_machine_ = std::make_shared<StateMachineImpl>();
-  disk_state_health_checker_ =
-      std::make_unique<DiskStateHealthChecker>(layout_, state_machine_);
+  disk_state_health_checker_ = std::make_unique<DiskStateHealthChecker>(
+      metric_, layout_, state_machine_);
 
   // filesystem
   auto check_status_func = [&](Status status) {
@@ -71,9 +74,6 @@ DiskCache::DiskCache(DiskCacheOption option) : running_(false) {
     fs_ = std::make_shared<LocalFileSystem>(check_status_func);
     LOG(INFO) << "Using local filesystem.";
   }
-
-  // metric
-  metric_ = std::make_shared<metrics::DiskCacheMetric>(option);
 
   // manager & loader
   manager_ = std::make_shared<DiskCacheManager>(option.cache_size_mb * kMiB,
@@ -127,7 +127,7 @@ Status DiskCache::Start(UploadFunc uploader) {
 
   // Metric
   metric_->uuid.set_value(uuid_);
-  metric_->running_status.set_value("up");
+  metric_->running_status.set_value("UP");
 
   running_ = true;
 
@@ -239,6 +239,7 @@ Status DiskCache::Stage(ContextSPtr ctx, const BlockKey& key,
   TraceLogGuard log(ctx, status, timer, kModule, "stage(%s,%zu)",
                     key.Filename(), block.size);
   StepTimerGuard guard(timer);
+  DiskCacheMetricGuard metric_guard(__func__, status, metric_);
 
   status = CheckStatus(kWantExec | kWantStage);
   if (!status.ok()) {
@@ -365,6 +366,7 @@ Status DiskCache::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   TraceLogGuard log(ctx, status, timer, kModule, "load(%s,%zu,%zu)",
                     key.Filename(), offset, length);
   StepTimerGuard guard(timer);
+  DiskCacheMetricGuard metric_guard(__func__, status, metric_);
 
   status = CheckStatus(kWantExec);
   if (!status.ok()) {

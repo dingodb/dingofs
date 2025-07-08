@@ -47,7 +47,7 @@ DEFINE_validator(cleanup_expire_interval_ms, brpc::PassValidate);
 
 DiskCacheManager::DiskCacheManager(uint64_t capacity,
                                    DiskCacheLayoutSPtr layout,
-                                   metrics::DiskCacheMetricSPtr metric)
+                                   DiskCacheMetricSPtr metric)
     : running_(false),
       used_bytes_(0),
       capacity_bytes_(capacity),
@@ -128,11 +128,13 @@ void DiskCacheManager::Add(const CacheKey& key, const CacheValue& value,
   if (phase == BlockPhase::kStaging) {
     staging_blocks_.emplace(key.Filename(), value);
     UpdateUsage(1, value.size);
+    metric_->stage_blocks << 1;
   } else if (phase == BlockPhase::kUploaded) {
     auto iter = staging_blocks_.find(key.Filename());
     CHECK(iter != staging_blocks_.end());
     cached_blocks_->Add(key, iter->second);
     staging_blocks_.erase(iter);
+    metric_->stage_blocks << -1;
   } else {  // cached
     cached_blocks_->Add(key, value);
     UpdateUsage(1, value.size);
@@ -296,8 +298,11 @@ void DiskCacheManager::DeleteBlocks(const CacheItems& to_del,
       timer.u_elapsed() / 1e6);
 }
 
-void DiskCacheManager::UpdateUsage(int64_t /*n*/, int64_t used_bytes) {
+void DiskCacheManager::UpdateUsage(int64_t n, int64_t used_bytes) {
   used_bytes_ += used_bytes;
+  metric_->used_bytes.set_value(used_bytes_);
+  metric_->cache_blocks << n;
+  metric_->cache_bytes << used_bytes;
 }
 
 std::string DiskCacheManager::GetRootDir() const {

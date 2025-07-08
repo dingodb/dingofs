@@ -19,6 +19,7 @@
 
 #include "cache/blockcache/disk_cache_layout.h"
 #include "cache/utils/state_machine.h"
+#include "metrics/cache/disk_cache_metric.h"
 #include "utils/executor/executor.h"
 
 namespace dingofs {
@@ -26,7 +27,7 @@ namespace cache {
 
 class DiskStateHealthChecker {
  public:
-  DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
+  DiskStateHealthChecker(DiskCacheMetricSPtr metric, DiskCacheLayoutSPtr layout,
                          StateMachineSPtr state_machine);
   virtual ~DiskStateHealthChecker() = default;
 
@@ -39,6 +40,7 @@ class DiskStateHealthChecker {
   std::string GetProbeFilepath() const;
 
   std::atomic<bool> running_;
+  DiskCacheMetricSPtr metric_;
   DiskCacheLayoutSPtr layout_;
   StateMachineSPtr state_machine_;
   std::unique_ptr<Executor> executor_;

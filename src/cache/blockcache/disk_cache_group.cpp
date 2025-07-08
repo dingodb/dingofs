@@ -23,10 +23,12 @@
 #include "cache/blockcache/disk_cache_group.h"
 
 #include <atomic>
+#include <memory>
 
 #include "cache/common/macro.h"
 #include "cache/utils/helper.h"
 #include "cache/utils/ketama_con_hash.h"
+#include "metrics/cache/disk_cache_group_metric.h"
 
 namespace dingofs {
 namespace cache {
@@ -35,12 +37,14 @@ DiskCacheGroup::DiskCacheGroup(std::vector<DiskCacheOption> options)
     : running_(false),
       options_(options),
       chash_(std::make_unique<KetamaConHash>()),
-      watcher_(std::make_unique<DiskCacheWatcher>()) {}
+      watcher_(std::make_unique<DiskCacheWatcher>()),
+      metric_(std::make_shared<DiskCacheGroupMetric>()) {}
 
 Status DiskCacheGroup::Start(UploadFunc uploader) {
   CHECK(!options_.empty());
   CHECK_NOTNULL(chash_);
   CHECK_NOTNULL(watcher_);
+  CHECK_NOTNULL(metric_);
 
   if (running_) {
     return Status::OK();
@@ -95,7 +99,10 @@ Status DiskCacheGroup::Stage(ContextSPtr ctx, const BlockKey& key,
                              const Block& block, StageOption option) {
   CHECK_RUNNING("Disk cache group");
 
-  return GetStore(key)->Stage(ctx, key, block, option);
+  Status status;
+  DiskCacheGroupMetricGuard metric_guard(__func__, block.size, status, metric_);
+  status = GetStore(key)->Stage(ctx, key, block, option);
+  return status;
 }
 
 Status DiskCacheGroup::RemoveStage(ContextSPtr ctx, const BlockKey& key,
@@ -131,7 +138,11 @@ Status DiskCacheGroup::Load(ContextSPtr ctx, const BlockKey& key, off_t offset,
   } else {
     store = GetStore(key);
   }
-  return store->Load(ctx, key, offset, length, buffer, option);
+
+  Status status;
+  DiskCacheGroupMetricGuard metirc_guard(__func__, length, status, metric_);
+  status = store->Load(ctx, key, offset, length, buffer, option);
+  return status;
 }
 
 bool DiskCacheGroup::IsRunning() const {

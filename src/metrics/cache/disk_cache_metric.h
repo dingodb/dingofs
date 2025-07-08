@@ -20,28 +20,31 @@
  * Author: Jingli Chen (Wine93)
  */
 
-#ifndef DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRICS_H_
-#define DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRICS_H_
+#ifndef DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_
+#define DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_
 
 #include <absl/strings/str_format.h>
 #include <bvar/reducer.h>
 #include <bvar/status.h>
+#include <glog/logging.h>
 
 #include <string>
 
+#include "common/status.h"
 #include "options/cache/blockcache.h"
 
 namespace dingofs {
-namespace metrics {
+namespace cache {
 
 class DiskCacheMetric {
  public:
   DiskCacheMetric(cache::DiskCacheOption option);
 
   void Expose(const std::string& prefix);
-
+  void Init();
   void Reset();
 
+  std::string prefix;
   bvar::Status<std::string> uuid;
   bvar::Status<std::string> dir;
   bvar::Status<int64_t> used_bytes;
@@ -58,7 +61,6 @@ class DiskCacheMetric {
   bvar::Adder<int64_t> cache_blocks;
   bvar::Adder<int64_t> cache_bytes;
   bvar::Status<bool> cache_full;
-  bvar::Status<bool> use_direct_write;
 
  private:
   cache::DiskCacheOption option_;
@@ -66,35 +68,31 @@ class DiskCacheMetric {
 
 using DiskCacheMetricSPtr = std::shared_ptr<DiskCacheMetric>;
 
-}  // namespace metrics
+struct DiskCacheMetricGuard {
+  DiskCacheMetricGuard(const std::string& op_name, Status& status,
+                       DiskCacheMetricSPtr metric)
+      : status(status), op_name(op_name), metric(metric) {}
+
+  ~DiskCacheMetricGuard() {
+    if (op_name == "Load") {
+      if (status.ok()) {
+        metric->cache_hits << 1;
+      } else {
+        metric->cache_misses << 1;
+      }
+    } else if (op_name == "Stage") {
+      if (!status.ok()) {
+        metric->stage_skips << 1;
+      }
+    }
+  }
+
+  std::string op_name;
+  Status& status;
+  DiskCacheMetricSPtr metric;
+};
+
+}  // namespace cache
 }  // namespace dingofs
 
-/*
-struct DiskCacheMetricGuard {
-      explicit DiskCacheMetricGuard(Status* status,
-                                    stub::metric::InterfaceMetric* metric,
-                                    size_t count)
-          : status(status), metric(metric), count(count) {
-        start = butil::cpuwide_time_us();
-      }
-
-      ~DiskCacheMetricGuard() {
-        if (status->ok()) {
-          metric->bps.count << count;
-          metric->qps.count << 1;
-          auto duration = butil::cpuwide_time_us() - start;
-          metric->latency << duration;
-          metric->latTotal << duration;
-        } else {
-          metric->eps.count << 1;
-        }
-      }
-
-      Status* status;
-      stub::metric::InterfaceMetric* metric;
-      size_t count;
-      uint64_t start;
-    };
-*/
-
-#endif  // DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRICS_H_
+#endif  // DINGOFS_SRC_METRICS_CACHE_DISK_CACHE_METRIC_H_

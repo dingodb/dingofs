@@ -33,7 +33,7 @@ namespace cache {
 static void SplitDiskCacheOption(std::vector<DiskCacheOption>* options) {
   std::vector<std::string> dirs = absl::StrSplit(cache::FLAGS_cache_dir, ";");
   for (size_t i = 0; i < dirs.size(); i++) {
-    uint64_t cache_size_mb = cache::FLAGS_cache_size_mb;
+    uint64_t cache_size_mb = FLAGS_cache_size_mb;
     std::vector<std::string> items = absl::StrSplit(dirs[i], ":");
     if (items.size() > 2 ||
         (items.size() == 2 && !utils::Str2Int(items[1], &cache_size_mb))) {
@@ -42,8 +42,9 @@ static void SplitDiskCacheOption(std::vector<DiskCacheOption>* options) {
       CHECK(false) << "Cache size must greater than 0.";
     }
 
-    cache::DiskCacheOption o;
-    o.cache_store = cache::FLAGS_cache_store;
+    DiskCacheOption o;
+    o.cache_store = FLAGS_cache_store;
+    o.cache_index = i;
     o.cache_dir = items[0];
     o.cache_size_mb = cache_size_mb;
     options->emplace_back(o);

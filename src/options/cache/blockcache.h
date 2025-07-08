@@ -107,8 +107,8 @@ DECLARE_uint32(check_disk_state_duration_ms);
 struct DiskCacheOption {
   DiskCacheOption();
 
-  uint32_t cache_index;
   std::string cache_store;
+  uint32_t cache_index;
   std::string cache_dir;
   uint64_t cache_size_mb;
 };

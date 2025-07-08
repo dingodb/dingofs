@@ -98,7 +98,7 @@ StateMachineImpl::StateMachineImpl()
       state_(std::make_unique<BaseState>(this)),
       executor_(std::make_unique<BthreadExecutor>()) {}
 
-bool StateMachineImpl::Start() {
+bool StateMachineImpl::Start(OnStateChangeFunc on_state_change) {
   std::lock_guard<BthreadMutex> lk(mutex_);
 
   if (running_) {
@@ -107,7 +107,10 @@ bool StateMachineImpl::Start() {
 
   LOG(INFO) << "State machine is starting...";
 
+  on_state_change_ = on_state_change;
+
   state_ = std::make_unique<NormalState>(this);
+  on_state_change_(state_->GetState());
 
   bthread::ExecutionQueueOptions options;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
@@ -226,6 +229,10 @@ void StateMachineImpl::ProcessEvent(StateEvent event) {
       break;
     default:
       LOG(FATAL) << "Unknown state: " << state_->GetState();
+  }
+
+  if (on_state_change_) {
+    on_state_change_(state_->GetState());
   }
 
   LOG(INFO) << "After process, current state is "

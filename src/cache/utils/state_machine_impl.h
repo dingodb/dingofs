@@ -101,7 +101,7 @@ class StateMachineImpl final : public StateMachine {
 
   ~StateMachineImpl() override = default;
 
-  bool Start() override;
+  bool Start(OnStateChangeFunc on_state_change = nullptr) override;
   bool Shutdown() override;
 
   void Success() override;
@@ -117,6 +117,7 @@ class StateMachineImpl final : public StateMachine {
 
   std::atomic<bool> running_;
   mutable BthreadMutex mutex_;  // for state_
+  OnStateChangeFunc on_state_change_;
   BaseStateUPtr state_;
   bthread::ExecutionQueueId<StateEvent> disk_event_queue_id_;
   std::unique_ptr<Executor> executor_;

@@ -20,6 +20,8 @@
 
 #include "cache/common/macro.h"
 #include "cache/utils/helper.h"
+#include "cache/utils/state_machine.h"
+#include "metrics/cache/disk_cache_metric.h"
 #include "options/cache/blockcache.h"
 #include "utils/executor/bthread/bthread_executor.h"
 
@@ -30,9 +32,11 @@ DEFINE_uint32(check_disk_state_duration_ms, 3000,
               "Duration in milliseconds to check the disk state");
 DEFINE_validator(check_disk_state_duration_ms, brpc::PassValidate);
 
-DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheLayoutSPtr layout,
+DiskStateHealthChecker::DiskStateHealthChecker(DiskCacheMetricSPtr metric,
+                                               DiskCacheLayoutSPtr layout,
                                                StateMachineSPtr state_machine)
     : running_(false),
+      metric_(metric),
       layout_(layout),
       state_machine_(state_machine),
       executor_(std::make_unique<BthreadExecutor>()) {}
@@ -44,7 +48,9 @@ void DiskStateHealthChecker::Start() {
 
   LOG(INFO) << "Disk state health checker is starting...";
 
-  CHECK(state_machine_->Start());
+  CHECK(state_machine_->Start([&](State state) {
+    metric_->healthy_status.set_value(StateToString(state));
+  }));
 
   CHECK(executor_->Start());
   executor_->Schedule([this] { RunCheck(); },

@@ -18,6 +18,7 @@
 #include <glog/logging.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -70,11 +71,13 @@ inline std::string StateEventToString(StateEvent event) {
 
 class StateMachine {
  public:
+  using OnStateChangeFunc = std::function<void(State state)>;
+
   StateMachine() = default;
 
   virtual ~StateMachine() = default;
 
-  virtual bool Start() = 0;
+  virtual bool Start(OnStateChangeFunc on_state_change = nullptr) = 0;
   virtual bool Shutdown() = 0;
 
   virtual void Success() = 0;

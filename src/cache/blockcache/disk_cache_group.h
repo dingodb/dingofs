@@ -28,6 +28,7 @@
 #include "cache/blockcache/disk_cache_watcher.h"
 #include "cache/utils/con_hash.h"
 #include "cache/utils/context.h"
+#include "metrics/cache/disk_cache_group_metric.h"
 
 namespace dingofs {
 namespace cache {
@@ -64,6 +65,7 @@ class DiskCacheGroup final : public CacheStore {
   std::unique_ptr<ConHash> chash_;
   std::unordered_map<std::string, DiskCacheSPtr> stores_;
   DiskCacheWatcherUPtr watcher_;
+  DiskCacheGroupMetricSPtr metric_;
 };
 
 }  // namespace cache

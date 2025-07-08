@@ -22,18 +22,15 @@
 
 #include "metrics/cache/disk_cache_metric.h"
 
-namespace dingofs {
-namespace metrics {
+#include "cache/common/const.h"
 
-constexpr const char* kLoadStopped = "STOP";  // load status
-constexpr const char* kOnLoading = "LOADING";
-constexpr const char* kLoadFinised = "FINISH";
-constexpr const char* kCacheUp = "UP";  // cache status
-constexpr const char* kCacheDown = "DOWN";
+namespace dingofs {
+namespace cache {
 
 DiskCacheMetric::DiskCacheMetric(cache::DiskCacheOption option)
     : option_(option) {
   Expose(absl::StrFormat("dingofs_disk_cache_%d_", option.cache_index));
+  Reset();
 }
 
 void DiskCacheMetric::Expose(const std::string& prefix) {
@@ -53,16 +50,16 @@ void DiskCacheMetric::Expose(const std::string& prefix) {
   cache_blocks.expose_as(prefix, "cache_blocks");
   cache_bytes.expose_as(prefix, "cache_bytes");
   cache_full.expose_as(prefix, "cache_full");
-  use_direct_write.expose_as(prefix, "use_direct_write");
 }
 
 void DiskCacheMetric::Reset() {
+  uuid.set_value("-");
   dir.set_value(option_.cache_dir);
   used_bytes.set_value(0);
-  capacity.set_value(option_.cache_size_mb * 1024 * 1024);
+  capacity.set_value(option_.cache_size_mb * kMiB);
   free_space_ratio.set_value(cache::FLAGS_free_space_ratio);
-  load_status.set_value(kLoadStopped);
-  running_status.set_value(kCacheDown);
+  load_status.set_value("STOP");
+  running_status.set_value("DOWN");
   healthy_status.set_value("unknown");
   stage_skips.reset();
   stage_blocks.reset();
@@ -72,8 +69,7 @@ void DiskCacheMetric::Reset() {
   cache_blocks.reset();
   cache_bytes.reset();
   cache_full.set_value(false);
-  use_direct_write.set_value(false);
 }
 
-}  // namespace metrics
+}  // namespace cache
 }  // namespace dingofs

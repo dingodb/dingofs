@@ -286,11 +286,11 @@ Status CacheGroupNodeImpl::RangeStorage(ContextSPtr ctx, StepTimer& timer,
 }
 
 void CacheGroupNodeImpl::AddCacheHitCount(int64_t count) {
-  metrics::CacheGroupNodeMetric::GetInstance().cache_hit_count << count;
+  CacheGroupNodeMetric::GetInstance().cache_hit_count << count;
 }
 
 void CacheGroupNodeImpl::AddCacheMissCount(int64_t count) {
-  metrics::CacheGroupNodeMetric::GetInstance().cache_miss_count << count;
+  CacheGroupNodeMetric::GetInstance().cache_miss_count << count;
 }
 
 }  // namespace cache

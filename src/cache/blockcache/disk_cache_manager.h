@@ -44,7 +44,7 @@ enum class BlockPhase : uint8_t {
 class DiskCacheManager {
  public:
   DiskCacheManager(uint64_t capacity, DiskCacheLayoutSPtr layout,
-                   metrics::DiskCacheMetricSPtr metric);
+                   DiskCacheMetricSPtr metric);
   virtual ~DiskCacheManager() = default;
 
   virtual void Start();
@@ -71,7 +71,7 @@ class DiskCacheManager {
   void CheckFreeSpace();
   void CleanupFull(uint64_t goal_bytes, uint64_t goal_files);
   void CleanupExpire();
-  void DeleteBlocks(const CacheItems& to_del, DeletionReason);
+  void DeleteBlocks(const CacheItems& to_del, DeletionReason reason);
   void UpdateUsage(int64_t n, int64_t used_bytes);
 
   std::string GetRootDir() const;
@@ -93,7 +93,7 @@ class DiskCacheManager {
   std::unordered_map<std::string, CacheValue> staging_blocks_;
   MessageQueueUPtr mq_;
   TaskThreadPoolUPtr thread_pool_;
-  metrics::DiskCacheMetricSPtr metric_;
+  DiskCacheMetricSPtr metric_;
 };
 
 using DiskCacheManagerSPtr = std::shared_ptr<DiskCacheManager>;

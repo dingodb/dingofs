@@ -26,7 +26,7 @@
 #include <bvar/bvar.h>
 
 namespace dingofs {
-namespace metrics {
+namespace cache {
 
 struct CacheGroupNodeMetric {
   static CacheGroupNodeMetric& GetInstance() {
@@ -38,7 +38,7 @@ struct CacheGroupNodeMetric {
   bvar::Adder<int64_t> cache_miss_count{"dingofs_cache_miss_count"};
 };
 
-}  // namespace metrics
+}  // namespace cache
 }  // namespace dingofs
 
 #endif  // DINGOFS_SRC_CACHE_METRICS_CACHE_GROUP_NODE_METRIC_H_
