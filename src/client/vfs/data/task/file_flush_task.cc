@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cstdint>
 
+#include "client/vfs/data/chunk.h"
 #include "common/callback.h"
 
 namespace dingofs {
@@ -70,7 +71,7 @@ void FileFlushTask::RunAsync(StatusCallback cb) {
 
   for (const auto& iter : chunks_) {
     uint64_t chunk_index = iter.first;
-    Chunk* chunk = iter.second;
+    ChunkSPtr chunk = iter.second;
     CHECK_NOTNULL(chunk);
 
     VLOG(4) << fmt::format("{} Flushing chunk_index: {}", UUID(), chunk_index);

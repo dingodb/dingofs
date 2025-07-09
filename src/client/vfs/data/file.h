@@ -63,7 +63,11 @@ class File : public IFile {
 
   std::mutex mutex_;
   // chunk_index -> chunk
-  std::unordered_map<uint64_t, std::unique_ptr<Chunk>> chunks_;
+  // chunk is used by file/file_flush_task/chunk_flush_task
+  // TODO: manage chunk use dec/inc ref mechanism
+  // TODO: or maybe transfer chunk ownership to file_flush_task and then transfer
+  // ownership to chunk_flush_task
+  std::unordered_map<uint64_t, ChunkSPtr> chunks_;
   // TODO: monitor this and add a manager
   // file_flush_id -> FileFlushTask
   std::unordered_map<uint64_t, std::unique_ptr<FileFlushTask>>

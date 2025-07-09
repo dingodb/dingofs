@@ -23,9 +23,9 @@
 
 #include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
+#include "client/meta/vfs_meta.h"
 #include "client/vfs/data/slice/slice_data.h"
 #include "client/vfs/data/task/chunk_flush_task.h"
-#include "client/meta/vfs_meta.h"
 #include "common/callback.h"
 #include "common/status.h"
 #include "fmt/format.h"
@@ -35,7 +35,8 @@ namespace client {
 namespace vfs {
 
 class VFSHub;
-class Chunk {
+
+class Chunk : public std::enable_shared_from_this<Chunk> {
  public:
   Chunk(VFSHub* hub, uint64_t ino, uint64_t index);
 
@@ -80,6 +81,7 @@ class Chunk {
     bool done{false};
     Status status;
     const StatusCallback cb{nullptr};
+    std::shared_ptr<Chunk> chunk{nullptr};
     std::unique_ptr<ChunkFlushTask> chunk_flush_task{nullptr};
 
     std::string UUID() const;
@@ -128,10 +130,13 @@ class Chunk {
   // seq_id -> slice datj
   std::map<uint64_t, std::unique_ptr<SliceData>> slices_;
   std::deque<FlushTask*> flush_queue_;
+  // TODO: use static 
   FlushTask* fake_header_{nullptr};
   // when this not ok, all write and flush should return error
   Status error_status_;
 };
+
+using ChunkSPtr = std::shared_ptr<Chunk>;
 
 }  // namespace vfs
 }  // namespace client

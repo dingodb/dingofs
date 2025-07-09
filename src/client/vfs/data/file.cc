@@ -47,7 +47,7 @@ Chunk* File::GetOrCreateChunk(uint64_t chunk_index) {
   if (iter != chunks_.end()) {
     return iter->second.get();
   } else {
-    auto chunk_writer = std::make_unique<Chunk>(vfs_hub_, ino_, chunk_index);
+    auto chunk_writer = std::make_shared<Chunk>(vfs_hub_, ino_, chunk_index);
     chunks_[chunk_index] = std::move(chunk_writer);
     return chunks_[chunk_index].get();
   }
@@ -152,13 +152,9 @@ void File::AsyncFlush(StatusCallback cb) {
       is_empty = true;
     } else {
       // TODO: maybe we only need chunk index
-      std::unordered_map<uint64_t, Chunk*> flush_chunks;
-      for (const auto& [chunk_index, chunk] : chunks_) {
-        flush_chunks[chunk_index] = chunk.get();
-      }
-
-      auto flush_task_unique_ptr = std::make_unique<FileFlushTask>(
-          ino_, file_flush_id, std::move(flush_chunks));
+      // copy chunks_
+      auto flush_task_unique_ptr =
+          std::make_unique<FileFlushTask>(ino_, file_flush_id, chunks_);
       flush_task = flush_task_unique_ptr.get();
 
       CHECK(inflight_flush_tasks_

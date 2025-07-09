@@ -34,7 +34,7 @@ namespace vfs {
 class FileFlushTask {
  public:
   explicit FileFlushTask(uint64_t ino, uint64_t file_flush_id,
-                         std::unordered_map<uint64_t, Chunk*> chunks)
+                         std::unordered_map<uint64_t, ChunkSPtr> chunks)
       : ino_(ino), file_flush_id_(file_flush_id), chunks_(std::move(chunks)) {}
 
   ~FileFlushTask() = default;
@@ -54,7 +54,7 @@ class FileFlushTask {
 
   const uint64_t ino_;
   const uint64_t file_flush_id_;
-  const std::unordered_map<uint64_t, Chunk*> chunks_;
+  const std::unordered_map<uint64_t, ChunkSPtr> chunks_;
 
   std::atomic_uint64_t flusing_chunk_{0};
 

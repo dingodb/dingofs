@@ -71,7 +71,11 @@ Chunk::Chunk(VFSHub* hub, uint64_t ino, uint64_t index)
       chunk_end_(chunk_start_ + chunk_size_),
       fake_header_(new FlushTask()) {}
 
-Chunk::~Chunk() { delete fake_header_; }
+Chunk::~Chunk() {
+  VLOG(4) << fmt::format("{} Destroy Chunk addr: {}", UUID(),
+                         static_cast<const void*>(this));
+  delete fake_header_;
+}
 
 Status Chunk::WriteToBlockCache(const cache::BlockKey& key,
                                 const cache::Block& block,
@@ -465,7 +469,7 @@ void Chunk::FlushTaskDone(FlushTask* flush_task, Status s) {
 
       } else {
         LOG(WARNING) << fmt::format(
-            "{} FlushTaskDone header_task: {} skip commit flush fail "
+            "{} FlushTaskDone header_task: {} skip commit fail "
             "chunk_flush_task: {}",
             UUID(), flush_task->UUID(), task->ToString());
 
@@ -498,6 +502,7 @@ void Chunk::DoFlushAsync(StatusCallback cb, uint64_t chunk_flush_id) {
           .chunk_flush_id = chunk_flush_id,
           .status = Status::OK(),
           .cb = std::move(cb),
+          .chunk = shared_from_this(),
       });
 
       flush_task = flush_queue_.back();
