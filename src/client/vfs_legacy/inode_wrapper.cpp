@@ -276,7 +276,12 @@ DINGOFS_ERROR InodeWrapper::Link(uint64_t parent) {
   VLOG(3) << "LinkLocked, inodeId=" << inode_.inodeid()
           << ", newnlink = " << inode_.nlink();
 
-  UpdateTimestampLocked(kChangeTime);
+  if (inode_.type() == FsFileType::TYPE_DIRECTORY) {
+    UpdateTimestampLocked(kChangeTime | kModifyTime);
+  } else {
+    UpdateTimestampLocked(kChangeTime);
+  }
+
   if (inode_.type() != FsFileType::TYPE_DIRECTORY && parent != 0) {
     inode_.add_parent(parent);
     dirtyAttr_.add_parent(parent);
@@ -317,7 +322,13 @@ DINGOFS_ERROR InodeWrapper::UnLinkWithReturn(uint64_t parent,
     VLOG(3) << "UnLinkLocked, inodeId=" << inode_.inodeid()
             << ", newnlink = " << inode_.nlink()
             << ", type = " << inode_.type();
-    UpdateTimestampLocked(kChangeTime | kModifyTime);
+
+    if (inode_.type() == FsFileType::TYPE_DIRECTORY) {
+      UpdateTimestampLocked(kChangeTime | kModifyTime);
+    } else {
+      UpdateTimestampLocked(kChangeTime);
+    }
+
     // newnlink == 0 will be deleted at metaserver
     // dir will not update parent
     // parent = 0; is useless
