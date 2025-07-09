@@ -24,7 +24,6 @@
 #include <string>
 
 #include "client/common/client_dummy_server_info.h"
-#include "client/common/metrics_dumper.h"
 #include "client/meta/vfs_meta.h"
 #include "client/vfs/common/helper.h"
 #include "client/vfs/data/file.h"
@@ -34,6 +33,7 @@
 #include "common/status.h"
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "metrics/metrics_dumper.h"
 #include "options/client/common_option.h"
 #include "utils/configuration.h"
 #include "utils/net_common.h"
