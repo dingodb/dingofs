@@ -46,6 +46,7 @@ static const std::string kFileSysteMoudle = "filesystem";
 static const std::string kAioModule = "aio";
 static const std::string kPageCacheModule = "pagecache";
 static const std::string kStorageMoudule = "storage";
+static const std::string kRPCMoudule = "rpc";
 
 // step: up-level module, like tier cache and cache group node service
 static const std::string kLocalPut = "local_put";

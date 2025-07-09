@@ -25,13 +25,17 @@
 #include <absl/strings/str_format.h>
 #include <brpc/channel.h>
 #include <brpc/options.pb.h>
+#include <brpc/reloadable_flags.h>
 #include <butil/iobuf.h>
 #include <butil/time.h>
+#include <gflags/gflags.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
+#include "cache/blockcache/block_cache.h"
+#include "cache/common/const.h"
 #include "cache/common/type.h"
 #include "common/io_buffer.h"
 #include "options/cache/tiercache.h"
@@ -39,20 +43,19 @@
 namespace dingofs {
 namespace cache {
 
-DEFINE_uint32(put_rpc_timeout_ms, 3000,
-              "RPC timeout for remote put operation in milliseconds");
-DEFINE_uint32(range_rpc_timeout_ms, 3000,
-              "RPC timeout for remote range operation in milliseconds");
-DEFINE_uint32(cache_rpc_timeout_ms, 3000,
-              "RPC timeout for remote cache operation in milliseconds");
-DEFINE_uint32(prefetch_rpc_timeout_ms, 3000,
-              "RPC timeout for remote prefetch operation in milliseconds");
-DEFINE_uint32(cache_rpc_max_retry_times, 3,
-              "Maximum number of retry times for remote cache rpc operations");
-DEFINE_uint32(
-    cache_rpc_max_timeout_ms, 10000,
-    "Maximum timeout for remote cache rpc operations in milliseconds");
+DEFINE_uint32(rpc_put_request_timeout_ms, 5000,
+              "Timeout (ms) for put rpc request");
+DEFINE_uint32(rpc_range_request_timeout_ms, 3000,
+              "Timeout (ms) for range rpc request");
+DEFINE_uint32(rpc_cache_request_timeout_ms, 10000,
+              "Timeout (ms) for cache rpc request");
+DEFINE_uint32(rpc_prefetch_request_timeout_ms, 10000,
+              "Timeout (ms) for prefetch rpc request");
+DEFINE_uint32(rpc_max_retry_times, 3, "Maximum retry times for rpc request");
+DEFINE_uint32(rpc_max_timeout_ms, 10000,
+              "Maximum rpc timeout (ms) for rpc request");
 
+static const std::string kModule = kRPCMoudule;
 static const std::string kApiPut = "Put";
 static const std::string kApiRange = "Range";
 static const std::string kApiCache = "Cache";
@@ -70,29 +73,40 @@ Status RPCClient::Init() { return InitChannel(server_ip_, server_port_); }
 
 Status RPCClient::Put(ContextSPtr ctx, const BlockKey& key,
                       const Block& block) {
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "put(%s,%zu)", key.Filename(),
+                    block.size);
+  StepTimerGuard guard(timer);
+
   PBPutRequest request;
   PBPutResponse response;
-
   IOBuffer buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  return SendRequest(ctx, kApiPut, request, buffer.ConstIOBuf(), response);
+  status = SendRequest(ctx, kApiPut, request, buffer.ConstIOBuf(), response);
+  return status;
 }
 
 Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-                        size_t length, IOBuffer* buffer, size_t block_size) {
+                        size_t length, IOBuffer* buffer, RangeOption option) {
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "%s(%s,%lld,%zu)",
+                    option.is_subrequest ? "subrange" : "range", key.Filename(),
+                    offset, length);
+  StepTimerGuard guard(timer);
+
   PBRangeRequest request;
   PBRangeResponse response;
-
   butil::IOBuf response_attachment;
   *request.mutable_block_key() = key.ToPB();
   request.set_offset(offset);
   request.set_length(length);
-  request.set_block_size(block_size);
+  request.set_block_size(option.block_size);
 
-  auto status =
-      SendRequest(ctx, kApiRange, request, response, response_attachment);
+  status = SendRequest(ctx, kApiRange, request, response, response_attachment);
   if (status.ok()) {
     *buffer = IOBuffer(response_attachment);
   }
@@ -101,25 +115,37 @@ Status RPCClient::Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
 
 Status RPCClient::Cache(ContextSPtr ctx, const BlockKey& key,
                         const Block& block) {
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "cache(%s,%zu)",
+                    key.Filename(), block.size);
+  StepTimerGuard guard(timer);
+
   PBCacheRequest request;
   PBCacheResponse response;
-
   auto buffer = block.buffer;
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(buffer.Size());
 
-  return SendRequest(ctx, kApiCache, request, buffer.ConstIOBuf(), response);
+  status = SendRequest(ctx, kApiCache, request, buffer.ConstIOBuf(), response);
+  return status;
 }
 
 Status RPCClient::Prefetch(ContextSPtr ctx, const BlockKey& key,
                            size_t length) {
+  Status status;
+  StepTimer timer;
+  TraceLogGuard log(ctx, status, timer, kModule, "prefetch(%s,%zu)",
+                    key.Filename(), length);
+  StepTimerGuard guard(timer);
+
   PBPrefetchRequest request;
   PBPrefetchResponse response;
-
   *request.mutable_block_key() = key.ToPB();
   request.set_block_size(length);
 
-  return SendRequest(ctx, kApiPrefetch, request, response);
+  status = SendRequest(ctx, kApiPrefetch, request, response);
+  return status;
 }
 
 Status RPCClient::InitChannel(const std::string& server_ip,
@@ -171,19 +197,19 @@ uint32_t RPCClient::NextTimeoutMs(const std::string& api_name,
                                   int retry_count) const {
   uint32_t timeout_ms;
   if (api_name == kApiPut) {
-    timeout_ms = FLAGS_put_rpc_timeout_ms;
+    timeout_ms = FLAGS_rpc_put_request_timeout_ms;
   } else if (api_name == kApiRange) {
-    timeout_ms = FLAGS_range_rpc_timeout_ms;
+    timeout_ms = FLAGS_rpc_range_request_timeout_ms;
   } else if (api_name == kApiCache) {
-    timeout_ms = FLAGS_cache_rpc_timeout_ms;
+    timeout_ms = FLAGS_rpc_cache_request_timeout_ms;
   } else if (api_name == kApiPrefetch) {
-    timeout_ms = FLAGS_prefetch_rpc_timeout_ms;
+    timeout_ms = FLAGS_rpc_prefetch_request_timeout_ms;
   } else {
     CHECK(false) << "Unknown API name: " << api_name;
   }
 
   timeout_ms = timeout_ms * std::pow(2, retry_count);
-  return std::min(timeout_ms, FLAGS_cache_rpc_max_timeout_ms);
+  return std::min(timeout_ms, FLAGS_rpc_max_timeout_ms);
 }
 
 template <typename Request, typename Response>
@@ -229,7 +255,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
   butil::Timer timer;
   timer.start();
 
-  for (int retry_count = 0; retry_count < FLAGS_cache_rpc_max_retry_times;
+  for (int retry_count = 0; retry_count < FLAGS_rpc_max_retry_times;
        ++retry_count) {
     brpc::Controller cntl;
     cntl.set_timeout_ms(NextTimeoutMs(api_name, retry_count));
@@ -287,8 +313,7 @@ Status RPCClient::SendRequest(ContextSPtr ctx, const std::string& api_name,
       "[rpc][%s][%s:%d][%.6lf][%s] failed: request(%s) exceed max retry times "
       "(%d).",
       api_name, server_ip_, server_port_, timer.u_elapsed(1.0) / 1e6,
-      ctx->TraceId(), request.ShortDebugString(),
-      FLAGS_cache_rpc_max_retry_times);
+      ctx->TraceId(), request.ShortDebugString(), FLAGS_rpc_max_retry_times);
 
   return Status::Internal("rpc failed exceed max retry times");
 };

@@ -110,7 +110,7 @@ bool StateMachineImpl::Start(OnStateChangeFunc on_state_change) {
   on_state_change_ = on_state_change;
 
   state_ = std::make_unique<NormalState>(this);
-  on_state_change_(state_->GetState());
+  OnStageChange();
 
   bthread::ExecutionQueueOptions options;
   options.bthread_attr = BTHREAD_ATTR_NORMAL;
@@ -231,12 +231,16 @@ void StateMachineImpl::ProcessEvent(StateEvent event) {
       LOG(FATAL) << "Unknown state: " << state_->GetState();
   }
 
-  if (on_state_change_) {
-    on_state_change_(state_->GetState());
-  }
+  OnStageChange();
 
   LOG(INFO) << "After process, current state is "
             << StateToString(state_->GetState());
+}
+
+void StateMachineImpl::OnStageChange() {
+  if (on_state_change_) {
+    on_state_change_(state_->GetState());
+  }
 }
 
 }  // namespace cache

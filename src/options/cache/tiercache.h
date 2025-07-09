@@ -40,23 +40,40 @@ DECLARE_uint32(load_members_interval_ms);
 // simultaneously sent to the cache group node.
 DECLARE_bool(fill_group_cache);
 
-// Sets the rpc timeout for remote put operation in milliseconds.
-DECLARE_uint32(put_rpc_timeout_ms);
+// Set whether split range request into subrequests.
+DECLARE_bool(subrequest_ranges);
 
-// Sets the rpc timeout for remote range operation in milliseconds.
-DECLARE_uint32(range_rpc_timeout_ms);
+// Range size for each subrequest
+DECLARE_uint32(subrequest_range_size);
 
-// Sets the rpc timeout for remote cache operation in milliseconds.
-DECLARE_uint32(cache_rpc_timeout_ms);
+// Sets whether to enable prefetching for remote cache operations.
+DECLARE_bool(enable_prefetch);
 
-// Sets the rpc timeout for remote prefetch operation in milliseconds.
-DECLARE_uint32(prefetch_rpc_timeout_ms);
+// The whole block will be splited into multiple requests and prefetch from
+// remote parallel (default is 256KB).
+DECLARE_uint32(prefetch_split_iosize_kb);
 
-// Sets the maximum number of retry times for remote cache rpc operations.
-DECLARE_uint32(cache_rpc_max_retry_times);
+// Sets the max buffer size for cache prefetch blocks in memory
+// (default is 512MB).
+DECLARE_uint32(prefetch_max_buffer_size_mb);
 
-// Sets the maximum timeout for remote cache rpc operations in milliseconds.
-DECLARE_uint32(cache_rpc_max_timeout_ms);
+// Timeout (ms) for put rpc request
+DECLARE_uint32(rpc_put_request_timeout_ms);
+
+// Timeout (ms) for range rpc request
+DECLARE_uint32(rpc_range_request_timeout_ms);
+
+// Timeout (ms) for cache rpc request
+DECLARE_uint32(rpc_cache_request_timeout_ms);
+
+// Timeout (ms) for prefetch rpc request
+DECLARE_uint32(rpc_prefetch_request_timeout_ms);
+
+// Maximum retry times for rpc request
+DECLARE_uint32(rpc_max_retry_times);
+
+// Maximum rpc timeout (ms) for rpc request
+DECLARE_uint32(rpc_max_timeout_ms);
 
 // Sets the duration in milliseconds to check the cache group node state.
 DECLARE_uint32(check_cache_node_state_duration_ms);

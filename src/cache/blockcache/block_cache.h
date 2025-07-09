@@ -39,6 +39,7 @@ struct PutOption {
 struct RangeOption {
   bool retrive{true};
   size_t block_size{0};
+  bool is_subrequest{false};
 };
 
 struct CacheOption {};

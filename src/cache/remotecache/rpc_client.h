@@ -27,6 +27,7 @@
 #include <butil/iobuf.h>
 #include <fmt/format.h>
 
+#include "cache/blockcache/block_cache.h"
 #include "cache/blockcache/cache_store.h"
 #include "cache/common/type.h"
 #include "cache/utils/context.h"
@@ -42,7 +43,7 @@ class RPCClient {
 
   Status Put(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status Range(ContextSPtr ctx, const BlockKey& key, off_t offset,
-               size_t length, IOBuffer* buffer, size_t block_size);
+               size_t length, IOBuffer* buffer, RangeOption option);
   Status Cache(ContextSPtr ctx, const BlockKey& key, const Block& block);
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length);
 

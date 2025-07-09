@@ -32,6 +32,10 @@
 #include "common/status.h"
 #include "options/cache/tiercache.h"
 
+namespace brpc {
+DECLARE_int32(max_connection_pool_size);
+}  // namespace brpc
+
 namespace dingofs {
 namespace cache {
 
@@ -51,6 +55,7 @@ RemoteBlockCacheImpl::RemoteBlockCacheImpl(RemoteBlockCacheOption option,
   } else {
     remote_node_ = std::make_unique<NoneRemoteNode>();
   }
+  brpc::FLAGS_max_connection_pool_size = 256;
 }
 
 Status RemoteBlockCacheImpl::Start() {

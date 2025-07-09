@@ -29,12 +29,21 @@
 #include "cache/remotecache/remote_node.h"
 #include "cache/remotecache/remote_node_health_checker.h"
 #include "cache/remotecache/rpc_client.h"
+#include "cache/utils/bthread.h"
 #include "cache/utils/context.h"
 #include "cache/utils/state_machine.h"
+#include "common/io_buffer.h"
 #include "options/cache/tiercache.h"
 
 namespace dingofs {
 namespace cache {
+
+struct SubRangeRequest {
+  off_t offset;
+  size_t length;
+  IOBuffer buffer;
+  Status status;
+};
 
 class RemoteNodeImpl final : public RemoteNode {
  public:
@@ -52,6 +61,12 @@ class RemoteNodeImpl final : public RemoteNode {
   Status Prefetch(ContextSPtr ctx, const BlockKey& key, size_t length) override;
 
  private:
+  std::vector<SubRangeRequest> SplitRange(off_t offset, size_t length,
+                                          size_t blksize);
+  void Subrequest(std::function<void()> func);
+  Status SubrequestRanges(ContextSPtr ctx, const BlockKey& key, off_t offset,
+                          size_t length, IOBuffer* buffer, RangeOption option);
+
   Status CheckHealth(ContextSPtr ctx) const;
   Status CheckStatus(Status status);
 
@@ -60,6 +75,7 @@ class RemoteNodeImpl final : public RemoteNode {
   RPCClientUPtr rpc_;
   StateMachineSPtr state_machine_;
   RemoteNodeHealthCheckerUPtr health_checker_;
+  BthreadJoinerUPtr joiner_;
 };
 
 }  // namespace cache

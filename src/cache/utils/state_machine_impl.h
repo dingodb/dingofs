@@ -114,6 +114,7 @@ class StateMachineImpl final : public StateMachine {
   static int EventThread(void* meta, bthread::TaskIterator<StateEvent>& iter);
   void ProcessEvent(StateEvent event);
   void TickTock();
+  void OnStageChange();
 
   std::atomic<bool> running_;
   mutable BthreadMutex mutex_;  // for state_
