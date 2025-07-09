@@ -8,7 +8,7 @@ g_args=""
 g_prefix=""
 g_binary=""
 g_start_args=""
-g_preexec="/dingofs/tools-v2/sbin/daemon"
+#g_preexec="/dingofs/tools-v2/sbin/daemon"
 
 ############################  BASIC FUNCTIONS
 function msg() {
@@ -120,7 +120,7 @@ function main() {
     prepare
     create_directory
     [[ $(command -v crontab) ]] && cron
-    [[ ! -z $g_preexec ]] && $g_preexec &
+    #[[ ! -z $g_preexec ]] && $g_preexec &
     if [ $g_role == "etcd" ]; then
         exec $g_binary $g_start_args >>$g_prefix/logs/etcd.log 2>&1
     elif [ $g_role == "monitor" ]; then

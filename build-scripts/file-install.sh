@@ -11,7 +11,6 @@ g_dingo_dir="$(dirname $g_util_dir)" # /path/to/project
 g_build_dir="$g_dingo_dir/build/bin" # /path/to/project/build/bin
 g_build_release=0
 tools_v2_dingo_file="https://github.com/dingodb/dingofs-tools/releases/download/v4.0/dingo"
-tools_v2_daemo_file="https://github.com/dingodb/dingofs-tools/releases/download/v4.0/daemon"
 
 g_color_yellow=`printf '\033[33m'`
 g_color_red=`printf '\033[31m'`
@@ -268,9 +267,7 @@ install_tools-v2() {
     mkdir -p $project_prefix/sbin
     mkdir -p $project_prefix/conf
     wget -O "$project_prefix/sbin/dingo" $tools_v2_dingo_file
-    wget -O "$project_prefix/sbin/daemon" $tools_v2_daemo_file
     chmod +x "$project_prefix/sbin/dingo"
-    chmod +x "$project_prefix/sbin/daemon"
     copy_file "conf/dingo.yaml" "$g_prefix/conf"
 }
 
