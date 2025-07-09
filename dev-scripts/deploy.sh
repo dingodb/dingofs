@@ -53,7 +53,7 @@ function deploy_server() {
   if [ -f "${dstpath}/bin/${server_name}" ]; then
     rm -f "${dstpath}/bin/${server_name}"
   fi
-  ln -s  "${srcpath}/build/bin/${server_name}" "${dstpath}/bin/${server_name}"
+  ln "${srcpath}/build/bin/${server_name}" "${dstpath}/bin/${server_name}"
 
   # link dingo-mdsv2-client
   if [ "${role}" == "mdsv2" ]; then
@@ -61,7 +61,7 @@ function deploy_server() {
     if [ -f "${dstpath}/bin/${client_name}" ]; then
       rm -f "${dstpath}/bin/${client_name}"
     fi
-    ln -s  "${srcpath}/build/bin/${client_name}" "${dstpath}/bin/${client_name}"
+    ln "${srcpath}/build/bin/${client_name}" "${dstpath}/bin/${client_name}"
   fi
 
   if [ "${FLAGS_replace_conf}" == "0" ]; then

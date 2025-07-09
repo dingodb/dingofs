@@ -393,7 +393,7 @@ Status VFSWrapper::Symlink(Ino parent, const std::string& name, uint32_t uid,
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opSymlink, &client_op_metric_->opAll});
 
-  if (link.length() > vfs_->GetMaxNameLength()) {
+  if (name.length() > vfs_->GetMaxNameLength()) {
     s = Status::NameTooLong(
         fmt::format("link name({}) too long", link.length()));
     return s;
