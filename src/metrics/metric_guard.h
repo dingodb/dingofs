@@ -84,28 +84,27 @@ struct MetricListGuard {
   uint64_t start_;
 };
 
-struct FsMetricGuard {
-  explicit FsMetricGuard(InterfaceMetric* metric, size_t* count)
-      : metric(metric), count(count), start(butil::cpuwide_time_us()) {}
+struct VFSRWMetricGuard {
+  explicit VFSRWMetricGuard(Status* s, InterfaceMetric* metric, size_t* count,
+                            uint64_t start = butil::cpuwide_time_us())
+      : s_(s), metric_(metric), count_(count), start_(start) {}
 
-  ~FsMetricGuard() {
-    if (!fail) {
-      metric->bps.count << *count;
-      metric->qps.count << 1;
-      auto duration = butil::cpuwide_time_us() - start;
-      metric->latency << duration;
-      metric->latTotal << duration;
+  ~VFSRWMetricGuard() {
+    if (s_->ok()) {
+      metric_->bps.count << *count_;
+      metric_->qps.count << 1;
+      auto duration = butil::cpuwide_time_us() - start_;
+      metric_->latency << duration;
+      metric_->latTotal << duration;
     } else {
-      metric->eps.count << 1;
+      metric_->eps.count << 1;
     }
   }
 
-  void Fail() { fail = true; }
-
-  bool fail{false};
-  InterfaceMetric* metric;
-  size_t* count;
-  uint64_t start;
+  Status* s_;
+  InterfaceMetric* metric_;
+  size_t* count_;
+  uint64_t start_;
 };
 
 struct ClientOpMetricGuard {

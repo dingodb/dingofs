@@ -82,21 +82,20 @@ struct ClientOpMetric {
         opAll(prefix, "opAll") {}
 };
 
-struct FSMetric {
-  inline static const std::string prefix = "dingofs_filesystem";
+struct VFSRWMetric {
+  inline static const std::string prefix = "dingofs_vfs";
 
-  InterfaceMetric user_write;
-  InterfaceMetric user_read;
-  explicit FSMetric()
-      : user_write(prefix, "_user_write"), user_read(prefix, "_user_read") {}
+  InterfaceMetric write;
+  InterfaceMetric read;
+  explicit VFSRWMetric() : write(prefix, "_write"), read(prefix, "_read") {}
 
  public:
-  FSMetric(const FSMetric&) = delete;
+  VFSRWMetric(const VFSRWMetric&) = delete;
 
-  FSMetric& operator=(const FSMetric&) = delete;
+  VFSRWMetric& operator=(const VFSRWMetric&) = delete;
 
-  static FSMetric& GetInstance() {
-    static FSMetric instance;
+  static VFSRWMetric& GetInstance() {
+    static VFSRWMetric instance;
     return instance;
   }
 };

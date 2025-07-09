@@ -23,7 +23,7 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
-using ::dingofs::metrics::client::FSMetric;
+using ::dingofs::metrics::client::VFSRWMetric;
 using ::dingofs::pb::mds::FsStatsData;
 using ::dingofs::pb::mds::FSStatusCode;
 using metrics::blockaccess::BlockMetric;
@@ -90,13 +90,13 @@ FsStatsData FsPushMetricManager::GetClientMetrics() {
 
   // filesystem read metrics
   client_metrics.set_readbytes(
-      FSMetric::GetInstance().user_read.bps.count.get_value());
+      VFSRWMetric::GetInstance().read.bps.count.get_value());
   client_metrics.set_readqps(
-      FSMetric::GetInstance().user_read.qps.count.get_value());
+      VFSRWMetric::GetInstance().read.qps.count.get_value());
   client_metrics.set_writebytes(
-      FSMetric::GetInstance().user_write.bps.count.get_value());
+      VFSRWMetric::GetInstance().write.bps.count.get_value());
   client_metrics.set_writeqps(
-      FSMetric::GetInstance().user_write.qps.count.get_value());
+      VFSRWMetric::GetInstance().write.qps.count.get_value());
   // s3 write metrics
   client_metrics.set_s3readbytes(
       BlockMetric::GetInstance().read_block.bps.count.get_value());

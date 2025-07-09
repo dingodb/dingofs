@@ -32,7 +32,7 @@ namespace metric {
 
 using ::dingofs::metrics::blockaccess::BlockMetric;
 using ::dingofs::metrics::client::ClientOpMetric;
-using ::dingofs::metrics::client::FSMetric;
+using ::dingofs::metrics::client::VFSRWMetric;
 using ::dingofs::metrics::client::vfs_legacy::KVClientMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3ChunkInfoMetric;
 using ::dingofs::metrics::client::vfs_legacy::S3MultiManagerMetric;
@@ -68,8 +68,8 @@ TEST_F(ClientMetricTest, test_prefix) {
   }
 
   {
-    const char* prefix = "dingofs_filesystem";
-    ASSERT_EQ(0, ::strcmp(FSMetric::prefix.c_str(), prefix));
+    const char* prefix = "dingofs_vfs";
+    ASSERT_EQ(0, ::strcmp(VFSRWMetric::prefix.c_str(), prefix));
   }
 
   {

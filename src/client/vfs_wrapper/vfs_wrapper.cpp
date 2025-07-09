@@ -38,6 +38,7 @@
 #include "client/vfs_wrapper/access_log.h"
 #include "common/rpc_stream.h"
 #include "common/status.h"
+#include "metrics/client/client.h"
 #include "metrics/metric_guard.h"
 #include "options/client/common_option.h"
 #include "options/client/vfs/vfs_option.h"
@@ -53,6 +54,8 @@ const std::string kFdStatePath = "/tmp/dingo-fuse-state.json";
 
 using ::dingofs::client::fuse::FuseUpgradeManager;
 using metrics::ClientOpMetricGuard;
+using metrics::VFSRWMetricGuard;
+using metrics::client::VFSRWMetric;
 
 #define METRIC_GUARD(REQUEST)              \
   ClientOpMetricGuard clientOpMetricGuard( \
@@ -518,6 +521,7 @@ Status VFSWrapper::Read(Ino ino, char* buf, uint64_t size, uint64_t offset,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opRead, &client_op_metric_->opAll});
+  VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().read, out_rsize);
 
   s = vfs_->Read(ino, buf, size, offset, fh, out_rsize);
   VLOG(1) << "VFSRead end ino: " << ino << ", buf: " << Char2Addr(buf)
@@ -541,6 +545,8 @@ Status VFSWrapper::Write(Ino ino, const char* buf, uint64_t size,
 
   ClientOpMetricGuard op_metric(
       {&client_op_metric_->opWrite, &client_op_metric_->opAll});
+
+  VFSRWMetricGuard guard(&s, &VFSRWMetric::GetInstance().write, out_wsize);
 
   s = vfs_->Write(ino, buf, size, offset, fh, out_wsize);
   VLOG(1) << "VFSWrite end ino: " << ino << ", buf:  " << Char2Addr(buf)
