@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -1174,7 +1175,8 @@ static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   RenderJsonPage(header, json, os);
 }
 
-static void RenderChunk(uint64_t& count, uint64_t chunk_index, ChunkType chunk, butil::IOBufBuilder& os) {
+static void RenderChunk(uint64_t& count, uint64_t chunk_index, uint64_t chunk_size, ChunkType chunk,
+                        butil::IOBufBuilder& os) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
@@ -1213,19 +1215,33 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_index, ChunkType chunk, 
     }
   }
 
-  // sort by slice id
+  std::set<uint64_t> uncontinuous_offsets;
+  uint64_t prev_offset = chunk_index * chunk_size;
   for (auto& offset_range : offset_ranges) {
     // sort by id, from newest to oldest
     std::sort(offset_range.slices.begin(), offset_range.slices.end(),
               [](const SliceType& a, const SliceType& b) { return a.id() < b.id(); });
+
+    if (offset_range.start != prev_offset) {
+      uncontinuous_offsets.insert(offset_range.start);
+    }
+
+    prev_offset = offset_range.end;
   }
 
-  for (const auto& offset_range : offset_ranges) {
+  for (int i = 0; i < offset_ranges.size(); ++i) {
+    const auto& offset_range = offset_ranges[i];
     os << "<tr>";
 
     os << "<td>" << ++count << "</td>";
-    os << "<td>" << chunk_index << "</td>";
-    os << "<td>" << fmt::format("[{}, {})", offset_range.start, offset_range.end) << "</td>";
+
+    os << ((i == 0) ? fmt::format(R"(<td>{} [{}, {})</td>)", chunk_index, chunk_index * chunk_size,
+                                  (chunk_index + 1) * chunk_size)
+                    : fmt::format(R"(<td>{}</td>)", chunk_index));
+
+    os << ((uncontinuous_offsets.count(offset_range.start) == 0)
+               ? fmt::format(R"(<td>[{}, {})</td>)", offset_range.start, offset_range.end)
+               : fmt::format(R"(<td style="color:red;">[{}, {})</td>)", offset_range.start, offset_range.end));
 
     os << R"(<td><ul style="list-style:disc">)";
     const auto& slices = offset_range.slices;
@@ -1251,7 +1267,7 @@ static void RenderChunksPage(const AttrType& attr, butil::IOBufBuilder& os) {
 
   os << "<head>" << RenderHead("dingofs chunk") << "</head>";
   os << "<body>";
-  os << R"(<h1 style="text-align:center;">Chunk Map</h1>)";
+  os << fmt::format(R"(<h1 style="text-align:center;">File({} v{}) Chunk</h1>)", attr.ino(), attr.version());
 
   const auto& chunks = attr.chunks();
   os << R"(<div style="margin: 12px;font-size:smaller">)";
@@ -1269,9 +1285,15 @@ static void RenderChunksPage(const AttrType& attr, butil::IOBufBuilder& os) {
   os << "<th>Slice<div>id [offset, len) size zero</div></th>";
   os << "</tr>";
 
+  // sort chunks by index
+  std::map<uint64_t, const ChunkType&> sort_chunks;
+  for (const auto& [index, chunk] : chunks) {
+    sort_chunks.insert({index, chunk});
+  }
+
   uint64_t count = 0;
-  for (const auto& [chunk_index, chunk] : chunks) {
-    RenderChunk(count, chunk_index, chunk, os);
+  for (const auto& [chunk_index, chunk] : sort_chunks) {
+    RenderChunk(count, chunk_index, chunk.chunk_size(), chunk, os);
   }
 
   os << "</table>";
