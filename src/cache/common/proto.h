@@ -55,7 +55,6 @@ using PBPrefetchRequest = pb::cache::blockcache::PrefetchRequest;
 using PBPrefetchResponse = pb::cache::blockcache::PrefetchResponse;
 using PBPingRequest = pb::cache::blockcache::PingRequest;
 using PBPingResponse = pb::cache::blockcache::PingResponse;
-using PBBlockCacheService = pb::cache::blockcache::BlockCacheService;
 
 inline PBBlockCacheErrCode PBErr(Status status) {
   if (status.ok()) {
