@@ -28,7 +28,7 @@
 
 #include "absl/container/btree_map.h"
 #include "client/vfs_legacy/filesystem/meta.h"
-#include "client/vfs_legacy/filesystem/metric.h"
+#include "metrics/client/vfs_legacy/dir_cache.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
 #include "utils/concurrent/concurrent.h"
 #include "utils/lru_cache.h"
@@ -98,7 +98,7 @@ class DirCache {
   DirCacheOption option_;
   std::shared_ptr<LRUType> lru_;
   std::shared_ptr<MessageQueueType> mq_;
-  std::shared_ptr<DirCacheMetric> metric_;
+  std::shared_ptr<metrics::client::vfs_legacy::DirCacheMetric> metric_;
 };
 
 }  // namespace filesystem
