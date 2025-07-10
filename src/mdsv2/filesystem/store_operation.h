@@ -41,7 +41,7 @@ class Operation {
   Operation(Trace& trace) : trace_(trace) { time_ns_ = Helper::TimestampNs(); }
   virtual ~Operation() = default;
 
-  enum class OpType {
+  enum class OpType : uint8_t {
     kMountFs = 0,
     kUmountFs = 1,
     kDeleteFs = 2,
@@ -53,7 +53,6 @@ class Operation {
     kSmyLink = 14,
     kUpdateAttr = 15,
     kUpdateXAttr = 16,
-    kUpdateChunk = 17,
     kFallocate = 18,
     kOpenFile = 19,
     kCloseFile = 20,
@@ -61,6 +60,11 @@ class Operation {
     kUnlink = 22,
     kRename = 23,
     kCompactChunk = 24,
+
+    kUpsertChunk = 25,
+    kGetChunk = 26,
+    kScanChunk = 27,
+    kCleanChunk = 28,
 
     kSetFsQuota = 30,
     kGetFsQuota = 31,
@@ -96,146 +100,7 @@ class Operation {
     kGetAndCompactFsStats = 82,
   };
 
-  const char* OpName() const {
-    switch (GetOpType()) {
-      case OpType::kMountFs:
-        return "MountFs";
-
-      case OpType::kUmountFs:
-        return "UmountFs";
-
-      case OpType::kDeleteFs:
-        return "DeleteFs";
-
-      case OpType::kUpdateFs:
-        return "UpdateFs";
-
-      case OpType::kCreateRoot:
-        return "CreateRoot";
-
-      case OpType::kMkDir:
-        return "MkDir";
-
-      case OpType::kMkNod:
-        return "MkNod";
-
-      case OpType::kHardLink:
-        return "HardLink";
-
-      case OpType::kSmyLink:
-        return "SmyLink";
-
-      case OpType::kUpdateAttr:
-        return "UpdateAttr";
-
-      case OpType::kUpdateXAttr:
-        return "UpdateXAttr";
-
-      case OpType::kUpdateChunk:
-        return "UpdateChunk";
-
-      case OpType::kFallocate:
-        return "Fallocate";
-
-      case OpType::kOpenFile:
-        return "OpenFile";
-
-      case OpType::kCloseFile:
-        return "CloseFile";
-
-      case OpType::kRmDir:
-        return "RmDir";
-
-      case OpType::kUnlink:
-        return "Unlink";
-
-      case OpType::kRename:
-        return "Rename";
-
-      case OpType::kCompactChunk:
-        return "CompactChunk";
-
-      case OpType::kSetFsQuota:
-        return "SetFsQuota";
-
-      case OpType::kGetFsQuota:
-        return "GetFsQuota";
-
-      case OpType::kFlushFsUsage:
-        return "FlushFsUsage";
-
-      case OpType::kDeleteFsQuota:
-        return "DeleteFsQuota";
-
-      case OpType::kSetDirQuota:
-        return "SetDirQuota";
-
-      case OpType::kDeleteDirQuota:
-        return "DeleteDirQuota";
-
-      case OpType::kLoadDirQuotas:
-        return "LoadDirQuotas";
-
-      case OpType::kFlushDirUsages:
-        return "FlushDirUsages";
-
-      case OpType::kUpsertMds:
-        return "UpsertMds";
-
-      case OpType::kDeleteMds:
-        return "DeleteMds";
-
-      case OpType::kScanMds:
-        return "ScanMds";
-
-      case OpType::kUpsertClient:
-        return "UpsertClient";
-
-      case OpType::kDeleteClient:
-        return "DeleteClient";
-
-      case OpType::kScanClient:
-        return "ScanClient";
-
-      case OpType::kGetFileSession:
-        return "GetFileSession";
-
-      case OpType::kScanFileSession:
-        return "ScanFileSession";
-
-      case OpType::kDeleteFileSession:
-        return "DeleteFileSession";
-
-      case OpType::kCleanDelSlice:
-        return "CleanDelSlice";
-
-      case OpType::kCleanDelFile:
-        return "CleanDelFile";
-
-      case OpType::kScanDentry:
-        return "ScanDentry";
-
-      case OpType::kScanDelFile:
-        return "ScanDelFile";
-
-      case OpType::kScanDelSlice:
-        return "ScanDelSlice";
-
-      case OpType::kSaveFsStats:
-        return "SaveFsStats";
-
-      case OpType::kScanFsStats:
-        return "ScanFsStats";
-
-      case OpType::kGetAndCompactFsStats:
-        return "GetAndCompactFsStats";
-
-      default:
-        return "UnknownOperation";
-    }
-
-    return nullptr;
-  }
+  const char* OpName() const;
 
   struct Result {
     Status status;
@@ -258,7 +123,7 @@ class Operation {
     switch (GetOpType()) {
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
-      case OpType::kUpdateChunk:
+      case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
         return true;
@@ -275,7 +140,7 @@ class Operation {
       case OpType::kSmyLink:
       case OpType::kUpdateAttr:
       case OpType::kUpdateXAttr:
-      case OpType::kUpdateChunk:
+      case OpType::kUpsertChunk:
       case OpType::kOpenFile:
       case OpType::kFallocate:
         return true;
@@ -291,6 +156,8 @@ class Operation {
   virtual Ino GetIno() const = 0;
   virtual uint64_t GetTime() const { return time_ns_; }
 
+  virtual std::string PrefetchKey() { return ""; }
+
   void SetEvent(bthread::CountdownEvent* event) { event_ = event; }
   void NotifyEvent() {
     if (event_) {
@@ -298,7 +165,9 @@ class Operation {
     }
   }
 
-  virtual Status RunInBatch(TxnUPtr&, AttrType&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
+  virtual Status RunInBatch(TxnUPtr&, AttrType&, const std::vector<KeyValue>& prefetch_kvs) {  // NOLINT
+    return Status(pb::error::ENOT_SUPPORT, "not support.");
+  }
   virtual Status Run(TxnUPtr&) { return Status(pb::error::ENOT_SUPPORT, "not support."); }
 
   void SetStatus(const Status& status) { result_.status = status; }
@@ -434,7 +303,7 @@ class MkDirOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
   const Dentry dentry_;
@@ -452,7 +321,7 @@ class MkNodOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
   const Dentry dentry_;
@@ -500,7 +369,7 @@ class SmyLinkOperation : public Operation {
   uint32_t GetFsId() const override { return dentry_.FsId(); }
   Ino GetIno() const override { return dentry_.ParentIno(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& parent_attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
   const Dentry& dentry_;
@@ -526,11 +395,12 @@ class UpdateAttrOperation : public Operation {
   uint32_t GetFsId() const override { return attr_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+  // todo: optimization, prefetch max chunk key
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
-  bool ExpandChunk(AttrType& attr, uint64_t new_length) const;
-  bool Truncate(AttrType& attr);
+  Status ExpandChunk(TxnUPtr& txn, AttrType& attr, ChunkType& max_chunk, uint64_t new_length) const;
+  Status Truncate(TxnUPtr& txn, AttrType& attr);
 
   uint64_t ino_;
   const uint32_t to_set_;
@@ -550,7 +420,7 @@ class UpdateXAttrOperation : public Operation {
   uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
   uint32_t fs_id_;
@@ -558,23 +428,26 @@ class UpdateXAttrOperation : public Operation {
   const Inode::XAttrMap& xattrs_;
 };
 
-class UpdateChunkOperation : public Operation {
+class UpsertChunkOperation : public Operation {
  public:
-  UpdateChunkOperation(Trace& trace, const FsInfoType fs_info, uint64_t ino, uint64_t index,
-                       std::vector<pb::mdsv2::Slice> slices)
+  UpsertChunkOperation(Trace& trace, const FsInfoType fs_info, uint64_t ino, uint64_t index,
+                       const std::vector<pb::mdsv2::Slice>& slices)
       : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(index), slices_(slices) {};
-  ~UpdateChunkOperation() override = default;
+  ~UpsertChunkOperation() override = default;
 
   struct Result : public Operation::Result {
     int64_t length_delta{0};
+    ChunkType chunk;
   };
 
-  OpType GetOpType() const override { return OpType::kUpdateChunk; }
+  OpType GetOpType() const override { return OpType::kUpsertChunk; }
 
   uint32_t GetFsId() const override { return fs_info_.fs_id(); }
   Ino GetIno() const override { return ino_; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+  std::string PrefetchKey() override;
+
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
   template <int size = 0>
   Result& GetResult() {
@@ -589,9 +462,95 @@ class UpdateChunkOperation : public Operation {
   const FsInfoType fs_info_;
   uint64_t ino_;
   uint64_t chunk_index_{0};
+
   std::vector<pb::mdsv2::Slice> slices_;
 
   Result result_;
+};
+
+class GetChunkOperation : public Operation {
+ public:
+  GetChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, uint64_t index)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(index) {};
+  ~GetChunkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    ChunkType chunk;
+  };
+
+  OpType GetOpType() const override { return OpType::kGetChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  uint64_t chunk_index_{0};
+
+  Result result_;
+};
+
+class ScanChunkOperation : public Operation {
+ public:
+  ScanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino) : Operation(trace), fs_id_(fs_id), ino_(ino) {};
+  ~ScanChunkOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<ChunkType> chunks;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+
+  Result result_;
+};
+
+class CleanChunkOperation : public Operation {
+ public:
+  CleanChunkOperation(Trace& trace, uint32_t fs_id, uint64_t ino, const std::vector<uint64_t>& chunk_indexs)
+      : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_indexs_(chunk_indexs) {};
+  ~CleanChunkOperation() override = default;
+
+  OpType GetOpType() const override { return OpType::kCleanChunk; }
+
+  uint32_t GetFsId() const override { return fs_id_; }
+  Ino GetIno() const override { return ino_; }
+
+  Status Run(TxnUPtr& txn) override;
+
+ private:
+  uint32_t fs_id_;
+  uint64_t ino_;
+  std::vector<uint64_t> chunk_indexs_{0};
 };
 
 class FallocateOperation : public Operation {
@@ -618,11 +577,11 @@ class FallocateOperation : public Operation {
   uint32_t GetFsId() const override { return param_.fs_id; }
   Ino GetIno() const override { return param_.ino; }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
-  bool PreAlloc(AttrType& attr, uint64_t offset, uint32_t len) const;
-  bool SetZero(AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const;
+  Status PreAlloc(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint32_t len) const;
+  Status SetZero(TxnUPtr& txn, AttrType& attr, uint64_t offset, uint64_t len, bool keep_size) const;
 
   Param param_;
 };
@@ -638,7 +597,7 @@ class OpenFileOperation : public Operation {
   uint32_t GetFsId() const override { return file_session_.fs_id(); }
   Ino GetIno() const override { return file_session_.ino(); }
 
-  Status RunInBatch(TxnUPtr& txn, AttrType& attr) override;
+  Status RunInBatch(TxnUPtr& txn, AttrType& attr, const std::vector<KeyValue>& prefetch_kvs) override;
 
  private:
   uint32_t flags_;
@@ -766,8 +725,9 @@ class RenameOperation : public Operation {
 
 class CompactChunkOperation : public Operation {
  public:
-  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index)
-      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index) {};
+  CompactChunkOperation(Trace& trace, const FsInfoType& fs_info, uint64_t ino, uint64_t chunk_index,
+                        uint64_t file_length)
+      : Operation(trace), fs_info_(fs_info), ino_(ino), chunk_index_(chunk_index), file_length_(file_length) {};
   ~CompactChunkOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -800,6 +760,8 @@ class CompactChunkOperation : public Operation {
   FsInfoType fs_info_;
   uint64_t ino_;
   uint64_t chunk_index_{0};
+  uint64_t file_length_{0};
+
   Result result_;
 };
 

@@ -14,17 +14,14 @@
 
 #include "mdsv2/filesystem/inode.h"
 
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "fmt/core.h"
-#include "mdsv2/common/constant.h"
-#include "mdsv2/common/helper.h"
+#include "gflags/gflags.h"
+#include "glog/logging.h"
 #include "mdsv2/common/logging.h"
 #include "utils/concurrent/concurrent.h"
 
@@ -145,25 +142,6 @@ std::string Inode::XAttr(const std::string& name) {
   return (it != attr_.xattrs().end()) ? it->second : std::string();
 }
 
-Inode::ChunkMap Inode::Chunks() {
-  utils::ReadLockGuard lk(lock_);
-
-  return attr_.chunks();
-}
-
-bool Inode::Chunk(uint64_t index, ChunkType& chunk) {
-  utils::ReadLockGuard lk(lock_);
-
-  auto it = attr_.chunks().find(index);
-  if (it == attr_.chunks().end()) {
-    return false;
-  }
-
-  chunk = it->second;
-
-  return true;
-}
-
 bool Inode::UpdateIf(const AttrType& attr) {
   utils::WriteLockGuard lk(lock_);
 
@@ -192,34 +170,10 @@ bool Inode::UpdateIf(AttrType&& attr) {
   return true;
 }
 
-Inode::AttrType Inode::Copy(bool just_basic) {
+Inode::AttrType Inode::Copy() {
   utils::ReadLockGuard lk(lock_);
 
-  if (!just_basic) {
-    return attr_;
-  }
-
-  // Copy only basic attributes
-  AttrType attr;
-  attr.set_fs_id(attr_.fs_id());
-  attr.set_ino(attr_.ino());
-  attr.set_type(attr_.type());
-  attr.set_length(attr_.length());
-  attr.set_uid(attr_.uid());
-  attr.set_gid(attr_.gid());
-  attr.set_mode(attr_.mode());
-  attr.set_nlink(attr_.nlink());
-  attr.set_symlink(attr_.symlink());
-  attr.set_rdev(attr_.rdev());
-  attr.set_dtime(attr_.dtime());
-  attr.set_ctime(attr_.ctime());
-  attr.set_mtime(attr_.mtime());
-  attr.set_atime(attr_.atime());
-  attr.set_openmpcount(attr_.openmpcount());
-  attr.mutable_parents()->CopyFrom(attr_.parents());
-  attr.set_version(attr_.version());
-
-  return std::move(attr);
+  return attr_;
 }
 
 Inode::AttrType&& Inode::Move() {

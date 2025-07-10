@@ -14,8 +14,6 @@
 
 #include "mdsv2/filesystem/fs_utils.h"
 
-#include <gflags/gflags.h>
-
 #include <cstdint>
 #include <map>
 #include <string>
@@ -23,6 +21,7 @@
 
 #include "dingofs/mdsv2.pb.h"
 #include "fmt/format.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "mdsv2/common/codec.h"
 #include "mdsv2/common/constant.h"
@@ -373,6 +372,20 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
   }
 
   result = doc.dump();
+
+  return Status::OK();
+}
+
+Status FsUtils::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks) {
+  Trace trace;
+  ScanChunkOperation operation(trace, fs_id, ino);
+  Status status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+  chunks = std::move(result.chunks);
 
   return Status::OK();
 }

@@ -14,6 +14,8 @@
 
 #include "mdsv2/common/codec.h"
 
+#include <fmt/format.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -40,6 +42,7 @@ enum KeyType : unsigned char {
   kTypeFS = 7,
   kTypeDentryOrInode = 9,
   kTypeQuota = 11,
+  kTypeChunk = 13,
   kTypeFsStats = 15,
   kTypeFileSession = 17,
   kTypeDelSlice = 19,
@@ -182,6 +185,18 @@ void MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_
 
   end_key = kPrefix;
   end_key.push_back(kTypeFileSession);
+  SerialHelper::WriteInt(fs_id, end_key);
+  SerialHelper::WriteULong(ino + 1, end_key);
+}
+
+void MetaCodec::GetChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
+  start_key = kPrefix;
+  start_key.push_back(kTypeChunk);
+  SerialHelper::WriteInt(fs_id, start_key);
+  SerialHelper::WriteULong(ino, start_key);
+
+  end_key = kPrefix;
+  end_key.push_back(kTypeChunk);
   SerialHelper::WriteInt(fs_id, end_key);
   SerialHelper::WriteULong(ino + 1, end_key);
 }
@@ -644,6 +659,43 @@ FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
   FileSessionEntry file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
   return std::move(file_session);
+}
+
+bool MetaCodec::IsChunkKey(const std::string& key) {
+  if (key.size() != (kPrefixSize + 21)) {
+    return false;
+  }
+  return key.at(kPrefixSize) == KeyType::kTypeChunk;
+}
+
+std::string MetaCodec::EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index) {
+  std::string key;
+  key.reserve(kPrefixSize + 32);
+
+  key.append(kPrefix);
+  key.push_back(KeyType::kTypeChunk);
+  SerialHelper::WriteInt(fs_id, key);
+  SerialHelper::WriteULong(ino, key);
+  SerialHelper::WriteULong(chunk_index, key);
+
+  return std::move(key);
+}
+
+void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index) {
+  CHECK(key.size() == (kPrefixSize + 21)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+  CHECK(key.at(kPrefixSize) == KeyType::kTypeChunk) << "key type is invalid.";
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
+  chunk_index = SerialHelper::ReadULong(key.substr(kPrefixSize + 13, kPrefixSize + 21));
+}
+
+std::string MetaCodec::EncodeChunkValue(const ChunkType& chunk) { return chunk.SerializeAsString(); }
+
+ChunkType MetaCodec::DecodeChunkValue(const std::string& value) {
+  ChunkType chunk;
+  CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
+  return std::move(chunk);
 }
 
 std::string MetaCodec::EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns) {

@@ -1175,8 +1175,7 @@ static void RenderInodePage(const AttrType& attr, butil::IOBufBuilder& os) {
   RenderJsonPage(header, json, os);
 }
 
-static void RenderChunk(uint64_t& count, uint64_t chunk_index, uint64_t chunk_size, ChunkType chunk,
-                        butil::IOBufBuilder& os) {
+static void RenderChunk(uint64_t& count, uint64_t chunk_size, ChunkType chunk, butil::IOBufBuilder& os) {
   struct OffsetRange {
     uint64_t start;
     uint64_t end;
@@ -1215,6 +1214,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_index, uint64_t chunk_si
     }
   }
 
+  uint64_t chunk_index = chunk.index();
+
   std::set<uint64_t> uncontinuous_offsets;
   uint64_t prev_offset = chunk_index * chunk_size;
   for (auto& offset_range : offset_ranges) {
@@ -1239,6 +1240,8 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_index, uint64_t chunk_si
                                   (chunk_index + 1) * chunk_size)
                     : fmt::format(R"(<td>{}</td>)", chunk_index));
 
+    os << fmt::format(R"(<td>{}</td>)", chunk.version());
+
     os << ((uncontinuous_offsets.count(offset_range.start) == 0)
                ? fmt::format(R"(<td>[{}, {})</td>)", offset_range.start, offset_range.end)
                : fmt::format(R"(<td style="color:red;">[{}, {})</td>)", offset_range.start, offset_range.end));
@@ -1262,14 +1265,13 @@ static void RenderChunk(uint64_t& count, uint64_t chunk_index, uint64_t chunk_si
   }
 }
 
-static void RenderChunksPage(const AttrType& attr, butil::IOBufBuilder& os) {
+static void RenderChunksPage(Ino ino, const std::vector<ChunkType>& chunks, butil::IOBufBuilder& os) {
   os << "<!DOCTYPE html><html>";
 
   os << "<head>" << RenderHead("dingofs chunk") << "</head>";
   os << "<body>";
-  os << fmt::format(R"(<h1 style="text-align:center;">File({} v{}) Chunk</h1>)", attr.ino(), attr.version());
+  os << fmt::format(R"(<h1 style="text-align:center;">File({} Chunk</h1>)", ino);
 
-  const auto& chunks = attr.chunks();
   os << R"(<div style="margin: 12px;font-size:smaller">)";
   os << fmt::format(R"(<h3>Chunk [{}]</h3>)", chunks.size());
   if (!chunks.empty()) {
@@ -1281,19 +1283,14 @@ static void RenderChunksPage(const AttrType& attr, butil::IOBufBuilder& os) {
   os << "<tr>";
   os << "<th>No.</th>";
   os << "<th>Index</th>";
+  os << "<th>Version</th>";
   os << "<th>Range(byte)</th>";
   os << "<th>Slice<div>id [offset, len) size zero</div></th>";
   os << "</tr>";
 
-  // sort chunks by index
-  std::map<uint64_t, const ChunkType&> sort_chunks;
-  for (const auto& [index, chunk] : chunks) {
-    sort_chunks.insert({index, chunk});
-  }
-
   uint64_t count = 0;
-  for (const auto& [chunk_index, chunk] : sort_chunks) {
-    RenderChunk(count, chunk_index, chunk.chunk_size(), chunk, os);
+  for (const auto& chunk : chunks) {
+    RenderChunk(count, chunk.chunk_size(), chunk, os);
   }
 
   os << "</table>";
@@ -1476,19 +1473,15 @@ void FsStatServiceImpl::default_method(::google::protobuf::RpcController* contro
     uint32_t fs_id = Helper::StringToInt32(params[1]);
     uint64_t ino = Helper::StringToInt64(params[2]);
 
-    auto file_system_set = Server::GetInstance().GetFileSystemSet();
-    auto file_system = file_system_set->GetFileSystem(fs_id);
-    if (file_system != nullptr) {
-      InodeSPtr inode;
-      auto status = file_system->GetInodeFromStore(ino, "ShowChunk", false, inode);
-      if (status.ok()) {
-        RenderChunksPage(inode->Copy(), os);
+    FsUtils fs_utils(Server::GetInstance().GetOperationProcessor());
 
-      } else {
-        os << fmt::format("Get inode({}) fail, {}.", ino, status.error_str());
-      }
+    std::vector<ChunkType> chunks;
+    auto status = fs_utils.GetChunks(fs_id, ino, chunks);
+    if (status.ok()) {
+      RenderChunksPage(ino, chunks, os);
+
     } else {
-      os << fmt::format("Not found file system {}", fs_id);
+      os << fmt::format("Get chunk({}) fail, {}.", ino, status.error_str());
     }
 
   } else {

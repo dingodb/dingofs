@@ -67,13 +67,10 @@ class Inode {
   XAttrMap XAttrs();
   std::string XAttr(const std::string& name);
 
-  ChunkMap Chunks();
-  bool Chunk(uint64_t index, ChunkType& chunk);
-
   bool UpdateIf(const AttrType& attr);
   bool UpdateIf(AttrType&& attr);
 
-  AttrType Copy(bool just_basic = false);
+  AttrType Copy();
   AttrType&& Move();
 
  private:

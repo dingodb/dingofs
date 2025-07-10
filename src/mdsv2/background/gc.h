@@ -94,6 +94,8 @@ class CleanDelFileTask : public TaskRunnable {
  private:
   friend class GcProcessor;
 
+  Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks);
+
   Status CleanDelFile(const AttrType& attr);
 
   AttrType attr_;

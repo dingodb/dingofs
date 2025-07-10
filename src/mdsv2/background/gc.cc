@@ -33,6 +33,7 @@
 #include "mdsv2/common/runnable.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -104,13 +105,35 @@ void CleanDelFileTask::Run() {
   }
 }
 
+Status CleanDelFileTask::GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks) {
+  class Trace trace;
+  ScanChunkOperation operation(trace, fs_id, ino);
+
+  auto status = operation_processor_->RunAlone(&operation);
+  if (!status.ok()) {
+    return status;
+  }
+
+  auto& result = operation.GetResult();
+
+  chunks = std::move(result.chunks);
+
+  return Status::OK();
+}
+
 Status CleanDelFileTask::CleanDelFile(const AttrType& attr) {
   DINGO_LOG(INFO) << fmt::format("[gc.delfile] clean delfile, ino({}) nlink({}) len({}) version({}).", attr.ino(),
                                  attr.nlink(), attr.length(), attr.version());
+  // get file chunks
+  std::vector<ChunkType> chunks;
+  auto status = GetChunks(attr.fs_id(), attr.ino(), chunks);
+  if (!status.ok()) {
+    return status;
+  }
 
   // delete data from s3
-  for (const auto& [chunk_index, chunk] : attr.chunks()) {
-    uint64_t chunk_offset = chunk_index * chunk.chunk_size();
+  for (const auto& chunk : chunks) {
+    uint64_t chunk_offset = chunk.index() * chunk.chunk_size();
     for (const auto& slice : chunk.slices()) {
       for (uint64_t len = 0; len < slice.len(); len += chunk.block_size()) {
         uint64_t block_index = (slice.offset() - chunk_offset + len) / chunk.block_size();
@@ -129,7 +152,7 @@ Status CleanDelFileTask::CleanDelFile(const AttrType& attr) {
   // delete inode
   class Trace trace;
   CleanDelFileOperation operation(trace, attr.fs_id(), attr.ino());
-  auto status = operation_processor_->RunAlone(&operation);
+  status = operation_processor_->RunAlone(&operation);
   if (!status.ok()) {
     return status;
   }

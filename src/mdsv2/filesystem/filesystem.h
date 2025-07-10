@@ -192,9 +192,8 @@ class FileSystem : public std::enable_shared_from_this<FileSystem> {
   Status GetDentry(Context& ctx, Ino parent, const std::string& name, Dentry& dentry);
   Status ListDentry(Context& ctx, Ino parent, const std::string& last_name, uint32_t limit, bool is_only_dir,
                     std::vector<Dentry>& dentries);
-  Status GetInode(Context& ctx, Ino ino, bool just_basic, EntryOut& entry_out);
-  Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, bool just_basic,
-                       std::vector<EntryOut>& out_entries);
+  Status GetInode(Context& ctx, Ino ino, EntryOut& entry_out);
+  Status BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries);
   Status BatchGetXAttr(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<pb::mdsv2::XAttr>& out_xattrs);
 
   Status RefreshInode(const std::vector<uint64_t>& inoes);

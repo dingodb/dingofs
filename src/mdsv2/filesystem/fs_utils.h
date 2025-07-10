@@ -21,7 +21,9 @@
 #include <vector>
 
 #include "dingofs/mdsv2.pb.h"
+#include "mdsv2/common/status.h"
 #include "mdsv2/common/type.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/storage.h"
 #include "nlohmann/json.hpp"
 
@@ -71,10 +73,13 @@ class FsUtils {
       hash_router_ = std::make_unique<HashRouter>(fs_info_.partition_policy().parent_hash());
     }
   }
+  FsUtils(OperationProcessorSPtr operation_processor) : operation_processor_(operation_processor) {}
 
   FsTreeNode* GenFsTree(uint32_t fs_id);
   std::string GenFsTreeJsonString();
   Status GenDirJsonString(Ino parent, std::string& result);
+
+  Status GetChunks(uint32_t fs_id, Ino ino, std::vector<ChunkType>& chunks);
 
  private:
   void GenFsTreeJson(FsTreeNode* node, nlohmann::json& doc);
@@ -82,6 +87,8 @@ class FsUtils {
 
   FsInfoType fs_info_;
   KVStorageSPtr kv_storage_;
+
+  OperationProcessorSPtr operation_processor_;
 
   HashRouterUPtr hash_router_{nullptr};
 };

@@ -48,6 +48,8 @@ class MetaCodec {
   static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
 
+  static void GetChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
+
   static void GetDelSliceTableRange(std::string& start_key, std::string& end_key);
   static void GetDelSliceRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
   static void GetDelSliceRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
@@ -92,6 +94,7 @@ class MetaCodec {
   static std::string EncodeFSValue(const pb::mdsv2::FsInfo& fs_info);
   static pb::mdsv2::FsInfo DecodeFSValue(const std::string& value);
 
+  // dentry
   // format: [$prefix, $type, $fs_id, $ino, $name]
   static std::string EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name);
   static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
@@ -109,14 +112,15 @@ class MetaCodec {
   static std::string EncodeInodeValue(const AttrType& attr);
   static AttrType DecodeInodeValue(const std::string& value);
 
-  // quota encode/decode
-  // fs format: [$prefix, $type, $fs_id]
+  // fs quota
+  // format: [$prefix, $type, $fs_id]
   static std::string EncodeFsQuotaKey(uint32_t fs_id);
   static void DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id);
   static std::string EncodeFsQuotaValue(const QuotaEntry& quota);
   static QuotaEntry DecodeFsQuotaValue(const std::string& value);
 
-  // dir format: [$prefix, $type, $fs_id, $ino]
+  // dir quota
+  // format: [$prefix, $type, $fs_id, $ino]
   static uint32_t DirQuotaKeyLength();
   static std::string EncodeDirQuotaKey(uint32_t fs_id, Ino ino);
   static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
@@ -136,6 +140,14 @@ class MetaCodec {
   static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
   static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
   static FileSessionEntry DecodeFileSessionValue(const std::string& value);
+
+  // chunk
+  // format: [$prefix, $type, $fs_id, $ino, $chunk_index]
+  static bool IsChunkKey(const std::string& key);
+  static std::string EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index);
+  static void DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index);
+  static std::string EncodeChunkValue(const ChunkType& chunk);
+  static ChunkType DecodeChunkValue(const std::string& value);
 
   // del slice
   // format: [$prefix, $type, $fs_id, $ino, $chunk_index, $time_ns]

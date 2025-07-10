@@ -1641,7 +1641,7 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
   }
 
   // update backend store
-  UpdateChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, slices);
+  UpsertChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, slices);
 
   status = RunOperation(&operation);
 
@@ -1649,21 +1649,20 @@ Status FileSystem::WriteSlice(Context& ctx, Ino parent, Ino ino, uint64_t chunk_
                                  ino, chunk_index, status.error_str());
 
   if (!status.ok()) {
-    return Status(pb::error::EBACKEND_STORE, fmt::format("put inode fail, {}", status.error_str()));
+    return Status(pb::error::EBACKEND_STORE, fmt::format("upsert chunk fail, {}", status.error_str()));
   }
 
   auto& result = operation.GetResult();
   auto& attr = result.attr;
   int64_t length_delta = result.length_delta;
+  const auto& chunk = result.chunk;
 
   // update cache
   inode->UpdateIf(attr);
 
   // check whether need to compact chunk
-  for (const auto& [_, chunk] : attr.chunks()) {
-    if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
-      DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
-    }
+  if (chunk.slices_size() > FLAGS_compact_slice_threshold_num) {
+    DINGO_LOG(INFO) << fmt::format("[fs.{}] need compact chunk({}) for ino({}).", fs_id_, chunk_index, ino);
   }
 
   // update quota
@@ -1690,17 +1689,22 @@ Status FileSystem::ReadSlice(Context& ctx, Ino ino, uint64_t chunk_index, std::v
     return status;
   }
 
-  pb::mdsv2::Chunk chunk;
-  if (!inode->Chunk(chunk_index, chunk)) {
-    return Status(pb::error::ENOT_FOUND, fmt::format("not found chunk({})", chunk_index));
-  }
+  GetChunkOperation operation(trace, fs_id_, ino, chunk_index);
 
-  slices = Helper::PbRepeatedToVector(chunk.slices());
+  status = RunOperation(&operation);
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] readslice {}/{} finish, status({}).", fs_id_, ElapsedTimeUs(time_ns),
                                  ino, chunk_index, status.error_str());
 
-  return status;
+  if (!status.ok()) {
+    return Status(pb::error::EBACKEND_STORE, fmt::format("get chunk fail, {}", status.error_str()));
+  }
+
+  auto& result = operation.GetResult();
+
+  slices = Helper::PbRepeatedToVector(result.chunk.slices());
+
+  return Status::OK();
 }
 
 Status FileSystem::Fallocate(Context& ctx, Ino ino, int32_t mode, uint64_t offset, uint64_t len, EntryOut& entry_out) {
@@ -1782,12 +1786,11 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   auto& trace = ctx.GetTrace();
   uint64_t time_ns = Helper::TimestampNs();
 
-  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index);
+  CompactChunkOperation operation(trace, GetFsInfo(), ino, chunk_index, inode->Length());
 
   status = RunOperation(&operation);
 
   auto& result = operation.GetResult();
-  auto& attr = result.attr;
   trash_slices = Helper::PbRepeatedToVector(result.trash_slice_list.mutable_slices());
 
   DINGO_LOG(INFO) << fmt::format("[fs.{}][{}us] compactchunk {}/{} finish, trash_slices({}) status({}).", fs_id_,
@@ -1795,8 +1798,6 @@ Status FileSystem::CompactChunk(Context& ctx, Ino ino, uint64_t chunk_index,
   if (!status.ok()) {
     return status;
   }
-
-  inode->UpdateIf(std::move(attr));
 
   return Status::OK();
 }
@@ -1840,7 +1841,7 @@ Status FileSystem::ListDentry(Context& ctx, Ino parent, const std::string& last_
   return ListDentryFromStore(parent, last_name, limit, is_only_dir, dentries);
 }
 
-Status FileSystem::GetInode(Context& ctx, Ino ino, bool just_basic, EntryOut& entry_out) {
+Status FileSystem::GetInode(Context& ctx, Ino ino, EntryOut& entry_out) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] getinode ino({}).", fs_id_, ino);
 
   InodeSPtr inode;
@@ -1849,13 +1850,12 @@ Status FileSystem::GetInode(Context& ctx, Ino ino, bool just_basic, EntryOut& en
     return status;
   }
 
-  entry_out.attr = inode->Copy(just_basic);
+  entry_out.attr = inode->Copy();
 
   return Status::OK();
 }
 
-Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, bool just_basic,
-                                 std::vector<EntryOut>& out_entries) {
+Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoes, std::vector<EntryOut>& out_entries) {
   DINGO_LOG(DEBUG) << fmt::format("[fs.{}] batchgetinode inoes({}).", fs_id_, Helper::VectorToString(inoes));
 
   bool bypass_cache = ctx.IsBypassCache();
@@ -1871,7 +1871,7 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
       }
 
       EntryOut entry_out;
-      entry_out.attr = inode->Copy(just_basic);
+      entry_out.attr = inode->Copy();
       out_entries.push_back(entry_out);
     }
 
@@ -1884,7 +1884,7 @@ Status FileSystem::BatchGetInode(Context& ctx, const std::vector<uint64_t>& inoe
 
     for (auto& inode : inodes) {
       EntryOut entry_out;
-      entry_out.attr = inode->Copy(just_basic);
+      entry_out.attr = inode->Copy();
       out_entries.push_back(entry_out);
     }
   }
@@ -2121,8 +2121,8 @@ Status FileSystemSet::GenFsId(uint32_t& fs_id) {
 }
 
 // gerenate parent hash partition
-std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> GenParentHashDistribution(const std::vector<MDSMeta>& mds_metas,
-                                                                                  uint32_t bucket_num) {
+static std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> GenParentHashDistribution(
+    const std::vector<MDSMeta>& mds_metas, uint32_t bucket_num) {
   std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet> mds_bucket_map;
   for (const auto& mds_meta : mds_metas) {
     mds_bucket_map[mds_meta.ID()] = pb::mdsv2::HashPartition::BucketSet();
@@ -2203,7 +2203,7 @@ bool FileSystemSet::IsExistFsTable() {
   return true;
 }
 
-Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
+static Status ValidateCreateFsParam(const FileSystemSet::CreateFsParam& param) {
   if (param.fs_name.empty()) {
     return Status(pb::error::EILLEGAL_PARAMTETER, "fs name is empty");
   }
