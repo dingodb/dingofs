@@ -57,22 +57,22 @@ void FreeMap(std::multimap<uint64_t, FsTreeNode*>& node_map) {
 }
 
 static Status GetFsInfo(KVStorageSPtr kv_storage, const std::string& fs_name, pb::mdsv2::FsInfo& fs_info) {
-  std::string fs_key = MetaCodec::EncodeFSKey(fs_name);
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
   std::string value;
   Status status = kv_storage->Get(fs_key, value);
   if (!status.ok()) {
     return Status(pb::error::ENOT_FOUND, fmt::format("not found fs({}), {}.", fs_name, status.error_str()));
   }
 
-  fs_info = MetaCodec::DecodeFSValue(value);
+  fs_info = MetaCodec::DecodeFsValue(value);
 
   return Status::OK();
 }
 
 static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
                                    std::multimap<uint64_t, FsTreeNode*>& node_map) {
-  Range range;
-  MetaCodec::GetDentryTableRange(fs_id, range.start_key, range.end_key);
+  // todo
+  Range range = MetaCodec::GetFsMetaTableRange(fs_id);
 
   // scan dentry/attr table
   auto txn = kv_storage->NewTxn();
@@ -91,7 +91,7 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
       uint32_t fs_id = 0;
       uint64_t ino = 0;
 
-      if (kv.key.size() == MetaCodec::InodeKeyLength()) {
+      if (MetaCodec::IsInodeKey(kv.key)) {
         MetaCodec::DecodeInodeKey(kv.key, fs_id, ino);
         const AttrType attr = MetaCodec::DecodeInodeValue(kv.value);
 
@@ -105,7 +105,7 @@ static FsTreeNode* GenFsTreeStruct(KVStorageSPtr kv_storage, uint32_t fs_id,
           ++it;
         }
 
-      } else {
+      } else if (MetaCodec::IsDentryKey(kv.key)) {
         // dentry
         uint64_t parent = 0;
         std::string name;
@@ -286,8 +286,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
   }
 
   const uint32_t fs_id = fs_info_.fs_id();
-  Range range;
-  MetaCodec::EncodeDentryRange(fs_id, parent, range.start_key, range.end_key);
+  Range range = MetaCodec::GetDentryRange(fs_id, parent, false);
 
   auto txn = kv_storage_->NewTxn();
 
@@ -304,8 +303,7 @@ Status FsUtils::GenDirJsonString(Ino parent, std::string& result) {
 
   // add child dentry
   std::map<Ino, DentryType> dentries;
-  for (size_t i = 1; i < kvs.size(); ++i) {
-    const auto& kv = kvs.at(i);
+  for (const auto& kv : kvs) {
     auto dentry = MetaCodec::DecodeDentryValue(kv.value);
     dentries.insert(std::make_pair(dentry.ino(), dentry));
   }

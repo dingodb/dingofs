@@ -372,7 +372,6 @@ class FileSystemSet {
   Status GenFsId(uint32_t& fs_id);
   FsInfoType GenFsInfo(int64_t fs_id, const CreateFsParam& param);
 
-  Status CreateFsTable();
   bool IsExistFsTable();
 
   bool AddFileSystem(FileSystemSPtr fs, bool is_force = false);

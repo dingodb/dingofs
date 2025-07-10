@@ -52,8 +52,8 @@ class CoordinatorClient {
   // version
 
   struct Range {
-    std::string start_key;
-    std::string end_key;
+    std::string start;
+    std::string end;
   };
 
   struct KVPair {
@@ -78,7 +78,7 @@ class CoordinatorClient {
     int64_t lease_id{0};
   };
 
-  enum EventType {
+  enum EventType : uint8_t {
     kNone = 0,
     kPut = 1,
     kDelete = 2,

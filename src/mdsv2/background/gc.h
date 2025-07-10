@@ -158,9 +158,9 @@ class GcProcessor {
 
   Status GetClientList(std::set<std::string>& clients);
 
-  void ScanDelSlice();
-  void ScanDelFile();
-  void ScanExpiredFileSession();
+  void ScanDelSlice(uint32_t fs_id);
+  void ScanDelFile(uint32_t fs_id);
+  void ScanExpiredFileSession(uint32_t fs_id);
 
   static bool ShouldDeleteFile(const AttrType& attr);
   static bool ShouldCleanFileSession(const FileSessionEntry& file_session, const std::set<std::string>& alive_clients);

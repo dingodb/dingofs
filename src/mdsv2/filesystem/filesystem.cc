@@ -218,8 +218,7 @@ std::map<uint64_t, PartitionPtr> FileSystem::GetAllPartitionsFromCache() { retur
 
 Status FileSystem::GetPartitionFromStore(Ino parent, const std::string& reason, PartitionPtr& out_partition) {
   // scan dentry from store
-  Range range;
-  MetaCodec::EncodeDentryRange(fs_id_, parent, range.start_key, range.end_key);
+  Range range = MetaCodec::GetDentryRange(fs_id_, parent, true);
 
   std::vector<KeyValue> kvs;
   auto status = kv_storage_->Scan(range, kvs);
@@ -232,8 +231,8 @@ Status FileSystem::GetPartitionFromStore(Ino parent, const std::string& reason, 
   }
 
   auto& parent_kv = kvs.at(0);
-  CHECK(parent_kv.key == range.start_key) << fmt::format(
-      "invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key), Helper::StringToHex(range.start_key));
+  CHECK(parent_kv.key == range.start) << fmt::format("invalid parent key({}/{}).", Helper::StringToHex(parent_kv.key),
+                                                     Helper::StringToHex(range.start));
 
   // build partition
   auto parent_inode = Inode::New(MetaCodec::DecodeInodeValue(parent_kv.value));
@@ -1958,12 +1957,12 @@ Status FileSystem::RefreshFsInfo(const std::string& name) {
   DINGO_LOG(INFO) << fmt::format("[fs.{}] refresh fs({}) info.", fs_id_, name);
 
   std::string value;
-  auto status = kv_storage_->Get(MetaCodec::EncodeFSKey(name), value);
+  auto status = kv_storage_->Get(MetaCodec::EncodeFsKey(name), value);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  RefreshFsInfo(MetaCodec::DecodeFSValue(value));
+  RefreshFsInfo(MetaCodec::DecodeFsValue(value));
 
   return Status::OK();
 }
@@ -1977,7 +1976,7 @@ void FileSystem::RefreshFsInfo(const FsInfoType& fs_info) {
 }
 
 Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
-  std::string key = MetaCodec::EncodeFSKey(fs_info_->GetName());
+  std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
 
   auto txn = kv_storage_->NewTxn();
 
@@ -1987,7 +1986,7 @@ Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  FsInfoType fs_info = MetaCodec::DecodeFSValue(value);
+  FsInfoType fs_info = MetaCodec::DecodeFsValue(value);
   CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::MONOLITHIC_PARTITION)
       << "invalid partition polocy type.";
 
@@ -1997,7 +1996,7 @@ Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
 
   fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
-  status = txn->Put(key, MetaCodec::EncodeFSValue(fs_info));
+  status = txn->Put(key, MetaCodec::EncodeFsValue(fs_info));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
@@ -2017,7 +2016,7 @@ Status FileSystem::UpdatePartitionPolicy(uint64_t mds_id) {
 }
 
 Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::HashPartition::BucketSet>& distributions) {
-  std::string key = MetaCodec::EncodeFSKey(fs_info_->GetName());
+  std::string key = MetaCodec::EncodeFsKey(fs_info_->GetName());
 
   auto txn = kv_storage_->NewTxn();
   std::string value;
@@ -2026,7 +2025,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
     return Status(pb::error::EBACKEND_STORE, fmt::format("get fs info fail, {}", status.error_str()));
   }
 
-  FsInfoType fs_info = MetaCodec::DecodeFSValue(value);
+  FsInfoType fs_info = MetaCodec::DecodeFsValue(value);
   CHECK(fs_info.partition_policy().type() == pb::mdsv2::PartitionType::PARENT_ID_HASH_PARTITION)
       << "invalid partition polocy type.";
 
@@ -2040,7 +2039,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
   fs_info.set_last_update_time_ns(Helper::TimestampNs());
 
   KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, key, MetaCodec::EncodeFSValue(fs_info));
+  status = kv_storage_->Put(option, key, MetaCodec::EncodeFsValue(fs_info));
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
   }
@@ -2058,7 +2057,7 @@ Status FileSystem::UpdatePartitionPolicy(const std::map<uint64_t, pb::mdsv2::Has
 Status FileSystem::GetDelFiles(std::vector<AttrType>& delfiles) {
   Trace trace;
   uint32_t count = 0;
-  ScanDelFileOperation operation(trace, [&](const std::string&, const std::string& value) -> bool {
+  ScanDelFileOperation operation(trace, fs_id_, [&](const std::string&, const std::string& value) -> bool {
     delfiles.push_back(MetaCodec::DecodeDelFileValue(value));
     ++count;
     return true;
@@ -2115,7 +2114,7 @@ bool FileSystemSet::Init() {
 
 Status FileSystemSet::GenFsId(uint32_t& fs_id) {
   uint64_t temp_fs_id;
-  bool ret = id_generator_->GenID(1, temp_fs_id);
+  bool ret = id_generator_->GenID(2, temp_fs_id);
   fs_id = static_cast<uint32_t>(temp_fs_id);
   return ret ? Status::OK() : Status(pb::error::EGEN_FSID, "generate fs id fail");
 }
@@ -2177,22 +2176,11 @@ FsInfoType FileSystemSet::GenFsInfo(int64_t fs_id, const CreateFsParam& param) {
   return fs_info;
 }
 
-Status FileSystemSet::CreateFsTable() {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetFsTableRange(option.start_key, option.end_key);
-  DINGO_LOG(INFO) << fmt::format("[fsset] create fs table, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-  return kv_storage_->CreateTable(kFsTableName, option, table_id);
-}
-
 bool FileSystemSet::IsExistFsTable() {
-  std::string start_key, end_key;
-  MetaCodec::GetFsTableRange(start_key, end_key);
-  DINGO_LOG(DEBUG) << fmt::format("[fsset] check fs table, start_key({}), end_key({}).", Helper::StringToHex(start_key),
-                                  Helper::StringToHex(end_key));
+  auto range = MetaCodec::GetMetaTableRange();
+  DINGO_LOG(DEBUG) << fmt::format("[fsset] check fs table, {}.", range.ToString());
 
-  auto status = kv_storage_->IsExistTable(start_key, end_key);
+  auto status = kv_storage_->IsExistTable(range.start, range.end);
   if (!status.ok()) {
     if (status.error_code() != pb::error::ENOT_FOUND) {
       DINGO_LOG(ERROR) << "[fsset] check fs table exist fail, error: " << status.error_str();
@@ -2260,7 +2248,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
     }
   };
 
-  std::string fs_key = MetaCodec::EncodeFSKey(param.fs_name);
+  std::string fs_key = MetaCodec::EncodeFsKey(param.fs_name);
   // check fs exist
   {
     std::string value;
@@ -2277,9 +2265,9 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
   // create dentry/inode table
   int64_t dentry_table_id = 0;
   {
-    KVStorage::TableOption option;
-    MetaCodec::GetDentryTableRange(fs_id, option.start_key, option.end_key);
-    std::string table_name = fmt::format("{}_{}_dentry_inode", param.fs_name, fs_id);
+    auto range = MetaCodec::GetFsMetaTableRange(fs_id);
+    KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
+    std::string table_name = fmt::format("dingofs-fs[{}]", param.fs_name);
     Status status = kv_storage_->CreateTable(table_name, option, dentry_table_id);
     if (!status.ok()) {
       return Status(pb::error::EINTERNAL, fmt::format("create dentry table fail, {}", status.error_str()));
@@ -2290,7 +2278,7 @@ Status FileSystemSet::CreateFs(const CreateFsParam& param, FsInfoType& fs_info) 
 
   // create fs
   KVStorage::WriteOption option;
-  status = kv_storage_->Put(option, fs_key, MetaCodec::EncodeFSValue(fs_info));
+  status = kv_storage_->Put(option, fs_key, MetaCodec::EncodeFsValue(fs_info));
   if (!status.ok()) {
     cleanup(dentry_table_id, "", "");
     return Status(pb::error::EBACKEND_STORE, fmt::format("put store fs fail, {}", status.error_str()));
@@ -2395,7 +2383,7 @@ Status FileSystemSet::UpdateFsInfo(Context& ctx, const std::string& fs_name, con
 Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfoType& fs_info) {
   auto& trace = ctx.GetTrace();
 
-  std::string fs_key = MetaCodec::EncodeFSKey(fs_name);
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name);
   std::string value;
   Status status = kv_storage_->Get(fs_key, value);
   if (!status.ok()) {
@@ -2404,7 +2392,7 @@ Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfo
 
   trace.RecordElapsedTime("store_operate");
 
-  fs_info = MetaCodec::DecodeFSValue(value);
+  fs_info = MetaCodec::DecodeFsValue(value);
 
   return Status::OK();
 }
@@ -2412,24 +2400,15 @@ Status FileSystemSet::GetFsInfo(Context& ctx, const std::string& fs_name, FsInfo
 Status FileSystemSet::GetAllFsInfo(Context& ctx, std::vector<FsInfoType>& fs_infoes) {
   auto& trace = ctx.GetTrace();
 
-  uint64_t now_us = Helper::TimestampUs();
+  ScanFsOperation operation(trace);
 
-  Range range;
-  MetaCodec::GetFsTableRange(range.start_key, range.end_key);
+  auto status = RunOperation(&operation);
+  if (!status.ok()) return status;
 
-  // scan fs table from kv storage
-  std::vector<KeyValue> kvs;
-  auto status = kv_storage_->Scan(range, kvs);
-  if (!status.ok()) {
-    return status;
-  }
-
-  trace.RecordElapsedTime("store_operate");
-
-  for (const auto& kv : kvs) {
-    auto fs_info = MetaCodec::DecodeFSValue(kv.value);
+  auto& all_fs_infoes = operation.GetResult().fs_infoes;
+  for (const auto& fs_info : all_fs_infoes) {
     if (!fs_info.is_deleted()) {
-      fs_infoes.push_back(std::move(fs_info));
+      fs_infoes.push_back(fs_info);
     }
   }
 
@@ -2540,8 +2519,7 @@ std::vector<FileSystemSPtr> FileSystemSet::GetAllFileSystem() {
 }
 
 bool FileSystemSet::LoadFileSystems() {
-  Range range;
-  MetaCodec::GetFsTableRange(range.start_key, range.end_key);
+  Range range = MetaCodec::GetFsRange();
 
   // scan fs table from kv storage
   std::vector<KeyValue> kvs;
@@ -2555,7 +2533,7 @@ bool FileSystemSet::LoadFileSystems() {
     auto id_generator = AutoIncrementIdGenerator::New(coordinator_client_, kInoTableId, kInoStartId, kInoBatchSize);
     CHECK(id_generator != nullptr) << "new id generator fail.";
 
-    auto fs_info = MetaCodec::DecodeFSValue(kv.value);
+    auto fs_info = MetaCodec::DecodeFsValue(kv.value);
     auto fs = GetFileSystem(fs_info.fs_id());
     if (fs == nullptr) {
       DINGO_LOG(INFO) << fmt::format("[fsset] add fs name({}) id({}).", fs_info.fs_name(), fs_info.fs_id());

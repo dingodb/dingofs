@@ -40,6 +40,13 @@ using ClientEntry = pb::mdsv2::Client;
 using FileSessionEntry = pb::mdsv2::FileSession;
 using FsStatsDataEntry = pb::mdsv2::FsStatsData;
 
+struct Range {
+  std::string start;
+  std::string end;
+
+  std::string ToString() const { return fmt::format("[{}, {})", start, end); }
+};
+
 inline bool IsDir(Ino ino) { return (ino & 1) == 1; }
 inline bool IsFile(Ino ino) { return (ino & 1) == 0; }
 

@@ -245,6 +245,12 @@ const char* Operation::OpName() const {
     case OpType::kCleanDelFile:
       return "CleanDelFile";
 
+    case OpType::kScanLock:
+      return "ScanLock";
+
+    case OpType::kScanFs:
+      return "ScanFs";
+
     case OpType::kScanDentry:
       return "ScanDentry";
 
@@ -272,13 +278,13 @@ const char* Operation::OpName() const {
 
 Status MountFsOperation::Run(TxnUPtr& txn) {
   std::string value;
-  std::string key = MetaCodec::EncodeFSKey(fs_name_);
+  std::string key = MetaCodec::EncodeFsKey(fs_name_);
   Status status = txn->Get(key, value);
   if (!status.ok()) {
     return status;
   }
 
-  auto fs_info = MetaCodec::DecodeFSValue(value);
+  auto fs_info = MetaCodec::DecodeFsValue(value);
 
   if (IsExistMountPoint(fs_info, mount_point_)) {
     return Status(pb::error::EEXISTED, "mountPoint already exist.");
@@ -287,7 +293,7 @@ Status MountFsOperation::Run(TxnUPtr& txn) {
   fs_info.add_mount_points()->CopyFrom(mount_point_);
   fs_info.set_last_update_time_ns(GetTime());
 
-  txn->Put(key, MetaCodec::EncodeFSValue(fs_info));
+  txn->Put(key, MetaCodec::EncodeFsValue(fs_info));
 
   return Status::OK();
 }
@@ -304,26 +310,26 @@ static void RemoveMountPoint(FsInfoType& fs_info, const std::string& client_id) 
 
 Status UmountFsOperation::Run(TxnUPtr& txn) {
   std::string value;
-  std::string key = MetaCodec::EncodeFSKey(fs_name_);
+  std::string key = MetaCodec::EncodeFsKey(fs_name_);
   Status status = txn->Get(key, value);
   if (!status.ok()) {
     return status;
   }
 
-  auto fs_info = MetaCodec::DecodeFSValue(value);
+  auto fs_info = MetaCodec::DecodeFsValue(value);
 
   RemoveMountPoint(fs_info, client_id_);
 
   fs_info.set_last_update_time_ns(GetTime());
 
-  txn->Put(key, MetaCodec::EncodeFSValue(fs_info));
+  txn->Put(key, MetaCodec::EncodeFsValue(fs_info));
 
   return Status::OK();
 }
 
 Status DeleteFsOperation::Run(TxnUPtr& txn) {
   std::string value;
-  std::string fs_key = MetaCodec::EncodeFSKey(fs_name_);
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name_);
   auto status = txn->Get(fs_key, value);
   if (!status.ok()) {
     if (status.error_code() == pb::error::ENOT_FOUND) {
@@ -332,7 +338,7 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
     return status;
   }
 
-  auto fs_info = MetaCodec::DecodeFSValue(value);
+  auto fs_info = MetaCodec::DecodeFsValue(value);
   if (!is_force_ && fs_info.mount_points_size() > 0) {
     return Status(pb::error::EEXISTED, "Fs exist mount point.");
   }
@@ -348,7 +354,7 @@ Status DeleteFsOperation::Run(TxnUPtr& txn) {
 }
 
 Status UpdateFsOperation::Run(TxnUPtr& txn) {
-  std::string fs_key = MetaCodec::EncodeFSKey(fs_name_);
+  std::string fs_key = MetaCodec::EncodeFsKey(fs_name_);
 
   std::string value;
   auto status = txn->Get(fs_key, value);
@@ -356,13 +362,13 @@ Status UpdateFsOperation::Run(TxnUPtr& txn) {
     return status;
   }
 
-  auto new_fs_info = MetaCodec::DecodeFSValue(value);
+  auto new_fs_info = MetaCodec::DecodeFsValue(value);
   new_fs_info.set_capacity(fs_info_.capacity());
   new_fs_info.set_block_size(fs_info_.block_size());
   new_fs_info.set_owner(fs_info_.owner());
   new_fs_info.set_recycle_time_hour(fs_info_.recycle_time_hour());
 
-  txn->Put(fs_key, MetaCodec::EncodeFSValue(new_fs_info));
+  txn->Put(fs_key, MetaCodec::EncodeFsValue(new_fs_info));
 
   return Status::OK();
 }
@@ -493,8 +499,7 @@ static Status GetChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, uint64_t chunk_ind
 }
 
 static Status ScanChunk(TxnUPtr& txn, uint32_t fs_id, Ino ino, std::map<uint64_t, ChunkType>& chunks) {
-  Range range;
-  MetaCodec::GetChunkRange(fs_id, ino, range.start_key, range.end_key);
+  Range range = MetaCodec::GetChunkRange(fs_id, ino);
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsChunkKey(key)) return true;
@@ -683,8 +688,7 @@ Status GetChunkOperation::Run(TxnUPtr& txn) {
 }
 
 Status ScanChunkOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetChunkRange(fs_id_, ino_, range.start_key, range.end_key);
+  Range range = MetaCodec::GetChunkRange(fs_id_, ino_);
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsChunkKey(key)) return true;
@@ -890,8 +894,7 @@ Status CloseFileOperation::Run(TxnUPtr& txn) {
 }
 
 static Status CheckDirEmpty(TxnUPtr& txn, uint32_t fs_id, uint64_t ino, bool& is_empty) {
-  Range range;
-  MetaCodec::GetDentryTableRange(fs_id, ino, range.start_key, range.end_key);
+  Range range = MetaCodec::GetDentryRange(fs_id, ino, true);
 
   std::vector<KeyValue> kvs;
   auto status = txn->Scan(range, 2, kvs);
@@ -1425,8 +1428,7 @@ Status CompactChunkOperation::Run(TxnUPtr& txn) {
 
   std::vector<ChunkType> chunks;
   if (chunk_index_ == 0) {
-    Range range;
-    MetaCodec::GetChunkRange(fs_id, ino_, range.start_key, range.end_key);
+    Range range = MetaCodec::GetChunkRange(fs_id, ino_);
     auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
       if (!MetaCodec::IsChunkKey(key)) return true;
 
@@ -1570,11 +1572,10 @@ Status DeleteDirQuotaOperation::Run(TxnUPtr& txn) {
 }
 
 Status LoadDirQuotasOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetDirQuotaRange(fs_id_, range.start_key, range.end_key);
+  Range range = MetaCodec::GetDirQuotaRange(fs_id_);
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
-    if (key.size() != MetaCodec::DirQuotaKeyLength()) return true;
+    if (!MetaCodec::IsDirQuotaKey(key)) return true;
 
     uint32_t fs_id;
     uint64_t ino;
@@ -1636,14 +1637,12 @@ Status DeleteMdsOperation::Run(TxnUPtr& txn) {
 }
 
 Status ScanMdsOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetHeartbeatMdsRange(range.start_key, range.end_key);
+  Range range = MetaCodec::GetHeartbeatMdsRange();
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsMdsHeartbeatKey(key)) return true;
 
-    MdsEntry mds;
-    MetaCodec::DecodeHeartbeatValue(value, mds);
+    MdsEntry mds = MetaCodec::DecodeHeartbeatMdsValue(value);
     result_.mds_entries.push_back(mds);
     return true;
   });
@@ -1664,14 +1663,12 @@ Status DeleteClientOperation::Run(TxnUPtr& txn) {
 }
 
 Status ScanClientOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetHeartbeatClientRange(range.start_key, range.end_key);
+  Range range = MetaCodec::GetHeartbeatClientRange();
 
   auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
     if (!MetaCodec::IsClientHeartbeatKey(key)) return true;
 
-    ClientEntry client;
-    MetaCodec::DecodeHeartbeatValue(value, client);
+    ClientEntry client = MetaCodec::DecodeHeartbeatClientValue(value);
     result_.client_entries.push_back(client);
     return true;
   });
@@ -1692,19 +1689,14 @@ Status GetFileSessionOperation::Run(TxnUPtr& txn) {
 };
 
 Status ScanFileSessionOperation::Run(TxnUPtr& txn) {
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+
   Range range;
-  if (fs_id_ == 0) {
-    MetaCodec::GetFileSessionTableRange(range.start_key, range.end_key);
-
-  } else if (ino_ == 0) {
-    CHECK(fs_id_ > 0) << "fs_id is 0";
-    MetaCodec::GetFsFileSessionRange(fs_id_, range.start_key, range.end_key);
-
+  if (ino_ == 0) {
+    range = MetaCodec::GetFileSessionRange(fs_id_);
   } else {
-    CHECK(fs_id_ > 0) << "fs_id is 0";
     CHECK(ino_ > 0) << "ino is 0";
-
-    MetaCodec::GetFileSessionRange(fs_id_, ino_, range.start_key, range.end_key);
+    range = MetaCodec::GetFileSessionRange(fs_id_, ino_);
   }
 
   auto status = txn->Scan(range, [&](const std::string&, const std::string& value) -> bool {
@@ -1746,11 +1738,37 @@ Status CleanDelFileOperation::Run(TxnUPtr& txn) {
   return Status::OK();
 }
 
+Status ScanLockOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetLockRange();
+
+  auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    CHECK(MetaCodec::IsLockKey(key)) << fmt::format("invalid lock key({}).", key);
+
+    result_.kvs.push_back(KeyValue{.key = key, .value = value});
+
+    return true;
+  });
+
+  return status;
+}
+
+Status ScanFsOperation::Run(TxnUPtr& txn) {
+  Range range = MetaCodec::GetFsRange();
+
+  auto status = txn->Scan(range, [&](const std::string& key, const std::string& value) -> bool {
+    CHECK(MetaCodec::IsFsKey(key)) << fmt::format("invalid fs key({}).", key);
+
+    result_.fs_infoes.push_back(MetaCodec::DecodeFsValue(value));
+    return true;
+  });
+
+  return status;
+}
+
 Status ScanDentryOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::EncodeDentryRange(fs_id_, ino_, range.start_key, range.end_key);
+  Range range = MetaCodec::GetDentryRange(fs_id_, ino_, false);
   if (!last_name_.empty()) {
-    range.start_key = MetaCodec::EncodeDentryKey(fs_id_, ino_, last_name_);
+    range.start = MetaCodec::EncodeDentryKey(fs_id_, ino_, last_name_);
   }
 
   auto status = txn->Scan(range, [&](const std::string&, const std::string& value) -> bool {
@@ -1762,31 +1780,28 @@ Status ScanDentryOperation::Run(TxnUPtr& txn) {
 
 Status ScanDelSliceOperation::Run(TxnUPtr& txn) {
   Range range;
-  if (fs_id_ == 0) {
-    MetaCodec::GetDelSliceTableRange(range.start_key, range.end_key);
-
-  } else if (ino_ == 0) {
+  if (ino_ == 0) {
     CHECK(fs_id_ > 0) << "fs_id is 0";
-    MetaCodec::GetDelSliceRange(fs_id_, range.start_key, range.end_key);
+    range = MetaCodec::GetDelSliceRange(fs_id_);
 
   } else if (chunk_index_ == 0) {
     CHECK(fs_id_ > 0) << "fs_id is 0";
     CHECK(ino_ > 0) << "ino is 0";
-    MetaCodec::GetDelSliceRange(fs_id_, ino_, range.start_key, range.end_key);
+    range = MetaCodec::GetDelSliceRange(fs_id_, ino_);
 
   } else {
     CHECK(fs_id_ > 0) << "fs_id is 0";
     CHECK(ino_ > 0) << "ino is 0";
     CHECK(chunk_index_ > 0) << "chunk_index is 0";
-    MetaCodec::GetDelSliceRange(fs_id_, ino_, chunk_index_, range.start_key, range.end_key);
+    range = MetaCodec::GetDelSliceRange(fs_id_, ino_, chunk_index_);
   }
 
   return txn->Scan(range, handler_);
 }
 
 Status ScanDelFileOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetDelFileTableRange(range.start_key, range.end_key);
+  CHECK(fs_id_ > 0) << "fs_id is 0";
+  Range range = MetaCodec::GetDelFileTableRange(fs_id_);
 
   return txn->Scan(range, scan_handler_);
 }
@@ -1798,9 +1813,8 @@ Status SaveFsStatsOperation::Run(TxnUPtr& txn) {
 }
 
 Status ScanFsStatsOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetFsStatsRange(fs_id_, range.start_key, range.end_key);
-  range.start_key = MetaCodec::EncodeFsStatsKey(fs_id_, start_time_ns_);
+  Range range = MetaCodec::GetFsStatsRange(fs_id_);
+  range.start = MetaCodec::EncodeFsStatsKey(fs_id_, start_time_ns_);
 
   return txn->Scan(range, handler_);
 }
@@ -1817,8 +1831,7 @@ static void SumFsStats(const FsStatsDataEntry& src_stats, FsStatsDataEntry& dst_
 }
 
 Status GetAndCompactFsStatsOperation::Run(TxnUPtr& txn) {
-  Range range;
-  MetaCodec::GetFsStatsRange(fs_id_, range.start_key, range.end_key);
+  Range range = MetaCodec::GetFsStatsRange(fs_id_);
 
   std::string mark_key = MetaCodec::EncodeFsStatsKey(fs_id_, mark_time_ns_);
   FsStatsDataEntry compact_stats;

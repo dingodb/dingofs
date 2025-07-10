@@ -22,6 +22,7 @@
 
 #include "mdsv2/common/status.h"
 #include "mdsv2/common/tracing.h"
+#include "mdsv2/common/type.h"
 
 namespace dingofs {
 namespace mdsv2 {
@@ -46,12 +47,6 @@ struct KeyValue {
   OpType opt_type{OpType::kPut};
   std::string key;
   std::string value;
-};
-
-// Range is a range of keys, [start_key, end_key)
-struct Range {
-  std::string start_key;
-  std::string end_key;
 };
 
 class Txn;

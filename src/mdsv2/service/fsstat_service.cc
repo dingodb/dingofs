@@ -406,7 +406,7 @@ static void RenderMainPage(const brpc::Server* server, FileSystemSetSPtr file_sy
 
   // distribution lock
   std::vector<StoreDistributionLock::LockEntry> lock_entries;
-  status = StoreDistributionLock::GetAllLockInfo(Server::GetInstance().GetKVStorage(), lock_entries);
+  status = StoreDistributionLock::GetAllLockInfo(Server::GetInstance().GetOperationProcessor(), lock_entries);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("[mdsstat] get distributed lock info fail, error({}).", status.error_str());
     os << fmt::format(R"(<div style="color:red;">get distributed lock info fail, error({}).</div>)",
@@ -1032,7 +1032,7 @@ static void RenderFileSessionPage(FileSystemSPtr filesystem, butil::IOBufBuilder
 
   os << "<head>" << RenderHead("dinfofs filesession") << "</head>";
   os << "<body>";
-  os << R"(<h1 style="text-align:center;">File Session</h1>)";
+  os << fmt::format(R"(<h1 style="text-align:center;">FileSystem({}) File Session</h1>)", filesystem->FsId());
 
   auto& file_session_manager = filesystem->GetFileSessionManager();
   std::vector<FileSessionEntry> file_sessions;

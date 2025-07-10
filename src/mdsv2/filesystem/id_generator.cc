@@ -128,7 +128,7 @@ Status AutoIncrementIdGenerator::AllocateIds(uint32_t num) {
 StoreAutoIncrementIdGenerator::StoreAutoIncrementIdGenerator(KVStorageSPtr kv_storage, const std::string& name,
                                                              int64_t start_id, int batch_size)
     : kv_storage_(kv_storage),
-      key_(MetaCodec::EncodeAutoIncrementKey(name)),
+      key_(MetaCodec::EncodeAutoIncrementIDKey(name)),
       next_id_(start_id),
       last_alloc_id_(start_id),
       batch_size_(batch_size) {
@@ -198,12 +198,12 @@ Status StoreAutoIncrementIdGenerator::GetOrPutAllocId(uint64_t& alloc_id) {
       alloc_id = 0;
 
     } else {
-      MetaCodec::DecodeAutoIncrementValue(value, alloc_id);
+      MetaCodec::DecodeAutoIncrementIDValue(value, alloc_id);
     }
 
     if (alloc_id < last_alloc_id_) {
       alloc_id = last_alloc_id_;
-      txn->Put(key_, MetaCodec::EncodeAutoIncrementValue(alloc_id));
+      txn->Put(key_, MetaCodec::EncodeAutoIncrementIDValue(alloc_id));
     }
 
     status = txn->Commit();
@@ -232,11 +232,11 @@ Status StoreAutoIncrementIdGenerator::AllocateIds(uint32_t size) {
       }
 
     } else {
-      MetaCodec::DecodeAutoIncrementValue(value, alloced_id);
+      MetaCodec::DecodeAutoIncrementIDValue(value, alloced_id);
     }
 
     start_alloc_id = std::max(alloced_id, start_alloc_id);
-    txn->Put(key_, MetaCodec::EncodeAutoIncrementValue(start_alloc_id + size));
+    txn->Put(key_, MetaCodec::EncodeAutoIncrementIDValue(start_alloc_id + size));
 
     status = txn->Commit();
     if (status.error_code() != pb::error::ESTORE_MAYBE_RETRY) {

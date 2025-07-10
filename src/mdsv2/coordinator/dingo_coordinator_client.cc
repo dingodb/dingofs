@@ -211,8 +211,8 @@ static dingodb::sdk::Version::Options Options2SdkOptions(const CoordinatorClient
 
 static dingodb::sdk::Version::Range Range2SdkRange(const CoordinatorClient::Range& range) {
   dingodb::sdk::Version::Range sdk_range;
-  sdk_range.start_key = range.start_key;
-  sdk_range.end_key = range.end_key;
+  sdk_range.start_key = range.start;
+  sdk_range.end_key = range.end;
 
   return sdk_range;
 }

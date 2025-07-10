@@ -18,6 +18,7 @@
 
 #include "fmt/format.h"
 #include "glog/logging.h"
+#include "mdsv2/common/constant.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/filesystem/store_operation.h"
 
@@ -112,7 +113,7 @@ void DirQuotaMap::UpdateUsage(Ino ino, int64_t byte_delta, int64_t inode_delta) 
       quota->UpdateUsage(byte_delta, inode_delta);
     }
 
-    if (curr_ino == 1) {
+    if (curr_ino == kRootIno) {
       break;
     }
 
@@ -148,7 +149,7 @@ QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
       return quota;
     }
 
-    if (curr_ino == 1) {
+    if (curr_ino == kRootIno) {
       break;
     }
 
@@ -159,8 +160,9 @@ QuotaSPtr DirQuotaMap::GetNearestQuota(Ino ino) {
 
     curr_ino = parent;
   }
-
-  DINGO_LOG(WARNING) << fmt::format("[quota] not found parent, ino({}).", curr_ino);
+  if (curr_ino != kRootIno) {
+    DINGO_LOG(WARNING) << fmt::format("[quota] not found parent, ino({}).", curr_ino);
+  }
 
   return nullptr;
 }

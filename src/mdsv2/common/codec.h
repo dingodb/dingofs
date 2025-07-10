@@ -15,10 +15,11 @@
 #ifndef DINGOFS_MDV2_FILESYSTEM_CODEC_H_
 #define DINGOFS_MDV2_FILESYSTEM_CODEC_H_
 
+#include <sys/types.h>
+
 #include <cstdint>
 #include <string>
 
-#include "dingofs/mdsv2.pb.h"
 #include "mdsv2/common/type.h"
 
 namespace dingofs {
@@ -26,143 +27,150 @@ namespace mdsv2 {
 
 class MetaCodec {
  public:
-  static void GetLockTableRange(std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableMeta
+  static Range GetMetaTableRange();
+  // format: ${prefix} kTableFsStats
+  static Range GetFsStatsTableRange();
+  // format: ${prefix} kTableFsMeta {fs_id}
+  static Range GetFsMetaTableRange(uint32_t fs_id);
 
-  static void GetAutoIncrementTableRange(std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableMeta kMetaLock
+  static Range GetLockRange();
+  // format: ${prefix} kTableMeta kMetaAutoIncrement
+  static Range GetAutoIncrementIDRange();
+  // format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds
+  static Range GetHeartbeatMdsRange();
+  // format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient
+  static Range GetHeartbeatClientRange();
 
-  static void GetHeartbeatTableRange(std::string& start_key, std::string& end_key);
-  static void GetHeartbeatMdsRange(std::string& start_key, std::string& end_key);
-  static void GetHeartbeatClientRange(std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableMeta kMetaFs
+  static Range GetFsRange();
+  // format: ${prefix} kTableMeta kMetaFsQuota
+  static Range GetFsQuotaRange();
 
-  static void GetFsTableRange(std::string& start_key, std::string& end_key);
-  static void GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetDentryTableRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry
+  static Range GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk
+  static Range GetChunkRange(uint32_t fs_id, Ino ino);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino}
+  static Range GetFileSessionRange(uint32_t fs_id);
+  static Range GetFileSessionRange(uint32_t fs_id, Ino ino);
 
-  static void GetQuotaTableRange(std::string& start_key, std::string& end_key);
-  static void GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaDirQuota
+  static Range GetDirQuotaRange(uint32_t fs_id);
 
-  static void GetFsStatsTableRange(std::string& start_key, std::string& end_key);
-  static void GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice
+  static Range GetDelSliceRange(uint32_t fs_id);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino}
+  static Range GetDelSliceRange(uint32_t fs_id, Ino ino);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index}
+  static Range GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index);
 
-  static void GetFileSessionTableRange(std::string& start_key, std::string& end_key);
-  static void GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile
+  static Range GetDelFileTableRange(uint32_t fs_id);
 
-  static void GetChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
+  // format: ${prefix} kTableFsStats kMetaFsStats
+  static Range GetFsStatsRange();
+  // format: ${prefix} kTableFsStats kMetaFsStats {fs_id}
+  static Range GetFsStatsRange(uint32_t fs_id);
 
-  static void GetDelSliceTableRange(std::string& start_key, std::string& end_key);
-  static void GetDelSliceRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-  static void GetDelSliceRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
-  static void GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
-                               std::string& end_key);
-
-  static void GetDelFileTableRange(std::string& start_key, std::string& end_key);
-  static void GetDelFileTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key);
-
-  // lock
-  // format: [$prefix, $type, $name]
+  // lock format: ${prefix} kTableMeta kMetaLock {name}
+  static bool IsLockKey(const std::string& key);
   static std::string EncodeLockKey(const std::string& name);
   static void DecodeLockKey(const std::string& key, std::string& name);
   static std::string EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t expire_time_ms);
   static void DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& epoch, uint64_t& expire_time_ms);
 
-  // auto increment id
-  // format: [$prefix, $type, $name]
-  static std::string EncodeAutoIncrementKey(const std::string& name);
-  static void DecodeAutoIncrementKey(const std::string& key, std::string& name);
-  static std::string EncodeAutoIncrementValue(uint64_t id);
-  static void DecodeAutoIncrementValue(const std::string& value, uint64_t& id);
+  // auto increment id format: ${prefix} kTableMeta kMetaAutoIncrement {name}
+  static bool IsAutoIncrementIDKey(const std::string& key);
+  static std::string EncodeAutoIncrementIDKey(const std::string& name);
+  static void DecodeAutoIncrementIDKey(const std::string& key, std::string& name);
+  static std::string EncodeAutoIncrementIDValue(uint64_t id);
+  static void DecodeAutoIncrementIDValue(const std::string& value, uint64_t& id);
 
-  // heartbeat
-  // format: [$prefix, $type, $role, $mds_id]
-  // or format: [$prefix, $type, $role, $client_mountpoint]
-  static std::string EncodeHeartbeatKey(int64_t mds_id);
-  static std::string EncodeHeartbeatKey(const std::string& client_id);
+  // heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
+  // heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
   static bool IsMdsHeartbeatKey(const std::string& key);
   static bool IsClientHeartbeatKey(const std::string& key);
+  static std::string EncodeHeartbeatKey(int64_t mds_id);
+  static std::string EncodeHeartbeatKey(const std::string& client_id);
   static void DecodeHeartbeatKey(const std::string& key, int64_t& mds_id);
   static void DecodeHeartbeatKey(const std::string& key, std::string& client_id);
   static std::string EncodeHeartbeatValue(const MdsEntry& mds);
   static std::string EncodeHeartbeatValue(const ClientEntry& client);
-  static void DecodeHeartbeatValue(const std::string& value, MdsEntry& mds);
-  static void DecodeHeartbeatValue(const std::string& value, ClientEntry& client);
+  static MdsEntry DecodeHeartbeatMdsValue(const std::string& value);
+  static ClientEntry DecodeHeartbeatClientValue(const std::string& value);
 
-  // fs
-  // format: [$prefix, $type, $name]
-  static std::string EncodeFSKey(const std::string& name);
-  static void DecodeFSKey(const std::string& key, std::string& name);
-  static std::string EncodeFSValue(const pb::mdsv2::FsInfo& fs_info);
-  static pb::mdsv2::FsInfo DecodeFSValue(const std::string& value);
+  // fs format: ${prefix} kTableMeta kMetaFs {name}
+  static bool IsFsKey(const std::string& key);
+  static std::string EncodeFsKey(const std::string& name);
+  static void DecodeFsKey(const std::string& key, std::string& name);
+  static std::string EncodeFsValue(const FsInfoType& fs_info);
+  static FsInfoType DecodeFsValue(const std::string& value);
 
-  // dentry
-  // format: [$prefix, $type, $fs_id, $ino, $name]
-  static std::string EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name);
-  static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
-  static std::string EncodeDentryValue(const DentryType& dentry);
-  static DentryType DecodeDentryValue(const std::string& value);
-  // format: [$prefix, $type, $fs_id, $ino]
-  // format: [$prefix, $type, $fs_id, $ino+1]
-  static void EncodeDentryRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key);
-
-  // inode
-  // format: [$prefix, $type, $fs_id, $ino]
-  static uint32_t InodeKeyLength();
-  static std::string EncodeInodeKey(uint32_t fs_id, Ino ino);
-  static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeInodeValue(const AttrType& attr);
-  static AttrType DecodeInodeValue(const std::string& value);
-
-  // fs quota
-  // format: [$prefix, $type, $fs_id]
+  // fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
+  static bool IsFsQuotaKey(const std::string& key);
   static std::string EncodeFsQuotaKey(uint32_t fs_id);
   static void DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id);
   static std::string EncodeFsQuotaValue(const QuotaEntry& quota);
   static QuotaEntry DecodeFsQuotaValue(const std::string& value);
 
-  // dir quota
-  // format: [$prefix, $type, $fs_id, $ino]
-  static uint32_t DirQuotaKeyLength();
-  static std::string EncodeDirQuotaKey(uint32_t fs_id, Ino ino);
-  static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
-  static std::string EncodeDirQuotaValue(const QuotaEntry& quota);
-  static QuotaEntry DecodeDirQuotaValue(const std::string& value);
+  // inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
+  static bool IsInodeKey(const std::string& key);
+  static std::string EncodeInodeKey(uint32_t fs_id, Ino ino);
+  static void DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
+  static std::string EncodeInodeValue(const AttrType& attr);
+  static AttrType DecodeInodeValue(const std::string& value);
 
-  // fs stats
-  // format: [$prefix, $type, $fs_id, $time_ns]
-  static std::string EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns);
-  static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
-  static std::string EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats);
-  static pb::mdsv2::FsStatsData DecodeFsStatsValue(const std::string& value);
+  // dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
+  static bool IsDentryKey(const std::string& key);
+  static std::string EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name);
+  static void DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name);
+  static std::string EncodeDentryValue(const DentryType& dentry);
+  static DentryType DecodeDentryValue(const std::string& value);
 
-  // file session
-  // format: [$prefix, $type, $fs_id, $ino, $session_id]
-  static std::string EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::string& session_id);
-  static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
-  static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
-  static FileSessionEntry DecodeFileSessionValue(const std::string& value);
-
-  // chunk
-  // format: [$prefix, $type, $fs_id, $ino, $chunk_index]
+  // inode chunk format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeChunk {chunk_index}
   static bool IsChunkKey(const std::string& key);
   static std::string EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index);
   static void DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index);
   static std::string EncodeChunkValue(const ChunkType& chunk);
   static ChunkType DecodeChunkValue(const std::string& value);
 
-  // del slice
-  // format: [$prefix, $type, $fs_id, $ino, $chunk_index, $time_ns]
+  // inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
+  static bool IsFileSessionKey(const std::string& key);
+  static std::string EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::string& session_id);
+  static void DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id);
+  static std::string EncodeFileSessionValue(const FileSessionEntry& file_session);
+  static FileSessionEntry DecodeFileSessionValue(const std::string& value);
+
+  // dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaDirQuota {ino}
+  static bool IsDirQuotaKey(const std::string& key);
+  static std::string EncodeDirQuotaKey(uint32_t fs_id, Ino ino);
+  static void DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& ino);
+  static std::string EncodeDirQuotaValue(const QuotaEntry& dir_quota);
+  static QuotaEntry DecodeDirQuotaValue(const std::string& value);
+
+  // inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
+  static bool IsDelSliceKey(const std::string& key);
   static std::string EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns);
   static void DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
                                 uint64_t& time_ns);
   static std::string EncodeDelSliceValue(const TrashSliceList& slice_list);
   static TrashSliceList DecodeDelSliceValue(const std::string& value);
 
-  // del file
-  // format: [$prefix, $type, $fs_id, $ino]
+  // inode delfile format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile {ino}
+  static bool IsDelFileKey(const std::string& key);
   static std::string EncodeDelFileKey(uint32_t fs_id, Ino ino);
-  static void DecodeDelFileKey(const std::string& key, uint32_t& fs_id, uint64_t& ino);
+  static void DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& ino);
   static std::string EncodeDelFileValue(const AttrType& attr);
   static AttrType DecodeDelFileValue(const std::string& value);
+
+  // fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
+  static bool IsFsStatsKey(const std::string& key);
+  static std::string EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns);
+  static void DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns);
+  static std::string EncodeFsStatsValue(const FsStatsDataEntry& stats);
+  static FsStatsDataEntry DecodeFsStatsValue(const std::string& value);
 };
 
 }  // namespace mdsv2

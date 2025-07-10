@@ -14,15 +14,13 @@
 
 #include "mdsv2/common/codec.h"
 
-#include <fmt/format.h>
-
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <utility>
 
 #include "dingofs/mdsv2.pb.h"
-#include "fmt/core.h"
+#include "fmt/format.h"
 #include "glog/logging.h"
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/serial_helper.h"
@@ -34,260 +32,452 @@ namespace mdsv2 {
 static const char* const kPrefix = "xDINGOFS:";
 static const size_t kPrefixSize = std::char_traits<char>::length(kPrefix);
 
-// not continuous for don't make region merge (region range not continuous)
-enum KeyType : unsigned char {
-  kTypeLock = 1,
-  kTypeAutoIncrement = 3,
-  kTypeHeartbeat = 5,
-  kTypeFS = 7,
-  kTypeDentryOrInode = 9,
-  kTypeQuota = 11,
-  kTypeChunk = 13,
-  kTypeFsStats = 15,
-  kTypeFileSession = 17,
-  kTypeDelSlice = 19,
-  kTypeDelFile = 21,
+// table:
+//      kTableMeta: all filesystem shared
+//      kTableFsStats: store fs stats for client upload, all filesystem shared
+//      kTableFsMeta+{fs_id}: store fs meta, each filesystem has its own table
+enum TableID : unsigned char {
+  kTableMeta = 1,
+  kTableFsStats = 3,
+  kTableFsMeta = 5,
 };
 
-void MetaCodec::GetLockTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeLock);
+// meta type:
+//      kMetaLock: lock, used for distributed lock
+//      kMetaAutoIncrement: auto increment id, used for fs id, ino
+//      kMetaHeartbeat: heartbeat, used for mds/client heartbeat
+//      kMetaFs: fs info, used for filesystem info
+//      kMetaFsQuota: fs quota, used for filesystem quota
+//      kMetaFsDirQuota: directory quota, used for directory quota
+//      kMetaFsInode: fs inode, used for file/directory inode
+//     kMetaFsFileSession: fs file session, used for file session
+//      kMetaFsStats: fs stats, used for filesystem stats
+//      kMetaFsDelSlice: fs deleted slice, used for deleted file data slice
+//      kMetaFsDelFile: fs deleted file, used for deleted file
+enum MetaType : unsigned char {
+  kMetaLock = 1,
+  kMetaAutoIncrement = 3,
+  kMetaHeartbeat = 5,
+  kMetaFs = 7,
+  kMetaFsQuota = 9,
+  kMetaFsDirQuota = 11,
+  kMetaFsInode = 13,
+  kMetaFsFileSession = 15,
+  kMetaFsDelSlice = 17,
+  kMetaFsDelFile = 19,
+  kMetaFsStats = 21,
+};
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeLock + 1);
+// inode meta type:
+//      kFsInodeAttr: inode basic attributes
+//      kFsInodeDentry: dentry, file/directory name
+//      kFsInodeChunk: chunk, file data chunk
+// key locality:
+//      directory: kFsInodeAttr kFsInodeDentry
+//      file: kFsInodeAttr kFsInodeChunk
+enum FsInodeType : unsigned char {
+  kFsInodeAttr = 1,
+  kFsInodeDentry = 3,
+  kFsInodeChunk = 5,
+};
+
+Range MetaCodec::GetMetaTableRange() {
+  Range range;
+
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetAutoIncrementTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeAutoIncrement);
+Range MetaCodec::GetFsStatsTableRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeAutoIncrement + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsStats);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsStats + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetHeartbeatTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeHeartbeat);
+Range MetaCodec::GetFsMetaTableRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeHeartbeat + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id + 1, end);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetHeartbeatMdsRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS, start_key);
+Range MetaCodec::GetLockRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  range.start.push_back(kMetaLock);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaLock + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetHeartbeatClientRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT, start_key);
+Range MetaCodec::GetAutoIncrementIDRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaAutoIncrement);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaAutoIncrement + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFsTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFS);
+Range MetaCodec::GetHeartbeatMdsRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFS + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaHeartbeat);
+  start.push_back(pb::mdsv2::ROLE_MDS);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaHeartbeat);
+  end.push_back(pb::mdsv2::ROLE_MDS + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDentryTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, start_key);
+Range MetaCodec::GetHeartbeatClientRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaHeartbeat);
+  start.push_back(pb::mdsv2::ROLE_CLIENT);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaHeartbeat);
+  end.push_back(pb::mdsv2::ROLE_CLIENT + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDentryTableRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
+Range MetaCodec::GetFsRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaFs);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaFs + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetQuotaTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeQuota);
+Range MetaCodec::GetFsQuotaRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeQuota + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableMeta);
+  start.push_back(kMetaFsQuota);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableMeta);
+  end.push_back(kMetaFsQuota + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDirQuotaRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeQuota);
-  SerialHelper::WriteInt(fs_id, start_key);
+Range MetaCodec::GetDentryRange(uint32_t fs_id, Ino ino, bool include_parent) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeQuota);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, start);
+  if (include_parent) {
+    start.push_back(kFsInodeAttr);
+  } else {
+    start.push_back(kFsInodeDentry);
+  }
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, end);
+  end.push_back(kFsInodeDentry + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFsStatsTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFsStats);
+Range MetaCodec::GetChunkRange(uint32_t fs_id, Ino ino) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFsStats + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, start);
+  start.push_back(kFsInodeChunk);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, end);
+  end.push_back(kFsInodeChunk + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFsStatsRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFsStats);
-  SerialHelper::WriteInt(fs_id, start_key);
+Range MetaCodec::GetFileSessionRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFsStats);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsFileSession);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsFileSession + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFileSessionTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFileSession);
+Range MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFileSession + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsFileSession);
+  SerialHelper::WriteULong(ino, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsFileSession);
+  SerialHelper::WriteULong(ino + 1, end);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFsFileSessionRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFileSession);
-  SerialHelper::WriteInt(fs_id, start_key);
+Range MetaCodec::GetDirQuotaRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFileSession);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDirQuota);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDirQuota + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetFileSessionRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeFileSession);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
+Range MetaCodec::GetDelSliceRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeFileSession);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDelSlice);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDelSlice + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetChunkRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeChunk);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
+Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeChunk);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDelSlice);
+  SerialHelper::WriteULong(ino, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDelSlice);
+  SerialHelper::WriteULong(ino + 1, end);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDelSliceTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelSlice);
+Range MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelSlice + 1);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDelSlice);
+  SerialHelper::WriteULong(ino, start);
+  SerialHelper::WriteULong(chunk_index, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDelSlice);
+  SerialHelper::WriteULong(ino, end);
+  SerialHelper::WriteULong(chunk_index + 1, end);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDelSliceRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id, start_key);
+Range MetaCodec::GetDelFileTableRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, start);
+  start.push_back(kMetaFsDelFile);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, end);
+  end.push_back(kMetaFsDelFile + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
+Range MetaCodec::GetFsStatsRange() {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsStats);
+  start.push_back(kMetaFsStats);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsStats);
+  end.push_back(kMetaFsStats + 1);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDelSliceRange(uint32_t fs_id, Ino ino, uint64_t chunk_index, std::string& start_key,
-                                 std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
-  SerialHelper::WriteULong(chunk_index, start_key);
+Range MetaCodec::GetFsStatsRange(uint32_t fs_id) {
+  Range range;
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelSlice);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino, end_key);
-  SerialHelper::WriteULong(chunk_index + 1, end_key);
+  auto& start = range.start;
+  start = kPrefix;
+  start.push_back(kTableFsStats);
+  start.push_back(kMetaFsStats);
+  SerialHelper::WriteInt(fs_id, start);
+
+  auto& end = range.end;
+  end = kPrefix;
+  end.push_back(kTableFsStats);
+  end.push_back(kMetaFsStats);
+  SerialHelper::WriteInt(fs_id + 1, end);
+
+  return std::move(range);
 }
 
-void MetaCodec::GetDelFileTableRange(std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelFile);
+// lock format: ${prefix} kTableMeta kMetaLock {name}
 
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelFile + 1);
+static const uint32_t kLockKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
+
+bool MetaCodec::IsLockKey(const std::string& key) {
+  if (key.size() <= kLockKeyHeaderSize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaLock) {
+    return false;
+  }
+
+  return true;
 }
 
-void MetaCodec::GetDelFileTableRange(uint32_t fs_id, std::string& start_key, std::string& end_key) {
-  start_key = kPrefix;
-  start_key.push_back(kTypeDelFile);
-  SerialHelper::WriteInt(fs_id, start_key);
-
-  end_key = kPrefix;
-  end_key.push_back(kTypeDelFile);
-  SerialHelper::WriteInt(fs_id + 1, end_key);
-}
-
-// format: [$prefix, $type, $name]
 std::string MetaCodec::EncodeLockKey(const std::string& name) {
-  CHECK(!name.empty()) << fmt::format("lock name is empty.", name);
-
   std::string key;
-  key.reserve(kPrefixSize + 1 + name.size());
+  key.reserve(kLockKeyHeaderSize + name.size());
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeLock);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaLock);
   key.append(name);
 
   return std::move(key);
 }
 
 void MetaCodec::DecodeLockKey(const std::string& key, std::string& name) {
-  CHECK(key.size() > (kPrefixSize + 1)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeLock) << "key type is invalid.";
+  CHECK(IsLockKey(key)) << fmt::format("invalid lock key({}).", Helper::StringToHex(key));
 
-  name = key.substr(kPrefixSize + 1);
+  name = key.substr(kLockKeyHeaderSize);
 }
 
-// format: [$mds_id, $expire_time_ms]
 std::string MetaCodec::EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t expire_time_ms) {
   std::string value;
+  value.reserve(24);
 
   SerialHelper::WriteLong(mds_id, value);
   SerialHelper::WriteULong(epoch, value);
@@ -297,34 +487,47 @@ std::string MetaCodec::EncodeLockValue(int64_t mds_id, uint64_t epoch, uint64_t 
 }
 
 void MetaCodec::DecodeLockValue(const std::string& value, int64_t& mds_id, uint64_t& epoch, uint64_t& expire_time_ms) {
-  CHECK(value.size() == 24) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
+  CHECK(value.size() == 24) << fmt::format("invalid lock value size({}).", value.size());
 
-  mds_id = SerialHelper::ReadLong(value);
-  epoch = SerialHelper::ReadULong(value.substr(8));
-  expire_time_ms = SerialHelper::ReadULong(value.substr(16));
+  mds_id = SerialHelper::ReadLong(value.substr(0, 8));
+  epoch = SerialHelper::ReadULong(value.substr(8, 8));
+  expire_time_ms = SerialHelper::ReadULong(value.substr(16, 8));
 }
 
-std::string MetaCodec::EncodeAutoIncrementKey(const std::string& name) {
-  CHECK(!name.empty()) << fmt::format("autoincrement name is empty.", name);
+// auto increment id format: ${prefix} kTableMeta kMetaAutoIncrement {name}
+static const uint32_t kAutoIncrementIDKeyHeaderSize = kPrefixSize + 2;  // prefix + table id + meta type
 
+bool MetaCodec::IsAutoIncrementIDKey(const std::string& key) {
+  if (key.size() <= kAutoIncrementIDKeyHeaderSize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaAutoIncrement) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeAutoIncrementIDKey(const std::string& name) {
   std::string key;
-  key.reserve(kPrefixSize + 1 + name.size());
+  key.reserve(kAutoIncrementIDKeyHeaderSize + name.size());
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeAutoIncrement);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaAutoIncrement);
   key.append(name);
 
   return std::move(key);
 }
 
-void MetaCodec::DecodeAutoIncrementKey(const std::string& key, std::string& name) {
-  CHECK(key.size() > (kPrefixSize + 1)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeAutoIncrement) << "key type is invalid.";
+void MetaCodec::DecodeAutoIncrementIDKey(const std::string& key, std::string& name) {
+  CHECK(IsAutoIncrementIDKey(key)) << fmt::format("invalid auto increment id key({}).", Helper::StringToHex(key));
 
-  name = key.substr(kPrefixSize + 1);
+  name = key.substr(kAutoIncrementIDKeyHeaderSize);
 }
 
-std::string MetaCodec::EncodeAutoIncrementValue(uint64_t id) {
+std::string MetaCodec::EncodeAutoIncrementIDValue(uint64_t id) {
   std::string value;
 
   SerialHelper::WriteULong(id, value);
@@ -332,134 +535,278 @@ std::string MetaCodec::EncodeAutoIncrementValue(uint64_t id) {
   return std::move(value);
 }
 
-void MetaCodec::DecodeAutoIncrementValue(const std::string& value, uint64_t& id) {
-  CHECK(value.size() == 16) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
+void MetaCodec::DecodeAutoIncrementIDValue(const std::string& value, uint64_t& id) {
+  CHECK(value.size() == 8) << fmt::format("value({}) length is invalid.", Helper::StringToHex(value));
 
   id = SerialHelper::ReadULong(value);
 }
 
-// format: [$prefix, $type, $role, $mds_id]
-std::string MetaCodec::EncodeHeartbeatKey(int64_t mds_id) {
-  std::string key;
-  key.reserve(kPrefixSize + 32);
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_MDS, key);
-  SerialHelper::WriteLong(mds_id, key);
-
-  return key;
-}
-
-// or format: [$prefix, $type, $role, $client_mountpoint]
-std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
-  std::string key;
-  key.reserve(kPrefixSize + 32 + client_id.size());
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeHeartbeat);
-  SerialHelper::WriteInt(pb::mdsv2::ROLE_CLIENT, key);
-  key.append(client_id);
-
-  return key;
-}
-
+// heartbeat(mds) format: ${prefix} kTableMeta kMetaHeartbeat kRoleMds {mds_id}
+// heartbeat(client) format: ${prefix} kTableMeta kMetaHeartbeat kRoleClient {client_id}
+static const uint32_t kHeartbeatKeyMdsSize = kPrefixSize + 1 + 1 + 1 + 8;
+static const uint32_t kHeartbeatClientKeySize = kPrefixSize + 1 + 1 + 1 + 36;
 bool MetaCodec::IsMdsHeartbeatKey(const std::string& key) {
-  CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  if (key.size() != kHeartbeatKeyMdsSize) {
+    return false;
+  }
 
-  auto role = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  return role == pb::mdsv2::ROLE_MDS;
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaHeartbeat ||
+      key.at(kPrefixSize + 2) != pb::mdsv2::ROLE_MDS) {
+    return false;
+  }
+
+  return true;
 }
 
 bool MetaCodec::IsClientHeartbeatKey(const std::string& key) {
-  CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  if (key.size() != kHeartbeatClientKeySize) {
+    return false;
+  }
 
-  auto role = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  return role == pb::mdsv2::ROLE_CLIENT;
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaHeartbeat ||
+      key.at(kPrefixSize + 2) != pb::mdsv2::ROLE_CLIENT) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeHeartbeatKey(int64_t mds_id) {
+  std::string key;
+  key.reserve(kHeartbeatKeyMdsSize);
+
+  key.append(kPrefix);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaHeartbeat);
+  key.push_back(pb::mdsv2::ROLE_MDS);
+  SerialHelper::WriteLong(mds_id, key);
+
+  return std::move(key);
+}
+
+std::string MetaCodec::EncodeHeartbeatKey(const std::string& client_id) {
+  CHECK(client_id.size() == 36) << fmt::format("client_id({}) length is invalid.", Helper::StringToHex(client_id));
+
+  std::string key;
+  key.reserve(kHeartbeatClientKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaHeartbeat);
+  key.push_back(pb::mdsv2::ROLE_CLIENT);
+  key.append(client_id);
+
+  return std::move(key);
 }
 
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, int64_t& mds_id) {
-  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  CHECK(IsMdsHeartbeatKey(key)) << fmt::format("invalid mds heartbeat key({}).", Helper::StringToHex(key));
 
-  mds_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
+  mds_id = SerialHelper::ReadLong(key.substr(kPrefixSize + 1 + 1 + 1));
 }
 
 void MetaCodec::DecodeHeartbeatKey(const std::string& key, std::string& client_id) {
-  CHECK(key.size() > (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeHeartbeat) << "key type is invalid.";
+  CHECK(IsClientHeartbeatKey(key)) << fmt::format("invalid client heartbeat key({}).", Helper::StringToHex(key));
 
-  client_id = key.substr(kPrefixSize + 5);
+  client_id = key.substr(kPrefixSize + 1 + 1 + 1);
 }
 
 std::string MetaCodec::EncodeHeartbeatValue(const MdsEntry& mds) { return mds.SerializeAsString(); }
 
 std::string MetaCodec::EncodeHeartbeatValue(const ClientEntry& client) { return client.SerializeAsString(); }
 
-void MetaCodec::DecodeHeartbeatValue(const std::string& value, MdsEntry& mds) {
-  CHECK(mds.ParseFromString(value)) << "parse mds fail.";
+MdsEntry MetaCodec::DecodeHeartbeatMdsValue(const std::string& value) {
+  MdsEntry mds;
+  CHECK(mds.ParseFromString(value)) << "parse mds heartbeat value fail.";
+
+  return std::move(mds);
 }
 
-void MetaCodec::DecodeHeartbeatValue(const std::string& value, ClientEntry& client) {
-  CHECK(client.ParseFromString(value)) << "parse client fail.";
+ClientEntry MetaCodec::DecodeHeartbeatClientValue(const std::string& value) {
+  ClientEntry client;
+  CHECK(client.ParseFromString(value)) << "parse client heartbeat value fail.";
+
+  return std::move(client);
 }
 
-// format: [$prefix, $type, $name]
-// size: >= 1+1+1 = 3
-std::string MetaCodec::EncodeFSKey(const std::string& name) {
-  CHECK(!name.empty()) << fmt::format("fs name is empty.", name);
+// fs format: ${prefix} kTableMeta kMetaFs {name}
+static const uint32_t kFsKeyHeaderSize = kPrefixSize + 2;
 
+bool MetaCodec::IsFsKey(const std::string& key) {
+  if (key.size() <= kFsKeyHeaderSize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaFs) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeFsKey(const std::string& name) {
   std::string key;
-  key.reserve(kPrefixSize + 32 + name.size());
+  key.reserve(kFsKeyHeaderSize + name.size());
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeFS);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaFs);
   key.append(name);
 
   return std::move(key);
 }
 
-void MetaCodec::DecodeFSKey(const std::string& key, std::string& name) {
-  CHECK(key.size() > (kPrefixSize + 1)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeFS) << "key type is invalid.";
+void MetaCodec::DecodeFsKey(const std::string& key, std::string& name) {
+  CHECK(IsFsKey(key)) << fmt::format("invalid fs key({}).", Helper::StringToHex(key));
 
-  name = key.substr(kPrefixSize + 1);
+  name = key.substr(kFsKeyHeaderSize);
 }
 
-std::string MetaCodec::EncodeFSValue(const pb::mdsv2::FsInfo& fs_info) { return fs_info.SerializeAsString(); }
+std::string MetaCodec::EncodeFsValue(const FsInfoType& fs_info) { return fs_info.SerializeAsString(); }
 
-pb::mdsv2::FsInfo MetaCodec::DecodeFSValue(const std::string& value) {
-  pb::mdsv2::FsInfo fs_info;
+FsInfoType MetaCodec::DecodeFsValue(const std::string& value) {
+  FsInfoType fs_info;
   CHECK(fs_info.ParseFromString(value)) << "parse fs info fail.";
-  return fs_info;
+
+  return std::move(fs_info);
 }
 
-// format: [$prefix, $type, $fs_id, $ino, $name]
-std::string MetaCodec::EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
+// fs quota format: ${prefix} kTableMeta kMetaFsQuota {fs_id}
+static const uint32_t kFsQuotaKeySize = kPrefixSize + 1 + 1 + 4;
 
+bool MetaCodec::IsFsQuotaKey(const std::string& key) {
+  if (key.size() != kFsQuotaKeySize) {
+    return false;
+  }
+
+  if (key.at(kPrefixSize) != kTableMeta || key.at(kPrefixSize + 1) != kMetaFsQuota) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeFsQuotaKey(uint32_t fs_id) {
   std::string key;
-  key.reserve(kPrefixSize + 32 + name.size());
+  key.reserve(kFsQuotaKeySize);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeDentryOrInode);
+  key.push_back(kTableMeta);
+  key.push_back(kMetaFsQuota);
   SerialHelper::WriteInt(fs_id, key);
+
+  return std::move(key);
+}
+
+void MetaCodec::DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id) {
+  CHECK(IsFsQuotaKey(key)) << fmt::format("invalid fs quota key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1 + 1));
+}
+
+std::string MetaCodec::EncodeFsQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
+
+QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
+  QuotaEntry quota;
+  CHECK(quota.ParseFromString(value)) << "parse fs quota fail.";
+
+  return std::move(quota);
+}
+
+// inode attr format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeAttr
+static const uint32_t kInodeKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 1;
+
+bool MetaCodec::IsInodeKey(const std::string& key) {
+  if (key.size() != kInodeKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsInode) {
+    return false;
+  }
+
+  // Check the inode type
+  if (key.at(key.size() - 1) != kFsInodeAttr) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, Ino ino) {
+  std::string key;
+  key.reserve(kInodeKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsInode);
   SerialHelper::WriteULong(ino, key);
+  key.push_back(kFsInodeAttr);
+
+  return std::move(key);
+}
+
+void MetaCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
+  CHECK(IsInodeKey(key)) << fmt::format("invalid inode key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+}
+
+std::string MetaCodec::EncodeInodeValue(const AttrType& attr) { return attr.SerializeAsString(); }
+
+AttrType MetaCodec::DecodeInodeValue(const std::string& value) {
+  AttrType attr;
+  CHECK(attr.ParseFromString(value)) << "parse inode attr fail.";
+
+  return std::move(attr);
+}
+
+// dentry format: ${prefix} kTableFsMeta {fs_id} kMetaFsInode {ino} kFsInodeDentry {name}
+static const uint32_t kDentryKeyHeaderSize = kPrefixSize + 1 + 4 + 1 + 8 + 1;
+
+bool MetaCodec::IsDentryKey(const std::string& key) {
+  if (key.size() <= kDentryKeyHeaderSize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsInode) {
+    return false;
+  }
+
+  // Check the inode type
+  if (key.at(kDentryKeyHeaderSize - 1) != kFsInodeDentry) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeDentryKey(uint32_t fs_id, Ino ino, const std::string& name) {
+  std::string key;
+  key.reserve(kDentryKeyHeaderSize + name.size());
+
+  key.append(kPrefix);
+  key.push_back(kTableFsMeta);
+  SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsInode);
+  SerialHelper::WriteULong(ino, key);
+  key.push_back(kFsInodeDentry);
   key.append(name);
 
-  return key;
+  return std::move(key);
 }
 
 void MetaCodec::DecodeDentryKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& name) {
-  CHECK(key.size() >= (kPrefixSize + 13))
-      << fmt::format("key({}) length({}) is invalid.", Helper::StringToHex(key), key.size());
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeDentryOrInode) << "Key type is invalid.";
+  CHECK(IsDentryKey(key)) << fmt::format("invalid dentry key({}).", Helper::StringToHex(key));
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-  name = key.substr(kPrefixSize + 13);
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+
+  name = key.substr(kDentryKeyHeaderSize);
 }
 
 std::string MetaCodec::EncodeDentryValue(const DentryType& dentry) { return dentry.SerializeAsString(); }
@@ -467,188 +814,99 @@ std::string MetaCodec::EncodeDentryValue(const DentryType& dentry) { return dent
 DentryType MetaCodec::DecodeDentryValue(const std::string& value) {
   DentryType dentry;
   CHECK(dentry.ParseFromString(value)) << "parse dentry fail.";
-  return dentry;
+
+  return std::move(dentry);
 }
 
-void MetaCodec::EncodeDentryRange(uint32_t fs_id, Ino ino, std::string& start_key, std::string& end_key) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
-  CHECK(ino > 0) << fmt::format("invalid ino {}.", ino);
+// inode chunk format: ${prefix} kTableFsMeta  {fs_id}  kMetaFsInode {ino} kFsInodeChunk {chunk_index}
+static const uint32_t kChunkKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 1 + 8;
 
-  start_key.reserve(kPrefixSize + 32);
+bool MetaCodec::IsChunkKey(const std::string& key) {
+  if (key.size() != kChunkKeySize) {
+    return false;
+  }
 
-  start_key.append(kPrefix);
-  start_key.push_back(KeyType::kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, start_key);
-  SerialHelper::WriteULong(ino, start_key);
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsInode) {
+    return false;
+  }
 
-  end_key.reserve(kPrefixSize + 32);
+  // Check the inode type
+  if (key.at(kChunkKeySize - 8 - 1) != kFsInodeChunk) {
+    return false;
+  }
 
-  end_key.append(kPrefix);
-  end_key.push_back(KeyType::kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, end_key);
-  SerialHelper::WriteULong(ino + 1, end_key);
+  return true;
 }
 
-uint32_t MetaCodec::InodeKeyLength() { return kPrefixSize + 13; }
-
-static std::string EncodeInodeKeyImpl(int fs_id, Ino ino, KeyType type) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
-
+std::string MetaCodec::EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index) {
   std::string key;
-  key.reserve(kPrefixSize + 32);
+  key.reserve(kChunkKeySize);
 
   key.append(kPrefix);
-  key.push_back(type);
+  key.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsInode);
   SerialHelper::WriteULong(ino, key);
+  key.push_back(kFsInodeChunk);
+  SerialHelper::WriteULong(chunk_index, key);
 
-  return key;
+  return std::move(key);
 }
 
-std::string MetaCodec::EncodeInodeKey(uint32_t fs_id, Ino ino) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
+void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index) {
+  CHECK(IsChunkKey(key)) << fmt::format("invalid chunk key({}).", Helper::StringToHex(key));
 
-  std::string key;
-  key.reserve(kPrefixSize + 32);
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeDentryOrInode);
-  SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteULong(ino, key);
-
-  return key;
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+  chunk_index = SerialHelper::ReadULong(key.substr(kChunkKeySize - 8));
 }
 
-void MetaCodec::DecodeInodeKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
-  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
+std::string MetaCodec::EncodeChunkValue(const ChunkType& chunk) { return chunk.SerializeAsString(); }
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
+ChunkType MetaCodec::DecodeChunkValue(const std::string& value) {
+  ChunkType chunk;
+  CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
+
+  return std::move(chunk);
 }
 
-std::string MetaCodec::EncodeInodeValue(const AttrType& attr) { return attr.SerializeAsString(); }
+// inode file session format: ${prefix} kTableFsMeta {fs_id} kMetaFsFileSession {ino} {session_id}
+static const uint32_t kFileSessionKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 36;
 
-AttrType MetaCodec::DecodeInodeValue(const std::string& value) {
-  AttrType attr;
-  CHECK(attr.ParseFromString(value)) << "parse attr fail.";
-  return std::move(attr);
-}
+bool MetaCodec::IsFileSessionKey(const std::string& key) {
+  if (key.size() != kFileSessionKeySize) {
+    return false;
+  }
 
-// fs format: [$prefix, $type, $fs_id]
-std::string MetaCodec::EncodeFsQuotaKey(uint32_t fs_id) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsFileSession) {
+    return false;
+  }
 
-  std::string key;
-  key.reserve(kPrefixSize + 32);
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeQuota);
-  SerialHelper::WriteInt(fs_id, key);
-
-  return key;
-}
-
-void MetaCodec::DecodeFsQuotaKey(const std::string& key, uint32_t& fs_id) {
-  CHECK(key.size() == (kPrefixSize + 5)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeQuota) << "key type is invalid.";
-
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-}
-
-std::string MetaCodec::EncodeFsQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
-
-QuotaEntry MetaCodec::DecodeFsQuotaValue(const std::string& value) {
-  QuotaEntry quota;
-  CHECK(quota.ParseFromString(value)) << "parse quota fail.";
-  return quota;
-}
-
-uint32_t MetaCodec::DirQuotaKeyLength() {
-  return kPrefixSize + 13;  // prefix + type + fs_id + ino
-}
-
-// dir format: [$prefix, $type, $fs_id, $ino]
-std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
-
-  std::string key;
-  key.reserve(kPrefixSize + 32);
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeQuota);
-  SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteULong(ino, key);
-
-  return key;
-}
-
-void MetaCodec::DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
-  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeQuota) << "key type is invalid.";
-
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-}
-
-std::string MetaCodec::EncodeDirQuotaValue(const QuotaEntry& quota) { return quota.SerializeAsString(); }
-
-QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
-  QuotaEntry quota;
-  CHECK(quota.ParseFromString(value)) << "parse quota fail.";
-  return std::move(quota);
-}
-
-std::string MetaCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns) {
-  CHECK(fs_id > 0) << fmt::format("invalid fs_id {}.", fs_id);
-
-  std::string key;
-  key.reserve(kPrefixSize + 32);
-
-  key.append(kPrefix);
-  key.push_back(KeyType::kTypeFsStats);
-  SerialHelper::WriteInt(fs_id, key);
-  SerialHelper::WriteULong(time_ns, key);
-
-  return key;
-}
-
-void MetaCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
-  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeFsStats) << "key type is invalid.";
-
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  time_ns = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-}
-
-std::string MetaCodec::EncodeFsStatsValue(const pb::mdsv2::FsStatsData& stats) { return stats.SerializeAsString(); }
-
-pb::mdsv2::FsStatsData MetaCodec::DecodeFsStatsValue(const std::string& value) {
-  pb::mdsv2::FsStatsData stats;
-  CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
-  return std::move(stats);
+  return true;
 }
 
 std::string MetaCodec::EncodeFileSessionKey(uint32_t fs_id, Ino ino, const std::string& session_id) {
   std::string key;
-  key.reserve(kPrefixSize + 32 + session_id.size());
+  key.reserve(kFileSessionKeySize);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeFileSession);
+  key.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsFileSession);
   SerialHelper::WriteULong(ino, key);
   key.append(session_id);
 
-  return key;
+  return std::move(key);
 }
 
 void MetaCodec::DecodeFileSessionKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, std::string& session_id) {
-  CHECK(key.size() == (kPrefixSize + 13 + session_id.size()))
-      << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeFileSession) << "key type is invalid.";
+  CHECK(IsFileSessionKey(key)) << fmt::format("invalid file session key({}).", Helper::StringToHex(key));
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-  session_id = key.substr(kPrefixSize + 13);
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+  session_id = key.substr(kFileSessionKeySize - 36);
 }
 
 std::string MetaCodec::EncodeFileSessionValue(const FileSessionEntry& file_session) {
@@ -658,104 +916,191 @@ std::string MetaCodec::EncodeFileSessionValue(const FileSessionEntry& file_sessi
 FileSessionEntry MetaCodec::DecodeFileSessionValue(const std::string& value) {
   FileSessionEntry file_session;
   CHECK(file_session.ParseFromString(value)) << "parse file session fail.";
+
   return std::move(file_session);
 }
 
-bool MetaCodec::IsChunkKey(const std::string& key) {
-  if (key.size() != (kPrefixSize + 21)) {
+// dir quota format: ${prefix} kTableFsMeta {fs_id} kMetaFsDirQuota {ino}
+static const uint32_t kDirQuotaKeySize = kPrefixSize + 1 + 4 + 1 + 8;
+
+bool MetaCodec::IsDirQuotaKey(const std::string& key) {
+  if (key.size() != kDirQuotaKeySize) {
     return false;
   }
-  return key.at(kPrefixSize) == KeyType::kTypeChunk;
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsDirQuota) {
+    return false;
+  }
+  return true;
 }
 
-std::string MetaCodec::EncodeChunkKey(uint32_t fs_id, Ino ino, uint64_t chunk_index) {
+std::string MetaCodec::EncodeDirQuotaKey(uint32_t fs_id, Ino ino) {
   std::string key;
-  key.reserve(kPrefixSize + 32);
+  key.reserve(kDirQuotaKeySize);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeChunk);
+  key.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsDirQuota);
   SerialHelper::WriteULong(ino, key);
-  SerialHelper::WriteULong(chunk_index, key);
 
   return std::move(key);
 }
 
-void MetaCodec::DecodeChunkKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index) {
-  CHECK(key.size() == (kPrefixSize + 21)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeChunk) << "key type is invalid.";
+void MetaCodec::DecodeDirQuotaKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
+  CHECK(IsDirQuotaKey(key)) << fmt::format("invalid dir quota key({}).", Helper::StringToHex(key));
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-  chunk_index = SerialHelper::ReadULong(key.substr(kPrefixSize + 13, kPrefixSize + 21));
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
 }
 
-std::string MetaCodec::EncodeChunkValue(const ChunkType& chunk) { return chunk.SerializeAsString(); }
+std::string MetaCodec::EncodeDirQuotaValue(const QuotaEntry& dir_quota) { return dir_quota.SerializeAsString(); }
 
-ChunkType MetaCodec::DecodeChunkValue(const std::string& value) {
-  ChunkType chunk;
-  CHECK(chunk.ParseFromString(value)) << "parse chunk fail.";
-  return std::move(chunk);
+QuotaEntry MetaCodec::DecodeDirQuotaValue(const std::string& value) {
+  QuotaEntry dir_quota;
+  CHECK(dir_quota.ParseFromString(value)) << "parse dir quota fail.";
+
+  return std::move(dir_quota);
+}
+
+// inode delslice format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelSlice {ino} {chunk_index} {time_ns}
+static const uint32_t kDelSliceKeySize = kPrefixSize + 1 + 4 + 1 + 8 + 8 + 8;
+
+bool MetaCodec::IsDelSliceKey(const std::string& key) {
+  if (key.size() != kDelSliceKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsDelSlice) {
+    return false;
+  }
+
+  return true;
 }
 
 std::string MetaCodec::EncodeDelSliceKey(uint32_t fs_id, Ino ino, uint64_t chunk_index, uint64_t time_ns) {
   std::string key;
-  key.reserve(kPrefixSize + 32);
+  key.reserve(kDelSliceKeySize);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeDelSlice);
+  key.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsDelSlice);
   SerialHelper::WriteULong(ino, key);
   SerialHelper::WriteULong(chunk_index, key);
   SerialHelper::WriteULong(time_ns, key);
 
   return std::move(key);
 }
+
 void MetaCodec::DecodeDelSliceKey(const std::string& key, uint32_t& fs_id, uint64_t& ino, uint64_t& chunk_index,
                                   uint64_t& time_ns) {
-  CHECK(key.size() == (kPrefixSize + 29)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeDelSlice) << "key type is invalid.";
+  CHECK(IsDelSliceKey(key)) << fmt::format("invalid del slice key({}).", Helper::StringToHex(key));
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
-  chunk_index = SerialHelper::ReadULong(key.substr(kPrefixSize + 13, kPrefixSize + 21));
-  time_ns = SerialHelper::ReadULong(key.substr(kPrefixSize + 21, kPrefixSize + 29));
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
+  chunk_index = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1 + 8));
+  time_ns = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1 + 8 + 8));
 }
 
-std::string MetaCodec::EncodeDelSliceValue(const TrashSliceList& slice) { return slice.SerializeAsString(); }
+std::string MetaCodec::EncodeDelSliceValue(const TrashSliceList& slice_list) { return slice_list.SerializeAsString(); }
 
 TrashSliceList MetaCodec::DecodeDelSliceValue(const std::string& value) {
   TrashSliceList slice_list;
-  CHECK(slice_list.ParseFromString(value)) << "parse trash slice list fail.";
+  CHECK(slice_list.ParseFromString(value)) << "parse del slice fail.";
+
   return std::move(slice_list);
+}
+
+// inode delfile format: ${prefix} kTableFsMeta {fs_id} kMetaFsDelFile {ino}
+static const uint32_t kDelFileKeySize = kPrefixSize + 1 + 4 + 1 + 8;
+
+bool MetaCodec::IsDelFileKey(const std::string& key) {
+  if (key.size() != kDelFileKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsMeta || key.at(kPrefixSize + 1 + 4) != kMetaFsDelFile) {
+    return false;
+  }
+
+  return true;
 }
 
 std::string MetaCodec::EncodeDelFileKey(uint32_t fs_id, Ino ino) {
   std::string key;
-  key.reserve(kPrefixSize + 32);
+  key.reserve(kDelFileKeySize);
 
   key.append(kPrefix);
-  key.push_back(KeyType::kTypeDelFile);
+  key.push_back(kTableFsMeta);
   SerialHelper::WriteInt(fs_id, key);
+  key.push_back(kMetaFsDelFile);
   SerialHelper::WriteULong(ino, key);
 
   return std::move(key);
 }
 
-void MetaCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, uint64_t& ino) {
-  CHECK(key.size() == (kPrefixSize + 13)) << fmt::format("key({}) length is invalid.", Helper::StringToHex(key));
-  CHECK(key.at(kPrefixSize) == KeyType::kTypeDelFile) << "key type is invalid.";
+void MetaCodec::DecodeDelFileKey(const std::string& key, uint32_t& fs_id, Ino& ino) {
+  CHECK(IsDelFileKey(key)) << fmt::format("invalid del file key({}).", Helper::StringToHex(key));
 
-  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1, kPrefixSize + 5));
-  ino = SerialHelper::ReadLong(key.substr(kPrefixSize + 5, kPrefixSize + 13));
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1));
+  ino = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 4 + 1));
 }
 
 std::string MetaCodec::EncodeDelFileValue(const AttrType& attr) { return attr.SerializeAsString(); }
 
 AttrType MetaCodec::DecodeDelFileValue(const std::string& value) {
   AttrType attr;
-  CHECK(attr.ParseFromString(value)) << "parse attr fail.";
+  CHECK(attr.ParseFromString(value)) << "parse del file attr fail.";
+
   return std::move(attr);
+}
+
+// fs stats format: ${prefix} kTableFsStats kMetaFsStats {fs_id} {time_ns}
+static const uint32_t kFsStatsKeySize = kPrefixSize + 2 + 4 + 8;
+
+bool MetaCodec::IsFsStatsKey(const std::string& key) {
+  if (key.size() != kFsStatsKeySize) {
+    return false;
+  }
+
+  // Check the prefix, table id, and meta type
+  if (key.at(kPrefixSize) != kTableFsStats || key.at(kPrefixSize + 1) != kMetaFsStats) {
+    return false;
+  }
+
+  return true;
+}
+
+std::string MetaCodec::EncodeFsStatsKey(uint32_t fs_id, uint64_t time_ns) {
+  std::string key;
+  key.reserve(kFsStatsKeySize);
+
+  key.append(kPrefix);
+  key.push_back(kTableFsStats);
+  key.push_back(kMetaFsStats);
+  SerialHelper::WriteInt(fs_id, key);
+  SerialHelper::WriteULong(time_ns, key);
+
+  return std::move(key);
+}
+
+void MetaCodec::DecodeFsStatsKey(const std::string& key, uint32_t& fs_id, uint64_t& time_ns) {
+  CHECK(IsFsStatsKey(key)) << fmt::format("invalid fs stats key({}).", Helper::StringToHex(key));
+
+  fs_id = SerialHelper::ReadInt(key.substr(kPrefixSize + 1 + 1));
+  time_ns = SerialHelper::ReadULong(key.substr(kPrefixSize + 1 + 1 + 4));
+}
+
+std::string MetaCodec::EncodeFsStatsValue(const FsStatsDataEntry& stats) { return stats.SerializeAsString(); }
+
+FsStatsDataEntry MetaCodec::DecodeFsStatsValue(const std::string& value) {
+  FsStatsDataEntry stats;
+  CHECK(stats.ParseFromString(value)) << "parse fs stats fail.";
+
+  return std::move(stats);
 }
 
 }  // namespace mdsv2

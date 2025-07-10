@@ -91,9 +91,11 @@ class Operation {
     kGetDelFile = 61,
     kCleanDelFile = 62,
 
-    kScanDentry = 70,
-    kScanDelFile = 71,
-    kScanDelSlice = 72,
+    kScanLock = 70,
+    kScanFs = 71,
+    kScanDentry = 72,
+    kScanDelFile = 73,
+    kScanDelSlice = 74,
 
     kSaveFsStats = 80,
     kScanFsStats = 81,
@@ -1152,7 +1154,7 @@ class ScanFileSessionOperation : public Operation {
 
   ScanFileSessionOperation(Trace& trace, uint32_t fs_id, Ino ino, HandlerType handler)
       : Operation(trace), fs_id_(fs_id), ino_(ino), handler_(handler) {};
-  ScanFileSessionOperation(Trace& trace, HandlerType handler) : Operation(trace), handler_(handler) {};
+  ScanFileSessionOperation(Trace& trace,uint32_t fs_id, HandlerType handler) : Operation(trace), fs_id_(fs_id), handler_(handler) {};
   ~ScanFileSessionOperation() override = default;
 
   struct Result : public Operation::Result {
@@ -1249,6 +1251,64 @@ class CleanDelFileOperation : public Operation {
   Ino ino_;
 };
 
+class ScanLockOperation : public Operation {
+ public:
+  ScanLockOperation(Trace& trace) : Operation(trace) {};
+  ~ScanLockOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<KeyValue> kvs;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanLock; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  Result result_;
+};
+
+class ScanFsOperation : public Operation {
+ public:
+  ScanFsOperation(Trace& trace) : Operation(trace) {};
+  ~ScanFsOperation() override = default;
+
+  struct Result : public Operation::Result {
+    std::vector<FsInfoType> fs_infoes;
+  };
+
+  OpType GetOpType() const override { return OpType::kScanFs; }
+
+  uint32_t GetFsId() const override { return 0; }
+  Ino GetIno() const override { return 0; }
+
+  Status Run(TxnUPtr& txn) override;
+
+  template <int size = 0>
+  Result& GetResult() {
+    auto& result = Operation::GetResult();
+    result_.status = result.status;
+    result_.attr = std::move(result.attr);
+
+    return result_;
+  }
+
+ private:
+  Result result_;
+};
+
 class ScanDentryOperation : public Operation {
  public:
   using HandlerType = std::function<bool(const DentryType&)>;
@@ -1277,7 +1337,6 @@ class ScanDelSliceOperation : public Operation {
       : Operation(trace), fs_id_(fs_id), ino_(ino), chunk_index_(chunk_index), handler_(handler) {};
   ScanDelSliceOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType handler)
       : Operation(trace), fs_id_(fs_id), handler_(handler) {};
-  ScanDelSliceOperation(Trace& trace, Txn::ScanHandlerType handler) : Operation(trace), handler_(handler) {};
   ~ScanDelSliceOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDelSlice; }
@@ -1296,18 +1355,19 @@ class ScanDelSliceOperation : public Operation {
 
 class ScanDelFileOperation : public Operation {
  public:
-  ScanDelFileOperation(Trace& trace, Txn::ScanHandlerType scan_handler)
-      : Operation(trace), scan_handler_(scan_handler) {};
+  ScanDelFileOperation(Trace& trace, uint32_t fs_id, Txn::ScanHandlerType scan_handler)
+      : Operation(trace), fs_id_(fs_id), scan_handler_(scan_handler) {};
   ~ScanDelFileOperation() override = default;
 
   OpType GetOpType() const override { return OpType::kScanDelFile; }
 
-  uint32_t GetFsId() const override { return 0; }
+  uint32_t GetFsId() const override { return fs_id_; }
   Ino GetIno() const override { return 0; }
 
   Status Run(TxnUPtr& txn) override;
 
  private:
+  uint32_t fs_id_{0};
   Txn::ScanHandlerType scan_handler_;
 };
 

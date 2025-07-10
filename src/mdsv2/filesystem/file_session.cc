@@ -208,7 +208,7 @@ std::vector<FileSessionPtr> FileSessionManager::Get(uint64_t ino, bool just_cach
 
 Status FileSessionManager::GetAll(std::vector<FileSessionEntry>& file_sessions) {
   Trace trace;
-  ScanFileSessionOperation operation(trace, fs_id_, 0, [&](const FileSessionEntry& file_session) -> bool {
+  ScanFileSessionOperation operation(trace, fs_id_, [&](const FileSessionEntry& file_session) -> bool {
     file_sessions.push_back(file_session);
     return true;
   });

@@ -278,10 +278,22 @@ Status GcProcessor::LaunchGc() {
     return Status(pb::error::EINTERNAL, "not own lock");
   }
 
-  ScanDelSlice();
-  ScanDelFile();
-  ScanExpiredFileSession();
+  auto fses = file_system_set_->GetAllFileSystem();
 
+  // delslice
+  for (auto& fs : fses) {
+    ScanDelSlice(fs->FsId());
+  }
+
+  // delfile
+  for (auto& fs : fses) {
+    ScanDelFile(fs->FsId());
+  }
+
+  // filesession
+  for (auto& fs : fses) {
+    ScanExpiredFileSession(fs->FsId());
+  }
   return Status::OK();
 }
 
@@ -319,10 +331,10 @@ Status GcProcessor::GetClientList(std::set<std::string>& clients) {
   return Status::OK();
 }
 
-void GcProcessor::ScanDelSlice() {
+void GcProcessor::ScanDelSlice(uint32_t fs_id) {
   Trace trace;
   uint32_t count = 0, exec_count = 0;
-  ScanDelSliceOperation operation(trace, [&](const std::string& key, const std::string& value) -> bool {
+  ScanDelSliceOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
     ++count;
 
     uint32_t fs_id = 0;
@@ -348,10 +360,10 @@ void GcProcessor::ScanDelSlice() {
                                  status.error_str());
 }
 
-void GcProcessor::ScanDelFile() {
+void GcProcessor::ScanDelFile(uint32_t fs_id) {
   Trace trace;
   uint32_t count = 0, exec_count = 0;
-  ScanDelFileOperation operation(trace, [&](const std::string& key, const std::string& value) -> bool {
+  ScanDelFileOperation operation(trace, fs_id, [&](const std::string& key, const std::string& value) -> bool {
     ++count;
 
     uint32_t fs_id = 0;
@@ -381,7 +393,7 @@ void GcProcessor::ScanDelFile() {
                                  status.error_str());
 }
 
-void GcProcessor::ScanExpiredFileSession() {
+void GcProcessor::ScanExpiredFileSession(uint32_t fs_id) {
   // get alive clients
   // to dead clients, we will clean their file sessions
   std::set<std::string> alive_clients;
@@ -394,7 +406,7 @@ void GcProcessor::ScanExpiredFileSession() {
   Trace trace;
   uint32_t count = 0, exec_count = 0;
   std::vector<FileSessionEntry> file_sessions;
-  ScanFileSessionOperation operation(trace, [&](const FileSessionEntry& file_session) -> bool {
+  ScanFileSessionOperation operation(trace, fs_id, [&](const FileSessionEntry& file_session) -> bool {
     ++count;
 
     if (ShouldCleanFileSession(file_session, alive_clients)) {

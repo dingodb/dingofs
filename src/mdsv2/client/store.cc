@@ -46,81 +46,17 @@ bool StoreClient::Init(const std::string& coor_addr) {
   return kv_storage_->Init(store_addrs);
 }
 
-bool StoreClient::CreateLockTable(const std::string& name) {
+bool StoreClient::CreateMetaTable(const std::string& name) {
   int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetLockTableRange(option.start_key, option.end_key);
+  Range range = MetaCodec::GetMetaTableRange();
+  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create lock table fail, error: {}.", status.error_str());
+    DINGO_LOG(ERROR) << fmt::format("create meta table fail, error: {}.", status.error_str());
     return false;
   }
 
-  DINGO_LOG(INFO) << fmt::format("create lock table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateAutoIncrementTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetAutoIncrementTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create autoincrement table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create autoincrement table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateHeartbeatTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetHeartbeatTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create heartbeat table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create heartbeat table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateFsTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetFsTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create fs table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create fs table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateFsQuotaTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetQuotaTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create fs quota table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create fs quota table success, start_key({}), end_key({}).",
+  DINGO_LOG(INFO) << fmt::format("create meta table success, start_key({}), end_key({}).",
                                  Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
 
   return true;
@@ -128,8 +64,8 @@ bool StoreClient::CreateFsQuotaTable(const std::string& name) {
 
 bool StoreClient::CreateFsStatsTable(const std::string& name) {
   int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetFsStatsTableRange(option.start_key, option.end_key);
+  Range range = MetaCodec::GetFsStatsTableRange();
+  KVStorage::TableOption option = {.start_key = range.start, .end_key = range.end};
   auto status = kv_storage_->CreateTable(name, option, table_id);
   if (!status.ok()) {
     DINGO_LOG(ERROR) << fmt::format("create fs stats table fail, error: {}.", status.error_str());
@@ -137,54 +73,6 @@ bool StoreClient::CreateFsStatsTable(const std::string& name) {
   }
 
   DINGO_LOG(INFO) << fmt::format("create fs stats table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateFileSessionTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetFileSessionTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create file session table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create file session table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateDelSliceTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetDelSliceTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create trash chunk table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create trash chunk table success, start_key({}), end_key({}).",
-                                 Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
-
-  return true;
-}
-
-bool StoreClient::CreateDelFileTable(const std::string& name) {
-  int64_t table_id = 0;
-  KVStorage::TableOption option;
-  MetaCodec::GetDelFileTableRange(option.start_key, option.end_key);
-  auto status = kv_storage_->CreateTable(name, option, table_id);
-  if (!status.ok()) {
-    DINGO_LOG(ERROR) << fmt::format("create del file table fail, error: {}.", status.error_str());
-    return false;
-  }
-
-  DINGO_LOG(INFO) << fmt::format("create del file table success, start_key({}), end_key({}).",
                                  Helper::StringToHex(option.start_key), Helper::StringToHex(option.end_key));
 
   return true;

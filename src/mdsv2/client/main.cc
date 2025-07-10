@@ -49,15 +49,8 @@ DEFINE_uint64(parent, 0, "parent");
 DEFINE_string(parents, "", "parents");
 DEFINE_uint32(num, 1, "num");
 
-DEFINE_string(lock_table_name, "dingofs-lock", "lock table name");
-DEFINE_string(autoincrement_table_name, "dingofs-autoincrement", "autoincrement table name");
-DEFINE_string(heartbeat_table_name, "dingofs-heartbeat", "heartbeat table name");
-DEFINE_string(fs_table_name, "dingofs-fs", "fs table name");
-DEFINE_string(quota_table_name, "dingofs-quota", "quota table name");
-DEFINE_string(stats_table_name, "dingofs-stats", "stats table name");
-DEFINE_string(filesession_table_name, "dingofs-filesession", "file session table name");
-DEFINE_string(del_slice_table_name, "dingofs-delslice", "del slice table name");
-DEFINE_string(del_file_table_name, "dingofs-delfile", "del file table name");
+DEFINE_string(meta_table_name, "dingofs-meta", "meta table name");
+DEFINE_string(fsstats_table_name, "dingofs-fsstats", "fs stats table name");
 
 DEFINE_uint32(max_bytes, 1024 * 1024 * 1024, "max bytes");
 DEFINE_uint32(max_inodes, 1000000, "max inodes");
@@ -260,43 +253,15 @@ int main(int argc, char* argv[]) {
       return -1;
     }
 
-    if (lower_cmd == Helper::ToLowerCase("CreateLockTable")) {
-      store_client.CreateLockTable(FLAGS_lock_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateAutoIncrementTable")) {
-      store_client.CreateAutoIncrementTable(FLAGS_autoincrement_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateHeartbeatTable")) {
-      store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateFsTable")) {
-      store_client.CreateFsTable(FLAGS_fs_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateFsQuotaTable")) {
-      store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
+    if (lower_cmd == Helper::ToLowerCase("CreateMetaTable")) {
+      store_client.CreateMetaTable(FLAGS_meta_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
-      store_client.CreateFsStatsTable(FLAGS_stats_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateFileSessionTable")) {
-      store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateDelSliceTable")) {
-      store_client.CreateDelSliceTable(FLAGS_del_slice_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateDelFileTable")) {
-      store_client.CreateDelFileTable(FLAGS_del_file_table_name);
+      store_client.CreateFsStatsTable(FLAGS_fsstats_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
-      store_client.CreateLockTable(FLAGS_lock_table_name);
-      store_client.CreateAutoIncrementTable(FLAGS_autoincrement_table_name);
-      store_client.CreateHeartbeatTable(FLAGS_heartbeat_table_name);
-      store_client.CreateFsTable(FLAGS_fs_table_name);
-      store_client.CreateFsQuotaTable(FLAGS_quota_table_name);
-      store_client.CreateFsStatsTable(FLAGS_stats_table_name);
-      store_client.CreateFileSessionTable(FLAGS_filesession_table_name);
-      store_client.CreateDelSliceTable(FLAGS_del_slice_table_name);
-      store_client.CreateDelFileTable(FLAGS_del_file_table_name);
+      store_client.CreateMetaTable(FLAGS_meta_table_name);
+      store_client.CreateFsStatsTable(FLAGS_fsstats_table_name);
 
     } else if (lower_cmd == Helper::ToLowerCase("tree")) {
       store_client.PrintDentryTree(FLAGS_fs_id, true);

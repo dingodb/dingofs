@@ -30,15 +30,8 @@ class StoreClient {
 
   bool Init(const std::string& coor_addr);
 
-  bool CreateLockTable(const std::string& name);
-  bool CreateAutoIncrementTable(const std::string& name);
-  bool CreateHeartbeatTable(const std::string& name);
-  bool CreateFsTable(const std::string& name);
-  bool CreateFsQuotaTable(const std::string& name);
+  bool CreateMetaTable(const std::string& name);
   bool CreateFsStatsTable(const std::string& name);
-  bool CreateFileSessionTable(const std::string& name);
-  bool CreateDelSliceTable(const std::string& name);
-  bool CreateDelFileTable(const std::string& name);
 
   // print fs dentry tree
   void PrintDentryTree(uint32_t fs_id, bool is_details);

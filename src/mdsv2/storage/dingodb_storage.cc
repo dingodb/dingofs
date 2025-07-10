@@ -296,7 +296,7 @@ Status DingodbStorage::Scan(const Range& range, std::vector<KeyValue>& kvs) {
   }
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn->Scan(range.start_key, range.end_key, FLAGS_dingodb_scan_batch_size, kv_pairs);
+  auto status = txn->Scan(range.start, range.end, FLAGS_dingodb_scan_batch_size, kv_pairs);
   if (!status.ok()) {
     return Status(pb::error::EBACKEND_STORE, status.ToString());
   }
@@ -420,7 +420,7 @@ Status DingodbTxn::Scan(const Range& range, uint64_t limit, std::vector<KeyValue
   ON_SCOPE_EXIT([&]() { txn_trace_.read_time_us += (Helper::TimestampUs() - start_time); });
 
   std::vector<dingodb::sdk::KVPair> kv_pairs;
-  auto status = txn_->Scan(range.start_key, range.end_key, limit, kv_pairs);
+  auto status = txn_->Scan(range.start, range.end, limit, kv_pairs);
   if (!status.ok()) {
     return TransformStatus(status);
   }

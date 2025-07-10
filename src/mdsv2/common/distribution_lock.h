@@ -18,7 +18,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -26,6 +25,7 @@
 #include "dingosdk/version.h"
 #include "mdsv2/common/status.h"
 #include "mdsv2/coordinator/coordinator_client.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/storage.h"
 
 namespace dingofs {
@@ -128,7 +128,7 @@ class StoreDistributionLock : public DistributionLock {
     uint64_t expire_time_ms{0};
   };
 
-  static Status GetAllLockInfo(KVStorageSPtr kv_storage, std::vector<LockEntry>& lock_entries);
+  static Status GetAllLockInfo(OperationProcessorSPtr operation_processor, std::vector<LockEntry>& lock_entries);
 
  private:
   Status RenewLease();

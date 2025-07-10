@@ -135,7 +135,7 @@ Status CoorDistributionLock::DeleteLease(int64_t lease_id) {
 Status CoorDistributionLock::DeleteLockKey(const std::string& key) {
   CoordinatorClient::Options options;
   CoordinatorClient::Range range;
-  range.start_key = key;
+  range.start = key;
 
   int64_t deleted_count;
   std::vector<CoordinatorClient::KVWithExt> prev_kvs;
@@ -178,8 +178,8 @@ Status CoorDistributionLock::CheckLock(std::string& watch_key, int64_t& watch_re
   options.count_only = false;
 
   CoordinatorClient::Range range;
-  range.start_key = lock_prefix_;
-  range.end_key = Helper::PrefixNext(lock_prefix_);
+  range.start = lock_prefix_;
+  range.end = Helper::PrefixNext(lock_prefix_);
 
   std::vector<CoordinatorClient::KVWithExt> kvs;
   bool more;
@@ -543,17 +543,17 @@ void StoreDistributionLock::StopRenewLease() {
   }
 }
 
-Status StoreDistributionLock::GetAllLockInfo(KVStorageSPtr kv_storage, std::vector<LockEntry>& lock_entries) {
-  Range range;
-  MetaCodec::GetLockTableRange(range.start_key, range.end_key);
+Status StoreDistributionLock::GetAllLockInfo(OperationProcessorSPtr operation_processor,
+                                             std::vector<LockEntry>& lock_entries) {
+  Trace trace;
+  ScanLockOperation operation(trace);
 
-  std::vector<KeyValue> kvs;
-  auto status = kv_storage->Scan(range, kvs);
-  if (!status.ok()) {
-    return status;
-  }
+  auto status = operation_processor->RunAlone(&operation);
+  if (!status.ok()) return status;
 
-  for (auto& kv : kvs) {
+  auto& result = operation.GetResult();
+
+  for (auto& kv : result.kvs) {
     LockEntry lock_entry;
     MetaCodec::DecodeLockKey(kv.key, lock_entry.name);
     MetaCodec::DecodeLockValue(kv.value, lock_entry.owner, lock_entry.epoch, lock_entry.expire_time_ms);
