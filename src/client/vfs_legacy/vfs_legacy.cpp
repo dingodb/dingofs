@@ -1093,7 +1093,7 @@ Status VFSOld::Rename(Ino old_parent, const std::string& old_name,
   rename_operator.UnlinkSrcParentInode();
   rename_operator.UnlinkOldInode();
   if (old_parent != new_parent) {
-    rename_operator.UpdateInodeParent();
+    rename_operator.UpdateInodeParent(fs_);
   }
   rename_operator.UpdateInodeCtime();
   rename_operator.UpdateCache();

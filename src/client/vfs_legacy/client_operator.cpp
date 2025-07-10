@@ -25,9 +25,9 @@
 #include <cstdint>
 #include <list>
 
-#include "dingofs/metaserver.pb.h"
 #include "client/vfs_legacy/filesystem/error.h"
 #include "client/vfs_legacy/filesystem/filesystem.h"
+#include "dingofs/metaserver.pb.h"
 #include "utils/uuid.h"
 
 namespace dingofs {
@@ -346,11 +346,12 @@ DINGOFS_ERROR RenameOperator::UpdateMCTime(uint64_t inode_id) {
 // rename from dir to dir is allowed olny when dest dir is empty
 // 1. if source is dir
 //   1.1 if source and destination dir under same directory
-//     1.1.1 if old inode exist, update new_parent link -1, this case will overwrite old dir
-//     1.1.2 if old inode not exist, update new_parent mctime
+//     1.1.1 if old inode exist, update new_parent link -1, this case will
+//     overwrite old dir 1.1.2 if old inode not exist, update new_parent mctime
 //   1.2 if source and destination dir under different directory
 //     1.2.1 if old inode exist, update new_parent mctime
-//     1.2.2 if old inode not exist, update new_parent link +1, this case will add new dir
+//     1.2.2 if old inode not exist, update new_parent link +1, this case will
+//     add new dir
 // 2, if source not dir, only need to update new_parent mctime
 DINGOFS_ERROR RenameOperator::LinkDestParentInode() {
   // Link action is unnecessary when met one of the following 2 conditions:
@@ -402,7 +403,9 @@ void RenameOperator::UnlinkOldInode() {
   LOG(INFO) << "Unlink old inode, retCode = " << rc;
 }
 
-DINGOFS_ERROR RenameOperator::UpdateInodeParent() {
+DINGOFS_ERROR RenameOperator::UpdateInodeParent(
+    std::shared_ptr<filesystem::FileSystem>& fs) {
+  // DINGOFS_ERROR RenameOperator::UpdateInodeParent() {
   std::shared_ptr<InodeWrapper> inode_wrapper;
   auto rc = inodeManager_->GetInode(srcDentry_.inodeid(), inode_wrapper);
   if (rc != DINGOFS_ERROR::OK) {
@@ -415,6 +418,9 @@ DINGOFS_ERROR RenameOperator::UpdateInodeParent() {
     LOG_ERROR("UpdateInodeParent", rc);
     return rc;
   }
+
+  fs->GetDirParentWatcher()->Remeber(srcDentry_.inodeid(), newParentId_);
+
 
   LOG(INFO) << "UpdateInodeParent oldParent = " << parentId_
             << ", newParent = " << newParentId_;

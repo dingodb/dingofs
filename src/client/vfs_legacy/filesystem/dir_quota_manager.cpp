@@ -193,6 +193,8 @@ void DirQuotaManager::UpdateDirQuotaUsage(Ino ino, int64_t new_space,
 bool DirQuotaManager::CheckDirQuota(Ino ino, int64_t space, int64_t inodes) {
   Ino inode = ino;
 
+  uint32_t depth = 0;
+
   while (true) {
     // NOTE: now we should not enable recycle
     if (inode == RECYCLEINODEID) {
@@ -223,6 +225,14 @@ bool DirQuotaManager::CheckDirQuota(Ino ino, int64_t space, int64_t inodes) {
       LOG(ERROR) << "CheckDirQuota failed, inodeId=" << ino
                  << " because get inodeId=" << inode
                  << " parent failed, rc = " << rc;
+      return false;
+    }
+
+    depth++;
+    if (depth > FLAGS_max_parent_depth_for_quota_check) {
+      LOG(ERROR) << "CheckDirQuota failed, inodeId=" << ino
+                 << ", depth = " << depth
+                 << " exceeds FLAGS_max_dir_quota_depth";
       return false;
     }
 

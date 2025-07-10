@@ -43,6 +43,8 @@ DECLARE_uint32(fs_usage_flush_interval_second);
 DECLARE_uint32(flush_quota_interval_second);
 DECLARE_uint32(load_quota_interval_second);
 
+DECLARE_uint32(max_parent_depth_for_quota_check);
+
 // push metrics interval
 DECLARE_uint32(push_metric_interval_millsecond);
 

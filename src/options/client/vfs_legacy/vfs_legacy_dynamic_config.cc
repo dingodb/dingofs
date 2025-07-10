@@ -55,6 +55,10 @@ DEFINE_uint32(push_metric_interval_millsecond, 500,
               "push client metrics interval in millsecond");
 DEFINE_validator(push_metric_interval_millsecond, &PassUint32);
 
+DEFINE_uint32(max_parent_depth_for_quota_check, 2048,
+              "max parent depth for quota check");
+DEFINE_validator(max_parent_depth_for_quota_check, &PassUint32);
+
 // fuse
 // kernal will retry when read fail
 DEFINE_uint32(fuse_read_max_retry_s3_not_exist, 60,

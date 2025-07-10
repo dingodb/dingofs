@@ -101,6 +101,10 @@ class FileSystem {
 
   DINGOFS_ERROR Release(Ino ino);
 
+  std::shared_ptr<DirParentWatcher> GetDirParentWatcher() {
+    return dir_parent_watcher_;
+  }
+
   // utility: file handler
   std::shared_ptr<FileHandler> NewHandler();
 
