@@ -32,6 +32,7 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using metrics::client::vfs_legacy::OpenfilesMetric;
 using utils::ReadLockGuard;
 using utils::WriteLockGuard;
 

@@ -33,6 +33,7 @@ namespace dingofs {
 namespace client {
 namespace filesystem {
 
+using metrics::client::vfs_legacy::DirCacheMetric;
 using utils::ReadLockGuard;
 using utils::RWLock;
 using utils::TimeSpec;

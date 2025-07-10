@@ -28,8 +28,8 @@
 
 #include "client/vfs_legacy/filesystem/defer_sync.h"
 #include "client/vfs_legacy/filesystem/meta.h"
-#include "client/vfs_legacy/filesystem/metric.h"
 #include "client/vfs_legacy/inode_wrapper.h"
+#include "metrics/client/vfs_legacy/open_files.h"
 #include "options/client/vfs_legacy/vfs_legacy_option.h"
 
 namespace dingofs {
@@ -66,7 +66,7 @@ class OpenFiles {
   OpenFilesOption option_;
   std::shared_ptr<DeferSync> deferSync_;
   std::unordered_map<Ino, std::unique_ptr<OpenFile>> files_;
-  std::shared_ptr<OpenfilesMetric> metric_;
+  std::shared_ptr<metrics::client::vfs_legacy::OpenfilesMetric> metric_;
 };
 
 }  // namespace filesystem
