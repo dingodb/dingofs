@@ -17,12 +17,11 @@
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+#include "mdsv2/client/br.h"
 #include "mdsv2/client/integration_test.h"
 #include "mdsv2/client/mds.h"
 #include "mdsv2/client/store.h"
 #include "mdsv2/common/helper.h"
-#include "mdsv2/common/logging.h"
-#include "mdsv2/common/type.h"
 
 DEFINE_string(coor_addr, "", "coordinator address, etc: list://127.0.0.1:22001 or file://./coor_list");
 DEFINE_string(mds_addr, "", "mds address");
@@ -57,21 +56,9 @@ DEFINE_uint32(max_inodes, 1000000, "max inodes");
 
 DEFINE_bool(is_force, false, "is force");
 
-static std::set<std::string> g_mds_cmd = {
-    "integrationtest", "getmdslist",
-    "createfs",        "deletefs",
-    "updatefs",        "getfs",
-    "listfs",          "mkdir",
-    "batchmkdir",      "mknod",
-    "batchmknod",      "getdentry",
-    "listdentry",      "getinode",
-    "batchgetinode",   "batchgetxattr",
-    "setfsstats",      "continuesetfsstats",
-    "getfsstats",      "getfspersecondstats",
-    "setfsquota",      "getfsquota",
-    "setdirquota",     "getdirquota",
-    "deletedirquota",
-};
+DEFINE_string(type, "", "type backup[meta|fsmeta]");
+DEFINE_string(output_type, "stdout", "output type[stdout|file|s3]");
+DEFINE_string(out, "./output", "output file path");
 
 static std::string GetDefaultCoorAddrPath() {
   if (!FLAGS_coor_addr.empty()) {
@@ -104,172 +91,75 @@ int main(int argc, char* argv[]) {
 
   std::string lower_cmd = Helper::ToLowerCase(FLAGS_cmd);
 
-  if (lower_cmd == Helper::ToLowerCase("IntegrationTest")) {
-    dingofs::mdsv2::client::RunIntegrationTests();
-    return 0;
+  // run integration test command
+  {
+    if (dingofs::mdsv2::client::IntegrationTestCommandRunner::Run(lower_cmd)) {
+      return 0;
+    }
   }
 
-  if (g_mds_cmd.count(lower_cmd) > 0) {
-    if (FLAGS_mds_addr.empty()) {
-      std::cout << "mds address is empty." << '\n';
-      return -1;
+  // run backup command
+  {
+    dingofs::mdsv2::br::BackupCommandRunner::Options options;
+    options.type = Helper::ToLowerCase(FLAGS_type);
+    options.output_type = Helper::ToLowerCase(FLAGS_output_type);
+    options.fs_id = FLAGS_fs_id;
+    options.fs_name = FLAGS_fs_name;
+    options.file_path = FLAGS_out;
+
+    if (dingofs::mdsv2::br::BackupCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
+      return 0;
     }
+  }
 
-    dingofs::mdsv2::client::MDSClient mds_client(FLAGS_fs_id);
-    if (!mds_client.Init(FLAGS_mds_addr)) {
-      std::cout << "init interaction fail." << '\n';
-      return -1;
+  // run restore command
+  {
+    dingofs::mdsv2::br::RestoreCommandRunner::Options options;
+    options.type = Helper::ToLowerCase(FLAGS_type);
+    options.output_type = Helper::ToLowerCase(FLAGS_output_type);
+    options.fs_id = FLAGS_fs_id;
+    options.fs_name = FLAGS_fs_name;
+    options.file_path = FLAGS_out;
+    options.bucket_name = FLAGS_s3_bucketname;
+    options.object_name = FLAGS_s3_endpoint;
+
+    if (dingofs::mdsv2::br::RestoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd)) {
+      return 0;
     }
+  }
 
-    if (lower_cmd == Helper::ToLowerCase("GetMdsList")) {
-      mds_client.GetMdsList();
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateFs")) {
-      dingofs::mdsv2::client::MDSClient::CreateFsParams params;
-      params.partition_type = FLAGS_fs_partition_type;
-      params.chunk_size = FLAGS_chunk_size;
-      params.block_size = FLAGS_block_size;
-      params.s3_endpoint = FLAGS_s3_endpoint;
-      params.s3_ak = FLAGS_s3_ak;
-      params.s3_sk = FLAGS_s3_sk;
-      params.s3_bucketname = FLAGS_s3_bucketname;
-
-      mds_client.CreateFs(FLAGS_fs_name, params);
-
-    } else if (lower_cmd == Helper::ToLowerCase("DeleteFs")) {
-      mds_client.DeleteFs(FLAGS_fs_name, FLAGS_is_force);
-
-    } else if (lower_cmd == Helper::ToLowerCase("UpdateFs")) {
-      mds_client.UpdateFs(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetFs")) {
-      mds_client.GetFs(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("ListFs")) {
-      mds_client.ListFs();
-
-    } else if (lower_cmd == Helper::ToLowerCase("MkDir")) {
-      mds_client.MkDir(FLAGS_parent, FLAGS_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("BatchMkDir")) {
-      std::vector<int64_t> parents;
-      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
-      mds_client.BatchMkDir(parents, FLAGS_prefix, FLAGS_num);
-
-    } else if (lower_cmd == Helper::ToLowerCase("MkNod")) {
-      mds_client.MkNod(FLAGS_parent, FLAGS_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("BatchMkNod")) {
-      std::vector<int64_t> parents;
-      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', parents);
-      mds_client.BatchMkNod(parents, FLAGS_prefix, FLAGS_num);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetDentry")) {
-      mds_client.GetDentry(FLAGS_parent, FLAGS_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("ListDentry")) {
-      mds_client.ListDentry(FLAGS_parent, false);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetInode")) {
-      mds_client.GetInode(FLAGS_parent);
-
-    } else if (lower_cmd == Helper::ToLowerCase("BatchGetInode")) {
-      std::vector<int64_t> inos;
-      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
-      mds_client.BatchGetInode(inos);
-
-    } else if (lower_cmd == Helper::ToLowerCase("BatchGetXattr")) {
-      std::vector<int64_t> inos;
-      dingofs::mdsv2::Helper::SplitString(FLAGS_parents, ',', inos);
-      mds_client.BatchGetXattr(inos);
-
-    } else if (lower_cmd == Helper::ToLowerCase("SetFsStats")) {
-      mds_client.SetFsStats(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("ContinueSetFsStats")) {
-      mds_client.ContinueSetFsStats(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetFsStats")) {
-      mds_client.GetFsStats(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetFsPerSecondStats")) {
-      mds_client.GetFsPerSecondStats(FLAGS_fs_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("SetFsQuota")) {
-      dingofs::mdsv2::QuotaEntry quota;
-      quota.set_max_bytes(FLAGS_max_bytes);
-      quota.set_max_inodes(FLAGS_max_inodes);
-
-      mds_client.SetFsQuota(quota);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetFsQuota")) {
-      auto response = mds_client.GetFsQuota();
-      std::cout << "fs quota: " << response.quota().ShortDebugString() << '\n';
-
-    } else if (lower_cmd == Helper::ToLowerCase("SetDirQuota")) {
-      if (FLAGS_ino == 0) {
-        std::cout << "ino is empty." << '\n';
-        return -1;
-      }
-
-      dingofs::mdsv2::QuotaEntry quota;
-      quota.set_max_bytes(FLAGS_max_bytes);
-      quota.set_max_inodes(FLAGS_max_inodes);
-
-      mds_client.SetDirQuota(FLAGS_ino, quota);
-
-    } else if (lower_cmd == Helper::ToLowerCase("GetDirQuota")) {
-      if (FLAGS_ino == 0) {
-        std::cout << "ino is empty." << '\n';
-        return -1;
-      }
-
-      auto response = mds_client.GetDirQuota(FLAGS_ino);
-      std::cout << "dir quota: " << response.quota().ShortDebugString() << '\n';
-
-    } else if (lower_cmd == Helper::ToLowerCase("DeleteDirQuota")) {
-      if (FLAGS_ino == 0) {
-        std::cout << "ino is empty." << '\n';
-        return -1;
-      }
-      mds_client.DeleteDirQuota(FLAGS_ino);
-
-    } else {
-      std::cout << "Invalid command: " << lower_cmd;
-      return -1;
+  // run mds command
+  {
+    dingofs::mdsv2::client::MdsCommandRunner::Options options;
+    options.ino = FLAGS_ino;
+    options.parent = FLAGS_parent;
+    options.parents = FLAGS_parents;
+    options.name = FLAGS_name;
+    options.fs_name = FLAGS_fs_name;
+    options.prefix = FLAGS_prefix;
+    options.num = FLAGS_num;
+    options.max_bytes = FLAGS_max_bytes;
+    options.max_inodes = FLAGS_max_inodes;
+    options.fs_partition_type = FLAGS_fs_partition_type;
+    options.chunk_size = FLAGS_chunk_size;
+    options.block_size = FLAGS_block_size;
+    options.s3_endpoint = FLAGS_s3_endpoint;
+    options.s3_ak = FLAGS_s3_ak;
+    options.s3_sk = FLAGS_s3_sk;
+    options.s3_bucketname = FLAGS_s3_bucketname;
+    if (dingofs::mdsv2::client::MdsCommandRunner::Run(options, FLAGS_mds_addr, lower_cmd, FLAGS_fs_id)) {
+      return 0;
     }
-  } else {
-    std::string coor_addr = GetDefaultCoorAddrPath();
-    if (coor_addr.empty()) {
-      std::cout << "coordinator address is empty." << '\n';
-      return -1;
-    }
+  }
 
-    DINGO_LOG(INFO) << "coor_addr: " << coor_addr;
-
-    dingofs::mdsv2::client::StoreClient store_client;
-    if (!store_client.Init(coor_addr)) {
-      std::cout << "init store client fail." << '\n';
-      return -1;
-    }
-
-    if (lower_cmd == Helper::ToLowerCase("CreateMetaTable")) {
-      store_client.CreateMetaTable(FLAGS_meta_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
-      store_client.CreateFsStatsTable(FLAGS_fsstats_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("CreateAllTable")) {
-      store_client.CreateMetaTable(FLAGS_meta_table_name);
-      store_client.CreateFsStatsTable(FLAGS_fsstats_table_name);
-
-    } else if (lower_cmd == Helper::ToLowerCase("tree")) {
-      store_client.PrintDentryTree(FLAGS_fs_id, true);
-
-    } else {
-      std::cout << "invalid command: " << FLAGS_cmd;
-      return -1;
-    }
+  // run store command
+  {
+    dingofs::mdsv2::client::StoreCommandRunner::Options options;
+    options.fs_id = FLAGS_fs_id;
+    options.fs_name = FLAGS_fs_name;
+    options.meta_table_name = FLAGS_meta_table_name;
+    options.fsstats_table_name = FLAGS_fsstats_table_name;
+    dingofs::mdsv2::client::StoreCommandRunner::Run(options, GetDefaultCoorAddrPath(), lower_cmd);
   }
 
   return 0;

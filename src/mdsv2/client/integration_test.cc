@@ -118,6 +118,13 @@ TEST_F(MDSIntegrationTest, FileSystemOperations) {
   ASSERT_EQ(umount_fs_resp.error().errcode(), dingofs::pb::error::OK);
 }
 
+bool IntegrationTestCommandRunner::Run(const std::string& cmd) {
+  if (cmd != "integrationtest") return false;
+
+  ::testing::InitGoogleTest();
+  return RUN_ALL_TESTS();
+}
+
 }  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs

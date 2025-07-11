@@ -15,6 +15,7 @@
 #ifndef DINGOFS_MDSV2_CLIENT_STORE_H_
 #define DINGOFS_MDSV2_CLIENT_STORE_H_
 
+#include <cstdint>
 #include <string>
 
 #include "mdsv2/storage/storage.h"
@@ -38,6 +39,21 @@ class StoreClient {
 
  private:
   KVStorageSPtr kv_storage_;
+};
+
+class StoreCommandRunner {
+ public:
+  StoreCommandRunner() = default;
+  ~StoreCommandRunner() = default;
+
+  struct Options {
+    uint32_t fs_id{0};
+    std::string fs_name;
+    std::string meta_table_name;
+    std::string fsstats_table_name;
+  };
+
+  static bool Run(const Options& options, const std::string& coor_addr, const std::string& cmd);
 };
 
 }  // namespace client

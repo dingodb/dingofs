@@ -797,6 +797,154 @@ DeleteDirQuotaResponse MDSClient::DeleteDirQuota(Ino ino) {
   return response;
 }
 
+bool MdsCommandRunner::Run(const Options& options, const std::string& mds_addr, const std::string& cmd,
+                           uint32_t fs_id) {
+  static std::set<std::string> mds_cmd = {
+      "integrationtest", "getmdslist",
+      "createfs",        "deletefs",
+      "updatefs",        "getfs",
+      "listfs",          "mkdir",
+      "batchmkdir",      "mknod",
+      "batchmknod",      "getdentry",
+      "listdentry",      "getinode",
+      "batchgetinode",   "batchgetxattr",
+      "setfsstats",      "continuesetfsstats",
+      "getfsstats",      "getfspersecondstats",
+      "setfsquota",      "getfsquota",
+      "setdirquota",     "getdirquota",
+      "deletedirquota",
+  };
+
+  if (mds_cmd.count(cmd) == 0) return false;
+
+  if (mds_addr.empty()) {
+    std::cout << "mds_addr is empty." << '\n';
+    return true;
+  }
+
+  MDSClient mds_client(fs_id);
+  if (!mds_client.Init(mds_addr)) {
+    std::cout << "init interaction fail." << '\n';
+    return true;
+  }
+
+  if (cmd == Helper::ToLowerCase("GetMdsList")) {
+    mds_client.GetMdsList();
+
+  } else if (cmd == Helper::ToLowerCase("CreateFs")) {
+    dingofs::mdsv2::client::MDSClient::CreateFsParams params;
+    params.partition_type = options.fs_partition_type;
+    params.chunk_size = options.chunk_size;
+    params.block_size = options.block_size;
+    params.s3_endpoint = options.s3_endpoint;
+    params.s3_ak = options.s3_ak;
+    params.s3_sk = options.s3_sk;
+    params.s3_bucketname = options.s3_bucketname;
+
+    mds_client.CreateFs(options.fs_name, params);
+
+  } else if (cmd == Helper::ToLowerCase("DeleteFs")) {
+    mds_client.DeleteFs(options.fs_name, options.is_force);
+
+  } else if (cmd == Helper::ToLowerCase("UpdateFs")) {
+    mds_client.UpdateFs(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("GetFs")) {
+    mds_client.GetFs(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("ListFs")) {
+    mds_client.ListFs();
+
+  } else if (cmd == Helper::ToLowerCase("MkDir")) {
+    mds_client.MkDir(options.parent, options.name);
+
+  } else if (cmd == Helper::ToLowerCase("BatchMkDir")) {
+    std::vector<int64_t> parents;
+    dingofs::mdsv2::Helper::SplitString(options.parents, ',', parents);
+    mds_client.BatchMkDir(parents, options.prefix, options.num);
+
+  } else if (cmd == Helper::ToLowerCase("MkNod")) {
+    mds_client.MkNod(options.parent, options.name);
+
+  } else if (cmd == Helper::ToLowerCase("BatchMkNod")) {
+    std::vector<int64_t> parents;
+    dingofs::mdsv2::Helper::SplitString(options.parents, ',', parents);
+    mds_client.BatchMkNod(parents, options.prefix, options.num);
+
+  } else if (cmd == Helper::ToLowerCase("GetDentry")) {
+    mds_client.GetDentry(options.parent, options.name);
+
+  } else if (cmd == Helper::ToLowerCase("ListDentry")) {
+    mds_client.ListDentry(options.parent, false);
+
+  } else if (cmd == Helper::ToLowerCase("GetInode")) {
+    mds_client.GetInode(options.parent);
+
+  } else if (cmd == Helper::ToLowerCase("BatchGetInode")) {
+    std::vector<int64_t> inos;
+    dingofs::mdsv2::Helper::SplitString(options.parents, ',', inos);
+    mds_client.BatchGetInode(inos);
+
+  } else if (cmd == Helper::ToLowerCase("BatchGetXattr")) {
+    std::vector<int64_t> inos;
+    dingofs::mdsv2::Helper::SplitString(options.parents, ',', inos);
+    mds_client.BatchGetXattr(inos);
+
+  } else if (cmd == Helper::ToLowerCase("SetFsStats")) {
+    mds_client.SetFsStats(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("ContinueSetFsStats")) {
+    mds_client.ContinueSetFsStats(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("GetFsStats")) {
+    mds_client.GetFsStats(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("GetFsPerSecondStats")) {
+    mds_client.GetFsPerSecondStats(options.fs_name);
+
+  } else if (cmd == Helper::ToLowerCase("SetFsQuota")) {
+    dingofs::mdsv2::QuotaEntry quota;
+    quota.set_max_bytes(options.max_bytes);
+    quota.set_max_inodes(options.max_inodes);
+
+    mds_client.SetFsQuota(quota);
+
+  } else if (cmd == Helper::ToLowerCase("GetFsQuota")) {
+    auto response = mds_client.GetFsQuota();
+    std::cout << "fs quota: " << response.quota().ShortDebugString() << '\n';
+
+  } else if (cmd == Helper::ToLowerCase("SetDirQuota")) {
+    if (options.ino == 0) {
+      std::cout << "ino is empty." << '\n';
+      return true;
+    }
+
+    dingofs::mdsv2::QuotaEntry quota;
+    quota.set_max_bytes(options.max_bytes);
+    quota.set_max_inodes(options.max_inodes);
+
+    mds_client.SetDirQuota(options.ino, quota);
+
+  } else if (cmd == Helper::ToLowerCase("GetDirQuota")) {
+    if (options.ino == 0) {
+      std::cout << "ino is empty." << '\n';
+      return true;
+    }
+
+    auto response = mds_client.GetDirQuota(options.ino);
+    std::cout << "dir quota: " << response.quota().ShortDebugString() << '\n';
+
+  } else if (cmd == Helper::ToLowerCase("DeleteDirQuota")) {
+    if (options.ino == 0) {
+      std::cout << "ino is empty." << '\n';
+      return true;
+    }
+    mds_client.DeleteDirQuota(options.ino);
+  }
+
+  return true;
+}
+
 }  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs

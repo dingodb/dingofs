@@ -21,10 +21,13 @@ namespace dingofs {
 namespace mdsv2 {
 namespace client {
 
-inline int RunIntegrationTests() {
-  ::testing::InitGoogleTest();
-  return RUN_ALL_TESTS();
-}
+class IntegrationTestCommandRunner {
+ public:
+  IntegrationTestCommandRunner() = default;
+  ~IntegrationTestCommandRunner() = default;
+
+  static bool Run(const std::string& cmd);
+};
 
 }  // namespace client
 }  // namespace mdsv2

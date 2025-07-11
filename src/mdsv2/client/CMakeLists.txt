@@ -20,6 +20,7 @@ add_executable(dingo-mdsv2-client
   store.cc
   interaction.cc
   integration_test.cc
+  br.cc
 )
 
 target_link_libraries(dingo-mdsv2-client

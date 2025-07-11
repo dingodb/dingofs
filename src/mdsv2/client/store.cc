@@ -25,6 +25,7 @@
 #include "mdsv2/common/helper.h"
 #include "mdsv2/common/logging.h"
 #include "mdsv2/filesystem/fs_utils.h"
+#include "mdsv2/filesystem/store_operation.h"
 #include "mdsv2/storage/dingodb_storage.h"
 #include "mdsv2/storage/storage.h"
 
@@ -108,7 +109,7 @@ void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
     return;
   }
 
-  FsUtils fs_utils(kv_storage_);
+  FsUtils fs_utils(OperationProcessor::New(kv_storage_));
 
   FsTreeNode* root = fs_utils.GenFsTree(fs_id);
   if (root == nullptr) {
@@ -119,6 +120,44 @@ void StoreClient::PrintDentryTree(uint32_t fs_id, bool is_details) {
   TraversePrint(root, is_details, 0);
 
   FreeFsTree(root);
+}
+
+bool StoreCommandRunner::Run(const Options& options, const std::string& coor_addr, const std::string& cmd) {
+  static std::set<std::string> mds_cmd = {
+      Helper::ToLowerCase("CreateMetaTable"),
+      Helper::ToLowerCase("CreateFsStatsTable"),
+      Helper::ToLowerCase("CreateAllTable"),
+      "tree",
+  };
+
+  if (mds_cmd.count(cmd) == 0) return false;
+
+  if (coor_addr.empty()) {
+    std::cout << "coordinator address is empty." << '\n';
+    return false;
+  }
+
+  dingofs::mdsv2::client::StoreClient store_client;
+  if (!store_client.Init(coor_addr)) {
+    std::cout << "init store client fail." << '\n';
+    return -1;
+  }
+
+  if (cmd == Helper::ToLowerCase("CreateMetaTable")) {
+    store_client.CreateMetaTable(options.meta_table_name);
+
+  } else if (cmd == Helper::ToLowerCase("CreateFsStatsTable")) {
+    store_client.CreateFsStatsTable(options.fsstats_table_name);
+
+  } else if (cmd == Helper::ToLowerCase("CreateAllTable")) {
+    store_client.CreateMetaTable(options.meta_table_name);
+    store_client.CreateFsStatsTable(options.fsstats_table_name);
+
+  } else if (cmd == Helper::ToLowerCase("tree")) {
+    store_client.PrintDentryTree(options.fs_id, true);
+  }
+
+  return true;
 }
 
 }  // namespace client

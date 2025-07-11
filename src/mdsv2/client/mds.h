@@ -203,6 +203,35 @@ class MDSClient {
   InteractionPtr interaction_;
 };
 
+class MdsCommandRunner {
+ public:
+  MdsCommandRunner() = default;
+  ~MdsCommandRunner() = default;
+
+  struct Options {
+    Ino ino;
+    Ino parent;
+    std::string parents;
+    std::string name;
+    std::string fs_name;
+    std::string prefix;
+    uint32_t num;
+    uint32_t max_bytes;
+    uint32_t max_inodes;
+    bool is_force{false};
+
+    std::string fs_partition_type;
+    uint32_t chunk_size;
+    uint32_t block_size;
+    std::string s3_endpoint;
+    std::string s3_ak;
+    std::string s3_sk;
+    std::string s3_bucketname;
+  };
+
+  static bool Run(const Options& options, const std::string& mds_addr, const std::string& cmd, uint32_t fs_id);
+};
+
 }  // namespace client
 }  // namespace mdsv2
 }  // namespace dingofs
